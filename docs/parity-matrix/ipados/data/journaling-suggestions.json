@@ -1,0 +1,50 @@
+{
+  "framework": "Journaling Suggestions",
+  "doc": "https://developer.apple.com/documentation/journalingsuggestions",
+  "macos_since": "",
+  "status": "gap",
+  "bifrost": "springboard/apps/journal-desktop/src",
+  "summary": "A picker that lists recent personal events (photos, places, workouts and similar) to inspire a journal entry. BifrOSt has a Journal app but no suggestions picker, no suggestion asset model and no suggestion notifications. iPadOS 26.0 and later per the index.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run this round; owner rule); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Suggestions picker",
+      "apple": "JournalingSuggestionsPicker",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No picker of recent events for an app."
+    },
+    {
+      "feature": "Suggestion and asset model",
+      "apple": "JournalingSuggestion, JournalingSuggestionAsset",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No suggestion object or asset content."
+    },
+    {
+      "feature": "Suggestion notifications",
+      "apple": "Receiving journaling suggestions system notifications",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No notification of new suggestions."
+    },
+    {
+      "feature": "Journal app",
+      "apple": "Journal (BifrOSt app, for context)",
+      "bifrost": "springboard/apps/journal-desktop/src",
+      "status": "partial",
+      "note": "The Journal app writes entries; it does not get event suggestions."
+    },
+    {
+      "feature": "Entitlement",
+      "apple": "com.apple.developer.journal.allow",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No entitlement model for the picker."
+    }
+  ],
+  "gaps": [
+    "No suggestions picker, suggestion model or suggestion notifications.",
+    "No event source for suggestions (photos, places, workouts) exposed to apps."
+  ]
+}

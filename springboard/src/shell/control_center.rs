@@ -3,7 +3,11 @@
 //! screen. Geometry follows the bifrost mini: 65 pt tiles, 10 pt gaps, the
 //! cluster 34 pt from the right edge and 68 pt from the top.
 
+use super::app_controls::{join_pref, pref_app_keys, AppControlEntry, AppControls};
+use super::controls::{draw_switch, SWITCH_H_PT, SWITCH_W_PT};
 use super::gestures::{ease_out_quartic, progress, Drag, SPRING_MS};
+use bifrost_ui::control_widget::ControlKind;
+use std::time::Duration;
 use super::music::nowplaying::Target as Media;
 use super::music::{draw_cc_controls, icons};
 use super::services::now_playing;
@@ -88,6 +92,48 @@ fn media_tile(ui: &Ui, w: i32) -> (f32, f32, f32, f32) {
     (x + ui.pt(BIG_PITCH_PT), y, ui.pt(BIG_PT), ui.pt(BIG_PT))
 }
 
+/// App-control tiles per row, under the built-in modules: four square tiles span the cluster's width.
+const APP_COLS: usize = 4;
+
+/// How long an app control's request may take on its control socket.
+const APP_CONTROL_WAIT: Duration = Duration::from_secs(8);
+
+/// Where app control `index` sits under the built-in modules, (x, y, w, h) in px. Rows fill left to right.
+pub fn app_tile_rect(ui: &Ui, w: i32, index: usize) -> (f32, f32, f32, f32) {
+    let (x, y) = origin(ui, w);
+    let col = (index % APP_COLS) as f32;
+    let row = (index / APP_COLS) as f32;
+    (x + ui.pt(col * PITCH_PT), y + ui.pt(BIG_PITCH_PT + 2.0 * PITCH_PT + SMALL_PT + GAP_PT + row * PITCH_PT), ui.pt(SMALL_PT), ui.pt(SMALL_PT))
+}
+
+/// The app control tile under (x, y), of `count` tiles on the panel.
+pub fn app_hit(ui: &Ui, w: i32, count: usize, x: f32, y: f32) -> Option<usize> {
+    (0..count).find(|&i| inside(app_tile_rect(ui, w, i), x, y))
+}
+
+/// The Edit Controls button, under the rows of `count` app control tiles, (x, y, w, h) in px.
+pub fn edit_button_rect(ui: &Ui, w: i32, count: usize) -> (f32, f32, f32, f32) {
+    let (x, y) = origin(ui, w);
+    let rows = count.div_ceil(APP_COLS) as f32;
+    (x, y + ui.pt(BIG_PITCH_PT + 2.0 * PITCH_PT + SMALL_PT + GAP_PT + rows * PITCH_PT), ui.pt(2.0 * BIG_PT + GAP_PT), ui.pt(32.0))
+}
+
+/// Row `index` of the Edit Controls list, which replaces the cluster while it is open: (x, y, w, h) in px.
+pub fn gallery_row_rect(ui: &Ui, w: i32, index: usize) -> (f32, f32, f32, f32) {
+    let (x, y) = origin(ui, w);
+    (x, y + ui.pt(ROW_PT) * index as f32, ui.pt(2.0 * BIG_PT + GAP_PT), ui.pt(ROW_PT))
+}
+
+/// Left edge of a module row's Menu Bar switch: it sits left of the panel switch, which is 12 pt from the row's end.
+pub fn menu_bar_switch_x(ui: &Ui, row_x: f32, row_w: f32) -> f32 {
+    row_x + row_w - 2.0 * ui.pt(SWITCH_W_PT) - ui.pt(24.0)
+}
+
+/// The Edit Controls row under (x, y), of `rows` rows.
+pub fn gallery_hit(ui: &Ui, w: i32, rows: usize, x: f32, y: f32) -> Option<usize> {
+    (0..rows).find(|&i| inside(gallery_row_rect(ui, w, i), x, y))
+}
+
 /// Where a tile sits, (x, y, w, h) in px.
 pub fn tile_rect(ui: &Ui, w: i32, tile: Tile) -> (f32, f32, f32, f32) {
     let (x, y) = origin(ui, w);
@@ -154,6 +200,12 @@ enum Touch {
     Panel(Option<Tile>),
     /// a tap on the Now Playing plate's progress bar: released there, it seeks the shown session
     Scrub,
+    /// a finger on an app control tile (its index in the panel's order): released there, it uses the control
+    App(usize),
+    /// a finger on the Edit Controls button
+    Edit,
+    /// a finger on a row of the Edit Controls list (the last row is Done)
+    Gallery(usize),
 }
 
 /// How long a finger rests on a module before it expands, like bifrost.
@@ -341,11 +393,84 @@ pub struct ControlCenter {
     press: Option<(Tile, f64, f32, f32)>,
     /// the toggle whose glyph bounces after it changed, with the bounce effect (seconds on the shell clock)
     bounce: Option<(Tile, SymbolEffect)>,
+    /// the app controls shown under the built-in modules, in panel order
+    pub app_controls: AppControls,
+    /// the Edit Controls list is showing in place of the modules
+    pub editing: bool,
+    /// the output menu opened from the Sound module's chevron
+    pub route_menu: Option<RouteMenu>,
+    /// the output the user picked in that menu, for the binary to apply (it owns the router)
+    pub route_choice: Option<crate::media::route::Route>,
+    /// the headset is in the jack: Headphones is listed in the output menu
+    pub headphones_present: bool,
+    /// the Up Next picker opened from the Now Playing card
+    pub up_next: Option<UpNext>,
+}
+
+/// The Up Next picker: the shown app's queue, picked from with `bifrost_ui::media_picker` (one choice).
+#[derive(Debug)]
+pub struct UpNext {
+    pub panel: bifrost_ui::Rect,
+    pub items: Vec<super::services::now_playing::QueueItem>,
+    pub picker: bifrost_ui::media_picker::MediaPicker,
+}
+
+impl UpNext {
+    /// The picker for a queue, drawn in `panel`. Entry `i` is picker item `i`.
+    pub fn new(items: Vec<super::services::now_playing::QueueItem>, panel: bifrost_ui::Rect) -> UpNext {
+        let picker_items = items
+            .iter()
+            .enumerate()
+            .map(|(i, it)| bifrost_ui::media_picker::PickItem {
+                id: i as u64,
+                kind: bifrost_ui::media_picker::Kind::Song,
+                title: it.title.clone(),
+                artist: it.artist.clone(),
+                album: String::new(),
+                playable: it.playable,
+            })
+            .collect();
+        let picker = bifrost_ui::media_picker::MediaPicker::new(picker_items, vec![bifrost_ui::media_picker::Kind::Song], bifrost_ui::media_picker::Selection::One);
+        UpNext { panel, items, picker }
+    }
+}
+
+impl Shell {
+    /// The Up Next button at the top right of the Now Playing card (x, y, w, h in px). Its width follows its label, and
+    /// the card's title is cut short of it (see `draw_media_tile`), so nothing overlaps at any card width.
+    fn up_next_button(&self, (x, y, w, _h): (f32, f32, f32, f32)) -> (f32, f32, f32, f32) {
+        let ui = &self.ui;
+        // The button never wider than the card's padded width, so it stays inside the card at any width.
+        let pad = ui.pt(DK_PAD_PT);
+        let bw = (self.measure_chrome("Up Next", 12.0, Weight::Semibold) + ui.pt(8.0)).min((w - 2.0 * pad).max(0.0));
+        (x + w - pad - bw, y + ui.pt(10.0), bw, ui.pt(20.0))
+    }
+}
+
+/// The Sound module's output menu: its panel and one row per output (`bifrost_ui::route_picker`).
+#[derive(Clone, Debug)]
+pub struct RouteMenu {
+    pub panel: bifrost_ui::Rect,
+    pub rows: Vec<bifrost_ui::route_picker::Destination>,
+}
+
+/// The output chevron's square at the top right of the Sound module (x, y, w, h in px).
+fn route_chevron((x, y, w, _h): (f32, f32, f32, f32), ui: &Ui) -> (f32, f32, f32, f32) {
+    (x + w - ui.pt(DK_PAD_PT + 22.0), y + ui.pt(6.0), ui.pt(22.0), ui.pt(22.0))
+}
+
+/// The route a menu row's id stands for.
+fn route_of_id(id: &str) -> Option<crate::media::route::Route> {
+    match id {
+        "speaker" => Some(crate::media::route::Route::Speaker),
+        "headphones" => Some(crate::media::route::Route::Headphones),
+        _ => None,
+    }
 }
 
 impl Default for ControlCenter {
     fn default() -> Self {
-        ControlCenter { state: State::Hidden, touch: None, airplane: false, airplane_prior: None, volume: 0.6, route: Default::default(), backdrop: None, backlight: false, labels: None, expanded: None, press: None, bounce: None }
+        ControlCenter { route_menu: None, route_choice: None, headphones_present: false, up_next: None, state: State::Hidden, touch: None, airplane: false, airplane_prior: None, volume: 0.6, route: Default::default(), backdrop: None, backlight: false, labels: None, expanded: None, press: None, bounce: None, app_controls: AppControls::new(), editing: false }
     }
 }
 
@@ -398,6 +523,7 @@ impl ControlCenter {
         self.backdrop = None;
         self.expanded = None;
         self.press = None;
+        self.editing = false;
     }
 
     /// When a resting finger turns into an expansion.
@@ -407,6 +533,9 @@ impl ControlCenter {
 
     fn settle(&mut self, from: f32, shown: bool, t: f64) {
         self.touch = None;
+        if !shown {
+            self.editing = false;
+        }
         self.state = State::Settling { from, to: if shown { 1.0 } else { 0.0 }, start: t };
     }
 
@@ -461,6 +590,8 @@ impl Shell {
         let range = self.ui.pt(REVEAL_PT);
         match (self.cc.state, ev) {
             (State::Hidden, Event::Down(x, y)) if self.cc_reveal_zone(x, y) => {
+                let candidates = self.cc_candidates();
+                self.restore_app_controls(&candidates);
                 let sharp = self.snapshot_screen(t);
                 self.cc.backdrop = Some(Frost::new(sharp, (self.ui.pt(BLUR_PT) / 4.0) as usize, 140));
                 self.cc.state = State::Dragging(Drag::new(y, t, 0.0, range));
@@ -490,13 +621,178 @@ impl Shell {
         parse_slots(self.prefs.get(MODULES_PREF).unwrap_or(""))
     }
 
+    /// Every app control the running apps declare, in the order the apps are running.
+    fn cc_candidates(&self) -> Vec<AppControlEntry> {
+        self.ext
+            .iter()
+            .flatten()
+            .flat_map(|h| {
+                // the controls the app's manifest declares (`[[control]]`); the host's `controls` is its UI tree
+                let declared = super::apphost::installed()
+                    .iter()
+                    .find(|a| a.manifest.id == h.id)
+                    .map(|a| a.manifest.controls.clone())
+                    .unwrap_or_default();
+                declared.into_iter().map(move |c| AppControlEntry { app_id: h.id.clone(), identifier: c.identifier(&h.id), control: c })
+            })
+            .collect()
+    }
+
+    /// Puts back on the panel each app control the saved list names, once its app declares it.
+    fn restore_app_controls(&mut self, candidates: &[AppControlEntry]) {
+        for key in pref_app_keys(self.prefs.get(MODULES_PREF).unwrap_or("")) {
+            if self.cc.app_controls.keys().contains(&key) {
+                continue;
+            }
+            if let Some(c) = candidates.iter().find(|c| c.identifier == key) {
+                let _ = self.cc.app_controls.add(&c.app_id, c.control.clone());
+            }
+        }
+    }
+
+    /// Adds an app control to the panel, or takes it off when it is already there, and saves the list.
+    fn toggle_app_control(&mut self, c: &AppControlEntry) {
+        if self.cc.app_controls.keys().contains(&c.identifier) {
+            self.cc.app_controls.remove(&c.identifier);
+        } else {
+            let _ = self.cc.app_controls.add(&c.app_id, c.control.clone());
+        }
+        let slots = self.cc_slots();
+        self.cc_save(&slots);
+    }
+
+    /// Writes the module list and the app controls on the panel to `MODULES_PREF`.
+    fn cc_save(&mut self, slots: &[ModuleSlot]) {
+        let text = save_text(slots, &self.cc.app_controls.keys());
+        let _ = self.prefs.set(MODULES_PREF, &text);
+    }
+
+    /// Opens the Edit Controls list and brings back the app controls the saved list names.
+    fn cc_open_edit(&mut self) {
+        let candidates = self.cc_candidates();
+        self.restore_app_controls(&candidates);
+        self.cc.editing = true;
+    }
+
+    /// The Edit Controls row under (x, y), while the list is open.
+    fn cc_gallery_at(&self, x: f32, y: f32) -> Option<usize> {
+        gallery_hit(&self.ui, self.w, self.cc_gallery_rows(), x, y)
+    }
+
+    /// The rows of the Edit Controls list: every module, then every app control, then Done.
+    fn cc_gallery_rows(&self) -> usize {
+        DEFAULT_MODULES.len() + self.cc_candidates().len() + 1
+    }
+
+    /// The modules that have their own menu bar item (`MENU_BAR_PREF`).
+    fn cc_menu_bar_items(&self) -> Vec<Tile> {
+        parse_menu_bar_items(self.prefs.get(MENU_BAR_PREF).unwrap_or(""))
+    }
+
+    /// Whether (x, y) is on the Menu Bar switch of module row `index`, which sits left of the panel switch.
+    fn in_menu_bar_switch(&self, x: f32, index: usize) -> bool {
+        if index >= DEFAULT_MODULES.len() {
+            return false;
+        }
+        let (rx, _, rw, _) = gallery_row_rect(&self.ui, self.w, index);
+        let left = menu_bar_switch_x(&self.ui, rx, rw);
+        x >= left && x < left + self.ui.pt(SWITCH_W_PT + 6.0)
+    }
+
+    /// Uses the Edit Controls row `index`. A module is shown or hidden, or with `menu_bar` its own menu bar item is
+    /// turned on or off. An app control is added or removed. The last row, Done, closes the list.
+    fn cc_gallery_tap(&mut self, index: usize, menu_bar: bool) {
+        let modules = DEFAULT_MODULES.len();
+        if index < modules {
+            let tile = DEFAULT_MODULES[index];
+            if menu_bar {
+                let mut items = self.cc_menu_bar_items();
+                let on = has_menu_bar_item(&items, tile);
+                set_menu_bar_item(&mut items, tile, !on);
+                let _ = self.prefs.set(MENU_BAR_PREF, &format_menu_bar_items(&items));
+                return;
+            }
+            let mut slots = self.cc_slots();
+            if let Some(slot) = slots.iter_mut().find(|m| m.tile == tile) {
+                slot.shown = !slot.shown;
+            }
+            self.cc_save(&slots);
+        } else if index < self.cc_gallery_rows() - 1 {
+            let candidates = self.cc_candidates();
+            if let Some(c) = candidates.get(index - modules) {
+                self.toggle_app_control(c);
+            }
+        } else {
+            self.cc.editing = false;
+        }
+    }
+
+    /// Draws the Edit Controls list over the frosted backdrop, in the cluster's place.
+    fn draw_gallery(&self, s: &mut Surface, slide: f32, alpha: u32) {
+        let ui = &self.ui;
+        let a = |c: u32| scale(c, alpha);
+        let candidates = self.cc_candidates();
+        let rows = DEFAULT_MODULES.len() + candidates.len() + 1;
+        let slots = self.cc_slots();
+        let bar_items = self.cc_menu_bar_items();
+        let (x0, y0, w0, _) = gallery_row_rect(ui, self.w, 0);
+        s.fill_rrect(x0, y0 + slide, w0, ui.pt(ROW_PT) * rows as f32, ui.pt(RADIUS_PT), a(rgba(118, 118, 128, 96)));
+        for i in 0..rows {
+            let (x, y, w, h) = gallery_row_rect(ui, self.w, i);
+            let y = y + slide;
+            if i == rows - 1 {
+                let done = ui.text("Done", 15.0, Weight::Semibold, BLUE);
+                s.blit(&done, (x + (w - done.w as f32) / 2.0) as i32, (y + (h - done.h as f32) / 2.0) as i32, 255, alpha);
+                continue;
+            }
+            let (title, on) = if i < DEFAULT_MODULES.len() {
+                let tile = DEFAULT_MODULES[i];
+                (module_title(tile).to_string(), slots.iter().find(|m| m.tile == tile).is_none_or(|m| m.shown))
+            } else {
+                let c = &candidates[i - DEFAULT_MODULES.len()];
+                (c.control.title.clone(), self.cc.app_controls.keys().contains(&c.identifier))
+            };
+            let label = ui.text(&title, 13.0, Weight::Regular, WHITE);
+            s.blit(&label, (x + ui.pt(12.0)) as i32, (y + (h - label.h as f32) / 2.0) as i32, 255, alpha);
+            let (sw, sh) = (ui.pt(SWITCH_W_PT), ui.pt(SWITCH_H_PT));
+            draw_switch(s, ui, x + w - sw - ui.pt(12.0), y + (h - sh) / 2.0, if on { 1.0 } else { 0.0 });
+            if i < DEFAULT_MODULES.len() {
+                let bar_on = has_menu_bar_item(&bar_items, DEFAULT_MODULES[i]);
+                draw_switch(s, ui, menu_bar_switch_x(ui, x, w), y + (h - sh) / 2.0, if bar_on { 1.0 } else { 0.0 });
+            }
+        }
+    }
+
     /// The tile under (x, y) that the cluster is showing: a module the user hid does not answer a finger.
     fn cc_tile_at(&self, x: f32, y: f32) -> Option<Tile> {
         let slots = self.cc_slots();
         hit(&self.ui, self.w, x, y).filter(|&t| tile_visible(&slots, t))
     }
 
+    /// Whether (x, y) is on the Edit Controls button under the app control rows.
+    fn cc_edit_at(&self, x: f32, y: f32) -> bool {
+        inside(edit_button_rect(&self.ui, self.w, self.cc.app_controls.entries().len()), x, y)
+    }
+
+    /// The app control tile under (x, y), if any.
+    fn cc_app_at(&self, x: f32, y: f32) -> Option<usize> {
+        app_hit(&self.ui, self.w, self.cc.app_controls.entries().len(), x, y)
+    }
+
     fn cc_down(&mut self, x: f32, y: f32, t: f64, range: f32) -> Vec<Effect> {
+        if self.cc.editing {
+            self.cc.touch = self.cc_gallery_at(x, y).map(Touch::Gallery);
+            return vec![];
+        }
+        if self.cc_edit_at(x, y) {
+            self.cc.touch = Some(Touch::Edit);
+            return vec![];
+        }
+        if let Some(i) = self.cc_app_at(x, y) {
+            self.cc.press = None;
+            self.cc.touch = Some(Touch::App(i));
+            return vec![];
+        }
         let tile = self.cc_tile_at(x, y);
         self.cc.press = tile.filter(|&k| Expanded::of(k).is_some()).map(|k| (k, t, x, y));
         match tile {
@@ -536,6 +832,16 @@ impl Shell {
         self.cc.press = None;
         match self.cc.touch.take() {
             Some(Touch::Tile(tile)) if self.cc_tile_at(x, y) == Some(tile) => self.activate_tile(tile, t),
+            Some(Touch::App(index)) if self.cc_app_at(x, y) == Some(index) => self.activate_app(index),
+            Some(Touch::Edit) if self.cc_edit_at(x, y) => {
+                self.cc_open_edit();
+                vec![]
+            }
+            Some(Touch::Gallery(index)) if self.cc_gallery_at(x, y) == Some(index) => {
+                let menu_bar = self.in_menu_bar_switch(x, index);
+                self.cc_gallery_tap(index, menu_bar);
+                vec![]
+            }
             Some(Touch::Outside(mut d)) => {
                 d.moved(y, t);
                 let tap = d.travel().abs() < self.ui.pt(TAP_PT);
@@ -597,6 +903,19 @@ impl Shell {
             }
         }
         fx
+    }
+
+    /// Uses app control `index`: a toggle flips in the registry, and its request goes to the app's control socket on
+    /// a worker thread. The app's dialog text, if any, is not shown yet.
+    fn activate_app(&mut self, index: usize) -> Vec<Effect> {
+        let Some(entry) = self.cc.app_controls.entries().get(index).cloned() else { return vec![] };
+        let Ok(line) = self.cc.app_controls.press(&entry.identifier) else { return vec![] };
+        std::thread::spawn(move || {
+            if let Err(e) = super::intents::exchange(&entry.app_id, &line, APP_CONTROL_WAIT).and_then(|reply| super::intents::parse_reply(&reply)) {
+                eprintln!("control center: {}: {e}", entry.app_id);
+            }
+        });
+        vec![]
     }
 
     fn activate_tile(&mut self, tile: Tile, t: f64) -> Vec<Effect> {
@@ -767,6 +1086,10 @@ impl Shell {
             _ => None,
         };
         let labels = self.cc.labels.as_ref().unwrap();
+        if self.cc.editing {
+            self.draw_gallery(s, slide, (alpha * 255.0) as u32);
+            return;
+        }
 
         // connectivity: airplane, nearby, wi-fi and bluetooth circles
         let (nx, ny, nw, nh) = network_tile(ui, self.w);
@@ -878,6 +1201,38 @@ impl Shell {
                 draw_speaker(s, cx, cy, ui.s, a(SECONDARY));
             }
         }
+
+        // app controls: one tile per control the user added, under the built-in modules
+        let app_pressed = match self.cc.touch {
+            Some(Touch::App(i)) => Some(i),
+            _ => None,
+        };
+        for (i, entry) in self.cc.app_controls.entries().iter().enumerate() {
+            let (x, y, w, h) = app_tile_rect(ui, self.w, i);
+            let y = y + slide;
+            let on = entry.control.kind == ControlKind::Toggle && self.cc.app_controls.value(&entry.identifier);
+            let mut bg = if on { BLUE } else { rgba(255, 255, 255, 34) };
+            if app_pressed == Some(i) {
+                bg = over(bg, rgba(255, 255, 255, 50));
+            }
+            s.fill_rrect(x, y, w, h, r, a(bg));
+            let (cx, cy) = (x + w / 2.0, y + h / 2.0 - ui.pt(8.0));
+            draw_app_symbol(s, &entry.control.symbol, cx, cy, ui.s, a(WHITE));
+            let title = ui.text(&entry.control.title, 10.0, Weight::Semibold, WHITE);
+            let tx = (x + (w - title.w as f32) / 2.0).max(x) as i32;
+            s.blit(&title, tx, (y + h - ui.pt(16.0)) as i32, 255, (alpha * 255.0) as u32);
+        }
+
+        // Edit Controls: opens the list of modules and app controls
+        let (ex, ey, ew, eh) = edit_button_rect(ui, self.w, self.cc.app_controls.entries().len());
+        let mut bg = tile_bg;
+        if matches!(self.cc.touch, Some(Touch::Edit)) {
+            bg = over(bg, a(rgba(255, 255, 255, 50)));
+        }
+        s.fill_rrect(ex, ey + slide, ew, eh, eh / 2.0, bg);
+        let label = ui.text("Edit Controls", 13.0, Weight::Semibold, BLUE);
+        s.blit(&label, (ex + (ew - label.w as f32) / 2.0) as i32, (ey + slide + (eh - label.h as f32) / 2.0) as i32, 255, (alpha * 255.0) as u32);
+
         if let Some(e) = self.cc.expanded {
             self.draw_expanded(s, e, (alpha * 255.0) as u32);
         }
@@ -996,6 +1351,20 @@ fn media_target(tile: Tile) -> Option<Media> {
 }
 
 /// An airplane pointing up-right, `size` px across its wings.
+/// The glyph an app control shows for its manifest `symbol` name. Names the shell has no glyph for get a plain dot.
+fn draw_app_symbol(s: &mut Surface, name: &str, cx: f32, cy: f32, pt: f32, color: u32) {
+    match name {
+        "moon" => status::draw_moon(s, cx - pt / 2.0, cy - pt / 2.0, pt, color),
+        "bell" => draw_bell(s, cx, cy, pt, color, false),
+        "timer" => draw_timer(s, cx, cy, pt, color),
+        "camera" => draw_camera(s, cx, cy, pt, color),
+        "sun.max" | "sun" => draw_sun(s, cx, cy, pt, color),
+        "speaker.wave.2" | "speaker" => draw_speaker(s, cx, cy, pt, color),
+        "wifi" => status::draw_wifi(s, cx - pt / 2.0, cy - pt / 2.0, pt, color),
+        _ => s.fill_rrect(cx - pt / 4.0, cy - pt / 4.0, pt / 2.0, pt / 2.0, pt / 4.0, color),
+    }
+}
+
 fn draw_airplane(s: &mut Surface, cx: f32, cy: f32, size: f32, color: u32) {
     const P: [(f32, f32); 18] = [
         (0.5, 0.0),
@@ -1105,7 +1474,7 @@ fn draw_camera(s: &mut Surface, cx: f32, cy: f32, pt: f32, color: u32) {
 }
 
 /// The brightness sun: a disc with eight rays.
-fn draw_sun(s: &mut Surface, cx: f32, cy: f32, pt: f32, color: u32) {
+pub(super) fn draw_sun(s: &mut Surface, cx: f32, cy: f32, pt: f32, color: u32) {
     let r = 5.0 * pt;
     s.fill_rrect(cx - r, cy - r, 2.0 * r, 2.0 * r, r, color);
     for i in 0..8 {
@@ -1166,6 +1535,55 @@ mod tests {
     use super::*;
     use crate::gfx::Surface;
 
+    #[test]
+    fn the_up_next_button_stays_inside_the_card_at_any_width() {
+        let sh = shell();
+        for w in [60.0_f32, 140.0, 320.0, 900.0] {
+            let card = (100.0, 100.0, w, 80.0);
+            let (bx, _, bw, _) = sh.up_next_button(card);
+            assert!(bx >= card.0, "the button starts inside the card at width {w}");
+            assert!(bx + bw <= card.0 + card.2, "the button ends inside the card at width {w}");
+        }
+    }
+
+    #[test]
+    fn up_next_picks_a_playable_entry_only() {
+        use super::super::services::now_playing::QueueItem;
+        let item = |title: &str, playable: bool| QueueItem { title: title.into(), artist: String::new(), playable };
+        let panel = bifrost_ui::Rect { x: 0.0, y: 0.0, w: 200.0, h: 100.0 };
+        let mut up = UpNext::new(vec![item("A", true), item("B", false)], panel);
+        assert!(up.picker.toggle(1).is_err(), "an unplayable entry is listed but not pickable");
+        assert!(up.picker.toggle(0).is_ok());
+        assert_eq!(up.picker.chosen(), &[0]);
+        assert!(UpNext::new(Vec::new(), panel).items.is_empty(), "an empty queue opens the empty state");
+    }
+
+    #[test]
+    fn sound_output_menu_lists_the_outputs_and_a_pick_reaches_the_binary() {
+        use crate::media::route::Route;
+        let mut sh = shell();
+        sh.set_headphones_present(false);
+        let rect = (100.0, 100.0, 300.0, 60.0);
+        sh.cc.route_menu = Some(sh.route_menu_below(rect));
+        {
+            let menu = sh.cc.route_menu.as_ref().unwrap();
+            assert_eq!(menu.rows.iter().map(|r| r.id.as_str()).collect::<Vec<_>>(), vec!["speaker"], "no headset, no Headphones row");
+            assert!(menu.rows[0].active, "the current output is checked");
+        }
+        sh.set_headphones_present(true);
+        let menu = sh.route_menu_below(rect);
+        assert_eq!(menu.rows.len(), 2);
+        assert!(!menu.rows[1].active);
+        // a press on the second row picks Headphones and closes the menu
+        let row_h = sh.ui.pt(super::super::list::ROW_PT);
+        let (x, y) = (menu.panel.x + 10.0, menu.panel.y + row_h * 1.5);
+        sh.cc.route_menu = Some(menu);
+        sh.cc_desk_event(Event::Down(x, y), 0.0);
+        assert!(sh.cc.route_menu.is_none());
+        assert_eq!(sh.take_route_choice(), Some(Route::Headphones));
+        assert_eq!(sh.take_route_choice(), None, "the choice is taken once");
+    }
+
     fn open_cc(sh: &mut Shell, t: f64) {
         swipe(sh, 1100.0, 5.0, 500.0, t);
         settle(sh, t + 110.0);
@@ -1181,6 +1599,101 @@ mod tests {
     fn centre(sh: &Shell, tile: Tile) -> (f32, f32) {
         let (x, y, w, h) = tile_rect(&sh.ui, sh.w, tile);
         (x + w / 2.0, y + h / 2.0)
+    }
+
+    #[test]
+    fn app_control_tiles_sit_under_the_modules_and_hit_test() {
+        let sh = shell();
+        let module_bottom = {
+            let (_, y, _, h) = cluster(&sh.ui, sh.w);
+            y + h
+        };
+        let (x0, y0, w0, h0) = app_tile_rect(&sh.ui, sh.w, 0);
+        assert!(y0 >= module_bottom, "app tiles start below the built-in modules");
+        // four to a row: the fifth control wraps to the second row, under the first
+        let (x4, y4, _, _) = app_tile_rect(&sh.ui, sh.w, 4);
+        assert!((x4 - x0).abs() < 0.5 && y4 > y0 + h0 / 2.0);
+        let tile_centre = |i: usize| {
+            let (x, y, w, h) = app_tile_rect(&sh.ui, sh.w, i);
+            (x + w / 2.0, y + h / 2.0)
+        };
+        let (cx, cy) = tile_centre(1);
+        assert_eq!(app_hit(&sh.ui, sh.w, 2, cx, cy), Some(1));
+        assert_eq!(app_hit(&sh.ui, sh.w, 1, cx, cy), None, "a tile past the count does not answer");
+        assert_eq!(app_hit(&sh.ui, sh.w, 3, x0 + w0 / 2.0, y0 - 1.0), None, "the gap above a row is not a tile");
+        // a built-in module's centre is not an app tile
+        let (wx, wy) = centre(&sh, Tile::Wifi);
+        assert_eq!(app_hit(&sh.ui, sh.w, 12, wx, wy), None);
+    }
+
+    fn notes_candidates() -> Vec<AppControlEntry> {
+        let control = super::super::app_controls::ManifestControl { kind: ControlKind::Toggle, title: "Quiet Hours".into(), symbol: "moon".into(), intent: "set-quiet".into() };
+        vec![AppControlEntry { app_id: "is.olibuijr.notes".into(), identifier: control.identifier("is.olibuijr.notes"), control }]
+    }
+
+    #[test]
+    fn gallery_module_row_hides_and_shows_a_module_and_saves_it() {
+        let mut sh = shell();
+        let wifi = DEFAULT_MODULES.iter().position(|&t| t == Tile::Wifi).unwrap();
+        sh.cc_gallery_tap(wifi, false);
+        assert!(!tile_visible(&sh.cc_slots(), Tile::Wifi));
+        assert!(sh.prefs.get(MODULES_PREF).unwrap_or("").contains("-wifi"));
+        sh.cc_gallery_tap(wifi, false);
+        assert!(tile_visible(&sh.cc_slots(), Tile::Wifi));
+        assert!(!sh.prefs.get(MODULES_PREF).unwrap_or("").contains("-wifi"));
+    }
+
+    #[test]
+    fn gallery_app_control_add_remove_persists_and_comes_back() {
+        let mut sh = shell();
+        let candidates = notes_candidates();
+        sh.toggle_app_control(&candidates[0]);
+        assert_eq!(sh.cc.app_controls.keys(), vec!["is.olibuijr.notes.set-quiet"]);
+        assert!(sh.prefs.get(MODULES_PREF).unwrap_or("").contains("app:is.olibuijr.notes.set-quiet"));
+        // a fresh panel gets the control back from the saved list, once its app declares it
+        sh.cc.app_controls = AppControls::new();
+        sh.restore_app_controls(&candidates);
+        assert_eq!(sh.cc.app_controls.keys(), vec!["is.olibuijr.notes.set-quiet"]);
+        sh.toggle_app_control(&candidates[0]);
+        assert!(sh.cc.app_controls.keys().is_empty());
+        assert!(!sh.prefs.get(MODULES_PREF).unwrap_or("").contains("app:"));
+    }
+
+    #[test]
+    fn edit_controls_opens_the_list_and_done_closes_it() {
+        let mut sh = shell();
+        let (x, y, w, h) = edit_button_rect(&sh.ui, sh.w, 0);
+        assert!(sh.cc_edit_at(x + w / 2.0, y + h / 2.0));
+        sh.cc_open_edit();
+        assert!(sh.cc.editing);
+        let (rx, ry, rw, rh) = gallery_row_rect(&sh.ui, sh.w, 0);
+        assert_eq!(sh.cc_gallery_at(rx + rw / 2.0, ry + rh / 2.0), Some(0));
+        sh.cc_gallery_tap(sh.cc_gallery_rows() - 1, false);
+        assert!(!sh.cc.editing);
+    }
+
+    #[test]
+    fn gallery_menu_bar_switch_turns_a_module_item_on_and_off() {
+        let mut sh = shell();
+        let wifi = DEFAULT_MODULES.iter().position(|&t| t == Tile::Wifi).unwrap();
+        sh.cc_gallery_tap(wifi, true);
+        assert_eq!(parse_menu_bar_items(sh.prefs.get(MENU_BAR_PREF).unwrap_or("")), vec![Tile::Wifi]);
+        // the module itself is still on the panel: the two switches are independent
+        assert!(tile_visible(&sh.cc_slots(), Tile::Wifi));
+        sh.cc_gallery_tap(wifi, true);
+        assert!(parse_menu_bar_items(sh.prefs.get(MENU_BAR_PREF).unwrap_or("")).is_empty());
+    }
+
+    #[test]
+    fn battery_label_needs_the_pref_and_a_battery() {
+        let mut sh = shell();
+        sh.info.battery_present = true;
+        sh.info.battery = 80;
+        assert_eq!(sh.battery_bar_label(), None, "off by default");
+        sh.prefs.set(BATTERY_PERCENT_PREF, "1").unwrap();
+        assert_eq!(sh.battery_bar_label().as_deref(), Some("80%"));
+        sh.info.battery_present = false;
+        assert_eq!(sh.battery_bar_label(), None, "no battery, no label");
     }
 
     #[test]
@@ -1580,8 +2093,9 @@ impl Shell {
         draw_scaled(s, &icons::placeholder(64, 0.0), r, ui.pt(5.0), alpha);
         let title = session.content().map_or("Now Playing".to_string(), |c| c.title.clone());
         let artist = session.content().map(|c| c.subtitle()).unwrap_or_default();
-        let text_w = ui.pt(130.0);
         let tx = (x + ui.pt(14.0) + size + ui.pt(10.0)) as i32;
+        // the text runs up to the Up Next button, whatever the card's width
+        let text_w = (self.up_next_button(rect).0 - ui.pt(8.0) - tx as f32).max(0.0);
         let title = self.fit_chrome(&title, 15.0, text_w);
         let artist = self.fit_chrome(&artist, 13.0, text_w);
         self.label(&title, 15.0, Weight::Semibold, WHITE, |im| s.blit(im, tx, (y + ui.pt(16.0)) as i32, 255, alpha));
@@ -1649,6 +2163,37 @@ impl Shell {
         Some((x, y, lx + lw - x, ly + lh - y))
     }
 
+    /// The output menu under the Sound module: Speaker, and Headphones while the headset is in, with the active
+    /// output checked.
+    pub(crate) fn route_menu_below(&self, (x, y, w, _h): (f32, f32, f32, f32)) -> RouteMenu {
+        let auth = bifrost_ui::route_auth::RouteAuth::new();
+        let local: Vec<(&str, &str)> = if self.cc.headphones_present { vec![("speaker", "Speaker"), ("headphones", "Headphones")] } else { vec![("speaker", "Speaker")] };
+        let rows = bifrost_ui::route_picker::destinations(&local, &[], &auth);
+        // the three outputs the person chose most often lead the menu (the audio service keeps the history)
+        let history = super::services::audio_devices::load_history(&super::services::audio_devices::history_path());
+        let mut rows = bifrost_ui::route_prediction::lead_with_suggestions(rows, &history.ids(), 3);
+        let current = match self.cc.route {
+            crate::media::route::Route::Speaker => "speaker",
+            crate::media::route::Route::Headphones => "headphones",
+        };
+        for row in rows.iter_mut() {
+            row.active = row.id == current;
+        }
+        let panel_w = self.ui.pt(220.0);
+        let panel = bifrost_ui::Rect { x: x + w - panel_w, y: y + self.ui.pt(30.0), w: panel_w, h: rows.len() as f32 * self.ui.pt(super::list::ROW_PT) };
+        RouteMenu { panel, rows }
+    }
+
+    /// The binary takes the output the user picked in the Sound module's menu.
+    pub fn take_route_choice(&mut self) -> Option<crate::media::route::Route> {
+        self.cc.route_choice.take()
+    }
+
+    /// The binary tells the shell whether the headset is in, so the output menu lists Headphones only then.
+    pub fn set_headphones_present(&mut self, plugged: bool) {
+        self.cc.headphones_present = plugged;
+    }
+
     /// A slider's track in its module: (left, right, centre y) in px.
     fn desk_track(&self, (x, y, w, h): (f32, f32, f32, f32)) -> (f32, f32, f32) {
         let ui = &self.ui;
@@ -1666,6 +2211,8 @@ impl Shell {
             return;
         }
         self.notify.center.hide();
+        self.cc.route_menu = None;
+        self.cc.up_next = None;
         self.cc.backlight = desk_backlight();
         // a live overlay over the desktop, like the menu-bar menus: no snapshot
         self.cc.backdrop = None;
@@ -1676,10 +2223,46 @@ impl Shell {
     /// Pointer input while the desktop panel is up: a click outside closes it
     /// (and is consumed, as a menu does), modules act on release.
     pub(super) fn cc_desk_event(&mut self, ev: Event, t: f64) -> Vec<Effect> {
+        // an open Up Next picker takes the next press: an entry picks it, an unplayable one keeps the picker open,
+        // and anything else closes it
+        if let Event::Down(x, y) = ev {
+            if let Some(mut up) = self.cc.up_next.take() {
+                self.dirty = true;
+                let row_h = self.ui.pt(super::list::ROW_PT);
+                if let Some(i) = super::pickers::row_at(up.panel, row_h, up.items.len(), x, y) {
+                    if up.picker.toggle(i as u64).is_ok() {
+                        super::services::now_playing::choose_up_next(i);
+                    } else {
+                        self.cc.up_next = Some(up);
+                    }
+                }
+                return vec![];
+            }
+        }
+        // an open output menu takes the next press: a row picks that output, anything else closes the menu
+        if let Event::Down(x, y) = ev {
+            if let Some(menu) = self.cc.route_menu.take() {
+                let row_h = self.ui.pt(super::list::ROW_PT);
+                if let Some(row) = super::pickers::row_at(menu.panel, row_h, menu.rows.len(), x, y) {
+                    self.cc.route_choice = route_of_id(&menu.rows[row].id);
+                }
+                self.dirty = true;
+                return vec![];
+            }
+        }
         let tiles = self.cc_desk_tiles();
         let at = |x: f32, y: f32| tiles.iter().copied().find(|&(_, r)| inside(r, x, y));
         match ev {
             Event::Down(x, y) => match at(x, y) {
+                Some((Tile::MediaPlay, r)) if inside(self.up_next_button(r), x, y) => {
+                    let row_h = self.ui.pt(super::list::ROW_PT);
+                    let items = now_playing::up_next();
+                    let panel_w = r.2;
+                    let panel = bifrost_ui::Rect { x: r.0, y: r.1 + r.3 + self.ui.pt(6.0), w: panel_w, h: items.len().max(1) as f32 * row_h + self.ui.pt(super::pickers::FOOTER_PT) };
+                    self.cc.up_next = Some(UpNext::new(items, panel));
+                    self.dirty = true;
+                    vec![]
+                }
                 Some((Tile::MediaPlay, r)) => {
                     let (bx, by, bw, bh) = media_bar(r, &self.ui);
                     let zone = (bx - self.ui.pt(6.0), by - self.ui.pt(6.0), bw + self.ui.pt(12.0), bh + self.ui.pt(12.0));
@@ -1688,6 +2271,11 @@ impl Shell {
                     } else {
                         Some(Touch::Tile(desk_media_button(r, x)))
                     };
+                    vec![]
+                }
+                Some((Tile::Volume, r)) if inside(route_chevron(r, &self.ui), x, y) => {
+                    self.cc.route_menu = Some(self.route_menu_below(r));
+                    self.dirty = true;
                     vec![]
                 }
                 Some((tile @ (Tile::Brightness | Tile::Volume), r)) => {
@@ -1779,11 +2367,17 @@ impl Shell {
                     } else {
                         draw_speaker(s, ends.0, cy, ui.s * 0.6, a(label));
                         draw_speaker_waves(s, ends.1, cy, ui.s * 0.6, a(label), 3);
+                        // the output chevron: opens the output menu
+                        let (kx, ky, kw, kh) = route_chevron((x, y, w, h), ui);
+                        let (kcx, kcy, k) = (kx + kw / 2.0, ky + kh / 2.0, ui.pt(4.0));
+                        icons::fill_poly(s, &[(kcx - k * 1.6, kcy - k * 0.6), (kcx + k * 1.6, kcy - k * 0.6), (kcx, kcy + k * 0.9)], a(label));
                     }
                 }
                 Tile::MediaPlay => {
                     desk_glass(s, ShellSurface::ControlCentre, (x, y, w, h), ui.pt(DK_SLIDER_R_PT), alpha);
                     self.draw_media_tile(s, (x, y, w, h), alpha, None);
+                    let (bx, by, _, _) = self.up_next_button((x, y, w, h));
+                    self.label("Up Next", 12.0, Weight::Semibold, SYSTEM_BLUE, |im| s.blit(im, bx as i32, by as i32, 255, alpha));
                 }
                 _ => {
                     desk_glass(s, ShellSurface::ControlCentre, (x, y, w, h), h / 2.0, alpha);
@@ -1796,7 +2390,8 @@ impl Shell {
                             let on = self.info.bt.on();
                             (on, "Bluetooth", if on { "On" } else { "Off" }.into())
                         }
-                        _ => (self.dnd(), "Focus", if self.dnd() { "Do Not Disturb" } else { "Off" }.into()),
+                        // the subtitle names the Focus mode that is on
+                        _ => (self.dnd(), "Focus", self.notify.active_mode().map_or_else(|| "Off".to_string(), |m| m.name)),
                     };
                     let d = ui.pt(DK_DISC_PT);
                     let (dx, dy) = (x + (h - d) / 2.0, y + (h - d) / 2.0);
@@ -1829,6 +2424,20 @@ impl Shell {
                     self.label(&f2, MAC_SUBHEAD_PT, Weight::Regular, sub_ink, |im| s.blit(im, tx as i32, (top + h1 as f32) as i32, 255, alpha));
                 }
             }
+        }
+        // the output menu and the Up Next picker, over the modules
+        if let Some(menu) = &self.cc.route_menu {
+            super::pickers::draw_route_menu(s, &self.ui, menu.panel, &menu.rows, None);
+        }
+        if let Some(up) = &self.cc.up_next {
+            let rows: Vec<super::pickers::PickerRow> = up
+                .items
+                .iter()
+                .enumerate()
+                .map(|(i, it)| super::pickers::PickerRow { title: it.title.clone(), subtitle: it.artist.clone(), chosen: up.picker.chosen().contains(&(i as u64)), enabled: it.playable })
+                .collect();
+            let footer = if rows.is_empty() { "Nothing up next".to_string() } else { format!("{} up next", rows.len()) };
+            super::pickers::draw_media_picker(s, &self.ui, up.panel, &rows, &footer);
         }
     }
 }
@@ -1932,6 +2541,79 @@ pub fn tile_visible(slots: &[ModuleSlot], tile: Tile) -> bool {
     }
 }
 
+/// The prefs key that holds the modules that get their own menu bar item (comma-separated module keys, in the
+/// order they appear in the bar). Empty or absent means none.
+pub const MENU_BAR_PREF: &str = "control_center_menu_bar";
+
+/// The prefs key for the battery percentage beside the battery menu bar item: `"1"` shows it, anything else hides it.
+pub const BATTERY_PERCENT_PREF: &str = "battery_show_percent";
+
+/// Reads the menu bar pref: the modules with their own status item, in order. Unknown keys, media tiles and repeats
+/// are dropped.
+pub fn parse_menu_bar_items(text: &str) -> Vec<Tile> {
+    let mut out: Vec<Tile> = Vec::new();
+    for key in text.split(',').map(str::trim).filter(|k| !k.is_empty()) {
+        let Some(tile) = DEFAULT_MODULES.iter().copied().find(|&t| module_key(t) == Some(key)) else { continue };
+        if !out.contains(&tile) {
+            out.push(tile);
+        }
+    }
+    out
+}
+
+/// Writes the menu bar items back in the form `parse_menu_bar_items` reads.
+pub fn format_menu_bar_items(items: &[Tile]) -> String {
+    let mut keys: Vec<&str> = Vec::new();
+    for key in items.iter().filter_map(|&t| module_key(t)) {
+        if !keys.contains(&key) {
+            keys.push(key);
+        }
+    }
+    keys.join(",")
+}
+
+/// Whether a module has its own menu bar item.
+pub fn has_menu_bar_item(items: &[Tile], tile: Tile) -> bool {
+    items.contains(&tile)
+}
+
+/// Turns a module's own menu bar item on or off, appending it at the end when turned on.
+pub fn set_menu_bar_item(items: &mut Vec<Tile>, tile: Tile, on: bool) {
+    items.retain(|&t| t != tile);
+    if on && module_key(tile).is_some() {
+        items.push(tile);
+    }
+}
+
+/// Whether the battery item shows its percentage, from the pref text.
+pub fn battery_percent_shown(pref: Option<&str>) -> bool {
+    pref.map(str::trim) == Some("1")
+}
+
+/// The name a module has in the Edit Controls list. Media tiles have none (they are not listed).
+pub fn module_title(tile: Tile) -> &'static str {
+    match tile {
+        Tile::Airplane => "Airplane Mode",
+        Tile::Nearby => "Nearby Sharing",
+        Tile::Wifi => "Wi-Fi",
+        Tile::Bluetooth => "Bluetooth",
+        Tile::RotationLock => "Rotation Lock",
+        Tile::Mirror => "Screen Mirroring",
+        Tile::Focus => "Focus",
+        Tile::Silent => "Silent Mode",
+        Tile::Timer => "Timer",
+        Tile::Camera => "Camera",
+        Tile::Brightness => "Brightness",
+        Tile::Volume => "Volume",
+        Tile::MediaPrev | Tile::MediaPlay | Tile::MediaNext => "",
+    }
+}
+
+/// The modules pref text for the module list and the app controls on the panel (`join_pref`).
+pub fn save_text(slots: &[ModuleSlot], app_keys: &[String]) -> String {
+    join_pref(&format_slots(slots), app_keys)
+}
+
 /// Moves the module at `from` to `to` (both indices into the list). Out-of-range indices change nothing.
 pub fn move_slot(slots: &mut Vec<ModuleSlot>, from: usize, to: usize) {
     if from >= slots.len() || to >= slots.len() {
@@ -2007,5 +2689,35 @@ mod module_list_tests {
         assert_eq!(slots, before);
         move_slot(&mut slots, 0, 2);
         assert_eq!(slots[2].tile, Tile::Airplane);
+    }
+
+    #[test]
+    fn menu_bar_items_read_in_order_and_drop_unknowns() {
+        let items = parse_menu_bar_items("wifi,bogus,media,wifi,focus,");
+        assert_eq!(items, vec![Tile::Wifi, Tile::Focus]);
+        assert!(parse_menu_bar_items("").is_empty());
+    }
+
+    #[test]
+    fn menu_bar_items_round_trip_and_toggle() {
+        let mut items = parse_menu_bar_items("focus,wifi");
+        set_menu_bar_item(&mut items, Tile::Bluetooth, true);
+        assert!(has_menu_bar_item(&items, Tile::Bluetooth));
+        set_menu_bar_item(&mut items, Tile::Focus, false);
+        assert!(!has_menu_bar_item(&items, Tile::Focus));
+        let text = format_menu_bar_items(&items);
+        assert_eq!(text, "wifi,bluetooth");
+        assert_eq!(parse_menu_bar_items(&text), items);
+        // media tiles have no menu bar item of their own
+        set_menu_bar_item(&mut items, Tile::MediaPlay, true);
+        assert!(!has_menu_bar_item(&items, Tile::MediaPlay));
+    }
+
+    #[test]
+    fn battery_percent_pref_is_on_only_for_one() {
+        assert!(battery_percent_shown(Some("1")));
+        assert!(battery_percent_shown(Some(" 1 ")));
+        assert!(!battery_percent_shown(Some("0")));
+        assert!(!battery_percent_shown(None));
     }
 }

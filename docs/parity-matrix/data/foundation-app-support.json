@@ -53,11 +53,11 @@
     }
   ],
   "gaps": [
-    "ProgressManager and publishing progress to other processes; value observation of progress for views",
-    "Per-domain error user info providers and a recovery attempter that runs the chosen option",
+    "Publishing progress to other processes and value observation for views: ui/src/progress.rs has the ProgressTree model, the SDK does not expose it, and nothing publishes progress across processes.",
+    "Per-domain error user info providers and a recovery attempter: sdk/src/error.rs (AppError) keeps the recovery options, and the caller runs the chosen one; no attempter runs it.",
     "NSUserActivity Handoff between devices",
-    "Generic app extension host and NSItemProvider",
+    "Generic app extension host: sdk/src/item_provider.rs loads typed representations (NSItemProvider style), but there is no extension host to load them from other apps.",
     "Scripting dictionaries / AppleScript-like automation",
-    "NotificationQueue coalescing and typed notification payloads"
+    "Typed notification payloads: sdk/src/notification_queue.rs covers coalescing (tests notification_queue::tests), but WhenIdle delivers on the same drain as Asap because there is no idle detection; payloads stay untyped user info."
   ]
 }

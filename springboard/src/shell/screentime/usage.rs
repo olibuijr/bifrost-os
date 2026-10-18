@@ -166,6 +166,8 @@ pub struct Tracker {
     today: Day,
     last_unix: i64,
     last_on: bool,
+    /// the app in front at the last record: the seconds up to the next record go to it
+    last_fg: Option<AppId>,
     dirty: bool,
     flushed_at: i64,
 }
@@ -173,7 +175,7 @@ pub struct Tracker {
 impl Tracker {
     /// A tracker writing into `dir`; nothing is read until the first tick.
     pub fn new(dir: impl Into<PathBuf>) -> Self {
-        Tracker { dir: dir.into(), day: i64::MIN, today: Day::default(), last_unix: 0, last_on: false, dirty: false, flushed_at: 0 }
+        Tracker { dir: dir.into(), day: i64::MIN, today: Day::default(), last_unix: 0, last_on: false, last_fg: None, dirty: false, flushed_at: 0 }
     }
 
     pub fn dir(&self) -> &Path {
@@ -193,9 +195,12 @@ impl Tracker {
         prune(&self.dir, day);
     }
 
-    /// Credits the time since the last tick to `fg` (the app on screen, if
-    /// any) while the screen is on, and counts a pickup when the screen
-    /// comes on. Returns true when today's record changed.
+    /// Records the state at `unix`. The seconds since the previous record are
+    /// credited to the app that was in front during them (`last_fg`) while the
+    /// screen was on, and a pickup is counted when the screen comes on. Callers
+    /// record once before and once after anything that changes the state, with
+    /// the time of that change, so a switch is credited from its own time.
+    /// Returns true when today's record changed.
     pub fn tick(&mut self, unix: i64, offset: i32, fg: Option<AppId>, screen_on: bool) -> bool {
         if unix <= 0 {
             return false;
@@ -210,7 +215,7 @@ impl Tracker {
         if self.last_unix > 0 {
             let dt = (unix - self.last_unix).clamp(0, MAX_STEP_SECS) as u32;
             // the screen must have been on for the whole interval (a wake-up tick credits nothing)
-            if let (Some(app), true, true, true) = (fg, screen_on, self.last_on, dt > 0) {
+            if let (Some(app), true, true) = (self.last_fg, self.last_on, dt > 0) {
                 *self.today.secs.entry(key(app)).or_default() += dt;
                 self.today.hours[(minute_of(unix, offset) / 60) as usize] += dt;
                 changed = true;
@@ -222,6 +227,7 @@ impl Tracker {
         }
         self.last_unix = unix;
         self.last_on = screen_on;
+        self.last_fg = fg;
         self.dirty |= changed;
         if self.dirty && unix - self.flushed_at >= FLUSH_SECS {
             self.flush();
@@ -305,11 +311,12 @@ mod tests {
         }
         assert_eq!(t.today().app_secs(AppId::Files), 10);
         t.tick(base + 12, 0, None, true);
+        assert_eq!(t.today().app_secs(AppId::Files), 11, "the second before the Home record was still in Files");
         t.tick(base + 13, 0, Some(AppId::Files), false);
-        assert_eq!(t.today().app_secs(AppId::Files), 10, "home screen and a dark screen add nothing");
+        assert_eq!(t.today().app_secs(AppId::Files), 11, "a dark screen adds nothing");
         t.tick(base + 14, 0, Some(AppId::Files), true);
         t.tick(base + 1000, 0, Some(AppId::Files), true);
-        assert_eq!(t.today().app_secs(AppId::Files), 10 + MAX_STEP_SECS as u32, "a stall is capped");
+        assert_eq!(t.today().app_secs(AppId::Files), 11 + MAX_STEP_SECS as u32, "a stall is capped");
         t.note_notification(AppId::Photos);
         t.flush();
         let back = load_day(&d, day_of(base, 0));
@@ -331,6 +338,37 @@ mod tests {
         assert_eq!(t.today().total(), 0);
         t.tick(base + 86_400 * (KEEP_DAYS + 2), 0, None, true);
         assert!(!day_path(&d, first_day).exists());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn midnight_gap_is_credited_to_neither_day() {
+        let d = dir("midnight");
+        let mut t = Tracker::new(&d);
+        let midnight = (1_700_000_000 / 86_400 + 1) * 86_400;
+        t.tick(midnight - 10, 0, Some(AppId::Files), true);
+        t.tick(midnight - 5, 0, Some(AppId::Files), true);
+        t.tick(midnight + 3, 0, Some(AppId::Files), true);
+        assert_eq!(t.today().app_secs(AppId::Files), 0, "the 3 s across midnight is not credited to the new day");
+        t.tick(midnight + 4, 0, Some(AppId::Files), true);
+        assert_eq!(t.today().app_secs(AppId::Files), 1);
+        assert_eq!(load_day(&d, day_of(midnight - 1, 0)).app_secs(AppId::Files), 5, "the old day keeps its own seconds");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn an_app_switch_is_credited_from_the_time_of_the_switch() {
+        let d = dir("switch");
+        let mut t = Tracker::new(&d);
+        let base = 1_700_000_000;
+        t.tick(base, 0, Some(AppId::Files), true);
+        t.tick(base + 1, 0, Some(AppId::Files), true);
+        // the switch happens at base + 1 (the shell records before and after the input event)
+        t.tick(base + 1, 0, Some(AppId::Photos), true);
+        t.tick(base + 3, 0, Some(AppId::Photos), true);
+        assert_eq!(t.today().app_secs(AppId::Files), 1, "Files keeps only the seconds up to the switch");
+        assert_eq!(t.today().app_secs(AppId::Photos), 2, "Photos gets the seconds after the switch");
+        assert_eq!(t.today().ranked()[0].0, AppId::Photos);
         let _ = std::fs::remove_dir_all(&d);
     }
 

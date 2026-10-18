@@ -53,10 +53,19 @@ package_bifrost_files() {
   # under, and the trigger that starts the target on the first desktop frame
   install -Dm755 "$PC_BIFROSTD" "$pkgdir/usr/bin/bifrostd"
   install -Dm644 "$here/bifrostd.service" "$pkgdir/usr/lib/systemd/system/bifrostd.service"
-  install -Dm644 "$here/bifrost-desktop-ready.service" "$pkgdir/usr/lib/systemd/system/bifrost-desktop-ready.service"
+  # zram swap at boot (memory pressure; bifrostd adds swap files under pressure once it runs)
+  install -Dm644 "$here/bifrost-zram.service" "$pkgdir/usr/lib/systemd/system/bifrost-zram.service"
+  # application firewall: the per-app inbound policies (bifrost-firewall, springboard/cmd) loaded as nftables rules
+  install -Dm644 "$here/bifrost-firewall.service" "$pkgdir/usr/lib/systemd/system/bifrost-firewall.service"
+  install -Dm644 "$here/bifrost-desktop-ready.service""$pkgdir/usr/lib/systemd/system/bifrost-desktop-ready.service"
   install -Dm644 "$here/bifrost-after-desktop.target" "$pkgdir/usr/lib/systemd/system/bifrost-after-desktop.target"
   install -Dm644 "$here/dbus/org.freedesktop.portal.Desktop.service" "$pkgdir/usr/share/dbus-1/services/org.freedesktop.portal.Desktop.service"
   install -Dm644 "$here/springboard.service" "$pkgdir/usr/lib/systemd/system/springboard.service"
+  # Printer Sharing: the LPD listener for the cups-lpd that the cups package ships (off until Sharing turns it on)
+  # DHCPv6 for a shared segment: privd writes /run/bifrost/dhcp6/<interface>.conf and starts this unit (dnsmasq)
+  install -Dm644 "$here/bifrost-dhcp6@.service" "$pkgdir/usr/lib/systemd/system/bifrost-dhcp6@.service"
+  install -Dm644 "$here/cups-lpd.socket" "$pkgdir/usr/lib/systemd/system/cups-lpd.socket"
+  install -Dm644 "$here/cups-lpd@.service" "$pkgdir/usr/lib/systemd/system/cups-lpd@.service"
   # login round: root helper, PAM service, privd socket group (the user-session migration is a later stage)
   # (PC_PRIVD overrides; otherwise bifrost-privd is looked up next to the shell binary)
   privd=${PC_PRIVD:-$(dirname "$binary")/bifrost-privd}
@@ -65,6 +74,10 @@ package_bifrost_files() {
   fi
   install -Dm644 "$here/bifrost-privd.service" "$pkgdir/usr/lib/systemd/system/bifrost-privd.service"
   install -Dm644 "$here/pam-bifrost-login" "$pkgdir/etc/pam.d/bifrost-login"
+  # Screen Sharing: wayvnc behind a login (PAM service "wayvnc", limited to the one account Settings names) and its
+  # RSA-AES key; off until Settings > Sharing > Screen Sharing turns it on (privd writes the configuration first)
+  install -Dm644 "$here/bifrost-wayvnc.service" "$pkgdir/usr/lib/systemd/system/bifrost-wayvnc.service"
+  install -Dm644 "$here/pam-bifrost-wayvnc" "$pkgdir/etc/pam.d/wayvnc"
   # ALSA compatibility plug-in for third-party apps (audio task 08): the default PCM goes to bifrost-audiod
   if [[ -n ${PC_ALSA_PLUGIN:-} && -f ${PC_ALSA_PLUGIN} ]]; then
     install -Dm755 "$PC_ALSA_PLUGIN" "$pkgdir/usr/lib/alsa-lib/libasound_module_pcm_bifrost.so"
@@ -107,6 +120,39 @@ package_bifrost_files() {
   # open equivalents for compat family names (Arial, Times New Roman, Courier New, Menlo, Symbol, ...)
   install -Dm644 "$here/fontconfig/60-bifrost-aliases.conf" "$pkgdir/etc/fonts/conf.d/60-bifrost-aliases.conf"
   install -Dm755 "$here/wayland/apps" "$pkgdir/usr/bin/bifrost-apps"
+  # bifrost-cmd (springboard/cmd/src/bin/*.rs): every tool of the crate, found by listing the sources, so a new tool
+  # ships without editing this script. PC_CMD_DIR holds the release binaries of `cargo build -p bifrost-cmd --bins`.
+  # Tools named below collide with a file an Arch package owns, so they go to /usr/lib/bifrost/cmd/bin, which
+  # /etc/profile.d/bifrost-cmd.sh puts on PATH after /usr/bin (the Arch file keeps the name):
+  local src tool dest colliding
+  local cmd_colliding=(
+    vis      # Arch extra/vis: the vis editor (/usr/bin/vis)
+    units    # Arch units: the GNU unit converter (/usr/bin/units)
+    lastcomm # Arch acct: process accounting (/usr/bin/lastcomm, with accton and sa)
+  )
+  # Checked and kept in /usr/bin: open, leave, and the other tool names. No package in runtime-packages.txt or
+  # BASE_PACKAGES (springboard/src/installer/plan.rs) owns a file of that name.
+  if [[ -z ${PC_CMD_DIR:-} || ! -d ${PC_CMD_DIR} ]]; then
+    echo "package-files.sh: PC_CMD_DIR is unset or not a directory; build bifrost-cmd first (tools/pc-publish.py does)" >&2
+    return 1 2>/dev/null || exit 1
+  fi
+  for src in "$here/../../springboard/cmd/src/bin"/*.rs; do
+    if [[ ! -f $src ]]; then
+      echo "package-files.sh: no bifrost-cmd tool sources under $here/../../springboard/cmd/src/bin" >&2
+      return 1 2>/dev/null || exit 1
+    fi
+    tool=$(basename "$src" .rs)
+    if [[ ! -x $PC_CMD_DIR/$tool ]]; then
+      echo "package-files.sh: bifrost-cmd tool $tool is not built ($PC_CMD_DIR/$tool)" >&2
+      return 1 2>/dev/null || exit 1
+    fi
+    dest=/usr/bin
+    for colliding in "${cmd_colliding[@]}"; do
+      if [[ $colliding == "$tool" ]]; then dest=/usr/lib/bifrost/cmd/bin; fi
+    done
+    install -Dm755 "$PC_CMD_DIR/$tool" "$pkgdir$dest/$tool"
+  done
+  install -Dm644 "$here/profile-bifrost-cmd.sh" "$pkgdir/etc/profile.d/bifrost-cmd.sh"
   # pico is the older name of nano; the nano package ships only nano, so the name is linked here
   install -d "$pkgdir/usr/bin"
   ln -sfn nano "$pkgdir/usr/bin/pico"

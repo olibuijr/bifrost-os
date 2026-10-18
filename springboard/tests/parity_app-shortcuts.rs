@@ -35,7 +35,10 @@ fn a_file_line_without_the_automation_field_reads_as_none() {
 fn an_automation_with_no_menu_key_keeps_a_zero_key_in_its_place() {
     let list = vec![with_automation("Save Power", Some(Automation::BatteryBelow(20)))];
     let line = serialize(&list);
-    assert!(line.trim_end().ends_with("\t0\tbattery:20"), "{line}");
+    // fields: name, glyph, action, ..., menu key (7th), automation (8th), then the later Focus fields
+    let fields: Vec<&str> = line.trim_end().split('\t').collect();
+    assert_eq!(fields[6], "0", "{line}");
+    assert_eq!(fields[7], "battery:20", "{line}");
     assert_eq!(parse(&line)[0].key, 0);
 }
 
@@ -117,27 +120,32 @@ fn a_starter_added_from_the_gallery_keeps_its_glyph_and_folder() {
 }
 
 #[test]
-fn the_automation_row_starts_at_the_first_app_and_ends_with_no_automation() {
-    assert_eq!(model::next_automation(None), Some(Automation::AppOpens(0)));
+fn the_automation_row_starts_at_sign_in_and_ends_with_no_automation() {
+    assert_eq!(model::next_automation(None), Some(Automation::AtLogin));
+    assert_eq!(model::next_automation(Some(Automation::AtLogin)), Some(Automation::FocusChanges(true)));
     assert_eq!(model::next_automation(Some(Automation::AppOpens(0))), Some(Automation::AppOpens(1)));
     let last_app = model::APP_CHOICES.len() - 1;
-    assert_eq!(model::next_automation(Some(Automation::AppOpens(last_app))), Some(Automation::BatteryBelow(10)));
+    assert_eq!(model::next_automation(Some(Automation::AppOpens(last_app))), Some(Automation::AppCloses(0)));
+    assert_eq!(model::next_automation(Some(Automation::AppCloses(last_app))), Some(Automation::BatteryBelow(10)));
     assert_eq!(model::next_automation(Some(Automation::BatteryBelow(20))), Some(Automation::BatteryBelow(30)));
-    assert_eq!(model::next_automation(Some(Automation::BatteryBelow(50))), None);
+    assert_eq!(model::next_automation(Some(Automation::BatteryBelow(50))), Some(Automation::FileDropped));
+    assert_eq!(model::next_automation(Some(Automation::FileDropped)), None);
 }
 
 #[test]
 fn the_automation_row_cycles_through_every_offered_automation_once() {
     let mut seen = Vec::new();
     let mut cur = None;
-    for _ in 0..=model::APP_CHOICES.len() + model::BATTERY_CHOICES.len() {
+    // sign-in, two Focus changes, daily and weekday times, app opens and closes, battery levels, a dropped file
+    let expected = 3 + 2 * model::TIMES.len() + 2 * model::APP_CHOICES.len() + model::BATTERY_CHOICES.len() + 1;
+    for _ in 0..=expected {
         cur = model::next_automation(cur);
         if cur.is_none() {
             break;
         }
         seen.push(cur);
     }
-    assert_eq!(seen.len(), model::APP_CHOICES.len() + model::BATTERY_CHOICES.len());
+    assert_eq!(seen.len(), expected);
     assert_eq!(cur, None, "the row returns to none after the last level");
 }
 
@@ -168,4 +176,20 @@ fn a_position_outside_the_list_has_no_neighbour() {
     assert_eq!(model::neighbour(0, 0, true), None);
     assert_eq!(model::neighbour(3, 5, false), None);
     assert_eq!(model::neighbour(3, 3, true), None);
+}
+
+#[test]
+fn a_focus_automation_fires_when_a_focus_turns_on_or_off() {
+    let list = vec![with_automation("On", Some(Automation::FocusChanges(true))), with_automation("Off", Some(Automation::FocusChanges(false)))];
+    assert_eq!(due(&list, Event::Focus(true)), vec![0]);
+    assert_eq!(due(&list, Event::Focus(false)), vec![1]);
+    assert_eq!(due(&list, Event::AppOpened("Notes")), Vec::<usize>::new());
+}
+
+#[test]
+fn focus_automations_survive_the_list_file_and_step_in_the_row() {
+    let list = vec![with_automation("On", Some(Automation::FocusChanges(true))), with_automation("Off", Some(Automation::FocusChanges(false)))];
+    assert_eq!(parse(&serialize(&list)), list);
+    assert_eq!(model::automation_label(Some(Automation::FocusChanges(true))), "When Focus Turns On");
+    assert_eq!(model::automation_label(Some(Automation::FocusChanges(false))), "When Focus Turns Off");
 }

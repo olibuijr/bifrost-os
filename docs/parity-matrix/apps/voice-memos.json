@@ -126,10 +126,10 @@
    "feature": "Playback speed",
    "area": "settings",
    "apple": "playback options",
-   "status": "gap",
-   "bifrost": "",
-   "note": "The audio service takes no playback rate, so playback runs at normal speed; the SDK audio_player_control model is not connected to playback.",
-   "wire": "Add a playback rate command to the audio service, then a rate control in the transport that sends it."
+   "status": "partial",
+   "bifrost": "springboard/src/media/timestretch.rs:39 (Stretcher, WSOLA time-stretch); springboard/src/media/audioplayer.rs:292 (set_rate); springboard/proto/src/svc.rs (Cmd::SetRate, tag 18; State carries rate); springboard/audiod/src/main.rs:128 (SetRate applied); springboard/sdk/src/system_audio.rs (Command::rate); springboard/apps/voicememos-desktop/src/voicememos.rs:1634 (rate_now, set_speed), :2356 (draw_speed, the Slower/Faster stepper); springboard/apps/voicememos-desktop/src/store.rs:238 (read_rate, write_rate, step_speed)",
+   "note": "The transport's Slower and Faster stepper moves through 0.5x, 1x, 1.5x and 2x. audiod time-stretches the audio, so the pitch stays the same, and the speed is saved per recording as a hidden sidecar. Tested headless: protocol round trip, output length, a 1 kHz tone keeps its pitch by DFT, the sidecar. Not verified on Midget.",
+   "wire": "Check on Midget: play a memo at 1.5x and listen for the same pitch; the take is about two thirds as long; reopen the memo and the speed is still 1.5x."
   },
   {
    "feature": "Notes per memo",
@@ -182,8 +182,8 @@
    "apple": "Transcript",
    "status": "gap",
    "bifrost": "",
-   "note": "",
-   "wire": "Local speech-to-text stored in a sidecar and shown in the notes pane"
+   "note": "No local speech-to-text engine exists. The repo ships only the SDK model springboard/sdk/src/speech_recognizer.rs (RecognitionBackend, with a test fake); no whisper, vosk or other engine is shipped or referenced, so nothing can transcribe a memo yet.",
+   "wire": "Needs a local speech-to-text engine first (none is installed or referenced). Then run it in the background on a recording, store the text in a sidecar, and show it in the notes pane."
   },
   {
    "feature": "Input device and quality settings",
@@ -225,9 +225,9 @@
  "summary": {
   "features": 24,
   "parity": 12,
-  "partial": 8,
-  "gap": 2,
+  "partial": 9,
+  "gap": 1,
   "n/a": 2,
-  "coverage_pct": 72.7
+  "coverage_pct": 75.0
  }
 }

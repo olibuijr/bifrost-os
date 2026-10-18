@@ -127,7 +127,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: mount installed, not run headless (changes machine state)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/mount"
+    }
+   ],
+   "ready_note": "installed counterpart /usr/bin/mount; presence check only, the command is not run because it changes machine state or needs arguments"
   },
   {
    "id": "path:/sbin/mount_9p",
@@ -148,7 +156,20 @@
    "status": "partial",
    "note": "Midget 0.7.25: mount installed, not run headless (changes machine state)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "mount --version",
+     "expect_exit": 0
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/mount"
+    }
+   ],
+   "ready_note": "mount_9p mounts a 9P file system; mount -t 9p (util-linux, with the kernel's 9p client) does that job. It needs root and the 9p module, so only the tool is checked."
   },
   {
    "id": "path:/sbin/mount_devfs",
@@ -211,7 +232,16 @@
    "status": "partial",
    "note": "The nfs-utils package that supplies mount.nfs is in the runtime package list. No BifrOSt code mounts NFS shares, and the command has not been run on Midget.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 mount.nfs --version >/dev/null 2>&1 || timeout 5 mount.nfs --help >/dev/null 2>&1 || timeout 5 mount.nfs -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart packaging/arch/runtime-packages.txt (nfs-utils provides mount.nfs) (Arch package nfs-utils); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/sbin/mount_smbfs",
@@ -232,7 +262,16 @@
    "status": "partial",
    "note": "cifs-utils provides mount.cifs and is listed in the runtime package list, so SMB shares can be mounted on the image. The reference option syntax is not mapped, and the mount is not verified on Midget.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 mount.cifs --version >/dev/null 2>&1 || timeout 5 mount.cifs --help >/dev/null 2>&1 || timeout 5 mount.cifs -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart packaging/arch/runtime-packages.txt (cifs-utils, mount.cifs) (Arch package cifs-utils); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/sbin/mount_webdav",
@@ -249,11 +288,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "tools/parity/os_cli_packages.txt (davfs2 provides mount.davfs)",
+   "bifrost": "/usr/bin/mount.davfs",
    "status": "partial",
    "note": "The davfs2 package that supplies mount.davfs is a candidate in the os/cli package list, not yet in the runtime package list. No BifrOSt code mounts WebDAV shares.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "command -v mount.davfs",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "davfs2 provides mount.davfs (added to runtime-packages.txt)"
   },
   {
    "id": "path:/sbin/mpioutil",
@@ -316,7 +364,15 @@
    "status": "partial",
    "note": "nfs-utils ships rpc.nfsd and is listed in the runtime package list. No BifrOSt service starts the NFS server, and the daemon is not verified on Midget.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/rpc.nfsd"
+    }
+   ],
+   "ready_note": "nfs-utils provides rpc.nfsd"
   },
   {
    "id": "path:/sbin/nologin",
@@ -337,7 +393,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: nologin installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/nologin"
+    }
+   ],
+   "ready_note": "nologin from util-linux/shadow"
   },
   {
    "id": "path:/usr/bin/macbinary",
@@ -421,7 +485,16 @@
    "status": "partial",
    "note": "provided by Arch package s-nail; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 mail --version >/dev/null 2>&1 || timeout 5 mail --help >/dev/null 2>&1 || timeout 5 mail -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/mail (Arch package s-nail); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/malloc_history",
@@ -463,7 +536,15 @@
    "status": "partial",
    "note": "provided by Arch package mandoc; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/mandoc"
+    }
+   ],
+   "ready_note": "mandoc package (added to runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/mcxquery",
@@ -545,9 +626,22 @@
    "doc": "",
    "bifrost": "springboard/cmd/src/mdfind.rs",
    "status": "partial",
-   "note": "mdfind walks the folder tree and matches names; the content index and -live are missing (see the module comment). Not yet verified on Midget.",
+   "note": "mdfind walks the folder tree, matches names and (with -content) text of files up to 4 MiB; the content index and -live are missing. Not yet verified on Midget.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "mdfind::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/mdfind"
+    }
+   ],
+   "ready_note": "mdfind walks the folder tree and matches names and (with -content) the text of files up to 4 MiB. Gap: no content index and no -live."
   },
   {
    "id": "path:/usr/bin/mdimport",
@@ -627,11 +721,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/cmd/src/mdutil.rs",
+   "bifrost": "springboard/cmd/src/mdutil.rs, springboard/src/shell/spotlight_scope.rs",
    "status": "partial",
-   "note": "mdutil stores per-volume index settings; the desktop quick search does not read them yet, so -i off does not stop its index. Not yet verified on Midget.",
+   "note": "mdutil stores per-volume index settings; the desktop quick search does not read them yet, so -i off does not stop its index. Built 2026-10-17 (wave 13): mdutil -i writes the Spotlight exclusions (spotlight_excluded) that shell::spotlight_scope reads (mdutil::tests).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "mdutil::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/mdutil"
+    }
+   ],
+   "ready_note": "mdutil -i off adds the volume to the Spotlight exclusions in the shell's settings, so Search lists nothing under it, and -i on removes it; -s reports it; -E erases the command line's own store. Gap: a running shell reads the exclusions at start or when Settings changes them."
   },
   {
    "id": "path:/usr/bin/memacct",
@@ -757,7 +864,16 @@
    "status": "partial",
    "note": "provided by Arch package mg; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 mg --version >/dev/null 2>&1 || timeout 5 mg --help >/dev/null 2>&1 || timeout 5 mg -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/mg (Arch package mg); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/mib2c",
@@ -778,7 +894,16 @@
    "status": "partial",
    "note": "provided by Arch package net-snmp; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 mib2c --version >/dev/null 2>&1 || timeout 5 mib2c --help >/dev/null 2>&1 || timeout 5 mib2c -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/mib2c (Arch package net-snmp); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/mib2c-update",
@@ -799,7 +924,16 @@
    "status": "partial",
    "note": "provided by Arch package net-snmp; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 mib2c-update --version >/dev/null 2>&1 || timeout 5 mib2c-update --help >/dev/null 2>&1 || timeout 5 mib2c-update -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/mib2c-update (Arch package net-snmp); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/mkbom",
@@ -1009,7 +1143,15 @@
    "status": "partial",
    "note": "provided by Arch package openbsd-netcat; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/nc"
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/nc (Arch package openbsd-netcat); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/ncal",
@@ -1114,7 +1256,16 @@
    "status": "partial",
    "note": "provided by Arch package net-snmp; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 net-snmp-cert --version >/dev/null 2>&1 || timeout 5 net-snmp-cert --help >/dev/null 2>&1 || timeout 5 net-snmp-cert -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/net-snmp-cert (Arch package net-snmp); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/net-snmp-config",
@@ -1135,7 +1286,16 @@
    "status": "partial",
    "note": "provided by Arch package net-snmp; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 net-snmp-config --version >/dev/null 2>&1 || timeout 5 net-snmp-config --help >/dev/null 2>&1 || timeout 5 net-snmp-config -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/net-snmp-config (Arch package net-snmp); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/net-snmp-create-v3-user",
@@ -1156,7 +1316,16 @@
    "status": "partial",
    "note": "provided by Arch package net-snmp; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 net-snmp-create-v3-user --version >/dev/null 2>&1 || timeout 5 net-snmp-create-v3-user --help >/dev/null 2>&1 || timeout 5 net-snmp-create-v3-user -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/net-snmp-create-v3-user (Arch package net-snmp); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/nettop",
@@ -1173,11 +1342,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "packaging/arch/runtime-packages.txt (nethogs)",
+   "bifrost": "/usr/bin/nethogs",
    "status": "partial",
    "note": "nethogs, which lists network use per process, is in the runtime package list. It is not a column-for-column equivalent of the reference monitor, and no BifrOSt view reads it yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/nethogs"
+    }
+   ],
+   "ready_note": "nettop shows network use per process; nethogs (Arch package nethogs, in runtime-packages.txt) does that job. The columns differ."
   },
   {
    "id": "path:/usr/bin/networkQuality",
@@ -1261,7 +1438,16 @@
    "status": "partial",
    "note": "provided by Arch package nfs-utils; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 nfsstat --version >/dev/null 2>&1 || timeout 5 nfsstat --help >/dev/null 2>&1 || timeout 5 nfsstat -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/nfsstat (Arch package nfs-utils); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/nice",
@@ -1341,11 +1527,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no BifrOSt or Linux equivalent",
+   "bifrost": "springboard/cmd/src/bin/notifyutil.rs (bifrost_cmd::notifyutil) over the shell's notify bus (springboard/src/shell/services/notify_bus.rs, control line `notify`)",
+   "status": "partial",
+   "note": "BifrOSt bus only: names are not the Darwin system names, -w polls the token every 50 ms instead of a pushed event, names cannot hold white space, state is a whole number up to 2^53. Not run on Midget; the shell side is unbuilt.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "notifyutil::"
+    }
+   ],
+   "ready_note": "notify bus; shell side is wired (springboard/src/bin/shell.rs Request::Notify -> notify_bus::control)"
   },
   {
    "id": "path:/usr/bin/nscurl",
@@ -1387,7 +1582,16 @@
    "status": "partial",
    "note": "provided by Arch package bind; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 nslookup --version >/dev/null 2>&1 || timeout 5 nslookup --help >/dev/null 2>&1 || timeout 5 nslookup -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/nslookup (Arch package bind); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/nsupdate",
@@ -1408,7 +1612,16 @@
    "status": "partial",
    "note": "provided by Arch package bind; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 nsupdate --version >/dev/null 2>&1 || timeout 5 nsupdate --help >/dev/null 2>&1 || timeout 5 nsupdate -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/nsupdate (Arch package bind); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/ocspcheck",
@@ -1471,7 +1684,16 @@
    "status": "partial",
    "note": "open goes through the shell control socket; see the module comment for the supported options. Not yet verified on Midget.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "open::"
+    }
+   ],
+   "ready_note": "open routes apps, folders and URLs through the shell control socket; shell answers open-app/open-folder/open-url"
   },
   {
    "id": "path:/usr/bin/opensnoop",
@@ -1530,11 +1752,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "n/a",
-   "note": "Compiles scripts for the reference system's own scripting runtime, which BifrOSt does not ship. BifrOSt scripts apps through App Intents and control sockets instead.",
+   "bifrost": "springboard/cmd/src/osacompile.rs; springboard/core/src/script/mod.rs (format)",
+   "status": "partial",
+   "note": "osacompile checks a script and writes its compiled form: a JSON document with the canonical source and the syntax tree. The format is BifrOSt's own, not the reference compiled format, and osascript reads it back. Gap: no compiled JavaScript scripts.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "osacompile::"
+    }
+   ],
+   "ready_note": "compiles to BifrOSt's own script format; no compiled JavaScript"
   },
   {
    "id": "path:/usr/bin/osadecompile",
@@ -1593,11 +1824,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "n/a",
-   "note": "The reference system's scripting languages for automation are not supported. BifrOSt automation goes through the JSON-RPC control socket (springboard/sdk/src/control.rs), so no interpreter for these languages is planned.",
+   "bifrost": "springboard/cmd/src/osascript.rs; springboard/core/src/script/ (language, dictionaries)",
+   "status": "partial",
+   "note": "osascript runs scripts in the BifrOSt scripting language (springboard/core/src/script). A tell app block sends each command to the running app as an AppEvent, resolved through the app's dictionary in its manifest ([[script.command]] and [[script.class]]). Gaps: JavaScript (-l JavaScript) and interactive mode (-i) are refused, osascript does not launch apps, and display dialog and display notification print on standard error.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "osascript::"
+    }
+   ],
+   "ready_note": "BifrOSt scripting language with tell-app dispatch; JavaScript and interactive mode refused"
   },
   {
    "id": "path:/usr/libexec/MSUEarlyBootTask",
@@ -1782,11 +2022,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "packaging/arch/runtime-packages.txt (man-db provides mandb, which builds the whatis database)",
+   "bifrost": "/usr/bin/mandb",
    "status": "partial",
    "note": "man-db is in the runtime package list and its mandb builds the whatis database that this command builds. The command itself has not been run on Midget.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/mandb"
+    }
+   ],
+   "ready_note": "man-db mandb builds the whatis database"
   },
   {
    "id": "path:/usr/libexec/makewhatis.local",
@@ -1803,11 +2051,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "packaging/arch/runtime-packages.txt (man-db, mandb)",
+   "bifrost": "/usr/bin/mandb",
    "status": "partial",
    "note": "man-db provides mandb, which builds the whatis index, and is listed in the runtime package list. The makewhatis.local wrapper itself is not installed, and the index build is not verified on Midget.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/mandb"
+    }
+   ],
+   "ready_note": "man-db mandb builds the whatis database"
   },
   {
    "id": "path:/usr/libexec/managedappsd",
@@ -2874,11 +3130,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no BifrOSt or Linux equivalent",
+   "bifrost": "/usr/bin/mtree",
+   "status": "partial",
+   "note": "springboard/cmd/src/mtree.rs and bin/mtree.rs (-c, compare, -e, -d, -x, -U/-u, -f, -p, /set, /unset, .., escapes, continuation). Keywords type, mode, uid, gid, size, link, time, nlink, sha1/256/512digest only; flags, uname, gname and other BSD keywords are not implemented and are reported on stderr, not checked. -u is an alias of -U. Uncompiled and untested on Midget.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "mtree::"
+    }
+   ],
+   "ready_note": "spec compare and create for the supported keywords; flags and BSD-only keywords are reported, not checked"
   },
   {
    "id": "path:/usr/sbin/ndp",
@@ -2895,11 +3160,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "/usr/bin/ip",
+   "bifrost": "springboard/cmd/src/neighbors.rs, springboard/cmd/src/bin/ndp.rs",
    "status": "partial",
    "note": "Midget 0.7.25: ip installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "neighbors::tests"
+    }
+   ],
+   "ready_note": "ndp -a and ndp host read ip -6 neigh show and print the IPv6 neighbour columns."
   },
   {
    "id": "path:/usr/sbin/netbiosd",
@@ -2962,7 +3236,16 @@
    "status": "partial",
    "note": "networksetup reads services, ports, Wi-Fi, DNS and proxies; DNS and proxy settings are read-only. Not yet verified on Midget.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "networksetup::"
+    }
+   ],
+   "ready_note": "services, ports, Wi-Fi, DNS and proxy reads; module tests"
   },
   {
    "id": "path:/usr/sbin/newsyslog",
@@ -2979,11 +3262,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "packaging/arch/runtime-packages.txt (logrotate)",
+   "bifrost": "springboard/cmd/src/bin/newsyslog.rs; springboard/cmd/src/newsyslog.rs",
    "status": "partial",
    "note": "logrotate rotates and compresses logs on a schedule, the job newsyslog does on the reference system, and is listed in the runtime package list. The newsyslog.conf entries are not translated, and rotation is not verified on Midget.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "newsyslog::"
+    }
+   ],
+   "ready_note": "translates newsyslog.conf rules to logrotate stanzas and runs logrotate; B, X, G, M flags are reported, not translated"
   },
   {
    "id": "path:/usr/sbin/nfs4mapid",
@@ -3004,7 +3296,16 @@
    "status": "partial",
    "note": "The nfs-utils package that supplies nfsidmap is in the runtime package list. No BifrOSt code maps NFSv4 identities, and the command has not been run on Midget.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 nfsidmap --version >/dev/null 2>&1 || timeout 5 nfsidmap --help >/dev/null 2>&1 || timeout 5 nfsidmap -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart packaging/arch/runtime-packages.txt (nfs-utils provides nfsidmap) (Arch package nfs-utils); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/sbin/nlcontrol",

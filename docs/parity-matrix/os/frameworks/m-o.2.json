@@ -1,0 +1,4199 @@
+{
+ "category": "frameworks",
+ "shard": "m-o.2",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MetalSerializer.framework",
+   "category": "frameworks",
+   "name": "MetalSerializer",
+   "path": "/System/Library/PrivateFrameworks/MetalSerializer.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: Metal binary archives are Apple GPU pipeline-cache files. BifrOSt renders through its own Linux presenter (docs/gpu-first.md), so there is no Metal archive format to read or write.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MetalTools.framework",
+   "category": "frameworks",
+   "name": "MetalTools",
+   "path": "/System/Library/PrivateFrameworks/MetalTools.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: Metal developer tooling (shader debugging and GPU capture for Xcode). It targets Apple GPU developers and has no BifrOSt counterpart; BifrOSt ships no Metal toolchain.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MetricKitCore.framework",
+   "category": "frameworks",
+   "name": "MetricKitCore",
+   "path": "/System/Library/PrivateFrameworks/MetricKitCore.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/core/src/daily_metric_report.rs; springboard/sdk/src/call_stack_tree.rs; springboard/sdk/src/diagnostic_report.rs",
+   "status": "partial",
+   "note": "Core types of MetricKit: the daily metric payload with its schedule and archive, the call stack tree and the diagnostic report, each built and tested.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "daily_metric_report::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "call_stack_tree::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "diagnostic_report::tests"
+    }
+   ],
+   "ready_note": "Host tests for the daily payload, schedule and JSON form, the call stack tree and the diagnostic report model that make up MetricKit's core types."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MetricKitServices.framework",
+   "category": "frameworks",
+   "name": "MetricKitServices",
+   "path": "/System/Library/PrivateFrameworks/MetricKitServices.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/services/metric_reports.rs; springboard/core/src/daily_metric_report.rs; springboard/sdk/src/diagnostic_report.rs",
+   "status": "partial",
+   "note": "The service side of MetricKit: the shell's metrics service feeds per-app totals, runs the daily schedule and delivers reports to subscribed apps.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::metric_reports::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "daily_metric_report::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "diagnostic_report::tests"
+    }
+   ],
+   "ready_note": "Host tests for the metrics shell service (totals, daily schedule, delivery to subscribers), the payload model and the diagnostic report."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MetricKitSource.framework",
+   "category": "frameworks",
+   "name": "MetricKitSource",
+   "path": "/System/Library/PrivateFrameworks/MetricKitSource.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/core/src/frame_metrics.rs; springboard/core/src/app_disk_writes.rs; springboard/core/src/app_transfer.rs; springboard/sdk/src/call_stack_tree.rs",
+   "status": "partial",
+   "note": "The metric sources MetricKit reads: frame and hitch timing, per-app disk writes, per-app network transfer and sampled call stacks, each a tested model in core or the SDK.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "frame_metrics::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "app_disk_writes::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "app_transfer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "call_stack_tree::tests"
+    }
+   ],
+   "ready_note": "Host tests for the frame metrics, per-app disk write and network transfer totals and the call stack tree that feed the daily payload."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MetricMeasurement.framework",
+   "category": "frameworks",
+   "name": "MetricMeasurement",
+   "path": "/System/Library/PrivateFrameworks/MetricMeasurement.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: the index lists one XPC helper (XPCServices/MetricMeasurementHelper.xpc) and Info.plist, with no resources. A helper that measures and reports usage metrics is Apple telemetry and analytics, which BifrOSt deliberately does not mirror; on-device app metrics are covered by the MetricKit rows.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MetricsFramework.framework",
+   "category": "frameworks",
+   "name": "MetricsFramework",
+   "path": "/System/Library/PrivateFrameworks/MetricsFramework.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: Apple app and system metric collection that reports to Apple. BifrOSt does not collect usage metrics for its vendor by design (privacy-first).",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MetricsKit.framework",
+   "category": "frameworks",
+   "name": "MetricsKit",
+   "path": "/System/Library/PrivateFrameworks/MetricsKit.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: Apple metric collection that reports to Apple. BifrOSt does not collect usage metrics for its vendor by design (privacy-first).",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MicroLocation.framework",
+   "category": "frameworks",
+   "name": "MicroLocation",
+   "path": "/System/Library/PrivateFrameworks/MicroLocation.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: the name points at short-range ultra-wideband positioning, which needs an Apple positioning chip. BifrOSt hardware (PC and Arm tablet) has no such chip, so the family has no job to build. Location stays in springboard/sdk/src/core_location.rs.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MicroLocationDaemon.framework",
+   "category": "frameworks",
+   "name": "MicroLocationDaemon",
+   "path": "/System/Library/PrivateFrameworks/MicroLocationDaemon.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: the name points at short-range ultra-wideband positioning, which needs an Apple positioning chip. BifrOSt hardware (PC and Arm tablet) has no such chip, so the family has no job to build. Location stays in springboard/sdk/src/core_location.rs.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MicroLocationKit.framework",
+   "category": "frameworks",
+   "name": "MicroLocationKit",
+   "path": "/System/Library/PrivateFrameworks/MicroLocationKit.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: the name points at short-range ultra-wideband positioning, which needs an Apple positioning chip. BifrOSt hardware (PC and Arm tablet) has no such chip, so the family has no job to build. Location stays in springboard/sdk/src/core_location.rs.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MicroLocationUtilities.framework",
+   "category": "frameworks",
+   "name": "MicroLocationUtilities",
+   "path": "/System/Library/PrivateFrameworks/MicroLocationUtilities.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: the name points at short-range ultra-wideband positioning, which needs an Apple positioning chip. BifrOSt hardware (PC and Arm tablet) has no such chip, so the family has no job to build. Location stays in springboard/sdk/src/core_location.rs.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MigrationKit.framework",
+   "category": "frameworks",
+   "name": "MigrationKit",
+   "path": "/System/Library/PrivateFrameworks/MigrationKit.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/migration.rs; springboard/src/shell/backup.rs; springboard/core/src/container_layout.rs",
+   "status": "gap",
+   "note": "Moves a user's data from another disk or a backup archive into this machine: migration.rs lists categories (shell data sets and per-app folders), stages the picked ones and applies them at the next start through the backup restore; container_layout restore_files fills app containers safely. Driven by `springboard --migrate DEST SOURCE [CATEGORY...]`.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::migration::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::backup::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "container_layout::tests"
+    }
+   ],
+   "ready_note": "Host tests for category listing, folder and archive sources, staged restore of picked categories, the encrypted archive round trip and the container restore path rules. There is no Settings screen for it yet; the command-line entry in the shell binary is the way in."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MilAneflow.framework",
+   "category": "frameworks",
+   "name": "MilAneflow",
+   "path": "/System/Library/PrivateFrameworks/MilAneflow.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "The name points to the Apple Neural Engine execution path, hardware BifrOSt does not have. Machine-learning models run on the CPU and GPU in springboard/ui/src/ml_model.rs.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MiniSoftwareUpdate.framework",
+   "category": "frameworks",
+   "name": "MiniSoftwareUpdate",
+   "path": "/System/Library/PrivateFrameworks/MiniSoftwareUpdate.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/updated/src/main.rs, packaging/arch/recovery/guard.rs",
+   "status": "partial",
+   "note": "Background update checks and managed installs run in the updated agent, with pacman transactions guarded by a rollback. Gap: base-system upgrades are refused without a recoverable root snapshot, and no app gets a minimal update API.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "updated",
+     "filter": "tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pacman_update::tests"
+    }
+   ],
+   "ready_note": "Background update checks and managed pacman installs run in the updated agent with the shell rollback guard. The refusal of base-system upgrades without a recoverable snapshot is the guard's intended behaviour."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MobileAccessoryUpdater.framework",
+   "category": "frameworks",
+   "name": "MobileAccessoryUpdater",
+   "path": "/System/Library/PrivateFrameworks/MobileAccessoryUpdater.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Updates firmware of Apple's own accessories through Apple's update service. BifrOSt ships no vendor accessory firmware, so there is nothing to update.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MobileActivationMacOS.framework",
+   "category": "frameworks",
+   "name": "MobileActivationMacOS",
+   "path": "/System/Library/PrivateFrameworks/MobileActivationMacOS.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Activates a new machine with Apple's activation servers during setup. BifrOSt installs from its own image and has no vendor activation step.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MobileAsset.framework",
+   "category": "frameworks",
+   "name": "MobileAsset",
+   "path": "/System/Library/PrivateFrameworks/MobileAsset.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/updated/src/assets.rs; springboard/core/src/asset_pack_file.rs; springboard/ui/src/managed_download.rs; springboard/ui/src/assetpack.rs",
+   "status": "gap",
+   "note": "On-demand asset packs for apps. Built 2026-10-17 (wave 12): the pack file format (BFPK1, SHA-256 sealed, safe names only) in core/src/asset_pack_file.rs, a local pack source in updated/src/assets.rs (`<pack folder>/<app>/<pack>.bfpk`, default /usr/share/bifrost/asset-packs, BIFROST_ASSET_PACKS overrides) whose transfer verifies and installs the pack into the app container under Library/Caches/AssetPacks/<id>, and the update agent now calls it instead of the old stub. Packs come only from the local folder, never from a third party.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "asset_pack_file::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "updated",
+     "filter": "assets::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "managed_download::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "assetpack::tests"
+    }
+   ],
+   "ready_note": "Host tests: pack file round trip, digest and unsafe-name refusal, install and replace in the purgeable pack folder, the daemon installing a queued pack from the local source and failing missing, damaged or mismatched packs, plus the existing queue and manifest tests. There is no remote pack index; packs are placed in the pack folder by the system image, an administrator or a disk."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MobileAssetDaemon.framework",
+   "category": "frameworks",
+   "name": "MobileAssetDaemon",
+   "path": "/System/Library/PrivateFrameworks/MobileAssetDaemon.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/updated/src/assets.rs; springboard/ui/src/managed_download.rs; springboard/core/src/asset_pack_file.rs",
+   "status": "gap",
+   "note": "The background daemon behind on-demand assets: AssetDaemon in the update agent runs each app's managed download queue on an unmetered, non-low-power link with a daily budget and three attempts, and since wave 12 its transfer is real (LocalPackSource reads, verifies and installs the pack file into the app container; main.rs calls it).",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "updated",
+     "filter": "assets::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "managed_download::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "asset_pack_file::tests"
+    }
+   ],
+   "ready_note": "Host tests for the daemon passes (wired, metered, retries, daily budget, low power) and for the local source transfer that installs a verified pack. Packs come from the local pack folder only."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MobileAssetExclaveServices.framework",
+   "category": "frameworks",
+   "name": "MobileAssetExclaveServices",
+   "path": "/System/Library/PrivateFrameworks/MobileAssetExclaveServices.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Services for assets held in the exclave, Apple silicon's isolated secure environment. BifrOSt has no exclave hardware or firmware to serve.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MobileAssetUpdater.framework",
+   "category": "frameworks",
+   "name": "MobileAssetUpdater",
+   "path": "/System/Library/PrivateFrameworks/MobileAssetUpdater.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/updated/src/assets.rs; springboard/core/src/asset_pack_file.rs",
+   "status": "os",
+   "note": "Applies asset pack updates (inferred from the name; the index lists only Info.plist, an en.lproj and a signature). LocalPackSource::transfer installs a pack only when it is new or its version differs from the installed one, and replaces the old files as a whole; the daemon runs it.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "updated",
+     "filter": "assets::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "asset_pack_file::tests"
+    }
+   ],
+   "ready_note": "Host tests for installing a pack, accepting an already-current version and replacing it with a newer one, and for the daemon run. The job is inferred from the name."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MobileBluetooth.framework",
+   "category": "frameworks",
+   "name": "MobileBluetooth",
+   "path": "/System/Library/PrivateFrameworks/MobileBluetooth.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/bare/bluetooth.rs; springboard/core/src/bt_pairing.rs; springboard/core/src/bt_address.rs",
+   "status": "partial",
+   "note": "Bluetooth for the desktop runs in bare/bluetooth.rs over the kernel management socket: power, discovery, pairing with the answer policy, unpairing, link keys kept across reboots and device class decoding. The index lists only localisations for this framework.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::bluetooth::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "bt_pairing::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "bt_address::tests"
+    }
+   ],
+   "ready_note": "Host tests for the Bluetooth state machine (events in, commands out), pairing answers and address and class decoding. The app-facing Bluetooth API is tracked in the Core Bluetooth rows, not here."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MobileContainerManager.framework",
+   "category": "frameworks",
+   "name": "MobileContainerManager",
+   "path": "/System/Library/PrivateFrameworks/MobileContainerManager.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "core/src/container_layout.rs, springboard/sdk/src/container_layout.rs (re-export), springboard/src/shell/apphost.rs (spawn creates the folders), springboard/src/bare/app_policy.rs",
+   "status": "partial",
+   "note": "Per-app container folders (Documents, Library, Caches, tmp) and the sandbox policy that mounts them are modelled. Gap: the shell does not create the folders yet, so apps still use a flat data directory.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "container_layout::tests"
+    }
+   ],
+   "ready_note": "Per-app container folders (Documents, Library, Caches, tmp) are created by the shell when an app is first launched (apphost spawn_with calls ContainerLayout::ensure). The layout and its symlink and file refusals are in bifrost-core, which the SDK re-exports, and the sandbox policy that mounts them is in app_policy.rs."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MobileIcons.framework",
+   "category": "frameworks",
+   "name": "MobileIcons",
+   "path": "/System/Library/PrivateFrameworks/MobileIcons.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/ui/src/thumb_service.rs; springboard/ui/src/uttype.rs",
+   "status": "os",
+   "note": "Document and folder type icons with badges (the index lists default icons, DocumentBadgeMask and AppFolderBadge masks). BifrOSt resolves a file to a type icon with an optional badge through thumb_service::icon_for over uttype conformance; app icons come from manifest.toml.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "thumb_service::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "uttype::tests"
+    }
+   ],
+   "ready_note": "Host tests for the type icon fallback, provider choice by nearest content type and the cache key, and for type identifier conformance. The icon artwork is BifrOSt's own."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MobileIdentityServiceUI.framework",
+   "category": "frameworks",
+   "name": "MobileIdentityServiceUI",
+   "path": "/System/Library/PrivateFrameworks/MobileIdentityServiceUI.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: the identity service UI signs the user in with an Apple account. BifrOSt accounts are the BifrOSt Cloud accounts (bifrost-cloud), not Apple IDs.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MobileInBoxUpdate.framework",
+   "category": "frameworks",
+   "name": "MobileInBoxUpdate",
+   "path": "/System/Library/PrivateFrameworks/MobileInBoxUpdate.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/updated/src/main.rs",
+   "status": "partial",
+   "note": "Built-in software updates are checked and installed by the updated agent through pacman packages. Gap: the reference framework's separate in-box app update path is not mirrored.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "updated",
+     "filter": "tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::update::tests"
+    }
+   ],
+   "ready_note": "Built-in software updates are checked and installed by the updated agent through pacman packages, with the shell's update manifest and SHA-256 check."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MobileInstallation.framework",
+   "category": "frameworks",
+   "name": "MobileInstallation",
+   "path": "/System/Library/PrivateFrameworks/MobileInstallation.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/store/install.rs",
+   "status": "partial",
+   "note": "App install and uninstall run in store/install.rs: the registry entry and package files are written or removed, and the data directory is kept. Gap: install progress and container queries are not exposed to apps.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::store::install::tests"
+    }
+   ],
+   "ready_note": "App install and uninstall in store/install.rs write or remove the registry entry and package files and keep the data directory."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MobileKeyBag.framework",
+   "category": "frameworks",
+   "name": "MobileKeyBag",
+   "path": "/System/Library/PrivateFrameworks/MobileKeyBag.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/core/src/keybag.rs; springboard/sdk/src/keychain_protection.rs; springboard/src/keychain.rs",
+   "status": "partial",
+   "note": "Built 2026-10-17 (wave 12): core/src/keybag.rs is the device-lock key store: three class keys, the after-first-unlock and when-unlocked keys wrapped under a PBKDF2-HMAC-SHA256 key from the password (HKDF pad plus HMAC tag), lock and unlock lifetimes as the class names promise, password change that keeps the class keys, and a wire form. Protection::key_class ties the SDK classes to it. Gap: the keychain Store still seals with its on-disk master key; it does not yet take its keys from the keybag, so classes are not enforced at rest until the shell unlocks the bag at login.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "keybag::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "keychain_protection::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "keychain::tests"
+    }
+   ],
+   "ready_note": "Host tests: PBKDF2 against the published vectors, create, lock, unlock, wrong password, tampered key, password change, wire form, and a test that each protection class is readable exactly when the keybag can hand out its key. The keychain store is not yet fed from the keybag."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MobileMulticastTransfer.framework",
+   "category": "frameworks",
+   "name": "MobileMulticastTransfer",
+   "path": "/System/Library/PrivateFrameworks/MobileMulticastTransfer.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: a device-to-device transfer protocol that only Apple devices speak. BifrOSt does not implement it and has no Apple peer to talk to.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MobileObliteration.framework",
+   "category": "frameworks",
+   "name": "MobileObliteration",
+   "path": "/System/Library/PrivateFrameworks/MobileObliteration.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/core/src/erase_content.rs; springboard/src/shell/settings.rs; springboard/src/shell/pages.rs; springboard/src/bin/shell.rs",
+   "status": "gap",
+   "note": "Built 2026-10-17 (wave 12): Settings > General > Transfer or Reset > Erase All Content and Settings asks for confirmation, writes erase.pending and restarts; the shell binary applies it before anything loads (core/src/erase_content.rs): the keychain goes first (deleting its master key), then every other entry of the data directory, keeping only update bookkeeping; links are removed, never followed; unsafe directories are refused. The system outside the data directory is untouched.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "erase_content::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages::tests::the_reset_page_offers_a_confirmed_erase"
+    }
+   ],
+   "ready_note": "Host tests on temporary directories: refusal of unsafe roots and links, plan order with the keychain first, erase removing user data and keeping the update files, links not followed, withdrawn request, ignored link marker. A test covers the Reset page row that starts it; the alert text and the start-up hook are not tested, and the erase is a file removal, not a block-level wipe."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MobileSoftwareUpdate.framework",
+   "category": "frameworks",
+   "name": "MobileSoftwareUpdate",
+   "path": "/System/Library/PrivateFrameworks/MobileSoftwareUpdate.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/updated/src/main.rs, packaging/arch/recovery/guard.rs",
+   "status": "partial",
+   "note": "Check, download and install of BifrOSt and app updates run in the updated agent, with the managed pacman transaction and shell rollback. Gap: base-system upgrades are refused without a recoverable root snapshot.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "updated",
+     "filter": "tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::update::tests"
+    }
+   ],
+   "ready_note": "Check, download and install of BifrOSt and app updates run in the updated agent through the managed pacman transaction, with the rollback guard that refuses unsafe base-system upgrades."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MobileStorage.framework",
+   "category": "frameworks",
+   "name": "MobileStorage",
+   "path": "/System/Library/PrivateFrameworks/MobileStorage.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/storage.rs",
+   "status": "partial",
+   "note": "Clearing of caches, thumbnails, the rotated log and old binaries runs in shell/storage.rs. Gap: the reference framework's per-app storage queries are not mirrored.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::storage::tests"
+    }
+   ],
+   "ready_note": "Clearing of caches, thumbnails, the rotated log and old binaries is in shell/storage.rs and is tested."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MobileStoreDemoCore.framework",
+   "category": "frameworks",
+   "name": "MobileStoreDemoCore",
+   "path": "/System/Library/PrivateFrameworks/MobileStoreDemoCore.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Demo mode for retail store display units, tied to Apple's store configuration. BifrOSt has no store demo configuration.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MobileSystemServices.framework",
+   "category": "frameworks",
+   "name": "MobileSystemServices",
+   "path": "/System/Library/PrivateFrameworks/MobileSystemServices.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: iOS-origin shim. The index lists only Info.plist, version.plist and a code signature (no resources, XPC service or plug-in), and the Mobile* naming is the iOS container and installation lookup layer. BifrOSt has its own app container and package model (container_layout, shell apphost), so no counterpart is mirrored.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MobileTimer.framework",
+   "category": "frameworks",
+   "name": "MobileTimer",
+   "path": "/System/Library/PrivateFrameworks/MobileTimer.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/clock-desktop/src/clock/mod.rs; springboard/src/shell/clock/mod.rs",
+   "status": "partial",
+   "note": "Alarms, timers and the stopwatch work through the Clock app and a headless shell service that fires them with the app closed. Not covered: the reference's alarm intents and widgets, and its daemon-level scheduling beyond the shell service.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-clock",
+     "filter": "clock::"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::clock::alarm::tests"
+    }
+   ],
+   "ready_note": "Alarms, timers and the stopwatch run in the Clock app and the shell's Clock service, which fires them with the app closed."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MobileTimerSupport.framework",
+   "category": "frameworks",
+   "name": "MobileTimerSupport",
+   "path": "/System/Library/PrivateFrameworks/MobileTimerSupport.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/clock/alarm.rs; springboard/src/shell/clock/timer.rs",
+   "status": "partial",
+   "note": "Alarm and timer scheduling and their saved files (clock.ini, clock-timers.ini) live in the shell's Clock service. Not covered: the reference's app-intent actions and shortcut phrases for alarms and timers.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::clock::alarm::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::clock::timer::tests"
+    }
+   ],
+   "ready_note": "Alarm and timer scheduling and their saved files (clock.ini, clock-timers.ini) live in the shell's Clock service and are tested."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MobileTimerUISupport.framework",
+   "category": "frameworks",
+   "name": "MobileTimerUISupport",
+   "path": "/System/Library/PrivateFrameworks/MobileTimerUISupport.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/clock-desktop/src/clock/mod.rs; springboard/src/shell/clock/picker.rs",
+   "status": "partial",
+   "note": "The alarm editor with its repeat days and sound, and the time pickers, are built in the Clock app and the shell picker. Not covered: the reference's timer-specific sheets and its watch layouts.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::clock::picker::tests"
+    }
+   ],
+   "ready_note": "The alarm editor with repeat days and sound and the time picker are built in the Clock app and the shell picker, both tested."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/ModelCatalog.framework",
+   "category": "frameworks",
+   "name": "ModelCatalog",
+   "path": "/System/Library/PrivateFrameworks/ModelCatalog.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Backs the model catalog agent, which keeps the vendor's base models and adapters and evaluates their subscriptions nightly from the vendor's catalog. BifrOSt has no vendor model catalog service, so the component has no job here.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/ModelCatalogRuntime.framework",
+   "category": "frameworks",
+   "name": "ModelCatalogRuntime",
+   "path": "/System/Library/PrivateFrameworks/ModelCatalogRuntime.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Runtime of the model catalog agent and its catalog daemon, which fetch the vendor's model subscriptions nightly from the vendor's service. BifrOSt has no vendor model catalog, so the component has no job here.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/ModelInterfaces.framework",
+   "category": "frameworks",
+   "name": "ModelInterfaces",
+   "path": "/System/Library/PrivateFrameworks/ModelInterfaces.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: interfaces of the Apple on-device model stack (the index lists only Info.plist and a signature; sibling bundles ModelManagerServices and ModelManagerExclaveInternal belong to the same stack). It serves Apple ML model packs, which BifrOSt does not mirror.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/ModelManagerExclaveInternal.framework",
+   "category": "frameworks",
+   "name": "ModelManagerExclaveInternal",
+   "path": "/System/Library/PrivateFrameworks/ModelManagerExclaveInternal.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: internal side of the model manager that runs in an exclave, Apple silicon's secure execution environment (the name; the index lists only Info.plist, version.plist and a signature). Apple hardware internals and Apple ML model packs, not mirrored.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/ModelManagerServices.framework",
+   "category": "frameworks",
+   "name": "ModelManagerServices",
+   "path": "/System/Library/PrivateFrameworks/ModelManagerServices.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: services of the Apple on-device model manager. The only resource in the index is default_factors_1690.pb, a protobuf of default factors for Apple ML models; there is no plist or daemon. Apple ML model packs are not mirrored.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MomentsIntelligence.framework",
+   "category": "frameworks",
+   "name": "MomentsIntelligence",
+   "path": "/System/Library/PrivateFrameworks/MomentsIntelligence.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/photos/memories.rs",
+   "status": "partial",
+   "note": "Memories group the library by capture month into slideshow albums, with screenshots left out. Gap: the on-device analysis that picks highlights and key frames in photos and videos is not built.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::memories::tests"
+    }
+   ],
+   "ready_note": "Memories albums by capture month, newest first, screenshots left out (shell::photos::memories::tests). n/a: the on-device highlight and key-frame analysis needs Apple's photo and video model packs, which BifrOSt cannot ship."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/Mondrian.framework",
+   "category": "frameworks",
+   "name": "Mondrian",
+   "path": "/System/Library/PrivateFrameworks/Mondrian.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/ui/src/thumb_service.rs",
+   "status": "os",
+   "note": "Thumbnail grid support (inferred from its resources: UnsupportedThumbnailFile.png, Assets.car and string tables). BifrOSt's system thumbnail service answers every request with a rendered thumbnail or a type icon when the file cannot be drawn.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "thumb_service::tests"
+    }
+   ],
+   "ready_note": "Host tests for thumbnail requests, provider choice and the fall back to a type icon for a file no provider can draw. The job is inferred from the resource names, not read from the binary."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MonitorPanel.framework",
+   "category": "frameworks",
+   "name": "MonitorPanel",
+   "path": "/System/Library/PrivateFrameworks/MonitorPanel.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs (desktop_display); springboard/wm/src/output_layout.rs; springboard/src/bare/power.rs",
+   "status": "partial",
+   "note": "The framework behind the Displays settings panel (the index lists GenericDisplay, GenericDisplayPortrait and iPadDisplay pictures, localised strings and a Genlock string table). BifrOSt's Displays page shows the active mode, scale and night shift, the arrangement model is tested, and hardware brightness is driven by bare/power.rs. Genlock and the extended-display (iPad) picture are not applicable on this hardware.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages::tests::desktop_display"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-wm",
+     "filter": "output_layout::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::power::tests"
+    }
+   ],
+   "ready_note": "Host tests for the Displays page contents, the output arrangement model and brightness and battery handling. Applying the arrangement to hardware is tracked in the display rows."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/Montreal.framework",
+   "category": "frameworks",
+   "name": "Montreal",
+   "path": "/System/Library/PrivateFrameworks/Montreal.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "os",
+   "note": "Reopened from n/a (audit 2026-10-17): purpose unknown. Bare framework (Info.plist 1340 B, version.plist 459 B); no other bundle names it. Its grouping with other Apple ML codenames in the earlier note is a guess. Needs: exports and callers.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/Morpheus.framework",
+   "category": "frameworks",
+   "name": "Morpheus",
+   "path": "/System/Library/PrivateFrameworks/Morpheus.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: its substantive resource is Resources/default.metallib (34 MB), a precompiled GPU shader library for Apple's Metal, with an 11 KB LICENSE.txt. Apple GPU shader binaries are not usable on Linux and are not reproduced; BifrOSt's compute kernels are its own (springboard/gpu, render).",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MorpheusExtensions.framework",
+   "category": "frameworks",
+   "name": "MorpheusExtensions",
+   "path": "/System/Library/PrivateFrameworks/MorpheusExtensions.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: extension companion of Morpheus (the index lists only Info.plist and a signature); Morpheus is an Apple GPU (Metal) shader library, which is not mirrored (see Morpheus).",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MorphunAssets.framework",
+   "category": "frameworks",
+   "name": "MorphunAssets",
+   "path": "/System/Library/PrivateFrameworks/MorphunAssets.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/ui/src/inflection.rs",
+   "status": "os",
+   "note": "Per-language resources of the morphology engine (the index lists asset-fallback.plist). Built 2026-10-17 (wave 12): ui/src/inflection.rs holds the plural category rules for all recogniser languages and the noun rules for English, Spanish and French; rules_for falls back to an invariant rule set for any other language, the counterpart of the asset fallback.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "inflection::tests"
+    }
+   ],
+   "ready_note": "Host tests for plural categories of the recogniser languages, regular and irregular nouns in three languages and the invariant fallback. Noun rules for other languages are not built."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MorphunSwift.framework",
+   "category": "frameworks",
+   "name": "MorphunSwift",
+   "path": "/System/Library/PrivateFrameworks/MorphunSwift.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/ui/src/inflection.rs; springboard/sdk/src/lib.rs",
+   "status": "os",
+   "note": "The morphology and grammar agreement API (inflection of text by number). Built 2026-10-17 (wave 12): bifrost_app::inflection (bifrost_ui::inflection) gives plural_category, inflect_noun and agree, which rewrites ^[2 apple](inflect: true) spans. No case, gender or article agreement.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "inflection::tests"
+    }
+   ],
+   "ready_note": "Host tests for the agreement markup (numbers, decimals, thousands separators, irregular nouns, unfinished spans) and plural categories."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MotionSensorLogging.framework",
+   "category": "frameworks",
+   "name": "MotionSensorLogging",
+   "path": "/System/Library/PrivateFrameworks/MotionSensorLogging.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: the name and the index (Info.plist, version.plist, signature only) show logging of motion sensor data, an Apple hardware accelerometer and gyroscope diagnostics path. BifrOSt has no motion sensors to log and does not mirror hardware diagnostics logging.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MultitouchSessionFilterSupport.framework",
+   "category": "frameworks",
+   "name": "MultitouchSessionFilterSupport",
+   "path": "/System/Library/PrivateFrameworks/MultitouchSessionFilterSupport.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/wm/src/input.rs; springboard/ui/src/trackpad_gesture.rs",
+   "status": "os",
+   "note": "Supplies the trackpad session filter's preferences (the index lists one XPC service, SessionFilterPreferenceProvider.xpc). In BifrOSt the shell reads the pointer and trackpad preferences (tap to click, secondary click, natural scroll, speed) from settings.ini and applies them to libinput devices in wm/src/input.rs.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-wm",
+     "filter": "input::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "trackpad_gesture::tests"
+    }
+   ],
+   "ready_note": "Host tests for the preference parsing and per-device libinput configuration and for the pinch and rotation gesture recognition. The filter itself is libinput's."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MultitouchSupport.framework",
+   "category": "frameworks",
+   "name": "MultitouchSupport",
+   "path": "/System/Library/PrivateFrameworks/MultitouchSupport.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/touch_events.rs; springboard/ui/src/trackpad_gesture.rs; springboard/wm/src/input.rs",
+   "status": "partial",
+   "note": "Multitouch for apps: touch frames with phase, location, previous location, tap count, force and radius reach apps that opt in (sdk touch_events), trackpad pinch and rotation are recognised, and device settings run through libinput. Raw per-contact trackpad frames are not forwarded: a trackpad reaches an app as one indirect touch.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "touch_events::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "trackpad_gesture::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-wm",
+     "filter": "input::tests"
+    }
+   ],
+   "ready_note": "Host tests for touch frame routing and tracking, the gesture recognisers and the input preferences. Raw trackpad contact frames are not exposed."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MultiverseSupport.framework",
+   "category": "frameworks",
+   "name": "MultiverseSupport",
+   "path": "/System/Library/PrivateFrameworks/MultiverseSupport.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "os",
+   "note": "Reopened from n/a (audit 2026-10-17): purpose unknown. Bare framework (Info.plist 1416 B) that shares the Multiverse name with the system daemon usr/libexec/multiversed (launchd plist present), so it is probably the client library for that daemon. See com.apple.multiversed. Needs: daemon Mach service and callers.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MusicKitInternal.framework",
+   "category": "frameworks",
+   "name": "MusicKitInternal",
+   "path": "/System/Library/PrivateFrameworks/MusicKitInternal.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "docs/parity-matrix/data/musickit.json",
+   "status": "n/a",
+   "note": "private framework, owner MusicKit; from SDK matrix musickit.json",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MusicKitPlaybackSupport.framework",
+   "category": "frameworks",
+   "name": "MusicKitPlaybackSupport",
+   "path": "/System/Library/PrivateFrameworks/MusicKitPlaybackSupport.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "docs/parity-matrix/data/musickit.json",
+   "status": "n/a",
+   "note": "private framework, owner MusicKit; from SDK matrix musickit.json",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MusicLibrary.framework",
+   "category": "frameworks",
+   "name": "MusicLibrary",
+   "path": "/System/Library/PrivateFrameworks/MusicLibrary.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/music-desktop/src/lib.rs",
+   "status": "partial",
+   "note": "The Music app scans a library of local files, plays it, and keeps playlists and the queue on disk. Not covered: the reference's library sync with the vendor's music service.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-music",
+     "filter": "music::library"
+    }
+   ],
+   "ready_note": "The Music app scans a library of local files, keeps playlists and the queue on disk, and the library model is tested."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MusicUI.framework",
+   "category": "frameworks",
+   "name": "MusicUI",
+   "path": "/System/Library/PrivateFrameworks/MusicUI.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/music-desktop/src/app.rs",
+   "status": "partial",
+   "note": "The Music window has sidebar pages, album and playlist views with Play and Shuffle, and a Dock tile that shows scan progress. Not covered: the reference's store and streaming pages.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-music",
+     "filter": "app::tests"
+    }
+   ],
+   "ready_note": "The Music window has sidebar pages, album and playlist views with Play and Shuffle, and a Dock tile for scan progress."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MusicUI_Mac.framework",
+   "category": "frameworks",
+   "name": "MusicUI_Mac",
+   "path": "/System/Library/PrivateFrameworks/MusicUI_Mac.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/music-desktop/src/app.rs",
+   "status": "partial",
+   "note": "The desktop Music window in the same app code as the MusicUI row, drawn in the Golden Gate window. Not covered: the reference's store and streaming pages.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-music",
+     "filter": "app::tests"
+    }
+   ],
+   "ready_note": "The desktop Music window built from the same app code as MusicUI, drawn in the Golden Gate window."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NANDInfo.framework",
+   "category": "frameworks",
+   "name": "NANDInfo",
+   "path": "/System/Library/PrivateFrameworks/NANDInfo.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/diskutil-desktop/src/probe.rs; springboard/apps/diskutil-desktop/src/model.rs",
+   "status": "partial",
+   "note": "Disk capacity, block sizes and SMART health are read with the system disk tools. Not covered: the reference's NAND controller queries, which read flash details from the vendor's storage controller.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-diskutil",
+     "filter": "model::tests"
+    }
+   ],
+   "ready_note": "Disk capacity, block sizes and SMART health come from the disk tools read by diskutil-desktop (probe.rs, model::tests). The NAND controller queries read the Apple storage controller, which BifrOSt hardware does not have, so that part is not applicable."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NANDInfo_osx.framework",
+   "category": "frameworks",
+   "name": "NANDInfo_osx",
+   "path": "/System/Library/PrivateFrameworks/NANDInfo_osx.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/diskutil-desktop/src/probe.rs; springboard/apps/diskutil-desktop/src/model.rs",
+   "status": "partial",
+   "note": "Disk capacity, block sizes and SMART health are read with the system disk tools. Not covered: the reference's NAND controller queries, which read flash details from the vendor's storage controller.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-diskutil",
+     "filter": "model::tests"
+    }
+   ],
+   "ready_note": "Same as NANDInfo: disk capacity, block sizes and SMART health are read by diskutil-desktop (model::tests). The Apple storage controller queries are not applicable to BifrOSt hardware."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NDOAPI.framework",
+   "category": "frameworks",
+   "name": "NDOAPI",
+   "path": "/System/Library/PrivateFrameworks/NDOAPI.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "os",
+   "note": "Reopened from n/a (audit 2026-10-17): purpose unknown. API half of a pair with NDOUI (Info.plist 1402 B, version.plist 464 B). NDO is not an expansion the index gives; the 'online Apple service' reading is a guess. Needs: NDOUI strings (Localizable.loctable) when decodable to see which feature the screens belong to.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NDOUI.framework",
+   "category": "frameworks",
+   "name": "NDOUI",
+   "path": "/System/Library/PrivateFrameworks/NDOUI.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "os",
+   "note": "Reopened from n/a (audit 2026-10-17): purpose unknown. UI half of a pair with NDOAPI: Assets.car (29.6 KB), a 15.9 KB Localizable.loctable and localisations, no daemon or XPC service. The strings and assets would name the feature but are not decodable here. Needs: decode the loctable and Assets.car; BifrOSt would need equivalent screens only if the feature is local.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NLP.framework",
+   "category": "frameworks",
+   "name": "NLP",
+   "path": "/System/Library/PrivateFrameworks/NLP.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/ui/src/lexical_tags.rs; springboard/ui/src/language.rs",
+   "status": "partial",
+   "note": "Language processing: rule-based lexical tagging of words and a language recogniser (script detection plus per-language scoring with hints and constraints). Not covered: statistical models for tagging and the per-language model resources in the reference image.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "lexical_tags::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "language::tests"
+    }
+   ],
+   "ready_note": "Host tests for the lexical tagger and for language and script recognition. Statistical models are not part of it."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NPTKit.framework",
+   "category": "frameworks",
+   "name": "NPTKit",
+   "path": "/System/Library/PrivateFrameworks/NPTKit.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: the index lists a single plug-in, PlugIns/NPTWiFiDiagnosticsExtension_macOS.appex: a Wi-Fi diagnostics extension, Apple diagnostics tooling that BifrOSt does not mirror (Wi-Fi status and logs are in Settings and Console).",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NSPredicateSecurityPolicy.framework",
+   "category": "frameworks",
+   "name": "NSPredicateSecurityPolicy",
+   "path": "/System/Library/PrivateFrameworks/NSPredicateSecurityPolicy.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/predicate_validating.rs",
+   "status": "os",
+   "note": "Security policy for predicates: PredicateValidating checks a predicate tree against the keys and operators an app exposes before anything evaluates it, so a search field or saved filter cannot reach other keys or comparisons.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "predicate_validating::tests"
+    }
+   ],
+   "ready_note": "Host tests for walking compound and comparison predicates against an allow policy."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NameRecognition.framework",
+   "category": "frameworks",
+   "name": "NameRecognition",
+   "path": "/System/Library/PrivateFrameworks/NameRecognition.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple on-device model pack: the index lists NameRecognitionModel.momd, a trained name model with no BifrOSt counterpart.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NanoPassKit.framework",
+   "category": "frameworks",
+   "name": "NanoPassKit",
+   "path": "/System/Library/PrivateFrameworks/NanoPassKit.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Wallet passes for the reference's wrist companion (the Nano prefix marks it); BifrOSt targets no wrist device, so the component has no job here.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NanoPassKitUI.framework",
+   "category": "frameworks",
+   "name": "NanoPassKitUI",
+   "path": "/System/Library/PrivateFrameworks/NanoPassKitUI.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "The user interface of the wrist companion's wallet passes (the Nano prefix marks it); BifrOSt targets no wrist device, so the component has no job here.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/Navigation.framework",
+   "category": "frameworks",
+   "name": "Navigation",
+   "path": "/System/Library/PrivateFrameworks/Navigation.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/maps-desktop/src/nav.rs; springboard/apps/maps-desktop/src/route.rs",
+   "status": "partial",
+   "note": "Route finding through an OSRM-compatible server and turn-by-turn guidance against a position are built. Not covered: offline map data and the reference's live traffic.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-maps",
+     "filter": "nav"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-maps",
+     "filter": "route"
+    }
+   ],
+   "ready_note": "Route finding through an OSRM-compatible server and turn-by-turn guidance against a position are built and tested in the Maps app."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NearField.framework",
+   "category": "frameworks",
+   "name": "NearField",
+   "path": "/System/Library/PrivateFrameworks/NearField.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: near-field communication stack for Apple's secure element: the index lists Core Data models NFStorageAppletModel, NFStorageDeveloperPresentmentModel, NFStorageExpressModel and NFStoragePurpleTrustModel (secure-element applets, express transit, Apple trust service). Apple hardware and payment services with no open equivalent; not mirrored.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NearFieldPrivateServices.framework",
+   "category": "frameworks",
+   "name": "NearFieldPrivateServices",
+   "path": "/System/Library/PrivateFrameworks/NearFieldPrivateServices.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "NFC secure-element restore and wallet-applet storage (helper services NFRestoreService and NFStorageServer) serve the reference's NFC payment hardware, which BifrOSt does not have.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NearbySessions.framework",
+   "category": "frameworks",
+   "name": "NearbySessions",
+   "path": "/System/Library/PrivateFrameworks/NearbySessions.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "The nearby-invitation helper service of the reference's shared-activity feature relays invitations between the reference's own devices, and BifrOSt has no such device ecosystem.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NeighborhoodActivityConduit.framework",
+   "category": "frameworks",
+   "name": "NeighborhoodActivityConduit",
+   "path": "/System/Library/PrivateFrameworks/NeighborhoodActivityConduit.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "The NeighborhoodActivityConduit framework is a conduit for the reference's telephony neighbourhood-activity feed, which needs the vendor's cellular telephony service that BifrOSt does not mirror.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NetAppsUtilities.framework",
+   "category": "frameworks",
+   "name": "NetAppsUtilities",
+   "path": "/System/Library/PrivateFrameworks/NetAppsUtilities.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/ui/src/network_attribution.rs; springboard/core/src/app_firewall.rs; springboard/core/src/app_transfer.rs",
+   "status": "os",
+   "note": "Per-app network utilities (inferred from the name and the iOSSupport sibling NetAppsUtilitiesUI; the index lists only Info.plist, version.plist and a signature): which app made a connection, the local-network permission, the per-app inbound firewall policy and per-app transfer totals.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "network_attribution::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "app_firewall::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "app_transfer::tests"
+    }
+   ],
+   "ready_note": "Host tests for connection attribution and the local-network permission, the per-app firewall ruleset and per-app transfer totals. The job is inferred from the name."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NetAuth.framework",
+   "category": "frameworks",
+   "name": "NetAuth",
+   "path": "/System/Library/PrivateFrameworks/NetAuth.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/net_auth.rs; springboard/src/keychain.rs; springboard/src/shell/network_auth_sheet.rs; springboard/src/shell/services/network_auth.rs",
+   "status": "gap",
+   "note": "Network authentication agent: prompts for credentials for SMB shares and 802.1X networks and stores them through the keychain (springboard/src/keychain.rs) and the Wi-Fi secret store (springboard/sdk/src/wifi_secrets.rs). Built 2026-10-17: the saved-or-prompt decision for both kinds, and the prompt model with its answer checks (springboard/src/net_auth.rs).",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "net_auth::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::network_auth_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::network_auth::tests"
+    }
+   ],
+   "ready_note": "Host tests for the shell path: the network_auth service answers a saved share or 802.1X login from the keychain group, queues a sheet otherwise, the shell draws the user name, password and remember steps, Cancel and Escape end it, a refused login is forgotten and the retry wording shown, and the typed login reaches the app once and the keychain only on Remember. Not verified on Midget. The SDK's WifiSecrets store stays in memory; 802.1X logins are kept in the keychain group instead. Apps (Files for shares) still have to call request_login; no app does yet."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NetFSServer.framework",
+   "category": "frameworks",
+   "name": "NetFSServer",
+   "path": "/System/Library/PrivateFrameworks/NetFSServer.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/sharing_page.rs (View, SERVICES, share_section, shares_in_conf, with_share, without_share); packaging/arch/runtime-packages.txt (samba, nfs-utils)",
+   "status": "partial",
+   "note": "File Sharing is switched on and off from Settings > Sharing through smb.service, and the Arch samba and nfs-utils packages serve SMB and NFS shares; there is no per-folder share list or AFP sharing. Built 2026-10-17: the folder share model (springboard/src/shell/sharing_page.rs share_section and shares_in_conf, tests sharing_page::tests); the page does not list or edit folders yet. Built 2026-10-17: with_share and without_share edit the smb.conf text (shell sharing_page::tests); the page does not call them yet.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::sharing_page::tests"
+    }
+   ],
+   "ready_note": "File Sharing is switched from Settings > Sharing (privd service.set on smb.service); the Arch samba and nfs-utils packages serve SMB and NFS. The folder share model reads, adds and removes smb.conf sections (tests). AFP is not mirrored (Apple's retired protocol with no open equivalent); the page does not list or edit folders yet."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/Netrb.framework",
+   "category": "frameworks",
+   "name": "Netrb",
+   "path": "/System/Library/PrivateFrameworks/Netrb.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: Netrb is the network-recovery-boot client, which fetches the recovery image from Apple's servers when a Mac cannot start from its disk. The reference index lists only Info.plist and version.plist for it (no resources, no strings), and BifrOSt recovers from its own installer media and the Midget recovery phase, with no Apple-hosted image.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NetworkInfo.framework",
+   "category": "frameworks",
+   "name": "NetworkInfo",
+   "path": "/System/Library/PrivateFrameworks/NetworkInfo.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/wireless-diagnostics-desktop/src/model.rs; springboard/cmd/src/ifconfig.rs; springboard/src/net/wifi.rs (Status, ethernet, default_gateway, iface_ipv4)",
+   "status": "partial",
+   "note": "Network details for the menu bar, Wireless Diagnostics and ifconfig. The diagnostic-extension half feeds Apple's sysdiagnose and is not mirrored; app-facing gaps in the SDK network layer are tracked in docs/parity-matrix/data/network.json.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-wireless-diagnostics",
+     "filter": "model::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "ifconfig::tests"
+    }
+   ],
+   "ready_note": "The framework reports connection and interface details (SSID, signal, address, gateway) and supplies them to the sysdiagnose collector (NetworkInfoDiagnosticExtension.appex in the index). BifrOSt reads them for Wireless Diagnostics (parsing, signal rating, report text) and ifconfig, and the Wi-Fi status for the menu bar. The sysdiagnose upload half is not mirrored; Settings > Diagnostics shares a report only when the user chooses to."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NetworkMenusCommon.framework",
+   "category": "frameworks",
+   "name": "NetworkMenusCommon",
+   "path": "/System/Library/PrivateFrameworks/NetworkMenusCommon.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/desktop_network.rs; springboard/src/net/wifi_config.rs; springboard/src/net/wifi.rs",
+   "status": "partial",
+   "note": "Common code of the Wi-Fi, VPN and network menu bar items; BifrOSt's version is desktop_network.rs with the Wi-Fi config model.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::desktop_network::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "net::wifi_config::tests"
+    }
+   ],
+   "ready_note": "Shared code behind the Wi-Fi and network menus (link problems, DNS check, saved networks and their order, join/forget actions) is desktop_network.rs and the Wi-Fi config model the menu bar and Settings both use."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NetworkQuality.framework",
+   "category": "frameworks",
+   "name": "NetworkQuality",
+   "path": "/System/Library/PrivateFrameworks/NetworkQuality.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "docs/parity-matrix/data/network.json",
+   "status": "n/a",
+   "note": "n/a: NetworkQuality is the networkQuality speed and responsiveness test (usr/bin/networkQuality, networkqualityd and networkqualityrelay sandbox profiles, an XPC service and a sysdiagnose appex in the index). It measures against Apple-hosted test endpoints and relays, which is a third-party lookup BifrOSt does not make (privacy-first rule); local link quality is shown by Wireless Diagnostics instead.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NetworkScore.framework",
+   "category": "frameworks",
+   "name": "NetworkScore",
+   "path": "/System/Library/PrivateFrameworks/NetworkScore.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/net/wifi_config.rs (priority_of, saved-network order); springboard/src/net/wpa.rs (bars); springboard/core/src/network_sets.rs (service order, active_services)",
+   "status": "partial",
+   "note": "Scores candidate networks to pick one; BifrOSt ranks by saved order and signal and lets the supplicant roam.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "net::wifi_config::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "net::wpa::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "network_sets::tests"
+    }
+   ],
+   "ready_note": "Choosing which network carries traffic: saved Wi-Fi networks get supplicant priorities from their order (priority_of), the signal is rated in bars (wpa bars), and network_sets keeps the ordered service list whose first enabled service is used. wpa_supplicant makes the roaming choice."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NetworkServiceProxy.framework",
+   "category": "frameworks",
+   "name": "NetworkServiceProxy",
+   "path": "/System/Library/PrivateFrameworks/NetworkServiceProxy.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/proxy_settings.rs, springboard/sdk/src/url.rs",
+   "status": "partial",
+   "note": "private framework, owner Network; from SDK matrix network.json",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "proxy_settings::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "url::tests"
+    }
+   ],
+   "ready_note": "ProxySettings (environment, bypass rules, proxy_for) used by URLSession for each request, with CONNECT tunnels for https."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NetworkStatistics.framework",
+   "category": "frameworks",
+   "name": "NetworkStatistics",
+   "path": "/System/Library/PrivateFrameworks/NetworkStatistics.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/activity-desktop/src/sample.rs (parse_netdev, IfaceRate); springboard/apps/activity-desktop/src/sample_net.rs (parse_ss, per_process, rate, read_sockets)",
+   "status": "partial",
+   "note": "Network counters for Activity Monitor: per interface and per process.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-activity",
+     "filter": "sample::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-activity",
+     "filter": "sample_net::tests"
+    }
+   ],
+   "ready_note": "Byte counters per interface (/proc/net/dev) with rates, and, built this wave, per-socket and per-process TCP byte counters from the kernel's socket diagnostics (ss -tinpH) summed per process. The Activity Monitor table does not show the per-process columns yet."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NeuralNetworks.framework",
+   "category": "frameworks",
+   "name": "NeuralNetworks",
+   "path": "/System/Library/PrivateFrameworks/NeuralNetworks.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/ui/src/nn.rs (DenseLayer, Model, MODEL_MAGIC); springboard/sdk/src/ndarray.rs; springboard/sdk/src/inference.rs",
+   "status": "partial",
+   "note": "Neural network runtime: tensors, typed inference signatures, compute units, and a CPU runtime for trained dense networks with its own model file format (Built 2026-10-17). Training is not built.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "nn::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "ndarray::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "inference::tests"
+    }
+   ],
+   "ready_note": "float32 tensors (ndarray), typed inference signatures (inference), compute unit choice, and a runtime an app can call: nn::Model loads a trained dense-layer network from a documented little-endian file (BNN1), checks every length before allocating, runs it on the CPU and classifies with softmax. Training and convolution layers are not covered."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NeutrinoCore.framework",
+   "category": "frameworks",
+   "name": "NeutrinoCore",
+   "path": "/System/Library/PrivateFrameworks/NeutrinoCore.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/photos/edit.rs; springboard/src/shell/photos/recipe.rs",
+   "status": "os",
+   "note": "Photo image pipeline core; BifrOSt's is the Photos edit pipeline and recipe.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::edit::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::recipe::tests"
+    }
+   ],
+   "ready_note": "Neutrino is the Photos image-processing pipeline (a Photos logging subsystem com.apple.photos.Neutrino is its only trace in the index). BifrOSt's pipeline is Photos edit mode: non-destructive recipe plus rotate, crop, blur, exposure, contrast, saturation, warmth, vignette and filters on the renderer's own filter models."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NeutrinoKit.framework",
+   "category": "frameworks",
+   "name": "NeutrinoKit",
+   "path": "/System/Library/PrivateFrameworks/NeutrinoKit.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/photos/edit.rs; springboard/src/shell/photos/recipe.rs",
+   "status": "os",
+   "note": "Kit over the photo image pipeline; covered with NeutrinoCore by the Photos edit pipeline.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::edit::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::recipe::tests"
+    }
+   ],
+   "ready_note": "Kit layer over the same photo pipeline as NeutrinoCore; BifrOSt's Photos edit mode and recipe cover the job in one module."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NewDeviceOutreach.framework",
+   "category": "frameworks",
+   "name": "NewDeviceOutreach",
+   "path": "/System/Library/PrivateFrameworks/NewDeviceOutreach.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Prompts that offer to set up the reference's other devices serve the vendor's device ecosystem onboarding, which BifrOSt does not have.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NewDeviceOutreachMacUI.framework",
+   "category": "frameworks",
+   "name": "NewDeviceOutreachMacUI",
+   "path": "/System/Library/PrivateFrameworks/NewDeviceOutreachMacUI.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "The Mac interface of the reference's new-device prompts serves the vendor's device ecosystem onboarding, which BifrOSt does not have.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NewsAnalyticsUpload.framework",
+   "category": "frameworks",
+   "name": "NewsAnalyticsUpload",
+   "path": "/System/Library/PrivateFrameworks/NewsAnalyticsUpload.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Uploads News reading analytics to the reference vendor's servers, which is telemetry BifrOSt does not collect.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NewsCore.framework",
+   "category": "frameworks",
+   "name": "NewsCore",
+   "path": "/System/Library/PrivateFrameworks/NewsCore.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/news-desktop/src/feed.rs; springboard/apps/news-desktop/src/news.rs",
+   "status": "partial",
+   "note": "The RSS and Atom article model and the feed list are built in the News app; the vendor's personalisation model and publisher subscriptions are not.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-news",
+     "filter": "news::tests"
+    }
+   ],
+   "ready_note": "The RSS and Atom article model and the feed list are built and tested in the News app."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NewsDaemon.framework",
+   "category": "frameworks",
+   "name": "NewsDaemon",
+   "path": "/System/Library/PrivateFrameworks/NewsDaemon.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/news-desktop/src/feed_cache.rs; springboard/apps/news-desktop/src/feed_refresh.rs; springboard/apps/news-desktop/src/news.rs (maintain, next_wake)",
+   "status": "partial",
+   "note": "Feeds are cached and revalidated inside the News app over HTTP. The refresh schedule is built in apps/news-desktop/src/feed_refresh.rs (which feeds are due, how long to sleep; feed_refresh::tests); news.rs maintain and next_wake already run the refresh with their own retry and refresh intervals; feed_refresh.rs is not used by that loop yet.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-news",
+     "filter": "feed_refresh::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-news",
+     "filter": "feed_cache::tests"
+    }
+   ],
+   "ready_note": "The background fetch-and-cache of articles is done by the News app over open feeds: cached and revalidated over HTTP, refreshed on a schedule (news.rs maintain and next_wake; feed_refresh holds the due rules). Apple's editorial News service itself is not mirrored."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NewsFoundation.framework",
+   "category": "frameworks",
+   "name": "NewsFoundation",
+   "path": "/System/Library/PrivateFrameworks/NewsFoundation.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/news-desktop/src/wire.rs",
+   "status": "partial",
+   "note": "Article text tokenizing, link cards and the Reading List are in wire.rs; the vendor's publisher catalogue types are not mirrored.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-news",
+     "filter": "wire::tests"
+    }
+   ],
+   "ready_note": "Article text tokenizing, link cards and the Reading List are in wire.rs and tested."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NewsToday.framework",
+   "category": "frameworks",
+   "name": "NewsToday",
+   "path": "/System/Library/PrivateFrameworks/NewsToday.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/news-desktop/src/services.rs; springboard/apps/news-desktop/src/news.rs",
+   "status": "partial",
+   "note": "The feed source list, offline reading and the top-stories widget timeline are built; the vendor's curated Today feed and its editorial sections are not.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-news",
+     "filter": "services::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-news",
+     "filter": "wire::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-news",
+     "filter": "feed::tests"
+    }
+   ],
+   "ready_note": "News source list, offline reading list and the top-stories widget timeline (services::tests, wire::tests, feed::tests). n/a: the curated Today editorial feed is served by Apple's news service."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NewsTransport.framework",
+   "category": "frameworks",
+   "name": "NewsTransport",
+   "path": "/System/Library/PrivateFrameworks/NewsTransport.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/news-desktop/src/feed.rs; springboard/apps/news-desktop/src/feed_cache.rs",
+   "status": "partial",
+   "note": "Feeds are fetched over HTTP with conditional requests and a body cache; the vendor's News service transport is not mirrored.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-news",
+     "filter": "feed::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-news",
+     "filter": "feed_cache::tests"
+    }
+   ],
+   "ready_note": "Feeds are fetched over HTTP with conditional requests and a body cache, tested in feed.rs and feed_cache.rs."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NewsURLBucket.framework",
+   "category": "frameworks",
+   "name": "NewsURLBucket",
+   "path": "/System/Library/PrivateFrameworks/NewsURLBucket.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Groups article links for the reference's News service; the RSS reader in BifrOSt opens feed links directly and has no vendor service to bucket them for.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NewsURLResolution.framework",
+   "category": "frameworks",
+   "name": "NewsURLResolution",
+   "path": "/System/Library/PrivateFrameworks/NewsURLResolution.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Resolves article links through the reference's News service; the RSS reader in BifrOSt opens feed links directly without that service.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/Nexus.framework",
+   "category": "frameworks",
+   "name": "Nexus",
+   "path": "/System/Library/PrivateFrameworks/Nexus.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: Nexus is the client framework of nexusd, a per-user background agent: the index shows only its Info.plist plus usr/libexec/nexusd, a LaunchAgent, a sandbox profile and a man page, with no resources, UI or strings. Nothing user- or app-visible is evidenced, and without a binary no behaviour can be reproduced clean-room; BifrOSt has no counterpart to mirror.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NexusDaemon.framework",
+   "category": "frameworks",
+   "name": "NexusDaemon",
+   "path": "/System/Library/PrivateFrameworks/NexusDaemon.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: NexusDaemon is the daemon side of the Nexus agent (nexusd: LaunchAgent com.apple.nexusd.plist and sandbox profile in the index); only Info.plist and version.plist ship in the bundle. No user- or app-visible function is evidenced and no binary can be read, so there is nothing BifrOSt must mirror.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/Nodes.framework",
+   "category": "frameworks",
+   "name": "Nodes",
+   "path": "/System/Library/PrivateFrameworks/Nodes.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: Nodes (version 1A) ships only Info.plist, version.plist and HostConfiguration.plist in the index: no resources, UI, strings or hosting bundle that names a user- or app-visible function. An Apple-internal framework with nothing BifrOSt can mirror clean-room.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NodesUI.framework",
+   "category": "frameworks",
+   "name": "NodesUI",
+   "path": "/System/Library/PrivateFrameworks/NodesUI.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: NodesUI is the UI side of Nodes: the index holds only Info.plist, Assets.car (Apple artwork, which cannot be reused clean-room) and default.metallib (Apple GPU shaders). No user-visible function is evidenced beyond that artwork; BifrOSt draws its own UI with its own shaders.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NotesAnalytics.framework",
+   "category": "frameworks",
+   "name": "NotesAnalytics",
+   "path": "/System/Library/PrivateFrameworks/NotesAnalytics.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Usage analytics for Notes, scheduled as background tasks (background task identifiers in its Info.plist), is telemetry for the reference vendor that BifrOSt does not collect.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NotesEditor.framework",
+   "category": "frameworks",
+   "name": "NotesEditor",
+   "path": "/System/Library/PrivateFrameworks/NotesEditor.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/notes-desktop/src/notes/mod.rs; springboard/apps/notes-desktop/src/notes/outline.rs",
+   "status": "partial",
+   "note": "The note editor with paragraph and character styles, lists, checklists, tables and indentation is built inside the Notes app; the reference's live-activity hooks are not mirrored.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-notes",
+     "filter": "notes::"
+    }
+   ],
+   "ready_note": "The note editor with paragraph and character styles, lists, checklists, tables and indentation is built in the Notes app and tested."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NotesHTML.framework",
+   "category": "frameworks",
+   "name": "NotesHTML",
+   "path": "/System/Library/PrivateFrameworks/NotesHTML.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/notes-desktop/src/notes/html.rs, springboard/apps/notes-desktop/src/notes/mod.rs (Share as HTML)",
+   "status": "partial",
+   "note": "HTML is converted to the Markdown a note is stored in; exporting a note as HTML is not built.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-notes",
+     "filter": "notes::html::tests"
+    }
+   ],
+   "ready_note": "A note exports as a standalone HTML page (Share as HTML). Headings, paragraphs, lists, checklists, quotes, code and inline emphasis come from the editor's own Markdown rules, all text is escaped, and the page has its own stylesheet."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NotesPreviewKit.framework",
+   "category": "frameworks",
+   "name": "NotesPreviewKit",
+   "path": "/System/Library/PrivateFrameworks/NotesPreviewKit.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/notes-desktop/src/notes/preview.rs",
+   "status": "os",
+   "note": "Previews of notes; BifrOSt's is the Notes preview.render generator.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-notes",
+     "filter": "notes::preview::tests"
+    }
+   ],
+   "ready_note": "Notes declares the preview.render generator for a note export in its manifest; preview.rs answers the shell with a PNG of the note's first lines."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NotesShared.framework",
+   "category": "frameworks",
+   "name": "NotesShared",
+   "path": "/System/Library/PrivateFrameworks/NotesShared.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/notes-desktop/src/notes/store.rs",
+   "status": "partial",
+   "note": "Notes are stored as one Markdown file per note with atomic writes, sorting, search and snippets; tests in notes::store::tests. n/a: the reference's shared account model and sync run on Apple's account and cloud services.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-notes",
+     "filter": "notes::store::tests"
+    }
+   ],
+   "ready_note": "Notes store (notes::store::tests): one Markdown file per note with atomic writes, sorting, search and snippets. The reference's shared account model and sync are Apple account services, n/a for BifrOSt."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NotesSiriUI.framework",
+   "category": "frameworks",
+   "name": "NotesSiriUI",
+   "path": "/System/Library/PrivateFrameworks/NotesSiriUI.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
+   "status": "partial",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_panel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::speech::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "automation::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "widget::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-reminders",
+     "filter": "actions_tests"
+    }
+   ],
+   "ready_note": "Apps declare [[intent]] tables in manifest.toml and serve them on their control socket. Search and the Shortcuts action library list and run an installed app's shortcut intents (shell::intents::runnable_shortcuts). The assistant answers with intent cards that run only after the user confirms them, and reads answers aloud when Speak Answers is on. Voice recognition is not built: nothing turns speech into an intent request, so Siri's spoken requests are not covered.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NotesSupport.framework",
+   "category": "frameworks",
+   "name": "NotesSupport",
+   "path": "/System/Library/PrivateFrameworks/NotesSupport.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/notes-desktop/src/notes/store.rs; springboard/apps/notes-desktop/src/notes/mod.rs",
+   "status": "os",
+   "note": "Support framework of Notes; BifrOSt implements it in notes/store.rs and notes/mod.rs.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-notes",
+     "filter": "notes::store::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-notes",
+     "filter": "notes::tests"
+    }
+   ],
+   "ready_note": "Internal support code of the Notes app (model, storage, helpers) that BifrOSt implements in the notes module and its store."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NotesUI.framework",
+   "category": "frameworks",
+   "name": "NotesUI",
+   "path": "/System/Library/PrivateFrameworks/NotesUI.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/notes-desktop/src/notes/chrome.rs; springboard/apps/notes-desktop/src/notes/mod.rs",
+   "status": "partial",
+   "note": "The Notes window with the folder sidebar, the note list and the editor toolbar is built in chrome.rs; the reference's note-sharing UI is not.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-notes",
+     "filter": "notes::tests"
+    }
+   ],
+   "ready_note": "The Notes window (folder sidebar, note list, editor toolbar) is chrome.rs, with the note behaviour tested in notes::tests. The reference's note-sharing sheet (iCloud collaboration) is not mirrored."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NotesUIServices.framework",
+   "category": "frameworks",
+   "name": "NotesUIServices",
+   "path": "/System/Library/PrivateFrameworks/NotesUIServices.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/notes-desktop/src/notes/system.rs",
+   "status": "partial",
+   "note": "The links to the pasteboard, widget timeline and search index are in system.rs; other service hooks of the reference's Notes UI are not mirrored.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-notes",
+     "filter": "notes::system::tests"
+    }
+   ],
+   "ready_note": "Notes system hooks (notes::system::tests): pasteboard copy as Markdown and rich text, the recent-notes widget timeline and the search index reload. Other reference service hooks are not mirrored."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NotificationCenterUI.framework",
+   "category": "frameworks",
+   "name": "NotificationCenterUI",
+   "path": "/System/Library/PrivateFrameworks/NotificationCenterUI.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/notify/center.rs; springboard/src/shell/notify/mod.rs; springboard/src/shell/notify/store.rs",
+   "status": "partial",
+   "note": "Refreshed 2026-10-17, still open: No app-drawn widget content: springboard/sdk/src/today_widgets.rs (WidgetSet) sets the order and the has-content flags only, and the shell draws its own widgets (NCWidgetProviding). No search results view or list view for widgets (NCWidgetSearchViewController, NCWidgetListViewController). The Notification Center column does not show widgets: springboard/src/shell/notify/center.rs says the shell has no widget data source on the PC yet. The layout model in springboard/ui/src/widget_column.rs exists but nothing calls it yet. WidgetKit (Apple's replacement) is not in the SDK; it is outside this framework but is where Apple's widget work now lives.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::notify::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::notify::store::tests"
+    }
+   ],
+   "ready_note": "The Notification Center column (notifications grouped by app, the Today widgets and their editing) is shell/notify/center.rs with the notification model and store tested. Apps cannot supply Today widgets yet (tracked in docs/parity-matrix/data/notification-center.json)."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NotificationPreferences.framework",
+   "category": "frameworks",
+   "name": "NotificationPreferences",
+   "path": "/System/Library/PrivateFrameworks/NotificationPreferences.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/notify_page.rs; springboard/sdk/src/usernotif.rs",
+   "status": "partial",
+   "note": "Settings > Notifications with a Muted switch per app and the Do Not Disturb schedule is built in notify_page.rs, with the per-app settings in the SDK; not verified on Midget.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::notify_page::tests"
+    }
+   ],
+   "ready_note": "Settings > Notifications with a Muted switch per app and the Do Not Disturb schedule is built in notify_page.rs, with per-app settings in the SDK; tested."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NowPlayingUI.framework",
+   "category": "frameworks",
+   "name": "NowPlayingUI",
+   "path": "/System/Library/PrivateFrameworks/NowPlayingUI.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/services/now_playing.rs; springboard/src/shell/now_playing_menu.rs; springboard/src/shell/music/nowplaying.rs; springboard/src/shell/control_center.rs",
+   "status": "partial",
+   "note": "private framework, owner NowPlaying; from SDK matrix now-playing.json Refreshed 2026-10-17: not ready, remaining: No app-facing local media session: an app cannot publish its own metadata, state and commands to the lock screen or Control Center (MediaSession, MediaSessionRepresentable). | No typed content model: the service track has no title, artist, kind, or artwork, so the lock card cannot show metadata from apps other than Music. | No artwork transport or animated artwork through the audio service. | No remote media sessions across devices, no remote session extension and no device list; the Bluetooth route is only shown as a name. | Shuffle and repeat are stored in the service but are not offered on the lock card or Control Center.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::now_playing::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::now_playing_menu::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::music::nowplaying::tests"
+    }
+   ],
+   "ready_note": "The now-playing surfaces: the menu bar item, the Control Center tile and the lock card, driven by the now_playing service. App-facing media sessions and typed content/artwork are tracked in docs/parity-matrix/data/now-playing.json."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NumberAdder.framework",
+   "category": "frameworks",
+   "name": "NumberAdder",
+   "path": "/System/Library/PrivateFrameworks/NumberAdder.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "A QA test fixture that exists only for the reference vendor's internal test suite and has no user function.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NutritionCore.framework",
+   "category": "frameworks",
+   "name": "NutritionCore",
+   "path": "/System/Library/PrivateFrameworks/NutritionCore.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: NutritionCore is the data layer of the Health app's nutrition logging (an App Intents framework _NutritionCore_AppIntents sits beside it in the index). It stores nutrition samples in HealthKit, and the matrix marks HealthKit n/a (docs/parity-matrix/data/healthkit.json: no health store, no wearable input, no Health app in BifrOSt).",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/NutritionUICore.framework",
+   "category": "frameworks",
+   "name": "NutritionUICore",
+   "path": "/System/Library/PrivateFrameworks/NutritionUICore.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: NutritionUICore is the Health app's nutrition views (Assets.car artwork and a Localizable.loctable in the index) over NutritionCore's HealthKit samples. HealthKit is n/a in the matrix (no health store or Health app in BifrOSt) and the artwork cannot be reused clean-room.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/OAHSoftwareUpdate.framework",
+   "category": "frameworks",
+   "name": "OAHSoftwareUpdate",
+   "path": "/System/Library/PrivateFrameworks/OAHSoftwareUpdate.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/updated/src/main.rs; springboard/src/shell/pacman_update.rs",
+   "status": "partial",
+   "note": "The update agent in updated/src/main.rs runs background OS and app update checks, and pacman_update.rs runs system package upgrades. n/a: the reference software catalog (oneProduct.sucatalog) and the Rosetta translation update are Apple services with no Linux counterpart.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "updated",
+     "filter": "tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pacman_update::tests"
+    }
+   ],
+   "ready_note": "Background OS and app update checks in the update agent (updated tests) and system package upgrades (shell::pacman_update::tests). n/a: the Apple software catalog and the Rosetta translation update, which has no use on Linux."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/OAuth.framework",
+   "category": "frameworks",
+   "name": "OAuth",
+   "path": "/System/Library/PrivateFrameworks/OAuth.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/accounts.rs (oauth2_authorize_url, oauth2_code_body, oauth2_redirect, begin_oauth2_sign_in, LoopbackSignIn, pkce_challenge, credential_from_token_response, oauth2_refresh_body, renewal_from_token_response)",
+   "status": "partial",
+   "note": "OAuth 1 and 2 credentials for apps with the OAuth 2 sign-in flow (authorize URL, PKCE, loopback redirect capture, code exchange, refresh) in springboard/sdk/src/accounts.rs.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "accounts::tests"
+    }
+   ],
+   "ready_note": "The whole OAuth 2 flow is covered: authorisation URL with PKCE, a loopback listener on 127.0.0.1 that captures the redirect (Host and path checked, state checked before a code is trusted, random state and verifier from the kernel pool), the code exchange body, first-token parse, and refresh. The caller opens the URL in the browser and posts the bodies; there is no one-call app wrapper for the HTTP legs."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/ODDAnalytics.framework",
+   "category": "frameworks",
+   "name": "ODDAnalytics",
+   "path": "/System/Library/PrivateFrameworks/ODDAnalytics.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Assistant analytics bundle (ODDAnalytics) that reports on the reference assistant's use to the vendor. BifrOSt sends no telemetry to a vendor and has no such assistant pipeline.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/ODDIFramework.framework",
+   "category": "frameworks",
+   "name": "ODDIFramework",
+   "path": "/System/Library/PrivateFrameworks/ODDIFramework.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Assistant data framework (ODDIFramework) of the reference assistant's data reporting to the vendor. BifrOSt has no vendor assistant data pipeline.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/ODIE.framework",
+   "category": "frameworks",
+   "name": "ODIE",
+   "path": "/System/Library/PrivateFrameworks/ODIE.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: an Apple on-device machine learning platform (its bundles carry the ML platform identifier and model packs). BifrOSt has no Apple ML model packs; the local inference path is springboard/sdk/src/inference.rs.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/ODIEDelegates.framework",
+   "category": "frameworks",
+   "name": "ODIEDelegates",
+   "path": "/System/Library/PrivateFrameworks/ODIEDelegates.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: an Apple on-device machine learning platform (its bundles carry the ML platform identifier and model packs). BifrOSt has no Apple ML model packs; the local inference path is springboard/sdk/src/inference.rs.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/OSAServicesClient.framework",
+   "category": "frameworks",
+   "name": "OSAServicesClient",
+   "path": "/System/Library/PrivateFrameworks/OSAServicesClient.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple analytics services client; the index holds only the bundle shell, but it belongs to the OS analytics family (telemetry) with no BifrOSt job.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/OSASubmissionClient.framework",
+   "category": "frameworks",
+   "name": "OSASubmissionClient",
+   "path": "/System/Library/PrivateFrameworks/OSASubmissionClient.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Client that submits OS analytics reports (OSASubmissionClient) to the reference vendor's collection service. BifrOSt sends no telemetry.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/OSASyncProxyClient.framework",
+   "category": "frameworks",
+   "name": "OSASyncProxyClient",
+   "path": "/System/Library/PrivateFrameworks/OSASyncProxyClient.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple analytics sync proxy (OSA family, telemetry upload); no BifrOSt job.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/OSAnalytics.framework",
+   "category": "frameworks",
+   "name": "OSAnalytics",
+   "path": "/System/Library/PrivateFrameworks/OSAnalytics.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/crash_alert.rs",
+   "status": "partial",
+   "note": "The crash alert in crash_alert.rs reports a failed app process, offers Report, which saves the report locally, and Reopen, using the systemd-coredump records. Not built: the reference's ReportCrashService upload path, which BifrOSt does not use.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::crash_alert::tests"
+    }
+   ],
+   "ready_note": "The crash alert reports a failed app process, offers Report (saved locally) and Reopen, using the systemd-coredump records; tested in crash_alert.rs."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/OSAnalyticsPrivate.framework",
+   "category": "frameworks",
+   "name": "OSAnalyticsPrivate",
+   "path": "/System/Library/PrivateFrameworks/OSAnalyticsPrivate.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple analytics: the index lists an analytics asset set (assets_1240, stabilityParameters.plist) and a Trial namespace descriptor. Telemetry with no BifrOSt job.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/OSD.framework",
+   "category": "frameworks",
+   "name": "OSD",
+   "path": "/System/Library/PrivateFrameworks/OSD.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/volume_hud.rs; springboard/src/shell/input_source_hud.rs",
+   "status": "os",
+   "note": "On-screen display for volume and input source; OSD.framework backs the reference OS's HUD helper (OSDUIHelper.app in CoreServices).",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::volume_hud::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::input_source_hud::tests"
+    }
+   ],
+   "ready_note": "The on-screen display (the OSDUIHelper role in the index): the volume HUD with the route name row on plug events, and the input-source HUD, each with hold and fade timing. A brightness or keyboard-backlight HUD is not built yet."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/OSEligibility.framework",
+   "category": "frameworks",
+   "name": "OSEligibility",
+   "path": "/System/Library/PrivateFrameworks/OSEligibility.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: decides feature eligibility from Apple-managed server configuration. BifrOSt has no Apple configuration service, and its feature switches are local settings.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/OSInstaller.framework",
+   "category": "frameworks",
+   "name": "OSInstaller",
+   "path": "/System/Library/PrivateFrameworks/OSInstaller.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/installer/plan.rs; springboard/src/installer/disks.rs",
+   "status": "partial",
+   "note": "plan.rs builds the install plan and disks.rs the disk layout for the BifrOSt installer. Not built: the per-model machine profiles that the reference reads from MachineProfiles.plist.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "installer::plan::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "installer::disks::tests"
+    }
+   ],
+   "ready_note": "plan.rs builds the install plan and disks.rs the disk layout for the installer, both with unit tests."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/OSIntelligence.framework",
+   "category": "frameworks",
+   "name": "OSIntelligence",
+   "path": "/System/Library/PrivateFrameworks/OSIntelligence.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Holds the reference platform's on-device inactivity prediction models. BifrOSt has no inactivity predictor and ships no such models.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/OSPersonalization.framework",
+   "category": "frameworks",
+   "name": "OSPersonalization",
+   "path": "/System/Library/PrivateFrameworks/OSPersonalization.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: OSPersonalization personalises an OS image for one device by requesting a signing ticket from Apple's signing servers (OSPError.strings and a sandbox profile in the index), for installs, restores and cryptex updates. BifrOSt images are not Apple-signed and no ticket request is made; this is the Apple account/cloud and hardware-attestation path.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/OSUpdate.framework",
+   "category": "frameworks",
+   "name": "OSUpdate",
+   "path": "/System/Library/PrivateFrameworks/OSUpdate.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/update.rs; springboard/updated/src/main.rs",
+   "status": "partial",
+   "note": "update.rs checks a manifest, downloads the binary and checks its SHA-256, and the update agent in updated/src/main.rs runs the background checks. Not built: the reference's product-level release notes and software catalog.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::update::tests"
+    }
+   ],
+   "ready_note": "update.rs checks the update manifest, downloads the binary and verifies its SHA-256; the updated agent runs the background checks."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/OTSVG.framework",
+   "category": "frameworks",
+   "name": "OTSVG",
+   "path": "/System/Library/PrivateFrameworks/OTSVG.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/render/src/svg_table.rs (SvgTable, glyph_markup, rasterize_glyph); springboard/render/src/svg.rs; springboard/render/src/font.rs",
+   "status": "partial",
+   "note": "OpenType-SVG glyphs: index, gunzip, glyph markup and rasterisation are built in render/src/svg_table.rs. Wired 2026-10-17: Font::parse keeps the SVG table index and the text renderer (render_placed) draws each glyph the table covers in colour, replacing its outline; a glyph whose document cannot be drawn keeps its outline.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "font::tests::a_glyph"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "svg_table::tests"
+    }
+   ],
+   "ready_note": "Text drawn with a font that has an SVG table shows the colour glyphs; tests build a font with the table and compare the pixels."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/OctagonTrust.framework",
+   "category": "frameworks",
+   "name": "OctagonTrust",
+   "path": "/System/Library/PrivateFrameworks/OctagonTrust.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "vendor cloud Keychain trust-circle framework (octagontrust) that joins devices to the vendor's keychain sync. BifrOSt has no vendor trust service; its keychain is springboard/src/keychain.rs.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/OfficeImport.framework",
+   "category": "frameworks",
+   "name": "OfficeImport",
+   "path": "/System/Library/PrivateFrameworks/OfficeImport.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/textedit-desktop/src/office.rs, springboard/apps/textedit-desktop/src/document.rs (xlsx and pptx open as text)",
+   "status": "partial",
+   "note": "docx.rs reads and writes the .docx text subset in TextEdit (runs, paragraphs, lists). Not built: spreadsheet and presentation import, shape and table style import (OAShapeTypes.zip, DefaultTableStyles.zip) and the .xls reader.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-textedit",
+     "filter": "office::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-textedit",
+     "filter": "docx::tests"
+    }
+   ],
+   "ready_note": "Spreadsheets (.xlsx: sheets as tab-separated rows with shared strings resolved) and presentations (.pptx: slide paragraphs) open in TextEdit as plain text. Still open, as the row notes: shape and table style import, and formulas and cell formats, which are not read."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/OmniSearch.framework",
+   "category": "frameworks",
+   "name": "OmniSearch",
+   "path": "/System/Library/PrivateFrameworks/OmniSearch.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/quicksearch.rs",
+   "status": "partial",
+   "note": "The search card in quicksearch.rs searches apps and content from the home screen. Not built: the assistant answers and dialog templates (Resources/Templates) that the reference search returns.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests"
+    }
+   ],
+   "ready_note": "The search card in quicksearch.rs searches apps and content from the home screen; tested."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/OmniSearchClient.framework",
+   "category": "frameworks",
+   "name": "OmniSearchClient",
+   "path": "/System/Library/PrivateFrameworks/OmniSearchClient.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: OmniSearchClient is the client of the omniSearch search service (searchtoold sandbox profile com.apple.omniSearch.searchtoold.sb, an OmniSearch feature-flag domain and a logging subsystem in the index), which queries Apple-hosted search back ends. That is a third-party lookup BifrOSt does not make; its search is local (Spotlight-style quick search over app content).",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/OmniSearchTypes.framework",
+   "category": "frameworks",
+   "name": "OmniSearchTypes",
+   "path": "/System/Library/PrivateFrameworks/OmniSearchTypes.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: OmniSearchTypes holds the request and result types of the omniSearch client for Apple-hosted search (only Info.plist and version.plist in the index). BifrOSt search is local and has no such service to type.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/OnBoardingKit.framework",
+   "category": "frameworks",
+   "name": "OnBoardingKit",
+   "path": "/System/Library/PrivateFrameworks/OnBoardingKit.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/setup.rs",
+   "status": "partial",
+   "note": "The Setup Assistant model in setup.rs holds the first-run steps, the recorded choices and the state file. Not built: the reference's onboarding screens and their Assets.car artwork.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "setup::tests"
+    }
+   ],
+   "ready_note": "The Setup Assistant model holds the first-run steps, the recorded choices and the state file (tests). The reference's onboarding artwork (Assets.car) is Apple artwork and is not reused."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/OnDeviceDaemon.framework",
+   "category": "frameworks",
+   "name": "OnDeviceDaemon",
+   "path": "/System/Library/PrivateFrameworks/OnDeviceDaemon.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: an Apple on-device machine learning platform (its bundles carry the ML platform identifier and model packs). BifrOSt has no Apple ML model packs; the local inference path is springboard/sdk/src/inference.rs.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/OnDeviceFoundation.framework",
+   "category": "frameworks",
+   "name": "OnDeviceFoundation",
+   "path": "/System/Library/PrivateFrameworks/OnDeviceFoundation.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: an Apple on-device machine learning platform (its bundles carry the ML platform identifier and model packs). BifrOSt has no Apple ML model packs; the local inference path is springboard/sdk/src/inference.rs.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/OnDeviceStorage.framework",
+   "category": "frameworks",
+   "name": "OnDeviceStorage",
+   "path": "/System/Library/PrivateFrameworks/OnDeviceStorage.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "On-device storage daemon (Support/amsondevicestoraged) that caches media content for the reference vendor's services, which BifrOSt does not run.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/OnDeviceStorageCore.framework",
+   "category": "frameworks",
+   "name": "OnDeviceStorageCore",
+   "path": "/System/Library/PrivateFrameworks/OnDeviceStorageCore.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Support code of OnDeviceStorage, which caches media for the reference vendor's services. BifrOSt does not run those services.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/OnDeviceStorageDaemon.framework",
+   "category": "frameworks",
+   "name": "OnDeviceStorageDaemon",
+   "path": "/System/Library/PrivateFrameworks/OnDeviceStorageDaemon.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Daemon of OnDeviceStorage, which caches media for the reference vendor's services. BifrOSt does not run those services.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/OpenAPIRuntimeInternal.framework",
+   "category": "frameworks",
+   "name": "OpenAPIRuntimeInternal",
+   "path": "/System/Library/PrivateFrameworks/OpenAPIRuntimeInternal.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Swift OpenAPI runtime library that apps link for HTTP APIs. BifrOSt apps are Rust and the system has no job for this library.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/OpenAPIURLSessionInternal.framework",
+   "category": "frameworks",
+   "name": "OpenAPIURLSessionInternal",
+   "path": "/System/Library/PrivateFrameworks/OpenAPIURLSessionInternal.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Swift OpenAPI transport library over URLSession. BifrOSt apps are Rust and the system has no job for this library.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/OpenDirectoryConfig.framework",
+   "category": "frameworks",
+   "name": "OpenDirectoryConfig",
+   "path": "/System/Library/PrivateFrameworks/OpenDirectoryConfig.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/ui/src/directory_config.rs (DirectoryConfig, Source, render_ldap_conf); springboard/ui/src/directory_local.rs; springboard/ui/src/directory_node.rs; packaging/arch/runtime-packages.txt (openldap)",
+   "status": "partial",
+   "note": "Directory service configuration: ordered, validated LDAP sources and the OpenLDAP client file they produce (Built 2026-10-17, springboard/ui/src/directory_config.rs). Applying the file as root and a Settings page are not built.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "directory_config::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "directory_local::tests"
+    }
+   ],
+   "ready_note": "Configuration of directory services: an ordered list of LDAP sources, accepted only when protected (ldaps or StartTLS), that renders the OpenLDAP client file from the packaged openldap; the local directory is always searched (directory_local). Installing the rendered file needs the privileged helper and is not wired."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/OpenDirectoryConfigUI.framework",
+   "category": "frameworks",
+   "name": "OpenDirectoryConfigUI",
+   "path": "/System/Library/PrivateFrameworks/OpenDirectoryConfigUI.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/ui/src/directory_config.rs",
+   "status": "partial",
+   "note": "Directory Utility's configuration UI. The model it edits is built (springboard/ui/src/directory_config.rs: sources, order, switches, validation, the OpenLDAP client file). Missing: a Settings page that lists the sources and edits them (PageId, spec in shell/pages.rs, load/apply in shell/settings.rs) and a privd command that installs the rendered file as root; both touch the shell's page registry and privd and need a build to verify.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/Osprey.framework",
+   "category": "frameworks",
+   "name": "Osprey",
+   "path": "/System/Library/PrivateFrameworks/Osprey.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: Osprey is the RPC client framework Apple's services use to talk to their servers over streaming channels (Siri and cloud features); the index holds only Info.plist and version.plist. It serves Apple cloud services BifrOSt does not use, with no user-visible surface.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/nt.framework",
+   "category": "frameworks",
+   "name": "nt",
+   "path": "/System/Library/PrivateFrameworks/nt.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: nt (version 2.0) is an Apple-internal framework: the index holds only Info.plist and version.plist (no resources, strings or hosting bundle) and its name matches no user- or app-visible function. Nothing evidenced for BifrOSt to mirror clean-room.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/oncrpc.framework",
+   "category": "frameworks",
+   "name": "oncrpc",
+   "path": "/System/Library/PrivateFrameworks/oncrpc.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "packaging/arch/runtime-packages.txt (rpcbind, nfs-utils)",
+   "status": "partial",
+   "note": "The rpcbind and nfs-utils packages in the runtime list provide the ONC RPC services (portmapper, rpc.statd, mount.nfs). Not built: the rpcgen stub compiler (bin/rpcgen in the reference), since no rpcsvc-proto package is in the runtime list.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/rpcinfo"
+    }
+   ],
+   "ready_note": "The rpcbind and nfs-utils runtime packages provide the ONC RPC services (portmapper, rpc.statd, mount.nfs); rpcinfo ships with rpcbind. rpcgen is a stub compiler for developers, not a service users run, so it is outside this row."
+  }
+ ]
+}

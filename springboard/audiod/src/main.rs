@@ -71,6 +71,7 @@ fn snapshot(s: PlayerSnapshot, muted: bool) -> Snapshot {
         queue_len: s.queue_len as u32,
         volume: s.volume,
         muted,
+        rate: s.rate,
         error: s.error,
         live: s.live.map(|l| Live {
             phase: match l.phase {
@@ -124,6 +125,8 @@ impl Core {
                 WireRepeat::One => Repeat::One,
             }),
             Cmd::SetVolume(v) => self.player.set_volume(v),
+            Cmd::SetRate(r) => self.player.set_rate(r),
+            Cmd::SetCrossfade(ms) => self.player.set_crossfade_ms(ms),
             Cmd::SetMuted(m) => {
                 self.muted = m;
                 self.player.set_muted(m);

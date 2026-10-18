@@ -1,0 +1,65 @@
+{
+  "framework": "Wi-Fi Aware",
+  "doc": "https://developer.apple.com/documentation/wifiaware",
+  "macos_since": "",
+  "status": "partial",
+  "bifrost": "springboard/sdk/src/nearby_service.rs, springboard/sdk/src/nearby_browsing.rs, springboard/sdk/src/peer_session.rs, springboard/sdk/src/peer_mesh.rs, springboard/sdk/src/network_connection.rs, springboard/sdk/src/wifi_accessory_browser.rs, springboard/ui/src/form_factor.rs",
+  "summary": "Nearby service names, browsing, peer sessions and a peer mesh exist as SDK models, and network connections are exposed to apps. There is no Wi-Fi Aware pairing, publish or subscribe over a Wi-Fi Aware data path, and no capability query for the radio. Whether the Samsung Tab A8 Wi-Fi chip supports Wi-Fi Aware has not been checked, and nothing has run on a tablet. iPadOS 26.0 and later per the index.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run this round; owner rule); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Service names for publish and subscribe",
+      "apple": "WAPublishableService, WASubscribableService, WiFiAwareServices",
+      "bifrost": "springboard/sdk/src/nearby_service.rs",
+      "status": "partial",
+      "note": "ServiceType checks the name; no Wi-Fi Aware service declaration."
+    },
+    {
+      "feature": "Browsing for a service",
+      "apple": "WASubscriberBrowser",
+      "bifrost": "springboard/sdk/src/nearby_browsing.rs",
+      "status": "partial",
+      "note": "Browsing state is modelled; the browse is not a Wi-Fi Aware subscribe."
+    },
+    {
+      "feature": "Listening and accepting peers",
+      "apple": "WAPublisherListener",
+      "bifrost": "springboard/sdk/src/peer_session.rs, springboard/sdk/src/peer_mesh.rs",
+      "status": "partial",
+      "note": "Peer sessions accept connections; the transport is not Wi-Fi Aware."
+    },
+    {
+      "feature": "Paired devices and pairing information",
+      "apple": "WAPairedDevice, WAPairedDevice.PairingInfo",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No pairing store or pairing exchange."
+    },
+    {
+      "feature": "Host capabilities",
+      "apple": "WACapabilities, WACapabilities.Feature",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No query of Wi-Fi Aware support on the host radio."
+    },
+    {
+      "feature": "Data path parameters and connections",
+      "apple": "WAParameters, WAConnection, WAEndpoint",
+      "bifrost": "springboard/sdk/src/network_connection.rs",
+      "status": "partial",
+      "note": "Generic connections exist; Wi-Fi Aware data paths and performance modes do not."
+    },
+    {
+      "feature": "Accessory browsing over Wi-Fi",
+      "apple": "Wi-Fi accessory setup (not Wi-Fi Aware)",
+      "bifrost": "springboard/sdk/src/wifi_accessory_browser.rs",
+      "status": "partial",
+      "note": "Scans for unconfigured accessories; a different mechanism from Wi-Fi Aware."
+    }
+  ],
+  "gaps": [
+    "No Wi-Fi Aware pairing, publish or subscribe data path.",
+    "No host capability check for Wi-Fi Aware; tablet radio support is unverified.",
+    "No paired-device store."
+  ]
+}

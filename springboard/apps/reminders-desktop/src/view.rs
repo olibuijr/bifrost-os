@@ -176,8 +176,12 @@ impl Reminders {
             if let Some(rep) = r.repeat {
                 sub = format!("{sub} · {}", rep.label());
             }
-        } else if let Some(line) = r.notes.lines().next().filter(|l| !l.is_empty()) {
-            sub = line.to_string();
+        } else {
+            // the notes' first line with its Markdown marks taken away (format::preview)
+            let preview = crate::format::preview(&r.notes);
+            if !preview.is_empty() {
+                sub = preview;
+            }
         }
         if r.urgent {
             sub = if sub.is_empty() { "Urgent".to_string() } else { format!("{sub} · Urgent") };
@@ -219,6 +223,30 @@ impl Reminders {
         }
         if !last {
             c.fill_rrect(tx, y + h - 1.0, w - (tx - x), 1.0, 0.0, SEPARATOR_C.now());
+        }
+    }
+
+    /// The Recently Deleted page: one row per kept reminder with its title and a Restore link. Rows are laid out by
+    /// `deleted_row_rect`, the same geometry the hit test uses.
+    fn draw_deleted(&mut self, s: &mut Surface, ui: &Ui) {
+        let wpx = self.w as f32;
+        let kept = self.deleted.clone().unwrap_or_default();
+        self.text(s, ui, "Recently Deleted", MAC_LARGE_TITLE_PT, Weight::Bold, BLUE, ui.pt(SPACE_XL), ui.pt(self.top_pt + 62.0));
+        self.right(s, ui, &kept.len().to_string(), MAC_LARGE_TITLE_PT, Weight::Regular, BLUE, wpx - ui.pt(SPACE_XL), ui.pt(self.top_pt + 62.0));
+        let (top, bottom) = (self.top_px(ui), self.bottom(ui));
+        if kept.is_empty() {
+            self.center(s, ui, "No Recently Deleted Reminders", MAC_TITLE3_PT, Weight::Semibold, LABEL_2.now(), wpx / 2.0, top + ui.pt(EMPTY_TOP_PT));
+            return;
+        }
+        for (i, reminder) in kept.iter().enumerate() {
+            let (x, y, w, h) = self.deleted_row_rect(ui, i);
+            if y + h > bottom {
+                break;
+            }
+            s.fill_rrect(x, y + h - 1.0, w, 1.0, 0.0, SEPARATOR_C.now());
+            let title = ui.fit(&clean(&reminder.title), MAC_BODY_PT, w - ui.pt(SPACE_HUGE * 2.0));
+            self.text(s, ui, &title, MAC_BODY_PT, Weight::Regular, LABEL.now(), x + ui.pt(SPACE_XS), y + ui.pt(SPACE_L));
+            self.right(s, ui, "Restore", MAC_BODY_PT, Weight::Semibold, LINK, x + w - ui.pt(SPACE_XS), y + ui.pt(SPACE_L));
         }
     }
 
@@ -621,6 +649,7 @@ impl Reminders {
             let mut col = self.column(s);
             let mut content = col.rows(ui.pt(self.top_pt) as usize, (self.h as f32 - home_zone(ui)) as usize);
             match self.screen {
+                Screen::Items if self.deleted.is_some() => self.draw_deleted(&mut content, ui),
                 Screen::Items => self.draw_items(&mut content, ui, t),
                 Screen::Editor | Screen::ListEditor => self.draw_form(&mut content, ui, t),
             }

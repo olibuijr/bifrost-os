@@ -14,6 +14,9 @@ pub use bifrost_ui as controls;
 pub use bifrost_ui::{Command, Commands};
 /// The shared remote command centre (`CommandCenter`): app-side handlers for the transport actions the system sends.
 pub use bifrost_ui::remote_command;
+/// Media models for apps (no drawing): feedback and rating for the playing item, playlists, the media picker's
+/// selection rules, library queries, external player content items, and the playback arbiter.
+pub use bifrost_ui::{content_items, media_feedback, media_picker, media_playlist, media_query, playback_arbiter};
 pub use bifrost_proto as proto;
 pub use bifrost_proto::{AppMenu, AppMenuItem, Configure, KeyInput, TouchKind};
 pub use bifrost_ui::touch::{TouchEvent, TouchPhase, TouchType};
@@ -36,6 +39,10 @@ pub mod kit {
     pub use bifrost_render::kernel;
     /// Pixel buffer layouts and the 8-bit CMYK, grey and RGB conversions, plane splitting and interleaving.
     pub use bifrost_render::pixel_layout;
+    /// Kernel convolution and grey-level morphology (dilate, erode, open, close) on 8-bit planes.
+    pub use bifrost_render::morphology;
+    /// Histograms, histogram equalization, level stretching and piecewise tone curves on 8-bit samples.
+    pub use bifrost_render::histogram;
     pub use springboard::shell::list;
     /// Loop regions for sampled playback: the loop modes (off, forward, ping-pong) and the read head through them.
     pub use springboard::media::loop_region;
@@ -56,7 +63,9 @@ pub mod kit {
     pub use bifrost_ui::scroll::Scroller;
 }
 
+pub mod watchdog;
 pub mod widgets;
+pub mod today_widgets;
 pub mod widgets_timeline;
 pub mod glyphs;
 pub mod glyph_draw;
@@ -67,6 +76,8 @@ pub mod cursor_service;
 pub mod text_services;
 pub mod accessibility_display;
 pub mod accessibility_rotor;
+pub mod accessibility_audit;
+pub mod av_capture_session;
 pub mod guided_access;
 pub mod defaults;
 pub mod font_descriptor;
@@ -77,13 +88,23 @@ pub mod screen_saver_defaults;
 pub mod screen_saver;
 pub mod idle_watch;
 pub mod screen_time;
+pub mod web_usage;
+pub mod web_history;
+pub mod screen_usage;
+pub mod device_activity;
 pub mod screens;
 pub mod displays;
 pub mod windows;
+pub mod app_windows;
 pub mod input_events;
 pub mod touch_events;
 pub mod launch_services;
+pub mod user_activity;
+pub mod mail_compose;
 pub mod notify_bus;
+pub mod speech;
+/// Screenshots from the shell's screenshot service (`bifrost_app::screenshot`).
+pub mod screenshot;
 pub mod locale;
 pub mod time_zone;
 pub mod formatters;
@@ -91,9 +112,11 @@ pub mod pref_domains;
 pub mod calendar_system;
 pub mod date_interval;
 pub mod bundle_resources;
-pub mod container_layout;
+/// The app container layout lives in bifrost-core so the shell creates the folders too.
+pub use bifrost_core::container_layout;
 pub mod package_layout;
 pub mod keychain;
+pub mod folder_actions;
 pub mod keychain_groups;
 pub mod keychain_query;
 pub mod passwords;
@@ -101,9 +124,13 @@ pub mod password_suggest;
 pub mod entropy;
 pub mod passkey;
 pub mod password_gen;
+pub mod totp;
 pub mod digest;
 pub mod crypto_key;
+pub mod kem;
+pub mod signature_pq;
 pub mod chacha_poly;
+pub mod crypto_kit;
 pub mod encrypted_archive;
 pub mod keychain_protection;
 pub mod keychain_keys;
@@ -111,7 +138,9 @@ pub mod security_status;
 pub mod transport_policy;
 pub mod system;
 pub mod autofill;
+pub mod secure_entry;
 pub mod trust;
+pub mod certificate_assistant;
 pub mod gss_status;
 pub mod gss_oid;
 pub mod gss_buffer;
@@ -122,6 +151,13 @@ pub mod gss_mechanism;
 pub mod gss_context;
 pub mod gss_message;
 pub mod gss_krb5;
+pub mod krb5_client;
+pub mod perf_counters;
+pub mod positional_audio;
+pub mod audio_scene;
+pub mod packet_tunnel;
+pub mod ldap_directory;
+pub mod directory_servers;
 pub mod typed_path;
 pub mod archive;
 pub mod tar_package;
@@ -130,24 +166,35 @@ pub mod dispatch_io;
 pub mod predicate_validating;
 pub mod cf_bundle;
 pub mod app_events;
+pub mod settings_panes;
+pub mod screen_stream;
 pub mod event_descriptor;
 pub mod dispatch_time;
 pub mod timer_source;
 pub mod background_tasks;
+pub mod running_board;
+pub mod endpoint_security;
 pub mod keyed_archive;
 pub mod value_types;
 pub mod colorsync;
 pub mod decimal;
 pub mod random;
+pub mod gameplay_kit;
+pub mod linear_algebra;
 pub mod csv_writer;
 pub mod accounts;
 pub mod cloud_identity;
 pub mod cloud_account;
+pub mod cloud_keys;
+pub mod cloud_clipboard;
+pub mod cloud_records;
+pub mod cloud_findmy;
 pub mod buffer_share;
 pub mod testing;
 pub mod usernotif;
 pub mod usernotif_model;
 pub mod contacts;
+pub mod contacts_intents;
 pub mod calendar;
 pub mod core_location;
 pub mod notification_schedule;
@@ -168,11 +215,19 @@ pub mod schedulers;
 pub mod webdriver;
 pub mod call_stack_tree;
 pub mod hitch_ratio;
-pub mod daily_metric_report;
+pub use bifrost_core::daily_metric_report;
 pub mod status_item;
 pub mod share;
+pub mod proxy_settings;
+pub use bifrost_core::system_config_store;
+pub mod oauth_credential;
+pub mod workflow;
 pub use bifrost_ui::print;
 pub use bifrost_ui::print_pages;
+/// Plural categories, noun plurals and `^[2 apple](inflect: true)` grammar agreement (`bifrost_ui::inflection`).
+pub use bifrost_ui::inflection;
+pub use bifrost_ui::print_presets;
+pub use bifrost_ui::print_ranges;
 pub use bifrost_ui::{cups, ipp};
 pub mod print_panel;
 pub mod drawing_model;
@@ -193,7 +248,9 @@ pub mod transfer_drag;
 pub mod layout;
 pub mod control;
 pub mod intent_form;
+pub mod intent_tools;
 pub mod intents;
+pub mod services;
 pub mod intent_presentation;
 pub mod system_audio;
 pub mod intent_catalog;
@@ -201,23 +258,46 @@ pub mod intent_resolve;
 pub mod donation;
 pub mod donations;
 pub mod extension;
+pub mod extension_service;
 pub mod quicksearch;
 pub mod indexed_entity;
 pub mod search_terms;
+pub mod search_kit;
+pub mod search_card_provider;
+pub mod embedding;
+pub mod tabular_summary;
+pub mod tabular_columns;
+pub mod tabular_frame;
+pub mod type_conversion;
+pub mod tabular_json;
+pub mod pixel_transfer;
+pub mod icon_images;
 pub mod search_index_batch;
 pub mod visual_search;
+pub mod visual_search_wire;
 pub mod data_scanner;
 pub mod sign_in;
 pub mod sensors;
+pub mod session_assertion;
 pub mod image_analysis;
+pub mod text_recognition;
+pub mod weather_service;
+pub mod core_ml;
+pub mod language_model;
+pub mod language_model_stream;
+pub mod document_scan;
+pub mod scan_session;
 pub mod peek;
 pub mod quick_look;
 pub mod permission_kit;
 pub mod authorization;
+pub mod content_kit;
 pub mod audio_session;
 pub mod video_playback;
 pub mod audio_hal;
 pub mod hid_virtual;
+pub mod hid_reports;
+pub mod media_format;
 pub mod input_grab;
 pub mod video_decode;
 pub mod video_frame;
@@ -227,6 +307,27 @@ pub mod media_extension;
 pub mod audio_application;
 pub mod audio_player_control;
 pub mod now_playing;
+/// Media library queries over the records an app supplies (`bifrost_ui::media_query`).
+pub mod media_library;
+/// The media picker as a list of rows and a footer count (`bifrost_ui::media_picker`); draws nothing.
+pub mod media_picker_view;
+/// Like, dislike, bookmark and rating for the Lock Screen and Control Center (`now_playing` service events).
+pub mod now_playing_feedback;
+/// Document link index for backlinks (`bifrost_core::link_index`, contentlinkingd).
+pub mod document_links;
+/// Routes menu bar, Control Center and media key transport requests to the app's remote command handlers.
+pub mod remote_routing;
+/// Purchase receipts the PC App Store signs; the caller supplies the signature check.
+pub mod store_receipt;
+/// StoreKit-shaped purchase models for the PC App Store: products and their types, purchases and their outcomes,
+/// the entitlement ledger, subscriptions, promotions. No payment is taken here.
+pub use bifrost_ui::{entitlement, product, promotion, purchase, subscription};
+/// Picture in Picture for video players: life cycle, delegate events and the floating window's rectangle and corner.
+pub mod picture_in_picture;
+/// The AirPlay-style route picker: outputs and nearby receivers in sections, and taps that activate authorized routes.
+pub mod route_picker;
+/// Streaming receivers found on the local network: read their advertisements and publish one. No streaming yet.
+pub mod media_receivers;
 pub mod thumbnails;
 pub mod thumbnail_error;
 pub mod peek_pdf;
@@ -247,7 +348,12 @@ pub mod midi_ci_property;
 pub mod midi_network;
 pub mod motion_raw;
 pub mod device_registry;
+pub mod scene_set;
 pub mod udev;
+/// Scripting object model: a dictionary of classes, properties and element arrays, and a `Target` that reads and writes
+/// properties by path, finds elements, keeps the last error and tells a delegate about each failure. The model is
+/// `bifrost_ui::scripting`, with its tests there.
+pub use bifrost_ui::scripting;
 pub mod script_value;
 pub mod script_syntax;
 pub mod script_export;
@@ -261,27 +367,53 @@ pub mod layer_tree {
     pub use bifrost_ui::layer_tree::*;
 }
 pub mod document;
+pub mod document_package;
+pub mod revisions;
 pub mod markup;
 pub mod log;
 pub mod signpost;
+/// App state reporting (`StateReporter`: named domains, one active state at a time, volatile and stable metadata).
+/// The model is `bifrost_ui::state_report`, with its tests there; this path is the app-facing name.
+pub use bifrost_ui::state_report as state_reporting;
 pub mod dispatch;
+pub mod operation_queue;
 pub mod actor;
 pub mod synchronization;
 pub mod fswatch;
+pub mod byte_range_lock;
 pub mod file_coordination;
+/// FUSE kernel protocol (7.31+) as pure encode and decode: requests, replies and READDIR packing.
+pub mod fuse;
+/// Mounts a FUSE volume through `fusermount3` and serves it; see docs/bifrost-ui.md "Unary file system module".
+pub mod fuse_mount;
+/// Unary file system module (`UnaryFileSystem`, `Dispatcher`): a read-only volume an app describes.
+pub mod fs_module;
 pub mod file_version;
 pub mod save_sync;
 pub mod file_provider;
 pub mod file_manager;
+/// File-manager sync extensions: badges, shortcut-menu items, a toolbar button and folder observation for Files.
+pub mod file_manager_sync;
+/// A model provider for the local inference engine on a loopback port (`LocalModelProvider`).
+pub mod local_model;
+/// On-demand resources: tagged payloads fetched when asked for, pinned while used, purged under a disk budget.
+pub mod on_demand_resources;
 pub mod url;
 pub mod url_background;
 pub mod multipart;
 pub mod social;
 pub mod social_account;
+pub mod social_oauth2;
+pub mod link_metadata;
+pub mod link_intents;
 pub mod url_components;
 pub mod network_path;
 pub mod network_connection;
 pub mod network_listener;
+pub mod network_group;
+pub mod avahi_publish;
+pub mod ct_sct;
+pub mod tls_client;
 pub mod network_browser;
 pub mod route_discovery;
 pub mod http_cookies;
@@ -301,19 +433,24 @@ pub mod http_auth;
 pub mod http_digest;
 pub mod dav_client;
 pub mod dav_sync;
+pub mod exchange_notes;
 pub mod host_addressing;
 pub mod ftp;
+pub mod smb;
 pub mod dns_service;
-pub mod net_diagnostic;
+// the connection diagnosis lives in bifrost-core so the shell (which the SDK depends on) can run it too
+pub use bifrost_core::{net_diagnostic, net_probe};
 pub mod stream;
 pub mod websocket;
 pub mod url_cache;
 pub mod url_configuration;
 pub mod url_stream_task;
 pub mod http_log;
+pub mod http_message;
 pub mod net_service;
 pub mod service_discovery;
 pub mod local_auth;
+pub mod local_account;
 pub mod privacy_permissions;
 pub mod screen_sample;
 pub mod external_accessory;
@@ -333,20 +470,36 @@ pub mod image_metadata;
 pub mod image_animation;
 pub mod picture_writer;
 pub mod photo_library;
+pub mod photo_picker;
+pub mod photo_intents;
+pub mod asset_packs;
+pub mod photo_editing;
+pub mod photo_project;
 pub mod image_blur;
 pub mod image_filter;
+pub mod pixel_filter;
 pub mod image_effects;
+pub mod image_render;
 pub use restoration::RestorableState;
 pub mod attributed;
 pub mod text_formatting;
+pub mod image_text;
 pub mod layer_kinds;
 pub mod richlayout;
 pub mod spellcheck;
 pub mod translation;
+pub mod translation_engine;
+pub mod translation_popover;
+pub mod tips;
+pub mod tooltips;
 pub mod wlan;
 pub mod wlan_events;
 pub mod wlan_keychain;
+pub mod wlan_service;
 pub mod wifi_status;
+pub mod container_migration;
+pub mod link_conditioner;
+pub mod kpasswd;
 pub mod system_prefs;
 pub mod wifi_secrets;
 pub mod net_totals;
@@ -361,6 +514,7 @@ pub mod service;
 pub mod search_ranking;
 pub mod audio_devices;
 pub mod disk_arbitration;
+pub mod disk_image;
 /// Aggregate devices (`AudioHardwareCreateAggregateDevice` keys) and clock domains, as a pure model.
 pub mod audio_aggregate;
 /// Process objects and process taps (`CATapDescription`), as pure models with their wire shapes.
@@ -370,6 +524,9 @@ pub mod audio_box;
 /// Virtual audio devices a driver plug-in would publish, as a pure model, and the driver status (no loader here).
 pub mod audio_virtual;
 pub mod speech_recognizer;
+pub mod speech_whisper;
+/// Control-event and notification publishers: the bridge from callbacks to `observable` subjects.
+pub mod control_publisher;
 pub mod media_intents;
 /// Stream formats (`StreamFormat`), the voice-take format (`pcm16`) and buffer durations (`audio_format::duration_ms`).
 pub mod audio_format;
@@ -377,17 +534,27 @@ pub mod focus_filter;
 pub mod pointer_focus;
 pub mod gamepad_service;
 pub mod gamepad_input;
+pub mod maps;
 pub mod distributed;
 pub mod observable;
 pub mod observable_object;
+/// Values computed from observable properties, recomputed only when something they read changed (`bifrost_ui::attribute_graph`).
+pub mod derived_state;
+/// Main-thread run loop timer queue (`RunLoop`): the non-`Send` scheduler that `debounce` and `throttle` use.
+pub mod run_loop;
 pub mod async_publisher;
 pub mod object_graph;
 pub mod ndarray;
 pub mod inference;
+/// Core AI: load a model once, keep its specialized plan, and call it as a typed inference function
+/// (`core_ai::InferenceSession`).
+pub mod core_ai;
 pub mod music_understanding;
 pub mod hotspot_configuration;
 pub mod accessory_hotspot;
 pub mod hotspot_helper;
+pub mod system_intents;
+pub mod scanner_intents;
 pub mod vpn_configuration;
 pub mod vpn_intents;
 pub mod wifi_accessory_browser;
@@ -429,13 +596,23 @@ pub mod file_wrapper;
 pub mod bookmark;
 pub mod metadata_query;
 pub mod file_stat;
+pub mod core_media_time;
 pub mod file_descriptor;
+/// The system error numbers an app can match on (`Errno::NOENT`, `Errno::from_io`), shared with the shell.
+pub mod errno {
+    pub use bifrost_core::errno::*;
+}
 pub mod volume;
 pub mod identity;
 pub mod reachability;
+/// The route flags for a host or address, computed from the network path (`SCNetworkReachabilityFlags`).
+pub mod reachability_flags;
+pub mod reachability_watch;
 pub mod auth_events;
 pub mod identity_events;
 pub mod memory_events;
+/// The memory pressure level bifrostd publishes (`published()`); changes come from `dispatch::DispatchSource`.
+pub mod memory_pressure;
 pub mod route_events;
 pub mod bluetooth_events;
 pub mod bluetooth_controller;
@@ -444,6 +621,8 @@ pub mod wireless_accessory_browser;
 pub mod bluetooth_devices;
 pub mod bluetooth_inquiry;
 pub mod bluetooth_hid;
+/// PIN and passkey input (`bifrost_core::bt_pairing`), shared with the shell.
+pub use bifrost_core::bt_pairing as bluetooth_pairing;
 pub mod bluetooth_service;
 pub mod ble_error;
 pub mod central;
@@ -546,11 +725,47 @@ pub trait App {
     /// app is in front. Called after every event and frame; the runtime sends the menus only when they differ from
     /// the last ones, so enabled and checked state is recomputed here (`validateMenuItem:`).
     fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> { Vec::new() }
+    /// The main-menu items while `window` is the key window (`Ctx::key_window`); the runtime sends them when they
+    /// differ from the last ones. Override it when an extra window has its own enabled or checked items. The default
+    /// is the main window's menus for every window.
+    fn menus_for(&self, ctx: &Ctx, _window: app_windows::WindowId) -> Vec<AppMenu> { self.main_menu(ctx) }
     /// The user chose menu item `id` (from the bar or its key equivalent); true when the app needs a new frame.
     fn menu_action(&mut self, _ctx: &Ctx, _id: u32) -> bool { false }
+    /// Input for the key window (`ToApp::WindowInput`): a key, a command, a menu item or a text edit that the shell
+    /// sent to `window`, which is an extra window or the main window. The default sends keys and commands to
+    /// `window_event` (as `Input::Key` and `Input::Command`), a menu item and a text edit to the main window's
+    /// `menu_action` and `text_input`, and drops the rest for extra windows. True when the app needs a new frame.
+    fn window_input(&mut self, ctx: &Ctx, window: app_windows::WindowId, input: crate::proto::WindowInput) -> bool {
+        app_windows::default_window_input(self, ctx, window, input)
+    }
     /// Draws into `surface` (premultiplied pixels, stride = width) and returns what changed.
     /// The first frame after a (re)allocation is always sent in full.
     fn draw(&mut self, ctx: &Ctx, surface: &mut Surface, t: f64) -> Damage;
+    /// An event for one of the app's windows (`app_windows`): the main window gets `event`. A window opened by the app
+    /// gets nothing unless the app overrides this. True when the app needs a new frame.
+    fn window_event(&mut self, ctx: &Ctx, window: app_windows::WindowId, ev: Input) -> bool {
+        if window.is_main() { self.event(ctx, ev) } else { false }
+    }
+    /// Draws one of the app's windows into `surface`. The main window gets `draw`; any other window draws nothing
+    /// until the app overrides this (the damage is empty, so nothing is sent).
+    fn draw_window(&mut self, ctx: &Ctx, window: app_windows::WindowId, surface: &mut Surface, t: f64) -> Damage {
+        if window.is_main() { self.draw(ctx, surface, t) } else { Damage::new(surface.w, surface.h) }
+    }
+    /// The shell closed or the app closed one of its windows; the app drops that window's state. The main window never
+    /// closes. True when the app needs a new frame.
+    fn window_closed(&mut self, _ctx: &Ctx, _window: app_windows::WindowId) -> bool {
+        false
+    }
+    /// The person dragged one of the app's windows (`ToApp::WindowMoved`): (x, y) is where it is now, in points relative to
+    /// the visible desktop area. Keep it to restore later. True when the app needs a new frame.
+    fn window_moved(&mut self, _ctx: &Ctx, _window: app_windows::WindowId, _x: f32, _y: f32) -> bool {
+        false
+    }
+    /// The person double-clicked the title bar of a window opened with `WindowSpec::with_title_double_click` (the shell
+    /// zooms every other window). True when the app needs a new frame.
+    fn window_title_double_click(&mut self, _ctx: &Ctx, _window: app_windows::WindowId) -> bool {
+        false
+    }
     /// Whether the app draws through `draw_canvas` (the GPU path, docs/graphics-architecture.md). Apps that return
     /// `true` are drawn with `draw_canvas` on the direct path and with `draw_canvas` on a CPU `Surface` (which
     /// implements `Canvas`) on the shared-memory path, so one drawing routine serves both. The default `false` keeps
@@ -595,6 +810,12 @@ pub trait App {
     }
     /// The user opened an indexed item from Search (`NativeUserActivity` continuation, `CSSearchableItemActionType`). Show the
     /// item named by `activity.unique_identifier`. Return true when a frame is needed.
+    /// The shell asks the app to index its content again (the app declares `index_extension = true`). Answer with
+    /// [`quicksearch::IndexExtensionRequests`]. Returns true when the app should redraw.
+    fn index_request(&mut self, _ctx: &Ctx, _request: quicksearch::IndexRequest) -> bool {
+        false
+    }
+
     fn continue_activity(&mut self, _ctx: &Ctx, _activity: quicksearch::UserActivity) -> bool {
         false
     }
@@ -699,9 +920,52 @@ pub mod graphics_imageio;
 pub mod color_list;
 pub mod image_object;
 pub mod gpu_device;
+pub mod image_capture;
+pub mod network_stream;
+pub mod link_fetch;
+pub mod map_snapshotter;
+pub mod pcsc;
+
+/// The Metal-shaped GPU API (`bifrost_gpu`): device, textures, buffers, command queues and buffers, render and compute
+/// encoders, pipelines, shared events. Apps that draw on the GPU use it directly; `gpu_pass` checks the passes first.
+pub use bifrost_gpu as gpu;
+/// Core models and transports the system frameworks hand to apps as they are (`bifrost_core`): Bluetooth RFCOMM, SDP
+/// and OBEX, USB descriptors, pipes, claims and the usbfs transport, PTP cameras, shared surfaces, serial lines, Matter,
+/// GeoJSON, code requirements, media extension manifests, image metadata, per-app metrics and diagnostics, and the
+/// network extension models (relay, content filter, DNS settings and proxy, local push, provider host).
+pub use bifrost_core::{
+    app_disk_writes, app_metrics, auth_context, auth_session, bt_address, bt_service_browser, codereq, content_filter,
+    dns_proxy, dns_settings, frame_metrics, geojson, imgmeta, local_push, matter, matter_cluster, matter_fabric,
+    matter_interaction, mediaext, obex_packet, provider_host, ptp, relay, resource_exception, rfcomm_frame, sdp_element,
+    serial_line, surface_registry, usb_claim, usb_descriptors, usb_host, usb_pipe,
+};
+pub mod avahi_browse;
 pub mod drawable_pool;
 pub mod gpu_pass;
 pub mod biquad;
+pub mod fft;
+pub mod dct;
+pub mod spectrogram;
 pub mod extent_map;
 pub mod os_services;
 pub mod buffer_handoff;
+pub mod framework_kits;
+
+#[cfg(test)]
+mod kit_image_tools {
+    use super::kit::{histogram, morphology};
+
+    #[test]
+    fn a_bright_speck_dilates_over_its_neighbours() {
+        let mut plane = vec![0u8; 9];
+        plane[4] = 255;
+        let out = morphology::dilate(&plane, 3, 3, 1, 1).expect("a 3x3 plane dilates");
+        assert!(out.iter().all(|&v| v == 255));
+    }
+
+    #[test]
+    fn the_histogram_counts_each_sample_value() {
+        let h = histogram::histogram(&[0, 0, 5]);
+        assert_eq!((h[0], h[5]), (2, 1));
+    }
+}

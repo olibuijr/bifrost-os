@@ -28,6 +28,7 @@ use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::print::{Orientation, PrintError, PrintInfo, PrintOperation};
 use bifrost_app::proto::{DocErrorCode, DocMode, CHORD_META, CHORD_SHIFT};
 use bifrost_app::widgets;
+use bifrost_app::windows::{self, Level};
 use bifrost_core::json::Json;
 use bifrost_app::{App, AppMenu, AppMenuItem, Command, Commands, Ctx, DocumentEvent, Input, KeyInput, TouchKind};
 use board::Marks;
@@ -109,6 +110,8 @@ const MENU_PORTRAIT: u32 = 103;
 const MENU_LANDSCAPE: u32 = 104;
 const MENU_PAPER_BASE: u32 = 105; // 105..=109, one per entry of PAPERS
 const MENU_WHOLE_WORD: u32 = 110;
+/// Window > Float on Top: the window stays above the other windows (`windows::set_level`).
+const MENU_FLOAT_ON_TOP: u32 = 111;
 
 /// What a replace changes: the selected match, every match in the focused note, or every match in every note.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -228,6 +231,8 @@ fn autocorrect_before_boundary(note: &mut Note, spelling: &Spelling, typed_len: 
 
 struct StickiesApp {
     board: Option<Board>,
+    /// Window > Float on Top: the window is kept above the other windows.
+    floating: bool,
     drag: Drag,
     dirty: bool,
     /// Export waiting for the save panel's file: the request and the bytes to write.
@@ -269,6 +274,7 @@ impl StickiesApp {
     fn new() -> StickiesApp {
         StickiesApp {
             board: None,
+            floating: false,
             drag: Drag::None,
             dirty: false,
             export: None,
@@ -1116,6 +1122,11 @@ impl StickiesApp {
                 note.toggle_zoom();
                 self.changed()
             }
+            MENU_FLOAT_ON_TOP => {
+                self.floating = !self.floating;
+                windows::set_level(ctx, if self.floating { Level::Floating } else { Level::Normal });
+                return true;
+            }
             MENU_ARRANGE_BASE..=56 => {
                 let by = Arrange::ALL[(id - MENU_ARRANGE_BASE) as usize];
                 let width = Self::window_rect(ctx).w;
@@ -1416,6 +1427,7 @@ impl StickiesApp {
             AppMenuItem::new(MENU_EXPAND_ALL, "Expand All").enabled(any),
             AppMenuItem::new(MENU_TRANSLUCENT, "Translucent").enabled(has_focus).checked(note.is_some_and(|n| n.translucent)),
             AppMenuItem::new(MENU_ZOOM, "Zoom Sticky Note").enabled(has_focus).checked(note.is_some_and(|n| n.restore.is_some())),
+            AppMenuItem::new(MENU_FLOAT_ON_TOP, "Float on Top").checked(self.floating),
             AppMenuItem::separator(),
             AppMenuItem::submenu("Arrange By"),
         ];
@@ -1647,7 +1659,7 @@ mod tests {
         for id in [MENU_NEW, MENU_DELETE, MENU_DUPLICATE, MENU_BOLD, MENU_CUT, MENU_PASTE, MENU_ZOOM, MENU_UPPER, 7, 12, 62, 54, MENU_OUTLINE, 80, 85, 88, MENU_SPELL_CORRECT] {
             assert!(undo_name(id).is_some(), "id {id}");
         }
-        for id in [MENU_COPY, MENU_SELECT_ALL, MENU_FIND, MENU_PRINT, MENU_IMPORT, MENU_OPEN_LINK, MENU_UNDO, MENU_COPY_STYLE, MENU_SPELL_CHECK_NOW, MENU_SMART_QUOTES, MENU_ADD_LINK] {
+        for id in [MENU_COPY, MENU_SELECT_ALL, MENU_FIND, MENU_PRINT, MENU_IMPORT, MENU_OPEN_LINK, MENU_UNDO, MENU_COPY_STYLE, MENU_SPELL_CHECK_NOW, MENU_SMART_QUOTES, MENU_ADD_LINK, MENU_FLOAT_ON_TOP] {
             assert!(undo_name(id).is_none(), "id {id}");
         }
         assert_eq!(undo_name(MENU_ARRANGE_BASE), Some("Arrange"));
@@ -1929,7 +1941,7 @@ mod tests {
 
     #[test]
     fn replace_and_custom_colour_ids_do_not_clash_with_the_other_menu_ids() {
-        let ids = [MENU_COLOUR_CUSTOM, MENU_SPEAK_START, MENU_SPEAK_STOP, MENU_REPLACE, MENU_REPLACE_ALL, MENU_REPLACE_IN_NOTE, MENU_IGNORE_CASE, MENU_WHOLE_WORD, MENU_PORTRAIT, MENU_LANDSCAPE, MENU_PAPER_BASE, MENU_PAPER_BASE + 4];
+        let ids = [MENU_COLOUR_CUSTOM, MENU_SPEAK_START, MENU_SPEAK_STOP, MENU_REPLACE, MENU_REPLACE_ALL, MENU_REPLACE_IN_NOTE, MENU_IGNORE_CASE, MENU_WHOLE_WORD, MENU_FLOAT_ON_TOP, MENU_PORTRAIT, MENU_LANDSCAPE, MENU_PAPER_BASE, MENU_PAPER_BASE + 4];
         for (i, a) in ids.iter().enumerate() {
             assert!(!(MENU_COLOUR_BASE..=15).contains(a) && !(MENU_ARRANGE_BASE..=56).contains(a) && !(MENU_INK_BASE..=64).contains(a));
             assert!(![MENU_INFO_CREATED, MENU_INFO_MODIFIED, MENU_ZOOM, MENU_TRANSLUCENT].contains(a));

@@ -5,6 +5,7 @@
 //! take as `Out::Named`.
 
 use super::keyboard::Out;
+use super::sticky_keys::{Modifier, StickyKeys};
 use super::desk::Tile;
 use super::photos::commands::PhotoCommand;
 use super::{AppId, Effect, Screen, Shell};
@@ -23,10 +24,17 @@ const KEY_EQUAL: u16 = 13;
 const KEY_D: u16 = 32;
 const KEY_GRAVE: u16 = 41;
 const KEY_5: u16 = 6;
+const KEY_BACKSPACE: u16 = 14;
+const KEY_ENTER: u16 = 28;
 const KEY_UP: u16 = 103;
 const KEY_LEFT: u16 = 105;
 const KEY_RIGHT: u16 = 106;
 const KEY_DOWN: u16 = 108;
+const KEY_HOME: u16 = 102;
+const KEY_PAGEUP: u16 = 104;
+const KEY_PAGEDOWN: u16 = 109;
+const KEY_END: u16 = 107;
+const KEY_DELETE: u16 = 111;
 const KEY_Y: u16 = 21;
 const KEY_LEFTCTRL: u16 = 29;
 const KEY_A: u16 = 30;
@@ -41,15 +49,28 @@ const KEY_LEFTSHIFT: u16 = 42;
 const KEY_RIGHTSHIFT: u16 = 54;
 const KEY_LEFTALT: u16 = 56;
 const KEY_SPACE: u16 = 57;
+const KEY_SLASH: u16 = 53;
 const KEY_RIGHTCTRL: u16 = 97;
 const KEY_RIGHTALT: u16 = 100;
 const KEY_LEFTMETA: u16 = 125;
 const KEY_RIGHTMETA: u16 = 126;
+const KEY_BRIGHTNESSDOWN: u16 = 224;
+const KEY_BRIGHTNESSUP: u16 = 225;
+const KEY_KBDILLUMDOWN: u16 = 229;
+const KEY_KBDILLUMUP: u16 = 230;
 
-/// Term key equivalents, taken only while Term is in front and only with Cmd held (Ctrl chords stay control characters).
+/// Term key equivalents, taken only while Term is in front. Cmd chords (Meta)
+/// drive the chrome (tabs, find, zoom); plain Ctrl and Alt chords become the
+/// control bytes and ESC-prefixed bytes the pty expects
+/// (`bifrost_ui::terminal_keys`), so readline and job control all work:
+/// Ctrl+A/E line start/end, Ctrl+C/Z interrupt/suspend, Alt+F/B word jumps.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TermKey {
     Copy,
+    /// Edit > Copy Special > Text with Colors (no key equivalent; the Edit menu runs it)
+    CopyStyled,
+    /// Edit > Copy Special > Without Background Colour
+    CopyStyledPlain,
     SelectAll,
     Find,
     FindNext,
@@ -66,6 +87,14 @@ pub enum TermKey {
     Tab(u8),
     /// Cmd+E: Use Selection for Find
     UseSelectionForFind,
+    /// A Ctrl chord's byte for the pty (Ctrl+A is 1, Ctrl+E is 5, ...).
+    Ctrl(u8),
+    /// An Alt chord's byte after ESC (Alt+F is `ESC f`).
+    Alt(u8),
+    /// Alt+Left (false) / Alt+Right (true): word backward / forward (`ESC b` / `ESC f`).
+    AltWord(bool),
+    /// A navigation key for the pty: "Home", "End", "Delete", "PageUp" or "PageDown".
+    Named(&'static str),
 }
 
 impl TermKey {
@@ -93,6 +122,48 @@ impl TermKey {
     }
 }
 
+/// The TermKey a plain Ctrl chord sends to the pty while Term is in front:
+/// the control byte of the physical key's US legend (Shift lets shifted
+/// symbols through, so Ctrl+Shift+2 is Ctrl+@). Ctrl+Backspace deletes a
+/// word (`0x17`, as in other terminals) and Ctrl+Enter is CR. None for keys
+/// Ctrl does not combine with (digits, Tab, function keys).
+fn term_ctrl_key(code: u16, shift: bool) -> Option<TermKey> {
+    if code == KEY_BACKSPACE {
+        return Some(TermKey::Ctrl(0x17));
+    }
+    if code == KEY_ENTER {
+        return Some(TermKey::Ctrl(b'\r'));
+    }
+    let (_, lower, upper) = TEXT_KEYS.iter().find(|k| k.0 == code)?;
+    bifrost_ui::terminal_keys::control_byte(*lower)
+        .or_else(|| shift.then(|| bifrost_ui::terminal_keys::control_byte(*upper)).flatten())
+        .map(TermKey::Ctrl)
+}
+
+/// The TermKey a plain Alt (Left Alt, not AltGr) chord sends to the pty while
+/// Term is in front: ESC plus the key, with Shift kept (Alt+Shift+F is
+/// `ESC F`). Alt+Backspace is `ESC DEL` (kill word backward) and Alt+Left /
+/// Alt+Right jump a word (`ESC b` / `ESC f`). None for keys Alt does not
+/// combine with (digits stay digits: they fall through as before).
+fn term_alt_key(code: u16, shift: bool) -> Option<TermKey> {
+    if code == KEY_BACKSPACE {
+        return Some(TermKey::Alt(bifrost_ui::terminal_keys::ALT_BACKSPACE));
+    }
+    if code == KEY_LEFT {
+        return Some(TermKey::AltWord(false));
+    }
+    if code == KEY_RIGHT {
+        return Some(TermKey::AltWord(true));
+    }
+    let (_, lower, upper) = TEXT_KEYS.iter().find(|k| k.0 == code)?;
+    let c = if shift { *upper } else { *lower };
+    // Letters, Space and the brackety symbols Alt combines with as Meta;
+    // digits and most punctuation fall through untouched.
+    if c.is_ascii_alphabetic() || c == ' ' || matches!(c, '[' | ']' | '\\') {
+        return bifrost_ui::terminal_keys::alt_bytes(c).map(|b| TermKey::Alt(b[1]));
+    }
+    None
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Shortcut {
     Term(TermKey),
@@ -128,6 +199,8 @@ pub enum Shortcut {
     ReaderRotor(bool),
     /// Ctrl+Alt+Space: the screen reader presses the element under its cursor
     ReaderActivate,
+    /// Option+Escape: speaks the selected text of the focused field (`accessibility::spoken`)
+    SpeakSelection,
     /// Option+Cmd+F5: switches the features chosen for the Accessibility Shortcut (`accessibility::shortcut`)
     AccessibilityShortcut,
     /// Ctrl+Cmd+D: Look Up the selection in Dictionary (the Services menu's Look Up in Dictionary)
@@ -138,8 +211,12 @@ pub enum Shortcut {
     Photo(PhotoCommand),
     /// Option+Cmd+8: Screen Zoom on or off (`accessibility::zoom`)
     ZoomToggle,
+    /// Cmd+Shift+A: opens the assistant panel (`assistant_panel`); with the assistant off, Settings > Assistant instead
+    Assistant,
     /// Option+Cmd+= (true) zooms the screen in one step, Option+Cmd+- (false) zooms it out
     ZoomStep(bool),
+    /// Shift+Cmd+/: opens the Help menu with its search field ready for typing
+    HelpSearch,
 }
 
 impl Shortcut {
@@ -152,7 +229,7 @@ impl Shortcut {
             Shortcut::SelectAll => "SelectAll",
             Shortcut::Undo => "Undo",
             Shortcut::Redo => "Redo",
-            Shortcut::Term(_) | Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Back | Shortcut::Home | Shortcut::Close | Shortcut::Minimize | Shortcut::Settings | Shortcut::FullScreen | Shortcut::Tile(_) | Shortcut::CycleWindow | Shortcut::InputSource | Shortcut::ReaderStep(_) | Shortcut::ReaderRotor(_) | Shortcut::ReaderActivate | Shortcut::AccessibilityShortcut | Shortcut::Capture | Shortcut::ZoomToggle | Shortcut::ZoomStep(_) | Shortcut::LookUp | Shortcut::Photo(_) => return None,
+            Shortcut::Term(_) | Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Back | Shortcut::Home | Shortcut::Close | Shortcut::Minimize | Shortcut::Settings | Shortcut::FullScreen | Shortcut::Tile(_) | Shortcut::CycleWindow | Shortcut::InputSource | Shortcut::ReaderStep(_) | Shortcut::ReaderRotor(_) | Shortcut::ReaderActivate | Shortcut::SpeakSelection | Shortcut::AccessibilityShortcut | Shortcut::Capture | Shortcut::ZoomToggle | Shortcut::ZoomStep(_) | Shortcut::LookUp | Shortcut::Photo(_) | Shortcut::HelpSearch | Shortcut::Assistant => return None,
         }))
     }
 }
@@ -171,15 +248,68 @@ pub struct HwKeys {
     meta_alone: bool,
     /// The installed keyboard layout: what a key types
     text: Keyboard,
+    /// Sticky Keys: the latches, tapped on modifier presses and taken by the next non-modifier press
+    sticky: StickyKeys,
+    /// The non-modifier key that holds sticky modifiers, and those modifiers; they count as held until it is released
+    sticky_held: Option<(u16, Vec<Modifier>)>,
 }
 
 impl HwKeys {
     /// Forgets every held modifier. Releases that arrive while the screen is
     /// off or the device is gone never reach `key`, so the counters would
-    /// stick and turn plain keys into chords. The keyboard layout is kept.
+    /// stick and turn plain keys into chords. The keyboard layout is kept,
+    /// and Sticky Keys stays on with its latches cleared.
     pub fn reset(&mut self) {
         let layout = self.text.layout();
-        *self = Self { text: Keyboard::new(layout), ..Self::default() };
+        let mut sticky = self.sticky.clone();
+        let on = sticky.enabled();
+        sticky.set_enabled(false);
+        sticky.set_enabled(on);
+        *self = Self { text: Keyboard::new(layout), sticky, ..Self::default() };
+    }
+
+    /// Turns Sticky Keys on or off. Turning it off releases every latch and any modifier a sticky key still holds.
+    pub fn set_sticky_keys(&mut self, on: bool) {
+        self.sticky_release();
+        self.sticky.set_enabled(on);
+    }
+
+    /// Whether Sticky Keys is on.
+    pub fn sticky_keys(&self) -> bool {
+        self.sticky.enabled()
+    }
+
+    /// A non-modifier key goes down: the latched modifiers count as held until that key is released.
+    fn sticky_press(&mut self, code: u16) {
+        self.sticky_release();
+        let mods = self.sticky.take_for_key();
+        if mods.is_empty() {
+            return;
+        }
+        for m in &mods {
+            let n = self.counter(*m);
+            *n = n.saturating_add(1);
+        }
+        self.sticky_held = Some((code, mods));
+    }
+
+    /// The key that held sticky modifiers is released (or another key replaces it): those modifiers drop.
+    fn sticky_release(&mut self) {
+        if let Some((_, mods)) = self.sticky_held.take() {
+            for m in mods {
+                let n = self.counter(m);
+                *n = n.saturating_sub(1);
+            }
+        }
+    }
+
+    fn counter(&mut self, m: Modifier) -> &mut u8 {
+        match m {
+            Modifier::Shift => &mut self.shift,
+            Modifier::Ctrl => &mut self.ctrl,
+            Modifier::Alt => &mut self.alt,
+            Modifier::Super => &mut self.meta,
+        }
     }
 
     /// Sets the keyboard layout (an index into the installer's `LAYOUTS`) that text keys type with.
@@ -210,6 +340,20 @@ impl HwKeys {
     /// `key`, with the key equivalents of the front app taken first: Term's Cmd chords while `term`, and Photos'
     /// commands while `photos`.
     pub fn key_front(&mut self, code: u16, down: bool, term: bool, photos: bool) -> Option<Shortcut> {
+        // Sticky Keys: a modifier press taps its latch; a text key takes the latched modifiers until it is released
+        match Modifier::of_code(code) {
+            Some(m) => {
+                if down {
+                    self.sticky.tap_modifier(m);
+                }
+            }
+            None if down => self.sticky_press(code),
+            None => {
+                if self.sticky_held.as_ref().is_some_and(|(held, _)| *held == code) {
+                    self.sticky_release();
+                }
+            }
+        }
         if code == KEY_RIGHTALT {
             self.altgr = if down { self.altgr.saturating_add(1) } else { self.altgr.saturating_sub(1) };
         }
@@ -243,6 +387,36 @@ impl HwKeys {
                 return Some(Shortcut::Term(k));
             }
         }
+        // While Term is in front, plain Ctrl and Alt chords go to the pty as
+        // control bytes (`bifrost_ui::terminal_keys`), not to editing
+        // shortcuts: Ctrl+A/E move, Ctrl+C/Z signal, Alt+F/B jump words.
+        // Kept for the shell: Ctrl+Space (input source), any Tab chord (the
+        // app switcher) and any Ctrl+Alt chord (the screen reader).
+        if term && ctrl && !meta && !alt && code != KEY_SPACE && code != KEY_TAB {
+            if let Some(k) = term_ctrl_key(code, self.shift > 0) {
+                return Some(Shortcut::Term(k));
+            }
+        }
+        if term && alt && self.alt > self.altgr && !ctrl && !meta && code != KEY_TAB {
+            if let Some(k) = term_alt_key(code, self.shift > 0) {
+                return Some(Shortcut::Term(k));
+            }
+        }
+        // Navigation keys with no modifiers reach the pty while Term is in
+        // front (Home/End line start/end, Delete, PageUp/PageDown).
+        if term && !ctrl && !alt && !meta {
+            let name = match code {
+                KEY_HOME => Some("Home"),
+                KEY_END => Some("End"),
+                KEY_DELETE => Some("Delete"),
+                KEY_PAGEUP => Some("PageUp"),
+                KEY_PAGEDOWN => Some("PageDown"),
+                _ => None,
+            };
+            if let Some(name) = name {
+                return Some(Shortcut::Term(TermKey::Named(name)));
+            }
+        }
         if photos && meta && !ctrl {
             if let Some(c) = PhotoCommand::from_chord(code, self.shift > 0, alt) {
                 return Some(Shortcut::Photo(c));
@@ -252,6 +426,8 @@ impl HwKeys {
             KEY_SPACE if meta && !alt => Some(Shortcut::QuickSearch),
             // Ctrl+Space switches the input source (the input menu's next keyboard), as on the reference platform
             KEY_SPACE if ctrl && !alt => Some(Shortcut::InputSource),
+            // Cmd+Shift+A opens the assistant panel (its chord is switched off in Settings > Assistant)
+            KEY_A if meta && self.shift > 0 && !ctrl && !alt => Some(Shortcut::Assistant),
             KEY_TAB if alt || meta || ctrl => Some(Shortcut::AppSwitch),
             KEY_ESC if !ctrl && !alt && !meta => Some(Shortcut::Back),
             // Cmd on a Mac keyboard is Meta here, so it works for edits too
@@ -279,8 +455,10 @@ impl HwKeys {
             KEY_LEFT | KEY_RIGHT if ctrl && alt && !meta && self.shift == 0 => Some(Shortcut::ReaderStep(code == KEY_RIGHT)),
             KEY_UP | KEY_DOWN if ctrl && alt && !meta && self.shift == 0 => Some(Shortcut::ReaderRotor(code == KEY_DOWN)),
             KEY_SPACE if ctrl && alt && !meta && self.shift == 0 => Some(Shortcut::ReaderActivate),
+            KEY_ESC if alt && !ctrl && !meta && self.shift == 0 => Some(Shortcut::SpeakSelection),
             KEY_F5 if meta && alt && !ctrl && self.shift == 0 => Some(Shortcut::AccessibilityShortcut),
             KEY_5 if meta && self.shift > 0 && !ctrl && !alt => Some(Shortcut::Capture),
+            KEY_SLASH if meta && self.shift > 0 && !ctrl && !alt => Some(Shortcut::HelpSearch),
             KEY_COMMA if meta && !ctrl && !alt && self.shift == 0 => Some(Shortcut::Settings),
             KEY_C | KEY_X | KEY_V | KEY_A if (ctrl || meta) && !alt && self.shift == 0 => Some(match code {
                 KEY_C => Shortcut::Copy,
@@ -424,6 +602,74 @@ impl KeyRepeat {
 }
 
 impl Shell {
+    /// A hardware media key (play, pause, next, previous, stop, fast forward, rewind). It goes to the owner of the
+    /// Now Playing session when that owner enabled the command, and works with the screen off. True when sent.
+    pub fn hw_media_key(&mut self, code: u16, down: bool, t: f64) -> bool {
+        if !down {
+            return false;
+        }
+        let used = super::services::now_playing::media_key(code);
+        if used {
+            self.last_input = t;
+        }
+        used
+    }
+
+    /// The keyboard backlight the machine has: its level 0..=1 and how many steps the hardware offers (`steps` 0 =
+    /// none). A sync at start; no HUD, no effect.
+    pub fn set_keyboard_backlight(&mut self, level: f32, steps: u32) {
+        self.kbd_backlight = (steps > 0).then(|| (level.clamp(0.0, 1.0), steps));
+    }
+
+    /// The keyboard backlight level 0..=1, None on a machine without one.
+    pub fn keyboard_backlight(&self) -> Option<f32> {
+        self.kbd_backlight.map(|(l, _)| l)
+    }
+
+    /// A brightness key (screen brightness down/up, keyboard backlight down/up): one step, the same HUD as the
+    /// volume keys when the screen shows something other than Control Center (whose slider moves instead), and the
+    /// effect for the device. Works on every screen and never wakes it (with the screen off the press is taken and ignored). None for any other key; a key release or a
+    /// keyboard backlight key on a machine without one is taken and does nothing.
+    pub fn hw_brightness_key(&mut self, code: u16, down: bool, t: f64) -> Option<Vec<Effect>> {
+        use bifrost_ui::osd::Level;
+        let (kind, up) = match code {
+            KEY_BRIGHTNESSDOWN => (Level::Brightness, false),
+            KEY_BRIGHTNESSUP => (Level::Brightness, true),
+            KEY_KBDILLUMDOWN => (Level::KeyboardBrightness, false),
+            KEY_KBDILLUMUP => (Level::KeyboardBrightness, true),
+            _ => return None,
+        };
+        // a dark screen keeps its backlight off: the press is taken and does nothing
+        if !down || !self.screen_on {
+            return Some(vec![]);
+        }
+        let (now, steps, floor) = match kind {
+            Level::KeyboardBrightness => {
+                let (level, steps) = self.kbd_backlight?;
+                (level, steps, 0)
+            }
+            // the panel never goes black from a key: the lowest step stays lit
+            _ => (self.info.brightness, 16, 1),
+        };
+        let at = (now * steps as f32).round() as i64;
+        let level = ((at + if up { 1 } else { -1 }).clamp(floor, steps as i64) as f32) / steps as f32;
+        let effect = match kind {
+            Level::KeyboardBrightness => {
+                self.kbd_backlight = Some((level, steps));
+                Effect::KeyboardBacklight(level)
+            }
+            _ => {
+                self.info.brightness = level;
+                Effect::Brightness(level)
+            }
+        };
+        if self.screen_on && !self.cc_active() {
+            self.hud.show_level(kind, level, t);
+        }
+        self.dirty = true;
+        Some(vec![effect])
+    }
+
     /// A key from a physical keyboard that the app on screen handles itself (Deildu, Files); true if taken.
     /// Power, volume and wake stay with the shell.
     pub fn hw_key(&mut self, code: u16, down: bool, t: f64) -> bool {
@@ -462,6 +708,32 @@ impl Shell {
         if !self.screen_on {
             return vec![];
         }
+        // the password sheet of an app's local authentication takes the typing before anything else
+        if self.auth_showing() {
+            self.auth_type(out, t);
+            return vec![];
+        }
+        // the unlock sheet for an encrypted volume takes the typing too
+        if self.volume_showing() {
+            self.volume_type(out, t);
+            return vec![];
+        }
+        // the package install sheet takes the typing (Escape closes it) and never installs on Return
+        if self.package_showing() {
+            self.package_type(out, t);
+            return vec![];
+        }
+        // the network login sheet takes the typing for its fields
+        if self.net_auth_showing() {
+            self.net_auth_type(out, t);
+            return vec![];
+        }
+        // the account access sheet takes touches only: typing waits for the answer
+        if self.access_showing() || self.usb_showing() {
+        // the account access sheet and the firewall question take touches only: typing waits for the answer
+        if self.access_showing() || self.fw_showing() {
+            return vec![];
+        }
         // Keyboard Navigation off: Tab does not move focus, though a terminal still gets it for completion
         if matches!(out, Out::Named("Tab")) && !super::kb_input::get().tab_navigation && !matches!(self.screen, Screen::App(AppId::Terminal | AppId::External(_))) {
             return vec![];
@@ -474,12 +746,24 @@ impl Shell {
             }
             return vec![];
         }
+        // the compose sheet takes the typing: it edits the post text
+        #[cfg(feature = "desktop-wayland")]
+        if self.compose.is_some() {
+            self.compose_type(out);
+            return vec![];
+        }
+        // the character viewer takes the typing for its search, unless a Search field or the assistant panel is open
+        if self.char_viewer.is_some() && !self.quicksearch.is_shown() && !self.assistant.is_shown() {
+            return self.char_viewer_key(out);
+        }
         // the login window opens on a tick; the shell may not have drawn since the lock, so open it for this key
         if self.screen == Screen::Lock {
             self.login_ensure(t);
         }
         let fx = match self.screen {
             // an open Search takes the typing, over whatever screen it was opened on
+            // an open assistant panel takes the typing too, as Search does
+            _ if self.assistant.is_shown() => self.assistant_key(out, t),
             _ if self.quicksearch.is_shown() => self.compose_search_key(out, t),
             Screen::App(AppId::Terminal | AppId::External(_)) => {
                 self.type_out(out, t);
@@ -552,6 +836,10 @@ impl Shell {
         if self.center_active() {
             self.notify.center.hide();
             self.dirty = true;
+            return vec![];
+        }
+        if self.assistant.is_shown() {
+            self.assistant_hide();
             return vec![];
         }
         if self.quicksearch.is_shown() {
@@ -654,6 +942,7 @@ impl Shell {
                 self.show_input_source(source, t);
                 vec![]
             }
+            Shortcut::Assistant => self.assistant_hotkey(t),
             Shortcut::AppSwitch => {
                 if self.screen != Screen::Switcher {
                     self.open_app_switcher(t);
@@ -679,9 +968,13 @@ impl Shell {
                 self.cmdtab_release(t);
                 vec![]
             }
-            Shortcut::ReaderStep(forward) if self.screen_reader_on() => self.reader_step(forward, t),
+            Shortcut::ReaderStep(forward) if self.reader_active() => self.reader_step(forward, t, forward) if self.screen_reader_on() || self.switch_scan_on() => self.reader_step(forward),
             Shortcut::ReaderRotor(forward) if self.screen_reader_on() => self.reader_rotor(forward, t),
-            Shortcut::ReaderActivate if self.screen_reader_on() => self.reader_activate(t),
+            Shortcut::ReaderActivate if self.reader_active() => self.reader_activate(t, ) || self.switch_scan_on() => self.reader_activate(t),
+            Shortcut::SpeakSelection => {
+                self.speak_selection();
+                vec![]
+            }
             Shortcut::AccessibilityShortcut => {
                 self.accessibility_shortcut();
                 vec![]
@@ -703,6 +996,12 @@ impl Shell {
                 vec![]
             }
             // Shift+Cmd+5 opens the screenshot toolbar; Escape closes it before it goes Back
+            // Shift+Cmd+/ opens the Help menu with its search field focused
+            #[cfg(feature = "desktop-wayland")]
+            Shortcut::HelpSearch if self.desk_active() && !self.is_locked() => {
+                self.help_search_open();
+                vec![]
+            }
             Shortcut::Capture if !self.is_locked() => {
                 self.capture = Some(super::capture::Session::with_prefs(self.capture_prefs));
                 vec![]
@@ -713,9 +1012,12 @@ impl Shell {
             }
             Shortcut::LookUp if self.desk_active() && !self.is_locked() => self.run_service(bifrost_ui::services_menu::Service::LookUp, t),
             // Escape closes the Look Up popover first, then the Accessibility Shortcut panel, then the character viewer, before it goes Back
+            Shortcut::Back if self.visual_search_escape() => vec![],
             Shortcut::Back if self.look_up_escape() => vec![],
             // Escape hides the Accessibility Shortcut panel, then the character viewer, before it goes Back
             Shortcut::Back if self.a11y_panel_escape() => vec![],
+            // Escape hides the Switch Control panel before it goes Back
+            Shortcut::Back if self.switch_panel_escape() => vec![],
             // Escape hides the character viewer first, before it goes Back
             Shortcut::Back if self.char_viewer_escape() => vec![],
             Shortcut::Back => self.hw_back(t),
@@ -738,7 +1040,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn term_takes_cmd_chords_only_while_in_front_and_leaves_ctrl_alone() {
+    fn term_takes_cmd_chords_only_while_in_front_and_ctrl_reaches_the_pty() {
         let mut k = HwKeys::default();
         let in_term = |k: &mut HwKeys, mods: &[u16], key: u16| {
             for m in mods {
@@ -767,14 +1069,48 @@ mod tests {
         assert_eq!(in_term(&mut k, &[KEY_LEFTMETA], 10), Some(Shortcut::Term(TermKey::Tab(8))));
         assert_eq!(in_term(&mut k, &[KEY_LEFTMETA], KEY_C), Some(Shortcut::Term(TermKey::Copy)));
         assert_eq!(in_term(&mut k, &[KEY_LEFTMETA], KEY_A), Some(Shortcut::Term(TermKey::SelectAll)));
-        // Ctrl chords are never Term's: Ctrl+F, Ctrl+K and Ctrl+T stay control characters for the pty
-        for key in [33, 37, 20, 34] {
-            assert_eq!(in_term(&mut k, &[KEY_LEFTCTRL], key), None);
-        }
-        // outside Term the same Cmd chords fall through to the app
+        // Plain Ctrl chords are Term's too now: they carry the control byte
+        // for the pty (readline, job control), never an editing shortcut.
+        // A=1 (line start), E=5 (line end), C=3 (interrupt), Z=26 (suspend).
+        assert_eq!(in_term(&mut k, &[KEY_LEFTCTRL], 30), Some(Shortcut::Term(TermKey::Ctrl(1))), "Ctrl+A");
+        assert_eq!(in_term(&mut k, &[KEY_LEFTCTRL], 18), Some(Shortcut::Term(TermKey::Ctrl(5))), "Ctrl+E");
+        assert_eq!(in_term(&mut k, &[KEY_LEFTCTRL], KEY_C), Some(Shortcut::Term(TermKey::Ctrl(3))), "Ctrl+C interrupts");
+        assert_eq!(in_term(&mut k, &[KEY_LEFTCTRL], KEY_A), Some(Shortcut::Term(TermKey::Ctrl(1))), "Ctrl+A, not SelectAll");
+        assert_eq!(in_term(&mut k, &[KEY_LEFTCTRL], KEY_X), Some(Shortcut::Term(TermKey::Ctrl(24))));
+        assert_eq!(in_term(&mut k, &[KEY_LEFTCTRL], KEY_V), Some(Shortcut::Term(TermKey::Ctrl(22))));
+        assert_eq!(in_term(&mut k, &[KEY_LEFTCTRL], KEY_Z), Some(Shortcut::Term(TermKey::Ctrl(26))), "Ctrl+Z suspends, not Undo");
+        assert_eq!(in_term(&mut k, &[KEY_LEFTCTRL, KEY_LEFTSHIFT], KEY_Z), Some(Shortcut::Term(TermKey::Ctrl(26))), "Ctrl+Shift+Z is the same byte");
+        assert_eq!(in_term(&mut k, &[KEY_LEFTCTRL], KEY_LEFTSHIFT), None, "bare Shift is not a chord");
+        // The shell keeps its own Ctrl chords: input source, the app switcher.
+        assert_eq!(in_term(&mut k, &[KEY_LEFTCTRL], KEY_SPACE), Some(Shortcut::InputSource));
+        assert_eq!(in_term(&mut k, &[KEY_LEFTCTRL], KEY_TAB), Some(Shortcut::AppSwitch));
+        assert_eq!(in_term(&mut k, &[KEY_LEFTCTRL], 2), None, "Ctrl+1 is not a control byte");
+        // Plain Alt chords send ESC plus the key (word jumps); AltGr still types.
+        assert_eq!(in_term(&mut k, &[KEY_LEFTALT], 33), Some(Shortcut::Term(TermKey::Alt(b'f'))), "Alt+F forward word");
+        assert_eq!(in_term(&mut k, &[KEY_LEFTALT], 30), Some(Shortcut::Term(TermKey::Alt(b'a'))));
+        assert_eq!(in_term(&mut k, &[KEY_LEFTALT, KEY_LEFTSHIFT], 33), Some(Shortcut::Term(TermKey::Alt(b'F'))));
+        assert_eq!(in_term(&mut k, &[KEY_LEFTALT], KEY_LEFT), Some(Shortcut::Term(TermKey::AltWord(false))));
+        assert_eq!(in_term(&mut k, &[KEY_LEFTALT], KEY_RIGHT), Some(Shortcut::Term(TermKey::AltWord(true))));
+        assert_eq!(in_term(&mut k, &[KEY_LEFTALT], 2), None, "Alt+1 falls through");
+        assert_eq!(in_term(&mut k, &[KEY_LEFTALT], KEY_TAB), Some(Shortcut::AppSwitch));
+        // Navigation keys with no modifiers reach the pty.
+        assert_eq!(in_term(&mut k, &[], KEY_HOME), Some(Shortcut::Term(TermKey::Named("Home"))));
+        assert_eq!(in_term(&mut k, &[], KEY_END), Some(Shortcut::Term(TermKey::Named("End"))));
+        assert_eq!(in_term(&mut k, &[], KEY_DELETE), Some(Shortcut::Term(TermKey::Named("Delete"))));
+        // outside Term the same chords are the app's shortcuts again
         k.key(KEY_LEFTMETA, true);
         assert_eq!(k.key_in(33, true, false), None);
         assert_eq!(k.key_in(KEY_C, true, false), Some(Shortcut::Copy));
+        k.key(KEY_C, false);
+        k.key(KEY_LEFTMETA, false);
+        k.key(KEY_LEFTCTRL, true);
+        assert_eq!(k.key_in(KEY_C, true, false), Some(Shortcut::Copy), "Ctrl+C outside Term is Copy");
+        k.key(KEY_C, false);
+        k.key(KEY_LEFTCTRL, false);
+        k.key(KEY_LEFTALT, true);
+        assert_eq!(k.key_in(33, true, false), None, "Alt+F outside Term is not the terminal's");
+        k.key(33, false);
+        k.key(KEY_LEFTALT, false);
     }
 
     #[test]
@@ -834,6 +1170,7 @@ mod tests {
         let mut k = HwKeys::default();
         assert_eq!(chord(&mut k, &[KEY_LEFTMETA], KEY_SPACE), Some(Shortcut::QuickSearch));
         assert_eq!(chord(&mut k, &[KEY_LEFTMETA, KEY_LEFTSHIFT], KEY_5), Some(Shortcut::Capture), "Shift-Cmd-5 opens the toolbar");
+        assert_eq!(chord(&mut k, &[KEY_LEFTMETA, KEY_LEFTSHIFT], KEY_SLASH), Some(Shortcut::HelpSearch), "Shift-Cmd-/ opens the Help search");
         assert_eq!(chord(&mut k, &[KEY_LEFTMETA], KEY_5), None, "Cmd-5 alone is not a shortcut");
         assert_eq!(chord(&mut k, &[KEY_LEFTALT], KEY_TAB), Some(Shortcut::AppSwitch));
         assert_eq!(chord(&mut k, &[KEY_RIGHTMETA], KEY_TAB), Some(Shortcut::AppSwitch));
@@ -845,6 +1182,9 @@ mod tests {
         // the screen reader's cursor: Ctrl+Alt+Right forward, Ctrl+Alt+Left back
         assert_eq!(chord(&mut k, &[KEY_LEFTCTRL, KEY_LEFTALT], KEY_RIGHT), Some(Shortcut::ReaderStep(true)));
         assert_eq!(chord(&mut k, &[KEY_LEFTCTRL, KEY_LEFTALT], KEY_LEFT), Some(Shortcut::ReaderStep(false)));
+        // Spoken Content: Option+Escape speaks the selection (Escape alone is Back)
+        assert_eq!(chord(&mut k, &[KEY_LEFTALT], KEY_ESC), Some(Shortcut::SpeakSelection));
+        assert_eq!(chord(&mut k, &[], KEY_ESC), Some(Shortcut::Back));
         // the rotor keys and the press key on the same chord family; Ctrl+Space keeps the input source
         assert_eq!(chord(&mut k, &[KEY_LEFTCTRL, KEY_LEFTALT], KEY_DOWN), Some(Shortcut::ReaderRotor(true)));
         assert_eq!(chord(&mut k, &[KEY_LEFTCTRL, KEY_LEFTALT], KEY_UP), Some(Shortcut::ReaderRotor(false)));
@@ -1022,4 +1362,74 @@ mod tests {
         k.reset();
         assert_eq!(k.typed(12), Some(Out::Text("ö".into())));
     }
+
+    #[test]
+    fn sticky_shift_capitalises_one_key_then_lets_go() {
+        let mut k = HwKeys::default();
+        k.set_sticky_keys(true);
+        k.key(KEY_LEFTSHIFT, true);
+        k.key(KEY_LEFTSHIFT, false);
+        k.key(KEY_A, true);
+        assert_eq!(k.typed(KEY_A), Some(Out::Text("A".into())));
+        assert!(k.shift_held(), "the latched shift is held for the key that took it");
+        k.key(KEY_A, false);
+        assert!(!k.shift_held());
+        k.key(KEY_A, true);
+        assert_eq!(k.typed(KEY_A), Some(Out::Text("a".into())), "the one-shot latch is spent");
+        k.key(KEY_A, false);
+    }
+
+    #[test]
+    fn sticky_ctrl_locked_by_two_taps_chords_every_key_until_a_third_tap() {
+        let mut k = HwKeys::default();
+        k.set_sticky_keys(true);
+        for _ in 0..2 {
+            k.key(KEY_LEFTCTRL, true);
+            k.key(KEY_LEFTCTRL, false);
+        }
+        k.key(KEY_C, true);
+        assert_eq!(k.chord_mods(KEY_C), Some(CHORD_CTRL));
+        k.key(KEY_C, false);
+        k.key(KEY_C, true);
+        assert_eq!(k.chord_mods(KEY_C), Some(CHORD_CTRL), "locked Ctrl stays for the next key");
+        k.key(KEY_C, false);
+        k.key(KEY_LEFTCTRL, true);
+        k.key(KEY_LEFTCTRL, false);
+        k.key(KEY_X, true);
+        assert_eq!(k.chord_mods(KEY_X), None, "the third tap unlocks Ctrl");
+        k.key(KEY_X, false);
+    }
+
+    #[test]
+    fn sticky_keys_off_ignores_taps_and_turning_it_off_releases_latches() {
+        let mut k = HwKeys::default();
+        k.key(KEY_LEFTMETA, true);
+        k.key(KEY_LEFTMETA, false);
+        k.key(KEY_A, true);
+        assert!(!k.mods_held(), "taps do nothing while Sticky Keys is off");
+        k.key(KEY_A, false);
+        k.set_sticky_keys(true);
+        k.key(KEY_LEFTSHIFT, true);
+        k.key(KEY_LEFTSHIFT, false);
+        k.set_sticky_keys(false);
+        assert!(!k.sticky_keys());
+        let b: u16 = 48;
+        k.key(b, true);
+        assert!(!k.shift_held());
+        k.key(b, false);
+    }
+
+    #[test]
+    fn reset_keeps_sticky_keys_on_but_clears_latches() {
+        let mut k = HwKeys::default();
+        k.set_sticky_keys(true);
+        k.key(KEY_LEFTALT, true);
+        k.key(KEY_LEFTALT, false);
+        k.reset();
+        assert!(k.sticky_keys());
+        k.key(KEY_A, true);
+        assert!(!k.mods_held());
+        k.key(KEY_A, false);
+    }
 }
+

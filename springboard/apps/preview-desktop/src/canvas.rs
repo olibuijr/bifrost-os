@@ -3,6 +3,7 @@
 //! draw first; the sidebar and the toolbar draw last, so anything that runs under them is covered.
 
 use crate::document::{Document, THUMB_W};
+use crate::forms::{FormWidget, Kind};
 use crate::export_panel;
 use crate::find::Hit;
 use crate::signature::Signature;
@@ -145,6 +146,8 @@ pub enum Action {
     FlipVertical,
     /// Tools > Remove Background: the background that touches the picture's edge becomes transparent.
     RemoveBackground,
+    /// Tools > Lift Subject: the picture becomes its subject, cut out of a plain backdrop.
+    LiftSubject,
     ZoomToSelection,
     /// Tools > Show Magnifier / Hide Magnifier.
     ToggleMagnifier,
@@ -303,6 +306,7 @@ pub const ACTIONS: &[Action] = &[
     Action::ChooseFormat(export_panel::Format::Pdf),
     Action::ExportNow,
     Action::ShowSignatures,
+    Action::LiftSubject,
 ];
 
 /// The toolbar buttons, in order. The rest are in the menus only.
@@ -389,6 +393,7 @@ impl Action {
             Action::FlipHorizontal => "Flip Horizontal",
             Action::FlipVertical => "Flip Vertical",
             Action::RemoveBackground => "Remove Background",
+            Action::LiftSubject => "Lift Subject",
             Action::ZoomToSelection => "Zoom to Selection",
             Action::ToggleMagnifier => "Show Magnifier",
             Action::ShowNotes => "Markup",
@@ -829,6 +834,8 @@ pub struct Scene<'a> {
     pub draft: Option<Mark>,
     /// The note whose text the keyboard is editing.
     pub editing: Option<usize>,
+    /// The form widget that the keyboard is typing into.
+    pub form_focus: Option<usize>,
     /// A message to show in the middle of the canvas (an open error, an export result).
     pub status: &'a str,
     pub mode: Mode,
@@ -892,6 +899,13 @@ pub fn draw(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, cache: &mut O
                 }
                 for m in doc.marks.iter().filter(|m| m.page == src).chain(scene.draft.iter()) {
                     draw_mark(s, &p, q, m);
+                }
+                // the form fields of this page, over the marks
+                for (i, w) in doc.widgets.iter().enumerate().filter(|(_, w)| w.page == src) {
+                    let field = doc.form.get(&w.name);
+                    let value = field.map(|f| f.value()).unwrap_or("");
+                    let on = field.is_some_and(|f| f.is_on());
+                    draw_widget(s, ui, &p, q, w, value, on, scene.form_focus == Some(i));
                 }
                 placed = Some(p);
                 shown_src = Some(src);
@@ -1187,6 +1201,30 @@ fn draw_closed(s: &mut Surface, pts: &[(f32, f32)], color: u32) {
     let mut closed = pts.to_vec();
     closed.push(first);
     draw_path(s, &closed, color);
+}
+
+/// Draws a form widget over the page: a text field shows its text on paper, a check box its tick when it is on. The
+/// focused field's border takes the mark blue.
+#[allow(clippy::too_many_arguments)]
+fn draw_widget(s: &mut Surface, ui: &Ui, p: &Placed, quarters: u8, w: &FormWidget, value: &str, on: bool, focused: bool) {
+    let (x, y, bw, bh) = to_screen(p, quarters, w.rect);
+    let (x, y, bw, bh) = (x as i32, y as i32, bw.max(1.0) as i32, bh.max(1.0) as i32);
+    fill(s, x, y, bw, bh, rgba(255, 255, 255, 255));
+    let border = if focused { MARK_BLUE } else { ui::SEPARATOR_C.now() };
+    s.stroke_rrect(x as f32, y as f32, bw as f32, bh as f32, 0.0, 1.0, border);
+    match w.kind {
+        Kind::Text => {
+            if !value.is_empty() {
+                let img = ui.text(value, ui::MAC_CALLOUT_PT, Weight::Regular, ui::WHITE);
+                s.blit_colored(&img, x + ui.pt(ui::SPACE_S) as i32, y + (bh - img.h as i32) / 2, rgba(0, 0, 0, 255), 255);
+            }
+        }
+        Kind::Check => {
+            if on {
+                fill(s, x + 3, y + 3, (bw - 6).max(1), (bh - 6).max(1), MARK_BLUE);
+            }
+        }
+    }
 }
 
 fn draw_mark(s: &mut Surface, p: &Placed, quarters: u8, m: &Mark) {

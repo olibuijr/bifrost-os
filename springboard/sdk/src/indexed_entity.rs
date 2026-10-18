@@ -9,6 +9,7 @@
 use crate::intents::Entity;
 use crate::quicksearch::{CSSearchableIndex, CSSearchableItem, CSSearchableItemAttributeSet, IndexError};
 use crate::Ctx;
+use bifrost_core::json::Json;
 
 /// An entity offered to Search, with the keywords it is found by.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -39,6 +40,16 @@ impl IndexedEntity {
     /// The Core Search identifier: `<type>/<id>`.
     pub fn unique_identifier(&self) -> String {
         format!("{}/{}", self.entity.ty, self.entity.id)
+    }
+    /// The wire form for an `entity.query` reply: the entity's fields plus `hidden`. The shell's entity index
+    /// (`shell::entity_index`) reads `hidden` and leaves such an entity out of Search.
+    pub fn to_json(&self) -> Json {
+        let mut fields = match self.entity.to_json() {
+            Json::Obj(fields) => fields,
+            other => return other,
+        };
+        fields.push(("hidden".into(), Json::Bool(self.hidden)));
+        Json::Obj(fields)
     }
     /// The Core Search item for this entity, or `None` when it is hidden.
     pub fn searchable_item(&self) -> Option<CSSearchableItem> {
@@ -101,6 +112,16 @@ mod tests {
         let hidden = IndexedEntity::new(note("n2")).hide_in_spotlight();
         assert!(hidden.hidden);
         assert!(hidden.searchable_item().is_none());
+    }
+
+    #[test]
+    fn the_wire_form_carries_the_hidden_flag() {
+        let shown = IndexedEntity::new(note("n1")).to_json();
+        assert_eq!(shown.get("id"), Some(&Json::Str("n1".into())));
+        assert_eq!(shown.get("hidden"), Some(&Json::Bool(false)));
+        let hidden = IndexedEntity::new(note("n2")).hide_in_spotlight().to_json();
+        assert_eq!(hidden.get("hidden"), Some(&Json::Bool(true)));
+        assert_eq!(hidden.get("title"), Some(&Json::Str("Shopping list".into())));
     }
 
     #[test]

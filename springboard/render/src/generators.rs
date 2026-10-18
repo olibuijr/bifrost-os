@@ -73,6 +73,29 @@ pub fn radial_gradient(w: usize, h: usize, center: (f32, f32), radius: f32, ramp
     out
 }
 
+/// An integer hash with good bit mixing (a 32-bit finaliser). It is a bijection on `u32`.
+fn mix32(mut x: u32) -> u32 {
+    x ^= x >> 16;
+    x = x.wrapping_mul(0x7feb_352d);
+    x ^= x >> 15;
+    x = x.wrapping_mul(0x846c_a68b);
+    x ^ (x >> 16)
+}
+
+/// `CIRandomGenerator`: opaque noise with each channel drawn independently per pixel. The same `seed`
+/// always gives the same image, and different seeds give different ones.
+pub fn random(w: usize, h: usize, seed: u32) -> Image {
+    let mut out = Image::new(w, h);
+    for (i, px) in out.px.iter_mut().enumerate() {
+        let key = seed ^ (i as u32).wrapping_mul(0x9e37_79b9);
+        let r = mix32(key) & 0xff;
+        let g = mix32(key ^ 0x68bc_21eb) & 0xff;
+        let b = mix32(key ^ 0x02e5_be93) & 0xff;
+        *px = r | g << 8 | b << 16 | 0xff00_0000;
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -127,5 +150,15 @@ mod tests {
         let img = radial_gradient(9, 9, (4.5, 4.5), 4.0, &black_to_white());
         assert_eq!(img.px[4 * 9 + 4], 0xff00_0000);
         assert_eq!(img.px[0], 0xffff_ffff);
+    }
+
+    #[test]
+    fn random_is_deterministic_per_seed_and_opaque() {
+        let a = random(8, 8, 7);
+        assert_eq!(a, random(8, 8, 7));
+        assert_ne!(a, random(8, 8, 8));
+        assert!(a.px.iter().all(|p| p >> 24 == 0xff));
+        let distinct = a.px.iter().collect::<std::collections::HashSet<_>>().len();
+        assert!(distinct > 32, "noise should not repeat a few values, got {distinct}");
     }
 }

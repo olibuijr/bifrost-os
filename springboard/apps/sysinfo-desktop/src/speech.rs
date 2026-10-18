@@ -69,6 +69,7 @@ impl Speaker {
     }
 
     /// True while the engine process runs. A finished process is collected here.
+    #[cfg(test)]
     pub fn is_speaking(&self) -> bool {
         let mut slot = self.child.borrow_mut();
         let state = slot.as_mut().map(|child| child.try_wait());

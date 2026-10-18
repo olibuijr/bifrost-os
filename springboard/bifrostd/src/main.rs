@@ -14,11 +14,27 @@ extern "C" fn on_term(_: i32) {
     QUIT.store(true, Ordering::SeqCst);
 }
 
+/// `bifrostd zram-setup`: the boot step of `bifrost-zram.service`.
+fn args_is_zram_setup() -> bool {
+    std::env::args_os().nth(1).is_some_and(|a| a.to_str() == Some("zram-setup"))
+}
+
 fn main() {
     let mut args = std::env::args_os().skip(1);
     if args.next().is_some_and(|a| a.to_str() == Some("desktop-ready")) {
         let marks: PathBuf = args.next().map(Into::into).unwrap_or_else(|| bifrostd::BOOT_MARKS.into());
         bifrostd::release_after_desktop(Path::new(&marks));
+        return;
+    }
+    if args_is_zram_setup() {
+        let ram = bifrostd::pager::Meminfo::from_proc().map(|m| m.total).unwrap_or(0);
+        match bifrostd::pager::zram_setup(ram) {
+            Ok(bytes) => eprintln!("bifrostd: zram swap {bytes} bytes"),
+            Err(e) => {
+                eprintln!("bifrostd: zram swap: {e}");
+                std::process::exit(1);
+            }
+        }
         return;
     }
     let root: PathBuf = std::env::args_os().nth(1).map(Into::into).or_else(|| std::env::var_os("BIFROST_ROOT").map(Into::into)).unwrap_or_else(|| "/var/lib/springboard".into());
@@ -27,10 +43,20 @@ fn main() {
         signal(2, on_term);
     }
     eprintln!("bifrostd {} supervising {} (services start on demand)", env!("CARGO_PKG_VERSION"), root.display());
+    // the priority socket (Game Mode) is served on its own thread, so the supervisor loop never waits for a peer
+    let run = bifrostd::run_dir(&root);
+    let _ = std::fs::create_dir_all(&run);
+    let (socket, apps) = (run.join(bifrostd::PRIORITY_SOCKET), root.join("apps"));
+    std::thread::spawn(move || bifrostd::priority::serve(socket, apps));
     let mut sup = bifrostd::Supervisor::new(root);
+    let mut pager = bifrostd::pager::Pager::new();
+    let mut purger = bifrostd::purge::Purger::default();
     while !QUIT.load(Ordering::SeqCst) {
         sup.wait(bifrostd::TICK);
         sup.tick();
+        let now = bifrostd::purge::now_secs();
+        pager.tick(now);
+        purger.tick(now);
     }
     sup.shutdown();
 }

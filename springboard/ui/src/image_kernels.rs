@@ -293,3 +293,77 @@ pub fn histogram(img: &Image) -> [[u32; 256]; 4] {
     }
     bins
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn image(w: usize, h: usize, px: &[u32]) -> Image {
+        let mut img = Image::new(w, h);
+        img.px.copy_from_slice(px);
+        img
+    }
+
+    #[test]
+    fn centre_one_kernel_returns_the_image_unchanged() {
+        let src = image(2, 2, &[0xff10_2030, 0xff40_5060, 0x8000_0000, 0xffff_ffff]);
+        let weights = [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0];
+        let out = convolve(&src, 3, 3, &weights, 0.0).unwrap();
+        assert_eq!(out.px, src.px);
+    }
+
+    #[test]
+    fn even_or_mismatched_kernels_are_refused() {
+        let src = image(2, 2, &[0; 4]);
+        assert!(convolve(&src, 2, 2, &[0.0; 4], 0.0).is_none());
+        assert!(convolve(&src, 3, 3, &[0.0; 4], 0.0).is_none());
+        assert!(convolve(&src, 3, 1, &[1.0 / 3.0; 3], 0.0).is_some());
+    }
+
+    #[test]
+    fn three_tap_average_spreads_a_single_bright_pixel() {
+        // A row of red 0, 255, 0. A 3 by 1 box averages each pixel with its neighbours: the middle
+        // one becomes red 255 / 3, about 85.
+        let src = image(3, 1, &[0xff00_0000, 0xff00_00ff, 0xff00_0000]);
+        let out = convolve(&src, 3, 1, &[1.0 / 3.0; 3], 0.0).unwrap();
+        let red = out.px[1] & 0xff;
+        assert!((red as i32 - 85).abs() <= 1, "red {red}");
+    }
+
+    #[test]
+    fn opaque_foreground_hides_the_background() {
+        let fg = image(1, 1, &[0xff00_00ff]);
+        let bg = image(1, 1, &[0xffff_ffff]);
+        assert_eq!(source_over(&fg, &bg).unwrap().px, vec![0xff00_00ff]);
+    }
+
+    #[test]
+    fn half_transparent_foreground_mixes_with_the_background() {
+        // Premultiplied red 0x80 at alpha 0x80 over opaque white: green is the white showing through,
+        // about 127 of 255, and the result stays opaque.
+        let fg = image(1, 1, &[0x80_00_00_80]);
+        let bg = image(1, 1, &[0xffff_ffff]);
+        let px = source_over(&fg, &bg).unwrap().px[0];
+        let green = ((px >> 8) & 0xff) as i32;
+        assert!((green - 127).abs() <= 1, "green {green}");
+        assert_eq!(px >> 24, 0xff);
+    }
+
+    #[test]
+    fn compositing_refuses_different_sizes() {
+        let a = image(2, 1, &[0; 2]);
+        let b = image(1, 2, &[0; 2]);
+        assert!(source_over(&a, &b).is_none());
+    }
+
+    #[test]
+    fn histogram_counts_each_channel_value() {
+        let img = image(2, 1, &[0xff00_0000, 0xff00_0000]);
+        let bins = histogram(&img);
+        assert_eq!(bins[0][0], 2);
+        assert_eq!(bins[1][0], 2);
+        assert_eq!(bins[2][0], 2);
+        assert_eq!(bins[3][255], 2);
+        assert_eq!(bins.iter().map(|b| b.iter().sum::<u32>()).sum::<u32>(), 8);
+    }
+}

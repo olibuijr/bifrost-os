@@ -546,8 +546,9 @@ impl PointerDecoder {
     fn sync(&mut self, ptr: &mut Pointer, t: f64, out: &mut Vec<Event>) {
         let cfg = pointer_prefs::get();
         if self.dx != 0.0 || self.dy != 0.0 {
+            let (dx, dy) = if self.touchpad { (self.dx, self.dy) } else { pointer_prefs::accelerate(self.dx, self.dy, cfg.accel) };
             let k = if self.touchpad { cfg.trackpad_speed } else { cfg.mouse_speed };
-            ptr.move_by(self.dx * k, self.dy * k);
+            ptr.move_by(dx * k, dy * k);
             self.moved = true;
         }
         let at = (ptr.x, ptr.y);
@@ -602,6 +603,8 @@ pub struct InputSet {
     pointer: Pointer,
     /// shift keys held on any keyboard, for the wheel
     shift: u8,
+    /// Mouse Keys drives the pointer from the keypad, so a cursor is drawn even with no pointing device
+    pointer_keys: bool,
     /// the hardware keyboard state last handed out by `keyboard_change`; None before the first report
     reported_keyboard: Option<bool>,
 }
@@ -638,7 +641,7 @@ impl InputSet {
 
     /// A desktop set for a panel of `w` x `h`; `exclusive` grabs keyboards, pointers and touchscreens.
     pub fn desktop(w: f32, h: f32, exclusive: bool) -> Self {
-        InputSet { panel: (w, h), exclusive, slots: vec![], ignored: vec![], next_scan: 0.0, watch: -1, pointer: Pointer::new(w, h), shift: 0, reported_keyboard: None }
+        InputSet { panel: (w, h), exclusive, slots: vec![], ignored: vec![], next_scan: 0.0, watch: -1, pointer: Pointer::new(w, h), shift: 0, pointer_keys: false, reported_keyboard: None }
     }
 
     /// A hardware keyboard is attached (any device passing `Caps::is_hardware_keyboard`).
@@ -657,14 +660,24 @@ impl InputSet {
         Some(now)
     }
 
+    /// Moves the shell's pointer by a keyboard step (Mouse Keys), clamped to the panel.
+    pub fn nudge(&mut self, dx: f32, dy: f32) {
+        self.pointer.move_by(dx, dy);
+    }
+
     /// Where the pointer is on the panel, for a cursor to be drawn there.
     pub fn pointer(&self) -> (f32, f32) {
         (self.pointer.x, self.pointer.y)
     }
 
-    /// A pointing device is present, so a cursor is worth drawing.
+    /// A pointing device is present, so a cursor is worth drawing. Mouse Keys counts as one while it is on.
     pub fn has_pointer(&self) -> bool {
-        self.slots.iter().any(|s| matches!(s.source, Source::Pointer(_)))
+        self.pointer_keys || self.slots.iter().any(|s| matches!(s.source, Source::Pointer(_)))
+    }
+
+    /// Mouse Keys is driving the pointer from the keypad (`set_pointer_keys`).
+    pub fn set_pointer_keys(&mut self, on: bool) {
+        self.pointer_keys = on;
     }
 
     /// A pointer's left button is held.
@@ -908,6 +921,26 @@ mod tests {
     }
 
     #[test]
+    fn mouse_keys_makes_the_pointer_visible_without_a_mouse() {
+        let mut s = InputSet::desktop(800.0, 600.0, false);
+        assert!(!s.has_pointer());
+        s.set_pointer_keys(true);
+        assert!(s.has_pointer());
+        s.nudge(5.0, 0.0);
+        assert_eq!(s.pointer(), (405.0, 300.0));
+    }
+
+    #[test]
+    fn nudge_moves_the_pointer_and_stops_at_the_panel_edge() {
+        let mut p = Pointer::new(800.0, 600.0);
+        assert_eq!((p.x, p.y), (400.0, 300.0));
+        p.move_by(10.0, -20.0);
+        assert_eq!((p.x, p.y), (410.0, 280.0));
+        p.move_by(-10_000.0, 10_000.0);
+        assert_eq!((p.x, p.y), (0.0, 599.0));
+    }
+
+    #[test]
     fn a_mouse_is_a_pointer_not_a_touchpad() {
         let caps = Caps { key: bits(96, &[BTN_LEFT]), rel: bits(2, &[REL_X, REL_Y, REL_WHEEL]), ..Default::default() };
         let r = caps.roles();
@@ -994,9 +1027,10 @@ mod tests {
 
     #[test]
     fn relative_motion_integrates_and_clamps_to_the_panel() {
-        let (out, p) = mouse(&[(EV_REL, REL_X, 10), (EV_REL, REL_Y, -5), (EV_SYN, 0, 0)]);
+        // 1 and -1 count stay under the acceleration knee, so the travel is the raw travel
+        let (out, p) = mouse(&[(EV_REL, REL_X, 1), (EV_REL, REL_Y, -1), (EV_SYN, 0, 0)]);
         assert!(out.is_empty(), "motion alone draws nothing and sends no touch");
-        assert_eq!((p.x, p.y), (60.0, 20.0));
+        assert_eq!((p.x, p.y), (51.0, 24.0));
         let (_, p) = mouse(&[(EV_REL, REL_X, 9999), (EV_REL, REL_Y, -9999), (EV_SYN, 0, 0)]);
         assert_eq!((p.x, p.y), (99.0, 0.0));
     }
@@ -1006,14 +1040,15 @@ mod tests {
         let (out, _) = mouse(&[
             (EV_KEY, BTN_LEFT, 1),
             (EV_SYN, 0, 0),
-            (EV_REL, REL_X, 4),
+            (EV_REL, REL_X, 2),
             (EV_SYN, 0, 0),
             (EV_KEY, BTN_LEFT, 0),
             (EV_SYN, 0, 0),
         ]);
+        // 2 counts is the acceleration knee, so the move is not sped up
         assert_eq!(
             out,
-            vec![Event::Down { x: 50.0, y: 25.0, t: 0.0 }, Event::Move { x: 54.0, y: 25.0, t: 0.0 }, Event::Up { x: 54.0, y: 25.0, t: 0.0 }]
+            vec![Event::Down { x: 50.0, y: 25.0, t: 0.0 }, Event::Move { x: 52.0, y: 25.0, t: 0.0 }, Event::Up { x: 52.0, y: 25.0, t: 0.0 }]
         );
     }
 

@@ -110,3 +110,112 @@ impl EditSession {
         self.result().is_some()
     }
 }
+
+/// The editors a host has installed, by format identifier. An edit is read back only by the editor whose format wrote
+/// it, so the host finds that editor from the record alone, and a session starts only for an installed editor.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct EditorRegistry {
+    /// (format identifier, display name), in install order
+    editors: Vec<(String, String)>,
+}
+
+impl EditorRegistry {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Installs an editor for a format under a display name. False, and nothing changes, when either is blank or the
+    /// format already has an editor.
+    pub fn install(&mut self, format_identifier: &str, name: &str) -> bool {
+        let format_identifier = format_identifier.trim();
+        let name = name.trim();
+        if format_identifier.is_empty() || name.is_empty() || self.editors.iter().any(|(f, _)| f == format_identifier) {
+            return false;
+        }
+        self.editors.push((format_identifier.to_string(), name.to_string()));
+        true
+    }
+
+    /// Removes the editor of a format. False when none was installed.
+    pub fn uninstall(&mut self, format_identifier: &str) -> bool {
+        let before = self.editors.len();
+        let format_identifier = format_identifier.trim();
+        self.editors.retain(|(f, _)| f != format_identifier);
+        self.editors.len() != before
+    }
+
+    /// The display name of the installed editor that can read `record`, if there is one.
+    pub fn editor_for(&self, record: &AdjustmentData) -> Option<&str> {
+        self.editors.iter().find(|(f, _)| f == record.format_identifier()).map(|(_, name)| name.as_str())
+    }
+
+    /// Starts an editing session for the installed editor of `format_identifier`, from the photo's record. None when no
+    /// editor of that format is installed.
+    pub fn session_for(&self, format_identifier: &str, input: Option<AdjustmentData>) -> Option<EditSession> {
+        let format_identifier = format_identifier.trim();
+        if !self.editors.iter().any(|(f, _)| f == format_identifier) {
+            return None;
+        }
+        EditSession::begin(format_identifier, input)
+    }
+
+    /// The installed editors in install order, as (format identifier, display name).
+    pub fn editors(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.editors.iter().map(|(f, n)| (f.as_str(), n.as_str()))
+    }
+
+    pub fn len(&self) -> usize {
+        self.editors.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.editors.is_empty()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn record(format: &str) -> AdjustmentData {
+        AdjustmentData::new(format, "1", vec![1, 2, 3]).unwrap()
+    }
+
+    #[test]
+    fn an_editor_is_installed_once_per_format() {
+        let mut r = EditorRegistry::new();
+        assert!(r.install("com.example.grain", "Grain"));
+        assert!(!r.install(" com.example.grain ", "Other"), "the format already has an editor");
+        assert!(!r.install("", "Blank"), "a blank format");
+        assert!(!r.install("com.example.blank", "  "), "a blank name");
+        assert_eq!(r.len(), 1);
+        assert_eq!(r.editors().collect::<Vec<_>>(), vec![("com.example.grain", "Grain")]);
+    }
+
+    #[test]
+    fn the_editor_of_a_record_is_found_by_its_format() {
+        let mut r = EditorRegistry::new();
+        r.install("com.example.grain", "Grain");
+        assert_eq!(r.editor_for(&record("com.example.grain")), Some("Grain"));
+        assert_eq!(r.editor_for(&record("com.example.other")), None);
+    }
+
+    #[test]
+    fn a_session_starts_only_for_an_installed_editor() {
+        let mut r = EditorRegistry::new();
+        assert!(r.session_for("com.example.grain", None).is_none(), "nothing installed");
+        r.install("com.example.grain", "Grain");
+        let session = r.session_for("com.example.grain", Some(record("com.example.grain")));
+        assert!(session.is_some_and(|s| s.input().is_some()), "the record is this editor's input");
+    }
+
+    #[test]
+    fn uninstalling_removes_the_editor() {
+        let mut r = EditorRegistry::new();
+        r.install("com.example.grain", "Grain");
+        assert!(r.uninstall("com.example.grain"));
+        assert!(!r.uninstall("com.example.grain"), "already gone");
+        assert!(r.is_empty());
+        assert_eq!(r.editor_for(&record("com.example.grain")), None);
+    }
+}

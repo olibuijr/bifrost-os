@@ -21,7 +21,16 @@
    "bifrost": "springboard/src/shell/wallpaper_page.rs",
    "status": "partial",
    "note": "wallpaper",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_page"
+    }
+   ],
+   "ready_note": "covers: wallpaper"
   },
   {
    "id": "path:/System/Library/CoreServices/WatchFaceAlert.app",
@@ -61,7 +70,16 @@
    "bifrost": "springboard/src/shell/desktop_network.rs",
    "status": "partial",
    "note": "network status",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::desktop_network"
+    }
+   ],
+   "ready_note": "covers: network status"
   },
   {
    "id": "path:/System/Library/CoreServices/WidgetKit Simulator.app",
@@ -121,7 +139,16 @@
    "bifrost": "springboard/src/shell/desk.rs",
    "status": "partial",
    "note": "window management on the desktop",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::desk"
+    }
+   ],
+   "ready_note": "covers: window management on the desktop"
   },
   {
    "id": "path:/System/Library/CoreServices/WorkoutAlert-Mac.app",
@@ -161,7 +188,16 @@
    "bifrost": "springboard/src/thumbs/ (thumbnails service)",
    "status": "partial",
    "note": "Draws: title and text of the page, markup not rendered (thumbs::text::WebProvider). Needs a Midget check for parity.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "thumbs"
+    }
+   ],
+   "ready_note": "covers: Draws: title and text of the page, markup not rendered (thumbs::text::WebProvider). Needs a Midget check for parity."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/Wi-Fi.appex",
@@ -181,7 +217,16 @@
    "bifrost": "springboard/src/shell/wifi_page.rs",
    "status": "partial",
    "note": "Wi-Fi page",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wifi_page"
+    }
+   ],
+   "ready_note": "covers: Wi-Fi page"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/Word of the Day.appex",
@@ -221,7 +266,16 @@
    "bifrost": "springboard/apps/clock-desktop/src/clock/intent.rs",
    "status": "partial",
    "note": "Intent world-clock-time (city time, shortcut in Search) declared in clock-desktop manifest.toml; built on os/team-l-04-system-ui; not yet verified on Midget",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-clock",
+     "filter": "clock::intent"
+    }
+   ],
+   "ready_note": "covers: Intent world-clock-time (city time, shortcut in Search) declared in clock-desktop manifest.toml; built on os/team-l-04-system-ui; not yet verified on Midget"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/WritingToolsAppIntentsExtension.appex",

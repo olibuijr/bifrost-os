@@ -8,6 +8,7 @@ use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_L, SPACE_M, SPACE_S, SPACE_XL, SPAC
 use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_CALLOUT_PT, MAC_CAPTION1_PT, MAC_FOOTNOTE_PT, MAC_TITLE1_PT};
 use crate::automation;
 use springboard::shortcuts as model;
+use springboard::shortcuts::{describe, droplet};
 use bifrost_app::kit::ui::{
     Ui, Weight, CARD_BG, CARD_RADIUS_PT, CELL_RADIUS_PT, CONTROL_PRESSED, CONTENT_BG, LABEL, LABEL_2, LABEL_3, LINK,
     MAC_TITLE3_PT, PRESSED, ROW_PRESSED, SEPARATOR_C, SYSTEM_BLUE, SYSTEM_BROWN, SYSTEM_GREEN, SYSTEM_ORANGE,
@@ -24,6 +25,7 @@ use springboard::shortcuts::{Action, Daily, Shortcut, FOLDERS, GLYPHS, KINDS, MA
 use bifrost_app::proto::LoginStatus as Status;
 use bifrost_app::intents::Snippet;
 use bifrost_core::json::Json;
+use springboard::shell::intents::AppShortcut;
 use std::path::PathBuf;
 
 /// The result panel's width (points) and the most step rows it shows before "and N more".
@@ -115,6 +117,8 @@ enum Edit {
     Name,
     /// the text of step `k` of the shortcut in the editor
     Value(usize),
+    /// the sentence in the gallery that drafts a shortcut
+    Describe,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -136,6 +140,8 @@ enum Target {
     Pick(usize),
     /// An intent in the Intents section of the action library: runs it on the shortcut in front.
     Intent(usize),
+    /// An intent another installed app declares in the action library's "From Apps" section: opens that app and runs it.
+    AppIntent(usize),
     Color(usize),
     Glyph(usize),
     Delete,
@@ -148,6 +154,8 @@ enum Target {
     Export,
     /// "Import from File..." in the gallery
     Import,
+    /// "Describe a Shortcut..." in the gallery: opens the field that drafts a shortcut from a sentence
+    Describe,
     /// a starter in the gallery: adds it
     Starter(usize),
     /// The follow-on button of the result panel: asks for the intent the result opens.
@@ -167,8 +175,10 @@ enum Target {
     Grip(usize),
     /// the Menu Key row of the open shortcut: steps to the next key
     MenuKey,
-    /// the Automation row of the open shortcut: steps to the next app or battery level
+    /// the Automation row of the open shortcut: steps to the next trigger (app, time, Focus, login or battery)
     Automation,
+    /// the Ask Before Running row, shown under an automation: switches between asking and running at once
+    AskBeforeRunning,
     /// a variable row under an open text step: inserts `{name}` into the text (the index is into `variable_names`)
     InsertVar(usize),
     /// a row of the menu a long press opens on a tile
@@ -295,6 +305,10 @@ pub struct Shortcuts {
     login_request: Option<bool>,
     /// the intents the last taps asked to run, oldest first, with their parameters
     intent_requests: Vec<(String, Json)>,
+    /// the shortcut intents of the installed apps, as the shell lists them (the library's "From Apps" section)
+    app_intents: Vec<AppShortcut>,
+    /// the other apps' intents the last taps asked to run, as (app id, app name, intent id), oldest first
+    app_intent_requests: Vec<(String, String, String)>,
     /// the result panel of the last intent run that had a snippet, if it is still showing
     result: Option<ResultPanel>,
     /// the search text of the toolbar's field
@@ -355,6 +369,8 @@ impl Shortcuts {
             login: None,
             login_request: None,
             intent_requests: Vec::new(),
+            app_intents: Vec::new(),
+            app_intent_requests: Vec::new(),
             result: None,
             query: TextField::new(),
             field: TextField::new(),
@@ -454,6 +470,17 @@ impl Shortcuts {
     /// their parameters.
     pub fn take_intent_requests(&mut self) -> Vec<(String, Json)> {
         std::mem::take(&mut self.intent_requests)
+    }
+
+    /// Replaces the other apps' shortcut intents the action library lists. Called when the installed apps change.
+    pub fn set_app_intents(&mut self, list: Vec<AppShortcut>) {
+        self.app_intents = list;
+        self.dirty = true;
+    }
+
+    /// The other apps' intents the last taps asked to run, oldest first, as (app id, app name, intent id).
+    pub fn take_app_intent_requests(&mut self) -> Vec<(String, String, String)> {
+        std::mem::take(&mut self.app_intent_requests)
     }
 
     /// The export the last tap or menu asked for, once: the suggested file name and the text to write.
@@ -777,7 +804,13 @@ impl Shortcuts {
                 let key = if sc.key == 0 { "None".to_string() } else { format!("Ctrl+Cmd+{}", sc.key) };
                 self.row(ui, &mut cells, &mut y, "Menu Key", &key, LABEL.now(), 0, Some(Target::MenuKey));
                 let automation = model::automation_label(sc.automation);
-                self.row(ui, &mut cells, &mut y, "Automation", &automation, LABEL.now(), ROW_POS_LAST, Some(Target::Automation));
+                // with an automation, its Ask Before Running row follows it, so Automation is no longer the last row
+                let (auto_pos, ask_row) = if sc.automation.is_some() { (ROW_POS_FIRST, true) } else { (ROW_POS_LAST, false) };
+                self.row(ui, &mut cells, &mut y, "Automation", &automation, LABEL.now(), auto_pos, Some(Target::Automation));
+                if ask_row {
+                    let ask = if sc.ask { "On" } else { "Off" };
+                    self.row(ui, &mut cells, &mut y, "Ask Before Running", ask, LABEL.now(), ROW_POS_LAST, Some(Target::AskBeforeRunning));
+                }
                 y += ui.pt(35.0) - ui.pt(SPACE_S);
                 cells.push(Cell { target: None, rect: (m + ui.pt(SPACE_L), y, w, ui.pt(SPACE_XXXL)), look: Look::Header("Color".into()) });
                 y += ui.pt(SPACE_XXXL);
@@ -837,13 +870,30 @@ impl Shortcuts {
                     cells.push(Cell { target: None, rect: note, look: Look::Note(intent.description.clone()) });
                     y += ui.pt(SPACE_XXXL);
                 }
-                if kinds.is_empty() && declared.iter().all(|i| !self.fits(&i.title)) {
+                // the shortcut intents of the other installed apps, as Search lists them
+                let others: Vec<usize> = (0..self.app_intents.len()).filter(|&k| self.app_intent_fits(&self.app_intents[k])).collect();
+                let none_from_apps = others.is_empty();
+                if !others.is_empty() {
+                    y += ui.pt(SPACE_L);
+                    cells.push(Cell { target: None, rect: (m + ui.pt(SPACE_L), y, w, ui.pt(SPACE_XXXL)), look: Look::Header("From Apps".into()) });
+                    y += ui.pt(SPACE_XXXL);
+                }
+                for k in others {
+                    let a = &self.app_intents[k];
+                    self.row(ui, &mut cells, &mut y, &a.intent.title, &a.app_name, LABEL.now(), ROW_POS_FIRST | ROW_POS_LAST, Some(Target::AppIntent(k)));
+                    let note = (m + ui.pt(SPACE_L), y, w - 2.0 * ui.pt(SPACE_L), ui.pt(SPACE_XXXL));
+                    cells.push(Cell { target: None, rect: note, look: Look::Note(a.intent.description.clone()) });
+                    y += ui.pt(SPACE_XXXL);
+                }
+                if kinds.is_empty() && declared.iter().all(|i| !self.fits(&i.title)) && none_from_apps {
                     let note = (m + ui.pt(SPACE_L), y, w - 2.0 * ui.pt(SPACE_L), ui.pt(SPACE_XXXL));
                     cells.push(Cell { target: None, rect: note, look: Look::Note(format!("No actions match \"{}\".", &*self.query)) });
                     y += ui.pt(SPACE_XXXL);
                 }
             }
             View::Gallery => {
+                y += ui.pt(SPACE_L);
+                self.row(ui, &mut cells, &mut y, "Describe a Shortcut...", "", SYSTEM_BLUE, ROW_POS_FIRST | ROW_POS_LAST, Some(Target::Describe));
                 y += ui.pt(SPACE_L);
                 let starters = model::starters();
                 let found: Vec<usize> = (0..starters.len()).filter(|&n| self.starter_fits(&starters[n])).collect();
@@ -942,6 +992,37 @@ impl Shortcuts {
             .and_then(|c| c.target)
     }
 
+    /// The droplet whose tile is under (x, y) in pixels: files dropped there are its input. `None` off the grid, in
+    /// edit mode, or over a shortcut that is not a droplet (its automation is not "When a File Is Dropped").
+    pub fn droplet_at(&self, ui: &Ui, x: f32, y: f32) -> Option<usize> {
+        if self.view != View::Grid || self.edit_mode {
+            return None;
+        }
+        match self.hit(ui, x, y) {
+            Some(Target::Tile(i)) if self.list.get(i).is_some_and(droplet::accepts) => Some(i),
+            _ => None,
+        }
+    }
+
+    /// The centre of tile `i` in pixels, for tests that aim a tap or a drop at it.
+    #[cfg(test)]
+    pub fn tile_centre(&self, ui: &Ui, i: usize) -> Option<(f32, f32)> {
+        let (cells, _) = self.layout(ui);
+        cells.iter().find(|c| c.target == Some(Target::Tile(i))).map(|c| (c.rect.0 + c.rect.2 / 2.0, c.rect.1 + c.rect.3 / 2.0))
+    }
+
+    /// The result panel's title and rows as one line, for tests.
+    #[cfg(test)]
+    pub fn result_text(&self) -> Option<String> {
+        self.result.as_ref().map(|p| format!("{} | {}", p.title, p.rows.iter().map(|r| r.1.clone()).collect::<Vec<_>>().join(" | ")))
+    }
+
+    /// The toast being shown, for tests.
+    #[cfg(test)]
+    pub fn toast_text(&self) -> Option<&str> {
+        self.toast.as_ref().map(|t| t.0.as_str())
+    }
+
     /// Asks for a run of shortcut `i`: the window cannot perform steps itself, so the app does, and shows the outcome.
     fn run_all(&mut self, i: usize) {
         let Some(s) = self.list.get(i) else { return };
@@ -963,6 +1044,11 @@ impl Shortcuts {
     fn fits(&self, text: &str) -> bool {
         let q = self.query.trim().to_lowercase();
         q.is_empty() || text.to_lowercase().contains(&q)
+    }
+
+    /// Whether another app's intent passes the search: its title or its app's name contains the text.
+    fn app_intent_fits(&self, a: &AppShortcut) -> bool {
+        self.fits(&a.intent.title) || self.fits(&a.app_name)
     }
 
     /// Whether a starter passes the search: its name, its line or its heading contains the text.
@@ -1081,11 +1167,43 @@ impl Shortcuts {
                     self.toast = Some(("That text cannot be used here.".into(), self.now + 3000.0));
                 }
             }
+            (Edit::Describe, View::Gallery) => self.add_described(&text),
             _ => {}
         }
         self.edit = Edit::None;
         self.field.clear();
         self.dirty = true;
+    }
+
+    /// Drafts a shortcut from a sentence (`springboard::shortcuts::describe`) and opens it in the editor. Nothing is
+    /// run and nothing is guessed: a clause that names no step is left out and the toast says so. A sentence that
+    /// names no step at all adds nothing.
+    fn add_described(&mut self, sentence: &str) {
+        if sentence.trim().is_empty() {
+            return;
+        }
+        let draft = describe::draft(sentence);
+        if draft.shortcut.actions.is_empty() {
+            self.toast = Some(("No step in that sentence could be understood. Try \"turn off Wi-Fi, then start a timer for 10 minutes\".".into(), self.now + 5000.0));
+            return;
+        }
+        if self.list.len() >= MAX_SHORTCUTS {
+            self.toast = Some((format!("A list holds at most {MAX_SHORTCUTS} shortcuts."), self.now + 3000.0));
+            return;
+        }
+        let mut shortcut = draft.shortcut;
+        shortcut.name = model::unique_name(&self.list, &shortcut.name);
+        shortcut.color = self.list.len() % PALETTE.len();
+        let steps = shortcut.actions.len();
+        self.list.push(shortcut);
+        self.view = View::Editor(self.list.len() - 1);
+        self.scroll = 0.0;
+        self.save();
+        let mut said = format!("Drafted {steps} {}.", if steps == 1 { "step" } else { "steps" });
+        if !draft.ignored.is_empty() {
+            said.push_str(&format!(" Left out: {}.", draft.ignored.join("; ")));
+        }
+        self.toast = Some((said, self.now + 6000.0));
     }
 
     /// Leaves the field, dropping what was typed; the search is emptied.
@@ -1120,6 +1238,7 @@ impl Shortcuts {
         let keeps = match (self.edit, next) {
             (Edit::Search, Target::Search | Target::SearchClear) => true,
             (Edit::Name, Target::Name) => true,
+            (Edit::Describe, Target::Describe) => true,
             (Edit::Value(a), Target::Value(b)) => a == b,
             (Edit::Value(_), Target::InsertVar(_)) => true,
             _ => false,
@@ -1266,6 +1385,11 @@ impl Shortcuts {
                     self.begin(Edit::Name);
                 }
             }
+            Target::Describe => {
+                if self.edit != Edit::Describe {
+                    self.begin(Edit::Describe);
+                }
+            }
             Target::Search => {
                 self.edit = Edit::Search;
             }
@@ -1295,6 +1419,12 @@ impl Shortcuts {
             Target::Automation => {
                 if let Some(s) = self.editing() {
                     s.automation = model::next_automation(s.automation);
+                    self.save();
+                }
+            }
+            Target::AskBeforeRunning => {
+                if let Some(s) = self.editing() {
+                    s.ask = !s.ask;
                     self.save();
                 }
             }
@@ -1375,6 +1505,11 @@ impl Shortcuts {
             Target::Intent(k) => {
                 if let Some(intent) = automation::declared().get(k) {
                     self.intent_requests.push((intent.id.clone(), Json::Obj(Vec::new())));
+                }
+            }
+            Target::AppIntent(k) => {
+                if let Some(a) = self.app_intents.get(k) {
+                    self.app_intent_requests.push((a.app_id.clone(), a.app_name.clone(), a.intent.id.clone()));
                 }
             }
             Target::ResultRun => {
@@ -1604,10 +1739,15 @@ impl Shortcuts {
                     let typing = match c.target {
                         Some(Target::Name) => self.edit == Edit::Name,
                         Some(Target::Value(k)) => self.edit == Edit::Value(k),
+                        Some(Target::Describe) => self.edit == Edit::Describe,
                         _ => false,
                     };
                     if typing {
-                        let placeholder = if self.edit == Edit::Name { "Name" } else { "Text" };
+                        let placeholder = match self.edit {
+                            Edit::Name => "Name",
+                            Edit::Describe => "Turn off Wi-Fi, then start a timer",
+                            _ => "Text",
+                        };
                         let pad = ui.pt(SPACE_S);
                         let bounds = PtRect { x: (x + ui.pt(46.0)) / ui.s, y: (y + pad) / ui.s, w: ((cw - ui.pt(46.0) - pad) / ui.s).max(0.0), h: ((ch - 2.0 * pad) / ui.s).max(0.0) };
                         widgets::search_field(s, ui, &self.field, bounds, placeholder, true);
@@ -1621,10 +1761,12 @@ impl Shortcuts {
                                 Some(
                                     Target::Pick(_)
                                         | Target::Intent(_)
+                                        | Target::AppIntent(_)
                                         | Target::Starter(_)
                                         | Target::Duplicate
                                         | Target::Export
                                         | Target::Import
+                                        | Target::Describe
                                         | Target::Choice(_)
                                 )
                             );
@@ -2350,9 +2492,9 @@ mod tests {
         w.view = View::Editor(0);
         assert!(w.list()[0].automation.is_none());
         w.activate(Target::Automation);
-        assert_eq!(w.list()[0].automation, Some(model::Automation::AppOpens(0)));
+        assert_eq!(w.list()[0].automation, Some(model::Automation::AtLogin));
         let saved = std::fs::read_to_string(&w.path).unwrap();
-        assert!(saved.lines().next().unwrap().contains("open:0"), "the automation is saved with the line");
+        assert!(saved.lines().next().unwrap().contains("login"), "the automation is saved with the line");
     }
 
     #[test]
@@ -2361,6 +2503,21 @@ mod tests {
         w.view = View::Editor(0);
         let (cells, _) = w.layout(&ui());
         assert!(cells.iter().any(|c| c.target == Some(Target::Automation)));
+        assert!(!cells.iter().any(|c| c.target == Some(Target::AskBeforeRunning)), "no ask row without an automation");
+    }
+
+    #[test]
+    fn the_ask_row_toggles_the_open_automation_and_is_saved() {
+        let mut w = window("automation-ask");
+        w.view = View::Editor(0);
+        w.activate(Target::Automation);
+        let (cells, _) = w.layout(&ui());
+        assert!(cells.iter().any(|c| c.target == Some(Target::AskBeforeRunning)), "the ask row follows an automation");
+        assert!(w.list()[0].ask, "asking is on by default");
+        w.activate(Target::AskBeforeRunning);
+        assert!(!w.list()[0].ask);
+        let saved = std::fs::read_to_string(&w.path).unwrap();
+        assert!(saved.lines().next().unwrap().contains("\tlogin\t0\t0"), "the ask flag is saved after the automation");
     }
 
     #[test]
@@ -2422,5 +2579,89 @@ mod tests {
             _ => None,
         }).collect();
         assert_eq!(headings, vec!["Focus", "Everyday", "Tools"]);
+    }
+
+    #[test]
+    fn an_intent_of_another_app_is_listed_in_the_library_and_asks_for_a_run() {
+        use springboard::shell::intents::ManifestIntent;
+        let mut w = window("app-intents");
+        w.set_app_intents(vec![AppShortcut {
+            app_id: "is.o.notes".into(),
+            app_name: "Notes".into(),
+            intent: ManifestIntent { id: "new-note".into(), title: "New Note".into(), description: "Makes a note.".into(), shortcut: true, params: Vec::new() },
+        }]);
+        w.view = View::Picker(0);
+        let (cells, _) = w.layout(&ui());
+        assert!(cells.iter().any(|c| matches!(c.target, Some(Target::AppIntent(0)))), "the library lists the other app's intent");
+        assert!(cells.iter().any(|c| matches!(&c.look, Look::Header(t) if t == "From Apps")));
+        w.activate(Target::AppIntent(0));
+        assert_eq!(w.take_app_intent_requests(), vec![("is.o.notes".to_string(), "Notes".to_string(), "new-note".to_string())]);
+        assert!(w.take_app_intent_requests().is_empty(), "a request is taken once");
+    }
+
+    #[test]
+    fn a_described_sentence_drafts_a_shortcut_and_opens_it() {
+        let mut w = window("describe");
+        let before = w.list().len();
+        w.activate(Target::Side(ROW_GALLERY));
+        let (cells, _) = w.layout(&ui());
+        assert!(cells.iter().any(|c| c.target == Some(Target::Describe)), "the gallery offers the field");
+        w.activate(Target::Describe);
+        assert!(w.wants_keyboard());
+        type_text(&mut w, "Turn off Wi-Fi, then start a timer for 10 minutes");
+        assert!(w.key(KeyInput::Code(13)));
+        assert!(!w.wants_keyboard());
+        assert_eq!(w.list().len(), before + 1);
+        let drafted = w.list().last().unwrap();
+        assert_eq!(drafted.actions, vec![Action::Wifi(false), Action::Timer(10)]);
+        assert_eq!(w.view, View::Editor(before), "the draft opens in the editor");
+        assert!(w.toast.as_ref().unwrap().0.starts_with("Drafted 2 steps."));
+        assert!(std::fs::read_to_string(&w.path).unwrap().contains(&drafted.name), "saved");
+    }
+
+    #[test]
+    fn a_sentence_that_names_no_step_adds_nothing_and_a_part_of_it_is_reported() {
+        let mut w = window("describe-none");
+        let before = w.list().len();
+        w.view = View::Gallery;
+        w.activate(Target::Describe);
+        type_text(&mut w, "make me a sandwich");
+        w.key(KeyInput::Code(13));
+        assert_eq!(w.list().len(), before, "nothing was guessed");
+        assert!(w.toast.as_ref().unwrap().0.starts_with("No step in that sentence"));
+        w.activate(Target::Describe);
+        type_text(&mut w, "take a screenshot and dance");
+        w.key(KeyInput::Code(13));
+        assert_eq!(w.list().len(), before + 1);
+        assert!(w.toast.as_ref().unwrap().0.contains("Left out: dance"), "{:?}", w.toast);
+    }
+
+    #[test]
+    fn an_empty_sentence_or_escape_drafts_nothing() {
+        let mut w = window("describe-empty");
+        let before = w.list().len();
+        w.view = View::Gallery;
+        w.activate(Target::Describe);
+        w.key(KeyInput::Code(13));
+        w.activate(Target::Describe);
+        type_text(&mut w, "take a screenshot");
+        w.key(KeyInput::Code(27));
+        assert_eq!(w.list().len(), before);
+    }
+
+    #[test]
+    fn only_a_droplets_tile_takes_a_drop() {
+        let mut w = window("droplet-hit");
+        let mut dropper = Shortcut::new("Convert", 0, vec![Action::ShowResult("{Output}".into())]);
+        dropper.automation = Some(springboard::shortcuts::Automation::FileDropped);
+        w.edit_list(|l| l.push(dropper));
+        let last = w.list().len() - 1;
+        let ui = ui();
+        let (x, y) = w.tile_centre(&ui, last).unwrap();
+        assert_eq!(w.droplet_at(&ui, x, y), Some(last));
+        let (px, py) = w.tile_centre(&ui, 0).unwrap();
+        assert_eq!(w.droplet_at(&ui, px, py), None, "an ordinary shortcut takes no drop");
+        w.edit_mode = true;
+        assert_eq!(w.droplet_at(&ui, x, y), None, "not while the tiles are being edited");
     }
 }

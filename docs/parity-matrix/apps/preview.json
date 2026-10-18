@@ -77,10 +77,10 @@
    "feature": "Take Screenshot (selection/window/screen)",
    "area": "menu",
    "apple": "MainMenu.nib File > Take Screenshot",
-   "status": "gap",
-   "bifrost": "",
-   "note": "The shell's screenshot tool has no app-facing service, so the menu item cannot call it yet; needs a shell service first",
-   "wire": "Call the shell screenshot service and open the result via open_path main.rs:82; File submenu"
+   "status": "partial",
+   "bifrost": "springboard/apps/preview-desktop/src/main.rs:2352",
+   "note": "File > Take Screenshot > From Selection, From Window and From Entire Screen call the shell's screenshot service (springboard/src/shell/services/screenshot.rs, SDK bifrost_app::screenshot); the captured file opens in the viewer. The file is saved to Photos, not the app's data folder. Not verified on Midget",
+   "wire": "Copy the picture into the app's data folder (the service reports the Photos path); verify the Screen permission prompt and a window pick on Midget"
   },
   {
    "feature": "Import from camera/scanner",
@@ -374,10 +374,10 @@
    "feature": "Insert page from file / blank page",
    "area": "menu",
    "apple": "MainMenu.nib Edit > Insert > Page from File, Blank Page",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Needs merging the pages of another PDF into the writer (document order and the object tree); not started",
-   "wire": "Add an Insert submenu that merges pages of another PDF into the order in document.rs and pdfmarks::write_edited"
+   "status": "partial",
+   "bifrost": "springboard/apps/preview-desktop/src/pdfmarks.rs:81 (Insertion), :91 (insertion_for); springboard/render/src/cg/pdf/writer.rs:446 (import), :466 (blank)",
+   "note": "Pages > Insert > Page from File and Blank Page. The chosen PDF's pages, or one blank page the size of the shown page, go after the shown page in a copy under the app's data folder, which is then opened. The other file's objects are renumbered and the page tree rewritten. Not yet: inserting into the open document in place (its markup is written into the copy, and Undo does not reach back past an insert), page ranges, and dragging thumbnails between windows.",
+   "wire": "Insert in place, keeping Undo and the markup sidecar: merge into the document's order instead of writing a copy; add page ranges to the file picker."
   },
   {
    "feature": "Drag pages between documents",
@@ -393,18 +393,18 @@
    "area": "integration",
    "apple": "PVFormFillingCoachingBanner.nib",
    "status": "partial",
-   "bifrost": "springboard/ui/src/acroform.rs, springboard/ui/src/pdfform.rs",
-   "note": "Audit 2026-10-13: kit models (ui/src/acroform.rs, pdfform.rs, host tests) hold form fields and values; Preview does not use them yet.",
-   "wire": "Detect fields in pdfjob.rs into an acroform::FieldSet, draw editable widgets, write values on save."
+   "bifrost": "springboard/apps/preview-desktop/src/forms.rs:49 (detect); springboard/apps/preview-desktop/src/document.rs:134 (field_edits); springboard/apps/preview-desktop/src/canvas.rs:1205 (draw_widget); springboard/render/src/cg/pdf/writer.rs:549 (set_need_appearances); kit model springboard/ui/src/acroform.rs (FieldSet)",
+   "note": "Text fields and check boxes are read on open into the kit's acroform::FieldSet, drawn over the page, typed into or toggled by a click, and saved by Save, Export PDF and Print as /V, /AS and NeedAppearances. Not yet: radio groups, choice lists, push buttons and signature fields (left in the file untouched); widget appearance streams are not regenerated, so readers redraw from NeedAppearances.",
+   "wire": "Fill radio groups (acroform select_radio), choice lists and signatures; regenerate widget appearance streams so readers that ignore NeedAppearances show the values."
   },
   {
    "feature": "Speech: start/stop speaking",
    "area": "menu",
    "apple": "MainMenu.nib Edit > Speech",
-   "status": "gap",
-   "bifrost": "",
-   "note": "The PC has no voice engine, so there is nothing to speak with (Books reads aloud by timing only)",
-   "wire": "Send page text to the speech service; Edit > Speech submenu"
+   "status": "partial",
+   "bifrost": "springboard/apps/preview-desktop/src/main.rs:2372",
+   "note": "Preview > Speech > Start Speaking speaks the selected PDF text, else the page's text (find.rs speech_text), through the speech service; Stop Speaking ends it. Pictures have no text. Needs espeak-ng on the device; not verified on Midget",
+   "wire": "Speech is in the Preview menu, not Edit (the shell's Edit menu takes no app items); the speech bubble text and word highlighting while speaking are not done"
   },
   {
    "feature": "Settings: window mode, background, default PDF view, remember page, logical page numbers, image DPI",
@@ -428,10 +428,10 @@
    "feature": "Services: open images",
    "area": "integration",
    "apple": "Info.plist NSServices",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Needs a shell service registration for the services menu; not done",
-   "wire": "Register an open-in-viewer service with the shell services menu"
+   "status": "partial",
+   "bifrost": "springboard/apps/preview-desktop/manifest.toml ([[service]] \"Open Images in Viewer\", send_types public.image and public.pdf); springboard/apps/preview-desktop/src/main.rs (rpc service.open_images opens the first picture or PDF); springboard/ui/src/app_services.rs (types, matching, request codec); springboard/src/shell/services_route.rs (app services in the App menu's Services rows)",
+   "note": "Implemented from the code, not yet built or run on the host or Midget. The Viewer opens one document, so the first picture or PDF of the selection opens. The shell's Services rows list every installed app's [[service]] whose send type the selection carries; the frontmost app's own services are listed too.",
+   "wire": "Build, run the focused tests, then check Services > Open Images in Viewer on a picture file selected in Files on Midget."
   },
   {
    "feature": "3D scene viewing",
@@ -446,9 +446,9 @@
  "summary": {
   "features": 48,
   "parity": 6,
-  "partial": 34,
-  "gap": 5,
+  "partial": 38,
+  "gap": 1,
   "n/a": 3,
-  "coverage_pct": 51.1
+  "coverage_pct": 55.6
  }
 }

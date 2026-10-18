@@ -19,8 +19,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/swiftui-app-data.json, docs/parity-matrix/data/swiftui-events-a11y-integration.json, docs/parity-matrix/data/swiftui-views-layout.json",
-   "status": "partial",
-   "note": "overlay module, owner SwiftUI; from SDK matrix swiftui-app-data.json, swiftui-events-a11y-integration.json, swiftui-views-layout.json",
+   "status": "n/a",
+   "note": "n/a: augmented-reality world tracking needs an AR session and depth or LiDAR sensing; BifrOSt has no AR session and no such sensor path (same class as the other AR rows). Previous note: overlay module, owner SwiftUI; from SDK matrix swiftui-app-data.json, swiftui-events-a11y-integration.json, swiftui-views-layout.json Built 2026-10-17: TabView selection model (ui tab_selection, tests tab_selection::tests); no view yet.",
    "rea": [],
    "method": "assessed"
   },
@@ -39,11 +39,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/avkit.json",
+   "bifrost": "springboard/src/shell/pip.rs, springboard/src/shell/pickers.rs, springboard/ui/src/pip_window.rs, springboard/ui/src/route_picker.rs, springboard/ui/src/route_picker_view.rs",
    "status": "partial",
    "note": "overlay module, owner AVKit; from SDK matrix avkit.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pip::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pickers::tests"
+    }
+   ],
+   "ready_note": "Host tests for the Picture in Picture window drawing and the route menu drawing (pip.rs, pickers.rs) over the pure PiP and route models. Not verified on Midget; no shell PiP controller or frame source yet, and the route button is not wired. Multiview, capture and Continuity remain gaps."
   },
   {
    "id": "path:/System/Library/Frameworks/_AppIntents_AppKit.framework",
@@ -60,11 +74,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/app-intents.json",
+   "bifrost": "springboard/sdk/src/intents.rs, springboard/sdk/src/intent_form.rs, springboard/ui/src/onscreen_entity.rs, springboard/ui/src/intent_resolve.rs",
    "status": "partial",
-   "note": "overlay module, owner AppIntents; from SDK matrix app-intents.json",
+   "note": "overlay module, owner AppIntents: covered by the SDK intents layer and the onscreen entity and parameter resolution models.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "intent_form::form_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "onscreen_entity::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "intent_resolve::tests"
+    }
+   ],
+   "ready_note": "The overlay's job, running intents from a window and tying views to entities, is the SDK intent layer (intents.rs run and dispatch, intent_form for a parameter editor) with the view-side models: onscreen_entity annotates views with the entity they show and intent_resolve resolves and confirms parameters before a run. All tested."
   },
   {
    "id": "path:/System/Library/Frameworks/_AppIntents_HealthKit.framework",
@@ -82,8 +120,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/app-intents.json",
-   "status": "partial",
-   "note": "overlay module, owner AppIntents; from SDK matrix app-intents.json",
+   "status": "n/a",
+   "note": "Overlay for HealthKit, an Apple health-record framework (n/a in the SDK matrix). BifrOSt has no health data store, so the App Intents health layer has no counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -102,11 +140,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/app-intents.json",
+   "bifrost": "springboard/sdk/src/intents.rs, springboard/sdk/src/intent_form.rs, springboard/ui/src/onscreen_entity.rs, springboard/ui/src/intent_resolve.rs",
    "status": "partial",
-   "note": "overlay module, owner AppIntents; from SDK matrix app-intents.json",
+   "note": "overlay module, owner AppIntents: covered by the SDK intents layer and the onscreen entity and parameter resolution models.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "intent_form::form_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "onscreen_entity::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "intent_resolve::tests"
+    }
+   ],
+   "ready_note": "Same job as the AppKit overlay for declarative views: running an intent from a control, annotating a view with its entity, resolving parameters before a run. Covered by the SDK intents layer and the ui onscreen_entity and intent_resolve models, all tested."
   },
   {
    "id": "path:/System/Library/Frameworks/_CompositorServices_SwiftUI.framework",
@@ -124,8 +186,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/swiftui-app-data.json, docs/parity-matrix/data/swiftui-events-a11y-integration.json, docs/parity-matrix/data/swiftui-views-layout.json",
-   "status": "partial",
-   "note": "overlay module, owner SwiftUI; from SDK matrix swiftui-app-data.json, swiftui-events-a11y-integration.json, swiftui-views-layout.json",
+   "status": "n/a",
+   "note": "Overlay for the visionOS compositor (spatial rendering). BifrOSt runs on flat displays only, so there is no counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -144,11 +206,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/contacts.json",
+   "bifrost": "springboard/sdk/src/contacts_intents.rs, springboard/sdk/src/contacts.rs",
    "status": "partial",
-   "note": "overlay module, owner Contacts; from SDK matrix contacts.json",
+   "note": "overlay module, owner Contacts: contact entities and the Find Contacts intent (sdk contacts_intents.rs).",
    "rea": [],
-   "method": "assessed"
+   "method": "built",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "contacts_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "contacts::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: contacts as App Intents values. sdk contacts_intents turns a contact record into an Entity (id, display name, first email or phone or organization as subtitle), answers suggested, id and string entity queries over the records the app may see, and declares the Find Contacts intent. Access still follows the person's contacts choice because the records come from contacts::fetch."
   },
   {
    "id": "path:/System/Library/Frameworks/_CoreData_CloudKit.framework",
@@ -166,8 +242,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/core-data.json",
-   "status": "partial",
-   "note": "overlay module, owner CoreData; from SDK matrix core-data.json",
+   "status": "n/a",
+   "note": "n/a: CloudKit mirroring and sharing are Apple iCloud services. The BifrOSt account sync is a bifrost-cloud service that keeps counters, not a mirror of the local store (core-data.json, iCloud section). Previous note: overlay module, owner CoreData; from SDK matrix core-data.json",
    "rea": [],
    "method": "assessed"
   },
@@ -186,11 +262,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/core-spotlight.json",
+   "bifrost": "springboard/sdk/src/quicksearch.rs, springboard/sdk/src/search_ranking.rs, springboard/sdk/src/search_index_batch.rs, springboard/ui/src/searchstore.rs, springboard/ui/src/searchindex.rs, springboard/src/shell/spotindex.rs, springboard/src/shell/services/search_ranking.rs, springboard/src/shell/apphost.rs, springboard/proto/src/quicksearch.rs, springboard/apps/notes-desktop/src/main.rs",
    "status": "partial",
    "note": "overlay module, owner CoreSpotlight; from SDK matrix core-spotlight.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "quicksearch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "search_ranking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchstore::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::search_ranking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-proto",
+     "filter": "quicksearch::tests"
+    }
+   ],
+   "ready_note": "Core Search in the shell: the default and named indexes per app (with protection classes, saved and reloaded), item expiry, deletes by identifier, domain or all, the app-side query (CSSearchQuery) and named-index queries, acknowledged index batches, and reindex requests to index extensions (Notes answers them). Host tests only; verify on Midget."
   },
   {
    "id": "path:/System/Library/Frameworks/_DeviceActivity_SwiftUI.framework",
@@ -207,11 +322,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/swiftui-app-data.json, docs/parity-matrix/data/swiftui-events-a11y-integration.json, docs/parity-matrix/data/swiftui-views-layout.json",
+   "bifrost": "springboard/sdk/src/device_activity.rs, springboard/sdk/src/screen_usage.rs, springboard/ui/src/os_services/usage_record.rs",
    "status": "partial",
-   "note": "overlay module, owner SwiftUI; from SDK matrix swiftui-app-data.json, swiftui-events-a11y-integration.json, swiftui-views-layout.json",
+   "note": "overlay module, owner DeviceActivity: usage report model over the per-day usage files, own-app scope private (sdk device_activity.rs).",
    "rea": [],
-   "method": "assessed"
+   "method": "built",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "device_activity::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_usage::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: the report a device activity report view draws. sdk device_activity builds total time, ranked apps, pickups, notifications, the hourly split and per-day totals from the per-day usage files, with an own-app scope that hides everything about other apps, pickups and hours (privacy), and row text for a list view. A drawn report view in the kit is not built."
   },
   {
    "id": "path:/System/Library/Frameworks/_FinanceKit_AppIntents.framework",
@@ -229,8 +358,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/app-intents.json",
-   "status": "partial",
-   "note": "overlay module, owner AppIntents; from SDK matrix app-intents.json",
+   "status": "n/a",
+   "note": "Overlay for FinanceKit, which reads Apple Wallet and bank data from Apple financial services. BifrOSt has no financial data source, so there is no counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -249,11 +378,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/foundation-models.json",
+   "bifrost": "springboard/sdk/src/language_model_stream.rs, springboard/sdk/src/language_model.rs, springboard/ui/src/model_session.rs",
    "status": "partial",
-   "note": "overlay module, owner FoundationModels; from SDK matrix foundation-models.json",
+   "note": "overlay module, owner FoundationModels: streamed answer state and availability text for a view (sdk language_model_stream.rs).",
    "rea": [],
-   "method": "assessed"
+   "method": "built",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "language_model_stream::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "language_model::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "model_session::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: what a window needs to show a model session. sdk language_model_stream adds streamed turns (run_turn_streamed with a stop that records nothing, a StreamedResponse view state) and the availability sentence for a view; the session, profile and availability types are in language_model and ui model_session. Still no on-device model runtime, generation options or constrained decoding: those belong to the FoundationModels row, not the overlay."
   },
   {
    "id": "path:/System/Library/Frameworks/_FoundationModels_SwiftUI.framework",
@@ -270,11 +418,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/foundation-models.json",
+   "bifrost": "springboard/sdk/src/language_model_stream.rs, springboard/sdk/src/language_model.rs, springboard/ui/src/model_session.rs",
    "status": "partial",
-   "note": "overlay module, owner FoundationModels; from SDK matrix foundation-models.json",
+   "note": "overlay module, owner FoundationModels: streamed answer state and availability text for a view (sdk language_model_stream.rs).",
    "rea": [],
-   "method": "assessed"
+   "method": "built",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "language_model_stream::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "language_model::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "model_session::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: what a declarative view binds to for a model session: streamed text so far with a progress flag (StreamedResponse), a way to stop a turn without a half answer in the history, and the availability sentence. Model runtime gaps stay on the FoundationModels row."
   },
   {
    "id": "path:/System/Library/Frameworks/_GeoToolbox_AppIntents.framework",
@@ -333,9 +500,48 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/siri-kit.json",
+   "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
    "status": "partial",
    "note": "overlay module, owner Intents; from SDK matrix siri-kit.json",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_panel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::speech::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "automation::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "widget::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-reminders",
+     "filter": "actions_tests"
+    }
+   ],
+   "ready_note": "Apps declare [[intent]] tables in manifest.toml and serve them on their control socket. Search and the Shortcuts action library list and run an installed app's shortcut intents (shell::intents::runnable_shortcuts). The assistant answers with intent cards that run only after the user confirms them, and reads answers aloud when Speak Answers is on. Voice recognition is not built: nothing turns speech into an intent request, so Siri's spoken requests are not covered.",
    "rea": [],
    "method": "assessed"
   },
@@ -354,11 +560,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/link-presentation.json",
+   "bifrost": "springboard/sdk/src/link_intents.rs, springboard/sdk/src/link_metadata.rs",
    "status": "partial",
-   "note": "overlay module, owner LinkPresentation; from SDK matrix link-presentation.json",
+   "note": "overlay module, owner LinkPresentation: link entity, value and snippet for intents (sdk link_intents.rs).",
    "rea": [],
-   "method": "assessed"
+   "method": "built",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "link_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "link_metadata::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: links as App Intents values. sdk link_intents turns link metadata into an Entity (checked web address as id, page title or host as title), a JSON value an intent returns, a result snippet, and reads a link value back with the address and picture addresses checked as web addresses; the fetch and parse are link_metadata."
   },
   {
    "id": "path:/System/Library/Frameworks/_LocalAuthentication_SwiftUI.framework",
@@ -375,11 +595,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/local-authentication.json",
+   "bifrost": "springboard/src/shell/auth_sheet.rs, springboard/src/shell/services/local_auth.rs",
    "status": "partial",
-   "note": "overlay module, owner LocalAuthentication; from SDK matrix local-authentication.json",
+   "note": "overlay module, owner LocalAuthentication; from SDK matrix local-authentication.json Built 2026-10-17: the policy check is decided by the biometry model and device_state reports biometry none (SDK LAContext.biometry_type). Open: the authentication sheet is not drawn and biometry stays absent.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::auth_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::local_auth::tests"
+    }
+   ],
+   "ready_note": "The authentication prompt the overlay stands for: the shell's password sheet (reason, secure field, three tries) for an app's evaluate call."
   },
   {
    "id": "path:/System/Library/Frameworks/_LocationEssentials.framework",
@@ -399,6 +633,15 @@
    "bifrost": "springboard/sdk/src/core_location.rs (LocationManager, Coordinate)",
    "status": "partial",
    "note": "The SDK location manager and coordinate model cover the public location surface. Gap: the private location-essentials service has no BifrOSt counterpart.",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "core_location::tests"
+    }
+   ],
+   "ready_note": "The public location surface (LocationManager authorization, start/stop updates, one-shot request, Coordinate and distance model) is in springboard/sdk/src/core_location.rs and covered by its unit tests. The private location-essentials service itself is not provided.",
    "rea": [],
    "method": "heuristic"
   },
@@ -438,11 +681,45 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/mapkit.json",
+   "bifrost": "springboard/sdk/src/view/map_widget.rs, springboard/sdk/src/maps.rs, springboard/ui/src/mapview.rs, springboard/ui/src/map_item.rs, springboard/ui/src/map_snapshot.rs, springboard/ui/src/map_geojson.rs",
    "status": "partial",
-   "note": "overlay module, owner MapKit; from SDK matrix mapkit.json",
+   "note": "overlay module, owner MapKit; from SDK matrix mapkit.json. Built earlier: GeoJSON to map items (ui map_geojson, tests map_geojson::tests). Built 2026-10-17: MapWidget view that draws the Maps app tiles with pins, drag and key zoom (sdk view map_widget, tests view::map_widget::tests). Overlays (lines, polygons) are not drawn by the view yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "view::map_widget::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "maps::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "mapview::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "map_item::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "map_snapshot::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "map_geojson::tests"
+    }
+   ],
+   "ready_note": "The SwiftUI Map content is the MapWidget view (sdk view/map_widget.rs): it shows the Maps app's own tiles around a MapView camera, draws annotation pins, pans by drag and zooms by key, over the camera, item and snapshot models. Host tests cover the picture conversion, refresh tracking, drag, zoom and pin placement. Not verified on Midget; the app calls refresh from its tick (drawing never waits for the network), and overlays (polylines, polygons) and map controls are not drawn by the view yet."
   },
   {
    "id": "path:/System/Library/Frameworks/_MediaIntents_AppIntents.framework",
@@ -459,11 +736,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/media-intents.json",
+   "bifrost": "springboard/ui/src/media_search.rs, springboard/ui/src/media_request.rs, springboard/src/shell/media_intents.rs, springboard/src/shell/intents.rs, springboard/sdk/src/intents.rs",
    "status": "partial",
-   "note": "overlay module, owner MediaIntents; from SDK matrix media-intents.json",
+   "note": "overlay module, owner MediaIntents; from SDK matrix media-intents.json Built 2026-10-17: AudioSearch filter fields and resolve() with disambiguation (ui media_search, tests media_search::tests); no system delivery of requests yet. Built 2026-10-17: requestConfirmation check for a loose text match (ui media_search, tests media_search::tests); system delivery of requests is still missing.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "media_search::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "media_request::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::media_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "intents::tests"
+    }
+   ],
+   "ready_note": "Media intents are the AudioSearch filter fields, resolve() with disambiguation and the confirmation check (ui media_search, media_request), the transport intents Search lists and runs (shell media_intents, intents) and the App Intents runtime (sdk intents). Host tests only; no voice assistant delivers requests, so requests arrive from Search, the control socket and the Control Center."
   },
   {
    "id": "path:/System/Library/Frameworks/_MediaPlayer_AppIntents.framework",
@@ -480,11 +786,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/media-player.json",
+   "bifrost": "springboard/src/shell/music/nowplaying.rs, springboard/src/shell/music/system.rs, springboard/src/shell/music/icons.rs, springboard/src/shell/audiosvc.rs, springboard/src/shell/pickers.rs, springboard/ui/src/media_picker.rs, springboard/ui/src/media_feedback.rs",
    "status": "partial",
    "note": "overlay module, owner MediaPlayer; from SDK matrix media-player.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::music::nowplaying::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::music::system::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pickers::tests"
+    }
+   ],
+   "ready_note": "Host tests for the lock-card like, dislike, bookmark and rating controls (sent to the owner through set_toggle and set_rating) and the media picker drawing. Not verified on Midget. App-facing library queries, remote command handlers and a picker sheet remain gaps."
   },
   {
    "id": "path:/System/Library/Frameworks/_MusicKit_SwiftUI.framework",
@@ -522,11 +847,45 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/now-playing.json",
+   "bifrost": "springboard/sdk/src/now_playing.rs, springboard/ui/src/media_session.rs, springboard/ui/src/media_feedback.rs, springboard/src/shell/services/now_playing.rs, springboard/src/shell/media_intents.rs, springboard/src/shell/now_playing_menu.rs",
    "status": "partial",
-   "note": "overlay module, owner NowPlaying; from SDK matrix now-playing.json",
+   "note": "overlay module, owner NowPlaying; from SDK matrix now-playing.json Refreshed 2026-10-17: not ready, remaining: No app-facing local media session: an app cannot publish its own metadata, state and commands to the lock screen or Control Center (MediaSession, MediaSessionRepresentable). | No typed content model: the service track has no title, artist, kind, or artwork, so the lock card cannot show metadata from apps other than Music. | No artwork transport or animated artwork through the audio service. | No remote media sessions across devices, no remote session extension and no device list; the Bluetooth route is only shown as a name. | Shuffle and repeat are stored in the service but are not offered on the lock card or Control Center.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "now_playing::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "media_session::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "media_feedback::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::now_playing::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::media_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::now_playing_menu::tests"
+    }
+   ],
+   "ready_note": "Intents that control the Now Playing session: an app publishes and clears its session and receives remote commands (sdk now_playing, ui media_session, media_feedback), the shell keeps the card and menu (services now_playing, now_playing_menu) and exposes play or pause, next and previous as App Intents (media_intents). Host tests only; remote media sessions on other devices are not modelled in the shell."
   },
   {
    "id": "path:/System/Library/Frameworks/_PassKit_SwiftUI.framework",
@@ -564,11 +923,45 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/permission_question.rs; springboard/src/shell/permission_sheet.rs; springboard/sdk/src/permission_kit.rs",
+   "bifrost": "springboard/core/src/permission_request.rs, springboard/ui/src/permission_question.rs, springboard/sdk/src/permission_kit.rs, springboard/src/shell/permission_sheet.rs, springboard/src/shell/guardian_sheet.rs, springboard/src/shell/services/permission_kit.rs",
    "status": "partial",
-   "note": "The permission-request sheet is built on the models in permission_question.rs, shown by permission_sheet.rs. Parent approval of app updates and an app-facing request API are not built.",
+   "note": "Significant app-update questions are built end to end: the app's ask and responses calls (sdk permission_kit, service shell/services/permission_kit), the question model and AskCenter (ui permission_question), and the guardian's sheet (shell guardian_sheet). Communication questions are not carried. The privacy permission sheet is in permission_sheet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "permission_request::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "permission_question::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "permission_kit::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::permission_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::guardian_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::permission_kit::tests"
+    }
+   ],
+   "ready_note": "Covers the significant-app-update question path (ask, queue, expiry, answer read-back, guardian sheet) and the privacy permission sheet. Communication questions are a separate gap in the SDK matrix."
   },
   {
    "id": "path:/System/Library/Frameworks/_PermissionKit_SwiftUI.framework",
@@ -585,11 +978,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/permission_question.rs; springboard/src/shell/permission_sheet.rs",
+   "bifrost": "springboard/ui/src/permission_question.rs, springboard/sdk/src/permission_kit.rs, springboard/src/shell/permission_sheet.rs, springboard/src/shell/services/permission_kit.rs, springboard/core/src/permission_request.rs",
    "status": "partial",
-   "note": "The SwiftUI side has no separate code; the same question and answer models in permission_question.rs back the sheet. No SwiftUI permission view is built.",
+   "note": "The SwiftUI side has no separate code: the system draws the permission sheet, and the same question and answer models in permission_question.rs back it, so there is no view type to build.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "permission_question::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "permission_kit::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::permission_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::permission_kit::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "permission_request::tests"
+    }
+   ],
+   "ready_note": "The question and answer models (ui permission_question: AskCenter, PermissionQuestion, PermissionButton, responses) back the SDK ask call (sdk permission_kit), the shell service that carries it and the guardian sheet the person answers (permission_sheet). The SwiftUI side is the same models; there is no separate view type because the system draws the sheet. Communication topics are not carried."
   },
   {
    "id": "path:/System/Library/Frameworks/_PhotosUI_SwiftUI.framework",
@@ -606,11 +1028,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/permission_question.rs; springboard/src/shell/permission_sheet.rs",
+   "bifrost": "springboard/src/shell/photo_pick_sheet.rs; springboard/src/shell/photo_pick.rs; springboard/src/shell/services/photos.rs; springboard/sdk/src/photo_picker.rs; springboard/ui/src/permission_question.rs; springboard/src/shell/permission_sheet.rs",
    "status": "partial",
-   "note": "The SwiftUI side has no separate code; the same question and answer models in permission_question.rs back the sheet. No SwiftUI permission view is built.",
+   "note": "Built 2026-10-17: the PhotosPicker sheet. The photos service picker call opens the shell's picker sheet (shell photo_pick_sheet, model photo_pick): a grid of the library's thumbnails (the Photos app's thumbnail cache), All, Photos and Videos tabs when the app allows more than one kind, the app's selection limit (0 none, default 1 replaces the choice), Add and Cancel, drag to scroll. The call answers pending at once and the choice reaches the app as the picker_did_finish event, with read access to exactly the chosen assets and no photos permission. Open: no keyboard control in the sheet, no search or album sidebar, Live Photos and movies show a still and do not play, the SwiftUI PhotosPickerItem transfer types (data, URL) are not modelled (the app reads the picked file through image), and a pick does not survive a shell restart.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photo_pick::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photo_pick_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::photos::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "photo_picker::tests"
+    }
+   ],
+   "ready_note": "The picker works end to end: the service call starts a pick, the sheet shows the library with the app's filters and selection limit, a tap chooses, Add returns only the chosen identifiers as picker_did_finish and grants the app those assets (tests photo_pick, photo_pick_sheet, services::photos, photo_picker). Keyboard control, search and Live Photo playback are not in the sheet."
   },
   {
    "id": "path:/System/Library/Frameworks/_PhotosUI_WidgetKit.framework",
@@ -627,11 +1073,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/photokit.json",
+   "bifrost": "springboard/src/shell/widgets/photos.rs; springboard/src/shell/today.rs; springboard/src/shell/photo_pick_sheet.rs; springboard/src/shell/photo_pick.rs; docs/parity-matrix/data/photokit.json",
    "status": "partial",
-   "note": "overlay module, owner PhotosUI; from SDK matrix photokit.json",
+   "note": "Built 2026-10-17: the Today View's Photos widget reads a chosen picture. A tap on the widget opens the picker sheet (one picture, pictures only) and the choice pins the widget to that picture's thumbnail (today pin_photo, saved as photos.pin in today.ini; it falls back to the minute rotation when the thumbnail is gone). Open: the widget cannot be unpinned except by editing today.ini, and there is no multi-picture, album or Memories widget family; the app widget runtime (sdk widgets.rs) has no photo kind for third-party widgets, so a third-party widget configuration cannot pick an asset yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::widgets::photos::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::today::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photo_pick_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photo_pick::tests"
+    }
+   ],
+   "ready_note": "Configuring the shell's Photos widget with the picker is wired: tap, choose, the widget shows the chosen picture and keeps it across restarts (tests widgets::photos, today, photo_pick_sheet, photo_pick). Third-party photo widgets and unpinning are open."
   },
   {
    "id": "path:/System/Library/Frameworks/_Photos_AppIntents.framework",
@@ -648,11 +1118,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/photokit.json",
+   "bifrost": "springboard/sdk/src/photo_intents.rs, springboard/sdk/src/photo_library.rs, springboard/ui/src/photo_smart_albums.rs",
    "status": "partial",
-   "note": "overlay module, owner Photos; from SDK matrix photokit.json",
+   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps. Built 2026-10-17: PhotoAsset and PhotoAlbum entities and open, open-album and favourite intents (sdk photo_intents, tests photo_intents::tests).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "photo_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "photo_library::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "photo_smart_albums::tests"
+    }
+   ],
+   "ready_note": "Photo App Intents are the PhotoAsset and PhotoAlbum entities and the open-photo, open-album and set-photo-favourite intents (sdk photo_intents) over the library asset records and the smart albums. Host tests cover entity building, album queries and parameter validation; the Photos app has not adopted the intents in its manifest yet."
   },
   {
    "id": "path:/System/Library/Frameworks/_QuickLook_SwiftUI.framework",
@@ -669,11 +1158,55 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/quick-look.json",
+   "bifrost": "springboard/sdk/src/peek.rs, springboard/proto/src/peek.rs, springboard/src/shell/preview_panel.rs, springboard/src/shell/preview_gen.rs, springboard/src/shell/services/quick_look.rs, springboard/src/shell/services/thumbnails.rs, springboard/ui/src/preview_manifest.rs, springboard/ui/src/preview_view.rs, springboard/src/files/preview.rs, springboard/apps/files/src/peek.rs, springboard/src/thumbs/pdf.rs, springboard/src/thumbs/media.rs, springboard/src/thumbs/mod.rs",
    "status": "partial",
    "note": "overlay module, owner QuickLook; from SDK matrix quick-look.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "peek::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "preview_manifest::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "preview_view::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::preview_gen::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::preview_panel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::thumbnails::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "thumbs::pdf::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "thumbs::media::poster_tests"
+    }
+   ],
+   "ready_note": "The Quick Look main job is covered by the preview panel, file previews, app preview generators (the [[preview]] manifest block, called over the control socket) and thumbnails. Host-tested only; the Midget check is still open (see docs/parity-matrix/data/quick-look.json)."
   },
   {
    "id": "path:/System/Library/Frameworks/_RealityKit_ComputeGraph.framework",
@@ -732,11 +1265,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/scenekit.json",
+   "bifrost": "springboard/sdk/src/view/scene_widget.rs, docs/parity-matrix/data/scenekit.json",
    "status": "partial",
-   "note": "overlay module, owner SceneKit; from SDK matrix scenekit.json",
+   "note": "SceneView is the SceneWidget view in the SDK: a scene3d Scene rendered by the CPU rasteriser into the app window, with orbit by drag, zoom and a click that picks.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "view::scene_widget::tests"
+    }
+   ],
+   "ready_note": "A SceneWidget view in the SDK (bifrost_app::view::SceneWidget) renders a scene3d Scene through its camera into the app window with the CPU triangle rasteriser (raster3d: flat shading and a depth buffer; drawables tie scene nodes to primitives3d geometry and materials), redrawing only when something changed. Dragging orbits the camera, scroll() and the + and - keys zoom, and a click picks the nearest drawable by bounding sphere through SceneView and sends an action. Host tests only. Not covered: GPU rendering, per-triangle picking, clipping of triangles that cross the near plane (they are dropped), textures, a wheel event (the SDK delivers none to views yet, so scroll() is for the app to call) and importing a scene file into drawables."
   },
   {
    "id": "path:/System/Library/Frameworks/_ScreenCaptureKit_SwiftUI.framework",
@@ -753,11 +1295,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/capture_picker.rs",
+   "bifrost": "springboard/ui/src/capture_picker.rs, springboard/ui/src/capture_access.rs, springboard/ui/src/capture_config.rs, springboard/ui/src/capture_content.rs, springboard/ui/src/capture_filter.rs",
    "status": "partial",
    "note": "The content-sharing picker model is in capture_picker.rs. The SwiftUI picker view is not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "capture_picker::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "capture_access::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "capture_config::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "capture_content::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "capture_filter::tests"
+    }
+   ],
+   "ready_note": "The content-sharing picker's modes, configuration and observer results (ui capture_picker), the permission gate (capture_access), shareable content, stream configuration and content filters. The picker itself is a system surface in the reference, so the SwiftUI overlay adds no view type of its own; here it is the same model. Host tests only; the shell does not draw the picker window yet."
   },
   {
    "id": "path:/System/Library/Frameworks/_SharedWithYou_AppIntents.framework",
@@ -774,9 +1345,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/capture_picker.rs",
-   "status": "partial",
-   "note": "The content-sharing picker model is in capture_picker.rs. The SwiftUI picker view is not built.",
+   "bifrost": "docs/parity-matrix/data/shared-with-you.json",
+   "status": "n/a",
+   "note": "n/a: Shared with You surfaces links and files people received in Messages, Mail and FaceTime, and this overlay adds App Intents entities for those received items. BifrOSt has no Messages, Mail or FaceTime and no Apple-only message transport, so there is nothing to surface. Evidence: the reference holds only a Metadata.appintents bundle under _SharedWithYou_AppIntents.framework and the SharedWithYou accessibility bundle; the owner framework is n/a in docs/parity-matrix/data/shared-with-you.json. Generic sharing is covered by the share sheet (sdk share.rs).",
    "rea": [],
    "method": "assessed"
   },
@@ -837,11 +1408,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/spritekit.json",
+   "bifrost": "springboard/sdk/src/view/sprite_widget.rs, springboard/ui/src/sk_node.rs, docs/parity-matrix/data/spritekit.json",
    "status": "partial",
-   "note": "overlay module, owner SpriteKit; from SDK matrix spritekit.json",
+   "note": "SpriteView is the SpriteWidget view in the SDK: a node tree drawn every frame by its scene loop, with scale modes, node actions and click picking.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "view::sprite_widget::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "sk_node::tests"
+    }
+   ],
+   "ready_note": "A SpriteWidget view in the SDK (bifrost_app::view::SpriteWidget) hosts a sk_node NodeTree with its scene2d scaling (the four scale modes and the anchor) and its scene_loop clock, and draws rectangles, circles, labels and registered images every frame; the tree reports rotated boxes through NodeTree::draw_quads. The view runs node actions and hands every frame phase to the app's on_step closure, pauses with the loop, and a click picks the topmost node by its own shape and sends an action. Host tests only. Not covered: shader nodes, rotated labels (a label is drawn upright), the physics world (the app steps it in on_step), colours stored in the model (the view keeps one per node) and archived scene files."
   },
   {
    "id": "path:/System/Library/Frameworks/_StoreKit_SwiftUI.framework",
@@ -859,8 +1444,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/storekit.json",
-   "status": "partial",
-   "note": "overlay module, owner StoreKit; from SDK matrix storekit.json",
+   "status": "n/a",
+   "note": "n/a: the StoreKit SwiftUI store views present products, subscriptions and receipts from Apple's App Store. BifrOSt sells apps through its own PC App Store service, which is tracked on the StoreKit SDK side (storekit.json), not by this view. Previous note: overlay module, owner StoreKit; from SDK matrix storekit.json",
    "rea": [],
    "method": "assessed"
   },
@@ -879,11 +1464,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/swiftdata.json",
+   "bifrost": "springboard/ui/src/managed_context.rs, springboard/ui/src/model_store.rs, springboard/ui/src/model_schema.rs, springboard/ui/src/data_store.rs, springboard/ui/src/history.rs",
    "status": "partial",
-   "note": "overlay module, owner SwiftData; from SDK matrix swiftdata.json",
+   "note": "overlay module, owner SwiftData; from SDK matrix swiftdata.json Built 2026-10-17: change history with transaction tokens (ui managed_context, tests managed_context::tests) and live FetchedResults that report a changed row set; still no model layer or data store.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "managed_context::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "model_store::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "model_schema::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "data_store::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "history::tests"
+    }
+   ],
+   "ready_note": "The bridge between the model layer and the managed-object layer is the shared store: model schema and store (ui model_schema, model_store), the managed context with change history and transaction tokens and live fetched results (managed_context), and the data store and history. Host tests only; apps keep their own file stores today and none has moved onto the model store."
   },
   {
    "id": "path:/System/Library/Frameworks/_SwiftData_SwiftUI.framework",
@@ -900,11 +1514,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/swiftdata.json",
+   "bifrost": "springboard/ui/src/observe.rs, springboard/ui/src/managed_context.rs, springboard/ui/src/model_store.rs, springboard/sdk/src/observable.rs",
    "status": "partial",
-   "note": "overlay module, owner SwiftData; from SDK matrix swiftdata.json",
+   "note": "overlay module, owner SwiftData; from SDK matrix swiftdata.json Built 2026-10-17: change history with transaction tokens (ui managed_context, tests managed_context::tests) and live FetchedResults that report a changed row set; still no model layer or data store.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "observe::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "managed_context::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "model_store::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "observable::tests"
+    }
+   ],
+   "ready_note": "The SwiftUI side of the model layer is observation: live fetched results that report a changed row set (ui managed_context), observation of model changes (ui observe) and the observable property wrapper in the SDK (sdk observable). Host tests only; the declarative views take their data from these through the app's own update loop."
   },
   {
    "id": "path:/System/Library/Frameworks/_Translation_SwiftUI.framework",
@@ -921,11 +1559,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/translation.json",
+   "bifrost": "springboard/sdk/src/translation_popover.rs, springboard/sdk/src/translation.rs, springboard/ui/src/translation.rs",
    "status": "partial",
-   "note": "overlay module, owner Translation; from SDK matrix translation.json",
+   "note": "overlay module, owner Translation; from SDK matrix translation.json Built 2026-10-17: on-device language packs (sdk translation LanguagePack, tests translation::tests); no neural engine is in the Arch repositories, the popover is still not wired.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "translation_popover::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "translation::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "translation::tests"
+    }
+   ],
+   "ready_note": "The translation presentation (popover model, language-pair check, result and replacement) and the session and availability types over the installed language packs. Host tests only; there is no neural engine in the Arch repositories, so translation uses phrase tables, and the shell does not draw the popover yet."
   },
   {
    "id": "path:/System/Library/Frameworks/_USDKit_RealityKit.framework",
@@ -963,11 +1620,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/user-notifications.json",
+   "bifrost": "springboard/sdk/src/usernotif.rs, springboard/sdk/src/usernotif_model.rs, springboard/sdk/src/notification_schedule.rs, springboard/src/shell/usernotif.rs, springboard/src/shell/services/notification_schedule.rs",
    "status": "partial",
    "note": "overlay module, owner UserNotifications; from SDK matrix user-notifications.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "usernotif::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "usernotif_model::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "notification_schedule::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::usernotif::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::notification_schedule::tests"
+    }
+   ],
+   "ready_note": "Notification actions that run an intent: the SDK notification content, categories and actions (sdk usernotif, usernotif_model), scheduling (notification_schedule) and the shell service that posts and routes the response (shell usernotif, services notification_schedule). Host tests only."
   },
   {
    "id": "path:/System/Library/Frameworks/_Vision_FoundationModels.framework",
@@ -984,11 +1670,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/foundation-models.json",
+   "bifrost": "springboard/ui/src/model_attachment.rs, springboard/ui/src/model_session.rs, springboard/ui/src/detect.rs, springboard/ui/src/generation_schema.rs",
    "status": "partial",
-   "note": "overlay module, owner FoundationModels; from SDK matrix foundation-models.json",
+   "note": "overlay module, owner FoundationModels; from SDK matrix foundation-models.json Refreshed 2026-10-17: Remaining: no on-device model runtime, no session generation options or streamed output, no constrained decoding, no model-invoked App Intents.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "model_attachment::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "model_session::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "detect::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "generation_schema::tests"
+    }
+   ],
+   "ready_note": "Image input for model sessions: the attachment model with size and kind checks (ui model_attachment), the session that carries it (model_session), the image detectors that feed Vision-style results to a prompt (detect) and the typed generation schema. Host tests only; there is no on-device model runtime, so a session needs a provider (model_provider) to answer."
   },
   {
    "id": "path:/System/Library/Frameworks/_WorkoutKit_SwiftUI.framework",
@@ -1006,8 +1716,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/swiftui-app-data.json, docs/parity-matrix/data/swiftui-events-a11y-integration.json, docs/parity-matrix/data/swiftui-views-layout.json",
-   "status": "partial",
-   "note": "overlay module, owner SwiftUI; from SDK matrix swiftui-app-data.json, swiftui-events-a11y-integration.json, swiftui-views-layout.json",
+   "status": "n/a",
+   "note": "n/a: workout sessions and plans are Apple Watch and Health service features; BifrOSt has no workout service. Previous note: overlay module, owner SwiftUI; from SDK matrix swiftui-app-data.json, swiftui-events-a11y-integration.json, swiftui-views-layout.json Built 2026-10-17: TabView selection model (ui tab_selection, tests tab_selection::tests); no view yet.",
    "rea": [],
    "method": "assessed"
   },
@@ -1026,11 +1736,65 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/app-intents.json",
+   "bifrost": "springboard/src/shell/intents.rs, springboard/src/shell/quicksearch.rs, springboard/src/shell/settings_intents.rs, springboard/src/shell/entity_index.rs, springboard/src/shell/services/focus_filter.rs, springboard/src/shell/apphost.rs, springboard/assistant-client/src/intents.rs, springboard/sdk/src/intents.rs",
    "status": "partial",
    "note": "private framework, owner AppIntents; from SDK matrix app-intents.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::entity_index::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::apphost::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::focus_filter::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_panel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-assistant-client",
+     "filter": "intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "intents::tests"
+    }
+   ],
+   "ready_note": "Apps declare intents in manifest.toml; Search lists and runs them (Shortcuts section, Settings intents, indexed entities), the assistant asks for missing values and disambiguates, Control Center runs [[control]] intents, and Focus changes call [[focus_filter]] intents. Covered by the tests listed in checks. Search parameter prompts, widgets and schema domains are not built."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/_AppIntentsServices_ToolKit.framework",
@@ -1048,8 +1812,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/app-intents.json",
-   "status": "partial",
-   "note": "private framework, owner AppIntents; from SDK matrix app-intents.json",
+   "status": "n/a",
+   "note": "n/a: the intents of an Apple-internal app, not a public framework contract; the App Intents framework itself is in app-intents.json. Previous note: private framework, owner AppIntents; from SDK matrix app-intents.json The App Intents framework layer is ready (see the AppIntents row); this Apple app's own intents are not ported.",
    "rea": [],
    "method": "assessed"
   },
@@ -1069,8 +1833,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "The extract holds only Info.plist for this bundle (an app analytics overlay by name), with no binary or resources, so its function is unconfirmed beyond the name. Left with the OS until the binary is extracted.",
+   "status": "n/a",
+   "note": "App analytics overlay for Apple telemetry. Apple analytics pipeline with no BifrOSt counterpart; the reference holds only Info.plist.",
    "rea": [],
    "method": "assessed"
   },
@@ -1153,8 +1917,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/app-intents.json",
-   "status": "partial",
-   "note": "private framework, owner AppIntents; from SDK matrix app-intents.json",
+   "status": "n/a",
+   "note": "n/a: the intents of an Apple-internal app, not a public framework contract; the App Intents framework itself is in app-intents.json. Previous note: private framework, owner AppIntents; from SDK matrix app-intents.json The App Intents framework layer is ready (see the AppIntents row); this Apple app's own intents are not ported.",
    "rea": [],
    "method": "assessed"
   },
@@ -1174,8 +1938,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/app-intents.json",
-   "status": "partial",
-   "note": "private framework, owner AppIntents; from SDK matrix app-intents.json",
+   "status": "n/a",
+   "note": "n/a: the intents of an Apple-internal app, not a public framework contract; BifrOSt ships no Apple-style on-device model (language_model.rs reports unavailable). Previous note: private framework, owner AppIntents; from SDK matrix app-intents.json The App Intents framework layer is ready (see the AppIntents row); this Apple app's own intents are not ported.",
    "rea": [],
    "method": "assessed"
   },
@@ -1216,8 +1980,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/weather/data.rs; springboard/src/shell/photos/exif.rs",
-   "status": "partial",
-   "note": "Place geocoding for the Weather app is in weather/data.rs, and GPS fields are read from photos in exif.rs. BifrOSt has no device position source, location permission or geofencing.",
+   "status": "n/a",
+   "note": "Overlay for GeoToolbox, an Apple hosted geo data service (n/a in the SDK matrix). The Weather place lookup in springboard/src/shell/weather/data.rs is a separate feature and does not use that service.",
    "rea": [],
    "method": "assessed"
   },
@@ -1236,11 +2000,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/icon_images.rs; springboard/sdk/src/thumbnails.rs; springboard/src/shell/services/thumb_providers.rs",
    "status": "os",
    "note": "The extract holds only a placeholder text file for the SwiftUI overlay build target and no binary, so the icon service's job is unconfirmed. Left with the OS.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "icon_images::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "thumbnails::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::thumb_providers::tests"
+    }
+   ],
+   "ready_note": "The SwiftUI overlay only adapts the icon service to views (the extract holds a placeholder staging text file). The job it fronts is the icon or thumbnail for a file or content type: the thumbnails service and its providers return the picture or the type icon, and sdk icon_images picks the best bitmap per content type with nearest-ancestor lookup. App icons are not cached as a system service (see the IconServices row)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/_JetEngine_SwiftUI.framework",
@@ -1279,8 +2062,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "The extract holds only Info.plist for this bundle, so the view layer of the same engine family cannot be confirmed. Left with the OS until the binary is extracted.",
+   "status": "n/a",
+   "note": "n/a: the SwiftUI view layer of the vendor's store and TV content engine (the siblings _JetEngine_SwiftUI and _OnDeviceStorage_JetEngine are already n/a). It renders server-driven pages fetched from the reference vendor's store servers, which BifrOSt does not have. Evidence: the index lists only the bundle's Resources directory and code signature.",
    "rea": [],
    "method": "assessed"
   },
@@ -1300,8 +2083,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "The extract holds only Info.plist for this bundle, so the view layer of the same engine family cannot be confirmed. Left with the OS until the binary is extracted.",
+   "status": "n/a",
+   "note": "Intents overlay for the Apple marketplace (vendor store). BifrOSt has no vendor marketplace; the reference holds only Info.plist and an intents extract.",
    "rea": [],
    "method": "assessed"
   },
@@ -1321,8 +2104,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/app-intents.json",
-   "status": "partial",
-   "note": "private framework, owner AppIntents; from SDK matrix app-intents.json",
+   "status": "n/a",
+   "note": "n/a: the intents of Apple Music, an Apple service with no BifrOSt counterpart; BifrOSt media intents are in media-intents.json. Previous note: private framework, owner AppIntents; from SDK matrix app-intents.json The App Intents framework layer is ready (see the AppIntents row); this Apple app's own intents are not ported.",
    "rea": [],
    "method": "assessed"
   },
@@ -1345,7 +2128,16 @@
    "status": "partial",
    "note": "queue.rs and audiosvc.rs cover the play queue and transport for files and streams. Catalog playback and protected content have no BifrOSt counterpart.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::queue::tests"
+    }
+   ],
+   "ready_note": "Local play queue (media::queue::tests) and the transport in audiosvc for the app's own files and streams. Catalog playback and protected content are Apple Music services with no BifrOSt counterpart, so they are n/a."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/_MusicKitInternal_MediaPlayer.framework",
@@ -1366,7 +2158,16 @@
    "status": "partial",
    "note": "queue.rs and audiosvc.rs cover the play queue and transport for files and streams. Catalog playback and protected content have no BifrOSt counterpart.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::queue::tests"
+    }
+   ],
+   "ready_note": "Local play queue (media::queue::tests) and the transport in audiosvc for the app's own files and streams. Catalog playback and protected content are Apple Music services with no BifrOSt counterpart, so they are n/a."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/_MusicKitInternal_SwiftUI.framework",
@@ -1446,11 +2247,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/picker.rs; springboard/src/shell/photos/mod.rs",
+   "bifrost": "springboard/apps/notes-desktop/src/notes/picker.rs; springboard/src/shell/photos/mod.rs; springboard/sdk/src/photo_picker.rs",
    "status": "partial",
-   "note": "The camera-roll picker in Notes and the built-in Photos app cover choosing a photo from a folder library. The source tabs (Messages, Notes, Files) and the picker search are not built.",
+   "note": "The camera-roll picker in Notes and the built-in Photos app cover choosing a photo from a folder library. The source tabs (Messages, Notes, Files) and the picker search are not built. Built 2026-10-17: picker search model (notes picker::matching, tests notes picker::tests: file-name match, ignoring case, blank query); the search field is not drawn and the source tabs are still missing.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-notes",
+     "filter": "notes::picker::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "photo_picker::tests"
+    }
+   ],
+   "ready_note": "Private SwiftUI pieces of the photo picker. The Photos app (library grid and selection) and the Notes camera-roll sheet (newest-first grid, thumbnails decoded off the UI thread, file-name search model) choose a photo from the folder library, and the SDK picker types (photo_picker) carry filters and the selection limit. Not mirrored: the source tabs for the vendor's Messages, Notes and Files apps (BifrOSt has one library), and the Notes sheet does not draw the search field yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/_SonicKit_MusicKit.framework",
@@ -1467,11 +2287,45 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/media/audioplayer.rs; springboard/src/media/audio_out.rs",
+   "bifrost": "springboard/src/media/crossfade_overlap.rs; springboard/src/media/crossfade.rs; springboard/src/media/audioplayer.rs; springboard/proto/src/svc.rs; springboard/audiod/src/main.rs; springboard/src/svc.rs; springboard/apps/music-desktop/src/music/menus.rs; springboard/apps/music-desktop/src/music/playback.rs",
    "status": "partial",
-   "note": "Gapless playback at 48 kHz is in audioplayer.rs, with output in audio_out.rs. The DSP graph and smart transitions between songs are not built.",
+   "note": "Gapless playback at 48 kHz is in audioplayer.rs, with output in audio_out.rs. The DSP graph and smart transitions between songs are not built. Built: crossfade planner (crossfade.rs: plan, gains_at, equal-power gains; tests media::crossfade::tests). Not yet applied by the audio thread, so transitions are still gapless. The DSP graph is not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::crossfade_overlap::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::crossfade::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::audioplayer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-proto",
+     "filter": "svc::audio::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-music",
+     "filter": "music::menus::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-music",
+     "filter": "music::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: smart transitions between songs. The audio engine holds the end of a song back and mixes the next song's start under it with equal-power gains (crossfade_overlap::Crossfader, wired into audioplayer; the overlap is capped at half a song and off for live stations), audiod takes it as the SetCrossfade command, and Music's Controls > Crossfade Songs menu sends the saved length (playback.txt) when the library store opens and when it changes. Gapless playback stays the default. Not built: the reference's DSP graph and per-song transition styles (beat-matched mixes); only the crossfade is."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/_SwiftMedia_SwiftUI.framework",
@@ -1488,11 +2342,65 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/media/player.rs; springboard/src/media/pip.rs; springboard/sdk/src/widgets.rs",
+   "bifrost": "springboard/src/media/player.rs; springboard/src/media/pickers.rs; springboard/src/media/speed.rs; springboard/src/media/subtitles.rs; springboard/src/shell/video.rs; springboard/apps/videoplayer-desktop/src/playback.rs; springboard/apps/videoplayer-desktop/src/movie.rs; springboard/src/shell/pickers.rs; springboard/src/media/route.rs; springboard/src/shell/pip.rs",
    "status": "partial",
-   "note": "The video player is in player.rs, the picture-in-picture geometry in pip.rs and the player capsule in widgets.rs. Route, subtitle and speed pickers are not built.",
+   "note": "The video player is in player.rs, the picture-in-picture geometry in pip.rs and the player capsule in widgets.rs. Route, subtitle and speed pickers are not built. Built: speed picker model (speed.rs: steps, label, next, prev, nearest) and subtitle picker model (subtitles.rs Picker); tests media::speed::tests and media::subtitles::tests. The picker views are not drawn yet; route.rs holds the route model.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::player::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::pickers::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::speed::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::subtitles::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::video::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pickers::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::route::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pip::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-videoplayer",
+     "filter": "playback::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-videoplayer",
+     "filter": "movie::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: the media player's views and pickers. The fullscreen player view (HUD, scrubbing, skips) plays through media::player, which now takes a playback rate (0.5x to 3x, the audio time-stretched, the picture clock at the same rate; player::tests). The Video Player app's Playback menu offers the speed picker and a subtitle picker over every per-language sidecar file (name.en.srt; playback::tests, movie::tests, subtitles::tests), and the route picker menu is drawn by shell pickers over media::route. Not built: speed and subtitle buttons in the on-screen HUD (they are menu rows), and embedded subtitle tracks (only sidecar files)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/_SwiftMedia_SwiftUI_MacHelper.framework",
@@ -1509,11 +2417,65 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/media/player.rs; springboard/src/media/pip.rs",
+   "bifrost": "springboard/src/media/player.rs; springboard/src/media/pickers.rs; springboard/src/media/speed.rs; springboard/src/media/subtitles.rs; springboard/src/shell/video.rs; springboard/apps/videoplayer-desktop/src/playback.rs; springboard/apps/videoplayer-desktop/src/movie.rs; springboard/src/shell/pickers.rs; springboard/src/media/route.rs; springboard/src/shell/pip.rs",
    "status": "partial",
-   "note": "A helper bundle for the same player views, covered by the player and picture-in-picture code above. Route, subtitle and speed pickers are not built.",
+   "note": "A helper bundle for the same player views, covered by the player and picture-in-picture code above. Route, subtitle and speed pickers are not built. Built: speed and subtitle picker models (speed.rs, subtitles.rs). The picker views are not drawn yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::player::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::pickers::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::speed::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::subtitles::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::video::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pickers::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::route::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pip::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-videoplayer",
+     "filter": "playback::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-videoplayer",
+     "filter": "movie::tests"
+    }
+   ],
+   "ready_note": "Helper bundle for the same player views; BifrOSt has no separate helper process, so the speed picker, subtitle picker and route picker of the _SwiftMedia_SwiftUI row (same checks) cover it."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/_ToolKit_AppIntents.framework",
@@ -1530,11 +2492,55 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/media/player.rs; springboard/src/media/pip.rs",
+   "bifrost": "springboard/src/shell/intents.rs, springboard/src/shell/quicksearch.rs, springboard/src/shell/settings_intents.rs, springboard/src/shell/entity_index.rs, springboard/src/shell/services/focus_filter.rs, springboard/src/shell/apphost.rs, springboard/assistant-client/src/intents.rs, springboard/sdk/src/intents.rs",
    "status": "partial",
-   "note": "A helper bundle for the same player views, covered by the player and picture-in-picture code above. Route, subtitle and speed pickers are not built.",
+   "note": "Overlay of the action toolkit for App Intents, covered by the intent catalogue and runner listed in bifrost.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::entity_index::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::apphost::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::focus_filter::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-assistant-client",
+     "filter": "intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "intents::tests"
+    }
+   ],
+   "ready_note": "Overlay that exposes the action toolkit (intent and entity metadata) to App Intents code. In BifrOSt the same job is the intent catalogue and runner: apps declare intents in manifest.toml, and the shell intents, Search, Settings intents, entity index and the SDK intents module list, resolve and run them (the same checks as the AppIntents rows)."
   }
  ]
 }

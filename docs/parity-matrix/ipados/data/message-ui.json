@@ -1,0 +1,44 @@
+{
+  "framework": "Message UI",
+  "doc": "https://developer.apple.com/documentation/messageui",
+  "macos_since": "",
+  "status": "partial",
+  "bifrost": "springboard/src/shell/compose_window.rs, springboard/src/shell/compose_sheet.rs, springboard/ui/src/compose.rs, springboard/ui/src/writing_assist.rs",
+  "summary": "The shell has a compose sheet and window for mail, and a writing-assist model. Apps have no SDK sheet for composing mail or text messages, and there is no SMS path.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run in this batch); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Mail composition sheet",
+      "apple": "MFMailComposeViewController, MFMailDraft",
+      "bifrost": "springboard/src/shell/compose_sheet.rs, springboard/src/shell/compose_window.rs, springboard/ui/src/compose.rs",
+      "status": "partial",
+      "note": "the shell's compose sheet and window; apps do not get a standard sheet to present"
+    },
+    {
+      "feature": "Text message composition",
+      "apple": "MFMessageComposeViewController",
+      "bifrost": "springboard/apps/messages-desktop",
+      "status": "gap",
+      "note": "the Messages app exists but offers no SDK composer for apps; no SMS transport"
+    },
+    {
+      "feature": "Writing assistance in compose",
+      "apple": "WritingAssistant, MFComposeAssistantViewController",
+      "bifrost": "springboard/ui/src/writing_assist.rs",
+      "status": "partial",
+      "note": "writing-assist model; it is not yet wired to a compose sheet API"
+    },
+    {
+      "feature": "Compose delegate and deferred actions",
+      "apple": "MFMailComposeViewControllerDelegate, MFMailComposeControllerDeferredAction",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no delegate callback for the result of a composed message"
+    }
+  ],
+  "gaps": [
+    "No SDK compose sheet for apps, for mail or for text messages.",
+    "No SMS transport.",
+    "The writing-assist model is not connected to a compose API."
+  ]
+}

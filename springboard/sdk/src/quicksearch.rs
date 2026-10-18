@@ -10,6 +10,7 @@ use crate::locale::Locale;
 use crate::proto::quicksearch::{SearchableItem, DELETE_ALL, DELETE_DOMAINS, DELETE_IDS, MAX_DOMAIN, MAX_ID, MAX_VALUES};
 use crate::proto::ToShell;
 use crate::Ctx;
+use bifrost_core::json::Json;
 
 /// A custom attribute: an app-defined key and value. Its value is folded into the item's keywords when indexed.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -211,16 +212,30 @@ pub struct CSSearchableItem {
     pub attribute_set: CSSearchableItemAttributeSet,
     /// `expirationDate`: seconds since the Unix epoch after which the item is dropped; `None` keeps it
     pub expiration_date: Option<i64>,
+    /// `hideInSpotlight`: the item stays indexed but the shell leaves it out of search results
+    pub hide_in_spotlight: bool,
 }
 
 impl CSSearchableItem {
     pub fn new(unique_identifier: &str, domain_identifier: &str, attribute_set: CSSearchableItemAttributeSet) -> Self {
-        CSSearchableItem { unique_identifier: unique_identifier.into(), domain_identifier: domain_identifier.into(), attribute_set, expiration_date: None }
+        CSSearchableItem {
+            unique_identifier: unique_identifier.into(),
+            domain_identifier: domain_identifier.into(),
+            attribute_set,
+            expiration_date: None,
+            hide_in_spotlight: false,
+        }
     }
 
     /// Sets `expirationDate`.
     pub fn expiration_date(mut self, secs: i64) -> Self {
         self.expiration_date = Some(secs);
+        self
+    }
+
+    /// Sets `hideInSpotlight`: the item is indexed but not shown in search results.
+    pub fn hide_in_spotlight(mut self) -> Self {
+        self.hide_in_spotlight = true;
         self
     }
 
@@ -321,6 +336,12 @@ impl CSSearchableIndex {
         for chunk in wire.chunks(MAX_ITEMS) {
             ctx.send_to_shell(ToShell::QuickSearchIndex(chunk.to_vec()));
         }
+        // The shell drops an item at its expiry through the search-index service, sent after the batch so the item
+        // exists when the expiry is set.
+        for i in items.iter().filter(|i| i.expiration_date.is_some() && IndexError::check(i).is_ok()) {
+            let at = i.expiration_date.unwrap_or(0).max(0) as u64;
+            crate::search_ranking::expire(ctx, &i.unique_identifier, Some(at));
+        }
         refused
     }
 
@@ -381,6 +402,233 @@ impl CSSearchableIndex {
     pub fn reindex_identifiers_with(&self, ctx: &Ctx, identifiers: &[&str], delegate: &dyn CSSearchableIndexDelegate) -> Vec<(usize, IndexError)> {
         let items = delegate.searchable_items_for(ctx, identifiers);
         self.index_checked(ctx, &items)
+    }
+}
+
+/// `CSIndexExtensionRequestHandler`: the app-side answers to a regeneration request for its index. The shell does not
+/// send these requests yet, so the app calls [`IndexExtensionRequests::reindex_all`] or
+/// [`IndexExtensionRequests::reindex_identifiers`] itself. The return value is the acknowledgement: the refused items
+/// by position and reason, empty when every item was sent.
+pub struct IndexExtensionRequests<'d> {
+    delegate: &'d dyn CSSearchableIndexDelegate,
+}
+
+impl<'d> IndexExtensionRequests<'d> {
+    /// Handles requests for `delegate`'s items.
+    pub fn new(delegate: &'d dyn CSSearchableIndexDelegate) -> Self {
+        IndexExtensionRequests { delegate }
+    }
+
+    /// `searchableIndex(_:reindexAllSearchableItemsWithAcknowledgementHandler:)`: clears the index and indexes again.
+    pub fn reindex_all(&self, ctx: &Ctx) -> Vec<(usize, IndexError)> {
+        CSSearchableIndex::default_index().reindex_all_with(ctx, self.delegate)
+    }
+
+    /// `searchableIndex(_:reindexSearchableItemsWithIdentifiers:acknowledgementHandler:)`: indexes the items for
+    /// `identifiers` and keeps the others.
+    pub fn reindex_identifiers(&self, ctx: &Ctx, identifiers: &[&str]) -> Vec<(usize, IndexError)> {
+        CSSearchableIndex::default_index().reindex_identifiers_with(ctx, identifiers, self.delegate)
+    }
+}
+
+/// An item the app's own query found in the shell's index (`CSSearchableItem` identifiers and title).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FoundItem {
+    pub unique_identifier: String,
+    pub domain_identifier: String,
+    pub title: String,
+    /// the `uttype` identifier of the item's file, when the shell knows it
+    pub content_type: Option<String>,
+}
+
+/// `CSSearchQuery` over the shell's index: runs `query_string` over the items this app indexed. The shell answers with
+/// the app's own items only, ranked, every word must match ("pdf" and "last week" filter; see
+/// `springboard/src/shell/services/search_ranking.rs`).
+///
+/// ```ignore
+/// let id = CSSearchQuery::new("milk").limit(5).start(ctx)?;
+/// // in App::service_reply, for that id:
+/// //   let items = quicksearch::found_items(&reply?);
+/// ```
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CSSearchQuery {
+    query_string: String,
+    limit: usize,
+    /// the named index to search, or None for the default index
+    index: Option<String>,
+}
+
+/// The most items one query asks the shell for (the shell caps it too).
+pub const SEARCH_QUERY_DEFAULT_LIMIT: usize = 10;
+
+impl CSSearchQuery {
+    pub fn new(query_string: &str) -> Self {
+        CSSearchQuery { query_string: query_string.to_string(), limit: SEARCH_QUERY_DEFAULT_LIMIT, index: None }
+    }
+
+    /// The most items to return.
+    pub fn limit(mut self, limit: usize) -> Self {
+        self.limit = limit.max(1);
+        self
+    }
+
+    /// Searches the named index `name` of this app (see [`NamedSearchableIndex`]) instead of the default one.
+    pub fn in_index(mut self, name: &str) -> Self {
+        self.index = Some(name.to_string());
+        self
+    }
+
+    /// Sends the query to the shell and returns its request id. A blank query string is refused with
+    /// `SearchQueryError::EmptyQueryString`, as the query model does.
+    pub fn start(&self, ctx: &Ctx) -> Result<u32, SearchQueryError> {
+        if self.query_string.trim().is_empty() {
+            return Err(SearchQueryError::EmptyQueryString);
+        }
+        Ok(match &self.index {
+            Some(name) => crate::search_ranking::search_named(ctx, name, &self.query_string, self.limit),
+            None => crate::search_ranking::search(ctx, &self.query_string, self.limit),
+        })
+    }
+}
+
+/// `CSSearchableIndex(name:protectionClass:)`: a named index of this app, kept apart from the default one. Its items are
+/// searched with [`CSSearchQuery::in_index`]. Other apps do not see them.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NamedSearchableIndex {
+    description: IndexDescription,
+}
+
+impl NamedSearchableIndex {
+    /// The named index `name` with its protection class. Refuses a name the shell cannot use.
+    pub fn new(name: &str, protection: Option<ProtectionClass>) -> Result<Self, IndexNameError> {
+        let mut description = IndexDescription::new(name)?;
+        description.protection_class = protection;
+        Ok(NamedSearchableIndex { description })
+    }
+
+    /// The index name.
+    pub fn name(&self) -> &str {
+        &self.description.name
+    }
+
+    /// `indexSearchableItems` on this index. Items that fail [`IndexError::check`] are not sent; their positions and
+    /// reasons are returned. The shell keeps the expiry of each item it is sent.
+    pub fn index_searchable_items(&self, ctx: &Ctx, items: &[CSSearchableItem]) -> Vec<(usize, IndexError)> {
+        let locale = Locale::current();
+        let mut refused = Vec::new();
+        let mut wire: Vec<Json> = Vec::new();
+        for (pos, i) in items.iter().enumerate() {
+            if let Err(e) = IndexError::check(i) {
+                refused.push((pos, e));
+                continue;
+            }
+            let (title, keywords) = i.attribute_set.wire_text(&locale);
+            let mut obj = vec![
+                ("id".to_string(), Json::Str(i.unique_identifier.clone())),
+                ("domain".to_string(), Json::Str(i.domain_identifier.clone())),
+                ("title".to_string(), Json::Str(title)),
+                ("desc".to_string(), Json::Str(i.attribute_set.content_description.clone())),
+                ("keywords".to_string(), Json::Arr(keywords.into_iter().map(Json::Str).collect())),
+            ];
+            if let Some(at) = i.expiration_date {
+                obj.push(("expires".to_string(), Json::Num(at.max(0) as f64)));
+            }
+            wire.push(Json::Obj(obj));
+        }
+        for chunk in wire.chunks(MAX_ITEMS) {
+            let _ = crate::search_ranking::index_named(ctx, self.name(), self.description.protection_class, chunk.to_vec());
+        }
+        refused
+    }
+
+    /// `deleteSearchableItems(withIdentifiers:)` on this index.
+    pub fn delete_searchable_items(&self, ctx: &Ctx, identifiers: &[&str]) {
+        let values: Vec<String> = identifiers.iter().map(|s| s.to_string()).collect();
+        let _ = crate::search_ranking::delete_named(ctx, self.name(), "ids", &values);
+    }
+
+    /// `deleteSearchableItems(withDomainIdentifiers:)` on this index.
+    pub fn delete_searchable_items_with_domain_identifiers(&self, ctx: &Ctx, domains: &[&str]) {
+        let values: Vec<String> = domains.iter().map(|s| s.to_string()).collect();
+        let _ = crate::search_ranking::delete_named(ctx, self.name(), "domains", &values);
+    }
+
+    /// `deleteAllSearchableItems` on this index; the index stays.
+    pub fn delete_all_searchable_items(&self, ctx: &Ctx) {
+        let _ = crate::search_ranking::delete_named(ctx, self.name(), "all", &[]);
+    }
+
+    /// `deleteIndex`: removes this index and its items.
+    pub fn delete_index(&self, ctx: &Ctx) {
+        let _ = crate::search_ranking::delete_named_index(ctx, self.name());
+    }
+}
+
+/// The items of a [`CSSearchQuery`] reply, best match first. A reply that is not a list gives none.
+pub fn found_items(reply: &bifrost_core::json::Json) -> Vec<FoundItem> {
+    crate::search_ranking::parse_hits(reply)
+        .into_iter()
+        .map(|h| FoundItem { unique_identifier: h.id, domain_identifier: h.domain, title: h.title, content_type: h.kind })
+        .collect()
+}
+
+/// A reindex request from the shell (`CSIndexExtensionRequestHandler`): all the app's content, or the items of some
+/// identifiers.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum IndexRequest {
+    ReindexAll,
+    ReindexIdentifiers(Vec<String>),
+}
+
+/// The shell's answer to an acknowledged index batch (see [`CSSearchableIndex::index_searchable_items_acked`]).
+#[derive(Debug)]
+pub struct IndexAck {
+    request: u32,
+}
+
+impl IndexAck {
+    /// The outcome once the shell has answered, `None` while it has not. The answer is taken once. A stored batch gives
+    /// the count the shell kept; an error answer from the shell gives `RemoteConnectionError`.
+    pub fn outcome(&self) -> Option<Result<usize, crate::search_index_batch::CSIndexError>> {
+        use crate::search_index_batch::{CSIndexError, CSIndexErrorCode};
+        let reply = crate::service::take_reply(self.request)?;
+        Some(match reply {
+            Ok(json) => Ok(json.get("stored").and_then(Json::as_u64).unwrap_or(0) as usize),
+            Err(_) => Err(CSIndexError { code: CSIndexErrorCode::RemoteConnectionError, item_position: None }),
+        })
+    }
+}
+
+impl CSSearchableIndex {
+    /// `indexSearchableItems(_:completionHandler:)` with the shell's acknowledgement. The items that pass
+    /// [`IndexError::check`] go to the shell in one `index` call; the refused ones are returned with their reasons. The
+    /// [`IndexAck`] carries the shell's answer once it has come back.
+    pub fn index_searchable_items_acked(&self, ctx: &Ctx, items: &[CSSearchableItem]) -> (IndexAck, Vec<(usize, IndexError)>) {
+        let locale = Locale::current();
+        let mut refused = Vec::new();
+        let mut wire: Vec<Json> = Vec::new();
+        for (pos, i) in items.iter().enumerate() {
+            if let Err(e) = IndexError::check(i) {
+                refused.push((pos, e));
+                continue;
+            }
+            let (title, keywords) = i.attribute_set.wire_text(&locale);
+            let mut obj = vec![
+                ("id".to_string(), Json::Str(i.unique_identifier.clone())),
+                ("domain".to_string(), Json::Str(i.domain_identifier.clone())),
+                ("title".to_string(), Json::Str(title)),
+                ("desc".to_string(), Json::Str(i.attribute_set.content_description.clone())),
+                ("keywords".to_string(), Json::Arr(keywords.into_iter().map(Json::Str).collect())),
+                ("thumb".to_string(), Json::Str(i.attribute_set.thumbnail_path.clone())),
+                ("url".to_string(), Json::Str(i.attribute_set.content_url.clone())),
+            ];
+            if let Some(at) = i.expiration_date {
+                obj.push(("expires".to_string(), Json::Num(at.max(0) as f64)));
+            }
+            wire.push(Json::Obj(obj));
+        }
+        let request = crate::service::call(ctx, crate::search_ranking::SERVICE, "index", &Json::Obj(vec![("items".into(), Json::Arr(wire))]));
+        (IndexAck { request }, refused)
     }
 }
 
@@ -664,5 +912,146 @@ mod tests {
     fn continue_activity_reaches_the_wire_format() {
         let m = crate::proto::ToApp::ContinueActivity { activity_type: ACTION_TYPE.into(), unique_id: "n1".into(), domain: "notes".into() };
         assert_eq!(crate::proto::ToApp::decode(&m.encode()), Ok(m));
+    }
+
+    #[test]
+    fn an_expiration_date_is_sent_to_the_shell_after_the_item() {
+        let c = ctx();
+        let timed = CSSearchableItem::new("t1", "notes", CSSearchableItemAttributeSet::new("Ticket")).expiration_date(1_800_000_000);
+        CSSearchableIndex::default_index().index_searchable_items(&c, &[timed]);
+        let sent = c.take_sent();
+        assert_eq!(sent.len(), 2);
+        assert_eq!(batch_ids(&sent[0]), ["t1"]);
+        let ToShell::ServiceCall { service, method, body, .. } = &sent[1] else { panic!("no expiry call") };
+        assert_eq!(service.as_str(), crate::search_ranking::SERVICE);
+        assert_eq!(method.as_str(), "expire");
+        assert!(body.contains("1800000000") && body.contains("t1"));
+    }
+
+    #[test]
+    fn index_extension_reindex_all_clears_then_indexes_and_acknowledges_refusals() {
+        let c = ctx();
+        let store = Store(vec![item("a"), item("")]);
+        let refused = IndexExtensionRequests::new(&store).reindex_all(&c);
+        assert_eq!(refused, vec![(1, IndexError::EmptyIdentifier)]);
+        let sent = c.take_sent();
+        assert_eq!(sent[0], ToShell::QuickSearchDelete { kind: DELETE_ALL, values: vec![] });
+        assert_eq!(batch_ids(&sent[1]), ["a"]);
+    }
+
+    #[test]
+    fn index_extension_reindex_identifiers_keeps_the_other_items() {
+        let c = ctx();
+        let store = Store(vec![item("a"), item("b")]);
+        let refused = IndexExtensionRequests::new(&store).reindex_identifiers(&c, &["a"]);
+        assert!(refused.is_empty());
+        let sent = c.take_sent();
+        assert_eq!(sent.len(), 1);
+        assert_eq!(batch_ids(&sent[0]), ["a"]);
+    }
+
+    #[test]
+    fn a_search_query_goes_to_the_shell_index_service() {
+        let c = ctx();
+        let id = CSSearchQuery::new("milk").limit(5).start(&c).unwrap();
+        let sent = c.take_sent();
+        assert_eq!(sent.len(), 1);
+        let ToShell::ServiceCall { request, service, method, body } = &sent[0] else { panic!("no search call") };
+        assert_eq!(*request, id);
+        assert_eq!(service.as_str(), crate::search_ranking::SERVICE);
+        assert_eq!(method.as_str(), "search");
+        let body = bifrost_core::json::parse(body).unwrap();
+        assert_eq!(body.get("query").and_then(|q| q.as_str()), Some("milk"));
+        assert_eq!(body.get("limit").and_then(|l| l.as_u64()), Some(5));
+    }
+
+    #[test]
+    fn a_blank_search_query_is_refused_and_sends_nothing() {
+        let c = ctx();
+        assert_eq!(CSSearchQuery::new("   ").start(&c), Err(SearchQueryError::EmptyQueryString));
+        assert!(c.take_sent().is_empty());
+    }
+
+    #[test]
+    fn a_search_query_reply_decodes_to_found_items() {
+        let reply = bifrost_core::json::parse(r#"[{"id":"n1","domain":"notes","title":"Milk","kind":null},{"id":"r1","domain":"files","title":"Q1","kind":"com.adobe.pdf"}]"#).unwrap();
+        let items = found_items(&reply);
+        assert_eq!(items[0], FoundItem { unique_identifier: "n1".into(), domain_identifier: "notes".into(), title: "Milk".into(), content_type: None });
+        assert_eq!(items[1].content_type.as_deref(), Some("com.adobe.pdf"));
+        assert!(found_items(&bifrost_core::json::Json::Null).is_empty());
+    }
+
+    #[test]
+    fn a_named_index_sends_its_items_with_the_protection_class_and_expiry() {
+        let c = ctx();
+        let index = NamedSearchableIndex::new("archive", Some(ProtectionClass::Complete)).unwrap();
+        assert_eq!(index.name(), "archive");
+        let timed = item("t1").expiration_date(1_800_000_000);
+        let refused = index.index_searchable_items(&c, &[timed, item("")]);
+        assert_eq!(refused, vec![(1, IndexError::EmptyIdentifier)]);
+        let sent = c.take_sent();
+        assert_eq!(sent.len(), 1);
+        let ToShell::ServiceCall { service, method, body, .. } = &sent[0] else { panic!("no index call") };
+        assert_eq!(service.as_str(), crate::search_ranking::SERVICE);
+        assert_eq!(method.as_str(), "index_named");
+        let body = bifrost_core::json::parse(body).unwrap();
+        assert_eq!(body.get("index").and_then(|v| v.as_str()), Some("archive"));
+        assert_eq!(body.get("protection").and_then(|v| v.as_str()), Some("complete"));
+        let items = body.get("items").and_then(|v| v.as_array()).unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].get("id").and_then(|v| v.as_str()), Some("t1"));
+        assert_eq!(items[0].get("expires").and_then(|v| v.as_u64()), Some(1_800_000_000));
+    }
+
+    #[test]
+    fn a_named_index_refuses_a_bad_name_and_a_query_can_target_it() {
+        assert_eq!(NamedSearchableIndex::new("a/b", None).unwrap_err(), IndexNameError::BadCharacter('/'));
+        let c = ctx();
+        CSSearchQuery::new("milk").in_index("archive").start(&c).unwrap();
+        let sent = c.take_sent();
+        let ToShell::ServiceCall { method, body, .. } = &sent[0] else { panic!("no search call") };
+        assert_eq!(method.as_str(), "search_named");
+        let body = bifrost_core::json::parse(body).unwrap();
+        assert_eq!(body.get("index").and_then(|v| v.as_str()), Some("archive"));
+        assert_eq!(body.get("query").and_then(|v| v.as_str()), Some("milk"));
+    }
+
+    #[test]
+    fn deleting_from_a_named_index_names_the_index_and_the_kind() {
+        let c = ctx();
+        let index = NamedSearchableIndex::new("archive", None).unwrap();
+        index.delete_searchable_items(&c, &["a"]);
+        index.delete_all_searchable_items(&c);
+        index.delete_index(&c);
+        let sent = c.take_sent();
+        let methods: Vec<String> = sent
+            .iter()
+            .map(|m| match m {
+                ToShell::ServiceCall { method, body, .. } => format!("{method} {body}"),
+                other => panic!("unexpected {other:?}"),
+            })
+            .collect();
+        assert!(methods[0].starts_with("delete_named ") && methods[0].contains("\"kind\":\"ids\""));
+        assert!(methods[1].contains("\"kind\":\"all\""));
+        assert!(methods[2].starts_with("delete_named_index "));
+    }
+
+    #[test]
+    fn an_acknowledged_batch_sends_one_index_call_and_has_no_outcome_until_the_shell_answers() {
+        let c = ctx();
+        let timed = item("t1").expiration_date(1_800_000_000);
+        let (ack, refused) = CSSearchableIndex::default_index().index_searchable_items_acked(&c, &[timed, item("")]);
+        assert_eq!(refused, vec![(1, IndexError::EmptyIdentifier)]);
+        let sent = c.take_sent();
+        assert_eq!(sent.len(), 1);
+        let ToShell::ServiceCall { service, method, body, .. } = &sent[0] else { panic!("no index call") };
+        assert_eq!(service.as_str(), crate::search_ranking::SERVICE);
+        assert_eq!(method.as_str(), "index");
+        let body = bifrost_core::json::parse(body).unwrap();
+        let items = body.get("items").and_then(|v| v.as_array()).unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].get("id").and_then(|v| v.as_str()), Some("t1"));
+        assert_eq!(items[0].get("expires").and_then(|v| v.as_u64()), Some(1_800_000_000));
+        assert!(ack.outcome().is_none(), "no reply yet");
     }
 }

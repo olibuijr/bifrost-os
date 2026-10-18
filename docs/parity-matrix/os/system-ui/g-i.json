@@ -79,8 +79,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "IO device UI agent, the Linux base handles device prompts",
+   "status": "n/a",
+   "note": "n/a: relays IOKit kernel notifications to the user session as alerts. The bundle has only Info.plist, a LaunchAgent plist and a man page in the index (no nib or UI resources of its own), and IOKit has no Linux counterpart. The hardware events a person needs are shown by the features that own them: storage by Files and Disk Utility, battery by low_battery, heat by thermal_alert.",
    "rea": []
   },
   {
@@ -141,7 +141,16 @@
    "bifrost": "springboard/src/installer/app.rs (progress_page)",
    "status": "partial",
    "note": "Install progress and failure pages live in the installer; no separate progress app. built on os/team-l-03-system-ui; not yet verified on Midget.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "installer"
+    }
+   ],
+   "ready_note": "covers: Install progress and failure pages live in the installer; no separate progress app. built on os/team-l-03-system-ui; not yet verified on Midget."
   },
   {
    "id": "path:/System/Library/CoreServices/Installer Progress.app",
@@ -161,7 +170,16 @@
    "bifrost": "springboard/src/installer/app.rs (progress_page)",
    "status": "partial",
    "note": "Install progress and failure pages live in the installer; no separate progress app. built on os/team-l-03-system-ui; not yet verified on Midget.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "installer"
+    }
+   ],
+   "ready_note": "covers: Install progress and failure pages live in the installer; no separate progress app. built on os/team-l-03-system-ui; not yet verified on Midget."
   },
   {
    "id": "path:/System/Library/CoreServices/Installer.app",
@@ -181,7 +199,16 @@
    "bifrost": "springboard/src/installer/app.rs",
    "status": "partial",
    "note": "The installer app runs at first boot with welcome, account, look, disk, confirm, progress and done pages; no standalone Installer.app bundle. built on os/team-l-03-system-ui; not yet verified on Midget.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "installer"
+    }
+   ],
+   "ready_note": "covers: The installer app runs at first boot with welcome, account, look, disk, confirm, progress and done pages; no standalone Installer.app bundle. built on os/team-l-03-system-ui; not yet verified on Midget."
   },
   {
    "id": "path:/System/Library/CoreServices/iCloud+.app",
@@ -398,10 +425,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/procedural_texture.rs (gradient)",
+   "bifrost": "springboard/ui/src/procedural_texture.rs, springboard/src/shell/wallpaper_page.rs, springboard/src/bin/shell.rs",
    "status": "partial",
-   "note": "Two-colour gradient texture generator only; no gradient wallpaper poster or picker. built on os/team-l-03-system-ui; not yet verified on Midget.",
-   "rea": []
+   "note": "Two-colour gradient texture generator only; no gradient wallpaper poster or picker. built on os/team-l-03-system-ui; not yet verified on Midget. Built 2026-10-17: five named gradient presets and gradient_poster(name, w, h) (ui::procedural_texture, tests procedural_texture::tests). Still missing: the picker that shows the presets in the wallpaper settings.",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "procedural_texture::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_page::tests"
+    }
+   ],
+   "ready_note": "Five named gradient posters (procedural_texture::GRADIENT_PRESETS) are packed as stills at the screen's wallpaper size (wallpaper_page::gradient_wallpapers) and listed in Settings > Wallpaper beside the photographs, where they can be set for the lock and home screens."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/Hello.appex",
@@ -521,7 +562,16 @@
    "bifrost": "springboard/src/thumbs/ (thumbnails service)",
    "status": "partial",
    "note": "Draws: the picture scaled to fit (thumbs::images::ImageProvider). Needs a Midget check for parity.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "thumbs"
+    }
+   ],
+   "ready_note": "covers: Draws: the picture scaled to fit (thumbs::images::ImageProvider). Needs a Midget check for parity."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/InferenceProviderService.appex",

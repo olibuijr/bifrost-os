@@ -21,6 +21,11 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
+/// Swap and memory pressure (`dynamic_pager` counterpart): zram at boot, swap files under pressure, the level file.
+pub mod pager;
+/// Purgeable storage (`deleted_helper` counterpart): low-space purge, the Free Up Space request, the Purgeable figure.
+pub mod purge;
+
 pub const BACKOFF_FIRST: Duration = Duration::from_secs(1);
 pub const BACKOFF_MAX: Duration = Duration::from_secs(30);
 /// A run this long counts as healthy and resets the backoff.
@@ -121,6 +126,11 @@ impl Backoff {
         d.min(BACKOFF_MAX)
     }
 }
+
+/// Game Mode's priority socket (`priority.rs`): `<root>/run/priority.sock`.
+pub const PRIORITY_SOCKET: &str = "priority.sock";
+
+pub mod priority;
 
 pub fn run_dir(root: &Path) -> PathBuf {
     root.join("run")

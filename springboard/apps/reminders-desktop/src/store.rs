@@ -18,7 +18,9 @@ pub const MAX_BYTES: usize = 8 * 1024 * 1024;
 const MAX_LINES: usize = 25_000;
 /// The format this version writes. An older version does not know it and leaves the file alone (it reports that it
 /// cannot read it and saves nothing), instead of reading the longer lines as damaged and dropping them.
-const HEADER: &str = "springboard-reminders-v3";
+const HEADER: &str = "springboard-reminders-v4";
+/// The format of versions 1.14 to 1.17: reminders end at their pictures, and their places are not kept.
+const HEADER_V3: &str = "springboard-reminders-v3";
 /// The format of versions before 1.14: lists and reminders with fewer fields on their lines.
 const HEADER_V2: &str = "springboard-reminders-v2";
 const HEADER_V1: &str = "springboard-reminders-v1";
@@ -54,9 +56,52 @@ fn flag(field: &str) -> Option<bool> {
     }
 }
 
+/// One reminder as its `R` line of the file, without the line break. Tabs and line breaks in text are escaped, so the
+/// line is one record.
+pub fn item_text(r: &Reminder) -> String {
+    let num = |v: Option<String>| v.unwrap_or_else(|| "-".into());
+    format!(
+        "R\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+        r.id,
+        r.list,
+        num(r.parent.map(|p| p.to_string())),
+        num(r.due.map(|d| d.to_string())),
+        num(r.time.map(|t| t.to_string())),
+        u8::from(r.completed),
+        u8::from(r.flagged),
+        r.priority,
+        r.repeat.map_or_else(|| "-".into(), Repeat::encode),
+        num(r.early.map(|e| e.to_string())),
+        escaped(&r.title),
+        escaped(&r.notes),
+        escaped(&r.url),
+        num(r.created.map(|c| c.to_string())),
+        num(r.section.map(|s| s.to_string())),
+        r.tz.as_deref().map_or_else(|| "-".to_string(), escaped),
+        u8::from(r.urgent),
+        if r.attachments.is_empty() { "-".to_string() } else { r.attachments.join(",") },
+        r.place.as_ref().map_or_else(|| "-".to_string(), |p| escaped(&p.encode())),
+    )
+}
+
+/// A reminder as the persistent store keeps it: its `R` line, read back by the same parser the file uses.
+impl bifrost_app::controls::persistent_store::Codec for Reminder {
+    fn encode(&self) -> String {
+        item_text(self)
+    }
+
+    fn decode(text: &str) -> Option<Reminder> {
+        let fields: Vec<&str> = text.split('\t').collect();
+        if fields.first() != Some(&"R") {
+            return None;
+        }
+        parse_item(&fields)
+    }
+}
+
 fn parse_item(fields: &[&str]) -> Option<Reminder> {
-    // R id list parent due time done flag prio repeat early title notes url [created [section [zone [urgent [pictures]]]]]
-    if !(14..=19).contains(&fields.len()) {
+    // R id list parent due time done flag prio repeat early title notes url [created [section [zone [urgent [pictures [place]]]]]]
+    if !(14..=20).contains(&fields.len()) {
         return None;
     }
     let due: Option<i64> = opt_num(fields[4]).ok()?;
@@ -108,6 +153,10 @@ fn parse_item(fields: &[&str]) -> Option<Reminder> {
                 }
                 names
             }
+        },
+        place: match fields.get(19) {
+            None | Some(&"-") => None,
+            Some(f) => Some(crate::place::Place::decode(&unescape(f, crate::place::MAX_TEXT, false)?)?),
         },
     })
 }
@@ -187,7 +236,7 @@ fn parse_smart(fields: &[&str]) -> Option<SmartDef> {
 pub fn parse(text: &str) -> Data {
     let mut lines = text.lines();
     let v1 = match lines.next() {
-        Some(HEADER | HEADER_V2) => false,
+        Some(HEADER | HEADER_V3 | HEADER_V2) => false,
         Some(HEADER_V1) => true,
         _ => return Data::default(),
     };
@@ -320,7 +369,7 @@ pub fn load_checked(path: &Path) -> std::io::Result<Data> {
         ));
     }
     let text = std::fs::read_to_string(path)?;
-    if !matches!(text.lines().next(), Some(HEADER | HEADER_V2 | HEADER_V1)) {
+    if !matches!(text.lines().next(), Some(HEADER | HEADER_V3 | HEADER_V2 | HEADER_V1)) {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
             "Unknown reminders format",
@@ -384,6 +433,7 @@ fn valid(data: &Data) -> bool {
                 && r.tz.as_deref().is_none_or(zones::valid_name)
                 && r.attachments.len() <= attach::MAX_PER_REMINDER
                 && r.attachments.iter().all(|n| attach::valid_name(n))
+                && r.place.as_ref().is_none_or(crate::place::Place::valid)
                 && r.due.is_none_or(|d| DAY_RANGE.contains(&d))
                 && r.section.is_none_or(|s| data.lists.iter().any(|l| l.id == r.list && l.sections.iter().any(|x| x.id == s)))
         })
@@ -449,27 +499,8 @@ pub fn save(path: &Path, data: &Data) -> std::io::Result<()> {
         ));
     }
     for r in &data.items {
-        out.push_str(&format!(
-            "R\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
-            r.id,
-            r.list,
-            num(r.parent.map(|p| p.to_string())),
-            num(r.due.map(|d| d.to_string())),
-            num(r.time.map(|t| t.to_string())),
-            u8::from(r.completed),
-            u8::from(r.flagged),
-            r.priority,
-            r.repeat.map_or_else(|| "-".into(), Repeat::encode),
-            num(r.early.map(|e| e.to_string())),
-            escaped(&r.title),
-            escaped(&r.notes),
-            escaped(&r.url),
-            num(r.created.map(|c| c.to_string())),
-            num(r.section.map(|s| s.to_string())),
-            r.tz.as_deref().map_or_else(|| "-".to_string(), escaped),
-            u8::from(r.urgent),
-            if r.attachments.is_empty() { "-".to_string() } else { r.attachments.join(",") },
-        ));
+        out.push_str(&item_text(r));
+        out.push('\n');
         if out.len() > MAX_BYTES {
             return Err(invalid("Reminders file too large"));
         }
@@ -490,16 +521,33 @@ mod tests {
         path
     }
     #[test]
+    fn a_reminder_round_trips_through_the_persistent_store_codec() {
+        use bifrost_app::controls::persistent_store::Codec;
+        let mut r = Reminder::new(7, "Milk\tand\nbread");
+        r.notes = "two\tlines".into();
+        r.due = Some(20_000);
+        r.time = Some(540);
+        r.flagged = true;
+        r.priority = 2;
+        let text = r.encode();
+        assert!(!text.contains('\n'), "one record per line");
+        assert_eq!(Reminder::decode(&text), Some(r));
+        assert_eq!(Reminder::decode("L\t1\tx"), None, "another record kind is refused");
+    }
+
+    #[test]
     fn the_header_written_is_the_one_an_older_version_refuses() {
         let path = scratch("header");
         save(&path, &Data::default()).unwrap();
         let text = std::fs::read_to_string(&path).unwrap();
-        assert_eq!(text.lines().next(), Some("springboard-reminders-v3"));
+        assert_eq!(text.lines().next(), Some("springboard-reminders-v4"));
         assert!(load_checked(&path).is_ok());
-        // a file of the previous format loads, and a future one is refused whole
+        // files of the previous formats load, and a future one is refused whole
         std::fs::write(&path, "springboard-reminders-v2\nL\t1\t0\t0\tOne\n").unwrap();
         assert_eq!(load_checked(&path).unwrap().lists[0].name, "One");
-        std::fs::write(&path, "springboard-reminders-v4\nL\t1\t0\t0\tOne\n").unwrap();
+        std::fs::write(&path, "springboard-reminders-v3\nL\t1\t0\t0\tOne\n").unwrap();
+        assert_eq!(load_checked(&path).unwrap().lists[0].name, "One");
+        std::fs::write(&path, "springboard-reminders-v5\nL\t1\t0\t0\tOne\n").unwrap();
         assert!(load_checked(&path).is_err());
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
@@ -553,7 +601,10 @@ mod tests {
         b.list = 2;
         b.parent = Some(1);
         b.completed = true;
-        data.items = vec![a, b];
+        let mut c = Reminder::new(3, "Pick up the parcel");
+        c.list = 2;
+        c.place = Some(crate::place::Place { name: "Post office, Hverfisgata".into(), lat: 64.1505, lon: -21.9330, radius_m: 150, trigger: crate::place::Trigger::Arriving });
+        data.items = vec![a, b, c];
         save(&path, &data).unwrap();
         assert_eq!(load_checked(&path).unwrap(), data);
         assert!(!path.with_extension("tsv.tmp").exists());

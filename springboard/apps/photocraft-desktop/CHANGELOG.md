@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.9.1
+
+- Upstream photocraft v0.9.0.
+  ## What's Changed
+  * Use craft-print for system printing by @skylartaylor in https://github.com/storytold/photocraft/pull/3872
+  * Tests: allow-list language-invariant bit-depth labels, add missing tr/hu 'Enable animations' (#4359) by @vangel76 in https://github.com/storytold/photocraft/pull/4362
+  * feat(automation): allow Crop and Straighten Photos through automation (#1052) by @buivanvu94 in https://github.com/storytold/photocraft/pull/3917
+  * Pencil: no 8-bit dither on aliased strokes, one flat colour at partial opacity by @cloudalister in https://github.com/storytold/photocraft/pull/3990
+
 ## 0.9.0
 
 - Upstream photocraft v0.9.0.

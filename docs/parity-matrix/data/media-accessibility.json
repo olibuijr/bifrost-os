@@ -4,7 +4,7 @@
   "macos_since": "10.9",
   "status": "partial",
   "bifrost": "springboard/src/shell/accessibility/mod.rs (system accessibility settings only); springboard/src/media/ (playback, no caption or haptic layer)",
-  "summary": "The framework exposes system caption appearance, audible media preferences, flashing-light dimming and Music Haptics. BifrOSt has none of these as an app-facing API: there is no caption appearance or audible media preference, no flashing-light detection or dimming, and no music haptics. The media player drops subtitle tracks at demux time. Reduce Motion and Increase Contrast exist in the shell, but they are not part of this framework.",
+  "summary": "The framework exposes system caption appearance, audible media preferences, flashing-light dimming and Music Haptics. BifrOSt has the flashing-lights setting and dimming as an app-facing option. Caption appearance and audible media preferences exist as UI-crate models but are not app-facing, and there are no music haptics. The media player drops subtitle tracks at demux time. Reduce Motion and Increase Contrast exist in the shell, but they are not part of this framework.",
   "rea_evidence": "ev_638847f577c821df90ff1e7bb3d494e65444e64de6b02caaf879bc750ba14bc6",
   "features": [
     {
@@ -47,7 +47,7 @@
       "apple": "MADimFlashingLightsEnabled, kMADimFlashingLightsChangedNotification, MAFlashingLightsProcessor",
       "bifrost": "springboard/ui/src/flashing_lights.rs; wired: springboard/ui/src/flashing_lights.rs (model); springboard/src/shell/accessibility/mod.rs (setting); springboard/src/shell/services/accessibility_display.rs (service); springboard/sdk/src/accessibility_display.rs (SDK)",
       "status": "partial",
-      "note": "Wave 6 (b13, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No flashing-light code in springboard/src or springboard/render/src. The 'flash' hits are the screenshot shutter (springboard/src/shell/screenshot.rs) and are unrelated. The magnifier (springboard/src/shell/magnifier.rs) has no photosensitivity filter. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "note": "Wave 6 (b13, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No flashing-light code in springboard/src or springboard/render/src. The 'flash' hits are the screenshot shutter (springboard/src/shell/screenshot.rs) and are unrelated. The magnifier (springboard/src/shell/magnifier.rs) has no photosensitivity filter. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity. Refreshed 2026-10-17: covered by springboard/ui/src/flashing_lights.rs (tests flashing_lights::tests), the shell setting, and the SDK DisplayOptions.dim_flashing_lights (sdk/src/accessibility_display.rs, tests accessibility_display::tests). The model takes caller-supplied samples and counts reversals, not the full photosensitivity rule."
     },
     {
       "feature": "Music Haptics",
@@ -65,10 +65,9 @@
     }
   ],
   "gaps": [
-    "Caption appearance preferences: font, colours, opacity, edge style, window and display type, with a settings page and a change notification.",
+    "Caption appearance preferences: the model is in ui/src/captions.rs (profiles, text, highlight and window styles, change reporting; tests captions::tests); missing the settings page and an app-facing SDK call.",
     "Caption and subtitle track support in the demuxers and the player (WebM drops subtitle tracks; MP4 has no text track), plus a caption renderer.",
-    "Audible media selection preferences (described video, music and sound descriptions) exposed to apps.",
-    "Flashing-light detection and dimming for video and UI, with a system setting and a change notification.",
+    "Audible media selection preferences: ui/src/media_selection.rs chooses tracks from them (tests media_selection::tests); no app-facing SDK call.",
     "Image caption metadata API (set and read the accessibility caption of an image).",
     "Music Haptics is n/a on PC hardware; the framework's Apple-only features are not expected to map here."
   ]

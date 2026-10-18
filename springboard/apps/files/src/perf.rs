@@ -91,7 +91,7 @@ fn entry_at(path: &Path) -> Option<Entry> {
         return None;
     }
     let md = std::fs::metadata(path).or_else(|_| std::fs::symlink_metadata(path)).ok()?;
-    let is_dir = md.is_dir();
+    let is_dir = md.is_dir() && !fs::is_package_name(&name);
     Some(Entry {
         kind: fs::kind_of(&name, is_dir),
         name,

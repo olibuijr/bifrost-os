@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.8.0 — 2026-10-17
+
+- Spin Reports row in the Reports section: lists the spin files the shell writes and shows each one's text. The shell does not write spin files yet, so the list is empty.
+- Log > Mark Message and Clear Marks: Save Messages writes the marked messages when any are marked.
+
 ## 1.7.1 — 2026-10-14
 
 - Find Next, Find Previous and Use Selection for Find are now in a dedicated Find menu, avoiding a duplicate shell Edit menu.

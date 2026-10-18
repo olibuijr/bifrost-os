@@ -3,7 +3,7 @@
 
 use bifrost_music::music::equalizer::BANDS;
 use bifrost_music::music::folders::Folders;
-use bifrost_music::music::playback::{crossfade_gains, Playback, CROSSFADE_MAX_SECS};
+use bifrost_music::music::playback::{crossfade_gains, loudness_from_replaygain, Playback, CROSSFADE_MAX_SECS};
 use bifrost_music::music::visualizer::{band_levels, smooth};
 use std::path::{Path, PathBuf};
 
@@ -108,6 +108,14 @@ fn a_song_with_no_loudness_measurement_plays_at_unity_gain() {
     let on = Playback { crossfade_secs: 0, sound_check: true };
     assert_eq!(on.gain(None), 1.0);
     assert_eq!(on.gain(Some(f32::NAN)), 1.0, "a measurement that is not a number is ignored");
+}
+
+#[test]
+fn a_replaygain_tag_gives_the_loudness_sound_check_levels() {
+    assert_eq!(loudness_from_replaygain(-6.5), -11.5, "a song tagged -6.5 dB measures 6.5 dB above the reference");
+    let on = Playback { crossfade_secs: 0, sound_check: true };
+    // -11.5 dB is 4.5 dB above the -16 dB target: a gain of 10^(-4.5/20), about 0.5957
+    assert!((on.gain(Some(loudness_from_replaygain(-6.5))) - 0.5957).abs() < 1e-3);
 }
 
 #[test]

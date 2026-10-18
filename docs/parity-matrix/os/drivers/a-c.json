@@ -124,7 +124,22 @@
    "bifrost": "springboard/sdk/src/hid_devices.rs",
    "status": "partial",
    "note": "Covers the HID device model the apps read; the kernel's evdev and HID drivers read the hardware, and this row does not replace them.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "modinfo -F filename usbhid",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "hid_devices::tests"
+    }
+   ],
+   "ready_note": "The HID device model is tested in hid_devices.rs. The kernel usbhid and hid_generic drivers read the hardware (usbhid is built in on the reference kernel)."
   },
   {
    "id": "path:/System/Library/DriverExtensions/com.apple.DriverKit-Apple16X50PCI.dext",
@@ -145,7 +160,16 @@
    "status": "os",
    "note": "Not determined as a BifrOSt component: a 16550 UART PCI serial driver whose counterpart is the Linux kernel serial driver; no kernel package is cited because runtime-packages.txt does not list one.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "modinfo -F filename 8250",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "16550 UART ports are driven by the Linux 8250 serial driver (built in on the Arch kernel), which BifrOSt ships unchanged."
   },
   {
    "id": "path:/System/Library/DriverExtensions/com.apple.DriverKit-AppleBCMWLAN.dext",
@@ -166,7 +190,31 @@
    "status": "partial",
    "note": "The chip is driven by the Linux kernel (brcmfmac for Broadcom parts). BifrOSt covers the layer above it: scans, joins and saved profiles through wpa_supplicant, and power save through nl80211. It does not configure the chip or its firmware.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "modinfo -F filename brcmfmac",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "net::wifi::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "net::wpa::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::nl80211::tests"
+    }
+   ],
+   "ready_note": "brcmfmac drives the Broadcom chip. The layer above it (scans, joins, saved profiles through wpa_supplicant, nl80211 power save) is covered by the wifi, wpa and nl80211 tests."
   },
   {
    "id": "path:/System/Library/DriverExtensions/com.apple.DriverKit-AppleEthernetE1000.dext",
@@ -187,7 +235,26 @@
    "status": "partial",
    "note": "The Intel gigabit cards are driven by the Linux e1000 and e1000e kernel modules. netd takes the address by DHCP. BifrOSt has no per-card settings such as offload or wake-on-LAN.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "modinfo -F filename e1000e",
+     "expect_exit": 0
+    },
+    {
+     "kind": "cmd",
+     "run": "modinfo -F filename e1000",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "netd",
+     "filter": "tests"
+    }
+   ],
+   "ready_note": "The e1000 and e1000e kernel modules drive the cards; netd takes the address by DHCP and has tests."
   },
   {
    "id": "path:/System/Library/DriverExtensions/com.apple.DriverKit-AppleEthernetIXGBE.dext",
@@ -208,7 +275,21 @@
    "status": "partial",
    "note": "The Intel 10 GbE cards are driven by the Linux ixgbe kernel module. netd manages them like any other link. BifrOSt has no tuning surface for queues or offloads.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "modinfo -F filename ixgbe",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "netd",
+     "filter": "tests"
+    }
+   ],
+   "ready_note": "The ixgbe kernel module drives the 10 GbE cards; netd manages the link."
   },
   {
    "id": "path:/System/Library/DriverExtensions/com.apple.DriverKit-AppleEthernetIXL.dext",
@@ -229,7 +310,21 @@
    "status": "partial",
    "note": "The Intel 700-series cards (XL710 family) are driven by the Linux i40e kernel module. netd manages them like any other link. BifrOSt has no tuning surface for these cards.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "modinfo -F filename i40e",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "netd",
+     "filter": "tests"
+    }
+   ],
+   "ready_note": "The i40e kernel module drives the 700-series cards; netd manages the link."
   },
   {
    "id": "path:/System/Library/DriverExtensions/com.apple.DriverKit-AppleEthernetMLX5.dext",
@@ -250,7 +345,25 @@
    "status": "partial",
    "note": "The ConnectX cards are driven by the Linux mlx5_core kernel module, and rdma-core is the userspace verbs layer. netd manages the links like any other. BifrOSt has no RDMA or offload surface for apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "modinfo -F filename mlx5_core",
+     "expect_exit": 0
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/ibv_devices"
+    },
+    {
+     "kind": "test",
+     "crate": "netd",
+     "filter": "tests"
+    }
+   ],
+   "ready_note": "The mlx5_core kernel module drives the ConnectX cards and rdma-core is the userspace verbs layer (runtime-packages.txt); netd manages the links."
   },
   {
    "id": "path:/System/Library/DriverExtensions/com.apple.DriverKit-AppleUSBCHCOM.dext",
@@ -271,7 +384,16 @@
    "status": "os",
    "note": "WCH CH34x USB serial adapters are handled by the Linux ch341 kernel module, which creates a /dev/ttyUSB node. BifrOSt exposes no serial-port API to apps, so the device stays with the OS.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "modinfo -F filename ch341",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "The ch341 kernel module drives CH34x adapters and creates /dev/ttyUSB nodes."
   },
   {
    "id": "path:/System/Library/DriverExtensions/com.apple.DriverKit-AppleUSBFTDI.dext",
@@ -292,7 +414,16 @@
    "status": "os",
    "note": "FTDI USB serial adapters are handled by the Linux ftdi_sio kernel module, which creates a /dev/ttyUSB node. BifrOSt exposes no serial-port API to apps, so the device stays with the OS.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "modinfo -F filename ftdi_sio",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "The ftdi_sio kernel module drives FTDI adapters and creates /dev/ttyUSB nodes."
   },
   {
    "id": "path:/System/Library/DriverExtensions/com.apple.DriverKit-AppleUSBPLCOM.dext",
@@ -313,7 +444,16 @@
    "status": "os",
    "note": "Prolific PL2303 USB serial adapters are handled by the Linux pl2303 kernel module, which creates a /dev/ttyUSB node. BifrOSt exposes no serial-port API to apps, so the device stays with the OS.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "modinfo -F filename pl2303",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "The pl2303 kernel module drives PL2303 adapters and creates /dev/ttyUSB nodes."
   },
   {
    "id": "path:/System/Library/DriverExtensions/com.apple.DriverKit-AppleUSBSLCOM.dext",
@@ -334,7 +474,16 @@
    "status": "os",
    "note": "Silicon Labs CP210x USB serial adapters are handled by the Linux cp210x kernel module, which creates a /dev/ttyUSB node. BifrOSt exposes no serial-port API to apps, so the device stays with the OS.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "modinfo -F filename cp210x",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "The cp210x kernel module drives CP210x adapters and creates /dev/ttyUSB nodes."
   },
   {
    "id": "path:/System/Library/DriverExtensions/com.apple.DriverKit-AppleUSBSerial.dext",
@@ -355,7 +504,16 @@
    "status": "os",
    "note": "The generic USB serial class is part of the Linux USB serial core, which gives adapters without a vendor driver a /dev/ttyUSB node. BifrOSt exposes no serial-port API to apps, so the device stays with the OS.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "modinfo -F filename usbserial",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "The Linux USB serial core (usbserial, built in on the reference kernel) gives vendor-less adapters a /dev/ttyUSB node."
   },
   {
    "id": "path:/System/Library/DriverExtensions/com.apple.DriverKit-IOUserDockChannelSerial.dext",
@@ -397,7 +555,26 @@
    "status": "partial",
    "note": "USB video class cameras are driven by the Linux uvcvideo kernel module. BifrOSt captures frames through V4L2 (v4l2.rs) and runs the camera app on top of them. No SDK API lets apps open a camera.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "modinfo -F filename uvcvideo",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::v4l2::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::camera::tests"
+    }
+   ],
+   "ready_note": "uvcvideo drives USB video class cameras; v4l2.rs and the camera app's tests cover the capture layer above it."
   },
   {
    "id": "path:/System/Library/DriverExtensions/com.apple.DriverKit.AppleUserECM.dext",
@@ -418,7 +595,21 @@
    "status": "partial",
    "note": "USB Ethernet adapters that use the CDC Ethernet Control Model are driven by the Linux cdc_ether kernel module. netd manages them like any other link. BifrOSt has no adapter-specific settings.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "modinfo -F filename cdc_ether",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "netd",
+     "filter": "tests"
+    }
+   ],
+   "ready_note": "The cdc_ether kernel module drives CDC Ethernet adapters; netd manages the link."
   }
  ]
 }

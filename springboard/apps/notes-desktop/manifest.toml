@@ -1,6 +1,6 @@
 id = "is.olibuijr.notes.desktop"
 name = "Notes"
-version = "1.18.2"
+version = "1.23.0"
 exec = "bifrost-notes"
 icon = "icon.png"
 min_shell = "0.4.84"
@@ -9,7 +9,9 @@ schemes = ["notes"]
 category = "Productivity"
 kind = "system-app"
 architecture = "x86_64-linux"
-permissions = ["storage", "documents"]
+permissions = ["storage", "documents", "network", "keychain"]
+keychain_groups = ["is.bifrost.passwords"]
+index_extension = true
 window = "full-size"
 
 [[intent]]
@@ -46,6 +48,23 @@ title = "Open Folder"
 description = "Shows the notes of a folder."
 shortcut = false
 params = ["folder:string"]
+
+[[preview]]
+id = "is.olibuijr.notes.markdown"
+types = ["net.daringfireball.markdown"]
+generator = "preview.render"
+timeout_ms = 3000
+
+[[script.command]]
+name = "make new note"
+event = "notes.make"
+params = ["title", "body"]
+result = "note"
+
+[[script.class]]
+name = "note"
+properties = ["name", "id", "folder", "modified"]
+elements = []
 
 [[log.subsystem]]
 id = "is.olibuijr.notes"

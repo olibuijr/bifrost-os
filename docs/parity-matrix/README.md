@@ -92,6 +92,10 @@ Owner rule (2026-10-12): test on the host, then on Midget; a row is `parity` onl
 - `tools/parity/os_frameworks.py [--write]` syncs the `os/frameworks` rows from the SDK matrix: public frameworks take the status of
   the SDK rows, private ones inherit from their owner (`os_private_owner_map.json`) and are never better than `partial`.
 - `bifrost pc parity os-status` prints the OS layer per category.
+- The `cli` tools that BifrOSt builds itself (`springboard/cmd/src/bin/*.rs`, crate `bifrost-cmd`) are installed by the system
+  package: `/usr/bin/<tool>`, or `/usr/lib/bifrost/cmd/bin/<tool>` when an Arch package owns the name (`vis`, `units`, `lastcomm`),
+  with `/etc/profile.d/bifrost-cmd.sh` putting that directory after `/usr/bin` on PATH. Collision list and reasons:
+  `packaging/arch/package-files.sh`; see `docs/bifrost-pc-workflow.md`, "bifrost-cmd tools in the system package".
 
 ## OS layer: command-line tools (`verify os-cli`)
 
@@ -107,3 +111,29 @@ tool on Midget (`tools/parity/os_cli.py`, mapping in `tools/parity/os_cli_map.js
 3. `verify os-cli closures results.json --version V [--dry-run]` rewrites the shards with method `assessed`: `parity` (probe passed,
    `bifrost` = command path, note "verified on Midget V"), `partial` (installed but the probe failed or is not run headless),
    `gap` (no equivalent or not installed), `n/a` (with the class reason).
+
+## OS layer: ready rows and the target check (`os-verify`)
+
+A row becomes `parity` only after its checks pass on an installed BifrOSt system. Mark a row ready with `"ready": true`,
+a `"ready_note"` and a `"checks"` list (`tools/parity/os_verify.py`):
+
+- `{"kind": "file", "path": "/usr/share/..."}`: the installed file exists (`test -e`).
+- `{"kind": "cmd", "run": "tool --version", "expect_exit": 0}`: `sh -c`, 10 s timeout, as the login user. Read-only only:
+  `sudo`, network tools, `rm`, `mv`, `systemctl`, `pacman`, `ssh` and `>` redirects are rejected by the schema.
+- `{"kind": "unit", "name": "x.service", "state": "enabled"|"active"}`, with `"user": true` for user units: `systemctl`.
+- `{"kind": "test", "crate": "<package name>", "filter": "<module path>"}`: `cargo test --offline --profile fast -p CRATE --
+  FILTER`, once per crate. These are host logic and run in the checkout, even for an ssh target. A filter that runs 0 tests fails.
+
+Commands (`bifrost pc parity os-verify ...`):
+
+1. `plan [--out plan.json]`: the ready rows (not `parity` or `n/a`) and the unique `(crate, filter)` pairs. Schema errors in
+   `ready` or `checks` stop the plan; `bifrost pc parity check` reports them too.
+2. `run plan.json --target local|ssh:HOST [--repo DIR] [--out results.json]`: file, cmd and unit checks run on the target
+   (`local` is this machine, `ssh:HOST` is a machine over ssh), test checks run in `--repo` (default: this checkout). Exit 1
+   when any row fails. With `local`, a root run refuses to start when the plan has cmd checks, because they run as the invoking user.
+3. `promote results.json --version V [--target-name NAME] [--dry-run]`: passing rows become `parity`, lose `ready` and get the note
+   "Verified on the NAME with BifrOSt V (os_verify)." `--target-name` defaults to `vm`; pass `--target-name midget` for evidence
+   taken on Midget. Failing rows keep their status and get `"ready": false` and
+   `"ready_failed"` with the reason.
+
+Rows that build the component but do not have the check yet stay `partial`; a ready row that fails stays partial, never `parity`.

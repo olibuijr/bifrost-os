@@ -2,15 +2,19 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::OnceLock;
 
 const BACKLIGHT_ROOT: &str = "/sys/class/backlight";
 const POWER_SUPPLY_ROOT: &str = "/sys/class/power_supply";
+const LEDS_ROOT: &str = "/sys/class/leds";
 
 /// Where the panel and the battery live on this machine, and what halting means. Set once at
 /// start-up by `configure`; until then (tests, tools) there is no backlight or battery.
 struct Config {
     backlight: Option<PathBuf>,
+    /// the keyboard backlight LED, on laptops that have one
+    kbd_backlight: Option<PathBuf>,
     battery: Option<PathBuf>,
     mains: Option<PathBuf>,
     emulated: bool,
@@ -23,6 +27,7 @@ static CONFIG: OnceLock<Config> = OnceLock::new();
 pub fn configure(emulated: bool) {
     let cfg = Config {
         backlight: find_backlight(Path::new(BACKLIGHT_ROOT)),
+        kbd_backlight: find_keyboard_backlight(Path::new(LEDS_ROOT)),
         battery: find_battery(Path::new(POWER_SUPPLY_ROOT)),
         mains: find_mains(Path::new(POWER_SUPPLY_ROOT)),
         emulated,
@@ -31,7 +36,7 @@ pub fn configure(emulated: bool) {
 }
 
 fn config() -> &'static Config {
-    CONFIG.get_or_init(|| Config { backlight: None, battery: None, mains: None, emulated: false })
+    CONFIG.get_or_init(|| Config { backlight: None, kbd_backlight: None, battery: None, mains: None, emulated: false })
 }
 
 fn read_num(path: &Path) -> Option<i64> {
@@ -78,11 +83,68 @@ pub fn brightness() -> i64 {
     config().backlight.as_ref().and_then(|b| read_num(&b.join("brightness"))).unwrap_or(0)
 }
 
-/// Sets the panel brightness; a machine without a backlight (a desktop monitor) ignores it.
+/// Sets the panel brightness. A machine without a backlight (a desktop with external monitors) sends the level to
+/// the monitors themselves over DDC/CI (`bifrost_core::ddc_ci`), off the caller's thread.
 pub fn set_brightness(v: i64) {
     if let Some(b) = &config().backlight {
         let _ = fs::write(b.join("brightness"), v.clamp(0, max_brightness()).to_string());
+    } else {
+        set_external_brightness(v);
     }
+}
+
+/// The keyboard backlight LED under `root` (`/sys/class/leds`): the first one named like `*kbd_backlight`, which is
+/// how the laptop platform drivers call it (`tpacpi::kbd_backlight`, `asus::kbd_backlight`, `apple::kbd_backlight`).
+pub fn find_keyboard_backlight(root: &Path) -> Option<PathBuf> {
+    sorted_entries(root).into_iter().find(|p| p.file_name().is_some_and(|n| n.to_string_lossy().ends_with("kbd_backlight")))
+}
+
+/// The highest keyboard backlight level (a few steps on most laptops), or 0 without one.
+pub fn keyboard_backlight_max() -> i64 {
+    config().kbd_backlight.as_ref().and_then(|b| read_num(&b.join("max_brightness"))).unwrap_or(0)
+}
+
+/// The current keyboard backlight level, 0 when off or without one.
+pub fn keyboard_backlight() -> i64 {
+    config().kbd_backlight.as_ref().and_then(|b| read_num(&b.join("brightness"))).unwrap_or(0)
+}
+
+/// Sets the keyboard backlight level (0 to `keyboard_backlight_max()`); nothing without one.
+pub fn set_keyboard_backlight(v: i64) {
+    if let Some(b) = &config().kbd_backlight {
+        let _ = fs::write(b.join("brightness"), v.clamp(0, keyboard_backlight_max()).to_string());
+    }
+}
+
+static EXTERNAL_TARGET: AtomicI32 = AtomicI32::new(-1);
+static EXTERNAL_BUSY: AtomicBool = AtomicBool::new(false);
+
+/// Hands a level (0 to `max_brightness()`) to the external monitors as a percent. A monitor takes about a tenth of
+/// a second per change, so one worker thread applies only the newest level while the slider keeps moving.
+fn set_external_brightness(v: i64) {
+    if config().emulated {
+        return;
+    }
+    let max = max_brightness().max(1);
+    EXTERNAL_TARGET.store((v.clamp(0, max) * 100 / max) as i32, Ordering::SeqCst);
+    if EXTERNAL_BUSY.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    std::thread::spawn(|| {
+        let mut done = -1;
+        loop {
+            let want = EXTERNAL_TARGET.load(Ordering::SeqCst);
+            if want != done {
+                bifrost_core::ddc_ci::set_external_brightness(want as u8);
+                done = want;
+                continue;
+            }
+            EXTERNAL_BUSY.store(false, Ordering::SeqCst);
+            if EXTERNAL_TARGET.load(Ordering::SeqCst) == done || EXTERNAL_BUSY.swap(true, Ordering::SeqCst) {
+                break;
+            }
+        }
+    });
 }
 
 /// Makes the power key (gpio-keys) a wakeup source, so pressing it resumes a suspended device.
@@ -230,6 +292,15 @@ mod tests {
         let r=fake_tree("device-battery",&[("00-mouse/type","Battery"),("00-mouse/scope","Device"),("BAT0/type","Battery"),("BAT0/scope","System")]);
         assert_eq!(find_battery(&r),Some(r.join("BAT0")));
         fs::remove_dir_all(r.join("BAT0")).unwrap();assert_eq!(find_battery(&r),None);
+    }
+
+    #[test]
+    fn the_keyboard_backlight_is_the_led_named_for_it() {
+        let r = fake_tree("kbd", &[("input3::capslock/brightness", "0\n"), ("tpacpi::kbd_backlight/max_brightness", "2\n")]);
+        assert_eq!(find_keyboard_backlight(&r), Some(r.join("tpacpi::kbd_backlight")));
+        assert_eq!(find_keyboard_backlight(&fake_tree("kbd2", &[("input3::capslock/brightness", "0\n")])), None);
+        assert_eq!(find_keyboard_backlight(Path::new("/nonexistent-springboard-test")), None);
+        assert_eq!(keyboard_backlight_max(), 0, "no configured LED in tests");
     }
 
     #[test]

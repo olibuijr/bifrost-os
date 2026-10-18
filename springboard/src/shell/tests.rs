@@ -124,6 +124,7 @@
 
     /// A tablet with the desktop up and one window (the Terminal) placed so that its bottom edge runs under the
     /// on-screen keyboard.
+    #[cfg(test)]
     fn tablet_desk_with_window_under_keyboard() -> Shell {
         let mut sh = desktop_shell();
         sh.form = bifrost_ui::form_factor::FormFactor::Tablet;
@@ -201,19 +202,16 @@
     /// the front one checked, and choosing a row brings that window forward.
     #[cfg(feature="desktop-wayland")]
     #[test]
-    fn desktop_menu_bar_follows_the_golden_gate_order_and_the_window_menu_focuses_a_window() {
+    fn desktop_menu_bar_follows_the_golden_gate_order_and_the_window_menu_lists_only_the_front_app() {
         let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;
         let order:Vec<desktop_bar::Menu>=sh.menu_buttons().into_iter().map(|b|b.0).filter(|m|!matches!(m,desktop_bar::Menu::Cpu|desktop_bar::Menu::Memory|desktop_bar::Menu::Network|desktop_bar::Menu::Power|desktop_bar::Menu::ControlCenter)).collect();
         assert_eq!(order,vec![desktop_bar::Menu::System,desktop_bar::Menu::App,desktop_bar::Menu::File,desktop_bar::Menu::Edit,desktop_bar::Menu::View,desktop_bar::Menu::Window,desktop_bar::Menu::Help]);
         sh.desk_open(AppId::Terminal,0.);sh.desk_open(AppId::Settings,0.);
         let rows=sh.menu_row_texts(desktop_bar::Menu::Window);
         assert!(rows.iter().any(|t|t=="\u{2713} Settings"),"front window checked: {rows:?}");
+        // the Window menu lists the front app's windows only (bf8aa3ab6), so Terminal is not offered here
         let name=apps().iter().find(|a|a.id==AppId::Terminal).unwrap().name;
-        let idx=rows.iter().position(|t|t.ends_with(name)).unwrap_or_else(||panic!("{name} listed: {rows:?}"));
-        sh.desktop_menu=Some(desktop_bar::Menu::Window);
-        let (x,y,_,_)=sh.desktop_popup_rect().unwrap();let row=y as f32+sh.ui.pt(sh.row_top_pt(desktop_bar::Menu::Window,idx)+18.);
-        sh.event(Event::Down(x as f32+12.,row),1.);sh.event(Event::Up(x as f32+12.,row),2.);
-        assert_eq!(sh.desk.as_ref().unwrap().front().map(|w|w.app),Some(AppId::Terminal));
+        assert!(!rows.iter().any(|t|t.ends_with(name)),"{name} is not the front app: {rows:?}");
     }
 
     /// Window > Zoom acts on the front visible window, not on a minimized one that still sits last in the stack.
@@ -666,7 +664,8 @@
     fn cmd_tab_cycles_while_held_and_raises_the_selection_on_release() {
         let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;
         sh.desk_open(AppId::Settings,0.);sh.desk_open(AppId::Files,1.);
-        sh.desk_cycle_window();
+        // Cmd+Tab is the switcher (all windows, most recent first); Cmd+` is `desk_cycle_window`
+        sh.switcher_cycle(false);
         assert_eq!(sh.desk.as_ref().unwrap().cmdtab.as_ref().map(|c|c.1),Some(1));
         let (w,h)=(sh.w as usize,sh.h as usize);let mut buf=vec![0u32;w*h];
         sh.draw_desk(&mut Surface{w,h,stride:w,px:&mut buf,y0:0},2.);
@@ -1748,6 +1747,79 @@
     }
 
     #[test]
+    fn brightness_keys_step_the_panel_and_show_the_same_hud_as_volume() {
+        use bifrost_ui::osd::Level;
+        let (down, up) = (224, 225);
+        let mut sh = shell();
+        assert!(sh.is_locked());
+        assert_eq!(sh.info.brightness, 0.5);
+        assert_eq!(sh.hw_brightness_key(up, true, 1000.0), Some(vec![Effect::Brightness(9.0 / 16.0)]), "works on the lock screen");
+        assert_eq!(sh.info.brightness, 9.0 / 16.0);
+        assert!(sh.hud.shown() && sh.hud.kind() == Level::Brightness && sh.hud.level() == 9.0 / 16.0);
+        assert_eq!(sh.hw_brightness_key(up, false, 1010.0), Some(vec![]), "a release is taken and does nothing");
+        assert_eq!(sh.hw_brightness_key(down, true, 1100.0), Some(vec![Effect::Brightness(0.5)]));
+        let mut buf = vec![0u32; 1200 * 1920];
+        let d = sh.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, 1200.0).clone();
+        assert!(d.is_all());
+        let (x, y, w, h) = VolumeHud::rect(&sh.ui, sh.w);
+        assert_ne!(buf[(y + h / 2.0) as usize * 1200 + (x + w - sh.ui.pt(20.0)) as usize], rgba(20, 20, 30, 255), "the HUD covers the wallpaper");
+        assert_eq!(sh.next_wake(1200.0), Some(1100.0 + volume_hud::HOLD_MS));
+        // a volume key brings the speaker back on the same panel
+        sh.event(Event::VolumeUp, 1300.0);
+        assert!(sh.hud.kind() == Level::Volume);
+        // the lowest step stays lit, the highest is full
+        for i in 0..40 {
+            sh.hw_brightness_key(down, true, 2000.0 + i as f64);
+        }
+        assert_eq!(sh.info.brightness, 1.0 / 16.0);
+        for i in 0..40 {
+            sh.hw_brightness_key(up, true, 3000.0 + i as f64);
+        }
+        assert_eq!(sh.info.brightness, 1.0);
+        assert_eq!(sh.hw_brightness_key(30, true, 4000.0), None, "other keys are not ours");
+    }
+
+    #[test]
+    fn brightness_keys_leave_a_dark_screen_and_the_control_center_alone() {
+        let mut sh = shell();
+        unlock(&mut sh);
+        swipe(&mut sh, 1100.0, 5.0, 500.0, 1000.0);
+        settle(&mut sh, 1110.0);
+        assert!(sh.cc.is_shown());
+        assert_eq!(sh.hw_brightness_key(225, true, 2000.0), Some(vec![Effect::Brightness(9.0 / 16.0)]));
+        assert!(!sh.hud.shown(), "the sheet's slider moves instead of the HUD");
+        sh.set_volume(0.5);
+        sh.cc.hide();
+        assert_eq!(sh.event(Event::Power, 5000.0), vec![Effect::ScreenOff]);
+        assert_eq!(sh.hw_brightness_key(225, true, 6000.0), Some(vec![]), "no wake, no backlight in the dark");
+        assert!(!sh.hud.shown());
+        assert_eq!(sh.info.brightness, 9.0 / 16.0);
+    }
+
+    #[test]
+    fn keyboard_backlight_keys_need_a_backlight_and_use_its_steps() {
+        use bifrost_ui::osd::Level;
+        let (down, up) = (229, 230);
+        let mut sh = shell();
+        assert_eq!(sh.keyboard_backlight(), None);
+        assert_eq!(sh.hw_brightness_key(up, true, 1000.0), None, "no LED: the key is left to the next handler");
+        sh.set_keyboard_backlight(0.0, 3);
+        assert_eq!(sh.hw_brightness_key(up, true, 1000.0), Some(vec![Effect::KeyboardBacklight(1.0 / 3.0)]));
+        assert!(sh.hud.shown() && sh.hud.kind() == Level::KeyboardBrightness);
+        assert_eq!(sh.info.brightness, 0.5, "the panel is untouched");
+        sh.hw_brightness_key(up, true, 1100.0);
+        sh.hw_brightness_key(up, true, 1200.0);
+        assert_eq!(sh.keyboard_backlight(), Some(1.0), "stops at the top step");
+        assert_eq!(sh.hw_brightness_key(down, true, 1300.0), Some(vec![Effect::KeyboardBacklight(2.0 / 3.0)]));
+        for _ in 0..5 {
+            sh.hw_brightness_key(down, true, 1400.0);
+        }
+        assert_eq!(sh.keyboard_backlight(), Some(0.0), "the backlight can go fully off");
+        sh.set_keyboard_backlight(0.5, 0);
+        assert_eq!(sh.keyboard_backlight(), None, "zero steps means none");
+    }
+
+    #[test]
     fn control_center_slider_and_keys_share_one_level() {
         let mut sh = shell();
         unlock(&mut sh);
@@ -1763,6 +1835,101 @@
         assert_eq!(sh.cc.volume, 13.0 / 16.0);
         sh.set_volume(0.25);
         assert_eq!(sh.cc.volume, 0.25);
+    }
+
+    #[test]
+    fn voice_control_presses_the_named_element_only_for_a_final_command() {
+        use bifrost_ui::whisper::Transcript;
+        let mut sh = desktop_shell();
+        let hypothesis = Transcript { text: "press General > Software Update".into(), is_final: false };
+        assert!(sh.voice_press(&hypothesis, 1.0).is_none(), "a hypothesis is not a command");
+        let chatter = Transcript { text: "good morning".into(), is_final: true };
+        assert!(sh.voice_press(&chatter, 1.0).is_none(), "a sentence without a press verb is not a command");
+        let heard = Transcript { text: "press os/settings/general/software-update.".into(), is_final: true };
+        let answer = sh.voice_press(&heard, 2.0).expect("a command").expect("the element is pressable");
+        assert_eq!(answer.0, "os/settings/general/software-update");
+    }
+
+    /// A `speech_recognizer` that logs the calls it gets and answers a scripted poll, in place of the real service.
+    struct ScriptedRecognizer {
+        calls: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+        refuse: bool,
+    }
+
+    impl super::services::SystemService for ScriptedRecognizer {
+        fn name(&self) -> &'static str {
+            "speech_recognizer"
+        }
+        fn call(&mut self, _shell: &mut Shell, app_id: &str, method: &str, _params: &bifrost_core::json::Json, _t: f64) -> Result<bifrost_core::json::Json, String> {
+            use bifrost_core::json::{parse, Json};
+            self.calls.lock().unwrap().push(format!("{app_id} {method}"));
+            match method {
+                "start" if self.refuse => Err("speech recognizer: no consent".into()),
+                "start" => Ok(Json::Obj(vec![("id".into(), Json::Num(1.0))])),
+                "poll" => parse(r#"{"transcripts":[{"text":"press os/settings/general/software-update.","final":true},{"text":"press nothing","final":false}],"running":true}"#),
+                "stop" => Ok(Json::Obj(vec![("stopped".into(), Json::Bool(true))])),
+                other => Err(format!("no method {other}")),
+            }
+        }
+    }
+
+    fn voice_rig(refuse: bool) -> (Shell, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
+        let calls = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let mut sh = desktop_shell();
+        sh.services = vec![Box::new(ScriptedRecognizer { calls: calls.clone(), refuse })];
+        (sh, calls)
+    }
+
+    #[test]
+    fn voice_control_listens_while_it_is_on_and_runs_each_final_command() {
+        let (mut sh, calls) = voice_rig(false);
+        assert!(sh.voice_control_tick(1000.0).is_empty());
+        assert!(calls.lock().unwrap().is_empty(), "off: the recognizer is not touched");
+        sh.prefs.set("a11y_voice_control", "1").unwrap();
+        sh.voice_control_tick(1000.0);
+        assert_eq!(*calls.lock().unwrap(), ["shell:voice-control start"], "switched on: a recognition starts");
+        sh.voice_control_tick(1100.0);
+        assert_eq!(calls.lock().unwrap().len(), 1, "no poll before the interval");
+        sh.voice_control_tick(1000.0 + accessibility::voice_control::POLL_MS);
+        assert_eq!(*calls.lock().unwrap(), ["shell:voice-control start", "shell:voice-control poll"]);
+        // the final transcript pressed the Software Update row, the hypothesis did nothing
+        assert_eq!(sh.settings.as_ref().expect("Settings opened").page(), super::pages::PageId::SoftwareUpdate);
+    }
+
+    #[test]
+    fn switching_voice_control_off_ends_the_recognition() {
+        let (mut sh, calls) = voice_rig(false);
+        sh.prefs.set("a11y_voice_control", "1").unwrap();
+        sh.voice_control_tick(1000.0);
+        sh.prefs.set("a11y_voice_control", "0").unwrap();
+        sh.voice_control_tick(1100.0);
+        assert_eq!(*calls.lock().unwrap(), ["shell:voice-control start", "shell:voice-control stop"]);
+        sh.voice_control_tick(2000.0);
+        assert_eq!(calls.lock().unwrap().len(), 2, "off stays off");
+    }
+
+    #[test]
+    fn a_refused_recognition_is_announced_once_and_tried_again_later() {
+        let (mut sh, calls) = voice_rig(true);
+        sh.prefs.set("a11y_voice_control", "1").unwrap();
+        sh.voice_control_tick(1000.0);
+        assert!(sh.announce.tick(1000.0));
+        assert!(sh.announce.shown().is_some_and(|text| text.contains("Voice Control cannot listen")), "{:?}", sh.announce.shown());
+        sh.voice_control_tick(1500.0);
+        assert_eq!(calls.lock().unwrap().len(), 1, "no new attempt inside the pause");
+        sh.voice_control_tick(1000.0 + accessibility::voice_control::RETRY_MS);
+        assert_eq!(calls.lock().unwrap().len(), 2, "tried again after the pause");
+    }
+
+    #[test]
+    fn switch_control_runs_the_reader_cursor_without_the_screen_reader() {
+        let mut sh = desktop_shell();
+        assert!(!sh.reader_active());
+        sh.prefs.set("a11y_switch_control", "1").unwrap();
+        assert!(sh.switch_control_on() && sh.reader_active() && !sh.screen_reader_on());
+        sh.prefs.set("a11y_switch_control", "0").unwrap();
+        sh.prefs.set("a11y_screen_reader", "1").unwrap();
+        assert!(sh.reader_active() && !sh.switch_control_on(), "the reader alone keeps the cursor on");
     }
 
     #[test]
@@ -1921,6 +2088,21 @@
         assert_eq!(sh.run_menu_action(buds, 0.0), vec![Effect::Bluetooth(BtCmd::Disconnect("AA:BB:CC:DD:EE:01".into()))]);
     }
 
+    #[test]
+    fn battery_menu_switches_low_power_mode_on_and_off() {
+        let mut sh = shell();
+        let row = |sh: &Shell, text: &str| sh.menu_rows(desktop_bar::Menu::Power).into_iter().find(|r| r.text == text).and_then(|r| r.action);
+        assert!(sh.menu_row_texts(desktop_bar::Menu::Power).iter().any(|t| t == "  Low Power Mode"), "the Battery menu offers Low Power Mode");
+        assert!(!sh.low_power());
+        let on = row(&sh, "  Low Power Mode").expect("the row acts");
+        sh.run_menu_action(on, 0.0);
+        assert!(sh.low_power(), "the row turns Low Power Mode on");
+        assert!(sh.menu_row_texts(desktop_bar::Menu::Power).iter().any(|t| t == "\u{2713} Low Power Mode"), "checked while on");
+        let off = row(&sh, "\u{2713} Low Power Mode").expect("the checked row acts");
+        sh.run_menu_action(off, 0.0);
+        assert!(!sh.low_power(), "and turns it off again");
+    }
+
     /// Settings window repaint cost at the lab panel's size (`cargo test --profile fast --lib -- --ignored
     /// bench_settings_window_draw --nocapture`). Each frame counts as fresh input, so the window is drawn in full.
     #[test]
@@ -1948,3 +2130,93 @@
         for k in 0..n {let t=1000.+k as f64*16.;let app=if k%2==0 {AppId::Settings} else {AppId::Files};sh.desk_open(app,t);sh.draw_desk(&mut Surface{w,h,stride:w,px:&mut img.px,y0:0},t+8.);}
         eprintln!("focus switch: {:.2} ms a frame at {w}x{h}",start.elapsed().as_secs_f64()*1000./n as f64);
     }
+
+#[cfg(test)]
+mod live_wallpaper_tests {
+    use super::*;
+    use crate::shell::live_wallpaper::{Look, FRAME_MS};
+
+    fn centre(sh: &Shell) -> u32 {
+        let (w, h) = (sh.w as usize, sh.h as usize);
+        let mut img = Image::new(w, h);
+        sh.draw_desktop_background(&mut Surface { w, h, stride: w, px: &mut img.px, y0: 0 });
+        img.px[(h / 2) * w + w / 2]
+    }
+
+    #[test]
+    fn a_chosen_look_is_what_the_desktop_draws_under_the_windows() {
+        let mut sh = desktop_shell();
+        let still = centre(&sh);
+        assert_eq!(still, rgba(20, 20, 30, 255), "the still photo");
+        assert!(!sh.live_wallpaper_tick(0.0), "the still look makes no frame");
+        sh.set_live_look(Look::Drift);
+        assert_eq!(sh.live_look(), Look::Drift);
+        assert_eq!(centre(&sh), still, "until the first frame is due the still stays");
+        assert!(sh.live_wallpaper_tick(0.0), "the first frame is rendered");
+        let first = centre(&sh);
+        assert_ne!(first, still, "the desktop now shows the drift frame");
+        assert_eq!(first, sh.wallpaper_frame().px[(sh.h as usize / 2) * sh.w as usize + sh.w as usize / 2]);
+        assert!(!sh.live_wallpaper_tick(FRAME_MS / 2.0), "within a frame interval the cached frame is reused");
+        assert!(sh.live_wallpaper_tick(FRAME_MS * 40.0), "a later frame moves the picture");
+        assert_ne!(centre(&sh), first);
+        sh.set_live_look(Look::Still);
+        assert_eq!(centre(&sh), still, "choosing Still brings the photo back");
+    }
+
+    #[test]
+    fn a_new_frame_redraws_and_asks_the_presenter_to_upload_it_again() {
+        let mut sh = desktop_shell();
+        sh.set_live_look(Look::Waves);
+        sh.note_wallpaper_uploaded();
+        sh.dirty = false;
+        assert!(sh.desktop_wallpaper_once().is_none(), "uploaded");
+        assert!(sh.live_wallpaper_tick(0.0));
+        assert!(sh.dirty, "the desktop redraws");
+        let (wp, x) = sh.desktop_wallpaper_once().expect("the presenter takes the new frame");
+        assert_eq!((wp.w, wp.h, x), (sh.w as usize, sh.h as usize, 0));
+        assert_eq!(wp.px.as_ptr(), sh.wallpaper_frame().px.as_ptr(), "it is the live frame, not the still");
+        let next = sh.next_wake(0.0).expect("an animated look schedules its next frame");
+        assert!(next <= FRAME_MS + 1.0, "{next}");
+    }
+
+    #[test]
+    fn low_power_mode_freezes_an_animated_look_on_one_frame() {
+        let mut sh = desktop_shell();
+        sh.prefs.set("low_power", "1").unwrap();
+        assert!(sh.low_power());
+        sh.set_live_look(Look::Dither);
+        assert!(sh.live_wallpaper_tick(0.0));
+        let frozen = centre(&sh);
+        assert_ne!(frozen, rgba(20, 20, 30, 255), "the fallback is a drawn still frame, not a blank");
+        assert!(!sh.live_wallpaper_tick(60_000.0), "no further frames");
+        assert_eq!(centre(&sh), frozen);
+        assert_eq!(sh.live_still_only(), true);
+    }
+
+    #[test]
+    fn the_time_of_day_poster_follows_the_clock() {
+        let mut sh = desktop_shell();
+        sh.set_live_look(Look::TimeOfDay);
+        let day = 86_400 * 20_000;
+        sh.set_wall(day, 0, 0.0);
+        assert!(sh.live_wallpaper_tick(0.0));
+        let night = centre(&sh);
+        sh.set_wall(day + 12 * 3600, 0, 0.0);
+        assert!(sh.live_wallpaper_tick(0.0), "noon is a different minute");
+        let noon = centre(&sh);
+        let sum = |p: u32| (p & 0xff) + (p >> 8 & 0xff) + (p >> 16 & 0xff);
+        assert!(sum(noon) > sum(night) + 150, "noon is brighter than midnight");
+        assert!(!sh.live_wallpaper_tick(1.0), "the same minute keeps the cached poster");
+    }
+
+    #[test]
+    fn the_look_does_not_run_off_the_desktop_or_with_the_screen_off() {
+        let mut sh = shell();
+        sh.set_live_look(Look::Drift);
+        assert!(!sh.live_wallpaper_tick(0.0), "the bifrost home screen has no live wallpaper");
+        let mut sh = desktop_shell();
+        sh.set_live_look(Look::Drift);
+        sh.screen_on = false;
+        assert!(!sh.live_wallpaper_tick(0.0), "the screen is off");
+    }
+}

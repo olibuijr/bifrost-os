@@ -208,10 +208,10 @@
    "feature": "Font family choice",
    "area": "panel",
    "apple": "Aa font list",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Not built: the reader draws every page in the system face and the Display panel has no family row. The unwired font model was removed; a serif or sans face and a family setting in store::Settings are still needed, then the page layout measures with that face.",
-   "wire": "Add a font family setting to the Display panel, measure/reflow EPUB pages with the selected face, and verify PDF behaviour remains explicit."
+   "status": "partial",
+   "bifrost": "springboard/apps/books-desktop/src/books/face.rs:16 (families, the font library's families); springboard/apps/books-desktop/src/books/face.rs:21 (path_of); springboard/apps/books-desktop/src/books/face.rs:28 (ui_for, the face the body is drawn with); springboard/apps/books-desktop/src/books/store.rs:258 (family_step, the row's order); springboard/apps/books-desktop/src/books/store.rs:267 (family_applies, off for PDF); springboard/apps/books-desktop/src/books/mod.rs:919 (body_face, built once per family and size); springboard/apps/books-desktop/src/books/mod.rs:937 (step_family, relayout keeps the place); springboard/apps/books-desktop/src/books/mod.rs:633 (repaginate measures in the face); springboard/apps/books-desktop/src/books/draw.rs:342 (draw_page draws in the face); springboard/apps/books-desktop/src/books/draw.rs:620 (draw_display: the font row and PDF footnote)",
+   "note": "The Display panel's font row steps through the families of BifrOSt's font library, System Font first. EPUB pages are measured and drawn in the chosen face, so the pagination changes with it; chrome stays in the system face. The row is disabled for a PDF, whose pages keep the font the document sets, and a footnote says so. Tested headless in books/store_prefs_tests.rs (the_family_row_steps_through_the_system_face_and_the_library, the_family_choice_is_off_for_pdfs), books/layout.rs (the_measure_of_the_chosen_face_sets_the_page_count) and books/settings_wiring_tests.rs (the_font_row_changes_an_epub_and_leaves_a_pdf_alone). Gap: the row steps through the families rather than showing a list; the faces come from the font library only, not the system's fonts; not verified on Midget.",
+   "wire": "Verify on Midget that a library family changes EPUB line breaks and that the row is dimmed with its footnote for a PDF; replace the stepper with a list of families when the Display panel has room."
   },
   {
    "feature": "Line spacing / margins / justification",
@@ -272,9 +272,9 @@
    "area": "view",
    "apple": "Audiobooks section",
    "status": "gap",
-   "bifrost": "",
-   "note": "Not started: there is no audiobook collection, chapter reader or playback through the shell media service yet.",
-   "wire": "Add an audiobook (m4b/mp3) collection played through the shell media service with chapters"
+   "bifrost": "springboard/src/svc.rs:269 (audio service client seek_ms, the shell's playback path); springboard/src/media/audiofile.rs:105 (format_of: the shell decodes m4b and mp3); springboard/src/media/codec.rs:39 (m4b maps to the MP4 demuxer); springboard/src/media/chapters.rs (chapter reader: Nero chpl and QuickTime chapter track for MP4, ID3 CHAP and CTOC for MP3)",
+   "note": "Not built as a Books collection. The chapter reader exists now (Tags::chapters, read through audiofile::read_tags), so an m4b's chapter list is available to the app. Still missing: the Audiobooks collection, the player bar and the chapter list UI. Playback is possible through the audio service (svc.rs seek_ms).",
+   "wire": "Add an Audiobooks collection to the Books sidebar that lists m4b and mp3 files from the library folders; show read_tags(path).chapters; play, pause and seek through the audio service (bifrost_app::audio::Client)."
   },
   {
    "feature": "Book and audiobook store",
@@ -316,18 +316,18 @@
    "feature": "Settings window",
    "area": "settings",
    "apple": "Books > Settings",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add a settings pane for library folders and reader defaults"
+   "status": "partial",
+   "bifrost": "springboard/apps/books-desktop/src/books/settings.rs:90 (open_settings, Books > Settings); springboard/apps/books-desktop/src/books/settings.rs:48 (lines, General and Reading groups); springboard/apps/books-desktop/src/books/settings.rs:114 (settings_targets: Done, Add Folder, Remove, Open Books In, size, theme, justify); springboard/apps/books-desktop/src/books/settings.rs:168 (remove_folder); springboard/apps/books-desktop/src/books/settings.rs:199 (add_folder_file, the folder's path from its file descriptor); springboard/apps/books-desktop/src/books/draw.rs:676 (draw_settings); springboard/apps/books-desktop/src/books/store.rs:238 (Store fields folders, family, open_continuous); springboard/apps/books-desktop/src/books/mod.rs:633 (repaginate); springboard/apps/books-desktop/src/main.rs (MENU_SETTINGS in the File menu; the folder panel opens from touch and is answered in document)",
+   "note": "Books > Settings (Cmd+,) opens a Settings window. General lists the library folders: the built-in ones, and user folders added with Add Folder and removed with Remove; Open Books In chooses single page or continuous scroll for a book's first opening. Reading edits the text size, theme and Justify Text, the same preferences as the Display panel. The preferences are kept in the state file. Hyphenation is not offered: the reflow engine does not hyphenate yet. Tested headless in books/store_prefs_tests.rs (settings_window_prefs_round_trip, a_state_file_from_before_the_prefs_loads_with_the_defaults, a_folder_is_listed_once) and books/settings_wiring_tests.rs (done_in_the_settings_window_returns_to_the_library, the_open_mode_and_the_library_folders_survive_a_restart, removing_a_user_folder_leaves_the_built_in_ones). Gap: the window does not scroll when many folders are listed; Add Folder depends on the shell's folder panel returning a path through the file descriptor; not verified on Midget.",
+   "wire": "Verify on Midget: Add Folder and Remove (the library rescans), Open Books In for a new book, text size, theme and justify persisting after relaunch; add scrolling for long folder lists; confirm the folder panel path resolves in the shell's sandbox."
   }
  ],
  "summary": {
   "features": 35,
   "parity": 19,
-  "partial": 11,
-  "gap": 3,
+  "partial": 13,
+  "gap": 1,
   "n/a": 2,
-  "coverage_pct": 74.2
+  "coverage_pct": 77.3
  }
 }

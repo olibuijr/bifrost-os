@@ -43,6 +43,21 @@ pub fn heart(s: &mut Surface, (cx, cy): (f32, f32), size: f32, color: u32) {
     fill_poly(s, &[(cx - edge, lobe_y + r * 0.35), (cx + edge, lobe_y + r * 0.35), (cx, cy + size * 0.46)], color);
 }
 
+/// A thumb `size` px wide, pointing up (`up` true) or down, drawn from fixed outline points.
+pub fn thumb(s: &mut Surface, (cx, cy): (f32, f32), size: f32, up: bool, color: u32) {
+    const OUTLINE: [(f32, f32); 10] = [(-0.42, -0.02), (-0.2, -0.02), (-0.05, -0.36), (0.02, -0.46), (0.1, -0.42), (0.1, -0.14), (0.44, -0.14), (0.44, 0.02), (0.36, 0.44), (-0.3, 0.44)];
+    let flip = if up { 1.0 } else { -1.0 };
+    let pts: Vec<(f32, f32)> = OUTLINE.iter().map(|&(x, y)| (cx + x * size, cy + y * size * flip)).collect();
+    fill_poly(s, &pts, color);
+}
+
+/// A bookmark ribbon `size` px tall with a notch at the foot.
+pub fn bookmark(s: &mut Surface, (cx, cy): (f32, f32), size: f32, color: u32) {
+    let pts = [(-0.3, -0.46), (0.3, -0.46), (0.3, 0.46), (0.0, 0.2), (-0.3, 0.46)];
+    let pts: Vec<(f32, f32)> = pts.iter().map(|&(x, y)| (cx + x * size, cy + y * size)).collect();
+    fill_poly(s, &pts, color);
+}
+
 /// A right-pointing triangle `size` px tall centred on (cx, cy).
 pub fn play(s: &mut Surface, (cx, cy): (f32, f32), size: f32, color: u32) {
     let (h, w) = (size / 2.0, size * 0.46);

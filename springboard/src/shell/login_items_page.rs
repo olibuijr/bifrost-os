@@ -27,6 +27,16 @@ impl ExtensionKind {
     /// Every kind, in the order the page lists them.
     pub const ALL: [ExtensionKind; 4] = [ExtensionKind::Share, ExtensionKind::Preview, ExtensionKind::FileProvider, ExtensionKind::Widget];
 
+    /// The manifest spelling of the kind, which the extension key uses.
+    pub fn key(self) -> &'static str {
+        match self {
+            ExtensionKind::Share => "share",
+            ExtensionKind::Preview => "quick-look",
+            ExtensionKind::FileProvider => "file-provider",
+            ExtensionKind::Widget => "widget",
+        }
+    }
+
     /// The manifest spelling of the kind (`kind = "..."`).
     pub fn parse(text: &str) -> Option<ExtensionKind> {
         match text.trim() {
@@ -73,13 +83,34 @@ pub struct LoginExtensions {
     pub background: Vec<BackgroundAgent>,
     /// app ids whose background agent is turned off
     pub background_off: Vec<String>,
+    /// apps that declare background tasks (`[background] tasks`), sorted by app name
+    pub refresh: Vec<BackgroundAgent>,
+    /// app ids whose Background App Refresh the user turned off (`background.refresh.off`)
+    pub refresh_off: Vec<String>,
     /// sorted by app name, then by kind (install order is kept within an app)
     pub extensions: Vec<Extension>,
+    /// the keys (`extension_key`) of the extensions the user turned off (`login.extensions.off`)
+    pub extensions_off: Vec<String>,
+}
+
+/// The pref that holds the keys of the extensions turned off, comma separated.
+pub const EXTENSIONS_OFF_KEY: &str = "login.extensions.off";
+
+/// The key one extension is saved under: its app, its kind and its name. A comma or percent sign in the name is
+/// escaped, so the pref list stays comma separated.
+pub fn extension_key(e: &Extension) -> String {
+    let name = e.name.replace('%', "%25").replace(',', "%2C");
+    format!("{}/{}/{}", e.app_id, e.kind.key(), name)
+}
+
+/// Whether an extension is on: it is not in the turned-off keys.
+pub fn extension_enabled(off: &[String], e: &Extension) -> bool {
+    !off.contains(&extension_key(e))
 }
 
 /// The empty list, for pages that show no extensions (a `const` so a page model can borrow it).
 #[cfg_attr(not(test), allow(dead_code))] // the empty set for tests and previews (a static: a const with Vecs cannot be borrowed for 'static)
-pub static NO_EXTENSIONS: LoginExtensions = LoginExtensions { background: Vec::new(), background_off: Vec::new(), extensions: Vec::new() };
+pub static NO_EXTENSIONS: LoginExtensions = LoginExtensions { background: Vec::new(), background_off: Vec::new(), refresh: Vec::new(), refresh_off: Vec::new(), extensions: Vec::new(), extensions_off: Vec::new() };
 
 /// The tables of one manifest that this page reads.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -88,10 +119,17 @@ pub struct ManifestTables {
     pub extensions: Vec<(ExtensionKind, String)>,
 }
 
+/// The kind Settings groups an extension point under, for an `[[extension]]` table that names a `point` and no `kind`
+/// (the registry tables of `bifrost_ui::extension_manifest`).
+pub fn kind_for_point(point: &str) -> Option<ExtensionKind> {
+    (point == bifrost_ui::extension_manifest::FILE_PROVIDER_POINT).then_some(ExtensionKind::FileProvider)
+}
+
 #[derive(Default)]
 struct Table {
     header: String,
     kind: String,
+    point: String,
     name: String,
 }
 
@@ -100,7 +138,7 @@ impl Table {
     fn finish(self, out: &mut ManifestTables) {
         match self.header.as_str() {
             "[[extension]]" => {
-                if let Some(kind) = ExtensionKind::parse(&self.kind) {
+                if let Some(kind) = ExtensionKind::parse(&self.kind).or_else(|| kind_for_point(&self.point)) {
                     out.extensions.push((kind, self.name));
                 }
             }
@@ -125,6 +163,7 @@ pub fn parse_tables(text: &str) -> ManifestTables {
         let value = value.trim().trim_matches('"').to_string();
         match key.trim() {
             "kind" => table.kind = value,
+            "point" => table.point = value,
             "name" => table.name = value,
             _ => {}
         }
@@ -144,12 +183,16 @@ where
         if tables.background {
             out.background.push(BackgroundAgent { app_id: id.to_string(), app_name: name.to_string() });
         }
+        if !super::services::background::parse_tasks(text).is_empty() {
+            out.refresh.push(BackgroundAgent { app_id: id.to_string(), app_name: name.to_string() });
+        }
         for (kind, label) in tables.extensions {
             let label = if label.is_empty() { kind.label().to_string() } else { label };
             out.extensions.push(Extension { app_id: id.to_string(), app_name: name.to_string(), kind, name: label });
         }
     }
     out.background.sort_by_key(|b| b.app_name.to_lowercase());
+    out.refresh.sort_by_key(|b| b.app_name.to_lowercase());
     out.extensions.sort_by_key(|e| e.app_name.to_lowercase());
     out
 }
@@ -193,6 +236,16 @@ pub fn background_off_to_pref(off: &[String]) -> String {
     off.join(",")
 }
 
+/// Whether the background agent of `app_id` may run: its switch is on, so its id is not in the turned-off list.
+pub fn background_agent_enabled(off: &[String], app_id: &str) -> bool {
+    !off.iter().any(|id| id == app_id)
+}
+
+/// The background agents whose switch is on, in the order given. A launcher starts these and skips the rest.
+pub fn runnable_background_agents<'a>(agents: &'a [BackgroundAgent], off: &[String]) -> Vec<&'a BackgroundAgent> {
+    agents.iter().filter(|a| background_agent_enabled(off, &a.app_id)).collect()
+}
+
 /// The START ORDER group: one row per login item in start order, each showing its place. Choosing a row moves that
 /// app one place earlier. None when there is nothing to order (fewer than two items).
 pub fn order_group(items: &[(String, String)]) -> Option<Group> {
@@ -216,8 +269,18 @@ pub fn background_group(ext: &LoginExtensions) -> Option<Group> {
     Some(Group::new(rows).header("ALLOW IN THE BACKGROUND").footer("Apps with a background agent may run when no window is open. Turn one off to stop its agent until you turn it back on."))
 }
 
-/// The EXTENSIONS groups: one group per kind that some app declares, each row the extension's name and its app.
-/// With no extensions at all, a single group says so.
+/// The per-app list under Background App Refresh: a switch per app that declares background tasks. The system-wide
+/// switch is the page's first group. None when no installed app declares a task.
+pub fn refresh_group(ext: &LoginExtensions) -> Option<Group> {
+    if ext.refresh.is_empty() {
+        return None;
+    }
+    let rows = ext.refresh.iter().map(|b| Item::new(b.app_name.as_str()).app_icon(b.app_id.as_str()).switch(!ext.refresh_off.contains(&b.app_id), Action::RefreshToggle(b.app_id.clone()))).collect();
+    Some(Group::new(rows).header("APPS").footer("Apps with background tasks may refresh their content while no window is open. Turn one off to stop its refresh."))
+}
+
+/// The EXTENSIONS groups: one group per kind that some app declares. Each row is the extension's name and its app, with
+/// a switch that turns the extension off. With no extensions at all, a single group says so.
 pub fn extension_groups(ext: &LoginExtensions) -> Vec<Group> {
     if ext.extensions.is_empty() {
         return vec![Group::new(vec![Item::new("No extensions")]).header("EXTENSIONS").footer("Apps add extensions to the share menu, Preview, file providers and widgets in their manifest.")];
@@ -225,7 +288,12 @@ pub fn extension_groups(ext: &LoginExtensions) -> Vec<Group> {
     ExtensionKind::ALL
         .into_iter()
         .filter_map(|kind| {
-            let rows: Vec<Item> = ext.extensions.iter().filter(|e| e.kind == kind).map(|e| Item::new(e.name.as_str()).value(e.app_name.as_str())).collect();
+            let rows: Vec<Item> = ext
+                .extensions
+                .iter()
+                .filter(|e| e.kind == kind)
+                .map(|e| Item::new(e.name.as_str()).value(e.app_name.as_str()).switch(extension_enabled(&ext.extensions_off, e), Action::ExtensionToggle(extension_key(e))))
+                .collect();
             if rows.is_empty() {
                 None
             } else {
@@ -238,6 +306,21 @@ pub fn extension_groups(ext: &LoginExtensions) -> Vec<Group> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_turned_off_extension_is_keyed_by_app_kind_and_name_with_commas_escaped() {
+        let e = Extension { app_id: "is.notes".into(), app_name: "Notes".into(), kind: ExtensionKind::Share, name: "Save, then send".into() };
+        assert_eq!(extension_key(&e), "is.notes/share/Save%2C then send");
+        assert!(extension_enabled(&[], &e));
+        let off = vec![extension_key(&e)];
+        assert!(!extension_enabled(&off, &e));
+        // the pref list is comma separated, so a key with a comma must survive the round trip
+        let saved = background_off_to_pref(&off);
+        assert_eq!(background_off_from_pref(Some(&saved)), off);
+        let groups = extension_groups(&LoginExtensions { extensions: vec![e], extensions_off: off, ..Default::default() });
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].items.len(), 1);
+    }
 
     fn item(id: &str, name: &str) -> (String, String) {
         (id.to_string(), name.to_string())
@@ -288,6 +371,14 @@ mod tests {
     }
 
     #[test]
+    fn a_registry_table_with_a_known_point_is_listed_under_its_kind() {
+        let text = "[[extension]]\npoint = \"is.bifrost.file-provider\"\nname = \"Example Drive\"\n\n[[extension]]\npoint = \"com.example.other\"\n";
+        let ext = from_manifests([("com.example.drive", "Drive", text)]);
+        assert_eq!(ext.extensions.len(), 1, "an unknown point has no Settings group");
+        assert_eq!((ext.extensions[0].kind, ext.extensions[0].name.as_str()), (ExtensionKind::FileProvider, "Example Drive"));
+    }
+
+    #[test]
     fn background_group_has_a_switch_state_per_app_and_none_without_agents() {
         assert!(background_group(&NO_EXTENSIONS).is_none());
         let mut ext = from_manifests([("is.notes", "Notes", NOTES)]);
@@ -314,5 +405,31 @@ mod tests {
         let off = background_off_from_pref(Some(" is.a, ,is.b "));
         assert_eq!(off, ["is.a", "is.b"]);
         assert_eq!(background_off_to_pref(&off), "is.a,is.b");
+    }
+}
+
+#[cfg(test)]
+mod background_gate_tests {
+    use super::*;
+
+    fn agent(id: &str) -> BackgroundAgent {
+        BackgroundAgent { app_id: id.into(), app_name: id.into() }
+    }
+
+    #[test]
+    fn a_turned_off_background_agent_does_not_run() {
+        let agents = [agent("is.a"), agent("is.b"), agent("is.c")];
+        let off = background_off_from_pref(Some("is.b, is.c"));
+        assert!(background_agent_enabled(&off, "is.a"));
+        assert!(!background_agent_enabled(&off, "is.b"));
+        let run: Vec<&str> = runnable_background_agents(&agents, &off).iter().map(|a| a.app_id.as_str()).collect();
+        assert_eq!(run, ["is.a"]);
+    }
+
+    #[test]
+    fn with_no_switch_turned_off_every_agent_runs_in_order() {
+        let agents = [agent("is.b"), agent("is.a")];
+        let run: Vec<&str> = runnable_background_agents(&agents, &[]).iter().map(|a| a.app_id.as_str()).collect();
+        assert_eq!(run, ["is.b", "is.a"]);
     }
 }

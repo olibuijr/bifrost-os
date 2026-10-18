@@ -2,7 +2,9 @@
 //! Core Image style filters), the layout in points, the file names in the library, and the 4-up contact sheet.
 
 use bifrost_app::image_filter::{Filter, FilterChain};
-use bifrost_app::kit::{pack, Image};
+use bifrost_app::kit::Image;
+#[cfg(test)]
+use bifrost_app::kit::pack;
 use crate::warp;
 use springboard::shell::photos::library::Date;
 use std::path::{Path, PathBuf};
@@ -143,6 +145,7 @@ impl Effect {
     }
 
     /// True for the effects that move pixels (`warp.rs`) instead of changing their colour.
+    #[cfg(test)]
     pub fn is_distortion(self) -> bool {
         matches!(self, Effect::Bulge | Effect::Twirl | Effect::Mirror)
     }

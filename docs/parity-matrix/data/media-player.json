@@ -33,7 +33,7 @@
       "apple": "MPMediaQuery, MPMediaQuerySection, MPMediaPropertyPredicate, MPMediaPredicate",
       "bifrost": "springboard/ui/src/media_query.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 8 tests. Wave 2 (theme-12, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. browse filters are private to the Music app; apps cannot query the media library"
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 2 (theme-12, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. browse filters are private to the Music app; apps cannot query the media library Built 2026-10-17: SDK bifrost_app::media_library::run over bifrost_ui::media_query (filters, groupings, sections); tests springboard/sdk/src/media_library.rs::tests."
     },
     {
       "feature": "Media items, collections and playlists",
@@ -54,7 +54,7 @@
       "apple": "MPMediaPickerController",
       "bifrost": "springboard/ui/src/media_picker.rs",
       "status": "partial",
-      "note": "Pure model, tested headless in parity_sdk-complete-26.rs: kinds accepted, one or many selection with a limit, the remaining count, select-all over the listed playable items, clearing the choice, playable filter, title and fuzzy search, and a confirmed choice returned to the app. Gap: no SDK widget or shell sheet draws it yet, which needs the lab machine to verify."
+      "note": "Pure model, tested headless in parity_sdk-complete-26.rs: kinds accepted, one or many selection with a limit, the remaining count, select-all over the listed playable items, clearing the choice, playable filter, title and fuzzy search, and a confirmed choice returned to the app. Gap: no SDK widget or shell sheet draws it yet, which needs the lab machine to verify. Built 2026-10-17: SDK row model over the picker (bifrost_app::media_picker_view: rows, footer, tap); the shell draws nothing yet. Tests springboard/sdk/src/media_picker_view.rs::tests. Built 2026-10-17: shell/pickers.rs draw_media_picker draws the rows (title, subtitle, check mark, dimmed unplayable rows) and the chosen-count footer; tests springboard shell::pickers::tests. No sheet opens it yet."
     },
     {
       "feature": "Volume control and route button",
@@ -75,7 +75,7 @@
       "apple": "MPRemoteCommandCenter, MPRemoteCommand, MPRemoteCommandEvent",
       "bifrost": "springboard/ui/src/remote_command.rs (CommandCenter), springboard/sdk/src/lib.rs (remote_command); wired: springboard/src/shell/now_playing_menu.rs, springboard/src/shell/desktop_bar.rs",
       "status": "partial",
-      "note": "Wave 4 (w4-media-player, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the shell's Control Center and lock screen send transport commands to the audio service; apps cannot register handlers and hardware media keys are not mapped. Headless tests: ui/tests/parity_sdk-tests-01a.rs (remote_actions_are_dispatched_to_the_newest_handler, an_action_without_a_handler_or_switched_off_is_refused, rating_command_refuses_values_outside_its_range). Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "Wave 4 (w4-media-player, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the shell's Control Center and lock screen send transport commands to the audio service; apps cannot register handlers and hardware media keys are not mapped. Headless tests: ui/tests/parity_sdk-tests-01a.rs (remote_actions_are_dispatched_to_the_newest_handler, an_action_without_a_handler_or_switched_off_is_refused, rating_command_refuses_values_outside_its_range). Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity. Built 2026-10-17: SDK routing of menu bar, Control Center and media key transport to the app's CommandCenter (bifrost_app::remote_routing: action_for, media_key, route); shell dispatch to the owning app still to wire. Tests springboard/sdk/src/remote_routing.rs::tests. Built 2026-10-17: shell sends hardware media keys (play, pause, next, previous, stop, fast forward, rewind) to the Now Playing owner (services/now_playing.rs media_key; shell.rs hw_media_key); tests springboard/src/shell/services/now_playing.rs::tests."
     },
     {
       "feature": "Track navigation and seeking",
@@ -103,21 +103,21 @@
       "apple": "MPFeedbackCommand, MPRatingCommand and their events",
       "bifrost": "springboard/ui/src/media_feedback.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (theme-03, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. favourites exist only inside the Music app; no feedback or rating commands for the system"
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (theme-03, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. favourites exist only inside the Music app; no feedback or rating commands for the system Built 2026-10-17: SDK feedback body and like/dislike/bookmark and rate event decoding (bifrost_app::now_playing_feedback); shell side not wired yet. Tests springboard/sdk/src/now_playing_feedback.rs::tests. Built 2026-10-17: the lock card draws the like, dislike and bookmark icons and the rating track from the owner's feedback, and a tap sends set_toggle or set_rating (music/nowplaying.rs, music/system.rs, audiosvc.rs svc_lock_action); tests springboard shell::music::nowplaying::tests and shell::music::system::tests."
     },
     {
       "feature": "Now Playing sessions and focus",
       "apple": "MPNowPlayingSession, MPNowPlayingInfoCenter multi-player handling",
       "bifrost": "springboard/sdk/src/now_playing.rs (publish, clear, transport commands); springboard/ui/src/media_session.rs (session, content, playback, command table); springboard/ui/src/playback_arbiter.rs (which participant may play); springboard/src/shell/services/now_playing.rs (newest session on the tile); springboard/src/svc.rs (one queue, one speaker: latest player wins), springboard/docs/services.md",
       "status": "partial",
-      "note": "Apps publish a session to Control Center, which shows the newest one, and receive its transport commands; the session and arbitration rules are tested in their models. Gap: the audio service still decides which app plays, and the shell does not yet apply the arbiter to the session it shows."
+      "note": "Apps publish a session to Control Center, which shows the newest one, and receive its transport commands; the session and arbitration rules are tested in their models. Gap: the audio service still decides which app plays, and the shell does not yet apply the arbiter to the session it shows. Built 2026-10-17: the SDK re-exports the media models (media_feedback, media_playlist, media_picker, media_query, content_items, playback_arbiter) so apps can use them; tests springboard/sdk/tests/media_models.rs. Shell wiring still pending."
     },
     {
       "feature": "External player items",
       "apple": "MPContentItem, MPPlayableContentManager",
       "bifrost": "springboard/ui/src/content_items.rs (ContentItem, ContentTree)",
       "status": "partial",
-      "note": "The item tree (containers, playable items, streaming and explicit flags, clamped playback progress, playback resolution) is tested headless in springboard/ui/tests/parity_sdk-gaps-01.rs. Gap: no SDK call publishes items to the shell and no player reads them."
+      "note": "The item tree (containers, playable items, streaming and explicit flags, clamped playback progress, playback resolution) is tested headless in springboard/ui/tests/parity_sdk-gaps-01.rs. Gap: no SDK call publishes items to the shell and no player reads them. Built 2026-10-17: the SDK re-exports the media models (media_feedback, media_playlist, media_picker, media_query, content_items, playback_arbiter) so apps can use them; tests springboard/sdk/tests/media_models.rs. Shell wiring still pending."
     },
     {
       "feature": "Deprecated movie player",
@@ -128,7 +128,7 @@
     }
   ],
   "gaps": [
-    "No app-facing media library: no query, filter, collection or library change API (MPMediaQuery, MPMediaLibrary); the scan lives in springboard/apps/music-desktop/src/music/library.rs.",
+    "Media library queries are an SDK model over records the app supplies (sdk media_library.rs); no shell library is exposed, and there is no library change API (MPMediaQuery, MPMediaLibrary); the scan lives in springboard/apps/music-desktop/src/music/library.rs.",
     "No media picker view for apps. springboard/ui/src/media_picker.rs models the picker (kinds, selection rules, search, confirm), but no SDK widget or shell sheet draws it.",
     "No remote command handlers for apps (MPRemoteCommandCenter); Control Center transport and hardware media keys are not exposed to apps (springboard/src/bare/input.rs:826 notes the media-key remote but does not map it).",
     "No playlist, rating or feedback model in the SDK (MPMediaPlaylist, MPRatingCommand); favourites and playlists are private to the Music app.",

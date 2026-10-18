@@ -1,0 +1,26 @@
+{
+  "framework": "RoomPlan",
+  "doc": "https://developer.apple.com/documentation/roomplan",
+  "macos_since": "",
+  "status": "n/a",
+  "bifrost": "none",
+  "summary": "RoomPlan builds a room model from a LiDAR scan. The target tablet has no LiDAR or depth sensor, so the capture side has no counterpart.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run in this batch); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Room capture session",
+      "apple": "RoomCaptureSession, RoomCaptureView",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "needs a LiDAR scanner, which the target tablet does not have"
+    },
+    {
+      "feature": "Captured room model and export",
+      "apple": "CapturedRoom, RoomBuilder, StructureBuilder",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "depends on the room capture session above"
+    }
+  ],
+  "gaps": []
+}

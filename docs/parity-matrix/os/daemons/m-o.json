@@ -19,10 +19,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings",
+   "status": "n/a",
+   "note": "Legacy talk (ntalk) messaging daemon. No Arch package ships it and no BifrOSt service or app uses the talk protocol, so the service has no meaning on BifrOSt.",
    "rea": [],
-   "method": "rule"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/org.apache.httpd.plist",
@@ -41,9 +41,21 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings",
+   "note": "Apache web server comes from the Arch apache package (runtime-packages.txt). The unit is installed but not enabled by default; BifrOSt has no Settings surface for it.",
    "rea": [],
-   "method": "rule"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/httpd"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/lib/systemd/system/httpd.service"
+    }
+   ],
+   "ready_note": "The apache package from packaging/arch/runtime-packages.txt ships the web server and its systemd unit httpd.service. Unit name not verified on a built image."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/org.cups.cups-lpd.plist",
@@ -60,11 +72,37 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/cups.rs, springboard/ui/src/ipp.rs",
+   "bifrost": "packaging/arch/cups-lpd.socket, packaging/arch/cups-lpd@.service, springboard/src/privd/accounts.rs, springboard/src/shell/sharing_page.rs",
    "status": "partial",
-   "note": "rule: CUPS client and IPP models; Print Center app",
+   "note": "Built: Printer Sharing switch (Settings > Sharing) enabling cups-lpd.socket, which hands each LPD connection to the packaged cups-lpd.",
    "rea": [],
-   "method": "rule"
+   "method": "built",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privd::accounts::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::sharing_page::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/lib/cups/daemon/cups-lpd"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/lib/systemd/system/cups-lpd.socket"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/lib/systemd/system/cups-lpd@.service"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: Printer Sharing. cups-lpd.socket listens on port 515 and starts cups-lpd@.service per connection, which runs the cups package's cups-lpd (queues the job through cupsd); Settings > Sharing gets a Printer Sharing switch that privd service.set maps to cups-lpd.socket (accounts::service_units). Off until the person turns it on."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/org.cups.cupsd.plist",
@@ -83,9 +121,31 @@
    "doc": "",
    "bifrost": "springboard/ui/src/cups.rs, springboard/ui/src/ipp.rs",
    "status": "partial",
-   "note": "rule: CUPS client and IPP models; Print Center app",
+   "note": "The CUPS scheduler is the cups package; BifrOSt's CUPS and IPP client models and the Print Center app use it.",
    "rea": [],
-   "method": "rule"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/cupsd"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/lib/systemd/system/cups.service"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cups::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "ipp::tests"
+    }
+   ],
+   "ready_note": "The CUPS scheduler comes from the cups package (cupsd and cups.service). BifrOSt's CUPS and IPP client models (cups.rs, ipp.rs) are tested against it and back the Print Center app."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/org.net-snmp.snmpd.plist",
@@ -104,9 +164,21 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings",
+   "note": "snmpd comes from the net-snmp package (runtime-packages.txt). It is not enabled by default and BifrOSt has no Settings surface for it.",
    "rea": [],
-   "method": "rule"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/snmpd"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/lib/systemd/system/snmpd.service"
+    }
+   ],
+   "ready_note": "The net-snmp package (runtime-packages.txt) ships the snmpd daemon and its unit snmpd.service. Unit name not verified on a built image."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/org.openldap.slapd.plist",
@@ -125,9 +197,21 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings",
+   "note": "slapd comes from the openldap package (runtime-packages.txt). It is not enabled by default and BifrOSt has no directory-service Settings surface.",
    "rea": [],
-   "method": "rule"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/slapd"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/lib/systemd/system/slapd.service"
+    }
+   ],
+   "ready_note": "The openldap package (runtime-packages.txt) ships the slapd directory server and its unit slapd.service. Unit name not verified on a built image."
   }
  ]
 }

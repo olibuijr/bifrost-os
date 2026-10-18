@@ -19,21 +19,21 @@
       "apple": "vDSP Fourier transforms, Discrete Cosine transforms, fast Fourier transforms",
       "bifrost": "springboard/ui/src/fourier.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 9 tests. Wave 3 (theme-27, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The FFT is app-local to the DAW convolver. No SDK transform API and no DCT."
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 3 (theme-27, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The FFT is app-local to the DAW convolver. No SDK transform API and no DCT. Built 2026-10-17: orthonormal DCT-II and inverse as bifrost_app::dct; tests dct::tests."
     },
     {
       "feature": "Convolution and morphology",
       "apple": "vImage convolution kernels, dilation and erosion (Convolution, Morphology collections)",
       "bifrost": "springboard/render/src/gfx.rs:476 (blur), springboard/render/src/gfx.rs:423 (blur_material); springboard/render/src/morphology.rs (convolve, dilate, erode, open, close)",
       "status": "partial",
-      "note": "Kernel convolution, dilation, erosion, opening and closing on 8-bit planes are tested headless in springboard/render/tests/parity_sdk-complete-39.rs. Gap: no float or multi-channel planes, no separable fast path, and no GPU filter path."
+      "note": "Kernel convolution, dilation, erosion, opening and closing on 8-bit planes are tested headless in springboard/render/tests/parity_sdk-complete-39.rs. Gap: no float or multi-channel planes, no separable fast path, and no GPU filter path. Refreshed 2026-10-17: exposed to apps as bifrost_app::kit::morphology (springboard/sdk/src/lib.rs); the convolution and morphology gap is closed for 8-bit planes (float and multi-channel are still missing)."
     },
     {
       "feature": "Image buffer geometry",
       "apple": "vImage geometric transforms (rotate, reflect, shear, scale) and resampling",
       "bifrost": "springboard/render/src/gfx/rotate.rs:157 (rotated), springboard/render/src/emoji.rs:402 (resample), springboard/src/shell/photos/edit.rs:214 (rotate)",
       "status": "partial",
-      "note": "Quarter-turn rotation and a resample for emoji only. No shear, arbitrary-angle transform, or Lanczos resampling API."
+      "note": "Quarter-turn rotation and a resample for emoji only. No shear, arbitrary-angle transform, or Lanczos resampling API. Built 2026-10-17: PixelTransfer::sheared, a 2x2 matrix shear about the centre with bounding-box output (sdk pixel_transfer.rs; tests pixel_transfer::tests). Refreshed 2026-10-17: shear and arbitrary-angle turn are PixelTransfer::sheared and rotated_by (springboard/sdk/src/pixel_transfer.rs, tests pixel_transfer::tests)."
     },
     {
       "feature": "Compositing and blend modes",
@@ -47,14 +47,14 @@
       "apple": "vImage convert-any-to-any (CMYK, planar and interleaved formats, YUV and RGB)",
       "bifrost": "springboard/render/src/pixel_layout.rs, springboard/sdk/src/lib.rs (kit::pixel_layout)",
       "status": "partial",
-      "note": "Pure model with host unit tests in pixel_layout::tests: CMYK to RGB, grey to RGB, luma, and plane split and join are also tested headless in springboard/render/tests/parity_sdk-complete-39.rs, and the SDK re-exports the module as kit::pixel_layout. Gap: float buffers are written but not read back, and the converter is not wired into apps or the shell and not yet tested on the VM or Midget."
+      "note": "Pure model with host unit tests in pixel_layout::tests: CMYK to RGB, grey to RGB, luma, and plane split and join are also tested headless in springboard/render/tests/parity_sdk-complete-39.rs, and the SDK re-exports the module as kit::pixel_layout. Gap: float buffers are written but not read back, and the converter is not wired into apps or the shell and not yet tested on the VM or Midget. Refreshed 2026-10-17: CMYK, grey and plane split and join are exposed as kit::pixel_layout (springboard/sdk/src/lib.rs, tests pixel_layout::tests); the gap is closed. Float read-back and wiring remain."
     },
     {
       "feature": "Tone and brightness adjustment, histogram",
       "apple": "vImage gamma, tone curves, histogram calculation, specification and equalization",
       "bifrost": "springboard/src/shell/photos/edit.rs:287 (per-channel lookup table: contrast then brightness); springboard/render/src/histogram.rs (histogram, equalization_lut, levels_lut, curve_lut)",
       "status": "partial",
-      "note": "Histogram, equalization, level stretch and piecewise tone curves are tested headless in springboard/render/tests/parity_sdk-complete-39.rs. Gap: the Photos app does not use these yet, and there is no gamma or histogram specification API."
+      "note": "Histogram, equalization, level stretch and piecewise tone curves are tested headless in springboard/render/tests/parity_sdk-complete-39.rs. Built 2026-10-17: gamma_lut and specification_lut (render histogram::tests), reachable as bifrost_app::kit::histogram. Gap: the Photos app does not use these yet."
     },
     {
       "feature": "Compression and decompression",
@@ -89,7 +89,7 @@
       "apple": "Biquadratic IIR filters, audio spectrogram sample (vDSP plus vImage)",
       "bifrost": "springboard/sdk/src/biquad.rs (Design, Coefficients, Biquad); springboard/audiod (playback service), springboard/src/media/audioplayer.rs, biquad filter chain in springboard/apps/daw/src/devices/inst/zones/mod.rs",
       "status": "partial",
-      "note": "Low-pass, high-pass and peaking sections with cookbook coefficients, their magnitude response and block processing are tested headless in tests/parity_sdk-os-02.rs. Gap: no spectrogram, and the playback service does not run these filters for apps."
+      "note": "Low-pass, high-pass and peaking sections with cookbook coefficients, their magnitude response and block processing are tested headless in tests/parity_sdk-os-02.rs. Gap: no spectrogram, and the playback service does not run these filters for apps. Built 2026-10-17: spectrogram (Hann-windowed FFT frames, dB conversion) as bifrost_app::spectrogram; tests spectrogram::tests."
     },
     {
       "feature": "Core Video pixel buffer interop",
@@ -108,10 +108,7 @@
   ],
   "gaps": [
     "No SDK module for vDSP, vImage, BNNS, BLAS/LAPACK, sparse solvers or simd.",
-    "No app-facing FFT or DCT API. The only FFT is private to the DAW convolver (springboard/apps/daw/src/conv.rs).",
-    "No LZFSE, LZ4, LZMA or Brotli codec. The SDK compression module covers DEFLATE and zlib only, and the PNG writer stores uncompressed blocks.",
-    "No general image convolution, morphology, histogram, or arbitrary-angle geometric transform API.",
-    "No public pixel-format conversion for CMYK or planar formats. Only NV12 and RGBA to RGBA exists, in the media layer.",
+    "No LZFSE or Brotli codec. The SDK compression module covers DEFLATE, zlib, LZ4 and LZMA (xz), and the PNG writer stores uncompressed blocks.",
     "No neural network inference or training API for apps.",
     "No small-vector, matrix or quaternion types exposed to the SDK."
   ]

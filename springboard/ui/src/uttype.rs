@@ -71,6 +71,7 @@ const TYPES: &[Entry] = &[
     Entry { id: "public.data", parent: &[], ext: &[], mime: "application/octet-stream", desc: "Document" },
     Entry { id: "public.item", parent: &[], ext: &[], mime: "", desc: "Item" },
     Entry { id: "public.content", parent: &["public.item"], ext: &[], mime: "", desc: "Document" },
+    Entry { id: "public.composite-content", parent: &["public.content"], ext: &[], mime: "", desc: "Document" },
     Entry { id: "public.text", parent: &["public.data", "public.content"], ext: &[], mime: "text/plain", desc: "Text" },
     Entry { id: "public.plain-text", parent: &["public.text"], ext: &["txt", "text", "log", "nfo", "list", "env", "prop", "rc", "ini", "conf", "cfg"], mime: "text/plain", desc: "Plain Text" },
     Entry { id: "public.utf8-plain-text", parent: &["public.plain-text"], ext: &[], mime: "", desc: "Plain Text" },
@@ -133,6 +134,7 @@ const TYPES: &[Entry] = &[
     Entry { id: "public.opentype-font", parent: &["public.font"], ext: &["otf"], mime: "font/otf", desc: "OpenType font" },
     Entry { id: "public.truetype-collection-font", parent: &["public.font"], ext: &["ttc"], mime: "font/collection", desc: "Font collection" },
     Entry { id: "public.rtf", parent: &["public.text"], ext: &["rtf"], mime: "text/rtf", desc: "Rich Text" },
+    Entry { id: "public.rtfd", parent: &["public.composite-content"], ext: &["rtfd"], mime: "", desc: "Rich Text with Attachments" },
     Entry { id: "org.openxmlformats.wordprocessingml.document", parent: &["public.data", "public.content"], ext: &["docx"], mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", desc: "Word document" },
     Entry { id: "org.openxmlformats.spreadsheetml.sheet", parent: &["public.data", "public.content"], ext: &["xlsx"], mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", desc: "Spreadsheet" },
     Entry { id: "org.openxmlformats.presentationml.presentation", parent: &["public.data", "public.content"], ext: &["pptx"], mime: "application/vnd.openxmlformats-officedocument.presentationml.presentation", desc: "Presentation" },
@@ -174,6 +176,20 @@ pub fn type_for_extension(name: &str) -> Option<&'static str> {
     let lower;
     let ext = if ext.bytes().any(|b| b.is_ascii_uppercase()) { lower = ext.to_ascii_lowercase(); lower.as_str() } else { ext };
     by_extension().get(ext).map(|e| e.id).or_else(|| read(&DECLARED).into_iter().find(|e| e.ext.contains(&ext)).map(|e| e.id))
+}
+
+/// The folder-package types: a folder of one of these is one document. Files and the file panels show it as a file, and
+/// an app opens and saves it as a whole (`sdk::document_package`).
+pub const PACKAGE_TYPES: &[&str] = &["public.rtfd"];
+
+/// Whether a type is a folder-package type (see `PACKAGE_TYPES`).
+pub fn is_package(id: &str) -> bool {
+    PACKAGE_TYPES.contains(&id)
+}
+
+/// Whether a file or folder name carries the extension of a folder-package type. A name with no dot has no extension.
+pub fn is_package_name(name: &str) -> bool {
+    name.contains('.') && type_for_extension(name).is_some_and(is_package)
 }
 
 /// `UTType.localizedDescription`: "PNG image", "Rust Source", "PDF document". Empty for an unknown identifier.
@@ -369,5 +385,21 @@ mod pasteboard_type_tests {
         assert!(conforms("public.file-url", "public.url"));
         assert!(!conforms("public.url", "public.text"));
         assert_eq!(type_for_mime(""), None);
+    }
+}
+
+#[cfg(test)]
+mod package_tests {
+    use super::*;
+
+    #[test]
+    fn a_rtfd_folder_is_a_package_and_a_bare_word_is_not() {
+        assert!(is_package("public.rtfd"));
+        assert!(!is_package("public.rtf"));
+        assert!(is_package_name("Letter.rtfd"));
+        assert!(is_package_name("LETTER.RTFD"));
+        assert!(!is_package_name("rtfd"), "a name with no dot has no extension");
+        assert!(!is_package_name("notes.rtf"));
+        assert_eq!(description("public.rtfd"), "Rich Text with Attachments");
     }
 }

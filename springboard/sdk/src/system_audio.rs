@@ -23,6 +23,9 @@ pub const SERVICE_ID: &str = "is.olibuijr.audio";
 pub const SOCKET_ENV: &str = "BIFROST_SERVICE_SOCK";
 /// The socket the service listens on when no override is set.
 pub const DEFAULT_SOCKET: &str = "/var/lib/springboard/run/is.olibuijr.audio.sock";
+/// The slowest and fastest playback rates the service takes.
+pub const RATE_MIN: f32 = 0.5;
+pub const RATE_MAX: f32 = 3.0;
 
 /// Why a command is refused, or a call to the service fails.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -30,6 +33,8 @@ pub enum AudioError {
     EmptyQueue,
     StartOutOfRange { start: u32, len: usize },
     InvalidVolume,
+    /// A playback rate outside 0.5 to 3.0, or not a number.
+    InvalidRate,
     InvalidPosition,
     EmptyPath,
     RelativePath,
@@ -136,6 +141,14 @@ impl Command {
         Ok(Command(Cmd::SetVolume(volume)))
     }
 
+    /// Playback speed: 0.5 to 3.0 (1 is normal). audiod keeps the pitch, so only the tempo changes.
+    pub fn rate(rate: f32) -> Result<Command, AudioError> {
+        if !(RATE_MIN..=RATE_MAX).contains(&rate) {
+            return Err(AudioError::InvalidRate);
+        }
+        Ok(Command(Cmd::SetRate(rate)))
+    }
+
     pub fn mute(muted: bool) -> Command {
         Command(Cmd::SetMuted(muted))
     }
@@ -225,5 +238,31 @@ impl<S: Read + Write> AudioClient<S> {
 
     fn write(&mut self, cmd: &Cmd) -> Result<(), AudioError> {
         svc::write_frame(&mut self.stream, &cmd.encode()).map_err(|e| AudioError::Io(e.kind()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_rate_command_takes_0_5_to_2_and_nothing_else() {
+        assert_eq!(Command::rate(0.5).map(|c| c.0), Ok(Cmd::SetRate(0.5)));
+        assert_eq!(Command::rate(1.5).map(|c| c.0), Ok(Cmd::SetRate(1.5)));
+        assert_eq!(Command::rate(2.0).map(|c| c.0), Ok(Cmd::SetRate(2.0)));
+        assert_eq!(Command::rate(3.0).map(|c| c.0), Ok(Cmd::SetRate(3.0)));
+        for bad in [0.49f32, 3.01, 0.0, -1.0, f32::NAN, f32::INFINITY] {
+            assert_eq!(Command::rate(bad), Err(AudioError::InvalidRate), "{bad}");
+        }
+    }
+
+    #[test]
+    fn a_rate_command_is_written_as_a_frame() {
+        // the client needs a stream it can read and write: a cursor over an empty buffer
+        let mut client = AudioClient::new(std::io::Cursor::new(Vec::<u8>::new()));
+        client.send(&Command::rate(1.5).unwrap()).unwrap();
+        let bytes = client.into_inner().into_inner();
+        let len = u32::from_le_bytes(bytes[..4].try_into().unwrap()) as usize;
+        assert_eq!(Cmd::decode(&bytes[4..4 + len]), Ok(Cmd::SetRate(1.5)));
     }
 }

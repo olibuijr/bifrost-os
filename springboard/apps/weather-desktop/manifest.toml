@@ -1,6 +1,6 @@
 id = "is.olibuijr.weather.desktop"
 name = "Weather"
-version = "1.7.3"
+version = "1.8.0"
 exec = "bifrost-weather"
 icon = "icon.png"
 min_shell = "0.4.84"
@@ -11,6 +11,9 @@ architecture = "x86_64-linux"
 permissions = ["storage", "network", "notifications"]
 schemes = ["weather"]
 window = "full-size"
+
+[privacy]
+location = "Weather shows the forecast for where you are when you choose My Location. Your position is rounded before it is used."
 
 [[intent]]
 id = "current"

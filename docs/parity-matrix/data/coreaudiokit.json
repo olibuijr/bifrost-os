@@ -74,7 +74,7 @@
   "gaps": [
     "No Audio Unit host: BifrOSt cannot load third-party AU plugins or show their custom views (AUViewController, AUAudioUnitViewConfiguration).",
     "No generic audio unit view (AUGenericView) or panner view (AUPannerView) for plugins without a custom UI.",
-    "No BLE MIDI peripheral picker or local MIDI peripheral advertising (CABTMIDI* equivalents).",
+    "No BLE MIDI radio path for apps: the picker and the advertiser are models (springboard/ui/src/midi_ble_picker.rs, MidiPicker and MidiAdvertiser; tests midi_ble_picker::tests), not connected to the Bluetooth controller or any app.",
     "Bluetooth audio streaming (A2DP/AVDTP) is not handled in springboard/src/bare/bluetooth.rs, so a device picker would list devices that cannot carry audio yet.",
     "No SDK route picker for apps: the picker rows exist in springboard/ui/src/route_picker.rs but no SDK API exposes them.",
     "No discovery source for network audio receivers; the browser model is fed by the caller and nothing scans the network yet."

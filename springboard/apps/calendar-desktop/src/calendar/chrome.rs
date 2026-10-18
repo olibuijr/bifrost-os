@@ -326,6 +326,7 @@ impl Calendar {
                 Target::Export => (209, Role::Button, "Export Event", String::new(), true),
                 Target::Delete => (210, Role::Button, "Delete Event", String::new(), draft.existing),
                 Target::Invitees => (211, Role::StaticText, "Invitees", invitees::summary(&draft.invitees), true),
+                Target::ShowInMaps => (215, Role::Button, "Show in Maps", String::new(), true),
                 _ => continue,
             };
             out.push(Node { id, role, label: label.into(), value, bounds: Rect { x, y: top, w, h }, enabled });

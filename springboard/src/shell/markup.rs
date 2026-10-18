@@ -1,6 +1,7 @@
 //! Markup: the editor a tap on the screenshot thumbnail opens. Pen, marker,
 //! pencil and eraser draw on the capture; a colour row, Undo, Cancel and Done
-//! (which saves the marked-up PNG over the capture) frame it as in bifrost.
+//! (which saves the marked-up PNG over the capture) frame it as in bifrost. Look Up sends the marked-up picture to the
+//! apps that answer visual searches (`visual_search_panel`); circling an object first is how the person selects it.
 
 use super::switcher::draw_scaled;
 use super::ui::{Ui, Weight, BLACK, CARD_RADIUS_PT, CELL, SECONDARY, SEPARATOR, SYSTEM_GREEN, SYSTEM_ORANGE, SYSTEM_RED, SYSTEM_YELLOW, TINT, WHITE};
@@ -50,6 +51,8 @@ struct Stroke {
 pub enum Outcome {
     Cancel,
     Done,
+    /// Look Up in Visual Search: the shell searches with the picture as it is marked now.
+    LookUp,
 }
 
 pub struct Markup {
@@ -57,6 +60,8 @@ pub struct Markup {
     base: Image,
     canvas: Image,
     strokes: Vec<Stroke>,
+    /// strokes taken back by undo, newest last, so redo can put them back
+    undone: Vec<Stroke>,
     tool: Tool,
     color: usize,
     drawing: bool,
@@ -68,11 +73,31 @@ pub struct Markup {
     s: f32,
 }
 
+/// Left edges of the Undo, Redo and Cancel buttons, one after another from the margin. Undo starts a pad to the
+/// left of the margin so its text lines up with the margin; each button's text sits `pad` inside its edges.
+fn bar_starts(m: f32, pad: f32, undo_w: f32, redo_w: f32) -> [f32; 3] {
+    let undo = m - pad;
+    let redo = undo + undo_w + 2.0 * pad;
+    let cancel = redo + redo_w + 2.0 * pad;
+    [undo, redo, cancel]
+}
+
+/// The bar button that sends the picture to the apps that answer visual searches.
+const LOOK_UP_LABEL: &str = "Look Up";
+
+/// Left edge of the Look Up button: it sits just left of Done, whose text is `done_w` wide, in a bar `w` wide with margin
+/// `m` and button padding `pad`; its text is `look_w` wide.
+fn look_up_start(w: f32, m: f32, pad: f32, done_w: f32, look_w: f32) -> f32 {
+    w - m - done_w - pad - (look_w + 2.0 * pad)
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Hit {
     Undo,
+    Redo,
     Cancel,
     Done,
+    LookUp,
     Tool(Tool),
     Color(usize),
 }
@@ -80,7 +105,7 @@ enum Hit {
 impl Markup {
     pub fn new(frame: Image, path: PathBuf, s: f32) -> Self {
         let (w, h) = (frame.w as i32, frame.h as i32);
-        Markup { path, canvas: frame.clone(), base: frame, strokes: vec![], tool: Tool::Pen, color: 2, drawing: false, mask: vec![], pressed: None, w, h, s }
+        Markup { path, canvas: frame.clone(), base: frame, strokes: vec![], undone: vec![], tool: Tool::Pen, color: 2, drawing: false, mask: vec![], pressed: None, w, h, s }
     }
 
     pub fn tool(&self) -> Tool {
@@ -129,11 +154,15 @@ impl Markup {
     fn rects(&self, ui: &Ui) -> Vec<(Hit, Rect)> {
         let m = 16.0 * self.s;
         let mut v = vec![];
-        let (uw, cw, dw) = (ui.measure("Undo", 17.0, Weight::Regular), ui.measure("Cancel", 17.0, Weight::Regular), ui.measure("Done", 17.0, Weight::Semibold));
+        let (uw, rw, cw, dw) = (ui.measure("Undo", 17.0, Weight::Regular), ui.measure("Redo", 17.0, Weight::Regular), ui.measure("Cancel", 17.0, Weight::Regular), ui.measure("Done", 17.0, Weight::Semibold));
+        let lw = ui.measure(LOOK_UP_LABEL, 17.0, Weight::Regular);
         let pad = 12.0 * self.s;
-        v.push((Hit::Undo, self.button(m - pad, uw + 2.0 * pad)));
-        v.push((Hit::Cancel, self.button(m + uw + pad, cw + 2.0 * pad)));
+        let xs = bar_starts(m, pad, uw, rw);
+        v.push((Hit::Undo, self.button(xs[0], uw + 2.0 * pad)));
+        v.push((Hit::Redo, self.button(xs[1], rw + 2.0 * pad)));
+        v.push((Hit::Cancel, self.button(xs[2], cw + 2.0 * pad)));
         v.push((Hit::Done, self.button(self.w as f32 - m - dw - pad, dw + 2.0 * pad)));
+        v.push((Hit::LookUp, self.button(look_up_start(self.w as f32, m, pad, dw, lw), lw + 2.0 * pad)));
         let tray = self.tray();
         let n = TOOLS.len() as i32;
         let gap = (8.0 * self.s) as i32;
@@ -167,6 +196,7 @@ impl Markup {
                     self.pressed = Some(h);
                 } else if self.pic().contains(x, y) {
                     self.drawing = true;
+                    self.undone.clear();
                     self.mask = vec![false; self.base.w * self.base.h];
                     let p = self.to_image(x, y);
                     let color = self.stroke_color();
@@ -191,8 +221,10 @@ impl Markup {
                 if let Some(h) = self.pressed.take().filter(|h| self.hit(ui, x, y) == Some(*h)) {
                     match h {
                         Hit::Undo => self.undo(),
+                        Hit::Redo => self.redo(),
                         Hit::Cancel => return Some(Outcome::Cancel),
                         Hit::Done => return Some(Outcome::Done),
+                        Hit::LookUp => return Some(Outcome::LookUp),
                         Hit::Tool(t) => self.tool = t,
                         Hit::Color(i) => {
                             self.color = i;
@@ -212,16 +244,34 @@ impl Markup {
         COLORS[self.color]
     }
 
+    pub fn can_redo(&self) -> bool {
+        !self.undone.is_empty()
+    }
+
     pub fn undo(&mut self) {
-        if self.strokes.pop().is_some() {
-            self.canvas = self.base.clone();
-            let strokes = std::mem::take(&mut self.strokes);
-            for (i, st) in strokes.iter().enumerate() {
-                self.mask = vec![false; self.base.w * self.base.h];
-                self.paint(st, 0, st.pts.len().saturating_sub(1).max(0), i);
-            }
-            self.strokes = strokes;
+        if let Some(st) = self.strokes.pop() {
+            self.undone.push(st);
+            self.repaint();
         }
+    }
+
+    /// Put back the stroke the last undo took away. A new stroke clears the redo history.
+    pub fn redo(&mut self) {
+        if let Some(st) = self.undone.pop() {
+            self.strokes.push(st);
+            self.repaint();
+        }
+    }
+
+    /// Redraw the base picture with every kept stroke, in order.
+    fn repaint(&mut self) {
+        self.canvas = self.base.clone();
+        let strokes = std::mem::take(&mut self.strokes);
+        for (i, st) in strokes.iter().enumerate() {
+            self.mask = vec![false; self.base.w * self.base.h];
+            self.paint(st, 0, st.pts.len().saturating_sub(1).max(0), i);
+        }
+        self.strokes = strokes;
     }
 
     fn stamp_last(&mut self, i: usize, from: usize) {
@@ -282,13 +332,15 @@ impl Markup {
         for (h, r) in self.rects(ui) {
             let down = self.pressed == Some(h);
             match h {
-                Hit::Undo | Hit::Cancel | Hit::Done => {
+                Hit::Undo | Hit::Redo | Hit::Cancel | Hit::Done | Hit::LookUp => {
                     let (label, weight) = match h {
                         Hit::Undo => ("Undo", Weight::Regular),
+                        Hit::Redo => ("Redo", Weight::Regular),
                         Hit::Cancel => ("Cancel", Weight::Regular),
+                        Hit::LookUp => (LOOK_UP_LABEL, Weight::Regular),
                         _ => ("Done", Weight::Semibold),
                     };
-                    let dim = h == Hit::Undo && !self.can_undo();
+                    let dim = (h == Hit::Undo && !self.can_undo()) || (h == Hit::Redo && !self.can_redo());
                     let color = if dim { SECONDARY } else { TINT };
                     let img = ui.text(label, 17.0, weight, color);
                     let a = if down { 120 } else { 255 };
@@ -337,5 +389,79 @@ mod tests {
         m.undo();
         assert_eq!(m.canvas.px[10 * 100 + 30], pack(0, 0, 0, 255));
         assert!(!m.can_undo());
+    }
+
+    #[test]
+    fn redo_button_sits_between_undo_and_cancel() {
+        // margin 16, pad 12, Undo and Redo 40 wide: Redo starts where Cancel used to start after Undo (16 + 40 + 12)
+        let xs = bar_starts(16.0, 12.0, 40.0, 40.0);
+        assert_eq!(xs[0], 4.0);
+        assert_eq!(xs[1], 68.0);
+        assert_eq!(xs[2], 132.0);
+        assert!(xs[0] < xs[1] && xs[1] < xs[2]);
+    }
+
+    #[test]
+    fn redo_restores_the_stroke_undo_took_and_a_new_stroke_clears_redo() {
+        let base = Image { w: 100, h: 100, px: vec![pack(0, 0, 0, 255); 100 * 100] };
+        let mut m = Markup::new(base, PathBuf::from("/x.png"), 1.0);
+        m.strokes.push(Stroke { tool: Tool::Pen, color: WHITE, pts: vec![(10.0, 10.0), (60.0, 10.0)] });
+        m.stamp_last(0, 0);
+        m.undo();
+        assert!(m.can_redo());
+        assert_eq!(m.canvas.px[10 * 100 + 30], pack(0, 0, 0, 255));
+        m.redo();
+        assert!(!m.can_redo());
+        assert!(m.can_undo());
+        assert_ne!(m.canvas.px[10 * 100 + 30], pack(0, 0, 0, 255));
+        m.undo();
+        assert!(m.can_redo());
+        m.undone.clear(); // what a new stroke does on touch-down
+        assert!(!m.can_redo());
+        m.redo();
+        assert!(!m.can_undo());
+    }
+
+    #[test]
+    fn look_up_sits_left_of_done_and_clear_of_the_title_and_cancel() {
+        // 1200 wide, margin 16, pad 12: Done is 50 wide, Look Up 70
+        let start = look_up_start(1200.0, 16.0, 12.0, 50.0, 70.0);
+        let done = 1200.0 - 16.0 - 50.0 - 12.0;
+        assert_eq!(start + 70.0 + 2.0 * 12.0, done, "the buttons touch edge to edge");
+        let cancel_end = bar_starts(16.0, 12.0, 40.0, 40.0)[2] + 60.0 + 24.0;
+        assert!(cancel_end < start && start > 600.0, "Look Up is right of Cancel and of the centred title");
+    }
+
+    #[test]
+    fn a_tap_on_look_up_finishes_the_touch_with_the_look_up_outcome() {
+        let ui = crate::shell::tests::ui();
+        let base = Image { w: 100, h: 100, px: vec![pack(0, 0, 0, 255); 100 * 100] };
+        let mut m = Markup::new(base, PathBuf::from("/x.png"), ui.s);
+        m.w = 1200;
+        m.h = 800;
+        let r = m.rects(&ui).into_iter().find(|(h, _)| *h == Hit::LookUp).map(|(_, r)| r).expect("the bar has a Look Up button");
+        let (x, y) = ((r.x + r.w / 2) as f32, (r.y + r.h / 2) as f32);
+        assert_eq!(m.touch(&ui, crate::shell::Event::Down(x, y), 0.0), None);
+        assert_eq!(m.touch(&ui, crate::shell::Event::Up(x, y), 0.0), Some(Outcome::LookUp));
+        assert!(m.strokes.is_empty(), "the tap drew nothing");
+    }
+
+    #[test]
+    fn look_up_in_the_editor_opens_the_visual_search_panel_and_keeps_the_editor() {
+        use crate::shell::Event;
+        let mut sh = crate::shell::tests::desktop_shell();
+        let base = Image { w: 100, h: 100, px: vec![pack(0, 0, 0, 255); 100 * 100] };
+        let mut m = Markup::new(base, PathBuf::from("/x.png"), sh.ui.s);
+        m.w = sh.w;
+        m.h = sh.h;
+        let r = m.rects(&sh.ui).into_iter().find(|(h, _)| *h == Hit::LookUp).map(|(_, r)| r).expect("the bar has a Look Up button");
+        let (x, y) = ((r.x + r.w / 2) as f32, (r.y + r.h / 2) as f32);
+        sh.markup = Some(m);
+        assert!(sh.visual_search.is_none());
+        assert!(sh.markup_touch(Event::Down(x, y), 1.0));
+        assert!(sh.visual_search.is_none(), "a press alone searches nothing");
+        assert!(sh.markup_touch(Event::Up(x, y), 2.0));
+        assert!(sh.visual_search.is_some(), "the tap opens the panel");
+        assert!(sh.markup.is_some(), "the editor stays open under it");
     }
 }

@@ -12,35 +12,35 @@
    "apple": "Product, Product.SubscriptionInfo, SubscriptionInfo",
    "bifrost": "springboard/src/shell/store/api.rs (StoreApp, parse_catalog, fetch); wired: springboard/src/shell/store/api.rs",
    "status": "partial",
-   "note": "StoreApp carries the price (minor units and currency), age rating, product type (consumable, non-consumable, non-renewable, auto-renewable), screenshots, release notes and install kind; no subscription status or renewal info yet. Tests: entries_missing_a_required_field_or_with_a_bad_version_or_hash_are_skipped, a_paid_entry_carries_its_price_rating_product_type_and_screenshots, release_dates_read_as_today_yesterday_days_ago_or_a_full_date (springboard/tests/parity_sdk-tests-10.rs). Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+   "note": "StoreApp carries the price (minor units and currency), age rating, product type (consumable, non-consumable, non-renewable, auto-renewable), screenshots, release notes and install kind; no subscription status or renewal info yet. Tests: entries_missing_a_required_field_or_with_a_bad_version_or_hash_are_skipped, a_paid_entry_carries_its_price_rating_product_type_and_screenshots, release_dates_read_as_today_yesterday_days_ago_or_a_full_date (springboard/tests/parity_sdk-tests-10.rs). Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Built 2026-10-17: the store lists in-app products from the catalogue with price, ownership and offer (shell/store/products.rs listing; Offer::Unavailable for priced products until the store takes payments); tests springboard/src/shell/store/products.rs::tests."
   },
   {
    "feature": "Purchase flow",
    "apple": "Product.purchase(options:), PurchaseAction, Product.PurchaseResult",
    "bifrost": "springboard/ui/src/purchase.rs (Price, Purchase, Outcome, Failure); tests: springboard/ui/tests/parity_sdk-complete-27.rs",
    "status": "partial",
-   "note": "Pure model: price text, one purchase attempt from the confirmation sheet to a final result, store failures (network, store, unknown, restriction, unsold product) with retry for the transient ones, and the install gate that allows a paid package only after success. Tests: springboard/ui/tests/parity_sdk-tests-08.rs (purchase_*), parity_sdk-complete-27.rs and the purchase unit tests. The shell wiring (press_button refuses paid apps, open_sheet, finish_purchase in springboard/src/shell/store) is not verified on Midget. Gap: no store payment sheet yet, which needs the shell and a store service."
+   "note": "Pure model: price text, one purchase attempt from the confirmation sheet to a final result, store failures (network, store, unknown, restriction, unsold product) with retry for the transient ones, and the install gate that allows a paid package only after success. Tests: springboard/ui/tests/parity_sdk-tests-08.rs (purchase_*), parity_sdk-complete-27.rs and the purchase unit tests. The shell wiring (press_button refuses paid apps, open_sheet, finish_purchase in springboard/src/shell/store) is not verified on Midget. Gap: no store payment sheet yet, which needs the shell and a store service. Built 2026-10-17: SDK exposes the purchase model (bifrost_app::purchase, product); no payment is taken."
   },
   {
    "feature": "Transactions and entitlements",
    "apple": "Transaction, Transaction.updates, Transaction.all, Transaction.currentEntitlements",
    "bifrost": "springboard/ui/src/entitlement.rs (Ledger, Transaction), springboard/ui/src/subscription.rs (Renewal)",
    "status": "partial",
-   "note": "Pure ledger of purchases: record, revoke, finish, the latest purchase per product and the current entitlements on a day, with grace-period access. Tests: springboard/ui/tests/parity_sdk-tests-08.rs (ledger_*) and the entitlement unit tests. The shell keeps installed state in apps/installed.json and reads it through AppStore::purchased; that path is not covered by these tests and not verified on Midget. No app-facing transaction API yet."
+   "note": "Pure ledger of purchases: record, revoke, finish, the latest purchase per product and the current entitlements on a day, with grace-period access. Tests: springboard/ui/tests/parity_sdk-tests-08.rs (ledger_*) and the entitlement unit tests. The shell keeps installed state in apps/installed.json and reads it through AppStore::purchased; that path is not covered by these tests and not verified on Midget. No app-facing transaction API yet. Built 2026-10-17: SDK exposes the entitlement ledger (bifrost_app::entitlement); tests springboard/ui/tests/parity_sdk-complete-27.rs."
   },
   {
    "feature": "Signed transaction verification (JWS)",
    "apple": "VerificationResult, VerificationResult.VerificationError",
    "bifrost": "springboard/ui/src/jws.rs",
    "status": "parity",
-   "note": "verified on Midget 0.7.25 by 7 tests. Wave 5 (w5-storekit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. package hash is checked; there is no signed-receipt or signed-transaction verification"
+   "note": "verified on Midget 0.7.25 by 7 tests. Wave 5 (w5-storekit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. package hash is checked; there is no signed-receipt or signed-transaction verification Built 2026-10-17: receipt shape and signature checks with a caller-supplied verifier (bifrost_app::store_receipt); tests springboard/sdk/src/store_receipt.rs::tests. Store signing key not wired yet."
   },
   {
    "feature": "Subscription status and renewal",
    "apple": "SubscriptionStatus, SubscriptionRenewalInfo, SubscriptionPeriod, Product.SubscriptionInfo.RenewalState",
    "bifrost": "springboard/ui/src/subscription.rs (Period, Renewal, State, Group, Change); tests: springboard/ui/tests/parity_sdk-complete-27.rs",
    "status": "partial",
-   "note": "Period arithmetic with month and year clamping, the paid, grace, billing-retry and expired states, the next expiration, and subscription groups (tier levels, an upgrade that takes effect now, a downgrade at renewal). Tests: springboard/ui/tests/parity_sdk-tests-08.rs (subscription_*), parity_sdk-complete-27.rs and the subscription unit tests. Gap: no billing backend, so the store supplies the dates and the group membership."
+   "note": "Period arithmetic with month and year clamping, the paid, grace, billing-retry and expired states, the next expiration, and subscription groups (tier levels, an upgrade that takes effect now, a downgrade at renewal). Tests: springboard/ui/tests/parity_sdk-tests-08.rs (subscription_*), parity_sdk-complete-27.rs and the subscription unit tests. Gap: no billing backend, so the store supplies the dates and the group membership. Built 2026-10-17: SDK exposes bifrost_app::subscription."
   },
   {
    "feature": "Offers, offer codes and win-back offers",
@@ -54,7 +54,7 @@
    "apple": "PurchaseIntent, Product.PromotionInfo",
    "bifrost": "springboard/ui/src/promotion.rs (visible_in_display_order); springboard/ui/tests/parity_sdk-complete-09.rs",
    "status": "partial",
-   "note": "App-side queue of purchase intents (first in, first out, no duplicates, bounded), and the store-side order of promoted products that leaves out products the customer already owns, tested headless. Gap: nothing shows a promotion and the store page does not send intents yet, and the flow is not verified on Midget."
+   "note": "App-side queue of purchase intents (first in, first out, no duplicates, bounded), and the store-side order of promoted products that leaves out products the customer already owns, tested headless. Gap: nothing shows a promotion and the store page does not send intents yet, and the flow is not verified on Midget. Built 2026-10-17: SDK exposes bifrost_app::promotion."
   },
   {
    "feature": "App Store product page and overlay",
@@ -110,7 +110,7 @@
    "apple": "StoreKit Test, sandbox testing, Xcode testing for IAP",
    "bifrost": "springboard/ui/src/store_test.rs",
    "status": "parity",
-   "note": "verified on Midget 0.7.25 by 9 tests. Wave 5 (w5-storekit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no commerce test harness; SDK testing kit is springboard/sdk/src/testing.rs, not purchase-aware"
+   "note": "verified on Midget 0.7.25 by 9 tests. Wave 5 (w5-storekit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no commerce test harness; SDK testing kit is springboard/sdk/src/testing.rs, not purchase-aware Built 2026-10-17: StoreSession, a scripted store that answers each purchase in order (result, pending or failure) in springboard/sdk/src/testing.rs; tests testing::store_session_tests."
   },
   {
    "feature": "Ad network attribution",
@@ -135,12 +135,11 @@
   }
  ],
  "gaps": [
-  "No purchase API: no product lookup with price, no purchase flow, no paid-app install path (springboard/src/shell/store/api.rs has no price or product type).",
-  "No transactions or entitlements API for apps to ask what the user has bought or is entitled to.",
+  "No payment: bifrost_app::purchase and product model the purchase and the price, but no store payment sheet, payment service or paid-app install path exists",
+  "No transaction feed for apps: bifrost_app::entitlement is a ledger, but nothing feeds it from a payment and the shell reads apps/installed.json",
   "No signed transaction verification (JWS) beyond the package sha256 check in springboard/src/shell/store/install.rs.",
-  "No subscriptions, renewal state, offers, offer codes or win-back offers.",
-  "No review prompt API (RequestReviewAction / SKStoreReviewController equivalent) in springboard/sdk/src.",
-  "No StoreKit-style test harness for purchase flows in springboard/sdk/src/testing.rs.",
+  "No offers, offer codes or win-back offers; subscription periods, renewal states and groups are modelled (bifrost_app::subscription) with no billing backend",
+  "No review prompt: sdk review::ReviewRequests keeps the ask policy, but no call shows the store rating prompt",
   "Storefront, App Store messages, ad attribution, external purchase and payment method binding are Apple-service specific and have no counterpart (status n/a)."
  ]
 }

@@ -15,6 +15,45 @@ pub enum AppId {
     AppStore,
     /// an installed app (see `apphost`): the index into `apphost::installed()`
     External(u8),
+    /// an extra window of an installed app: the app's slot, then the window id the app chose (see `app_window_table`).
+    /// The desk treats it as a window of its own; the parent app's semantics apply everywhere else.
+    ExternalWindow(u8, u16),
+}
+
+impl AppId {
+    /// The app this window belongs to: an extra window's parent is `External(slot)`; every other id is its own parent.
+    pub fn parent(self) -> AppId {
+        match self {
+            AppId::ExternalWindow(slot, _) => AppId::External(slot),
+            other => other,
+        }
+    }
+
+    /// True for an extra window (`ExternalWindow`), false for an app's main window or a built-in app.
+    pub fn is_extra_window(self) -> bool {
+        matches!(self, AppId::ExternalWindow(..))
+    }
+
+    /// The slot of the installed app an extra window belongs to.
+    pub fn window_slot(self) -> Option<u8> {
+        match self {
+            AppId::ExternalWindow(slot, _) => Some(slot),
+            _ => None,
+        }
+    }
+
+    /// The app's own id of an extra window (`WindowOpen { id }`), as the desk keys it.
+    pub fn window_id(self) -> Option<u16> {
+        match self {
+            AppId::ExternalWindow(_, id) => Some(id),
+            _ => None,
+        }
+    }
+
+    /// The extra window `id` of the installed app in `slot`.
+    pub fn extra_window(slot: u8, id: u16) -> AppId {
+        AppId::ExternalWindow(slot, id)
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -38,19 +77,24 @@ pub const APPS: &[AppDef] = &[
     AppDef { id: AppId::AppStore, name: "App Store", icon: "bifrost.appstore", icon_image: Some(store::icon) },
 ];
 /// The Terminal icon at `size` px: the reference icon when one is installed (personal-use reference assets,
-/// see `bifrost_core::ref_assets`), else BifrOSt's own artwork (`res/term-icon/icon.svg`, rendered to PNG).
+/// see `bifrost_core::ref_assets`), else BifrOSt's own layered icon (`res/icons/terminal`, the tile from
+/// `res/term-icon/icon.svg` with its prompt as a layer), drawn by the shared icon renderer.
 pub fn term_icon(size: usize) -> Image {
     use bifrost_core::ref_assets::{Kind, Resolver};
     let reference = Resolver::standard(None)
         .resolve(Kind::AppIcon, "Terminal")
         .and_then(|p| std::fs::read(p).ok())
         .and_then(|b| crate::cg::imageio::decode(&b));
-    let img = reference.or_else(|| crate::cg::imageio::decode(TERM_ICON_PNG)).unwrap_or_else(|| Image { w: size, h: size, px: vec![0; size * size] });
-    if img.w == size && img.h == size { img } else { img.resized(size, size) }
+    if let Some(img) = reference {
+        return if img.w == size && img.h == size { img } else { img.resized(size, size) };
+    }
+    bifrost_render::icon_doc::render_builtin(TERM_ICON_JSON, &[("prompt.png", TERM_PROMPT_PNG)], size)
+        .unwrap_or_else(|| Image { w: size, h: size, px: vec![0; size * size] })
 }
 
-/// BifrOSt's Terminal artwork, 512 px (`res/term-icon/icon.svg` rendered with rsvg-convert).
-const TERM_ICON_PNG: &[u8] = include_bytes!("../../res/term-icon/icon-512.png");
+/// BifrOSt's Terminal icon document and its prompt layer (`res/icons/terminal`).
+const TERM_ICON_JSON: &str = include_str!("../../res/icons/terminal/icon.json");
+const TERM_PROMPT_PNG: &[u8] = include_bytes!("../../res/icons/terminal/prompt.png");
 
 /// Every app on the home screen: the built-in `APPS`, then the installed ones
 /// (`apphost::register` must run before the first call to include them).
@@ -137,6 +181,22 @@ mod tests {
             assert_eq!((img.w, img.h, img.px.len()), (size, size, size * size));
         }
         assert!(APPS.iter().any(|a| a.id == AppId::Terminal && a.icon_image.is_some()));
+    }
+
+    #[test]
+    fn an_extra_window_belongs_to_its_app_and_is_its_own_desk_key() {
+        let w = AppId::ExternalWindow(2, 7);
+        assert_eq!(w.parent(), AppId::External(2));
+        assert_eq!(AppId::External(2).parent(), AppId::External(2));
+        assert_eq!(AppId::Files.parent(), AppId::Files);
+        assert!(w.is_extra_window() && !AppId::External(2).is_extra_window());
+        assert_eq!((w.window_slot(), w.window_id()), (Some(2), Some(7)));
+        assert_eq!((AppId::External(2).window_slot(), AppId::External(2).window_id()), (None, None));
+        assert_eq!(AppId::extra_window(2, 7), w);
+        // two windows of one app are two desk keys; the same id in another app is another key
+        assert_ne!(AppId::extra_window(2, 7), AppId::extra_window(2, 8));
+        assert_ne!(AppId::extra_window(2, 7), AppId::extra_window(3, 7));
+        assert_ne!(w, AppId::External(2), "a window is not the main window of its app");
     }
 
     #[test]

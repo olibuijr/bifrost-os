@@ -26,7 +26,7 @@
       "apple": "Undo of markup changes through the view controller and its undo manager",
       "bifrost": "springboard/src/shell/markup.rs:215 (undo), test at :331; springboard/tests/parity_sdk-tests-05.rs; springboard/apps/freeform-desktop/src/freeform.rs:583 (undo_step), :599 (redo_step), :1354 (push_undo)",
       "status": "partial",
-      "note": "The markup editor undoes strokes, tested headless in springboard/tests/parity_sdk-tests-05.rs, and has no redo. Freeform's board has undo and redo (undo_step, redo_step), which no headless test covers yet."
+      "note": "The markup editor undoes strokes, tested headless in springboard/tests/parity_sdk-tests-05.rs, and has no redo. Freeform's board has undo and redo (undo_step, redo_step), which no headless test covers yet. Built 2026-10-17: Redo button on the shell markup bar, between Undo and Cancel, dimmed when nothing is undone (tests shell::markup::tests::redo_button_sits_between_undo_and_cancel)."
     },
     {
       "feature": "Insertion menu for markup elements",
@@ -96,7 +96,7 @@
     "No app-facing SDK markup API: no view controller, no markup data model, no shared type. Apps cannot embed a markup canvas.",
     "No vector elements: shapes, text boxes, images, links and loupes are all missing; every mark is a raster stamp.",
     "No editable, reloadable markup document; the shell and Freeform save a flattened PNG and discard the strokes.",
-    "No redo, no stroke selection or editing, no stylus pressure or tilt.",
+    "No stroke selection or editing, no stylus pressure or tilt.",
     "No feature set or rendering options exposed to apps."
   ]
 }

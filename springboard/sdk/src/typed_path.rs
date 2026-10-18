@@ -158,6 +158,68 @@ impl TypedPath {
     }
 }
 
+/// Whether a path starts at the root directory or at the current one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Root {
+    /// The path starts with `/`.
+    Absolute,
+    /// The path starts with a name, `.` or `..`.
+    Relative,
+}
+
+/// A read-only view of a path's components: the root, then each part in order.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ComponentView<'a> {
+    root: Root,
+    parts: &'a [Part],
+}
+
+impl<'a> ComponentView<'a> {
+    /// The root the components hang from.
+    pub fn root(&self) -> Root {
+        self.root
+    }
+
+    /// The components after the root, in order.
+    pub fn parts(&self) -> &'a [Part] {
+        self.parts
+    }
+
+    /// The number of components after the root.
+    pub fn len(&self) -> usize {
+        self.parts.len()
+    }
+
+    /// True when there are no components after the root (`/`, or an empty relative path).
+    pub fn is_empty(&self) -> bool {
+        self.parts.is_empty()
+    }
+
+    /// Each component in order.
+    pub fn iter(&self) -> std::slice::Iter<'a, Part> {
+        self.parts.iter()
+    }
+}
+
+impl TypedPath {
+    /// The root of the path.
+    pub fn root(&self) -> Root {
+        if self.absolute { Root::Absolute } else { Root::Relative }
+    }
+
+    /// A view of the root and the components, for code that walks a path without taking it apart.
+    pub fn components(&self) -> ComponentView<'_> {
+        ComponentView { root: self.root(), parts: &self.parts }
+    }
+
+    /// The path as a NUL-terminated platform string, for a system call. Parsing already refuses a NUL byte, so this
+    /// fails only for a path built some other way; the error names the position of the byte.
+    pub fn to_c_string(&self) -> Result<std::ffi::CString, PathError> {
+        use std::os::unix::ffi::OsStrExt;
+        std::ffi::CString::new(self.to_path_buf().as_os_str().as_bytes()).map_err(|e| PathError::NulByte(e.nul_position()))
+    }
+}
+
 impl fmt::Display for TypedPath {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.absolute {

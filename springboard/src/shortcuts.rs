@@ -8,6 +8,8 @@
 
 use std::path::{Path, PathBuf};
 
+pub mod describe;
+pub mod droplet;
 pub mod flow;
 #[cfg(test)]
 mod parity_app_shortcuts;
@@ -37,6 +39,9 @@ pub const COPY_CHOICES: [&str; 4] = ["Thanks", "Be right back", "On my way", "Se
 pub const FOLDER_CHOICES: [&str; 5] = ["Desktop", "Documents", "Downloads", "Pictures", "Music"];
 /// The commands a "Run Shell Script" step can run.
 pub const SCRIPT_CHOICES: [&str; 4] = ["date", "uptime", "df -h /", "free -h"];
+/// The source a new "Run Script" step starts with: it outputs its input, which the script gets as the first item of
+/// `argv`. Steps are one line, so `\n` stands for a line break (see `script_source`).
+pub const DEFAULT_SCRIPT: &str = "on run argv\\nreturn item 1 of argv\\nend";
 /// The glyphs a tile can show, by symbol name. Index 0 is the plain Shortcuts mark and has no symbol name.
 pub const GLYPHS: [&str; 21] = [
     "", "star", "house", "clock", "music.note", "photo", "film", "envelope", "phone", "calendar", "globe", "bookmark", "flag",
@@ -168,6 +173,8 @@ pub enum Action {
     OpenFolder(String),
     /// runs one of `SCRIPT_CHOICES` in a shell
     RunScript(String),
+    /// runs this BifrOSt script; the previous output is the first item of `argv`, and the script's result is the output
+    Script(String),
     /// outputs this text; `{Name}` stands for a variable and `{Output}` for the previous output
     Text(String),
     /// asks the user this question and outputs the answer
@@ -194,7 +201,7 @@ pub enum Action {
 }
 
 /// The kinds the "Add Action" list offers, in order.
-pub const KINDS: [&str; 21] = [
+pub const KINDS: [&str; 22] = [
     "Set Wi-Fi",
     "Set Low Power Mode",
     "Set Do Not Disturb",
@@ -216,6 +223,7 @@ pub const KINDS: [&str; 21] = [
     "Repeat",
     "Repeat with Each",
     "Stop",
+    "Run Script",
 ];
 
 /// The next or previous of `choices` after `cur` (wrapping). A `cur` that is not one of them counts as the first choice.
@@ -329,6 +337,7 @@ impl Action {
             18 => Action::Repeat(2),
             19 => Action::RepeatEach,
             20 => Action::Stop,
+            21 => Action::Script(DEFAULT_SCRIPT.into()),
             _ => Action::Timer(5),
         }
     }
@@ -357,6 +366,7 @@ impl Action {
             Action::CopyText(_) => KINDS[8],
             Action::OpenFolder(_) => KINDS[9],
             Action::RunScript(_) => KINDS[10],
+            Action::Script(_) => KINDS[21],
             Action::Text(_) => KINDS[11],
             Action::AskInput(_) => KINDS[12],
             Action::GetUrl(_) => KINDS[13],
@@ -391,6 +401,7 @@ impl Action {
             | Action::CopyText(m)
             | Action::OpenFolder(m)
             | Action::RunScript(m)
+            | Action::Script(m)
             | Action::Text(m)
             | Action::AskInput(m)
             | Action::GetUrl(m)
@@ -438,6 +449,7 @@ impl Action {
             | Action::SaveFile(_)
             | Action::ShowResult(_)
             | Action::SetVariable(_)
+            | Action::Script(_)
             | Action::Otherwise
             | Action::EndIf
             | Action::EndRepeat
@@ -457,6 +469,7 @@ impl Action {
                 | Action::SaveFile(_)
                 | Action::ShowResult(_)
                 | Action::SetVariable(_)
+                | Action::Script(_)
                 | Action::Otherwise
                 | Action::EndIf
                 | Action::EndRepeat
@@ -474,7 +487,8 @@ impl Action {
             | Action::GetUrl(t)
             | Action::SaveFile(t)
             | Action::ShowResult(t)
-            | Action::SetVariable(t) => Some(t),
+            | Action::SetVariable(t)
+            | Action::Script(t) => Some(t),
             Action::If(c) => c.text(),
             _ => None,
         }
@@ -484,7 +498,7 @@ impl Action {
     /// `clean_url`). False, and nothing changes, when the step has no free text or nothing is left after cleaning.
     pub fn set_text(&mut self, s: &str) -> bool {
         let (slot, clean): (&mut String, Clean) = match self {
-            Action::Text(t) | Action::AskInput(t) | Action::ShowResult(t) => (t, clean_text as Clean),
+            Action::Text(t) | Action::AskInput(t) | Action::ShowResult(t) | Action::Script(t) => (t, clean_text as Clean),
             Action::GetUrl(t) => (t, clean_url as Clean),
             Action::SaveFile(t) => (t, clean_file as Clean),
             Action::SetVariable(t) => (t, clean_var as Clean),
@@ -524,6 +538,7 @@ impl Action {
             Action::CopyText(m) => format!("copy:{m}"),
             Action::OpenFolder(m) => format!("folder:{m}"),
             Action::RunScript(m) => format!("script:{m}"),
+            Action::Script(t) => format!("osa:{}", esc(t)),
             Action::Text(t) => format!("text:{}", esc(t)),
             Action::AskInput(t) => format!("ask:{}", esc(t)),
             Action::GetUrl(t) => format!("url:{}", esc(t)),
@@ -559,6 +574,7 @@ impl Action {
             "copy" => Action::CopyText(choice(&COPY_CHOICES, v)?),
             "folder" => Action::OpenFolder(choice(&FOLDER_CHOICES, v)?),
             "script" => Action::RunScript(choice(&SCRIPT_CHOICES, v)?),
+            "osa" => Action::Script(free(v, clean_text)?),
             "text" => Action::Text(free(v, clean_text)?),
             "ask" => Action::AskInput(free(v, clean_text)?),
             "url" => Action::GetUrl(free(v, clean_url)?),
@@ -626,25 +642,65 @@ pub const BATTERY_CHOICES: [u8; 4] = [10, 20, 30, 50];
 pub enum Automation {
     /// runs when the app named `APP_CHOICES[i]` opens
     AppOpens(usize),
+    /// runs when the app named `APP_CHOICES[i]` closes
+    AppCloses(usize),
     /// runs each time the charge falls below this percent (`MIN_BATTERY` to `MAX_BATTERY`)
     BatteryBelow(u8),
+    /// runs when the person signs in
+    AtLogin,
+    /// runs when a Focus turns on (`true`) or off (`false`)
+    FocusChanges(bool),
+    /// runs at a local time of day, every day or on weekdays only
+    TimeOfDay { at: Daily, weekdays: bool },
+    /// runs for a file dropped on the shortcut's droplet icon
+    FileDropped,
 }
 
 impl Automation {
-    /// The form stored in the list file: `open:N` for `APP_CHOICES[N]`, or `battery:P`.
+    /// The form stored in the list file: `open:N` or `close:N` for `APP_CHOICES[N]`, `battery:P`, `login`,
+    /// `focus:on` or `focus:off`, and `time:HH:MM:every` or `time:HH:MM:weekdays`.
     fn encode(self) -> String {
         match self {
             Automation::AppOpens(i) => format!("open:{i}"),
+            Automation::AppCloses(i) => format!("close:{i}"),
             Automation::BatteryBelow(p) => format!("battery:{p}"),
+            Automation::AtLogin => "login".into(),
+            Automation::FileDropped => "dropped".into(),
+            Automation::FocusChanges(on) => format!("focus:{}", if on { "on" } else { "off" }),
+            Automation::TimeOfDay { at, weekdays } => format!("time:{}:{}", at.label(), if weekdays { "weekdays" } else { "every" }),
         }
     }
 
     /// The automation a stored form names; `None` for an unknown kind or a value out of range.
     fn decode(v: &str) -> Option<Automation> {
+        if v == "login" {
+            return Some(Automation::AtLogin);
+        }
+        if v == "dropped" {
+            return Some(Automation::FileDropped);
+        }
+        if let Some(rest) = v.strip_prefix("time:") {
+            let (hm, days) = rest.rsplit_once(':')?;
+            let at = Daily::parse(hm)?;
+            let weekdays = match days {
+                "every" => false,
+                "weekdays" => true,
+                _ => return None,
+            };
+            return Some(Automation::TimeOfDay { at, weekdays });
+        }
+        if let Some(on) = v.strip_prefix("focus:") {
+            return match on {
+                "on" => Some(Automation::FocusChanges(true)),
+                "off" => Some(Automation::FocusChanges(false)),
+                _ => None,
+            };
+        }
         let (kind, n) = v.split_once(':')?;
         let n: usize = n.parse().ok()?;
         match kind {
             "open" => (n < APP_CHOICES.len()).then_some(Automation::AppOpens(n)),
+            "close" => (n < APP_CHOICES.len()).then_some(Automation::AppCloses(n)),
             "battery" => u8::try_from(n).ok().filter(|p| (MIN_BATTERY..=MAX_BATTERY).contains(p)).map(Automation::BatteryBelow),
             _ => None,
         }
@@ -656,8 +712,18 @@ impl Automation {
 pub enum Event<'a> {
     /// the app with this name opened
     AppOpened(&'a str),
+    /// the app with this name closed
+    AppClosed(&'a str),
     /// the battery charge changed from `before` (`None` for the first reading) to `now`, in percent
     BatteryLevel { before: Option<u8>, now: u8 },
+    /// the person signed in
+    Login,
+    /// a Focus turned on (`true`) or off (`false`)
+    Focus(bool),
+    /// a local time; `weekday` is 1 for Sunday to 7 for Saturday, the calendar convention of the shell's scheduler
+    Time { hour: u8, minute: u8, weekday: u8 },
+    /// a file was dropped on the shortcut's droplet icon
+    FileDropped,
 }
 
 /// Whether a change in the charge crosses below `level`: the charge was at or above it and is now below it. The first
@@ -668,15 +734,36 @@ pub fn battery_fell_below(before: Option<u8>, now: u8, level: u8) -> bool {
 
 /// The positions in `list`, in list order, of the automations that `event` starts.
 pub fn due(list: &[Shortcut], event: Event) -> Vec<usize> {
-    list.iter()
-        .enumerate()
-        .filter(|(_, s)| match (s.automation, event) {
-            (Some(Automation::AppOpens(i)), Event::AppOpened(app)) => APP_CHOICES.get(i) == Some(&app),
-            (Some(Automation::BatteryBelow(level)), Event::BatteryLevel { before, now }) => battery_fell_below(before, now, level),
-            _ => false,
-        })
-        .map(|(i, _)| i)
-        .collect()
+    list.iter().enumerate().filter(|(_, s)| s.automation.is_some_and(|a| starts(a, event))).map(|(i, _)| i).collect()
+}
+
+/// Whether the automation `a` is started by `event`.
+pub fn starts(a: Automation, event: Event) -> bool {
+    match (a, event) {
+        (Automation::AppOpens(i), Event::AppOpened(app)) => APP_CHOICES.get(i) == Some(&app),
+        (Automation::AppCloses(i), Event::AppClosed(app)) => APP_CHOICES.get(i) == Some(&app),
+        (Automation::BatteryBelow(level), Event::BatteryLevel { before, now }) => battery_fell_below(before, now, level),
+        (Automation::AtLogin, Event::Login) => true,
+        (Automation::FileDropped, Event::FileDropped) => true,
+        (Automation::FocusChanges(on), Event::Focus(now)) => on == now,
+        (Automation::TimeOfDay { at, weekdays }, Event::Time { hour, minute, weekday }) => {
+            at.hour == hour && at.minute == minute && (!weekdays || (2..=6).contains(&weekday))
+        }
+        _ => false,
+    }
+}
+
+/// A shortcut an event starts, with whether the person is asked first.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Run {
+    pub index: usize,
+    pub ask: bool,
+}
+
+/// The shortcuts `event` starts, in list order, each with its ask flag. The shell shows a notification with Run and
+/// Don't Run for an asking shortcut, and runs the others at once.
+pub fn dispatch(list: &[Shortcut], event: Event) -> Vec<Run> {
+    due(list, event).into_iter().map(|index| Run { index, ask: list[index].ask }).collect()
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -695,12 +782,45 @@ pub struct Shortcut {
     pub key: u8,
     /// a personal automation that runs the shortcut when its event happens; `None` for none
     pub automation: Option<Automation>,
+    /// whether an automation asks first (Run or Don't Run) instead of running at once; on by default
+    pub ask: bool,
+    /// whether the person has confirmed that this shortcut's "Run Shell Script" steps may run (once, per shortcut)
+    pub confirmed: bool,
 }
 
 impl Shortcut {
-    /// A shortcut with no reminder, the plain glyph, no folder, no menu key and no automation.
+    /// A shortcut with no reminder, the plain glyph, no folder, no menu key, no automation, asking before an automation
+    /// runs it, and no shell-script confirmation.
     pub fn new(name: &str, color: usize, actions: Vec<Action>) -> Shortcut {
-        Shortcut { name: name.into(), color, actions, schedule: None, glyph: 0, folder: 0, key: 0, automation: None }
+        Shortcut {
+            name: name.into(),
+            color,
+            actions,
+            schedule: None,
+            glyph: 0,
+            folder: 0,
+            key: 0,
+            automation: None,
+            ask: true,
+            confirmed: false,
+        }
+    }
+
+    /// Whether running this shortcut would run a "Run Shell Script" step the person has not confirmed yet.
+    pub fn needs_shell_confirmation(&self) -> bool {
+        !self.confirmed && self.actions.iter().any(|a| matches!(a, Action::RunScript(_)))
+    }
+}
+
+/// Records the person's one-time confirmation that shortcut `i` may run its "Run Shell Script" steps. False when there is
+/// no shortcut at `i`.
+pub fn confirm_shell(list: &mut [Shortcut], i: usize) -> bool {
+    match list.get_mut(i) {
+        Some(s) => {
+            s.confirmed = true;
+            true
+        }
+        None => false,
     }
 }
 
@@ -710,19 +830,22 @@ pub fn serialize(list: &[Shortcut]) -> String {
         let name: String = s.name.chars().filter(|c| !c.is_control()).collect();
         let acts: Vec<String> = s.actions.iter().map(Action::encode).collect();
         out += &format!("{name}\t{}\t{}", s.color, acts.join(";"));
-        let extra = s.glyph != 0 || s.folder != 0 || s.key != 0 || s.automation.is_some();
+        let tail = s.automation.is_some() || !s.ask || s.confirmed;
+        let extra = s.glyph != 0 || s.folder != 0 || s.key != 0 || tail;
         if s.schedule.is_some() || extra {
             out += &format!("\t{}", s.schedule.map(Daily::label).unwrap_or_default());
         }
         if extra {
             out += &format!("\t{}\t{}", s.glyph, s.folder);
         }
-        // the key is written as 0 when only an automation follows it, so the automation keeps its place
-        if s.key != 0 || s.automation.is_some() {
+        // the key is written as 0 when only the columns after it follow, so they keep their place
+        if s.key != 0 || tail {
             out += &format!("\t{}", s.key);
         }
-        if let Some(automation) = s.automation {
-            out += &format!("\t{}", automation.encode());
+        // the automation (empty for none), then its ask flag and the shell-script confirmation, one column each
+        if tail {
+            let automation = s.automation.map(Automation::encode).unwrap_or_default();
+            out += &format!("\t{automation}\t{}\t{}", u8::from(s.ask), u8::from(s.confirmed));
         }
         out.push('\n');
     }
@@ -741,7 +864,10 @@ pub fn parse(text: &str) -> Vec<Shortcut> {
             let folder = f.next().and_then(|g| g.parse::<usize>().ok()).filter(|g| *g <= FOLDERS.len()).unwrap_or(0);
             let key = f.next().and_then(|k| k.parse::<u8>().ok()).filter(|k| (1..=MAX_KEY).contains(k)).unwrap_or(0);
             let automation = f.next().and_then(Automation::decode);
-            (!name.trim().is_empty()).then_some(Shortcut { name, color, actions, schedule, glyph, folder, key, automation })
+            // a line from before these columns asks before an automation runs and has no confirmation
+            let ask = f.next().map_or(true, |v| v != "0");
+            let confirmed = f.next().is_some_and(|v| v == "1");
+            (!name.trim().is_empty()).then_some(Shortcut { name, color, actions, schedule, glyph, folder, key, automation, ask, confirmed })
         })
         .take(MAX_SHORTCUTS)
         .collect()
@@ -820,23 +946,41 @@ pub fn next_key(cur: u8) -> u8 {
 /// The automation after `cur` in the order the editor's Automation row steps through: none, each app in
 /// `APP_CHOICES`, each level in `BATTERY_CHOICES`, then none again. `None` for a value the row never offers.
 pub fn next_automation(cur: Option<Automation>) -> Option<Automation> {
-    let order: Vec<Automation> =
-        (0..APP_CHOICES.len()).map(Automation::AppOpens).chain(BATTERY_CHOICES.iter().map(|&p| Automation::BatteryBelow(p))).collect();
+    let order = automation_order();
     match cur {
         None => order.first().copied(),
         Some(a) => order.iter().position(|&x| x == a).and_then(|k| order.get(k + 1).copied()),
     }
 }
 
-/// The text the Automation row shows for `cur`: "Off", "When Notes Opens" or "Battery Below 20%".
+/// Every automation the row steps through, in its order: sign-in, the Focus changes, the time of day (every day, then
+/// weekdays), each app opening, each app closing, then each battery level.
+fn automation_order() -> Vec<Automation> {
+    let mut order = vec![Automation::AtLogin, Automation::FocusChanges(true), Automation::FocusChanges(false)];
+    order.extend(TIMES.iter().map(|&at| Automation::TimeOfDay { at, weekdays: false }));
+    order.extend(TIMES.iter().map(|&at| Automation::TimeOfDay { at, weekdays: true }));
+    order.extend((0..APP_CHOICES.len()).map(Automation::AppOpens));
+    order.extend((0..APP_CHOICES.len()).map(Automation::AppCloses));
+    order.extend(BATTERY_CHOICES.iter().map(|&p| Automation::BatteryBelow(p)));
+    order.push(Automation::FileDropped);
+    order
+}
+
+/// The text the Automation row shows for `cur`: "Off", "When Notes Opens", "When Notes Closes", "Battery Below 20%",
+/// "At Login", "When Focus Turns On", "When Focus Turns Off" or "Daily at 07:00" / "Weekdays at 07:00".
 pub fn automation_label(cur: Option<Automation>) -> String {
+    let app = |i: usize| APP_CHOICES.get(i).copied();
     match cur {
         None => "Off".into(),
-        Some(Automation::AppOpens(i)) => match APP_CHOICES.get(i) {
-            Some(app) => format!("When {app} Opens"),
-            None => "Off".into(),
-        },
+        Some(Automation::AppOpens(i)) => app(i).map_or("Off".into(), |a| format!("When {a} Opens")),
+        Some(Automation::AppCloses(i)) => app(i).map_or("Off".into(), |a| format!("When {a} Closes")),
         Some(Automation::BatteryBelow(p)) => format!("Battery Below {p}%"),
+        Some(Automation::AtLogin) => "At Login".into(),
+        Some(Automation::FocusChanges(true)) => "When Focus Turns On".into(),
+        Some(Automation::FocusChanges(false)) => "When Focus Turns Off".into(),
+        Some(Automation::TimeOfDay { at, weekdays: false }) => format!("Daily at {}", at.label()),
+        Some(Automation::TimeOfDay { at, weekdays: true }) => format!("Weekdays at {}", at.label()),
+        Some(Automation::FileDropped) => "When a File Is Dropped".into(),
     }
 }
 
@@ -1325,6 +1469,18 @@ mod tests {
     }
 
     #[test]
+    fn run_script_step_round_trips_and_starts_with_the_pass_through_script() {
+        assert_eq!(Action::of_kind(21).title(), "Run Script");
+        assert_eq!(Action::of_kind(21), Action::Script(DEFAULT_SCRIPT.into()));
+        let step = Action::Script("return item 1 of argv: 50%; done".into());
+        let list = vec![Shortcut::new("Calc", 0, vec![step.clone()])];
+        let back = parse(&serialize(&list));
+        assert_eq!(back[0].actions, vec![step]);
+        assert!(Action::Script("x".into()).text() == Some("x"));
+        assert!(!Action::Script("x".into()).adjustable());
+    }
+
+    #[test]
     fn every_add_menu_kind_builds_its_own_action() {
         for (i, title) in KINDS.iter().enumerate() {
             assert_eq!(Action::of_kind(i).title(), *title);
@@ -1686,5 +1842,142 @@ mod tests {
     fn the_glyph_list_starts_with_the_plain_mark() {
         assert_eq!(GLYPHS[0], "");
         assert!(GLYPHS[1..].iter().all(|g| !g.is_empty()));
+    }
+
+    fn at(hour: u8, minute: u8) -> Daily {
+        Daily { hour, minute }
+    }
+
+    #[test]
+    fn the_new_automation_kinds_round_trip_through_the_file() {
+        let kinds = [
+            Automation::AppCloses(2),
+            Automation::AtLogin,
+            Automation::FocusChanges(true),
+            Automation::FocusChanges(false),
+            Automation::TimeOfDay { at: at(7, 0), weekdays: false },
+            Automation::TimeOfDay { at: at(22, 30), weekdays: true },
+        ];
+        for a in kinds {
+            let mut s = named("Auto");
+            s.automation = Some(a);
+            assert_eq!(parse(&serialize(&[s.clone()])), vec![s], "{a:?}");
+        }
+    }
+
+    #[test]
+    fn a_stored_automation_with_a_bad_value_is_refused() {
+        assert_eq!(Automation::decode("close:99"), None);
+        assert_eq!(Automation::decode("focus:maybe"), None);
+        assert_eq!(Automation::decode("time:25:00:every"), None);
+        assert_eq!(Automation::decode("time:07:00:someday"), None);
+        assert_eq!(Automation::decode("time:07:00"), None);
+    }
+
+    #[test]
+    fn ask_before_running_is_on_by_default_and_old_lines_keep_it() {
+        let mut s = named("Ask");
+        s.automation = Some(Automation::AtLogin);
+        assert!(s.ask);
+        // a line written before the ask and confirmation columns: the automation is the last column
+        // name, color, actions, schedule, glyph, folder, key, automation: no ask or confirmation column
+        let old = "Ask\t1\t\t\t\t\t\tlogin\n";
+        assert_eq!(parse(old)[0].automation, Some(Automation::AtLogin));
+        assert!(parse(old)[0].ask);
+        assert!(!parse(old)[0].confirmed);
+        // an opted-out automation keeps its flag through a round trip
+        s.ask = false;
+        assert!(!parse(&serialize(&[s.clone()]))[0].ask);
+    }
+
+    #[test]
+    fn a_time_automation_runs_at_its_minute_and_weekdays_only_on_weekdays() {
+        let mut every = named("Morning");
+        every.automation = Some(Automation::TimeOfDay { at: at(7, 0), weekdays: false });
+        let mut work = named("Work");
+        work.automation = Some(Automation::TimeOfDay { at: at(7, 0), weekdays: true });
+        let l = vec![every, work];
+        let at_0700 = |weekday| Event::Time { hour: 7, minute: 0, weekday };
+        // 1 is Sunday, 7 is Saturday
+        assert_eq!(due(&l, at_0700(1)), vec![0]);
+        assert_eq!(due(&l, at_0700(2)), vec![0, 1]);
+        assert_eq!(due(&l, at_0700(7)), vec![0]);
+        assert_eq!(due(&l, Event::Time { hour: 7, minute: 1, weekday: 2 }), Vec::<usize>::new());
+    }
+
+    #[test]
+    fn app_close_focus_and_login_events_start_only_their_automation() {
+        let mut close = named("Close");
+        close.automation = Some(Automation::AppCloses(0));
+        let mut on = named("On");
+        on.automation = Some(Automation::FocusChanges(true));
+        let mut login = named("Login");
+        login.automation = Some(Automation::AtLogin);
+        let l = vec![close, on, login];
+        assert_eq!(due(&l, Event::AppClosed("Settings")), Vec::<usize>::new());
+        assert_eq!(due(&l, Event::AppClosed(APP_CHOICES[0])), vec![0]);
+        assert_eq!(due(&l, Event::Focus(true)), vec![1]);
+        assert_eq!(due(&l, Event::Focus(false)), Vec::<usize>::new());
+        assert_eq!(due(&l, Event::Login), vec![2]);
+        assert_eq!(due(&l, Event::AppOpened(APP_CHOICES[0])), Vec::<usize>::new());
+    }
+
+    #[test]
+    fn dispatch_carries_each_shortcuts_ask_flag() {
+        let mut asks = named("Asks");
+        asks.automation = Some(Automation::AtLogin);
+        let mut quiet = named("Quiet");
+        quiet.automation = Some(Automation::AtLogin);
+        quiet.ask = false;
+        let l = vec![asks, quiet];
+        assert_eq!(
+            dispatch(&l, Event::Login),
+            vec![Run { index: 0, ask: true }, Run { index: 1, ask: false }]
+        );
+    }
+
+    #[test]
+    fn a_run_shell_script_step_needs_confirmation_once() {
+        let mut s = Shortcut::new("Shell", 0, vec![Action::RunScript("date".into())]);
+        assert!(s.needs_shell_confirmation());
+        let mut l = vec![s.clone()];
+        assert!(confirm_shell(&mut l, 0));
+        assert!(!l[0].needs_shell_confirmation());
+        assert!(!confirm_shell(&mut l, 5), "no shortcut at that position");
+        // the confirmation is kept in the list file
+        assert!(parse(&serialize(&l))[0].confirmed);
+        s.actions = vec![Action::Screenshot];
+        assert!(!s.needs_shell_confirmation(), "a shortcut without the step needs none");
+    }
+
+    #[test]
+    fn the_automation_row_steps_through_the_new_kinds_and_labels_them() {
+        assert_eq!(next_automation(None), Some(Automation::AtLogin));
+        assert_eq!(automation_label(Some(Automation::AtLogin)), "At Login");
+        assert_eq!(automation_label(Some(Automation::TimeOfDay { at: at(7, 0), weekdays: true })), "Weekdays at 07:00");
+        assert_eq!(automation_label(Some(Automation::AppCloses(0))), format!("When {} Closes", APP_CHOICES[0]));
+        // every step of the row is a value the file can store
+        let mut cur = None;
+        let mut steps = 0;
+        loop {
+            cur = next_automation(cur);
+            match cur {
+                Some(a) => {
+                    assert_eq!(Automation::decode(&a.encode()), Some(a));
+                    steps += 1;
+                }
+                None => break,
+            }
+        }
+        assert_eq!(steps, automation_order().len());
+    }
+
+    #[test]
+    fn a_dropped_file_starts_only_the_dropped_automation() {
+        assert_eq!(automation_label(Some(Automation::FileDropped)), "When a File Is Dropped");
+        assert_eq!(Automation::decode("dropped"), Some(Automation::FileDropped));
+        assert!(starts(Automation::FileDropped, Event::FileDropped));
+        assert!(!starts(Automation::FileDropped, Event::Login));
+        assert!(!starts(Automation::AtLogin, Event::FileDropped));
     }
 }

@@ -9,6 +9,9 @@ use bifrost_ui::internet_accounts::{self as shared, Kind};
 pub enum Purpose {
     ComputerName,
     LocalHostname,
+    /// Sharing > Screen Sharing: the account whose name and password a viewer signs in with. `start` turns Screen
+    /// Sharing on once the account is set (the switch was flipped before any account was chosen).
+    ScreenSharingAccount { start: bool },
     /// step 1 of a new account: the full name
     NewUserFull { admin: bool },
     /// step 2: the account name
@@ -19,6 +22,9 @@ pub enum Purpose {
     CurrentPassword { name: String },
     /// `old` is the current password when the account is the installed one
     ChangePassword { name: String, old: Option<String> },
+    /// the new password typed again: `then` (the account or password change that asked for it) runs only when the
+    /// text equals `first`, the password typed before
+    ConfirmPassword { first: String, then: Box<Purpose> },
     NewGroup,
     /// Print & Scan: the device address of a printer to add (`ipp://`, `socket://`, `usb://`)
     PrinterAddress,
@@ -28,6 +34,28 @@ pub enum Purpose {
     NewAccountUser { kind: Kind, address: String },
     /// step 3: the password, which is saved in Passwords when the account is added
     NewAccountPassword { kind: Kind, address: String, username: String },
+    /// Location Services > Set Location, step 1 of 2: the latitude in degrees (see `location_page::step`)
+    SetLatitude,
+    /// step 2: the longitude; `latitude` is the text typed in step 1
+    SetLongitude { latitude: String },
+    /// Settings > BifrOSt Account step 1 of 2: the email address of the account (see `account_page`)
+    AccountEmail,
+    /// step 2 of 2: the password for `email`. It goes to the cloud's sign-in route and is not kept.
+    AccountPassword { email: String },
+    /// Bluetooth pairing: the PIN (up to 16 characters) or the six-digit passkey `addr` asks for. Not kept; it is
+    /// sent to the radio as `Cmd::AnswerPairing`.
+    BluetoothPairing { addr: String, passkey: bool },
+    /// the password an app asked for through the `local_auth` service (the sheet is `auth_sheet.rs`); the typed text
+    /// goes to the service's answer and is never stored or sent to the app
+    AppAuthentication { app: String },
+    /// the passphrase of a locked encrypted volume (the sheet is `volume_sheet.rs`); it goes to privd's unlock and is never kept
+    VolumeUnlock { device: String },
+    /// the user name (`password` false) or the password (true) a share or an 802.1X network asked for through the
+    /// `network_auth` service (the sheet is `network_auth_sheet.rs`); the answer goes to the service and is saved only if asked
+    NetworkLogin { password: bool },
+    /// the administrator's password for installing software (the sheet is `package_install_sheet.rs`); it goes to
+    /// privd's `auth.elevate` and is never kept
+    InstallAuthentication,
 }
 
 /// What the sheet shows.
@@ -56,6 +84,20 @@ impl Prompt {
         Prompt { max: 63, initial: current.into(), ..Prompt::new(Purpose::LocalHostname, "Local Hostname", "Other computers on the network reach this one as this name followed by .local. Letters, digits and hyphens.", "Hostname", "Done") }
     }
 
+    pub fn screen_sharing_account(current: &str, start: bool) -> Prompt {
+        Prompt {
+            max: 32,
+            initial: current.into(),
+            ..Prompt::new(
+                Purpose::ScreenSharingAccount { start },
+                "Screen Sharing Account",
+                "Enter the account name of the person who may connect. They sign in with that account's name and password, and the connection is encrypted.",
+                "Account Name",
+                if start { "Turn On" } else { "Done" },
+            )
+        }
+    }
+
     pub fn new_user(admin: bool) -> Prompt {
         let title = if admin { "New Administrator" } else { "New Standard User" };
         Prompt::new(Purpose::NewUserFull { admin }, title, "Enter the person's full name.", "Full Name", "Next")
@@ -73,6 +115,47 @@ impl Prompt {
         Prompt { max: 255, ..Prompt::new(Purpose::PrinterAddress, "Add Printer", "Enter the address of the printer, such as ipp://printer.local/ipp/print or socket://192.168.1.20.", "Address", "Add") }
     }
 
+    /// Location Services > Set Location, step 1: the latitude, prefilled with the current one.
+    pub fn set_latitude(current: &str) -> Prompt {
+        Prompt {
+            max: 16,
+            initial: current.into(),
+            ..Prompt::new(Purpose::SetLatitude, "Set Location", "Enter the latitude in degrees, from -90 (south) to 90 (north). A decimal comma works too.", "Latitude", "Next")
+        }
+    }
+
+    /// Location Services > Set Location, step 2: the longitude.
+    pub fn set_longitude(latitude: &str) -> Prompt {
+        Prompt {
+            max: 16,
+            ..Prompt::new(Purpose::SetLongitude { latitude: latitude.into() }, "Set Location", "Enter the longitude in degrees, from -180 (west) to 180 (east).", "Longitude", "Set")
+        }
+    }
+
+    /// BifrOSt Account step 1: the email address. `message` is the hint, or the cloud's reason after a refusal.
+    pub fn account_email(message: &str) -> Prompt {
+        Prompt { max: crate::cloud_account::MAX_EMAIL_BYTES, ..Prompt::new(Purpose::AccountEmail, "BifrOSt Account", message, "Email", "Next") }
+    }
+
+    /// BifrOSt Account step 2: the password of `email`. Never stored.
+    pub fn account_password(email: &str, message: &str) -> Prompt {
+        Prompt {
+            secure: true,
+            max: 256,
+            ..Prompt::new(Purpose::AccountPassword { email: email.to_string() }, "Sign In", message, "Password", "Sign In")
+        }
+    }
+
+    /// The Bluetooth pairing prompt for the device `addr`: a six-digit passkey, or a PIN of up to 16 characters.
+    pub fn bluetooth_pairing(addr: &str, passkey: bool) -> Prompt {
+        let (message, placeholder, max) = if passkey {
+            ("Type the six-digit passkey shown on the device.", "Passkey", 6)
+        } else {
+            ("Type the PIN for the device: up to 16 letters or digits.", "PIN", 16)
+        };
+        Prompt { secure: true, max, ..Prompt::new(Purpose::BluetoothPairing { addr: addr.to_string(), passkey }, "Pair Device", message, placeholder, "Pair") }
+    }
+
     pub fn new_group() -> Prompt {
         Prompt { max: 32, ..Prompt::new(Purpose::NewGroup, "New Group", "Lowercase letters, digits, hyphens and underscores.", "Name", "Add") }
     }
@@ -83,6 +166,7 @@ impl Prompt {
             Kind::Mail => ("Add Mail Account", "Enter the email address. The IMAP and SMTP servers are taken from its domain.", "Email Address"),
             Kind::CalDav => ("Add Calendar Account", "Enter the CalDAV server address, such as https://dav.example.com/.", "Server Address"),
             Kind::CardDav => ("Add Contacts Account", "Enter the CardDAV server address, such as https://dav.example.com/.", "Server Address"),
+            Kind::Exchange => ("Add Exchange Account", "Enter the Exchange Web Services address, such as https://mail.example.com/EWS/Exchange.asmx. Notes reads the Notes folder of this mailbox.", "Server Address"),
         };
         Prompt { max: 255, ..Prompt::new(Purpose::NewAccountAddress { kind }, title, message, label, "Next") }
     }
@@ -90,10 +174,15 @@ impl Prompt {
     /// Internet Accounts step 2: the user name. A mail account starts with its address.
     pub fn new_account_user(kind: Kind, address: &str) -> Prompt {
         let initial = if kind == Kind::Mail { address.to_string() } else { String::new() };
+        // a mail address gets the server suggestion from its domain, read on this device only
+        let message = match (kind, bifrost_ui::account_suggestions::for_address(address)) {
+            (Kind::Mail, Some(s)) => format!("Enter the user name for the account.\n{}", bifrost_ui::account_suggestions::describe(&s)),
+            _ => "Enter the user name for the account.".to_string(),
+        };
         Prompt {
             max: 128,
             initial,
-            ..Prompt::new(Purpose::NewAccountUser { kind, address: address.to_string() }, "Add Account", "Enter the user name for the account.", "User Name", "Next")
+            ..Prompt::new(Purpose::NewAccountUser { kind, address: address.to_string() }, "Add Account", &message, "User Name", "Next")
         }
     }
 
@@ -135,6 +224,14 @@ impl Prompt {
                 max: 128,
                 ..Prompt::new(Purpose::ChangePassword { name: name.clone(), old: Some(text.to_string()) }, "New Password", &format!("Enter a new password for “{name}”."), "Password", "Change")
             }),
+            Purpose::NewUserPassword { .. } | Purpose::ChangePassword { .. } => {
+                let ok = if matches!(purpose, Purpose::NewUserPassword { .. }) { "Create" } else { "Change" };
+                Some(Prompt {
+                    secure: true,
+                    max: 128,
+                    ..Prompt::new(Purpose::ConfirmPassword { first: text.to_string(), then: Box::new(purpose.clone()) }, "Confirm Password", "Type the password again to confirm it.", "Password", ok)
+                })
+            }
             _ => None,
         }
     }
@@ -146,19 +243,48 @@ pub fn acceptable(purpose: &Purpose, text: &str) -> bool {
         Purpose::ComputerName => accounts::valid_computer_name(text),
         Purpose::LocalHostname => accounts::valid_hostname(text),
         Purpose::NewUserFull { .. } => accounts::valid_full_name(text),
-        Purpose::NewUserName { .. } | Purpose::NewGroup => accounts::valid_user(text),
+        Purpose::NewUserName { .. } | Purpose::NewGroup | Purpose::ScreenSharingAccount { .. } => accounts::valid_user(text),
         Purpose::PrinterAddress => bifrost_ui::cups::valid_device_uri(text.trim()),
-        Purpose::NewUserPassword { .. } | Purpose::ChangePassword { .. } | Purpose::CurrentPassword { .. } => accounts::valid_password(text),
+        Purpose::NewUserPassword { .. } | Purpose::ChangePassword { .. } | Purpose::CurrentPassword { .. } | Purpose::ConfirmPassword { .. } => accounts::valid_password(text),
         Purpose::NewAccountAddress { kind: Kind::Mail } => shared::valid_address(text.trim()),
+        Purpose::NewAccountAddress { kind: Kind::Exchange } => shared::valid_exchange_url(text.trim()),
         Purpose::NewAccountAddress { .. } => shared::valid_dav_url(text.trim()),
         Purpose::NewAccountUser { .. } => !text.trim().is_empty() && !text.contains(['\r', '\n']),
         Purpose::NewAccountPassword { .. } => !text.is_empty(),
+        Purpose::AccountEmail => crate::cloud_account::normalize_email(text).is_ok(),
+        Purpose::AccountPassword { .. } => !text.is_empty(),
+        Purpose::AppAuthentication { .. } | Purpose::VolumeUnlock { .. } | Purpose::InstallAuthentication => !text.is_empty(),
+        Purpose::NetworkLogin { .. } => crate::net_auth::valid_field(text),
+        Purpose::SetLatitude => super::location_page::coordinate(text, 90.0).is_some(),
+        Purpose::SetLongitude { .. } => super::location_page::coordinate(text, 180.0).is_some(),
+        Purpose::BluetoothPairing { passkey: true, .. } => bifrost_core::bt_pairing::validate_passkey(text).is_ok(),
+        Purpose::BluetoothPairing { passkey: false, .. } => bifrost_core::bt_pairing::validate_pin(text).is_ok(),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_exchange_server_address_must_be_https() {
+        let ask = Purpose::NewAccountAddress { kind: Kind::Exchange };
+        assert!(acceptable(&ask, "https://mail.example.com/EWS/Exchange.asmx"));
+        assert!(!acceptable(&ask, "http://mail.example.com/EWS/Exchange.asmx"));
+        assert!(acceptable(&Purpose::NewAccountAddress { kind: Kind::CalDav }, "http://dav.example.com/"), "DAV keeps its own rule");
+        let prompt = Prompt::new_account_address(Kind::Exchange);
+        assert_eq!(prompt.title, "Add Exchange Account");
+        assert_eq!(prompt.purpose, ask);
+    }
+
+    #[test]
+    fn a_new_password_is_typed_again_before_it_is_used() {
+        let purpose = Purpose::NewUserPassword { admin: false, full: "Kid".into(), name: "kid".into() };
+        let confirm = Prompt::next(&purpose, "s3cret-one").expect("confirm step");
+        assert_eq!(confirm.purpose, Purpose::ConfirmPassword { first: "s3cret-one".into(), then: Box::new(purpose) });
+        assert_eq!(confirm.ok, "Create");
+        assert!(Prompt::next(&confirm.purpose, "s3cret-one").is_none());
+    }
 
     #[test]
     fn each_purpose_checks_its_text() {
@@ -180,12 +306,27 @@ mod tests {
         let third = Prompt::next(&second.purpose, "asa").expect("a password follows");
         assert!(third.secure);
         assert_eq!(third.purpose, Purpose::NewUserPassword { admin: true, full: "Ása Jónsdóttir".into(), name: "asa".into() });
-        assert!(Prompt::next(&third.purpose, "pw").is_none(), "the flow ends with the password");
+        // The password is typed twice: a confirmation step follows, and the flow ends with it.
+        let fourth = Prompt::next(&third.purpose, "pw").expect("a confirmation follows");
+        assert_eq!(fourth.title, "Confirm Password");
+        assert!(Prompt::next(&fourth.purpose, "pw").is_none(), "the flow ends with the confirmation");
     }
 
     #[test]
     fn an_unusable_suggestion_is_left_empty() {
         let second = Prompt::next(&Purpose::NewUserFull { admin: false }, "9 Lives").expect("account name step");
         assert_eq!(second.initial, "", "an account name cannot start with a digit");
+    }
+
+    #[test]
+    fn bluetooth_pairing_takes_a_pin_or_a_six_digit_passkey() {
+        let pin = Prompt::bluetooth_pairing("AA:BB:CC:DD:EE:FF", false);
+        assert!(pin.secure && pin.max == 16);
+        assert!(acceptable(&pin.purpose, "1234") && acceptable(&pin.purpose, "abc123"));
+        assert!(!acceptable(&pin.purpose, "") && !acceptable(&pin.purpose, "12 34"));
+        let passkey = Prompt::bluetooth_pairing("AA:BB:CC:DD:EE:FF", true);
+        assert_eq!(passkey.max, 6);
+        assert!(acceptable(&passkey.purpose, "000042"));
+        assert!(!acceptable(&passkey.purpose, "42") && !acceptable(&passkey.purpose, "12a456"));
     }
 }

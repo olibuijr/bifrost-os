@@ -105,8 +105,8 @@
    "apple": "MainMenu.nib Edit > Cut/Copy/Paste",
    "status": "partial",
    "bifrost": "springboard/apps/calendar-desktop/src/main.rs:257",
-   "note": "Edit > Cut/Copy/Paste from the shell Edit menu now act on the saved event being edited (Cut = copy then delete with Undo; Paste adds the pasteboard event to the selected day); Event > Cut Event (Shift-Command-X). Copy/Cut work only from the open editor; the month and week grids have no selected-event state, and text selection copy inside the editor fields is not routed. A custom repeat rule and custom alarms now go with the event through copy and paste (clip.rs copy_text and paste, tested headless in tests/parity_app-calendar.rs).",
-   "wire": "Select an event with a single click (the grid opens it today) and keep custom repeat rules when pasting once the custom repeat sheet exists."
+   "note": "Copy and Cut act on the event last tapped or opened. A single tap now selects an event (a second tap opens it in a window).",
+   "wire": "Keep custom repeat rules when pasting once the custom repeat sheet exists."
   },
   {
    "feature": "Export Event (.ics)",
@@ -249,17 +249,17 @@
    "apple": "iTIPelements.nib; ResendInvitations.nib",
    "status": "partial",
    "bifrost": "springboard/apps/calendar-desktop/src/calendar/invitees.rs:1",
-   "note": "Read-only list of imported attendees; cannot add or invite",
-   "wire": "Add an Add Invitees field with contacts autocomplete and send iTIP REQUEST mail through the Mail service."
+   "note": "Read-only list of imported attendees. When the account organises a saved event that has invitees, the saved event goes to them as an iTIP REQUEST (METHOD:REQUEST, the event's own lines, written to itip-requests/) by Mail, on Save (rsvp.rs invite_attendees). Cannot add invitees yet; recurrence rules are not sent.",
+   "wire": "Add an Add Invitees field with contacts autocomplete, then send through CalDAV scheduling when the server advertises it (no scheduling PUT exists yet)."
   },
   {
    "feature": "Respond to invitations; show declined events",
    "area": "menu",
    "apple": "View > Show Declined Events; notifications settings",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Show Accept/Maybe/Decline on events with a pending PARTSTAT for the user, reply via iTIP, and a View toggle for declined events."
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/rsvp.rs:94 (respond: PARTSTAT update); springboard/apps/calendar-desktop/src/calendar/rsvp.rs:75 (reply_text: METHOD:REPLY); springboard/apps/calendar-desktop/src/calendar/rsvp.rs:136 (respond_to_invitation: saves calendar.ics and the reply); springboard/apps/calendar-desktop/src/calendar/ics.rs:407 (ORGANIZER parse); springboard/apps/calendar-desktop/src/calendar/overlay.rs:111 (sync_declined, hides declined events); springboard/apps/calendar-desktop/src/calendar.rs:1571 (Accept, Maybe, Decline rows)",
+   "note": "In the event editor, Accept, Maybe and Decline show when the account address (the CalDAV account username, rsvp.rs:174) is an invitee with PARTSTAT=NEEDS-ACTION. The answer is written to calendar.ics, and an iTIP REPLY (METHOD:REPLY, one ATTENDEE line, RFC 5546) is saved to itip-replies/. The reply then opens in Mail (mail_compose), addressed to the organiser with that .ics attached; the person sends it from Mail. View > Show Declined Events (off by default) shows the events the account declined. Tests in calendar/rsvp.rs cover the PARTSTAT parse, the exact reply text, the answer, the mail message and the declined filter; not built or run, and nothing is verified on Midget.",
+   "wire": "Accept, Maybe and Decline are editor rows, not a popover, and are not in the accessibility tree. An answered invitation cannot be changed from Calendar yet. The declined set is refreshed when the saved-event count changes, not after an edit. Sending is through Mail only; CalDAV scheduling (PUT to the organiser's inbox) is not used."
   },
   {
    "feature": "Data detectors in event (address from notes, copy phone)",
@@ -313,25 +313,34 @@
    "status": "partial",
    "bifrost": "springboard/apps/calendar-desktop/src/calendar/layout.rs::travel_span; springboard/apps/calendar-desktop/src/calendar/timeview.rs::grid_span; springboard/apps/calendar-desktop/src/calendar/pickers.rs:287",
    "note": "A Travel Time row in the event form (none, 15, 30, 45 or 60 minutes) saved with the event (extras.rs). The Day and Week grids pad the event block upwards by its travel time, never before midnight (layout.rs travel_span, tested headless in tests/parity_app-calendar.rs). Not used for alerts. Left: Time to Leave, which needs a routing service.",
-   "wire": "Add a travel-time field in the editor that pads the event block; Time to Leave alerts once a maps routing service exists."
+   "wire": "Time to Leave alerts once a maps routing service exists."
+  },
+  {
+   "feature": "Show event location in Maps",
+   "area": "panel",
+   "apple": "event location field (Maps link)",
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/places.rs (search_link); springboard/apps/calendar-desktop/src/calendar.rs (Target::ShowInMaps, map_link, take_map_link); springboard/apps/calendar-desktop/src/main.rs (send_outbox)",
+   "note": "A Show in Maps row under the Location field, shown while the field has text, opens a maps: search link through the shell. Maps does the lookup with the geocoder it already uses, so Calendar adds no geocoding. Code only: not built, not run, not on Midget.",
+   "wire": "Show a travel time from the current location to the event (Maps routing) to feed Time to Leave."
   },
   {
    "feature": "Reminders shown in calendar",
    "area": "view",
    "apple": "View > Show Completed Reminders; RemindersCalendarInspector.nib",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Read dated reminders from the Reminders store and draw them as all-day items, with a View toggle."
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/reminders.rs:90 (overlay_events, checkbox glyph, all-day items); springboard/apps/calendar-desktop/src/calendar/reminders.rs:56 (parse of the Reminders store); springboard/apps/calendar-desktop/src/calendar/overlay.rs:171 (sync_overlay adds them); springboard/apps/calendar-desktop/src/calendar/overlay.rs:213 (LAYER_REMINDERS switch); springboard/apps/calendar-desktop/src/calendar.rs:1074 (View > Show Reminders)",
+   "note": "View > Show Reminders (saved in calendar-prefs.txt as show_reminders) draws the open, dated reminders of the Reminders app as all-day items with a checkbox glyph. They are read from appdata/is.olibuijr.reminders.desktop/reminders.tsv beside the Calendar data folder. Tests in calendar/reminders.rs cover the parse and the mapping; they were written and not run, and nothing is verified on Midget.",
+   "wire": "Left: read-only. Completing a reminder from Calendar needs a write API on the Reminders store, and none is shared yet, so it stays in Reminders. Items are all-day only (no time of day). Completed reminders are hidden, with no Show Completed Reminders. The store is re-read only when the shown year or a calendar switch changes, not when the file changes."
   },
   {
    "feature": "Open events in separate windows",
    "area": "settings",
    "apple": "PreferencesPanel.nib option",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Offer opening the editor in a second window through the SDK multi-window API."
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/window.rs (Pane, open_pane, with_pane, draw_pane, tap_event); springboard/apps/calendar-desktop/src/main.rs (open_event_window, window_event, draw_window, pane_input)",
+   "note": "A tap selects an event; a second tap on it within 400 ms opens its editor in a window of its own (480 x 560 pt, the card window size). The editor's state is swapped in while its window is drawn or sent input, so the store and the grid are shared. Save, Delete or Cancel closes the window; closing it with unsaved edits drops them without asking. The main grid stays usable meanwhile. Code only: not built, not run, not on Midget.",
+   "wire": "Ask before a window with unsaved edits is closed; add Event > Open in New Window; focus the existing window when the event is already open from the menu."
   },
   {
    "feature": "Zoom in / out of the time grid",
@@ -351,5 +360,13 @@
    "note": "Intents show-date, show-event and create-event (intents.rs), and control methods calendar.state, calendar.show_date, calendar.create_event. No user-activity handoff.",
    "wire": "Add a continue-activity hook (Search items for events), a show-day intent that picks the view, and a reply with the event for create-event."
   }
- ]
+ ],
+ "summary": {
+  "features": 39,
+  "parity": 12,
+  "partial": 25,
+  "gap": 0,
+  "n/a": 2,
+  "coverage_pct": 66.2
+ }
 }

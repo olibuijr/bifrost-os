@@ -110,6 +110,8 @@ pub struct Room {
     pub typing: Vec<String>,
     /// Who is in the room (joined or invited), as the syncs reported it.
     pub members: Vec<Member>,
+    /// The room has end-to-end encryption on (`m.room.encryption`): the header shows a lock.
+    pub encrypted: bool,
 }
 
 impl Room {
@@ -806,6 +808,20 @@ impl Messages {
 
     /// Applies one sync answer and returns the notifications for messages that just arrived from other people.
     /// Rooms are kept in order of their newest message, newest first.
+    /// Puts the decrypted bodies in place of the undecryptable placeholders (see `api::Patch`). A message that is gone
+    /// by now is skipped.
+    pub fn apply_decrypted(&mut self, patches: &[crate::api::Patch]) {
+        for (room_id, events) in patches {
+            let Some(room) = self.rooms.iter_mut().find(|r| r.id == *room_id) else { continue };
+            for (id, body, reply_to) in events {
+                if let Some(message) = room.timeline.iter_mut().find(|m| m.id == *id) {
+                    message.body = body.clone();
+                    message.reply_to = reply_to.clone();
+                }
+            }
+        }
+    }
+
     pub fn apply_sync(&mut self, sync: &Sync) -> Vec<Notice> {
         let mut notices = Vec::new();
         for update in &sync.rooms {
@@ -878,6 +894,7 @@ fn apply_room(room: &mut Room, update: &RoomUpdate, me: &str, primed: bool, view
     }
     room.unread = update.unread;
     room.highlights = update.highlights;
+    room.encrypted |= update.encrypted;
     if let Some(typing) = &update.typing {
         room.typing = typing.iter().filter(|user| user.as_str() != me).cloned().collect();
     }
@@ -1021,6 +1038,7 @@ pub fn preview(body: &Body) -> String {
         Body::Text(s) | Body::Notice(s) | Body::Emote(s) => clip(s),
         Body::Image { name, .. } => format!("Sent an image: {name}"),
         Body::Encrypted => "Sent an encrypted message".into(),
+        Body::Undecryptable => "Unable to decrypt message".into(),
         Body::Other(kind) => format!("Sent a {}", kind.trim_start_matches("m.")),
         Body::Redacted => "Message removed".into(),
     }
@@ -1049,7 +1067,7 @@ mod tests {
     }
 
     fn sync(rooms: Vec<RoomUpdate>) -> Sync {
-        Sync { next_batch: "n".into(), rooms }
+        Sync { next_batch: "n".into(), rooms, ..Sync::default() }
     }
 
     fn signed_in() -> Messages {
@@ -1153,6 +1171,7 @@ mod tests {
     fn previews_describe_every_kind_of_message() {
         assert_eq!(preview(&Body::Image { name: "cat.png".into(), mxc: "mxc://x/y".into() }), "Sent an image: cat.png");
         assert_eq!(preview(&Body::Encrypted), "Sent an encrypted message");
+        assert_eq!(preview(&Body::Undecryptable), "Unable to decrypt message", "the placeholder never shows ciphertext");
         assert_eq!(preview(&Body::Other("m.file".into())), "Sent a file");
         assert_eq!(preview(&Body::Redacted), "Message removed");
         assert_eq!(preview(&Body::Text("a\n  b".into())), "a b", "one line");

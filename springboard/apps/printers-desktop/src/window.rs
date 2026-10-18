@@ -32,6 +32,7 @@ pub const FOOT_PT: f32 = 30.0;
 pub const PAD_PT: f32 = 20.0;
 /// How often the printers are listed again while the window is in the foreground and nothing is queued (milliseconds).
 /// While a job waits or prints the listing comes sooner, see `model::poll_interval_ms`.
+#[cfg(test)]
 pub const POLL_MS: f64 = model::IDLE_POLL_MS;
 /// How soon the loop comes back while the Add Printer pane listens for replies (milliseconds).
 const DISCOVER_WAKE_MS: f64 = 250.0;

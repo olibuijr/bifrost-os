@@ -4,6 +4,8 @@
 //! environment reports whether one is present and feeds it the recognized phrases. Mirrors the reference dictation
 //! entry, which starts and stops on the system dictation key and delivers text to the focused control.
 
+use crate::dictation_commands::{Interpreter, Language};
+
 /// Why dictation cannot start.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Reason {
@@ -33,11 +35,18 @@ pub enum State {
 pub struct Dictation {
     state: State,
     text: String,
+    /// Reads spoken punctuation and editing words in the phrases (see `dictation_commands`); None types phrases as they are.
+    commands: Option<Interpreter>,
 }
 
 impl Dictation {
     pub fn new() -> Self {
         Dictation::default()
+    }
+
+    /// A session that reads spoken commands such as "comma", "new paragraph" and "scratch that" in `language`.
+    pub fn with_commands(language: Language) -> Self {
+        Dictation { commands: Some(Interpreter::new(language)), ..Dictation::default() }
     }
 
     pub fn state(&self) -> State {
@@ -66,6 +75,11 @@ impl Dictation {
         if self.state != State::Listening {
             return false;
         }
+        if let Some(commands) = &mut self.commands {
+            commands.feed(phrase);
+            self.text = commands.text().to_string();
+            return true;
+        }
         let phrase = phrase.trim();
         if phrase.is_empty() {
             return true;
@@ -84,6 +98,9 @@ impl Dictation {
 
     /// Returns the recognized text and clears it, as the control does when it inserts the text.
     pub fn take_text(&mut self) -> String {
+        if let Some(commands) = &mut self.commands {
+            commands.take_text();
+        }
         std::mem::take(&mut self.text)
     }
 }

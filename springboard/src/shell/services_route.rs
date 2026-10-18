@@ -4,6 +4,7 @@
 //! a link opens in the browser, a path is shown in Files, and Search opens with the text in its field.
 
 use super::{Effect, Shell};
+use bifrost_ui::app_services::{self as apps, ServiceDecl};
 use bifrost_ui::services_menu::{self as menu, Route, Selection, Service};
 use std::path::Path;
 use std::time::Duration;
@@ -39,11 +40,40 @@ fn clipboard_text() -> Option<Selection> {
     (!text.trim().is_empty()).then(|| Selection::Text(text.to_string()))
 }
 
-/// The App menu's Services rows: the index in `Service::ALL` and the title, for each service that takes the selection.
+/// A service an installed app declares (`[[service]]`) that takes the current selection.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AppService {
+    pub app_id: String,
+    pub app_name: String,
+    pub decl: ServiceDecl,
+    /// The send type the selection carries that the service takes; the call names it.
+    pub uti: String,
+}
+
+/// The services of the installed apps that take `sel`, in install order.
+pub fn app_services_for(sel: &Selection) -> Vec<AppService> {
+    let types = apps::selection_types(sel, |t| Path::new(t).is_file());
+    let mut out = Vec::new();
+    for app in super::apphost::installed().iter() {
+        for decl in app.manifest.services.iter().filter(|d| d.accepts(&types)) {
+            let Some(uti) = decl.send_type_for(&types) else { continue };
+            out.push(AppService { app_id: app.manifest.id.clone(), app_name: app.manifest.name.clone(), decl: decl.clone(), uti: uti.to_string() });
+        }
+    }
+    out
+}
+
+/// The App menu's Services rows: the index and the title of each service that takes the selection. Built-in services
+/// index `Service::ALL`; an app's service follows them at `Service::ALL.len()` plus its place in [`app_services_for`].
 #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
-pub fn menu_entries() -> Vec<(u8, &'static str)> {
+pub fn menu_entries() -> Vec<(u8, String)> {
     let Some(sel) = selection() else { return Vec::new() };
-    Service::ALL.iter().enumerate().filter(|(_, s)| s.accepts(&sel)).map(|(i, s)| (i as u8, s.title())).collect()
+    let base = Service::ALL.len();
+    let mut rows: Vec<(u8, String)> = Service::ALL.iter().enumerate().filter(|(_, s)| s.accepts(&sel)).map(|(i, s)| (i as u8, s.title().to_string())).collect();
+    // the row index is a u8: at most the indexes that remain after the built-in ones
+    let room = u8::MAX as usize - base;
+    rows.extend(app_services_for(&sel).iter().take(room).enumerate().map(|(k, s)| ((base + k) as u8, s.decl.title.clone())));
+    rows
 }
 
 /// Show in Files shows a folder itself, or the folder that holds a file.
@@ -84,16 +114,50 @@ impl Shell {
         Vec::new()
     }
 
+    /// Runs the app service at `index` (an index past the built-in services) on the current selection: opens the
+    /// provider, then calls its `service.<method>` on a worker thread. A returned value goes on the pasteboard.
+    pub(super) fn run_app_service(&mut self, index: usize, t: f64) {
+        let Some(sel) = selection() else { return };
+        let Some(svc) = index.checked_sub(Service::ALL.len()).and_then(|k| app_services_for(&sel).into_iter().nth(k)) else { return };
+        if !self.desktop_open_app(&svc.app_id, t) {
+            eprintln!("services: {} is not installed", svc.app_name);
+            return;
+        }
+        let payload = apps::payload_for(&svc.uti, &sel);
+        let line = apps::request_line(&svc.decl.method, &svc.uti, &payload);
+        let returns = !svc.decl.return_types.is_empty();
+        std::thread::spawn(move || {
+            let reply = match super::intents::exchange(&svc.app_id, &line, INTENT_WAIT) {
+                Ok(reply) => reply,
+                Err(e) => return eprintln!("services: {}: {e}", svc.app_id),
+            };
+            match apps::parse_reply(&reply) {
+                Ok(Some(text)) if returns => {
+                    if let Some(plain) = super::pasteboard::set(vec![(apps::PLAIN_TEXT.to_string(), text.into_bytes())]) {
+                        bifrost_render::clipboard::set_text(&plain);
+                    }
+                }
+                Ok(_) => {}
+                Err(e) => eprintln!("services: {}: {e}", svc.app_id),
+            }
+        });
+    }
+
     /// Opens `app` and runs its `intent` with one string parameter over its control socket, on a worker thread.
     /// Shared by the Services routes and the Look Up popover's Open in Dictionary row.
     pub(super) fn run_intent(&mut self, app: &'static str, intent: &'static str, param: &'static str, text: &str, t: f64) {
+        self.run_intent_with(app, intent, vec![(param, text.to_string())], t);
+    }
+
+    /// Like `run_intent`, with several string parameters (`name`, `value`). Used by the Look Up popover's Add to Calendar.
+    pub(super) fn run_intent_with(&mut self, app: &'static str, intent: &'static str, params: Vec<(&'static str, String)>, t: f64) {
         if !self.desktop_open_app(app, t) {
             eprintln!("services: {app} is not installed");
             return;
         }
-        let text = text.to_string();
         std::thread::spawn(move || {
-            if let Err(e) = super::intents::run_with(app, intent, &[(param, text.as_str())], INTENT_WAIT) {
+            let refs: Vec<(&str, &str)> = params.iter().map(|(k, v)| (*k, v.as_str())).collect();
+            if let Err(e) = super::intents::run_with(app, intent, &refs, INTENT_WAIT) {
                 eprintln!("services: {app} {intent}: {e}");
             }
         });

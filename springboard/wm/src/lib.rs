@@ -35,6 +35,7 @@ pub mod text_input;
 pub mod tiling;
 pub mod transform;
 pub mod touch;
+pub mod window_level;
 pub mod wm;
 #[cfg(feature = "xwayland")]
 pub mod xwayland;

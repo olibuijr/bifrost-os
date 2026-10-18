@@ -50,6 +50,28 @@ fn titles(app: &Reminders) -> Vec<String> {
 }
 
 #[test]
+fn a_deleted_reminder_waits_in_recently_deleted_and_restores_from_there() {
+    let (mut app, ui, path) = app("recently-deleted");
+    add(&mut app, &ui, "Buy milk", 0.0);
+    let id = app.data.items[0].id;
+    assert!(app.show_item(id));
+    assert!(app.delete_selected(&ui, 10.0));
+    assert!(app.data.items.is_empty());
+    assert_eq!(app.kept_count, 1, "the sidebar count sees the kept reminder");
+    app.activate(&ui, Target::Deleted, 20.0);
+    let kept: Vec<String> = app.deleted.clone().expect("the page is open").into_iter().map(|r| r.title).collect();
+    assert_eq!(kept, vec!["Buy milk".to_string()]);
+    // the page draws with its row and restore link
+    let mut buf = vec![0u32; 1200 * 1920];
+    app.draw(&mut bifrost_app::kit::Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, &ui, 30.0);
+    app.activate(&ui, Target::Restore(id), 40.0);
+    assert_eq!(titles(&app), vec!["Buy milk".to_string()]);
+    assert!(app.deleted.as_ref().expect("still on the page").is_empty());
+    assert_eq!(app.kept_count, 0);
+    cleanup(&path);
+}
+
+#[test]
 fn duplicate_places_an_incomplete_copy_after_the_original() {
     let (mut app, ui, path) = app("duplicate");
     add(&mut app, &ui, "Buy milk", 0.0);
@@ -432,13 +454,14 @@ fn creation_dates_are_kept_and_sort_by_creation_date_puts_the_oldest_first() {
 #[test]
 fn smart_list_tiles_can_be_hidden_and_a_pinned_list_gets_a_tile() {
     let (mut app, ui, path) = app("tiles");
-    assert_eq!(app.tiles().len(), 5);
+    // five smart tiles and Recently Deleted
+    assert_eq!(app.tiles().len(), 6);
     app.toggle_smart(Smart::Flagged);
     assert!(!app.smart_shown(Smart::Flagged));
-    assert_eq!(app.tiles().len(), 4);
+    assert_eq!(app.tiles().len(), 5);
     assert!(!app.tiles().contains(&chrome::Tile::Smart(Smart::Flagged)));
     app.toggle_smart(Smart::Flagged);
-    assert_eq!(app.tiles().len(), 5);
+    assert_eq!(app.tiles().len(), 6);
 
     assert!(!app.toggle_pin(), "no list is open");
     app.activate(&ui, Target::List(1), 1.0);
@@ -450,14 +473,15 @@ fn smart_list_tiles_can_be_hidden_and_a_pinned_list_gets_a_tile() {
         let r = app.tile_rect(&ui, i);
         app.sidebar_target(&ui, (r.x + r.w / 2.0) * k, (r.y + r.h / 2.0) * k)
     };
-    assert_eq!(at(&app, 5), Some(Target::List(1)), "the pinned tile opens the list");
+    assert_eq!(at(&app, 6), Some(Target::List(1)), "the pinned tile opens the list");
+    assert_eq!(at(&app, 5), Some(Target::Deleted));
     assert_eq!(at(&app, 0), Some(Target::Smart(Smart::Today)));
     let tiles: Vec<_> = app.controls(&ui).into_iter().filter(|n| (100..200).contains(&n.id)).map(|n| n.label).collect();
-    assert_eq!(tiles, ["Today", "Scheduled", "All", "Flagged", "Completed", "Reminders"]);
+    assert_eq!(tiles, ["Today", "Scheduled", "All", "Flagged", "Completed", "Recently Deleted", "Reminders"]);
     render(&mut app, &ui);
     assert_eq!(app.edit_titles().0, "Undo Pin List");
     assert!(app.toggle_pin());
-    assert_eq!(app.tiles().len(), 5);
+    assert_eq!(app.tiles().len(), 6);
     cleanup(&path);
 }
 
@@ -1014,5 +1038,23 @@ fn a_reminder_holds_four_pictures_and_the_form_must_be_open_to_add_one() {
     assert!(!app.take_image_request(), "the form does not ask for a fifth");
     assert!(app.notice.is_some());
     app.activate(&ui, Target::Cancel, 2.0);
+    cleanup(&path);
+}
+
+#[test]
+fn create_list_item_adds_to_the_named_list_and_add_reminder_keeps_the_default_list() {
+    let (mut app, ui, path) = app("create-list-item");
+    app.data.lists.push(model::ListDef::new(2, "Work", 1, 0));
+    let id = app.add_reminder_to_named(&ui, "  Send invoice  ", Some("2030-01-02T09:30"), " work ").unwrap();
+    let r = app.data.items.iter().find(|r| r.id == id).unwrap();
+    assert_eq!((r.title.as_str(), r.list), ("Send invoice", 2));
+    assert!(r.due.is_some());
+    assert_eq!(r.time, Some(9 * 60 + 30));
+    assert!(app.add_reminder_to_named(&ui, "Nope", None, "Garden").is_err(), "no list has that name");
+    assert!(app.add_reminder_to_named(&ui, "   ", None, "Work").is_err(), "a blank title is refused");
+    assert!(app.add_reminder_to_named(&ui, "Late", Some("soon"), "Work").is_err(), "a bad due date is refused");
+    app.opts.default_list = Some(2);
+    let plain = app.add_reminder(&ui, "Milk", None).unwrap();
+    assert_eq!(app.data.items.iter().find(|r| r.id == plain).unwrap().list, 2, "add-reminder still uses the default list");
     cleanup(&path);
 }

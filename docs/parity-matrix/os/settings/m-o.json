@@ -38,10 +38,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/mouse_page.rs; springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/mouse_page.rs",
    "status": "partial",
-   "note": "Same Mouse page (identifier com.apple.Mouse-Settings.extension); host only, see Mouse.",
-   "rea": []
+   "note": "has: Mouse page (mouse_page.rs groups, pages.rs:1051): tracking speed, pointer acceleration (applied in input.rs), scrolling speed, double-click speed (applied to the title-bar double-click), natural scrolling, secondary click; missing: pointer size and colour",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::mouse_page"
+    }
+   ],
+   "ready_note": "covers: Mouse page (mouse_page.rs groups, pages.rs:1051): tracking speed, pointer acceleration (applied in input.rs), scrolling speed, double-click speed (applied to the title-bar double-click), natural scrolling, secondary click"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/MouseIntentsExtension.appex",
@@ -58,10 +67,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/mouse_page.rs",
+   "bifrost": "springboard/src/shell/settings_intents.rs, springboard/src/shell/mouse_page.rs",
    "status": "partial",
-   "note": "Settings > Mouse page exists; its App Intents declarations are not exposed.",
-   "rea": []
+   "note": "has: Mouse page; missing: App Intents declarations are not exposed",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found"
+    }
+   ],
+   "ready_note": "covers: the open-mouse intent in the settings catalogue (settings_intents.rs); Search lists it and it opens its pane."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/NeptuneOneWallpaper.appex",
@@ -79,8 +102,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_page.rs",
-   "status": "partial",
-   "note": "Settings wallpaper page exists; the Apple wallpaper resource bundle has no counterpart.",
+   "status": "n/a",
+   "note": "Apple named wallpaper resource bundle; BifrOSt ships its own stills and gradients on the Wallpaper page, and the bundle is Apple data that is not copied",
    "rea": []
   },
   {
@@ -98,10 +121,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/pages.rs:750",
    "status": "partial",
-   "note": "Network page",
-   "rea": []
+   "note": "has: Network page (desktop_network_page pages.rs:750): Wi-Fi (pages.rs:754), Ethernet (pages.rs:751), VPN (pages.rs:752); missing: proxy and DNS editing",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: Network page (desktop_network_page pages.rs:750): Wi-Fi (pages.rs:754), Ethernet (pages.rs:751), VPN (pages.rs:752)"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/NetworkSettingsIntents.appex",
@@ -118,10 +150,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/wifi_page.rs; springboard/src/shell/desktop_network.rs",
+   "bifrost": "springboard/src/shell/settings_intents.rs, springboard/src/shell/wifi_page.rs",
    "status": "partial",
-   "note": "Wi-Fi and network pages exist; App Intents declarations are not exposed.",
-   "rea": []
+   "note": "has: Wi-Fi and network pages; missing: App Intents declarations are not exposed",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found"
+    }
+   ],
+   "ready_note": "covers: the open-network intent in the settings catalogue (settings_intents.rs); Search lists it and it opens its pane."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/NotificationsSettings.appex",
@@ -138,10 +184,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/notify_page.rs",
    "status": "partial",
-   "note": "Notifications page",
-   "rea": []
+   "note": "has: Notifications page (notify_page.rs:186); missing: summary delivery",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::notify_page"
+    }
+   ],
+   "ready_note": "covers: Notifications page (notify_page.rs:186)"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/NotificationsSettingsIntents.appex",
@@ -158,10 +213,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/notify_page.rs",
+   "bifrost": "springboard/src/shell/settings_intents.rs, springboard/src/shell/notify_page.rs",
    "status": "partial",
-   "note": "Settings Notifications page exists; App Intents declarations are not exposed.",
-   "rea": []
+   "note": "has: Notifications page; missing: App Intents declarations are not exposed",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found"
+    }
+   ],
+   "ready_note": "covers: the open-notifications intent in the settings catalogue (settings_intents.rs); Search lists it and it opens its pane."
   },
   {
    "id": "path:/System/Library/PreferencePanes/Mouse.prefPane",
@@ -178,10 +247,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/mouse_page.rs; springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/mouse_page.rs",
    "status": "partial",
-   "note": "Mouse page, host only: tracking speed, pointer acceleration (stored, not yet applied to the input layer), scrolling speed, double-click speed (stored, not yet read by the shell), natural scrolling, secondary click side. Needs a Midget check; no Bluetooth mouse pairing rows or per-device settings.",
-   "rea": []
+   "note": "has: Mouse page (mouse_page.rs groups, pages.rs:1051): tracking speed, pointer acceleration (applied in input.rs), scrolling speed, double-click speed (applied to the title-bar double-click), natural scrolling, secondary click (swap buttons); missing: pointer size and colour",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::mouse_page"
+    }
+   ],
+   "ready_note": "covers: Mouse page (mouse_page.rs groups, pages.rs:1051): tracking speed, pointer acceleration (applied in input.rs), scrolling speed, double-click speed (applied to the title-bar double-click), natural scrolling, secondary click (swap buttons)"
   },
   {
    "id": "path:/System/Library/PreferencePanes/Network.prefPane",
@@ -198,10 +276,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/pages.rs:750",
    "status": "partial",
-   "note": "Network page",
-   "rea": []
+   "note": "has: Network page (desktop_network_page pages.rs:750): Wi-Fi (pages.rs:754), Ethernet (pages.rs:751), VPN (pages.rs:752); missing: proxy and DNS editing",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: Network page (desktop_network_page pages.rs:750): Wi-Fi (pages.rs:754), Ethernet (pages.rs:751), VPN (pages.rs:752)"
   },
   {
    "id": "path:/System/Library/PreferencePanes/Notifications.prefPane",
@@ -218,10 +305,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/notify_page.rs",
    "status": "partial",
-   "note": "Notifications page",
-   "rea": []
+   "note": "has: Notifications page (pages.rs:1360, notify_page.rs:186): per-app alerts and banners; missing: scheduled summary delivery UI",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::notify_page"
+    }
+   ],
+   "ready_note": "covers: Notifications page (pages.rs:1360, notify_page.rs:186): per-app alerts and banners"
   }
  ]
 }

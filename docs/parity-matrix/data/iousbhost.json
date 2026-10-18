@@ -12,56 +12,56 @@
       "apple": "IOUSBHostDevice, IOUSBHostObject",
       "bifrost": "springboard/sdk/src/usb_device.rs (plan_claim, ClaimPlan), springboard/core/src/usb_claim.rs, springboard/core/src/usb_descriptors.rs",
       "status": "partial",
-      "note": "An app can plan a claim (configuration and alternate-setting requests in order, and the pipes the interface opens), and the setup packets and descriptors are encoded and parsed in the inline tests of usb_claim.rs and usb_descriptors.rs. Gap: nothing sends the requests and the sandbox binds no /dev/bus/usb, which needs hardware and a Midget check."
+      "note": "An app can plan a claim (configuration and alternate-setting requests in order, and the pipes the interface opens), and the setup packets and descriptors are encoded and parsed in the inline tests of usb_claim.rs and usb_descriptors.rs. Gap: nothing sends the requests and the sandbox binds no /dev/bus/usb, which needs hardware and a Midget check. Refreshed 2026-10-17: covered by springboard/core/src/usb_claim.rs; tests usb_claim::tests."
     },
     {
       "feature": "Interface, pipe and stream I/O (control, bulk, interrupt, isochronous)",
       "apple": "IOUSBHostInterface, IOUSBHostPipe, IOUSBHostStream, IOUSBHostIOSource",
       "bifrost": "springboard/core/src/usb_pipe.rs",
       "status": "partial",
-      "note": "Wave 4 (theme-14, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No pipe or stream abstraction exposed to apps."
+      "note": "Wave 4 (theme-14, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No pipe or stream abstraction exposed to apps. Refreshed 2026-10-17: covered by springboard/core/src/usb_pipe.rs; tests usb_pipe::tests."
     },
     {
       "feature": "Isochronous transfer options",
       "apple": "IOUSBHostIsochronousTransfer*, IOUSBHostIsochronousTransaction",
       "bifrost": "springboard/core/src/usb_pipe.rs",
       "status": "partial",
-      "note": "Wave 4 (theme-14, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Needed for audio and video class devices if apps are to drive them directly."
+      "note": "Wave 4 (theme-14, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Needed for audio and video class devices if apps are to drive them directly. Refreshed 2026-10-17: covered by springboard/core/src/usb_pipe.rs; tests usb_pipe::tests."
     },
     {
       "feature": "Matching and IOServicePlane device and interface properties",
       "apple": "IOUSBHostMatchingPropertyKey, IOUSBHostDevicePropertyKey, IOUSBHostInterfacePropertyKey, IOUSBHostPropertyKey",
       "bifrost": "springboard/ui/src/os_services/usb.rs (Matching, Device, DeviceClass, parse_id, parse_code); springboard/sdk/src/os_services.rs; springboard/src/bare/input.rs (device discovery by capability, kept current on hotplug)",
       "status": "partial",
-      "note": "Matching by vendor, product, class, interface subclass and protocol, and sysfs identifier parsing, are tested headless in tests/parity_sdk-os-06.rs. Gap: the device monitor does not hand live descriptors to apps, so callers must supply the Device values."
+      "note": "Matching by vendor, product, class, interface subclass and protocol, and sysfs identifier parsing, are tested headless in tests/parity_sdk-os-06.rs. Gap: the device monitor does not hand live descriptors to apps, so callers must supply the Device values. Refreshed 2026-10-17: covered by springboard/ui/src/os_services/usb.rs; tests tests/parity_sdk-os-06.rs."
     },
     {
       "feature": "Keyboards, mice and pointing devices",
       "apple": "IOUSBHost (HID devices via USB)",
       "bifrost": "springboard/ui/src/os_services/usb.rs (Device::is_keyboard, Device::is_pointer); springboard/src/bare/input.rs",
       "status": "partial",
-      "note": "Keyboard and pointer interfaces are recognised from the HID protocol codes and tested headless. Gap: input events still reach apps only through the window system, and no live device list is exposed."
+      "note": "Keyboard and pointer interfaces are recognised from the HID protocol codes and tested headless. Gap: input events still reach apps only through the window system, and no live device list is exposed. Refreshed 2026-10-17: covered by springboard/ui/src/os_services/usb.rs; tests tests/parity_sdk-os-06.rs."
     },
     {
       "feature": "Video cameras (UVC)",
       "apple": "IOUSBHost (camera devices via USB)",
       "bifrost": "springboard/ui/src/os_services/usb.rs (Device::is_camera); springboard/src/media/v4l2.rs, springboard/src/shell/camera/mod.rs",
       "status": "partial",
-      "note": "Video streaming interfaces are recognised from the UVC class codes and tested headless. Gap: cameras are still reached through kernel V4L2 in the shell, and apps get no frames from this model."
+      "note": "Video streaming interfaces are recognised from the UVC class codes and tested headless. Gap: cameras are still reached through kernel V4L2 in the shell, and apps get no frames from this model. Refreshed 2026-10-17: covered by springboard/ui/src/os_services/usb.rs; tests tests/parity_sdk-os-06.rs."
     },
     {
       "feature": "Audio devices (USB audio class)",
       "apple": "IOUSBHost (audio devices via USB)",
       "bifrost": "springboard/ui/src/os_services/usb.rs (Device::is_audio); springboard/audiod",
       "status": "partial",
-      "note": "Audio streaming interfaces are recognised from the USB audio class codes and tested headless. Gap: audiod does not take a USB endpoint from this model, and apps cannot select one."
+      "note": "Audio streaming interfaces are recognised from the USB audio class codes and tested headless. Gap: audiod does not take a USB endpoint from this model, and apps cannot select one. Refreshed 2026-10-17: covered by springboard/ui/src/os_services/usb.rs; tests tests/parity_sdk-os-06.rs."
     },
     {
       "feature": "Scanners and printers over USB",
       "apple": "IOUSBHost (scanner and printer devices)",
       "bifrost": "springboard/core/src/usb_printer.rs (can_print, DeviceId::display_name), springboard/sdk/src/usb_printer.rs; springboard/core/tests/parity_sdk-complete-45.rs",
       "status": "partial",
-      "note": "Wave 5 (w5-iousbhost, parity/integration 93f283b0): pure model with host unit tests, now including can_print (a printer interface needs a bulk-out endpoint) and the printer name for a list, tested headless in parity_sdk-complete-45.rs. Not wired into apps or the shell, not yet tested on the VM or Midget. The print API does not expose a USB transport. No scanner API exists: most USB scanners use vendor-specific protocols, so scanner support needs per-model drivers and a device."
+      "note": "Wave 5 (w5-iousbhost, parity/integration 93f283b0): pure model with host unit tests, now including can_print (a printer interface needs a bulk-out endpoint) and the printer name for a list, tested headless in parity_sdk-complete-45.rs. Not wired into apps or the shell, not yet tested on the VM or Midget. The print API does not expose a USB transport. No scanner API exists: most USB scanners use vendor-specific protocols, so scanner support needs per-model drivers and a device. Refreshed 2026-10-17: covered by springboard/core/src/usb_printer.rs; tests usb_printer::tests."
     },
     {
       "feature": "Host controller interface and state machines (hubs, controller, port, endpoint)",
@@ -81,7 +81,7 @@
   "gaps": [
     "No app-facing transport: the claim plan (springboard/sdk/src/usb_device.rs) is not sent and no control, bulk, interrupt or isochronous request reaches a device (IOUSBHostDevice, IOUSBHostInterface, IOUSBHostPipe, IOUSBHostStream).",
     "The app sandbox (springboard/src/bare/app_policy.rs) does not bind USB device nodes, so a sandboxed app cannot reach raw USB even if an API existed.",
-    "No scanner API and no USB transport for printers (springboard/ui/src/print.rs).",
+    "No USB transport for printers (springboard/ui/src/print.rs); scanner sessions are an SDK model (sdk scan_session.rs) with no transport.",
     "Owner decision needed: whether a desktop needs app-level raw USB access at all. The triage note says likely n/a; the framework's stated use cases (cameras, audio, scanners, printers, MIDI, hubs) are mostly covered at the system layer, which leaves custom device drivers as the real gap."
   ]
 }

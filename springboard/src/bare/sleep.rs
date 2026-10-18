@@ -94,17 +94,78 @@ fn app_sleep_holds() -> std::sync::MutexGuard<'static, std::collections::BTreeSe
 /// Records the activity union an app reported: the app holds a system sleep block while the
 /// `idleSystemSleepDisabled` bit is set.
 pub fn note_app_activity(app: &str, options: u32) {
-    let mut holds = app_sleep_holds();
-    if options & bifrost_proto::activity::IDLE_SYSTEM_SLEEP_DISABLED != 0 {
-        holds.insert(app.to_string());
+    let wanted = options & bifrost_proto::activity::IDLE_SYSTEM_SLEEP_DISABLED != 0;
+    {
+        let mut holds = app_sleep_holds();
+        if wanted {
+            holds.insert(app.to_string());
+        } else {
+            holds.remove(app);
+        }
+    }
+    if wanted {
+        hold_app_inhibitor(app);
     } else {
-        holds.remove(app);
+        release_app_inhibitor(app);
     }
 }
 
 /// Drops an app's sleep block when the app goes away.
 pub fn forget_app(app: &str) {
     app_sleep_holds().remove(app);
+    release_app_inhibitor(app);
+}
+
+/// The logind inhibitors the shell holds for apps, by app id: a `systemd-inhibit` process per app that keeps the
+/// system from sleeping, so other programs and logind see the block (`app_sleep_blockers` is the shell's own list).
+static APP_SLEEP_INHIBITORS: std::sync::Mutex<std::collections::BTreeMap<String, std::process::Child>> =
+    std::sync::Mutex::new(std::collections::BTreeMap::new());
+
+fn app_inhibitors() -> std::sync::MutexGuard<'static, std::collections::BTreeMap<String, std::process::Child>> {
+    APP_SLEEP_INHIBITORS.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// The `systemd-inhibit` arguments for an app's sleep block (the same form as `bifrost_app::session_assertion`).
+/// The held command is `cat`: it reads stdin until the shell closes it, so the block lasts exactly as long as the
+/// app keeps it.
+pub fn app_inhibitor_args(app: &str) -> Vec<String> {
+    vec![
+        "--what=sleep".to_string(),
+        format!("--who={app}"),
+        "--why=An app is keeping the system awake".to_string(),
+        "--mode=block".to_string(),
+        "cat".to_string(),
+    ]
+}
+
+/// Starts the block for an app that does not hold one yet. A missing `systemd-inhibit` is logged and the app keeps
+/// only the shell's own list entry.
+fn hold_app_inhibitor(app: &str) {
+    let mut inhibitors = app_inhibitors();
+    if inhibitors.contains_key(app) {
+        return;
+    }
+    let spawned = std::process::Command::new("systemd-inhibit")
+        .args(app_inhibitor_args(app))
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn();
+    match spawned {
+        Ok(child) => {
+            inhibitors.insert(app.to_string(), child);
+        }
+        Err(e) => eprintln!("springboard: sleep inhibitor for {app}: {e}"),
+    }
+}
+
+/// Ends an app's block: closing `cat`'s stdin lets it exit, and `systemd-inhibit` exits with it.
+fn release_app_inhibitor(app: &str) {
+    let child = app_inhibitors().remove(app);
+    if let Some(mut child) = child {
+        drop(child.stdin.take());
+        let _ = child.wait();
+    }
 }
 
 /// One blocker entry per app holding a sleep block, in the same form as logind's lock list.
@@ -554,6 +615,15 @@ Delay Only 0 root 1 y sleep because delay
         assert_eq!(a.feed(true), None);
         assert_eq!(a.feed(false), Some(false));
         assert_eq!(a.feed(true), Some(true));
+    }
+
+    #[test]
+    fn an_app_sleep_block_is_a_sleep_inhibitor_named_for_the_app() {
+        let args = app_inhibitor_args("video-export");
+        assert_eq!(args[0], "--what=sleep");
+        assert_eq!(args[1], "--who=video-export");
+        assert_eq!(args[3], "--mode=block");
+        assert_eq!(args.last().map(String::as_str), Some("cat"));
     }
 
     #[test]

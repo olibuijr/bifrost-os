@@ -1,7 +1,9 @@
-//! Lyrics from a `.lrc` file beside the song (`Song.mp3` and `Song.lrc`). A file with time tags (`[01:23.45]text`)
-//! gives synced lyrics, where the line for the playing position can be found; a file without tags gives plain lyrics
-//! that are only listed. Pure parsing, no UI.
+//! Lyrics from a `.lrc` file beside the song (`Song.mp3` and `Song.lrc`), or else from the song's own tags (an ID3
+//! USLT frame). A file with time tags (`[01:23.45]text`) gives synced lyrics, where the line for the playing position
+//! can be found; text without tags gives plain lyrics that are only listed. Parsing is pure; reading goes through the
+//! media tag reader.
 
+use springboard::media::audiofile;
 use std::path::Path;
 
 /// A lyrics file bigger than this is not read.
@@ -104,8 +106,22 @@ impl Lyrics {
         Lyrics { lines: timed, synced: true }
     }
 
-    /// The lyrics beside the song at `song`; None when there is no `.lrc` file, it is too big, or it holds no lines.
+    /// The lyrics of the song at `song`: the `.lrc` file beside it, else the lyrics tagged in the file. None when neither
+    /// gives lines, or the text is too big.
     pub fn load(song: &Path) -> Option<Lyrics> {
+        Self::load_sidecar(song).or_else(|| Self::load_embedded(song))
+    }
+
+    fn load_embedded(song: &Path) -> Option<Lyrics> {
+        let text = audiofile::read_tags(song).ok()?.lyrics?;
+        if text.len() as u64 > MAX_LYRICS_BYTES {
+            return None;
+        }
+        let lyrics = Lyrics::parse(&text);
+        (!lyrics.lines.is_empty()).then_some(lyrics)
+    }
+
+    fn load_sidecar(song: &Path) -> Option<Lyrics> {
         let file = sidecar(song);
         if std::fs::metadata(&file).ok()?.len() > MAX_LYRICS_BYTES {
             return None;
@@ -198,6 +214,16 @@ mod tests {
         let l = Lyrics::parse("\u{feff}[00:01.00]<00:01.00>hel<00:01.40>lo <00:01.80>world\n");
         assert_eq!(l.lines()[0].text, "hello world");
         assert_eq!(l.lines()[0].at_ms, 1_000);
+    }
+
+    #[test]
+    fn embedded_plain_lyrics_are_listed_and_timed_ones_are_synced() {
+        let plain = Lyrics::parse("first line\n\nsecond line\n");
+        assert!(!plain.is_synced());
+        assert_eq!(plain.lines().len(), 2);
+        let timed = Lyrics::parse("[00:02.00]two\n[00:01.00]one\n");
+        assert!(timed.is_synced());
+        assert_eq!(timed.current(1_500.0), Some(0));
     }
 
     #[test]

@@ -10,11 +10,60 @@
 
 use super::ui::{Weight, BLACK, WHITE};
 use super::{AppId, Drawn, Effect, Event, Screen, Shell, apps, IN_DOCK};
-use crate::gfx::rotate::{draw_turn, scale_into, Orientation, Rotation};
+use crate::gfx::rotate::{draw_turn, orientation_from_gravity, scale_into, Orientation, Rotation};
 use crate::gfx::{Damage, Image, Surface, View};
 use crate::layout::Layout;
 use crate::scene::{dock_background, Tile};
 use super::applib::AppLibrary;
+use bifrost_core::device_motion::DeviceMotionManager;
+use bifrost_core::inertial_sensors::Sensors;
+use bifrost_core::motion_manager::SensorSource;
+
+/// How often the shell reads the gravity direction for the orientation, in seconds (the sensor's 200 ms cadence).
+pub const ORIENTATION_INTERVAL: f64 = 0.2;
+
+/// The shell's own device-motion client for the orientation feed. It runs the device motion estimate on the sensors the
+/// kernel exposes (`Sensors::scan_default`) and reads the gravity direction every [`ORIENTATION_INTERVAL`]. A device with
+/// no accelerometer or no gyroscope has no estimate, so the feed stays idle and the sensed orientation does not move.
+pub struct SensorFeed {
+    motion: DeviceMotionManager,
+    sensors: Sensors,
+    next: f64,
+}
+
+impl SensorFeed {
+    /// The feed on the kernel's sensor tree.
+    pub fn scan() -> Self {
+        Self::with_sensors(Sensors::scan_default())
+    }
+
+    /// The feed on the given sensors. Its device motion is available when there is an accelerometer.
+    pub fn with_sensors(sensors: Sensors) -> Self {
+        let available = sensors.accelerometer.is_some();
+        let mut motion = DeviceMotionManager::new(available);
+        motion.set_update_interval(ORIENTATION_INTERVAL);
+        motion.start(|_| {});
+        SensorFeed { motion, sensors, next: f64::NEG_INFINITY }
+    }
+
+    /// One shell tick at `t` seconds: the estimate advances on every tick, and the gravity direction (x, y, in g) comes
+    /// back at most once per interval, and only when there is an estimate.
+    pub fn sample(&mut self, t: f64) -> Option<(f32, f32)> {
+        let SensorFeed { motion, sensors, next } = self;
+        feed_step(motion, next, t, sensors)
+    }
+}
+
+/// The body of [`SensorFeed::sample`], with the sensor source given.
+fn feed_step(motion: &mut DeviceMotionManager, next: &mut f64, t: f64, source: &mut dyn SensorSource) -> Option<(f32, f32)> {
+    motion.tick(t, source);
+    if t < *next {
+        return None;
+    }
+    let gravity = motion.device_motion()?.gravity;
+    *next = t + ORIENTATION_INTERVAL;
+    Some((gravity.x as f32, gravity.y as f32))
+}
 
 /// Duration of the turn animation.
 pub const TURN_MS: f64 = 300.0;
@@ -92,11 +141,13 @@ pub struct Rotate {
     /// the turn was just set up: its clock starts on the next tick, after the relayout
     turn_fresh: bool,
     turn_seq: u64,
+    /// the device-motion client that senses the orientation (idle without an accelerometer)
+    feed: SensorFeed,
 }
 
 impl Rotate {
     pub fn new() -> Self {
-        Rotate { sensed: Orientation::Portrait, current: Orientation::Portrait, locked: false, base: Orientation::Portrait, turn: None, scratch: None, wallpaper: None, labels: Vec::new(), other_library: None, library_key: (0, 0, 0), turn_fresh: false, turn_seq: 0 }
+        Rotate { sensed: Orientation::Portrait, current: Orientation::Portrait, locked: false, base: Orientation::Portrait, turn: None, scratch: None, wallpaper: None, labels: Vec::new(), other_library: None, library_key: (0, 0, 0), turn_fresh: false, turn_seq: 0, feed: SensorFeed::scan() }
     }
 }
 
@@ -168,6 +219,20 @@ impl Shell {
     }
 
     /// The accelerometer's orientation; adopted unless Rotation Lock holds.
+    /// The sensed orientation from the device-motion feed, read on each shell tick. Adopts a new orientation only when
+    /// the gravity direction gives one and Rotation Lock does not hold it; a desktop panel never asks.
+    pub(super) fn sensor_tick(&mut self, t: f64) {
+        if !self.wants_orientation() {
+            return;
+        }
+        let Some((x, y)) = self.rot.feed.sample(t) else { return };
+        if let Some(o) = orientation_from_gravity(x, y, self.rot.sensed) {
+            if o != self.rot.sensed {
+                self.set_orientation(o, t);
+            }
+        }
+    }
+
     pub fn set_orientation(&mut self, o: Orientation, t: f64) {
         self.rot.sensed = o;
         self.update_orientation(t);
@@ -681,3 +746,51 @@ mod tmp_bench {
         eprintln!("snap2 {:?}", t.elapsed());
     }
 }
+
+#[cfg(test)]
+mod sensor_feed_tests {
+    use super::*;
+    use bifrost_core::motion::Vec3;
+
+    /// A device lying tilted: the accelerometer reads `accel` and the gyroscope is still.
+    struct Still {
+        accel: Vec3,
+    }
+
+    impl SensorSource for Still {
+        fn accelerometer(&mut self) -> Option<Vec3> {
+            Some(self.accel)
+        }
+        fn gyroscope(&mut self) -> Option<Vec3> {
+            Some(Vec3 { x: 0.0, y: 0.0, z: 0.0 })
+        }
+    }
+
+    #[test]
+    fn a_feed_without_an_accelerometer_never_samples() {
+        let mut feed = SensorFeed::with_sensors(Sensors::default());
+        for i in 0..20 {
+            assert_eq!(feed.sample(i as f64 * 0.05), None);
+        }
+    }
+
+    #[test]
+    fn with_a_tilted_device_the_gravity_direction_comes_once_per_interval() {
+        let mut motion = DeviceMotionManager::new(true);
+        motion.set_update_interval(ORIENTATION_INTERVAL);
+        motion.start(|_| {});
+        let mut next = f64::NEG_INFINITY;
+        let mut src = Still { accel: Vec3 { x: 0.9, y: 0.0, z: -0.4 } };
+        let mut samples = Vec::new();
+        for i in 0..60 {
+            if let Some(g) = feed_step(&mut motion, &mut next, i as f64 * 0.01, &mut src) {
+                samples.push(g);
+            }
+        }
+        assert!(samples.len() >= 2 && samples.len() <= 4, "one sample per 200 ms, got {}", samples.len());
+        let (x, _) = *samples.last().unwrap();
+        // Gravity points down, so it is the opposite of the accelerometer reading (a flat device reads (0, 0, -1)).
+        assert!((x + 0.9).abs() < 0.2, "gravity x is the opposite of the reading: {x}");
+    }
+}
+

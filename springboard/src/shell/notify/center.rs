@@ -305,8 +305,8 @@ impl Shell {
                 self.open_from_notification(app, t);
             }
             Some(Hit::Clear(i)) => {
-                if let Some(app) = c.list.as_ref().and_then(|l| l.groups.get(i)).map(|g| g.app) {
-                    self.clear_notifications(app);
+                if let Some((app, thread)) = c.list.as_ref().and_then(|l| l.groups.get(i)).map(|g| (g.app, g.thread.clone())) {
+                    self.clear_group(app, &thread);
                 }
             }
             Some(Hit::Mute(i)) => {
@@ -315,6 +315,7 @@ impl Shell {
                 }
             }
             Some(Hit::ClearAll) => self.clear_all_notifications(),
+            Some(Hit::Action { id, slot, .. }) => self.list_action(id, slot, t),
             Some(Hit::Collapse(_)) => {}
             None => c.settle(1.0, false, t),
         }
@@ -455,7 +456,8 @@ const NC_BOTTOM_PT: f32 = 90.0;
 enum DeskHit {
     ClearAll,
     Card(AppId),
-    Close(AppId),
+    /// the close control of a stack: its index in the column's groups
+    Close(usize),
     /// the Edit Widgets capsule at the foot of the column
     EditWidgets,
     /// the gallery's Done
@@ -641,7 +643,7 @@ impl Shell {
             return Some(DeskHit::ClearAll);
         }
         let groups = self.visible_groups(Mode::Center);
-        cards.iter().find(|c| within(c.1, x, y)).map(|&(i, _, close)| if within(close, x, y) { DeskHit::Close(groups[i].app) } else { DeskHit::Card(groups[i].app) })
+        cards.iter().find(|c| within(c.1, x, y)).map(|&(i, _, close)| if within(close, x, y) { DeskHit::Close(i) } else { DeskHit::Card(groups[i].app) })
     }
 
     /// The option rows of the widget being configured: (option index, row rect), as many as fit above the dock.
@@ -738,7 +740,12 @@ impl Shell {
                 if hit.is_some() && hit == self.center_desk_hit(x, y) {
                     match hit.unwrap() {
                         DeskHit::ClearAll => self.clear_all_notifications(),
-                        DeskHit::Close(app) => self.clear_notifications(app),
+                        DeskHit::Close(i) => {
+                            let stack = self.visible_groups(Mode::Center).get(i).map(|g| (g.app, g.thread.clone()));
+                            if let Some((app, thread)) = stack {
+                                self.clear_group(app, &thread);
+                            }
+                        }
                         DeskHit::Card(app) => {
                             self.notify.center.hide();
                             self.open_from_notification(app, t);

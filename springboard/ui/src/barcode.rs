@@ -203,44 +203,44 @@ pub fn decode_row(row: &[u8]) -> Option<Decoded> {
     None
 }
 
+/// Renders module widths (alternating bar, space, ...) into a sample row `scale` samples per module.
+pub fn render_modules(widths: &[usize], scale: usize, quiet: usize) -> Vec<u8> {
+    let mut row = vec![255u8; quiet];
+    for (i, w) in widths.iter().enumerate() {
+        row.extend(std::iter::repeat(if i % 2 == 0 { 0u8 } else { 255u8 }).take(w * scale));
+    }
+    row.extend(std::iter::repeat(255u8).take(quiet));
+    row
+}
+
+/// EAN-13 module widths for 12 data digits plus the computed check digit (bar-first).
+pub fn ean13_modules(digits: &[u8; 12]) -> (Vec<usize>, [u8; 13]) {
+    let sum: u32 = digits.iter().enumerate().map(|(i, v)| u32::from(*v) * if i % 2 == 0 { 1 } else { 3 }).sum();
+    let check = ((10 - sum % 10) % 10) as u8;
+    let mut all = [0u8; 13];
+    all[..12].copy_from_slice(digits);
+    all[12] = check;
+    let parity = FIRST_DIGIT[all[0] as usize].as_bytes();
+    let mut w: Vec<usize> = vec![1, 1, 1];
+    for i in 0..6 {
+        let d = all[1 + i] as usize;
+        let p = L_CODE[d];
+        // L-code is space, bar, space, bar; the symbol begins after a bar so the order is space-first
+        let four: Vec<usize> = if parity[i] == b'L' { p.iter().map(|x| *x as usize).collect() } else { p.iter().rev().map(|x| *x as usize).collect() };
+        w.extend(four);
+    }
+    w.extend([1, 1, 1, 1, 1]);
+    for i in 0..6 {
+        let d = all[7 + i] as usize;
+        w.extend(L_CODE[d].iter().map(|x| *x as usize));
+    }
+    w.extend([1, 1, 1]);
+    (w, all)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// Renders module widths (alternating bar, space, ...) into a sample row `scale` samples per module.
-    fn render(widths: &[usize], scale: usize, quiet: usize) -> Vec<u8> {
-        let mut row = vec![255u8; quiet];
-        for (i, w) in widths.iter().enumerate() {
-            row.extend(std::iter::repeat(if i % 2 == 0 { 0u8 } else { 255u8 }).take(w * scale));
-        }
-        row.extend(std::iter::repeat(255u8).take(quiet));
-        row
-    }
-
-    /// EAN-13 module widths for 12 data digits plus the computed check digit (bar-first).
-    fn ean_widths(digits: &[u8; 12]) -> (Vec<usize>, [u8; 13]) {
-        let sum: u32 = digits.iter().enumerate().map(|(i, v)| u32::from(*v) * if i % 2 == 0 { 1 } else { 3 }).sum();
-        let check = ((10 - sum % 10) % 10) as u8;
-        let mut all = [0u8; 13];
-        all[..12].copy_from_slice(digits);
-        all[12] = check;
-        let parity = FIRST_DIGIT[all[0] as usize].as_bytes();
-        let mut w: Vec<usize> = vec![1, 1, 1];
-        for i in 0..6 {
-            let d = all[1 + i] as usize;
-            let p = L_CODE[d];
-            // L-code is space, bar, space, bar; the symbol begins after a bar so the order is space-first
-            let four: Vec<usize> = if parity[i] == b'L' { p.iter().map(|x| *x as usize).collect() } else { p.iter().rev().map(|x| *x as usize).collect() };
-            w.extend(four);
-        }
-        w.extend([1, 1, 1, 1, 1]);
-        for i in 0..6 {
-            let d = all[7 + i] as usize;
-            w.extend(L_CODE[d].iter().map(|x| *x as usize));
-        }
-        w.extend([1, 1, 1]);
-        (w, all)
-    }
 
     #[test]
     fn runs_alternate() {
@@ -261,10 +261,10 @@ mod tests {
     #[test]
     fn ean13_round_trip_at_scales() {
         let digits = [5, 9, 0, 1, 2, 3, 4, 1, 2, 3, 4, 5];
-        let (w, all) = ean_widths(&digits);
+        let (w, all) = ean13_modules(&digits);
         let want: String = all.iter().map(|d| char::from(b'0' + d)).collect();
         for scale in [2, 3, 5] {
-            let row = render(&w, scale, 12 * scale);
+            let row = render_modules(&w, scale, 12 * scale);
             let d = decode_row(&row).unwrap_or_else(|| panic!("scale {scale}"));
             assert_eq!(d.symbology, Symbology::Ean13);
             assert_eq!(d.text, want);
@@ -273,8 +273,8 @@ mod tests {
 
     #[test]
     fn reversed_rows_decode_too() {
-        let (w, all) = ean_widths(&[2, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
-        let mut row = render(&w, 3, 30);
+        let (w, all) = ean13_modules(&[2, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        let mut row = render_modules(&w, 3, 30);
         row.reverse();
         let want: String = all.iter().map(|d| char::from(b'0' + d)).collect();
         assert_eq!(decode_row(&row).map(|d| d.text), Some(want));
@@ -291,7 +291,7 @@ mod tests {
             widths.push(1); // inter-character gap (a space)
         }
         widths.pop();
-        let row = render(&widths, 2, 20);
+        let row = render_modules(&widths, 2, 20);
         let d = decode_row(&row).unwrap();
         assert_eq!(d, Decoded { symbology: Symbology::Code39, text: "A7".to_string() });
     }

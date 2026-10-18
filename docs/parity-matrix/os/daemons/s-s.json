@@ -20,9 +20,25 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings",
+   "note": "The SSH server is sshd from the openssh package, which the installer always installs (BASE_PACKAGES).",
    "rea": [],
-   "method": "rule"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/sshd"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/lib/systemd/system/sshd.service"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/ssh"
+    }
+   ],
+   "ready_note": "sshd and its unit come from the openssh package in BASE_PACKAGES (springboard/src/installer/plan.rs). Settings does not surface it."
   }
  ]
 }

@@ -78,13 +78,15 @@ def check(m):
         sys.exit("manifest.toml: id must be reverse-DNS (letters, digits, . - _)")
     if not re.fullmatch(r"\d+\.\d+\.\d+", m["version"]):
         sys.exit("manifest.toml: version must be semver x.y.z")
+    if m.get("help") and (m["help"].startswith("/") or ".." in m["help"].split("/")):
+        sys.exit("manifest.toml: help must be a relative directory inside the app")
     if m.get("provides") and not is_system(m):
         sys.exit("manifest.toml: only a system package may declare `provides`")
     for k in ("exec", "icon"):
         if m.get(k) and (m[k].startswith("/") or ".." in m[k].split("/")):
             sys.exit(f"manifest.toml: `{k}` must be a relative path inside the package")
     for p in m.get("permissions", []):
-        if p not in ("network", "audio", "camera", "storage", "photos", "notifications", "documents", "keychain", "accessibility", "display-config", "remote-desktop"):
+        if p not in ("network", "audio", "camera", "storage", "photos", "notifications", "documents", "keychain", "accessibility", "display-config", "sensors", "contacts", "remote-desktop"):
             sys.exit(f"manifest.toml: unknown permission {p!r}")
 
 
@@ -161,6 +163,15 @@ def pack(args):
                 if name in extra:  # the generated copy (word lists) wins
                     continue
                 add(tf, name, open(p, "rb").read(), 0o644)
+        # help books (manifest `help = "help"`): Markdown pages the shell's help index reads
+        if m.get("help"):
+            helpdir = os.path.join(app, m["help"])
+            if not os.path.isdir(helpdir):
+                sys.exit(f"help directory missing: {helpdir}")
+            for d, _, files in sorted(os.walk(helpdir)):
+                for f in sorted(files):
+                    p = os.path.join(d, f)
+                    add(tf, os.path.relpath(p, app), open(p, "rb").read(), 0o644)
         for name, data in sorted(extra.items()):
             add(tf, name, data, 0o644)
     data = open(out, "rb").read()

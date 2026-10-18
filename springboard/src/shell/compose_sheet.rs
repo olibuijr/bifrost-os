@@ -6,7 +6,9 @@
 //! has no network behind it, so "Post" hands the post text, attachments and links to the clipboard and reports `done`
 //! to the sender; "Cancel" reports `cancelled`.
 //!
-//! Gaps: the text is shown, not edited (no text field yet), and nothing is sent to a social network.
+//! Typing edits the post text: the keyboard's text goes to the sheet (`Shell::compose_type`), which rebuilds its draft
+//! with the new text and keeps the attachments and links. Gaps: the draft is not posted through
+//! `social::draft_request` (no social account is signed in), so nothing is sent to a social network.
 //!
 //! Like `power_menu`, this is pure state plus drawing; the shell routes touches to it and performs the hand-off.
 
@@ -14,6 +16,7 @@ use bifrost_proto::Payload;
 use bifrost_ui::compose::{ComposeItem, ComposeResult, ComposeSheet};
 
 use super::ui::{Ui, Weight, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, LINK, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_TITLE2_PT, WHITE};
+use super::keyboard::Out;
 use super::Event;
 use crate::gfx::{rgba, Image, Surface};
 
@@ -137,6 +140,8 @@ pub struct ComposeOverlay {
     /// the app that shared the items, and its request id (for `ToApp::ShareDone`)
     pub slot: u8,
     pub request: u32,
+    /// the shared items as they came in, rebuilt into the draft when the text changes
+    items: Vec<Payload>,
     sheet: ComposeSheet,
     pressed: Option<Button>,
     title: Image,
@@ -167,6 +172,7 @@ impl ComposeOverlay {
         ComposeOverlay {
             slot,
             request,
+            items: items.to_vec(),
             pressed: None,
             title: ui.text("Compose Post", MAC_TITLE2_PT, Weight::Semibold, LABEL.now()),
             preview: ui.text(&first_line, MAC_BODY_PT, Weight::Regular, LABEL.now()),
@@ -178,6 +184,18 @@ impl ComposeOverlay {
             post_off: ui.text("Post", MAC_BODY_PT, Weight::Semibold, LABEL_3.now()),
             sheet,
         }
+    }
+
+    /// The post text as typed so far.
+    pub fn text(&self) -> &str {
+        self.sheet.draft().text()
+    }
+
+    /// Replaces the post text and rebuilds the sheet from the same items, so the attachments and links stay.
+    pub fn set_text(&mut self, ui: &Ui, text: &str) {
+        let items = with_text(&self.items, text);
+        let (slot, request) = (self.slot, self.request);
+        *self = ComposeOverlay::new(ui, slot, request, &items);
     }
 
     /// Post is allowed for a non-empty post within the limit.
@@ -269,6 +287,35 @@ fn centre_label(s: &mut Surface, img: &Image, (cx, cy): (f32, f32)) {
     s.blit(img, (cx - img.w as f32 / 2.0) as i32, (cy - img.h as f32 / 2.0) as i32, 255, 255);
 }
 
+/// The shared items with their text replaced by `text` (first, as the post text). Attachments and links keep their
+/// order; an empty `text` removes the text.
+pub fn with_text(items: &[Payload], text: &str) -> Vec<Payload> {
+    let mut out: Vec<Payload> = items.iter().filter(|p| !matches!(p, Payload::Text(_))).cloned().collect();
+    if !text.is_empty() {
+        out.insert(0, Payload::Text(text.to_string()));
+    }
+    out
+}
+
+/// Shell side: typing while the compose sheet is open. Text is appended, Backspace removes the last character;
+/// other keys do nothing here.
+impl super::Shell {
+    pub(super) fn compose_type(&mut self, out: Out) {
+        let Some(overlay) = self.compose.as_mut() else { return };
+        let mut text = overlay.text().to_string();
+        match out {
+            Out::Text(typed) => text.push_str(&typed),
+            Out::Backspace => {
+                text.pop();
+            }
+            _ => return,
+        }
+        overlay.set_text(&self.ui, &text);
+        self.drawn = super::Drawn::Nothing;
+        self.dirty = true;
+    }
+}
+
 /// Shell side: the user closed the compose sheet. Post copies the post to the clipboard and reports `compose-post`
 /// to the sender as done; Cancel reports an empty target.
 impl super::Shell {
@@ -290,6 +337,13 @@ mod tests {
 
     fn text(s: &str) -> Payload {
         Payload::Text(s.into())
+    }
+
+    #[test]
+    fn typing_replaces_the_text_and_keeps_the_attachments_and_links() {
+        let items = vec![text("old"), Payload::Url("https://ruv.is".into()), text("second")];
+        assert_eq!(with_text(&items, "new post"), vec![Payload::Text("new post".into()), Payload::Url("https://ruv.is".into())]);
+        assert_eq!(with_text(&items, ""), vec![Payload::Url("https://ruv.is".into())]);
     }
 
     #[test]

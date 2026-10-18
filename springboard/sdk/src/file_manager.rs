@@ -301,6 +301,13 @@ impl NativeFileManager {
         env::temp_dir()
     }
 
+    /// The per-user directories a login creates before any app runs: the application support directory and the
+    /// cache directory, which is made private (mode 0700) as the per-user cache helper makes it. Existing
+    /// directories are left alone. Returns the two paths in that order. The XDG values are read as `url_for` reads them.
+    pub fn ensure_login_directories(&self) -> io::Result<Vec<PathBuf>> {
+        bifrost_core::login_directories::ensure_for_env()
+    }
+
     /// `removeItem(at:)`: removes a file, a link (not its target) or a directory with everything in it.
     pub fn remove_item(&self, path: &Path) -> io::Result<()> {
         match kind_of(&fs::symlink_metadata(path)?) {

@@ -1,0 +1,49 @@
+{
+  "framework": "EnergyKit",
+  "doc": "https://developer.apple.com/documentation/energykit",
+  "macos_since": "",
+  "status": "n/a",
+  "bifrost": "none",
+  "summary": "Grid forecasts, electricity guidance and EV or HVAC load events from Apple's Home energy service, behind Apple entitlements. BifrOSt has no utility grid data source and no Home energy service, so there is no counterpart to build on. iPadOS 26.0 and later per the index.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run this round; owner rule); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Electricity guidance (cleaner, cheaper hours)",
+      "apple": "ElectricityGuidance",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Needs a grid forecast from a utility or Apple's service."
+    },
+    {
+      "feature": "Electric vehicle load and status events",
+      "apple": "ElectricVehicleLoadEvent, ElectricVehicleStatusEvent",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Events come from a charger connected through the Home energy system."
+    },
+    {
+      "feature": "HVAC load events",
+      "apple": "ElectricHVACLoadEvent",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Events come from Home energy devices; BifrOSt has none."
+    },
+    {
+      "feature": "Electricity insights",
+      "apple": "ElectricityInsightService, ElectricityInsightRecord",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Insights are computed by Apple from the energy data it holds."
+    },
+    {
+      "feature": "Entitlements and energy venues",
+      "apple": "EnergyKit Entitlement, EnergyVenue",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Apple entitlements and venue registration; no equivalent service."
+    }
+  ],
+  "gaps": [
+    "No grid or utility data source; this is n/a until BifrOSt has an energy service."
+  ]
+}

@@ -1,0 +1,5920 @@
+{
+ "category": "daemons",
+ "shard": "a-c.1",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.AMPArtworkAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.AMPArtworkAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.AMPArtworkAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 656
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/music-desktop/src/music/library.rs, springboard/apps/music-desktop/src/music/jobs.rs",
+   "status": "partial",
+   "note": "Album artwork is read from the song tags during the library scan (one cover kept per album) and decoded on the Music app job threads; the agent's cache job is done by the library model.",
+   "rea": [],
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-music",
+     "filter": "music::library::tests"
+    }
+   ],
+   "ready_note": "Covers are taken per album while the library is built and decoded in background jobs (music::library::tests: only_the_first_cover_of_an_album_is_kept_in_memory, builds_songs_albums_and_artists_sorted_with_fallbacks)"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.AMPDeviceDiscoveryAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.AMPDeviceDiscoveryAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.AMPDeviceDiscoveryAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 754
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Discovers mobile devices that the reference Music library syncs with. BifrOSt has no vendor device sync, so the job has no counterpart.",
+   "rea": [],
+   "method": "audit"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.AMPDevicesAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.AMPDevicesAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.AMPDevicesAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 716
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Copies library contents to and from the vendor's mobile devices. BifrOSt has no vendor device sync and no library transfer service.",
+   "rea": [],
+   "method": "audit"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.AMPLibraryAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.AMPLibraryAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.AMPLibraryAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 763
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/music-desktop/src/music/library.rs",
+   "status": "partial",
+   "note": "The Music app scans the music folders, reads tags and builds the Artists, Albums and Songs library, with a stamp per file so only changed files are read again.",
+   "rea": [],
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-music",
+     "filter": "music::library::tests"
+    }
+   ],
+   "ready_note": "Library scan, tag reading, sorting and change stamps are covered by music::library::tests"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.AMPSystemPlayerAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.AMPSystemPlayerAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.AMPSystemPlayerAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 737
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/services/now_playing.rs",
+   "status": "partial",
+   "note": "The shell now_playing service owns system playback state and transport commands for the audio service; apps read and drive it through the SDK.",
+   "rea": [],
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::now_playing::tests"
+    }
+   ],
+   "ready_note": "System playback state and remote commands live in the now_playing service (17 tests)"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.AOSHeartbeat.plist",
+   "category": "daemons",
+   "name": "com.apple.AOSHeartbeat",
+   "path": "/System/Library/LaunchAgents/com.apple.AOSHeartbeat.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1082
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple cloud, account, store, advertising or telemetry service; BifrOSt has no Apple cloud and mirrors none of it",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.AOSPushRelay.plist",
+   "category": "daemons",
+   "name": "com.apple.AOSPushRelay",
+   "path": "/System/Library/LaunchAgents/com.apple.AOSPushRelay.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 839
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple cloud, account, store, advertising or telemetry service; BifrOSt has no Apple cloud and mirrors none of it",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.AccessibilityVisualsAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.AccessibilityVisualsAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.AccessibilityVisualsAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 680
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/ui/src/ax.rs, springboard/ui/src/braille.rs, springboard/ui/src/captions.rs",
+   "status": "partial",
+   "note": "rule: accessibility models",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "ax::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "braille::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "captions::tests"
+    }
+   ],
+   "ready_note": "Accessibility models (AX tree, braille output, live captions) are built and tested. The visual agent's job is served by them."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.AddressBook.SourceSync.plist",
+   "category": "daemons",
+   "name": "com.apple.AddressBook.SourceSync",
+   "path": "/System/Library/LaunchAgents/com.apple.AddressBook.SourceSync.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1063
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Syncs contact accounts (Apple account and other remote sources) through Apple's account services. BifrOSt has no account sync; the local contact store is springboard/sdk/src/contacts.rs.",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.AddressBook.abd.plist",
+   "category": "daemons",
+   "name": "com.apple.AddressBook.abd",
+   "path": "/System/Library/LaunchAgents/com.apple.AddressBook.abd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 677
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/contacts.rs",
+   "status": "partial",
+   "note": "rule: contacts model; Contacts app",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "contacts::tests"
+    }
+   ],
+   "ready_note": "The contacts model (sdk contacts.rs) is the address book database the abd role serves, with 23 tests."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.AirPlayUIAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.AirPlayUIAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.AirPlayUIAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1621
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/nearby_service.rs, springboard/sdk/src/peer_session.rs",
+   "status": "n/a",
+   "note": "n/a: AirPlay is Apple's proprietary streaming protocol and receiver. BifrOSt does not speak it; nearby discovery and peer sessions are generic (springboard/sdk/src/nearby_service.rs, peer_session.rs).",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.AppSSOAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.AppSSOAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.AppSSOAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 2234
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/gss_krb5.rs",
+   "status": "n/a",
+   "note": "n/a: Apple platform single sign-on brokers tokens for Apple accounts and managed Apple identity providers. BifrOSt has no Apple account service. Kerberos stays in springboard/sdk/src/gss_krb5.rs.",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.AquaAppearanceHelper.agent.plist",
+   "category": "daemons",
+   "name": "com.apple.AquaAppearanceHelper.agent",
+   "path": "/System/Library/LaunchAgents/com.apple.AquaAppearanceHelper.agent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 684
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/render/src/appearance.rs, springboard/render/src/icc.rs, springboard/sdk/src/displays.rs",
+   "status": "partial",
+   "note": "rule: colour profile and display models",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "appearance::scheme_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "appearance::tinted_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "appearance::display_option_tests"
+    }
+   ],
+   "ready_note": "Light, Dark and Auto appearance with the cross-fade and observers (render appearance.rs, appearance::scheme_tests, tinted_tests, display_option_tests); colour profiles and display options in icc.rs and sdk displays.rs"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.Archetype.textcontextd.plist",
+   "category": "daemons",
+   "name": "com.apple.Archetype.textcontextd",
+   "path": "/System/Library/LaunchAgents/com.apple.Archetype.textcontextd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 789
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple Intelligence, personalisation or prediction service; the assistant app has its own cloud and local model paths",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.AskPermissionUI.plist",
+   "category": "daemons",
+   "name": "com.apple.AskPermissionUI",
+   "path": "/System/Library/LaunchAgents/com.apple.AskPermissionUI.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 814
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/privacy_permissions.rs, springboard/core/src/permission_request.rs",
+   "status": "partial",
+   "note": "rule: privacy permission service model",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "permission_request::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "privacy_permissions::tests"
+    }
+   ],
+   "ready_note": "The permission question centre and privacy request model (core permission_request.rs, sdk privacy_permissions.rs) hold the questions, answers and expiry the prompt shows, with tests."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.AssetCache.agent.plist",
+   "category": "daemons",
+   "name": "com.apple.AssetCache.agent",
+   "path": "/System/Library/LaunchAgents/com.apple.AssetCache.agent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 701
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Content caching for the vendor's software and cloud downloads on the local network. BifrOSt updates come from its own repository through updated.",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.AssetCacheLocatorService.plist",
+   "category": "daemons",
+   "name": "com.apple.AssetCacheLocatorService",
+   "path": "/System/Library/LaunchAgents/com.apple.AssetCacheLocatorService.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 393
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Locator for the vendor's content caching service. BifrOSt has no content cache.",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.AssistiveControl.plist",
+   "category": "daemons",
+   "name": "com.apple.AssistiveControl",
+   "path": "/System/Library/LaunchAgents/com.apple.AssistiveControl.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1354
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/assistive_touch.rs, springboard/src/shell/accessibility/switch_scan.rs, springboard/src/shell/accessibility/dwell.rs, springboard/src/shell/accessibility/voice_control.rs",
+   "status": "partial",
+   "note": "AssistiveTouch menu, Switch Control scanning, Dwell Control and Voice Control run in the shell (shell/assistive_touch.rs and shell/accessibility).",
+   "rea": [],
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistive_touch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::switch_scan::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::dwell::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::voice_control::tests"
+    }
+   ],
+   "ready_note": "Assistive control features (touch menu, switch scanning, dwell click, voice commands) each have tested shell modules"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.AutoFillPanel.plist",
+   "category": "daemons",
+   "name": "com.apple.AutoFillPanel",
+   "path": "/System/Library/LaunchAgents/com.apple.AutoFillPanel.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 594
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/autofill.rs",
+   "status": "partial",
+   "note": "rule: autofill model",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "autofill::tests"
+    }
+   ],
+   "ready_note": "The autofill model (sdk autofill.rs) covers the autofill panel's suggestions, with 3 tests."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.BTServerAgent.le.plist",
+   "category": "daemons",
+   "name": "com.apple.BTServerAgent.le",
+   "path": "/System/Library/LaunchAgents/com.apple.BTServerAgent.le.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 387
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/bluetooth_service.rs, springboard/core/src/bt_service_browser.rs, springboard/core/src/obex_packet.rs",
+   "status": "partial",
+   "note": "rule: Bluetooth service, browser and OBEX models over the Linux stack",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "bluetooth_service::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "bt_service_browser::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "obex_packet::tests"
+    }
+   ],
+   "ready_note": "Bluetooth service, browser and OBEX packet models over the Linux stack are built and tested."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.BiomeAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.BiomeAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.BiomeAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 7260
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple silicon, firmware, secure element or device-specific service; BifrOSt targets generic PC hardware",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.CallHistoryPluginHelper.plist",
+   "category": "daemons",
+   "name": "com.apple.CallHistoryPluginHelper",
+   "path": "/System/Library/LaunchAgents/com.apple.CallHistoryPluginHelper.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 938
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Plug-in helper for the reference phone app's call history, started by a notification from the vendor's telephony stack. BifrOSt has no cellular telephony, so there is no call history to serve.",
+   "rea": [],
+   "method": "audit"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.CallHistorySyncHelper.plist",
+   "category": "daemons",
+   "name": "com.apple.CallHistorySyncHelper",
+   "path": "/System/Library/LaunchAgents/com.apple.CallHistorySyncHelper.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1467
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Syncs call history between the vendor's devices through the vendor's push and identity services. BifrOSt has no call history and no vendor device sync.",
+   "rea": [],
+   "method": "audit"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.CloudSettingsSyncAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.CloudSettingsSyncAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.CloudSettingsSyncAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1561
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple cloud, account, store, advertising or telemetry service; BifrOSt has no Apple cloud and mirrors none of it",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.CommCenter-osx.plist",
+   "category": "daemons",
+   "name": "com.apple.CommCenter-osx",
+   "path": "/System/Library/LaunchAgents/com.apple.CommCenter-osx.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 2680
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple silicon, firmware, secure element or device-specific service; BifrOSt targets generic PC hardware",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.ContainerMigrationService.plist",
+   "category": "daemons",
+   "name": "com.apple.ContainerMigrationService",
+   "path": "/System/Library/LaunchAgents/com.apple.ContainerMigrationService.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 744
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Migrates sandbox containers when the reference system changes its container layout during an OS upgrade. BifrOSt has no OS-level container migration step, and its app data directories keep their own layout.",
+   "rea": [],
+   "method": "audit"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.ContextStoreAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.ContextStoreAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.ContextStoreAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1530
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple Intelligence, personalisation or prediction service; the assistant app has its own cloud and local model paths",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.CoreAuthentication.agent.plist",
+   "category": "daemons",
+   "name": "com.apple.CoreAuthentication.agent",
+   "path": "/System/Library/LaunchAgents/com.apple.CoreAuthentication.agent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 495
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/keychain.rs, springboard/sdk/src/trust.rs, springboard/sdk/src/local_auth.rs",
+   "status": "partial",
+   "note": "rule: keychain, trust and local authentication models",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "keychain::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "trust::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "local_auth::tests"
+    }
+   ],
+   "ready_note": "Keychain, trust evaluation and local authentication models are built and tested."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.CoreLocationAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.CoreLocationAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.CoreLocationAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 375
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/services/location.rs, springboard/src/shell/permission_sheet.rs, springboard/sdk/src/core_location.rs",
+   "status": "partial",
+   "note": "The location service answers apps from the fixed place the person sets in Settings (no GPS, no network lookup, by design), applies the global switch and per-app precise or approximate grants, and the permission sheet asks Allow Once, While Using or Don't Allow.",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::location::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::permission_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "core_location::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "permission_question::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "location_auth::tests"
+    }
+   ],
+   "ready_note": "Location service, authorization model, permission sheet and the SDK client are tested; the source is the manual location only, which is the privacy-first choice"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.CryptoTokenKit.ahp.agent.plist",
+   "category": "daemons",
+   "name": "com.apple.CryptoTokenKit.ahp.agent",
+   "path": "/System/Library/LaunchAgents/com.apple.CryptoTokenKit.ahp.agent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 865
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: the per-user half of the Apple hardware token broker; its system daemon row (com.apple.CryptoTokenKit.ahp) is already n/a for the same reason. The index lists only the two launchd plists and no resources. Smart cards are served by the smartcards service (ctkd and ctkbind rows).",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.DataDetectorsLocalSources.plist",
+   "category": "daemons",
+   "name": "com.apple.DataDetectorsLocalSources",
+   "path": "/System/Library/LaunchAgents/com.apple.DataDetectorsLocalSources.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 591
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/ui/src/searchindex.rs, springboard/sdk/src/search_index_batch.rs",
+   "status": "partial",
+   "note": "rule: search index model; Spotlight search in the shell",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "search_index_batch::tests"
+    }
+   ],
+   "ready_note": "The search index model and its batch writer (ui searchindex.rs, sdk search_index_batch.rs) cover the local data source's job, with tests."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.DeviceConfigurationAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.DeviceConfigurationAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.DeviceConfigurationAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 2024
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: enterprise management, enrolment or erase service; BifrOSt is not an MDM-managed system",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.DiagnosticsReporter.plist",
+   "category": "daemons",
+   "name": "com.apple.DiagnosticsReporter",
+   "path": "/System/Library/LaunchAgents/com.apple.DiagnosticsReporter.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 758
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Submits diagnostics to the vendor's servers. BifrOSt sends no telemetry; logs stay on the machine (Console app, springboard/core/src/log.rs).",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.DiskArbitrationAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.DiskArbitrationAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.DiskArbitrationAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 636
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/core/src/disk_session.rs, springboard/sdk/src/disk_arbitration.rs",
+   "status": "partial",
+   "note": "rule: disk arbitration, image and volume models; Disk Utility app",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "disk_session::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "disk_arbitration::tests"
+    }
+   ],
+   "ready_note": "Disk sessions and arbitration run in core disk_session and the SDK disk_arbitration model. Both are used by the disk tools (diskutil-desktop actions and shell services/disks), and their tests cover the session rules."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.Dock.plist",
+   "category": "daemons",
+   "name": "com.apple.Dock",
+   "path": "/System/Library/LaunchAgents/com.apple.Dock.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1842
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/desktop_dock.rs",
+   "status": "partial",
+   "note": "role filled by desktop_dock.rs and dock_stack.rs; no separate process; runs inside the shell",
+   "rea": [],
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::desktop_dock::"
+    }
+   ],
+   "ready_note": "desktop_dock.rs builds the dock with its running-app and stack tiles; dock_stack.rs covers stacks. Tests cover the dock model."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.DwellControl.plist",
+   "category": "daemons",
+   "name": "com.apple.DwellControl",
+   "path": "/System/Library/LaunchAgents/com.apple.DwellControl.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1045
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/accessibility/dwell.rs, springboard/src/shell/accessibility/mod.rs, springboard/src/shell/pages.rs, springboard/src/shell/settings.rs, springboard/src/bin/shell.rs",
+   "status": "partial",
+   "note": "Dwell Control is built: Settings > Accessibility > Touch > Dwell Control sets a delay (Off, 0.5 s, 1 s, 2 s). The shell input loop (bin/shell.rs) clicks a pointer that rests inside the radius for that delay, with no button held. Model: shell/accessibility/dwell.rs (the old duplicate shell/dwell.rs was removed). Needs a Midget check before it counts as parity.",
+   "rea": [],
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::dwell::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::tests"
+    }
+   ],
+   "ready_note": "Dwell Control: Settings > Accessibility > Touch > Dwell Control picks the delay (accessibility/mod.rs, pages.rs DwellControl, settings.rs Pick::Dwell). bin/shell.rs feeds each resting pointer sample to accessibility::dwell::DwellClick and injects a press and release where it rests. The pure model and the settings round trip are tested; pointer behaviour needs a Midget check."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.EscrowSecurityAlert.plist",
+   "category": "daemons",
+   "name": "com.apple.EscrowSecurityAlert",
+   "path": "/System/Library/LaunchAgents/com.apple.EscrowSecurityAlert.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 662
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: enterprise management, enrolment or erase service; BifrOSt is not an MDM-managed system",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.ExpansionSlotNotification.plist",
+   "category": "daemons",
+   "name": "com.apple.ExpansionSlotNotification",
+   "path": "/System/Library/LaunchAgents/com.apple.ExpansionSlotNotification.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 738
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Expansion slot hardware notifications",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.FamilyControlsAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.FamilyControlsAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.FamilyControlsAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 665
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/screentime/mod.rs, springboard/src/shell/screentime/config.rs, springboard/src/shell/screentime/shield.rs",
+   "status": "gap",
+   "note": "The on-device part of family controls is Screen Time: per-app daily limits, Downtime, the shield over a blocked app and a passcode-guarded ignore grant, all local. The remote family management through Apple IDs is not mirrored.",
+   "rea": [],
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::screentime::config::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::screentime::shield::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::screentime::usage::tests"
+    }
+   ],
+   "ready_note": "The agent lives in FamilyControls.framework, the app-facing authorization for Screen Time restrictions; BifrOSt enforces the same restrictions locally (limits, downtime, shield)"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.FeatureAccessAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.FeatureAccessAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.FeatureAccessAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 2314
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/privacy_permissions.rs, springboard/core/src/permission_request.rs",
+   "status": "partial",
+   "note": "rule: privacy permission service model",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "privacy_permissions::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "permission_request::tests"
+    }
+   ],
+   "ready_note": "The privacy request model and the permission question centre (sdk privacy_permissions.rs, core permission_request.rs) cover the feature access decisions, with tests."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.FileProvider.plist",
+   "category": "daemons",
+   "name": "com.apple.FileProvider",
+   "path": "/System/Library/LaunchAgents/com.apple.FileProvider.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1905
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/fswatch.rs, springboard/sdk/src/file_coordination.rs, springboard/sdk/src/file_provider.rs",
+   "status": "partial",
+   "note": "rule: file watching, coordination and provider models",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "file_provider::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "fswatch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "file_coordination::tests"
+    }
+   ],
+   "ready_note": "The file provider, file watching and file coordination models (sdk file_provider.rs, fswatch.rs, file_coordination.rs) cover the provider's job, with tests."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.FilesystemUI.plist",
+   "category": "daemons",
+   "name": "com.apple.FilesystemUI",
+   "path": "/System/Library/LaunchAgents/com.apple.FilesystemUI.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 757
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/services/disks.rs, springboard/core/src/disk_magic.rs",
+   "status": "partial",
+   "note": "The disks service posts a notice when a disk arrives and, from a probe of each volume's first sectors (core disk_magic), a Disk Not Readable notice for a volume no known filesystem matches; Disk Utility erases or repairs it.",
+   "rea": [],
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::disks::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "disk_magic::tests"
+    }
+   ],
+   "ready_note": "Filesystem detection by magic bytes (ext, FAT, exFAT, NTFS, XFS, btrfs, F2FS, ISO 9660, LUKS) decides readable, encrypted, ignored or unreadable; the service notifies for unreadable volumes"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.Finder.plist",
+   "category": "daemons",
+   "name": "com.apple.Finder",
+   "path": "/System/Library/LaunchAgents/com.apple.Finder.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 742
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/desk.rs",
+   "status": "partial",
+   "note": "role filled by desk.rs (desktop and icons) with the Files app; no separate process; file windows are the Files app, not the agent",
+   "rea": [],
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::desk::"
+    }
+   ],
+   "ready_note": "desk.rs draws the desktop, its icons and the file-window hand-off to the Files app; the desk tests cover layout and selection."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.FollowUpUI.plist",
+   "category": "daemons",
+   "name": "com.apple.FollowUpUI",
+   "path": "/System/Library/LaunchAgents/com.apple.FollowUpUI.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 908
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: the follow-up list is raised by the Apple Account, iCloud and device-pairing setup services (the app lives in PrivateFrameworks/CoreFollowUp.framework, FollowUpUI.app). BifrOSt has no vendor account items to follow up; local prompts use notifications and the Settings update badge.",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.FontValidator.plist",
+   "category": "daemons",
+   "name": "com.apple.FontValidator",
+   "path": "/System/Library/LaunchAgents/com.apple.FontValidator.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 850
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/font_descriptor.rs, springboard/render/src/fontprefs.rs",
+   "status": "partial",
+   "note": "rule: font and spelling models; Font Book app",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "fontprefs::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_descriptor::tests"
+    }
+   ],
+   "ready_note": "fontprefs probe validates a font file before it is listed or used (sfnt or collection header, required tables); tests cover it."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.FontWorker.plist",
+   "category": "daemons",
+   "name": "com.apple.FontWorker",
+   "path": "/System/Library/LaunchAgents/com.apple.FontWorker.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 793
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/font_descriptor.rs, springboard/sdk/src/spellcheck.rs",
+   "status": "partial",
+   "note": "rule: font and spelling models; Font Book app",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_descriptor::tests"
+    }
+   ],
+   "ready_note": "The font descriptor model (sdk font_descriptor.rs) is the font lookup the worker serves, with 6 tests."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.GameController.gamecontrolleragentd.plist",
+   "category": "daemons",
+   "name": "com.apple.GameController.gamecontrolleragentd",
+   "path": "/System/Library/LaunchAgents/com.apple.GameController.gamecontrolleragentd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 836
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/game_controllers_page.rs",
+   "status": "partial",
+   "note": "role filled by game_controllers_page.rs; no separate process; settings page only",
+   "rea": [],
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::game_controllers_page::"
+    }
+   ],
+   "ready_note": "game_controllers_page.rs lists and configures connected game controllers over gamepad_service; tests cover the page model."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.GamePolicyAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.GamePolicyAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.GamePolicyAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 918
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/gamemode.rs",
+   "status": "partial",
+   "note": "Partial: the shell's Game Mode (springboard/src/shell/gamemode.rs) enters when a game is in front full screen (Games category or game = true), leaves after 3 s, and while on: CPU profile Performance, the game's nice and uclamp raised through bifrostd (priority socket), the background task scheduler paused, a menu bar item with Turn Off Game Mode, and a one-time notice. Full screen for app windows is the green button or ToShell::SetFullScreen. Not built: file indexing pause (no indexer runs in the shell), Bluetooth sniff interval (no mgmt connection update), and no framework API for apps to read the state.",
+   "rea": [],
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::gamemode::"
+    }
+   ],
+   "ready_note": "gamemode.rs enters Game Mode for a full-screen game and leaves after 3 s; tests cover the enter and leave rules."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.GenerativeFunctions.agentstored.plist",
+   "category": "daemons",
+   "name": "com.apple.GenerativeFunctions.agentstored",
+   "path": "/System/Library/LaunchAgents/com.apple.GenerativeFunctions.agentstored.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1931
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple Intelligence, personalisation or prediction service; the assistant app has its own cloud and local model paths",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.IOUIAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.IOUIAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.IOUIAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1594
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/hid_devices.rs, springboard/sdk/src/gamepad_service.rs",
+   "status": "partial",
+   "note": "rule: HID and game controller models",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "hid_devices::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "gamepad_service::tests"
+    }
+   ],
+   "ready_note": "HID device and game controller models are built and tested."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.KeyboardAccessAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.KeyboardAccessAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.KeyboardAccessAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1078
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/sticky_keys.rs, springboard/src/shell/hwkeys.rs, springboard/src/shell/slow_keys.rs, springboard/src/shell/mouse_keys.rs, springboard/src/bare/input.rs",
+   "status": "partial",
+   "note": "Sticky Keys, Slow Keys, Repeat Keys and Mouse Keys are built. Sticky Keys is a switch in Settings > Accessibility > Keyboard (hwkeys.rs latches the modifiers). Slow Keys is Settings > Keyboard > Slow Keys (shell/slow_keys.rs). Repeat Keys is the key auto-repeat in hwkeys.rs (Settings > Keyboard > Key Repeat). Mouse Keys is a switch (shell/mouse_keys.rs): the keypad moves the pointer with acceleration and the 5 key clicks; 0 and the decimal point are not used for hold and release yet.",
+   "rea": [],
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::sticky_keys::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::slow_keys::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::mouse_keys::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::hwkeys::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::tests"
+    }
+   ],
+   "ready_note": "Keyboard access: Sticky Keys (shell/sticky_keys.rs, hwkeys tests), Slow Keys (shell/slow_keys.rs), Repeat Keys (hwkeys.rs KeyRepeat) and Mouse Keys (shell/mouse_keys.rs), with the settings round trips in accessibility::tests. Needs a Midget check of the keypad and the switches."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.LinkedNotesUIService.plist",
+   "category": "daemons",
+   "name": "com.apple.LinkedNotesUIService",
+   "path": "/System/Library/LaunchAgents/com.apple.LinkedNotesUIService.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 605
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/notes-desktop/src/notes/note_url.rs, springboard/apps/notes-desktop/src/notes/mod.rs",
+   "status": "partial",
+   "note": "Note links (notes://note/<id>) are built and parsed, and the open note shows a Linked Notes line (for example 2 linked notes) when other notes link to it; the backlink model is core link_index.",
+   "rea": [],
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-notes",
+     "filter": "notes::note_url::tests"
+    }
+   ],
+   "ready_note": "Backlink model, label and panel titles are tested in note_url; Notes draws the Linked Notes line under the open note (Notes::linked_label)"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.LocalAuthentication.UIAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.LocalAuthentication.UIAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.LocalAuthentication.UIAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 926
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/keychain.rs, springboard/sdk/src/trust.rs, springboard/sdk/src/local_auth.rs",
+   "status": "partial",
+   "note": "rule: keychain, trust and local authentication models",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "local_auth::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "trust::tests"
+    }
+   ],
+   "ready_note": "Local authentication model and the trust checks its prompts use are built and tested."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.MENotificationAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.MENotificationAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.MENotificationAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 822
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/low_battery.rs",
+   "status": "partial",
+   "note": "Battery menu extra alerts (Low Power Mode offer, Low Battery warnings, clean shutdown) are posted by the shell low_battery module.",
+   "rea": [],
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::low_battery::tests"
+    }
+   ],
+   "ready_note": "The menu extra notification agent's job on a PC is the battery and power alerts; low_battery covers them (10 tests)"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.MTLAssetUpgraderD.plist",
+   "category": "daemons",
+   "name": "com.apple.MTLAssetUpgraderD",
+   "path": "/System/Library/LaunchAgents/com.apple.MTLAssetUpgraderD.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1374
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple silicon, firmware, secure element or device-specific service; BifrOSt targets generic PC hardware",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.ManagedClientAgent.agent.plist",
+   "category": "daemons",
+   "name": "com.apple.ManagedClientAgent.agent",
+   "path": "/System/Library/LaunchAgents/com.apple.ManagedClientAgent.agent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 2173
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: enterprise management, enrolment or erase service; BifrOSt is not an MDM-managed system",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.ManagedClientAgent.enrollagent.plist",
+   "category": "daemons",
+   "name": "com.apple.ManagedClientAgent.enrollagent",
+   "path": "/System/Library/LaunchAgents/com.apple.ManagedClientAgent.enrollagent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 644
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: enterprise management, enrolment or erase service; BifrOSt is not an MDM-managed system",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.ManagedSettingsAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.ManagedSettingsAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.ManagedSettingsAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1381
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: enterprise management, enrolment or erase service; BifrOSt is not an MDM-managed system",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.Maps.mapssyncd.plist",
+   "category": "daemons",
+   "name": "com.apple.Maps.mapssyncd",
+   "path": "/System/Library/LaunchAgents/com.apple.Maps.mapssyncd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1476
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Syncs Maps data between the vendor's devices through the vendor's account and cloud. BifrOSt has no vendor account sync; the Maps app keeps its data on the device.",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.Maps.pushdaemon.plist",
+   "category": "daemons",
+   "name": "com.apple.Maps.pushdaemon",
+   "path": "/System/Library/LaunchAgents/com.apple.Maps.pushdaemon.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1305
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Vendor push relay for Maps data. BifrOSt has no vendor push service.",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.MemorySlotNotification.plist",
+   "category": "daemons",
+   "name": "com.apple.MemorySlotNotification",
+   "path": "/System/Library/LaunchAgents/com.apple.MemorySlotNotification.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 701
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Memory slot hardware notifications",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.MenuBarAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.MenuBarAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.MenuBarAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 884
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/desktop_bar.rs",
+   "status": "partial",
+   "note": "role filled by desktop_bar.rs; no separate process; no per-app menu extras host API",
+   "rea": [],
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::desktop_bar::"
+    }
+   ],
+   "ready_note": "desktop_bar.rs draws the menu bar, its menus and the status items in-process; tests cover menu layout and regions."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.MobileAccessoryUpdater.fudHelperAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.MobileAccessoryUpdater.fudHelperAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.MobileAccessoryUpdater.fudHelperAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 601
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple silicon, firmware, secure element or device-specific service; BifrOSt targets generic PC hardware",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.ModelCatalogAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.ModelCatalogAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.ModelCatalogAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 3706
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple Intelligence, personalisation or prediction service; the assistant app has its own cloud and local model paths",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.NVMeAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.NVMeAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.NVMeAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 842
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple silicon, firmware, secure element or device-specific service; BifrOSt targets generic PC hardware",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.NowPlayingTouchUI.plist",
+   "category": "daemons",
+   "name": "com.apple.NowPlayingTouchUI",
+   "path": "/System/Library/LaunchAgents/com.apple.NowPlayingTouchUI.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1028
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple silicon, firmware, secure element or device-specific service; BifrOSt targets generic PC hardware",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.OSDUIHelper.plist",
+   "category": "daemons",
+   "name": "com.apple.OSDUIHelper",
+   "path": "/System/Library/LaunchAgents/com.apple.OSDUIHelper.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 679
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/volume_hud.rs, springboard/ui/src/osd.rs, springboard/src/shell/hwkeys.rs, springboard/src/bare/power.rs, springboard/src/bin/shell.rs",
+   "status": "partial",
+   "note": "The key HUD (level bar, 1.5 s hold then fade) is drawn by the shell for the volume (speaker or headset glyph, route name), the screen brightness (sun glyph) and the keyboard backlight (keyboard glyph), all from the OSD levels in bifrost-ui osd.rs. The brightness keys (224, 225) and the keyboard backlight keys (229, 230) step the level by 1/16 (the LED's own steps for the backlight), show the HUD on every screen except under Control Center, whose slider moves instead, and never wake a dark screen. The panel level goes through the existing Brightness effect (backlight or monitor DDC/CI); the backlight goes to /sys/class/leds/*kbd_backlight. The HUD for mute, eject and other keys of the reference helper is not drawn.",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::volume_hud::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "osd::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::tests::volume_keys_work_in_apps_and_with_the_screen_off_without_waking_it"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::tests::brightness_keys"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::tests::keyboard_backlight_keys"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::power::tests"
+    }
+   ],
+   "ready_note": "The brightness and keyboard backlight keys step the level and show the same HUD as the volume keys (shell::tests::brightness_keys_step_the_panel_and_show_the_same_hud_as_volume, brightness_keys_leave_a_dark_screen_and_the_control_center_alone, keyboard_backlight_keys_need_a_backlight_and_use_its_steps; volume_hud::tests::brightness_levels_draw_their_own_glyphs); the key codes reach hw_brightness_key from the input loop in bin/shell.rs"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.PIPAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.PIPAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.PIPAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 660
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pip.rs, springboard/src/shell/services/picture_in_picture.rs, springboard/ui/src/pip_window.rs",
+   "status": "partial",
+   "note": "The pip service runs the floating video window: controller life cycle and delegate events, corner placement above the dock, automatic start when the app leaves the foreground, and (built 2026-10-17) the player sends frames with pip.frame (base64 RGBA, up to 1920x1080) which the window draws at the video aspect ratio.",
+   "rea": [],
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pip::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::picture_in_picture::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "pip_window::tests"
+    }
+   ],
+   "ready_note": "Window life cycle, placement, automatic start and frame hand-over are tested; the window is drawn by Shell::draw over the windows"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.PackageUIKit.InstallStatus.plist",
+   "category": "daemons",
+   "name": "com.apple.PackageUIKit.InstallStatus",
+   "path": "/System/Library/LaunchAgents/com.apple.PackageUIKit.InstallStatus.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1002
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/updated",
+   "status": "partial",
+   "note": "rule: the updated service and the app installer",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "updated",
+     "filter": "install_log::tests"
+    }
+   ],
+   "ready_note": "The updated service keeps the install log that the install status is read from; its tests cover the log."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.PlatformSSOUIAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.PlatformSSOUIAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.PlatformSSOUIAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 889
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/gss_krb5.rs",
+   "status": "n/a",
+   "note": "n/a: the sign-in UI for Apple platform single sign-on, which BifrOSt does not use (see AppSSOAgent). Kerberos stays in springboard/sdk/src/gss_krb5.rs.",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.RapportUIAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.RapportUIAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.RapportUIAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 269
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/nearby_service.rs, springboard/sdk/src/peer_session.rs",
+   "status": "n/a",
+   "note": "n/a: the pairing UI of Apple's Rapport device-to-device (Continuity) protocol. BifrOSt does not speak Rapport; generic peer sessions are in springboard/sdk/src/peer_session.rs.",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.RemoteManagementAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.RemoteManagementAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.RemoteManagementAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 2248
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: enterprise management, enrolment or erase service; BifrOSt is not an MDM-managed system",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.ReportCrash.plist",
+   "category": "daemons",
+   "name": "com.apple.ReportCrash",
+   "path": "/System/Library/LaunchAgents/com.apple.ReportCrash.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 707
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/crash_report.rs, springboard/sdk/src/call_stack_tree.rs",
+   "status": "partial",
+   "note": "rule: crash report and call-stack models",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "crash_report::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "call_stack_tree::tests"
+    }
+   ],
+   "ready_note": "The crash report and call stack tree models (sdk crash_report.rs, call_stack_tree.rs) cover the crash reporter's job, with tests."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.ReportGPURestart.plist",
+   "category": "daemons",
+   "name": "com.apple.ReportGPURestart",
+   "path": "/System/Library/LaunchAgents/com.apple.ReportGPURestart.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 462
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple silicon, firmware, secure element or device-specific service; BifrOSt targets generic PC hardware",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.Safari.SafeBrowsing.Service.plist",
+   "category": "daemons",
+   "name": "com.apple.Safari.SafeBrowsing.Service",
+   "path": "/System/Library/LaunchAgents/com.apple.Safari.SafeBrowsing.Service.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1051
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Downloads the vendor's phishing and malware lists for the reference browser. BifrOSt's browser app has no vendor list service and no lookup servers to call.",
+   "rea": [],
+   "method": "audit"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.SafeEjectGPUAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.SafeEjectGPUAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.SafeEjectGPUAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1543
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple silicon, firmware, secure element or device-specific service; BifrOSt targets generic PC hardware",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.ScreenReaderUIServer.plist",
+   "category": "daemons",
+   "name": "com.apple.ScreenReaderUIServer",
+   "path": "/System/Library/LaunchAgents/com.apple.ScreenReaderUIServer.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 995
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/accessibility/reader.rs",
+   "status": "partial",
+   "note": "role filled by accessibility/reader.rs; no separate process; no braille or caption panel",
+   "rea": [],
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::reader::"
+    }
+   ],
+   "ready_note": "accessibility/reader.rs drives the screen reader UI; tests cover the reader model. No braille or caption panel."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.ScreenTimeAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.ScreenTimeAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.ScreenTimeAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 4995
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/screentime/mod.rs, springboard/src/shell/screentime/usage.rs, springboard/src/shell/screentime/config.rs",
+   "status": "partial",
+   "note": "Screen Time usage and limits in the shell",
+   "rea": [],
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::"
+    }
+   ],
+   "ready_note": "Screen Time usage, limits, shield and page models in the shell are tested (screentime submodules)."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.ScreenTimeSettingsAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.ScreenTimeSettingsAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.ScreenTimeSettingsAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 4008
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/screentime/page.rs",
+   "status": "partial",
+   "note": "Screen Time settings page",
+   "rea": [],
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::screentime::"
+    }
+   ],
+   "ready_note": "screentime/page.rs is the Screen Time settings page over the shell's usage and limit models; tests cover the page."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.ScriptMenuApp.plist",
+   "category": "daemons",
+   "name": "com.apple.ScriptMenuApp",
+   "path": "/System/Library/LaunchAgents/com.apple.ScriptMenuApp.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 640
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/scripts_menu.rs, springboard/src/shell/desktop_bar.rs, springboard/apps/script-editor-desktop/src/main.rs",
+   "status": "partial",
+   "note": "The Script menu is a menu bar extra (shell/desktop_bar.rs, Menu::Scripts) that lists the scripts in ~/.local/share/bifrost/scripts and runs the chosen one with sh (shell/scripts_menu.rs). It shows only while the folder holds a file. The Script Editor app still has its own Script menu.",
+   "rea": [],
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::scripts_menu::tests"
+    }
+   ],
+   "ready_note": "The system Script menu: folder listing, title, name checks and the run (shell::scripts_menu::tests). Needs a Midget check of the menu bar extra."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.SecureBackupDaemon.plist",
+   "category": "daemons",
+   "name": "com.apple.SecureBackupDaemon",
+   "path": "/System/Library/LaunchAgents/com.apple.SecureBackupDaemon.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 470
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple cloud, account, store, advertising or telemetry service; BifrOSt has no Apple cloud and mirrors none of it",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.ServicesUIAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.ServicesUIAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.ServicesUIAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1342
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/launch_services.rs, springboard/sdk/src/app_links.rs",
+   "status": "partial",
+   "note": "rule: launch services and app link models",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "launch_services::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "app_links::tests"
+    }
+   ],
+   "ready_note": "Launch services and app link models are built and tested."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.Siri.agent.plist",
+   "category": "daemons",
+   "name": "com.apple.Siri.agent",
+   "path": "/System/Library/LaunchAgents/com.apple.Siri.agent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 877
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/assistant.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/services/recognizer.rs",
+   "status": "gap",
+   "note": "BifrOSt has its own assistant: a panel opened by a shortcut (assistant_panel.rs), a service that decides what the assistant may see and do (assistant.rs, off by default, no history by default) and on-device speech recognition (recognizer.rs, whisper, consent first). It uses no vendor model or account.",
+   "rea": [],
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_panel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::recognizer::tests"
+    }
+   ],
+   "ready_note": "Typed and spoken requests, intents with per-app access and the privacy gates are tested; status stays gap because the row is the vendor assistant, which BifrOSt replaces with its own"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.SiriTTSTrainingAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.SiriTTSTrainingAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.SiriTTSTrainingAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 332
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Voice training for Apple's Siri voices",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.SoftwareUpdateNotificationManager.plist",
+   "category": "daemons",
+   "name": "com.apple.SoftwareUpdateNotificationManager",
+   "path": "/System/Library/LaunchAgents/com.apple.SoftwareUpdateNotificationManager.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 2238
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/ota.rs",
+   "status": "partial",
+   "note": "role filled by ota.rs; no separate process; notices come from the update check",
+   "rea": [],
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::ota::"
+    }
+   ],
+   "ready_note": "ota.rs runs the update check and posts update notices; tests cover the notice logic."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.SpacesTouchBarAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.SpacesTouchBarAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.SpacesTouchBarAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1152
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple silicon, firmware, secure element or device-specific service; BifrOSt targets generic PC hardware",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.Spotlight.plist",
+   "category": "daemons",
+   "name": "com.apple.Spotlight",
+   "path": "/System/Library/LaunchAgents/com.apple.Spotlight.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1091
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/quicksearch.rs",
+   "status": "partial",
+   "note": "role filled by quicksearch.rs and quicksearch_math.rs; no separate process; no per-volume metadata server",
+   "rea": [],
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::"
+    }
+   ],
+   "ready_note": "quicksearch.rs and quicksearch_math.rs run the search panel (apps, files, math). No per-volume metadata server."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.StatusKitAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.StatusKitAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.StatusKitAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1009
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Shares presence and status between contacts through the vendor's cloud, push and identity services. BifrOSt has no cloud presence service.",
+   "rea": [],
+   "method": "audit"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.StorageManagement.Service.plist",
+   "category": "daemons",
+   "name": "com.apple.StorageManagement.Service",
+   "path": "/System/Library/LaunchAgents/com.apple.StorageManagement.Service.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 839
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/storage.rs, springboard/core/src/cache_purge.rs",
+   "status": "partial",
+   "note": "Storage accounting by category on a worker thread, disposable caches that can be cleared, and the guard that clears the least recently used caches by itself when the data partition runs low.",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::storage::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "cache_purge::tests"
+    }
+   ],
+   "ready_note": "Usage by category, cache clearing and the low-space purge plan are tested"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.StorageManagementUIHelper.plist",
+   "category": "daemons",
+   "name": "com.apple.StorageManagementUIHelper",
+   "path": "/System/Library/LaunchAgents/com.apple.StorageManagementUIHelper.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 699
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/storage_page.rs, springboard/src/shell/storage.rs",
+   "status": "partial",
+   "note": "Settings > Storage shows the usage bar by category, lists the disposable caches with a Clear action, and removes an installed package after a confirmation.",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::storage_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::storage::tests"
+    }
+   ],
+   "ready_note": "The Storage page spec, usage bar and clear actions are tested"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.SystemUIServer.plist",
+   "category": "daemons",
+   "name": "com.apple.SystemUIServer",
+   "path": "/System/Library/LaunchAgents/com.apple.SystemUIServer.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1236
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/desktop_bar.rs",
+   "status": "partial",
+   "note": "The shell draws the menu bar and its status items in-process, with no separate server process. No host for third-party menu extras is provided.",
+   "rea": [],
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::desktop_bar::"
+    }
+   ],
+   "ready_note": "The menu bar and its status items are drawn in-process by desktop_bar.rs (no separate server). No host for third-party menu extras."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.TMHelperAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.TMHelperAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.TMHelperAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1293
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/core/src/snapshot_backup.rs, springboard/core/src/backup_exclusion.rs",
+   "status": "partial",
+   "note": "rule: snapshot backup model",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "snapshot_backup::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "backup_exclusion::tests"
+    }
+   ],
+   "ready_note": "The snapshot backup model and the backup exclusion rules (core snapshot_backup.rs, backup_exclusion.rs) cover the backup helper's job, with tests."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.TextInputMenuAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.TextInputMenuAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.TextInputMenuAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 804
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/input_source_hud.rs",
+   "status": "partial",
+   "note": "role filled by input_source_hud.rs and kb_layouts.rs; no separate process; menu extra is part of the menu bar",
+   "rea": [],
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::input_source_hud::"
+    }
+   ],
+   "ready_note": "input_source_hud.rs shows the input source switcher; kb_layouts.rs and fcitx_bridge.rs carry the layouts. Tests cover the HUD state."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.TextInputSwitcher.plist",
+   "category": "daemons",
+   "name": "com.apple.TextInputSwitcher",
+   "path": "/System/Library/LaunchAgents/com.apple.TextInputSwitcher.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 902
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/input_source_hud.rs",
+   "status": "partial",
+   "note": "role filled by input_source_hud.rs; no separate process; switching goes through fcitx_bridge.rs",
+   "rea": [],
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::input_source_hud::"
+    }
+   ],
+   "ready_note": "input_source_hud.rs shows the input source HUD; switching goes through fcitx_bridge.rs. Tests cover the HUD state."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.ThreadCommissionerService.plist",
+   "category": "daemons",
+   "name": "com.apple.ThreadCommissionerService",
+   "path": "/System/Library/LaunchAgents/com.apple.ThreadCommissionerService.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 660
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/core/src/matter.rs, springboard/core/src/matter_interaction.rs",
+   "status": "partial",
+   "note": "rule: Matter commissioning and interaction models",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "matter::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "matter_interaction::tests"
+    }
+   ],
+   "ready_note": "The Matter commissioning model and its interaction model (core matter.rs, matter_interaction.rs) cover the Thread commissioner's job, with tests."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.TrustEvaluationAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.TrustEvaluationAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.TrustEvaluationAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 637
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/keychain.rs, springboard/sdk/src/trust.rs, springboard/sdk/src/local_auth.rs",
+   "status": "partial",
+   "note": "rule: keychain, trust and local authentication models",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "trust::tests"
+    }
+   ],
+   "ready_note": "Trust evaluation (chain, host and anchor checks) is the SDK trust model in sdk/src/trust.rs, with its tests."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.UsageTrackingAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.UsageTrackingAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.UsageTrackingAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 3252
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple cloud, account, store, advertising or telemetry service; BifrOSt has no Apple cloud and mirrors none of it",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.UserEventAgent-Aqua.plist",
+   "category": "daemons",
+   "name": "com.apple.UserEventAgent-Aqua",
+   "path": "/System/Library/LaunchAgents/com.apple.UserEventAgent-Aqua.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 789
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/defaults.rs, springboard/sdk/src/pref_domains.rs",
+   "status": "partial",
+   "note": "rule: defaults and preference domain models; Settings app",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "defaults::tests"
+    }
+   ],
+   "ready_note": "The defaults model (sdk defaults.rs) covers user defaults and preference events for the Aqua session, with 13 tests."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.UserEventAgent-CryptexContainer.plist",
+   "category": "daemons",
+   "name": "com.apple.UserEventAgent-CryptexContainer",
+   "path": "/System/Library/LaunchAgents/com.apple.UserEventAgent-CryptexContainer.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 825
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Cryptex is the sealed system-volume container of the reference OS. BifrOSt has no Cryptex volumes, so the agent has no job here.",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.UserEventAgent-LoginWindow.plist",
+   "category": "daemons",
+   "name": "com.apple.UserEventAgent-LoginWindow",
+   "path": "/System/Library/LaunchAgents/com.apple.UserEventAgent-LoginWindow.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 623
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/login.rs",
+   "status": "partial",
+   "note": "Login window events",
+   "rea": [],
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::login::"
+    }
+   ],
+   "ready_note": "login.rs is the login window: the user picker, password entry and the login event flow; tests cover the flow."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.UserPictureSyncAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.UserPictureSyncAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.UserPictureSyncAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 956
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: the agent (System/Library/CoreServices/UserPictureSyncAgent) keeps the local user picture in step with the Apple Account profile. BifrOSt has no vendor account to sync from; the account picture is the local ~/.face file.",
+   "rea": [],
+   "method": "audit"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.VoiceOver.plist",
+   "category": "daemons",
+   "name": "com.apple.VoiceOver",
+   "path": "/System/Library/LaunchAgents/com.apple.VoiceOver.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1028
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/accessibility/reader.rs, springboard/src/shell/accessibility/walk.rs, springboard/src/shell/accessibility/speech.rs, springboard/src/shell/atspi/bridge.rs, springboard/ui/src/ax.rs",
+   "status": "partial",
+   "note": "The screen reader walks the menu bar, menus and the front window, speaks through espeak-ng, plays earcons, shows Braille output and exports the element tree on the AT-SPI bus so Orca and other readers work with BifrOSt apps.",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::reader::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::walk::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::speech::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::atspi::model::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "ax::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "braille::tests"
+    }
+   ],
+   "ready_note": "Screen reader cursor, vocabulary, speech, AT-SPI model and the element map are tested"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.WindowManager.plist",
+   "category": "daemons",
+   "name": "com.apple.WindowManager",
+   "path": "/System/Library/LaunchAgents/com.apple.WindowManager.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 908
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/workspace.rs",
+   "status": "partial",
+   "note": "role filled by workspace.rs and window_fx.rs; no separate process; window placement lives in the shell and compositor config",
+   "rea": [],
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::workspace::"
+    }
+   ],
+   "ready_note": "workspace.rs places and tracks windows for the shell; window_fx.rs holds the effects. Tests cover placement."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.accessibility.AXVisualSupportAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.accessibility.AXVisualSupportAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.accessibility.AXVisualSupportAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1357
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/accessibility/mod.rs, springboard/src/shell/accessibility/zoom.rs, springboard/src/shell/services/accessibility_display.rs",
+   "status": "partial",
+   "note": "Visual accessibility runs in the shell: Display Zoom, screen Zoom, Reduce Motion, Increase Contrast, Reduce Transparency, Button Shapes and Dim Flashing Lights, served to apps by the accessibility_display service.",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::zoom::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::accessibility_display::tests"
+    }
+   ],
+   "ready_note": "Display accessibility settings, screen zoom and the service apps read them from are tested"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.accessibility.LiveTranscriptionAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.accessibility.LiveTranscriptionAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.accessibility.LiveTranscriptionAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 972
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/live_captions.rs, springboard/src/shell/services/recognizer.rs, springboard/ui/src/whisper.rs, springboard/src/shell/accessibility/mod.rs, springboard/src/shell/pages.rs",
+   "status": "partial",
+   "note": "Live Captions: Settings > Accessibility > Live Captions (a11y_live_captions, off by default) makes the shell start a caption pipeline through the speech_recognizer service (captions_start, shell-only): the same local whisper model as dictation fed from the monitor of the default output (pulsesrc device=@DEFAULT_MONITOR@, or pipewiresrc with stream.capture.sink), so it hears what the computer plays and not the room. The shell polls it every 250 ms and draws the newest two lines on a plate at the bottom centre, which holds 5 s after the last words and fades. Consent and the model come from Keyboard > Dictation; without them the plate says so once and nothing is captured. English only. Not done: the native audio server's pulse compatibility layer reports no monitor sources, so the capture needs the PipeWire or PulseAudio stack; stored caption profiles (ui captions.rs) are not wired to Settings, so the look is the model's default; no caption of a call or of the microphone; no transcript export.",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "whisper::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::recognizer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::live_captions::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::tests::live_captions_round_trips_and_is_off_by_default"
+    }
+   ],
+   "ready_note": "The Accessibility switch (prefs) starts the system-audio caption pipeline, polled words reach the plate that the frame draws and damages, a refusal or a dark screen captures nothing, and only the shell may use the system-audio source (shell::live_captions::tests, services::recognizer::tests::captions_*, whisper::tests::system_audio_is_the_monitor_of_the_default_output)"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.accessibility.MotionTrackingAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.accessibility.MotionTrackingAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.accessibility.MotionTrackingAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 377
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: head and face tracking for pointer control runs on the Apple vision ML models and the TrueDepth or ANE pipeline (binary in AccessibilitySharedSupport.framework with its own sandbox profile). BifrOSt ships no vision model packs; pointer alternatives are Dwell Control, Switch Control and Voice Control.",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.accessibility.axassetsd.plist",
+   "category": "daemons",
+   "name": "com.apple.accessibility.axassetsd",
+   "path": "/System/Library/LaunchAgents/com.apple.accessibility.axassetsd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1512
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/ui/src/speech_assets.rs, springboard/ui/src/whisper.rs, springboard/src/shell/services/recognizer.rs",
+   "status": "partial",
+   "note": "The accessibility asset job (speech voices and recognition models) is a consent-gated local download: the recognizer service fetches the whisper model only after the person grants it, and speech_assets tracks installed, downloading and reserved locales. The voice engine (espeak-ng) is a packaged Arch dependency.",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "speech_assets::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "whisper::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::recognizer::tests"
+    }
+   ],
+   "ready_note": "Model consent, download state and installed locales are tested; no vendor asset catalogue is used"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.accessibility.dfrhud.plist",
+   "category": "daemons",
+   "name": "com.apple.accessibility.dfrhud",
+   "path": "/System/Library/LaunchAgents/com.apple.accessibility.dfrhud.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 880
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/ui/src/ax.rs, springboard/ui/src/braille.rs, springboard/ui/src/captions.rs",
+   "status": "n/a",
+   "note": "Touch Bar HUD for Apple laptop hardware. BifrOSt has no Touch Bar, so the job has no counterpart.",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.accessibility.heard.plist",
+   "category": "daemons",
+   "name": "com.apple.accessibility.heard",
+   "path": "/System/Library/LaunchAgents/com.apple.accessibility.heard.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1039
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: the hearing-device daemon for Apple's proprietary hearing aid and AirPods hearing features (paired-device protocol and firmware settings). The index lists only its launchd plist. Sound classification and captions are covered by other rows.",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.accessoryaccess.uiagent.plist",
+   "category": "daemons",
+   "name": "com.apple.accessoryaccess.uiagent",
+   "path": "/System/Library/LaunchAgents/com.apple.accessoryaccess.uiagent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 812
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/privacy_permissions.rs, springboard/core/src/permission_request.rs",
+   "status": "partial",
+   "note": "rule: privacy permission service model",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "privacy_permissions::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "permission_request::tests"
+    }
+   ],
+   "ready_note": "The privacy request model and the permission question centre (sdk privacy_permissions.rs, core permission_request.rs) cover the accessory access prompts, with tests."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.accessorysensormgrd.plist",
+   "category": "daemons",
+   "name": "com.apple.accessorysensormgrd",
+   "path": "/System/Library/LaunchAgents/com.apple.accessorysensormgrd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 629
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/core/src/accessory_manager.rs, springboard/sdk/src/external_accessory.rs",
+   "status": "partial",
+   "note": "rule: accessory manager and external accessory models",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "accessory_manager::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "external_accessory::tests"
+    }
+   ],
+   "ready_note": "The accessory manager in core tracks connected accessories and their sensors. The SDK external_accessory and accessory_access modules use it, and the tests cover both."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.accountsd.plist",
+   "category": "daemons",
+   "name": "com.apple.accountsd",
+   "path": "/System/Library/LaunchAgents/com.apple.accountsd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 681
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple cloud, account, store, advertising or telemetry service; BifrOSt has no Apple cloud and mirrors none of it",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.ak.auth.authKitUIMacService.plist",
+   "category": "daemons",
+   "name": "com.apple.ak.auth.authKitUIMacService",
+   "path": "/System/Library/LaunchAgents/com.apple.ak.auth.authKitUIMacService.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 382
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple cloud, account, store, advertising or telemetry service; BifrOSt has no Apple cloud and mirrors none of it",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.akd.plist",
+   "category": "daemons",
+   "name": "com.apple.akd",
+   "path": "/System/Library/LaunchAgents/com.apple.akd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1385
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple cloud, account, store, advertising or telemetry service; BifrOSt has no Apple cloud and mirrors none of it",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.alf.useragent.plist",
+   "category": "daemons",
+   "name": "com.apple.alf.useragent",
+   "path": "/System/Library/LaunchAgents/com.apple.alf.useragent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 509
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/core/src/app_firewall.rs, springboard/src/shell/services/app_firewall.rs, springboard/src/shell/firewall_sheet.rs, springboard/src/shell/pages.rs, springboard/src/shell/settings.rs",
+   "status": "partial",
+   "note": "Per-app incoming connection choices (allow, block, ask when none is remembered) are kept and carried out: the app_firewall service saves app-firewall.conf, builds the nftables ruleset (core app_firewall.rs) and loads it with nft -f - (nftables is in runtime-packages.txt). The shell now asks: every 4 s it matches the listening sockets in /proc/net/{tcp,tcp6,udp,udp6} (non-loopback; UDP below the ephemeral range) with the sockets each hosted app and its child processes hold open, and for an app with no choice shows an Allow or Deny card (Deny is the default; an app is asked once per run and the answer is saved with the service). A blocked app's new ports are blocked without asking again. Settings > Network > Firewall lists each remembered app with Allow, Block and Forget This Choice. Not done: apps the shell did not start (a terminal program, a foreign Wayland client) are not asked, and the firewall page cannot add an app or edit its ports by hand.",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "app_firewall::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::app_firewall::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::firewall_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages::tests::the_desktop_network_page_links_to_the_firewall"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings::tests::the_firewall_page_hands_the_shell_each_change"
+    }
+   ],
+   "ready_note": "An app that starts listening is asked on a card whose answer is saved through the app_firewall service and loaded as rules, a blocked app's new port is blocked silently, and the Network > Firewall page changes or forgets each choice (shell::firewall_sheet::tests, settings::tests::the_firewall_page_hands_the_shell_each_change)"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.amp.mediasharingd.plist",
+   "category": "daemons",
+   "name": "com.apple.amp.mediasharingd",
+   "path": "/System/Library/LaunchAgents/com.apple.amp.mediasharingd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 819
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple cloud, account, store, advertising or telemetry service; BifrOSt has no Apple cloud and mirrors none of it",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.amsaccountsd.plist",
+   "category": "daemons",
+   "name": "com.apple.amsaccountsd",
+   "path": "/System/Library/LaunchAgents/com.apple.amsaccountsd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 2772
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple cloud, account, store, advertising or telemetry service; BifrOSt has no Apple cloud and mirrors none of it",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.amsengagementd.plist",
+   "category": "daemons",
+   "name": "com.apple.amsengagementd",
+   "path": "/System/Library/LaunchAgents/com.apple.amsengagementd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 3093
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple cloud, account, store, advertising or telemetry service; BifrOSt has no Apple cloud and mirrors none of it",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.amsondevicestoraged.plist",
+   "category": "daemons",
+   "name": "com.apple.amsondevicestoraged",
+   "path": "/System/Library/LaunchAgents/com.apple.amsondevicestoraged.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 3576
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple cloud, account, store, advertising or telemetry service; BifrOSt has no Apple cloud and mirrors none of it",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.analyticsagent.plist",
+   "category": "daemons",
+   "name": "com.apple.analyticsagent",
+   "path": "/System/Library/LaunchAgents/com.apple.analyticsagent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 2903
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple cloud, account, store, advertising or telemetry service; BifrOSt has no Apple cloud and mirrors none of it",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.ap.adprivacyd.plist",
+   "category": "daemons",
+   "name": "com.apple.ap.adprivacyd",
+   "path": "/System/Library/LaunchAgents/com.apple.ap.adprivacyd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1296
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple cloud, account, store, advertising or telemetry service; BifrOSt has no Apple cloud and mirrors none of it",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.ap.promotedcontentd.plist",
+   "category": "daemons",
+   "name": "com.apple.ap.promotedcontentd",
+   "path": "/System/Library/LaunchAgents/com.apple.ap.promotedcontentd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1821
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple cloud, account, store, advertising or telemetry service; BifrOSt has no Apple cloud and mirrors none of it",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.apfsuseragent.plist",
+   "category": "daemons",
+   "name": "com.apple.apfsuseragent",
+   "path": "/System/Library/LaunchAgents/com.apple.apfsuseragent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 902
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Shows user notices for container events of the reference copy-on-write filesystem, such as encryption and volume prompts. BifrOSt volumes do not use that filesystem.",
+   "rea": [],
+   "method": "audit"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.appleaccountd.plist",
+   "category": "daemons",
+   "name": "com.apple.appleaccountd",
+   "path": "/System/Library/LaunchAgents/com.apple.appleaccountd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1592
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple cloud, account, store, advertising or telemetry service; BifrOSt has no Apple cloud and mirrors none of it",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.appleaccounttransparencyd.plist",
+   "category": "daemons",
+   "name": "com.apple.appleaccounttransparencyd",
+   "path": "/System/Library/LaunchAgents/com.apple.appleaccounttransparencyd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 750
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple cloud, account, store, advertising or telemetry service; BifrOSt has no Apple cloud and mirrors none of it",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.appleidsetupd.plist",
+   "category": "daemons",
+   "name": "com.apple.appleidsetupd",
+   "path": "/System/Library/LaunchAgents/com.apple.appleidsetupd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 561
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple cloud, account, store, advertising or telemetry service; BifrOSt has no Apple cloud and mirrors none of it",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.appleseed.seedusaged.plist",
+   "category": "daemons",
+   "name": "com.apple.appleseed.seedusaged",
+   "path": "/System/Library/LaunchAgents/com.apple.appleseed.seedusaged.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 552
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple cloud, account, store, advertising or telemetry service; BifrOSt has no Apple cloud and mirrors none of it",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.appleseed.seedusaged.postinstall.plist",
+   "category": "daemons",
+   "name": "com.apple.appleseed.seedusaged.postinstall",
+   "path": "/System/Library/LaunchAgents/com.apple.appleseed.seedusaged.postinstall.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 577
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple cloud, account, store, advertising or telemetry service; BifrOSt has no Apple cloud and mirrors none of it",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.applespell.plist",
+   "category": "daemons",
+   "name": "com.apple.applespell",
+   "path": "/System/Library/LaunchAgents/com.apple.applespell.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 282
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/core/src/spellcheck.rs, springboard/sdk/src/spellcheck.rs",
+   "status": "partial",
+   "note": "rule: font and spelling models; Font Book app",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "spellcheck::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "spellcheck::tests"
+    }
+   ],
+   "ready_note": "Spelling service: the shared checker model in bifrost-core with its tests, and the app-facing NativeSpellChecker that keeps learned words in defaults. Font matching is a separate row."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.appplaceholdersyncd.plist",
+   "category": "daemons",
+   "name": "com.apple.appplaceholdersyncd",
+   "path": "/System/Library/LaunchAgents/com.apple.appplaceholdersyncd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1453
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Syncs app placeholders through the vendor's account cloud. BifrOSt installs apps from its own PC App Store and keeps no cloud placeholders.",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.appsleepd.plist",
+   "category": "daemons",
+   "name": "com.apple.appsleepd",
+   "path": "/System/Library/LaunchAgents/com.apple.appsleepd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 169
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/background.rs",
+   "status": "partial",
+   "note": "rule: power and thermal service models",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::background::tests"
+    }
+   ],
+   "ready_note": "Background app suspension: an unseen app is stopped after the grace period, resumed on focus, and every stopped app resumes when the switch is off. shell::background tests."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.appstoreagent.plist",
+   "category": "daemons",
+   "name": "com.apple.appstoreagent",
+   "path": "/System/Library/LaunchAgents/com.apple.appstoreagent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 3803
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple cloud, account, store, advertising or telemetry service; BifrOSt has no Apple cloud and mirrors none of it",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.appstorecomponentsd.plist",
+   "category": "daemons",
+   "name": "com.apple.appstorecomponentsd",
+   "path": "/System/Library/LaunchAgents/com.apple.appstorecomponentsd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1158
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple cloud, account, store, advertising or telemetry service; BifrOSt has no Apple cloud and mirrors none of it",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.arkitd.plist",
+   "category": "daemons",
+   "name": "com.apple.arkitd",
+   "path": "/System/Library/LaunchAgents/com.apple.arkitd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 733
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Runs the reference system's camera tracking services for hand, gaze and device tracking. BifrOSt targets PC and tablet hardware with no such sensor pipeline.",
+   "rea": [],
+   "method": "audit"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.askpermissiond.plist",
+   "category": "daemons",
+   "name": "com.apple.askpermissiond",
+   "path": "/System/Library/LaunchAgents/com.apple.askpermissiond.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1590
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/privacy_permissions.rs, springboard/core/src/permission_request.rs",
+   "status": "partial",
+   "note": "rule: privacy permission service model",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "permission_request::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "privacy_permissions::tests"
+    }
+   ],
+   "ready_note": "The permission question centre (core permission_request.rs) and the privacy request and status wire (sdk privacy_permissions.rs) cover the permission service's job, with tests for both."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.asktod.plist",
+   "category": "daemons",
+   "name": "com.apple.asktod",
+   "path": "/System/Library/LaunchAgents/com.apple.asktod.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 558
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Relays screen-time requests to a family organiser through the vendor's messaging service and screen-time store. BifrOSt has no family account group.",
+   "rea": [],
+   "method": "audit"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.assessmentagent.plist",
+   "category": "daemons",
+   "name": "com.apple.assessmentagent",
+   "path": "/System/Library/LaunchAgents/com.apple.assessmentagent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 944
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Runs the managed assessment lock for classroom and enterprise exams, driven by configuration profiles. BifrOSt is not MDM-managed.",
+   "rea": [],
+   "method": "audit"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.assistant_cdmd.plist",
+   "category": "daemons",
+   "name": "com.apple.assistant_cdmd",
+   "path": "/System/Library/LaunchAgents/com.apple.assistant_cdmd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 2382
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple Intelligence, personalisation or prediction service; the assistant app has its own cloud and local model paths",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.assistant_service.plist",
+   "category": "daemons",
+   "name": "com.apple.assistant_service",
+   "path": "/System/Library/LaunchAgents/com.apple.assistant_service.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1117
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple Intelligence, personalisation or prediction service; the assistant app has its own cloud and local model paths",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.assistantd.plist",
+   "category": "daemons",
+   "name": "com.apple.assistantd",
+   "path": "/System/Library/LaunchAgents/com.apple.assistantd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 10626
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple Intelligence, personalisation or prediction service; the assistant app has its own cloud and local model paths",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.audio.AudioComponentRegistrar.plist",
+   "category": "daemons",
+   "name": "com.apple.audio.AudioComponentRegistrar",
+   "path": "/System/Library/LaunchAgents/com.apple.audio.AudioComponentRegistrar.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 701
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/ui/src/audio_components.rs, springboard/ui/src/audio_engine.rs, springboard/sdk/src/audio_devices.rs, springboard/audiod",
+   "status": "partial",
+   "note": "Missing: a registry of audio components (plug-in units) that hosts can discover and load. audio_engine nodes exist only in process. Built 2026-10-17: component registry (ui/src/audio_components.rs) with discovery by kind and replace-by-id; tests audio_components::tests.",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "audio_components::tests"
+    }
+   ],
+   "ready_note": "audio_components.rs: register, find, discover by kind, replace by id, unregister"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.avatarsd.plist",
+   "category": "daemons",
+   "name": "com.apple.avatarsd",
+   "path": "/System/Library/LaunchAgents/com.apple.avatarsd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 766
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Stores and serves the vendor's animated avatars for messaging and calls. BifrOSt has no avatar service.",
+   "rea": [],
+   "method": "audit"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.avconferenced.plist",
+   "category": "daemons",
+   "name": "com.apple.avconferenced",
+   "path": "/System/Library/LaunchAgents/com.apple.avconferenced.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1238
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/ui/src/camera_device.rs, springboard/ui/src/device_browser.rs",
+   "status": "n/a",
+   "note": "Video calling and conferencing service of Apple's calling stack. BifrOSt has no calling service. Camera capture devices are modelled in the UI camera_device model.",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.backgroundassets.user.plist",
+   "category": "daemons",
+   "name": "com.apple.backgroundassets.user",
+   "path": "/System/Library/LaunchAgents/com.apple.backgroundassets.user.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1135
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/url_background.rs, springboard/ui/src/assetpack.rs",
+   "status": "partial",
+   "note": "rule: background transfer and asset pack models",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "assetpack::tests"
+    }
+   ],
+   "ready_note": "The asset pack model (ui assetpack.rs) covers the background assets role, with 10 tests."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.backgroundtaskmanagement.agent.plist",
+   "category": "daemons",
+   "name": "com.apple.backgroundtaskmanagement.agent",
+   "path": "/System/Library/LaunchAgents/com.apple.backgroundtaskmanagement.agent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1167
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/url_background.rs, springboard/ui/src/assetpack.rs",
+   "status": "partial",
+   "note": "rule: background transfer and asset pack models",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "url_background::tests"
+    }
+   ],
+   "ready_note": "The background transfer model (sdk url_background.rs) covers the background task work the agent schedules, with 7 tests."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.betaenrollmentagent.plist",
+   "category": "daemons",
+   "name": "com.apple.betaenrollmentagent",
+   "path": "/System/Library/LaunchAgents/com.apple.betaenrollmentagent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1029
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple cloud, account, store, advertising or telemetry service; BifrOSt has no Apple cloud and mirrors none of it",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.biomesyncd.plist",
+   "category": "daemons",
+   "name": "com.apple.biomesyncd",
+   "path": "/System/Library/LaunchAgents/com.apple.biomesyncd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 4452
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple silicon, firmware, secure element or device-specific service; BifrOSt targets generic PC hardware",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.bird.plist",
+   "category": "daemons",
+   "name": "com.apple.bird",
+   "path": "/System/Library/LaunchAgents/com.apple.bird.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 2510
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple cloud, account, store, advertising or telemetry service; BifrOSt has no Apple cloud and mirrors none of it",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.bluetoothUIServer.plist",
+   "category": "daemons",
+   "name": "com.apple.bluetoothUIServer",
+   "path": "/System/Library/LaunchAgents/com.apple.bluetoothUIServer.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1071
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/bluetooth_service.rs, springboard/core/src/bt_service_browser.rs",
+   "status": "partial",
+   "note": "rule: Bluetooth service, browser and OBEX models over the Linux stack",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "bluetooth_service::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "bt_service_browser::tests"
+    }
+   ],
+   "ready_note": "Pairing prompts and device choice: bluetooth_service tests (pairing code and PIN prompts, device list) and the service browser tests."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.bluetoothaudiod.plist",
+   "category": "daemons",
+   "name": "com.apple.bluetoothaudiod",
+   "path": "/System/Library/LaunchAgents/com.apple.bluetoothaudiod.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 417
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/bluetooth_service.rs, springboard/src/bare/bluetooth.rs, springboard/ui/src/hfp.rs",
+   "status": "partial",
+   "note": "Partial: Bluetooth devices, GATT, hands-free profile messages and OBEX are modelled and the adapter is driven (bare/bluetooth.rs). Missing: the audio transport itself, that is an A2DP endpoint registered with bluez (MediaEndpoint1 over D-Bus), SBC encoding and a bluetooth sink or source in the audio server (docs/audio-architecture.md lists the bluetooth driver as later).",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.bluetoothuserd.plist",
+   "category": "daemons",
+   "name": "com.apple.bluetoothuserd",
+   "path": "/System/Library/LaunchAgents/com.apple.bluetoothuserd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 2113
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/bluetooth_service.rs, springboard/core/src/bt_service_browser.rs, springboard/core/src/obex_packet.rs",
+   "status": "partial",
+   "note": "rule: Bluetooth service, browser and OBEX models over the Linux stack",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "bluetooth_service::tests"
+    }
+   ],
+   "ready_note": "The Bluetooth service model (sdk bluetooth_service.rs) covers the user-level Bluetooth daemon's job, with 8 tests."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.bookassetd.plist",
+   "category": "daemons",
+   "name": "com.apple.bookassetd",
+   "path": "/System/Library/LaunchAgents/com.apple.bookassetd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 833
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Asset service for the reference book store. BifrOSt has no book store or book library.",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.bookdatastored.plist",
+   "category": "daemons",
+   "name": "com.apple.bookdatastored",
+   "path": "/System/Library/LaunchAgents/com.apple.bookdatastored.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 997
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Library data store for the reference book store. BifrOSt has no book store or book library.",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.btsa.plist",
+   "category": "daemons",
+   "name": "com.apple.btsa",
+   "path": "/System/Library/LaunchAgents/com.apple.btsa.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 625
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/bluetooth_service.rs",
+   "status": "partial",
+   "note": "rule: Bluetooth service, browser and OBEX models over the Linux stack",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "bluetooth_service::tests"
+    }
+   ],
+   "ready_note": "Pairing assistant flow: a status reply that names a pairing waiting for a code, and the PIN versus passkey distinction. bluetooth_service tests."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.businessservicesd.plist",
+   "category": "daemons",
+   "name": "com.apple.businessservicesd",
+   "path": "/System/Library/LaunchAgents/com.apple.businessservicesd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 746
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Serves business messaging accounts through the vendor's business chat service and its servers. BifrOSt has no business messaging.",
+   "rea": [],
+   "method": "audit"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.cache_delete.plist",
+   "category": "daemons",
+   "name": "com.apple.cache_delete",
+   "path": "/System/Library/LaunchAgents/com.apple.cache_delete.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 799
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/storage.rs",
+   "status": "partial",
+   "note": "The shell trims disposable caches when free space falls below a threshold, with one call that frees every cache. It runs only on low space, with no daily sweep.",
+   "rea": [],
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::storage::"
+    }
+   ],
+   "ready_note": "storage.rs trims disposable caches on low free space in one call; tests cover the threshold and the trim."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.calaccessd.plist",
+   "category": "daemons",
+   "name": "com.apple.calaccessd",
+   "path": "/System/Library/LaunchAgents/com.apple.calaccessd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 5561
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/calendar.rs, springboard/sdk/src/dav_sync.rs",
+   "status": "partial",
+   "note": "rule: calendar and sync models; Calendar and Reminders apps",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "calendar::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "dav_sync::tests"
+    }
+   ],
+   "ready_note": "The calendar model and the DAV sync model (sdk calendar.rs, dav_sync.rs) cover the calendar access service's job, with tests."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.calendar.CalendarAgentBookmarkMigrationService.plist",
+   "category": "daemons",
+   "name": "com.apple.calendar.CalendarAgentBookmarkMigrationService",
+   "path": "/System/Library/LaunchAgents/com.apple.calendar.CalendarAgentBookmarkMigrationService.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 717
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/calendar.rs, springboard/sdk/src/dav_sync.rs",
+   "status": "n/a",
+   "note": "Migrates sandbox bookmarks of the Apple calendar store. BifrOSt keeps its calendars in its own store and syncs CalDAV through dav_sync, so there are no bookmarks to migrate.",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.callhistoryd.plist",
+   "category": "daemons",
+   "name": "com.apple.callhistoryd",
+   "path": "/System/Library/LaunchAgents/com.apple.callhistoryd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 676
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Stores the reference phone app's call history and serves it to the sync helpers. BifrOSt has no cellular telephony, so no call log exists to store.",
+   "rea": [],
+   "method": "audit"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.callintelligenced.plist",
+   "category": "daemons",
+   "name": "com.apple.callintelligenced",
+   "path": "/System/Library/LaunchAgents/com.apple.callintelligenced.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1512
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple Intelligence, personalisation or prediction service; the assistant app has its own cloud and local model paths",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.callverificationd.plist",
+   "category": "daemons",
+   "name": "com.apple.callverificationd",
+   "path": "/System/Library/LaunchAgents/com.apple.callverificationd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1187
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Verifies the identity of telephone callers through the vendor's verification service. BifrOSt has no telephony.",
+   "rea": [],
+   "method": "audit"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.campo.plist",
+   "category": "daemons",
+   "name": "com.apple.campo",
+   "path": "/System/Library/LaunchAgents/com.apple.campo.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 786
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "On-device model service of the reference assistant (Apple Intelligence). BifrOSt's assistant app runs on demand with its own cloud and local model paths; there is no shared model daemon.",
+   "rea": [],
+   "method": "audit"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.cdpd.plist",
+   "category": "daemons",
+   "name": "com.apple.cdpd",
+   "path": "/System/Library/LaunchAgents/com.apple.cdpd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 767
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Holds the vendor's keychain trust circle and syncs secure objects through the vendor's cloud. BifrOSt keeps no vendor keychain.",
+   "rea": [],
+   "method": "audit"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.cfnetwork.AuthBrokerAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.cfnetwork.AuthBrokerAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.cfnetwork.AuthBrokerAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 293
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/url_background.rs, springboard/sdk/src/http_auth.rs",
+   "status": "partial",
+   "note": "Missing: test coverage for the authentication challenge answer in url_background.rs (answer_challenge). Built 2026-10-17: the answer has tests (stored credential, delegate credential kept or not kept, declined challenge, Digest not answered with Basic); tests url_background::tests. Credential storage is in http_auth.rs.",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "url_background::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "http_auth::tests"
+    }
+   ],
+   "ready_note": "Challenge answering for URL sessions (url_background.rs answer_challenge) and the per-host credential store (http_auth.rs URLCredentialStorage) cover the broker job; both are tested in the bifrost-app crate."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.cfprefsd.xpc.agent.plist",
+   "category": "daemons",
+   "name": "com.apple.cfprefsd.xpc.agent",
+   "path": "/System/Library/LaunchAgents/com.apple.cfprefsd.xpc.agent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 460
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/defaults.rs, springboard/sdk/src/pref_domains.rs",
+   "status": "partial",
+   "note": "rule: defaults and preference domain models; Settings app",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "defaults::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "pref_domains::tests"
+    }
+   ],
+   "ready_note": "The preferences store runs in-process in the SDK defaults module, with per-domain rules in pref_domains. Apps read and write it (for example music-desktop and stickies-desktop), and the tests cover the store."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.chronod.plist",
+   "category": "daemons",
+   "name": "com.apple.chronod",
+   "path": "/System/Library/LaunchAgents/com.apple.chronod.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 5798
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/services/widgets_timeline.rs, springboard/sdk/src/widgets_timeline.rs, springboard/sdk/src/notification.rs, springboard/sdk/src/usernotif.rs, springboard/ui/src/live_activity.rs",
+   "status": "partial",
+   "note": "Widget timelines are built: the shell widgets_timeline service keeps dated entries with a reload policy and asks the owning app for a new timeline when its reload date passes. Live activities and notifications exist too.",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::widgets_timeline::tests"
+    }
+   ],
+   "ready_note": "widgets_timeline service: entry on screen, reload due at its date and at the end, live activities, unknown methods refused"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.ciphermld.plist",
+   "category": "daemons",
+   "name": "com.apple.ciphermld",
+   "path": "/System/Library/LaunchAgents/com.apple.ciphermld.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1860
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple Intelligence, personalisation or prediction service; the assistant app has its own cloud and local model paths",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.ckdiscretionaryd.plist",
+   "category": "daemons",
+   "name": "com.apple.ckdiscretionaryd",
+   "path": "/System/Library/LaunchAgents/com.apple.ckdiscretionaryd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 296
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple cloud, account, store, advertising or telemetry service; BifrOSt has no Apple cloud and mirrors none of it",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.cksharingmanagementd.plist",
+   "category": "daemons",
+   "name": "com.apple.cksharingmanagementd",
+   "path": "/System/Library/LaunchAgents/com.apple.cksharingmanagementd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 999
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple cloud, account, store, advertising or telemetry service; BifrOSt has no Apple cloud and mirrors none of it",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.cloudd.plist",
+   "category": "daemons",
+   "name": "com.apple.cloudd",
+   "path": "/System/Library/LaunchAgents/com.apple.cloudd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 532
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple cloud, account, store, advertising or telemetry service; BifrOSt has no Apple cloud and mirrors none of it",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.cloudpaird.plist",
+   "category": "daemons",
+   "name": "com.apple.cloudpaird",
+   "path": "/System/Library/LaunchAgents/com.apple.cloudpaird.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 3619
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple cloud, account, store, advertising or telemetry service; BifrOSt has no Apple cloud and mirrors none of it",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.cloudphotod.plist",
+   "category": "daemons",
+   "name": "com.apple.cloudphotod",
+   "path": "/System/Library/LaunchAgents/com.apple.cloudphotod.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 4102
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple cloud, account, store, advertising or telemetry service; BifrOSt has no Apple cloud and mirrors none of it",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.cmfsyncagent.plist",
+   "category": "daemons",
+   "name": "com.apple.cmfsyncagent",
+   "path": "/System/Library/LaunchAgents/com.apple.cmfsyncagent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1100
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Syncs communication limits for family accounts through the vendor's cloud key-value store. BifrOSt has no family account group.",
+   "rea": [],
+   "method": "audit"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.cmio.ContinuityCaptureAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.cmio.ContinuityCaptureAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.cmio.ContinuityCaptureAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1428
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Uses the vendor's phone as a camera through device continuity. BifrOSt has no vendor device continuity camera.",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.cmio.LaunchCMIOUserExtensionsAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.cmio.LaunchCMIOUserExtensionsAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.cmio.LaunchCMIOUserExtensionsAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 797
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/ui/src/camera_device.rs, springboard/ui/src/device_browser.rs",
+   "status": "partial",
+   "note": "rule: camera and capture device models",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "camera_device::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "device_browser::tests"
+    }
+   ],
+   "ready_note": "The camera device model and the device browser (ui camera_device.rs, device_browser.rs) cover the camera extension agent's job, with tests."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.colorsync.useragent.plist",
+   "category": "daemons",
+   "name": "com.apple.colorsync.useragent",
+   "path": "/System/Library/LaunchAgents/com.apple.colorsync.useragent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1731
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/render/src/icc.rs, springboard/sdk/src/displays.rs",
+   "status": "partial",
+   "note": "rule: colour profile and display models",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "icc::tests"
+    }
+   ],
+   "ready_note": "The colour profile model (render icc.rs) loads and applies profiles, with 23 tests."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.commerce.plist",
+   "category": "daemons",
+   "name": "com.apple.commerce",
+   "path": "/System/Library/LaunchAgents/com.apple.commerce.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 749
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple cloud, account, store, advertising or telemetry service; BifrOSt has no Apple cloud and mirrors none of it",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.communicationtrustd.plist",
+   "category": "daemons",
+   "name": "com.apple.communicationtrustd",
+   "path": "/System/Library/LaunchAgents/com.apple.communicationtrustd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 829
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Runs the vendor's on-device sensitive-content analysis for messaging and keeps an analysis history. BifrOSt has no messaging app with that feature.",
+   "rea": [],
+   "method": "audit"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.companiond.plist",
+   "category": "daemons",
+   "name": "com.apple.companiond",
+   "path": "/System/Library/LaunchAgents/com.apple.companiond.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1412
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Pairs the vendor's companion devices such as a watch. BifrOSt has no vendor companion device.",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.contacts.donation-agent.plist",
+   "category": "daemons",
+   "name": "com.apple.contacts.donation-agent",
+   "path": "/System/Library/LaunchAgents/com.apple.contacts.donation-agent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 649
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Donates contact suggestions to the reference prediction service. BifrOSt has no suggestion donation.",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.contacts.postersyncd.plist",
+   "category": "daemons",
+   "name": "com.apple.contacts.postersyncd",
+   "path": "/System/Library/LaunchAgents/com.apple.contacts.postersyncd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 344
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Syncs contact posters through the vendor's account cloud. BifrOSt has no vendor account sync.",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.contactsd.plist",
+   "category": "daemons",
+   "name": "com.apple.contactsd",
+   "path": "/System/Library/LaunchAgents/com.apple.contactsd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1486
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/contacts.rs",
+   "status": "partial",
+   "note": "rule: contacts model; Contacts app",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "contacts::tests"
+    }
+   ],
+   "ready_note": "The contacts model (sdk contacts.rs) is the store the contacts service serves, with 23 tests."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.containermanagerd.plist",
+   "category": "daemons",
+   "name": "com.apple.containermanagerd",
+   "path": "/System/Library/LaunchAgents/com.apple.containermanagerd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 423
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/core/src/container_layout.rs, springboard/src/shell/apphost.rs",
+   "status": "partial",
+   "note": "Per-app container folders (Documents, Library, Library/Caches, tmp) are created at app launch by apphost, which calls ContainerLayout::ensure. The layout model refuses symbolic links and files in place of folders.",
+   "rea": [],
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "container_layout::tests"
+    }
+   ],
+   "ready_note": "Layout model and launch-time creation: container_layout tests (folder policy, root containment, symlink and file refusal); apphost.rs creates the folders when an app starts."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.controlcenter.plist",
+   "category": "daemons",
+   "name": "com.apple.controlcenter",
+   "path": "/System/Library/LaunchAgents/com.apple.controlcenter.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1719
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/control_center.rs",
+   "status": "partial",
+   "note": "role filled by control_center.rs; no separate process; module set is smaller than Apple's",
+   "rea": [],
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::control_center::"
+    }
+   ],
+   "ready_note": "control_center.rs hosts the control module set; tests cover the module state. The module set is smaller than the reference."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.controlstrip.plist",
+   "category": "daemons",
+   "name": "com.apple.controlstrip",
+   "path": "/System/Library/LaunchAgents/com.apple.controlstrip.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1030
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Touch Bar control strip hardware",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.coredatad.plist",
+   "category": "daemons",
+   "name": "com.apple.coredatad",
+   "path": "/System/Library/LaunchAgents/com.apple.coredatad.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 243
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/ui/src/data_store.rs, springboard/ui/src/record_store.rs",
+   "status": "partial",
+   "note": "rule: record store models",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "record_store::tests"
+    }
+   ],
+   "ready_note": "The record store is the shared record model that the cloud record and sync modules build on (sdk cloud_records, ui record_sync and record_share). Its tests cover the store. data_store is a model with no caller yet and is not claimed here."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.coreidvd.plist",
+   "category": "daemons",
+   "name": "com.apple.coreidvd",
+   "path": "/System/Library/LaunchAgents/com.apple.coreidvd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 539
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple Intelligence, personalisation or prediction service; the assistant app has its own cloud and local model paths",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.coreimportd.plist",
+   "category": "daemons",
+   "name": "com.apple.coreimportd",
+   "path": "/System/Library/LaunchAgents/com.apple.coreimportd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1174
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/spotindex.rs, springboard/ui/src/mdimport.rs",
+   "status": "partial",
+   "note": "Content importers are chosen by the closest content type (ui mdimport.rs) and run by the shell index (spotindex.rs), which reads files and apps and stores title, description and keywords.",
+   "rea": [],
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "mdimport::tests"
+    }
+   ],
+   "ready_note": "Importer choice by type and the index that stores the metadata are tested (30 and 7 tests); the importers run in the shell process rather than in worker processes"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.coreservices.UASharedPasteboardProgressUI.plist",
+   "category": "daemons",
+   "name": "com.apple.coreservices.UASharedPasteboardProgressUI",
+   "path": "/System/Library/LaunchAgents/com.apple.coreservices.UASharedPasteboardProgressUI.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 931
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pasteboard_transfer.rs",
+   "status": "n/a",
+   "note": "n/a: the progress panel of Universal Clipboard, the Continuity transfer of a copied item between Apple devices (the app lives in PrivateFrameworks/UserActivity.framework/Agents). There is no open equivalent of that protocol. The local transfer progress overlay is shell/pasteboard_transfer.rs.",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.coreservices.sharedfilelistd.plist",
+   "category": "daemons",
+   "name": "com.apple.coreservices.sharedfilelistd",
+   "path": "/System/Library/LaunchAgents/com.apple.coreservices.sharedfilelistd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 652
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/recent_items.rs, springboard/ui/src/shared_list.rs, springboard/ui/src/shared_list_store.rs",
+   "status": "partial",
+   "note": "Recent apps and favourites are kept on the shared list model, saved to recent-items.txt in the settings directory and read back at start; favourites survive the recents cap.",
+   "rea": [],
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::recent_items::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "shared_list::tests"
+    }
+   ],
+   "ready_note": "Recents, favourites, the cap rule and the text store are tested"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.coreservices.uiagent.plist",
+   "category": "daemons",
+   "name": "com.apple.coreservices.uiagent",
+   "path": "/System/Library/LaunchAgents/com.apple.coreservices.uiagent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 681
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/launch_services.rs, springboard/sdk/src/app_links.rs",
+   "status": "partial",
+   "note": "rule: launch services and app link models",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "launch_services::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "app_links::tests"
+    }
+   ],
+   "ready_note": "Open With candidates and default apps (launch_services tests) and web site to app claims with longest path prefix (app_links tests)."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.coreservices.useractivityd.plist",
+   "category": "daemons",
+   "name": "com.apple.coreservices.useractivityd",
+   "path": "/System/Library/LaunchAgents/com.apple.coreservices.useractivityd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 853
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/user_activity.rs, springboard/sdk/src/launch_services.rs, springboard/sdk/src/app_links.rs",
+   "status": "partial",
+   "note": "The activity model keeps one current activity per type with resume state, continuation by another app on this computer and search eligibility (sdk user_activity.rs, ActivityCenter). Handoff to another vendor device is not mirrored.",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "user_activity::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "launch_services::tests"
+    }
+   ],
+   "ready_note": "User activities are created, resumed and continued through ActivityCenter (user_activity::tests)"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.corespeechd.plist",
+   "category": "daemons",
+   "name": "com.apple.corespeechd",
+   "path": "/System/Library/LaunchAgents/com.apple.corespeechd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 4958
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple Intelligence, personalisation or prediction service; the assistant app has its own cloud and local model paths",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.corespotlightd.plist",
+   "category": "daemons",
+   "name": "com.apple.corespotlightd",
+   "path": "/System/Library/LaunchAgents/com.apple.corespotlightd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 6459
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/spotindex.rs",
+   "status": "partial",
+   "note": "role filled by spotindex.rs; no separate process; no donation daemon",
+   "rea": [],
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::"
+    }
+   ],
+   "ready_note": "spotindex.rs indexes files and apps for search in-process; tests cover the index. No donation daemon."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.corespotlightservice.plist",
+   "category": "daemons",
+   "name": "com.apple.corespotlightservice",
+   "path": "/System/Library/LaunchAgents/com.apple.corespotlightservice.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 382
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/spotindex.rs",
+   "status": "partial",
+   "note": "Shell search index",
+   "rea": [],
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::"
+    }
+   ],
+   "ready_note": "spotindex.rs answers index queries for the search panel in-process."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.csuseragent.plist",
+   "category": "daemons",
+   "name": "com.apple.csuseragent",
+   "path": "/System/Library/LaunchAgents/com.apple.csuseragent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 499
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "packaging/arch/initcpio/hooks/bifrost-unlock, springboard/core/src/volume_unlock.rs, springboard/src/privd/disk.rs, springboard/src/privd_client.rs, springboard/src/shell/volume_sheet.rs",
+   "status": "partial",
+   "note": "The initramfs hook unlocks the encrypted system volume at boot. After login, the shell lists the LUKS volumes with no open mapping (core volume_unlock.rs) and shows the password sheet for each (shell/volume_sheet.rs). The sheet sends the passphrase to privd's disk.unlock_volume (privd/disk.rs), which opens the volume with cryptsetup and mounts it with udisksctl. A failed unlock asks again; Cancel leaves the volume locked for the session.",
+   "rea": [],
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "volume_unlock::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privd::disk::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::volume_sheet::tests"
+    }
+   ],
+   "ready_note": "Unlock after login: core model, privd disk.unlock_volume (refusals and command lines tested), and the shell sheet (prompt and queue tested). Needs a Midget check with a real LUKS volume."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.ctkbind.plist",
+   "category": "daemons",
+   "name": "com.apple.ctkbind",
+   "path": "/System/Library/LaunchAgents/com.apple.ctkbind.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 821
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/services/smartcards.rs, springboard/ui/src/token_registry.rs, springboard/ui/src/token_registration.rs",
+   "status": "partial",
+   "note": "Binding a smart card to the account: the smartcards service registers a present card for sign-in (register, unregister, policy), saves the registrations in smartcards/registered.txt and applies the required-card policy model (ui token_registry, token_registration).",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::smartcards::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "token_registry::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "token_registration::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/pcsc_scan"
+    }
+   ],
+   "ready_note": "Card registration, persistence and the sign-in policy are tested; the PC/SC tools come from the pcsc-tools package"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.ctkd.plist",
+   "category": "daemons",
+   "name": "com.apple.ctkd",
+   "path": "/System/Library/LaunchAgents/com.apple.ctkd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 980
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/services/smartcards.rs, springboard/ui/src/smartcard_slot.rs, springboard/ui/src/token_watch.rs, springboard/ui/src/token_objects.rs",
+   "status": "partial",
+   "note": "The token daemon role: the smartcards service runs pcsc_scan against pcscd (pcscd.socket is enabled by the installer, ccid is packaged), turns reader and card lines into slots and tokens (token ID pcsc:<reader>:<ATR>) and pushes token_inserted and token_removed to apps. Token objects and PIN sessions are the ui token_objects and token_watch models.",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::smartcards::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "smartcard_slot::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "token_watch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "token_objects::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/pcsc_scan"
+    }
+   ],
+   "ready_note": "Reader output parsing, slot and token tracking, swap and removal handling and events are tested; no PIN or key material passes through the service"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.cvmsCompAgent3600_arm64.plist",
+   "category": "daemons",
+   "name": "com.apple.cvmsCompAgent3600_arm64",
+   "path": "/System/Library/LaunchAgents/com.apple.cvmsCompAgent3600_arm64.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 814
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple silicon, firmware, secure element or device-specific service; BifrOSt targets generic PC hardware",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.cvmsCompAgent3600_arm64_1.plist",
+   "category": "daemons",
+   "name": "com.apple.cvmsCompAgent3600_arm64_1",
+   "path": "/System/Library/LaunchAgents/com.apple.cvmsCompAgent3600_arm64_1.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 818
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple silicon, firmware, secure element or device-specific service; BifrOSt targets generic PC hardware",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.cvmsCompAgent3600_x86_64.plist",
+   "category": "daemons",
+   "name": "com.apple.cvmsCompAgent3600_x86_64",
+   "path": "/System/Library/LaunchAgents/com.apple.cvmsCompAgent3600_x86_64.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 814
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple silicon, firmware, secure element or device-specific service; BifrOSt targets generic PC hardware",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.cvmsCompAgent3600_x86_64_1.plist",
+   "category": "daemons",
+   "name": "com.apple.cvmsCompAgent3600_x86_64_1",
+   "path": "/System/Library/LaunchAgents/com.apple.cvmsCompAgent3600_x86_64_1.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 818
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple silicon, firmware, secure element or device-specific service; BifrOSt targets generic PC hardware",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.cvmsCompAgent_arm64.plist",
+   "category": "daemons",
+   "name": "com.apple.cvmsCompAgent_arm64",
+   "path": "/System/Library/LaunchAgents/com.apple.cvmsCompAgent_arm64.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 740
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple silicon, firmware, secure element or device-specific service; BifrOSt targets generic PC hardware",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.cvmsCompAgent_arm64_1.plist",
+   "category": "daemons",
+   "name": "com.apple.cvmsCompAgent_arm64_1",
+   "path": "/System/Library/LaunchAgents/com.apple.cvmsCompAgent_arm64_1.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 744
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple silicon, firmware, secure element or device-specific service; BifrOSt targets generic PC hardware",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.cvmsCompAgent_x86_64.plist",
+   "category": "daemons",
+   "name": "com.apple.cvmsCompAgent_x86_64",
+   "path": "/System/Library/LaunchAgents/com.apple.cvmsCompAgent_x86_64.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 801
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple silicon, firmware, secure element or device-specific service; BifrOSt targets generic PC hardware",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.cvmsCompAgent_x86_64_1.plist",
+   "category": "daemons",
+   "name": "com.apple.cvmsCompAgent_x86_64_1",
+   "path": "/System/Library/LaunchAgents/com.apple.cvmsCompAgent_x86_64_1.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 805
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple silicon, firmware, secure element or device-specific service; BifrOSt targets generic PC hardware",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.dataaccess.dataaccessd.plist",
+   "category": "daemons",
+   "name": "com.apple.dataaccess.dataaccessd",
+   "path": "/System/Library/LaunchAgents/com.apple.dataaccess.dataaccessd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 966
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/calendar.rs, springboard/sdk/src/dav_sync.rs",
+   "status": "partial",
+   "note": "rule: calendar and sync models; Calendar and Reminders apps",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "dav_sync::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "calendar::tests"
+    }
+   ],
+   "ready_note": "The DAV sync and calendar models (sdk dav_sync.rs, calendar.rs) cover the data access daemon's job for calendars, with tests."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.devicecheckd.plist",
+   "category": "daemons",
+   "name": "com.apple.devicecheckd",
+   "path": "/System/Library/LaunchAgents/com.apple.devicecheckd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 783
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Issues app device-attestation tokens through the vendor's attestation servers. BifrOSt has no vendor attestation.",
+   "rea": [],
+   "method": "audit"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.devicemanagementclient.ManagedAppsAgent.plist",
+   "category": "daemons",
+   "name": "com.apple.devicemanagementclient.ManagedAppsAgent",
+   "path": "/System/Library/LaunchAgents/com.apple.devicemanagementclient.ManagedAppsAgent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 674
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: enterprise management, enrolment or erase service; BifrOSt is not an MDM-managed system",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.devicemanagementclient.alertagent.plist",
+   "category": "daemons",
+   "name": "com.apple.devicemanagementclient.alertagent",
+   "path": "/System/Library/LaunchAgents/com.apple.devicemanagementclient.alertagent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 845
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: enterprise management, enrolment or erase service; BifrOSt is not an MDM-managed system",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.diagnosticextensionsd.plist",
+   "category": "daemons",
+   "name": "com.apple.diagnosticextensionsd",
+   "path": "/System/Library/LaunchAgents/com.apple.diagnosticextensionsd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1294
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Hosts the vendor's diagnostic extensions and their feedback collection flow, with a wake key for the vendor's messaging service. BifrOSt has no extension host, and its crash and log tools are separate.",
+   "rea": [],
+   "method": "audit"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.diagnostics_agent.plist",
+   "category": "daemons",
+   "name": "com.apple.diagnostics_agent",
+   "path": "/System/Library/LaunchAgents/com.apple.diagnostics_agent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 2127
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Runs the vendor's hardware diagnostics on Apple hardware. BifrOSt targets generic PC hardware and has no diagnostics daemon.",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.diagnosticspushd.plist",
+   "category": "daemons",
+   "name": "com.apple.diagnosticspushd",
+   "path": "/System/Library/LaunchAgents/com.apple.diagnosticspushd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1179
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple cloud, account, store, advertising or telemetry service; BifrOSt has no Apple cloud and mirrors none of it",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.diskspaced.plist",
+   "category": "daemons",
+   "name": "com.apple.diskspaced",
+   "path": "/System/Library/LaunchAgents/com.apple.diskspaced.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 611
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/bifrostd/src/purge.rs, springboard/core/src/low_space.rs",
+   "status": "partial",
+   "note": "rule: disk arbitration, image and volume models; Disk Utility app",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrostd",
+     "filter": "purge::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "low_space::watch_tests"
+    }
+   ],
+   "ready_note": "Low-space warnings with escalation and reminder rules (low_space tests) and purgeable storage deletion order and thresholds (bifrostd purge tests)."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.distnoted.xpc.agent.plist",
+   "category": "daemons",
+   "name": "com.apple.distnoted.xpc.agent",
+   "path": "/System/Library/LaunchAgents/com.apple.distnoted.xpc.agent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 424
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/core/src/notify_center.rs, springboard/sdk/src/notify_bus.rs",
+   "status": "partial",
+   "note": "rule: notification centre and notify bus models",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "notify_center::"
+    }
+   ],
+   "ready_note": "core notify_center.rs is the in-process notification centre that posts and delivers named notifications; tests cover delivery. The SDK notify bus carries the app side."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.dmd.agent.plist",
+   "category": "daemons",
+   "name": "com.apple.dmd.agent",
+   "path": "/System/Library/LaunchAgents/com.apple.dmd.agent.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 2336
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Device management agent for enterprise declarative configuration and remote management. BifrOSt is not MDM-managed.",
+   "rea": [],
+   "method": "audit"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.donotdisturbd.plist",
+   "category": "daemons",
+   "name": "com.apple.donotdisturbd",
+   "path": "/System/Library/LaunchAgents/com.apple.donotdisturbd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1465
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/focus_filter.rs, springboard/ui/src/focus_filter.rs, springboard/sdk/src/usernotif.rs",
+   "status": "partial",
+   "note": "rule: notification, live activity and focus models",
+   "rea": [],
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "focus_filter::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "focus_filter::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "usernotif::tests"
+    }
+   ],
+   "ready_note": "Focus state and per-app Focus filter values (focus_filter tests in the SDK and the UI model) and interruption levels for notifications (usernotif tests)."
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.dprivacyd.plist",
+   "category": "daemons",
+   "name": "com.apple.dprivacyd",
+   "path": "/System/Library/LaunchAgents/com.apple.dprivacyd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 958
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple cloud, account, store, advertising or telemetry service; BifrOSt has no Apple cloud and mirrors none of it",
+   "rea": [],
+   "method": "rule"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.dt.AutomationModeUI.plist",
+   "category": "daemons",
+   "name": "com.apple.dt.AutomationModeUI",
+   "path": "/System/Library/LaunchAgents/com.apple.dt.AutomationModeUI.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 455
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Asks the user to allow developer UI automation for the reference test tooling. BifrOSt drives its apps through its own control sockets and has no automation consent gate.",
+   "rea": [],
+   "method": "audit"
+  },
+  {
+   "id": "path:/System/Library/LaunchAgents/com.apple.dt.CommandLineTools.installondemand.plist",
+   "category": "daemons",
+   "name": "com.apple.dt.CommandLineTools.installondemand",
+   "path": "/System/Library/LaunchAgents/com.apple.dt.CommandLineTools.installondemand.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 734
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Opens the vendor's installer prompt for developer command line tools when a developer shim is started. BifrOSt builds with the Arch toolchain packages, so the prompt has no meaning here.",
+   "rea": []
+  }
+ ]
+}

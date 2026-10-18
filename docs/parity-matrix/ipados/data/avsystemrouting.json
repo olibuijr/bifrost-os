@@ -1,0 +1,50 @@
+{
+  "framework": "AVSystemRouting",
+  "doc": "https://developer.apple.com/documentation/avsystemrouting",
+  "macos_since": "",
+  "status": "partial",
+  "bifrost": "springboard/sdk/src/route_events.rs, springboard/sdk/src/route_discovery.rs, springboard/ui/src/route_picker.rs, springboard/ui/src/route_action.rs, springboard/src/media/route.rs",
+  "summary": "The shell has a route picker model, custom action items and route events for an app's own destinations. The routing controller does not discover or stream to real remote receivers, and there is no data channel.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run in this batch); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Route picker with local and discovered outputs",
+      "apple": "AVSystemRouteController, AVSystemRouteEvent",
+      "bifrost": "springboard/ui/src/route_picker.rs, springboard/src/media/route.rs",
+      "status": "partial",
+      "note": "local outputs first, then discovered receivers; the local output switch is the only real route"
+    },
+    {
+      "feature": "Route events for app destinations",
+      "apple": "AVSystemRouteEvent, AVSystemRouteEvent.Reason",
+      "bifrost": "springboard/sdk/src/route_events.rs",
+      "status": "partial",
+      "note": "an app is told when the user activates, deactivates or reactivates one of its destinations"
+    },
+    {
+      "feature": "Custom action items in the picker",
+      "apple": "custom routing actions",
+      "bifrost": "springboard/ui/src/route_action.rs",
+      "status": "partial",
+      "note": "action items named by the app's configuration"
+    },
+    {
+      "feature": "Receiver discovery",
+      "apple": "AVSystemRoute, AVSystemRouteSession",
+      "bifrost": "springboard/sdk/src/route_discovery.rs",
+      "status": "partial",
+      "note": "the app-facing side of receiver discovery; no network discovery of real receivers"
+    },
+    {
+      "feature": "Playback session and data channel",
+      "apple": "AVSystemRouteMediaSession, AVSystemRoute.DataChannel, AVSystemRouteDataDelegate",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no playback session on a remote device and no data channel"
+    }
+  ],
+  "gaps": [
+    "No discovery or streaming to real remote receivers; the AirPlay-style sender is a gap.",
+    "No remote playback session or data channel."
+  ]
+}

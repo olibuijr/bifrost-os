@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.23.0 — 2026-10-17
+
+- Exchange notes: an Exchange account added in Settings > Internet Accounts (Notes (Exchange)) with its Notes switch on is mirrored in a Notes folder named after the account (`notes/exchange.rs`, SDK `exchange_notes`). Notes made there appear in the folder and open, edit, search and delete like any note; edits, new notes and deletions go back to the mailbox's Notes folder (a deleted note moves to Deleted Items on the server). A round runs when the app starts, every five minutes, and from Note > Sync Exchange Notes. A note edited on both sides keeps the local text as a separate note; a note open in the editor is not replaced until it is closed. The manifest asks for `network` and `keychain` (the password is read from Passwords).
+
+## 1.22.0 — 2026-10-17
+
+- Open in Separate Window: a double-click on a note row, or Note > Open in Separate Window, opens the note in a window of its own (`notes/note_windows.rs`). The window shows the note's text read-only: keyboard input is not routed to extra windows yet. Window > Float on Top stacks the focused note window above the others (`windows::set_window_level`).
+- Settings: Note > Settings... opens a pane over the window with Text Size, New Notes Start With (Title, Heading, Body), Sort Notes By, Oldest First, Group by Date and Dark Note Background. Each tap saves at once (`notes/settings.rs`, `notes/settings_pane.rs`). Text size and the dark background apply to the editor and the note windows.
+- New Notes start with the style chosen in the pane.
+- Checklists: Mark All and Unmark All apply Move Checked to Bottom when it is on.
+
+## 1.21.0 — 2026-10-17
+
+- Math: `$x^2$` in a note is typeset inline, in place of its source (fractions, roots, scripts, sums and integrals with limits, Greek letters, matrices). A `$$...$$` paragraph is display math, centred on its own line. The source stays in the note file; a formula that does not parse shows as text. Typesetting is in `bifrost-render` `math` (textarea.rs `formula`, md.rs `Style::Math`).
+
+## 1.20.0 — 2026-10-17
+
+- Collapsible sections: a Title, Heading or Subheading line shows a disclosure chevron. Tapping it folds or unfolds the lines up to the next heading of the same or a higher level; the editor takes no height for hidden lines (textarea.rs `set_hidden`). Format > Collapse Section, Expand Section, Collapse All Sections and Expand All Sections do the same from the keyboard. Folds are saved per note in `.springboard-notes-folds`, and entries of deleted notes are dropped when it is saved. The note text never changes.
+- Gallery: View > as List / as Gallery and the list toolbar toggle draw the note list as a grid of cards (first picture or a text preview, title and date). Columns follow the list width (`notes/gallery.rs`). Pictures decode off the UI thread. Tap a card to open it.
+
+## 1.19.0 — 2026-10-17
+
+- Edit > Speech: Start Speaking speaks the selection of the open note (else the whole note) through the shell speech service; Stop Speaking ends it.
+
 ## 1.18.2 — 2026-10-14
 
 - Use named system black and white colors for sketch ink and paper pixels.

@@ -9,14 +9,14 @@ use crate::layout;
 use crate::message::Priority;
 use crate::prefs::Favorite;
 use crate::richtext::{self, Style, TextColor};
-use crate::state::{is_multiline, Compose, Filter, Mail, Sheet, MAX_CHOICES};
+use crate::state::{is_multiline, Compose, Filter, Mail, Sheet, MAX_CHOICES, MAX_SUGGESTIONS};
 use crate::window::{MailWindow, Region};
 use bifrost_app::controls::prefs_layout::m;
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem};
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
 use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_TITLE1_PT, SEPARATOR_C, SPACE_M, SPACE_S, SPACE_XL, SPACE_XS, SPACE_XXS, WHITE};
 use bifrost_app::kit::ui::system::{FIND_HIGHLIGHT, SYSTEM_ORANGE};
-use bifrost_app::kit::{colors, rgba, Image, Surface, TextCache, Ui, Weight};
+use bifrost_app::kit::{colors, Image, Surface, TextCache, Ui, Weight};
 use bifrost_app::widgets;
 
 pub const TOOLBAR_PT: f32 = 52.0;
@@ -25,10 +25,10 @@ const BUTTON_W_PT: f32 = 96.0;
 const SIDE_HEAD_PT: f32 = 30.0;
 const SIDE_ROW_PT: f32 = 26.0;
 const ROW_PT: f32 = 58.0;
-const READER_PAD_PT: f32 = 20.0;
-const BODY_LINE_PT: f32 = 18.0;
-const FOOT_LINE_PT: f32 = 15.0;
-const TITLE_LINE_PT: f32 = 28.0;
+pub(crate) const READER_PAD_PT: f32 = 20.0;
+pub(crate) const BODY_LINE_PT: f32 = 18.0;
+pub(crate) const FOOT_LINE_PT: f32 = 15.0;
+pub(crate) const TITLE_LINE_PT: f32 = 28.0;
 const SHEET_W_PT: f32 = 440.0;
 const SHEET_HEAD_PT: f32 = 44.0;
 const SHEET_FOOT_PT: f32 = 60.0;
@@ -110,6 +110,14 @@ pub enum Hit {
     Field(usize),
     /// A mailbox on the favourites bar, by its place in the saved list.
     Favorite(usize),
+    /// Load Remote Content, under the privacy note of the open message.
+    LoadRemote,
+    /// A link of the "Found in Mail" banner over the message text.
+    Found(crate::found::FoundHit),
+    /// Don't Save on the question sheet: the message is discarded.
+    Discard,
+    /// A rule's name in the Rules pane: its editor opens.
+    EditRule(usize),
     /// The disclosure triangle of a conversation: folds or unfolds it. The UID is its first message's.
     Fold(u32),
     /// A file named in the open message, by its place in the message.
@@ -248,6 +256,15 @@ pub fn choices_of(mail: &Mail) -> Vec<String> {
     }
 }
 
+/// How many rows the open sheet lists under a field: the mailboxes Open Quickly matches, or the recipient suggestions of
+/// the focused To, Cc or Bcc field.
+pub fn choice_count(mail: &Mail) -> usize {
+    match &mail.sheet {
+        Some(Sheet::Compose(_)) => mail.recipient_suggestions().len().min(MAX_SUGGESTIONS),
+        _ => choices_of(mail).len(),
+    }
+}
+
 /// The header block of a message (every line before the first blank line), for All Headers.
 pub fn header_block(raw: &str) -> String {
     let text = raw_text(raw);
@@ -264,13 +281,16 @@ pub struct SheetLayout {
     pub fields: Vec<Rect>,
     pub cancel: Rect,
     pub primary: Rect,
+    /// The question sheet's Don't Save button, left of Cancel.
+    pub discard: Option<Rect>,
     /// Compose: the Attach button at the left of the footer.
     pub attach: Option<Rect>,
     /// Compose: the line that shows the signature the message will end with.
     pub note: Option<Rect>,
     /// Compose: the row of each attached file and its Remove button.
     pub files: Vec<(Rect, Rect)>,
-    /// Open Quickly: the row of each mailbox the field matches, below the field.
+    /// The row of each mailbox Open Quickly matches (below its field), or of each recipient suggestion (right under the
+    /// focused To, Cc or Bcc field).
     pub choices: Vec<Rect>,
 }
 
@@ -288,15 +308,24 @@ fn field_height(ui: &Ui, label: &str) -> f32 {
 /// [`MAX_CHOICES`] and only the sheet that lists them takes any.
 pub fn sheet_layout(ui: &Ui, w: f32, h: f32, sheet: &Sheet, choices: usize) -> SheetLayout {
     let form = sheet.form();
+    // the question sheet has buttons only
+    let shown: &[crate::state::Field] = if matches!(sheet, Sheet::Question(_)) { &[] } else { &form.fields };
     let pad = ui.pt(SHEET_PAD_PT);
     let head = ui.pt(SHEET_HEAD_PT);
     let foot = ui.pt(SHEET_FOOT_PT);
-    let heights: Vec<f32> = form.fields.iter().map(|f| field_height(ui, f.label)).collect();
+    let heights: Vec<f32> = shown.iter().map(|f| field_height(ui, f.label)).collect();
     let (note_h, files) = match sheet {
+        Sheet::Rules(_, names) => (0.0, names.len()),
         Sheet::Compose(c) => (if c.signature.trim().is_empty() { 0.0 } else { ui.pt(NOTE_PT) }, c.attachments.len()),
         _ => (0.0, 0),
     };
-    let choices = if matches!(sheet, Sheet::Quickly(_)) { choices.min(MAX_CHOICES) } else { 0 };
+    let choices = match sheet {
+        Sheet::Quickly(_) => choices.min(MAX_CHOICES),
+        Sheet::Compose(_) => choices.min(MAX_SUGGESTIONS),
+        _ => 0,
+    };
+    // the suggestions of a recipient field sit right under it; Open Quickly's list follows its only field
+    let list_after = if matches!(sheet, Sheet::Compose(_)) { form.focus } else { shown.len().saturating_sub(1) };
     let row_h = ui.pt(ATTACH_ROW_PT);
     let body: f32 = heights.iter().sum::<f32>() + note_h + files as f32 * row_h + choices as f32 * row_h;
     let pw = ui.pt(SHEET_W_PT).min(w - 2.0 * ui.pt(SPACE_M)).max(0.0);
@@ -305,9 +334,16 @@ pub fn sheet_layout(ui: &Ui, w: f32, h: f32, sheet: &Sheet, choices: usize) -> S
     let py = ((h - ph) / 2.0).max(ui.pt(TOOLBAR_PT) + pad);
     let mut y = py + head;
     let mut fields = Vec::with_capacity(heights.len());
-    for hh in heights {
+    let mut matched = Vec::with_capacity(choices);
+    for (i, hh) in heights.into_iter().enumerate() {
         fields.push([px + pad, y, pw - 2.0 * pad, hh]);
         y += hh;
+        if i == list_after {
+            for _ in 0..choices {
+                matched.push([px + pad, y, pw - 2.0 * pad, row_h]);
+                y += row_h;
+            }
+        }
     }
     let note = (note_h > 0.0).then(|| [px + pad, y, pw - 2.0 * pad, note_h]);
     y += note_h;
@@ -318,18 +354,14 @@ pub fn sheet_layout(ui: &Ui, w: f32, h: f32, sheet: &Sheet, choices: usize) -> S
         rows.push((row, [row[0] + row[2] - remove_w, row[1], remove_w, row[3]]));
         y += row_h;
     }
-    let mut matched = Vec::with_capacity(choices);
-    for _ in 0..choices {
-        matched.push([px + pad, y, pw - 2.0 * pad, row_h]);
-        y += row_h;
-    }
     let bh = ui.pt(BUTTON_H_PT);
     let bw = ui.pt(BUTTON_W_PT);
     let by = py + ph - pad - bh;
     let primary = [px + pw - pad - bw, by, bw, bh];
     let cancel = [primary[0] - ui.pt(SPACE_S) - bw, by, bw, bh];
-    let attach = matches!(sheet, Sheet::Compose(_)).then(|| [px + pad, by, bw, bh]);
-    SheetLayout { panel: [px, py, pw, ph], fields, cancel, primary, attach, note, files: rows, choices: matched }
+    let discard = matches!(sheet, Sheet::Question(_)).then(|| [cancel[0] - ui.pt(SPACE_S) - bw, by, bw, bh]);
+    let attach = matches!(sheet, Sheet::Compose(_) | Sheet::Rules(..)).then(|| [px + pad, by, bw, bh]);
+    SheetLayout { panel: [px, py, pw, ph], fields, cancel, primary, discard, attach, note, files: rows, choices: matched }
 }
 
 /// The wrapped text of the open message, kept while the message and the width stay the same.
@@ -365,7 +397,7 @@ pub fn wrap(ui: &Ui, text: &str, width: f32, pt: f32, weight: Weight) -> Vec<Str
 }
 
 /// `text` cut to fit `max` pixels, with `...` where it is cut.
-fn fit(ui: &Ui, text: &str, pt: f32, weight: Weight, max: f32) -> String {
+pub(crate) fn fit(ui: &Ui, text: &str, pt: f32, weight: Weight, max: f32) -> String {
     if ui.measure(text, pt, weight) <= max {
         return text.to_string();
     }
@@ -500,7 +532,7 @@ fn mailbox_title(name: &str) -> &str {
 // text helpers --------------------------------------------------------------------------------------------------------
 
 #[allow(clippy::too_many_arguments)]
-fn put(s: &mut Surface, labels: &mut TextCache, ui: &Ui, text: &str, pt: f32, wt: Weight, color: u32, x: f32, y: f32) {
+pub(crate) fn put(s: &mut Surface, labels: &mut TextCache, ui: &Ui, text: &str, pt: f32, wt: Weight, color: u32, x: f32, y: f32) {
     if text.is_empty() {
         return;
     }
@@ -539,9 +571,12 @@ impl MailWindow {
     pub fn hit(&self, ui: &Ui, x: f32, y: f32) -> Hit {
         let (w, h) = (self.w as f32, self.h as f32);
         if let Some(sheet) = &self.mail.sheet {
-            let l = sheet_layout(ui, w, h, sheet, choices_of(&self.mail).len());
+            let l = sheet_layout(ui, w, h, sheet, choice_count(&self.mail));
             if inside(l.primary, x, y) {
                 return Hit::Primary;
+            }
+            if l.discard.is_some_and(|r| inside(r, x, y)) {
+                return Hit::Discard;
             }
             if inside(l.cancel, x, y) {
                 return Hit::Cancel;
@@ -551,6 +586,11 @@ impl MailWindow {
             }
             if let Some(index) = l.files.iter().position(|(_, remove)| inside(*remove, x, y)) {
                 return Hit::RemoveAttachment(index);
+            }
+            if matches!(sheet, Sheet::Rules(..)) {
+                if let Some(index) = l.files.iter().position(|(row, _)| inside(*row, x, y)) {
+                    return Hit::EditRule(index);
+                }
             }
             if let Some(index) = l.choices.iter().position(|r| inside(*r, x, y)) {
                 return Hit::Choice(index);
@@ -604,6 +644,12 @@ impl MailWindow {
                 return Hit::FindDone;
             }
         }
+        if self.remote_rect.is_some_and(|r| inside(r, x, y)) {
+            return Hit::LoadRemote;
+        }
+        if let Some((_, link)) = self.found_rects.iter().find(|(r, _)| inside(*r, x, y)) {
+            return Hit::Found(*link);
+        }
         if let Some((_, index)) = self.attach_rects.iter().find(|(r, _)| inside(*r, x, y)) {
             return Hit::Attachment(*index);
         }
@@ -635,6 +681,22 @@ impl MailWindow {
         }
     }
 
+    /// Paints the window without the compose sheet while that sheet belongs to a compose window (`compose_windows`).
+    pub fn draw_hiding_compose(&mut self, s: &mut Surface, ui: &Ui, hide: bool) {
+        let hidden = if hide && matches!(self.mail.sheet, Some(Sheet::Compose(_) | Sheet::Question(_))) { self.mail.sheet.take() } else { None };
+        self.draw(s, ui);
+        if hidden.is_some() {
+            self.mail.sheet = hidden;
+        }
+    }
+
+    /// Paints a compose window: its message sheet, centred, over the content background.
+    pub fn draw_compose(&mut self, s: &mut Surface, ui: &Ui, sheet: &Sheet) {
+        s.fill_rect(0, 0, s.w, s.h, CONTENT_BG.now());
+        let (w, h) = (s.w as f32, s.h as f32);
+        self.draw_sheet(s, ui, sheet, w, h);
+    }
+
     /// The favourites bar: one chip for each pinned mailbox, the one on screen filled.
     fn draw_favorites(&mut self, s: &mut Surface, ui: &Ui, y: f32, h: f32) {
         s.fill_rect(0, px(y), s.w, px(h), CONTENT_BG.now());
@@ -650,7 +712,7 @@ impl MailWindow {
         }
     }
 
-    fn draw_toolbar(&mut self, s: &mut Surface, ui: &Ui, w: f32, top: f32) {
+    fn draw_toolbar(&mut self, s: &mut Surface, ui: &Ui, w: f32, _top: f32) {
         widgets::toolbar_band(s, ui, bifrost_app::controls::Rect { x: 0.0, y: 0.0, w: w / ui.pt(1.0), h: TOOLBAR_PT });
         let title = if self.mail.accounts.is_empty() { "Mail" } else { mailbox_title(&self.mail.mailbox) };
         let model = toolbar_model(&self.mail);
@@ -767,6 +829,8 @@ impl MailWindow {
         let area = (h - top).max(0.0);
         let text_w = (width - 2.0 * pad).max(0.0);
         self.attach_rects.clear();
+        self.remote_rect = None;
+        self.found_rects.clear();
         self.find_hits = None;
         let Some(uid) = self.mail.open else {
             self.reader_scroll.set_max(0.0);
@@ -832,6 +896,25 @@ impl MailWindow {
             y += ui.pt(SPACE_M);
         }
 
+        // remote content stays blocked until the person loads it for this message or Mail Settings allows it
+        if loaded && self.remote_memo.map(|(m, _)| m) != Some(uid) {
+            let blocked = self.mail.bodies.get(&uid).map_or(0, |raw| crate::html::sanitize(raw, false).remote_images_blocked);
+            self.remote_memo = Some((uid, blocked));
+        }
+        let blocked = self.remote_memo.filter(|(m, _)| *m == uid).map_or(0, |(_, n)| n);
+        if blocked > 0 && !self.mail.remote_allowed(uid) {
+            let note = fit(ui, "Remote images are blocked to protect your privacy.", MAC_FOOTNOTE_PT, Weight::Regular, text_w);
+            put(s, &mut self.labels, ui, &note, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), x, y);
+            y += ui.pt(FOOT_LINE_PT);
+            let link = "Load Remote Content";
+            put(s, &mut self.labels, ui, link, MAC_FOOTNOTE_PT, Weight::Regular, colors::SYSTEM_BLUE.now(), x, y);
+            let wide = ui.measure(link, MAC_FOOTNOTE_PT, Weight::Regular);
+            self.remote_rect = Some([x, y, wide, ui.pt(FOOT_LINE_PT)]);
+            y += ui.pt(FOOT_LINE_PT) + ui.pt(SPACE_M);
+        }
+
+        y = self.draw_found_banner(s, ui, x, y, text_w);
+
         if !loaded {
             put(s, &mut self.labels, ui, "Loading...", MAC_BODY_PT, Weight::Regular, LABEL_2.now(), x, y);
             y += ui.pt(BODY_LINE_PT);
@@ -855,6 +938,60 @@ impl MailWindow {
         if bar_h > 0.0 {
             self.draw_find_bar(s, ui, x0, width, top, bar_h, matches.len(), current);
         }
+    }
+
+    /// The "Found in Mail" banner over the message text: where the first suggestion of the open message was found, its
+    /// title and detail, and the links that add it, turn it down or page to the next. Returns the y below the banner (`y`
+    /// again when the message has nothing to offer). The links are recorded for `hit`.
+    fn draw_found_banner(&mut self, s: &mut Surface, ui: &Ui, x: f32, y: f32, width: f32) -> f32 {
+        let Some(found) = self.mail.found_current().cloned() else { return y };
+        let label = self.mail.found_label();
+        let pad = ui.pt(SPACE_S);
+        let (small, body) = (ui.pt(FOOT_LINE_PT), ui.pt(BODY_LINE_PT));
+        let rows = small + body + if found.subtitle.is_empty() { 0.0 } else { small } + small;
+        let height = rows + 2.0 * pad;
+        s.fill_rrect(x, y, width, height, ui.pt(RADIUS_PT), FIELD_BG.now());
+        let (left, inner) = (x + pad, (width - 2.0 * pad).max(0.0));
+        let mut cy = y + pad;
+        let source = fit(ui, &found.found_in(), MAC_FOOTNOTE_PT, Weight::Regular, inner);
+        put(s, &mut self.labels, ui, &source, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), left, cy);
+        if let Some(label) = &label {
+            let wide = ui.measure(label, MAC_FOOTNOTE_PT, Weight::Regular);
+            put(s, &mut self.labels, ui, label, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), left + inner - wide, cy);
+        }
+        cy += small;
+        let title = fit(ui, &found.title, MAC_BODY_PT, Weight::Semibold, inner);
+        put(s, &mut self.labels, ui, &title, MAC_BODY_PT, Weight::Semibold, LABEL.now(), left, cy);
+        cy += body;
+        if !found.subtitle.is_empty() {
+            let detail = fit(ui, &found.subtitle, MAC_FOOTNOTE_PT, Weight::Regular, inner);
+            put(s, &mut self.labels, ui, &detail, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), left, cy);
+            cy += small;
+        }
+        let gap = ui.pt(SPACE_M);
+        let mut lx = left;
+        let mut links: Vec<(&str, crate::found::FoundHit)> = Vec::new();
+        if let Some(add) = crate::found::add_label(found.kind) {
+            links.push((add, crate::found::FoundHit::Add));
+        }
+        links.push(("Dismiss", crate::found::FoundHit::Dismiss));
+        for (text, link) in links {
+            put(s, &mut self.labels, ui, text, MAC_FOOTNOTE_PT, Weight::Regular, colors::SYSTEM_BLUE.now(), lx, cy);
+            let wide = ui.measure(text, MAC_FOOTNOTE_PT, Weight::Regular);
+            self.found_rects.push(([lx, cy, wide, small], link));
+            lx += wide + gap;
+        }
+        if label.is_some() {
+            let mut rx = left + inner;
+            for (text, link) in [("Next", crate::found::FoundHit::Next), ("Previous", crate::found::FoundHit::Previous)] {
+                let wide = ui.measure(text, MAC_FOOTNOTE_PT, Weight::Regular);
+                rx -= wide;
+                put(s, &mut self.labels, ui, text, MAC_FOOTNOTE_PT, Weight::Regular, colors::SYSTEM_BLUE.now(), rx, cy);
+                self.found_rects.push(([rx, cy, wide, small], link));
+                rx -= gap;
+            }
+        }
+        y + height + ui.pt(SPACE_M)
     }
 
     /// The find bar over the top of the reader: the text typed, which match is shown, and the Previous, Next and Done buttons.
@@ -929,6 +1066,7 @@ impl MailWindow {
         let room = ((r[1] + r[3] - value_y - ui.pt(SPACE_XS)) / line_h).floor().max(1.0) as usize;
         let first = lines.len().saturating_sub(room);
         let current = compose.misspelled.get(compose.misspelled_at);
+        let (suggested, suggested_at) = compose.proofread_marks();
         let mut end_x = tx;
         for (k, line) in lines[first..].iter().enumerate() {
             let y = value_y + k as f32 * line_h;
@@ -955,6 +1093,16 @@ impl MailWindow {
                         s.fill_rect(px(x + measure(&before, run.style)), px(y + line_h - ui.pt(SPACE_XXS)), px(measure(&word, run.style)), thick, colors::SYSTEM_RED.now());
                     }
                 }
+                // the writing assistant's suggestions: a blue line, thicker under the one in view
+                for (k, mark) in suggested.iter().enumerate() {
+                    let (a, b) = (mark.start.max(run.start), mark.end.min(run.start + chars.len()));
+                    if a < b {
+                        let before: String = chars[..a - run.start].iter().collect();
+                        let word: String = chars[a - run.start..b - run.start].iter().collect();
+                        let thick = if k == suggested_at { 2 * rule } else { rule };
+                        s.fill_rect(px(x + measure(&before, run.style)), px(y + line_h - ui.pt(SPACE_XXS)), px(measure(&word, run.style)), thick, colors::SYSTEM_BLUE.now());
+                    }
+                }
                 x += wide;
             }
             end_x = x;
@@ -967,7 +1115,9 @@ impl MailWindow {
 
     fn draw_sheet(&mut self, s: &mut Surface, ui: &Ui, sheet: &Sheet, w: f32, h: f32) {
         let matches = choices_of(&self.mail);
-        let l = sheet_layout(ui, w, h, sheet, matches.len());
+        let suggestions = if matches!(sheet, Sheet::Compose(_)) { self.mail.recipient_suggestions().to_vec() } else { Vec::new() };
+        let highlighted = self.mail.recipient_field.highlighted();
+        let l = sheet_layout(ui, w, h, sheet, if suggestions.is_empty() { matches.len() } else { suggestions.len() });
         let [px_, py, pw, ph] = l.panel;
         let rule = ui.pt(1.0).max(1.0);
         let radius = ui.pt(PANEL_RADIUS_PT);
@@ -979,7 +1129,8 @@ impl MailWindow {
 
         let pad = ui.pt(SPACE_S);
         let caret = ui.pt(1.0).max(1.0);
-        for (i, field) in form.fields.iter().enumerate() {
+        let shown: &[crate::state::Field] = if matches!(sheet, Sheet::Question(_)) { &[] } else { &form.fields };
+        for (i, field) in shown.iter().enumerate() {
             let r = l.fields[i];
             let focused = form.focus == i;
             if focused {
@@ -1051,6 +1202,14 @@ impl MailWindow {
             }
         }
 
+        if let Sheet::Rules(_, names) = sheet {
+            for (name, (row, remove)) in names.iter().zip(&l.files) {
+                let text = fit(ui, name, MAC_FOOTNOTE_PT, Weight::Regular, (row[2] - remove[2]).max(0.0));
+                put_mid(s, &mut self.labels, ui, &text, MAC_FOOTNOTE_PT, Weight::Regular, LABEL.now(), row[0], row[1] + row[3] / 2.0);
+                put_centred(s, &mut self.labels, ui, "Remove", MAC_FOOTNOTE_PT, Weight::Regular, colors::SYSTEM_BLUE.now(), remove[0] + remove[2] / 2.0, remove[1] + remove[3] / 2.0);
+            }
+        }
+
         // Open Quickly: the mailboxes the field matches, the first one is the one Return opens
         for (index, (name, row)) in matches.iter().zip(&l.choices).enumerate() {
             if index == 0 {
@@ -1061,10 +1220,36 @@ impl MailWindow {
             put_mid(s, &mut self.labels, ui, &text, MAC_BODY_PT, Weight::Regular, color, row[0] + pad, row[1] + row[3] / 2.0);
         }
 
+        // a recipient field: the people it could be, the one the arrow keys reached is highlighted
+        for (index, (suggestion, row)) in suggestions.iter().zip(&l.choices).enumerate() {
+            let on = highlighted == Some(index);
+            if on {
+                s.fill_rrect(row[0], row[1], row[2], row[3], ui.pt(RADIUS_PT), colors::SYSTEM_BLUE.now());
+            }
+            let (main, second) = if on { (WHITE, WHITE) } else { (LABEL.now(), LABEL_2.now()) };
+            let who = if suggestion.name == suggestion.address { suggestion.address.clone() } else { suggestion.name.clone() };
+            let who = fit(ui, &who, MAC_BODY_PT, Weight::Regular, (row[2] / 2.0 - pad).max(0.0));
+            put_mid(s, &mut self.labels, ui, &who, MAC_BODY_PT, Weight::Regular, main, row[0] + pad, row[1] + row[3] / 2.0);
+            if suggestion.name != suggestion.address {
+                let tag = match &suggestion.label {
+                    Some(label) => format!("{label}  {}", suggestion.address),
+                    None => suggestion.address.clone(),
+                };
+                let left = row[0] + row[2] / 2.0;
+                let tag = fit(ui, &tag, MAC_FOOTNOTE_PT, Weight::Regular, (row[0] + row[2] - left - pad).max(0.0));
+                put_mid(s, &mut self.labels, ui, &tag, MAC_FOOTNOTE_PT, Weight::Regular, second, left, row[1] + row[3] / 2.0);
+            }
+        }
+
         let (cr, pr) = (l.cancel, l.primary);
         if let Some(ar) = l.attach {
+            let label = if matches!(sheet, Sheet::Rules(..)) { "Add Rule..." } else { "Attach..." };
             s.fill_rrect(ar[0], ar[1], ar[2], ar[3], ui.pt(RADIUS_PT), FIELD_BG.now());
-            put_centred(s, &mut self.labels, ui, "Attach...", MAC_BODY_PT, Weight::Regular, LABEL.now(), ar[0] + ar[2] / 2.0, ar[1] + ar[3] / 2.0);
+            put_centred(s, &mut self.labels, ui, label, MAC_BODY_PT, Weight::Regular, LABEL.now(), ar[0] + ar[2] / 2.0, ar[1] + ar[3] / 2.0);
+        }
+        if let Some(dr) = l.discard {
+            s.fill_rrect(dr[0], dr[1], dr[2], dr[3], ui.pt(RADIUS_PT), FIELD_BG.now());
+            put_centred(s, &mut self.labels, ui, "Don't Save", MAC_BODY_PT, Weight::Regular, LABEL.now(), dr[0] + dr[2] / 2.0, dr[1] + dr[3] / 2.0);
         }
         s.fill_rrect(cr[0], cr[1], cr[2], cr[3], ui.pt(RADIUS_PT), FIELD_BG.now());
         put_centred(s, &mut self.labels, ui, "Cancel", MAC_BODY_PT, Weight::Regular, LABEL.now(), cr[0] + cr[2] / 2.0, cr[1] + cr[3] / 2.0);

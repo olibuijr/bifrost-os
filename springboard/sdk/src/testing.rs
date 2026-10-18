@@ -47,6 +47,9 @@ pub fn seed() -> u64 {
     nanos | 1
 }
 
+/// Pointer moves [`TestWindow::swipe`] sends between its endpoints.
+pub const SWIPE_STEPS: u32 = 12;
+
 /// `XCUIApplication` for one window: the SDK [`Window`], your model and a loaded [`Ui`] (SFUI font, scale 1).
 pub struct TestWindow<S: Responder = NoApp> {
     pub window: Window<S>,
@@ -72,9 +75,27 @@ impl<S: Responder> TestWindow<S> {
     }
     /// Pointer down and up at window point (x, y); true when a view handled it.
     pub fn click(&mut self, x: f32, y: f32) -> bool {
+        // `Window::event` reports whether a frame is needed, which is also true for a click that hits nothing (the
+        // responder resigns). A click counts as handled only when a view is under the point.
+        let hit = self.window.hit_test(x, y).is_some();
         let d = self.window.event(&ViewEvent::Pointer(Event::Down(x, y)), &mut self.model);
         let u = self.window.event(&ViewEvent::Pointer(Event::Up(x, y)), &mut self.model);
-        d || u
+        hit && (d || u)
+    }
+    /// `XCUICoordinate.tap()`: pointer down and up at window point (x, y) through the hit test; true when handled.
+    pub fn tap(&mut self, x: f32, y: f32) -> bool {
+        self.click(x, y)
+    }
+    /// `XCUICoordinate.press(forDuration:thenDragTo:)`-style swipe: pointer down at `from`, [`SWIPE_STEPS`] moves
+    /// along the straight line, then up at `to`. True when any view handled one of those events.
+    pub fn swipe(&mut self, from: (f32, f32), to: (f32, f32)) -> bool {
+        let mut handled = self.window.event(&ViewEvent::Pointer(Event::Down(from.0, from.1)), &mut self.model);
+        for i in 1..=SWIPE_STEPS {
+            let t = i as f32 / SWIPE_STEPS as f32;
+            let (x, y) = (from.0 + (to.0 - from.0) * t, from.1 + (to.1 - from.1) * t);
+            handled |= self.window.event(&ViewEvent::Pointer(Event::Move(x, y)), &mut self.model);
+        }
+        handled | self.window.event(&ViewEvent::Pointer(Event::Up(to.0, to.1)), &mut self.model)
     }
     /// A key event to the first responder.
     pub fn key(&mut self, k: KeyInput) -> bool {
@@ -83,6 +104,12 @@ impl<S: Responder> TestWindow<S> {
     /// Types `s` into the first responder.
     pub fn type_text(&mut self, s: &str) -> bool {
         self.key(KeyInput::Text(s.into()))
+    }
+    /// `XCUIElement.typeText`: taps the centre of the element with this role and label, then types `s`.
+    /// False when no such element exists or the tap was not handled.
+    pub fn type_into(&mut self, role: Role, label: &str, s: &str) -> bool {
+        let Some(mut el) = self.element(role, label) else { return false };
+        el.click() && self.type_text(s)
     }
     /// Resizes the window (points) and lays out again.
     pub fn resize(&mut self, w: u32, h: u32) {
@@ -162,4 +189,125 @@ macro_rules! assert_element {
             panic!("no {:?} labelled {:?}; elements: {:?}", $role, $label, $win.elements().iter().map(|n| (n.role, n.label.clone())).collect::<Vec<_>>());
         }
     };
+}
+
+// ---- StoreKit test session -------------------------------------------------------------------------------------------
+
+/// One scripted answer from the store to a purchase attempt.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum StoreAnswer {
+    /// The store's result: a final outcome, or `Pending` when a later answer finishes the purchase.
+    Result(bifrost_ui::purchase::Outcome),
+    /// The store could not complete the attempt.
+    Fail(bifrost_ui::purchase::Failure),
+}
+
+/// A scripted store for purchase tests (StoreKit's test session role). Each purchase takes answers from the front of
+/// the script, so an app's purchase code runs with no store and no account. When the script runs out before a final
+/// result, the attempt fails with `Failure::StoreUnavailable`.
+#[derive(Clone, Debug, Default)]
+pub struct StoreSession {
+    script: std::collections::VecDeque<StoreAnswer>,
+}
+
+impl StoreSession {
+    /// A session that answers with `answers`, in order, across every purchase it runs.
+    pub fn new(answers: impl IntoIterator<Item = StoreAnswer>) -> Self {
+        StoreSession { script: answers.into_iter().collect() }
+    }
+
+    /// Answers still waiting in the script.
+    pub fn remaining(&self) -> usize {
+        self.script.len()
+    }
+
+    /// Runs one purchase of `product` at `price` through the scripted answers and returns the attempt.
+    pub fn purchase(&mut self, product: &str, price: bifrost_ui::purchase::Price) -> bifrost_ui::purchase::Purchase {
+        use bifrost_ui::purchase::{Failure, Outcome, Purchase};
+        let mut attempt = Purchase::new(product, price);
+        attempt.begin();
+        loop {
+            match self.script.pop_front() {
+                None => {
+                    attempt.fail(Failure::StoreUnavailable);
+                    break;
+                }
+                Some(StoreAnswer::Fail(failure)) => {
+                    attempt.fail(failure);
+                    break;
+                }
+                Some(StoreAnswer::Result(outcome)) => {
+                    let finished = outcome != Outcome::Pending;
+                    attempt.complete(outcome);
+                    if finished {
+                        break;
+                    }
+                }
+            }
+        }
+        attempt
+    }
+}
+
+#[cfg(test)]
+mod store_session_tests {
+    use super::*;
+    use bifrost_ui::purchase::{Failure, Outcome, Price, Step};
+
+    fn price() -> Price {
+        Price::new(990, 2, "USD")
+    }
+
+    #[test]
+    fn a_success_answer_finishes_the_purchase_and_allows_install() {
+        let mut store = StoreSession::new([StoreAnswer::Result(Outcome::Success(7))]);
+        let attempt = store.purchase("app.pro", price());
+        assert_eq!(attempt.outcome(), Some(&Outcome::Success(7)));
+        assert!(attempt.may_install());
+        assert_eq!(store.remaining(), 0);
+    }
+
+    #[test]
+    fn a_pending_answer_waits_for_the_next_answer() {
+        let mut store = StoreSession::new([StoreAnswer::Result(Outcome::Pending), StoreAnswer::Result(Outcome::UserCancelled)]);
+        let attempt = store.purchase("app.pro", price());
+        assert_eq!(attempt.outcome(), Some(&Outcome::UserCancelled));
+        assert!(!attempt.may_install());
+    }
+
+    #[test]
+    fn a_failure_answer_ends_the_attempt_and_can_be_retried() {
+        let mut store = StoreSession::new([StoreAnswer::Fail(Failure::NetworkUnavailable)]);
+        let mut attempt = store.purchase("app.pro", price());
+        assert_eq!(attempt.failure(), Some(Failure::NetworkUnavailable));
+        assert!(attempt.retry());
+        assert_eq!(attempt.step(), &Step::Idle);
+    }
+
+    #[test]
+    fn an_empty_script_fails_the_attempt_with_store_unavailable() {
+        let mut store = StoreSession::default();
+        let attempt = store.purchase("app.pro", price());
+        assert_eq!(attempt.failure(), Some(Failure::StoreUnavailable));
+    }
+
+    #[test]
+    fn a_script_pending_with_no_answer_left_fails_the_attempt() {
+        let mut store = StoreSession::new([StoreAnswer::Result(Outcome::Pending)]);
+        let attempt = store.purchase("app.pro", price());
+        assert_eq!(attempt.step(), &Step::Failed(Failure::StoreUnavailable));
+    }
+
+    #[test]
+    fn answers_are_used_in_order_across_purchases() {
+        let mut store = StoreSession::new([
+            StoreAnswer::Result(Outcome::Success(1)),
+            StoreAnswer::Fail(Failure::NotAllowed),
+        ]);
+        assert_eq!(store.purchase("a", price()).outcome(), Some(&Outcome::Success(1)));
+        let mut second = store.purchase("b", price());
+        assert_eq!(second.failure(), Some(Failure::NotAllowed));
+        assert!(!second.retry(), "a restricted account may not retry");
+        assert_eq!(store.remaining(), 0);
+    }
 }

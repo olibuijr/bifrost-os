@@ -1,0 +1,49 @@
+{
+  "framework": "Trust Insights",
+  "doc": "https://developer.apple.com/documentation/trustinsights",
+  "macos_since": "",
+  "status": "n/a",
+  "bifrost": "none",
+  "summary": "Evaluates transactions for signs of coercion (for example, someone coaching a person) with a privacy-preserving model and an authorization flow that Apple runs. BifrOSt has no equivalent model and no data pipeline for it, and building one would need Apple's model and data. macOS 27 (Mac Catalyst 27.0) per the index; the tablet entry is the same framework.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run this round; owner rule); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Authorization request and status",
+      "apple": "requestAuthorization(for:), authorizationStatus(for:)",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Authorization is for Apple's evaluation service."
+    },
+    {
+      "feature": "Insight evaluator and request",
+      "apple": "InsightEvaluator, requestEvaluation(context:)",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Evaluation runs Apple's model on the device."
+    },
+    {
+      "feature": "Coaching insight",
+      "apple": "IsLikelyBeingCoachedInsight",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Uses Apple's trained insight model; no BifrOSt model exists."
+    },
+    {
+      "feature": "Evaluation result and errors",
+      "apple": "InsightEvaluation, InsightError",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Result types of the same service."
+    },
+    {
+      "feature": "Consumption feedback",
+      "apple": "reportConsumption(_:insightsUsed:)",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Feedback goes to Apple's service."
+    }
+  ],
+  "gaps": [
+    "Not planned: depends on Apple's insight model and service."
+  ]
+}

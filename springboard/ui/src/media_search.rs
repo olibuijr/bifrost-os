@@ -47,11 +47,22 @@ pub struct MediaItem {
     pub title: String,
     pub artist: Option<String>,
     pub album: Option<String>,
+    /// The genre and mood a request's structured criteria can name (`AudioSearch.Criteria.genre` and `.mood`).
+    pub genre: Option<String>,
+    pub mood: Option<String>,
 }
 
 impl MediaItem {
     pub fn new(id: &str, kind: MediaKind, title: &str) -> Self {
-        Self { id: id.to_string(), kind, title: title.to_string(), artist: None, album: None }
+        Self {
+            id: id.to_string(),
+            kind,
+            title: title.to_string(),
+            artist: None,
+            album: None,
+            genre: None,
+            mood: None,
+        }
     }
 
     fn fields(&self) -> impl Iterator<Item = &str> {
@@ -68,15 +79,45 @@ impl MediaItem {
     }
 }
 
-/// A request: the classified criteria of one audio search or playback request.
+/// The structured criteria of a request beside its text (`AudioSearch.Criteria`): media kind, genre and mood. An
+/// unset field does not filter. Genre and mood compare case-insensitively; an item without a genre or mood never
+/// matches a request that names one.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct MediaFilter {
+    pub kind: Option<MediaKind>,
+    pub genre: Option<String>,
+    pub mood: Option<String>,
+}
+
+impl MediaFilter {
+    pub fn matches(&self, item: &MediaItem) -> bool {
+        self.kind.map_or(true, |k| k == item.kind) && same_word(&self.genre, &item.genre) && same_word(&self.mood, &item.mood)
+    }
+}
+
+fn same_word(wanted: &Option<String>, have: &Option<String>) -> bool {
+    match wanted {
+        None => true,
+        Some(w) => have.as_deref().map_or(false, |h| h.eq_ignore_ascii_case(w)),
+    }
+}
+
+/// A request: the classified criteria of one audio search or playback request, and its structured filter.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MediaSearch {
     pub criteria: MediaCriteria,
+    pub filter: MediaFilter,
 }
 
 impl MediaSearch {
     pub fn new(criteria: MediaCriteria) -> Self {
-        Self { criteria }
+        Self { criteria, filter: MediaFilter::default() }
+    }
+
+    /// The same request narrowed by `filter`.
+    pub fn with_filter(mut self, filter: MediaFilter) -> Self {
+        self.filter = filter;
+        self
     }
 }
 
@@ -96,31 +137,97 @@ fn tokens(query: &str) -> Vec<String> {
 /// A search query matches an item when every content word matches some field (title, artist or album) with the
 /// fuzzy matcher; items are ranked by their summed scores, ties keep catalogue order. A query with no content words
 /// and an `Unspecified` request return the first items of the catalogue as recommendations. A `Url` returns the
-/// item whose id equals the link.
+/// item whose id equals the link. The structured filter applies to every case.
 pub fn values_for<'a>(search: &MediaSearch, catalogue: &'a [MediaItem], limit: usize) -> Vec<&'a MediaItem> {
     if limit == 0 {
         return Vec::new();
     }
+    ranked(search, catalogue).into_iter().take(limit).map(|(_, item)| item).collect()
+}
+
+/// The matching items with their scores, best first. Links and recommendations score 0 and keep catalogue order.
+fn ranked<'a>(search: &MediaSearch, catalogue: &'a [MediaItem]) -> Vec<(i32, &'a MediaItem)> {
     let words = match &search.criteria {
-        MediaCriteria::Url(link) => return catalogue.iter().filter(|i| i.id == *link).take(limit).collect(),
+        MediaCriteria::Url(link) => {
+            return catalogue.iter().filter(|i| i.id == *link && search.filter.matches(i)).map(|i| (0, i)).collect()
+        }
         MediaCriteria::SearchQuery(q) => tokens(q),
         MediaCriteria::Unspecified => Vec::new(),
     };
     if words.is_empty() {
-        return catalogue.iter().take(limit).collect();
+        return catalogue.iter().filter(|i| search.filter.matches(i)).map(|i| (0, i)).collect();
     }
     let mut scored: Vec<(i32, usize, &MediaItem)> = catalogue
         .iter()
         .enumerate()
+        .filter(|(_, item)| search.filter.matches(item))
         .filter_map(|(i, item)| item.score(&words).map(|s| (s, i, item)))
         .collect();
     scored.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
-    scored.into_iter().take(limit).map(|(_, _, item)| item).collect()
+    scored.into_iter().map(|(s, _, item)| (s, item)).collect()
+}
+
+/// The outcome of resolving a request to one item: nothing matched, one item is the clear answer, or several items
+/// fit equally well and the person must choose one (the `requestDisambiguation` case).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Resolution<'a> {
+    NoMatch,
+    Single(&'a MediaItem),
+    Disambiguate(Vec<&'a MediaItem>),
+}
+
+/// Resolves `search` against `catalogue`. The best item is the answer when its score is strictly higher than every
+/// other item's; otherwise every item tied for the best score is offered. A link to one item resolves to it.
+/// Recommendations (`Unspecified`) resolve to one item only when a single item passes the filter.
+pub fn resolve<'a>(search: &MediaSearch, catalogue: &'a [MediaItem]) -> Resolution<'a> {
+    let ranked = ranked(search, catalogue);
+    let Some(&(top, first)) = ranked.first() else {
+        return Resolution::NoMatch;
+    };
+    let tied: Vec<&'a MediaItem> = ranked.iter().filter(|(s, _)| *s == top).map(|(_, item)| *item).collect();
+    if tied.len() == 1 {
+        Resolution::Single(first)
+    } else {
+        Resolution::Disambiguate(tied)
+    }
+}
+
+/// Whether the person must confirm a resolved item before the app acts on it (the `requestConfirmation` case). A
+/// text request asks when its content words do not spell the item's title, so a loose match ("rain" for "Heavy
+/// rain") is checked first. A link names its item and a recommendation was accepted by asking, so neither asks.
+pub fn needs_confirmation(search: &MediaSearch, item: &MediaItem) -> bool {
+    match &search.criteria {
+        MediaCriteria::SearchQuery(q) => tokens(q).join(" ") != tokens(&item.title).join(" "),
+        MediaCriteria::Unspecified | MediaCriteria::Url(_) => false,
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_text_request_that_spells_the_title_needs_no_confirmation() {
+        let item = song("r", "Rain", "Ambient");
+        assert!(!needs_confirmation(&MediaSearch::new(MediaCriteria::SearchQuery("rain".into())), &item));
+        assert!(!needs_confirmation(&MediaSearch::new(MediaCriteria::SearchQuery("play Rain".into())), &item), "filler words do not count");
+    }
+
+    #[test]
+    fn a_loose_text_match_asks_first() {
+        let item = song("h", "Heavy rain", "Band");
+        assert!(needs_confirmation(&MediaSearch::new(MediaCriteria::SearchQuery("rain".into())), &item));
+        let by_artist = song("e", "Example song", "Example artist");
+        let search = MediaSearch::new(MediaCriteria::SearchQuery("Example song by Example artist".into()));
+        assert!(needs_confirmation(&search, &by_artist), "the artist words are not in the title");
+    }
+
+    #[test]
+    fn links_and_recommendations_never_ask() {
+        let item = song("h", "Heavy rain", "Band");
+        assert!(!needs_confirmation(&MediaSearch::new(MediaCriteria::Url("h".into())), &item));
+        assert!(!needs_confirmation(&MediaSearch::new(MediaCriteria::Unspecified), &item));
+    }
 
     fn song(id: &str, title: &str, artist: &str) -> MediaItem {
         let mut m = MediaItem::new(id, MediaKind::Song, title);
@@ -176,6 +283,50 @@ mod tests {
         let cat = vec![song("1", "One", "A"), song("2", "Two", "B")];
         let search = MediaSearch::new(MediaCriteria::Url("2".into()));
         assert_eq!(ids(&values_for(&search, &cat, 10)), vec!["2"]);
+    }
+
+    #[test]
+    fn filter_narrows_by_kind_genre_and_mood() {
+        let mut jazz = song("j", "Night", "Band");
+        jazz.genre = Some("Jazz".into());
+        jazz.mood = Some("Calm".into());
+        let mut album = MediaItem::new("a", MediaKind::Album, "Night");
+        album.genre = Some("jazz".into());
+        let cat = vec![jazz, album, song("p", "Night", "Band")];
+
+        let by_genre = MediaSearch::new(MediaCriteria::Unspecified)
+            .with_filter(MediaFilter { genre: Some("JAZZ".into()), ..Default::default() });
+        assert_eq!(ids(&values_for(&by_genre, &cat, 10)), vec!["j", "a"]);
+
+        let kind_and_mood = MediaSearch::new(MediaCriteria::SearchQuery("night".into())).with_filter(MediaFilter {
+            kind: Some(MediaKind::Song),
+            mood: Some("calm".into()),
+            genre: None,
+        });
+        assert_eq!(ids(&values_for(&kind_and_mood, &cat, 10)), vec!["j"]);
+    }
+
+    #[test]
+    fn resolve_picks_the_clear_best_match() {
+        let cat = vec![song("r", "Rain", "Band"), song("j", "Jazz", "Quartet")];
+        let search = MediaSearch::new(MediaCriteria::SearchQuery("rain".into()));
+        assert_eq!(resolve(&search, &cat), Resolution::Single(&cat[0]));
+    }
+
+    #[test]
+    fn resolve_offers_equally_good_matches_for_disambiguation() {
+        let cat = vec![song("1", "Rain", "Alpha"), song("2", "Rain", "Omega"), song("3", "Sun", "Alpha")];
+        let search = MediaSearch::new(MediaCriteria::SearchQuery("rain".into()));
+        assert_eq!(resolve(&search, &cat), Resolution::Disambiguate(vec![&cat[0], &cat[1]]));
+    }
+
+    #[test]
+    fn resolve_reports_no_match_and_a_unique_link() {
+        let cat = vec![song("1", "One", "A")];
+        let none = MediaSearch::new(MediaCriteria::SearchQuery("zebra".into()));
+        assert_eq!(resolve(&none, &cat), Resolution::NoMatch);
+        let link = MediaSearch::new(MediaCriteria::Url("1".into()));
+        assert_eq!(resolve(&link, &cat), Resolution::Single(&cat[0]));
     }
 
     #[test]

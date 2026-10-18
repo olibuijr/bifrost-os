@@ -43,7 +43,16 @@
    "status": "partial",
    "note": "The jdk-openjdk Arch package provides the Java runtime that Java programs run on. Gap: the Cocoa Java bridge and its bridge-support metadata are not provided.",
    "rea": [],
-   "method": "heuristic"
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "java -version",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "jdk-openjdk provides the Java runtime. The Cocoa Java bridge is not covered."
   },
   {
    "id": "path:/System/Library/Frameworks/JavaVM.framework",
@@ -64,7 +73,16 @@
    "status": "partial",
    "note": "jdk-openjdk provides the OpenJDK virtual machine as an ordinary process. Gap: there is no embedding API that lets an app start a Java VM in process.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "java -version",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "OpenJDK from jdk-openjdk runs Java programs as an ordinary process. The in-process embedding API is not covered."
   },
   {
    "id": "path:/System/Library/Frameworks/Kerberos.framework",
@@ -83,8 +101,22 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/gss_krb5.rs",
    "status": "partial",
-   "note": "Audit 2026-10-13: pure kit model with host tests; not wired, not tested on Midget.",
-   "rea": []
+   "note": "Audit 2026-10-13: pure kit model with host tests; not wired, not tested on Midget. Built 2026-10-17: kinit and klist through the SDK (krb5_client::tests), and FILE cache copy (krb5_client::tests). Gap: the GSS context export (gss_export_sec_context, lucid form) is not built.",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "krb5_client::tests"
+    },
+    {
+     "kind": "cmd",
+     "run": "command -v kinit && command -v klist",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "kinit, klist and FILE credential cache copy run through the SDK (krb5_client::tests). The GSS context export is still open."
   },
   {
    "id": "path:/System/Library/Frameworks/Kernel.framework",
@@ -145,8 +177,22 @@
    "doc": "",
    "bifrost": "springboard/ui/src/directory_query.rs",
    "status": "partial",
-   "note": "Audit 2026-10-13: pure kit model with host tests; not wired, not tested on Midget.",
-   "rea": []
+   "note": "Audit 2026-10-13: pure kit model with host tests; not wired, not tested on Midget. Built 2026-10-17: simple binds with a password file that is never an argument (ldap_directory::tests), and base64 LDIF attributes and DNs are decoded.",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "ldap_directory::tests"
+    },
+    {
+     "kind": "cmd",
+     "run": "command -v ldapsearch",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "ldapsearch LDIF is parsed into directory records, loaded into a directory node, and searched with simple binds or anonymously (ldap_directory::tests). SASL and TLS options are the tool's own configuration."
   },
   {
    "id": "path:/System/Library/Frameworks/LatentSemanticMapping.framework",
@@ -184,11 +230,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/lightweightcoderequirements.json",
+   "bifrost": "springboard/core/src/codereq.rs; springboard/apps/console-desktop/src/identity.rs",
    "status": "partial",
-   "note": "from SDK matrix lightweightcoderequirements.json",
+   "note": "from SDK matrix lightweightcoderequirements.json Refreshed 2026-10-17 (still open): No code-signature verification of executables before launch or after download.; No signed identity (team or signing identifier) for apps, so identity cannot be tied to a developer.; No process peer identity check for control sockets or IPC (not verified; no SO_PEERCRED hits in the app host files).; No SDK API for apps to query identity, entitlements or validity of other code.; Update manifests carry an unsigned SHA-256 only (springboard/src/shell/update.rs:8).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "codereq::tests"
+    }
+   ],
+   "ready_note": "The requirement language (process, launch and on-disk constraints, allOf and anyOf, team and signing identifier, code directory and Info.plist hash, signing flags, validation category) is evaluated against identity facts the caller supplies (bifrost_app::codereq); the Console app adapts running processes to those facts. BifrOSt packages carry hash manifests, not signing identities, so the facts come from the package record rather than a signature; entitlement queries are in app_policy. Verifying a developer signature before launch is not part of this framework."
   },
   {
    "id": "path:/System/Library/Frameworks/LinkPresentation.framework",
@@ -205,11 +260,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/link-presentation.json",
+   "bifrost": "springboard/sdk/src/link_metadata.rs; springboard/sdk/src/link_fetch.rs; springboard/ui/src/linkmeta.rs; springboard/ui/src/link_card.rs; springboard/ui/src/detect.rs",
    "status": "partial",
-   "note": "from SDK matrix link-presentation.json",
+   "note": "from SDK matrix link-presentation.json Built 2026-10-17: Metadata parsing, relative address resolution and fetch state (timeout, cancel, typed LinkError) in springboard/sdk/src/link_metadata.rs (tests link_metadata::tests); the request and the rich link view are still open.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "link_metadata::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "link_fetch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "linkmeta::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "link_card::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "detect::tests"
+    }
+   ],
+   "ready_note": "Built this wave: bifrost_app::link_fetch::fetch does the request (URLSession, head only, timeout, typed LinkError) and returns the title, icon and picture parsed by link_metadata; the rich link card and the provider and view models are in the kit. Only the host in the address the app passes is contacted. Open: video metadata and a rich preview in the share sheet."
   },
   {
    "id": "path:/System/Library/Frameworks/LinkSecurity.framework",
@@ -268,11 +352,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/local-authentication.json",
+   "bifrost": "springboard/sdk/src/local_auth.rs, springboard/src/shell/services/local_auth.rs, springboard/src/shell/auth_sheet.rs, springboard/core/src/biometry.rs",
    "status": "partial",
-   "note": "from SDK matrix local-authentication.json",
+   "note": "from SDK matrix local-authentication.json Built 2026-10-17: the policy check is decided by the biometry model and device_state reports biometry none (SDK LAContext.biometry_type). Open: the authentication sheet is not drawn and biometry stays absent.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "local_auth::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::local_auth::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::auth_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "biometry::tests"
+    }
+   ],
+   "ready_note": "The shell's local_auth service decides the policy checks and draws the password sheet (checked on the host). Biometry is absent by design: the device has no sensor, so the model reports none."
   },
   {
    "id": "path:/System/Library/Frameworks/LocalAuthenticationEmbeddedUI.framework",
@@ -289,11 +397,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/local-authentication-embedded-ui.json",
+   "bifrost": "springboard/sdk/src/view/local_auth_view.rs; springboard/ui/src/auth_view.rs; springboard/core/src/auth_context.rs; springboard/core/src/auth_session.rs; springboard/core/src/fingerprint.rs; springboard/core/src/biometry.rs; springboard/src/shell/services/local_auth.rs",
    "status": "partial",
-   "note": "from SDK matrix local-authentication-embedded-ui.json",
+   "note": "from SDK matrix local-authentication-embedded-ui.json Refreshed 2026-10-17 (still open): No biometric authentication in the system layer, so there is no state for LAAuthenticationView to show (docs/bifrost-ui.md, Login window gaps: \"no biometric or paired-device unlock\").; LocalAuthenticationView (sdk view/local_auth_view.rs) draws the icon state; it stays idle until a biometric source exists; The login screen password flow (springboard/src/shell/login.rs) is the only authentication UI; it cannot show biometric state until a biometric source exists.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "view::local_auth_view::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "auth_view::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "auth_context::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "auth_session::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "fingerprint::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "biometry::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::local_auth::tests"
+    }
+   ],
+   "ready_note": "The authentication view (idle, evaluating, succeeded, failed and locked states, icon by biometry kind, control size) is bifrost_app::view::local_auth_view over the context and session models. The biometric source is a fingerprint reader through fprintd (core fingerprint, enrolled fingers and verify; fprintd is in the runtime packages); machines without a reader show the password flow of the local_auth service. No face or optic sensor exists on the target hardware."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/JavaLaunching.framework",
@@ -310,11 +457,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "packaging/arch/runtime-packages.txt (jdk-openjdk)",
+   "bifrost": "springboard/src/shell/java_launch.rs, packaging/arch/runtime-packages.txt (jdk-openjdk)",
    "status": "partial",
-   "note": "The java launcher from jdk-openjdk starts Java programs. Gap: launching a Java application bundle from the desktop is not provided.",
+   "note": "Launching Java programs: reads a jar's manifest (Main-Class, Class-Path), builds the java command line without a shell, limits runtime options to a safe set, finds the runtime (JAVA_HOME, PATH, Arch default) and checks a required version. Built 2026-10-17 (shell/java_launch.rs, tests java_launch::tests). Wiring the .jar type's Open With to JavaSpec::for_jar is a launch-services registration, not part of this module.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::java_launch::tests"
+    }
+   ],
+   "ready_note": "Launching Java programs: reads a jar's manifest (Main-Class, Class-Path), builds the java command line without a shell, limits runtime options to a safe set, finds the runtime (JAVA_HOME, PATH, Arch default) and checks a required version. Built 2026-10-17 (shell/java_launch.rs, tests java_launch::tests). Wiring the .jar type's Open With to JavaSpec::for_jar is a launch-services registration, not part of this module."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/JavaScriptAppleEvents.framework",
@@ -331,11 +487,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/js_automation.rs, springboard/cmd/src/osascript.rs, springboard/core/src/script/interp.rs",
    "status": "gap",
-   "note": "Bridges JavaScript to the event channel used to script other apps. Build a JavaScript automation bridge that calls the app control sockets (bifrost pc control) so scripts can drive apps.",
+   "note": "JavaScript bridge to app events. Built 2026-10-17: Application(name) in a Boa context maps camelCase properties to the commands of the app's manifest dictionary and sends them as typed events through the same Host as the AppleScript-style language; the Policy rule refuses events to apps outside the grants (-1743) before sending, and the shell needs its own grant (js_automation::tests). Not covered: object specifiers (properties and elements); an app cannot push a notification into a script, as in the reference.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::js_automation::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "osascript::tests"
+    }
+   ],
+   "ready_note": "JavaScript bridge to app events. Built 2026-10-17: Application(name) in a Boa context maps camelCase properties to the commands of the app's manifest dictionary and sends them as typed events through the same Host as the AppleScript-style language; the Policy rule refuses events to apps outside the grants (-1743) before sending, and the shell needs its own grant (js_automation::tests). Not covered: object specifiers (properties and elements); an app cannot push a notification into a script, as in the reference."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/JavaScriptOSA.framework",
@@ -352,11 +522,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/js_automation.rs, springboard/cmd/src/osascript.rs, springboard/core/src/script/",
    "status": "gap",
-   "note": "Runs JavaScript automation scripts through the scripting component layer. Build a JavaScript script runner on the app control sockets, shared with the JavaScript event bridge row.",
+   "note": "The JavaScript scripting component: a runner that evaluates a script in a fresh Boa context with the automation host object, calls run(argv) when defined, returns the result as a script value and reports errors with Apple-event numbers (syntax -2740, generic -2700). Built 2026-10-17 (shell/js_automation.rs) and reachable as `osascript -l JavaScript`. The compiled-script store (osacompile) stays AppleScript-only.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::js_automation::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "osascript::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "script::tests"
+    }
+   ],
+   "ready_note": "The JavaScript scripting component: a runner that evaluates a script in a fresh Boa context with the automation host object, calls run(argv) when defined, returns the result as a script value and reports errors with Apple-event numbers (syntax -2740, generic -2700). Built 2026-10-17 (shell/js_automation.rs) and reachable as `osascript -l JavaScript`. The compiled-script store (osacompile) stays AppleScript-only."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Jet.framework",
@@ -374,8 +563,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Private framework with no owner identified. The extract has only its bundle property lists, and the binary is in the shared cache, which the extract does not expose. Left as os.",
+   "status": "n/a",
+   "note": "n/a: Apple's store-client app framework (storefront page engine; the index lists its jetkey files under System/Library/Jet and iOSSupport copies). It serves Apple's App Store and media stores, which BifrOSt deliberately does not mirror; the PC App Store has its own client.",
    "rea": [],
    "method": "assessed"
   },
@@ -395,8 +584,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Private framework with no owner identified. The extract has only its bundle property lists, and the binary is in the shared cache, which the extract does not expose. Left as os.",
+   "status": "n/a",
+   "note": "n/a: asset packaging of the Jet store-client framework (Jet.framework, JetEngine, JetUI; iOSSupport copies in the index). It serves Apple's stores, which BifrOSt does not mirror.",
    "rea": [],
    "method": "assessed"
   },
@@ -416,8 +605,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Private framework with no owner identified. The extract has only its bundle property lists, and the binary is in the shared cache, which the extract does not expose. Left as os.",
+   "status": "n/a",
+   "note": "The index shows the jetpackassetd daemon, which downloads Apple-hosted asset packs for Apple's own services. BifrOSt has no counterpart service and no content store to serve.",
    "rea": [],
    "method": "assessed"
   },
@@ -437,8 +626,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Private framework with no owner identified. The extract has only its bundle property lists, and the binary is in the shared cache, which the extract does not expose. Left as os.",
+   "status": "n/a",
+   "note": "n/a: the page engine of the Jet store-client framework (with the _JetEngine_SwiftUI overlay and iOSSupport copies in the index). It renders Apple's store pages, which BifrOSt does not mirror.",
    "rea": [],
    "method": "assessed"
   },
@@ -458,8 +647,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Private framework with no owner identified. The extract has only its bundle property lists, and the binary is in the shared cache, which the extract does not expose. Left as os.",
+   "status": "n/a",
+   "note": "n/a: foundation types of the Jet store-client framework (Jet, JetEngine, JetUI, JetPack). It serves Apple's stores, which BifrOSt does not mirror.",
    "rea": [],
    "method": "assessed"
   },
@@ -479,8 +668,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Private framework with no owner identified. The extract has only its bundle property lists, and the binary is in the shared cache, which the extract does not expose. Left as os.",
+   "status": "n/a",
+   "note": "n/a: packaging format of the Jet store-client framework (iOSSupport copy in the index). It serves Apple's stores, which BifrOSt does not mirror.",
    "rea": [],
    "method": "assessed"
   },
@@ -500,8 +689,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Private framework with no owner identified. The extract has only its bundle property lists, and the binary is in the shared cache, which the extract does not expose. Left as os.",
+   "status": "n/a",
+   "note": "n/a: UI layer of the Jet store-client framework (with the _JetUI_SwiftUI overlay and iOSSupport copies in the index). It draws Apple's store pages, which BifrOSt does not mirror.",
    "rea": [],
    "method": "assessed"
   },
@@ -522,7 +711,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "Private framework for join requests. The owning feature is not identified: the bundle has only property lists (copyright 2022), and the binary is in the shared cache. Left as os.",
+   "note": "Reopened from n/a (audit 2026-10-17): purpose unknown. Bare framework (Info.plist 1402 B only). By name it handles requests to join a shared group or space, likely tied to an Apple account service (family or sharing invitations), but the index shows no evidence of which. Needs: strings and callers; BifrOSt would need a local consent-based join flow if it backs a feature such as shared calendars or albums.",
    "rea": [],
    "method": "assessed"
   },
@@ -604,11 +793,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/installer/keymaps_data.rs",
+   "bifrost": "springboard/src/installer/keymaps_data.rs, springboard/src/installer/keymaps.rs",
    "status": "partial",
    "note": "The layout table is generated from xkeyboard-config through libxkbcommon, with console keymaps for the installer. Gap: the layouts are not verified on the lab machine.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "installer::keymaps::tests"
+    }
+   ],
+   "ready_note": "The layout table is generated from xkeyboard-config through libxkbcommon and the installer's console keymaps are tested in installer::keymaps::tests (US typing and shift, Icelandic letters, German swaps, dead keys and compose, Caps Lock, a full alphabet per layout, the installed layout from the keyboard environment). Verifying the layouts on the lab machine is the remaining step."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/KeyboardServices.framework",
@@ -629,7 +827,21 @@
    "status": "partial",
    "note": "Text replacements and learned words are served by the shell text service, and spelling runs on the core spellcheck model. Gap: there is no user dictionary store that syncs across devices, and the reference text replacement models are not read.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "text_services::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "spellcheck::tests"
+    }
+   ],
+   "ready_note": "Text replacements and learned words are served by the shell text service (bifrost-app text_services::tests), and spelling runs on the core spellcheck model (bifrost-core spellcheck::tests). No cross-device dictionary sync."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/KeychainCircle.framework",
@@ -669,7 +881,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "Knowledge graph library with no caller identified in the extract (bundle property list only). Left as os.",
+   "note": "Reopened from n/a (audit 2026-10-17): purpose unknown. Bare framework (Info.plist 1480 B only). By name a knowledge-graph library; the reference OS uses graphs for photos, search and suggestions. It may be a local on-device store (entities and relations) rather than a cloud service, and BifrOSt has entity_index.rs as a partial local analogue. Needs: callers and strings; a local graph store would need to stay opt-in and private.",
    "rea": [],
    "method": "assessed"
   },
@@ -772,11 +984,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/apps/keyboard/src/predict.rs, springboard/core/src/spellcheck.rs",
    "status": "os",
-   "note": "Language modeling framework (2013 copyright) with no caller identified in the extract. Left as os until its owner is found.",
+   "note": "Language models for typing: a prefix trie over word lists with frequencies, a previous-word bigram bonus learned from what is typed, and edit-distance autocorrect (apps/keyboard/src/predict.rs, tests predict::tests), plus spell checking (core/src/spellcheck.rs). Word lists exist for English and Icelandic.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-keyboard",
+     "filter": "predict::tests"
+    }
+   ],
+   "ready_note": "Language models for typing: a prefix trie over word lists with frequencies, a previous-word bigram bonus learned from what is typed, and edit-distance autocorrect (apps/keyboard/src/predict.rs, tests predict::tests), plus spell checking (core/src/spellcheck.rs). Word lists exist for English and Icelandic."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/LearnedFeatures.framework",
@@ -794,8 +1015,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Learned 3D vision feature models (Espresso and MIL files). No owner is identified from the extract, so it stays os.",
+   "status": "n/a",
+   "note": "Learned 3D vision feature models (espresso weights and model.mil files under Resources/Models and CV3D_LearnedFeatures_* bundles, seen in the reference index). These are Apple ML model packs with no BifrOSt runtime or caller, so n/a.",
    "rea": [],
    "method": "assessed"
   },
@@ -837,7 +1058,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "Private framework with no owner identified (bundle property list only). Left as os.",
+   "note": "Reopened from n/a (audit 2026-10-17): purpose unknown. Bare framework (Info.plist and version.plist only; the only other 'Leo' hits are the unrelated Leonardo.framework and old Leopard actions). Nothing visible. Needs: dyld-cache data to see exports and callers.",
    "rea": [],
    "method": "assessed"
   },
@@ -857,8 +1078,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "3D render graphs, USD scenes and a Metal library for tracker and detector scenes. No owning app is identified, so it stays os.",
+   "status": "n/a",
+   "note": "n/a: Apple's on-device 3D capture and tracking renderer: render graphs, USD scenes, an orbit-and-bake pipeline, accessory and background scenes, a device-specific sensor noise model (Rendering/Materials/J318NoiseModel.cube, 6.8 MB) and an Apple GPU shader library. Apple ML data and Apple hardware calibration; no BifrOSt feature depends on it.",
    "rea": [],
    "method": "assessed"
   },
@@ -881,7 +1102,21 @@
    "status": "partial",
    "note": "Dictionary lookup reads StarDict packages, and spelling uses a word list in the core spellcheck model. Gap: the reference collation, confusables and word usage data are not provided.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "stardict::"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "spellcheck::"
+    }
+   ],
+   "ready_note": "Dictionary lookup reads StarDict packages (bifrost-ui stardict) and spelling uses the core spellcheck word list; both are tested. Collation and confusables data are not covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/LibraryRepair.framework",
@@ -898,11 +1133,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/photos/repair.rs",
    "status": "os",
-   "note": "Reference system daemon com.apple.library-repair.agent (an XPC agent repairing the reference library caches). Arch verifies installed files with pacman, but BifrOSt names no repair service in its runtime packages, so it stays os until that decision is made.",
+   "note": "Repair Library for Photos: finds and removes stale and damaged cached thumbnails and interrupted writes, and moves empty picture files to Recently Deleted, never rewriting the pictures. Built 2026-10-17 (shell/photos/repair.rs, tests repair::tests). A menu command that calls check and repair is the caller's wiring.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::repair::tests"
+    }
+   ],
+   "ready_note": "Repair Library for Photos: finds and removes stale and damaged cached thumbnails and interrupted writes, and moves empty picture files to Recently Deleted, never rewriting the pictures. Built 2026-10-17 (shell/photos/repair.rs, tests repair::tests). A menu command that calls check and repair is the caller's wiring."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/LiftUI.framework",
@@ -921,7 +1165,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "Reference bundle com.apple.LiftUI with only an Info.plist in the reference extract (no binary, strings or headers were readable), so the purpose is not determined and it stays os.",
+   "note": "Reopened from n/a (audit 2026-10-17): purpose unknown. Bare framework (Info.plist 1279 B, version.plist 454 B; no nib, strings or images). Name suggests a UI toolkit layer, which would be a candidate for the bifrost-ui kit if apps call it. Needs: exports and callers.",
    "rea": [],
    "method": "assessed"
   },
@@ -940,11 +1184,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/ambient_light.rs, springboard/src/bare/ambient_sensor.rs, springboard/src/shell/night_shift.rs",
    "status": "os",
-   "note": "Reference bundle com.apple.LightSourceSupport with only an Info.plist in the reference extract (no binary, strings or headers were readable), so the purpose is not determined and it stays os.",
+   "note": "Ambient light source support: an illuminance (IIO) light sensor read as lux and turned into a display brightness and warmth. The reference holds only Info.plist and a perf-telemetry metadata plist.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "ambient_light::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::ambient_sensor::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::night_shift::tests"
+    }
+   ],
+   "ready_note": "The IIO illuminance channel is read, smoothed and mapped to a panel brightness (ambient_light, ambient_sensor), and Night Shift warms the final frame (night_shift). Laptops without a light sensor keep manual brightness."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/LighthouseBackground.framework",
@@ -962,8 +1225,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Reference bundle com.apple.LighthouseBackground with only an Info.plist in the reference extract (no binary, strings or headers were readable), so the purpose is not determined and it stays os.",
+   "status": "n/a",
+   "note": "n",
    "rea": [],
    "method": "assessed"
   },
@@ -983,8 +1246,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Reference bundle com.apple.LighthouseBitacoraFramework with only an Info.plist in the reference extract (no binary, strings or headers were readable), so the purpose is not determined and it stays os.",
+   "status": "n/a",
+   "note": "n/a: the logbook (Spanish bitacora) of the Lighthouse model training and evaluation pipeline (host SiriSuggestionsLightHousePlugin.appex in the index; sibling LighthouseCoreMLFeatureStore is already n/a). It records pipeline runs for the vendor's experiments; the bundle holds only Info.plist and BifrOSt runs no such pipeline.",
    "rea": [],
    "method": "assessed"
   },
@@ -1004,8 +1267,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Reference bundle com.apple.LighthouseCoreMLFeatureStore with only an Info.plist in the reference extract (no binary, strings or headers were readable), so the purpose is not determined and it stays os.",
+   "status": "n/a",
+   "note": "Apple-internal Lighthouse Core ML pipeline (feature store, model store, model analysis, data processing). It serves Apple's trained model packs, which BifrOSt does not ship.",
    "rea": [],
    "method": "assessed"
   },
@@ -1025,8 +1288,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Reference bundle com.apple.LighthouseCoreMLModelAnalysis with only an Info.plist in the reference extract (no binary, strings or headers were readable), so the purpose is not determined and it stays os.",
+   "status": "n/a",
+   "note": "Apple-internal Lighthouse Core ML pipeline (feature store, model store, model analysis, data processing). It serves Apple's trained model packs, which BifrOSt does not ship.",
    "rea": [],
    "method": "assessed"
   },
@@ -1046,8 +1309,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Reference bundle com.apple.LighthouseCoreMLModelStore with only an Info.plist in the reference extract (no binary, strings or headers were readable), so the purpose is not determined and it stays os.",
+   "status": "n/a",
+   "note": "Apple-internal Lighthouse Core ML pipeline (feature store, model store, model analysis, data processing). It serves Apple's trained model packs, which BifrOSt does not ship.",
    "rea": [],
    "method": "assessed"
   },
@@ -1067,8 +1330,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Reference bundle com.apple.LighthouseDataProcessor with only an Info.plist in the reference extract (no binary, strings or headers were readable), so the purpose is not determined and it stays os.",
+   "status": "n/a",
+   "note": "Apple-internal Lighthouse Core ML pipeline (feature store, model store, model analysis, data processing). It serves Apple's trained model packs, which BifrOSt does not ship.",
    "rea": [],
    "method": "assessed"
   },
@@ -1088,8 +1351,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Reference bundle com.apple.Lightning with only an Info.plist in the reference extract (no binary, strings or headers were readable), so the purpose is not determined and it stays os.",
+   "status": "n/a",
+   "note": "n/a: support for the vendor's Lightning connector and its accessories (the index lists AppleUSBLightningAdapter.kext and AppleLightningErrorHandler.kext, and the framework ships only a BridgeSupport file). Vendor connector hardware with no PC counterpart; PCs use USB-C, handled by the Linux kernel.",
    "rea": [],
    "method": "assessed"
   },
@@ -1129,11 +1392,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/spellcheck.rs, springboard/sdk/src/spellcheck.rs, springboard/ui/src/lexical_tags.rs, springboard/ui/src/stardict.rs, springboard/ui/src/textbreak.rs",
    "status": "os",
-   "note": "Reference bundle com.apple.LinguisticData with only an Info.plist in the reference extract (no binary, strings or headers were readable), so the purpose is not determined and it stays os.",
+   "note": "Language data assets (the index shows System/Library/LinguisticData with Latn and Cyrl data and RequiredAssets_* bundles per language) that feed spelling, tokenising and lexical tagging.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "spellcheck::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "lexical_tags::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "stardict::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "textbreak::tests"
+    }
+   ],
+   "ready_note": "Words are tokenised and checked against installed StarDict dictionaries with per-user learned words (spellcheck, stardict), word and sentence breaks come from textbreak, and lexical classes from lexical_tags. BifrOSt does not ship the reference's per-language asset bundles; dictionaries are open-source packages."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/LinkMetadata.framework",
@@ -1154,7 +1441,16 @@
    "status": "partial",
    "note": "Link metadata is read from a page head into a card with placeholder, loading, timeout and completion states, tested headless. Gap: no network fetch, image or icon download, redirect following or share-sheet preview; the caller does those.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "linkmeta::tests"
+    }
+   ],
+   "ready_note": "Link card model covered by bifrost-ui linkmeta::tests: placeholder, loading, timeout and completion states. The network fetch and image download stay with the caller."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/LinkPresentationMessagesSupport.framework",
@@ -1171,9 +1467,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/link-presentation.json",
-   "status": "partial",
-   "note": "private framework, owner LinkPresentation; from SDK matrix link-presentation.json",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: draws link bubbles inside the vendor's iMessage client (LinkPresentation messages support, owner LinkPresentation). BifrOSt Messages is a Matrix client that sends the link as text; rich link cards come from bifrost_ui::link_card and link_metadata, tracked in the LinkPresentation SDK rows.",
    "rea": [],
    "method": "assessed"
   },
@@ -1192,11 +1488,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/link-presentation.json",
+   "bifrost": "springboard/ui/src/linkmeta.rs, springboard/ui/src/link_card.rs, springboard/sdk/src/link_metadata.rs",
    "status": "partial",
-   "note": "private framework, owner LinkPresentation; from SDK matrix link-presentation.json",
+   "note": "Style sheet parsing that the link view uses to style its card. Internal plumbing of LinkPresentation, which BifrOSt implements as the native LinkView card model and its drawing.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "linkmeta::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "link_card::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "link_metadata::tests"
+    }
+   ],
+   "ready_note": "The link card is styled by named kit tokens in link_card (no CSS layer), and the page's own markup is parsed by link_metadata (title, icon, image from meta and link elements). Style sheets for the card do not exist as a separate step."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/LinkServices.framework",
@@ -1213,11 +1528,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/intents.rs, springboard/sdk/src/intent_catalog.rs, springboard/src/shell/intents.rs, springboard/src/shell/quicksearch.rs",
    "status": "os",
-   "note": "Reference bundle com.apple.LinkServices with only an Info.plist in the reference extract (no binary, strings or headers were readable), so the purpose is not determined and it stays os.",
+   "note": "The App Intents link service (daemon-side catalogue and runner of app actions and entities, called by Shortcuts and Search).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests"
+    }
+   ],
+   "ready_note": "Apps declare intents in manifest.toml; the shell keeps the catalogue (shell::intents), Search lists and runs them (quicksearch), and the SDK serves perform_intent and entity queries (sdk intents). Covered by the listed tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/LiveExecutionResultsFoundation.framework",
@@ -1297,11 +1631,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/fs_module.rs, springboard/sdk/src/fuse.rs, springboard/sdk/src/fuse_mount.rs, springboard/ui/src/fs_volume.rs, packaging/arch/runtime-packages.txt",
    "status": "os",
-   "note": "Reference bundle com.apple.LiveFS with only an Info.plist in the reference extract (no binary, strings or headers were readable), so the purpose is not determined and it stays os.",
+   "note": "Live (user-space) file system support: volumes served by a process instead of a kernel driver.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "fs_module::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "fuse::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "fs_volume::tests"
+    }
+   ],
+   "ready_note": "An app serves a read-only volume (fs_module Dispatcher over the FUSE kernel protocol in fuse, mounted by fuse_mount through fusermount3) and fs_volume models the tree. Write support is not built."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/LiveSpeechServices.framework",
@@ -1318,11 +1671,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/speech_engine.rs, springboard/src/shell/services/speech.rs, springboard/sdk/src/speech.rs, springboard/ui/src/speech.rs",
    "status": "os",
-   "note": "Reference bundle com.apple.LiveSpeechServices with only an Info.plist in the reference extract (no binary, strings or headers were readable), so the purpose is not determined and it stays os.",
+   "note": "Live Speech (type to speak): text typed by the person is spoken aloud by the synthesiser. The index shows the accessibility sandbox profile com.apple.accessibility.LiveSpeech.sb and the Live Speech category strings.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "speech_engine::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::speech::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "speech::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "speech::tests"
+    }
+   ],
+   "ready_note": "The shell speech service speaks an app's text through espeak-ng (packaged), one utterance per app with voice and rate; ui::speech models the utterance queue. Personal voices and a system-wide type-to-speak panel are not built."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/LiveTranscription.framework",
@@ -1339,11 +1716,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/services/recognizer.rs, springboard/sdk/src/speech_whisper.rs, springboard/ui/src/whisper.rs, springboard/ui/src/captions.rs",
    "status": "os",
-   "note": "Reference bundle com.apple.LiveTranscription with only an Info.plist in the reference extract (no binary, strings or headers were readable), so the purpose is not determined and it stays os.",
+   "note": "Live transcription (the Live Captions agent, com.apple.accessibility.LiveTranscriptionAgent in the index): speech turned into text on the device.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::recognizer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "speech_whisper::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "whisper::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "captions::tests"
+    }
+   ],
+   "ready_note": "The speech_recognizer service captures the microphone and runs the packaged whisper element with a local model, after the person's consent, and apps read transcripts through speech_whisper; captions holds the caption look. English only; there is no system-audio caption overlay yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/LocalAuthenticationCore.framework",
@@ -1360,11 +1761,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/local-authentication.json",
+   "bifrost": "springboard/core/src/biometry.rs, springboard/src/shell/services/local_auth.rs",
    "status": "partial",
-   "note": "private framework, owner LocalAuthentication; from SDK matrix local-authentication.json",
+   "note": "private framework, owner LocalAuthentication; from SDK matrix local-authentication.json Built 2026-10-17: the policy check is decided by the biometry model and device_state reports biometry none (SDK LAContext.biometry_type). Open: the authentication sheet is not drawn and biometry stays absent.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "biometry::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::local_auth::tests"
+    }
+   ],
+   "ready_note": "The biometry device model (resolve, DomainState) and the policy check the shell service runs through it."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/LocalAuthenticationCoreUI.framework",
@@ -1381,11 +1796,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/local-authentication.json",
+   "bifrost": "springboard/src/shell/auth_sheet.rs, springboard/ui/src/auth_prompt.rs",
    "status": "partial",
-   "note": "private framework, owner LocalAuthentication; from SDK matrix local-authentication.json",
+   "note": "private framework, owner LocalAuthentication; from SDK matrix local-authentication.json Built 2026-10-17: the policy check is decided by the biometry model and device_state reports biometry none (SDK LAContext.biometry_type). Open: the authentication sheet is not drawn and biometry stays absent.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::auth_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "auth_prompt::tests"
+    }
+   ],
+   "ready_note": "The password sheet the shell draws for an app's evaluate call, and the attempt model it follows."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/LocalAuthenticationCredentialServices.framework",
@@ -1402,11 +1831,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/local-authentication.json",
+   "bifrost": "springboard/src/keychain.rs, springboard/ui/src/credential_acl.rs, springboard/ui/src/access_control.rs",
    "status": "partial",
-   "note": "private framework, owner LocalAuthentication; from SDK matrix local-authentication.json",
+   "note": "private framework, owner LocalAuthentication; from SDK matrix local-authentication.json. Credential binding (owner-only grants, presence required on every read) is modelled in bifrost_ui::credential_acl and, built 2026-10-17 (wave 12), stored and enforced by the keychain store in springboard/src/keychain.rs.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "keychain::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "credential_acl::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "access_control::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: the keychain store keeps an owner-only credential binding next to each item and enforces it: other apps read only with a grant (get_as), a presence requirement refuses a plain read with AuthFailed until the person has shown it (get_with_presence), grants and revokes belong to the owner, and a binding goes with its item. The authentication sheet that collects the presence is the LocalAuthentication row's."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/LocalAuthenticationRecoveryUI.framework",
@@ -1423,9 +1871,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/local-authentication.json",
+   "bifrost": "springboard/ui/src/recovery_key.rs",
    "status": "partial",
-   "note": "private framework, owner LocalAuthentication; from SDK matrix local-authentication.json",
+   "note": "private framework, owner LocalAuthentication; from SDK matrix local-authentication.json Built 2026-10-17: the reset decision (recovery key with salted digest, five tries, administrator with verified password) in bifrost_ui::recovery_key, with tests. Open, and left on purpose: the reset needs a privd method that checks the root-owned recovery record and sets the password before login, plus a login-window step (forgot-password link, key and new-password fields). That is a pre-login privileged path and a drawn screen that must be compiled and reviewed on Midget, so it is not written blind in this wave.",
    "rea": [],
    "method": "assessed"
   },
@@ -1444,11 +1892,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/local-authentication.json",
+   "bifrost": "springboard/src/shell/auth_sheet.rs, springboard/src/shell/forms.rs",
    "status": "partial",
-   "note": "private framework, owner LocalAuthentication; from SDK matrix local-authentication.json",
+   "note": "private framework, owner LocalAuthentication; from SDK matrix local-authentication.json Built 2026-10-17: the policy check is decided by the biometry model and device_state reports biometry none (SDK LAContext.biometry_type). Open: the authentication sheet is not drawn and biometry stays absent.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::auth_sheet::tests"
+    }
+   ],
+   "ready_note": "The password sheet (reason, one secure field, Cancel and Continue), answered through the login backend."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/LocalFederatedSearch.framework",
@@ -1469,7 +1926,16 @@
    "status": "partial",
    "note": "Entities an app lists are indexed into the shared Core Search index, so a search finds them without launching the app. Gap: there is no cross-app federated search service, and per-app indexes are not merged into one result set.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "indexed_entity::"
+    }
+   ],
+   "ready_note": "Entities that apps list are indexed into the shared search index (bifrost-app indexed_entity), tested. Cross-app federated merging is not covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/LocalSpeechRecognitionBridge.framework",
@@ -1486,11 +1952,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/speech_recognizer.rs, springboard/sdk/src/speech_whisper.rs, springboard/src/shell/services/recognizer.rs, springboard/ui/src/recognition_task.rs",
    "status": "os",
-   "note": "Reference bundle com.apple.LocalSpeechRecognitionBridge with only an Info.plist in the reference extract (no binary, strings or headers were readable), so the purpose is not determined and it stays os.",
+   "note": "Bridge from apps to the on-device speech recogniser.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "speech_recognizer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "speech_whisper::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::recognizer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "recognition_task::tests"
+    }
+   ],
+   "ready_note": "Apps use the recogniser-shaped API (speech_recognizer requests, tasks and results), which reaches the shell's speech_recognizer service over speech_whisper; audio never leaves the machine and consent comes first. English only, no per-word timing."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/LocalStatusKit.framework",
@@ -1508,8 +1998,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Reference bundle com.apple.LocalStatusKit with only an Info.plist in the reference extract (no binary, strings or headers were readable), so the purpose is not determined and it stays os.",
+   "status": "n/a",
+   "note": "n/a: shares a person's Focus or status with other people over the vendor's identity and messaging services (name-based; the index holds only Info.plist and resources). Needs the vendor account and iMessage transport; BifrOSt Focus (focus_filter, dnd) is local only.",
    "rea": [],
    "method": "assessed"
   },
@@ -1532,7 +2022,26 @@
    "status": "partial",
    "note": "Per-app location grants and the authorization status and error model are in the privacy and location services, with the status model in springboard/ui/src/location_auth.rs. Gap: there is no separate authorization daemon, and the grant prompt is not verified on the lab machine.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::privacy_permissions::"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::location::"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "location_auth::"
+    }
+   ],
+   "ready_note": "Per-app location grants live in shell::services::privacy_permissions and shell::services::location; the authorization status and error model is bifrost-ui location_auth. All three have unit tests. The separate authorization daemon is not part of these checks."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/LocationAuthorizationFramework.framework",
@@ -1553,7 +2062,26 @@
    "status": "partial",
    "note": "Per-app location grants and the authorization status and error model are in the privacy and location services, with the status model in springboard/ui/src/location_auth.rs. Gap: there is no separate authorization daemon, and the grant prompt is not verified on the lab machine.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::privacy_permissions::"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::location::"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "location_auth::"
+    }
+   ],
+   "ready_note": "The authorization status and error model (bifrost-ui location_auth) and the per-app grant store are tested. No separate daemon is part of these checks."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/LocationAuthorizationXPC.framework",
@@ -1574,7 +2102,16 @@
    "status": "partial",
    "note": "Per-app location grants and the authorization status and error model are in the privacy and location services, with the status model in springboard/ui/src/location_auth.rs. Gap: there is no separate authorization daemon, and the grant prompt is not verified on the lab machine.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "location_auth::tests"
+    }
+   ],
+   "ready_note": "Authorization status and error model covered by bifrost-ui location_auth::tests; per-app grants are in the privacy and location services. There is no separate authorization daemon."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/LocationLogEncryption.framework",
@@ -1592,8 +2129,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Encryption of the reference location log store (com.apple.CoreLocation.LocationLogEncryption). BifrOSt writes no location log, so there is no store to encrypt; it stays os pending that decision.",
+   "status": "n/a",
+   "note": "Encryption of the reference location log store. BifrOSt writes no location log, so there is no store to encrypt; the row does not apply.",
    "rea": [],
    "method": "assessed"
   },
@@ -1612,11 +2149,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/services/location.rs, springboard/sdk/src/core_location.rs, springboard/ui/src/location.rs, springboard/ui/src/location_auth.rs",
    "status": "os",
-   "note": "Reference bundle com.apple.LocationSupport with only an Info.plist in the reference extract (no binary, strings or headers were readable), so the purpose is not determined and it stays os.",
+   "note": "Support code for the location service (positions, accuracy, authorisation).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::location::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "core_location::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "location::tests"
+    }
+   ],
+   "ready_note": "The shell location service answers apps the person allowed (fixes, accuracy, errors), core_location gives the manager and geocoder-shaped API, and ui::location holds the fix and heading values."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/LockdownMode.framework",
@@ -1634,8 +2190,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Reference hardening profile served by the lockdownmoded XPC daemon (com.apple.LockdownMode). BifrOSt has no equivalent profile; hardening on Arch is handled by the kernel and systemd units, so the choice is not made here and it stays os.",
+   "status": "n/a",
+   "note": "Apple's lockdownmoded hardening profile for Apple's own platform services. It relies on Apple signed-code and firmware controls that BifrOSt does not have, so there is no equivalent profile to build.",
    "rea": [],
    "method": "assessed"
   },
@@ -1655,8 +2211,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Settings and prompt UI for the reference hardening profile (com.apple.LockdownModeUI); it depends on the LockdownMode profile, which BifrOSt does not have, so it stays os.",
+   "status": "n/a",
+   "note": "Settings and prompt UI for Apple's Lockdown Mode profile. It depends on the Lockdown Mode service above, which BifrOSt does not have.",
    "rea": [],
    "method": "assessed"
   },
@@ -1675,11 +2231,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "Gap: the sign-in attempt counter and temporary lock exist in springboard/core/src/password_verify.rs (Attempts), but there is no lock screen panel that shows the lockout and the wait time. Build that panel in the shell lock screen.",
+   "bifrost": "springboard/src/shell/screentime/shield.rs",
+   "status": "partial",
+   "note": "Partial: the Time Limit lockout cover (Limit and Downtime, Ignore Limit for 1 more minute, 15 minutes or today, behind the Screen Time passcode) is built in springboard/src/shell/screentime/shield.rs. Gap: the sign-in attempt lock panel (springboard/core/src/password_verify.rs keeps the counter, but no lock screen panel shows the lockout and wait time yet). Not verified on Midget.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::screentime::shield::"
+    }
+   ],
+   "ready_note": "The Time Limit lockout cover (Limit, Downtime, ignore for a minute, passcode gate) is in shell::screentime::shield, with tests. The sign-in attempt lock is not covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/LoggingSupport.framework",
@@ -1699,6 +2264,20 @@
    "bifrost": "springboard/sdk/src/log.rs",
    "status": "partial",
    "note": "Unified logging for apps (os.Logger and the log store) is implemented in bifrost_core::log, with per-argument privacy formatting in springboard/core/src/log_format.rs. Gap: system-wide journal integration with systemd is not verified on the lab machine.",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "log::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "log_format::"
+    }
+   ],
+   "ready_note": "Unified logging for apps (the Logger API and the log store) is in bifrost_core::log, with per-argument privacy formatting in log_format.rs; both have unit tests. Journal integration with systemd is not part of this check.",
    "rea": [],
    "method": "assessed"
   },
@@ -1717,11 +2296,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
+   "bifrost": "springboard/src/shell/login.rs",
+   "status": "partial",
    "note": "Reference bundle com.apple.LoginUIKit with only an Info.plist in the reference extract (no binary, strings or headers were readable), so the purpose is not determined and it stays os.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::login::"
+    }
+   ],
+   "ready_note": "Login window UI: the shell login window (shell::login) draws the avatar, password field and power controls it needs; the reference login UI assets are not shipped as-is."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Lookup.framework",
@@ -1738,11 +2326,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "Gap: no system-wide Look Up service shows a definition for selected text. The dictionary app (springboard/apps/dictionary-desktop/src/main.rs) looks words up only inside itself. Build a Look Up service and popover that other apps can call.",
+   "bifrost": "springboard/src/shell/look_up_popover.rs; springboard/ui/src/look_up.rs",
+   "status": "partial",
+   "note": "Partial: the Look Up popover (Services menu Look Up and Ctrl+Cmd+D) shows the dictionary definition and quick search hits for the selected word, with Search and Open in Dictionary actions. Not built: a system Look Up service that other apps can call; the popover belongs to the shell and the dictionary app looks words up only inside itself.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "look_up::"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::look_up_popover::"
+    }
+   ],
+   "ready_note": "Dictionary definition and quick search hits for a selected word, shown in the Look Up popover; the lookup model (bifrost-ui look_up) and the popover (shell::look_up_popover) have tests. A system Look Up service is not part of these checks."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/LowPowerMode.framework",
@@ -1761,9 +2363,28 @@
    "doc": "",
    "bifrost": "springboard/src/bare/boost.rs; packaging/arch/runtime-packages.txt (power-profiles-daemon)",
    "status": "partial",
-   "note": "The shell hands its power profile to power-profiles-daemon through powerprofilesctl. Gap: there is no Low Power Mode toggle or app-facing power-state API, and the profile change is not verified on the lab machine.",
+   "note": "The shell hands its power profile to power-profiles-daemon through powerprofilesctl. Gap: there is no Low Power Mode toggle or app-facing power-state API, and the profile change is not verified on the lab machine. Built 2026-10-17 (verified existing): Low Power Mode switch on the Battery page (src/shell/pages.rs), SDK ProcessInfo::is_low_power_mode_enabled and observe_low_power_mode, and the desktop power-saver hand-off to power-profiles-daemon (boost::tests).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::boost::tests::desktop_profiles_map_to_power_profiles_daemon"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "process_info::tests::low_power_state_file_parses"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "power_service::tests"
+    }
+   ],
+   "ready_note": "The Battery page switch, the SDK low power query and change event, and the power-saver hand-off are covered by these tests. No Control Center tile yet: the cluster grid has no free slot."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/kperf.framework",
@@ -1781,8 +2402,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Kernel performance counter bridge used by the reference profiler (kperf.framework, com.apple.kperf). Arch offers the perf tool (listed as a candidate in tools/parity/os_cli_packages.txt, not shipped), so it stays os.",
+   "status": "n/a",
+   "note": "Apple's kernel-private performance counter bridge. Its counter-reading job is taken by Linux perf_event_open, tracked on the kperfdata row.",
    "rea": [],
    "method": "assessed"
   },
@@ -1803,9 +2424,23 @@
    "doc": "",
    "bifrost": "perf (Arch package, tools/parity/os_cli_packages.txt)",
    "status": "partial",
-   "note": "The reference counter library reads hardware performance counters. Linux perf reads the same counters through perf_event_open and its command-line tools are in the package list. BifrOSt has no SDK counter API, and the perf probe is not verified on Midget.",
+   "note": "The reference counter library reads hardware performance counters. Linux perf reads the same counters through perf_event_open and its command-line tools are in the package list. BifrOSt has no SDK counter API, and the perf probe is not verified on Midget. Built 2026-10-17: perf stat runs through the SDK with CSV counter parsing and unset counters as None (sdk perf_counters::tests).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "perf_counters::tests"
+    },
+    {
+     "kind": "cmd",
+     "run": "command -v perf",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "perf stat is run and its counter lines parsed through the SDK (perf_counters::tests). The perf probe on Midget is not verified."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ktrace.framework",
@@ -1823,8 +2458,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Kernel trace session library for the reference's trace tooling. Syscall tracing is covered by strace in the runtime package list, but no kernel event trace API is mirrored, and no daily-desktop job needs one, so it stays os.",
+   "status": "n/a",
+   "note": "n/a: kernel trace session library of the reference kernel's kdebug event stream (Instruments and the vendor's trace tools). It is specific to that kernel; Linux uses ftrace, perf and eBPF, strace is packaged, and no BifrOSt feature reads a kernel event trace.",
    "rea": [],
    "method": "assessed"
   },
@@ -1886,8 +2521,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only the bundle identifier (com.apple.lighthouse-runtime) was readable from the reference image. Its job is not determined, so it stays os.",
+   "status": "n/a",
+   "note": "n/a: runtime of the Lighthouse model training and evaluation pipeline (bundle id com.apple.lighthouse-runtime; host SiriSuggestionsLightHousePlugin.appex in the index; sibling LighthouseCoreMLFeatureStore is already n/a). BifrOSt ships no Apple model packs and runs no such pipeline.",
    "rea": [],
    "method": "assessed"
   },
@@ -1910,7 +2545,16 @@
    "status": "partial",
    "note": "The lock screen draws the login window, the account avatar, the password field and the power menu. The reference's login user service (LoginUserService XPC) and its multi-user login logic are not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::login::"
+    }
+   ],
+   "ready_note": "The lock screen login window (avatar, password field, power menu) is in shell::login, with tests. Multi-user login logic is not covered."
   }
  ]
 }

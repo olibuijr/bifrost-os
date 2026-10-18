@@ -19,16 +19,20 @@ pub mod export;
 pub mod folders;
 pub mod grid;
 pub mod import;
+pub mod libraries;
 pub mod library;
 pub mod link;
 pub mod memories;
 pub mod meta;
 pub mod models;
+pub mod places;
 pub mod recipe;
+pub mod repair;
 pub mod slideshow;
 pub mod stars;
 pub mod thumbs;
 pub mod undo;
+pub mod video;
 pub mod viewer;
 pub mod zoom;
 #[cfg(test)]
@@ -37,6 +41,8 @@ mod commands_tests;
 mod adjust_tests;
 #[cfg(test)]
 mod favorites_tests;
+#[cfg(test)]
+mod library_tests;
 #[cfg(test)]
 mod selection_tests;
 #[cfg(test)]
@@ -128,6 +134,14 @@ pub enum Target {
     ChooseAlbum(Album),
     /// the menu's New Album row
     NewAlbum,
+    /// a pin on the Places map: its index in the clusters (see `place_clusters`)
+    Place(usize),
+    /// the Places cluster's photos: back to the map
+    PlacesBack,
+    /// the movie's play or pause control in the viewer
+    ClipToggle,
+    /// a point on the movie's progress bar, in thousandths of its length
+    ClipSeek(u16),
     /// the viewer's Album button: add to (or remove from) a user album
     AddToAlbum,
     AlbumCancel,
@@ -182,6 +196,8 @@ pub enum Target {
     SheetDuplicate,
     /// the Info sheet's Revert to Original row
     InfoRevert,
+    /// the Info sheet's Look Up in Visual Search row
+    InfoLookUp,
     Edit,
     EditCancel,
     EditSave,
@@ -387,6 +403,8 @@ pub enum Album {
     Hidden,
     /// pictures whose files are the same bytes; listed in the picker once there are any
     Duplicates,
+    /// the photos with an EXIF GPS position, on a map (or, after a tap on a pin, the photos of that pin)
+    Places,
     /// a user album: index into the album list
     User(u8),
     /// a smart album: the slot of its saved rules
@@ -395,10 +413,19 @@ pub enum Album {
     Memory(u8),
 }
 
+/// The movie in the viewer: its path, its player (None when it would not open) and the frame on screen.
+struct Clip {
+    path: PathBuf,
+    player: Option<crate::media::player::Player>,
+    frame: Option<Image>,
+}
+
 /// At most this many user albums.
 const MAX_USER_ALBUMS: usize = 8;
 /// At most this many smart albums.
 const MAX_SMART_ALBUMS: usize = 8;
+/// The Places map's pin cell: pins closer than this on screen are one cluster.
+const PIN_CELL_PT: f32 = 56.0;
 
 /// A smart album: a name, the rules it was saved with (a search, see `meta::Query`) and the photos that match them.
 struct SmartEntry {
@@ -419,6 +446,7 @@ impl Album {
             Self::Trash => "Recently Deleted",
             Self::Hidden => "Hidden",
             Self::Duplicates => "Duplicates",
+            Self::Places => "Places",
             Self::User(_) => "Album",
             Self::Smart(_) => "Smart Album",
             Self::Memory(_) => "Memory",
@@ -474,6 +502,8 @@ enum Done {
     ThumbSkipped { key: String },
     Full { key: String, image: Option<Image> },
     Wallpaper { id: String, ok: bool },
+    /// GPS positions read off the UI thread for the photos of a batch (None: the file has none)
+    Gps { results: Vec<(PathBuf, Option<(f64, f64)>)> },
 }
 
 pub struct Photos {
@@ -525,6 +555,18 @@ pub struct Photos {
     /// groups of identical files from the last scan, and the visible photos that have a twin
     dupe_groups: Vec<Vec<PathBuf>>,
     duplicates: Vec<Photo>,
+    /// the photos with a GPS position (Places), their positions in the same order, the GPS read so far
+    places: Vec<Photo>,
+    place_points: Vec<(f64, f64)>,
+    place_gps: std::collections::HashMap<PathBuf, Option<(f64, f64)>>,
+    /// the photos of the pin the user tapped; None shows the map
+    place_pick: Option<Vec<PathBuf>>,
+    /// a worker is reading GPS positions; its result refreshes the map
+    place_busy: bool,
+    /// the movie shown in the viewer, if the photo on screen is one
+    clip: Option<Clip>,
+    /// the map tiles under the Places pins, loaded from the shared tile cache (created on first use)
+    tiles: Option<crate::maptiles::loader::TileLoader>,
     /// what Undo and Redo step through
     stack: Stack,
     /// the edit copied in the editor, for Paste Edits
@@ -591,6 +633,8 @@ pub struct Photos {
     effects: Vec<Effect>,
     /// a picture the user chose to send; the shell opens the share sheet
     share_req: Option<PathBuf>,
+    /// the picture the Info sheet's Look Up in Visual Search row chose; the shell takes it once and opens the panel
+    visual_search_req: Option<PathBuf>,
     camera_req: bool,
     /// the open photo a Print command handed over; the shell takes it once and opens the print sheet
     print_req: Option<Image>,
@@ -633,6 +677,9 @@ impl Photos {
     /// (the first is ours and receives screenshots and the trash), `offset`
     /// is the local zone's offset from UTC in seconds.
     pub fn new(ui: &Ui, w: i32, h: i32, data: PathBuf, dirs: Vec<PathBuf>, offset: i32) -> std::io::Result<Self> {
+        // the library chosen last, when its folder still exists, replaces the default one
+        let prefs = Prefs::load(data.join(PREFS_FILE));
+        let dirs = libraries::remembered(&prefs).filter(|p| p.is_dir()).map_or(dirs, |lib| vec![lib]);
         let pictures = dirs.first().cloned().unwrap_or_else(|| data.join("Pictures"));
         std::fs::create_dir_all(&pictures)?;
         let mut p = Photos {
@@ -669,6 +716,13 @@ impl Photos {
             now: 0.0,
             dupe_groups: vec![],
             duplicates: vec![],
+            places: vec![],
+            place_points: vec![],
+            place_gps: std::collections::HashMap::new(),
+            place_pick: None,
+            place_busy: false,
+            tiles: None,
+            clip: None,
             stack: Stack::default(),
             edit_clip: None,
             pending_link: None,
@@ -706,7 +760,7 @@ impl Photos {
             viewer: None,
             slideshow: None,
             sheet: None,
-            prefs: Prefs::load(data.join(PREFS_FILE)),
+            prefs,
             text: TextCache::default(),
             pressed: None,
             scrolling: false,
@@ -714,6 +768,7 @@ impl Photos {
             recent: vec![],
             effects: vec![],
             share_req: None,
+            visual_search_req: None,
             camera_req: false,
             print_req: None,
             dirty: true,
@@ -748,6 +803,11 @@ impl Photos {
         self.share_req.take()
     }
 
+    /// The picture to look up in visual search, if the Info sheet's Look Up row was just chosen.
+    pub fn take_visual_search(&mut self) -> Option<PathBuf> {
+        self.visual_search_req.take()
+    }
+
     /// True while the viewer hides its bars (no status bar or home indicator).
     pub fn fullscreen(&self) -> bool {
         self.slideshow.as_ref().is_some_and(|s| !s.controls) || self.viewer.as_ref().is_some_and(|v| !v.chrome)
@@ -780,6 +840,7 @@ impl Photos {
             Album::All => &self.visible,
             Album::Hidden => &self.hidden,
             Album::Duplicates => &self.duplicates,
+            Album::Places => &self.places,
             Album::Recents => &self.recents,
             Album::Favorites => &self.favorites,
             Album::Screenshots => &self.screenshots,
@@ -798,6 +859,9 @@ impl Photos {
         }
         if !self.duplicates.is_empty() {
             v.push(Album::Duplicates);
+        }
+        if !self.places.is_empty() {
+            v.push(Album::Places);
         }
         let names: Vec<(usize, String)> = self.user_albums.iter().enumerate().map(|(i, u)| (i, u.0.clone())).collect();
         v.extend(albums::album_order(&names, self.albums_by_name()).into_iter().map(|i| Album::User(i as u8)));
@@ -926,6 +990,7 @@ impl Photos {
     /// Switches albums and returns to that album's grid.
     pub fn select_album(&mut self, ui: &Ui, album: Album) {
         self.album = album;
+        self.place_pick = None;
         self.album_menu = false;
         self.more_menu = false;
         self.keywords_open = false;
@@ -1086,6 +1151,7 @@ impl Photos {
             })
             .map(|(i, name)| (name, self.visible.iter().filter(|p| self.in_user_album(i, p)).cloned().collect()))
             .collect();
+        self.refresh_places();
         self.recents = models::smart_album(SmartAlbum::RecentlyAdded, &self.visible, |p| self.is_favourite(p), now);
         self.screenshots = models::smart_album(SmartAlbum::Screenshots, &self.visible, |p| self.is_favourite(p), now);
         self.smart_albums = (0..MAX_SMART_ALBUMS)
@@ -1111,10 +1177,13 @@ impl Photos {
             }
         }
         let view = {
-            let base = self.album_list(self.album);
+            let base: Vec<Photo> = match &self.place_pick {
+                Some(paths) if self.album == Album::Places => self.places.iter().filter(|p| paths.contains(&p.path)).cloned().collect(),
+                _ => self.album_list(self.album).to_vec(),
+            };
             let filtered = match &self.filter {
-                Some((_, range)) => albums::in_range(base, *range),
-                None => base.to_vec(),
+                Some((_, range)) => albums::in_range(&base, *range),
+                None => base,
             };
             let searched = if self.query.is_empty() { filtered } else { self.search_filter(filtered, &self.query) };
             models::by_date(&searched, self.newest_first)
@@ -1209,6 +1278,35 @@ impl Photos {
             }
         }
         self.trash.retain(|p| !gone.contains(&p.path));
+    }
+
+    /// Makes `dir` the library Photos shows: the folder is created when missing, the choice is remembered for the
+    /// next launch, and the pictures in it are scanned. False, with the library kept, when the folder cannot be made
+    /// or the choice cannot be saved.
+    pub fn switch_library(&mut self, ui: &Ui, dir: PathBuf) -> bool {
+        if std::fs::create_dir_all(&dir).is_err() {
+            return false;
+        }
+        let mut list = libraries::decode(&self.prefs);
+        libraries::remember(&mut list, &dir);
+        let writes = libraries::writes(&list, &dir);
+        let pairs: Vec<(&str, &str)> = writes.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+        let mut next = self.prefs.clone();
+        if next.set_many(&pairs).is_err() {
+            return false;
+        }
+        self.prefs = next;
+        self.pictures = dir.clone();
+        self.dirs = vec![dir];
+        // what the old library showed does not carry over
+        self.viewer = None;
+        self.selection = Selection::default();
+        self.anchor = None;
+        self.all.clear();
+        self.trash.clear();
+        self.rebuild(ui);
+        self.rescan();
+        true
     }
 
     /// Writes one setting; false (and the old value kept) if it cannot be saved.
@@ -1311,7 +1409,7 @@ impl Photos {
                         return Done::ThumbSkipped { key };
                     }
                     let image = disk.read(&key).or_else(|| {
-                        let img = decode_edited(&std::fs::read(&photo.path).ok()?, recipe)?;
+                        let img = if video::is_video(&photo.path) { video::poster(&photo.path)? } else { decode_edited(&std::fs::read(&photo.path).ok()?, recipe)? };
                         let thumb = if fit { imgdec::contain(&img, thumbs::SIZE, thumbs::SIZE) } else { imgdec::cover(&img, thumbs::SIZE, thumbs::SIZE) };
                         disk.write(&key, &thumb);
                         Some(thumb)
@@ -1333,7 +1431,8 @@ impl Photos {
         };
         for photo in around {
             let key = photo.key();
-            if self.full.contains(&key) || self.full_pending.contains(&key) {
+            // movies play through the media player (see `follow_clip`), not as a decoded still
+            if self.full.contains(&key) || self.full_pending.contains(&key) || video::is_video(&photo.path) {
                 continue;
             }
             self.full_pending.insert(key.clone());
@@ -1419,6 +1518,16 @@ impl Photos {
                         self.follow_link(ui, l);
                     }
                 }
+                Done::Gps { results } => {
+                    self.place_busy = false;
+                    for (path, gps) in results {
+                        self.place_gps.insert(path, gps);
+                    }
+                    self.refresh_places();
+                    if self.album == Album::Places {
+                        self.rebuild(ui);
+                    }
+                }
                 Done::Thumb { key, image } => {
                     self.thumb_pending.remove(&key);
                     match image {
@@ -1470,6 +1579,11 @@ impl Photos {
     /// came into view. True when the screen changed.
     pub fn tick(&mut self, ui: &Ui, t: f64) -> bool {
         self.now = t;
+        // map tiles finish on their own threads; applying them here picks them up on the next frame
+        if self.tiles.as_mut().is_some_and(|l| l.pump()) {
+            self.dirty = true;
+        }
+        self.follow_clip();
         if self.note.as_ref().is_some_and(|(_, until)| t >= *until) {
             self.note = None;
             self.dirty = true;
@@ -1528,7 +1642,7 @@ impl Photos {
         if y >= ui.pt(STATUS_PT) && y < content_top(ui) {
             let m = ui.pt(MARGIN_PT);
             if x < m + ui.pt(150.0) {
-                return Some(Target::Album);
+                return Some(if self.showing_pick() { Target::PlacesBack } else { Target::Album });
             }
             if self.blank_library() {
                 return None;
@@ -1650,6 +1764,11 @@ impl Photos {
             if y < content_top(ui) || y >= self.content_bottom(ui) {
                 return None;
             }
+            if self.album == Album::Places && self.place_pick.is_none() {
+                let (local_x, local_y) = (f64::from(x), f64::from(y - content_top(ui)));
+                let radius = f64::from(ui.pt(18.0));
+                return Some(places::cluster_at(&self.place_clusters(ui), local_x, local_y, radius).map_or(Target::Content, Target::Place));
+            }
             return Some(self.grid.hit(x, y - content_top(ui) + self.scroll.offset()).map_or(Target::Content, Target::Cell));
         };
         if let Some(sheet) = self.sheet {
@@ -1673,13 +1792,15 @@ impl Photos {
                         return Some(Target::InfoDetails);
                     }
                 }
-                if self.info_revert {
-                    let (sx, sy, sw, _) = self.sheet_rect(ui, Sheet::Info);
-                    let row = ui.pt(INFO_ROW_PT);
-                    let details = usize::from(self.info_has_rating());
-                    if within(x, y, (sx, sy + row * (self.info.len() + 1 + rated + details) as f32, sw, row)) {
-                        return Some(Target::InfoRevert);
-                    }
+                let (sx, sy, sw, _) = self.sheet_rect(ui, Sheet::Info);
+                let row = ui.pt(INFO_ROW_PT);
+                let details = usize::from(self.info_has_rating());
+                let look_up = self.info.len() + 1 + rated + details;
+                if within(x, y, (sx, sy + row * look_up as f32, sw, row)) {
+                    return Some(Target::InfoLookUp);
+                }
+                if self.info_revert && within(x, y, (sx, sy + row * (look_up + 1) as f32, sw, row)) {
+                    return Some(Target::InfoRevert);
                 }
                 return Some(Target::SheetCancel);
             }
@@ -1699,6 +1820,11 @@ impl Photos {
                 (Sheet::Share, 6) | (Sheet::Delete, 0) => Target::SheetAction,
                 _ => Target::SheetCancel,
             });
+        }
+        if v.chrome && self.clip_shown() {
+            if let Some(t) = self.clip_hit(ui, x, y) {
+                return Some(t);
+            }
         }
         if v.chrome {
             if y < content_top(ui) {
@@ -1810,6 +1936,15 @@ impl Photos {
                 }
             }
             Target::OpenCamera => self.camera_req = true,
+            Target::Place(i) => {
+                let clusters = self.place_clusters(ui);
+                if let Some(c) = clusters.get(i) {
+                    let paths: Vec<PathBuf> = c.members.iter().filter_map(|&m| self.places.get(m)).map(|p| p.path.clone()).collect();
+                    self.place_pick = Some(paths);
+                    self.rebuild(ui);
+                    self.scroll.jump_to(0.0);
+                }
+            }
             Target::Filter if !self.search.is_empty() => {
                 let text = self.search.clone();
                 self.open_entry(ui, Purpose::Search, &text, None, t);
@@ -1872,6 +2007,10 @@ impl Photos {
                 }
             }
             Target::InfoDetails => self.sheet = Some(Sheet::Details),
+            Target::InfoLookUp => {
+                self.sheet = None;
+                self.visual_search_req = self.viewing().map(|p| p.path.clone());
+            }
             Target::SheetExport => self.sheet = Some(Sheet::Export),
             Target::Export(row) => self.activate_export(row),
             Target::Detail(row) => self.activate_detail(ui, row, t),
@@ -1977,6 +2116,27 @@ impl Photos {
             Target::Slide(_) => {}
             Target::Album => {
                 self.album_menu = true;
+            }
+            Target::ClipToggle => {
+                if let Some(p) = self.clip.as_mut().and_then(|c| c.player.as_mut()) {
+                    if video::is_playing(p) {
+                        p.pause();
+                    } else {
+                        p.play();
+                    }
+                }
+            }
+            Target::ClipSeek(permille) => {
+                if let Some(p) = self.clip.as_mut().and_then(|c| c.player.as_mut()) {
+                    if let Some(d) = p.duration_ms() {
+                        p.seek_ms(d * f64::from(permille) / 1000.0);
+                    }
+                }
+            }
+            Target::PlacesBack => {
+                self.place_pick = None;
+                self.rebuild(ui);
+                self.scroll.jump_to(0.0);
             }
             Target::More => {
                 self.album_menu = false;
@@ -2391,7 +2551,7 @@ impl Photos {
 
     fn info_size(&self, ui: &Ui) -> (f32, f32) {
         let revert = usize::from(self.info_revert);
-        let rows = self.info.len() + 1 + 3 * usize::from(self.info_has_rating()) + revert;
+        let rows = self.info.len() + 1 + 3 * usize::from(self.info_has_rating()) + 1 + revert;
         (ui.pt(INFO_W_PT).min(self.w as f32 - 2.0 * ui.pt(MARGIN_PT)), ui.pt(INFO_ROW_PT) * rows as f32)
     }
 
@@ -2495,12 +2655,176 @@ impl Photos {
             self.draw_editor(s, ui);
         } else if self.viewer.is_some() {
             self.draw_viewer(s, ui);
+        } else if self.album == Album::Places && self.place_pick.is_none() && !self.places.is_empty() {
+            self.draw_places(s, ui);
         } else {
             self.draw_grid(s, ui);
         }
         self.draw_note(s, ui);
         if self.entry.is_some() {
             self.draw_entry(s, ui, t);
+        }
+    }
+
+    /// Keeps the visible photos whose GPS position is known (cached by path). Photos not read yet are sent to a
+    /// worker; its result comes back through `pump` and refreshes the map. Nothing is read on the UI thread.
+    fn refresh_places(&mut self) {
+        let mut places = Vec::new();
+        let mut points = Vec::new();
+        let mut missing = Vec::new();
+        for p in &self.visible {
+            match self.place_gps.get(&p.path) {
+                Some(Some(g)) => {
+                    places.push(p.clone());
+                    points.push(*g);
+                }
+                Some(None) => {}
+                None => missing.push(p.path.clone()),
+            }
+        }
+        self.places = places;
+        self.place_points = points;
+        if !missing.is_empty() && !self.place_busy {
+            self.place_busy = true;
+            self.pool.spawn(move || Done::Gps { results: missing.into_iter().map(|path| {
+                let gps = places::gps_of(&path);
+                (path, gps)
+            }).collect() });
+        }
+    }
+
+    /// Keeps the movie in the viewer in step with the photo on screen: a movie starts when it is shown, stops when
+    /// another photo or none is, and its newest frame is taken here.
+    fn follow_clip(&mut self) {
+        let want = self.viewing().filter(|p| video::is_video(&p.path)).map(|p| p.path.clone());
+        if self.clip.as_ref().map(|c| &c.path) != want.as_ref() {
+            self.clip = want.map(|path| {
+                let player = video::open(&path);
+                Clip { path, player, frame: None }
+            });
+        }
+        if let Some(c) = self.clip.as_mut() {
+            if let Some(img) = c.player.as_mut().and_then(|p| p.take_frame()) {
+                c.frame = Some(img);
+                self.dirty = true;
+            }
+        }
+    }
+
+    /// True when the viewer shows a movie that opened.
+    fn clip_shown(&self) -> bool {
+        self.viewer.is_some() && self.clip.as_ref().is_some_and(|c| c.player.is_some())
+    }
+
+    /// The progress bar of the viewer's movie: its x range and its centre line.
+    fn clip_bar(&self, ui: &Ui) -> (f32, f32, f32) {
+        (ui.pt(MARGIN_PT), self.w as f32 - ui.pt(MARGIN_PT), self.bar_top(ui) - ui.pt(12.0))
+    }
+
+    /// The centre of the viewer's play/pause control.
+    fn clip_centre(&self, ui: &Ui) -> (f32, f32) {
+        (self.w as f32 / 2.0, (content_top(ui) + self.bar_top(ui)) / 2.0)
+    }
+
+    /// The movie's controls under a touch: the progress bar (seek) or the play/pause button.
+    fn clip_hit(&self, ui: &Ui, x: f32, y: f32) -> Option<Target> {
+        let (x0, x1, bar_y) = self.clip_bar(ui);
+        if x >= x0 && x <= x1 && (y - bar_y).abs() <= ui.pt(8.0) {
+            return Some(Target::ClipSeek(((x - x0) / (x1 - x0) * 1000.0).clamp(0.0, 1000.0) as u16));
+        }
+        let (cx, cy) = self.clip_centre(ui);
+        ((x - cx).hypot(y - cy) <= ui.pt(30.0)).then_some(Target::ClipToggle)
+    }
+
+    /// Draws the movie's play or pause button and its progress bar over the viewer.
+    fn draw_clip_controls(&mut self, s: &mut Surface, ui: &Ui) {
+        let (cx, cy) = self.clip_centre(ui);
+        let r = ui.pt(30.0);
+        let player = self.clip.as_ref().and_then(|c| c.player.as_ref());
+        let playing = player.is_some_and(video::is_playing);
+        let fraction = player.and_then(|p| p.duration_ms().map(|d| (p.position_ms() / d).clamp(0.0, 1.0) as f32)).unwrap_or(0.0);
+        s.fill_rrect(cx - r, cy - r, r * 2.0, r * 2.0, r, rgba(0, 0, 0, 120));
+        if playing {
+            let (bw, bh) = (ui.pt(7.0), ui.pt(22.0));
+            s.fill_rrect(cx - ui.pt(8.0), cy - bh / 2.0, bw, bh, ui.pt(1.0), WHITE);
+            s.fill_rrect(cx + ui.pt(1.0), cy - bh / 2.0, bw, bh, ui.pt(1.0), WHITE);
+        } else {
+            // a right-pointing triangle: each row is as wide as its distance from the top or bottom edge allows
+            let (half, width, x0) = (ui.pt(14.0), ui.pt(20.0), cx - ui.pt(6.0));
+            let n = (2.0 * half).max(1.0) as usize;
+            let top = (cy - half).max(0.0) as usize;
+            for i in 0..n {
+                let f = (i as f32 + 0.5) / n as f32;
+                let w = (width * (1.0 - (2.0 * f - 1.0).abs())).max(1.0) as usize;
+                s.fill_rect(x0.max(0.0) as usize, top + i, w, 1, WHITE);
+            }
+        }
+        let (x0, x1, bar_y) = self.clip_bar(ui);
+        let (h, radius) = (ui.pt(3.0), ui.pt(1.5));
+        s.fill_rrect(x0, bar_y, x1 - x0, h, radius, rgba(255, 255, 255, 70));
+        s.fill_rrect(x0, bar_y, (x1 - x0) * fraction, h, radius, WHITE);
+    }
+
+    /// True while the grid shows the photos of one Places pin (the nav bar then offers the way back to the map).
+    fn showing_pick(&self) -> bool {
+        self.album == Album::Places && self.place_pick.is_some()
+    }
+
+    /// The pins of the Places map for the current window: clusters of photos that would overlap on screen.
+    fn place_clusters(&self, ui: &Ui) -> Vec<places::Cluster> {
+        let h = (self.content_bottom(ui) - content_top(ui)).max(0.0) as u32;
+        places::layout(&self.place_points, self.w as u32, h, f64::from(ui.pt(PIN_CELL_PT)))
+    }
+
+    /// The Places map: a graticule over the content area, the shared map tiles over it, and one pin per cluster with
+    /// a count on pins that stand for several photos.
+    fn draw_places(&mut self, s: &mut Surface, ui: &Ui) {
+        let (top, bottom) = (content_top(ui), self.content_bottom(ui));
+        let step = ui.pt(48.0) as usize;
+        let (w, top_u, h) = (self.w as usize, top as usize, (bottom - top).max(0.0) as usize);
+        let mut x = 0;
+        while x < w {
+            s.fill_rect(x, top_u, 1, h, SEPARATOR);
+            x += step;
+        }
+        let mut y = top_u;
+        while y < top_u + h {
+            s.fill_rect(0, y, w, 1, SEPARATOR);
+            y += step;
+        }
+        self.draw_place_tiles(s, top, h);
+        for c in self.place_clusters(ui) {
+            let (cx, cy) = (c.x as f32, top + c.y as f32);
+            let many = c.members.len() > 1;
+            let ring = ui.pt(if many { 18.0 } else { 14.0 });
+            let line = ui.pt(2.0);
+            s.fill_rrect(cx - ring, cy - ring, ring * 2.0, ring * 2.0, ring, WHITE);
+            s.fill_rrect(cx - ring + line, cy - ring + line, ring * 2.0 - line * 2.0, ring * 2.0 - line * 2.0, ring - line, BLUE);
+            if many {
+                self.label(s, ui, &c.members.len().to_string(), 14.0, Weight::Bold, WHITE, cx, cy);
+            }
+        }
+    }
+
+    /// Draws the map tiles that cover the Places area, at the snapshot the pins are placed with. Tiles load in the
+    /// background (see `tick`); until one arrives the graticule shows through.
+    fn draw_place_tiles(&mut self, s: &mut Surface, top: f32, h: usize) {
+        let Some(snap) = places::snapshot_for(&self.place_points, self.w as u32, h as u32) else { return };
+        if self.tiles.is_none() {
+            let ua = format!("BifrOSt-Photos/{} (BifrOSt desktop; +https://bifrost.olibuijr.com)", env!("CARGO_PKG_VERSION"));
+            if let Ok(source) = crate::maptiles::source::TileSource::new(crate::maptiles::source::DEFAULT_TEMPLATE, &ua) {
+                let root = self.data.join("map-tiles");
+                self.tiles = Some(crate::maptiles::loader::TileLoader::new(&root, source, std::sync::Arc::new(crate::maptiles::net::Live::default())));
+            }
+        }
+        let Some(loader) = self.tiles.as_mut() else { return };
+        let placed = snap.tiles();
+        let ids: Vec<crate::maptiles::tiles::TileId> = placed.iter().map(|p| crate::maptiles::tiles::TileId { z: p.zoom as u8, x: p.tile_x as u32, y: p.tile_y as u32 }).collect();
+        loader.want(&ids);
+        for (p, id) in placed.iter().zip(&ids) {
+            if let Some(img) = loader.image(*id) {
+                s.blit(img, p.dest_x as i32, top as i32 + p.dest_y as i32, 255, 255);
+            }
         }
     }
 
@@ -2596,6 +2920,7 @@ impl Photos {
                     (Album::Trash, _) => ("No Recently Deleted Photos", "Deleted photos wait here for 30 days."),
                     (Album::Hidden, _) => ("No Hidden Photos", "Photos you hide from All Photos appear here."),
                     (Album::Duplicates, _) => ("No Duplicates", "Pictures that are the same file appear here."),
+                    (Album::Places, _) => ("No Places", "Photos with a location in their file appear here."),
                     (Album::User(_), _) => ("No Photos", "Open a photo and tap Album to add it here."),
                     (Album::Smart(_), _) => ("No Photos", "No photo matches the rules of this smart album."),
                     (Album::Memory(_), _) => ("No Photos", "This memory has no photos left."),
@@ -2638,7 +2963,11 @@ impl Photos {
         let select = if self.selection.active { "Cancel" } else { "Select" };
         self.label(s, ui, select, 17.0, Weight::Regular, if pressed == Some(Target::Select) { rgba(10, 132, 255, 140) } else { BLUE }, self.w as f32 - ui.pt(MARGIN_PT + 96.0 + 38.0), mid);
         let dim = |p: Option<Target>, t: Target| if p == Some(t) { rgba(10, 132, 255, 140) } else { BLUE };
-        self.label_left(s, ui, "Albums", 17.0, Weight::Regular, dim(pressed, Target::Album), m, mid);
+        if self.showing_pick() {
+            self.label_left(s, ui, "< Places", 17.0, Weight::Regular, dim(pressed, Target::PlacesBack), m, mid);
+        } else {
+            self.label_left(s, ui, "Albums", 17.0, Weight::Regular, dim(pressed, Target::Album), m, mid);
+        }
         let cx = m + ui.pt(66.0);
         let cy = mid;
         for (a, b) in [((cx - ui.pt(4.0), cy - ui.pt(2.0)), (cx, cy + ui.pt(2.0))), ((cx, cy + ui.pt(2.0)), (cx + ui.pt(4.0), cy - ui.pt(2.0)))] {
@@ -2770,7 +3099,8 @@ impl Photos {
         let Some(v) = &mut self.viewer else { return };
         for (page, p) in &around {
             let (page, key) = (*page, p.key());
-            let (img, fit) = match self.full.get(&key) {
+            let frame = self.clip.as_ref().filter(|c| c.path == p.path).and_then(|c| c.frame.as_ref());
+            let (img, fit) = match frame.or_else(|| self.full.get(&key)) {
                 Some(img) => {
                     let fit = imgdec::fit_size(img, w, h);
                     (img, fit)
@@ -2796,6 +3126,9 @@ impl Photos {
         }
         if !v.chrome {
             return;
+        }
+        if self.clip_shown() {
+            self.draw_clip_controls(s, ui);
         }
         let current = around.into_iter().find(|(i, _)| *i == index).map(|(_, p)| p);
         let top = content_top(ui);
@@ -2889,8 +3222,14 @@ impl Photos {
             let color = if self.pressed == Some(Target::InfoDetails) { crate::gfx::scale(BLUE, 140) } else { BLUE };
             self.label(s, ui, "Edit Details", 15.0, Weight::Regular, color, x + w / 2.0, cy);
         }
-        if self.info_revert {
+        {
             let cy = y + row * (rows.len() + 1 + rated + usize::from(rated == 2)) as f32 + row / 2.0;
+            s.fill_rect((x + ui.pt(14.0)) as usize, (cy - row / 2.0) as usize, (w - ui.pt(28.0)) as usize, 1, SEPARATOR);
+            let color = if self.pressed == Some(Target::InfoLookUp) { crate::gfx::scale(BLUE, 140) } else { BLUE };
+            self.label(s, ui, "Look Up in Visual Search", 15.0, Weight::Regular, color, x + w / 2.0, cy);
+        }
+        if self.info_revert {
+            let cy = y + row * (rows.len() + 2 + rated + usize::from(rated == 2)) as f32 + row / 2.0;
             s.fill_rect((x + ui.pt(14.0)) as usize, (cy - row / 2.0) as usize, (w - ui.pt(28.0)) as usize, 1, SEPARATOR);
             let color = if self.pressed == Some(Target::InfoRevert) { crate::gfx::scale(BLUE, 140) } else { BLUE };
             self.label(s, ui, "Revert to Original", 15.0, Weight::Regular, color, x + w / 2.0, cy);
@@ -3430,14 +3769,37 @@ mod tests {
         tap(&mut p, &ui, 1200.0 * 0.31, cy, 1000.0);
         assert_eq!(p.sheet, Some(Sheet::Info));
         assert!(p.info_revert, "an edited photo offers Revert to Original");
-        // the Revert row sits under the detail rows, the rating, Hide Photo and Edit Details rows
+        // the Revert row sits under the detail rows, the rating, Hide Photo, Edit Details and Look Up rows
         let (sx, sy, sw, _) = p.sheet_rect(&ui, Sheet::Info);
         let row = ui.pt(INFO_ROW_PT);
-        let y = sy + row * (p.info.len() + 1 + 3) as f32 + row / 2.0;
+        let y = sy + row * (p.info.len() + 1 + 3 + 1) as f32 + row / 2.0;
         tap(&mut p, &ui, sx + sw / 2.0, y, 2000.0);
         assert!(p.recipe(&photo).is_none(), "the saved edit is dropped");
         assert!(original.exists(), "the original is never changed");
         assert_eq!(p.photos().len(), 1, "nothing leaves the library");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_info_sheet_look_up_row_hands_the_open_photo_to_the_shell_once() {
+        let (mut p, dir, ui) = photos("lookup", 1);
+        p.open_viewer(0);
+        frame(&mut p, &ui);
+        let path = p.photos()[0].path.clone();
+        let cy = p.bar_top(&ui) + ui.pt(BAR_PT) / 2.0;
+        tap(&mut p, &ui, 1200.0 * 0.31, cy, 1000.0);
+        assert_eq!(p.sheet, Some(Sheet::Info));
+        assert!(!p.info_revert, "an unedited photo has no Revert row, so Look Up is the last row");
+        assert_eq!(p.take_visual_search(), None, "nothing is sent before the row is tapped");
+        // the Look Up row sits under the detail rows, the rating, Hide Photo and Edit Details rows
+        let (sx, sy, sw, sh) = p.sheet_rect(&ui, Sheet::Info);
+        let row = ui.pt(INFO_ROW_PT);
+        let y = sy + row * (p.info.len() + 1 + 3) as f32 + row / 2.0;
+        assert!(y < sy + sh, "the row is inside the sheet");
+        tap(&mut p, &ui, sx + sw / 2.0, y, 2000.0);
+        assert_eq!(p.sheet, None, "the sheet closes");
+        assert_eq!(p.take_visual_search(), Some(path), "the shell is handed the open photo");
+        assert_eq!(p.take_visual_search(), None, "once");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

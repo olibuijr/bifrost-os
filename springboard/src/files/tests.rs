@@ -447,3 +447,23 @@ fn pdf_and_epub_files_are_handed_to_books_only_when_the_shell_asks() {
     let (x, y) = row(&ui, index_of(&f, "paper.pdf"));
     assert_eq!(tap(&mut f, &ui, x, y, 4000.0), vec![Request::OpenBook(home.join("paper.pdf"))]);
 }
+
+#[test]
+fn a_program_is_handed_to_the_shell_to_assess_only_when_the_shell_asks() {
+    use std::os::unix::fs::PermissionsExt;
+    let (mut f, ui, home) = app("program");
+    let tool = home.join("tool.run");
+    std::fs::write(&tool, b"#!/bin/sh\n").unwrap();
+    std::fs::set_permissions(&tool, std::fs::Permissions::from_mode(0o755)).unwrap();
+    open_home(&mut f, &ui, 0.0);
+    let (x, y) = row(&ui, index_of(&f, "tool.run"));
+    // without the hand-off Files previews the file itself
+    tap(&mut f, &ui, x, y, 1000.0);
+    assert!(matches!(f.nav.top(), Page::Preview(_)));
+    tap(&mut f, &ui, 40.0, ui.pt(NAV_MID_PT), 2000.0);
+    settle(&mut f, &ui, 2000.0);
+    f.set_handoff(true);
+    let (x, y) = row(&ui, index_of(&f, "tool.run"));
+    let requests = tap(&mut f, &ui, x, y, 3000.0);
+    assert!(matches!(requests.as_slice(), [Request::Launch(e)] if e.path == tool), "{requests:?}");
+}

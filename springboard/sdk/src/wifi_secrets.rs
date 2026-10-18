@@ -171,6 +171,43 @@ impl WifiSecrets {
     }
 }
 
+/// What joining an 802.1X network needs from the network-authentication agent: the saved login, or a prompt for one.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum EapAccess {
+    /// A username and password are stored for the network and can be used to join it.
+    Saved(EapCredentials),
+    /// Nothing is stored, so the user has to be asked.
+    Prompt,
+}
+
+impl WifiSecrets {
+    /// The access a join of an 802.1X network starts from: the stored login, or `Prompt` when none is stored.
+    /// A bad domain or network name is still an error.
+    pub fn eap_access(&self, domain: Domain, ssid: &str) -> Result<EapAccess, Error> {
+        match self.find_eap_username_password(domain, ssid) {
+            Ok(c) => Ok(EapAccess::Saved(c.clone())),
+            Err(Error::ItemNotFound) => Ok(EapAccess::Prompt),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Stores the login the user typed at the prompt, so the next join finds it, and returns it as the access to use
+    /// now. A login that breaks the secret rules is refused and nothing is stored.
+    pub fn answer_eap_prompt(&mut self, domain: Domain, ssid: &str, username: &str, password: &str) -> Result<EapAccess, Error> {
+        self.set_eap_username_password(domain, ssid, username, password)?;
+        self.eap_access(domain, ssid)
+    }
+
+    /// Forgets the stored login, for instance after the network refused it: the next access is a `Prompt`. Forgetting
+    /// a network that has no login is not an error. The password and identity slots are kept.
+    pub fn forget_eap(&mut self, domain: Domain, ssid: &str) -> Result<(), Error> {
+        match self.delete_eap_username_password(domain, ssid) {
+            Err(Error::ItemNotFound) => Ok(()),
+            other => other,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -240,5 +277,30 @@ mod tests {
         assert_eq!(s.eap_identities(Domain::User), vec![("Campus", "student-id"), ("Work", "work-cert")]);
         assert_eq!(s.eap_identities(Domain::System), vec![("Work", "shared-cert")]);
         assert_eq!(s.find_eap_identity(Domain::User, "Home"), Err(Error::ItemNotFound));
+    }
+
+    #[test]
+    fn an_802_1x_network_without_a_login_prompts_and_the_answer_is_remembered() {
+        let mut s = WifiSecrets::new();
+        assert_eq!(s.eap_access(Domain::User, "Campus"), Ok(EapAccess::Prompt));
+        let used = s.answer_eap_prompt(Domain::User, "Campus", "ola", "pw1").unwrap();
+        let creds = EapCredentials { username: "ola".into(), password: "pw1".into() };
+        assert_eq!(used, EapAccess::Saved(creds.clone()));
+        assert_eq!(s.eap_access(Domain::User, "Campus"), Ok(EapAccess::Saved(creds)));
+        assert_eq!(s.eap_access(Domain::System, "Campus"), Ok(EapAccess::Prompt), "another domain has no login");
+        s.set_password(Domain::User, "Campus", "wpa-pass").unwrap();
+        s.forget_eap(Domain::User, "Campus").unwrap();
+        assert_eq!(s.eap_access(Domain::User, "Campus"), Ok(EapAccess::Prompt), "a refused login is asked for again");
+        assert_eq!(s.find_password(Domain::User, "Campus"), Ok("wpa-pass"), "the shared password stays");
+        s.forget_eap(Domain::User, "Campus").unwrap();
+    }
+
+    #[test]
+    fn an_802_1x_prompt_answer_that_breaks_the_rules_is_not_stored() {
+        let mut s = WifiSecrets::new();
+        assert_eq!(s.answer_eap_prompt(Domain::User, "Campus", "", "pw"), Err(Error::Param));
+        assert_eq!(s.answer_eap_prompt(Domain::None, "Campus", "ola", "pw"), Err(Error::Param));
+        assert_eq!(s.eap_access(Domain::User, "Campus"), Ok(EapAccess::Prompt));
+        assert_eq!(s.eap_access(Domain::None, "Campus"), Err(Error::Param));
     }
 }

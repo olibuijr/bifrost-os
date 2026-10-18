@@ -375,7 +375,7 @@ pub fn read_battery(device: &Path) -> Battery {
 
 /// The app id of a window: only an installed (SDK) app has one; the shell's own windows get no input.
 pub fn focused_app(app: AppId, installed_ids: &[String]) -> Option<String> {
-    match app {
+    match app.parent() {
         AppId::External(slot) => installed_ids.get(usize::from(slot)).cloned(),
         _ => None,
     }

@@ -753,18 +753,39 @@ impl WebProcessPool {
         }
         let pixels = map.pixels();
         let cols = w.min(fw as usize);
-        for row in 0..h.min(fh as usize) {
-            let y = fy as usize + row;
-            if y < s.y0 || y >= s.h {
-                continue;
+        let rows = h.min(fh as usize);
+        // Fast path: full-width contiguous copy avoiding row-by-row slice iterations
+        if fx == 0 && cols == w && s.stride == w && s.y0 == 0 && fy >= 0 {
+            let start_y = fy as usize;
+            let max_rows = rows.min(s.h.saturating_sub(start_y));
+            let total = max_rows * w;
+            let dst_start = start_y * w;
+            let dst_end = dst_start + total;
+            if dst_end <= s.px.len() && total <= pixels.len() {
+                s.px[dst_start..dst_end].copy_from_slice(&pixels[..total]);
+            } else {
+                for row in 0..max_rows {
+                    let y = start_y + row;
+                    let at = y * s.stride;
+                    if at + cols <= s.px.len() && (row + 1) * w <= pixels.len() {
+                        s.px[at..at + cols].copy_from_slice(&pixels[row * w..row * w + cols]);
+                    }
+                }
             }
-            let x0 = (fx.max(0) as usize).min(s.w);
-            let n = cols.min(s.w - x0);
-            let at = (y - s.y0) * s.stride + x0;
-            if at + n > s.px.len() {
-                break;
+        } else {
+            for row in 0..rows {
+                let y = fy as usize + row;
+                if y < s.y0 || y >= s.h {
+                    continue;
+                }
+                let x0 = (fx.max(0) as usize).min(s.w);
+                let n = cols.min(s.w - x0);
+                let at = (y - s.y0) * s.stride + x0;
+                if at + n > s.px.len() {
+                    break;
+                }
+                s.px[at..at + n].copy_from_slice(&pixels[row * w..row * w + n]);
             }
-            s.px[at..at + n].copy_from_slice(&pixels[row * w..row * w + n]);
         }
         // the pixels are copied out, so the engine may write the next frame now
         if std::mem::take(&mut self.ack_pending) {
@@ -775,6 +796,16 @@ impl WebProcessPool {
     /// The pixel size of the content frame.
     pub fn frame(&self) -> (i32, i32, u32, u32) {
         self.frame
+    }
+
+    /// The dimensions of the last rendered frame from the engine.
+    pub fn pixels_size(&self) -> (usize, usize) {
+        self.pixels_size
+    }
+
+    /// True when a valid frame with pixels has been received and is ready for display.
+    pub fn has_frame(&self) -> bool {
+        self.pixels_size.0 > 0 && self.pixels_size.1 > 0 && self.map.is_some() && self.visible.is_some()
     }
 }
 
@@ -950,5 +981,12 @@ mod tests {
         assert_eq!(evdev_char(30), Some('a'));
         assert_eq!(evdev_char(2), Some('1'));
         assert_eq!(evdev_char(200), None);
+    }
+
+    #[test]
+    fn initial_frame_state_is_empty() {
+        let Ok(pool) = WebProcessPool::spawn(Path::new("/bin/cat"), Path::new("/tmp/bifrost-webview-test-state")) else { return };
+        assert_eq!(pool.pixels_size(), (0, 0));
+        assert!(!pool.has_frame());
     }
 }

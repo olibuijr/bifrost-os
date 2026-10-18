@@ -15,6 +15,8 @@ mod model;
 #[allow(dead_code)]
 mod sample;
 #[allow(dead_code)]
+mod sample_net;
+#[allow(dead_code)]
 mod sample_proc;
 #[allow(dead_code)]
 mod window;
@@ -23,7 +25,8 @@ use bifrost_app::controls::Node;
 use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::dock_tile;
 use bifrost_app::proto::DocErrorCode;
-use bifrost_app::windows::{self, WindowListOptions};
+use bifrost_app::app_windows::{WindowId, WindowSpec};
+use bifrost_app::windows::{self, Level, WindowListOptions};
 use bifrost_app::workspace;
 use bifrost_core::json::Json;
 use bifrost_app::{App, AppMenu, AppMenuItem, Command, Commands, Ctx, DocumentEvent, Input, KeyInput, TouchKind};
@@ -31,7 +34,7 @@ use model::{ColumnSet, DockMode, Filter, Tab, UpdateFrequency, SIGNALS};
 use std::io::Write;
 use std::path::PathBuf;
 use window::{
-    Monitor, Request, MENU_CLOSE_REPORT, MENU_COLUMN, MENU_DOCK, MENU_COPY, MENU_CPU_HISTORY, MENU_DELTAS, MENU_DIAGNOSTICS, MENU_FILTER, MENU_FIND, MENU_FORCE,
+    Monitor, Request, MENU_WINDOW_CPU_HISTORY, MENU_WINDOW_CPU_USAGE, MENU_WINDOW_KEEP_TOP, MENU_CLOSE_REPORT, MENU_COLUMN, MENU_DOCK, MENU_COPY, MENU_CPU_HISTORY, MENU_DELTAS, MENU_DIAGNOSTICS, MENU_FILTER, MENU_FIND, MENU_FORCE,
     MENU_FREQ, MENU_INSPECT, MENU_QUIT, MENU_SAMPLE, MENU_SAMPLE_LENGTH, MENU_SAVE, MENU_SIGNAL, MENU_SIGNAL_SHEET, MENU_STOP,
 };
 
@@ -41,6 +44,8 @@ const PREF_FREQUENCY: &str = "updateSeconds";
 const PREF_COLUMNS: &str = "columns";
 /// The preference holding View > CPU History.
 const PREF_CPU_HISTORY: &str = "cpuHistory";
+/// The preference holding Window > Keep CPU Windows on Top.
+const PREF_ON_TOP: &str = "cpuWindowsOnTop";
 /// The preference holding View > Dock Icon, as an index into `DockMode::ALL`.
 const PREF_DOCK: &str = "dockMode";
 /// The preference holding Process > Sample Duration, in seconds.
@@ -62,9 +67,68 @@ struct ActivityApp {
     window_request: Option<u32>,
     /// The read grant asked for the program that Reveal in Files shows, by request id.
     reveal_request: Option<u32>,
+    /// The Window > CPU Usage window, while it is open.
+    cpu_usage_window: Option<WindowId>,
+    /// The Window > CPU History window, while it is open.
+    cpu_history_window: Option<WindowId>,
+    /// Window > Keep CPU Windows on Top: the CPU windows float above the normal windows.
+    keep_on_top: bool,
 }
 
 impl ActivityApp {
+    /// Window > CPU Usage or CPU History: opens the floating window when it is closed, closes it when it is open.
+    fn toggle_cpu_window(&mut self, ctx: &Ctx, usage: bool) {
+        let slot = if usage { self.cpu_usage_window } else { self.cpu_history_window };
+        if let Some(id) = slot {
+            let _ = ctx.close_window(id);
+            self.forget_window(id);
+            return;
+        }
+        let cores = self.monitor.as_ref().map_or(1, |m| m.core_loads().len());
+        let (title, (w, h)) = if usage { ("CPU Usage", draw::usage_window_size(cores)) } else { ("CPU History", draw::history_window_size(cores)) };
+        match ctx.open_window(WindowSpec::new(title, w, h)) {
+            Ok(id) => {
+                if self.keep_on_top {
+                    windows::set_window_level(ctx, id, Level::Floating);
+                }
+                if usage {
+                    self.cpu_usage_window = Some(id);
+                } else {
+                    self.cpu_history_window = Some(id);
+                }
+            }
+            Err(e) => {
+                ctx.log(&format!("window: {e:?}"));
+                if let Some(m) = &mut self.monitor {
+                    m.status = "Could not open the window".into();
+                }
+            }
+        }
+    }
+
+    /// Clears a CPU window's id once the window is gone (its traffic light, or Window > CPU Usage again).
+    fn forget_window(&mut self, id: WindowId) -> bool {
+        if self.cpu_usage_window == Some(id) {
+            self.cpu_usage_window = None;
+            return true;
+        }
+        if self.cpu_history_window == Some(id) {
+            self.cpu_history_window = None;
+            return true;
+        }
+        false
+    }
+
+    /// Window > Keep CPU Windows on Top: stored, and applied to the CPU windows that are open now.
+    fn toggle_keep_on_top(&mut self, ctx: &Ctx) {
+        self.keep_on_top = !self.keep_on_top;
+        ctx.defaults_mut().set_bool(PREF_ON_TOP, self.keep_on_top);
+        let level = if self.keep_on_top { Level::Floating } else { Level::Normal };
+        for id in [self.cpu_usage_window, self.cpu_history_window].into_iter().flatten() {
+            windows::set_window_level(ctx, id, level);
+        }
+    }
+
     /// Asks the shell for the save panel the window wants, if it wants one.
     fn serve(&mut self, ctx: &Ctx) {
         if let Some(tile) = self.monitor.as_mut().and_then(Monitor::take_dock_update) {
@@ -238,6 +302,7 @@ impl App for ActivityApp {
                 m.set_dock_mode(DockMode::from_index(ctx.defaults().int(PREF_DOCK)));
                 // a stored length that is not offered (or none yet) keeps the default
                 m.set_sample_seconds(u32::try_from(ctx.defaults().int(PREF_SAMPLE)).unwrap_or(0));
+                self.keep_on_top = ctx.defaults().bool(PREF_ON_TOP);
                 self.monitor = Some(m);
             }
         }
@@ -252,7 +317,42 @@ impl App for ActivityApp {
     fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
         let changed = self.monitor.as_mut().map_or(false, |m| m.tick(t));
         self.serve(ctx);
-        changed
+        // the CPU windows show live readings, so they are redrawn every tick while open
+        changed || self.cpu_usage_window.is_some() || self.cpu_history_window.is_some()
+    }
+
+    fn window_closed(&mut self, _ctx: &Ctx, window: WindowId) -> bool {
+        self.forget_window(window)
+    }
+
+    /// Cmd+W in a CPU window closes it, as its traffic light does. The main window takes its keys and items as before.
+    fn window_input(&mut self, ctx: &Ctx, window: WindowId, input: bifrost_app::proto::WindowInput) -> bool {
+        if window.is_main() {
+            return bifrost_app::app_windows::default_window_input(self, ctx, window, input);
+        }
+        match input {
+            bifrost_app::proto::WindowInput::Key(k) if bifrost_app::app_windows::is_close_window_key(&k) => {
+                let _ = ctx.close_window(window);
+                self.forget_window(window)
+            }
+            _ => false,
+        }
+    }
+
+    fn draw_window(&mut self, ctx: &Ctx, window: WindowId, s: &mut Surface, t: f64) -> Damage {
+        if window.is_main() {
+            return self.draw(ctx, s, t);
+        }
+        if let Some(m) = &mut self.monitor {
+            if Some(window) == self.cpu_usage_window {
+                m.draw_cpu_usage(&ctx.ui, s);
+            } else if Some(window) == self.cpu_history_window {
+                m.draw_cpu_history_window(&ctx.ui, s);
+            }
+        }
+        let mut d = Damage::new(s.w, s.h);
+        d.all();
+        d
     }
 
     fn document(&mut self, ctx: &Ctx, ev: DocumentEvent) -> bool {
@@ -387,6 +487,13 @@ impl App for ActivityApp {
             view.push(AppMenuItem::new(MENU_DOCK + i as u32, mode.label()).checked(m.dock_mode == *mode).depth(1));
         }
         view.push(AppMenuItem::new(MENU_CPU_HISTORY, "CPU History").checked(m.cpu_history).enabled(m.tab == Tab::Cpu));
+        let cpu_open = |id: Option<WindowId>| id.is_some();
+        let window = vec![
+            AppMenuItem::new(MENU_WINDOW_CPU_USAGE, "CPU Usage").checked(cpu_open(self.cpu_usage_window)),
+            AppMenuItem::new(MENU_WINDOW_CPU_HISTORY, "CPU History").checked(cpu_open(self.cpu_history_window)),
+            AppMenuItem::separator(),
+            AppMenuItem::new(MENU_WINDOW_KEEP_TOP, "Keep CPU Windows on Top").checked(self.keep_on_top),
+        ];
         view.push(AppMenuItem::separator());
         view.push(AppMenuItem::new(MENU_DIAGNOSTICS, "Run System Diagnostics...").enabled(!m.job_running()));
         let has_report = m.report.is_some();
@@ -400,11 +507,26 @@ impl App for ActivityApp {
             },
             AppMenu { title: "View".into(), items: view },
             AppMenu { title: "Process".into(), items: process },
+            AppMenu { title: "Window".into(), items: window },
         ]
     }
 
     fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
-        let changed = self.run_menu_action(ctx, id);
+        let changed = match id {
+            MENU_WINDOW_CPU_USAGE => {
+                self.toggle_cpu_window(ctx, true);
+                true
+            }
+            MENU_WINDOW_CPU_HISTORY => {
+                self.toggle_cpu_window(ctx, false);
+                true
+            }
+            MENU_WINDOW_KEEP_TOP => {
+                self.toggle_keep_on_top(ctx);
+                true
+            }
+            _ => self.run_menu_action(ctx, id),
+        };
         self.serve(ctx);
         changed
     }
@@ -420,5 +542,13 @@ impl App for ActivityApp {
 }
 
 fn main() {
-    bifrost_app::run(ActivityApp { monitor: None, export: None, window_request: None, reveal_request: None });
+    bifrost_app::run(ActivityApp {
+        monitor: None,
+        export: None,
+        window_request: None,
+        reveal_request: None,
+        cpu_usage_window: None,
+        cpu_history_window: None,
+        keep_on_top: false,
+    });
 }

@@ -1,13 +1,13 @@
 //! Typed file descriptors: a file opened with an explicit access mode and open flags, read and written at the
 //! current position or at an offset, seeked, and duplicated. An app holds its files through this type instead of
 //! a raw integer. The access mode is checked before the system call, so a read-only descriptor refuses a write
-//! without touching the file. The descriptor closes when it is dropped; pipes are not created here.
+//! without touching the file. The descriptor closes when it is dropped. Pipes come from `FileDescriptor::pipe`.
 
 use std::fmt;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::os::unix::fs::FileExt;
-use std::os::unix::io::{AsRawFd, RawFd};
+use std::os::unix::io::{AsRawFd, OwnedFd, RawFd};
 use std::path::Path;
 
 /// What a descriptor may do with its file.
@@ -130,6 +130,27 @@ impl FileDescriptor {
         Ok(FileDescriptor { access: self.access, file })
     }
 
+    /// Creates a pipe. The first descriptor reads and the second writes; bytes written to one come out of the other
+    /// in order. Closing the writer makes reads return end of file once the pipe is drained.
+    pub fn pipe() -> Result<(FileDescriptor, FileDescriptor), FileError> {
+        let (reader, writer) = std::io::pipe().map_err(FileError::Io)?;
+        let reader = FileDescriptor { access: Access::Read, file: File::from(OwnedFd::from(reader)) };
+        let writer = FileDescriptor { access: Access::Write, file: File::from(OwnedFd::from(writer)) };
+        Ok((reader, writer))
+    }
+
+    /// Wraps a descriptor the shell handed to the app, such as a document grant or a pipe end, with the access
+    /// the grant allows. The wrapper owns the descriptor from then on and closes it on drop.
+    pub fn from_received(fd: OwnedFd, access: Access) -> Self {
+        FileDescriptor { access, file: File::from(fd) }
+    }
+
+    /// Gives the descriptor back as an owned system descriptor, for a caller that passes it on. The access mode is
+    /// lost with the wrapper, so the receiver must know it.
+    pub fn into_owned(self) -> OwnedFd {
+        OwnedFd::from(self.file)
+    }
+
     /// The system's number for this descriptor, for a caller that hands it to a child process or a system call.
     pub fn raw(&self) -> RawFd {
         self.file.as_raw_fd()
@@ -149,5 +170,64 @@ impl FileDescriptor {
         } else {
             Err(FileError::NotWritable)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_pipe_carries_bytes_from_the_writer_to_the_reader_in_order() {
+        let (mut reader, mut writer) = FileDescriptor::pipe().expect("the system can make a pipe");
+        assert_eq!(reader.access(), Access::Read);
+        assert_eq!(writer.access(), Access::Write);
+        assert_eq!(writer.write(b"abc").expect("write"), 3);
+        assert_eq!(writer.write(b"de").expect("write"), 2);
+        drop(writer);
+        let mut out = Vec::new();
+        let mut buf = [0u8; 8];
+        loop {
+            let n = reader.read(&mut buf).expect("read");
+            if n == 0 {
+                break;
+            }
+            out.extend_from_slice(&buf[..n]);
+        }
+        assert_eq!(out, b"abcde");
+    }
+
+    #[test]
+    fn a_pipe_end_refuses_the_direction_it_does_not_have() {
+        let (mut reader, mut writer) = FileDescriptor::pipe().expect("the system can make a pipe");
+        assert!(matches!(writer.read(&mut [0u8; 1]), Err(FileError::NotReadable)));
+        assert!(matches!(reader.write(b"x"), Err(FileError::NotWritable)));
+        assert!(matches!(reader.write_at(b"x", 0), Err(FileError::NotWritable)));
+    }
+
+    #[test]
+    fn a_received_descriptor_keeps_the_access_it_was_given() {
+        let (mut reader, writer) = FileDescriptor::pipe().expect("the system can make a pipe");
+        let fd = writer.into_owned();
+        let mut wrapped = FileDescriptor::from_received(fd, Access::Write);
+        assert_eq!(wrapped.access(), Access::Write);
+        assert!(matches!(wrapped.read(&mut [0u8; 1]), Err(FileError::NotReadable)));
+        wrapped.write(b"q").expect("write through the received end");
+        drop(wrapped);
+        let mut buf = [0u8; 2];
+        assert_eq!(reader.read(&mut buf).expect("read"), 1);
+        assert_eq!(buf[0], b'q');
+    }
+
+    #[test]
+    fn a_duplicated_pipe_end_still_reaches_the_same_pipe() {
+        let (mut reader, writer) = FileDescriptor::pipe().expect("the system can make a pipe");
+        let mut second = writer.duplicate().expect("duplicate the writer");
+        second.write(b"z").expect("write through the copy");
+        drop(writer);
+        drop(second);
+        let mut buf = [0u8; 4];
+        assert_eq!(reader.read(&mut buf).expect("read"), 1);
+        assert_eq!(buf[0], b'z');
     }
 }

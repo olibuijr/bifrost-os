@@ -1,7 +1,8 @@
-//! Composite, matrix and generator filters for pixel buffers, the Core Image categories that
-//! `effect_chain` does not cover: the blend modes as two-input composite filters (source-over and
-//! the twelve separable blend modes), a colour matrix (`ColorMatrix`), gamma, and a linear gradient
-//! generator. Pixels are packed as the renderer packs them (red in the low byte, alpha in the top
+//! Composite, matrix, transition and generator filters for pixel buffers, the Core Image categories
+//! that `effect_chain` does not cover: the blend modes as two-input composite filters (source-over,
+//! the twelve separable blend modes, the four non-separable modes Hue, Saturation, Color and
+//! Luminosity, and the Addition, Maximum and Minimum compositing operators), a colour matrix
+//! (`ColorMatrix`), gamma, a dissolve transition and a linear gradient generator. Pixels are packed as the renderer packs them (red in the low byte, alpha in the top
 //! byte). Composite filters take premultiplied pixels, as `blend::composite` does. Colour filters
 //! read straight RGBA, as `colorfx` does. Everything is pure std code, so it runs without a GPU.
 
@@ -25,10 +26,17 @@ pub enum Blend {
     SoftLight,
     Difference,
     Exclusion,
+    Hue,
+    Saturation,
+    Color,
+    Luminosity,
+    Addition,
+    Maximum,
+    Minimum,
 }
 
 /// The name of each blend filter, in catalogue order.
-const BLENDS: [(&str, Blend); 12] = [
+const BLENDS: [(&str, Blend); 19] = [
     ("sourceOver", Blend::SourceOver),
     ("multiply", Blend::Multiply),
     ("screen", Blend::Screen),
@@ -41,6 +49,13 @@ const BLENDS: [(&str, Blend); 12] = [
     ("softLight", Blend::SoftLight),
     ("difference", Blend::Difference),
     ("exclusion", Blend::Exclusion),
+    ("hue", Blend::Hue),
+    ("saturation", Blend::Saturation),
+    ("color", Blend::Color),
+    ("luminosity", Blend::Luminosity),
+    ("addition", Blend::Addition),
+    ("maximum", Blend::Maximum),
+    ("minimum", Blend::Minimum),
 ];
 
 impl Blend {
@@ -54,9 +69,10 @@ impl Blend {
         BLENDS.iter().find(|e| e.1 == self).map(|e| e.0).unwrap_or("sourceOver")
     }
 
-    /// The separable blend formula this filter uses. `SourceOver` is plain `Mode::Normal`.
-    pub fn mode(self) -> Mode {
-        match self {
+    /// The separable blend formula this filter uses. `None` for the non-separable modes and for the
+    /// compositing operators, which `blend_pixel` handles itself.
+    pub fn mode(self) -> Option<Mode> {
+        Some(match self {
             Blend::SourceOver => Mode::Normal,
             Blend::Multiply => Mode::Multiply,
             Blend::Screen => Mode::Screen,
@@ -69,7 +85,10 @@ impl Blend {
             Blend::SoftLight => Mode::SoftLight,
             Blend::Difference => Mode::Difference,
             Blend::Exclusion => Mode::Exclusion,
-        }
+            Blend::Hue | Blend::Saturation | Blend::Color | Blend::Luminosity | Blend::Addition | Blend::Maximum | Blend::Minimum => {
+                return None
+            }
+        })
     }
 }
 
@@ -85,8 +104,124 @@ pub fn composite(foreground: &[u32], background: &[u32], w: usize, h: usize, fil
     if foreground.len() != n || background.len() != n {
         return None;
     }
-    let mode = filter.mode();
-    Some(foreground.iter().zip(background).map(|(&s, &d)| blend::composite(s, d, mode)).collect())
+    Some(foreground.iter().zip(background).map(|(&s, &d)| blend_pixel(s, d, filter)).collect())
+}
+
+/// One premultiplied pixel of `filter` with `src` over `dst`. Separable modes use `blend::composite`.
+/// The non-separable modes follow the W3C compositing formulas: the backdrop and source colours are
+/// unpremultiplied, mixed with `B(cb, cs)`, and premultiplied again. Addition, Maximum and Minimum
+/// act on the premultiplied channels directly.
+pub fn blend_pixel(src: u32, dst: u32, filter: Blend) -> u32 {
+    match filter {
+        Blend::Addition => {
+            let (s, d) = (unpack(src), unpack(dst));
+            pack([s[0] + d[0], s[1] + d[1], s[2] + d[2], s[3] + d[3]])
+        }
+        Blend::Maximum => {
+            let (s, d) = (unpack(src), unpack(dst));
+            pack([s[0].max(d[0]), s[1].max(d[1]), s[2].max(d[2]), s[3].max(d[3])])
+        }
+        Blend::Minimum => {
+            let (s, d) = (unpack(src), unpack(dst));
+            pack([s[0].min(d[0]), s[1].min(d[1]), s[2].min(d[2]), s[3].min(d[3])])
+        }
+        Blend::Hue | Blend::Saturation | Blend::Color | Blend::Luminosity => non_separable(src, dst, filter),
+        _ => match filter.mode() {
+            Some(mode) => blend::composite(src, dst, mode),
+            None => dst,
+        },
+    }
+}
+
+/// `B(cb, cs)` of the non-separable modes, on unpremultiplied colours.
+fn non_separable(src: u32, dst: u32, filter: Blend) -> u32 {
+    let (s, d) = (unpack(src), unpack(dst));
+    let (as_, ab) = (s[3], d[3]);
+    let cs = unpremultiply3(s);
+    let cb = unpremultiply3(d);
+    let mixed = match filter {
+        Blend::Hue => set_lum(set_sat(cs, sat(cb)), lum(cb)),
+        Blend::Saturation => set_lum(set_sat(cb, sat(cs)), lum(cb)),
+        Blend::Color => set_lum(cs, lum(cb)),
+        _ => set_lum(cb, lum(cs)),
+    };
+    let mut out = [0.0f32; 4];
+    for c in 0..3 {
+        out[c] = (1.0 - ab) * s[c] + (1.0 - as_) * d[c] + as_ * ab * mixed[c];
+    }
+    out[3] = as_ + ab - as_ * ab;
+    pack(out)
+}
+
+fn unpremultiply3(v: [f32; 4]) -> [f32; 3] {
+    if v[3] <= 0.0 {
+        [0.0; 3]
+    } else {
+        [v[0] / v[3], v[1] / v[3], v[2] / v[3]]
+    }
+}
+
+fn lum(c: [f32; 3]) -> f32 {
+    0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2]
+}
+
+fn sat(c: [f32; 3]) -> f32 {
+    c.iter().fold(f32::MIN, |a, &v| a.max(v)) - c.iter().fold(f32::MAX, |a, &v| a.min(v))
+}
+
+/// Pulls an out-of-range colour back into 0..=1 along the line to its luminosity.
+fn clip_color(c: [f32; 3]) -> [f32; 3] {
+    let l = lum(c);
+    let n = c.iter().fold(f32::MAX, |a, &v| a.min(v));
+    let x = c.iter().fold(f32::MIN, |a, &v| a.max(v));
+    let mut o = c;
+    if n < 0.0 && l - n > 1e-9 {
+        for v in o.iter_mut() {
+            *v = l + (*v - l) * l / (l - n);
+        }
+    }
+    if x > 1.0 && x - l > 1e-9 {
+        for v in o.iter_mut() {
+            *v = l + (*v - l) * (1.0 - l) / (x - l);
+        }
+    }
+    o
+}
+
+fn set_lum(c: [f32; 3], l: f32) -> [f32; 3] {
+    let d = l - lum(c);
+    clip_color([c[0] + d, c[1] + d, c[2] + d])
+}
+
+/// Rescales the colour so its saturation (max minus min) is `s`, keeping the middle channel's place.
+fn set_sat(c: [f32; 3], s: f32) -> [f32; 3] {
+    let mut idx = [0usize, 1, 2];
+    idx.sort_by(|&a, &b| c[a].partial_cmp(&c[b]).unwrap_or(std::cmp::Ordering::Equal));
+    let (imin, imid, imax) = (idx[0], idx[1], idx[2]);
+    let mut o = [0.0f32; 3];
+    if c[imax] > c[imin] {
+        o[imid] = (c[imid] - c[imin]) * s / (c[imax] - c[imin]);
+        o[imax] = s;
+    }
+    o
+}
+
+/// `CIDissolveTransition`: `a` at time 0, `b` at time 1, a straight per-channel mix in between.
+/// `time` is clamped to 0..=1. Returns `None` when the two buffers differ in length.
+pub fn dissolve(a: &[u32], b: &[u32], time: f32) -> Option<Vec<u32>> {
+    if a.len() != b.len() {
+        return None;
+    }
+    let t = if time.is_finite() { time.clamp(0.0, 1.0) } else { 0.0 };
+    Some(
+        a.iter()
+            .zip(b)
+            .map(|(&x, &y)| {
+                let (p, q) = (unpack(x), unpack(y));
+                pack([0, 1, 2, 3].map(|c| p[c] + (q[c] - p[c]) * t))
+            })
+            .collect(),
+    )
 }
 
 fn unpack(px: u32) -> [f32; 4] {
@@ -189,8 +324,9 @@ mod tests {
         }
         assert_eq!(Blend::named("multiply"), Some(Blend::Multiply));
         assert_eq!(Blend::named("nonexistent"), None);
-        assert_eq!(blend_names().len(), 12);
-        assert_eq!(Blend::SourceOver.mode(), Mode::Normal);
+        assert_eq!(blend_names().len(), 19);
+        assert_eq!(Blend::SourceOver.mode(), Some(Mode::Normal));
+        assert_eq!(Blend::Hue.mode(), None);
     }
 
     #[test]
@@ -210,8 +346,10 @@ mod tests {
 
     #[test]
     fn transparent_foreground_leaves_the_background_for_every_blend() {
+        // Minimum is excluded: min(0, dst) is 0 on every channel, so a transparent source does not
+        // leave the background under that compositing operator, as in CIMinimumCompositing.
         let bg = [0xff12_3456, 0x80ab_cdef];
-        for name in blend_names() {
+        for name in blend_names().into_iter().filter(|&n| n != "minimum") {
             let b = Blend::named(name).unwrap();
             let out = composite(&[0, 0], &bg, 2, 1, b).unwrap();
             assert_eq!(out, bg.to_vec(), "{name}");
@@ -276,5 +414,71 @@ mod tests {
     fn zero_length_gradient_shows_the_first_colour() {
         let out = linear_gradient(2, 2, (1.0, 1.0), (1.0, 1.0), 0xff10_2030, 0xffff_ffff);
         assert_eq!(out, vec![0xff10_2030; 4]);
+    }
+
+    fn luma_of(px: u32) -> f32 {
+        let v = unpack(px);
+        0.3 * v[0] + 0.59 * v[1] + 0.11 * v[2]
+    }
+
+    #[test]
+    fn luminosity_takes_the_source_brightness_and_keeps_the_backdrop_hue() {
+        // White backdrop, pure red source at luma 0.3: the result is grey at 0.3, about 77 of 255.
+        let out = composite(&[0xff00_00ff], &[0xffff_ffff], 1, 1, Blend::Luminosity).unwrap()[0];
+        for shift in [0u32, 8, 16] {
+            assert!((((out >> shift) & 0xff) as i32 - 77).abs() <= 1, "channel at {shift}");
+        }
+    }
+
+    #[test]
+    fn colour_keeps_the_backdrop_luminance() {
+        // Mid-grey backdrop (luma 0.5) under pure red: the hue is red and the luma stays 0.5.
+        let out = composite(&[0xff00_00ff], &[0xff80_8080], 1, 1, Blend::Color).unwrap()[0];
+        assert!((luma_of(out) - 0.5).abs() < 0.01, "luma {}", luma_of(out));
+        assert!(red(out) >= 254, "red {}", red(out));
+    }
+
+    #[test]
+    fn saturation_over_a_grey_backdrop_leaves_the_grey() {
+        // A grey backdrop has no saturation to take, so the source's saturation changes nothing.
+        let out = composite(&[0xff00_00ff], &[0xff80_8080], 1, 1, Blend::Saturation).unwrap()[0];
+        assert!((red(out) - 128).abs() <= 1, "red {}", red(out));
+        assert_eq!(out >> 24, 0xff);
+    }
+
+    #[test]
+    fn hue_of_a_grey_source_gives_grey_at_the_backdrop_luma() {
+        // A grey source has no hue or saturation, so the result is grey at the backdrop's luma (0.3 for red).
+        let out = composite(&[0xff80_8080], &[0xff00_00ff], 1, 1, Blend::Hue).unwrap()[0];
+        for shift in [0u32, 8, 16] {
+            assert!((((out >> shift) & 0xff) as i32 - 77).abs() <= 1, "channel at {shift}");
+        }
+    }
+
+    #[test]
+    fn addition_clamps_at_full_scale() {
+        // 0x80 plus 0x80 is 256, clamped to 255 on each opaque channel.
+        let out = composite(&[0xff80_8080], &[0xff80_8080], 1, 1, Blend::Addition).unwrap()[0];
+        assert_eq!(out, 0xffff_ffff);
+    }
+
+    #[test]
+    fn maximum_and_minimum_pick_the_larger_or_smaller_channel() {
+        let src = [0xff00_1080];
+        let dst = [0xff00_9040];
+        assert_eq!(composite(&src, &dst, 1, 1, Blend::Maximum).unwrap(), vec![0xff00_9080]);
+        assert_eq!(composite(&src, &dst, 1, 1, Blend::Minimum).unwrap(), vec![0xff00_1040]);
+    }
+
+    #[test]
+    fn dissolve_mixes_the_ends_and_the_middle() {
+        let black = [0xff00_0000];
+        let white = [0xffff_ffff];
+        assert_eq!(dissolve(&black, &white, 0.0).unwrap(), black.to_vec());
+        assert_eq!(dissolve(&black, &white, 1.0).unwrap(), white.to_vec());
+        assert!((red(dissolve(&black, &white, 0.5).unwrap()[0]) - 128).abs() <= 1);
+        // Time outside 0..=1 is clamped, and mismatched buffers are refused.
+        assert_eq!(dissolve(&black, &white, 7.0).unwrap(), white.to_vec());
+        assert_eq!(dissolve(&black, &[0, 0], 0.5), None);
     }
 }

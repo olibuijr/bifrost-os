@@ -1,0 +1,42 @@
+{
+  "framework": "AdAttributionKit",
+  "doc": "https://developer.apple.com/documentation/adattributionkit",
+  "macos_since": "",
+  "status": "n/a",
+  "bifrost": "none",
+  "summary": "Ad impressions, postbacks and attribution registered with Apple and App Store ad networks. It depends on Apple's ad attribution service and App Store campaigns, which BifrOSt does not have. iPadOS 17.4 and later per the index.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run this round; owner rule); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Ad impressions and app impressions",
+      "apple": "AppImpression, JWS impressions",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Signed impressions are checked by Apple's attribution service."
+    },
+    {
+      "feature": "Postbacks and conversion values",
+      "apple": "Postback, PostbackUpdate, CoarseConversionValue",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Postbacks are sent by Apple to the ad network."
+    },
+    {
+      "feature": "Ad presentation in the app",
+      "apple": "Presenting ads in your app",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Ads come from Apple's ad network; BifrOSt runs no ad network."
+    },
+    {
+      "feature": "Postback verification",
+      "apple": "Verifying a postback",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Verification uses Apple's signing keys."
+    }
+  ],
+  "gaps": [
+    "Not planned: depends on Apple's ad attribution service and App Store campaigns."
+  ]
+}

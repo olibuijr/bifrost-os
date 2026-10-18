@@ -104,6 +104,8 @@ pub enum Style {
     Underline,
     /// `==text==`
     Highlight,
+    /// `$tex$`: inline math, typeset in place of its source
+    Math,
 }
 
 /// A run of chars (indices within the line) with one style. `marker` spans
@@ -138,6 +140,10 @@ pub fn spans(line: &str, start: usize) -> Vec<Span> {
             '~' if chars.get(i + 1) == Some(&'~') => (2, Style::Strike),
             '+' if chars.get(i + 1) == Some(&'+') => (2, Style::Underline),
             '=' if chars.get(i + 1) == Some(&'=') => (2, Style::Highlight),
+            // a lone dollar opens inline math; `$$` is display math, handled per paragraph
+            '$' if chars.get(i + 1).is_some_and(|c| *c != '$' && *c != ' ') && (i == 0 || chars[i - 1] != '$') => {
+                (1, Style::Math)
+            }
             _ => {
                 i += 1;
                 continue;
@@ -148,6 +154,7 @@ pub fn spans(line: &str, start: usize) -> Vec<Span> {
             Style::Italic => chars[j - 1] != ' ',
             // a pair of these marks must hug its text, so "i++ and j++" and "a == b" stay plain
             Style::Strike | Style::Underline | Style::Highlight => !chars[i + 2].is_whitespace() && !chars[j - 1].is_whitespace(),
+            Style::Math => !chars[j - 1].is_whitespace(),
             _ => true,
         });
         let Some(j) = close else {
@@ -582,6 +589,8 @@ mod tests {
         ]);
         assert!(kinds("x ++u++").iter().any(|(s, m, t)| *s == Style::Underline && !*m && t == "u"));
         assert!(kinds("==hi== there").iter().any(|(s, m, t)| *s == Style::Highlight && !*m && t == "hi"));
+        assert!(kinds("e = $x^2$ now").iter().any(|(s, m, t)| *s == Style::Math && !*m && t == "x^2"));
+        assert!(kinds("cost $5 or $6").iter().all(|(s, _, _)| *s == Style::Plain), "a dollar before a space stays plain");
         for plain in ["i++ and j++", "a == b == c", "~~ spaced ~~", "one ~~ two"] {
             assert!(kinds(plain).iter().all(|(s, _, _)| *s == Style::Plain), "{plain} stays plain");
         }

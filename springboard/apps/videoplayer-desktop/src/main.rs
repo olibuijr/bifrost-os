@@ -1,6 +1,7 @@
 //! Video Player as an installed BifrOSt app. It plays one movie at a time in the shell's fullscreen player view, over
-//! the shell's media stack (the same view and decoder Files and Deildu use). A sidecar subtitle file (`.srt` or `.vtt`
-//! next to the movie) shows as captions, trim marks loop a part of the movie, and the Recording menu makes an audio
+//! the shell's media stack (the same view and decoder Files and Deildu use). Sidecar subtitle files (`.srt` or `.vtt`,
+//! one per language as `name.en.srt`) show as captions chosen in the Playback menu, which also sets the speed (0.5x to
+//! 3x, the sound time-stretched); trim marks loop a part of the movie, and the Recording menu makes an audio
 //! take through the audio service into the app's data folder.
 //!
 //! Movies come from Movie > Open, from a file handed to the app, or from the command line. New Screen Recording stays
@@ -8,6 +9,7 @@
 //! writer. The take and the recording state use the shared `Recorder` model; the window only shows its answers.
 
 mod movie;
+mod playback;
 
 use bifrost_app::audio;
 use bifrost_app::kit::ui::{SPACE_L, SPACE_M, SPACE_S};
@@ -29,7 +31,6 @@ const MENU_OPEN: u32 = 1;
 const MENU_TRIM_START: u32 = 2;
 const MENU_TRIM_END: u32 = 3;
 const MENU_TRIM_CLEAR: u32 = 4;
-const MENU_SUBTITLES: u32 = 5;
 const MENU_AUDIO: u32 = 6;
 const MENU_SCREEN: u32 = 7;
 
@@ -279,13 +280,15 @@ impl App for VideoPlayerApp {
         self.movie.as_mut().is_some_and(|m| m.tick(&ctx.ui, t))
     }
 
-    /// One menu for the movie and one for recording, between App and the shell's File, Edit, View, Window and Help.
+    /// One menu for the movie, one for playback (speed and subtitle pickers) and one for recording, between App and the
+    /// shell's File, Edit, View, Window and Help.
     fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
         let movie = self.movie.as_ref();
         let open = movie.is_some();
         let trimmed = movie.is_some_and(|m| m.trim().is_some());
-        let subtitles = movie.is_some_and(|m| m.has_subtitles());
-        let subtitles_on = movie.is_some_and(|m| m.subtitles_on());
+        let speed = movie.map_or(1.0, |m| m.speed());
+        let subtitle_rows = movie.map(|m| m.subtitle_rows()).unwrap_or_default();
+        let subtitle_row = movie.map_or(0, |m| m.subtitle_row());
         let taking = self.take.is_recording();
         vec![
             AppMenu {
@@ -296,10 +299,9 @@ impl App for VideoPlayerApp {
                     AppMenuItem::new(MENU_TRIM_START, "Set Trim Start").enabled(open),
                     AppMenuItem::new(MENU_TRIM_END, "Set Trim End").enabled(open),
                     AppMenuItem::new(MENU_TRIM_CLEAR, "Clear Trim").enabled(trimmed),
-                    AppMenuItem::separator(),
-                    AppMenuItem::new(MENU_SUBTITLES, "Subtitles").checked(subtitles_on).enabled(subtitles),
                 ],
             },
+            playback::menu(open, speed, &subtitle_rows, subtitle_row),
             AppMenu {
                 title: "Recording".into(),
                 items: vec![
@@ -322,14 +324,21 @@ impl App for VideoPlayerApp {
                 }
                 self.notice.clear();
             }
-            MENU_SUBTITLES => {
-                if let Some(m) = &mut self.movie {
-                    m.toggle_subtitles();
-                }
-            }
             MENU_AUDIO => self.toggle_take(ctx, t),
             MENU_SCREEN => self.notice = "Screen recording needs the screen capture service, which is not available yet.".into(),
-            _ => return false,
+            _ => match playback::action(id) {
+                Some(playback::Action::Speed(rate)) => {
+                    if let Some(m) = &mut self.movie {
+                        m.set_speed(rate);
+                    }
+                }
+                Some(playback::Action::Subtitles(row)) => {
+                    if let Some(m) = &mut self.movie {
+                        m.choose_subtitles(row);
+                    }
+                }
+                None => return false,
+            },
         }
         true
     }

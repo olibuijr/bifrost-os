@@ -212,7 +212,7 @@ mod tests {
     }
 
     fn dock(size: f32) -> ToChrome {
-        ToChrome::Dock(DockModel { items: vec![], size, magnified: 0.0, position: DockPosition::Bottom, autohide: false })
+        ToChrome::Dock(DockModel { items: vec![], size, magnified: 0.0, position: DockPosition::Bottom, autohide: false, icon_variant: 0, icon_tint: [0; 3], icon_gen: 0 })
     }
 
     fn appearance(dark: bool) -> ToChrome {

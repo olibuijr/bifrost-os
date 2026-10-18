@@ -7,6 +7,7 @@
 
 use super::super::ui::{Ui, Weight, GRAY_DIM, SYSTEM_BLUE, SYSTEM_RED, WHITE};
 use super::super::notify_page::AppNotif;
+use bifrost_proto::NotifAction;
 use super::super::AppId;
 use super::store::{age_text, Group, Notification};
 use crate::gfx::{pack, scale, Image, Surface};
@@ -16,6 +17,9 @@ pub const CARD_H_PT: f32 = 80.0;
 pub const RADIUS_PT: f32 = 23.0;
 pub const ICON_PT: f32 = 20.0;
 const PAD_PT: f32 = 14.0;
+/// The attachment thumbnail at the right of a card, and the gap before the text.
+const THUMB_PT: f32 = 40.0;
+const THUMB_GAP_PT: f32 = 8.0;
 const TEXT_X_PT: f32 = PAD_PT;
 /// between the cards of an expanded group
 const GAP_PT: f32 = 8.0;
@@ -60,6 +64,8 @@ pub enum Hit {
     Collapse(usize),
     /// the button under the list that drops everything
     ClearAll,
+    /// an action button under a card: the group, the notification (its store id) and the button's index in its category
+    Action { group: usize, id: u64, slot: usize },
 }
 
 /// One card, or a whole group, slid sideways by a finger.
@@ -78,6 +84,8 @@ pub struct Opts<'a> {
     /// lock-screen groups shown expanded
     pub expanded: &'a [AppId],
     pub muted: &'a [AppId],
+    /// apps whose Show Previews setting hides their titles and bodies in this list
+    pub hidden: &'a [AppId],
     /// hide titles and bodies (a passcode is set and the bifrost is locked)
     pub private: bool,
 }
@@ -92,6 +100,45 @@ pub struct Card {
     time: Image,
     /// the header row's app name (uppercase, secondary)
     name: Image,
+    /// the first attachment, at the right of the card; none while the text is private
+    thumb: Option<Image>,
+    /// drawn with the app's name and "Notification" instead of its text (Show Previews)
+    pub private: bool,
+    /// the category's action buttons, drawn in a row under the text (empty for none)
+    actions: Vec<ActionButton>,
+}
+
+/// One action button under a card: its identifier (sent back as the action), its title and an optional icon.
+struct ActionButton {
+    id: String,
+    label: Image,
+    icon: Option<Image>,
+    destructive: bool,
+}
+
+/// Button height and spacing, in points.
+const ACTION_H_PT: f32 = 26.0;
+const ACTION_ROW_PT: f32 = 36.0;
+const ACTION_PAD_PT: f32 = 12.0;
+const ACTION_ICON_PT: f32 = 16.0;
+const ACTION_GAP_PT: f32 = 8.0;
+
+/// The buttons' rectangles (x, y, w, h) laid out left to right from `x`, `h` tall, `gap` apart.
+pub fn lay_out_actions(widths: &[f32], x: f32, y: f32, h: f32, gap: f32) -> Vec<[f32; 4]> {
+    let mut left = x;
+    widths
+        .iter()
+        .map(|&w| {
+            let r = [left, y, w, h];
+            left += w + gap;
+            r
+        })
+        .collect()
+}
+
+/// The index of the button whose rectangle holds the point (px, py), if any.
+pub fn action_index_at(rects: &[[f32; 4]], px: f32, py: f32) -> Option<usize> {
+    rects.iter().position(|r| px >= r[0] && px < r[0] + r[2] && py >= r[1] && py < r[1] + r[3])
 }
 
 impl Card {
@@ -101,7 +148,9 @@ impl Card {
         let d = ui.pt(ICON_PT).round() as usize;
         let time = ui.text(&age_text(n.time, now), 13.0, Weight::Regular, TIME);
         let name = ui.text(&app_name(n.app).to_uppercase(), 13.0, Weight::Regular, TIME);
-        let text_w = ui.pt(CARD_W_PT - TEXT_X_PT - PAD_PT);
+        let thumb = if private { None } else { n.image.as_ref().map(|i| i.resized(ui.pt(THUMB_PT).round() as usize, ui.pt(THUMB_PT).round() as usize)) };
+        let beside = if thumb.is_some() { THUMB_PT + THUMB_GAP_PT } else { 0.0 };
+        let text_w = ui.pt(CARD_W_PT - TEXT_X_PT - PAD_PT - beside);
         let title_w = text_w;
         let (title, body) = if private { (app_name(n.app).to_string(), "Notification".to_string()) } else { (n.title.clone(), n.body.clone()) };
         Card {
@@ -112,13 +161,68 @@ impl Card {
             body: ui.text(&ui.fit(&body, 15.0, text_w), 15.0, Weight::Regular, BODY),
             time,
             name,
+            thumb,
+            private,
+            actions: Vec::new(),
         }
+    }
+
+    /// Gives the card its category's action buttons. `icon` looks up an icon by its name (None when it is not
+    /// available, and the button is drawn without one).
+    pub fn set_actions(&mut self, ui: &Ui, actions: &[NotifAction], icon: &dyn Fn(&str) -> Option<Image>) {
+        let d = ui.pt(ACTION_ICON_PT).round() as usize;
+        self.actions = actions
+            .iter()
+            .map(|a| ActionButton {
+                id: a.id.clone(),
+                label: ui.text(&a.title, 13.0, Weight::Semibold, WHITE),
+                icon: if a.icon.is_empty() { None } else { icon(&a.icon).map(|i| i.resized(d, d)) },
+                destructive: a.destructive,
+            })
+            .collect();
+    }
+
+    /// The card's height: the base card, plus the action row when it has buttons.
+    pub fn height(&self, ui: &Ui) -> f32 {
+        ui.pt(CARD_H_PT) + if self.actions.is_empty() { 0.0 } else { ui.pt(ACTION_ROW_PT) }
+    }
+
+    /// Each button's width in px: its title, its icon when it has one, and the padding either side.
+    fn action_widths(&self, ui: &Ui) -> Vec<f32> {
+        let pad = ui.pt(ACTION_PAD_PT);
+        self.actions.iter().map(|a| a.label.w as f32 + a.icon.as_ref().map_or(0.0, |i| i.w as f32 + ui.pt(ACTION_GAP_PT) / 2.0) + 2.0 * pad).collect()
+    }
+
+    /// The button rectangles for a card with its top-left at (x, y), in the order of its actions.
+    fn action_rects(&self, ui: &Ui, x: f32, y: f32) -> Vec<[f32; 4]> {
+        let row_y = y + ui.pt(CARD_H_PT) + (ui.pt(ACTION_ROW_PT) - ui.pt(ACTION_H_PT)) / 2.0;
+        lay_out_actions(&self.action_widths(ui), x + ui.pt(TEXT_X_PT), row_y, ui.pt(ACTION_H_PT), ui.pt(ACTION_GAP_PT))
+    }
+
+    /// The identifier of the action whose button holds (px, py), for a card with its top-left at (x, y).
+    pub fn action_at(&self, ui: &Ui, x: f32, y: f32, px: f32, py: f32) -> Option<&str> {
+        self.action_slot_at(ui, x, y, px, py).map(|i| self.actions[i].id.as_str())
+    }
+
+    /// The index in the category of the button under (px, py), for a card with its top-left at (x, y).
+    pub fn action_slot_at(&self, ui: &Ui, x: f32, y: f32, px: f32, py: f32) -> Option<usize> {
+        action_index_at(&self.action_rects(ui, x, y), px, py)
     }
 
     /// Draws the card with its top-left at (x, y), faded by `alpha` / 255.
     pub fn draw(&self, s: &mut Surface, ui: &Ui, x: f32, y: f32, alpha: u32) {
         let (w, h) = (ui.pt(CARD_W_PT), ui.pt(CARD_H_PT));
-        s.fill_rrect(x, y, w, h, ui.pt(RADIUS_PT), scale(CARD, alpha));
+        s.fill_rrect(x, y, w, self.height(ui), ui.pt(RADIUS_PT), scale(CARD, alpha));
+        for (a, r) in self.actions.iter().zip(self.action_rects(ui, x, y)) {
+            let fill = if a.destructive { SYSTEM_RED } else { SYSTEM_BLUE };
+            s.fill_rrect(r[0], r[1], r[2], r[3], r[3] / 2.0, scale(fill, alpha));
+            let mut lx = r[0] + ui.pt(ACTION_PAD_PT);
+            if let Some(icon) = &a.icon {
+                s.blit(icon, lx as i32, (r[1] + (r[3] - icon.h as f32) / 2.0).round() as i32, 255, alpha);
+                lx += icon.w as f32 + ui.pt(ACTION_GAP_PT) / 2.0;
+            }
+            s.blit(&a.label, lx as i32, (r[1] + (r[3] - a.label.h as f32) / 2.0).round() as i32, 255, alpha);
+        }
         let head_mid = y + ui.pt(20.0);
         s.blit(&self.icon, (x + ui.pt(PAD_PT)) as i32, (head_mid - self.icon.h as f32 / 2.0).round() as i32, 255, alpha);
         s.blit(&self.name, (x + ui.pt(PAD_PT + ICON_PT + 8.0)) as i32, (head_mid - self.name.h as f32 / 2.0).round() as i32, 255, alpha);
@@ -129,6 +233,32 @@ impl Card {
         s.blit(&self.title, tx, (title_mid - self.title.h as f32 / 2.0).round() as i32, 255, alpha);
         s.blit(&self.body, tx, (body_mid - self.body.h as f32 / 2.0).round() as i32, 255, alpha);
         s.blit(&self.time, (x + w - ui.pt(PAD_PT) - self.time.w as f32) as i32, (head_mid - self.time.h as f32 / 2.0).round() as i32, 255, alpha);
+        if let Some(t) = &self.thumb {
+            s.blit(t, (x + w - ui.pt(PAD_PT) - t.w as f32) as i32, (y + (h - t.h as f32) / 2.0).round() as i32, 255, alpha);
+        }
+    }
+}
+
+#[cfg(test)]
+mod action_tests {
+    use super::*;
+
+    #[test]
+    fn buttons_sit_left_to_right_with_the_gap_between_them() {
+        let r = lay_out_actions(&[60.0, 80.0], 10.0, 5.0, 26.0, 8.0);
+        assert_eq!(r, vec![[10.0, 5.0, 60.0, 26.0], [78.0, 5.0, 80.0, 26.0]]);
+        assert!(lay_out_actions(&[], 10.0, 5.0, 26.0, 8.0).is_empty());
+    }
+
+    #[test]
+    fn a_tap_inside_a_button_names_it_and_a_tap_outside_names_none() {
+        let r = lay_out_actions(&[60.0, 80.0], 10.0, 5.0, 26.0, 8.0);
+        assert_eq!(action_index_at(&r, 12.0, 6.0), Some(0));
+        assert_eq!(action_index_at(&r, 150.0, 30.0), Some(1));
+        assert_eq!(action_index_at(&r, 75.0, 6.0), None, "the gap between buttons is not a button");
+        assert_eq!(action_index_at(&r, 70.0, 31.0), None, "below the row");
+        assert_eq!(action_index_at(&r, 10.0, 5.0), Some(0), "the top-left corner is inside");
+        assert_eq!(action_index_at(&r, 70.0, 5.0), None, "the right edge is exclusive");
     }
 }
 
@@ -139,6 +269,8 @@ fn app_name(app: AppId) -> &'static str {
 /// An app's group as drawn: its newest cards and how many more there are.
 pub struct GroupView {
     pub app: AppId,
+    /// the thread of the stack; empty for notifications without one
+    pub thread: String,
     /// notifications in the group
     pub count: usize,
     /// drawn as an expanded group (always in Notification Center)
@@ -204,9 +336,11 @@ impl ListView {
                 let shown = if expanded { EXPANDED.min(g.items.len()) } else { 1 };
                 let hidden = g.items.len() - shown;
                 let muted = opts.muted.contains(&g.app);
-                let name = if muted { format!("{} (Muted)", app_name(g.app)) } else { app_name(g.app).to_string() };
+                let title = if g.thread.is_empty() { app_name(g.app).to_string() } else { format!("{} \u{b7} {}", app_name(g.app), g.thread) };
+                let name = if muted { format!("{title} (Muted)") } else { title };
                 GroupView {
                     app: g.app,
+                    thread: g.thread.clone(),
                     count: g.items.len(),
                     expanded,
                     muted,
@@ -215,13 +349,26 @@ impl ListView {
                     mute: ui.text(if muted { "Unmute" } else { "Mute" }, 13.0, Weight::Semibold, WHITE),
                     less: ui.text("Show Less", 13.0, Weight::Semibold, WHITE),
                     caption: (!expanded && g.items.len() > 1).then(|| ui.text(&format!("{} notifications", g.items.len()), 13.0, Weight::Regular, TIME)),
-                    cards: g.items[..shown].iter().map(|n| Card::new(ui, n, &img, now, opts.private)).collect(),
+                    cards: g.items[..shown].iter().map(|n| Card::new(ui, n, &img, now, opts.private || opts.hidden.contains(&g.app))).collect(),
                     more: (hidden > 0).then(|| ui.text(&format!("{hidden} more notification{}", if hidden == 1 { "" } else { "s" }), 13.0, Weight::Regular, TIME)),
                 }
             })
             .collect();
         let label = |t: &str| ui.text(t, 15.0, Weight::Regular, WHITE);
         ListView { mode, groups, clear_all: ui.text("Clear All", 13.0, Weight::Semibold, WHITE), reveal: [label("Options"), label("View"), label("Clear")] }
+    }
+
+    /// Gives every card its category's action buttons. `actions` lists a notification's buttons by its store id.
+    /// Cards that hide their text (private previews) get none.
+    pub fn set_actions(&mut self, ui: &Ui, actions: &dyn Fn(u64) -> Vec<NotifAction>, icon: &dyn Fn(&str) -> Option<Image>) {
+        for g in &mut self.groups {
+            for c in g.cards.iter_mut().filter(|c| !c.private) {
+                let a = actions(c.id);
+                if !a.is_empty() {
+                    c.set_actions(ui, &a, icon);
+                }
+            }
+        }
     }
 
     pub fn is_empty(&self) -> bool {
@@ -237,10 +384,11 @@ impl ListView {
     pub fn group_h(&self, ui: &Ui, i: usize) -> f32 {
         let g = &self.groups[i];
         if g.expanded {
-            let n = g.cards.len() as f32;
-            ui.pt(HEADER_PT) + n * ui.pt(CARD_H_PT) + (n - 1.0).max(0.0) * ui.pt(GAP_PT) + if g.more.is_some() { ui.pt(MORE_PT) } else { 0.0 }
+            let cards: f32 = g.cards.iter().map(|c| c.height(ui)).sum();
+            ui.pt(HEADER_PT) + cards + (g.cards.len() as f32 - 1.0).max(0.0) * ui.pt(GAP_PT) + if g.more.is_some() { ui.pt(MORE_PT) } else { 0.0 }
         } else {
-            ui.pt(CARD_H_PT) + (g.count - 1).min(MAX_PEEK) as f32 * ui.pt(PEEK_PT) + if g.caption.is_some() { ui.pt(CAPTION_PT) } else { 0.0 }
+            let top = g.cards.first().map_or(ui.pt(CARD_H_PT), |c| c.height(ui));
+            top + (g.count - 1).min(MAX_PEEK) as f32 * ui.pt(PEEK_PT) + if g.caption.is_some() { ui.pt(CAPTION_PT) } else { 0.0 }
         }
     }
 
@@ -274,7 +422,8 @@ impl ListView {
     /// Card `j` of group `i`: (x, y) when the list starts at `top`.
     fn card_pos(&self, ui: &Ui, w: i32, top: f32, i: usize, j: usize) -> (f32, f32) {
         let gy = self.group_top(ui, top, i);
-        let y = if self.groups[i].expanded { gy + ui.pt(HEADER_PT) + j as f32 * ui.pt(CARD_H_PT + GAP_PT) } else { gy };
+        let above: f32 = self.groups[i].cards[..j].iter().map(|c| c.height(ui) + ui.pt(GAP_PT)).sum();
+        let y = if self.groups[i].expanded { gy + ui.pt(HEADER_PT) + above } else { gy };
         (Self::x(ui, w), y)
     }
 
@@ -338,7 +487,7 @@ impl ListView {
 
     /// What lies under (x, y) when the list starts at `top` on a `w` px wide screen.
     pub fn hit(&self, ui: &Ui, w: i32, top: f32, x: f32, y: f32) -> Option<Hit> {
-        let (cw, ch) = (ui.pt(CARD_W_PT), ui.pt(CARD_H_PT));
+        let (cw, _ch) = (ui.pt(CARD_W_PT), ui.pt(CARD_H_PT));
         let inside = |(rx, ry, rw, rh): Rect| x >= rx && x < rx + rw && y >= ry && y < ry + rh;
         if !self.is_empty() && self.mode == Mode::Center && inside(self.clear_all_rect(ui, w, top)) {
             return Some(Hit::ClearAll);
@@ -351,7 +500,10 @@ impl ListView {
             }
             for (j, c) in g.cards.iter().enumerate() {
                 let (cx, cy) = self.card_pos(ui, w, top, i, j);
-                let h = if g.expanded { ch } else { self.group_h(ui, i) };
+                if let Some(slot) = c.action_slot_at(ui, cx, cy, x, y) {
+                    return Some(Hit::Action { group: i, id: c.id, slot });
+                }
+                let h = if g.expanded { c.height(ui) } else { self.group_h(ui, i) };
                 if inside((cx, cy, cw, h)) {
                     return Some(Hit::Card { group: i, id: c.id, app: c.app });
                 }
@@ -407,7 +559,7 @@ impl ListView {
                 }
                 if let Some(m) = &g.more {
                     let (_, last) = self.card_pos(ui, w, top, i, g.cards.len() - 1);
-                    let my = last + ch + ui.pt(MORE_PT) / 2.0;
+                    let my = last + g.cards.last().map_or(ch, |c| c.height(ui)) + ui.pt(MORE_PT) / 2.0;
                     s.blit(m, (x + ui.pt(PAD_PT)) as i32, (my - m.h as f32 / 2.0).round() as i32, 255, a);
                 }
             } else {
@@ -418,7 +570,7 @@ impl ListView {
                 }
                 g.cards[0].draw(s, ui, x, gy, a);
                 if let Some(c) = &g.caption {
-                    let cy = gy + ch + (g.count - 1).min(MAX_PEEK) as f32 * ui.pt(PEEK_PT) + ui.pt(CAPTION_PT) / 2.0;
+                    let cy = gy + g.cards[0].height(ui) + (g.count - 1).min(MAX_PEEK) as f32 * ui.pt(PEEK_PT) + ui.pt(CAPTION_PT) / 2.0;
                     s.blit(c, (x + ui.pt(PAD_PT)) as i32, (cy - c.h as f32 / 2.0).round() as i32, 255, a);
                 }
             }
@@ -463,10 +615,10 @@ mod tests {
     use crate::shell::tests::ui;
 
     fn groups() -> Vec<Group> {
-        let n = |app, title: &str, id| Notification { app, title: title.into(), body: "body".into(), time: 0, id };
+        let n = |app, title: &str, id| Notification { image: None, app, title: title.into(), body: "body".into(), time: 0, id, thread: String::new() };
         vec![
-            Group { app: AppId::Files, items: vec![n(AppId::Files, "Alarm", 9), n(AppId::Files, "Timer", 8), n(AppId::Files, "Older", 7), n(AppId::Files, "Oldest", 6), n(AppId::Files, "Ancient", 5)] },
-            Group { app: AppId::Settings, items: vec![n(AppId::Settings, "Low Battery", 4)] },
+            Group { app: AppId::Files, thread: String::new(), items: vec![n(AppId::Files, "Alarm", 9), n(AppId::Files, "Timer", 8), n(AppId::Files, "Older", 7), n(AppId::Files, "Oldest", 6), n(AppId::Files, "Ancient", 5)] },
+            Group { app: AppId::Settings, thread: String::new(), items: vec![n(AppId::Settings, "Low Battery", 4)] },
         ]
     }
 
@@ -474,7 +626,7 @@ mod tests {
         Image { w: 100, h: 100, px: vec![WHITE; 10_000] }
     }
 
-    const NONE: Opts<'static> = Opts { expanded: &[], muted: &[], private: false };
+    const NONE: Opts<'static> = Opts { expanded: &[], muted: &[], hidden: &[], private: false };
 
     #[test]
     fn lock_list_stacks_one_card_per_app_with_peeks_and_a_count() {
@@ -563,6 +715,41 @@ mod tests {
         let empty = ListView::new(&ui, Mode::Lock, &[], &icon, 0, NONE);
         assert_eq!(empty.footer_h(&ui), 0.0);
         assert_eq!(empty.hit(&ui, 1200, top, bx + bw / 2.0, top + ui.pt(GROUP_GAP_PT) + 5.0), None, "nothing to clear");
+    }
+
+    #[test]
+    fn a_card_with_actions_is_taller_and_its_buttons_route_as_hits() {
+        let ui = ui();
+        let mut l = ListView::new(&ui, Mode::Center, &groups(), &icon, 0, NONE);
+        let before = l.group_h(&ui, 1);
+        let acts = |id: u64| if id == 4 { vec![NotifAction::button("archive", "Archive"), NotifAction::button("delete", "Delete")] } else { vec![] };
+        l.set_actions(&ui, &acts, &|_| None);
+        assert_eq!(l.group_h(&ui, 1), before + ui.pt(ACTION_ROW_PT), "the Low Battery card gains its action row");
+        let (cx, cy) = l.card_pos(&ui, 1200, 0.0, 1, 0);
+        let [bx, by, _, _] = l.groups[1].cards[0].action_rects(&ui, cx, cy)[0];
+        assert_eq!(l.hit(&ui, 1200, 0.0, bx + 2.0, by + 2.0), Some(Hit::Action { group: 1, id: 4, slot: 0 }));
+        assert_eq!(l.hit(&ui, 1200, 0.0, cx + 2.0, cy + 2.0), Some(Hit::Card { group: 1, id: 4, app: AppId::Settings }));
+    }
+
+    #[test]
+    fn an_attachment_shows_as_a_thumbnail_unless_previews_are_hidden() {
+        let ui = ui();
+        let icon = Image::new(8, 8);
+        let mut n = Notification::new(AppId::Files, "T", "B", 0);
+        n.image = Some(Image::new(96, 96));
+        assert!(Card::new(&ui, &n, &icon, 0, false).thumb.is_some());
+        assert!(Card::new(&ui, &n, &icon, 0, true).thumb.is_none(), "private text hides the picture too");
+        n.image = None;
+        assert!(Card::new(&ui, &n, &icon, 0, false).thumb.is_none());
+    }
+
+    #[test]
+    fn previews_hidden_per_app_hide_only_that_app_text() {
+        let ui = ui();
+        let icon = |_: AppId| Image::new(1, 1);
+        let opts = Opts { hidden: &[AppId::Settings], ..NONE };
+        let l = ListView::new(&ui, Mode::Center, &groups(), &icon, 0, opts);
+        assert!(l.groups.iter().all(|g| g.cards.iter().all(|c| c.private == (g.app == AppId::Settings))));
     }
 
     #[test]

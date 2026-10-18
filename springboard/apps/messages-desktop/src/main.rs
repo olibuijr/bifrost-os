@@ -55,6 +55,10 @@ impl App for MessagesApp {
         self.window.as_mut().is_some_and(|messages| messages.menu_action(ctx, id))
     }
 
+    fn keychain(&mut self, ctx: &Ctx, reply: bifrost_app::keychain::Reply) -> bool {
+        self.window.as_mut().is_some_and(|messages| messages.keychain(ctx, reply))
+    }
+
     fn service_reply(&mut self, ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
         self.window.as_mut().is_some_and(|messages| messages.service_reply(ctx, request, result))
     }

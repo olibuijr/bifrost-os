@@ -152,3 +152,31 @@ fn pushing_a_name_extends_a_relative_path() {
     assert_eq!(path.to_string(), "docs/a.txt");
     assert_eq!(path.file_name(), Some("a.txt"));
 }
+
+
+#[test]
+fn a_path_reports_its_root_and_walks_its_components() {
+    use bifrost_app::typed_path::{Part, Root, TypedPath};
+    let abs = TypedPath::parse("/a/./b/..").expect("parses");
+    assert_eq!(abs.root(), Root::Absolute);
+    assert_eq!(abs.components().len(), 4);
+    assert_eq!(abs.components().iter().next(), Some(&Part::Name("a".into())));
+    let rel = TypedPath::parse("docs/x").expect("parses");
+    assert_eq!(rel.root(), Root::Relative);
+    assert!(!rel.components().is_empty());
+}
+
+#[test]
+fn the_root_path_has_no_components() {
+    use bifrost_app::typed_path::{Root, TypedPath};
+    let root = TypedPath::parse("/").expect("parses");
+    assert_eq!(root.root(), Root::Absolute);
+    assert!(root.components().is_empty());
+}
+
+#[test]
+fn a_path_converts_to_a_nul_terminated_platform_string() {
+    use bifrost_app::typed_path::TypedPath;
+    let p = TypedPath::parse("/tmp/report.pdf").expect("parses");
+    assert_eq!(p.to_c_string().expect("no NUL byte").as_bytes(), b"/tmp/report.pdf");
+}

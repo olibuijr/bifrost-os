@@ -3,7 +3,7 @@
 use super::backup;
 use super::list::{Body, Group, Item, Spec, Tint};
 use super::pages::Toggle;
-use super::pages::{Action, Command, PageId, BUILD};
+use super::pages::{Action, Command, PageId, Pick, BUILD};
 use super::storage_page::Bar;
 use super::update::{Manifest, Source, State, Updater};
 use crate::gfx::pack;
@@ -27,8 +27,10 @@ pub struct PageState<'a> {
     pub backup_before_update: bool,
     /// "N files backed up", the last error, or empty
     pub backup_note: &'a str,
-    /// unix time of the newest backup in the data directory
+    /// unix time of the newest backup in the chosen destination
     pub latest_backup: Option<u64>,
+    /// the chosen backup disk's mount point, or "" for this computer
+    pub destination: &'a str,
 }
 
 pub fn spec(id: PageId, st: &PageState) -> Spec {
@@ -38,13 +40,34 @@ pub fn spec(id: PageId, st: &PageState) -> Spec {
     }
 }
 
+/// The places a backup can go: This Computer (the data folder, path "") and each removable disk mounted now, with
+/// its mount point as the path. Listed in the order the disks are mounted.
+pub fn destination_choices() -> Vec<(String, String)> {
+    let mut out = vec![("This Computer".to_string(), String::new())];
+    for v in crate::files::volumes::mounted() {
+        let removable = ["/media/", "/run/media/", "/mnt/"].iter().any(|p| v.mount.to_string_lossy().starts_with(p));
+        if removable {
+            out.push((v.name.clone(), v.mount.to_string_lossy().into_owned()));
+        }
+    }
+    out
+}
+
 fn backup_spec(st: &PageState) -> Spec {
     let latest = st.latest_backup.map_or("None".to_string(), |t| format!("{} min ago", (now().saturating_sub(t)) / 60));
     let restore = Item::new("Restore Latest Backup").tint(if st.latest_backup.is_some() { Tint::Blue } else { Tint::Dim }).action(Action::Run(Command::RestoreBackup));
+    let destinations: Vec<Item> = destination_choices()
+        .into_iter()
+        .enumerate()
+        .map(|(i, (label, path))| Item::new(label).check(path == st.destination, Action::Pick(Pick::BackupDestination(i))))
+        .collect();
     let mut groups = vec![
+        Group::new(destinations).header("BACKUP DESTINATION").footer("Backups are kept in the chosen place. A removable disk must stay connected to back up or restore."),
         Group::new(vec![Item::new("Back Up Now").tint(Tint::Blue).action(Action::Run(Command::BackUpNow)), Item::new("Latest Backup").value(latest)])
             .footer(&format!("Saves Notes, Contacts, Calendar, Reminders, settings and notifications to one file in {}/. `tab backup` copies it to a computer.", backup::BACKUP_DIR)),
         Group::new(vec![restore]).footer("Replaces that data with the backup and restarts SpringBoard. The backup is checked first; a damaged one is refused."),
+        Group::new(vec![Item::new("Delete All Backups").tint(if st.latest_backup.is_some() { Tint::Red } else { Tint::Dim }).action(Action::Run(Command::DeleteBackups))])
+            .footer("Removes every backup file. Your data is not changed."),
     ];
     if !st.backup_note.is_empty() {
         groups.push(Group::new(vec![]).footer(st.backup_note));
@@ -131,11 +154,12 @@ fn now() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::shell::list::Accessory;
 
     #[test]
     fn update_page_offers_the_step_for_each_state() {
         let mut u = Updater::new(std::env::temp_dir().join("sb-nonexistent-dir"), None);
-        let st = |u: &Updater| spec(PageId::SoftwareUpdate, &PageState { updater: u, auto_update: true, backup_before_update: true, backup_note: "", latest_backup: None });
+        let st = |u: &Updater| spec(PageId::SoftwareUpdate, &PageState { updater: u, auto_update: true, backup_before_update: true, backup_note: "", latest_backup: None, destination: "" });
         assert_eq!(st(&u).groups[1].items[0].action, Action::Run(Command::CheckUpdate));
         u.state = State::Checking;
         assert_eq!(st(&u).groups[1].items[0].action, Action::None);
@@ -164,9 +188,32 @@ mod tests {
     }
 
     #[test]
+    fn the_destination_group_marks_the_chosen_place_and_starts_with_this_computer() {
+        let u = Updater::new(std::path::PathBuf::from("/nonexistent"), None);
+        let s = spec(PageId::Backup, &PageState { updater: &u, auto_update: true, backup_before_update: true, backup_note: "", latest_backup: None, destination: "" });
+        let first = &s.groups[0];
+        assert_eq!(first.items[0].label, "This Computer");
+        assert_eq!(first.items[0].accessory, Accessory::Check(true), "the data folder is the default");
+        assert_eq!(first.items[0].action, Action::Pick(Pick::BackupDestination(0)));
+        let chosen = spec(PageId::Backup, &PageState { updater: &u, auto_update: true, backup_before_update: true, backup_note: "", latest_backup: None, destination: "/run/media/u/USB" });
+        assert_eq!(chosen.groups[0].items[0].accessory, Accessory::Check(false));
+    }
+
+    #[test]
+    fn delete_backups_is_offered_and_dim_without_a_backup() {
+        let u = Updater::new(std::env::temp_dir().join("sb-nonexistent-dir"), None);
+        let none = spec(PageId::Backup, &PageState { updater: &u, auto_update: true, backup_before_update: true, backup_note: "", latest_backup: None, destination: "" });
+        // Groups: destination, backup, restore, delete.
+        assert_eq!(none.groups[3].items[0].action, Action::Run(Command::DeleteBackups));
+        assert_eq!(none.groups[3].items[0].tint, Tint::Dim);
+        let some = spec(PageId::Backup, &PageState { updater: &u, auto_update: true, backup_before_update: true, backup_note: "", latest_backup: Some(1), destination: "" });
+        assert_eq!(some.groups[3].items[0].tint, Tint::Red);
+    }
+
+    #[test]
     fn restore_is_dim_without_a_backup() {
         let u = Updater::new(std::env::temp_dir().join("sb-nonexistent-dir"), None);
-        let s = spec(PageId::Backup, &PageState { updater: &u, auto_update: true, backup_before_update: true, backup_note: "", latest_backup: None });
-        assert_eq!(s.groups[1].items[0].tint, Tint::Dim);
+        let s = spec(PageId::Backup, &PageState { updater: &u, auto_update: true, backup_before_update: true, backup_note: "", latest_backup: None, destination: "" });
+        assert_eq!(s.groups[2].items[0].tint, Tint::Dim);
     }
 }

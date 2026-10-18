@@ -2,13 +2,17 @@
 //! the `privacy` service (Settings > Privacy > App Permissions > Location); the error model is
 //! `bifrost_ui::location_auth`. The SDK client is `bifrost_app::core_location`.
 //!
-//! There is no GPS hardware, so a fix comes from one of two sources, tried in this order:
-//! 1. a manual location the person set in Settings (`location.manual.enabled`, `.latitude`, `.longitude`, `.city`,
-//!    `.country` in the shell prefs), accurate to 100 m;
-//! 2. an IP geolocation lookup, **off by default** for privacy: it runs only when `location.ip.enabled` is `1` and
-//!    `location.ip.endpoint` names an HTTPS endpoint answering JSON with `latitude`/`longitude` (or `lat`/`lon`) and
-//!    optional `city` and `country`. It is fetched on a worker thread, at most every 10 minutes, and is accurate to
-//!    about 25 km (city level).
+//! There is no GPS hardware and no network lookup. The only source is a fixed location the person sets in Settings
+//! (`location.manual.enabled`, `.latitude`, `.longitude`, `.city`, `.country` in the shell prefs), accurate to 100 m.
+//! No third-party service is called, and the IP-address estimate is gone. A GeoClue2 client is not built: the repo has
+//! no D-Bus client for it in use yet.
+//!
+//! Privacy rules (owner decision, follows the reference platform):
+//! - `location.services.enabled` (default `1`) is the global Location Services switch. `0` denies every app.
+//! - Each app is approximate by default. `location.precise.<app id>` set to `1` turns on its Precise Location. An
+//!   approximate app gets its coordinates on a grid of about 3 km (`bifrost_ui::location_auth::approximate`).
+//! - Nothing is stored beyond the last fix in memory. The only per-app record is when each app last received a fix
+//!   (`Location::last_use`), kept in memory and never written to disk.
 //!
 //! Methods (params are a JSON object):
 //! - `status {}` returns `{status, authorized}` (names as in the `privacy` service).
@@ -17,18 +21,17 @@
 //!   `didUpdateLocations` event (`{locations: [location]}`) and a failure as `didFailWithError` (`{code, domain,
 //!   message}`), the second only once per run of the same failure.
 //! - `reverse {latitude, longitude}` returns the `{city, country, latitude, longitude}` of the known place within
-//!   50 km. Places are the manual and IP places; there is no worldwide gazetteer yet.
+//!   50 km. The known place is the fixed location.
+//! - `geocode {address}` returns `{places: [{city, country, latitude, longitude}]}` for the known places whose city or
+//!   country equals the address (case-insensitive). No gazetteer is kept, so other names find nothing.
 //!
 //! A location is `{latitude, longitude, altitude: null, horizontal_accuracy, timestamp, source, city, country}`.
 use super::{Event, Shell, SystemService};
-use crate::shell::music::radio::{Fetch, Http};
 use crate::shell::prefs::Prefs;
 use crate::shell::services::privacy_permissions::{location_name, location_status};
 use bifrost_core::json::Json;
-use bifrost_ui::location_auth::{AuthorizationStatus, LocationError};
+use bifrost_ui::location_auth::{accuracy_for, approximate, AccuracyAuthorization, AuthorizationStatus, LocationError, APPROXIMATE_ACCURACY};
 use std::collections::BTreeMap;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
 
 /// The service name.
 pub const SERVICE: &str = "location";
@@ -36,15 +39,51 @@ pub const SERVICE: &str = "location";
 pub const EVENT_UPDATE: &str = "didUpdateLocations";
 /// The event for a failure.
 pub const EVENT_FAIL: &str = "didFailWithError";
+/// The prefs key of the global Location Services switch (`1` on, the default).
+pub const PREFS_SERVICES: &str = "location.services.enabled";
+/// Prefix of the per-app Precise Location switch: `location.precise.<app id>` (`1` on, the default is off).
+pub const PREFS_PRECISE_PREFIX: &str = "location.precise.";
 
 /// Accuracy of a manual location, in metres.
 pub const MANUAL_ACCURACY: f64 = 100.0;
-/// Accuracy of an IP lookup, in metres (city level).
-pub const IP_ACCURACY: f64 = 25_000.0;
-/// Seconds between IP lookups.
-const IP_REFRESH: f64 = 600.0;
 /// Farthest a reverse lookup reaches, in metres.
 const REVERSE_RADIUS: f64 = 50_000.0;
+/// How long after a fix an app still counts as using location for the menu bar indicator, in seconds.
+pub const ACTIVE_WINDOW: f64 = 5.0;
+
+thread_local! {
+    /// The apps using location as of the last service call or tick. The menu bar reads it through `in_use_now`.
+    static IN_USE: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
+    /// When each app last got a fix this run (Unix seconds). Kept in memory only: nothing is written to disk.
+    static LAST_USE: std::cell::RefCell<BTreeMap<String, f64>> = const { std::cell::RefCell::new(BTreeMap::new()) };
+}
+
+/// Records that `app_id` got a fix at `t` (Unix seconds). Memory only, see the module note.
+pub fn record_use(app_id: &str, t: f64) {
+    LAST_USE.with(|u| {
+        u.borrow_mut().insert(app_id.to_string(), t);
+    });
+}
+
+/// When `app_id` last got a fix this run, in Unix seconds. `None` when it never has.
+pub fn last_use_of(app_id: &str) -> Option<f64> {
+    LAST_USE.with(|u| u.borrow().get(app_id).copied())
+}
+
+/// Whether `last` (a fix time) is within `window` seconds before `now`. A fix in the future does not count.
+pub fn used_within(last: Option<f64>, now: f64, window: f64) -> bool {
+    last.is_some_and(|u| now >= u && now - u <= window)
+}
+
+/// Records the apps using location now, for the menu bar.
+pub fn publish_in_use(apps: Vec<String>) {
+    IN_USE.with(|s| *s.borrow_mut() = apps);
+}
+
+/// The apps using location as the service last published them (sorted by id). Empty means the indicator is hidden.
+pub fn in_use_now() -> Vec<String> {
+    IN_USE.with(|s| s.borrow().clone())
+}
 
 /// One position fix.
 #[derive(Clone, Debug, PartialEq)]
@@ -55,7 +94,7 @@ pub struct Fix {
     pub horizontal_accuracy: f64,
     /// Unix seconds.
     pub timestamp: f64,
-    /// `manual` or `ip`.
+    /// Always `manual` for now.
     pub source: &'static str,
     pub city: String,
     pub country: String,
@@ -100,6 +139,35 @@ pub fn manual_fix(prefs: &Prefs, now: f64) -> Option<Fix> {
     })
 }
 
+/// Whether the global Location Services switch is on.
+pub fn services_on(prefs: &Prefs) -> bool {
+    prefs.get_bool(PREFS_SERVICES, true)
+}
+
+/// Whether the app has Precise Location on (default off).
+pub fn precise_for(prefs: &Prefs, app_id: &str) -> bool {
+    prefs.get_bool(&format!("{PREFS_PRECISE_PREFIX}{app_id}"), false)
+}
+
+/// The status an app is held to: the global switch off denies every app, whatever its grant.
+pub fn effective_status(status: AuthorizationStatus, services_on: bool) -> AuthorizationStatus {
+    if services_on {
+        status
+    } else {
+        AuthorizationStatus::Denied
+    }
+}
+
+/// The fix an app receives: unchanged when it has Precise Location, otherwise moved to the approximate grid and
+/// reported with the grid's accuracy (never finer than the grid).
+pub fn fix_for(fix: &Fix, accuracy: AccuracyAuthorization) -> Fix {
+    if accuracy.is_full() {
+        return fix.clone();
+    }
+    let (latitude, longitude) = approximate(fix.latitude, fix.longitude);
+    Fix { latitude, longitude, horizontal_accuracy: fix.horizontal_accuracy.max(APPROXIMATE_ACCURACY), ..fix.clone() }
+}
+
 fn valid(latitude: f64, longitude: f64) -> Option<()> {
     ((-90.0..=90.0).contains(&latitude) && (-180.0..=180.0).contains(&longitude)).then_some(())
 }
@@ -110,25 +178,6 @@ fn number(v: &Json) -> Option<f64> {
         Json::Str(s) => s.trim().parse().ok(),
         _ => None,
     }
-}
-
-/// Reads an IP geolocation answer. `None` when it has no usable coordinates.
-pub fn parse_ip_response(body: &[u8], now: f64) -> Option<Fix> {
-    let json = bifrost_core::json::parse(std::str::from_utf8(body).ok()?).ok()?;
-    let pick = |names: &[&str]| names.iter().find_map(|n| json.get(n).and_then(number));
-    let text = |names: &[&str]| names.iter().find_map(|n| json.get(n).and_then(Json::as_str)).unwrap_or("").to_string();
-    let latitude = pick(&["latitude", "lat"])?;
-    let longitude = pick(&["longitude", "lon", "lng"])?;
-    valid(latitude, longitude)?;
-    Some(Fix {
-        latitude,
-        longitude,
-        horizontal_accuracy: IP_ACCURACY,
-        timestamp: now,
-        source: "ip",
-        city: text(&["city"]),
-        country: text(&["country", "country_name"]),
-    })
 }
 
 /// Great-circle distance in metres.
@@ -148,6 +197,16 @@ pub fn reverse(places: &[Fix], latitude: f64, longitude: f64) -> Option<&Fix> {
         .filter(|(d, _)| *d <= REVERSE_RADIUS)
         .min_by(|a, b| a.0.total_cmp(&b.0))
         .map(|(_, p)| p)
+}
+
+/// The known places whose city or country equals the address, ignoring case and surrounding spaces. Only known places
+/// are searched (no gazetteer and no network lookup), so a name the fixed location does not carry finds nothing.
+pub fn forward<'a>(places: &'a [Fix], address: &str) -> Vec<&'a Fix> {
+    let want = address.trim().to_lowercase();
+    if want.is_empty() {
+        return Vec::new();
+    }
+    places.iter().filter(|p| p.city.to_lowercase() == want || p.country.to_lowercase() == want).collect()
 }
 
 fn error_json(e: LocationError) -> Json {
@@ -173,17 +232,30 @@ struct Watch {
     failed: Option<LocationError>,
 }
 
-/// The service state: who watches, and the IP lookup.
+/// The service state: who watches, and when each app last got a fix. Kept in memory only.
 #[derive(Default)]
 pub struct Location {
     watching: BTreeMap<String, Watch>,
-    ip: Arc<Mutex<Option<Fix>>>,
-    in_flight: Arc<AtomicBool>,
-    last_try: Option<f64>,
 }
 
 impl Location {
-    /// Answers one call. `fix` is the best fix now, `places` the known places for reverse lookups.
+    /// When `app_id` last received a fix this run, in Unix seconds. `None` when it never has.
+    pub fn last_use(&self, app_id: &str) -> Option<f64> {
+        last_use_of(app_id)
+    }
+
+    /// The apps using location now, sorted by id: each one with a live watch, or with a fix within `window` seconds of
+    /// `t`. Drives the menu bar location indicator, which shows while this list is not empty. Nothing is recorded here.
+    pub fn in_use(&self, t: f64, window: f64) -> Vec<String> {
+        let recent: Vec<String> = LAST_USE.with(|u| u.borrow().iter().filter(|&(_, &u)| t >= u && t - u <= window).map(|(a, _)| a.clone()).collect());
+        let mut apps: Vec<String> = self.watching.keys().cloned().chain(recent).collect();
+        apps.sort();
+        apps.dedup();
+        apps
+    }
+
+    /// Answers one call. `fix` is the best fix now, already shaped for this app; `places` the known places for
+    /// reverse lookups; `t` the time in Unix seconds, recorded as the app's last use when it gets a fix.
     pub fn answer(
         &mut self,
         status: AuthorizationStatus,
@@ -192,6 +264,7 @@ impl Location {
         params: &Json,
         fix: Option<&Fix>,
         places: &[Fix],
+        t: f64,
     ) -> Result<Json, String> {
         match method {
             "status" => Ok(Json::Obj(vec![
@@ -202,7 +275,9 @@ impl Location {
                 if let Some(e) = refusal(status) {
                     return Err(format!("{e:?}"));
                 }
-                fix.map(fix_json).ok_or_else(|| format!("{:?}", LocationError::LocationUnknown))
+                let f = fix.ok_or_else(|| format!("{:?}", LocationError::LocationUnknown))?;
+                record_use(app_id, t);
+                Ok(fix_json(f))
             }
             "start" => {
                 self.watching.insert(app_id.to_string(), Watch::default());
@@ -221,16 +296,43 @@ impl Location {
                     ("longitude".into(), Json::Num(p.longitude)),
                 ]))
             }
+            "geocode" => {
+                let address = params.get("address").and_then(Json::as_str).ok_or("address is required")?;
+                let found = forward(places, address);
+                if found.is_empty() {
+                    return Err(format!("{:?}", LocationError::GeocodeFoundNoResult));
+                }
+                let list = found
+                    .into_iter()
+                    .map(|p| {
+                        Json::Obj(vec![
+                            ("city".into(), Json::Str(p.city.clone())),
+                            ("country".into(), Json::Str(p.country.clone())),
+                            ("latitude".into(), Json::Num(p.latitude)),
+                            ("longitude".into(), Json::Num(p.longitude)),
+                        ])
+                    })
+                    .collect();
+                Ok(Json::Obj(vec![("places".into(), Json::Arr(list))]))
+            }
             _ => Err(format!("location has no method {method}")),
         }
     }
 
-    /// The events due now for the watching apps. `status_of` is each app's grant.
-    pub fn updates(&mut self, status_of: impl Fn(&str) -> AuthorizationStatus, fix: Option<&Fix>) -> Vec<Event> {
+    /// The events due now for the watching apps. `status_of` is each app's effective grant, `accuracy_of` its
+    /// Precise Location setting, and `fix` the best fix (shaped per app here).
+    pub fn updates(
+        &mut self,
+        status_of: impl Fn(&str) -> AuthorizationStatus,
+        accuracy_of: impl Fn(&str) -> AccuracyAuthorization,
+        fix: Option<&Fix>,
+        t: f64,
+    ) -> Vec<Event> {
         let mut out = Vec::new();
+        let mut used = Vec::new();
         for (app, w) in self.watching.iter_mut() {
             let problem = refusal(status_of(app)).or(if fix.is_none() { Some(LocationError::LocationUnknown) } else { None });
-            let (Some(f), None) = (fix, problem) else {
+            let (Some(raw), None) = (fix, problem) else {
                 let e = problem.unwrap_or(LocationError::LocationUnknown);
                 if w.failed != Some(e) {
                     w.failed = Some(e);
@@ -239,48 +341,28 @@ impl Location {
                 continue;
             };
             w.failed = None;
-            if !w.last.as_ref().is_some_and(|l| l.same_place(f)) {
-                w.last = Some(f.clone());
-                let body = Json::Obj(vec![("locations".into(), Json::Arr(vec![fix_json(f)]))]);
+            let f = fix_for(raw, accuracy_of(app));
+            used.push(app.clone());
+            if !w.last.as_ref().is_some_and(|l| l.same_place(&f)) {
+                let body = Json::Obj(vec![("locations".into(), Json::Arr(vec![fix_json(&f)]))]);
+                w.last = Some(f);
                 out.push(Event { app: Some(app.clone()), event: EVENT_UPDATE.into(), body });
             }
+        }
+        for app in used {
+            record_use(&app, t);
         }
         out
     }
 
-    /// Starts an IP lookup on a worker when it is on, due, and none runs.
-    fn refresh_ip(&mut self, prefs: &Prefs, t: f64) {
-        if !prefs.get_bool("location.ip.enabled", false) {
-            return;
-        }
-        let Some(endpoint) = prefs.get("location.ip.endpoint").filter(|e| e.starts_with("https://")).map(str::to_string) else {
-            return;
-        };
-        if self.last_try.is_some_and(|l| t - l < IP_REFRESH) || self.in_flight.swap(true, Ordering::SeqCst) {
-            return;
-        }
-        self.last_try = Some(t);
-        let (slot, flag) = (self.ip.clone(), self.in_flight.clone());
-        std::thread::spawn(move || {
-            if let Ok(body) = Http::default().get(&endpoint, 64 * 1024) {
-                if let Some(f) = parse_ip_response(&body, now_unix()) {
-                    if let Ok(mut s) = slot.lock() {
-                        *s = Some(f);
-                    }
-                }
-            }
-            flag.store(false, Ordering::SeqCst);
-        });
-    }
-
-    /// The places known now: the manual one, then the IP one.
+    /// The fixed location, the only source: the places known now.
     fn places(&self, prefs: &Prefs) -> Vec<Fix> {
-        let ip = self.ip.lock().ok().and_then(|g| g.clone());
-        manual_fix(prefs, now_unix()).into_iter().chain(ip).collect()
+        manual_fix(prefs, now_unix()).into_iter().collect()
     }
 }
 
-fn now_unix() -> f64 {
+/// The current time in Unix seconds (0 when the clock is before 1970).
+pub fn now_unix() -> f64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0.0, |d| d.as_secs_f64())
 }
 
@@ -290,19 +372,29 @@ impl SystemService for Location {
     }
 
     fn call(&mut self, shell: &mut Shell, app_id: &str, method: &str, params: &Json, t: f64) -> Result<Json, String> {
-        self.refresh_ip(&shell.prefs, t);
         let places = self.places(&shell.prefs);
-        let status = location_status(app_id);
-        self.answer(status, app_id, method, params, places.first(), &places)
+        let status = effective_status(location_status(app_id), services_on(&shell.prefs));
+        let accuracy = accuracy_for(precise_for(&shell.prefs, app_id));
+        let shaped = places.first().map(|f| fix_for(f, accuracy));
+        let reply = self.answer(status, app_id, method, params, shaped.as_ref(), &places, t);
+        publish_in_use(self.in_use(t, ACTIVE_WINDOW));
+        reply
     }
 
     fn tick(&mut self, shell: &mut Shell, t: f64) -> Vec<Event> {
+        publish_in_use(self.in_use(t, ACTIVE_WINDOW));
         if self.watching.is_empty() {
             return Vec::new();
         }
-        self.refresh_ip(&shell.prefs, t);
         let places = self.places(&shell.prefs);
-        self.updates(location_status, places.first())
+        let on = services_on(&shell.prefs);
+        let prefs = &shell.prefs;
+        self.updates(
+            |app| effective_status(location_status(app), on),
+            |app| accuracy_for(precise_for(prefs, app)),
+            places.first(),
+            t,
+        )
     }
 }
 
@@ -311,6 +403,8 @@ mod tests {
     use super::*;
 
     const WHEN: AuthorizationStatus = AuthorizationStatus::AuthorizedWhenInUse;
+    const FULL: AccuracyAuthorization = AccuracyAuthorization::FullAccuracy;
+    const REDUCED: AccuracyAuthorization = AccuracyAuthorization::ReducedAccuracy;
 
     fn manual_prefs() -> Prefs {
         let mut p = Prefs::memory();
@@ -329,8 +423,10 @@ mod tests {
         manual_fix(&manual_prefs(), 1000.0).unwrap()
     }
 
+    /// Calls `answer` for app "a" at time 0 with the fix shaped for the given accuracy.
     fn call(s: &mut Location, st: AuthorizationStatus, m: &str, p: &Json, fix: Option<&Fix>) -> Result<Json, String> {
-        s.answer(st, "a", m, p, fix, fix.map(std::slice::from_ref).unwrap_or(&[]))
+        let shaped = fix.map(|f| fix_for(f, FULL));
+        s.answer(st, "a", m, p, shaped.as_ref(), fix.map(std::slice::from_ref).unwrap_or(&[]), 0.0)
     }
 
     #[test]
@@ -370,29 +466,60 @@ mod tests {
     }
 
     #[test]
+    fn the_global_switch_off_denies_an_authorized_app() {
+        assert_eq!(effective_status(WHEN, false), AuthorizationStatus::Denied);
+        assert_eq!(effective_status(WHEN, true), WHEN);
+        let mut s = Location::default();
+        let f = here();
+        let r = s.answer(effective_status(WHEN, false), "a", "current", &Json::Null, Some(&f), &[], 0.0);
+        assert_eq!(r, Err("Denied".to_string()));
+        assert!(s.last_use("a").is_none());
+    }
+
+    #[test]
+    fn approximate_is_the_default_and_precise_is_read_per_app() {
+        let mut p = manual_prefs();
+        assert!(!precise_for(&p, "a"));
+        p.set("location.precise.a", "1").unwrap();
+        assert!(precise_for(&p, "a"));
+        assert!(!precise_for(&p, "b"));
+    }
+
+    #[test]
+    fn an_approximate_app_gets_the_grid_and_a_wider_accuracy() {
+        let f = here();
+        let rough = fix_for(&f, REDUCED);
+        assert_ne!((rough.latitude, rough.longitude), (f.latitude, f.longitude));
+        assert_eq!(rough.horizontal_accuracy, APPROXIMATE_ACCURACY);
+        assert!(distance((f.latitude, f.longitude), (rough.latitude, rough.longitude)) <= 2_500.0);
+        assert_eq!(fix_for(&f, FULL), f);
+        assert_eq!(rough.city, "Akureyri");
+    }
+
+    #[test]
     fn a_watching_app_gets_a_changed_fix_once() {
         let mut s = Location::default();
         call(&mut s, WHEN, "start", &Json::Null, None).unwrap();
         let f = here();
-        let first = s.updates(|_| WHEN, Some(&f));
+        let first = s.updates(|_| WHEN, |_| FULL, Some(&f), 1.0);
         assert_eq!(first.len(), 1);
         assert_eq!(first[0].event, EVENT_UPDATE);
         assert_eq!(first[0].app.as_deref(), Some("a"));
-        assert!(s.updates(|_| WHEN, Some(&f)).is_empty());
+        assert!(s.updates(|_| WHEN, |_| FULL, Some(&f), 2.0).is_empty());
         let mut moved = f.clone();
         moved.latitude = 64.0;
-        assert_eq!(s.updates(|_| WHEN, Some(&moved)).len(), 1);
+        assert_eq!(s.updates(|_| WHEN, |_| FULL, Some(&moved), 3.0).len(), 1);
     }
 
     #[test]
     fn a_failure_is_delivered_once_and_a_denied_grant_wins() {
         let mut s = Location::default();
         call(&mut s, WHEN, "start", &Json::Null, None).unwrap();
-        let e = s.updates(|_| WHEN, None);
+        let e = s.updates(|_| WHEN, |_| FULL, None, 0.0);
         assert_eq!(e[0].event, EVENT_FAIL);
         assert_eq!(e[0].body.get("code"), Some(&Json::Num(LocationError::LocationUnknown.code() as f64)));
-        assert!(s.updates(|_| WHEN, None).is_empty());
-        let d = s.updates(|_| AuthorizationStatus::Denied, Some(&here()));
+        assert!(s.updates(|_| WHEN, |_| FULL, None, 0.0).is_empty());
+        let d = s.updates(|_| AuthorizationStatus::Denied, |_| FULL, Some(&here()), 0.0);
         assert_eq!(d[0].body.get("code"), Some(&Json::Num(LocationError::Denied.code() as f64)));
     }
 
@@ -402,18 +529,20 @@ mod tests {
         call(&mut s, WHEN, "start", &Json::Null, None).unwrap();
         let r = call(&mut s, WHEN, "stop", &Json::Null, None).unwrap();
         assert_eq!(r.get("stopped"), Some(&Json::Bool(true)));
-        assert!(s.updates(|_| WHEN, Some(&here())).is_empty());
+        assert!(s.updates(|_| WHEN, |_| FULL, Some(&here()), 0.0).is_empty());
     }
 
     #[test]
-    fn an_ip_answer_is_read_at_city_accuracy() {
-        let body = br#"{"lat": 64.14, "lon": "-21.94", "city": "Reykjavik", "country_name": "Iceland"}"#;
-        let f = parse_ip_response(body, 5.0).unwrap();
-        assert_eq!((f.latitude, f.longitude, f.source), (64.14, -21.94, "ip"));
-        assert_eq!((f.city.as_str(), f.country.as_str(), f.horizontal_accuracy), ("Reykjavik", "Iceland", IP_ACCURACY));
-        assert!(parse_ip_response(b"{}", 0.0).is_none());
-        assert!(parse_ip_response(br#"{"latitude": 200, "longitude": 0}"#, 0.0).is_none());
-        assert!(parse_ip_response(b"nope", 0.0).is_none());
+    fn the_last_use_is_kept_in_memory_for_an_app_that_got_a_fix() {
+        let mut s = Location::default();
+        let f = here();
+        assert!(s.last_use("a").is_none());
+        s.answer(WHEN, "a", "current", &Json::Null, Some(&f), &[], 42.0).unwrap();
+        assert_eq!(s.last_use("a"), Some(42.0));
+        assert!(s.last_use("b").is_none());
+        call(&mut s, WHEN, "start", &Json::Null, None).unwrap();
+        s.updates(|_| WHEN, |_| FULL, Some(&f), 50.0);
+        assert_eq!(s.last_use("a"), Some(50.0));
     }
 
     #[test]
@@ -429,9 +558,50 @@ mod tests {
     }
 
     #[test]
+    fn forward_geocoding_finds_the_known_place_by_name_only() {
+        let mut s = Location::default();
+        let f = here();
+        let by_city = Json::Obj(vec![("address".into(), Json::Str("  akureyri ".into()))]);
+        let r = call(&mut s, WHEN, "geocode", &by_city, Some(&f)).unwrap();
+        let places = r.get("places").and_then(Json::as_array).unwrap();
+        assert_eq!(places.len(), 1);
+        assert_eq!(places[0].get("country").and_then(Json::as_str), Some("Iceland"));
+        let by_country = Json::Obj(vec![("address".into(), Json::Str("Iceland".into()))]);
+        assert!(call(&mut s, WHEN, "geocode", &by_country, Some(&f)).is_ok());
+        let unknown = Json::Obj(vec![("address".into(), Json::Str("Reykjavik".into()))]);
+        assert_eq!(call(&mut s, WHEN, "geocode", &unknown, Some(&f)), Err("GeocodeFoundNoResult".to_string()));
+        let blank = Json::Obj(vec![("address".into(), Json::Str("   ".into()))]);
+        assert_eq!(call(&mut s, WHEN, "geocode", &blank, Some(&f)), Err("GeocodeFoundNoResult".to_string()));
+        assert!(call(&mut s, WHEN, "geocode", &Json::Null, Some(&f)).is_err());
+    }
+
+    #[test]
     fn distance_is_about_right() {
         let d = distance((64.14, -21.94), (65.68, -18.10));
         assert!((d - 250_000.0).abs() < 15_000.0, "{d}");
+    }
+
+    #[test]
+    fn the_indicator_lists_watching_apps_and_recent_fixes_only() {
+        let mut s = Location::default();
+        let f = here();
+        assert!(s.in_use(10.0, ACTIVE_WINDOW).is_empty(), "no app, no indicator");
+        s.answer(WHEN, "b", "current", &Json::Null, Some(&f), &[], 8.0).unwrap();
+        assert_eq!(s.in_use(10.0, ACTIVE_WINDOW), ["b"], "a fix 2 s ago is in use");
+        assert!(s.in_use(20.0, ACTIVE_WINDOW).is_empty(), "an old fix is not in use");
+        call(&mut s, WHEN, "start", &Json::Null, None).unwrap();
+        assert_eq!(s.in_use(20.0, ACTIVE_WINDOW), ["a"], "a live watch is in use, sorted");
+        s.answer(WHEN, "a", "stop", &Json::Null, None, &[], 20.0).unwrap();
+        assert!(s.in_use(20.0, ACTIVE_WINDOW).is_empty(), "stop ends the indicator");
+        assert!(s.in_use(5.0, ACTIVE_WINDOW).is_empty(), "a fix in the future is not counted");
+    }
+
+    #[test]
+    fn the_published_in_use_list_is_what_the_menu_bar_reads() {
+        publish_in_use(vec!["a".into()]);
+        assert_eq!(in_use_now(), ["a"]);
+        publish_in_use(Vec::new());
+        assert!(in_use_now().is_empty(), "an empty list hides the indicator");
     }
 
     #[test]

@@ -15,6 +15,7 @@ pub enum FamilyClass {
     GrotesqueSans,
     GeometricSans,
     HumanistSans,
+    WideHumanist,
     DidoneSerif,
     TransitionalSerif,
     Slab,
@@ -40,14 +41,15 @@ impl FamilyClass {
     /// The open families that stand in for the class, preferred first.
     pub fn equivalents(self) -> &'static [&'static str] {
         match self {
-            FamilyClass::GrotesqueSans => &["Inter", "Geist", "Source Sans 3"],
+            FamilyClass::GrotesqueSans => &["Inter", "Geist", "Source Sans 3", "Noto Sans"],
             FamilyClass::GeometricSans => &["Outfit", "Poppins", "Geist", "Inter"],
-            FamilyClass::HumanistSans => &["Source Sans 3", "IBM Plex Sans", "Inter"],
+            FamilyClass::HumanistSans => &["Source Sans 3", "IBM Plex Sans", "Inter", "Lato"],
+            FamilyClass::WideHumanist => &["DejaVu Sans", "Source Sans 3", "Inter"],
             FamilyClass::DidoneSerif => &["Playfair Display", "Noto Serif", "Source Serif 4"],
             FamilyClass::TransitionalSerif => &["Noto Serif", "Source Serif 4", "Libre Baskerville"],
             FamilyClass::Slab => &["Roboto Slab", "Zilla Slab", "Noto Serif"],
             FamilyClass::Script => &["Pacifico", "Caveat", "Dancing Script"],
-            FamilyClass::Monospaced => &["JetBrains Mono", "Geist Mono", "Source Code Pro", "Fira Code"],
+            FamilyClass::Monospaced => &["JetBrains Mono", "Geist Mono", "Source Code Pro", "Fira Code", "Liberation Mono", "DejaVu Sans Mono"],
             FamilyClass::Rounded => &["Nunito", "Quicksand", "M PLUS Rounded 1c", "Inter"],
             FamilyClass::CjkGothic => &["Noto Sans CJK JP", "Noto Sans CJK SC", "Noto Sans CJK TC", "Noto Sans CJK KR"],
             FamilyClass::CjkMincho => &["Noto Serif CJK JP", "Noto Serif CJK SC", "Noto Serif CJK TC", "Noto Serif CJK KR"],
@@ -83,16 +85,17 @@ const TABLE: &[(&str, FamilyClass)] = &[
     ("din alternate", GrotesqueSans), ("din condensed", GrotesqueSans), ("avenir next condensed", GrotesqueSans),
     // geometric sans
     ("avenir", GeometricSans), ("avenir next", GeometricSans), ("futura", GeometricSans), ("gill sans", GeometricSans),
-    ("century gothic", GeometricSans), ("optima", GeometricSans), ("trebuchet ms", GeometricSans), ("copperplate", GeometricSans),
+    ("century gothic", GeometricSans), ("optima", GeometricSans), ("copperplate", GeometricSans),
     ("didot sans", GeometricSans), ("kohinoor devanagari", GeometricSans), ("kohinoor bangla", GeometricSans),
     // humanist sans
-    ("lucida grande", HumanistSans), ("lucida sans", HumanistSans), ("verdana", HumanistSans), ("tahoma", HumanistSans),
+    ("lucida grande", HumanistSans), ("lucida sans", HumanistSans), ("trebuchet ms", HumanistSans), ("stone sans", HumanistSans),
+    ("verdana", WideHumanist), ("tahoma", WideHumanist),
     ("calibri", HumanistSans), ("segoe ui", HumanistSans), ("geneva", HumanistSans), ("myriad pro", HumanistSans),
     ("frutiger", HumanistSans), ("candara", HumanistSans), ("corbel", HumanistSans), ("noteworthy", HumanistSans),
     ("pt sans", HumanistSans), ("al bayan", HumanistSans), ("damascus", HumanistSans),
     ("geeza pro", HumanistSans), ("kefa", HumanistSans), ("mshtakan", HumanistSans), ("nadeem", HumanistSans),
     // didone and display serif
-    ("didot", DidoneSerif), ("bodoni 72", DidoneSerif), ("bodoni 72 oldstyle", DidoneSerif), ("bodoni 72 smallcaps", DidoneSerif),
+    ("didot", DidoneSerif), ("trattatello", DidoneSerif), ("bodoni 72", DidoneSerif), ("bodoni 72 oldstyle", DidoneSerif), ("bodoni 72 smallcaps", DidoneSerif),
     ("bodoni mt", DidoneSerif), ("new york", DidoneSerif), ("playfair display", DidoneSerif),
     // transitional and old-style serif
     ("times", TransitionalSerif), ("times new roman", TransitionalSerif), ("georgia", TransitionalSerif),
@@ -110,7 +113,7 @@ const TABLE: &[(&str, FamilyClass)] = &[
     ("marker felt", Script), ("segoe script", Script), ("lucida handwriting", Script), ("party let", Script),
     ("papyrus", Script), ("blackmoor let", Script),
     // monospaced
-    ("sf mono", Monospaced), ("menlo", Monospaced), ("monaco", Monospaced), ("courier", Monospaced),
+    ("sf mono", Monospaced), ("menlo", Monospaced), ("monaco", Monospaced), ("spotmono", Monospaced), ("courier", Monospaced),
     ("courier new", Monospaced), ("consolas", Monospaced), ("andale mono", Monospaced), ("lucida console", Monospaced),
     ("liberation mono", Monospaced), ("cousine", Monospaced), ("dejavu sans mono", Monospaced), ("osaka-mono", Monospaced),
     // rounded
@@ -132,7 +135,7 @@ const TABLE: &[(&str, FamilyClass)] = &[
     ("nanumscript", CjkGothic), ("bmdohyeon-regular", CjkGothic), ("bmhanna11yrs-regular", CjkGothic),
     ("bmhannaair-regular", CjkGothic), ("bmhannapro-regular", CjkGothic), ("bmjua-regular", CjkGothic),
     ("bmkiranghaerang-regular", CjkGothic), ("baoli", CjkGothic), ("weibeisc-bold", CjkGothic), ("weibeitc-bold", CjkGothic),
-    ("xingkai", CjkGothic), ("wawasc-regular", CjkGothic), ("wawatc-regular", CjkGothic), ("yuppysc-regular", CjkGothic),
+    ("xingkai", CjkKai), ("wawasc-regular", CjkGothic), ("wawatc-regular", CjkGothic), ("yuppysc-regular", CjkGothic),
     ("yuppytc-regular", CjkGothic),
     // CJK mincho (serif)
     ("hiragino mincho pro", CjkMincho), ("hiragino mincho pron", CjkMincho), ("ヒラギノ明朝 pro", CjkMincho),
@@ -150,7 +153,155 @@ const TABLE: &[(&str, FamilyClass)] = &[
     ("hiragino maru gothic pro", CjkRounded), ("hiragino maru gothic pron", CjkRounded), ("ヒラギノ丸ゴ pron", CjkRounded),
     ("ヒラギノ丸ゴ pron w4", CjkRounded), ("ヒラギノ丸ゴ pro", CjkRounded), ("yuanti sc", CjkRounded), ("yuanti tc", CjkRounded),
     ("yuanti", CjkRounded), ("tsukushiamarugothic", CjkRounded), ("tsukushibmarugothic", CjkRounded),
+    // Apple reference faces with an installed open stand-in (noto-fonts, noto-fonts-cjk, ttf-liberation)
+    ("sf ns", GrotesqueSans), ("sf ns mono", Monospaced), ("sf ns rounded", Rounded), ("sf camera", GrotesqueSans),
+    ("proxima nova", GrotesqueSans), ("produkt", GrotesqueSans), ("publico text", TransitionalSerif),
+    ("publico headline", TransitionalSerif), ("stixgeneral", TransitionalSerif), ("stheiti light", CjkGothic),
+    ("stheiti medium", CjkGothic),
 ];
+
+/// Reference family name (lowercase) to the open face that stands in for it by name, tried before the class's
+/// equivalents. Only packaged faces appear here (noto-fonts, noto-fonts-cjk, ttf-dejavu, gsfonts): P052 is the URW
+/// Palatino clone, the rest are the closest packaged face for the role, and the package row notes which is which.
+const FACES: &[(&str, &str)] = &[
+    ("palatino", "P052"),
+    ("pt sans", "Noto Sans"), ("pt serif", "Noto Serif"), ("pt serif caption", "Noto Serif"), ("pt mono", "DejaVu Sans Mono"),
+    ("papyrus", "Noto Sans"), ("partylet-plain", "Noto Sans"), ("party let", "Noto Sans"), ("phosphate", "Noto Sans"),
+    ("rockwell", "Noto Serif"), ("macintoshskeletal", "Noto Sans"),
+    ("ornanong", "Noto Sans Thai"),
+    ("osaka", "Noto Sans CJK JP"), ("osaka-mono", "DejaVu Sans Mono"), ("osakamono", "DejaVu Sans Mono"),
+    ("ヒラギノ角ゴシック w0", "Noto Sans CJK JP"), ("ヒラギノ角ゴシック w1", "Noto Sans CJK JP"),
+    ("ヒラギノ角ゴシック w2", "Noto Sans CJK JP"), ("ヒラギノ角ゴシック w3", "Noto Sans CJK JP"),
+    ("ヒラギノ角ゴシック w4", "Noto Sans CJK JP"), ("ヒラギノ角ゴシック w5", "Noto Sans CJK JP"),
+    ("ヒラギノ角ゴシック w6", "Noto Sans CJK JP"), ("ヒラギノ角ゴシック w7", "Noto Sans CJK JP"),
+    ("ヒラギノ角ゴシック w8", "Noto Sans CJK JP"), ("ヒラギノ角ゴシック w9", "Noto Sans CJK JP"),
+    ("ヒラギノ丸ゴ pron w4", "Noto Sans CJK JP"), ("ヒラギノ明朝 pron", "Noto Serif CJK JP"),
+    ("儷宋 pro", "Noto Serif CJK SC"), ("儷黑 pro", "Noto Sans CJK SC"), ("华文仿宋", "Noto Serif CJK SC"),
+    ("华文细黑", "Noto Sans CJK SC"), ("华文黑体", "Noto Sans CJK SC"),
+    ("avenir", "Lato"),
+    ("avenir next", "Lato"),
+    ("avenir next condensed", "Lato"),
+    ("arial black", "Noto Sans"),
+    ("arial unicode ms", "Noto Sans"),
+    ("andale mono", "DejaVu Sans Mono"),
+    ("athelas", "Liberation Serif"),
+    ("baskerville", "Libertinus Serif"),
+    ("big caslon", "Libertinus Serif"),
+    ("cochin", "Libertinus Serif"),
+    ("charter", "Charis SIL"),
+    ("american typewriter", "IBM Plex Serif"),
+    ("helvetica neue", "TeX Gyre Heros"),
+    ("georgia", "Source Serif 4"),
+    ("garamond", "Libertinus Serif"),
+    ("hoefler text", "Libertinus Serif"),
+    ("iowan old style", "Libertinus Serif"),
+    ("domaine display", "Libertinus Serif"),
+    ("herculanum", "Libertinus Serif"),
+    ("gill sans", "Lato"),
+    ("geneva", "Lato"),
+    ("forgotten futurist", "Lato"),
+    ("dash", "Inter"),
+    ("founders grotesk", "Inter"),
+    ("founders grotesk condensed", "Inter"),
+    ("founders grotesk text", "Inter"),
+    ("graphik", "Inter"),
+    ("graphik compact", "Inter"),
+    ("headline a", "Inter"),
+    ("kefa iii", "Noto Sans Ethiopic"),
+    ("bank gothic", "Roboto Condensed"),
+    ("bebas neue", "Roboto Condensed"),
+    ("din alternate", "Roboto Condensed"),
+    ("din condensed", "Roboto Condensed"),
+    ("druk", "Roboto Condensed"),
+    ("bodoni svtytwo", "Noto Serif Display"),
+    ("bodoni svtytwo os", "Noto Serif Display"),
+    ("bodoni svtytwo sc", "Noto Serif Display"),
+    ("didot", "Noto Serif Display"),
+    ("canela", "Noto Serif Display"),
+    ("canela deck", "Noto Serif Display"),
+    ("canela text", "Noto Serif Display"),
+    ("bordeaux roman bold let", "Libertinus Serif"),
+    ("bordeaux roman bold let fonts", "Libertinus Serif"),
+    ("brill", "Libertinus Serif"),
+    ("braganza", "TeX Gyre Chorus"),
+    ("carlito", "Carlito"),
+    ("calibri", "Carlito"),
+    ("adelle sans", "IBM Plex Sans"),
+    ("euphemia ucas", "Noto Sans"),
+    ("euphemiacas", "Noto Sans"),
+    ("coolvetica", "Montserrat"),
+    ("futura", "Montserrat"),
+    ("fakt slab stencil pro", "IBM Plex Serif"),
+    ("lato", "Lato"),
+    ("menlo", "DejaVu Sans Mono"),
+    ("monaco", "DejaVu Sans Mono"),
+    ("new york", "Source Serif 4"),
+    ("optima", "Libertinus Sans"),
+    ("marion", "Libertinus Serif"),
+    ("luminari", "Noto Serif Display"),
+    ("journal sans inline", "Source Sans 3"),
+    ("microsoft sans serif", "Liberation Sans"),
+    ("kokonor", "Noto Serif Tibetan"),
+    ("nanum gothic", "Noto Sans CJK KR"),
+    ("nanumgothic", "Noto Sans CJK KR"),
+    ("nanum myeongjo", "Noto Serif CJK KR"),
+    ("nanummyeongjo", "Noto Serif CJK KR"),
+    ("nom na tong", "Noto Serif CJK SC"),
+    // Open substitutes for the remaining reference typefaces (scripts to TeX Gyre Chorus, casual hands to Nunito,
+    // ornaments to D050000L, scripts of other writing systems to their Noto face); design-similar, never a copy.
+    ("adtnumeric", "Inter"), ("adt numeric", "Inter"), ("academy engraved let", "Libertinus Serif Display"),
+    ("academy engraved let fonts", "Libertinus Serif Display"), ("bodoni 72 os", "Noto Serif Display"), ("bodoni 72 oldstyle", "Noto Serif Display"),
+    ("bodoni 72 smallcaps", "Noto Serif Display"), ("bodoni 72 smallcaps book", "Noto Serif Display"), ("bodoni 72", "Noto Serif Display"),
+    ("bodoni ornaments", "D050000L"), ("bradley hand", "TeX Gyre Chorus"), ("bradley hand bold", "TeX Gyre Chorus"),
+    ("brush script", "TeX Gyre Chorus"), ("brush script mt", "TeX Gyre Chorus"), ("chalkboard", "Nunito"),
+    ("chalkboard se", "Nunito"), ("chalkduster", "Nunito"), ("comic sans ms", "Nunito"),
+    ("copperplate", "Montserrat"), ("copperplate gothic", "Montserrat"), ("corsiva", "TeX Gyre Chorus"),
+    ("monotype corsiva", "TeX Gyre Chorus"), ("apple chancery", "TeX Gyre Chorus"), ("adtgaramond", "Libertinus Serif"),
+    ("adt garamond", "Libertinus Serif"), ("asphalt", "Roboto Condensed"), ("asphalt medium", "Roboto Condensed"),
+    ("asphaltmedium", "Roboto Condensed"), ("balega", "Inter"), ("balega regular", "Inter"),
+    ("balegaregular", "Inter"), ("blackmoor let", "Junicode"), ("blackmoor let fonts", "Junicode"),
+    ("blair", "Libertinus Sans"), ("blair medium", "Libertinus Sans"), ("itc blair", "Libertinus Sans"),
+    ("capitals", "Noto Serif Display"), ("charm", "Noto Sans Thai Looped"), ("agc", "Inter"),
+    ("dearjoe", "Nunito"), ("dear joe", "Nunito"), ("galvji", "Noto Sans Gujarati"),
+    ("hoefler text ornaments", "D050000L"), ("impact", "Roboto Condensed"), ("hopper script", "TeX Gyre Chorus"),
+    ("hopperscript", "TeX Gyre Chorus"), ("hei", "Noto Sans CJK SC"), ("invisible_glyphs", "DejaVu Sans"),
+    ("invisible glyphs", "DejaVu Sans"), ("keyboard", "Libertinus Keyboard"), ("jazz let", "Nunito"),
+    ("jazz let fonts", "Nunito"), ("katari", "Noto Serif Thai"), ("kefa", "Noto Sans Ethiopic"),
+    ("kigelia", "Noto Sans Arabic"), ("kigelia arabic", "Noto Sans Arabic"), ("libian", "Noto Serif CJK SC"),
+    ("libian sc", "Noto Serif CJK SC"), ("libian tc", "Noto Serif CJK SC"), ("marker felt", "Nunito"),
+    ("markerfelt", "Nunito"), ("noteworthy", "Nunito"), ("new peninim mt", "Noto Serif Hebrew"),
+    ("newpeninimmt", "Noto Serif Hebrew"), ("peninim mt", "Noto Serif Hebrew"), ("mona lisa solid itc tt", "Noto Serif Display"),
+    ("mona lisa solid itc", "Noto Serif Display"), ("mali", "Noto Sans Thai Looped"), ("nanumscript", "Noto Sans CJK KR"),
+    ("nanum script", "Noto Sans CJK KR"), ("novemberindia", "Noto Sans"), ("november india", "Noto Sans"),
+    ("octoberindia", "Noto Sans"), ("october india", "Noto Sans"), ("pcf", "Noto Sans Symbols 2"),
+    ("portago itc tt", "Noto Serif Display"), ("portago itc", "Noto Serif Display"), ("itc portago", "Noto Serif Display"),
+    ("princetown let", "Noto Serif Display"), ("princetown let fonts", "Noto Serif Display"), ("raya", "Lato"),
+    ("padyakke expanded one", "Noto Sans Kannada"), ("padyakkeexpandedone", "Noto Sans Kannada"), ("pilgiche", "TeX Gyre Chorus"),
+    ("quotescaps-regular", "Libertinus Serif Initials"), ("quotescaps", "Libertinus Serif Initials"), ("quotes caps", "Libertinus Serif Initials"),
+    ("quotesscript-regular", "TeX Gyre Chorus"), ("quotesscript", "TeX Gyre Chorus"), ("quotes script", "TeX Gyre Chorus"),
+    ("stixgeneral", "TeX Gyre Termes"), ("stixintegralsd", "Libertinus Math"), ("stixintegralssm", "Libertinus Math"),
+    ("stixintegralsup", "Libertinus Math"), ("stixintegralsupd", "Libertinus Math"), ("stixintegralsupsm", "Libertinus Math"),
+    ("stixnonunicode", "Libertinus Math"), ("sana", "Noto Naskh Arabic"), ("sana arabic", "Noto Naskh Arabic"),
+    ("sathu", "Noto Serif Thai"), ("savoye let", "TeX Gyre Chorus"), ("seravek", "Source Sans 3"),
+    ("shree714", "Noto Sans Devanagari"), ("shree devanagari 714", "Noto Sans Devanagari"), ("signpainter", "TeX Gyre Chorus"),
+    ("signpainter-housescript", "TeX Gyre Chorus"), ("silom", "Noto Sans Thai"), ("skia", "Source Sans 3"),
+    ("snell roundhand", "TeX Gyre Chorus"), ("superclarendon", "TeX Gyre Schola"), ("scancardium_2.0", "DejaVu Sans Mono"),
+    ("scancardium", "DejaVu Sans Mono"), ("spendcardium", "DejaVu Sans Mono"), ("santa fe let", "Noto Serif Display"),
+    ("santa fe let fonts", "Noto Serif Display"), ("scheme", "Montserrat"), ("schemebold", "Montserrat"),
+    ("schoolhouse cursive b", "TeX Gyre Chorus"), ("schoolhouse printed a", "Nunito"), ("somer", "Inter"),
+    ("synchro let", "Nunito"), ("synchro let fonts", "Nunito"), ("sauberscript", "TeX Gyre Chorus"),
+    ("sauber script", "TeX Gyre Chorus"), ("thehandserif-semibold", "Libertinus Serif"), ("the hand serif", "Libertinus Serif"),
+    ("twentiethcentury", "Montserrat"), ("twentieth century", "Montserrat"), ("type embellishments one let", "D050000L"),
+    ("webdings", "Noto Sans Symbols 2"), ("wingdings 2", "D050000L"), ("wingdings 3", "Noto Sans Symbols"),
+    ("wingdings", "D050000L"), ("zapfino", "TeX Gyre Chorus"), ("workflowglyphs", "Noto Sans Symbols 2"),
+    ("workflow glyphs", "Noto Sans Symbols 2"),
+];
+
+/// The open face named for `family` in FACES, if any (case and surrounding space ignored).
+pub fn face_of_family(family: &str) -> Option<&'static str> {
+    let key = family.trim().to_lowercase();
+    FACES.iter().find(|(n, _)| *n == key).map(|(_, f)| *f)
+}
 
 /// The class of a reference family name (case and surrounding space ignored), None when it is not in the table.
 pub fn class_of_family(family: &str) -> Option<FamilyClass> {
@@ -158,9 +309,24 @@ pub fn class_of_family(family: &str) -> Option<FamilyClass> {
     TABLE.iter().find(|(n, _)| *n == key).map(|(_, c)| *c)
 }
 
+
+
+/// The open families for `family`: its own face first, then the equivalents of its class. Empty when neither is known.
+fn equivalents_of(family: &str) -> Vec<&'static str> {
+    let mut out: Vec<&'static str> = face_of_family(family).into_iter().collect();
+    if let Some(c) = class_of_family(family) {
+        for f in c.equivalents() {
+            if !out.contains(f) {
+                out.push(f);
+            }
+        }
+    }
+    out
+}
+
 /// The open families that stand in for `family`, preferred first. Empty when the name is unknown.
 pub fn substitute(family: &str) -> Vec<&'static str> {
-    class_of_family(family).map(|c| c.equivalents().to_vec()).unwrap_or_default()
+    equivalents_of(family)
 }
 
 /// The generic class for a descriptor whose family is unknown: fixed pitch is monospaced, everything else is the
@@ -177,14 +343,15 @@ pub fn class_for_spec(spec: &FontSpec) -> FamilyClass {
 /// class (or of the generic class for an unknown name), in preference order. Empty when `spec` names no family.
 pub fn candidates(spec: &FontSpec) -> Vec<FontSpec> {
     let Some(name) = spec.family.as_deref() else { return Vec::new() };
-    let class = class_of_family(name).unwrap_or_else(|| class_for_spec(spec));
-    class
-        .equivalents()
-        .iter()
+    let list = match equivalents_of(name) {
+        v if !v.is_empty() => v,
+        _ => class_for_spec(spec).equivalents().to_vec(),
+    };
+    list.into_iter()
         .filter(|f| !f.eq_ignore_ascii_case(name))
         .map(|f| {
             let mut s = spec.clone();
-            s.family = Some((*f).to_string());
+            s.family = Some(f.to_string());
             s
         })
         .collect()
@@ -256,6 +423,7 @@ mod tests {
         assert_eq!(class_of_family("Hiragino Sans"), Some(CjkGothic));
         assert_eq!(class_of_family("PingFang SC"), Some(CjkGothic));
         assert_eq!(class_of_family("YuMincho"), Some(CjkMincho));
+        assert_eq!(class_of_family("Songti"), Some(CjkMincho));
         assert_eq!(class_of_family("Kaiti"), Some(CjkKai));
         assert_eq!(class_of_family("Yuanti SC"), Some(CjkRounded));
         assert_eq!(class_of_family("Nothing Like This"), None);
@@ -263,10 +431,43 @@ mod tests {
 
     #[test]
     fn substitute_lists_open_equivalents_preferred_first() {
-        assert_eq!(substitute("Helvetica Neue")[0], "Inter");
-        assert_eq!(substitute("Futura")[0], "Outfit");
+        assert_eq!(substitute("Helvetica Neue")[0], "TeX Gyre Heros");
+        assert_eq!(substitute("Helvetica Neue")[1], "Inter");
+        assert_eq!(substitute("Futura")[0], "Montserrat");
         assert_eq!(substitute("Hiragino Mincho Pro")[0], "Noto Serif CJK JP");
         assert!(substitute("Nothing Like This").is_empty());
+    }
+
+    #[test]
+    fn licensed_faces_get_their_open_substitute_first() {
+        assert_eq!(substitute("Georgia")[0], "Source Serif 4");
+        assert_eq!(substitute("Garamond")[0], "Libertinus Serif");
+        assert_eq!(substitute("Gill Sans")[0], "Lato");
+        assert_eq!(substitute("Founders Grotesk Condensed")[0], "Inter");
+        assert_eq!(substitute("Kefa III")[0], "Noto Sans Ethiopic");
+        let c = candidates(&FontSpec::new().family("Georgia"));
+        assert_eq!(c[0].family.as_deref(), Some("Source Serif 4"));
+        let dash: Vec<String> = candidates(&FontSpec::new().family("Dash")).into_iter().filter_map(|c| c.family).collect();
+        assert_eq!(dash[0], "Inter");
+        assert!(dash.iter().all(|f| f != "Dash"));
+    }
+
+    #[test]
+    fn packaged_open_substitutes_resolve_by_class() {
+        // Reference faces closed with packaged open substitutes (ttf-dejavu, ttf-lato, noto-fonts, noto-fonts-cjk).
+        for name in ["Verdana", "Tahoma"] {
+            assert_eq!(class_of_family(name), Some(WideHumanist), "{name}");
+            assert_eq!(substitute(name)[0], "DejaVu Sans");
+        }
+        for name in ["Trebuchet MS", "Stone Sans"] {
+            assert_eq!(class_of_family(name), Some(HumanistSans), "{name}");
+            assert!(substitute(name).contains(&"Lato"));
+        }
+        assert_eq!(class_of_family("Trattatello"), Some(DidoneSerif));
+        assert_eq!(class_of_family("SpotMono"), Some(Monospaced));
+        assert!(substitute("SpotMono").contains(&"DejaVu Sans Mono"));
+        assert_eq!(class_of_family("SimSong"), Some(CjkMincho));
+        assert_eq!(class_of_family("Xingkai"), Some(CjkKai));
     }
 
     #[test]
@@ -275,6 +476,130 @@ mod tests {
         for (n, _) in TABLE {
             assert_eq!(*n, n.to_lowercase(), "key {n} must be lowercase");
             assert!(seen.insert(*n), "duplicate key {n}");
+        }
+        let mut faces = std::collections::HashSet::new();
+        for (n, f) in FACES {
+            assert_eq!(*n, n.to_lowercase(), "face key {n} must be lowercase");
+            assert!(!f.is_empty() && faces.insert(*n), "face {n} needs one open family, once");
+        }
+    }
+
+    #[test]
+    fn open_faces_stand_in_for_licensed_families_first() {
+        assert_eq!(substitute("Avenir Next")[0], "Lato");
+        assert_eq!(substitute("  AVENIR NEXT CONDENSED ")[0], "Lato");
+        assert_eq!(substitute("Charter")[0], "Charis SIL");
+        assert_eq!(substitute("Andale Mono")[0], "DejaVu Sans Mono");
+        assert_eq!(substitute("Arial Black")[0], "Noto Sans");
+        assert_eq!(substitute("Arial Unicode MS"), vec!["Noto Sans"]);
+        assert_eq!(substitute("Baskerville")[0], "Libertinus Serif");
+        assert_eq!(substitute("American Typewriter")[0], "IBM Plex Serif");
+        assert_eq!(substitute("Futura")[0], "Montserrat");
+        let avenir = candidates(&FontSpec::new().family("Avenir"));
+        assert_eq!(avenir[0].family.as_deref(), Some("Lato"));
+        assert!(avenir.iter().all(|s| s.family.as_deref() != Some("Avenir")));
+    }
+
+    #[test]
+    fn reference_faces_have_installed_stand_ins() {
+        assert_eq!(class_of_family("SF Camera"), Some(GrotesqueSans));
+        assert_eq!(class_of_family("Publico Text"), Some(TransitionalSerif));
+        assert_eq!(class_of_family("STHeiti Light"), Some(CjkGothic));
+        assert_eq!(class_of_family("SF Mono"), Some(Monospaced));
+        assert_eq!(FamilyClass::GrotesqueSans.equivalents().last(), Some(&"Noto Sans"));
+        assert_eq!(FamilyClass::Monospaced.equivalents().last(), Some(&"Liberation Mono"));
+    }
+
+    #[test]
+    fn reference_typefaces_resolve_to_packaged_open_faces() {
+        let pairs = [
+            ("Bank Gothic", "Roboto Condensed"), ("Bebas Neue", "Roboto Condensed"),
+            ("DIN Alternate", "Roboto Condensed"), ("DIN Condensed", "Roboto Condensed"), ("Druk", "Roboto Condensed"),
+            ("Bodoni SvtyTwo", "Noto Serif Display"), ("Bodoni SvtyTwo OS", "Noto Serif Display"),
+            ("Bodoni SvtyTwo SC", "Noto Serif Display"), ("Didot", "Noto Serif Display"),
+            ("Canela", "Noto Serif Display"), ("Canela Deck", "Noto Serif Display"), ("Canela Text", "Noto Serif Display"),
+            ("Bordeaux Roman Bold LET", "Libertinus Serif"), ("Brill", "Libertinus Serif"),
+            ("Braganza", "TeX Gyre Chorus"), ("Carlito", "Carlito"), ("Calibri", "Carlito"),
+            ("Adelle Sans", "IBM Plex Sans"), ("Euphemia UCAS", "Noto Sans"), ("EuphemiaCAS", "Noto Sans"),
+            ("Coolvetica", "Montserrat"), ("Futura", "Montserrat"), ("Fakt Slab Stencil Pro", "IBM Plex Serif"),
+        ];
+        for (reference, open) in pairs {
+            assert_eq!(face_of_family(reference), Some(open), "{reference}");
+            assert_eq!(substitute(reference)[0], open, "{reference}");
+        }
+        assert_eq!(face_of_family("Blackmoor LET"), Some("Junicode"));
+    }
+
+    #[test]
+    fn asset_inventory_faces_have_an_open_stand_in() {
+        assert_eq!(substitute("Lato")[0], "Lato");
+        assert_eq!(substitute("Menlo")[0], "DejaVu Sans Mono");
+        assert_eq!(substitute("Monaco")[0], "DejaVu Sans Mono");
+        assert_eq!(substitute("New York")[0], "Source Serif 4");
+        assert_eq!(substitute("Optima")[0], "Libertinus Sans");
+        assert_eq!(substitute("Marion")[0], "Libertinus Serif");
+        assert_eq!(substitute("Luminari")[0], "Noto Serif Display");
+        assert_eq!(substitute("Journal Sans Inline")[0], "Source Sans 3");
+        assert_eq!(substitute("Microsoft Sans Serif")[0], "Liberation Sans");
+        assert_eq!(substitute("Kokonor")[0], "Noto Serif Tibetan");
+        assert_eq!(substitute("Nanum Gothic")[0], "Noto Sans CJK KR");
+        assert_eq!(substitute("NanumMyeongjo")[0], "Noto Serif CJK KR");
+        assert_eq!(substitute("Nom Na Tong")[0], "Noto Serif CJK SC");
+    }
+
+    #[test]
+    fn remaining_reference_typefaces_resolve_to_packaged_open_faces() {
+        let pairs = [
+            ("adtnumeric", "Inter"), ("adt numeric", "Inter"), ("academy engraved let", "Libertinus Serif Display"),
+            ("academy engraved let fonts", "Libertinus Serif Display"), ("bodoni 72 os", "Noto Serif Display"), ("bodoni 72 oldstyle", "Noto Serif Display"),
+            ("bodoni 72 smallcaps", "Noto Serif Display"), ("bodoni 72 smallcaps book", "Noto Serif Display"), ("bodoni 72", "Noto Serif Display"),
+            ("bodoni ornaments", "D050000L"), ("bradley hand", "TeX Gyre Chorus"), ("bradley hand bold", "TeX Gyre Chorus"),
+            ("brush script", "TeX Gyre Chorus"), ("brush script mt", "TeX Gyre Chorus"), ("chalkboard", "Nunito"),
+            ("chalkboard se", "Nunito"), ("chalkduster", "Nunito"), ("comic sans ms", "Nunito"),
+            ("copperplate", "Montserrat"), ("copperplate gothic", "Montserrat"), ("corsiva", "TeX Gyre Chorus"),
+            ("monotype corsiva", "TeX Gyre Chorus"), ("apple chancery", "TeX Gyre Chorus"), ("adtgaramond", "Libertinus Serif"),
+            ("adt garamond", "Libertinus Serif"), ("asphalt", "Roboto Condensed"), ("asphalt medium", "Roboto Condensed"),
+            ("asphaltmedium", "Roboto Condensed"), ("balega", "Inter"), ("balega regular", "Inter"),
+            ("balegaregular", "Inter"), ("blackmoor let", "Junicode"), ("blackmoor let fonts", "Junicode"),
+            ("blair", "Libertinus Sans"), ("blair medium", "Libertinus Sans"), ("itc blair", "Libertinus Sans"),
+            ("capitals", "Noto Serif Display"), ("charm", "Noto Sans Thai Looped"), ("agc", "Inter"),
+            ("dearjoe", "Nunito"), ("dear joe", "Nunito"), ("galvji", "Noto Sans Gujarati"),
+            ("hoefler text ornaments", "D050000L"), ("impact", "Roboto Condensed"), ("hopper script", "TeX Gyre Chorus"),
+            ("hopperscript", "TeX Gyre Chorus"), ("hei", "Noto Sans CJK SC"), ("invisible_glyphs", "DejaVu Sans"),
+            ("invisible glyphs", "DejaVu Sans"), ("keyboard", "Libertinus Keyboard"), ("jazz let", "Nunito"),
+            ("jazz let fonts", "Nunito"), ("katari", "Noto Serif Thai"), ("kefa", "Noto Sans Ethiopic"),
+            ("kigelia", "Noto Sans Arabic"), ("kigelia arabic", "Noto Sans Arabic"), ("libian", "Noto Serif CJK SC"),
+            ("libian sc", "Noto Serif CJK SC"), ("libian tc", "Noto Serif CJK SC"), ("marker felt", "Nunito"),
+            ("markerfelt", "Nunito"), ("noteworthy", "Nunito"), ("new peninim mt", "Noto Serif Hebrew"),
+            ("newpeninimmt", "Noto Serif Hebrew"), ("peninim mt", "Noto Serif Hebrew"), ("mona lisa solid itc tt", "Noto Serif Display"),
+            ("mona lisa solid itc", "Noto Serif Display"), ("mali", "Noto Sans Thai Looped"), ("nanumscript", "Noto Sans CJK KR"),
+            ("nanum script", "Noto Sans CJK KR"), ("novemberindia", "Noto Sans"), ("november india", "Noto Sans"),
+            ("octoberindia", "Noto Sans"), ("october india", "Noto Sans"), ("pcf", "Noto Sans Symbols 2"),
+            ("portago itc tt", "Noto Serif Display"), ("portago itc", "Noto Serif Display"), ("itc portago", "Noto Serif Display"),
+            ("princetown let", "Noto Serif Display"), ("princetown let fonts", "Noto Serif Display"), ("raya", "Lato"),
+            ("padyakke expanded one", "Noto Sans Kannada"), ("padyakkeexpandedone", "Noto Sans Kannada"), ("pilgiche", "TeX Gyre Chorus"),
+            ("quotescaps-regular", "Libertinus Serif Initials"), ("quotescaps", "Libertinus Serif Initials"), ("quotes caps", "Libertinus Serif Initials"),
+            ("quotesscript-regular", "TeX Gyre Chorus"), ("quotesscript", "TeX Gyre Chorus"), ("quotes script", "TeX Gyre Chorus"),
+            ("stixgeneral", "TeX Gyre Termes"), ("stixintegralsd", "Libertinus Math"), ("stixintegralssm", "Libertinus Math"),
+            ("stixintegralsup", "Libertinus Math"), ("stixintegralsupd", "Libertinus Math"), ("stixintegralsupsm", "Libertinus Math"),
+            ("stixnonunicode", "Libertinus Math"), ("sana", "Noto Naskh Arabic"), ("sana arabic", "Noto Naskh Arabic"),
+            ("sathu", "Noto Serif Thai"), ("savoye let", "TeX Gyre Chorus"), ("seravek", "Source Sans 3"),
+            ("shree714", "Noto Sans Devanagari"), ("shree devanagari 714", "Noto Sans Devanagari"), ("signpainter", "TeX Gyre Chorus"),
+            ("signpainter-housescript", "TeX Gyre Chorus"), ("silom", "Noto Sans Thai"), ("skia", "Source Sans 3"),
+            ("snell roundhand", "TeX Gyre Chorus"), ("superclarendon", "TeX Gyre Schola"), ("scancardium_2.0", "DejaVu Sans Mono"),
+            ("scancardium", "DejaVu Sans Mono"), ("spendcardium", "DejaVu Sans Mono"), ("santa fe let", "Noto Serif Display"),
+            ("santa fe let fonts", "Noto Serif Display"), ("scheme", "Montserrat"), ("schemebold", "Montserrat"),
+            ("schoolhouse cursive b", "TeX Gyre Chorus"), ("schoolhouse printed a", "Nunito"), ("somer", "Inter"),
+            ("synchro let", "Nunito"), ("synchro let fonts", "Nunito"), ("sauberscript", "TeX Gyre Chorus"),
+            ("sauber script", "TeX Gyre Chorus"), ("thehandserif-semibold", "Libertinus Serif"), ("the hand serif", "Libertinus Serif"),
+            ("twentiethcentury", "Montserrat"), ("twentieth century", "Montserrat"), ("type embellishments one let", "D050000L"),
+            ("webdings", "Noto Sans Symbols 2"), ("wingdings 2", "D050000L"), ("wingdings 3", "Noto Sans Symbols"),
+            ("wingdings", "D050000L"), ("zapfino", "TeX Gyre Chorus"), ("workflowglyphs", "Noto Sans Symbols 2"),
+            ("workflow glyphs", "Noto Sans Symbols 2"),
+        ];
+        for (reference, open) in pairs {
+            assert_eq!(face_of_family(reference), Some(open), "{reference}");
+            assert_eq!(substitute(&reference.to_uppercase())[0], open, "{reference}");
         }
     }
 

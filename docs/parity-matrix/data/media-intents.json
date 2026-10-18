@@ -19,14 +19,14 @@
       "apple": "AudioSearch (struct), AudioSearch.Criteria (searchQuery, unspecified, url)",
       "bifrost": "springboard/ui/src/media_search.rs (MediaSearch, MediaCriteria::classify)",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 7 tests. Criteria cases mirror the official enum; the request is built from request text or a link. No media fields (artist, album, genre, mood, media type) and no spotlight search results input"
+      "note": "verified on Midget 0.7.25 by 7 tests. Criteria cases mirror the official enum; the request is built from request text or a link. No media fields (artist, album, genre, mood, media type) and no spotlight search results input Built 2026-10-17: AudioSearch.Criteria fields as MediaFilter (kind, genre, mood) on MediaSearch, with MediaItem genre and mood; tests media_search::tests::filter_narrows_by_kind_genre_and_mood."
     },
     {
       "feature": "Resolving free-text media requests to app results",
       "apple": "AudioSearch values(for:) through the intent value query (the system delivers the search type to App Intents)",
       "bifrost": "springboard/ui/src/media_search.rs (values_for), springboard/sdk/src/intents.rs (entities(matching:))",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 7 tests. values_for matches every content word against title, artist and album with the fuzzy matcher and ranks by score; it is a library call, not a system-delivered search, and the shell does not resolve parameters (Spotlight runs parameterless shortcuts only, docs/bifrost-ui.md:966-973)"
+      "note": "verified on Midget 0.7.25 by 7 tests. values_for matches every content word against title, artist and album with the fuzzy matcher and ranks by score; it is a library call, not a system-delivered search, and the shell does not resolve parameters (Spotlight runs parameterless shortcuts only, docs/bifrost-ui.md:966-973) Built 2026-10-17: resolve() returns NoMatch, Single or Disambiguate (the tied best matches, the requestDisambiguation case); tests media_search::tests::resolve_offers_equally_good_matches_for_disambiguation and resolve_reports_no_match_and_a_unique_link. Confirmation (requestConfirmation) is still not modelled."
     },
     {
       "feature": "Audio content entities (song, album, artist, episode)",
@@ -40,7 +40,7 @@
       "apple": "Playback that Siri requests start in the app (Media Intents results point to playable media)",
       "bifrost": "springboard/src/svc.rs (pub mod audio, client), springboard/audiod/src/main.rs (audio service), springboard/apps/music-desktop/src/music/engine.rs, springboard/ui/src/media_queue.rs (PlaybackQueue), springboard/sdk/src/media_intents.rs (handle_request); springboard/sdk/tests/parity_sdk-complete-28.rs; springboard/ui/tests/parity_sdk-complete-28.rs",
       "status": "partial",
-      "note": "Playback is a shared service that survives app restarts, and bifrost_app::audio is the client. bifrost_app::media_intents now gives apps the media item, playback request and play queue types, and handle_request applies a request to the queue and returns its dialog; play, queue, search, advance and the end of the queue are tested headless. Gap: the queue is not yet handed to the audio service as a playlist, and a voice request reaching the app needs Midget."
+      "note": "Playback is a shared service that survives app restarts, and bifrost_app::audio is the client. bifrost_app::media_intents now gives apps the media item, playback request and play queue types, and handle_request applies a request to the queue and returns its dialog; play, queue, search, advance and the end of the queue are tested headless. Gap: the queue is not yet handed to the audio service as a playlist, and a voice request reaching the app needs Midget. Refreshed 2026-10-17: ui media_search::needs_confirmation decides when a resolved item must be confirmed (springboard/ui/src/media_search.rs, tests media_search::tests); no sheet asks the person yet."
     },
     {
       "feature": "Now-playing state shown outside the app",
@@ -66,8 +66,8 @@
   ],
   "gaps": [
     "No system delivery of audio search requests and no Siri or voice request path for media (springboard/ui/src/media_search.rs models the request, but nothing routes system requests to apps).",
-    "AudioSearch.Criteria has no media fields (genre, mood, media type); only search text, unspecified and link are modelled.",
-    "No parameter resolution, disambiguation or confirmation for media intents (requestDisambiguation, requestConfirmation are not modelled, docs/bifrost-ui.md:966-973).",
+    "AudioSearch.Criteria filter fields (kind, genre, mood) are modelled (MediaFilter); no system delivery of them yet",
+    "No confirmation prompt for media intents: ui media_search::needs_confirmation decides when a resolved item must be confirmed (tests media_search::tests), but no shell sheet asks the person",
     "No SDK call for an app to publish media metadata or a queue to the shell or to voice requests; Music and Podcasts keep their own state.",
     "Intents are served only while the app runs (docs/bifrost-ui.md:980); Apple media requests can launch and play without an open window."
   ]

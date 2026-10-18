@@ -19,7 +19,7 @@
       "apple": "Publishing media sessions (article)",
       "bifrost": "springboard/ui/src/media_session.rs (MediaSession, RemoteCommand, dispatch); springboard/sdk/src/now_playing.rs (publish_body, publish, clear); springboard/src/shell/music/system.rs (lock-screen card, Control Center controls)",
       "status": "partial",
-      "note": "An app's session, its content, its position capped at the duration and its command gating are tested headless in parity_sdk-os-01. Gap: the lock-screen card for an app's session is not verified on the lab machine, and the shell's Music card is not yet shared with other sessions."
+      "note": "An app's session, its content, its position capped at the duration and its command gating are tested headless in parity_sdk-os-01. Gap: the lock-screen card for an app's session is not verified on the lab machine, and the shell's Music card is not yet shared with other sessions. Built 2026-10-17: SDK feedback body and toggle/rate event decoding for the lock card (bifrost_app::now_playing_feedback); shell side pending. Tests springboard/sdk/src/now_playing_feedback.rs::tests. Built 2026-10-17: shell now_playing service accepts the feedback call and queues like, dislike, bookmark and rate events to the owner (services/now_playing.rs parse_feedback, set_toggle, set_rating); tests services::now_playing::tests. The lock card controls are not drawn yet."
     },
     {
       "feature": "Remote sessions: RemoteMediaSession, extension, attributes, MediaDevice",
@@ -45,8 +45,6 @@
     {
       "feature": "Play, pause, stop and toggle commands",
       "apple": "play(_:), pause(_:), stop(_:), togglePlayPause(_:)",
-      "bifrost": "springboard/ui/src/media_session.rs, springboard/sdk/src/now_playing.rs; wired: springboard/src/shell/now_playing_menu.rs, springboard/src/shell/desktop_bar.rs (Menu::NowPlaying, Action::Media)",
-      "status": "partial",
       "bifrost": "springboard/ui/src/media_session.rs, springboard/sdk/src/now_playing.rs; tests: springboard/sdk/tests/parity_sdk-complete-22.rs; wired: springboard/src/shell/now_playing_menu.rs, springboard/src/shell/desktop_bar.rs (Menu::NowPlaying, Action::Media)",
       "status": "partial",
       "note": "An app declares each command as unsupported, disabled or enabled, and now_playing::accept checks a shell command against that table before the app runs it. Gap: the shell does not yet deliver its play, pause and toggle events to an app's own player on the lab machine, and the lock card's transport is not verified on Midget."
@@ -63,7 +61,7 @@
       "apple": "skipForward(preferredIntervals:_:), skipBackward(preferredIntervals:_:)",
       "bifrost": "springboard/ui/src/skip_interval.rs; wired: springboard/apps/podcasts-desktop/src/transport.rs (skip_target_ms, BACK_SKIP_S 15, FORWARD_SKIP_S 30) used by src/podcasts.rs buttons, keys and remote skip commands",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (w3-now-playing, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The lock card and Control Center only offer track skips. The floating player widget takes skip symbols from the app, but nothing sends an interval skip to the service. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (w3-now-playing, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The lock card and Control Center only offer track skips. The floating player widget takes skip symbols from the app, but nothing sends an interval skip to the service. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity. Refreshed 2026-10-17: covered by springboard/ui/src/skip_interval.rs (SkipCommand) and media_session.rs (SkipForward, SkipBackward, held-skip target); tests skip_interval::tests."
     },
     {
       "feature": "Seek to position and scrubbing",
@@ -77,7 +75,7 @@
       "apple": "changePlaybackRate(supported:_:)",
       "bifrost": "springboard/ui/src/playback_rate.rs; wired: springboard/apps/podcasts-desktop/src/podcasts.rs (speed menu) and src/transport.rs (RATES, rate_index)",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (w3-now-playing, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The audio service has no playback-rate command or field in its snapshot. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (w3-now-playing, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The audio service has no playback-rate command or field in its snapshot. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity. Refreshed 2026-10-17: covered by springboard/ui/src/playback_rate.rs and proto Cmd::SetRate with Snapshot.rate; tests playback_rate::tests."
     },
     {
       "feature": "Repeat and shuffle modes",
@@ -91,7 +89,7 @@
       "apple": "feedback(title:shortTitle:status:_:), MediaCommand.FeedbackStatus",
       "bifrost": "springboard/ui/src/media_feedback.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (theme-03, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No feedback command exists in the service or the shell cards."
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (theme-03, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No feedback command exists in the service or the shell cards. Refreshed 2026-10-17: covered by springboard/ui/src/media_feedback.rs (FeedbackState, RatingCommand); tests media_feedback::tests."
     },
     {
       "feature": "Playback state snapshot",
@@ -106,9 +104,6 @@
     "No typed content model: the service track has no title, artist, kind, or artwork, so the lock card cannot show metadata from apps other than Music.",
     "No artwork transport or animated artwork through the audio service.",
     "No remote media sessions across devices, no remote session extension and no device list; the Bluetooth route is only shown as a name.",
-    "No interval skip commands and no press-and-hold fast forward or rewind through the system surface.",
-    "No playback-rate command or field in the audio service.",
-    "No feedback (like and dislike) command.",
     "Shuffle and repeat are stored in the service but are not offered on the lock card or Control Center."
   ]
 }

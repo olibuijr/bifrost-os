@@ -144,10 +144,10 @@
       "feature": "End-to-end encryption",
       "area": "integration",
       "apple": "encryption",
-      "status": "gap",
-      "bifrost": "springboard/apps/messages-desktop/src/protocol.rs:110",
-      "note": "Not done: needs an Olm/Megolm implementation; encrypted events still show a placeholder",
-      "wire": "Integrate an Olm/Megolm implementation for decrypt and encrypted send"
+      "status": "partial",
+      "bifrost": "springboard/apps/messages-desktop/src/crypto.rs:1",
+      "note": "vodozemac Olm/Megolm end to end, not yet built or run on Midget. Device keys upload and query, one-time key claim, Olm room keys in and out, Megolm decrypt and encrypted send, rotation after 100 messages, a week or a membership change, late joiners get the current key (crypto.rs prepare_room, share_key), own verified devices' m.room_key_request answered (crypto.rs key_requests), the device and its keys in app keychain items per homeserver and full user id (window.rs start_sign_in, save_crypto, signed_in; crypto.rs KEY_ITEM, DEVICE_ITEM), the Megolm and Olm sessions in an encrypted file in the app's data directory (state_file.rs: ChaCha20-Poly1305 under the pickle key, the account id authenticated, written atomically; crypto.rs sessions_blob keeps Olm sessions across a restart; a sessions keychain item of an earlier version is migrated once and removed), the account stored under the full user id the server returns, and a bare-name login moved to it (accounts.rs stored_user, moved_from), key work on a keys worker (api.rs run_key_work), a lock in the header, a device list with Unverified labels (draw.rs Overlay::Details). Pictures and files in encrypted rooms are AES-256-CTR encrypted under the Matrix file object (attachment.rs: ctr_xor on bifrost_core's AES, NIST SP 800-38A vectors; api.rs send_encrypted_media, fetch_attachment). Not done: device verification (every device is Unverified; nothing is verified), key backup and cross-signing, reactions are refused in encrypted rooms (api.rs send_reaction), the window does not download received pictures for display yet (fetch_attachment and decrypt are in place, not called from the window). Headless tests cover the sessions file, the migration helpers, the CTR vectors and the file object; not yet run on Midget",
+      "wire": "Remaining: m.key.verification.* to-device flow and cross-signing; GET/PUT /room_keys/version and /room_keys/keys backup and restore; the window calls Api::fetch_attachment to show received encrypted pictures (api.rs, protocol.rs media_download_url); encrypted reactions (api.rs send_reaction); m.room_key_request forwarding of keys this device received (crypto.rs key_requests answers only own outbound sessions)"
     },
     {
       "feature": "Conversation details (name, members)",

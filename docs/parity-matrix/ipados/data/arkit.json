@@ -1,0 +1,43 @@
+{
+  "framework": "ARKit",
+  "doc": "https://developer.apple.com/documentation/arkit",
+  "macos_since": "",
+  "status": "gap",
+  "bifrost": "springboard/ui/src/camera2d.rs, springboard/ui/src/capture_session.rs, springboard/ui/src/spatial.rs",
+  "summary": "The shell has a camera session model and 3D geometry, but no AR session that tracks the device pose against the world, no anchors and no scene reconstruction. A depth sensor is not part of the target tablet.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run in this batch); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "AR session and world tracking",
+      "apple": "ARSession, ARKitSession, ARWorldTrackingConfiguration",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no pose tracking from the camera and the inertial sensors"
+    },
+    {
+      "feature": "Camera frames for AR",
+      "apple": "ARFrame, camera passthrough",
+      "bifrost": "springboard/ui/src/capture_session.rs, springboard/ui/src/camera2d.rs",
+      "status": "partial",
+      "note": "camera session and frame model; no AR frame object"
+    },
+    {
+      "feature": "Anchors and world coordinates",
+      "apple": "ARAnchor, Anchor",
+      "bifrost": "springboard/ui/src/spatial.rs",
+      "status": "partial",
+      "note": "3D points, boxes, rays and spherical coordinates; no anchor objects"
+    },
+    {
+      "feature": "Depth and scene reconstruction",
+      "apple": "ARKit scene depth and mesh reconstruction",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "needs a depth sensor, which the target tablet does not have"
+    }
+  ],
+  "gaps": [
+    "No AR session, pose tracking or anchors.",
+    "No AR content path that apps can use."
+  ]
+}

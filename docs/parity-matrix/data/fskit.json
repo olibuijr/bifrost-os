@@ -10,9 +10,9 @@
     {
       "feature": "Unary file system extension (user-space module)",
       "apple": "UnaryFileSystemExtension, FSUnaryFileSystem, FSFileSystemBase",
-      "bifrost": "none; no SDK or shell API for an app to register a mount type",
-      "status": "gap",
-      "note": "Blocked: a mount type needs a FUSE binding (the kernel interface exists, no Rust wrapper is built) plus a shell mount service that runs an app's module and checks its grants. Neither exists, and no C dependency is allowed to fill the gap."
+      "bifrost": "springboard/sdk/src/fuse.rs, springboard/sdk/src/fuse_mount.rs, springboard/sdk/src/fs_module.rs",
+      "status": "partial",
+      "note": "Read-only first version: FUSE protocol 7.31 encode/decode and READDIR packing (fuse.rs), fusermount3 mount and serve loop (fuse_mount.rs), and an app trait with a dispatcher (fs_module.rs). Host tests: fuse::tests (decode, reply sizes, dirent alignment) and fs_module::tests (dispatcher over an in-memory volume fed synthetic requests). Not built or run; no Midget mount. No shell mount service or grant check yet."
     },
     {
       "feature": "Volumes and items",
@@ -79,7 +79,7 @@
     }
   ],
   "gaps": [
-    "No user-space file system module API: no way for an app to ship and mount a file system, the core of FSKit",
+    "No shell mount service or grant check for a user-space file system module (the read-only SDK module and FUSE session exist; write operations do not)",
     "No SDK volume and item model (FSVolume, FSItem) for the Files app or third-party apps",
     "No probe, mount or maintenance request path for apps or daemons (FSClient equivalent)",
     "No FSTask-style channel from a file system module to the shell for log and completion events",

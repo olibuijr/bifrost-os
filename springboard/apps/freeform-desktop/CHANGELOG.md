@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.13.0 — 2026-10-17
+
+- Shapes toolbar popover: a Shapes button opens Line, Arrow, Rectangle, Oval, Triangle and Star in one panel under the
+  button; the chosen shape becomes the tool. The same six shapes stay in Insert > Shape.
+
 ## 1.12.2 — 2026-10-14
 
 - Use scheme-aware popover material for board search and the inspector, and named layout/type tokens.

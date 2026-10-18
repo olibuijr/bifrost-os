@@ -12,35 +12,35 @@
    "apple": "AudioHardwareSystem, AudioHardwareDevice, AudioHardwareStream, AudioHardwareControl, AudioHardwareClock, AudioHardwareObject",
    "bifrost": "springboard/audio/alsa/src/ctl.rs (ALSA mixer controls), springboard/src/media/capture.rs (PCM discovery via /proc/asound/pcm); springboard/sdk/src/audio_hal.rs (System, Device, Stream built from the PCM listing)",
    "status": "partial",
-   "note": "The SDK builds devices, streams and object ids from the PCM listing text, tested headless in springboard/sdk/tests/parity_sdk-os-10.rs. Gap: controls and clocks are not objects, the SDK does not read the listing itself, and capture discovery reports only the default input."
+   "note": "The SDK builds devices, streams and object ids from the PCM listing text, tested headless in springboard/sdk/tests/parity_sdk-os-10.rs. Gap: controls and clocks are not objects, the SDK does not read the listing itself, and capture discovery reports only the default input. Refreshed 2026-10-17: covered by springboard/sdk/src/audio_hal.rs (from_listing, devices, streams); tests tests/parity_sdk-os-10.rs."
   },
   {
    "feature": "Audio server driver plug-ins (virtual devices)",
    "apple": "Creating an Audio Server Driver Plug-in, Building an Audio Server Plug-in and Driver Extension, AudioHardwarePlugin",
    "bifrost": "springboard/sdk/src/audio_virtual.rs (VirtualDevice::from_descriptor, to_descriptor, VirtualDeviceSet::load); springboard/sdk/tests/parity_sdk-complete-07.rs",
    "status": "partial",
-   "note": "A virtual device (uid, name, channels, sample rate) is read from a key=value description and validated before it joins a set with unique uids; tested headless in parity_sdk-complete-07. DriverStatus reports that no user-space loader exists, so nothing publishes a device to the sound server; that needs a loader on the lab machine."
+   "note": "A virtual device (uid, name, channels, sample rate) is read from a key=value description and validated before it joins a set with unique uids; tested headless in parity_sdk-complete-07. DriverStatus reports that no user-space loader exists, so nothing publishes a device to the sound server; that needs a loader on the lab machine. Refreshed 2026-10-17: covered by springboard/sdk/src/audio_virtual.rs; tests audio_virtual::tests."
   },
   {
    "feature": "Aggregate devices",
    "apple": "AudioHardwareAggregateDevice",
    "bifrost": "springboard/sdk/src/audio_aggregate.rs (AggregateDescription, drift_corrections, resample_ratio); springboard/sdk/tests/parity_sdk-complete-47.rs",
    "status": "partial",
-   "note": "Headless tests cover the description keys, validation, clock source, and drift corrections (flagged sub-devices in another clock domain, with the source-over-sub-device ratio). Gap: the audio path does not resample by those ratios and there is no audiod creation command; needs a Midget check."
+   "note": "Headless tests cover the description keys, validation, clock source, and drift corrections (flagged sub-devices in another clock domain, with the source-over-sub-device ratio). Gap: the audio path does not resample by those ratios and there is no audiod creation command; needs a Midget check. Refreshed 2026-10-17: covered by springboard/sdk/src/audio_aggregate.rs; tests audio_aggregate::tests."
   },
   {
    "feature": "Process taps (capture a process's output)",
    "apple": "AudioHardwareTap, CATapDescription, Capturing system audio with Core Audio taps",
    "bifrost": "springboard/sdk/src/audio_process.rs",
    "status": "partial",
-   "note": "SDK model: CATapDescription constructors, mono or stereo mixdown, exclusion, mute behavior, wire shape. Not implemented: the audiod output hook that captures audio. Needs a Midget check."
+   "note": "SDK model: CATapDescription constructors, mono or stereo mixdown, exclusion, mute behavior, wire shape. Not implemented: the audiod output hook that captures audio. Needs a Midget check. Refreshed 2026-10-17: covered by springboard/sdk/src/audio_process.rs; tests audio_process::tests."
   },
   {
    "feature": "Process objects (client process list)",
    "apple": "AudioHardwareProcess",
    "bifrost": "springboard/sdk/src/audio_process.rs",
    "status": "partial",
-   "note": "SDK model: ProcessObject (pid, bundle id, running input and output), kAudioHardwarePropertyProcessObjectList request and reply decoding. Not implemented: audiod does not report processes yet. Needs a Midget check."
+   "note": "SDK model: ProcessObject (pid, bundle id, running input and output), kAudioHardwarePropertyProcessObjectList request and reply decoding. Not implemented: audiod does not report processes yet. Needs a Midget check. Refreshed 2026-10-17: covered by springboard/sdk/src/audio_process.rs; tests audio_process::tests."
   },
   {
    "feature": "Speaker playback",
@@ -89,7 +89,7 @@
    "apple": "AudioHardwareClock, kAudioDevicePropertySuggestedReferenceDevice",
    "bifrost": "springboard/sdk/src/audio_aggregate.rs (ClockDomain, SampleClock, ClockAnchor); springboard/sdk/tests/parity_sdk-complete-47.rs",
    "status": "partial",
-   "note": "Headless tests cover ClockDomain, the sample position of a clock at a host time and back, and the frame skew between two clocks of different rates. Gap: no real hardware clock or timestamps are read, so sample-accurate sync between devices needs a Midget check."
+   "note": "Headless tests cover ClockDomain, the sample position of a clock at a host time and back, and the frame skew between two clocks of different rates. Gap: no real hardware clock or timestamps are read, so sample-accurate sync between devices needs a Midget check. Refreshed 2026-10-17: covered by springboard/sdk/src/audio_aggregate.rs; tests audio_aggregate::tests."
   },
   {
    "feature": "Channel layouts and data types",
@@ -103,7 +103,7 @@
    "apple": "AudioHardwareBox",
    "bifrost": "springboard/sdk/src/audio_box.rs",
    "status": "partial",
-   "note": "AudioBox with its devices and BoxRegistry with enable, disable, acquire and release rules (an acquired box cannot be disabled, a device belongs to one box) are tested headless in sdk/tests/parity_sdk-complete-08.rs. Gap: enable state is not applied to hardware because the sound server owns the containers; that needs the lab machine."
+   "note": "AudioBox with its devices and BoxRegistry with enable, disable, acquire and release rules (an acquired box cannot be disabled, a device belongs to one box) are tested headless in sdk/tests/parity_sdk-complete-08.rs. Gap: enable state is not applied to hardware because the sound server owns the containers; that needs the lab machine. Refreshed 2026-10-17: covered by springboard/sdk/src/audio_box.rs; tests audio_box::tests."
   },
   {
    "feature": "Remote and streaming device transports",
@@ -115,7 +115,7 @@
  ],
  "gaps": [
   "Virtual audio device publication: no user-space plug-in loader, and no ALSA loopback or PipeWire node reaches apps (AudioHardwarePlugin, Audio Server Plug-in). The SDK model in audio_virtual.rs is not connected to the sound server.",
-  "App-facing device and stream API: enumerate devices, open input and output streams and choose a device (AudioHardwareDevice, AudioHardwareStream).",
+  "No app-facing stream I/O: springboard/sdk/src/audio_hal.rs models devices and streams from the PCM listing, but apps cannot open an input or output stream.",
   "Device property listeners for default device, sample rate and volume changes (AudioHardwareObject.addPropertyListener).",
   "Audio box enable and acquire state is not applied to hardware (AudioHardwareBox); audio_box.rs is a model only."
  ]

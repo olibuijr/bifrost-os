@@ -5,6 +5,9 @@
 
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 /// A font the desktop draws with, each replaceable on its own.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -133,7 +136,7 @@ fn walk(dir: &Path, depth: usize, out: &mut Vec<Face>) {
             if depth < 6 {
                 walk(&path, depth + 1, out);
             }
-        } else if path.extension().and_then(|x| x.to_str()).is_some_and(|x| x.eq_ignore_ascii_case("ttf") || x.eq_ignore_ascii_case("otf")) {
+        } else if path.extension().and_then(|x| x.to_str()).is_some_and(|x| ["ttf", "otf", "ttc"].iter().any(|e| x.eq_ignore_ascii_case(e))) {
             if let Some(face) = probe(&path) {
                 out.push(face);
             }
@@ -146,7 +149,14 @@ fn probe(path: &Path) -> Option<Face> {
     let mut f = std::fs::File::open(path).ok()?;
     let mut head = [0u8; 12];
     f.read_exact(&mut head).ok()?;
-    // TrueType or CFF outlines; collections (ttcf) and other containers are not single fonts
+    // a collection ('ttcf'): the first face is named and checked, its directory sits at the first offset
+    if &head[..4] == b"ttcf" {
+        let mut first = [0u8; 4];
+        f.read_exact(&mut first).ok()?;
+        f.seek(SeekFrom::Start(u32::from_be_bytes(first) as u64)).ok()?;
+        f.read_exact(&mut head).ok()?;
+    }
+    // TrueType or CFF outlines; other containers are not single fonts
     if !matches!(&head[..4], [0, 1, 0, 0] | b"OTTO" | b"true") {
         return None;
     }
@@ -176,6 +186,40 @@ fn probe(path: &Path) -> Option<Face> {
     let panose = table(b"OS/2").and_then(|t| read(t, 36)).is_some_and(|o| o.len() >= 36 && o[32] == 2 && o[35] == 9);
     // a family name starting with '.' is a hidden system face
     (!family.starts_with('.')).then(|| Face { family, style, path: path.to_string_lossy().into_owned(), mono: fixed || panose, variable: has(b"fvar") && has(b"gvar") })
+}
+
+/// The user's own font folder, relative to the home directory. Only this folder is ever rebuilt by `refresh_user_cache`.
+pub const USER_FONTS: &str = ".local/share/fonts";
+/// The shortest gap between two font cache rebuilds, so a burst of installs or removals rebuilds once.
+pub const REFRESH_GAP: Duration = Duration::from_secs(10);
+
+static LAST_REFRESH: Mutex<Option<Instant>> = Mutex::new(None);
+
+/// True when a rebuild last run at `last` may run again at `now`.
+pub fn refresh_due(last: Option<Instant>, now: Instant) -> bool {
+    last.is_none_or(|t| now.saturating_duration_since(t) >= REFRESH_GAP)
+}
+
+/// Rebuilds the fontconfig cache of the user's font folder so other apps see an install or a removal. Runs
+/// `fc-cache` on `user_dir` only (no root, no system folders) and at most once per `REFRESH_GAP`: a call inside the
+/// gap returns `Ok(false)` and does nothing. `user_dir` must end in `.local/share/fonts`.
+pub fn refresh_user_cache(user_dir: &Path) -> Result<bool, String> {
+    if !user_dir.ends_with(USER_FONTS) {
+        return Err(format!("Only the user's font folder is refreshed, not {}.", user_dir.display()));
+    }
+    let now = Instant::now();
+    let mut last = LAST_REFRESH.lock().unwrap_or_else(|e| e.into_inner());
+    if !refresh_due(*last, now) {
+        return Ok(false);
+    }
+    *last = Some(now);
+    drop(last);
+    let status = Command::new("fc-cache").arg(user_dir).status().map_err(|e| format!("Cannot run fc-cache: {e}"))?;
+    if status.success() {
+        Ok(true)
+    } else {
+        Err(format!("fc-cache exited with {status}"))
+    }
 }
 
 /// Name `id` from a `name` table: Windows Unicode (English first), else Unicode, else Mac Roman.
@@ -266,6 +310,42 @@ mod tests {
         let names: Vec<_> = got.iter().map(|f| (f.family.as_str(), f.path.rsplit('/').next().unwrap(), f.mono, f.variable)).collect();
         assert_eq!(names, [("Code", "Code-Regular.otf", true, false), ("Inter", "InterVariable.ttf", false, true)]);
         std::fs::remove_dir_all(&d).unwrap();
+    }
+
+    /// A font collection holding one face: the header, then the face with its table offsets moved past the header.
+    fn ttc(family: &str) -> Vec<u8> {
+        let mut face = sfnt(family, "Regular", false, false);
+        let n = u16::from_be_bytes([face[4], face[5]]) as usize;
+        for i in 0..n {
+            let at = 12 + 16 * i + 8;
+            let off = u32::from_be_bytes(face[at..at + 4].try_into().unwrap()) + 16;
+            face[at..at + 4].copy_from_slice(&off.to_be_bytes());
+        }
+        let mut out = b"ttcf".to_vec();
+        out.extend([0, 1, 0, 0]);
+        out.extend(1u32.to_be_bytes());
+        out.extend(16u32.to_be_bytes());
+        out.extend(face);
+        out
+    }
+
+    #[test]
+    fn a_collection_lists_its_first_face() {
+        let d = tmp("ttc");
+        std::fs::write(d.join("Mincho.ttc"), ttc("Mincho")).unwrap();
+        let faces = installed(std::slice::from_ref(&d));
+        assert_eq!(faces.iter().map(|f| f.family.as_str()).collect::<Vec<_>>(), ["Mincho"]);
+        assert!(faces[0].path.ends_with("Mincho.ttc"));
+    }
+
+    #[test]
+    fn the_cache_refresh_is_rate_limited_and_limited_to_the_user_folder() {
+        let now = Instant::now();
+        assert!(refresh_due(None, now), "the first refresh always runs");
+        assert!(!refresh_due(Some(now), now + REFRESH_GAP / 2), "a burst waits out the gap");
+        assert!(refresh_due(Some(now), now + REFRESH_GAP), "the gap has passed");
+        assert!(refresh_user_cache(Path::new("/usr/share/fonts")).is_err(), "system folders are never rebuilt");
+        assert!(refresh_user_cache(Path::new("/home/u/Fonts")).is_err());
     }
 
     #[test]

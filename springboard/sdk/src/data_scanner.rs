@@ -2,13 +2,16 @@
 //! `DataScannerViewControllerDelegate` callbacks).
 //!
 //! [`DataScanner`] takes one camera frame at a time as 8-bit luminance and decodes the QR code in it with the
-//! decoder the system Camera app uses. Results go through [`ScanSession`], so an app receives the same added,
+//! decoder the system Camera app uses. When the frame has no QR code, it reads EAN-13 and Code 39 barcodes from
+//! sample rows spread down the frame. Results go through [`ScanSession`], so an app receives the same added,
 //! updated and removed delta that a scanner delegate gets. The item id is a hash of the payload, so one code keeps
-//! its id from frame to frame. Limits: QR model 2 only, one code per frame, and no perspective correction. The
-//! outline of an item is the whole frame, because the decoder does not report the position of the code.
+//! its id from frame to frame. Limits: QR model 2 only, EAN-13 and Code 39 with no other symbologies, one code per
+//! frame, and no perspective correction. The outline of an item is the whole frame, because neither decoder reports
+//! the position of the code.
 //!
 //! [`Stabilizer`] (from `bifrost_ui::camera_region`) keeps a region of the frame on screen while the target moves.
 
+use bifrost_ui::barcode::decode_row;
 use springboard::shell::camera::qr::decode_luma;
 
 pub use bifrost_ui::camera_region::{Stabilizer, DEFAULT_DEAD_BAND};
@@ -30,6 +33,20 @@ fn frame_quad(w: usize, h: usize) -> Quad {
     Quad([Point { x: 0.0, y: 0.0 }, Point { x: w, y: 0.0 }, Point { x: w, y: h }, Point { x: 0.0, y: h }])
 }
 
+/// Sample rows read for one-dimensional codes, spread evenly down the frame.
+const SCAN_ROWS: usize = 9;
+
+/// The payload of the first one-dimensional code found in the sample rows of a `w` x `h` frame.
+fn decode_rows(luma: &[u8], w: usize, h: usize) -> Option<String> {
+    if w == 0 || h == 0 || luma.len() < w * h {
+        return None;
+    }
+    (1..=SCAN_ROWS).find_map(|i| {
+        let y = h * i / (SCAN_ROWS + 1);
+        decode_row(&luma[y * w..(y + 1) * w]).map(|d| d.text)
+    })
+}
+
 /// Barcode scanning over a stream of camera frames.
 #[derive(Debug, Default)]
 pub struct DataScanner {
@@ -41,10 +58,11 @@ impl DataScanner {
         Self::default()
     }
 
-    /// Decodes one frame (`w` x `h` luminance, row-major) and reports the change since the previous frame. A frame
-    /// without a readable code removes the previous item. A frame that is too small or too short is treated the same.
+    /// Decodes one frame (`w` x `h` luminance, row-major) and reports the change since the previous frame. A QR code
+    /// wins over a barcode in the same frame. A frame without a readable code removes the previous item. A frame that
+    /// is too small or too short is treated the same.
     pub fn scan_luma(&mut self, luma: &[u8], w: usize, h: usize) -> Changes {
-        let observed = match decode_luma(luma, w, h) {
+        let observed = match decode_luma(luma, w, h).or_else(|| decode_rows(luma, w, h)) {
             Some(payload) => vec![Item {
                 id: payload_id(&payload),
                 kind: ItemKind::Barcode,
@@ -70,6 +88,7 @@ impl DataScanner {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bifrost_ui::barcode::{ean13_modules, render_modules};
 
     #[test]
     fn payload_id_is_fnv1a() {
@@ -108,6 +127,24 @@ mod tests {
         // Buffer shorter than w * h, and a frame below the 21 pixel minimum for a QR code.
         assert!(s.scan_luma(&[0u8; 50], 100, 100).is_empty());
         assert!(s.scan_luma(&[0u8; 400], 20, 20).is_empty());
+    }
+
+    #[test]
+    fn ean13_barcode_in_the_frame_is_one_item() {
+        let digits = [5, 9, 0, 1, 2, 3, 4, 1, 2, 3, 4, 5];
+        let (widths, all) = ean13_modules(&digits);
+        let row = render_modules(&widths, 3, 30);
+        let (w, h) = (row.len(), 100);
+        let frame: Vec<u8> = (0..h).flat_map(|_| row.iter().copied()).collect();
+        let want: String = all.iter().map(|d| char::from(b'0' + d)).collect();
+        let mut s = DataScanner::new();
+        let changes = s.scan_luma(&frame, w, h);
+        assert_eq!(changes.added.len(), 1);
+        let item = s.items().next().expect("one item");
+        assert_eq!(item.kind, ItemKind::Barcode);
+        assert_eq!(item.payload, want);
+        // The same code in the next frame keeps its id and is not reported again.
+        assert!(s.scan_luma(&frame, w, h).is_empty());
     }
 
     #[test]

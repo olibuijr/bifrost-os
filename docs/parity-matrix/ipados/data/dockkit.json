@@ -1,0 +1,42 @@
+{
+  "framework": "DockKit",
+  "doc": "https://developer.apple.com/documentation/dockkit",
+  "macos_since": "",
+  "status": "n/a",
+  "bifrost": "none",
+  "summary": "Motorised dock accessories that rotate a phone to follow a subject in the camera, through Apple's DockKit accessory protocol. That protocol is for certified accessories, and BifrOSt has no DockKit accessory support. iPadOS 17.0 and later per the index.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run this round; owner rule); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Dock accessory manager",
+      "apple": "DockAccessoryManager",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Certified dock accessories use Apple's DockKit protocol."
+    },
+    {
+      "feature": "Dock accessory control",
+      "apple": "DockAccessory",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Rotation and tracking commands are sent over that protocol."
+    },
+    {
+      "feature": "Custom subject tracking",
+      "apple": "Track custom objects in a frame",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Depends on the dock accessory; the camera side alone is not DockKit."
+    },
+    {
+      "feature": "Errors",
+      "apple": "DockKitError",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Errors of the dock protocol."
+    }
+  ],
+  "gaps": [
+    "Not planned: needs certified DockKit accessories."
+  ]
+}

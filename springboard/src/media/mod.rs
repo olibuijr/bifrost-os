@@ -24,10 +24,12 @@
 pub mod aac;
 pub mod aacstream;
 pub mod audiofile;
+pub mod chapters;
 pub mod codec;
 pub mod convert;
 #[cfg(target_os = "linux")]
 pub mod dl;
+pub mod hls;
 pub mod demux;
 pub mod id3;
 pub mod ilst;
@@ -60,6 +62,13 @@ pub mod v4l2;
 #[cfg(target_os = "linux")]
 pub mod speaker;
 pub mod audioplayer;
+pub mod timestretch;
+pub mod speed;
+pub mod crossfade;
+/// Choice models for the video player's pickers: playback speed and subtitle track.
+pub mod pickers;
+/// Crossfade gains between two songs (equal power), for the music player's transitions.
+pub mod crossfade_overlap;
 pub mod queue;
 #[cfg(target_os = "linux")]
 pub mod player;

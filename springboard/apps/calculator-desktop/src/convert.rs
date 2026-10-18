@@ -1,11 +1,13 @@
-//! The Convert mode of Calculator: unit conversion over thirteen categories.
+//! The Convert mode of Calculator: unit conversion over fourteen categories.
 //!
 //! Length, mass and temperature use the SDK's `Measurement` model (`bifrost_app::locale`). That model has
 //! no other dimension yet, so the rest (speed, volume, area, time, data size, energy, pressure, power, angle and
-//! fuel economy) use the scale factors below (the SDK's `Unit` cannot hold them). Numbers are shown with the
-//! SDK's `NumberFormatter` in the app's locale.
+//! fuel economy) use the scale factors below (the SDK's `Unit` cannot hold them). Currency converts through the
+//! European Central Bank's daily rates (`rates.rs`), which the app loads; without them Currency is unavailable.
+//! Numbers are shown with the SDK's `NumberFormatter` in the app's locale.
 
 use crate::format::{self, Locale};
+use crate::rates::{self, Rates};
 use bifrost_app::locale::{Locale as SdkLocale, Measurement, NumberFormatter, NumberStyle, Unit as Std};
 
 /// Digits the entry line holds.
@@ -26,10 +28,11 @@ pub enum Category {
     Power,
     Angle,
     FuelEconomy,
+    Currency,
 }
 
 impl Category {
-    pub const ALL: [Category; 13] = [
+    pub const ALL: [Category; 14] = [
         Category::Length,
         Category::Mass,
         Category::Temperature,
@@ -43,6 +46,7 @@ impl Category {
         Category::Power,
         Category::Angle,
         Category::FuelEconomy,
+        Category::Currency,
     ];
 
     pub fn title(self) -> &'static str {
@@ -60,6 +64,7 @@ impl Category {
             Category::Power => "Power",
             Category::Angle => "Angle",
             Category::FuelEconomy => "Fuel",
+            Category::Currency => "Currency",
         }
     }
 
@@ -78,6 +83,7 @@ impl Category {
             Category::Power => POWER,
             Category::Angle => ANGLE,
             Category::FuelEconomy => FUEL_ECONOMY,
+            Category::Currency => CURRENCY,
         }
     }
 }
@@ -91,6 +97,8 @@ pub enum Kind {
     Scale(f64),
     /// A unit that is the reciprocal of the base unit: `factor / base` (litres per 100 km against km per litre).
     Reciprocal(f64),
+    /// A currency, by its ISO code; converted with the day's rates, never by a fixed factor.
+    Currency(&'static str),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -200,12 +208,25 @@ const FUEL_ECONOMY: &[UnitDef] = &[
     UnitDef { name: "Liters per 100 Kilometers", symbol: "L/100km", kind: Kind::Reciprocal(100.0) },
 ];
 
+const CURRENCY: &[UnitDef] = &[
+    UnitDef { name: "Euro", symbol: "EUR", kind: Kind::Currency("EUR") },
+    UnitDef { name: "US Dollar", symbol: "USD", kind: Kind::Currency("USD") },
+    UnitDef { name: "British Pound", symbol: "GBP", kind: Kind::Currency("GBP") },
+    UnitDef { name: "Icelandic Krona", symbol: "ISK", kind: Kind::Currency("ISK") },
+    UnitDef { name: "Swedish Krona", symbol: "SEK", kind: Kind::Currency("SEK") },
+    UnitDef { name: "Norwegian Krone", symbol: "NOK", kind: Kind::Currency("NOK") },
+    UnitDef { name: "Danish Krone", symbol: "DKK", kind: Kind::Currency("DKK") },
+    UnitDef { name: "Japanese Yen", symbol: "JPY", kind: Kind::Currency("JPY") },
+    UnitDef { name: "Swiss Franc", symbol: "CHF", kind: Kind::Currency("CHF") },
+    UnitDef { name: "Canadian Dollar", symbol: "CAD", kind: Kind::Currency("CAD") },
+];
+
 /// `value` of a scale or reciprocal unit in the category's base unit; None for a reciprocal of zero or an SDK unit.
 fn to_base(kind: Kind, value: f64) -> Option<f64> {
     match kind {
         Kind::Scale(x) => Some(value * x),
         Kind::Reciprocal(k) => (value != 0.0).then(|| k / value),
-        Kind::Std(_) => None,
+        Kind::Std(_) | Kind::Currency(_) => None,
     }
 }
 
@@ -214,18 +235,39 @@ fn from_base(kind: Kind, base: f64) -> Option<f64> {
     match kind {
         Kind::Scale(x) => Some(base / x),
         Kind::Reciprocal(k) => (base != 0.0).then(|| k / base),
-        Kind::Std(_) => None,
+        Kind::Std(_) | Kind::Currency(_) => None,
     }
 }
 
 /// `value` in unit `from` expressed in unit `to` of the same category; None for an index out of range.
+/// Currency needs rates, so without them it gives None; see `convert_with`.
+#[cfg(test)]
 pub fn convert(category: Category, value: f64, from: usize, to: usize) -> Option<f64> {
+    convert_with(category, value, from, to, None)
+}
+
+/// `convert`, with the day's currency rates for the Currency category (None when they are not loaded).
+pub fn convert_with(category: Category, value: f64, from: usize, to: usize, rates: Option<&Rates>) -> Option<f64> {
     let units = category.units();
     let (a, b) = (units.get(from)?, units.get(to)?);
     match (a.kind, b.kind) {
         (Kind::Std(x), Kind::Std(y)) => Measurement::new(value, x).converted(y).map(|m| m.value),
-        (Kind::Std(_), _) | (_, Kind::Std(_)) => None,
+        (Kind::Currency(x), Kind::Currency(y)) => {
+            // rates are units per euro: euros are value / rate(from), then times rate(to)
+            let rates = rates?;
+            Some(value / rates.per_euro(x)? * rates.per_euro(y)?)
+        }
+        (Kind::Std(_), _) | (_, Kind::Std(_)) | (Kind::Currency(_), _) | (_, Kind::Currency(_)) => None,
         (from_kind, to_kind) => from_base(to_kind, to_base(from_kind, value)?),
+    }
+}
+
+/// The line under the units that says where the Currency rates come from and how old they are.
+pub fn rates_note(rates: Option<&Rates>, pending: bool) -> String {
+    match rates {
+        Some(r) => format!("Updated {} \u{b7} {}", r.date, rates::SOURCE_NAME),
+        None if pending => "Loading today's currency rates\u{2026}".into(),
+        None => "Currency rates are unavailable offline. Connect to load the day's rates.".into(),
     }
 }
 
@@ -237,11 +279,20 @@ pub struct Converter {
     pub to: usize,
     /// The entry with `.` as the decimal point: "", "-", "12.5".
     input: String,
+    /// The day's currency rates, when they are loaded.
+    pub rates: Option<Rates>,
+}
+
+impl Converter {
+    /// A converter with the day's currency rates (or none yet), every other field at its default.
+    pub fn with_rates(rates: Option<Rates>) -> Converter {
+        Converter { rates, ..Converter::default() }
+    }
 }
 
 impl Default for Converter {
     fn default() -> Self {
-        Converter { category: Category::Length, from: 0, to: 1, input: String::new() }
+        Converter { category: Category::Length, from: 0, to: 1, input: String::new(), rates: None }
     }
 }
 
@@ -269,13 +320,14 @@ impl Converter {
 
     /// The converted value, or None if the units do not belong to the category.
     pub fn result(&self) -> Option<f64> {
-        convert(self.category, self.value(), self.from, self.to)
+        convert_with(self.category, self.value(), self.from, self.to, self.rates.as_ref())
     }
 
     /// The converted value as the display shows it in `locale` (grouping, decimal comma, scientific when extreme).
     pub fn result_text(&self, locale: Locale) -> String {
         match self.result() {
             Some(v) => format_result(v, locale),
+            None if self.category == Category::Currency => "Unavailable".into(),
             None => "Error".into(),
         }
     }
@@ -434,7 +486,7 @@ mod tests {
 
     #[test]
     fn every_category_has_units_a_title_and_distinct_symbols() {
-        assert_eq!(Category::ALL.len(), 13);
+        assert_eq!(Category::ALL.len(), 14);
         for category in Category::ALL {
             let units = category.units();
             assert!(units.len() >= 3, "{category:?}");
@@ -452,6 +504,10 @@ mod tests {
     #[test]
     fn conversions_round_trip_and_out_of_range_units_give_none() {
         for category in Category::ALL {
+            // Currency converts only with the day's rates, so it is tested with them below
+            if category == Category::Currency {
+                continue;
+            }
             let n = category.units().len();
             for a in 0..n {
                 for b in 0..n {
@@ -461,6 +517,47 @@ mod tests {
             }
         }
         assert_eq!(convert(Category::Length, 1.0, 0, 9), None);
+    }
+
+    fn day_rates() -> Rates {
+        Rates {
+            date: "2026-10-16".into(),
+            per_euro: vec![("USD".into(), 1.25), ("ISK".into(), 140.0), ("JPY".into(), 180.0)],
+        }
+    }
+
+    #[test]
+    fn currency_converts_through_the_euro_with_the_day_rates() {
+        let rates = day_rates();
+        let idx = |code: &str| index_of(Category::Currency, code);
+        let usd_to_eur = convert_with(Category::Currency, 25.0, idx("USD"), idx("EUR"), Some(&rates)).unwrap();
+        assert!(close(usd_to_eur, 20.0));
+        let eur_to_isk = convert_with(Category::Currency, 1.0, idx("EUR"), idx("ISK"), Some(&rates)).unwrap();
+        assert!(close(eur_to_isk, 140.0));
+        let usd_to_jpy = convert_with(Category::Currency, 1.0, idx("USD"), idx("JPY"), Some(&rates)).unwrap();
+        assert!(close(usd_to_jpy, 144.0));
+    }
+
+    #[test]
+    fn currency_is_unavailable_without_rates_or_for_a_missing_code() {
+        let (usd, eur) = (index_of(Category::Currency, "USD"), index_of(Category::Currency, "EUR"));
+        assert_eq!(convert(Category::Currency, 1.0, usd, eur), None, "no rates loaded");
+        let rates = day_rates();
+        let gbp = index_of(Category::Currency, "GBP");
+        assert_eq!(convert_with(Category::Currency, 1.0, gbp, eur, Some(&rates)), None, "GBP is not in the file");
+        let mut c = Converter { category: Category::Currency, from: usd, to: eur, ..Converter::default() };
+        c.digit(1);
+        assert_eq!(c.result_text(Locale::En), "Unavailable");
+        c.rates = Some(rates);
+        assert_eq!(c.result_text(Locale::En), "0.8");
+    }
+
+    #[test]
+    fn the_rates_note_says_when_the_rates_are_from_or_that_they_are_missing() {
+        let rates = day_rates();
+        assert!(rates_note(Some(&rates), false).starts_with("Updated 2026-10-16"));
+        assert!(rates_note(None, true).starts_with("Loading"));
+        assert!(rates_note(None, false).contains("unavailable offline"));
     }
 
     #[test]

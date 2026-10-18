@@ -43,7 +43,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: umount installed, not run headless (changes machine state)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/umount"
+    }
+   ],
+   "ready_note": "util-linux umount (BASE_PACKAGES); not run (changes mounts)"
   },
   {
    "id": "path:/usr/bin/tab2space",
@@ -85,7 +93,16 @@
    "status": "partial",
    "note": "Midget 0.7.25: tabs installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "tabs -V",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "Arch package ncurses ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/tail",
@@ -270,11 +287,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/cmd/src/textutil.rs",
+   "bifrost": "springboard/cmd/src/bin/textutil.rs, springboard/cmd/src/textutil.rs",
    "status": "partial",
-   "note": "BifrOSt textutil converts txt, html and rtf (plain text and paragraphs only; no Word formats, no styling); not yet verified on Midget",
+   "note": "converts txt, html and rtf only (plain text and paragraphs, no styling); Word formats are not supported Built 2026-10-17 (wave 13): docx and odt read and write (textutil::tests).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "textutil::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/textutil"
+    }
+   ],
+   "ready_note": "textutil -convert converts between txt, html, rtf, docx and odt (text and paragraph breaks; the zip packages are read and written with the shared zip module). Gap: no fonts, colours, images or tables, no old binary .doc, and no -info, -stdin or -encoding."
   },
   {
    "id": "path:/usr/bin/tftp",
@@ -295,7 +325,15 @@
    "status": "partial",
    "note": "provided by Arch package tftp-hpa; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/tftp"
+    }
+   ],
+   "ready_note": "Arch package tftp-hpa ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/tic",
@@ -316,7 +354,16 @@
    "status": "partial",
    "note": "Midget 0.7.25: tic installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "tic -V",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "ncurses (BASE_PACKAGES)"
   },
   {
    "id": "path:/usr/bin/tidy",
@@ -337,7 +384,15 @@
    "status": "partial",
    "note": "provided by Arch package tidy; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/tidy"
+    }
+   ],
+   "ready_note": "Arch package tidy ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/tidy_changelog",
@@ -379,7 +434,21 @@
    "status": "partial",
    "note": "BifrOSt tiff2icns writes ICNS with PNG sizes 32 to 1024 from ImageMagick (magick) decodes; needs the imagemagick package; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "tiff2icns"
+    },
+    {
+     "kind": "cmd",
+     "run": "tiff2icns --help",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "BifrOSt tiff2icns (springboard/cmd/src/tiff2icns.rs) writes ICNS; the decode path needs ImageMagick, which Arch package imagemagick ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/tiffutil",
@@ -396,11 +465,28 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "/usr/bin/tiffinfo",
+   "bifrost": "springboard/cmd/src/bin/tiffutil.rs, springboard/cmd/src/tiffutil.rs, /usr/bin/tiffcp, /usr/bin/tiffinfo",
    "status": "partial",
-   "note": "Midget 0.7.25: tiffinfo installed, --version/--help probe failed",
+   "note": "tiffinfo covers the info query only; tiffutil's other operations are not implemented Built 2026-10-17 (wave 13): springboard/cmd/src/tiffutil.rs (tiffutil::tests).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "tiffutil::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/tiffcp"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/tiffutil"
+    }
+   ],
+   "ready_note": "tiffutil -info, -cat, -extract and the -lzw, -packbits and -none recompression map onto tiffinfo and tiffcp (Arch package libtiff). Gap: -cathidpicts, -jpeg and -g4 are refused."
   },
   {
    "id": "path:/usr/bin/time",
@@ -419,9 +505,18 @@
    "doc": "",
    "bifrost": "time",
    "status": "partial",
-   "note": "Midget 0.7.25: time installed, --version/--help probe failed",
+   "note": "the time package is not in runtime-packages.txt or BASE_PACKAGES, so it is not guaranteed on the installed system",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "time --version",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "covers: GNU time from the time package, now listed in packaging/arch/runtime-packages.txt."
   },
   {
    "id": "path:/usr/bin/timer_analyser.d",
@@ -505,7 +600,15 @@
    "status": "partial",
    "note": "provided by Arch package net-snmp; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/tkmib"
+    }
+   ],
+   "ready_note": "Arch package net-snmp ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/tkpp",
@@ -564,11 +667,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/cmd/src/tmutil.rs",
+   "bifrost": "springboard/cmd/src/bin/tmutil.rs, springboard/cmd/src/tmutil.rs",
    "status": "partial",
-   "note": "BifrOSt tmutil over the snapshot backup store (status, startbackup, listbackups, restore, add and removeexclusion); not yet verified on Midget",
+   "note": "Built 2026-10-17: latestbackup and isexcluded (springboard/cmd/src/tmutil.rs; tests tmutil::tests). Other modes still not replicated.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "tmutil::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/tmutil"
+    }
+   ],
+   "ready_note": "tmutil drives the snapshot backup: status, startbackup, listbackups, latestbackup, restore, isexcluded and add/removeexclusion. Gap: startbackup --block and per-path restore into an existing folder."
   },
   {
    "id": "path:/usr/bin/toe",
@@ -589,7 +705,16 @@
    "status": "partial",
    "note": "Midget 0.7.25: toe installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "toe -V",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "ncurses (BASE_PACKAGES)"
   },
   {
    "id": "path:/usr/bin/top",
@@ -715,7 +840,16 @@
    "status": "partial",
    "note": "Midget 0.7.25: tput installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "tput -V",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "ncurses (BASE_PACKAGES)"
   },
   {
    "id": "path:/usr/bin/tr",
@@ -774,11 +908,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "packaging/arch/runtime-packages.txt (net-snmp, which tools/parity/os_cli_packages.txt lists with traptoemail)",
+   "bifrost": "/usr/bin/traptoemail (net-snmp)",
    "status": "partial",
-   "note": "The package list names traptoemail under net-snmp, and net-snmp is in the runtime package list. Installation has not been checked on Midget, and no BifrOSt code forwards SNMP traps by mail.",
+   "note": "ships with net-snmp (runtime-packages.txt), but installation is not checked and no BifrOSt script wraps it",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/traptoemail"
+    }
+   ],
+   "ready_note": "traptoemail is net-snmp's trap handler that mails a trap; the Arch package net-snmp (in runtime-packages.txt) ships it unchanged."
   },
   {
    "id": "path:/usr/bin/trash",
@@ -883,7 +1025,16 @@
    "status": "partial",
    "note": "Midget 0.7.25: truncate installed, not run headless (changes machine state)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "truncate --version",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "coreutils truncate"
   },
   {
    "id": "path:/usr/bin/trustcachectl",
@@ -925,7 +1076,16 @@
    "status": "partial",
    "note": "Midget 0.7.25: tset installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "tset -V",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "ncurses (BASE_PACKAGES)"
   },
   {
    "id": "path:/usr/bin/tsort",
@@ -1089,11 +1249,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no Arch package found in the official repositories; unit converter not implemented",
+   "bifrost": "/usr/lib/bifrost/cmd/bin/units",
+   "status": "partial",
+   "note": "bifrost-cmd units tool (conversion, -q/-t/-v/-f/-U/-V, interactive two-prompt mode, conformability errors, SI and binary prefixes, temperature functions, built-in table of 140 definitions); not yet built or verified on Midget. Not covered: currency rates, the reference database's full size (the built-in table is smaller; -f adds more), angle units (no radian or degree), and exact reference output wording (-v and the interactive ratio lines are our own format)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "units"
+    },
+    {
+     "kind": "cmd",
+     "run": "/usr/lib/bifrost/cmd/bin/units -V",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "BifrOSt units (springboard/cmd/src/units.rs) is installed under /usr/lib/bifrost/cmd/bin because the name collides with Arch's units; unit tests in bifrost-cmd"
   },
   {
    "id": "path:/usr/bin/unvis",
@@ -1110,11 +1284,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no Arch package; BSD unvis decoder not implemented",
+   "bifrost": "springboard/cmd/src/bin/unvis.rs",
+   "status": "partial",
+   "note": "BifrOSt decoder in the bifrost-cmd crate (springboard/cmd/src/vis.rs): all escape forms, -h, -e/-m, -b, -n; invalid escapes exit 1 with 'unvis: invalid escape'. Round trips with vis are unit tested, not yet compiled or run. Not installed by packaging: the bifrost-cmd tools have no install rule yet, so it is not on a built system (Midget check pending).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "vis"
+    },
+    {
+     "kind": "cmd",
+     "run": "unvis -h",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "BifrOSt unvis decoder (springboard/cmd/src/vis.rs): escape forms, -h, -e/-m, -b, -n"
   },
   {
    "id": "path:/usr/bin/unzip",
@@ -1135,7 +1323,16 @@
    "status": "partial",
    "note": "provided by Arch package unzip; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "unzip -h",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "Arch package unzip ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/unzipsfx",
@@ -1156,7 +1353,15 @@
    "status": "partial",
    "note": "provided by Arch package unzip; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/unzipsfx"
+    }
+   ],
+   "ready_note": "Arch package unzip ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/update_dyld_shared_cache",
@@ -1282,7 +1487,16 @@
    "status": "partial",
    "note": "provided by Arch package usd; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "usdcat --help",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "Arch package usd ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/usdchecker",
@@ -1303,7 +1517,16 @@
    "status": "partial",
    "note": "provided by Arch package usd; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "usdchecker --help",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "Arch package usd ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/usdcrush",
@@ -1341,11 +1564,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no usdextract in the Arch usd package; not implemented",
+   "bifrost": "springboard/cmd/src/bin/usdextract.rs, springboard/cmd/src/usdextract.rs",
+   "status": "partial",
+   "note": "Built 2026-10-17: usdextract ARCHIVE.usdz DESTINATION unpacks a USDZ package through unzip (springboard/cmd/src/usdextract.rs; tests usdextract::tests). Only the unpack form is built; any other usdextract options are not. Not verified on Midget.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "usdextract::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/usdextract"
+    }
+   ],
+   "ready_note": "usdextract ARCHIVE.usdz DESTINATION unpacks a USDZ package. Gap: only the unpack form."
   },
   {
    "id": "path:/usr/bin/usdrecord",
@@ -1366,7 +1602,16 @@
    "status": "partial",
    "note": "provided by Arch package usd; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "usdrecord --help",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "Arch package usd ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/usdtree",
@@ -1387,7 +1632,16 @@
    "status": "partial",
    "note": "provided by Arch package usd; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "usdtree --help",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "Arch package usd ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/usdzip",
@@ -1408,7 +1662,16 @@
    "status": "partial",
    "note": "provided by Arch package usd; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "usdzip --help",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "Arch package usd ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/users",
@@ -1660,7 +1923,16 @@
    "status": "partial",
    "note": "provided by Arch package vim; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "vim --version",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "Arch package vim ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/vimtutor",
@@ -1681,7 +1953,15 @@
    "status": "partial",
    "note": "provided by Arch package vim; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/vimtutor"
+    }
+   ],
+   "ready_note": "Arch package vim ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/vis",
@@ -1698,11 +1978,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "n/a",
-   "note": "vis(1) is the BSD character encoder for unprintable text. The Arch package named vis is an editor and does not provide this encoder.",
+   "bifrost": "/usr/lib/bifrost/cmd/bin/vis",
+   "status": "partial",
+   "note": "BifrOSt now ships the encoder: bifrost-cmd builds vis (springboard/cmd/src/vis.rs) with the default, -o, -c, -h, -e/-m, -n styles and -w, -t, -l, -s, -b, -F/-f. It is built as a bifrost-cmd binary named vis, not installed as /usr/bin/vis, so the Arch package named vis (an editor) is not touched. Packaging has no install rule for bifrost-cmd tools yet. Unit tested, not yet compiled or run.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "vis"
+    },
+    {
+     "kind": "cmd",
+     "run": "/usr/lib/bifrost/cmd/bin/vis --help",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "BifrOSt vis encoder is installed as /usr/lib/bifrost/cmd/bin/vis (name collides with Arch's vis editor); -h/-e/-m/-n/-w/-t/-l/-s styles in springboard/cmd/src/vis.rs"
   },
   {
    "id": "path:/usr/bin/vm_stat",
@@ -1996,7 +2290,15 @@
    "status": "partial",
    "note": "provided by Arch package tftp-hpa; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/in.tftpd"
+    }
+   ],
+   "ready_note": "Arch package tftp-hpa ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/libexec/thermalmonitord",
@@ -2710,7 +3012,16 @@
    "status": "partial",
    "note": "provided by Arch package tcpdump; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "tcpdump --version",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "Arch package tcpdump ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/sbin/traceroute",
@@ -2731,7 +3042,15 @@
    "status": "partial",
    "note": "provided by Arch package traceroute; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/traceroute"
+    }
+   ],
+   "ready_note": "Arch package traceroute ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/sbin/traceroute6",
@@ -2752,7 +3071,15 @@
    "status": "partial",
    "note": "provided by Arch package traceroute; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/traceroute6"
+    }
+   ],
+   "ready_note": "Arch package traceroute ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/sbin/uasysdiagnose",

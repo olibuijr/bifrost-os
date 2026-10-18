@@ -25,7 +25,7 @@ pub use bifrost_ui::ax::{AxCustomRotor, AxMeta, AxText, Priority as AnnouncePrio
 pub use guided::GuidedRestriction;
 pub mod workspace;
 pub use workspace::{WorkspaceEventKind, WorkspaceOp, WorkspaceStatus};
-pub use rich::{dragop, DragItem, DragPhase, DragPreview, NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, Payload, TextInput, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION};
+pub use rich::{dragop, DragItem, DragPhase, DragPreview, NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, Payload, TextInput, NOTIF_AUTH_ALERT, NOTIF_AUTH_BADGE, NOTIF_AUTH_CRITICAL, NOTIF_AUTH_MASK, NOTIF_AUTH_PROVISIONAL, NOTIF_AUTH_SOUND, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION, NOTIF_PRESENT_BADGE, NOTIF_PRESENT_BANNER, NOTIF_PRESENT_LIST, NOTIF_PRESENT_MASK, NOTIF_PRESENT_SOUND, NotifTrigger, MAX_NOTIF_ATTACHMENTS, MAX_NOTIF_ATTACHMENT_PATH, NOTIF_CATEGORY_CUSTOM_DISMISS, NOTIF_CATEGORY_HIDDEN_SHOW_SUBTITLE, NOTIF_CATEGORY_HIDDEN_SHOW_TITLE};
 
 pub const MAX_PACKET: usize = 16 * 1024;
 /// The most user info pairs a quick action may carry on the wire.
@@ -63,6 +63,40 @@ pub struct Configure {
 pub enum KeyInput {
     Text(String),
     Code(u32),
+}
+
+/// Input for the key window of an app (`ToApp::WindowInput`): the keys, menu items, commands and text edits that go
+/// to the window with key focus. The main window gets the same input in the messages every app already handles
+/// (`WindowInput::to_app` with window 0), so an app without extra windows is unchanged.
+#[derive(Clone, Debug, PartialEq)]
+pub enum WindowInput {
+    Key(KeyInput),
+    Command(Command),
+    MenuAction(u32),
+    /// as `ToApp::SetMarkedText`
+    SetMarkedText { text: String, sel_start: u32, sel_len: u32 },
+    /// as `ToApp::UnmarkText`
+    UnmarkText { commit: bool },
+    /// as `ToApp::DeleteSurrounding`
+    DeleteSurrounding { before: u32, after: u32 },
+}
+
+impl WindowInput {
+    /// The message that carries this input to `window`. Window 0 is the main window and keeps the messages every app
+    /// already handles; an extra window gets `ToApp::WindowInput`.
+    pub fn to_app(self, window: u32) -> ToApp {
+        if window != 0 {
+            return ToApp::WindowInput { window, input: self };
+        }
+        match self {
+            WindowInput::Key(k) => ToApp::Key(k),
+            WindowInput::Command(c) => ToApp::Command(c),
+            WindowInput::MenuAction(id) => ToApp::MenuAction(id),
+            WindowInput::SetMarkedText { text, sel_start, sel_len } => ToApp::SetMarkedText { text, sel_start, sel_len },
+            WindowInput::UnmarkText { commit } => ToApp::UnmarkText { commit },
+            WindowInput::DeleteSurrounding { before, after } => ToApp::DeleteSurrounding { before, after },
+        }
+    }
 }
 
 /// A Ctrl or Cmd chord the shell did not use, sent as `KeyInput::Code` with `CHORD_FLAG` set.
@@ -361,6 +395,32 @@ pub const MAX_DOC_TEXT: usize = 255;
 /// The longest path a `DocGrantPath` carries (bytes).
 pub const MAX_DOC_PATH: usize = 4096;
 
+/// The stacking level an app asks for its window (`ToShell::WindowLevel`). A floating window stays above the normal
+/// windows of the desktop, and below menus, panels and the menu bar.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum WindowLevel {
+    #[default]
+    Normal = 0,
+    Floating = 1,
+}
+
+impl WindowLevel {
+    /// The wire byte; an unknown byte is a bad value.
+    pub fn from_wire(v: u8) -> Option<Self> {
+        match v {
+            0 => Some(WindowLevel::Normal),
+            1 => Some(WindowLevel::Floating),
+            _ => None,
+        }
+    }
+}
+
+/// Flags of `ToShell::WindowOpen`.
+pub mod window_flags {
+    /// The app wants `ToApp::WindowTitleDoubleClick` instead of the shell's zoom when the title bar is double-clicked.
+    pub const TITLE_DOUBLE_CLICK: u32 = 1;
+}
+
 /// Shell -> app.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ToApp {
@@ -373,6 +433,28 @@ pub enum ToApp {
     /// The shell is done with buffer `buf` of the `Buffers` set numbered `generation`; an app ignores it when
     /// that is not its current set (a late release must not free a slot of the new set).
     Release { buf: u32, generation: u32 },
+    /// Several windows (`app_windows`): the shell closed window `id` from its own controls. The app drops its state for it.
+    WindowClosed { id: u32 },
+    /// The shell's full-screen state for the app's window changed (the green button, or the app's own request).
+    /// The window takes the whole screen, with the menu bar hidden until the pointer reaches the top edge.
+    FullScreen { on: bool },
+    /// Several windows: the shell resized window `id` to `w` x `h` points.
+    WindowConfigure { id: u32, w: f32, h: f32 },
+    /// Several windows: a touch on window `id`, with the same fields as `Touch` (`touch` is the touch id).
+    WindowTouch { id: u32, touch: u32, kind: TouchKind, x: f32, y: f32, t_ms: u32 },
+    /// Several windows: buffer `buf` of window `id`'s set `generation` is free again (as `Release` for the main window).
+    WindowRelease { id: u32, buf: u32, generation: u32 },
+    /// Several windows: the person dragged window `window` to (x, y) points relative to the visible desktop area (the
+    /// shell's clamped position). Tag 0x24d.
+    WindowMoved { window: u32, x: f32, y: f32 },
+    /// Several windows: the person double-clicked the title bar of window `window`. Only sent to windows opened with
+    /// `window_flags::TITLE_DOUBLE_CLICK`. Tag 0x24e.
+    WindowTitleDoubleClick { window: u32 },
+    /// Several windows: window `window` gained (`focused`) or lost key focus. The main window is key when no extra
+    /// window is, and it is told as `WindowFocus { window: 0, .. }` when focus moves back to it. Tag 0x24f.
+    WindowFocus { window: u32, focused: bool },
+    /// Several windows: input for the key window `window` (see `WindowInput`). Window 0 never arrives here. Tag 0x250.
+    WindowInput { window: u32, input: WindowInput },
     Resume,
     Suspend,
     Quit,
@@ -427,9 +509,15 @@ pub enum ToApp {
     /// The user acted on a notification the app posted (`userNotificationCenter(_:didReceive:)`). `action` is the action
     /// identifier, `NOTIF_DEFAULT_ACTION` for opening it or `NOTIF_DISMISS_ACTION`; `text` is the reply of a text-input
     /// action. Delivered on start if the app was not running.
-    NotificationAction { id: String, action: String, text: String, thread: String, category: String },
+    /// `userInfo` of the request is returned with the response, as `UNNotificationResponse.notification.request.content`.
+    NotificationAction { id: String, action: String, text: String, thread: String, category: String, user_info: Vec<(String, String)> },
     /// The user opened an indexed item from Search (`NativeUserActivity` of `quicksearch::ACTION_TYPE`, `continue(_:)`). 0x1c2.
     ContinueActivity { activity_type: String, unique_id: String, domain: String },
+    /// The shell asks an app that declares `index_extension = true` to index all its content again (the
+    /// `CSIndexExtensionRequestHandler` reindex-all request). 0x1c3.
+    ReindexAll,
+    /// The shell asks an app to index again the items of `identifiers` (the reindex-identifiers request). 0x1c4.
+    ReindexIdentifiers { identifiers: Vec<String> },
     /// The answer to `ToShell::WorkspaceRequest`. Tag 100.
     WorkspaceReply { request: u32, status: WorkspaceStatus, items: Vec<String> },
     /// A workspace notification the app subscribed to (`ToShell::WorkspaceSubscribe`). `app_id` and `name` are empty for sleep and wake. Tag 101.
@@ -440,6 +528,12 @@ pub enum ToApp {
     NotificationList { request: u32, delivered: bool, ids: Vec<String> },
     /// The answer to `ToShell::NotifySettings`. Tag 56.
     NotificationSettings { request: u32, settings: NotifSettings },
+    /// The answer to `ToShell::NotifyAuthorize` (`requestAuthorization(options:)`'s `granted`). Tag 57.
+    NotificationAuthorized { request: u32, granted: bool },
+    /// A notification of this app arrives while the app is frontmost and the app opted in with
+    /// `ToShell::NotifyPresentDelegate`. The app answers `ToShell::NotifyPresentReply { token, .. }`; with no answer
+    /// within the shell's timeout the notification is not shown (`willPresent` not implemented). Tag 58.
+    NotificationWillPresent { token: u32, id: String, thread: String, category: String, title: String, body: String },
     /// The user picked a target of `ToShell::Share`; `target` is the app id, "copy" for Copy, empty when dismissed.
     ShareDone { request: u32, target: String },
     /// The answer to `ToShell::LoginItem` (`SMAppService.status`). Tag 0x1b0.
@@ -615,9 +709,27 @@ pub enum ToShell {
     /// `generation` counts the sets the app has sent (wrapping, starting at 1).
     Buffers { w: u32, h: u32, generation: u32 },
     Frame { buf: u32, damage: Vec<Rect> },
+    /// Several windows: open window `id` (the app chose the id; the shell never invents one). The title is at most 512
+    /// bytes; the size is in points. The window has no pixels until `WindowBuffers` and `WindowFrame` arrive.
+    /// `position` (optional, points relative to the visible desktop area) asks where the window goes; the shell clamps it to
+    /// the screen. `flags` is a `window_flags` set. Tag 0x240.
+    WindowOpen { id: u32, title: String, w: f32, h: f32, position: Option<(f32, f32)>, flags: u32 },
+    /// Several windows: close window `id`. The shell drops its frames.
+    WindowClose { id: u32 },
+    /// Several windows: the window's title.
+    WindowTitle { id: u32, title: String },
+    /// Several windows: the window's size in points, as the app asks for it.
+    WindowResize { id: u32, w: f32, h: f32 },
+    /// Several windows: two buffers of `w * h * 4` bytes for window `id`, as SCM_RIGHTS fds, like `Buffers`.
+    WindowBuffers { id: u32, w: u32, h: u32, generation: u32 },
+    /// Several windows: the newest frame of window `id` is in buffer `buf`, like `Frame`.
+    WindowFrame { id: u32, buf: u32, damage: Vec<Rect> },
     WantsKeyboard { on: bool },
     Haptic,
     OpenUrl { url: String },
+    /// Plays the built-in alert sound `name` (one of the shell's alert tones) once, on the sound-effects role. An
+    /// unknown name is dropped. Tag 0x1f4.
+    PlaySystemSound { name: String },
     Notify { title: String, body: String },
     Log { text: String },
     SetClipboard { text: String },
@@ -632,6 +744,8 @@ pub enum ToShell {
     ContextMenu {x:f32,y:f32,items:Vec<ContextItem>},
     /// The app's dock badge (`NativeDockTile.badgeLabel`): a short label such as an unread count; empty clears it.
     SetBadge { label: String },
+    /// Enter (`on`) or leave full screen for the app's window (`NSWindow.toggleFullScreen`). Answered by `ToApp::FullScreen`.
+    SetFullScreen { on: bool },
     /// Sent only by the keyboard system app.
     KeyboardOut(KeyboardOut),
     /// Ask the user for a file (`NativeOpenPanel`). `filters` are UTIs or extensions; they only narrow the panel's list.
@@ -687,6 +801,17 @@ pub enum ToShell {
     /// activities (0 = none). While `USER_INITIATED` or `LATENCY_CRITICAL` is set the shell does not suspend the app
     /// when it leaves the foreground. Sent only when the union changes. 0x161.
     Activity { options: u32 },
+    /// `NSWindow.level` for the app's window: `Floating` keeps it above the normal windows (the Calculator's
+    /// Always on Top, Stickies' Float on Top). Sent when it changes; the shell keeps it while the app lives. Tag 0x165.
+    WindowLevel(WindowLevel),
+    /// The level of one of the app's extra windows (`WindowOpen`'s id). Id 0 is the main window and is refused by the
+    /// shell (use `WindowLevel`). Tag 0x24c.
+    WindowLevelOf { id: u32, level: WindowLevel },
+    /// Several windows: move window `window` to (x, y) points relative to the visible desktop area. The shell clamps it
+    /// to the screen. Tag 0x246.
+    WindowMove { window: u32, x: f32, y: f32 },
+    /// Several windows: collapse window `window` to its title bar (`collapsed`) or expand it back. Tag 0x247.
+    WindowCollapse { window: u32, collapsed: bool },
     /// `setNotificationCategories`: replaces the app's categories. Needs the `notifications` permission.
     NotifyCategories(Vec<NotifCategory>),
     /// `CSSearchableIndex.indexSearchableItems`: at most `quicksearch::MAX_ITEMS` per message. 0x1c0.
@@ -711,6 +836,9 @@ pub enum ToShell {
     Announce { text: String, priority: AnnouncePriority },
     /// Custom rotors the screen reader steps through beside the standard ones (`bifrost_ui::ax_rotor`). Tag 0x213.
     AxRotors(Vec<AxCustomRotor>),
+    /// The accessibility notifications an app posted for its elements (`bifrost_ui::ax::post`), in posting order; the
+    /// shell turns each into an AT-SPI signal on the element's object. Tag 0x214.
+    AxNotify(Vec<(u64, bifrost_ui::ax::AxNotification)>),
     /// Guided Access: `on` asks for a single-app session with these restrictions, `!on` ends it. Tag 0x170.
     GuidedAccessRequest { on: bool, restrictions: Vec<GuidedRestriction> },
     /// `UNUserNotificationCenter.add`: answered with `NotificationStatus`.
@@ -722,6 +850,17 @@ pub enum ToShell {
     /// The notification settings query: answered with `NotificationSettings`, also when the app has no
     /// `notifications` permission (then `authorized` is false). Tag 0x14a.
     NotifySettings { request: u32 },
+    /// `UNUserNotificationCenter.requestAuthorization(options:)`: `options` is the `NOTIF_AUTH_*` bit set. Answered with
+    /// `NotificationAuthorized`: at once when the app was asked before, otherwise after the first-time alert. Tag 0x14b.
+    NotifyAuthorize { request: u32, options: u8 },
+    /// Opts the app in to `ToApp::NotificationWillPresent` (`enabled`) or out (`false`). Tag 0x14d.
+    NotifyPresentDelegate { enabled: bool },
+    /// The answer to `ToApp::NotificationWillPresent`: `options` is the `NOTIF_PRESENT_*` bit set, empty to hide it.
+    /// Tag 0x14c.
+    NotifyPresentReply { token: u32, options: u8 },
+    /// `UNUserNotificationCenter.add` with a calendar or time-interval trigger. The trigger sets the time, so
+    /// `req.delay_ms` and `req.repeats` are not used. Answered with `NotificationStatus`. Tag 0x14e.
+    NotifySchedule { request: u32, req: NotifRequest, trigger: NotifTrigger },
     /// `NativeSharingServicePicker.show(relativeTo:)`: `anchor` is in window points. Answered with `ShareDone`.
     Share { request: u32, items: Vec<Payload>, anchor: UiRect },
     /// `SMAppService.mainApp` register, unregister or status; always answered with `LoginItemStatus`. Tag 0x1b0.
@@ -832,6 +971,21 @@ mod tag {
     pub const INPUT_SOURCE: u32 = 0x162;
     pub const ACCENT_HOLD: u32 = 0x163;
     pub const QUICK_ACTION: u32 = 0x164;
+    // several windows, window level and full screen: 0x240..=0x24f (0x1c0..=0x1cf belongs to `quicksearch`)
+    pub const WINDOW_CLOSED: u32 = 0x248;
+    pub const WINDOW_CONFIGURE: u32 = 0x249;
+    pub const WINDOW_TOUCH: u32 = 0x24a;
+    pub const WINDOW_RELEASE: u32 = 0x24b;
+    pub const WINDOW_OPEN: u32 = 0x240;
+    pub const WINDOW_CLOSE: u32 = 0x241;
+    pub const WINDOW_TITLE: u32 = 0x242;
+    pub const WINDOW_RESIZE: u32 = 0x243;
+    pub const WINDOW_BUFFERS: u32 = 0x244;
+    pub const WINDOW_FRAME: u32 = 0x245;
+    /// Shell -> app: window key focus changed (`ToApp::WindowFocus`).
+    pub const WINDOW_FOCUS: u32 = 0x24f;
+    /// Shell -> app: input for the key window (`ToApp::WindowInput`).
+    pub const WINDOW_INPUT: u32 = 0x250;
 
     pub const HELLO: u32 = 0x101;
     pub const BUFFERS: u32 = 0x102;
@@ -839,6 +993,7 @@ mod tag {
     pub const WANTS_KEYBOARD: u32 = 0x104;
     pub const HAPTIC: u32 = 0x105;
     pub const OPEN_URL: u32 = 0x106;
+    pub const PLAY_SYSTEM_SOUND: u32 = 0x1f4;
     pub const NOTIFY: u32 = 0x107;
     pub const LOG: u32 = 0x108;
     pub const SET_CLIPBOARD: u32 = 0x109;
@@ -848,6 +1003,10 @@ mod tag {
     pub const REMOTE_SHARING: u32 = 0x10c;
     pub const CONTEXT_MENU:u32=0x10d;
     pub const SET_BADGE: u32 = 0x10e;
+    /// App -> shell: enter or leave full screen for the app's window (`ToShell::SetFullScreen`).
+    pub const SET_FULL_SCREEN: u32 = 0x24d;
+    /// Shell -> app: the window's full-screen state changed (`ToApp::FullScreen`).
+    pub const FULL_SCREEN: u32 = 0x24c;
     pub const KEYBOARD_OUT: u32 = 0x10f;
     pub const DOC_OPEN: u32 = 0x110;
     pub const DOC_SAVE: u32 = 0x111;
@@ -871,6 +1030,12 @@ mod tag {
     pub const INPUT_ACCESSORY: u32 = 0x153;
     pub const SUDDEN_TERMINATION: u32 = 0x160;
     pub const ACTIVITY: u32 = 0x161;
+    pub const WINDOW_LEVEL: u32 = 0x165;
+    pub const WINDOW_LEVEL_OF: u32 = 0x24c;
+    pub const WINDOW_MOVE: u32 = 0x246;
+    pub const WINDOW_COLLAPSE: u32 = 0x247;
+    pub const WINDOW_MOVED: u32 = 0x24d;
+    pub const WINDOW_TITLE_DOUBLE_CLICK: u32 = 0x24e;
 }
 
 /// The part of `text` sent as surrounding text: at most `MAX_SURROUNDING` bytes around `caret`, cut on character
@@ -953,6 +1118,87 @@ fn str_(b: &mut Vec<u8>, s: &str) {
     }
     u32_(b, n as u32);
     b.extend_from_slice(&s.as_bytes()[..n]);
+}
+
+/// The longest window title on the wire, in bytes.
+pub const MAX_WINDOW_TITLE: usize = 512;
+
+/// A window title cut to `MAX_WINDOW_TITLE` bytes on a character boundary (the encoder side).
+fn short_title(title: &str) -> String {
+    let mut end = title.len().min(MAX_WINDOW_TITLE);
+    while !title.is_char_boundary(end) {
+        end -= 1;
+    }
+    title[..end].to_string()
+}
+
+/// A decoded window title; a title over the limit is refused.
+fn checked_title(title: String) -> Result<String, DecodeError> {
+    if title.len() > MAX_WINDOW_TITLE { Err(DecodeError::BadValue) } else { Ok(title) }
+}
+
+/// `WindowInput` after the window id: a kind byte, then the payload (`0` key, `1` command, `2` menu item, `3` marked
+/// text, `4` unmark, `5` delete surrounding).
+fn window_input_encode(b: &mut Vec<u8>, input: &WindowInput) {
+    match input {
+        WindowInput::Key(KeyInput::Text(s)) => {
+            b.push(0);
+            b.push(0);
+            str_(b, s);
+        }
+        WindowInput::Key(KeyInput::Code(c)) => {
+            b.push(0);
+            b.push(1);
+            u32_(b, *c);
+        }
+        WindowInput::Command(c) => {
+            b.push(1);
+            u32_(b, *c as u32);
+        }
+        WindowInput::MenuAction(id) => {
+            b.push(2);
+            u32_(b, *id);
+        }
+        WindowInput::SetMarkedText { text, sel_start, sel_len } => {
+            b.push(3);
+            str_(b, text);
+            u32_(b, *sel_start);
+            u32_(b, *sel_len);
+        }
+        WindowInput::UnmarkText { commit } => {
+            b.push(4);
+            b.push(*commit as u8);
+        }
+        WindowInput::DeleteSurrounding { before, after } => {
+            b.push(5);
+            u32_(b, *before);
+            u32_(b, *after);
+        }
+    }
+}
+
+fn window_input_decode(r: &mut Reader) -> Result<WindowInput, DecodeError> {
+    Ok(match r.u8()? {
+        0 => match r.u8()? {
+            0 => WindowInput::Key(KeyInput::Text(r.str()?)),
+            1 => WindowInput::Key(KeyInput::Code(r.u32()?)),
+            _ => return Err(DecodeError::BadValue),
+        },
+        1 => WindowInput::Command(Command::from_wire(r.u32()?).ok_or(DecodeError::BadValue)?),
+        2 => WindowInput::MenuAction(r.u32()?),
+        3 => {
+            let text = r.str()?;
+            let (sel_start, sel_len) = (r.u32()?, r.u32()?);
+            let end = sel_start as u64 + sel_len as u64;
+            if end > text.len() as u64 || !text.is_char_boundary(sel_start as usize) || !text.is_char_boundary(end as usize) {
+                return Err(DecodeError::BadValue);
+            }
+            WindowInput::SetMarkedText { text, sel_start, sel_len }
+        }
+        4 => WindowInput::UnmarkText { commit: r.u8()? != 0 },
+        5 => WindowInput::DeleteSurrounding { before: r.u32()?, after: r.u32()? },
+        _ => return Err(DecodeError::BadValue),
+    })
 }
 
 struct Reader<'a>(&'a [u8]);
@@ -1076,6 +1322,60 @@ impl ToApp {
                 u32_(&mut b, *buf);
                 u32_(&mut b, *generation);
             }
+            ToApp::WindowMoved { window, x, y } => {
+                u32_(&mut b, tag::WINDOW_MOVED);
+                u32_(&mut b, *window);
+                f32_(&mut b, *x);
+                f32_(&mut b, *y);
+            }
+            ToApp::WindowTitleDoubleClick { window } => {
+                u32_(&mut b, tag::WINDOW_TITLE_DOUBLE_CLICK);
+                u32_(&mut b, *window);
+            }
+            ToApp::WindowClosed { id } => {
+                u32_(&mut b, tag::WINDOW_CLOSED);
+                u32_(&mut b, *id);
+            }
+            ToApp::FullScreen { on } => {
+                u32_(&mut b, tag::FULL_SCREEN);
+                b.push(*on as u8);
+            }
+            ToApp::WindowConfigure { id, w, h } => {
+                u32_(&mut b, tag::WINDOW_CONFIGURE);
+                u32_(&mut b, *id);
+                f32_(&mut b, *w);
+                f32_(&mut b, *h);
+            }
+            ToApp::WindowTouch { id, touch, kind, x, y, t_ms } => {
+                u32_(&mut b, tag::WINDOW_TOUCH);
+                u32_(&mut b, *id);
+                u32_(&mut b, *touch);
+                b.push(match kind {
+                    TouchKind::Down => 0,
+                    TouchKind::Move => 1,
+                    TouchKind::Up => 2,
+                    TouchKind::Cancel => 3,
+                });
+                f32_(&mut b, *x);
+                f32_(&mut b, *y);
+                u32_(&mut b, *t_ms);
+            }
+            ToApp::WindowRelease { id, buf, generation } => {
+                u32_(&mut b, tag::WINDOW_RELEASE);
+                u32_(&mut b, *id);
+                u32_(&mut b, *buf);
+                u32_(&mut b, *generation);
+            }
+            ToApp::WindowFocus { window, focused } => {
+                u32_(&mut b, tag::WINDOW_FOCUS);
+                u32_(&mut b, *window);
+                b.push(*focused as u8);
+            }
+            ToApp::WindowInput { window, input } => {
+                u32_(&mut b, tag::WINDOW_INPUT);
+                u32_(&mut b, *window);
+                window_input_encode(&mut b, input);
+            }
             ToApp::Resume => u32_(&mut b, tag::RESUME),
             ToApp::Suspend => u32_(&mut b, tag::SUSPEND),
             ToApp::AxSet { id, action } => {
@@ -1168,11 +1468,11 @@ impl ToApp {
                 u32_(&mut b, *count);
             }
             m @ (ToApp::LoginItemStatus { .. } | ToApp::StatusItemAction { .. }) => extras::encode_app(m, &mut b),
-            m @ ToApp::ContinueActivity { .. } => quicksearch::encode_app(m, &mut b),
+            m @ (ToApp::ContinueActivity { .. } | ToApp::ReindexAll | ToApp::ReindexIdentifiers { .. }) => quicksearch::encode_app(m, &mut b),
             m @ (ToApp::GuidedAccessState { .. } | ToApp::GuidedRestriction { .. }) => guided::encode_app(m, &mut b),
             m @ ToApp::Touches(_) => touch::encode_app(m, &mut b),
             m @ (ToApp::WorkspaceReply { .. } | ToApp::WorkspaceEvent { .. }) => workspace::encode_app(m, &mut b),
-            m @ (ToApp::NotificationAction { .. } | ToApp::NotificationStatus { .. } | ToApp::NotificationList { .. } | ToApp::NotificationSettings { .. } | ToApp::ShareDone { .. } | ToApp::DistNotify { .. } | ToApp::ServiceReply { .. } | ToApp::ServiceEvent { .. } | ToApp::DragDest { .. } | ToApp::DragEnded { .. }) => rich::encode_app(m, &mut b),
+            m @ (ToApp::NotificationAction { .. } | ToApp::NotificationStatus { .. } | ToApp::NotificationList { .. } | ToApp::NotificationSettings { .. } | ToApp::NotificationAuthorized { .. } | ToApp::NotificationWillPresent { .. } | ToApp::ShareDone { .. } | ToApp::DistNotify { .. } | ToApp::ServiceReply { .. } | ToApp::ServiceEvent { .. } | ToApp::DragDest { .. } | ToApp::DragEnded { .. }) => rich::encode_app(m, &mut b),
         }
         b
     }
@@ -1206,6 +1506,54 @@ impl ToApp {
                 _ => return Err(DecodeError::BadValue),
             },
             tag::RELEASE => ToApp::Release { buf: r.u32()?, generation: r.u32()? },
+            tag::WINDOW_CLOSED => ToApp::WindowClosed { id: r.u32()? },
+            tag::FULL_SCREEN => ToApp::FullScreen { on: r.u8()? != 0 },
+            tag::WINDOW_MOVED => {
+                let window = r.u32()?;
+                let (x, y) = (r.f32()?, r.f32()?);
+                if !x.is_finite() || !y.is_finite() {
+                    return Err(DecodeError::BadValue);
+                }
+                ToApp::WindowMoved { window, x, y }
+            }
+            tag::WINDOW_TITLE_DOUBLE_CLICK => ToApp::WindowTitleDoubleClick { window: r.u32()? },
+            tag::WINDOW_CONFIGURE => {
+                let (id, w, h) = (r.u32()?, r.f32()?, r.f32()?);
+                if !w.is_finite() || !h.is_finite() || w < 0.0 || h < 0.0 {
+                    return Err(DecodeError::BadValue);
+                }
+                ToApp::WindowConfigure { id, w, h }
+            }
+            tag::WINDOW_TOUCH => {
+                let id = r.u32()?;
+                let touch = r.u32()?;
+                let kind = match r.u8()? {
+                    0 => TouchKind::Down,
+                    1 => TouchKind::Move,
+                    2 => TouchKind::Up,
+                    3 => TouchKind::Cancel,
+                    _ => return Err(DecodeError::BadValue),
+                };
+                let (x, y) = (r.f32()?, r.f32()?);
+                if !x.is_finite() || !y.is_finite() {
+                    return Err(DecodeError::BadValue);
+                }
+                ToApp::WindowTouch { id, touch, kind, x, y, t_ms: r.u32()? }
+            }
+            tag::WINDOW_RELEASE => ToApp::WindowRelease { id: r.u32()?, buf: r.u32()?, generation: r.u32()? },
+            tag::WINDOW_FOCUS => {
+                let window = r.u32()?;
+                let focused = match r.u8()? {
+                    0 => false,
+                    1 => true,
+                    _ => return Err(DecodeError::BadValue),
+                };
+                ToApp::WindowFocus { window, focused }
+            }
+            tag::WINDOW_INPUT => {
+                let window = r.u32()?;
+                ToApp::WindowInput { window, input: window_input_decode(&mut r)? }
+            }
             tag::RESUME => ToApp::Resume,
             tag::SUSPEND => ToApp::Suspend,
             tag::CONTEXT=>{let x=r.f32()?;let y=r.f32()?;if !x.is_finite()||!y.is_finite(){return Err(DecodeError::BadValue);}ToApp::Context{x,y}},
@@ -1319,6 +1667,67 @@ impl ToShell {
                 u32_(&mut b, *h);
                 u32_(&mut b, *generation);
             }
+            ToShell::WindowOpen { id, title, w, h, position, flags } => {
+                u32_(&mut b, tag::WINDOW_OPEN);
+                u32_(&mut b, *id);
+                str_(&mut b, &short_title(title));
+                f32_(&mut b, *w);
+                f32_(&mut b, *h);
+                match position {
+                    Some((x, y)) => {
+                        b.push(1);
+                        f32_(&mut b, *x);
+                        f32_(&mut b, *y);
+                    }
+                    None => b.push(0),
+                }
+                u32_(&mut b, *flags);
+            }
+            ToShell::WindowMove { window, x, y } => {
+                u32_(&mut b, tag::WINDOW_MOVE);
+                u32_(&mut b, *window);
+                f32_(&mut b, *x);
+                f32_(&mut b, *y);
+            }
+            ToShell::WindowCollapse { window, collapsed } => {
+                u32_(&mut b, tag::WINDOW_COLLAPSE);
+                u32_(&mut b, *window);
+                b.push(*collapsed as u8);
+            }
+            ToShell::WindowClose { id } => {
+                u32_(&mut b, tag::WINDOW_CLOSE);
+                u32_(&mut b, *id);
+            }
+            ToShell::WindowTitle { id, title } => {
+                u32_(&mut b, tag::WINDOW_TITLE);
+                u32_(&mut b, *id);
+                str_(&mut b, &short_title(title));
+            }
+            ToShell::WindowResize { id, w, h } => {
+                u32_(&mut b, tag::WINDOW_RESIZE);
+                u32_(&mut b, *id);
+                f32_(&mut b, *w);
+                f32_(&mut b, *h);
+            }
+            ToShell::WindowBuffers { id, w, h, generation } => {
+                u32_(&mut b, tag::WINDOW_BUFFERS);
+                u32_(&mut b, *id);
+                u32_(&mut b, *w);
+                u32_(&mut b, *h);
+                u32_(&mut b, *generation);
+            }
+            ToShell::WindowFrame { id, buf, damage } => {
+                u32_(&mut b, tag::WINDOW_FRAME);
+                u32_(&mut b, *id);
+                u32_(&mut b, *buf);
+                let n = damage.len().min((MAX_PACKET - 16) / 16);
+                u32_(&mut b, n as u32);
+                for r in &damage[..n] {
+                    for v in r {
+                        u32_(&mut b, *v);
+                    }
+                }
+            }
             ToShell::Frame { buf, damage } => {
                 u32_(&mut b, tag::FRAME);
                 u32_(&mut b, *buf);
@@ -1421,10 +1830,10 @@ impl ToShell {
             m @ (ToShell::QuickSearchIndex(_) | ToShell::QuickSearchDelete { .. }) => quicksearch::encode_shell(m, &mut b),
             m @ (ToShell::WorkspaceRequest { .. } | ToShell::WorkspaceSubscribe { .. }) => workspace::encode_shell(m, &mut b),
             m @ (ToShell::Preview { .. } | ToShell::PreviewClose) => peek::encode_shell(m, &mut b),
-            m @ (ToShell::AxText(_) | ToShell::AxMeta(_) | ToShell::Announce { .. }) => axtext::encode_shell(m, &mut b),
+            m @ (ToShell::AxText(_) | ToShell::AxMeta(_) | ToShell::Announce { .. } | ToShell::AxNotify(_)) => axtext::encode_shell(m, &mut b),
             m @ ToShell::AxRotors(_) => axrotor::encode_shell(m, &mut b),
             m @ ToShell::GuidedAccessRequest { .. } => guided::encode_shell(m, &mut b),
-            m @ (ToShell::NotifyCategories(_) | ToShell::NotifyRequest { .. } | ToShell::NotifyRemove { .. } | ToShell::NotifyQuery { .. } | ToShell::NotifySettings { .. } | ToShell::Share { .. } | ToShell::DistPost { .. } | ToShell::ServiceCall { .. } | ToShell::DragBegin { .. } | ToShell::DragRegister { .. } | ToShell::DragReply { .. } | ToShell::DragPerformed { .. } | ToShell::DragCancel { .. }) => rich::encode_shell(m, &mut b),
+            m @ (ToShell::NotifyCategories(_) | ToShell::NotifyRequest { .. } | ToShell::NotifyRemove { .. } | ToShell::NotifyQuery { .. } | ToShell::NotifySettings { .. } | ToShell::NotifyAuthorize { .. } | ToShell::NotifyPresentDelegate { .. } | ToShell::NotifyPresentReply { .. } | ToShell::NotifySchedule { .. } | ToShell::Share { .. } | ToShell::DistPost { .. } | ToShell::ServiceCall { .. } | ToShell::DragBegin { .. } | ToShell::DragRegister { .. } | ToShell::DragReply { .. } | ToShell::DragPerformed { .. } | ToShell::DragCancel { .. }) => rich::encode_shell(m, &mut b),
             ToShell::ControlsTree(list) => {
                 u32_(&mut b, tag::CONTROLS_TREE);
                 let n = list.len().min(MAX_NODE_EXT);
@@ -1473,6 +1882,15 @@ impl ToShell {
                 u32_(&mut b, tag::ACTIVITY);
                 u32_(&mut b, *options);
             }
+            ToShell::WindowLevel(level) => {
+                u32_(&mut b, tag::WINDOW_LEVEL);
+                b.push(*level as u8);
+            }
+            ToShell::WindowLevelOf { id, level } => {
+                u32_(&mut b, tag::WINDOW_LEVEL_OF);
+                u32_(&mut b, *id);
+                b.push(*level as u8);
+            }
             ToShell::InputAccessory(items) => {
                 u32_(&mut b, tag::INPUT_ACCESSORY);
                 let n = items.len().min(MAX_ACCESSORY_ITEMS);
@@ -1496,9 +1914,17 @@ impl ToShell {
                 u32_(&mut b, tag::SET_BADGE);
                 str_(&mut b, label);
             }
+            ToShell::SetFullScreen { on } => {
+                u32_(&mut b, tag::SET_FULL_SCREEN);
+                b.push(*on as u8);
+            }
             ToShell::OpenUrl { url } => {
                 u32_(&mut b, tag::OPEN_URL);
                 str_(&mut b, url);
+            }
+            ToShell::PlaySystemSound { name } => {
+                u32_(&mut b, tag::PLAY_SYSTEM_SOUND);
+                str_(&mut b, name);
             }
             ToShell::Notify { title, body } => {
                 u32_(&mut b, tag::NOTIFY);
@@ -1627,6 +2053,70 @@ impl ToShell {
                 }
                 ToShell::Frame { buf, damage }
             }
+            tag::WINDOW_OPEN => {
+                let id = r.u32()?;
+                let title = checked_title(r.str()?)?;
+                let (w, h) = (r.f32()?, r.f32()?);
+                if !w.is_finite() || !h.is_finite() || w < 0.0 || h < 0.0 {
+                    return Err(DecodeError::BadValue);
+                }
+                let position = match r.u8()? {
+                    0 => None,
+                    1 => {
+                        let (x, y) = (r.f32()?, r.f32()?);
+                        if !x.is_finite() || !y.is_finite() {
+                            return Err(DecodeError::BadValue);
+                        }
+                        Some((x, y))
+                    }
+                    _ => return Err(DecodeError::BadValue),
+                };
+                let flags = r.u32()?;
+                ToShell::WindowOpen { id, title, w, h, position, flags }
+            }
+            tag::WINDOW_CLOSE => ToShell::WindowClose { id: r.u32()? },
+            tag::WINDOW_MOVE => {
+                let window = r.u32()?;
+                let (x, y) = (r.f32()?, r.f32()?);
+                if !x.is_finite() || !y.is_finite() {
+                    return Err(DecodeError::BadValue);
+                }
+                ToShell::WindowMove { window, x, y }
+            }
+            tag::WINDOW_COLLAPSE => {
+                let window = r.u32()?;
+                let collapsed = match r.u8()? {
+                    0 => false,
+                    1 => true,
+                    _ => return Err(DecodeError::BadValue),
+                };
+                ToShell::WindowCollapse { window, collapsed }
+            }
+            tag::WINDOW_TITLE => {
+                let id = r.u32()?;
+                ToShell::WindowTitle { id, title: checked_title(r.str()?)? }
+            }
+            tag::WINDOW_RESIZE => {
+                let (id, w, h) = (r.u32()?, r.f32()?, r.f32()?);
+                if !w.is_finite() || !h.is_finite() || w < 0.0 || h < 0.0 {
+                    return Err(DecodeError::BadValue);
+                }
+                ToShell::WindowResize { id, w, h }
+            }
+            tag::WINDOW_BUFFERS => ToShell::WindowBuffers { id: r.u32()?, w: r.u32()?, h: r.u32()?, generation: r.u32()? },
+            tag::WINDOW_FRAME => {
+                let id = r.u32()?;
+                let buf = r.u32()?;
+                let n = r.u32()? as usize;
+                if n > MAX_PACKET / 16 {
+                    return Err(DecodeError::BadValue);
+                }
+                let mut damage = Vec::with_capacity(n);
+                for _ in 0..n {
+                    damage.push([r.u32()?, r.u32()?, r.u32()?, r.u32()?]);
+                }
+                ToShell::WindowFrame { id, buf, damage }
+            }
             tag::WANTS_KEYBOARD => ToShell::WantsKeyboard { on: r.u8()? != 0 },
             tag::KEYBOARD_OUT => ToShell::KeyboardOut(match r.u8()? {
                 0 => KeyboardOut::Text(r.str()?),
@@ -1651,8 +2141,10 @@ impl ToShell {
             }),
             tag::HAPTIC => ToShell::Haptic,
             tag::SET_BADGE => ToShell::SetBadge { label: r.str()? },
+            tag::SET_FULL_SCREEN => ToShell::SetFullScreen { on: r.u8()? != 0 },
             tag::DOCUMENT_STATE => ToShell::DocumentState { title: r.str()?, edited: r.u8()? != 0, represented: r.str()? },
             tag::OPEN_URL => ToShell::OpenUrl { url: r.str()? },
+            tag::PLAY_SYSTEM_SOUND => ToShell::PlaySystemSound { name: r.str()? },
             tag::NOTIFY => ToShell::Notify { title: r.str()?, body: r.str()? },
             tag::LOG => ToShell::Log { text: r.str()? },
             tag::PASTEBOARD_SET => ToShell::PasteboardSet { items: r.items()? },
@@ -1772,6 +2264,11 @@ impl ToShell {
             }),
             tag::SUDDEN_TERMINATION => ToShell::SuddenTermination { enabled: r.u8()? != 0 },
             tag::ACTIVITY => ToShell::Activity { options: r.u32()? },
+            tag::WINDOW_LEVEL => ToShell::WindowLevel(WindowLevel::from_wire(r.u8()?).ok_or(DecodeError::BadValue)?),
+            tag::WINDOW_LEVEL_OF => {
+                let id = r.u32()?;
+                ToShell::WindowLevelOf { id, level: WindowLevel::from_wire(r.u8()?).ok_or(DecodeError::BadValue)? }
+            }
             tag::INPUT_ACCESSORY => {
                 let n = r.u32()? as usize;
                 if n > MAX_ACCESSORY_ITEMS {
@@ -2046,11 +2543,14 @@ mod tests {
             ToShell::Haptic,
             ToShell::SetBadge { label: "12".into() },
             ToShell::SetBadge { label: String::new() },
+            ToShell::SetFullScreen { on: true },
+            ToShell::SetFullScreen { on: false },
             ToShell::Materials(vec![Material { kind: MaterialKind::Sidebar, rect: UiRect { x: 0., y: 0., w: 220., h: 600. }, radius: 17., state: MaterialState::FollowsWindowActiveState, blending: BlendingMode::BehindWindow, emphasized: false, corners: None },
                 Material { kind: MaterialKind::Titlebar, rect: UiRect { x: 220., y: 0., w: 580., h: 52. }, radius: 0., state: MaterialState::Active, blending: BlendingMode::WithinWindow, emphasized: true, corners: Some(Corners { tl: 1., tr: 2., br: 3., bl: 4. }) }]),
             ToShell::Materials(MaterialKind::ALL.iter().map(|&kind| Material { kind, rect: UiRect { x: 1., y: 2., w: 3., h: 4. }, radius: 5., state: MaterialState::Inactive, blending: BlendingMode::BehindWindow, emphasized: false, corners: None }).collect()),
             ToShell::Materials(vec![]),
             ToShell::OpenUrl { url: "https://bifrost.olibuijr.com".into() },
+            ToShell::PlaySystemSound { name: "Bell".into() },
             ToShell::Notify { title: "T".into(), body: "B ü".into() },
             ToShell::Log { text: "hi".into() },
             ToShell::SetClipboard { text: "1,5".into() },
@@ -2177,10 +2677,36 @@ mod ax_tree_tests {
             ToShell::SuddenTermination { enabled: false },
             ToShell::Activity { options: 0x3 },
             ToShell::Activity { options: 0 },
+            ToShell::WindowLevel(WindowLevel::Floating),
+            ToShell::WindowLevel(WindowLevel::Normal),
+            ToShell::WindowLevelOf { id: 2, level: WindowLevel::Floating },
+            ToShell::WindowLevelOf { id: 2, level: WindowLevel::Normal },
         ];
         for m in to_shell {
             assert_eq!(ToShell::decode(&m.encode()), Ok(m));
         }
+    }
+
+    #[test]
+    fn a_window_level_of_one_window_is_id_then_one_byte() {
+        let m = ToShell::WindowLevelOf { id: 3, level: WindowLevel::Floating }.encode();
+        assert_eq!(&m[..4], &0x24cu32.to_le_bytes());
+        assert_eq!(&m[4..8], &3u32.to_le_bytes());
+        assert_eq!(*m.last().unwrap(), 1);
+        let mut bad = m.clone();
+        *bad.last_mut().unwrap() = 9;
+        assert_eq!(ToShell::decode(&bad), Err(DecodeError::BadValue));
+    }
+
+    #[test]
+    fn window_level_is_one_byte_and_rejects_an_unknown_level() {
+        let m = ToShell::WindowLevel(WindowLevel::Floating).encode();
+        assert_eq!(m.len(), 4 + 1, "the tag, then the level byte");
+        assert_eq!(*m.last().unwrap(), 1);
+        let mut bad = m.clone();
+        let n = bad.len();
+        bad[n - 1] = 7;
+        assert_eq!(ToShell::decode(&bad), Err(DecodeError::BadValue));
     }
 
     #[test]
@@ -2435,5 +2961,151 @@ mod quick_action_tests {
         let many: Vec<(String, String)> = (0..=MAX_QUICK_INFO).map(|n| (format!("k{n}"), "v".into())).collect();
         let bytes = ToApp::QuickAction { kind: "x".into(), user_info: many }.encode();
         assert_eq!(ToApp::decode(&bytes), Err(DecodeError::BadValue));
+    }
+
+    #[test]
+    fn window_messages_round_trip_through_the_codec() {
+        let shell = [
+            ToShell::WindowOpen { id: 3, title: "Ada Lovelace".into(), w: 480.0, h: 560.0, position: None, flags: 0 },
+            ToShell::WindowClose { id: 3 },
+            ToShell::WindowTitle { id: 3, title: "Grace".into() },
+            ToShell::WindowResize { id: 3, w: 320.0, h: 240.0 },
+            ToShell::WindowBuffers { id: 3, w: 4, h: 3, generation: 2 },
+            ToShell::WindowFrame { id: 3, buf: 1, damage: vec![[0, 0, 4, 3]] },
+            ToShell::WindowFrame { id: 3, buf: 0, damage: vec![] },
+        ];
+        for m in shell {
+            assert_eq!(ToShell::decode(&m.encode()), Ok(m.clone()), "{m:?}");
+        }
+        let app = [
+            ToApp::WindowClosed { id: 3 },
+            ToApp::FullScreen { on: true },
+            ToApp::WindowConfigure { id: 3, w: 320.0, h: 240.0 },
+            ToApp::WindowTouch { id: 3, touch: 1, kind: TouchKind::Move, x: 10.5, y: -2.0, t_ms: 99 },
+            ToApp::WindowRelease { id: 3, buf: 1, generation: 5 },
+        ];
+        for m in app {
+            assert_eq!(ToApp::decode(&m.encode()), Ok(m.clone()), "{m:?}");
+        }
+    }
+
+    #[test]
+    fn key_window_messages_round_trip_through_the_codec() {
+        let app = [
+            ToApp::WindowFocus { window: 3, focused: true },
+            ToApp::WindowFocus { window: 0, focused: false },
+            ToApp::WindowInput { window: 3, input: WindowInput::Key(KeyInput::Text("é😀".into())) },
+            ToApp::WindowInput { window: 3, input: WindowInput::Key(KeyInput::Code(30)) },
+            ToApp::WindowInput { window: 3, input: WindowInput::Command(Command::SelectAll) },
+            ToApp::WindowInput { window: 3, input: WindowInput::MenuAction(7) },
+            ToApp::WindowInput { window: 3, input: WindowInput::SetMarkedText { text: "にほん".into(), sel_start: 3, sel_len: 3 } },
+            ToApp::WindowInput { window: 3, input: WindowInput::UnmarkText { commit: true } },
+            ToApp::WindowInput { window: 3, input: WindowInput::DeleteSurrounding { before: 2, after: 0 } },
+        ];
+        for m in app {
+            assert_eq!(ToApp::decode(&m.encode()), Ok(m.clone()), "{m:?}");
+        }
+    }
+
+    #[test]
+    fn window_input_has_the_documented_layout() {
+        // tag 0x250, window 3, kind 0 (key), key kind 1 (code), code 30
+        let bytes = ToApp::WindowInput { window: 3, input: WindowInput::Key(KeyInput::Code(30)) }.encode();
+        assert_eq!(&bytes[..4], &0x250u32.to_le_bytes());
+        assert_eq!(&bytes[4..8], &3u32.to_le_bytes());
+        assert_eq!(&bytes[8..10], &[0, 1]);
+        assert_eq!(&bytes[10..14], &30u32.to_le_bytes());
+        // tag 0x24f, window 3, focused
+        let focus = ToApp::WindowFocus { window: 3, focused: true }.encode();
+        assert_eq!(&focus[..4], &0x24fu32.to_le_bytes());
+        assert_eq!(&focus[4..9], &[3, 0, 0, 0, 1]);
+    }
+
+    #[test]
+    fn window_input_for_the_main_window_uses_the_legacy_messages() {
+        assert_eq!(WindowInput::Key(KeyInput::Code(9)).to_app(0), ToApp::Key(KeyInput::Code(9)));
+        assert_eq!(WindowInput::Command(Command::Copy).to_app(0), ToApp::Command(Command::Copy));
+        assert_eq!(WindowInput::MenuAction(4).to_app(0), ToApp::MenuAction(4));
+        assert_eq!(WindowInput::UnmarkText { commit: false }.to_app(0), ToApp::UnmarkText { commit: false });
+        assert_eq!(WindowInput::MenuAction(4).to_app(2), ToApp::WindowInput { window: 2, input: WindowInput::MenuAction(4) });
+    }
+
+    #[test]
+    fn a_bad_window_focus_or_window_input_is_refused() {
+        let mut focus = ToApp::WindowFocus { window: 1, focused: true }.encode();
+        focus[8] = 2;
+        assert_eq!(ToApp::decode(&focus), Err(DecodeError::BadValue));
+        // unknown input kind
+        let mut kind = ToApp::WindowInput { window: 1, input: WindowInput::MenuAction(1) }.encode();
+        kind[8] = 9;
+        assert_eq!(ToApp::decode(&kind), Err(DecodeError::BadValue));
+        // unknown key kind inside a key
+        let mut key = ToApp::WindowInput { window: 1, input: WindowInput::Key(KeyInput::Code(1)) }.encode();
+        key[9] = 7;
+        assert_eq!(ToApp::decode(&key), Err(DecodeError::BadValue));
+        // a command number the table does not know
+        let mut cmd = ToApp::WindowInput { window: 1, input: WindowInput::Command(Command::Copy) }.encode();
+        cmd[9..13].copy_from_slice(&99u32.to_le_bytes());
+        assert_eq!(ToApp::decode(&cmd), Err(DecodeError::BadValue));
+        // a marked-text selection that ends inside a character
+        let mut marked = ToApp::WindowInput { window: 1, input: WindowInput::SetMarkedText { text: "é".into(), sel_start: 0, sel_len: 2 } }.encode();
+        // kind 3 at byte 8, the text length at 9..13, "é" at 13..15, then sel_start and sel_len
+        marked[15..19].copy_from_slice(&0u32.to_le_bytes());
+        marked[19..23].copy_from_slice(&1u32.to_le_bytes());
+        assert_eq!(ToApp::decode(&marked), Err(DecodeError::BadValue));
+    }
+
+    #[test]
+    fn window_open_has_the_documented_layout() {
+        let bytes = ToShell::WindowOpen { id: 2, title: "ab".into(), w: 1.0, h: 2.0, position: None, flags: 0 }.encode();
+        // tag 0x240, id 2, title length 2 and "ab", then the two floats
+        assert_eq!(&bytes[..4], &0x240u32.to_le_bytes());
+        assert_eq!(&bytes[4..8], &2u32.to_le_bytes());
+        assert_eq!(&bytes[8..12], &2u32.to_le_bytes());
+        assert_eq!(&bytes[12..14], b"ab");
+    }
+
+    #[test]
+    fn window_placement_and_collapse_round_trip() {
+        let shell = [
+            ToShell::WindowOpen { id: 4, title: "Note".into(), w: 200.0, h: 150.0, position: Some((12.5, 40.0)), flags: window_flags::TITLE_DOUBLE_CLICK },
+            ToShell::WindowOpen { id: 5, title: "Plain".into(), w: 1.0, h: 1.0, position: None, flags: 0 },
+            ToShell::WindowMove { window: 4, x: -3.0, y: 88.0 },
+            ToShell::WindowCollapse { window: 4, collapsed: true },
+            ToShell::WindowCollapse { window: 4, collapsed: false },
+        ];
+        for m in shell {
+            assert_eq!(ToShell::decode(&m.encode()), Ok(m.clone()), "{m:?}");
+        }
+        let app = [ToApp::WindowMoved { window: 4, x: 10.0, y: 20.0 }, ToApp::WindowTitleDoubleClick { window: 4 }];
+        for m in app {
+            assert_eq!(ToApp::decode(&m.encode()), Ok(m.clone()), "{m:?}");
+        }
+    }
+
+    #[test]
+    fn window_placement_refuses_a_bad_flag_or_a_non_finite_position() {
+        let mut bad = ToShell::WindowCollapse { window: 4, collapsed: true }.encode();
+        let n = bad.len();
+        bad[n - 1] = 2;
+        assert_eq!(ToShell::decode(&bad), Err(DecodeError::BadValue));
+        let nan = ToShell::WindowMove { window: 4, x: f32::NAN, y: 0.0 }.encode();
+        assert_eq!(ToShell::decode(&nan), Err(DecodeError::BadValue));
+        let open = ToShell::WindowOpen { id: 4, title: "a".into(), w: 1.0, h: 1.0, position: Some((f32::INFINITY, 0.0)), flags: 0 }.encode();
+        assert_eq!(ToShell::decode(&open), Err(DecodeError::BadValue));
+    }
+
+    #[test]
+    fn an_overlong_or_non_finite_window_message_is_refused() {
+        let long = ToShell::WindowTitle { id: 1, title: "x".repeat(MAX_WINDOW_TITLE + 1) };
+        // the encoder cuts the title, so the decoder never sees an overlong one from this crate
+        let ToShell::WindowTitle { title, .. } = ToShell::decode(&long.encode()).unwrap() else { panic!() };
+        assert_eq!(title.len(), MAX_WINDOW_TITLE);
+        let mut bad = ToShell::WindowResize { id: 1, w: 1.0, h: 1.0 }.encode();
+        bad[8..12].copy_from_slice(&f32::NAN.to_le_bytes());
+        assert!(ToShell::decode(&bad).is_err());
+        let mut bad_touch = ToApp::WindowTouch { id: 1, touch: 0, kind: TouchKind::Down, x: 0.0, y: 0.0, t_ms: 0 }.encode();
+        bad_touch[12] = 9;
+        assert!(ToApp::decode(&bad_touch).is_err());
     }
 }

@@ -19,6 +19,10 @@ pub struct NotifyPrefs {
     pub apps: Vec<(AppId, AppNotif)>,
     /// apps whose notifications still show while Focus is on
     pub focus_allowed: Vec<AppId>,
+    /// the names of the Focus modes, in the order of `notify::modes::Modes::list`
+    pub modes: Vec<String>,
+    /// the index into `modes` of the mode that is on by hand
+    pub mode_on: Option<usize>,
 }
 
 /// One app's page of Settings > Notifications (bifrost defaults: everything on, Temporary banners).
@@ -149,6 +153,8 @@ pub enum NotifyEdit {
     App(AppId, AppField),
     /// the Allow During Focus switch of one app
     FocusAllowed(AppId),
+    /// a row of the Focus mode list (an index into `NotifyPrefs::modes`)
+    Mode(usize),
 }
 
 /// An edit the shell must apply to its notification store.
@@ -160,10 +166,19 @@ pub enum NotifyChange {
     App(AppId, AppNotif),
     /// an app was allowed through Focus, or held back (persisted by the shell)
     FocusAllowed(AppId, bool),
+    /// a Focus mode was switched on by hand (an index into the mode list), or Focus was switched off
+    Mode(Option<usize>),
 }
 
 fn clock(minute: u16, h24: bool) -> String {
     crate::status::clock_in((minute / 60) as i32, (minute % 60) as i32, h24)
+}
+
+/// The Focus modes, one row each; the mode that is on carries the check. Tapping it again switches Focus off.
+pub fn modes_group(p: &NotifyPrefs) -> Group {
+    Group::new(p.modes.iter().enumerate().map(|(i, name)| Item::new(name.as_str()).check(p.mode_on == Some(i), Action::Notify(NotifyEdit::Mode(i)))).collect())
+        .header("FOCUS MODES")
+        .footer("A mode holds back the notifications of every app and person it does not allow. Tap the mode that is on to turn Focus off.")
 }
 
 /// The Scheduled switch with its From and To rows, for the Focus page.
@@ -250,7 +265,7 @@ mod tests {
 
     #[test]
     fn schedule_rows_show_the_window() {
-        let p = NotifyPrefs { schedule: Schedule { enabled: true, start: 22 * 60, end: 7 * 60 }, muted: vec![], clock_24h: true, apps: vec![], focus_allowed: vec![] };
+        let p = NotifyPrefs { schedule: Schedule { enabled: true, start: 22 * 60, end: 7 * 60 }, clock_24h: true, ..Default::default() };
         let g = schedule_group(&p);
         assert_eq!(g.items[0].accessory, super::super::list::Accessory::Switch(true));
         assert_eq!((g.items[1].value.as_str(), g.items[2].value.as_str()), ("22:00", "7:00"));
@@ -311,6 +326,20 @@ mod tests {
         assert_eq!(last.items[0].accessory, super::super::list::Accessory::Switch(true));
         assert_eq!(last.items[0].action, Action::Notify(NotifyEdit::FocusAllowed(AppId::Photos)));
         assert_eq!(app_spec(&NotifyPrefs { muted: vec![AppId::Photos], ..Default::default() }, "Photos").groups.len(), 1);
+    }
+
+    #[test]
+    fn the_focus_page_lists_the_modes_and_checks_the_one_that_is_on() {
+        let p = NotifyPrefs { modes: vec!["Do Not Disturb".into(), "Work".into(), "Sleep".into()], mode_on: Some(1), ..Default::default() };
+        let g = modes_group(&p);
+        assert_eq!(g.header.as_deref(), Some("FOCUS MODES"));
+        let labels: Vec<&str> = g.items.iter().map(|i| i.label.as_str()).collect();
+        assert_eq!(labels, ["Do Not Disturb", "Work", "Sleep"]);
+        let checks: Vec<bool> = g.items.iter().map(|i| i.accessory == super::super::list::Accessory::Check(true)).collect();
+        assert_eq!(checks, [false, true, false]);
+        assert_eq!(g.items[2].action, Action::Notify(NotifyEdit::Mode(2)));
+        let none = modes_group(&NotifyPrefs { modes: vec!["Work".into()], ..Default::default() });
+        assert!(none.items.iter().all(|i| i.accessory == super::super::list::Accessory::Check(false)));
     }
 
     #[test]

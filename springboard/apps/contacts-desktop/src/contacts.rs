@@ -37,6 +37,8 @@ use crate::exchange;
 use crate::extras::{self, Extra, Extras, ValueKind};
 use crate::printing;
 use crate::smart::{self, Condition, Rule, RuleField, UserList};
+use crate::suggested::{self, Suggestions};
+use bifrost_app::contacts::suggested::{Feedback, Suggested};
 use crate::textimport;
 use crate::group_file;
 use crate::history::History;
@@ -104,12 +106,18 @@ const MENU_DUPLICATES: u32 = 26;
 const MENU_LAST_IMPORT: u32 = 27;
 /// Card > Add Field: item `MENU_FIELD + n` adds the field `Detail::ALL[n]`.
 const MENU_FIELD: u32 = 30;
+/// Card > Open in Separate Window: the open card gets a window of its own (`take_card_request`).
+const MENU_OPEN_WINDOW: u32 = 60;
+/// Two presses on one row this close together (ms) open its card in a window.
+const DOUBLE_CLICK_MS: f64 = 400.0;
 /// Sidebar rows.
 const LIST_ALL: u32 = 100;
 const LIST_FAVORITES: u32 = 101;
 const LIST_RECENT: u32 = 102;
 const LIST_DUPLICATES: u32 = 103;
 const LIST_LAST_IMPORT: u32 = 104;
+/// The suggested contacts (people other apps saw that are not in the book): a screen of their own, not a filter.
+const LIST_SUGGESTIONS: u32 = 105;
 /// Smart group `n` (its offset in `smart::Smart::ALL`) is the sidebar row `LIST_SMART + n`.
 const LIST_SMART: u32 = 110;
 const LIST_SMART_LAST: u32 = LIST_SMART + crate::smart::Smart::ALL.len() as u32 - 1;
@@ -230,6 +238,10 @@ const NODE_SMART_FIELD: u64 = 510;
 const NODE_SMART_CONDITION: u64 = 520;
 const NODE_SMART_VALUE: u64 = 530;
 const NODE_SMART_REMOVE: u64 = 540;
+/// The Add and Dismiss buttons of the suggested contacts, by row.
+const NODE_SUGGEST_ADD: u64 = 600;
+const NODE_SUGGEST_DISMISS: u64 = 700;
+const MAX_SUGGEST_NODES: u64 = 100;
 const ROW_NODE: u64 = 10_000;
 
 /// Windows at least this wide (points) open with the lists sidebar shown, as the stock Contacts app does.
@@ -265,6 +277,8 @@ enum Screen {
     Settings,
     /// The smart list editor, in the detail pane: the list being edited, or `None` for a new one.
     SmartEditor(Option<usize>),
+    /// The suggested contacts, in the detail pane: Add makes one a contact, Dismiss never offers it again.
+    Suggestions,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -275,6 +289,8 @@ enum Target {
     SearchClear,
     Row(usize),
     Copy(usize),
+    /// A tap on a value row of the card: a phone calls, an email opens Mail, any other value copies.
+    Use(usize),
     CopyContact,
     Favorite,
     Share,
@@ -298,6 +314,9 @@ enum Target {
     SmartRemove(usize),
     SmartAdd,
     SmartDelete,
+    /// The Add and Dismiss buttons of a suggested contact, by row.
+    SuggestAdd(usize),
+    SuggestDismiss(usize),
     List,
     Content,
 }
@@ -488,6 +507,19 @@ struct Row {
     section: Option<char>,
 }
 
+/// What a tap on a phone or email value of a card hands to the shell: a `tel:` link, or a new message in Mail.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Handoff {
+    Call(String),
+    Mail(String),
+}
+
+/// The `tel:` link for a phone value: spaces, dashes and brackets are dropped and a leading plus is kept.
+pub fn tel_url(value: &str) -> String {
+    let digits: String = value.chars().filter(|c| c.is_ascii_digit() || *c == '+').collect();
+    format!("tel:{digits}")
+}
+
 /// The detail card, scroll applied, in window points.
 struct CardLayout {
     avatar: (f32, f32, f32),
@@ -601,6 +633,25 @@ pub struct Contacts {
     /// The contact, with its extra values, that a Copy Contact press asked to put on the pasteboard; `main.rs` takes it
     /// with `take_copy`.
     copy_out: Option<(Contact, Vec<Extra>)>,
+    /// The phone or email a card tap asked to hand to the shell; `main.rs` takes it with `take_handoff`.
+    handoff: Option<Handoff>,
+    /// The contact whose card asked for its own window (Card > Open in Separate Window, or a double-click on a row);
+    /// `main.rs` takes it with `take_card_request`.
+    card_req: Option<u64>,
+    /// The last row press: a second press on the same contact within `DOUBLE_CLICK_MS` opens its card in a window.
+    last_row_click: Option<(u64, f64)>,
+    /// True while a card window draws or takes a touch (`draw_card`, `touch_card`): the detail pane fills the surface.
+    card_window: bool,
+    /// The size of the card window in points, from its last draw.
+    card_size: (f32, f32),
+    /// A card window's own scroller and press state: its scrolling leaves the main window's detail pane alone.
+    card_scroll: Scroller,
+    card_pressed: Option<Target>,
+    card_scroll_list: Option<bool>,
+    /// The Edit button of a card window was pressed down (its release edits the contact).
+    card_edit_down: bool,
+    /// The contact whose card window asked to edit it (taken once, `take_card_edit`).
+    card_edit: Option<u64>,
     confirm_delete: bool,
     /// A failed load must not turn into an overwrite of unknown data.
     load_failed: bool,
@@ -633,7 +684,27 @@ pub struct Contacts {
     dirty: bool,
     /// Whether names show given name first or family name first (View menu). Saved with the display settings.
     name_order: names::NameOrder,
+    /// The people other apps donated that are not in the book, and the answers waiting to go back to the shell.
+    suggestions: Suggestions,
 }
+
+/// The Suggestions screen: its rows with their Add and Dismiss buttons, in window points.
+struct SuggestLayout {
+    title_y: f32,
+    note_y: f32,
+    rows: Vec<SuggestRow>,
+    height: f32,
+}
+
+struct SuggestRow {
+    row: Rect,
+    add: Rect,
+    dismiss: Rect,
+}
+
+/// The widths of the Add and Dismiss buttons of a suggestion, in points.
+const SUGGEST_ADD_W: f32 = 48.0;
+const SUGGEST_DISMISS_W: f32 = 72.0;
 
 fn rect(x: f32, y: f32, w: f32, h: f32) -> Rect {
     Rect { x, y, w, h }
@@ -653,6 +724,10 @@ impl Contacts {
             Ok(contacts) => (contacts, None),
             Err(e) => (vec![], Some(format!("Unable to load contacts: {e}"))),
         };
+        // Cards saved before UIDs existed get one now, and the file keeps it, so the card stays linked to its server copy.
+        if error.is_none() && store::ensure_uids(&mut contacts) {
+            let _ = store::save(&path, &contacts);
+        }
         let (mut extras, values_error) = match extras::load_checked(&path.with_file_name(VALUES_FILE)) {
             Ok(values) => (values, None),
             Err(e) => (Extras::default(), Some(format!("Unable to load contact values: {e}"))),
@@ -715,6 +790,16 @@ impl Contacts {
             scroll_list: None,
             share_req: None,
             copy_out: None,
+            handoff: None,
+            card_req: None,
+            last_row_click: None,
+            card_window: false,
+            card_size: (480.0, 560.0),
+            card_scroll: Scroller::new(),
+            card_pressed: None,
+            card_scroll_list: None,
+            card_edit_down: false,
+            card_edit: None,
             confirm_delete: false,
             load_failed,
             extras,
@@ -735,6 +820,7 @@ impl Contacts {
             labels: TextCache::default(),
             dirty: true,
             name_order,
+            suggestions: Suggestions::default(),
         };
         app.rebuild(ui);
         app
@@ -744,10 +830,41 @@ impl Contacts {
     pub fn listed(&self) -> Vec<&Contact> {
         self.rows.iter().map(|r| &self.contacts[r.contact]).collect()
     }
+    /// Every saved card as (UID, vCard text), for the Internet Accounts sync to find its edits. Empty when the file did
+    /// not load, so an unreadable file never reads as "every card was deleted".
+    pub fn sync_objects(&self) -> Vec<(String, String)> {
+        if self.load_failed {
+            return Vec::new();
+        }
+        let options = exchange::ExportOptions { notes: true };
+        self.contacts
+            .iter()
+            .filter(|c| !c.uid.is_empty())
+            .map(|c| (c.uid.clone(), exchange::export_with(std::slice::from_ref(c), &self.extras, &self.details, options, exchange::Version::V4)))
+            .collect()
+    }
+
     /// Saved contacts for the search index; independent of the list's filter. `None` when the file did not load, so an
     /// unreadable file never clears what the index holds.
     pub fn all_contacts(&self) -> Option<&[Contact]> {
         (!self.load_failed).then_some(self.contacts.as_slice())
+    }
+
+    /// The cards that have a birthday, for the Birthdays widget. `None` when the file did not load, so an unreadable file
+    /// never empties the widget.
+    pub fn birthdays(&self) -> Option<Vec<crate::widget::Person>> {
+        if self.load_failed {
+            return None;
+        }
+        Some(
+            self.contacts
+                .iter()
+                .filter_map(|c| {
+                    let birthday = self.details.of(c.id).get(Detail::Birthday).to_string();
+                    (!birthday.is_empty()).then(|| crate::widget::Person { name: crate::services::label(c), birthday })
+                })
+                .collect(),
+        )
     }
 
     /// True while a form is open, the contact editor or the smart list editor: its edits are not saved yet.
@@ -792,6 +909,7 @@ impl Contacts {
             Screen::Editor(id) => format!("editor:{}", id.map_or_else(|| "new".into(), |id| id.to_string())),
             Screen::Settings => "settings".into(),
             Screen::SmartEditor(n) => format!("smart-editor:{}", n.map_or_else(|| "new".into(), |n| n.to_string())),
+            Screen::Suggestions => "suggestions".into(),
         };
         format!(
             "contacts_screen={screen}\ncontacts_count={}\ncontacts_shown={}\ncontacts_sidebar={}\ncontacts_confirm_delete={}\ncontacts_error={}\n",
@@ -811,9 +929,119 @@ impl Contacts {
         self.share_req.take()
     }
 
+    /// The contact whose card asked for its own window, with its name for the window title (taken once).
+    pub fn take_card_request(&mut self) -> Option<(u64, String)> {
+        let id = self.card_req.take()?;
+        let name = self.contacts.iter().find(|c| c.id == id).map(|c| self.title_of(c)).unwrap_or_default();
+        Some((id, name))
+    }
+
+    /// Card > Open in Separate Window: asks for the open card's window. False when no card is open.
+    fn ask_card_window(&mut self) -> bool {
+        match self.screen {
+            Screen::Detail(id) => {
+                self.card_req = Some(id);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// One contact's card drawn at the size of its own window (`s`, px): the detail pane fills the surface, with no list
+    /// or sidebar beside it. The main window's screen and layout are restored afterwards.
+    pub fn draw_card(&mut self, s: &mut Surface, ui: &Ui, id: u64) {
+        let saved = (self.w, self.h, self.screen, self.card_window);
+        self.w = s.w as f32 / ui.s;
+        self.h = s.h as f32 / ui.s;
+        self.card_size = (self.w, self.h);
+        self.screen = Screen::Detail(id);
+        self.card_window = true;
+        std::mem::swap(&mut self.scroll, &mut self.card_scroll);
+        s.fill_rect(0, 0, s.w, s.h, CONTENT_BG.now());
+        self.draw_detail(s, ui, 0.0);
+        let edit = self.card_edit_rect();
+        self.text(s, ui, "Edit", MAC_BODY_PT, Weight::Regular, LINK, edit.x + SPACE_S, edit.y + edit.h * 0.3);
+        std::mem::swap(&mut self.scroll, &mut self.card_scroll);
+        (self.w, self.h, self.screen, self.card_window) = saved;
+    }
+
+    /// The Edit button at the top right of a card window, in points.
+    fn card_edit_rect(&self) -> Rect {
+        rect(self.card_size.0 - 72.0, 12.0, 60.0, 28.0)
+    }
+
+    /// A touch in a card window showing contact `id`. The card scrolls on its own scroller; a tap on a value copies it, as
+    /// in the main card; Delete is not offered here; Edit asks the main window to edit the contact (`take_card_edit`).
+    /// The main window's screen, scroll and press state are left as they were.
+    pub fn touch_card(&mut self, ui: &Ui, id: u64, ev: Event, t: f64) {
+        let (x, y) = match ev {
+            Event::Down(x, y) | Event::Move(x, y) | Event::Up(x, y) => (x / ui.s, y / ui.s),
+            _ => return,
+        };
+        let edit = self.card_edit_rect();
+        match ev {
+            Event::Down(..) => {
+                self.card_edit_down = edit.contains(x, y);
+                if self.card_edit_down {
+                    return;
+                }
+            }
+            Event::Up(..) => {
+                if std::mem::take(&mut self.card_edit_down) {
+                    if edit.contains(x, y) {
+                        self.card_edit = Some(id);
+                    }
+                    return;
+                }
+            }
+            _ => {}
+        }
+        // a card has no toolbar: the top band is the card's own area, not the main window's bar buttons
+        if y < UNIFIED_BAR_PT {
+            return;
+        }
+        let saved = (self.w, self.h, self.screen, self.card_window, self.sidebar_shown);
+        self.w = self.card_size.0;
+        self.h = self.card_size.1;
+        self.screen = Screen::Detail(id);
+        self.card_window = true;
+        self.sidebar_shown = false;
+        std::mem::swap(&mut self.scroll, &mut self.card_scroll);
+        std::mem::swap(&mut self.pressed, &mut self.card_pressed);
+        std::mem::swap(&mut self.scroll_list, &mut self.card_scroll_list);
+        let blocked = matches!(self.hit(ui, x, y), Some(Target::Delete | Target::ConfirmDelete | Target::CancelDelete));
+        if !blocked {
+            self.touch(ui, ev, t);
+        }
+        // the share sheet is a shell feature, as in the main window
+        let _ = self.take_share();
+        std::mem::swap(&mut self.scroll, &mut self.card_scroll);
+        std::mem::swap(&mut self.pressed, &mut self.card_pressed);
+        std::mem::swap(&mut self.scroll_list, &mut self.card_scroll_list);
+        (self.w, self.h, self.screen, self.card_window, self.sidebar_shown) = saved;
+    }
+
+    /// The contact whose card window asked to be edited, once.
+    pub fn take_card_edit(&mut self) -> Option<u64> {
+        self.card_edit.take()
+    }
+
+    /// Card window > Edit: the main window shows the contact and opens its editor.
+    pub fn edit_from_card(&mut self, ui: &Ui, id: u64) {
+        if self.contacts.iter().any(|c| c.id == id) {
+            self.show_card(ui, id);
+            self.edit_contact(ui, Some(id));
+        }
+    }
+
     /// The contact the user asked to copy to the pasteboard, if any (taken once).
     pub fn take_copy(&mut self) -> Option<(Contact, Vec<Extra>)> {
         self.copy_out.take()
+    }
+
+    /// The phone or email a card tap asked to hand to the shell, if any (taken once).
+    pub fn take_handoff(&mut self) -> Option<Handoff> {
+        self.handoff.take()
     }
 
     /// Shows a line of feedback in the header, such as the outcome of a copy.
@@ -832,6 +1060,9 @@ impl Contacts {
     }
     /// Left edge of the detail pane.
     fn detail_x(&self) -> f32 {
+        if self.card_window {
+            return 0.0;
+        }
         self.side() + self.list_w()
     }
     /// The detail pane's readable column: (left, width).
@@ -899,7 +1130,7 @@ impl Contacts {
                 items.push(ToolbarItem::button(BAR_CANCEL, "Cancel"));
                 items.push(ToolbarItem::button(BAR_DONE, "Done"));
             }
-            Screen::Settings => items.push(ToolbarItem::button(BAR_DONE, "Done")),
+            Screen::Settings | Screen::Suggestions => items.push(ToolbarItem::button(BAR_DONE, "Done")),
         }
         Toolbar::new(items)
     }
@@ -933,6 +1164,9 @@ impl Contacts {
         if !self.last_import_ids().is_empty() {
             rows.push((LIST_LAST_IMPORT, "Last Import".to_string(), "arrow.down.circle"));
         }
+        if !self.suggestions.is_empty() {
+            rows.push((LIST_SUGGESTIONS, "Suggested Contacts".to_string(), "person.crop.circle"));
+        }
         rows.push((0, "Smart Groups".to_string(), ""));
         for s in crate::smart::Smart::ALL {
             rows.push((LIST_SMART + s.index() as u32, s.title().to_string(), s.symbol()));
@@ -961,7 +1195,7 @@ impl Contacts {
             })
             .collect();
         let mut list = SourceList::new(items, m::SIDEBAR_ROW_PITCH, m::SIDEBAR_ROW_H);
-        list.set_selected(Some(self.filter.sidebar_id()));
+        list.set_selected(Some(if self.screen == Screen::Suggestions { LIST_SUGGESTIONS } else { self.filter.sidebar_id() }));
         list
     }
     fn sidebar_bounds(&self) -> Rect {
@@ -1075,6 +1309,7 @@ impl Contacts {
             Screen::Editor(_) => self.edit_layout(ui).height,
             Screen::Settings => self.settings_layout().height,
             Screen::SmartEditor(_) => self.smart_layout().height,
+            Screen::Suggestions => self.suggest_layout().height,
         };
         self.scroll.set_max(height - self.h);
     }
@@ -1099,6 +1334,102 @@ impl Contacts {
             y += ROW + SPACE_XS;
         }
         SettingsLayout { title_y, sort, switches, heading_y, height: y + off + SPACE_XL }
+    }
+
+    /// The Suggestions screen, scroll applied, in window points. Each row is a card with the person at the left and the
+    /// Add and Dismiss buttons at the right.
+    fn suggest_layout(&self) -> SuggestLayout {
+        let (x, cw) = self.column();
+        let off = self.scroll.offset();
+        let title_y = UNIFIED_BAR_PT + SPACE_XL - off;
+        let note_y = UNIFIED_BAR_PT + 3.0 * SPACE_XL - off;
+        let mut y = UNIFIED_BAR_PT + 4.0 * SPACE_XL - off;
+        let mut rows = Vec::new();
+        for _ in 0..self.suggestions.len() {
+            let row = rect(x, y, cw, ROW + SPACE_XL);
+            let dismiss = rect(row.x + row.w - SPACE_L - SUGGEST_DISMISS_W, row.y, SUGGEST_DISMISS_W, row.h);
+            let add = rect(dismiss.x - SPACE_S - SUGGEST_ADD_W, row.y, SUGGEST_ADD_W, row.h);
+            rows.push(SuggestRow { row, add, dismiss });
+            y += row.h + SPACE_XS;
+        }
+        SuggestLayout { title_y, note_y, rows, height: y + off + SPACE_XL }
+    }
+
+    /// The handles (normalised emails and phone numbers) the address book holds, for leaving known people out of the
+    /// suggestions.
+    fn known_handles(&self) -> BTreeSet<String> {
+        use bifrost_app::contacts::suggested::Handle;
+        let mut known = BTreeSet::new();
+        for c in &self.contacts {
+            known.extend(suggested::handle_key(Handle::Email, &c.email));
+            known.extend(suggested::handle_key(Handle::Phone, &c.phone));
+            for extra in self.extras.get(c.id) {
+                match extra.kind {
+                    ValueKind::Email => known.extend(suggested::handle_key(Handle::Email, &extra.value)),
+                    ValueKind::Phone => known.extend(suggested::handle_key(Handle::Phone, &extra.value)),
+                    ValueKind::Address => {}
+                }
+            }
+        }
+        known
+    }
+
+    /// The shell sent the people other apps donated: the list the Suggestions screen shows. When none is left the screen
+    /// closes and the sidebar row goes.
+    pub fn set_suggestions(&mut self, ui: &Ui, items: Vec<Suggested>) {
+        let known = self.known_handles();
+        self.suggestions.set(items, &known);
+        if self.suggestions.is_empty() && self.screen == Screen::Suggestions {
+            self.screen = Screen::List;
+        }
+        self.fit_scroll(ui);
+        self.dirty = true;
+    }
+
+    /// The Accept and Dismiss answers to send to the shell, once.
+    pub fn take_suggestion_answers(&mut self) -> Vec<(String, Feedback)> {
+        self.suggestions.take_answers()
+    }
+
+    /// The sidebar row Suggested Contacts: the screen opens in the detail pane.
+    fn open_suggestions(&mut self, ui: &Ui) {
+        if self.editing() || self.suggestions.is_empty() {
+            return;
+        }
+        self.screen = Screen::Suggestions;
+        self.focus = None;
+        self.status = None;
+        self.scroll.jump_top();
+        self.fit_scroll(ui);
+    }
+
+    /// Add: the person becomes a contact and leaves the list. A person who is already in the book only leaves it; one
+    /// the book refuses (a twin by name, a full book) stays, with the reason in the status line.
+    fn accept_suggestion(&mut self, ui: &Ui, index: usize) {
+        let Some(s) = self.suggestions.items().get(index).cloned() else { return };
+        let title = suggested::title_of(&s);
+        if !self.known_handles().contains(&s.key) {
+            let (name, phone, email) = suggested::contact_fields(&s);
+            if let Err(e) = self.add_contact(&name, &phone, &email, "") {
+                self.status = Some(e);
+                return;
+            }
+        }
+        self.suggestions.answer(index, Feedback::Accepted);
+        self.status = Some(format!("Added {title}"));
+        if self.suggestions.is_empty() {
+            self.screen = Screen::List;
+        }
+        self.rebuild(ui);
+        self.fit_scroll(ui);
+    }
+
+    /// Dismiss: the person is never suggested again.
+    fn dismiss_suggestion(&mut self, ui: &Ui, index: usize) {
+        if self.suggestions.answer(index, Feedback::Dismissed).is_some() && self.suggestions.is_empty() {
+            self.screen = Screen::List;
+        }
+        self.fit_scroll(ui);
     }
 
     /// Whether a switch row of the Settings screen is on.
@@ -1471,6 +1802,11 @@ impl Contacts {
             labels: self.labels_idx,
             notes: self.notes.text().into(),
             favorite: existing.and_then(|id| self.contacts.iter().find(|c| c.id == id)).is_some_and(|c| c.favorite),
+            // an edit keeps the card's UID, so a synced copy stays linked to it
+            uid: match existing.and_then(|id| self.contacts.iter().find(|c| c.id == id)) {
+                Some(old) if !old.uid.is_empty() => old.uid.clone(),
+                _ => store::new_uid(id),
+            },
         };
         if !contact.valid() {
             self.error = Some("Enter a name, company, phone number or email".into());
@@ -1816,6 +2152,7 @@ impl Contacts {
         let mut card = vec![
             AppMenuItem::new(MENU_MY_CARD, "Make This My Card").enabled(ready && open),
             AppMenuItem::new(MENU_GO_MY_CARD, "Go to My Card").enabled(self.prefs.me.is_some()),
+            AppMenuItem::new(MENU_OPEN_WINDOW, "Open in Separate Window").enabled(ready && open),
             AppMenuItem::separator(),
             AppMenuItem::new(MENU_COMPANY, "Mark as a Company").checked(company).enabled(ready && on_card),
             AppMenuItem::submenu("Add Field"),
@@ -1891,6 +2228,9 @@ impl Contacts {
             MENU_LAST_FIRST => self.set_name_order(names::NameOrder::LastFirst),
             MENU_LAST_IMPORT => self.show_list(ui, Filter::LastImport),
             MENU_DUPLICATES => self.show_list(ui, Filter::Duplicates),
+            MENU_OPEN_WINDOW => {
+                self.ask_card_window();
+            }
             MENU_MY_CARD => self.make_my_card(),
             MENU_GO_MY_CARD => self.go_to_my_card(ui),
             MENU_COMPANY => self.toggle_company(ui),
@@ -2068,6 +2408,7 @@ impl Contacts {
         let mut updated_details = self.details.clone();
         let mut new_ids = BTreeSet::new();
         let (mut added, mut skipped, mut invalid, mut extra, mut unreadable) = (0usize, 0usize, 0usize, 0usize, 0usize);
+        let mut refreshed = 0usize;
         for read in reads {
             let Some(read) = read else {
                 unreadable += 1;
@@ -2076,6 +2417,21 @@ impl Contacts {
             invalid += read.invalid;
             extra += read.extra_values;
             for ((contact, values), card) in read.contacts.into_iter().zip(read.values).zip(read.details) {
+                // a card whose UID is already a contact is that contact read again (a sync): it takes the card's fields
+                // and keeps its id and favourite; its extra values are not read again
+                if !contact.uid.is_empty() {
+                    if let Some(i) = updated.iter().position(|c| c.uid == contact.uid) {
+                        let kept = &updated[i];
+                        let merged = Contact { id: kept.id, favorite: kept.favorite, ..contact };
+                        if merged == *kept {
+                            skipped += 1;
+                        } else {
+                            updated[i] = merged;
+                            refreshed += 1;
+                        }
+                        continue;
+                    }
+                }
                 if dupes::has_duplicate(&updated, &contact) {
                     skipped += 1;
                     continue;
@@ -2084,7 +2440,8 @@ impl Contacts {
                     self.error = Some("Contact limit reached".into());
                     break;
                 };
-                updated.push(Contact { id, ..contact });
+                let uid = if contact.uid.is_empty() { store::new_uid(id) } else { contact.uid.clone() };
+                updated.push(Contact { id, uid, ..contact });
                 for value in values {
                     updated_extras.add(id, value);
                 }
@@ -2094,6 +2451,9 @@ impl Contacts {
             }
         }
         let mut parts = vec![format!("Imported {added} contacts")];
+        if refreshed > 0 {
+            parts.push(format!("updated {refreshed} contacts already in the book"));
+        }
         if skipped > 0 {
             parts.push(format!("skipped {skipped} duplicates"));
         }
@@ -2112,7 +2472,7 @@ impl Contacts {
             summary.push_str(note);
             summary.push('.');
         }
-        if added == 0 {
+        if added == 0 && refreshed == 0 {
             self.status = Some(summary.clone());
             self.dirty = true;
             return summary;
@@ -2586,6 +2946,13 @@ impl Contacts {
     /// The `create-contact` intent: adds a contact and opens its card. A name or a company, a phone number or an email is
     /// needed, and a contact that duplicates one in the list is refused.
     pub fn create_contact(&mut self, ui: &Ui, name: &str, phone: &str, email: &str, company: &str) -> Result<u64, String> {
+        let id = self.add_contact(name, phone, email, company)?;
+        self.show_card(ui, id);
+        Ok(id)
+    }
+
+    /// Adds a contact to the book and saves it, without opening its card.
+    fn add_contact(&mut self, name: &str, phone: &str, email: &str, company: &str) -> Result<u64, String> {
         if self.load_failed {
             return Err("The contacts could not be read".into());
         }
@@ -2605,6 +2972,7 @@ impl Contacts {
             return Err(format!("{} is already in the contacts (id {})", twin.display_name(), twin.id));
         }
         contact.id = store::new_id(&self.contacts).ok_or_else(|| "Contact limit reached".to_string())?;
+        contact.uid = store::new_uid(contact.id);
         let id = contact.id;
         let mut updated = self.contacts.clone();
         updated.push(contact);
@@ -2612,7 +2980,6 @@ impl Contacts {
         let before = std::mem::replace(&mut self.contacts, updated);
         self.record(&before);
         self.error = None;
-        self.show_card(ui, id);
         Ok(id)
     }
 
@@ -2668,7 +3035,7 @@ impl Contacts {
             Screen::Detail(_) => {
                 let l = self.card_layout(ui);
                 if let Some(&(k, _)) = l.values.iter().find(|(_, r)| r.contains(x, y)) {
-                    return Some(Target::Copy(k));
+                    return Some(Target::Use(k));
                 }
                 if l.favorite.contains(x, y) {
                     return Some(Target::Favorite);
@@ -2717,6 +3084,17 @@ impl Contacts {
                 }
                 if let Some(i) = (0..6).find(|&i| l.fields[i].is_some_and(|r| r.contains(x, y))) {
                     return Some(Target::Field(i));
+                }
+            }
+            Screen::Suggestions => {
+                let l = self.suggest_layout();
+                for (i, row) in l.rows.iter().enumerate() {
+                    if row.add.contains(x, y) {
+                        return Some(Target::SuggestAdd(i));
+                    }
+                    if row.dismiss.contains(x, y) {
+                        return Some(Target::SuggestDismiss(i));
+                    }
                 }
             }
             Screen::Settings => {
@@ -2808,7 +3186,7 @@ impl Contacts {
             }
             BAR_CANCEL => self.cancel_editor(ui),
             BAR_DONE => {
-                if self.screen == Screen::Settings {
+                if matches!(self.screen, Screen::Settings | Screen::Suggestions) {
                     self.screen = Screen::List;
                     self.fit_scroll(ui);
                 } else if matches!(self.screen, Screen::SmartEditor(_)) {
@@ -2847,6 +3225,8 @@ impl Contacts {
             NODE_SMART_ANY => Target::SmartAny,
             NODE_SMART_ADD => Target::SmartAdd,
             NODE_SMART_DELETE => Target::SmartDelete,
+            _ if (NODE_SUGGEST_ADD..NODE_SUGGEST_ADD + MAX_SUGGEST_NODES).contains(&id) => Target::SuggestAdd((id - NODE_SUGGEST_ADD) as usize),
+            _ if (NODE_SUGGEST_DISMISS..NODE_SUGGEST_DISMISS + MAX_SUGGEST_NODES).contains(&id) => Target::SuggestDismiss((id - NODE_SUGGEST_DISMISS) as usize),
             _ if (NODE_SMART_FIELD..NODE_SMART_FIELD + smart::MAX_RULES as u64).contains(&id) => Target::SmartField((id - NODE_SMART_FIELD) as usize),
             _ if (NODE_SMART_CONDITION..NODE_SMART_CONDITION + smart::MAX_RULES as u64).contains(&id) => {
                 Target::SmartCondition((id - NODE_SMART_CONDITION) as usize)
@@ -2883,9 +3263,16 @@ impl Contacts {
         }
         match target {
             Target::Bar(id) => self.bar(ui, id),
+            Target::SuggestAdd(i) => self.accept_suggestion(ui, i),
+            Target::SuggestDismiss(i) => self.dismiss_suggestion(ui, i),
+            Target::Sidebar(LIST_SUGGESTIONS) => self.open_suggestions(ui),
             Target::Sidebar(id) => {
                 if self.picking.is_some() {
                     self.finish_picking(ui);
+                }
+                if self.screen == Screen::Suggestions {
+                    self.screen = Screen::List;
+                    self.fit_scroll(ui);
                 }
                 self.filter = Filter::from_sidebar_id(id);
                 self.status = None;
@@ -2909,6 +3296,13 @@ impl Contacts {
                     }
                 } else if let Some(row) = self.rows.get(i) {
                     let id = self.contacts[row.contact].id;
+                    // a second press on the same row within the double-click time opens the card in its own window
+                    let again = self.last_row_click.is_some_and(|(last, at)| last == id && t - at <= DOUBLE_CLICK_MS);
+                    self.last_row_click = Some((id, t));
+                    if again {
+                        self.last_row_click = None;
+                        self.card_req = Some(id);
+                    }
                     self.open_detail(ui, id);
                 }
             }
@@ -2916,6 +3310,26 @@ impl Contacts {
             Target::List => {
                 if matches!(self.screen, Screen::Detail(_)) {
                     self.close_detail(ui);
+                }
+            }
+            Target::Use(k) => {
+                if let Some(c) = self.selected() {
+                    let rows = self.rows_of(c);
+                    let row = rows.get(k);
+                    let value = row.map(|r| r.value.clone()).unwrap_or_default();
+                    let handoff = match row.map(|r| &r.action) {
+                        Some(contact_card::Action::Call) => Some(Handoff::Call(value.clone())),
+                        Some(contact_card::Action::Email) => Some(Handoff::Mail(value.clone())),
+                        _ => None,
+                    };
+                    match handoff {
+                        Some(h) if !value.is_empty() => self.handoff = Some(h),
+                        _ if !value.is_empty() => {
+                            clipboard::set_text(&value);
+                            self.toast_until = Some(t + 2000.0);
+                        }
+                        _ => {}
+                    }
                 }
             }
             Target::Copy(k) => {
@@ -3017,7 +3431,7 @@ impl Contacts {
         let Some(i) = self.focus else {
             if matches!(out, Out::Hide | Out::Named("Escape")) && self.editing() {
                 self.cancel_editor(ui);
-            } else if matches!(out, Out::Hide | Out::Named("Escape")) && self.screen == Screen::Settings {
+            } else if matches!(out, Out::Hide | Out::Named("Escape")) && matches!(self.screen, Screen::Settings | Screen::Suggestions) {
                 self.screen = Screen::List;
                 self.fit_scroll(ui);
             } else if matches!(out, Out::Hide | Out::Named("Escape")) && self.selecting {
@@ -3235,6 +3649,14 @@ impl Contacts {
                 }
                 if let Some(c) = l.cancel {
                     nodes.push(button(NODE_CANCEL, "Cancel", c));
+                }
+            }
+            Screen::Suggestions => {
+                let l = self.suggest_layout();
+                for (i, (s, row)) in self.suggestions.items().iter().zip(&l.rows).enumerate() {
+                    let who = suggested::title_of(s);
+                    nodes.push(Node { id: NODE_SUGGEST_ADD + i as u64, role: Role::Button, label: format!("Add {who}"), value: String::new(), bounds: row.add, enabled: !self.load_failed });
+                    nodes.push(Node { id: NODE_SUGGEST_DISMISS + i as u64, role: Role::Button, label: format!("Dismiss {who}"), value: String::new(), bounds: row.dismiss, enabled: true });
                 }
             }
             Screen::Settings => {
@@ -3477,6 +3899,29 @@ impl Contacts {
         }
     }
 
+    /// The Suggested Contacts screen: each person other apps saw, with Add and Dismiss.
+    fn draw_suggestions(&mut self, s: &mut Surface, ui: &Ui) {
+        let (x, cw) = self.column();
+        let l = self.suggest_layout();
+        self.centre_text(s, ui, "Suggested Contacts", MAC_TITLE1_PT, Weight::Semibold, LABEL.now(), x + cw / 2.0, l.title_y);
+        let note = ui.fit("People your apps saw who are not in your contacts. Nothing leaves this computer.", MAC_FOOTNOTE_PT, ui.pt(cw));
+        self.centre_text(s, ui, &note, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), x + cw / 2.0, l.note_y);
+        let items: Vec<Suggested> = self.suggestions.items().to_vec();
+        for (item, row) in items.iter().zip(&l.rows) {
+            let r = row.row;
+            Self::fill(s, ui, r, m::CARD_RADIUS, CARD_BG.now());
+            let room = ui.pt(row.add.x - r.x - SPACE_L - SPACE_S);
+            let title = ui.fit(&suggested::title_of(item), MAC_BODY_PT, room);
+            self.text(s, ui, &title, MAC_BODY_PT, Weight::Regular, LABEL.now(), r.x + SPACE_L, r.y + r.h * 0.34);
+            let detail = ui.fit(&suggested::detail_of(item), MAC_FOOTNOTE_PT, room);
+            self.text(s, ui, &detail, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), r.x + SPACE_L, r.y + r.h * 0.68);
+            for (rect_of, label) in [(row.add, "Add"), (row.dismiss, "Dismiss")] {
+                let width = ui.measure(label, MAC_BODY_PT, Weight::Regular) / ui.pt(1.0);
+                self.text(s, ui, label, MAC_BODY_PT, Weight::Regular, LINK, rect_of.x + rect_of.w - width, r.y + r.h / 2.0);
+            }
+        }
+    }
+
     /// The smart list editor: the name, the match mode, one row per rule, and Add Rule.
     fn draw_smart_editor(&mut self, s: &mut Surface, ui: &Ui) {
         let (x, cw) = self.column();
@@ -3645,6 +4090,7 @@ impl Contacts {
             Screen::Editor(_) => self.draw_editor(s, ui, t),
             Screen::Settings => self.draw_settings(s, ui),
             Screen::SmartEditor(_) => self.draw_smart_editor(s, ui),
+            Screen::Suggestions => self.draw_suggestions(s, ui),
         }
         // the list column and the sidebar are opaque columns left of the detail pane
         s.fill_rect(0, 0, dx as usize, s.h, CONTENT_BG.now());
@@ -3709,6 +4155,75 @@ mod tests {
 
     fn contact(id: u64, name: &str) -> Contact {
         Contact { id, name: name.into(), ..Default::default() }
+    }
+
+    fn donated(key: &str, name: &str, sources: u32) -> Suggested {
+        Suggested { key: key.into(), handle: bifrost_app::contacts::suggested::Handle::Email, value: key.into(), name: name.into(), sources }
+    }
+
+    #[test]
+    fn donated_people_are_offered_in_the_sidebar_accept_adds_a_contact_and_dismiss_blocks_it() {
+        let mut anna = contact(1, "Anna As");
+        anna.email = "Anna@Work.is".into();
+        let path = file_with("suggestions", &[anna]);
+        let ui = test_ui();
+        let mut app = Contacts::new(&ui, 1200, 780, path.clone());
+        assert!(!app.sidebar_rows().iter().any(|row| row.0 == LIST_SUGGESTIONS), "nothing donated yet");
+        // Anna is in the book already (by email, in any case) and is left out
+        app.set_suggestions(&ui, vec![donated("anna@work.is", "Anna", 1), donated("ada@example.com", "Ada Lovelace", 2), donated("bob@example.com", "", 1)]);
+        assert!(app.sidebar_rows().iter().any(|row| row.0 == LIST_SUGGESTIONS && row.1 == "Suggested Contacts"));
+        assert_eq!(app.suggestions.len(), 2);
+
+        app.activate(&ui, Target::Sidebar(LIST_SUGGESTIONS), 0.0, 0.0, 0.0);
+        assert_eq!(app.screen, Screen::Suggestions);
+        assert!(app.describe().contains("contacts_screen=suggestions"));
+        let l = app.suggest_layout();
+        assert_eq!(l.rows.len(), 2);
+        let (add, dismiss) = (l.rows[0].add, l.rows[1].dismiss);
+        assert_eq!(app.hit(&ui, add.x + add.w / 2.0, add.y + add.h / 2.0), Some(Target::SuggestAdd(0)));
+        assert_eq!(app.hit(&ui, dismiss.x + dismiss.w / 2.0, dismiss.y + dismiss.h / 2.0), Some(Target::SuggestDismiss(1)));
+        assert!(app.controls(&ui).iter().any(|n| n.id == NODE_SUGGEST_ADD && n.label == "Add Ada Lovelace"));
+
+        // Add: the person is a contact now, saved to the file, and leaves the list
+        app.activate(&ui, Target::SuggestAdd(0), 0.0, 0.0, 0.0);
+        assert!(app.listed().iter().any(|c| c.name == "Ada Lovelace" && c.email == "ada@example.com"));
+        assert_eq!(app.status.as_deref(), Some("Added Ada Lovelace"));
+        assert_eq!(app.suggestions.len(), 1);
+        assert_eq!(app.screen, Screen::Suggestions, "the screen stays while people are left");
+        assert!(Contacts::new(&ui, 1200, 780, path.clone()).listed().iter().any(|c| c.email == "ada@example.com"), "saved");
+
+        // Dismiss the last one: the screen closes and the sidebar row goes
+        app.activate(&ui, Target::SuggestDismiss(0), 0.0, 0.0, 0.0);
+        assert_eq!(app.screen, Screen::List);
+        assert!(!app.sidebar_rows().iter().any(|row| row.0 == LIST_SUGGESTIONS));
+        let answers: Vec<(String, Feedback)> = app.take_suggestion_answers();
+        assert_eq!(answers, vec![("ada@example.com".to_string(), Feedback::Accepted), ("bob@example.com".to_string(), Feedback::Dismissed)]);
+        assert!(app.take_suggestion_answers().is_empty(), "answers go to the shell once");
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn a_tap_on_a_phone_or_email_hands_it_off_and_other_values_copy() {
+        let mut ann = contact(1, "Anna As");
+        ann.phone = "555 0100".into();
+        ann.email = "anna@work.is".into();
+        let path = file_with("handoff", &[ann]);
+        let ui = test_ui();
+        let mut app = Contacts::new(&ui, 1200, 780, path);
+        app.open_detail(&ui, 1);
+        let rows = app.rows_of(app.selected().unwrap());
+        let phone = rows.iter().position(|r| r.action == contact_card::Action::Call).unwrap();
+        let email = rows.iter().position(|r| r.action == contact_card::Action::Email).unwrap();
+        app.activate(&ui, Target::Use(phone), 0.0, 0.0, 0.0);
+        assert_eq!(app.take_handoff(), Some(Handoff::Call("555 0100".into())));
+        app.activate(&ui, Target::Use(email), 0.0, 0.0, 0.0);
+        assert_eq!(app.take_handoff(), Some(Handoff::Mail("anna@work.is".into())));
+        assert!(app.take_handoff().is_none(), "taken once");
+    }
+
+    #[test]
+    fn a_phone_value_becomes_a_tel_link_without_spaces_or_dashes() {
+        assert_eq!(tel_url("+354 555-0100"), "tel:+3545550100");
     }
 
     #[test]

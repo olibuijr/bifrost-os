@@ -22,7 +22,7 @@
 //! | usernotificationsd, UserNotificationCenter | `usernotif.rs`, `notify/store.rs`, `notify/schedule.rs`, `notify/permission.rs` |
 //! | WindowManager, WindowServer | `workspace.rs`, `window_fx.rs`, labwc |
 //! | Search panel | `quicksearch.rs` |
-//! | corespotlightd, mdworker.shared | `spotindex.rs` |
+//! | corespotlightd, mdworker.shared, spotlightknowledged.importer | `spotindex.rs`, `file_import.rs` |
 //! | screencaptureui | `screenshot.rs`, `screenrec.rs` |
 //! | wallpaper | `wallpaper_page.rs` |
 //! | loginwindow | `login.rs` |
@@ -35,8 +35,11 @@
 //! | ScreenReaderUIServer | `accessibility/reader.rs` |
 //! | gamecontrolleragentd | `game_controllers_page.rs` |
 //!
-//! Voice assistant, family controls, cloud sync, search-party, Screen Time and the memory/expansion slot agents have no counterpart
-//! and stay gap rows.
+//! Cloud sync, search-party and the memory/expansion slot agents have no counterpart (n/a rows). The vendor voice assistant
+//! and family controls keep the status `gap` (the vendor services are not mirrored) and are `ready` through BifrOSt's own
+//! assistant (`assistant.rs`, `assistant_panel.rs`) and local Screen Time (`screentime/`). Smart card readers are served by
+//! `services/smartcards.rs` (the token daemon and token binding roles), the application firewall by
+//! `services/app_firewall.rs`, and an unreadable disk by `services/disks.rs`.
 use super::Shell;
 use bifrost_core::json::Json;
 
@@ -44,11 +47,16 @@ pub mod pasteboard_types;
 pub mod keychain_groups;
 pub mod search_ranking;
 pub mod local_auth;
+pub mod permission_kit;
+pub mod picture_in_picture;
+pub mod accounts_access;
+pub mod network_auth;
 pub mod privacy_permissions;
 pub mod contacts;
 pub mod calendar;
 pub mod location;
 pub mod screen_sample;
+pub mod screen_stream;
 pub mod power_service;
 pub mod audio_devices;
 pub mod quick_look;
@@ -56,6 +64,9 @@ pub mod gamepad_service;
 pub mod bluetooth_service;
 pub mod login_items_approval;
 pub mod network_path;
+pub mod wifi;
+pub mod universal_access_control;
+pub mod voice_banking;
 pub mod dock_tile;
 pub mod quick_actions;
 pub mod now_playing;
@@ -68,7 +79,13 @@ pub mod accessibility_display;
 pub mod text_services;
 pub mod focus_filter;
 pub mod notify_bus;
+pub mod speech;
+pub mod recognizer;
+pub mod smartcards;
+pub mod app_firewall;
+pub mod screenshot;
 pub mod launch_services;
+pub mod mail_compose;
 pub mod display_services;
 pub mod window_services;
 pub mod scene_services;
@@ -77,6 +94,23 @@ pub mod thumbnails;
 pub mod thumb_providers;
 pub mod disks;
 pub mod photos;
+pub mod background;
+pub mod scripting;
+pub mod metric_reports;
+pub mod backup_exclusions;
+pub mod folder_actions_service;
+pub mod snapshots;
+pub mod braille_text;
+pub mod record_store;
+pub mod directory;
+pub mod console_seat;
+pub mod trust_eval;
+pub mod obex_codec;
+pub mod domains;
+pub mod peer_hub;
+pub mod running_board;
+pub mod system_intents;
+pub mod endpoint_security;
 
 /// A named service in the shell.
 pub trait SystemService {
@@ -93,6 +127,18 @@ pub trait SystemService {
 /// Whether the installed app `app_id` lists `permission` in its manifest.
 pub fn app_has_permission(app_id: &str, permission: &str) -> bool {
     super::apphost::installed().iter().find(|a| a.manifest.id == app_id).is_some_and(|a| a.manifest.permissions.iter().any(|p| p == permission))
+}
+
+/// Whether an app of this `kind` with these manifest `declared` entitlements holds `entitlement`. An entitlement is
+/// honoured only when the manifest declares it, only for a first-party app (`is.olibuijr.*`) and only for a system app,
+/// the same rule as `app_policy::Policy::with_entitlements`: a store package cannot grant itself one.
+pub fn entitlement_held(app_id: &str, kind: &str, declared: &[String], entitlement: &str) -> bool {
+    app_id.starts_with("is.olibuijr.") && kind == super::kinds::SYSTEM_APP && declared.iter().any(|e| e == entitlement)
+}
+
+/// Whether the installed app `app_id` holds `entitlement` (see [`entitlement_held`]).
+pub fn app_has_entitlement(app_id: &str, entitlement: &str) -> bool {
+    super::apphost::installed().iter().find(|a| a.manifest.id == app_id).is_some_and(|a| entitlement_held(app_id, &a.manifest.kind, &a.manifest.entitlements, entitlement))
 }
 
 /// The process id of the running installed app `app_id`, when it runs as a child of the shell.
@@ -119,11 +165,16 @@ pub fn all() -> Vec<Box<dyn SystemService>> {
         Box::new(keychain_groups::KeychainGroups::default()),
         Box::new(search_ranking::SearchRanking::default()),
         Box::new(privacy_permissions::PrivacyPermissions),
+        Box::new(permission_kit::PermissionKit),
+        Box::new(picture_in_picture::PictureInPicture::default()),
         Box::new(local_auth::LocalAuth::default()),
+        Box::new(accounts_access::AccountsAccess::default()),
+        Box::new(network_auth::NetworkAuth),
         Box::new(contacts::Contacts),
         Box::new(calendar::Calendar),
         Box::new(location::Location::default()),
         Box::new(screen_sample::ScreenSample),
+        Box::new(screen_stream::ScreenStreamService::default()),
         Box::new(widgets_timeline::WidgetsTimeline),
         Box::new(power_service::PowerService::default()),
         Box::new(audio_devices::AudioDevices::new()),
@@ -132,22 +183,48 @@ pub fn all() -> Vec<Box<dyn SystemService>> {
         Box::new(bluetooth_service::BluetoothService::default()),
         Box::new(login_items_approval::LoginItemsApproval),
         Box::new(network_path::NetworkPath::new()),
+        Box::new(wifi::WifiService::new()),
         Box::new(now_playing::NowPlaying),
         Box::new(notification_schedule::NotificationSchedule::default()),
         Box::new(screens::Displays::default()),
         Box::new(cursor_service::CursorService),
         Box::new(accessibility_display::AccessibilityDisplay::default()),
+        Box::new(universal_access_control::UniversalAccessControl),
+        Box::new(voice_banking::VoiceBanking),
         Box::new(text_services::TextServices),
         Box::new(focus_filter::FocusFilterService::default()),
         Box::new(notify_bus::NotifyBus::default()),
+        Box::new(speech::Speech::default()),
+        Box::new(recognizer::Recognizer::new(recognizer::user_data_dir())),
+        Box::new(smartcards::SmartCards::new(smartcards::data_dir())),
+        Box::new(app_firewall::AppFirewall::new(smartcards::data_dir())),
+        Box::new(screenshot::ScreenshotService::default()),
         Box::new(launch_services::LaunchServices),
+        Box::new(mail_compose::MailCompose),
         Box::new(display_services::DisplayServices::default()),
         Box::new(window_services::WindowServices),
         Box::new(scene_services::SceneServices::default()),
         Box::new(event_services::EventServices),
         Box::new(thumbnails::Thumbnails::default()),
         Box::new(disks::Disks::default()),
-        Box::new(photos::Photos),
+        Box::new(photos::Photos::default()),
+        Box::new(background::BackgroundService::at(super::apphost::root().join(background::STORE_FILE))),
+        Box::new(scripting::Scripting),
+        Box::new(metric_reports::MetricReports),
+        Box::new(backup_exclusions::BackupExclusions),
+        Box::new(folder_actions_service::FolderActions),
+        Box::new(snapshots::Snapshots::default()),
+        Box::new(braille_text::BrailleText),
+        Box::new(record_store::RecordStore::default()),
+        Box::new(directory::Directory::default()),
+        Box::new(console_seat::ConsoleSeat),
+        Box::new(trust_eval::TrustEval),
+        Box::new(obex_codec::ObexCodec::default()),
+        Box::new(domains::Domains),
+        Box::new(peer_hub::PeerHub::new()),
+        Box::new(running_board::RunningBoard),
+        Box::new(system_intents::SystemIntents),
+        Box::new(endpoint_security::EndpointSecurity::default()),
     ]
 }
 

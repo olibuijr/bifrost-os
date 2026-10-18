@@ -9,7 +9,10 @@
 //!
 //! Both kinds form one pending list per app, and a request with an identifier replaces the earlier pending request of
 //! either kind. Delivery is the normal notification UI, so the `notifications` permission is required for every method.
-//! Pending calendar requests are not kept across a shell restart (the interval ones are not either).
+//! Pending requests of both kinds are saved to `pending-notifications.ini` beside the notification store and read back
+//! on the first tick after the data directory is set. A restored request keeps its trigger time: one that passed
+//! while the shell was off fires on the first tick. The saved form keeps the text, badge and category of a request;
+//! its sound, user info and interruption level are not saved, so a restored request is delivered without them.
 //!
 //! Methods (JSON params; the app is the caller):
 //! - `add`: `{ "id", "title", "subtitle"?, "body"?, "thread"?, "category"?, "badge"?, "sound"?, "userInfo"?, "interruptionLevel"?, "relevanceScore"?, "trigger" }`. Answers `{"added": id}`.
@@ -18,34 +21,38 @@
 use super::{Event, Shell, SystemService};
 use crate::shell::clock::alarm::Alarm;
 use crate::shell::clock::offset_fn;
-use crate::shell::usernotif::{self, Added, MAX_PENDING};
+use crate::shell::prefs::write_atomic;
+use crate::shell::usernotif::{self, Calendar};
 use bifrost_core::json::Json;
 use bifrost_proto::rich::{MAX_NOTIF_ID, MAX_NOTIF_TEXT, MAX_NOTIF_USER_INFO, MAX_NOTIF_USER_INFO_VALUE};
-use bifrost_proto::{NotifRequest, NotifStatus};
+use bifrost_proto::{NotifRequest, NotifStatus, NotifTrigger};
 
 /// The longest interval one request may name (about 49 days, the millisecond delay of the wire message is a `u32`).
 const MAX_INTERVAL_SECS: f64 = 4_294_967.0;
 
-/// A calendar-trigger request waiting for its next time.
-#[derive(Clone, Debug, PartialEq)]
-struct Calendar {
-    app: String,
-    req: NotifRequest,
-    alarm: Alarm,
-    repeats: bool,
-    /// Unix time (s) of the next delivery
-    due: i64,
-}
-
+/// The `notification-schedule` service. The calendar and interval requests are kept by the shell's registry
+/// (`usernotif::Registry`, see `Shell::usernotif_schedule`); this service parses the JSON and saves and restores them.
 #[derive(Default)]
 pub struct NotificationSchedule {
-    calendars: Vec<Calendar>,
+    /// the saved file has been read (it is read once, when the data directory is known)
+    restored: bool,
+    /// the text last written, so an unchanged list is not written again
+    saved: String,
 }
 
-/// A trigger as the request names it.
+/// One pending request as the saved file keeps it.
 #[derive(Clone, Debug, PartialEq)]
-enum Trigger {
-    Interval { ms: u32, repeats: bool },
+struct Row {
+    kind: Kind,
+    app: String,
+    req: NotifRequest,
+    /// Unix milliseconds of the next delivery
+    due_ms: i64,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Kind {
+    Interval,
     Calendar { hour: u32, minute: u32, weekdays: u8, repeats: bool },
 }
 
@@ -61,20 +68,31 @@ impl SystemService for NotificationSchedule {
         match method {
             "add" => self.add(shell, app_id, params, t),
             "remove" => self.remove(shell, app_id, params),
-            "pending" => Ok(Json::Obj(vec![("pending".into(), Json::Arr(self.pending(shell, app_id).into_iter().map(Json::Str).collect()))])),
+            "pending" => Ok(Json::Obj(vec![("pending".into(), Json::Arr(shell.usernotif_pending(app_id).into_iter().map(Json::Str).collect()))])),
             _ => Err(format!("notification-schedule has no method {method}")),
         }
     }
 
     fn tick(&mut self, shell: &mut Shell, t: f64) -> Vec<Event> {
-        if self.calendars.is_empty() {
-            return Vec::new();
+        if !self.restored {
+            self.restore(shell, t);
         }
+        if !shell.usernotif.calendars.is_empty() {
+            self.fire(shell, t);
+        }
+        self.persist(shell, t);
+        Vec::new()
+    }
+}
+
+impl NotificationSchedule {
+    /// Delivers the calendar requests that are due and keeps the repeating ones for their next time.
+    fn fire(&mut self, shell: &mut Shell, t: f64) {
         let now = shell.wall.now(t);
         let offset = offset_fn(None, shell.wall.offset);
         let mut fired = Vec::new();
-        let mut kept = Vec::with_capacity(self.calendars.len());
-        for mut c in std::mem::take(&mut self.calendars) {
+        let mut kept = Vec::with_capacity(shell.usernotif.calendars.len());
+        for mut c in std::mem::take(&mut shell.usernotif.calendars) {
             if c.due > now {
                 kept.push(c);
                 continue;
@@ -88,61 +106,147 @@ impl SystemService for NotificationSchedule {
                 }
             }
         }
-        self.calendars = kept;
+        shell.usernotif.calendars = kept;
         for (app, req) in fired {
             shell.usernotif_fire(&app, req, t);
         }
-        Vec::new()
     }
-}
 
-impl NotificationSchedule {
+    /// Reads the requests an earlier shell saved. Nothing is read until the data directory is set.
+    fn restore(&mut self, shell: &mut Shell, t: f64) {
+        let Some(path) = shell.pending_path() else { return };
+        self.restored = true;
+        let now_ms = shell.wall.now_ms(t);
+        for row in decode(&std::fs::read_to_string(&path).unwrap_or_default()) {
+            match row.kind {
+                Kind::Interval => shell.usernotif.restore_pending(&row.app, row.req, t + (row.due_ms - now_ms) as f64),
+                Kind::Calendar { hour, minute, weekdays, repeats } => {
+                    let alarm = Alarm { repeat: weekdays, ..Alarm::new(hour, minute) };
+                    shell.usernotif.calendars.push(Calendar { app: row.app, req: row.req, alarm, repeats, due: row.due_ms.div_euclid(1000) });
+                }
+            }
+        }
+    }
+
+    /// Writes the pending requests of both kinds when they changed since the last write.
+    fn persist(&mut self, shell: &Shell, t: f64) {
+        if !self.restored {
+            return;
+        }
+        let Some(path) = shell.pending_path() else { return };
+        let now_ms = shell.wall.now_ms(t);
+        let mut rows: Vec<Row> = shell.usernotif.pending_rows(t, now_ms).into_iter().map(|(app, req, due_ms)| Row { kind: Kind::Interval, app, req, due_ms }).collect();
+        rows.extend(shell.usernotif.calendars.iter().map(|c| Row {
+            kind: Kind::Calendar { hour: c.alarm.hour, minute: c.alarm.min, weekdays: c.alarm.repeat, repeats: c.repeats },
+            app: c.app.clone(),
+            req: c.req.clone(),
+            due_ms: c.due * 1000,
+        }));
+        let text = encode(&rows);
+        if text != self.saved {
+            match write_atomic(&path, &text) {
+                Ok(()) => self.saved = text,
+                Err(e) => eprintln!("springboard: pending-notifications.ini: {e}"),
+            }
+        }
+    }
+
     fn add(&mut self, shell: &mut Shell, app: &str, params: &Json, t: f64) -> Result<Json, String> {
         let req = request(params)?;
         let trigger = trigger(params.get("trigger").ok_or("trigger is required")?)?;
-        if let Some(status) = shell.usernotif.check(app, &req) {
-            return Err(refusal(status));
-        }
         let id = req.id.clone();
-        // the identifier replaces the pending request of either kind
-        self.calendars.retain(|c| !(c.app == app && c.req.id == id));
-        shell.usernotif.remove(app, false, std::slice::from_ref(&id));
-        if self.pending(shell, app).len() >= MAX_PENDING {
-            return Err(refusal(NotifStatus::Full));
+        match shell.usernotif_schedule(app, req, trigger, t) {
+            NotifStatus::Ok => Ok(Json::Obj(vec![("added".into(), Json::Str(id))])),
+            status => Err(refusal(status)),
         }
-        match trigger {
-            Trigger::Interval { ms, repeats } => match shell.usernotif.add(app, NotifRequest { delay_ms: ms, repeats, ..req }, t) {
-                Added::Scheduled => {}
-                Added::Refused(status) => return Err(refusal(status)),
-                Added::Deliver { .. } => return Err("an interval trigger must be later than now".into()),
-            },
-            Trigger::Calendar { hour, minute, weekdays, repeats } => {
-                let now = shell.wall.now(t);
-                let offset = offset_fn(None, shell.wall.offset);
-                let alarm = Alarm { repeat: weekdays, ..Alarm::new(hour, minute) };
-                let due = alarm.regular_fire(now, &offset).ok_or("no date matches the calendar trigger")?;
-                self.calendars.push(Calendar { app: app.to_string(), req, alarm, repeats, due });
-            }
-        }
-        Ok(Json::Obj(vec![("added".into(), Json::Str(id))]))
     }
 
     fn remove(&mut self, shell: &mut Shell, app: &str, params: &Json) -> Result<Json, String> {
         let ids = string_list(params.get("ids"))?;
-        let hit = |id: &str| ids.is_empty() || ids.iter().any(|i| i == id);
-        let before = self.pending(shell, app).len();
-        self.calendars.retain(|c| !(c.app == app && hit(&c.req.id)));
-        shell.usernotif.remove(app, false, &ids);
-        let removed = before.saturating_sub(self.pending(shell, app).len());
+        let before = shell.usernotif_pending(app).len();
+        shell.usernotif_remove_pending(app, &ids);
+        let removed = before.saturating_sub(shell.usernotif_pending(app).len());
         Ok(Json::Obj(vec![("removed".into(), Json::Num(removed as f64))]))
     }
+}
 
-    /// The pending identifiers of both kinds: the interval ones first, then the calendar ones, in the order they were added.
-    fn pending(&self, shell: &Shell, app: &str) -> Vec<String> {
-        let mut ids = shell.usernotif.list(app, false);
-        ids.extend(self.calendars.iter().filter(|c| c.app == app).map(|c| c.req.id.clone()));
-        ids
+const SAVED_HEADER: &str = "# springboard pending notifications: one request per line, fields separated by tabs\n";
+/// Fields per saved line: kind, app, due, delay, repeats, badge, hour, minute, weekdays, id, title, subtitle, body,
+/// thread, category.
+const SAVED_FIELDS: usize = 15;
+
+/// Text in a saved field: tabs and line breaks become spaces, so a line keeps its fields.
+fn saved_text(s: &str) -> String {
+    s.replace(['\t', '\n', '\r'], " ")
+}
+
+fn encode(rows: &[Row]) -> String {
+    let mut out = String::from(SAVED_HEADER);
+    for r in rows {
+        let (kind, hour, minute, weekdays, repeats) = match r.kind {
+            Kind::Interval => ("i", 0, 0, 0, r.req.repeats),
+            Kind::Calendar { hour, minute, weekdays, repeats } => ("c", hour, minute, weekdays, repeats),
+        };
+        let badge = r.req.badge.map_or(-1, i64::from);
+        let fields = [
+            kind.to_string(),
+            saved_text(&r.app),
+            r.due_ms.to_string(),
+            r.req.delay_ms.to_string(),
+            u8::from(repeats).to_string(),
+            badge.to_string(),
+            hour.to_string(),
+            minute.to_string(),
+            weekdays.to_string(),
+            saved_text(&r.req.id),
+            saved_text(&r.req.title),
+            saved_text(&r.req.subtitle),
+            saved_text(&r.req.body),
+            saved_text(&r.req.thread),
+            saved_text(&r.req.category),
+        ];
+        out.push_str(&fields.join("\t"));
+        out.push('\n');
     }
+    out
+}
+
+/// The rows of a saved file; a line that does not parse is skipped.
+fn decode(text: &str) -> Vec<Row> {
+    text.lines()
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+        .filter_map(|line| {
+            let f: Vec<&str> = line.split('\t').collect();
+            if f.len() != SAVED_FIELDS {
+                return None;
+            }
+            let due_ms: i64 = f[2].parse().ok()?;
+            let delay_ms: u32 = f[3].parse().ok()?;
+            let repeats = f[4] == "1";
+            let badge: i64 = f[5].parse().ok()?;
+            let hour: u32 = f[6].parse().ok()?;
+            let minute: u32 = f[7].parse().ok()?;
+            let weekdays: u8 = f[8].parse().ok()?;
+            let kind = match f[0] {
+                "i" => Kind::Interval,
+                "c" => Kind::Calendar { hour, minute, weekdays, repeats },
+                _ => return None,
+            };
+            let req = NotifRequest {
+                id: f[9].into(),
+                title: f[10].into(),
+                subtitle: f[11].into(),
+                body: f[12].into(),
+                thread: f[13].into(),
+                category: f[14].into(),
+                delay_ms,
+                badge: u32::try_from(badge).ok(),
+                repeats,
+                ..Default::default()
+            };
+            Some(Row { kind, app: f[1].to_string(), req, due_ms })
+        })
+        .collect()
 }
 
 /// The text of a refusal, as the request status names it.
@@ -244,7 +348,7 @@ fn relevance(v: Option<&Json>) -> Result<u16, String> {
 }
 
 /// The trigger of an `add` request.
-fn trigger(t: &Json) -> Result<Trigger, String> {
+fn trigger(t: &Json) -> Result<NotifTrigger, String> {
     let repeats = match t.get("repeats") {
         None | Some(Json::Null) => false,
         Some(Json::Bool(b)) => *b,
@@ -259,7 +363,7 @@ fn trigger(t: &Json) -> Result<Trigger, String> {
             if repeats && secs < 60.0 {
                 return Err("trigger.seconds must be at least 60 for a repeating trigger".into());
             }
-            Ok(Trigger::Interval { ms: secs as u32 * 1000, repeats })
+            Ok(NotifTrigger::Interval { seconds: secs as u32, repeats })
         }
         Some("calendar") => {
             let hour = integer(t, "hour", 23.0)?;
@@ -275,7 +379,7 @@ fn trigger(t: &Json) -> Result<Trigger, String> {
                 }
                 Some(_) => return Err("trigger.weekdays must be a list".into()),
             }
-            Ok(Trigger::Calendar { hour, minute, weekdays, repeats })
+            Ok(NotifTrigger::Calendar { hour: hour as u8, minute: minute as u8, weekdays, repeats })
         }
         _ => Err("trigger.kind must be interval or calendar".into()),
     }
@@ -312,6 +416,7 @@ fn string_list(v: Option<&Json>) -> Result<Vec<String>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::shell::usernotif::Added;
 
     fn json(text: &str) -> Json {
         bifrost_core::json::parse(text).unwrap()
@@ -332,10 +437,105 @@ mod tests {
         assert!(request(&json(r#"{"id":"a","relevanceScore":1.5}"#)).is_err());
     }
 
+    fn scratch_dir(name: &str) -> std::path::PathBuf {
+        let dir = std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/target/test-pending")).join(std::process::id().to_string()).join(name);
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// A test shell at Unix time `unix` (monotonic 0) whose data directory is `dir`.
+    fn shell_in(dir: &std::path::Path, unix: i64) -> Shell {
+        let mut sh = crate::shell::tests::shell();
+        sh.set_wall(unix, 0, 0.0);
+        let _ = sh.set_data_dir(dir.to_str().unwrap(), 0.0);
+        sh
+    }
+
+    #[test]
+    fn saved_rows_round_trip_and_skip_lines_that_do_not_parse() {
+        let rows = vec![
+            Row {
+                kind: Kind::Interval,
+                app: "is.example.chat".into(),
+                req: NotifRequest { id: "a".into(), title: "T\tab".into(), body: "B\nC".into(), thread: "room".into(), category: "MSG".into(), delay_ms: 90_000, badge: Some(3), repeats: true, ..Default::default() },
+                due_ms: 1_700_000_090_000,
+            },
+            Row {
+                kind: Kind::Calendar { hour: 8, minute: 30, weekdays: 0b10_0010, repeats: true },
+                app: "is.example.news".into(),
+                req: NotifRequest { id: "b".into(), title: "Morning".into(), ..Default::default() },
+                due_ms: 1_700_001_000_000,
+            },
+        ];
+        let back = decode(&format!("{}garbage line\n", encode(&rows)));
+        assert_eq!(back.len(), 2, "the bad line is skipped");
+        assert_eq!((back[0].req.title.as_str(), back[0].req.body.as_str()), ("T ab", "B C"), "tabs and breaks become spaces");
+        assert_eq!((back[0].kind, back[0].req.badge, back[0].req.repeats), (Kind::Interval, Some(3), true));
+        assert_eq!(back[0].req.thread, "room");
+        assert_eq!((back[1].kind, back[1].due_ms, back[1].req.badge), (rows[1].kind, 1_700_001_000_000, None));
+    }
+
+    #[test]
+    fn pending_requests_survive_a_restart_and_keep_their_trigger_times() {
+        let dir = scratch_dir("restart");
+        // first shell (Unix 1_000_000 s at monotonic 0): an interval request 120 s out, a calendar request at 1_003_600
+        let mut first = shell_in(&dir, 1_000_000);
+        let mut svc = NotificationSchedule::default();
+        let req = |id: &str| NotifRequest { id: id.into(), title: "Timer".into(), ..Default::default() };
+        assert_eq!(first.usernotif.add("is.example.timer", NotifRequest { delay_ms: 120_000, ..req("timer") }, 0.0), Added::Scheduled);
+        first.usernotif.calendars.push(Calendar { app: "is.example.news".into(), req: req("morning"), alarm: Alarm { repeat: 0, ..Alarm::new(8, 30) }, repeats: false, due: 1_003_600 });
+        svc.tick(&mut first, 1_000.0);
+        let saved = std::fs::read_to_string(dir.join("pending-notifications.ini")).unwrap();
+        assert_eq!(saved.lines().filter(|l| !l.starts_with('#')).count(), 2, "both kinds are saved");
+
+        // restart 60 s later: the timer is due 60 s after the restart, the calendar request keeps its date
+        let mut second = shell_in(&dir, 1_000_060);
+        let mut back = NotificationSchedule::default();
+        back.tick(&mut second, 0.0);
+        assert_eq!(second.usernotif.next_due(), Some(60_000.0));
+        assert!(second.usernotif.due(59_999.0).is_empty());
+        let fired = second.usernotif.due(60_000.0);
+        assert_eq!(fired.len(), 1);
+        assert_eq!((fired[0].0.as_str(), fired[0].1.id.as_str()), ("is.example.timer", "timer"));
+        assert_eq!(second.usernotif.calendars.len(), 1);
+        assert_eq!((second.usernotif.calendars[0].app.as_str(), second.usernotif.calendars[0].due), ("is.example.news", 1_003_600));
+        assert_eq!((second.usernotif.calendars[0].alarm.hour, second.usernotif.calendars[0].alarm.min), (8, 30));
+    }
+
+    #[test]
+    fn a_request_whose_time_passed_while_the_shell_was_off_fires_on_the_first_tick() {
+        let dir = scratch_dir("missed");
+        let mut first = shell_in(&dir, 1_000_000);
+        let mut svc = NotificationSchedule::default();
+        assert_eq!(first.usernotif.add("is.example.timer", NotifRequest { id: "late".into(), title: "Late".into(), delay_ms: 30_000, ..Default::default() }, 0.0), Added::Scheduled);
+        svc.tick(&mut first, 0.0);
+        // back 10 minutes later: the 30 s timer is long past, so it is due at once
+        let mut second = shell_in(&dir, 1_000_600);
+        NotificationSchedule::default().tick(&mut second, 0.0);
+        assert_eq!(second.usernotif.next_due(), Some(-570_000.0), "its trigger is 570 s before now");
+        let fired = second.usernotif.due(0.0);
+        assert_eq!(fired.len(), 1, "the missed request is delivered on the first tick");
+        assert_eq!(fired[0].1.id, "late");
+    }
+
+    #[test]
+    fn a_cleared_request_is_not_saved_again() {
+        let dir = scratch_dir("cleared");
+        let mut sh = shell_in(&dir, 1_000_000);
+        let mut svc = NotificationSchedule::default();
+        assert_eq!(sh.usernotif.add("is.example.timer", NotifRequest { id: "gone".into(), title: "x".into(), delay_ms: 5_000, ..Default::default() }, 0.0), Added::Scheduled);
+        svc.tick(&mut sh, 0.0);
+        sh.usernotif.remove("is.example.timer", false, &["gone".to_string()]);
+        svc.tick(&mut sh, 1.0);
+        let saved = std::fs::read_to_string(dir.join("pending-notifications.ini")).unwrap();
+        assert_eq!(saved.lines().filter(|l| !l.starts_with('#')).count(), 0);
+    }
+
     #[test]
     fn an_interval_trigger_is_a_whole_number_of_seconds() {
-        assert_eq!(trigger(&json(r#"{"kind":"interval","seconds":90,"repeats":true}"#)), Ok(Trigger::Interval { ms: 90_000, repeats: true }));
-        assert_eq!(trigger(&json(r#"{"kind":"interval","seconds":5}"#)), Ok(Trigger::Interval { ms: 5000, repeats: false }));
+        assert_eq!(trigger(&json(r#"{"kind":"interval","seconds":90,"repeats":true}"#)), Ok(NotifTrigger::Interval { seconds: 90, repeats: true }));
+        assert_eq!(trigger(&json(r#"{"kind":"interval","seconds":5}"#)), Ok(NotifTrigger::Interval { seconds: 5, repeats: false }));
         assert!(trigger(&json(r#"{"kind":"interval","seconds":0}"#)).is_err());
         assert!(trigger(&json(r#"{"kind":"interval","seconds":30,"repeats":true}"#)).is_err(), "a repeating interval is at least 60 s");
         assert!(trigger(&json(r#"{"kind":"interval","seconds":60,"repeats":true}"#)).is_ok());
@@ -348,9 +548,9 @@ mod tests {
         // 1 = Sunday is bit 0, as in the alarm model; Monday and Friday are bits 1 and 5
         assert_eq!(
             trigger(&json(r#"{"kind":"calendar","hour":8,"minute":30,"weekdays":[2,6,2],"repeats":true}"#)),
-            Ok(Trigger::Calendar { hour: 8, minute: 30, weekdays: 0b10_0010, repeats: true })
+            Ok(NotifTrigger::Calendar { hour: 8, minute: 30, weekdays: 0b10_0010, repeats: true })
         );
-        assert_eq!(trigger(&json(r#"{"kind":"calendar","hour":7,"minute":0}"#)), Ok(Trigger::Calendar { hour: 7, minute: 0, weekdays: 0, repeats: false }));
+        assert_eq!(trigger(&json(r#"{"kind":"calendar","hour":7,"minute":0}"#)), Ok(NotifTrigger::Calendar { hour: 7, minute: 0, weekdays: 0, repeats: false }));
         assert!(trigger(&json(r#"{"kind":"calendar","hour":24,"minute":0}"#)).is_err());
         assert!(trigger(&json(r#"{"kind":"calendar","hour":1,"minute":60}"#)).is_err());
         assert!(trigger(&json(r#"{"kind":"calendar","hour":1,"minute":1,"weekdays":[0]}"#)).is_err());
@@ -392,5 +592,48 @@ mod tests {
         assert_eq!(string_list(Some(&json(r#"["a","b"]"#))), Ok(vec!["a".to_string(), "b".to_string()]));
         assert!(string_list(Some(&json(r#"[1]"#))).is_err());
         assert!(string_list(Some(&json(r#""a""#))).is_err());
+    }
+
+    #[test]
+    fn a_wire_calendar_request_is_saved_and_fires_after_a_restart() {
+        let dir = scratch_dir("wire-calendar");
+        let mut first = shell_in(&dir, 1_000_000);
+        let req = NotifRequest { id: "morning".into(), title: "Morning".into(), ..Default::default() };
+        let daily = NotifTrigger::Calendar { hour: 8, minute: 30, weekdays: 0, repeats: true };
+        assert_eq!(first.usernotif_schedule("is.example.news", req, daily, 0.0), NotifStatus::Ok);
+        NotificationSchedule::default().tick(&mut first, 1.0);
+        let saved = std::fs::read_to_string(dir.join("pending-notifications.ini")).unwrap();
+        assert!(saved.lines().any(|l| l.starts_with("c\tis.example.news\t")), "the calendar request is saved");
+
+        // restart 60 s later: the request keeps its next 08:30 (UTC, the shell's zone offset is 0 here)
+        let mut second = shell_in(&dir, 1_000_060);
+        NotificationSchedule::default().tick(&mut second, 0.0);
+        let offset = |_: i64| 0;
+        let expected = Alarm::new(8, 30).regular_fire(1_000_000, &offset).unwrap();
+        assert_eq!(second.usernotif.calendars.len(), 1);
+        assert_eq!((second.usernotif.calendars[0].due, second.usernotif.calendars[0].repeats), (expected, true));
+    }
+
+    #[test]
+    fn the_pending_list_and_removal_cover_both_kinds() {
+        let dir = scratch_dir("wire-pending");
+        let mut sh = shell_in(&dir, 1_000_000);
+        let app = "is.example.timer";
+        let at_8_30 = NotifTrigger::Calendar { hour: 8, minute: 30, weekdays: 0, repeats: false };
+        let cal = NotifRequest { id: "cal".into(), title: "C".into(), ..Default::default() };
+        let int = NotifRequest { id: "int".into(), title: "I".into(), ..Default::default() };
+        assert_eq!(sh.usernotif_schedule(app, cal, at_8_30, 0.0), NotifStatus::Ok);
+        assert_eq!(sh.usernotif_schedule(app, int, NotifTrigger::Interval { seconds: 120, repeats: false }, 0.0), NotifStatus::Ok);
+        assert_eq!(sh.usernotif_pending(app), vec!["int".to_string(), "cal".to_string()], "interval first, then calendar");
+
+        // the same identifier replaces the pending request of either kind
+        let again = NotifRequest { id: "int".into(), title: "I".into(), ..Default::default() };
+        assert_eq!(sh.usernotif_schedule(app, again, NotifTrigger::Calendar { hour: 9, minute: 0, weekdays: 0, repeats: false }, 0.0), NotifStatus::Ok);
+        assert_eq!(sh.usernotif_pending(app), vec!["cal".to_string(), "int".to_string()]);
+
+        sh.usernotif_remove_pending(app, &["cal".to_string()]);
+        assert_eq!(sh.usernotif_pending(app), vec!["int".to_string()]);
+        sh.usernotif_remove_pending(app, &[]);
+        assert!(sh.usernotif_pending(app).is_empty());
     }
 }

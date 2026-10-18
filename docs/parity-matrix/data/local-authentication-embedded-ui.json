@@ -12,7 +12,7 @@
       "apple": "LAAuthenticationView",
       "bifrost": "springboard/ui/src/auth_view.rs (AuthView, BiometryKind::from_sensor_name)",
       "status": "partial",
-      "note": "The icon state machine picks a key for each biometry kind and state, and a sensor name maps to its kind (unknown names map to nothing). Headless tests: ui/tests/parity_sdk-complete-11.rs (a_sensor_name_picks_its_biometry_kind_and_nothing_else, an_auth_view_follows_a_failed_then_successful_attempt). Gap: no biometric state source feeds the events and no SDK view draws the icon; both need the local authentication service and a check on Midget."
+      "note": "The icon state machine picks a key for each biometry kind and state, and a sensor name maps to its kind (unknown names map to nothing). Headless tests: ui/tests/parity_sdk-complete-11.rs (a_sensor_name_picks_its_biometry_kind_and_nothing_else, an_auth_view_follows_a_failed_then_successful_attempt). Gap: no biometric state source feeds the events and no SDK view draws the icon; both need the local authentication service and a check on Midget. Built 2026-10-17: LocalAuthenticationView (springboard/sdk/src/view/local_auth_view.rs) wraps the AuthView model as a tappable icon; tests view::local_auth_view::tests. The biometric source is still missing."
     },
     {
       "feature": "Creating the view from an authentication context",
@@ -45,7 +45,7 @@
   ],
   "gaps": [
     "No biometric authentication in the system layer, so there is no state for LAAuthenticationView to show (docs/bifrost-ui.md, Login window gaps: \"no biometric or paired-device unlock\").",
-    "No SDK API equivalent to an authentication context or to LAAuthenticationView, and no control size token for it.",
+    "LocalAuthenticationView (sdk view/local_auth_view.rs) draws the icon state; it stays idle until a biometric source exists",
     "The login screen password flow (springboard/src/shell/login.rs) is the only authentication UI; it cannot show biometric state until a biometric source exists."
   ]
 }

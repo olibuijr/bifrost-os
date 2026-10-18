@@ -228,6 +228,8 @@ pub struct Camera {
     qr_on: bool,
     qr_result: Option<String>,
     qr_scanned_at: f64,
+    /// the white balance of the live preview, following the scene a frame at a time
+    balance: crate::media::convert::Smoothed,
     /// QR scans run on their own thread; one at a time
     qr_busy: bool,
     qr_tx: Sender<Option<String>>,
@@ -335,6 +337,7 @@ impl Camera {
             qr_on: false,
             qr_result: None,
             qr_scanned_at: f64::MIN,
+            balance: Default::default(),
             qr_busy: false,
             qr_tx,
             qr_rx,
@@ -747,7 +750,10 @@ impl Camera {
                 // convert the whole frame at the matching scale, then cut the crop out of it
                 let (full_w, full_h) = ((pw * frame.width / cw.max(1)).max(1), (ph * frame.height / ch.max(1)).max(1));
                 if let Some(px) = v4l2::to_pixels(&frame, full_w, full_h) {
-                    let full = Image { w: full_w, h: full_h, px };
+                    let mut full = Image { w: full_w, h: full_h, px };
+                    // the preview follows the scene's white balance, smoothed so it does not flicker
+                    let gains = self.balance.update(&full);
+                    crate::media::convert::apply_gains(&mut full, gains);
                     if self.qr_on && !self.qr_busy && t - self.qr_scanned_at >= QR_SCAN_MS {
                         self.qr_scanned_at = t;
                         self.qr_busy = true;
@@ -979,7 +985,9 @@ impl Camera {
 fn save_capture(frame: &Frame, dir: &std::path::Path, name: String, aspect: Aspect, zoom: usize, thumb_n: usize, unix: i64, exif: &jpeg::Exif) -> Saved {
     let failed = |name: String| Saved { path: None, name, thumb: None };
     let Some(px) = v4l2::to_pixels(frame, frame.width, frame.height) else { return failed(name) };
-    let full = Image { w: frame.width, h: frame.height, px };
+    let mut full = Image { w: frame.width, h: frame.height, px };
+    // gray-world white balance: a photo keeps its neutrals neutral (the preview is left as the sensor delivers it)
+    crate::media::convert::white_balance(&mut full);
     let (x, y, w, h) = zoomed(aspect.crop(full.w, full.h), zoom);
     let img = full.crop(x, y, w, h);
     let bytes = jpeg::encode_pixels(img.w, img.h, &img.px, JPEG_QUALITY, Some(exif));
@@ -998,17 +1006,11 @@ fn square_thumb(img: &Image, n: usize) -> Image {
     img.crop((img.w - side) / 2, (img.h - side) / 2, side, side).resized(n.max(1), n.max(1))
 }
 
-/// The Camera icon, built with software shapes (no asset download).
+/// The Camera icon: a camera body on dark grey, a layered document (`res/icons/camera`) drawn by the icon renderer.
 pub fn icon(size: usize) -> Image {
-    let mut image = Image { w: size, h: size, px: vec![pack(58, 58, 60, 255); size * size] };
-    let f = size as f32;
-    let mut s = Surface { w: size, h: size, stride: size, px: &mut image.px, y0: 0 };
-    let grey = pack(200, 200, 204, 255);
-    s.fill_rrect(f * 0.14, f * 0.30, f * 0.72, f * 0.46, f * 0.06, grey);
-    s.fill_rrect(f * 0.34, f * 0.22, f * 0.32, f * 0.12, f * 0.03, grey);
-    s.fill_rrect(f * 0.32, f * 0.35, f * 0.36, f * 0.36, f * 0.18, pack(44, 44, 46, 255));
-    s.fill_rrect(f * 0.38, f * 0.41, f * 0.24, f * 0.24, f * 0.12, pack(30, 60, 110, 255));
-    image
+    const JSON: &str = include_str!("../../../res/icons/camera/icon.json");
+    bifrost_render::icon_doc::render_builtin(JSON, &[("camera.png", include_bytes!("../../../res/icons/camera/camera.png"))], size)
+        .unwrap_or_else(|| Image { w: size, h: size, px: vec![pack(58, 58, 60, 255); size * size] })
 }
 
 #[cfg(test)]

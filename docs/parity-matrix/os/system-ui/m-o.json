@@ -81,7 +81,16 @@
    "bifrost": "springboard/src/shell/music/nowplaying.rs",
    "status": "partial",
    "note": "now playing",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::music::nowplaying"
+    }
+   ],
+   "ready_note": "covers: now playing"
   },
   {
    "id": "path:/System/Library/CoreServices/MediaRemoteUIService.app",
@@ -101,7 +110,16 @@
    "bifrost": "springboard/src/shell/services/now_playing.rs",
    "status": "partial",
    "note": "now playing service",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::now_playing"
+    }
+   ],
+   "ready_note": "covers: now playing service"
   },
   {
    "id": "path:/System/Library/CoreServices/Medical Imaging Calibrator.app",
@@ -161,7 +179,16 @@
    "bifrost": "springboard/src/shell/desktop_bar.rs",
    "status": "partial",
    "note": "menu bar and menu extras",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::desktop_bar"
+    }
+   ],
+   "ready_note": "covers: menu bar and menu extras"
   },
   {
    "id": "path:/System/Library/CoreServices/MusicRecognitionMac.app",
@@ -198,9 +225,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/apps/files/src/server.rs",
    "status": "os",
-   "note": "network authentication agent, the Linux base supplies 802.1X",
+   "note": "Missing: BifrOSt connects to FTP servers only (Files, Go > Connect to Server, anonymous or name:password in the address) and has no name-and-password dialog or share picker. Needs a network volume mounter for SMB (cifs-utils and smbclient are packaged) that runs through the privileged helper (privd has no mount request yet), a credentials sheet with Guest or Registered User, and a share list. Not a stub-sized job: it adds a privd request, a credentials store entry and two sheets.",
    "rea": []
   },
   {
@@ -221,7 +248,16 @@
    "bifrost": "springboard/src/shell/notify/center.rs",
    "status": "partial",
    "note": "notification centre",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::notify::center"
+    }
+   ],
+   "ready_note": "covers: notification centre"
   },
   {
    "id": "path:/System/Library/CoreServices/NowPlayingTouchUI.app",
@@ -261,7 +297,16 @@
    "bifrost": "springboard/apps/bluetooth-exchange-desktop/src/transport.rs, springboard/core/src/obex_packet.rs",
    "status": "partial",
    "note": "OBEX file transfer runs in the bluetooth-exchange app and its packet codec; built on os/team-l-05-system-ui; not yet verified on Midget",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "obex_packet"
+    }
+   ],
+   "ready_note": "covers: OBEX file transfer runs in the bluetooth-exchange app and its packet codec; built on os/team-l-05-system-ui; not yet verified on Midget"
   },
   {
    "id": "path:/System/Library/CoreServices/OSDUIHelper.app",
@@ -281,7 +326,16 @@
    "bifrost": "springboard/src/shell/volume_hud.rs",
    "status": "partial",
    "note": "volume and brightness HUD",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::volume_hud"
+    }
+   ],
+   "ready_note": "covers: volume and brightness HUD"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/MADViewServiceExtension.appex",
@@ -418,10 +472,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/media_intents.rs, springboard/src/shell/services/now_playing.rs",
+   "bifrost": "springboard/src/shell/media_intents.rs, springboard/src/shell/quicksearch.rs, springboard/src/shell/services/now_playing.rs",
    "status": "partial",
    "note": "Play or pause, next and previous track as App Intents mapped to Now Playing commands; not yet wired into Search or the owner routing; built on os/team-l-05-system-ui; not yet verified on Midget",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::media_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests"
+    }
+   ],
+   "ready_note": "Play or pause, next and previous track are App Intents (media_intents) listed in Search (quicksearch Hit::MediaTransport) and sent to the Now Playing owner through services::now_playing::send, the same path as the Now Playing menu. Tests: media_intents::tests and quicksearch::tests."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/MessagesAnalyticsWorker.appex",
@@ -641,7 +709,16 @@
    "bifrost": "springboard/src/thumbs/images.rs (OfficeProvider)",
    "status": "partial",
    "note": "Word, spreadsheet and presentation files get the picture they embed, not a page render; built on os/team-l-05-system-ui; not yet verified on Midget",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "thumbs"
+    }
+   ],
+   "ready_note": "covers: Word, spreadsheet and presentation files get the picture they embed, not a page render; built on os/team-l-05-system-ui; not yet verified on Midget"
   }
  ]
 }

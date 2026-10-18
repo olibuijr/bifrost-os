@@ -12,6 +12,8 @@
 //! ctx.evaluate_policy(LAPolicy::DeviceOwnerAuthentication, "Reveal password", now, |reason| shell_ask(reason))?;
 //! ```
 
+use crate::service;
+use crate::Ctx;
 use bifrost_core::json::Json;
 
 /// `LAPolicy`.
@@ -38,6 +40,33 @@ pub enum BiometryType {
     TouchID,
     FaceID,
     OpticID,
+}
+
+impl BiometryType {
+    /// The wire name the shell's `device_state` reply uses.
+    pub fn wire(self) -> &'static str {
+        match self {
+            BiometryType::None => "none",
+            BiometryType::TouchID => "touch_id",
+            BiometryType::FaceID => "face_id",
+            BiometryType::OpticID => "optic_id",
+        }
+    }
+
+    /// The type for a wire name. An unknown or missing name is `None`, the type of a device with no sensor.
+    pub fn from_wire(name: &str) -> BiometryType {
+        match name {
+            "touch_id" => BiometryType::TouchID,
+            "face_id" => BiometryType::FaceID,
+            "optic_id" => BiometryType::OpticID,
+            _ => BiometryType::None,
+        }
+    }
+
+    /// The type a `device_state` reply from the shell reports (`biometry_type`). A reply without the field is `None`.
+    pub fn from_device_state(reply: &Json) -> BiometryType {
+        reply.get("biometry_type").and_then(Json::as_str).map_or(BiometryType::None, BiometryType::from_wire)
+    }
 }
 
 /// The error domain name of [`LAError`] values on the wire and in logs.
@@ -134,6 +163,108 @@ pub fn decode_reply(reply: &Json) -> Result<(), LAError> {
     Err(reply.get("error").and_then(Json::as_str).and_then(LAError::from_wire).unwrap_or(LAError::AuthenticationFailed))
 }
 
+/// Whether a shell reply is the password sheet still being answered. The shell answers `{ok: false, error: "pending",
+/// pending: true}` while the person has the sheet; the app calls `evaluate` again and gets the answer then.
+pub fn is_pending(reply: &Json) -> bool {
+    matches!(reply.get("pending"), Some(Json::Bool(true)))
+}
+
+/// Decodes a shell reply the way [`decode_reply`] does, but reports a pending reply as `None` so the caller calls
+/// again instead of failing.
+pub fn decode_evaluation(reply: &Json) -> Option<Result<(), LAError>> {
+    if is_pending(reply) {
+        None
+    } else {
+        Some(decode_reply(reply))
+    }
+}
+
+/// How often an unanswered evaluation asks the shell again, in seconds.
+pub const POLL_SECS: f64 = 0.25;
+
+/// What one shell reply means for an [`Evaluation`]: wait and ask again, or the final answer.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Action {
+    Wait,
+    Done(Result<(), LAError>),
+}
+
+/// The one event an [`Evaluation`] delivers, from [`Evaluation::tick`], when the person has answered.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Event {
+    Finished(Result<(), LAError>),
+}
+
+/// An asynchronous `evaluatePolicy`. The shell draws the password sheet while the person answers it, so the first
+/// answer is a pending reply. Call [`Evaluation::tick`] from the app's loop with the clock in seconds: it sends the
+/// request, asks again every [`POLL_SECS`] while the sheet is up, and returns [`Event::Finished`] once, when the answer
+/// is in. Replies arrive through [`service::take_reply`], so an app whose `App::service_reply` hook takes the replies
+/// first must hand them to [`Evaluation::on_reply`] itself.
+#[derive(Debug)]
+pub struct Evaluation {
+    policy: LAPolicy,
+    reason: String,
+    request: Option<u32>,
+    resend_at: f64,
+    done: bool,
+}
+
+impl Evaluation {
+    /// A new evaluation. Nothing is sent until the first [`Evaluation::tick`].
+    pub fn new(policy: LAPolicy, reason: &str) -> Evaluation {
+        Evaluation { policy, reason: reason.to_string(), request: None, resend_at: 0.0, done: false }
+    }
+
+    /// The params of the `evaluate` call.
+    pub fn params(&self) -> Json {
+        Json::Obj(vec![("policy".into(), Json::Str(self.policy.wire().into())), ("reason".into(), Json::Str(self.reason.clone()))])
+    }
+
+    /// Whether the event has been delivered.
+    pub fn is_done(&self) -> bool {
+        self.done
+    }
+
+    /// Reads one reply to the request this evaluation sent. A pending reply schedules the next ask at `now` plus
+    /// [`POLL_SECS`]; any other reply is the answer.
+    pub fn on_reply(&mut self, reply: &Json, now: f64) -> Action {
+        self.request = None;
+        if is_pending(reply) {
+            self.resend_at = now + POLL_SECS;
+            return Action::Wait;
+        }
+        Action::Done(decode_reply(reply))
+    }
+
+    /// Polls the request, asks again when it is due, and returns the event once the answer is in.
+    pub fn tick(&mut self, ctx: &Ctx, now: f64) -> Option<Event> {
+        if self.done {
+            return None;
+        }
+        if let Some(request) = self.request {
+            return match service::take_reply(request) {
+                None => None,
+                Some(Ok(reply)) => match self.on_reply(&reply, now) {
+                    Action::Done(answer) => Some(self.finish(answer)),
+                    Action::Wait => None,
+                },
+                // the call itself failed: the shell cannot answer, so the evaluation is cancelled by the system
+                Some(Err(_)) => Some(self.finish(Err(LAError::SystemCancel))),
+            };
+        }
+        if now >= self.resend_at {
+            self.request = Some(service::call(ctx, "local_auth", "evaluate", &self.params()));
+        }
+        None
+    }
+
+    fn finish(&mut self, answer: Result<(), LAError>) -> Event {
+        self.done = true;
+        self.request = None;
+        Event::Finished(answer)
+    }
+}
+
 /// `LAContext`. Times are seconds since any fixed epoch the caller uses.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LAContext {
@@ -218,6 +349,46 @@ mod tests {
     fn biometrics_policy_is_not_available() {
         assert_eq!(ctx().can_evaluate_policy(LAPolicy::DeviceOwnerAuthenticationWithBiometrics), Err(LAError::BiometryNotAvailable));
         assert_eq!(ctx().biometry_type(), BiometryType::None);
+    }
+
+    #[test]
+    fn device_state_reply_decodes_the_biometry_type() {
+        let state = |name: &str| Json::Obj(vec![("biometry_type".into(), Json::Str(name.into()))]);
+        assert_eq!(BiometryType::from_device_state(&state("none")), BiometryType::None);
+        assert_eq!(BiometryType::from_device_state(&state("face_id")), BiometryType::FaceID);
+        assert_eq!(BiometryType::from_device_state(&state("touch_id")), BiometryType::TouchID);
+        assert_eq!(BiometryType::from_device_state(&state("laser")), BiometryType::None);
+        assert_eq!(BiometryType::from_device_state(&Json::Null), BiometryType::None);
+        for t in [BiometryType::None, BiometryType::TouchID, BiometryType::FaceID, BiometryType::OpticID] {
+            assert_eq!(BiometryType::from_wire(t.wire()), t);
+        }
+    }
+
+    #[test]
+    fn an_evaluation_waits_while_the_sheet_is_up_then_finishes_once() {
+        let mut e = Evaluation::new(LAPolicy::DeviceOwnerAuthentication, "Reveal the note");
+        let pending = Json::Obj(vec![("ok".into(), Json::Bool(false)), ("pending".into(), Json::Bool(true))]);
+        assert_eq!(e.on_reply(&pending, 10.0), Action::Wait);
+        assert_eq!(e.resend_at, 10.0 + POLL_SECS, "the next ask waits one poll interval");
+        assert_eq!(e.on_reply(&ok(), 11.0), Action::Done(Ok(())));
+        assert_eq!(e.finish(Err(LAError::UserCancel)), Event::Finished(Err(LAError::UserCancel)));
+        assert!(e.is_done());
+    }
+
+    #[test]
+    fn the_evaluate_params_name_the_policy_and_the_reason() {
+        let e = Evaluation::new(LAPolicy::DeviceOwnerAuthentication, "Reveal the note");
+        assert_eq!(e.params().get("policy").and_then(Json::as_str), Some("device_owner_authentication"));
+        assert_eq!(e.params().get("reason").and_then(Json::as_str), Some("Reveal the note"));
+    }
+
+    #[test]
+    fn a_pending_reply_is_not_an_answer() {
+        let pending = Json::Obj(vec![("ok".into(), Json::Bool(false)), ("error".into(), Json::Str("pending".into())), ("pending".into(), Json::Bool(true))]);
+        assert!(is_pending(&pending));
+        assert_eq!(decode_evaluation(&pending), None);
+        assert_eq!(decode_evaluation(&ok()), Some(Ok(())));
+        assert_eq!(decode_evaluation(&err("user_cancel")), Some(Err(LAError::UserCancel)));
     }
 
     #[test]

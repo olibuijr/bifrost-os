@@ -267,17 +267,17 @@
    "apple": "Share List; Manage Shared List; Assign",
    "status": "n/a",
    "bifrost": "",
-   "note": "Needs the vendor cloud sharing service",
+   "note": "Needs the vendor cloud sharing service; CalDAV has no standard sharing, so it is not built",
    "wire": ""
   },
   {
    "feature": "Location-based reminders",
    "area": "integration",
    "apple": "Filter editor Location arriving/leaving",
-   "status": "n/a",
-   "bifrost": "",
-   "note": "Needs location hardware and geofencing service",
-   "wire": ""
+   "status": "gap",
+   "bifrost": "springboard/apps/reminders-desktop/src/place.rs (Place, Watch); springboard/apps/reminders-desktop/src/store.rs (format v4 place field); springboard/apps/reminders-desktop/manifest.toml [privacy]",
+   "note": "Model, store field (format v4) and the location watch with tests exist, and the manifest has the location purpose string. The form has no place fields and the window does not call the watch, so no alert fires yet.",
+   "wire": "Add arriving and leaving place fields to the form (a saved place or a latitude and longitude with a radius), feed LocationManager fixes to place::Watch while the app runs, request a background task for the other times, and post the alert."
   },
   {
    "feature": "Print list",
@@ -305,6 +305,15 @@
    "bifrost": "springboard/apps/reminders-desktop/src/main.rs:363",
    "note": "Add Reminder, Add Quick Reminder, Create List, Open List, Open Smart List and Search Reminders; built on parity/team-d-reminders; not yet verified on Midget",
    "wire": "Add the Pinned Lists entity and a Show Quick Reminder intent that opens a quick-entry panel."
+  },
+  {
+   "feature": "Scripting: make new reminder and list, read reminder properties",
+   "area": "intent",
+   "apple": "Scripting dictionary: reminder and list classes",
+   "status": "partial",
+   "bifrost": "springboard/apps/reminders-desktop/src/scripting.rs; springboard/apps/reminders-desktop/src/main.rs (script_event, rpc); springboard/apps/reminders-desktop/manifest.toml [[script.*]]",
+   "note": "tell app \"Reminders\" can make a reminder (name, due) and a list, and get name, id, notes, completed, flagged, priority, due day and list of each reminder; setting properties and deleting reminders is refused. Built in 1.17.0; host tests in scripting.rs; not yet verified on Midget.",
+   "wire": "Set properties and delete reminders from a script, and add a list class with its reminders as elements."
   },
   {
    "feature": "Dock badge of due items",
@@ -337,10 +346,10 @@
    "feature": "Rich text in reminder notes (bold, lists)",
    "area": "menu",
    "apple": "Format > Font, Bullets and Numbering",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Markdown rendering of the notes field in view.rs and Format menu items."
+   "status": "partial",
+   "bifrost": "springboard/apps/reminders-desktop/src/format.rs; springboard/apps/reminders-desktop/src/view.rs (row preview)",
+   "note": "The Format menu writes Markdown marks. Row preview shows the notes' first line with the marks removed (format::preview, shell md::to_plain). The notes field still edits the raw Markdown text, so the form does not show rendered bold or lists yet.",
+   "wire": "Render the notes field as Markdown when it is not being edited (bold, lists) the way Notes does, and move the caret after a Format command."
   },
   {
    "feature": "Image attachments",
@@ -389,11 +398,11 @@
   }
  ],
  "summary": {
-  "features": 42,
+  "features": 43,
   "parity": 21,
-  "partial": 18,
+  "partial": 20,
   "gap": 1,
-  "n/a": 2,
-  "coverage_pct": 75.0
+  "n/a": 1,
+  "coverage_pct": 73.8
  }
 }

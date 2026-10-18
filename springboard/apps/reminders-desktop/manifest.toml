@@ -1,6 +1,6 @@
 id = "is.olibuijr.reminders.desktop"
 name = "Reminders"
-version = "1.16.0"
+version = "1.19.0"
 exec = "bifrost-reminders"
 icon = "icon.png"
 min_shell = "0.5.7"
@@ -12,12 +12,22 @@ permissions = ["storage", "notifications", "documents"]
 handles = ["net.daringfireball.markdown:alternate"]
 window = "full-size"
 
+[privacy]
+location = "Reminders tells you when you arrive at or leave a place you chose for a reminder. Your position is checked only while Reminders is open and is never sent anywhere."
+
 [[intent]]
 id = "add-reminder"
 title = "Add Reminder"
 description = "Adds a reminder to the default list, with an optional due date."
 shortcut = false
 params = ["title:string", "due:date?"]
+
+[[intent]]
+id = "create-list-item"
+title = "Create List Item"
+description = "Adds a reminder to the named list, with an optional due date."
+shortcut = false
+params = ["title:string", "list:string", "due:date?"]
 
 [[intent]]
 id = "quick-reminder"
@@ -53,3 +63,25 @@ title = "Search Reminders"
 description = "Searches the reminders and shows the results."
 shortcut = false
 params = ["query:string"]
+
+[[script.command]]
+name = "make new reminder"
+event = "reminders.make"
+params = ["name", "due"]
+result = "reminder"
+
+[[script.command]]
+name = "make new list"
+event = "reminders.makelist"
+params = ["name"]
+result = "list"
+
+[[script.class]]
+name = "reminder"
+properties = ["name", "id", "notes", "completed", "flagged", "priority", "due", "list"]
+elements = []
+
+[[script.class]]
+name = "list"
+properties = ["name", "id"]
+elements = []

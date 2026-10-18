@@ -42,7 +42,7 @@ use super::keyboard::{self, Keyboard, Out};
 use super::textfield::TextField;
 use super::ui::{home_zone, Ui, Weight, BLACK, CELL, SECONDARY, WHITE};
 use super::{clipboard, Event};
-use crate::deildu::http::Transport;
+use crate::deildu::http::{self, TlsRejection, Transport};
 use crate::deildu::scroll::Scroller;
 use crate::gfx::Surface;
 use crate::scene::STATUS_PT;
@@ -305,7 +305,15 @@ pub struct Browser {
     long_fired: bool,
     menu_down: Option<(f32, f32)>,
     toast: Option<(String, f64)>,
+    /// the TLS stack refused the certificate of the last page that failed to load; the shell shows it
+    trust_prompt: Option<TlsRejection>,
     dirty: bool,
+}
+
+/// The chain the TLS stack refused for the host of `url` since the last call, if it refused one.
+fn refused_certificate(url: &str) -> Option<TlsRejection> {
+    let host = url::Url::parse(url).ok()?.host_str()?.to_string();
+    http::take_rejection(&host)
 }
 
 fn within(x: f32, y: f32, (rx, ry, rw, rh): (f32, f32, f32, f32)) -> bool {
@@ -343,6 +351,7 @@ impl Browser {
             long_fired: false,
             menu_down: None,
             toast: None,
+            trust_prompt: None,
             dirty: true,
         };
         b.url.focused = false;
@@ -355,6 +364,12 @@ impl Browser {
         b.active = active.min(b.tabs.len() - 1);
         b.ensure_loaded(ui, b.active, t);
         b
+    }
+
+    /// The certificate chain the TLS stack refused for the page that just failed to load, once. The shell takes it to
+    /// show the trust sheet.
+    pub fn take_trust_prompt(&mut self) -> Option<TlsRejection> {
+        self.trust_prompt.take()
     }
 
     pub fn set_wall(&mut self, wall: Wall) {
@@ -825,7 +840,16 @@ impl Browser {
                 let restore = self.tabs[ti].restore.take();
                 let f = match result {
                     Ok(f) => f,
-                    Err(e) => fetch::error_page(&url, &e),
+                    Err(e) => match refused_certificate(&url) {
+                        // The page failed because the system refused the site's certificate: say that, and let the
+                        // shell show the chain. The connection stays refused.
+                        Some(refused) => {
+                            let message = format!("The identity of {} could not be verified. {}", refused.host, refused.reason);
+                            self.trust_prompt = Some(refused);
+                            fetch::error_page(&url, &message)
+                        }
+                        None => fetch::error_page(&url, &e),
+                    },
                 };
                 self.install(ui, ti, f, restore, t);
             }

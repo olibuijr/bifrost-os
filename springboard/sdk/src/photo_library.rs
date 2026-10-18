@@ -14,8 +14,10 @@
 //! let img = PHImageManager::image_from_bytes(&bytes, (200, 200), PHImageContentMode::AspectFit)?;
 //! ```
 //! The shell side is `springboard/src/shell/services/photos.rs`. Without the `photos` permission in the manifest the
-//! status is `denied` and a fetch is an error. Gaps: no change observation, no collections, no writes, `isFavorite`
-//! is always false until the Photos app shares its marks.
+//! status is `denied` and a fetch is an error. `PHChange::change_details` compares two fetches (the library's change
+//! record, computed in the app from its last and its new result; the shell does not push changes yet). Gaps: no
+//! collections, no writes here (see `photo_picker`, `photo_editing`, `photo_project`), `isFavorite` is always false
+//! until the Photos app shares its marks.
 pub use crate::controls::photo_access::Status as PHAuthorizationStatus;
 use crate::image_source::{ImageSource, SourceError};
 use crate::runtime::Ctx;
@@ -119,7 +121,11 @@ pub struct PHAsset {
     pub pixel_height: usize,
     /// Seconds since the epoch.
     pub creation_date: u64,
+    /// Seconds since the epoch. A content change gives a new value; the wire falls back to `creation_date`.
+    pub modification_date: u64,
     pub is_favorite: bool,
+    /// `PHAssetMediaSubtype.photoLive`: a still whose movie the library pairs with it (the movie is not listed).
+    pub is_live_photo: bool,
 }
 
 impl PHAsset {
@@ -136,7 +142,9 @@ impl PHAsset {
             pixel_width: record.get("width").and_then(Json::as_u64)? as usize,
             pixel_height: record.get("height").and_then(Json::as_u64)? as usize,
             creation_date: record.get("created").and_then(Json::as_u64)?,
+            modification_date: record.get("modified").and_then(Json::as_u64).or_else(|| record.get("created").and_then(Json::as_u64))?,
             is_favorite: matches!(record.get("favorite"), Some(Json::Bool(true))),
+            is_live_photo: matches!(record.get("live"), Some(Json::Bool(true))),
         })
     }
 }
@@ -181,6 +189,42 @@ impl PHPhotoLibrary {
     }
 }
 
+/// The event the shell pushes to a change observer.
+pub const LIBRARY_DID_CHANGE: &str = "library_did_change";
+
+impl PHPhotoLibrary {
+    /// `register(_:)` of a library observer: the shell keeps the listing the app now sees and pushes
+    /// `library_did_change` when it changes. Decode each push with [`PHPhotoLibrary::decode_change`].
+    pub fn start_observing(ctx: &Ctx) -> u32 {
+        service::call(ctx, SERVICE, "observe", &Json::Null)
+    }
+
+    /// `unregisterChangeObserver`: the pushes stop.
+    pub fn stop_observing(ctx: &Ctx) -> u32 {
+        service::call(ctx, SERVICE, "unobserve", &Json::Null)
+    }
+
+    /// The change a pushed `ServiceEvent` carries, or None when it is not a library change. The indexes refer to the
+    /// listing the observer started from (the default fetch: oldest first, no predicate).
+    pub fn decode_change(service: &str, event: &str, body: &Json) -> Option<PHFetchResultChangeDetails> {
+        if service != SERVICE || event != LIBRARY_DID_CHANGE {
+            return None;
+        }
+        let indexes = |key: &str| -> Option<Vec<usize>> {
+            body.get(key)?.as_array()?.iter().map(|v| v.as_u64().map(|n| n as usize)).collect()
+        };
+        let d = PHFetchResultChangeDetails {
+            removed_indexes: indexes("removed")?,
+            inserted_indexes: indexes("inserted")?,
+            moved_indexes: indexes("moved")?,
+            changed_indexes: indexes("changed")?,
+            has_incremental_changes: false,
+        };
+        let has_incremental_changes = !(d.removed_indexes.is_empty() && d.inserted_indexes.is_empty() && d.moved_indexes.is_empty() && d.changed_indexes.is_empty());
+        Some(PHFetchResultChangeDetails { has_incremental_changes, ..d })
+    }
+}
+
 /// The wire name of a status.
 pub fn status_name(s: PHAuthorizationStatus) -> &'static str {
     match s {
@@ -202,6 +246,41 @@ pub fn status_from_name(name: &str) -> Option<PHAuthorizationStatus> {
     ]
     .into_iter()
     .find(|s| status_name(*s) == name)
+}
+
+/// `PHChange`: the change details between two fetches of the same options, the way a library observer receives them.
+pub struct PHChange;
+
+/// `PHFetchResultChangeDetails`: positions into the old and the new [`PHFetchResult`].
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PHFetchResultChangeDetails {
+    /// Positions in the old result that were removed.
+    pub removed_indexes: Vec<usize>,
+    /// Positions in the new result that were inserted.
+    pub inserted_indexes: Vec<usize>,
+    /// Positions in the new result that were moved.
+    pub moved_indexes: Vec<usize>,
+    /// Positions in the new result whose content changed.
+    pub changed_indexes: Vec<usize>,
+    pub has_incremental_changes: bool,
+}
+
+impl PHChange {
+    /// `changeDetails(for:)`: `None` when either result names an asset twice, as the library cannot tell those apart.
+    pub fn change_details(old: &PHFetchResult, new: &PHFetchResult) -> Option<PHFetchResultChangeDetails> {
+        let stamps = |r: &PHFetchResult| -> Vec<crate::controls::photo_changes::Asset> {
+            r.iter().map(|a| crate::controls::photo_changes::Asset { id: a.local_identifier.clone(), modified: a.modification_date }).collect()
+        };
+        let d = crate::controls::photo_changes::details(&stamps(old), &stamps(new)).ok()?;
+        let has_incremental_changes = !d.is_empty();
+        Some(PHFetchResultChangeDetails {
+            removed_indexes: d.removed,
+            inserted_indexes: d.inserted,
+            moved_indexes: d.moved,
+            changed_indexes: d.changed,
+            has_incremental_changes,
+        })
+    }
 }
 
 /// `PHImageContentMode`.
@@ -301,6 +380,56 @@ mod tests {
         let bad = Json::Obj(vec![("assets".into(), Json::Arr(vec![record("a", "hologram")]))]);
         assert!(PHFetchResult::decode(&bad).is_none());
         assert!(PHFetchResult::decode(&Json::Null).is_none());
+    }
+
+    #[test]
+    fn change_details_report_inserts_and_removals() {
+        let old = PHFetchResult::decode(&Json::Obj(vec![("assets".into(), Json::Arr(vec![record("a", "image"), record("b", "image")]))])).unwrap();
+        let new = PHFetchResult::decode(&Json::Obj(vec![("assets".into(), Json::Arr(vec![record("b", "image"), record("c", "image")]))])).unwrap();
+        let d = PHChange::change_details(&old, &new).unwrap();
+        assert_eq!(d.removed_indexes, vec![0]);
+        assert_eq!(d.inserted_indexes, vec![1]);
+        assert!(d.has_incremental_changes);
+        assert!(PHChange::change_details(&old, &old).unwrap().changed_indexes.is_empty());
+        assert!(!PHChange::change_details(&old, &old).unwrap().has_incremental_changes);
+    }
+
+    #[test]
+    fn a_modified_stamp_marks_a_content_change() {
+        let mut edited = record("a", "image");
+        if let Json::Obj(f) = &mut edited {
+            f.push(("modified".into(), Json::Num(5000.0)));
+        }
+        let old = PHFetchResult::decode(&Json::Obj(vec![("assets".into(), Json::Arr(vec![record("a", "image")]))])).unwrap();
+        let new = PHFetchResult::decode(&Json::Obj(vec![("assets".into(), Json::Arr(vec![edited]))])).unwrap();
+        assert_eq!(new.object_at(0).unwrap().modification_date, 5000);
+        assert_eq!(PHChange::change_details(&old, &new).unwrap().changed_indexes, vec![0]);
+    }
+
+    #[test]
+    fn a_live_photo_flag_decodes_from_the_asset_record() {
+        let mut live = record("a", "image");
+        if let Json::Obj(f) = &mut live {
+            f.push(("live".into(), Json::Bool(true)));
+        }
+        assert!(PHAsset::decode(&live).unwrap().is_live_photo);
+        assert!(!PHAsset::decode(&record("b", "image")).unwrap().is_live_photo);
+    }
+
+    #[test]
+    fn a_pushed_library_change_decodes_into_indexes() {
+        let body = Json::Obj(vec![
+            ("removed".into(), Json::Arr(vec![Json::Num(0.0)])),
+            ("inserted".into(), Json::Arr(vec![Json::Num(3.0)])),
+            ("moved".into(), Json::Arr(vec![])),
+            ("changed".into(), Json::Arr(vec![])),
+        ]);
+        let d = PHPhotoLibrary::decode_change(SERVICE, LIBRARY_DID_CHANGE, &body).unwrap();
+        assert_eq!((d.removed_indexes.clone(), d.inserted_indexes.clone()), (vec![0], vec![3]));
+        assert!(d.has_incremental_changes);
+        assert!(PHPhotoLibrary::decode_change("power", LIBRARY_DID_CHANGE, &body).is_none());
+        assert!(PHPhotoLibrary::decode_change(SERVICE, "other", &body).is_none());
+        assert!(PHPhotoLibrary::decode_change(SERVICE, LIBRARY_DID_CHANGE, &Json::Null).is_none());
     }
 
     #[test]

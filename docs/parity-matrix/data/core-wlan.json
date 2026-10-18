@@ -10,23 +10,23 @@
     {
       "feature": "Client and shared instance (CWWiFiClient)",
       "apple": "CWWiFiClient, CWWiFiClient.shared()",
-      "bifrost": "springboard/sdk/src/wifi_status.rs (WifiStatus, WifiState); springboard/sdk/src/wlan_events.rs (Watch, diff)",
+      "bifrost": "springboard/sdk/src/wifi_status.rs (WifiStatus, WifiState); springboard/sdk/src/wlan_events.rs (Watch, diff); sdk/src/wlan_service.rs; springboard/src/shell/services/wifi.rs",
       "status": "partial",
-      "note": "The connection snapshot and its change events are tested headless in springboard/sdk/tests/parity_sdk-os-04.rs. Gap: there is no shared client object; netd runs the supplicant and apps build their snapshot from what the shell sends."
+      "note": "The connection snapshot and its change events are tested headless in springboard/sdk/tests/parity_sdk-os-04.rs. Gap: there is no shared client object; netd runs the supplicant and apps build their snapshot from what the shell sends. Built 2026-10-17: sdk wlan_service exposes the shell's wifi service to apps (interfaces, networks, power, scan, join, forget); the calls go through the same worker as the Wi-Fi page (tests wlan_service::tests, shell services::wifi::tests). Still no shared client object."
     },
     {
       "feature": "Interfaces (CWInterface)",
       "apple": "CWInterface, interfaceNames, powerOn, interfaceMode",
-      "bifrost": "springboard/sdk/src/wifi_status.rs (WifiState, WifiStatus::has_address, signal_bars)",
+      "bifrost": "springboard/sdk/src/wifi_status.rs (WifiState, WifiStatus::has_address, signal_bars); sdk/src/wlan_service.rs; springboard/src/shell/services/wifi.rs",
       "status": "partial",
-      "note": "The state, address and signal of the one wireless link are tested headless in springboard/sdk/tests/parity_sdk-os-04.rs. Gap: no interface names, interface mode or power control reach apps, and the shell uses only the first wireless interface."
+      "note": "The state, address and signal of the one wireless link are tested headless in springboard/sdk/tests/parity_sdk-os-04.rs. Gap: no interface names, interface mode or power control reach apps, and the shell uses only the first wireless interface. Built 2026-10-17: the wifi service lists Wi-Fi interfaces by name with power, connection, SSID and address; a named interface must be a Wi-Fi interface (tests services::wifi::tests). Interface mode and channel settings are still absent."
     },
     {
       "feature": "Scan and network list (CWNetwork)",
       "apple": "CWNetwork: ssid, bssid, rssi, channel, security, ibss, countryCode; scanForNetworks",
-      "bifrost": "springboard/sdk/src/wlan.rs (merge, Network, Band, Phy, SecurityClass, channel_for_freq)",
+      "bifrost": "springboard/sdk/src/wlan.rs (merge, Network, Band, Phy, SecurityClass, channel_for_freq); sdk/src/wlan_service.rs; springboard/src/shell/services/wifi.rs",
       "status": "partial",
-      "note": "Scan results merge by network name and report channel, band, PHY and security, tested headless in springboard/sdk/tests/parity_sdk-os-04.rs. Gap: no IBSS flag, no country code, and no channel width, which the scan flags do not carry."
+      "note": "Scan results merge by network name and report channel, band, PHY and security, tested headless in springboard/sdk/tests/parity_sdk-os-04.rs. Gap: no IBSS flag, no country code, and no channel width, which the scan flags do not carry. Built 2026-10-17: networks from the last scan are readable by apps with bars, security and saved flag, and a scan can be started (tests wlan_service::tests, services::wifi::tests). Still no IBSS flag, country code or channel width. Refreshed 2026-10-17: channel, band and PHY are decoded in springboard/sdk/src/wlan.rs (channel_for_freq, Band, Phy; tests in that module)."
     },
     {
       "feature": "Channel, band, width and PHY mode (CWChannel, CWChannelBand, CWChannelWidth, CWPHYMode)",
@@ -38,9 +38,9 @@
     {
       "feature": "Saved network profiles (CWNetworkProfile, CWMutableNetworkProfile)",
       "apple": "CWNetworkProfile, CWMutableNetworkProfile: ssid, security, priority, password reference",
-      "bifrost": "springboard/src/net/wifi_config.rs:83 (NetworkConfig), springboard/src/net/wifi_config.rs:207 (conf), springboard/src/net/wifi_config.rs:289 (move_network); wired: springboard/src/shell/pages.rs (PageId::KnownNetworks, PageId::WifiDetail); springboard/src/shell/desktop_network.rs (saved list now carries security)",
+      "bifrost": "springboard/src/net/wifi_config.rs:83 (NetworkConfig), springboard/src/net/wifi_config.rs:207 (conf), springboard/src/net/wifi_config.rs:289 (move_network); wired: springboard/src/shell/pages.rs (PageId::KnownNetworks, PageId::WifiDetail); springboard/src/shell/desktop_network.rs (saved list now carries security); sdk/src/wlan_service.rs; springboard/src/shell/services/wifi.rs",
       "status": "partial",
-      "note": "saved list with priority, auto-join and hidden flags; written to springboard.conf, not a managed profile store; no SDK API Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "note": "saved list with priority, auto-join and hidden flags; written to springboard.conf, not a managed profile store; no SDK API Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity. Built 2026-10-17: saved networks are reported through the networks call (saved flag), and forget removes only a saved network. No profile objects for apps yet."
     },
     {
       "feature": "Security types (CWSecurity)",
@@ -52,16 +52,16 @@
     {
       "feature": "Configuration (CWConfiguration, CWMutableConfiguration)",
       "apple": "CWConfiguration, CWMutableConfiguration: interface mode, channel, network profiles, access-point and IBSS settings",
-      "bifrost": "springboard/src/net/wifi.rs:83 (Cmd::Enable, Cmd::SetAutoJoin, Cmd::Move); wired: springboard/src/shell/pages.rs (WifiDetail: Auto-Join, Move Up/Down; unchanged this round)",
+      "bifrost": "springboard/src/net/wifi.rs:83 (Cmd::Enable, Cmd::SetAutoJoin, Cmd::Move); wired: springboard/src/shell/pages.rs (WifiDetail: Auto-Join, Move Up/Down; unchanged this round); sdk/src/wlan_service.rs; springboard/src/shell/services/wifi.rs",
       "status": "partial",
-      "note": "client mode only; no access-point or IBSS configuration and no channel setting Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "note": "client mode only; no access-point or IBSS configuration and no channel setting Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity. Built 2026-10-17: apps can switch the radio with the power call. Access-point and IBSS settings are still absent."
     },
     {
       "feature": "Join, select and forget",
       "apple": "CWInterface.associate(to:password:), associateToEnterpriseNetwork, commitConfiguration",
-      "bifrost": "springboard/sdk/src/wlan_keychain.rs (check_passphrase, password_item, eap_item); springboard/sdk/src/wifi_secrets.rs (WifiSecrets)",
+      "bifrost": "springboard/sdk/src/wlan_keychain.rs (check_passphrase, password_item, eap_item); springboard/sdk/src/wifi_secrets.rs (WifiSecrets); sdk/src/wlan_service.rs; springboard/src/shell/services/wifi.rs",
       "status": "partial",
-      "note": "The passphrase, enterprise credential and per-network secret rules are tested headless in springboard/sdk/tests/parity_sdk-os-04.rs. Gap: no app call joins, selects or forgets a network; netd does those when the shell asks."
+      "note": "The passphrase, enterprise credential and per-network secret rules are tested headless in springboard/sdk/tests/parity_sdk-os-04.rs. Gap: no app call joins, selects or forgets a network; netd does those when the shell asks. Built 2026-10-17: apps join a network (open, or a WPA passphrase of 8 to 63 bytes or a 64-digit key) and forget a saved one through the wifi service; select of a saved network is not exposed. Tests services::wifi::tests and wlan_service::tests. Refreshed 2026-10-17: request_join, request_forget and request_host are in springboard/sdk/src/wlan_service.rs; passwords go through springboard/sdk/src/wlan_keychain.rs and wifi_secrets.rs."
     },
     {
       "feature": "Wi-Fi events (CWEventDelegate, CWEventType)",
@@ -100,12 +100,9 @@
     }
   ],
   "gaps": [
-    "No app-facing SDK API: springboard/sdk/src/ has no network module, so apps cannot list interfaces, scan, join or read status.",
-    "Typed event delegate: netd sends one Status snapshot, not per-event callbacks (ssid, bssid, link, power, scan cache, mode, country code, link quality).",
-    "Channel, band, width and PHY mode are not decoded (ScanResult keeps freq only).",
-    "Access-point and IBSS configuration and channel setting are absent.",
-    "Wi-Fi keychain domain and EAP identity list do not exist; passwords live in the config file.",
-    "WEP and WPA-only personal security types are not supported (Security enum).",
+    "Channel width is not decoded (the scan flags carry no width); channel, band and PHY mode are decoded in springboard/sdk/src/wlan.rs.",
+    "The configuration model has no channel setting; access-point (request_host) and ad-hoc (request_ad_hoc) requests exist in springboard/sdk/src/wlan_service.rs.",
+    "The Other Network sheet offers only the common security choices; WEP and WPA-only are modelled in springboard/src/net/wifi_config.rs (Security) but not offered in the UI.",
     "Link quality beyond RSSI (noise, transmit rate) is not reported."
   ]
 }

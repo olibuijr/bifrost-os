@@ -3,6 +3,24 @@
 //! an on or off value. The registry is the value source the panel reads, and the panel's presses reach it through
 //! `press`, `toggle` and `set_value`. Pure: nothing is drawn or stored outside the registry.
 
+/// The intent parameter a toggle's new state travels in. The shell sends it with the value `"true"` or `"false"`
+/// (see [`toggle_param_value`]); an app reads it with [`toggle_param`].
+pub const TOGGLE_PARAM: &str = "on";
+
+/// The text a toggle's new state is sent as.
+pub fn toggle_param_value(on: bool) -> &'static str {
+    if on { "true" } else { "false" }
+}
+
+/// Reads a toggle's new state from its parameter text. Anything but `"true"` or `"false"` is `None`.
+pub fn toggle_param(value: &str) -> Option<bool> {
+    match value {
+        "true" => Some(true),
+        "false" => Some(false),
+        _ => None,
+    }
+}
+
 /// The longest identifier a control may have, in bytes.
 pub const MAX_IDENTIFIER_LEN: usize = 128;
 
@@ -147,4 +165,23 @@ fn validate_identifier(identifier: &str) -> Result<(), ControlError> {
         return Err(ControlError::InvalidIdentifier { identifier: identifier.into() });
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod toggle_param_tests {
+    use super::*;
+
+    #[test]
+    fn toggle_state_round_trips_through_its_parameter_text() {
+        assert_eq!(TOGGLE_PARAM, "on");
+        assert_eq!(toggle_param(toggle_param_value(true)), Some(true));
+        assert_eq!(toggle_param(toggle_param_value(false)), Some(false));
+    }
+
+    #[test]
+    fn other_text_is_not_a_toggle_state() {
+        assert_eq!(toggle_param("1"), None);
+        assert_eq!(toggle_param("TRUE"), None);
+        assert_eq!(toggle_param(""), None);
+    }
 }

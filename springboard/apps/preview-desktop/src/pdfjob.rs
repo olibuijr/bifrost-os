@@ -44,6 +44,8 @@ pub struct Opened {
     pub info: Vec<(&'static str, String)>,
     /// Whether the file is encrypted.
     pub encrypted: bool,
+    /// The fillable fields of the form, if the file has one.
+    pub form: crate::forms::Form,
 }
 
 /// A result from the worker.
@@ -59,6 +61,8 @@ pub enum Reply {
     Found(String, Vec<Hit>),
     /// The text copied from a page: its lines, one to a line of the string.
     Copied(String),
+    /// The text read for speech: the selection's lines (empty when there is none) and the whole page's, one to a line.
+    Spoken(String, String),
 }
 
 /// A job for the PDF utility queue: it runs with the parsed file and returns its reply.
@@ -125,7 +129,8 @@ impl Pdf {
                 page: self.pages.iter().position(|p| p.num == Some(item.dest.page)),
             })
             .collect();
-        Ok(Opened { sizes, outline, info: self.info(), encrypted: self.doc.is_encrypted() })
+        let form = crate::forms::detect(&self.doc, &self.pages);
+        Ok(Opened { sizes, outline, info: self.info(), encrypted: self.doc.is_encrypted(), form })
     }
 
     /// The title, author, subject and keywords the document information dictionary holds, when they are text.

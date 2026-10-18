@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use bifrost_app::kit::{pack, Image, Surface};
+use bifrost_app::kit::{Image, Surface};
 use bifrost_app::kit::ui::{CARD_BG, LABEL_2, SYSTEM_ORANGE as ORANGE};
 
 /// The classic Calculator icon, built with software shapes so it shares

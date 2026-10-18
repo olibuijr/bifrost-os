@@ -1,7 +1,8 @@
 //! The Time Limit shield: a full-screen cover shown over an app whose daily
 //! limit is reached (or that Downtime does not allow). It offers OK (back to
-//! the Home Screen) and "Ignore Limit" for 15 minutes or the rest of the
-//! day, each behind the Screen Time Passcode when one is set.
+//! the Home Screen) and "Ignore Limit" for one more minute, for 15 minutes,
+//! or for the rest of the day, each behind the Screen Time Passcode when one
+//! is set.
 //!
 //! It only ever takes touches. Hardware keys (power, volume, the screenshot
 //! chord) never reach it, Settings is never shielded, and the shell drops
@@ -9,12 +10,11 @@
 //! cannot be blocked by it.
 
 use super::super::icons::BLUE;
-use super::super::passcode::{Lock, LockOut};
+use super::super::passcode::{Lock, LockOut, Store as Passcode};
 use super::super::ui::{centred, Ui, Weight, SECONDARY, WHITE};
 use super::super::{Event, apps};
 use super::config::{Ignore, Reason};
 use crate::gfx::{pack, rgba, Surface};
-use std::path::Path;
 
 const BG: u32 = pack(18, 18, 20, 255);
 const PLATE: u32 = pack(44, 44, 46, 255);
@@ -24,6 +24,7 @@ const BUTTON_GAP_PT: f32 = 12.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Btn {
+    OneMinute,
     Fifteen,
     Today,
     Ok,
@@ -75,26 +76,35 @@ impl Shield {
     fn rect(&self, ui: &Ui, b: Btn) -> (f32, f32, f32, f32) {
         let (bw, bh, gap) = (ui.pt(BUTTON_W_PT).min(self.w as f32 - ui.pt(40.0)), ui.pt(BUTTON_H_PT), ui.pt(BUTTON_GAP_PT));
         let idx = match b {
-            Btn::Fifteen => 0.0,
-            Btn::Today => 1.0,
-            Btn::Ok => 2.0,
+            Btn::OneMinute => 0.0,
+            Btn::Fifteen => 1.0,
+            Btn::Today => 2.0,
+            Btn::Ok => 3.0,
         };
-        let top = self.h as f32 * 0.58;
+        // the four buttons sit at 58% of the height, moved up so the stack still fits a short window body
+        let stack = 4.0 * bh + 3.0 * gap;
+        let top = (self.h as f32 * 0.58).min(self.h as f32 - stack - ui.pt(16.0)).max(0.0);
         ((self.w as f32 - bw) / 2.0, top + idx * (bh + gap), bw, bh)
     }
 
     fn hit(&self, ui: &Ui, x: f32, y: f32) -> Option<Btn> {
-        [Btn::Fifteen, Btn::Today, Btn::Ok].into_iter().find(|&b| {
+        [Btn::OneMinute, Btn::Fifteen, Btn::Today, Btn::Ok].into_iter().find(|&b| {
             let (rx, ry, rw, rh) = self.rect(ui, b);
             x >= rx && x < rx + rw && y >= ry && y < ry + rh
         })
     }
 
-    /// Centre of a button's ignore/OK area, for tests: 0 = 15 min, 1 = today, 2 = OK.
+    /// Centre of a button's area, for tests: 0 = one minute, 1 = 15 min, 2 = today, 3 = OK.
     pub fn button_centre(&self, ui: &Ui, which: usize) -> (f32, f32) {
-        let b = [Btn::Fifteen, Btn::Today, Btn::Ok][which];
+        let b = [Btn::OneMinute, Btn::Fifteen, Btn::Today, Btn::Ok][which];
         let (x, y, w, h) = self.rect(ui, b);
         (x + w / 2.0, y + h / 2.0)
+    }
+
+    /// The size of the cover: the screen, or a desktop window's body.
+    pub fn resize(&mut self, w: i32, h: i32) {
+        self.w = w;
+        self.h = h;
     }
 
     /// Refreshes the passcode prompt's lockout text; true when a frame is due.
@@ -114,8 +124,8 @@ impl Shield {
         }
     }
 
-    /// Handles a touch; `pass` is the Screen Time passcode file.
-    pub fn touch(&mut self, ui: &Ui, ev: Event, t: f64, pass: &Path) -> Out {
+    /// Handles a touch; `pass` is the Screen Time passcode (keychain-backed).
+    pub fn touch(&mut self, ui: &Ui, ev: Event, t: f64, pass: &Passcode) -> Out {
         if let Some((lock, how)) = &mut self.lock {
             return match lock.touch(ui, ev, t) {
                 LockOut::Unlocked => Out::Ignore(*how),
@@ -139,14 +149,15 @@ impl Shield {
         Out::Open
     }
 
-    fn press(&mut self, b: Btn, pass: &Path) -> Out {
+    fn press(&mut self, b: Btn, pass: &Passcode) -> Out {
         let how = match b {
             Btn::Ok => return Out::Home,
+            Btn::OneMinute => Ignore::OneMinute,
             Btn::Fifteen => Ignore::Fifteen,
             Btn::Today => Ignore::Today,
         };
-        if Lock::required(pass) {
-            self.lock = Some((Lock::new(pass, self.w, self.h), how));
+        if pass.enabled() {
+            self.lock = Some((Lock::with_store(pass.clone(), self.w, self.h), how));
             Out::Open
         } else {
             Out::Ignore(how)
@@ -165,7 +176,12 @@ impl Shield {
             y += img.h as f32 + ui.pt(4.0);
         }
         let radius = ui.pt(5.0).min(6.0);
-        for (b, label, color) in [(Btn::Fifteen, "Ignore Limit for 15 min", BLUE), (Btn::Today, "Ignore Limit For Today", BLUE), (Btn::Ok, "OK", WHITE)] {
+        for (b, label, color) in [
+            (Btn::OneMinute, "Ignore Limit for 1 More Minute", BLUE),
+            (Btn::Fifteen, "Ignore Limit for 15 min", BLUE),
+            (Btn::Today, "Ignore Limit For Today", BLUE),
+            (Btn::Ok, "OK", WHITE),
+        ] {
             let (x, by, w, h) = self.rect(ui, b);
             s.fill_rrect(x, by, w, h, radius, if self.pressed == Some(b) { rgba(70, 70, 74, 255) } else { PLATE });
             let img = ui.text(label, 17.0, Weight::Semibold, color);
@@ -182,7 +198,7 @@ mod tests {
     use super::*;
     use crate::shell::AppId;
 
-    fn tap(sh: &mut Shield, ui: &Ui, which: usize, pass: &Path) -> Out {
+    fn tap(sh: &mut Shield, ui: &Ui, which: usize, pass: &Passcode) -> Out {
         let (x, y) = sh.button_centre(ui, which);
         sh.touch(ui, Event::Down(x, y), 0.0, pass);
         sh.touch(ui, Event::Up(x, y), 1.0, pass)
@@ -199,28 +215,36 @@ mod tests {
     #[test]
     fn ok_goes_home_and_ignore_needs_no_passcode_when_none_is_set() {
         let ui = crate::shell::tests::ui();
-        let none = Path::new("/nonexistent/screentime_passcode.ini");
+        let none = Passcode::memory();
         let mut sh = Shield::new(AppId::Files, Reason::Limit, 1200, 800);
-        assert_eq!(tap(&mut sh, &ui, 2, none), Out::Home);
-        assert_eq!(tap(&mut sh, &ui, 0, none), Out::Ignore(Ignore::Fifteen));
-        assert_eq!(tap(&mut sh, &ui, 1, none), Out::Ignore(Ignore::Today));
+        assert_eq!(tap(&mut sh, &ui, 3, &none), Out::Home);
+        assert_eq!(tap(&mut sh, &ui, 0, &none), Out::Ignore(Ignore::OneMinute));
+        assert_eq!(tap(&mut sh, &ui, 1, &none), Out::Ignore(Ignore::Fifteen));
+        assert_eq!(tap(&mut sh, &ui, 2, &none), Out::Ignore(Ignore::Today));
     }
 
     #[test]
     fn ignore_asks_for_the_passcode_when_one_is_set() {
         let ui = crate::shell::tests::ui();
-        let dir = std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/target/test-shield")).join(std::process::id().to_string());
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("screentime_passcode.ini");
-        let mut store = crate::shell::passcode::Store::load(&path);
+        let mut store = Passcode::memory();
         store.set("1234").unwrap();
         let mut sh = Shield::new(AppId::Files, Reason::Limit, 1200, 800);
-        assert_eq!(tap(&mut sh, &ui, 1, &path), Out::Open, "the keypad is up, nothing granted yet");
+        assert_eq!(tap(&mut sh, &ui, 2, &store), Out::Open, "the keypad is up, nothing granted yet");
         assert!(sh.lock.is_some());
         let mut buf = vec![0u32; 1200 * 800];
         sh.draw(&mut Surface { w: 1200, h: 800, stride: 1200, px: &mut buf, y0: 0 }, &ui, 0.0);
-        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_resized_cover_lays_its_buttons_inside_the_window_body() {
+        let ui = crate::shell::tests::ui();
+        let mut sh = Shield::new(AppId::Files, Reason::Limit, 1200, 800);
+        // a body the size of a small desktop window (the cover's buttons start at 58% of its height)
+        sh.resize(960, 640);
+        for which in 0..4 {
+            let (x, y) = sh.button_centre(&ui, which);
+            assert!(x > 0.0 && x < 960.0 && y > 0.0 && y < 640.0, "button {which} at ({x}, {y}) is outside 960x640");
+        }
     }
 
     #[test]

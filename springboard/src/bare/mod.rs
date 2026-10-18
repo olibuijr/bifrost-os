@@ -1,6 +1,8 @@
 //! Running without Android: KMS display, evdev input, sysfs power.
 pub mod chord_recovery;
 pub mod bluetooth;
+pub mod rfcomm;
+pub mod ambient_sensor;
 pub mod boost;
 pub mod control;
 pub mod cpuprofile;
@@ -30,11 +32,13 @@ pub mod wl_touch;
 pub mod wayland;
 #[cfg(feature = "desktop-wayland")]
 pub mod material_client;
+pub mod window_level_client;
 
 #[cfg(feature="desktop-wayland")]
 pub mod desktop_input;
 
 pub mod account;
+pub mod account_policy;
 
 #[cfg(feature="desktop-wayland")]
 pub mod app_policy;

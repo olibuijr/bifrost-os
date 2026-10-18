@@ -100,9 +100,9 @@
    "area": "panel",
    "apple": "Song > Get Info",
    "status": "partial",
-   "bifrost": "springboard/apps/music-desktop/src/music/info.rs::Info",
-   "note": "Song > Get Info and a song's ... menu open a page that edits Title, Artist and Album. The edits are kept by path in info.txt and laid over the tags at each scan. The audio files are not written, and artwork and lyrics cannot be edited yet.",
-   "wire": "Write the edited tags into the files (needs a tag writer in the media crate); then artwork and lyrics"
+   "bifrost": "springboard/apps/music-desktop/src/music/info.rs::Info; springboard/src/media/audiofile.rs::write_tags (tag writer: ID3v2.4 for MP3 and ADTS, ilst for M4A, atomic write)",
+   "note": "Song > Get Info and a song's ... menu open a page that edits Title, Artist and Album. Each edit is kept by path in info.txt, laid over the tags at each scan, and written into the song's file through the tag writer (MP3, ADTS, M4A). The writer covers title, artist, album, album artist, track, year, lyrics and cover. An MP3 rewrite keeps every ID3 frame the model does not hold (genre, comments, chapters) and refuses tags it cannot copy safely. Files with chapters and FLAC/WAV keep the sidecar edit only. Artwork and lyrics cannot be edited in the sheet yet.",
+   "wire": "Add artwork and lyrics fields to the Get Info sheet; keep non-model ID3 frames (genre, comment) when rewriting an MP3 tag; add CHAP output to the ID3 writer so chaptered files can be edited."
   },
   {
    "feature": "Favourite songs",
@@ -145,18 +145,18 @@
    "area": "view",
    "apple": "Window > MiniPlayer / Full Screen Player",
    "status": "partial",
-   "bifrost": "springboard/apps/music-desktop/src/music.rs::draw_sheet",
-   "note": "Player sheet and mini bar, with the route button in the bar; no separate MiniPlayer window, because apps have no window size request in the SDK yet.",
-   "wire": "Add a compact MiniPlayer window mode from a Window menu item, once the SDK can resize an app window"
+   "bifrost": "springboard/apps/music-desktop/src/music/miniplayer.rs; springboard/apps/music-desktop/src/app.rs (MusicApp::toggle_mini, mini_touch, draw_window)",
+   "note": "Player sheet and mini bar. Window > MiniPlayer (Option+Cmd+M) opens a small extra window with the artwork, title and artist, the transport, a scrubber and the volume; closing it returns to the main window. Window > Keep MiniPlayer on Top floats it. The layout and hit tests are tested headless in music/miniplayer.rs. Not yet checked on Midget.",
+   "wire": "Check on Midget that the window opens, takes taps and drags, floats when asked and closes; confirm the artwork (the BIG cache size) fits its 80 pt box."
   },
   {
    "feature": "Lyrics view",
    "area": "panel",
    "apple": "View > Lyrics",
    "status": "partial",
-   "bifrost": "springboard/apps/music-desktop/src/music.rs::draw_lyrics",
-   "note": "A .lrc file beside a song adds a Lyrics switch on the Now Playing sheet; the line being sung is highlighted and follows the song. View > Show Lyrics does the same. Plain-text lyrics are listed without highlight. Not yet checked on Midget.",
-   "wire": "Verify timed .lrc highlighting and plain-text lyrics in the Now Playing sheet on Midget."
+   "bifrost": "springboard/apps/music-desktop/src/music/lyrics.rs (Lyrics::load, load_embedded); springboard/src/media/id3.rs (lyrics); music.rs::draw_lyrics",
+   "note": "A .lrc file beside a song, or else the lyrics tagged in the file (ID3 USLT), adds a Lyrics switch on the Now Playing sheet; timed lyrics highlight the line being sung and follow the song. View > Show Lyrics does the same. Plain-text lyrics are listed without highlight. Not yet checked on Midget.",
+   "wire": "Verify on Midget the timed .lrc highlighting, lyrics embedded in an MP3 (USLT) and plain-text lyrics in the Now Playing sheet."
   },
   {
    "feature": "Equalizer",
@@ -171,10 +171,10 @@
    "feature": "Playback settings: crossfade, Sound Check",
    "area": "settings",
    "apple": "Settings > Playback",
-   "status": "partial",
-   "bifrost": "springboard/apps/music-desktop/src/music/playback.rs (Playback::gain, crossfade_gains, parse, to_text)",
-   "note": "The crossfade length (up to 12 seconds), the Sound Check gain toward -16 dB with a 9 dB limit, the settings file and the equal-power crossfade curve are tested headless in tests/parity_app-music_w8.rs. Not yet: no Settings page sets them, and the audio service has no crossfade or gain command, so the engine does not use them.",
-   "wire": "Settings page with the crossfade seconds and a Sound Check switch; crossfade and gain commands in the audio service"
+   "status": "gap",
+   "bifrost": "springboard/apps/music-desktop/src/music/playback.rs (Playback::gain, crossfade_gains, loudness_from_replaygain); springboard/src/media/id3.rs, ilst.rs (ReplayGain tag readers)",
+   "note": "Crossfade length (up to 12 seconds), the Sound Check gain toward -16 dB with a 9 dB limit, the settings file, the equal-power crossfade curve and the ReplayGain track tag (ID3 TXXX and MP4 freeform) are read and tested headless. Not yet: no Settings page sets them; the audio service plays one track at a time (springboard/src/media/audioplayer.rs has one decoder and one gain, the volume), so there is no second decoder to overlap the next track and no per-track gain stage, and nothing sends the values to the engine.",
+   "wire": "Settings page with the crossfade seconds and a Sound Check switch; a per-track gain stage and a second decoder in audioplayer.rs for the overlap; send the track gain (loudness_from_replaygain) with each queued track."
   },
   {
    "feature": "Recently Added / Recently Played",
@@ -243,9 +243,9 @@
  "summary": {
   "features": 26,
   "parity": 8,
-  "partial": 16,
-  "gap": 0,
+  "partial": 15,
+  "gap": 1,
   "n/a": 2,
-  "coverage_pct": 66.7
+  "coverage_pct": 64.6
  }
 }

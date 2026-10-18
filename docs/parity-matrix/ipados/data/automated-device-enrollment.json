@@ -1,0 +1,28 @@
+{
+  "framework": "Automated Device Enrollment",
+  "doc": "https://developer.apple.com/documentation/automateddeviceenrollment",
+  "macos_since": "",
+  "status": "n/a",
+  "bifrost": "none",
+  "summary": "Lets a third-party MDM app add devices to an organisation through Apple's device enrollment service. The service is tied to Apple's enrollment program, which BifrOSt does not have. iPadOS 16.1 and later per the index.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run this round; owner rule); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Add devices sheet",
+      "apple": "automatedDeviceEnrollmentAddition(isPresented:)",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Presents Apple's enrollment flow; depends on Apple's service."
+    },
+    {
+      "feature": "Add-devices entitlement",
+      "apple": "com.apple.developer.automated-device-enrollment.add-devices",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Apple entitlement for the enrollment program."
+    }
+  ],
+  "gaps": [
+    "Not planned: depends on Apple's device enrollment program."
+  ]
+}

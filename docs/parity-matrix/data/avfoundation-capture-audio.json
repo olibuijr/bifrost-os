@@ -4,7 +4,7 @@
   "macos_since": "10.7",
   "status": "partial",
   "bifrost": "bifrost_app::audio (springboard/src/svc.rs), springboard/audiod, springboard/src/media/capture.rs, v4l2.rs, springboard/src/shell/camera/",
-  "summary": "Audio playback and microphone recording work through an audio service with an SDK client, and the shell has a V4L2 camera pipeline for the Camera app. Apps get no camera capture API, no capture session model, no photo or depth capture, no audio engine graph and no speech synthesis.",
+  "summary": "Audio playback and microphone recording work through an audio service with an SDK client, and the shell has a V4L2 camera pipeline for the Camera app. Apps get no camera capture API, no capture session model, no photo or depth capture, no audio engine graph and no speech synthesis. Refreshed 2026-10-17: Speech synthesis is built: springboard/sdk/src/speech.rs (Utterance, Voice, speak, stop, voices; tests speech::tests) with the shell service springboard/src/shell/services/speech.rs, so that gap is closed.",
   "rea_evidence": "ev_3454e00a1652a501787395c901dc99acf7b01ec817aac14225f902e711fb2d33",
   "features": [
     {
@@ -88,7 +88,6 @@
   "gaps": [
     "App-facing capture API (session, device discovery, inputs and outputs) for camera and microphone",
     "Per-app camera and microphone permission prompts",
-    "Speech synthesis (voices, utterances, accessibility use)",
     "Audio engine graph with effects and buffers",
     "Video recording to file and sample buffer outputs",
     "Depth, metadata and synchronized multi-output capture",

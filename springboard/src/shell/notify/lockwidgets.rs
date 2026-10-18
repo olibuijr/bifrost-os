@@ -163,7 +163,7 @@ mod tests {
     }
 
     fn ev(id: u64, date: Date, minute: u16, duration: u16, all_day: bool, title: &str) -> CalendarEvent {
-        CalendarEvent { id, date, minute, duration, all_day, title: title.into(), location: String::new(), notes: String::new(), repeat: 0, alert: 0 }
+        CalendarEvent { id, date, minute, duration, all_day, title: title.into(), location: String::new(), notes: String::new(), repeat: 0, alert: 0, uid: String::new() }
     }
 
     #[test]

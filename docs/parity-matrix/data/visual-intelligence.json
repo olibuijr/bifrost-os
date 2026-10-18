@@ -12,7 +12,7 @@
       "apple": "Visual Intelligence framework; Integrating your app with visual intelligence (article)",
       "bifrost": "springboard/sdk/src/visual_search.rs, springboard/ui/src/visual_search.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 5 tests. Wave 2 (visual-intelligence, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No system pass of camera or screenshot content to apps and no app return path for matches. The camera has a QR scanner only."
+      "note": "verified on Midget 0.7.25 by 5 tests. Wave 2 (visual-intelligence, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No system pass of camera or screenshot content to apps and no app return path for matches. The camera has a QR scanner only. Checked 2026-10-17: the app-side return path (VisualSearchProvider and search, with app-id stamping) and the crop selection are in the code; the gap that remains is the system delivery of camera or screenshot scenes to the shell, which needs camera and screenshot capture on the device."
     },
     {
       "feature": "SemanticContentDescriptor (scene labels, pixel buffer for apps)",
@@ -59,9 +59,9 @@
   ],
   "gaps": [
     "No system delivery of camera or screenshot scenes to third-party apps (the core of the framework).",
-    "No app return path for visual matches (an app cannot answer a scene query with results).",
-    "No scene classification labels (SemanticContentDescriptor.labels) and no pixel-buffer scene type for apps.",
-    "No object selection in screenshots feeding a search.",
+    "App return path is a model only: sdk visual_search::VisualSearchProvider answers a Scene with Matches, and search() stamps each match with the provider app id (tests in sdk/src/visual_search.rs); the shell does not call it yet.",
+    "Scene labels and pixels exist (ui visual_search::Scene::new, with_labels, pixel); the caller supplies the labels, nothing classifies the scene.",
+    "Object selection exists as Scene::crop(PixelRect) in ui visual_search; no screenshot UI feeds it yet.",
     "App Intents are not exposed to a Shortcuts app or to a Siri-like assistant; entity queries are reachable only through the control socket and the Spotlight shortcut list."
   ]
 }

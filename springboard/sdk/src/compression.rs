@@ -2,17 +2,22 @@
 //!
 //! This is the app-facing counterpart of the reference compression API (`compression_encode_buffer`,
 //! `compression_decode_buffer`, `compression_stream_*`, `InputFilter`, `OutputFilter`, `FilterError`).
-//! The codecs are DEFLATE (RFC 1951) and the zlib wrapper (RFC 1950). The encoder is greedy LZ77 with
-//! dynamic Huffman blocks, chosen by a [`Level`] (the chain depth of the match search). It can also
-//! split large inputs over several threads (`encode_buffer_threaded`). Algorithm cases this build has
-//! no codec for (Brotli, LZ4, LZBITMAP, LZFSE, LZMA) are named so that app code keeps the reference
-//! shape, and they fail with `Error::Unsupported`. `Algorithm::Deflate` (raw DEFLATE, no wrapper) is a
-//! BifrOSt addition.
+//! The codecs are DEFLATE (RFC 1951), the zlib wrapper (RFC 1950), LZ4 (`lz4`: block, the buffer framing and
+//! the LZ4 frame format) and LZMA (`lzma`: the xz container around LZMA2, with CRC32, CRC64 and SHA-256 checks).
+//! The DEFLATE encoder is greedy or lazy LZ77 with dynamic Huffman blocks, chosen by a
+//! [`Level`] (the chain depth of the match search; Default and Best are lazy). A block is stored when that is
+//! smaller. Large inputs can be split over several threads (`encode_buffer_threaded`). Algorithm cases this build
+//! has no codec for (Brotli, LZBITMAP, LZFSE) are named so that app code keeps the reference shape, and they
+//! fail with `Error::Unsupported`. `Algorithm::Deflate` (raw DEFLATE, no wrapper) is a BifrOSt addition.
 //!
-//! Streams and filters buffer their input and run the one-shot codec when they are finalized, so no
-//! output appears before `finalize`. Output is still delivered in chunks of the requested size.
+//! Streams and filters are incremental. The encoder emits each block as soon as it is full (65535 bytes of input), and
+//! the decoder returns output as soon as each symbol completes (`inflate_stream`), so output appears
+//! before `finalize`. Output is delivered in chunks of the requested size.
 
 mod dynamic;
+mod inflate_stream;
+pub mod lz4;
+pub mod lzma;
 
 use springboard::pngenc::adler32;
 use bifrost_render::cg::pdf::inflate;
@@ -37,7 +42,7 @@ pub enum Algorithm {
 impl Algorithm {
     /// True for the algorithms this build can encode and decode.
     pub fn is_supported(self) -> bool {
-        matches!(self, Algorithm::Zlib | Algorithm::Deflate)
+        matches!(self, Algorithm::Zlib | Algorithm::Deflate | Algorithm::Lz4 | Algorithm::Lzma)
     }
 }
 
@@ -119,6 +124,9 @@ pub fn encode_buffer_threaded(algorithm: Algorithm, src: &[u8], level: Level, th
             Ok(out)
         }
         Algorithm::Deflate => Ok(dynamic::encode_threaded(src, level, threads)),
+        // LZ4 and LZMA have no level or thread option; the level and thread count are ignored
+        Algorithm::Lz4 => Ok(lz4::encode_buffer(src)),
+        Algorithm::Lzma => Ok(lzma::encode_buffer(src)),
         other => Err(Error::Unsupported(other)),
     }
 }
@@ -154,25 +162,115 @@ pub fn decode_buffer_limited(algorithm: Algorithm, src: &[u8], limit: usize) -> 
             inflate::inflate_limited(&src[2..], limit).map_err(Error::from)
         }
         Algorithm::Deflate => inflate::inflate_limited(src, limit).map_err(Error::from),
+        Algorithm::Lz4 => lz4::decode_buffer(src, limit),
+        Algorithm::Lzma => lzma::decode_buffer(src, limit),
         other => Err(Error::Unsupported(other)),
     }
 }
 
-fn run(op: FilterOperation, algorithm: Algorithm, input: &[u8]) -> Result<Vec<u8>, Error> {
-    match op {
-        FilterOperation::Compress => encode_buffer(algorithm, input),
-        FilterOperation::Decompress => decode_buffer(algorithm, input),
+use dynamic::Encoder as DeflateEncoder;
+use inflate_stream::Decoder;
+
+/// ADLER-32 modulus (RFC 1950 section 8).
+const ADLER_MOD: u64 = 65_521;
+
+/// zlib framing around the incremental DEFLATE encoder: the two-byte header goes out with the first
+/// output, and the Adler-32 trailer with `finish`. Raw DEFLATE has neither.
+#[derive(Debug)]
+struct Compressor {
+    zlib: bool,
+    header: Vec<u8>,
+    deflate: DeflateEncoder,
+    a: u64,
+    b: u64,
+}
+
+impl Compressor {
+    fn new(zlib: bool) -> Compressor {
+        let header = if zlib { vec![0x78, 0x9c] } else { Vec::new() };
+        Compressor { zlib, header, deflate: DeflateEncoder::new(Level::Default), a: 1, b: 0 }
+    }
+
+    /// Adds `src` and returns the output it completes, header first.
+    fn write(&mut self, src: &[u8]) -> Vec<u8> {
+        if self.zlib {
+            for &x in src {
+                self.a = (self.a + x as u64) % ADLER_MOD;
+                self.b = (self.b + self.a) % ADLER_MOD;
+            }
+        }
+        let mut out = std::mem::take(&mut self.header);
+        out.extend(self.deflate.write(src));
+        out
+    }
+
+    /// Closes the stream and returns the rest of the output, trailer last.
+    fn finish(self) -> Vec<u8> {
+        let mut out = self.header;
+        out.extend(self.deflate.finish());
+        if self.zlib {
+            out.extend((((self.b << 16) | self.a) as u32).to_be_bytes());
+        }
+        out
     }
 }
 
-/// A multiple-step compression stream. Input is collected by `process` and the codec runs on
-/// the whole input when `finalize` is true, so the output comes from the final call.
+/// The codec under a stream or filter: an incremental DEFLATE or zlib compressor or decoder, or, for an
+/// algorithm with no incremental codec here (LZ4 and LZMA), the input buffered and run through the one-shot codec
+/// when the stream ends.
+#[derive(Debug)]
+enum Codec {
+    Encode(Compressor),
+    Decode(Decoder),
+    Buffered { op: FilterOperation, algorithm: Algorithm, input: Vec<u8> },
+}
+
+impl Codec {
+    fn new(op: FilterOperation, algorithm: Algorithm) -> Codec {
+        let zlib = algorithm == Algorithm::Zlib;
+        match (op, algorithm) {
+            (_, Algorithm::Lz4 | Algorithm::Lzma) => Codec::Buffered { op, algorithm, input: Vec::new() },
+            (FilterOperation::Compress, _) => Codec::Encode(Compressor::new(zlib)),
+            (FilterOperation::Decompress, _) => Codec::Decode(Decoder::new(zlib, inflate::MAX_OUT)),
+        }
+    }
+
+    /// Feeds `src` and returns the output it completes.
+    fn write(&mut self, src: &[u8]) -> Result<Vec<u8>, Error> {
+        match self {
+            Codec::Encode(c) => Ok(c.write(src)),
+            Codec::Decode(d) => d.feed(src).map_err(Error::from),
+            Codec::Buffered { input, .. } => {
+                input.extend_from_slice(src);
+                Ok(Vec::new())
+            }
+        }
+    }
+
+    /// Ends the input and returns the rest of the output. Fails when the input was not a whole stream.
+    fn finish(self) -> Result<Vec<u8>, Error> {
+        match self {
+            Codec::Encode(c) => Ok(c.finish()),
+            Codec::Decode(d) => d.finish().map_err(Error::from),
+            Codec::Buffered { op: FilterOperation::Compress, algorithm, input } => encode_buffer(algorithm, &input),
+            Codec::Buffered { op: FilterOperation::Decompress, algorithm, input } => decode_buffer(algorithm, &input),
+        }
+    }
+}
+
+/// Sends `out` to `sink` in pieces of at most `capacity` bytes.
+fn deliver<F: FnMut(&[u8])>(sink: &mut F, capacity: usize, out: &[u8]) {
+    for chunk in out.chunks(capacity) {
+        sink(chunk);
+    }
+}
+
+/// A multiple-step compression stream. `process` takes input as it comes and returns the output that is
+/// ready: compressed blocks as they fill, or decoded bytes as they complete. `finalize` ends the stream
+/// and returns the rest. Calls after the stream is finalized fail with `Error::Finished`.
 #[derive(Debug)]
 pub struct Stream {
-    op: FilterOperation,
-    algorithm: Algorithm,
-    pending: Vec<u8>,
-    finished: bool,
+    codec: Option<Codec>,
 }
 
 impl Stream {
@@ -181,36 +279,34 @@ impl Stream {
         if !algorithm.is_supported() {
             return Err(Error::Unsupported(algorithm));
         }
-        Ok(Stream { op, algorithm, pending: Vec::new(), finished: false })
+        Ok(Stream { codec: Some(Codec::new(op, algorithm)) })
     }
 
-    /// Adds `src` to the stream. With `finalize` set, returns the whole result and closes the stream;
-    /// otherwise returns an empty buffer.
+    /// Adds `src` and returns the output it completes. With `finalize` set, also ends the stream and
+    /// returns the rest of its output.
     pub fn process(&mut self, src: &[u8], finalize: bool) -> Result<Vec<u8>, Error> {
-        if self.finished {
-            return Err(Error::Finished);
+        let codec = self.codec.as_mut().ok_or(Error::Finished)?;
+        let mut out = codec.write(src)?;
+        if finalize {
+            if let Some(codec) = self.codec.take() {
+                out.extend(codec.finish()?);
+            }
         }
-        self.pending.extend_from_slice(src);
-        if !finalize {
-            return Ok(Vec::new());
-        }
-        self.finished = true;
-        let input = std::mem::take(&mut self.pending);
-        run(self.op, self.algorithm, &input)
+        Ok(out)
     }
 }
 
-/// Reads processed data from a source. The source is called with the buffer capacity and returns
-/// `None` at the end of its input. The first `read_data` drains the source and runs the codec.
+/// Reads processed data from a source. The source is called with the buffer capacity and returns `None`
+/// at the end of its input. `read_data` asks for input one capacity-sized piece at a time, and only
+/// until it has the bytes it was asked for, so the source is never read further ahead than the reader.
 pub struct InputFilter<F> {
-    op: FilterOperation,
-    algorithm: Algorithm,
+    codec: Option<Codec>,
     capacity: usize,
     source: F,
-    loaded: bool,
-    failure: Option<FilterError>,
-    data: Vec<u8>,
+    /// Processed output not read yet: `pending[pos..]`.
+    pending: Vec<u8>,
     pos: usize,
+    failure: Option<FilterError>,
 }
 
 impl<F: FnMut(usize) -> Option<Vec<u8>>> InputFilter<F> {
@@ -220,49 +316,63 @@ impl<F: FnMut(usize) -> Option<Vec<u8>>> InputFilter<F> {
             return Err(FilterError::InvalidState);
         }
         Ok(InputFilter {
-            op,
-            algorithm,
+            codec: Some(Codec::new(op, algorithm)),
             capacity: buffer_capacity.max(1),
             source: reading_from,
-            loaded: false,
-            failure: None,
-            data: Vec::new(),
+            pending: Vec::new(),
             pos: 0,
+            failure: None,
         })
     }
 
     /// Returns up to `length` bytes of processed data. An empty result means the end of the output.
+    /// Bad input is reported once, on the read that reaches it, and every later read fails the same way.
     pub fn read_data(&mut self, length: usize) -> Result<Vec<u8>, FilterError> {
-        if !self.loaded {
-            self.loaded = true;
-            let mut input = Vec::new();
-            while let Some(chunk) = (self.source)(self.capacity) {
-                input.extend(chunk);
-            }
-            match run(self.op, self.algorithm, &input) {
-                Ok(data) => self.data = data,
-                Err(_) => self.failure = Some(FilterError::InvalidData),
-            }
-        }
         if let Some(e) = self.failure {
             return Err(e);
         }
-        let end = self.pos.saturating_add(length).min(self.data.len());
-        let out = self.data[self.pos..end].to_vec();
+        while self.pending.len() - self.pos < length && self.codec.is_some() {
+            match (self.source)(self.capacity) {
+                Some(chunk) => {
+                    let Some(codec) = self.codec.as_mut() else { break };
+                    match codec.write(&chunk) {
+                        Ok(out) => self.pending.extend(out),
+                        Err(_) => return Err(self.fail()),
+                    }
+                }
+                None => {
+                    if let Some(codec) = self.codec.take() {
+                        match codec.finish() {
+                            Ok(out) => self.pending.extend(out),
+                            Err(_) => return Err(self.fail()),
+                        }
+                    }
+                }
+            }
+        }
+        let end = self.pos.saturating_add(length).min(self.pending.len());
+        let out = self.pending[self.pos..end].to_vec();
         self.pos = end;
+        if self.pos == self.pending.len() {
+            self.pending.clear();
+            self.pos = 0;
+        }
         Ok(out)
+    }
+
+    fn fail(&mut self) -> FilterError {
+        self.failure = Some(FilterError::InvalidData);
+        FilterError::InvalidData
     }
 }
 
-/// Writes data into a filter and passes the processed result to a sink. `write` collects the data,
-/// and `finalize` runs the codec and delivers the output in chunks of the buffer capacity.
+/// Writes data into a filter and passes the processed result to a sink. `write` sends the output that is
+/// ready to the sink in chunks of the buffer capacity, and `finalize` sends the rest.
 pub struct OutputFilter<F> {
-    op: FilterOperation,
-    algorithm: Algorithm,
+    codec: Option<Codec>,
     capacity: usize,
     sink: F,
-    pending: Vec<u8>,
-    finished: bool,
+    failure: Option<FilterError>,
 }
 
 impl<F: FnMut(&[u8])> OutputFilter<F> {
@@ -271,36 +381,37 @@ impl<F: FnMut(&[u8])> OutputFilter<F> {
         if !algorithm.is_supported() {
             return Err(FilterError::InvalidState);
         }
-        Ok(OutputFilter {
-            op,
-            algorithm,
-            capacity: buffer_capacity.max(1),
-            sink: writing_to,
-            pending: Vec::new(),
-            finished: false,
-        })
+        Ok(OutputFilter { codec: Some(Codec::new(op, algorithm)), capacity: buffer_capacity.max(1), sink: writing_to, failure: None })
     }
 
-    /// Adds data to the filter. Fails with `InvalidState` after `finalize`.
+    /// Adds data and sends the output it completes to the sink. Fails with `InvalidData` as soon as a
+    /// decompressing filter sees bad input, and with `InvalidState` after `finalize`.
     pub fn write(&mut self, data: &[u8]) -> Result<(), FilterError> {
-        if self.finished {
-            return Err(FilterError::InvalidState);
+        if let Some(e) = self.failure {
+            return Err(e);
         }
-        self.pending.extend_from_slice(data);
-        Ok(())
+        let codec = self.codec.as_mut().ok_or(FilterError::InvalidState)?;
+        match codec.write(data) {
+            Ok(out) => {
+                deliver(&mut self.sink, self.capacity, &out);
+                Ok(())
+            }
+            Err(_) => {
+                self.failure = Some(FilterError::InvalidData);
+                Err(FilterError::InvalidData)
+            }
+        }
     }
 
-    /// Runs the codec over everything written and sends the output to the sink in chunks.
+    /// Ends the input and sends the rest of the output to the sink. Fails with `InvalidState` if the
+    /// filter was already finalized.
     pub fn finalize(&mut self) -> Result<(), FilterError> {
-        if self.finished {
-            return Err(FilterError::InvalidState);
+        if let Some(e) = self.failure {
+            return Err(e);
         }
-        self.finished = true;
-        let input = std::mem::take(&mut self.pending);
-        let out = run(self.op, self.algorithm, &input).map_err(|_| FilterError::InvalidData)?;
-        for chunk in out.chunks(self.capacity) {
-            (self.sink)(chunk);
-        }
+        let codec = self.codec.take().ok_or(FilterError::InvalidState)?;
+        let out = codec.finish().map_err(|_| FilterError::InvalidData)?;
+        deliver(&mut self.sink, self.capacity, &out);
         Ok(())
     }
 }
@@ -308,6 +419,16 @@ impl<F: FnMut(&[u8])> OutputFilter<F> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn lcg(n: usize) -> Vec<u8> {
+        let mut s = 1u32;
+        (0..n)
+            .map(|_| {
+                s = s.wrapping_mul(1664525).wrapping_add(1013904223);
+                (s >> 24) as u8
+            })
+            .collect()
+    }
 
     #[test]
     fn empty_zlib_stream_has_the_default_header_and_the_empty_adler32() {
@@ -360,6 +481,29 @@ mod tests {
     }
 
     #[test]
+    fn stored_fallback_keeps_incompressible_input_within_five_bytes_per_block() {
+        let data = lcg(200_000);
+        let packed = encode_buffer(Algorithm::Deflate, &data).unwrap();
+        assert!(packed.len() <= data.len() + 5 * data.len().div_ceil(65_535), "{} bytes for {}", packed.len(), data.len());
+        assert_eq!(decode_buffer(Algorithm::Deflate, &packed).unwrap(), data);
+    }
+
+    #[test]
+    fn lazy_and_stored_output_decodes_for_a_mixed_corpus() {
+        let mut mixed = lcg(3000);
+        mixed.extend(std::iter::repeat(b'a').take(5000));
+        mixed.extend(b"abcabcabcabcxabcabcabcy".repeat(40));
+        let corpus = [b"".to_vec(), b"aaaa".to_vec(), mixed, lcg(70_000)];
+        for data in &corpus {
+            for level in [Level::Fast, Level::Default, Level::Best] {
+                let enc = encode_buffer_threaded(Algorithm::Zlib, data, level, 1).unwrap();
+                assert_eq!(decode_buffer(Algorithm::Zlib, &enc).unwrap(), *data);
+                assert_eq!(encode_buffer_threaded(Algorithm::Zlib, data, level, 1).unwrap(), enc);
+            }
+        }
+    }
+
+    #[test]
     fn bad_zlib_header_and_short_input_are_reported() {
         // 0x7800 % 31 == 30, so the header checksum is wrong
         assert_eq!(decode_buffer(Algorithm::Zlib, &[0x78, 0x00, 0x03, 0x00]), Err(Error::InvalidData));
@@ -374,17 +518,97 @@ mod tests {
         assert_eq!(decode_buffer_limited(Algorithm::Deflate, &enc, 10), Err(Error::TooBig));
         assert_eq!(decode_buffer_limited(Algorithm::Deflate, &enc, 100).unwrap(), vec![0u8; 100]);
         assert_eq!(encode_buffer(Algorithm::Lzfse, b"x"), Err(Error::Unsupported(Algorithm::Lzfse)));
-        assert!(!Algorithm::Lz4.is_supported());
+        assert!(Algorithm::Lz4.is_supported());
+        assert!(Algorithm::Lzma.is_supported());
+        assert!(!Algorithm::Lzfse.is_supported());
     }
 
     #[test]
-    fn stream_returns_output_only_when_finalized() {
+    fn an_lz4_stream_buffers_and_round_trips_on_finalize() {
+        let data: Vec<u8> = (0..200_000u32).map(|i| (i % 251) as u8).collect();
+        let mut enc = Stream::init(FilterOperation::Compress, Algorithm::Lz4).unwrap();
+        assert!(enc.process(&data[..1000], false).unwrap().is_empty());
+        let mut packed = enc.process(&data[1000..], true).unwrap();
+        assert_eq!(&packed[..4], b"bv41");
+        let mut dec = Stream::init(FilterOperation::Decompress, Algorithm::Lz4).unwrap();
+        let tail = packed.split_off(packed.len() / 2);
+        assert!(dec.process(&packed, false).unwrap().is_empty());
+        assert_eq!(dec.process(&tail, true).unwrap(), data);
+    }
+
+    #[test]
+    fn a_compress_stream_emits_full_blocks_before_finalize() {
+        let data = lcg(200_000);
+        let mut stream = Stream::init(FilterOperation::Compress, Algorithm::Zlib).unwrap();
+        let mut out = stream.process(&data, false).unwrap();
+        assert!(out.len() > 60_000, "full blocks are returned without finalize, got {} bytes", out.len());
+        out.extend(stream.process(&[], true).unwrap());
+        assert_eq!(out, encode_buffer(Algorithm::Zlib, &data).unwrap());
+        assert_eq!(stream.process(b"x", false), Err(Error::Finished));
+    }
+
+    #[test]
+    fn a_compress_stream_gives_the_one_shot_bytes_for_any_split() {
+        let mut data = lcg(150_000);
+        data.extend_from_slice(&b"split me, split me, ".repeat(3000));
+        let whole = encode_buffer(Algorithm::Zlib, &data).unwrap();
+        for piece in [1usize, 7, 4096, 65_535, 100_000] {
+            let mut stream = Stream::init(FilterOperation::Compress, Algorithm::Zlib).unwrap();
+            let mut out = Vec::new();
+            for chunk in data.chunks(piece) {
+                out.extend(stream.process(chunk, false).unwrap());
+            }
+            out.extend(stream.process(&[], true).unwrap());
+            assert_eq!(out, whole, "piece size {}", piece);
+        }
+    }
+
+    #[test]
+    fn a_decompress_stream_returns_output_before_finalize() {
+        let mut data = lcg(70_000);
+        data.extend_from_slice(&b"decoded early, decoded early, ".repeat(500));
+        let packed = encode_buffer(Algorithm::Zlib, &data).unwrap();
+        let mut stream = Stream::init(FilterOperation::Decompress, Algorithm::Zlib).unwrap();
+        let early = stream.process(&packed[..packed.len() / 2], false).unwrap();
+        assert!(!early.is_empty());
+        assert_eq!(&data[..early.len()], &early[..]);
+        let mut out = early;
+        out.extend(stream.process(&packed[packed.len() / 2..], true).unwrap());
+        assert_eq!(out, data);
+    }
+
+    #[test]
+    fn a_decompress_stream_takes_one_byte_at_a_time() {
+        let data = b"one byte at a time ".repeat(100);
+        let packed = encode_buffer(Algorithm::Deflate, &data).unwrap();
+        let mut stream = Stream::init(FilterOperation::Decompress, Algorithm::Deflate).unwrap();
+        let mut out = Vec::new();
+        for (i, b) in packed.iter().enumerate() {
+            out.extend(stream.process(&[*b], i + 1 == packed.len()).unwrap());
+        }
+        assert_eq!(out, data);
+    }
+
+    #[test]
+    fn a_decompress_stream_reports_bad_input_as_soon_as_it_arrives() {
+        let mut stream = Stream::init(FilterOperation::Decompress, Algorithm::Zlib).unwrap();
+        assert_eq!(stream.process(&[0x79, 0x9c], false), Err(Error::InvalidData));
+    }
+
+    #[test]
+    fn a_truncated_decompress_stream_fails_at_finalize_and_then_is_finished() {
+        let packed = encode_buffer(Algorithm::Zlib, b"truncate this stream please").unwrap();
+        let mut stream = Stream::init(FilterOperation::Decompress, Algorithm::Zlib).unwrap();
+        assert_eq!(stream.process(&packed[..packed.len() - 6], true), Err(Error::Truncated));
+        assert_eq!(stream.process(&[], true), Err(Error::Finished));
+    }
+
+    #[test]
+    fn stream_errors_name_the_finished_state_and_unsupported_algorithms() {
         let mut s = Stream::init(FilterOperation::Compress, Algorithm::Zlib).unwrap();
-        assert_eq!(s.process(b"ab", false).unwrap(), Vec::<u8>::new());
-        let out = s.process(b"c", true).unwrap();
-        assert_eq!(out, encode_buffer(Algorithm::Zlib, b"abc").unwrap());
-        assert_eq!(s.process(b"x", false), Err(Error::Finished));
-        assert_eq!(Stream::init(FilterOperation::Decompress, Algorithm::Lzma).unwrap_err(), Error::Unsupported(Algorithm::Lzma));
+        s.process(b"ab", true).unwrap();
+        assert_eq!(s.process(b"c", false), Err(Error::Finished));
+        assert_eq!(Stream::init(FilterOperation::Decompress, Algorithm::Lzfse).unwrap_err(), Error::Unsupported(Algorithm::Lzfse));
     }
 
     #[test]
@@ -396,6 +620,28 @@ mod tests {
         assert_eq!(f.read_data(10).unwrap(), b"lo".to_vec());
         assert_eq!(f.read_data(1).unwrap(), Vec::<u8>::new());
         assert!(InputFilter::new(FilterOperation::Decompress, Algorithm::Brotli, 4, |_: usize| None).is_err());
+    }
+
+    #[test]
+    fn input_filter_pulls_input_only_as_far_as_the_reader_needs() {
+        let data = lcg(100_000);
+        let packed = encode_buffer(Algorithm::Deflate, &data).unwrap();
+        let mut calls = 0usize;
+        let mut offset = 0usize;
+        let mut f = InputFilter::new(FilterOperation::Decompress, Algorithm::Deflate, 1024, |cap: usize| {
+            calls += 1;
+            if offset >= packed.len() {
+                return None;
+            }
+            let end = (offset + cap).min(packed.len());
+            let piece = packed[offset..end].to_vec();
+            offset = end;
+            Some(piece)
+        })
+        .unwrap();
+        assert_eq!(f.read_data(10).unwrap(), data[..10].to_vec());
+        drop(f);
+        assert!(calls <= 2, "{} source reads for 10 bytes of output", calls);
     }
 
     #[test]
@@ -411,5 +657,17 @@ mod tests {
         let expected = encode_buffer(Algorithm::Zlib, b"abc").unwrap();
         assert!(got.iter().all(|c| c.len() <= 2));
         assert_eq!(got.concat(), expected);
+    }
+
+    #[test]
+    fn output_filter_reports_bad_input_on_the_write_that_has_it() {
+        let mut calls = 0;
+        {
+            let mut f = OutputFilter::new(FilterOperation::Decompress, Algorithm::Zlib, 8, |_: &[u8]| calls += 1).unwrap();
+            assert_eq!(f.write(&[0xff, 0xff, 0x00]), Err(FilterError::InvalidData));
+            assert_eq!(f.write(&[0x00]), Err(FilterError::InvalidData));
+            assert_eq!(f.finalize(), Err(FilterError::InvalidData));
+        }
+        assert_eq!(calls, 0);
     }
 }

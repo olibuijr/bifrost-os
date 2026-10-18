@@ -73,6 +73,66 @@ pub fn radial_t(center: (f32, f32), radius: f32, x: f32, y: f32) -> f32 {
     (dx * dx + dy * dy).sqrt() / radius
 }
 
+/// A looping phase in 0..=1 for an animation that runs back and forth over `period` seconds: 0 at the
+/// start, 1 at half a period, 0 again at the end of each period. A non-positive period, or non-finite input,
+/// gives 0.
+pub fn ping_pong_phase(time: f32, period: f32) -> f32 {
+    if !(time.is_finite() && period.is_finite() && period > 0.0) {
+        return 0.0;
+    }
+    let f = (time / period).rem_euclid(1.0);
+    1.0 - (2.0 * f - 1.0).abs()
+}
+
+/// The colour at offset `t` of two ramps cross-faded by `phase`: 0 shows `from`, 1 shows `to`. The phase is
+/// clamped to 0..=1 and a non-finite phase shows `from`. Animated posters evaluate this per pixel with a
+/// phase from `ping_pong_phase`.
+pub fn cross_fade(from: &Ramp, to: &Ramp, phase: f32, t: f32) -> Rgb {
+    let p = if phase.is_finite() { phase.clamp(0.0, 1.0) } else { 0.0 };
+    let a = from.color_at(t);
+    let b = to.color_at(t);
+    Rgb::new(a.r + (b.r - a.r) * p, a.g + (b.g - a.g) * p, a.b + (b.b - a.b) * p)
+}
+
+/// One frame of an animated diagonal poster: each pixel of a `width` by `height` buffer (row-major)
+/// takes the cross-faded colour of `from` and `to` along the line from the top-left corner to the
+/// bottom-right corner, at the phase `ping_pong_phase(time, period)`. An empty size gives an empty buffer.
+pub fn animated_frame(from: &Ramp, to: &Ramp, width: usize, height: usize, time: f32, period: f32) -> Vec<Rgb> {
+    let phase = ping_pong_phase(time, period);
+    let (w, h) = (width as f32, height as f32);
+    let mut out = Vec::with_capacity(width.saturating_mul(height));
+    for y in 0..height {
+        for x in 0..width {
+            let t = linear_t((0.0, 0.0), (w, h), x as f32 + 0.5, y as f32 + 0.5);
+            out.push(cross_fade(from, to, phase, t));
+        }
+    }
+    out
+}
+
+/// Renders a linear gradient over a `w` x `h` pixel grid as opaque RGBA bytes, row-major from the
+/// top-left pixel. Each pixel samples the ramp at its centre, `linear_t(from, to, x + 0.5, y + 0.5)`.
+/// `None` when a side is zero or the byte count would overflow.
+pub fn render_linear_rgba(w: usize, h: usize, from: (f32, f32), to: (f32, f32), ramp: &Ramp) -> Option<Vec<u8>> {
+    if w == 0 || h == 0 {
+        return None;
+    }
+    let len = w.checked_mul(h)?.checked_mul(4)?;
+    let mut out = Vec::with_capacity(len);
+    for y in 0..h {
+        for x in 0..w {
+            let c = ramp.color_at(linear_t(from, to, x as f32 + 0.5, y as f32 + 0.5));
+            out.extend_from_slice(&[to_byte(c.r), to_byte(c.g), to_byte(c.b), 255]);
+        }
+    }
+    Some(out)
+}
+
+/// A colour channel in 0..=1 as a byte, clamped.
+fn to_byte(v: f32) -> u8 {
+    (v.clamp(0.0, 1.0) * 255.0).round() as u8
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -135,10 +195,74 @@ mod tests {
     }
 
     #[test]
+    fn render_linear_rgba_samples_the_ramp_at_pixel_centres() {
+        let ramp = Ramp::new(&[(0.0, BLACK), (1.0, WHITE)]).unwrap();
+        // two pixels across, the gradient runs left to right over x = 0..2: centres at t = 0.25 and 0.75
+        let px = render_linear_rgba(2, 1, (0.0, 0.0), (2.0, 0.0), &ramp).unwrap();
+        assert_eq!(px, vec![64, 64, 64, 255, 191, 191, 191, 255]);
+    }
+
+    #[test]
+    fn render_linear_rgba_is_row_major_and_opaque() {
+        let ramp = Ramp::new(&[(0.0, BLACK), (1.0, RED)]).unwrap();
+        let px = render_linear_rgba(3, 4, (0.0, 0.0), (0.0, 4.0), &ramp).unwrap();
+        assert_eq!(px.len(), 3 * 4 * 4);
+        assert!(px.chunks(4).all(|p| p[3] == 255));
+        // the last pixel (bottom right) sits at t = 3.5 / 4 = 0.875 along the ramp: red 223, green and blue 0
+        let last = (3 * 4 - 1) * 4;
+        assert_eq!(&px[last..last + 4], &[223, 0, 0, 255]);
+        // the first pixel is at t = 0.5 / 4 = 0.125: red 32
+        assert_eq!(px[0], 32);
+    }
+
+    #[test]
+    fn render_linear_rgba_refuses_empty_or_overflowing_grids() {
+        let ramp = Ramp::new(&[(0.0, BLACK)]).unwrap();
+        assert!(render_linear_rgba(0, 4, (0.0, 0.0), (1.0, 0.0), &ramp).is_none());
+        assert!(render_linear_rgba(4, 0, (0.0, 0.0), (1.0, 0.0), &ramp).is_none());
+        assert!(render_linear_rgba(usize::MAX, 2, (0.0, 0.0), (1.0, 0.0), &ramp).is_none());
+    }
+
+    #[test]
     fn radial_offset_is_distance_over_radius() {
         assert!(close(radial_t((0.0, 0.0), 10.0, 3.0, 4.0), 0.5));
         assert!(close(radial_t((0.0, 0.0), 10.0, 0.0, 0.0), 0.0));
         assert!(close(radial_t((0.0, 0.0), 5.0, 0.0, 10.0), 2.0));
         assert_eq!(radial_t((0.0, 0.0), 0.0, 1.0, 1.0), 1.0);
+    }
+
+
+    #[test]
+    fn ping_pong_phase_runs_up_and_back_each_period() {
+        assert!(ping_pong_phase(0.0, 4.0).abs() < 1e-6);
+        assert!((ping_pong_phase(2.0, 4.0) - 1.0).abs() < 1e-6, "half a period is the peak");
+        assert!((ping_pong_phase(1.0, 4.0) - 0.5).abs() < 1e-6);
+        assert!(ping_pong_phase(4.0, 4.0).abs() < 1e-6, "a whole period is back at the start");
+        assert_eq!(ping_pong_phase(1.0, 0.0), 0.0);
+        assert_eq!(ping_pong_phase(f32::NAN, 4.0), 0.0);
+    }
+
+    #[test]
+    fn cross_fade_moves_from_one_ramp_to_the_other() {
+        let black = Ramp::new(&[(0.0, BLACK), (1.0, BLACK)]).unwrap();
+        let white = Ramp::new(&[(0.0, WHITE), (1.0, WHITE)]).unwrap();
+        assert_eq!(cross_fade(&black, &white, 0.0, 0.3), BLACK);
+        assert_eq!(cross_fade(&black, &white, 1.0, 0.3), WHITE);
+        let half = cross_fade(&black, &white, 0.5, 0.3);
+        assert!(close(half.r, 0.5) && close(half.g, 0.5) && close(half.b, 0.5));
+        assert_eq!(cross_fade(&black, &white, 2.0, 0.3), WHITE, "phase above one is clamped");
+        assert_eq!(cross_fade(&black, &white, f32::NAN, 0.3), BLACK);
+    }
+
+    #[test]
+    fn animated_frame_follows_the_phase_over_the_whole_buffer() {
+        let black = Ramp::new(&[(0.0, BLACK), (1.0, BLACK)]).unwrap();
+        let white = Ramp::new(&[(0.0, WHITE), (1.0, WHITE)]).unwrap();
+        let start = animated_frame(&black, &white, 4, 3, 0.0, 4.0);
+        assert_eq!(start.len(), 12);
+        assert!(start.iter().all(|&c| c == BLACK));
+        let peak = animated_frame(&black, &white, 4, 3, 2.0, 4.0);
+        assert!(peak.iter().all(|&c| c == WHITE));
+        assert!(animated_frame(&black, &white, 0, 3, 0.0, 4.0).is_empty());
     }
 }

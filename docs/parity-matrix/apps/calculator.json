@@ -9,10 +9,10 @@
  "summary": {
   "features": 26,
   "parity": 11,
-  "partial": 11,
-  "gap": 3,
+  "partial": 13,
+  "gap": 1,
   "n/a": 1,
-  "coverage_pct": 66.0
+  "coverage_pct": 70.0
  },
  "features": [
   {
@@ -109,10 +109,10 @@
    "feature": "Currency conversion with live rates",
    "area": "integration",
    "apple": "Localizable: Currency rates unavailable, rate source credit, Updated %@",
-   "status": "gap",
-   "bifrost": "",
-   "note": "No currency category.",
-   "wire": "Add a Currency category in convert.rs fed by a rates service (titan or cloud endpoint) cached with an \"Updated\" timestamp; show the unavailable state offline."
+   "status": "partial",
+   "bifrost": "springboard/apps/calculator-desktop/src/rates.rs; springboard/apps/calculator-desktop/src/convert.rs (Category::Currency, convert_with, rates_note); springboard/apps/calculator-desktop/src/calc.rs (draw_convert note, set_rates); springboard/apps/calculator-desktop/src/main.rs (tick, next_wake)",
+   "note": "Convert > Currency converts ten currencies (EUR, USD, GBP, ISK, SEK, NOK, DKK, JPY, CHF, CAD) through the European Central Bank daily reference rates, a public source with no account. The app checks at most once a day (UTC) on a background thread and caches the file in its data folder; the line under the units reads 'Updated <date>' with the source credit, and offline it keeps the last copy or says the rates are unavailable. Not verified on Midget or against the live file yet; reference rate providers beyond the ECB are not offered.",
+   "wire": "Verify on Midget with the network up and down: the Updated line, the Unavailable result with no cache, and that one check runs per day."
   },
   {
    "feature": "History sidebar (show/hide, grouped by day, delete one, clear all with confirm)",
@@ -199,10 +199,10 @@
    "feature": "Always on top",
    "area": "menu",
    "apple": "Localizable: Always on Top",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Missing.",
-   "wire": "Add a checked Window > Always on Top item that sets the SDK window level for the calculator window."
+   "status": "partial",
+   "bifrost": "springboard/apps/calculator-desktop/src/main.rs:150",
+   "note": "Window > Always on Top is a ticked item. bifrost_app::windows::set_level sends ToShell::WindowLevel (proto tag 0x165); the app host keeps the level (apphost.rs window_level), the shell sets the desk order and the frames (desk.rs band_top, sync_levels, take_wayland_windows), and bare/wayland.rs sends bifrost_window_level_v1 set_level for the window surface. The window server (springboard/wm/src/window_level.rs, wm.rs Level) keeps floating windows above normal ones through map, raise and focus. Built and run only on the host by reading: not verified on Midget.",
+   "wire": "Build the workspace and check the item and the stacking on Midget: open Calculator, choose Window > Always on Top, raise another window over it."
   },
   {
    "feature": "Evaluate intent / Shortcuts",

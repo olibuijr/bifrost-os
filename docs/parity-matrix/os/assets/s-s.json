@@ -22,7 +22,15 @@
    "status": "partial",
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/springboard/assets/SFUIMono.ttf"
+    }
+   ],
+   "ready_note": "BifrOSt's default mono font SFUIMono.ttf (JetBrains Mono, variable wght, OFL) is required by the ISO build. Upright weights only; not the Apple glyph shapes."
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-BoldItalic.otf",
@@ -43,7 +51,20 @@
    "status": "partial",
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/JetBrainsMono-BoldItalic.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute JetBrains Mono (ttf-jetbrains-mono, OFL-1.1) bold italic for the same role; design-similar."
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-Heavy.otf",
@@ -64,7 +85,15 @@
    "status": "partial",
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/springboard/assets/SFUIMono.ttf"
+    }
+   ],
+   "ready_note": "BifrOSt's default mono font SFUIMono.ttf (JetBrains Mono, variable wght, OFL) is required by the ISO build. Upright weights only; not the Apple glyph shapes."
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-HeavyItalic.otf",
@@ -85,7 +114,20 @@
    "status": "partial",
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/JetBrainsMono-ExtraBoldItalic.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute JetBrains Mono (ttf-jetbrains-mono, OFL-1.1) extrabold italic for the same role; design-similar."
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-Light.otf",
@@ -106,7 +148,15 @@
    "status": "partial",
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/springboard/assets/SFUIMono.ttf"
+    }
+   ],
+   "ready_note": "BifrOSt's default mono font SFUIMono.ttf (JetBrains Mono, variable wght, OFL) is required by the ISO build. Upright weights only; not the Apple glyph shapes."
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-LightItalic.otf",
@@ -127,7 +177,20 @@
    "status": "partial",
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/JetBrainsMono-LightItalic.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute JetBrains Mono (ttf-jetbrains-mono, OFL-1.1) light italic for the same role; design-similar."
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-Medium.otf",
@@ -148,7 +211,15 @@
    "status": "partial",
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/springboard/assets/SFUIMono.ttf"
+    }
+   ],
+   "ready_note": "BifrOSt's default mono font SFUIMono.ttf (JetBrains Mono, variable wght, OFL) is required by the ISO build. Upright weights only; not the Apple glyph shapes."
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-MediumItalic.otf",
@@ -169,7 +240,20 @@
    "status": "partial",
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/JetBrainsMono-MediumItalic.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute JetBrains Mono (ttf-jetbrains-mono, OFL-1.1) medium italic for the same role; design-similar."
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-Regular.otf",
@@ -190,7 +274,15 @@
    "status": "partial",
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/springboard/assets/SFUIMono.ttf"
+    }
+   ],
+   "ready_note": "BifrOSt's default mono font SFUIMono.ttf (JetBrains Mono, variable wght, OFL) is required by the ISO build. Upright weights only; not the Apple glyph shapes."
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-RegularItalic.otf",
@@ -211,7 +303,20 @@
    "status": "partial",
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/JetBrainsMono-Italic.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute JetBrains Mono (ttf-jetbrains-mono, OFL-1.1) italic for the same role; design-similar."
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-Semibold.otf",
@@ -232,7 +337,15 @@
    "status": "partial",
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/springboard/assets/SFUIMono.ttf"
+    }
+   ],
+   "ready_note": "BifrOSt's default mono font SFUIMono.ttf (JetBrains Mono, variable wght, OFL) is required by the ISO build. Upright weights only; not the Apple glyph shapes."
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-SemiboldItalic.otf",
@@ -253,7 +366,20 @@
    "status": "partial",
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/JetBrainsMono-SemiBoldItalic.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute JetBrains Mono (ttf-jetbrains-mono, OFL-1.1) semibold italic for the same role; design-similar."
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SFMono-Terminal.ttf",
@@ -274,7 +400,15 @@
    "status": "partial",
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/springboard/assets/SFUIMono.ttf"
+    }
+   ],
+   "ready_note": "BifrOSt's default mono font SFUIMono.ttf (JetBrains Mono, variable wght, OFL) is required by the ISO build. Upright weights only; not the Apple glyph shapes."
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SFMonoItalic-Terminal.ttf",
@@ -295,7 +429,20 @@
    "status": "partial",
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/JetBrainsMono-Italic.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute JetBrains Mono (ttf-jetbrains-mono, OFL-1.1) italic for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Desktop Pictures/.thumbnails/Solar Gradients.heic",
@@ -313,8 +460,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -334,8 +481,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -355,8 +502,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -376,8 +523,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -397,8 +544,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -417,11 +564,25 @@
    "description": "",
    "role": "Dynamic desktop wallpaper (light/dark and time-of-day variants in one HEIC)",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/wallpaper_schedule.rs, springboard/src/shell/settings.rs",
    "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "Time of day: the shell drives the day schedule (wallpaper_schedule, one packed still per slice) when settings.ini sets wallpaper_dynamic=1 (shell.rs info tick). Not matched: the light and dark variant pair (BifrOSt ships no dark stills) and a Settings toggle for dynamic wallpaper (built 2026-10-17: Settings > Wallpaper, Dynamic Wallpaper switch saved as wallpaper_dynamic; tests settings::tests::dynamic_wallpaper_switch_persists_and_turning_it_off_restores_the_picked_still and wallpaper_page::tests::the_dynamic_switch_row_taps_toggle_only_outside_the_preview). Still missing: the light and dark pair. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_schedule::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings::tests"
+    }
+   ],
+   "ready_note": "time-of-day dynamic desktop and its Settings switch: shell::wallpaper_schedule::tests, shell::settings::tests. The light and dark variant pair is not matched (BifrOSt ships no dark stills)."
   },
   {
    "id": "path:/System/Library/Desktop Pictures/Sonoma.heic",
@@ -438,11 +599,25 @@
    "description": "",
    "role": "Dynamic desktop wallpaper (light/dark and time-of-day variants in one HEIC)",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/wallpaper_schedule.rs, springboard/src/shell/settings.rs",
    "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "Time of day: the shell drives the day schedule (wallpaper_schedule, one packed still per slice) when settings.ini sets wallpaper_dynamic=1 (shell.rs info tick). Not matched: the light and dark variant pair (BifrOSt ships no dark stills) and a Settings toggle for dynamic wallpaper (built 2026-10-17: Settings > Wallpaper, Dynamic Wallpaper switch saved as wallpaper_dynamic; tests settings::tests::dynamic_wallpaper_switch_persists_and_turning_it_off_restores_the_picked_still and wallpaper_page::tests::the_dynamic_switch_row_taps_toggle_only_outside_the_preview). Still missing: the light and dark pair. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_schedule::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings::tests"
+    }
+   ],
+   "ready_note": "time-of-day dynamic desktop and its Settings switch: shell::wallpaper_schedule::tests, shell::settings::tests. The light and dark variant pair is not matched (BifrOSt ships no dark stills)."
   },
   {
    "id": "path:/System/Library/Fonts/SFArabic.ttf",
@@ -459,11 +634,19 @@
    "description": "",
    "role": "Script/language coverage font: SFArabic",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansArabic-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansArabic-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/Fonts/SFArabicRounded.ttf",
@@ -480,11 +663,19 @@
    "description": "",
    "role": "Script/language coverage font: SFArabicRounded",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansArabic-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansArabic-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/Fonts/SFArmenian.ttf",
@@ -501,11 +692,19 @@
    "description": "",
    "role": "Script/language coverage font: SFArmenian",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansArmenian-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansArmenian-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/Fonts/SFArmenianRounded.ttf",
@@ -522,11 +721,19 @@
    "description": "",
    "role": "Script/language coverage font: SFArmenianRounded",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansArmenian-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansArmenian-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/Fonts/SFCamera.ttf",
@@ -545,9 +752,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "SFCamera resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/inter/InterVariable.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Inter (inter-font, OFL-1.1) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/SFCompact.ttf",
@@ -565,8 +785,8 @@
    "role": "SF variant font: SFCompact",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "SFCompact resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "SF Compact is the watchOS system face (Apple Watch only); BifrOSt does not run on watch hardware.",
    "rea": [],
    "method": "assessed"
   },
@@ -586,8 +806,8 @@
    "role": "SF variant font: SFCompactItalic",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "SFCompactItalic resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "SF Compact is the watchOS system face (Apple Watch only); BifrOSt does not run on watch hardware.",
    "rea": [],
    "method": "assessed"
   },
@@ -607,8 +827,8 @@
    "role": "SF variant font: SFCompactRounded",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "SFCompactRounded resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "SF Compact Rounded is the watchOS system face (Apple Watch only); BifrOSt does not run on watch hardware.",
    "rea": [],
    "method": "assessed"
   },
@@ -627,11 +847,19 @@
    "description": "",
    "role": "Script/language coverage font: SFGeorgian",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansGeorgian-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansGeorgian-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/Fonts/SFGeorgianRounded.ttf",
@@ -648,11 +876,19 @@
    "description": "",
    "role": "Script/language coverage font: SFGeorgianRounded",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansGeorgian-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansGeorgian-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/Fonts/SFHebrew.ttf",
@@ -669,11 +905,19 @@
    "description": "",
    "role": "Script/language coverage font: SFHebrew",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansHebrew-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansHebrew-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/Fonts/SFHebrewRounded.ttf",
@@ -690,11 +934,19 @@
    "description": "",
    "role": "Script/language coverage font: SFHebrewRounded",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansHebrew-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansHebrew-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/Fonts/SFIndia.ttc",
@@ -711,11 +963,19 @@
    "description": "",
    "role": "Script/language coverage font: SFIndia",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansDevanagari-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansDevanagari-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/Fonts/SFNS.ttf",
@@ -736,7 +996,15 @@
    "status": "partial",
    "note": "BifrOSt default system font is Inter (SFUI.ttf, variable wght+opsz, OFL) as stand-in for SF Pro; optional Geist, IBM Plex Sans, Source Sans 3 in Settings > Fonts. Not the Apple glyph shapes; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/springboard/assets/SFUI.ttf"
+    }
+   ],
+   "ready_note": "BifrOSt's system UI font SFUI.ttf (Inter, variable wght and opsz, OFL) is required by the ISO build as the default system font. Not the Apple glyph shapes."
   },
   {
    "id": "path:/System/Library/Fonts/SFNSItalic.ttf",
@@ -757,7 +1025,20 @@
    "status": "partial",
    "note": "BifrOSt default system font is Inter (SFUI.ttf, variable wght+opsz, OFL) as stand-in for SF Pro; optional Geist, IBM Plex Sans, Source Sans 3 in Settings > Fonts. Not the Apple glyph shapes; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/inter/InterVariable-Italic.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Inter (inter-font, OFL-1.1) italic for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/SFNSMono.ttf",
@@ -778,7 +1059,15 @@
    "status": "partial",
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/springboard/assets/SFUIMono.ttf"
+    }
+   ],
+   "ready_note": "BifrOSt's default mono font SFUIMono.ttf (JetBrains Mono, variable wght, OFL) is required by the ISO build. Upright weights only; not the Apple glyph shapes."
   },
   {
    "id": "path:/System/Library/Fonts/SFNSMonoItalic.ttf",
@@ -799,7 +1088,20 @@
    "status": "partial",
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/JetBrainsMono-Italic.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute JetBrains Mono (ttf-jetbrains-mono, OFL-1.1) italic for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/SFNSRounded.ttf",
@@ -818,9 +1120,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "SFNSRounded resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/ttf-nunito/Nunito-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Nunito (ttf-nunito, OFL-1.1) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/STHeiti Light.ttc",
@@ -841,7 +1156,20 @@
    "status": "partial",
    "note": "CJK glyph coverage comes from the noto-fonts-cjk package through the font fallback chain; not the Apple family or its weight set, and no per-language style selection; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSansCJK-Light.ttc"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Sans CJK (noto-fonts-cjk, OFL-1.1) Light for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/STHeiti Medium.ttc",
@@ -862,7 +1190,20 @@
    "status": "partial",
    "note": "CJK glyph coverage comes from the noto-fonts-cjk package through the font fallback chain; not the Apple family or its weight set, and no per-language style selection; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSansCJK-Medium.ttc"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Sans CJK (noto-fonts-cjk, OFL-1.1) Medium for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXGeneral.otf",
@@ -883,7 +1224,20 @@
    "status": "partial",
    "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerif-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Serif (noto-fonts, OFL-1.1-no-RFN) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXGeneralBol.otf",
@@ -904,7 +1258,20 @@
    "status": "partial",
    "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerif-Bold.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Serif (noto-fonts, OFL-1.1-no-RFN) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXGeneralBolIta.otf",
@@ -925,7 +1292,20 @@
    "status": "partial",
    "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerif-BoldItalic.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Serif (noto-fonts, OFL-1.1-no-RFN) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXGeneralItalic.otf",
@@ -944,9 +1324,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent TeX Gyre Termes (tex-gyre-fonts), metric-compatible; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/tex-gyre/texgyretermes-regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute TeX Gyre Termes (tex-gyre-fonts, GUST Font License) for the same role (a Times-style serif (Termes is the Times clone and matches STIX General metrics closely)); metric-compatible."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXIntDBol.otf",
@@ -965,9 +1358,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/libertinus/LibertinusMath-Regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Libertinus Math (otf-libertinus, OFL-1.1) for the same role (a math integral and summation glyph set); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXIntDReg.otf",
@@ -986,9 +1392,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/libertinus/LibertinusMath-Regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Libertinus Math (otf-libertinus, OFL-1.1) for the same role (a math integral and summation glyph set); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXIntSmBol.otf",
@@ -1007,9 +1426,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/libertinus/LibertinusMath-Regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Libertinus Math (otf-libertinus, OFL-1.1) for the same role (a math integral and summation glyph set); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXIntSmReg.otf",
@@ -1028,9 +1460,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/libertinus/LibertinusMath-Regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Libertinus Math (otf-libertinus, OFL-1.1) for the same role (a math integral and summation glyph set); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXIntUpBol.otf",
@@ -1049,9 +1494,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/libertinus/LibertinusMath-Regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Libertinus Math (otf-libertinus, OFL-1.1) for the same role (a math integral and summation glyph set); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXIntUpDBol.otf",
@@ -1070,9 +1528,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/libertinus/LibertinusMath-Regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Libertinus Math (otf-libertinus, OFL-1.1) for the same role (a math integral and summation glyph set); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXIntUpDReg.otf",
@@ -1091,9 +1562,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/libertinus/LibertinusMath-Regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Libertinus Math (otf-libertinus, OFL-1.1) for the same role (a math integral and summation glyph set); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXIntUpReg.otf",
@@ -1112,9 +1596,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/libertinus/LibertinusMath-Regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Libertinus Math (otf-libertinus, OFL-1.1) for the same role (a math integral and summation glyph set); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXIntUpSmBol.otf",
@@ -1133,9 +1630,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/libertinus/LibertinusMath-Regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Libertinus Math (otf-libertinus, OFL-1.1) for the same role (a math integral and summation glyph set); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXIntUpSmReg.otf",
@@ -1154,9 +1664,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/libertinus/LibertinusMath-Regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Libertinus Math (otf-libertinus, OFL-1.1) for the same role (a math integral and summation glyph set); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXNonUni.otf",
@@ -1175,9 +1698,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/libertinus/LibertinusMath-Regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Libertinus Math (otf-libertinus, OFL-1.1) for the same role (a math glyph set); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXNonUniBol.otf",
@@ -1194,11 +1730,20 @@
    "description": "",
    "role": "Symbol, dingbat or math font: STIXNonUniBol",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/font_descriptor.rs, springboard/core/src/ref_assets.rs",
    "status": "partial",
    "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_descriptor::tests"
+    }
+   ],
+   "ready_note": "Reference-first resolution: the STIX face is drawn from bifrost-ref when installed (font_descriptor::tests a_reference_face_is_preferred_and_a_missing_one_falls_back); otherwise the packaged open otf-stix stand-in applies. The stand-in is not metric-identical to the reference glyphs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXNonUniBolIta.otf",
@@ -1215,11 +1760,20 @@
    "description": "",
    "role": "Symbol, dingbat or math font: STIXNonUniBolIta",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/font_descriptor.rs, springboard/core/src/ref_assets.rs",
    "status": "partial",
    "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_descriptor::tests"
+    }
+   ],
+   "ready_note": "Reference-first resolution: the STIX face is drawn from bifrost-ref when installed (font_descriptor::tests a_reference_face_is_preferred_and_a_missing_one_falls_back); otherwise the packaged open otf-stix stand-in applies. The stand-in is not metric-identical to the reference glyphs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXNonUniIta.otf",
@@ -1236,11 +1790,20 @@
    "description": "",
    "role": "Symbol, dingbat or math font: STIXNonUniIta",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/font_descriptor.rs, springboard/core/src/ref_assets.rs",
    "status": "partial",
    "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_descriptor::tests"
+    }
+   ],
+   "ready_note": "Reference-first resolution: the STIX face is drawn from bifrost-ref when installed (font_descriptor::tests a_reference_face_is_preferred_and_a_missing_one_falls_back); otherwise the packaged open otf-stix stand-in applies. The stand-in is not metric-identical to the reference glyphs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXSizFiveSymReg.otf",
@@ -1257,11 +1820,20 @@
    "description": "",
    "role": "Symbol, dingbat or math font: STIXSizFiveSymReg",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/font_descriptor.rs, springboard/core/src/ref_assets.rs",
    "status": "partial",
    "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_descriptor::tests"
+    }
+   ],
+   "ready_note": "Reference-first resolution: the STIX face is drawn from bifrost-ref when installed (font_descriptor::tests a_reference_face_is_preferred_and_a_missing_one_falls_back); otherwise the packaged open otf-stix stand-in applies. The stand-in is not metric-identical to the reference glyphs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXSizFourSymBol.otf",
@@ -1278,11 +1850,20 @@
    "description": "",
    "role": "Symbol, dingbat or math font: STIXSizFourSymBol",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/font_descriptor.rs, springboard/core/src/ref_assets.rs",
    "status": "partial",
    "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_descriptor::tests"
+    }
+   ],
+   "ready_note": "Reference-first resolution: the STIX face is drawn from bifrost-ref when installed (font_descriptor::tests a_reference_face_is_preferred_and_a_missing_one_falls_back); otherwise the packaged open otf-stix stand-in applies. The stand-in is not metric-identical to the reference glyphs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXSizFourSymReg.otf",
@@ -1299,11 +1880,20 @@
    "description": "",
    "role": "Symbol, dingbat or math font: STIXSizFourSymReg",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/font_descriptor.rs, springboard/core/src/ref_assets.rs",
    "status": "partial",
    "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_descriptor::tests"
+    }
+   ],
+   "ready_note": "Reference-first resolution: the STIX face is drawn from bifrost-ref when installed (font_descriptor::tests a_reference_face_is_preferred_and_a_missing_one_falls_back); otherwise the packaged open otf-stix stand-in applies. The stand-in is not metric-identical to the reference glyphs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXSizOneSymBol.otf",
@@ -1320,11 +1910,20 @@
    "description": "",
    "role": "Symbol, dingbat or math font: STIXSizOneSymBol",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/font_descriptor.rs, springboard/core/src/ref_assets.rs",
    "status": "partial",
    "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_descriptor::tests"
+    }
+   ],
+   "ready_note": "Reference-first resolution: the STIX face is drawn from bifrost-ref when installed (font_descriptor::tests a_reference_face_is_preferred_and_a_missing_one_falls_back); otherwise the packaged open otf-stix stand-in applies. The stand-in is not metric-identical to the reference glyphs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXSizOneSymReg.otf",
@@ -1341,11 +1940,20 @@
    "description": "",
    "role": "Symbol, dingbat or math font: STIXSizOneSymReg",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/font_descriptor.rs, springboard/core/src/ref_assets.rs",
    "status": "partial",
    "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_descriptor::tests"
+    }
+   ],
+   "ready_note": "Reference-first resolution: the STIX face is drawn from bifrost-ref when installed (font_descriptor::tests a_reference_face_is_preferred_and_a_missing_one_falls_back); otherwise the packaged open otf-stix stand-in applies. The stand-in is not metric-identical to the reference glyphs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXSizThreeSymBol.otf",
@@ -1362,11 +1970,20 @@
    "description": "",
    "role": "Symbol, dingbat or math font: STIXSizThreeSymBol",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/font_descriptor.rs, springboard/core/src/ref_assets.rs",
    "status": "partial",
    "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_descriptor::tests"
+    }
+   ],
+   "ready_note": "Reference-first resolution: the STIX face is drawn from bifrost-ref when installed (font_descriptor::tests a_reference_face_is_preferred_and_a_missing_one_falls_back); otherwise the packaged open otf-stix stand-in applies. The stand-in is not metric-identical to the reference glyphs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXSizThreeSymReg.otf",
@@ -1383,11 +2000,20 @@
    "description": "",
    "role": "Symbol, dingbat or math font: STIXSizThreeSymReg",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/font_descriptor.rs, springboard/core/src/ref_assets.rs",
    "status": "partial",
    "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_descriptor::tests"
+    }
+   ],
+   "ready_note": "Reference-first resolution: the STIX face is drawn from bifrost-ref when installed (font_descriptor::tests a_reference_face_is_preferred_and_a_missing_one_falls_back); otherwise the packaged open otf-stix stand-in applies. The stand-in is not metric-identical to the reference glyphs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXSizTwoSymBol.otf",
@@ -1404,11 +2030,20 @@
    "description": "",
    "role": "Symbol, dingbat or math font: STIXSizTwoSymBol",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/font_descriptor.rs, springboard/core/src/ref_assets.rs",
    "status": "partial",
    "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_descriptor::tests"
+    }
+   ],
+   "ready_note": "Reference-first resolution: the STIX face is drawn from bifrost-ref when installed (font_descriptor::tests a_reference_face_is_preferred_and_a_missing_one_falls_back); otherwise the packaged open otf-stix stand-in applies. The stand-in is not metric-identical to the reference glyphs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXSizTwoSymReg.otf",
@@ -1425,11 +2060,20 @@
    "description": "",
    "role": "Symbol, dingbat or math font: STIXSizTwoSymReg",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/font_descriptor.rs, springboard/core/src/ref_assets.rs",
    "status": "partial",
    "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_descriptor::tests"
+    }
+   ],
+   "ready_note": "Reference-first resolution: the STIX face is drawn from bifrost-ref when installed (font_descriptor::tests a_reference_face_is_preferred_and_a_missing_one_falls_back); otherwise the packaged open otf-stix stand-in applies. The stand-in is not metric-identical to the reference glyphs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXTwoMath.otf",
@@ -1446,11 +2090,19 @@
    "description": "",
    "role": "Symbol, dingbat or math font: STIXTwoMath",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "open equivalent Noto Sans Math (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansMath-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansMath-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXTwoText-Italic.ttf",
@@ -1467,11 +2119,20 @@
    "description": "",
    "role": "Symbol, dingbat or math font: STIXTwoText-Italic",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/font_descriptor.rs, springboard/core/src/ref_assets.rs",
    "status": "partial",
    "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_descriptor::tests"
+    }
+   ],
+   "ready_note": "Reference-first resolution: the STIX face is drawn from bifrost-ref when installed (font_descriptor::tests a_reference_face_is_preferred_and_a_missing_one_falls_back); otherwise the packaged open otf-stix stand-in applies. The stand-in is not metric-identical to the reference glyphs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXTwoText.ttf",
@@ -1488,11 +2149,20 @@
    "description": "",
    "role": "Symbol, dingbat or math font: STIXTwoText",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/font_descriptor.rs, springboard/core/src/ref_assets.rs",
    "status": "partial",
    "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_descriptor::tests"
+    }
+   ],
+   "ready_note": "Reference-first resolution: the STIX face is drawn from bifrost-ref when installed (font_descriptor::tests a_reference_face_is_preferred_and_a_missing_one_falls_back); otherwise the packaged open otf-stix stand-in applies. The stand-in is not metric-identical to the reference glyphs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXVar.otf",
@@ -1509,11 +2179,20 @@
    "description": "",
    "role": "Symbol, dingbat or math font: STIXVar",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/font_descriptor.rs, springboard/core/src/ref_assets.rs",
    "status": "partial",
    "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_descriptor::tests"
+    }
+   ],
+   "ready_note": "Reference-first resolution: the STIX face is drawn from bifrost-ref when installed (font_descriptor::tests a_reference_face_is_preferred_and_a_missing_one_falls_back); otherwise the packaged open otf-stix stand-in applies. The stand-in is not metric-identical to the reference glyphs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXVarBol.otf",
@@ -1530,11 +2209,20 @@
    "description": "",
    "role": "Symbol, dingbat or math font: STIXVarBol",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/font_descriptor.rs, springboard/core/src/ref_assets.rs",
    "status": "partial",
    "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_descriptor::tests"
+    }
+   ],
+   "ready_note": "Reference-first resolution: the STIX face is drawn from bifrost-ref when installed (font_descriptor::tests a_reference_face_is_preferred_and_a_missing_one_falls_back); otherwise the packaged open otf-stix stand-in applies. The stand-in is not metric-identical to the reference glyphs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Sana.ttc",
@@ -1553,9 +2241,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Noto Naskh Arabic (noto-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoNaskhArabic-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Naskh Arabic (noto-fonts, OFL-1.1) for the same role (an Arabic naskh text face); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Sathu.ttf",
@@ -1574,9 +2275,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Noto Serif Thai (noto-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerifThai-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Serif Thai (noto-fonts, OFL-1.1) for the same role (a Thai-script serif text face); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Savoye LET.ttc",
@@ -1595,9 +2309,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Savoye LET resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/tex-gyre/texgyrechorus-mediumitalic.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute TeX Gyre Chorus (tex-gyre-fonts, GUST Font License) for the same role (a connected script); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Seravek.ttc",
@@ -1616,9 +2343,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Seravek resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Source Sans 3 (adobe-source-sans-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/adobe-source-sans/SourceSans3-Regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Source Sans 3 (adobe-source-sans-fonts, OFL-1.1) for the same role (a humanist sans); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Shree714.ttc",
@@ -1637,9 +2377,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Noto Sans Devanagari (noto-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansDevanagari-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Sans Devanagari (noto-fonts, OFL-1.1) for the same role (a Devanagari-script text face); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/SignPainter.ttc",
@@ -1658,9 +2411,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "SignPainter resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/tex-gyre/texgyrechorus-mediumitalic.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute TeX Gyre Chorus (tex-gyre-fonts, GUST Font License) for the same role (a brush sign-painter script); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Silom.ttf",
@@ -1679,9 +2445,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Silom resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Noto Sans Thai (noto-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansThai-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Sans Thai (noto-fonts, OFL-1.1) for the same role (a Thai-script bold sans); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Sinhala MN.ttc",
@@ -1698,11 +2477,19 @@
    "description": "",
    "role": "Script/language coverage font: Sinhala MN",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansSinhala-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansSinhala-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Sinhala Sangam MN.ttc",
@@ -1719,11 +2506,19 @@
    "description": "",
    "role": "Script/language coverage font: Sinhala Sangam MN",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansSinhala-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansSinhala-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Skia.ttf",
@@ -1742,9 +2537,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Skia resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Source Sans 3 (adobe-source-sans-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/adobe-source-sans/SourceSans3-Regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Source Sans 3 (adobe-source-sans-fonts, OFL-1.1) for the same role (a humanist sans); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/SnellRoundhand.ttc",
@@ -1763,9 +2571,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "SnellRoundhand resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/tex-gyre/texgyrechorus-mediumitalic.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute TeX Gyre Chorus (tex-gyre-fonts, GUST Font License) for the same role (a roundhand script); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Songti.ttc",
@@ -1784,9 +2605,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Songti resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSerifCJK-Regular.ttc"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Serif CJK (noto-fonts-cjk, OFL-1.1) for the same role (CJK mincho serif); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/SukhumvitSet.ttc",
@@ -1803,11 +2637,19 @@
    "description": "",
    "role": "Script/language coverage font: SukhumvitSet",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansThai-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansThai-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/SuperClarendon.ttc",
@@ -1826,9 +2668,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "SuperClarendon resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent TeX Gyre Schola (tex-gyre-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/tex-gyre/texgyreschola-regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute TeX Gyre Schola (tex-gyre-fonts, GUST Font License) for the same role (a Clarendon-style bracketed slab (Century Schoolbook is the nearest packaged class)); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Symbol.ttf",
@@ -1845,11 +2700,19 @@
    "description": "",
    "role": "Symbol, dingbat or math font: Symbol",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "open equivalent Standard Symbols PS (gsfonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/gsfonts/StandardSymbolsPS.otf"
+    }
+   ],
+   "ready_note": "StandardSymbolsPS (gsfonts, runtime package) is the open symbol face for this font. The Apple glyph set is not shipped; coverage is not metric-identical."
   },
   {
    "id": "path:/System/Library/Frameworks/MediaToolbox.framework/Versions/A/Resources/SFSymbolsNeededByCoreMedia-Semibold.ttf",
@@ -1867,8 +2730,8 @@
    "role": "SF variant font: SFSymbolsNeededByCoreMedia-Semibold",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "SFSymbolsNeededByCoreMedia-Semibold resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple-internal symbol font that CoreMedia uses for its own transport glyphs; BifrOSt draws its media controls from its own icon set.",
    "rea": [],
    "method": "assessed"
   },
@@ -1888,8 +2751,8 @@
    "role": "Webfont of Ruby 2.6 rdoc HTML template",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Webfont inside Ruby's rdoc HTML template (ruby 2.6 darkfish); BifrOSt renders no rdoc pages. The same open family (Source Code Pro) is already a monospaced equivalent in the SDK font table.",
    "rea": [],
    "method": "assessed"
   },
@@ -1909,8 +2772,8 @@
    "role": "Webfont of Ruby 2.6 rdoc HTML template",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Webfont inside Ruby's rdoc HTML template (ruby 2.6 darkfish); BifrOSt renders no rdoc pages. The same open family (Source Code Pro) is already a monospaced equivalent in the SDK font table.",
    "rea": [],
    "method": "assessed"
   },
@@ -1933,7 +2796,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ScreenshotWindow), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art"
+    }
+   ],
+   "ready_note": "Code-drawn ScreenshotWindow shape with both layers in bifrost-ui cursor_art. Not the original PDF art."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/screenshotWindow-top.pdf",
@@ -1954,7 +2826,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ScreenshotWindow), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art"
+    }
+   ],
+   "ready_note": "Code-drawn ScreenshotWindow shape with both layers in bifrost-ui cursor_art. Not the original PDF art."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreRecognition.framework/Versions/A/Resources/Fonts/Scancardium_2.0.ttf",
@@ -1973,9 +2854,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Scancardium_2.0 resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent DejaVu Sans Mono (ttf-dejavu), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/DejaVuSansMono.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute DejaVu Sans Mono (ttf-dejavu, Bitstream Vera licence) for the same role (a card-number OCR monospace); design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreRecognition.framework/Versions/A/Resources/Fonts/Spendcardium.ttf",
@@ -1994,9 +2888,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Spendcardium resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent DejaVu Sans Mono (ttf-dejavu), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/DejaVuSansMono.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute DejaVu Sans Mono (ttf-dejavu, Bitstream Vera licence) for the same role (a card-number OCR monospace); design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Santa Fe LET Fonts.ttf",
@@ -2015,9 +2922,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Santa Fe LET Fonts resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Noto Serif Display (noto-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerifDisplay-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Serif Display (noto-fonts, OFL-1.1) for the same role (a display roman); design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/SchemeBold.otf",
@@ -2036,9 +2956,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "SchemeBold resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Montserrat (ttf-montserrat), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/Montserrat-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Montserrat (ttf-montserrat, OFL-1.1) for the same role (a bold geometric display sans); design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/SchoolHouse Cursive B.ttf",
@@ -2057,9 +2990,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "SchoolHouse Cursive B resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/tex-gyre/texgyrechorus-mediumitalic.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute TeX Gyre Chorus (tex-gyre-fonts, GUST Font License) for the same role (a school cursive hand); design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/SchoolHouse Printed A.ttf",
@@ -2078,9 +3024,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "SchoolHouse Printed A resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Nunito (ttf-nunito), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/ttf-nunito/Nunito-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Nunito (ttf-nunito, OFL-1.1) for the same role (a school printing hand (the friendly rounded sans is nearest)); design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Somer.ttc",
@@ -2099,9 +3058,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Somer resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Inter (inter-font), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/inter/InterVariable.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Inter (inter-font, OFL-1.1) for the same role (a plain sans); design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Stone Sans.ttc",
@@ -2120,9 +3092,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Stone Sans resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/Lato-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Open-source substitute Lato Regular (ttf-lato, OFL-1.1) for the same role; design-similar humanist sans."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Synchro LET Fonts.ttf",
@@ -2141,9 +3126,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Synchro LET Fonts resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Nunito (ttf-nunito), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/ttf-nunito/Nunito-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Nunito (ttf-nunito, OFL-1.1) for the same role (a rounded technical display (the rounded sans is nearest)); design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/SamaDevanagari.ttc",
@@ -2160,11 +3158,19 @@
    "description": "",
    "role": "Script/language coverage font: SamaDevanagari",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansDevanagari-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansDevanagari-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/SamaGujarati.ttc",
@@ -2181,11 +3187,19 @@
    "description": "",
    "role": "Script/language coverage font: SamaGujarati",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansGujarati-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansGujarati-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/SamaGurmukhi.ttc",
@@ -2202,11 +3216,19 @@
    "description": "",
    "role": "Script/language coverage font: SamaGurmukhi",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansGurmukhi-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansGurmukhi-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/SamaKannada.ttc",
@@ -2223,11 +3245,19 @@
    "description": "",
    "role": "Script/language coverage font: SamaKannada",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansKannada-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansKannada-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/SamaMalayalam.ttc",
@@ -2244,11 +3274,19 @@
    "description": "",
    "role": "Script/language coverage font: SamaMalayalam",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansMalayalam-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansMalayalam-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/SamaTamil.ttc",
@@ -2265,11 +3303,19 @@
    "description": "",
    "role": "Script/language coverage font: SamaTamil",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansTamil-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansTamil-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Sarabun.ttc",
@@ -2286,11 +3332,19 @@
    "description": "",
    "role": "Script/language coverage font: Sarabun",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansThai-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansThai-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/SauberScript.ttc",
@@ -2309,9 +3363,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "SauberScript resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/tex-gyre/texgyrechorus-mediumitalic.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute TeX Gyre Chorus (tex-gyre-fonts, GUST Font License) for the same role (a connected script); design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Shobhika-Devanagari.ttc",
@@ -2328,11 +3395,19 @@
    "description": "",
    "role": "Script/language coverage font: Shobhika-Devanagari",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansDevanagari-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansDevanagari-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/SimSong.ttc",
@@ -2351,9 +3426,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "SimSong resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSerifCJK-Regular.ttc"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Open-source substitute Noto Serif CJK (noto-fonts-cjk, OFL-1.1) for the same role; design-similar CJK song serif."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/SpotMono.ttc",
@@ -2374,7 +3462,20 @@
    "status": "partial",
    "note": "open equivalent DejaVu Sans Mono (ttf-dejavu), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/DejaVuSansMono.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Open-source substitute DejaVu Sans Mono (ttf-dejavu, free licence, Bitstream Vera lineage) for the same role; design-similar; glyph coverage not metric-identical."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Srisakdi.ttc",
@@ -2391,11 +3492,19 @@
    "description": "",
    "role": "Script/language coverage font: Srisakdi",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansThai-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansThai-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PassKitUIFoundation.framework/Versions/A/Resources/SF-Cash-Text-Condensed-Medium.otf",
@@ -2413,8 +3522,8 @@
    "role": "SF variant font: SF-Cash-Text-Condensed-Medium",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "SF-Cash-Text-Condensed-Medium resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple Cash card typeface for Wallet and Apple Pay payment screens; an Apple service face BifrOSt has no use for.",
    "rea": [],
    "method": "assessed"
   },
@@ -2434,8 +3543,8 @@
    "role": "SF variant font: SF-Cash-Text-Condensed-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "SF-Cash-Text-Condensed-Regular resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple Cash card typeface for Wallet and Apple Pay payment screens; an Apple service face BifrOSt has no use for.",
    "rea": [],
    "method": "assessed"
   },
@@ -2455,8 +3564,8 @@
    "role": "SF variant font: SF-Cash-Text-Condensed-Semibold",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "SF-Cash-Text-Condensed-Semibold resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple Cash card typeface for Wallet and Apple Pay payment screens; an Apple service face BifrOSt has no use for.",
    "rea": [],
    "method": "assessed"
   },
@@ -2476,8 +3585,8 @@
    "role": "SF variant font: SFCash-Chiseled",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "SFCash-Chiseled resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple Cash card typeface for Wallet and Apple Pay payment screens; an Apple service face BifrOSt has no use for.",
    "rea": [],
    "method": "assessed"
   },
@@ -2497,8 +3606,8 @@
    "role": "SF variant font: SFCash-Plain",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "SFCash-Plain resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple Cash card typeface for Wallet and Apple Pay payment screens; an Apple service face BifrOSt has no use for.",
    "rea": [],
    "method": "assessed"
   },
@@ -2517,11 +3626,20 @@
    "description": "",
    "role": "Source Sans (Adobe, OFL) bundled by macOS",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/tools/pack.py; springboard/tests/font_packages.rs",
    "status": "partial",
    "note": "same family is in BifrOSt's font library (Source Sans 3 / variable); selectable in Settings > Fonts; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "font_packages::library_pins_the_source_sans_italic_face"
+    }
+   ],
+   "ready_note": "The italic face is pinned in the font library (tools/pack.py LIBRARY_FONTS, SourceSans3-Italic-Variable.ttf, Google Fonts pinned commit, sha256 checked at pack time) so Settings > Fonts offers Source Sans 3 Italic. Not yet verified on Midget; the file ships when the font pack is built."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/ScrollPage.aiff",
@@ -2542,7 +3660,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'scroll-page' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/SearchRangeWithinSameElement.aiff",
@@ -2563,7 +3690,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'search-range' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/SecureCharacter.aiff",
@@ -2584,7 +3720,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'secure-character' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/SecureCharacter.caf",
@@ -2605,7 +3750,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'secure-character' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/Select.aiff",
@@ -2626,7 +3780,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'select' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/SingleClick.aiff",
@@ -2647,7 +3810,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'single-click' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/SpringBack.aiff",
@@ -2668,7 +3840,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'spring-back' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/SpringForward.aiff",
@@ -2689,7 +3870,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'spring-forward' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/StyleChangeDouble.aiff",
@@ -2710,7 +3900,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'style-change-double' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/StyleChangeMultiple.aiff",
@@ -2731,7 +3930,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'style-change-multiple' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/StyleChangeSingle.aiff",
@@ -2752,7 +3960,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'style-change-single' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/Sounds/Sosumi.aiff",
@@ -2773,7 +3990,16 @@
    "status": "partial",
    "note": "BifrOSt has its own synthesised alert set (Bell, Chime, Pulse, Tick); its Bell tone covers this alert's role. The Apple tone itself is not reproduced; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::alert_sound"
+    }
+   ],
+   "ready_note": "BifrOSt synthesises every alert tone in shell::alert_sound from notes, not recordings. The Apple tone itself is not reproduced."
   },
   {
    "id": "path:/System/Library/Sounds/Submarine.aiff",
@@ -2794,7 +4020,16 @@
    "status": "partial",
    "note": "BifrOSt has its own synthesised alert set (Bell, Chime, Pulse, Tick); its Pulse tone covers this alert's role. The Apple tone itself is not reproduced; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::alert_sound"
+    }
+   ],
+   "ready_note": "BifrOSt synthesises every alert tone in shell::alert_sound from notes, not recordings. The Apple tone itself is not reproduced."
   },
   {
    "id": "path:/System/iOSSupport/System/Library/PrivateFrameworks/UIKitCore.framework/Versions/A/Resources/SFProRoundedStatusBar.ttf",
@@ -2812,8 +4047,8 @@
    "role": "SF variant font: SFProRoundedStatusBar",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "SFProRoundedStatusBar resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple status-bar glyph face for the iOS and iPadOS status bar; BifrOSt's menu bar is drawn in the system face, so this face has no role.",
    "rea": [],
    "method": "assessed"
   }

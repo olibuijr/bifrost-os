@@ -3,10 +3,28 @@
 
 use super::nowplaying::{self, clock, draw_slider, LockCard, R};
 use super::icons;
+use crate::shell::services::now_playing::Feedback;
 use crate::gfx::{rgba, Image, Surface};
 use crate::layout::Rect;
 use crate::shell::switcher::draw_scaled;
 use crate::shell::ui::{Ui, Weight, WHITE};
+
+/// The feedback icons' size in pt.
+pub const FEEDBACK_ICON_PT: f32 = 20.0;
+
+/// The feedback toggle a card target stands for, in `Feedback::toggles` order.
+pub fn toggle_target(slot: usize) -> Option<nowplaying::Target> {
+    [nowplaying::Target::Like, nowplaying::Target::Dislike, nowplaying::Target::Bookmark].get(slot).copied()
+}
+
+/// The fraction of a rating scale `value` sits at; 0 when the scale has no width.
+pub fn rating_fraction(min: f64, max: f64, value: f64) -> f32 {
+    if max > min {
+        ((value - min) / (max - min)).clamp(0.0, 1.0) as f32
+    } else {
+        0.0
+    }
+}
 
 /// Everything the lock screen needs to draw the card, borrowed from the app
 /// so worker threads can paint it.
@@ -16,6 +34,8 @@ pub struct LockCardView<'a> {
     title: &'a Image,
     artist: &'a Image,
     playing: bool,
+    /// the like, dislike, bookmark and rating the owner published; None hides the row
+    pub(super) feedback: Option<Feedback>,
     /// a live stream: no timeline, "LIVE" instead
     pub(super) live: bool,
     position_ms: f64,
@@ -31,7 +51,7 @@ impl<'a> LockCardView<'a> {
     /// The card for what the audio service plays: no artwork, the labels come from the shell.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn service(ui: &Ui, w: i32, title: &'a Image, artist: &'a Image, snap: &crate::svc::audio::Snapshot, scrub: Option<f32>, pressed: Option<nowplaying::Target>) -> Self {
-        LockCardView { card: LockCard::new(ui, w), art: None, title, artist, playing: snap.playing, live: snap.live.is_some() || snap.track.as_ref().is_some_and(|t| t.url.is_some()), position_ms: snap.position_ms, duration_ms: snap.duration_ms, scrub, pressed, route: String::new() }
+        LockCardView { card: LockCard::new(ui, w), art: None, title, artist, playing: snap.playing, feedback: crate::shell::services::now_playing::feedback(), live: snap.live.is_some() || snap.track.as_ref().is_some_and(|t| t.url.is_some()), position_ms: snap.position_ms, duration_ms: snap.duration_ms, scrub, pressed, route: String::new() }
     }
 
     /// Paints the card `dy` px above its resting place (the lock screen lifts).
@@ -61,6 +81,35 @@ impl<'a> LockCardView<'a> {
         icons::skip(s, (c.prev.0, y(c.prev.1)), ui.pt(22.0), false, ink(nowplaying::Target::Prev));
         icons::play_pause(s, (c.play.0, y(c.play.1)), ui.pt(30.0), self.playing, ink(nowplaying::Target::Play));
         icons::skip(s, (c.next.0, y(c.next.1)), ui.pt(22.0), true, ink(nowplaying::Target::Next));
+        self.draw_feedback(s, ui, dy);
+    }
+
+    /// The like, dislike and bookmark icons, and the rating track when the item has a rating scale. Lit toggles are
+    /// white; the others are dim. Nothing is drawn when the owner published no feedback.
+    fn draw_feedback(&self, s: &mut Surface, ui: &Ui, dy: i32) {
+        let Some(fb) = self.feedback else { return };
+        let c = self.card;
+        let y = |v: f32| v + dy as f32;
+        let size = ui.pt(FEEDBACK_ICON_PT);
+        for (slot, &(cx, cy)) in c.toggles.iter().enumerate() {
+            let pressed = toggle_target(slot).is_some_and(|t| self.pressed == Some(t));
+            let color = match (fb.toggles[slot], pressed) {
+                (true, false) => WHITE,
+                (true, true) => rgba(255, 255, 255, 140),
+                (false, false) => rgba(255, 255, 255, 110),
+                (false, true) => rgba(255, 255, 255, 60),
+            };
+            let at = (cx, y(cy));
+            match slot {
+                0 => icons::heart(s, at, size, color),
+                1 => icons::thumb(s, at, size, false, color),
+                _ => icons::bookmark(s, at, size, color),
+            }
+        }
+        if let Some(rating) = fb.rating {
+            let frac = rating_fraction(rating.min, rating.max, rating.value);
+            draw_slider(s, ui, R { y: y(c.rating.y), ..c.rating }, frac, self.pressed == Some(nowplaying::Target::Rating));
+        }
     }
 
     /// The scrubber and the elapsed / remaining times of a song.
@@ -86,4 +135,25 @@ pub fn draw_cc_controls(s: &mut Surface, ui: &Ui, (x, y, w, h): (f32, f32, f32, 
     icons::skip(s, (x + w * 0.22, cy), ui.pt(20.0), false, dim(nowplaying::Target::Prev));
     icons::play_pause(s, (x + w * 0.5, cy), ui.pt(28.0), playing, dim(nowplaying::Target::Play));
     icons::skip(s, (x + w * 0.78, cy), ui.pt(20.0), true, dim(nowplaying::Target::Next));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn feedback_toggles_map_to_their_slots() {
+        assert_eq!(toggle_target(0), Some(nowplaying::Target::Like));
+        assert_eq!(toggle_target(1), Some(nowplaying::Target::Dislike));
+        assert_eq!(toggle_target(2), Some(nowplaying::Target::Bookmark));
+        assert_eq!(toggle_target(3), None);
+    }
+
+    #[test]
+    fn rating_fraction_clamps_and_guards_an_empty_scale() {
+        assert_eq!(rating_fraction(0.0, 5.0, 2.5), 0.5);
+        assert_eq!(rating_fraction(0.0, 5.0, 9.0), 1.0);
+        assert_eq!(rating_fraction(1.0, 5.0, -3.0), 0.0);
+        assert_eq!(rating_fraction(2.0, 2.0, 2.0), 0.0, "a zero-width scale draws empty");
+    }
 }

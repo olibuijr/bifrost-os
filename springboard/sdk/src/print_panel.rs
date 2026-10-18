@@ -11,6 +11,7 @@
 //! and writes values by key. Nothing here touches the system: it is a pure model with host tests.
 
 use crate::print::{Orientation, PaperSize, PrintInfo, SCALING_RANGE};
+use bifrost_ui::print_ranges::PageSelection;
 
 /// Keys that [`PrintInfo::attributes`](crate::print::PrintInfo::attributes) already writes. A plug-in cannot set them.
 pub const RESERVED_KEYS: [&str; 4] = ["media", "orientation-requested", "copies", "page-ranges"];
@@ -312,6 +313,9 @@ pub struct PanelRequest {
     pub copies: Option<u32>,
     /// `Some(None)` prints every page; `Some(Some((first, last)))` a 1-based inclusive range.
     pub pages: Option<Option<(u32, u32)>>,
+    /// A page list of one or more ranges (from the Pages field or the shell's sheet). When set it replaces `pages`
+    /// through [`PageSelection::apply_to`]; several ranges go to `PrintInfo::page_list`.
+    pub selection: Option<PageSelection>,
     pub paper: Option<PaperSize>,
     pub orientation: Option<Orientation>,
     pub scaling: Option<f32>,
@@ -337,7 +341,15 @@ impl PanelOptions {
             match pages {
                 _ if !self.shows_page_range => refused.push("pages"),
                 Some((first, last)) if first < 1 || last < first => refused.push("pages"),
-                pages => info.pages = pages,
+                pages => {
+                    info.pages = pages;
+                    info.page_list.clear();
+                }
+            }
+        }
+        if let Some(selection) = &request.selection {
+            if !self.shows_page_range || selection.apply_to(info).is_err() {
+                refused.push("pages");
             }
         }
         if let Some(paper) = request.paper {
@@ -526,6 +538,7 @@ mod tests {
         let request = PanelRequest {
             copies: Some(3),
             pages: Some(Some((2, 4))),
+            selection: None,
             paper: Some(PaperSize::Letter),
             orientation: Some(Orientation::Landscape),
             scaling: Some(0.5),
@@ -582,5 +595,20 @@ mod tests {
         assert_eq!(layout.scaling(), 10.0);
         layout.set_scaling(f32::NAN);
         assert_eq!(layout.scaling(), 1.0);
+    }
+
+    #[test]
+    fn a_page_list_from_the_panel_sets_several_ranges_and_respects_the_hidden_field() {
+        use bifrost_ui::print_ranges::parse_page_ranges;
+        let mut info = PrintInfo::default();
+        let list = PanelRequest { selection: Some(parse_page_ranges("1-2, 5", 9).unwrap()), ..Default::default() };
+        assert!(PanelOptions::default().apply(&mut info, &list).is_empty());
+        assert_eq!((info.pages, info.page_list.clone()), (None, vec![(1, 2), (5, 5)]));
+        let single = PanelRequest { selection: Some(parse_page_ranges("3", 9).unwrap()), ..Default::default() };
+        PanelOptions::default().apply(&mut info, &single);
+        assert_eq!((info.pages, info.page_list.is_empty()), (Some((3, 3)), true), "one range replaces the list");
+        let hidden = PanelOptions { shows_page_range: false, ..PanelOptions::default() };
+        assert_eq!(hidden.apply(&mut info, &list), vec!["pages"]);
+        assert_eq!(info.pages, Some((3, 3)), "a hidden field changes nothing");
     }
 }

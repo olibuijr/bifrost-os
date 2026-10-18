@@ -110,7 +110,7 @@ impl Calendar {
             location: new.location.trim().to_string(),
             notes: new.notes.trim().to_string(),
             repeat: 0,
-            alert: if new.all_day { self.prefs.alert_all_day } else { self.prefs.alert },
+            alert: if new.all_day { self.prefs.alert_all_day } else { self.prefs.alert }, uid: String::new(),
         };
         if !event.valid() {
             return Err("The event needs a title of up to 160 characters, without line breaks".into());

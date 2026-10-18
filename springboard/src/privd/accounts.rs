@@ -113,14 +113,22 @@ pub fn hostname_for(computer_name: &str) -> String {
     out.chars().take(63).collect::<String>().trim_end_matches('-').to_string()
 }
 
-/// The sharing switches Settings may flip, and the unit behind each. Nothing else can be enabled through privd.
-pub fn service_unit(id: &str) -> Option<&'static str> {
+/// The sharing switches Settings may flip, and the units behind each. Nothing else can be enabled through privd.
+/// File Sharing is the SMB server and the NetBIOS name service beside it; Printer Sharing is the LPD listener that hands
+/// each connection to the `cups-lpd` the cups package ships.
+pub fn service_units(id: &str) -> Option<&'static [&'static str]> {
     match id {
-        "remote_login" => Some("sshd.service"),
-        "file_sharing" => Some("smb.service"),
-        "screen_sharing" => Some("wayvnc.service"),
+        "remote_login" => Some(&["sshd.service"]),
+        "file_sharing" => Some(&["smb.service", "nmb.service"]),
+        "screen_sharing" => Some(&["bifrost-wayvnc.service"]),
+        "printer_sharing" => Some(&["cups-lpd.socket"]),
         _ => None,
     }
+}
+
+/// The unit whose state a sharing switch shows: the first of its units.
+pub fn service_unit(id: &str) -> Option<&'static str> {
+    service_units(id).and_then(|u| u.first().copied())
 }
 
 /// Why `name` may not be deleted (None: it may).
@@ -213,9 +221,41 @@ fn set_password(user: &str, password: &str) -> Result<(), PErr> {
     run(&strs(&["/usr/bin/chpasswd"]), Some(&format!("{user}:{password}\n")))
 }
 
+fn str_list(p: &Json, name: &str) -> Result<Vec<String>, PErr> {
+    match p.get(name) {
+        Some(Json::Arr(items)) => items
+            .iter()
+            .map(|v| v.as_str().map(str::to_string).ok_or_else(|| PErr::bad(format!("{name} must hold strings"))))
+            .collect(),
+        _ => Err(PErr::bad(format!("{name} must be a list"))),
+    }
+}
+
+/// Settings > Users & Groups > content limits: replaces one managed person's app blocks and feature switches in the
+/// account policy file the launcher reads. The installed account and system accounts have no limits to set.
+fn set_policy(p: &Json) -> Result<Json, PErr> {
+    let name = text(p, "account")?;
+    let (users, _) = db();
+    if !users.iter().any(|u| u.name == name && is_human(u)) {
+        return Err(PErr::bad("not a person's account"));
+    }
+    if installed().as_deref() == Some(name) {
+        return Err(PErr::bad("the account BifrOSt was installed for has no limits"));
+    }
+    let blocked = str_list(p, "blocked")?;
+    let disabled = str_list(p, "disabled")?;
+    let blocked: Vec<&str> = blocked.iter().map(String::as_str).collect();
+    let disabled: Vec<&str> = disabled.iter().map(String::as_str).collect();
+    crate::bare::account_policy::validate_rules(&blocked, &disabled).map_err(PErr::bad)?;
+    crate::bare::account_policy::set_account_rules(std::path::Path::new(crate::bare::account_policy::POLICY_FILE), name, &blocked, &disabled)
+        .map(|_| obj(vec![]))
+        .map_err(PErr::internal)
+}
+
 /// Dispatches the account methods; None when `method` is not one of them.
 pub fn call(method: &str, p: &Json) -> Option<Result<Json, PErr>> {
     Some(match method {
+        "account.set_policy" => set_policy(p),
         "user.add" => user_add(p),
         "user.delete" => user_delete(p),
         "user.set_admin" => user_set_admin(p),
@@ -225,6 +265,7 @@ pub fn call(method: &str, p: &Json) -> Option<Result<Json, PErr>> {
         "group.member" => group_member(p),
         "system.set_names" => set_names(p),
         "service.set" => service_set(p),
+        "screen_sharing.configure" => screen_sharing_configure(p),
         _ => return None,
     })
 }
@@ -365,9 +406,61 @@ fn set_names(p: &Json) -> Result<Json, PErr> {
 
 fn service_set(p: &Json) -> Result<Json, PErr> {
     let id = text(p, "id")?;
-    let unit = service_unit(id).ok_or_else(|| PErr::bad("unknown service"))?;
+    let units = service_units(id).ok_or_else(|| PErr::bad("unknown service"))?;
     let on = flag(p, "on")?;
-    run(&strs(&["systemctl", if on { "enable" } else { "disable" }, "--now", unit]), None).map(|_| obj(vec![]))
+    if on && id == "screen_sharing" {
+        // never start the server without its account, key and a current local-network address
+        screen_sharing_prepare()?;
+    }
+    let mut argv = vec!["systemctl", if on { "enable" } else { "disable" }, "--now"];
+    argv.extend_from_slice(units);
+    run(&strs(&argv), None).map(|_| obj(vec![]))
+}
+
+/// Writes the wayvnc configuration for the address this computer has on the local network now.
+fn screen_sharing_write_config() -> Result<(), PErr> {
+    use super::screen_sharing as ss;
+    let out = Command::new("ip").args(["-4", "-o", "addr", "show", "scope", "global"]).output().map_err(|e| PErr::internal(format!("ip: {e}")))?;
+    let address = ss::lan_address(&String::from_utf8_lossy(&out.stdout)).ok_or_else(|| PErr::bad("this computer has no local network address, so Screen Sharing stays off"))?;
+    super::methods::write_nofollow(ss::CONF, &ss::config_text(&address, ss::PORT, ss::KEY)).map_err(|e| PErr::internal(e.to_string()))
+}
+
+/// What must exist before the server starts: the account that may sign in and the key. The address is refreshed.
+fn screen_sharing_prepare() -> Result<(), PErr> {
+    use super::screen_sharing as ss;
+    let ready = std::fs::read_to_string(ss::USERS).ok().and_then(|t| ss::user_from(&t)).is_some() && std::path::Path::new(ss::KEY).is_file();
+    if !ready {
+        return Err(PErr::bad("choose the account for Screen Sharing first"));
+    }
+    screen_sharing_write_config()
+}
+
+/// `screen_sharing.configure {user}`: the account whose password lets a viewer in. The first call makes this computer's
+/// RSA key; the account must be a person's account. The server restarts when it runs, so the change takes effect.
+fn screen_sharing_configure(p: &Json) -> Result<Json, PErr> {
+    use super::screen_sharing as ss;
+    let user = text(p, "user")?;
+    if !valid_user(user) {
+        return Err(PErr::bad("invalid account name"));
+    }
+    let (users, _) = db();
+    if !users.iter().any(|u| u.name == user && is_human(u)) {
+        return Err(PErr::bad("not a person's account"));
+    }
+    std::fs::create_dir_all(ss::DIR).map_err(|e| PErr::internal(e.to_string()))?;
+    if !std::path::Path::new(ss::KEY).exists() {
+        run(&ss::keygen_argv(ss::KEY), None)?;
+    }
+    super::methods::write_nofollow(ss::USERS, &ss::users_text(user)).map_err(|e| PErr::internal(e.to_string()))?;
+    // the account name is not a secret and Settings reads it to show it; the key and the configuration stay root-only
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(ss::USERS, std::fs::Permissions::from_mode(0o644)).map_err(|e| PErr::internal(e.to_string()))?;
+    }
+    screen_sharing_write_config()?;
+    // a running server keeps the account it started with: restart it only when it is running
+    let _ = run(&strs(&["systemctl", "try-restart", "bifrost-wayvnc.service"]), None);
+    Ok(obj(vec![("user", s(user))]))
 }
 
 #[cfg(test)]
@@ -432,6 +525,22 @@ mod tests {
     }
 
     #[test]
+    fn screen_sharing_switches_the_packaged_unit() {
+        assert_eq!(service_units("screen_sharing"), Some(&["bifrost-wayvnc.service"][..]));
+    }
+
+    #[test]
+    fn file_sharing_brings_the_netbios_name_service_with_it() {
+        assert_eq!(service_units("file_sharing"), Some(&["smb.service", "nmb.service"][..]));
+        assert_eq!(service_unit("file_sharing"), Some("smb.service"));
+        assert_eq!(service_units("printer_sharing"), Some(&["cups-lpd.socket"][..]));
+        assert_eq!(service_units("nmb.service"), None);
+        for id in ["remote_login", "file_sharing", "screen_sharing", "printer_sharing"] {
+            assert!(service_units(id).unwrap().iter().all(|u| u.ends_with(".service") || u.ends_with(".socket")));
+        }
+    }
+
+    #[test]
     fn delete_keeps_system_accounts_the_installed_account_and_the_last_admin() {
         let (users, groups) = (parse_passwd(PASSWD), parse_group(GROUP));
         assert_eq!(delete_refusal("kid", &users, &groups, Some("olof")), None);
@@ -466,6 +575,9 @@ mod tests {
         assert_eq!(bad("user.add", vec![("name", s("ok")), ("full_name", s("x")), ("admin", Json::Bool(false)), ("password", s(""))]), "bad_params");
         assert_eq!(bad("user.delete", vec![("name", s("root")), ("remove_home", Json::Bool(true))]), "bad_params");
         assert_eq!(bad("service.set", vec![("id", s("telnet")), ("on", Json::Bool(true))]), "bad_params");
+        assert_eq!(bad("screen_sharing.configure", vec![]), "bad_params");
+        assert_eq!(bad("screen_sharing.configure", vec![("user", s("Bad Name"))]), "bad_params");
+        assert_eq!(bad("screen_sharing.configure", vec![("user", s("root"))]), "bad_params", "root is not a person's account");
         assert_eq!(bad("system.set_names", vec![]), "bad_params");
         assert_eq!(bad("system.set_names", vec![("local", s("a b"))]), "bad_params");
         assert!(call("time.set_ntp", &obj(vec![])).is_none());

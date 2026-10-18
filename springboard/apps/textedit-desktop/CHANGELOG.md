@@ -1,5 +1,45 @@
 # Changelog
 
+## 1.11.0 — 2026-10-17
+
+- RTFD packages open from the open panel: a package folder of the RTFD type is one file to the panel, chosen whole and not
+  navigated into (the app declares `package_types = ["rtfd"]`).
+- Save As and Rename to a package name (`Notes.rtfd`) write the package folder, which replaces an existing package only on
+  commit; a package keeps its folder for the next save.
+- Shared text opened on the Dock icon or from the share sheet becomes an untitled document (Input::Open with a data: URL).
+
+## 1.10.0 — 2026-10-17
+
+- Attachments are drawn inline: an attachment is as tall as its line and as wide as its picture, narrowed to the text
+  width, and is selected, deleted and undone as one character.
+- Insert > Image... opens a panel for PNG and JPEG files; image files dropped on the page are inserted at the drop point's
+  caret (rich text only).
+- Copy, cut and paste of pictures go through the general pasteboard as PNG or JPEG.
+- Format > Make Plain Text asks before removing attachments (Remove Attachments, or Cancel).
+- docx, odt, html and web archive saves leave attachments out instead of writing the attachment character.
+- RTFD folder packages open and save through the document controller; Files shows a package folder as one file.
+  Choosing a package in the open panel and opening one from Files are not wired yet.
+
+## 1.9.1 — 2026-10-17
+
+- Ships a help book (`help/`: writing, formatting, find and print), indexed by the shell help index for the Help menu and `help://is.olibuijr.textedit.desktop` links.
+
+## 1.9.0 — 2026-10-17
+
+- Rich text packages (RTFD) are read and written as a folder: `TXT.rtf` plus the files its attachments name, saved
+  atomically. The SDK has the folder-package type (`bifrost_app::document_package`) and the manifest key `package_types`.
+- An attachment is one character in the text (a NeXTGraphic group in RTF). Format > Make Plain Text is refused while the
+  document has attachments, so none are dropped silently.
+
+## 1.8.0 — 2026-10-17
+
+- Services menu: "New Window Containing Selection" opens the selected text in a new untitled document, and "Open Selected
+  File" opens the file whose path is selected (as an untitled document; Save asks for a place to write it).
+
+## 1.7.0 — 2026-10-17
+
+- Text > Speech: Start Speaking speaks the selection (else the whole document) through the shell speech service; Stop Speaking ends it.
+
 ## 1.6.2 — 2026-10-14
 
 - Named document-format list indentation and bold-weight thresholds so exported document dimensions remain semantic, not resolution-like literals.

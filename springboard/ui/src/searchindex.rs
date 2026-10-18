@@ -32,6 +32,13 @@ impl ProtectionClass {
             ProtectionClass::None => "none",
         }
     }
+
+    /// The class with this raw name (see [`ProtectionClass::raw`]), or `None` for an unknown name.
+    pub fn from_raw(name: &str) -> Option<Self> {
+        [ProtectionClass::Complete, ProtectionClass::CompleteUnlessOpen, ProtectionClass::CompleteUntilFirstUserAuthentication, ProtectionClass::None]
+            .into_iter()
+            .find(|c| c.raw() == name)
+    }
 }
 
 /// Why an index name is refused.
@@ -117,6 +124,14 @@ mod tests {
         assert_eq!(ProtectionClass::CompleteUnlessOpen.raw(), "completeUnlessOpen");
         assert_eq!(ProtectionClass::CompleteUntilFirstUserAuthentication.raw(), "completeUntilFirstUserAuthentication");
         assert_eq!(ProtectionClass::None.raw(), "none");
+    }
+
+    #[test]
+    fn protection_class_names_round_trip_and_unknown_ones_are_refused() {
+        for c in [ProtectionClass::Complete, ProtectionClass::CompleteUnlessOpen, ProtectionClass::CompleteUntilFirstUserAuthentication, ProtectionClass::None] {
+            assert_eq!(ProtectionClass::from_raw(c.raw()), Some(c));
+        }
+        assert_eq!(ProtectionClass::from_raw("open"), None);
     }
 
     #[test]

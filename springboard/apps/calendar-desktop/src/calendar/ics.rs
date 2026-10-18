@@ -51,8 +51,10 @@ pub struct IcsEvent {
     /// Minutes before the start, one per alert.
     pub alarms: Vec<u32>,
     pub color: Option<String>,
-    /// Invitees and their responses (ATTENDEE lines), read-only.
+    /// Invitees and their responses (ATTENDEE lines); `rsvp` answers them for the account.
     pub attendees: Vec<Participant>,
+    /// The ORGANIZER value as written (`mailto:bo@example.is`): the address a reply goes to.
+    pub organizer: Option<String>,
 }
 
 impl IcsEvent {
@@ -71,6 +73,7 @@ impl IcsEvent {
             alarms: vec![],
             color: None,
             attendees: vec![],
+            organizer: None,
         }
     }
 
@@ -281,6 +284,7 @@ struct Builder {
     alarms: Vec<u32>,
     color: Option<String>,
     attendees: Vec<Participant>,
+    organizer: Option<String>,
 }
 
 impl Builder {
@@ -310,6 +314,7 @@ impl Builder {
             alarms,
             color: self.color,
             attendees: self.attendees,
+            organizer: self.organizer,
         })
     }
 }
@@ -399,6 +404,7 @@ pub fn parse(text: &str) -> IcsCalendar {
                     "DTEND" => b.end = parse_when(&line.value, line.param("VALUE")).map(|w| w.0),
                     "DURATION" => b.duration = parse_duration(&line.value),
                     "RRULE" => b.rule = recur::parse_rrule(&line.value),
+                    "ORGANIZER" => b.organizer = Some(line.value.trim().to_string()).filter(|v| !v.is_empty()),
                     "ATTENDEE" => {
                         let (cn, role, cutype, partstat) = (line.param("CN"), line.param("ROLE"), line.param("CUTYPE"), line.param("PARTSTAT"));
                         if let Some(p) = invitees::attendee(&line.value, cn, role, cutype, partstat) {
@@ -501,6 +507,9 @@ fn write_event(out: &mut String, e: &IcsEvent, stamp: &str) {
     if !e.notes.is_empty() {
         add(format!("DESCRIPTION:{}", escape(&e.notes)));
     }
+    if let Some(organizer) = &e.organizer {
+        add(format!("ORGANIZER:{organizer}"));
+    }
     for p in &e.attendees {
         add(invitees::attendee_line(p));
     }
@@ -597,6 +606,9 @@ pub fn to_calendar_event(e: &IcsEvent, id: u64) -> Option<CalendarEvent> {
         notes: String::new(),
         repeat: 0,
         alert: 0,
+        // the event keeps the UID of the object it came from, so its edits can be sent back to that account; a repeating
+        // object expands to many events that share one UID, so those are not linked
+        uid: if e.rule.is_some() { String::new() } else { e.uid.clone() },
     };
     ev.valid().then_some(ev)
 }
@@ -749,12 +761,13 @@ BEGIN:VEVENT\r\nUID:bad\r\nSUMMARY:No start\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
             location: String::new(),
             notes: String::new(),
             repeat: 0,
-            alert: 0,
+            alert: 0, uid: String::new(),
         };
         let ics = from_calendar_event(&e);
         assert_eq!(ics.uid, "7@springboard.tab");
         assert_eq!(ics.end, l(d(2026, 10, 5), 11, 30));
-        assert_eq!(to_calendar_event(&ics, 7), Some(e));
+        // a plain (non-repeating) event keeps the UID of the object it came from, so the round trip carries it back
+        assert_eq!(to_calendar_event(&ics, 7), Some(CalendarEvent { uid: ics.uid.clone(), ..e }));
         let mut all_day = from_calendar_event(&CalendarEvent {
             id: 8,
             date: d(2026, 10, 31),
@@ -765,7 +778,7 @@ BEGIN:VEVENT\r\nUID:bad\r\nSUMMARY:No start\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
             location: String::new(),
             notes: String::new(),
             repeat: 0,
-            alert: 0,
+            alert: 0, uid: String::new(),
         });
         assert_eq!(all_day.end.date, d(2026, 11, 1));
         all_day.end = all_day.end.add_minutes(3 * 1440);

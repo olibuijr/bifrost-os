@@ -13,10 +13,20 @@
 //!   `{year?, month, day}` and `dates` is a list of `{label, year?, month, day}`. `query`
 //!   filters by any text of the contact. Answers only the contacts the app may read, sorted by name. Without a
 //!   read grant it is an error.
+//! - `view {contact}` shows the person one contact's card in Contacts (`contact` is a name or an identifier) and
+//!   returns `{status: "shown"}`. It reads nothing from the book, so it needs no grant.
 //! - `save {add?, update?, delete?}` changes the book and returns `{added: [id, ...]}`, the ids the new contacts got.
 //!   `add` and `update` hold records of the fields above (`update` also needs the contact `id` and changes only the
 //!   fields it names; `null` clears one). `delete` holds `{id}` objects. Only full access writes: a limited grant is read-only. The whole
 //!   call applies or none of it does, and the shell stores the book only when it succeeds.
+//!
+//! - `donate {name?, handle, value}` (any app) offers a person the app saw: `handle` is `email` or `phone`. The shell keeps
+//!   it in a sidecar (`contactdonations`) with the app as its source, and returns `{donated}`: false for an address the
+//!   person dismissed before. A value that is no email address or phone number is an error.
+//! - `suggestions {limit?}` returns `{suggestions: [{key, handle, value, name, sources, count}]}`, the donated people not
+//!   yet in the book, best first. `feedback {key, answer}` (`accepted` or `dismissed`) records the person's answer; an
+//!   accepted one returns `{contact: {given_name, family_name, email, phone}}` for the book to save, a dismissed one is
+//!   never offered again. Only the Contacts app (the owner of the book) may call these two.
 //!
 //! The first phone and email come from the contacts file (labeled by its label row); more phones and emails, URLs, the
 //! birthday and dates come from the sidecar (`contactextras`). A contact without a sidecar entry reads as before, with
@@ -26,9 +36,18 @@
 //! grants live per shell thread (thread-local, like the `privacy` service), so they reset when the shell restarts.
 use super::{Shell, SystemService};
 use crate::shell::contactextras::{self, Book, Extras};
+use crate::shell::contactchanges;
+use crate::shell::contactdonations;
+use crate::shell::contactgroups;
+use crate::shell::contactpick;
+use crate::shell::contactphotos;
 use crate::shell::contactstore::{self, Contact, LABELS};
 use bifrost_core::json::Json;
+use bifrost_ui::contact_groups::Groups;
+use bifrost_ui::contact_vcard;
 use bifrost_ui::contact_access::{Access, Choice, Error, Status};
+use bifrost_ui::contact_book::{Contact as BookContact, LabeledValue as BookValue};
+use bifrost_ui::contact_donation::{DonationStore, Feedback, Handle, Refusal};
 use bifrost_ui::contact_fetch::{project, DateComponents, Key, Keys, LabeledValue, Partial, Record, Value};
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -44,11 +63,23 @@ pub fn access_of(app_id: &str) -> Access {
 
 /// The answer to the access prompt the app is waiting on. The prompt is shown once.
 pub fn answer_prompt(app_id: &str, choice: Choice) -> Result<Status, Error> {
+    super::privacy_permissions::mark_grants_dirty();
     ACCESS.with(|a| a.borrow_mut().entry(app_id.to_string()).or_default().request(choice))
+}
+
+/// Every app with a contacts answer, as `(app, status, picked contacts)`, for the privacy store to save.
+pub fn grants_snapshot() -> Vec<(String, Status, Vec<u64>)> {
+    ACCESS.with(|a| {
+        a.borrow()
+            .iter()
+            .map(|(app, access)| (app.clone(), access.status(), access.picked().iter().copied().collect()))
+            .collect()
+    })
 }
 
 /// A change the person makes in Settings for one app. Only a system restriction blocks it.
 pub fn change_by_user(app_id: &str, choice: Choice) -> Result<Status, Error> {
+    super::privacy_permissions::mark_grants_dirty();
     ACCESS.with(|a| a.borrow_mut().entry(app_id.to_string()).or_default().change_in_settings(choice))
 }
 
@@ -65,9 +96,11 @@ pub fn record_of(c: &Contact) -> Record {
 /// The record of a store contact together with its extra multi-value fields. The file's phone and email come first.
 pub fn record_with(c: &Contact, extras: &Extras) -> Record {
     let mut r = Record::new(c.id);
-    let (given, family) = split_name(&c.name);
-    r.set(Key::GivenName, Value::Text(given));
-    r.set(Key::FamilyName, Value::Text(family));
+    let parts = name_parts(&c.name);
+    r.set(Key::GivenName, Value::Text(parts.given));
+    r.set(Key::MiddleName, Value::Text(parts.middle));
+    r.set(Key::FamilyName, Value::Text(parts.family));
+    r.set(Key::NameSuffix, Value::Text(parts.suffix));
     r.set(Key::Organization, Value::Text(c.company.clone()));
     let first = |value: &str, set: usize, more: &[LabeledValue]| {
         let label = LABELS[set].get(c.labels[set] as usize).copied().unwrap_or("other");
@@ -87,12 +120,53 @@ pub fn record_with(c: &Contact, extras: &Extras) -> Record {
     r
 }
 
-fn split_name(name: &str) -> (String, String) {
-    let name = name.trim();
-    match name.rsplit_once(' ') {
-        Some((given, family)) => (given.trim().to_string(), family.to_string()),
-        None => (name.to_string(), String::new()),
+/// The parts of a store name: given, middle, family and suffix. The store keeps one name string, so these are derived
+/// from it on read and joined back into it on save.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct NameParts {
+    given: String,
+    middle: String,
+    family: String,
+    suffix: String,
+}
+
+/// Generational and professional suffixes that end a name ("Jr", "III", "Esq."). Matched without case.
+const NAME_SUFFIXES: [&str; 9] = ["Jr", "Jr.", "Sr", "Sr.", "II", "III", "IV", "Esq", "Esq."];
+
+/// Splits a name the way a contact card reads it: a trailing suffix is taken off first, then the first word is the
+/// given name, the last word the family name and any words between them the middle name. A one-word name is a given
+/// name; a two-word name has no middle.
+fn name_parts(name: &str) -> NameParts {
+    let mut words: Vec<&str> = name.split_whitespace().collect();
+    let mut parts = NameParts::default();
+    if words.len() > 1 {
+        if let Some(last) = words.last().copied() {
+            if NAME_SUFFIXES.iter().any(|s| s.eq_ignore_ascii_case(last)) {
+                parts.suffix = last.to_string();
+                words.pop();
+            }
+        }
     }
+    match words.len() {
+        0 => {}
+        1 => parts.given = words[0].to_string(),
+        n => {
+            parts.given = words[0].to_string();
+            parts.middle = words[1..n - 1].join(" ");
+            parts.family = words[n - 1].to_string();
+        }
+    }
+    parts
+}
+
+/// Joins name parts back into the one name string the store keeps, skipping empty parts.
+fn join_name(parts: &NameParts) -> String {
+    [&parts.given, &parts.middle, &parts.family, &parts.suffix]
+        .into_iter()
+        .filter(|part| !part.is_empty())
+        .map(String::as_str)
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// The JSON of one partial record: its id and each fetched key, `null` when the contact has no value for it.
@@ -209,18 +283,23 @@ fn contact_of(id: u64, (record, cleared): &(Record, Vec<Key>), base: Option<&Con
             Ok(kept.to_string())
         }
     };
-    let (kept_given, kept_family) = base.map_or(("", ""), |c| c.name.rsplit_once(' ').unwrap_or(("", c.name.as_str())));
-    let given = field(Key::GivenName, kept_given)?;
-    let family = field(Key::FamilyName, kept_family)?;
+    let kept = base.map_or_else(NameParts::default, |c| name_parts(&c.name));
+    let name = NameParts {
+        given: field(Key::GivenName, &kept.given)?,
+        middle: field(Key::MiddleName, &kept.middle)?,
+        family: field(Key::FamilyName, &kept.family)?,
+        suffix: field(Key::NameSuffix, &kept.suffix)?,
+    };
     let contact = Contact {
         id,
-        name: [given, family].into_iter().filter(|part| !part.is_empty()).collect::<Vec<_>>().join(" "),
+        name: join_name(&name),
         company: field(Key::Organization, base.map_or("", |c| &c.company))?,
         phone: field(Key::Phones, base.map_or("", |c| &c.phone))?,
         email: field(Key::Emails, base.map_or("", |c| &c.email))?,
         address: field(Key::Address, base.map_or("", |c| &c.address))?,
         notes: field(Key::Note, base.map_or("", |c| &c.notes))?,
         favorite: base.is_some_and(|c| c.favorite),
+        uid: base.map_or_else(|| crate::shell::contactstore::new_uid(id), |c| c.uid.clone()),
         labels: base.map_or([0; 3], |c| c.labels),
     };
     if contact.valid() {
@@ -317,26 +396,382 @@ pub fn answer_with(app_id: &str, method: &str, params: &Json, contacts: &[Contac
     }
 }
 
+/// The group methods. Reads need a read grant, writes need full access, and a group holds only contacts the app can
+/// see. Returns the reply and whether the groups changed, so the caller saves the sidecar only then.
+pub fn groups_answer(
+    app_id: &str,
+    method: &str,
+    params: &Json,
+    contacts: &[Contact],
+    groups: &mut Groups,
+) -> Result<(Json, bool), String> {
+    let access = access_of(app_id);
+    let number = |key: &str| {
+        params.get(key).and_then(Json::as_u64).ok_or_else(|| format!("{method} needs {key}"))
+    };
+    let writable = || access.check_write().map_err(|_| "contacts write access is not granted".to_string());
+    let no_grant = || "contacts access is not granted".to_string();
+    match method {
+        "groups" => {
+            if !reads(app_id) {
+                return Err(no_grant());
+            }
+            let rows: Vec<Json> = groups
+                .all()
+                .map(|g| {
+                    Json::Obj(vec![
+                        ("id".into(), Json::Num(g.id as f64)),
+                        ("name".into(), Json::Str(g.name.clone())),
+                        ("parent".into(), g.parent.map(|p| Json::Num(p as f64)).unwrap_or(Json::Null)),
+                    ])
+                })
+                .collect();
+            Ok((Json::Obj(vec![("groups".into(), Json::Arr(rows))]), false))
+        }
+        "group_members" => {
+            if !reads(app_id) {
+                return Err(no_grant());
+            }
+            let recursive = matches!(params.get("recursive"), Some(Json::Bool(true)));
+            let members = groups.members(number("group")?, recursive).map_err(|e| format!("{e:?}"))?;
+            let visible: Vec<Json> =
+                members.into_iter().filter(|m| access.can_read(*m)).map(|m| Json::Num(m as f64)).collect();
+            Ok((Json::Obj(vec![("contacts".into(), Json::Arr(visible))]), false))
+        }
+        "group_add" => {
+            writable()?;
+            let name = params.get("name").and_then(Json::as_str).ok_or_else(|| "group_add needs name".to_string())?;
+            let parent = match params.get("parent") {
+                None | Some(Json::Null) => None,
+                Some(_) => Some(number("parent")?),
+            };
+            let id = groups.add(name, parent).map_err(|e| format!("{e:?}"))?;
+            Ok((Json::Obj(vec![("id".into(), Json::Num(id as f64))]), true))
+        }
+        "group_remove" => {
+            writable()?;
+            let removed = groups.remove(number("group")?).map_err(|e| format!("{e:?}"))?;
+            Ok((Json::Obj(vec![("removed".into(), Json::Num(removed.len() as f64))]), true))
+        }
+        "group_add_member" | "group_remove_member" => {
+            writable()?;
+            let (group, contact) = (number("group")?, number("contact")?);
+            if !contacts.iter().any(|c| c.id == contact) || !access.can_read(contact) {
+                return Err("no such contact".into());
+            }
+            let changed = if method == "group_add_member" {
+                groups.add_member(group, contact)
+            } else {
+                groups.remove_member(group, contact)
+            }
+            .map_err(|e| format!("{e:?}"))?;
+            Ok((Json::Obj(vec![("changed".into(), Json::Bool(changed))]), changed))
+        }
+        _ => Err(format!("contacts has no method {method}")),
+    }
+}
+
 pub struct Contacts;
+
+/// The apps that own the book: only they see the donated people and answer for them.
+pub fn owns_book(app_id: &str) -> bool {
+    matches!(app_id, "is.olibuijr.contacts" | "is.olibuijr.contacts.desktop")
+}
+
+/// The book as the donation model needs it: the email addresses and phone numbers the store and its sidecar hold, so a
+/// person already in the book is never suggested.
+pub fn handles_of(contacts: &[Contact], extras: &Book) -> Vec<BookContact> {
+    contacts
+        .iter()
+        .map(|c| {
+            let more = extras.get(&c.id).cloned().unwrap_or_default();
+            let mut book = BookContact { identifier: c.id.to_string(), ..BookContact::default() };
+            for email in std::iter::once(c.email.as_str()).chain(more.emails.iter().map(|e| e.value.as_str())) {
+                if !email.trim().is_empty() {
+                    book.email_addresses.push(BookValue::new(None, email.to_string()));
+                }
+            }
+            for phone in std::iter::once(c.phone.as_str()).chain(more.phones.iter().map(|p| p.value.as_str())) {
+                if !phone.trim().is_empty() {
+                    book.phone_numbers.push(BookValue::new(None, phone.to_string()));
+                }
+            }
+            book
+        })
+        .collect()
+}
+
+/// Answers `donate`, `suggestions` and `feedback` over `store`. `book` is the people already in the address book and
+/// `now` the clock in seconds. The flag says whether the store changed and must be saved.
+pub fn donations_answer(app_id: &str, method: &str, params: &Json, store: &mut DonationStore, book: &[BookContact], now: u64) -> Result<(Json, bool), String> {
+    let text = |name: &str| params.get(name).and_then(Json::as_str).unwrap_or("");
+    match method {
+        "donate" => {
+            let handle = match text("handle") {
+                "email" => Handle::Email,
+                "phone" => Handle::Phone,
+                other => return Err(format!("donate needs handle email or phone, not {other:?}")),
+            };
+            match store.donate(app_id, text("name"), handle, text("value"), now) {
+                Ok(()) => Ok((Json::Obj(vec![("donated".into(), Json::Bool(true))]), true)),
+                Err(Refusal::Blocked) => Ok((Json::Obj(vec![("donated".into(), Json::Bool(false))]), false)),
+                Err(Refusal::BadField) => Err("donate needs a value and a name of at most 200 bytes each".into()),
+                Err(Refusal::BadHandle) => Err("the value is not an email address or phone number".into()),
+            }
+        }
+        "suggestions" | "feedback" if !owns_book(app_id) => Err("only the Contacts app sees suggested contacts".into()),
+        "suggestions" => {
+            let limit = params.get("limit").and_then(Json::as_u64).map_or(20, |n| n.min(100) as usize);
+            let rows = store
+                .suggestions(book, limit)
+                .into_iter()
+                .map(|d| {
+                    Json::Obj(vec![
+                        ("key".into(), Json::Str(d.key.clone())),
+                        ("handle".into(), Json::Str(if d.handle == Handle::Email { "email" } else { "phone" }.into())),
+                        ("value".into(), Json::Str(d.display.clone())),
+                        ("name".into(), Json::Str(d.name.clone())),
+                        ("sources".into(), Json::Num(d.sources.len() as f64)),
+                        ("count".into(), Json::Num(f64::from(d.count))),
+                    ])
+                })
+                .collect();
+            Ok((Json::Obj(vec![("suggestions".into(), Json::Arr(rows))]), false))
+        }
+        "feedback" => {
+            let key = text("key");
+            let answer = match text("answer") {
+                "accepted" => Feedback::Accepted,
+                "dismissed" => Feedback::Dismissed,
+                other => return Err(format!("feedback answer is accepted or dismissed, not {other:?}")),
+            };
+            let contact = store.feedback(key, answer);
+            match (answer, contact) {
+                (Feedback::Accepted, Some(c)) => {
+                    let first = |list: &[BookValue<String>]| list.first().map_or(Json::Null, |v| Json::Str(v.value.clone()));
+                    let reply = Json::Obj(vec![
+                        ("given_name".into(), Json::Str(c.given_name.clone())),
+                        ("family_name".into(), Json::Str(c.family_name.clone())),
+                        ("email".into(), first(&c.email_addresses)),
+                        ("phone".into(), first(&c.phone_numbers)),
+                    ]);
+                    Ok((Json::Obj(vec![("contact".into(), reply)]), true))
+                }
+                (Feedback::Accepted, None) => Err("no such suggestion".into()),
+                (Feedback::Dismissed, _) => Ok((Json::Obj(Vec::new()), true)),
+            }
+        }
+        _ => Err(format!("contacts has no method {method}")),
+    }
+}
+
+/// The Contacts app, which draws a contact's card for the `view` method.
+pub const CONTACTS_APP: &str = "is.olibuijr.contacts.desktop";
+
+/// The longest contact name or identifier a `view` call may carry, in characters.
+const VIEW_QUERY_MAX: usize = 200;
+
+/// The text the Contacts app is asked to open: the `contact` param, a name or an identifier (a number is an identifier).
+/// A blank value, a control character or a longer value is refused.
+pub fn view_query(params: &Json) -> Result<String, String> {
+    let text = match params.get("contact") {
+        Some(Json::Num(n)) if n.fract() == 0.0 && *n >= 0.0 => format!("{}", *n as u64),
+        Some(Json::Str(s)) => s.trim().to_string(),
+        _ => return Err("view needs a contact: a name or an identifier".into()),
+    };
+    if text.is_empty() || text.chars().count() > VIEW_QUERY_MAX || text.chars().any(char::is_control) {
+        return Err("view needs a contact: a name or an identifier".into());
+    }
+    Ok(text)
+}
 
 impl SystemService for Contacts {
     fn name(&self) -> &'static str {
         "contacts"
     }
 
-    fn call(&mut self, shell: &mut Shell, app_id: &str, method: &str, params: &Json, _t: f64) -> Result<Json, String> {
+    fn call(&mut self, shell: &mut Shell, app_id: &str, method: &str, params: &Json, t: f64) -> Result<Json, String> {
         let path = contactstore::store_path(&shell.data_dir);
+        let groups_path = contactgroups::path_for(&path);
         let load = || contactstore::load_checked(&path).map_err(|e| e.to_string());
         match method {
             "save" => {
                 let book = if access_of(app_id).check_write().is_ok() { load()? } else { Vec::new() };
                 let (reply, next) = apply_save(app_id, params, &book)?;
                 contactstore::save(&path, &next).map_err(|e| e.to_string())?;
+                let changes = contactchanges::diff(&book, &next);
+                if !changes.is_empty() {
+                    let log_path = contactchanges::path_for(&path);
+                    let mut log = contactchanges::load(&log_path);
+                    log.append(&changes);
+                    contactchanges::save(&log_path, &log).map_err(|e| e.to_string())?;
+                    // A deleted contact takes its picture with it.
+                    let photos = contactphotos::dir_for(&path);
+                    for (kind, id) in &changes {
+                        if *kind == contactchanges::Kind::Deleted {
+                            let _ = contactphotos::remove(&photos, *id);
+                        }
+                    }
+                }
+                // A deleted contact leaves every group it was in.
+                let mut groups = contactgroups::load(&groups_path);
+                let stale: Vec<u64> = groups
+                    .all()
+                    .flat_map(|g| groups.members(g.id, false).unwrap_or_default())
+                    .filter(|m| !next.iter().any(|c| c.id == *m))
+                    .collect();
+                if !stale.is_empty() {
+                    for m in stale {
+                        groups.forget_contact(m);
+                    }
+                    contactgroups::save(&groups_path, &groups).map_err(|e| e.to_string())?;
+                }
                 Ok(reply)
             }
             "fetch" if reads(app_id) => {
                 let extras = contactextras::load(&contactextras::path_for(&path));
                 answer_with(app_id, method, params, &load()?, &extras)
+            }
+            "pick" => {
+                // A pick shows the whole book to the person, who chooses; the app itself reads nothing from it.
+                let need = params.get("need").and_then(Json::as_str).and_then(contactpick::card_key);
+                let keys = params
+                    .get("keys")
+                    .and_then(Json::as_array)
+                    .unwrap_or(&[])
+                    .iter()
+                    .filter_map(|k| k.as_str().and_then(contactpick::card_key))
+                    .collect();
+                let mode_name = params.get("mode").and_then(Json::as_str).unwrap_or("");
+                let mode = contactpick::mode_of(mode_name, need, keys)?;
+                let entries = contactpick::entries_of(&load()?);
+                let app_name = super::super::apphost::installed()
+                    .iter()
+                    .find(|a| a.manifest.id == app_id)
+                    .map_or_else(|| app_id.to_string(), |a| a.manifest.name.clone());
+                contactpick::start(app_id, &app_name, bifrost_ui::contact_picker::Picker::new(entries.clone(), mode), &entries);
+                Ok(Json::Obj(vec![("status".into(), Json::Str("pending".into()))]))
+            }
+            "pick_result" => match contactpick::outcome(app_id) {
+                contactpick::Outcome::None => Err("no contact pick is open for this app".into()),
+                contactpick::Outcome::Pending => Ok(Json::Obj(vec![("status".into(), Json::Str("pending".into()))])),
+                contactpick::Outcome::Chosen(bifrost_ui::contact_picker::Choice::Contact(id)) => Ok(Json::Obj(vec![
+                    ("status".into(), Json::Str("chosen".into())),
+                    ("contact".into(), Json::Num(id as f64)),
+                ])),
+                contactpick::Outcome::Chosen(bifrost_ui::contact_picker::Choice::Property { contact, key: _, value }) => {
+                    Ok(Json::Obj(vec![
+                        ("status".into(), Json::Str("chosen".into())),
+                        ("contact".into(), Json::Num(contact as f64)),
+                        ("value".into(), Json::Str(value)),
+                    ]))
+                }
+            },
+            "photo" => {
+                if !reads(app_id) {
+                    return Err("contacts access is not granted".into());
+                }
+                let id = params.get("id").and_then(Json::as_u64).ok_or_else(|| "photo needs id".to_string())?;
+                if !access_of(app_id).can_read(id) {
+                    return Err("no such contact".into());
+                }
+                match contactphotos::read(&contactphotos::dir_for(&path), id) {
+                    Some((format, bytes)) => Ok(Json::Obj(vec![
+                        ("format".into(), Json::Str(contactphotos::format_name(format).into())),
+                        ("data".into(), Json::Str(contact_vcard::base64_encode(&bytes))),
+                    ])),
+                    None => Ok(Json::Obj(vec![("format".into(), Json::Null)])),
+                }
+            }
+            "photo_set" | "photo_remove" => {
+                if access_of(app_id).check_write().is_err() {
+                    return Err("contacts write access is not granted".into());
+                }
+                let id = params.get("id").and_then(Json::as_u64).ok_or_else(|| "photo needs id".to_string())?;
+                if !load()?.iter().any(|c| c.id == id) {
+                    return Err("no such contact".into());
+                }
+                let dir = contactphotos::dir_for(&path);
+                if method == "photo_remove" {
+                    let removed = contactphotos::remove(&dir, id).map_err(|e| e.to_string())?;
+                    if removed {
+                        contactchanges::record_for(&path, &[(contactchanges::Kind::Updated, id)]).map_err(|e| e.to_string())?;
+                    }
+                    return Ok(Json::Obj(vec![("removed".into(), Json::Bool(removed))]));
+                }
+                let encoded = params.get("data").and_then(Json::as_str).ok_or_else(|| "photo_set needs data".to_string())?;
+                let bytes = contact_vcard::base64_decode(encoded).ok_or_else(|| "photo data is not base64".to_string())?;
+                let format = contactphotos::write(&dir, id, &bytes)?;
+                contactchanges::record_for(&path, &[(contactchanges::Kind::Updated, id)]).map_err(|e| e.to_string())?;
+                Ok(Json::Obj(vec![("format".into(), Json::Str(contactphotos::format_name(format).into()))]))
+            }
+            "view" => {
+                // Shows the person one contact's card in Contacts. The card is drawn by that app, so the caller reads
+                // nothing from the book and needs no grant; it learns only that the request was made.
+                let query = view_query(params)?;
+                shell.run_intent(CONTACTS_APP, "view-card", "contact", &query, t);
+                Ok(Json::Obj(vec![("status".into(), Json::Str("shown".into()))]))
+            }
+            "request" => {
+                // An undecided app gets the access sheet; the status it reads is the one before the answer.
+                let status = access_of(app_id).status();
+                if status == Status::NotDetermined {
+                    let name = super::super::apphost::installed()
+                        .iter()
+                        .find(|a| a.manifest.id == app_id)
+                        .map_or_else(|| app_id.to_string(), |a| a.manifest.name.clone());
+                    super::privacy_permissions::queue_prompt(app_id, &name, super::privacy_permissions::Kind::Contacts, "");
+                }
+                Ok(Json::Obj(vec![("status".into(), Json::Str(status.name().into()))]))
+            }
+            "changes" => {
+                if !reads(app_id) {
+                    return Err("contacts access is not granted".into());
+                }
+                let token = params.get("token").and_then(Json::as_u64).unwrap_or(0);
+                let log = contactchanges::load(&contactchanges::path_for(&path));
+                let access = access_of(app_id);
+                let rows: Vec<Json> = log
+                    .since(token)?
+                    .into_iter()
+                    .filter(|e| access.can_read(e.id))
+                    .map(|e| {
+                        Json::Obj(vec![
+                            ("seq".into(), Json::Num(e.seq as f64)),
+                            ("kind".into(), Json::Str(e.kind.name().into())),
+                            ("id".into(), Json::Num(e.id as f64)),
+                        ])
+                    })
+                    .collect();
+                Ok(Json::Obj(vec![
+                    ("token".into(), Json::Num(log.last_seq as f64)),
+                    ("changes".into(), Json::Arr(rows)),
+                ]))
+            }
+            "donate" | "suggestions" | "feedback" => {
+                let donations_path = contactdonations::path_for(&path);
+                let mut store = contactdonations::load(&donations_path);
+                // the owner's suggestions leave out everyone already in the book
+                let book = if method == "donate" || !owns_book(app_id) { Vec::new() } else { handles_of(&load()?, &contactextras::load(&contactextras::path_for(&path))) };
+                let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+                let (reply, changed) = donations_answer(app_id, method, params, &mut store, &book, now)?;
+                if changed {
+                    contactdonations::save(&donations_path, &store).map_err(|e| e.to_string())?;
+                }
+                Ok(reply)
+            }
+            "groups" | "group_members" | "group_add" | "group_remove" | "group_add_member" | "group_remove_member" => {
+                let mut groups: Groups = contactgroups::load(&groups_path);
+                let before = groups.clone();
+                let contacts = if access_of(app_id).check_write().is_ok() || reads(app_id) { load()? } else { Vec::new() };
+                let (reply, changed) = groups_answer(app_id, method, params, &contacts, &mut groups)?;
+                if changed {
+                    contactgroups::save(&groups_path, &groups).map_err(|e| e.to_string())?;
+                    // a contact whose groups changed is an updated contact in the change log
+                    let changes = contactchanges::group_changes(&before, &groups, &contacts);
+                    contactchanges::record_for(&path, &changes).map_err(|e| e.to_string())?;
+                }
+                Ok(reply)
             }
             _ => answer_with(app_id, method, params, &[], &Book::new()),
         }
@@ -346,6 +781,19 @@ impl SystemService for Contacts {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn view_takes_a_name_or_an_identifier_and_nothing_else() {
+        let obj = |v: Json| Json::Obj(vec![("contact".into(), v)]);
+        assert_eq!(view_query(&obj(Json::Str("  Ada Lovelace ".into()))), Ok("Ada Lovelace".into()));
+        assert_eq!(view_query(&obj(Json::Num(42.0))), Ok("42".into()));
+        assert!(view_query(&obj(Json::Str("   ".into()))).is_err());
+        assert!(view_query(&obj(Json::Str("a\nb".into()))).is_err());
+        assert!(view_query(&obj(Json::Str("x".repeat(201)))).is_err());
+        assert!(view_query(&obj(Json::Num(-1.0))).is_err());
+        assert!(view_query(&obj(Json::Num(1.5))).is_err());
+        assert!(view_query(&Json::Obj(vec![])).is_err());
+    }
 
     fn contact(id: u64, name: &str, phone: &str, email: &str, notes: &str) -> Contact {
         Contact { id, name: name.into(), phone: phone.into(), email: email.into(), notes: notes.into(), ..Default::default() }
@@ -369,6 +817,73 @@ mod tests {
             fields.push(("query".into(), Json::Str(query.into())));
         }
         params
+    }
+
+    const OWNER: &str = "is.olibuijr.contacts.desktop";
+
+    fn donate(store: &mut DonationStore, app: &str, name: &str, handle: &str, value: &str) -> Result<(Json, bool), String> {
+        let params = Json::Obj(vec![
+            ("name".into(), Json::Str(name.into())),
+            ("handle".into(), Json::Str(handle.into())),
+            ("value".into(), Json::Str(value.into())),
+        ]);
+        donations_answer(app, "donate", &params, store, &[], 100)
+    }
+
+    fn suggested(store: &mut DonationStore, book: &[BookContact]) -> Vec<String> {
+        let (reply, _) = donations_answer(OWNER, "suggestions", &Json::Null, store, book, 100).unwrap();
+        reply.get("suggestions").and_then(Json::as_array).unwrap().iter().filter_map(|r| r.get("key").and_then(Json::as_str)).map(str::to_string).collect()
+    }
+
+    fn feedback(store: &mut DonationStore, key: &str, answer: &str) -> Result<(Json, bool), String> {
+        let params = Json::Obj(vec![("key".into(), Json::Str(key.into())), ("answer".into(), Json::Str(answer.into()))]);
+        donations_answer(OWNER, "feedback", &params, store, &[], 100)
+    }
+
+    #[test]
+    fn any_app_donates_but_only_the_contacts_app_sees_the_suggestions() {
+        let mut store = DonationStore::new();
+        let (reply, changed) = donate(&mut store, "is.olibuijr.mail.desktop", "Ada Lovelace", "email", "Ada@Example.com").unwrap();
+        assert_eq!(reply.get("donated"), Some(&Json::Bool(true)));
+        assert!(changed);
+        assert!(donate(&mut store, "is.olibuijr.mail.desktop", "X", "email", "not-an-address").is_err());
+        assert!(donate(&mut store, "is.olibuijr.mail.desktop", "X", "fax", "1").is_err());
+        for method in ["suggestions", "feedback"] {
+            assert!(donations_answer("is.olibuijr.mail.desktop", method, &Json::Null, &mut store, &[], 100).is_err(), "{method} is the owner's");
+        }
+        assert_eq!(suggested(&mut store, &[]), vec!["ada@example.com"]);
+    }
+
+    #[test]
+    fn a_person_in_the_book_is_not_suggested() {
+        let mut store = DonationStore::new();
+        donate(&mut store, "mail", "Ada Lovelace", "email", "ADA@example.com").unwrap();
+        donate(&mut store, "mail", "Bob Stone", "email", "bob@example.com").unwrap();
+        donate(&mut store, "mail", "Alan", "phone", "+354 555 0300").unwrap();
+        donate(&mut store, "mail", "Cy", "phone", "+354 555 0999").unwrap();
+        let known = handles_of(&book(), &Book::new());
+        assert_eq!(suggested(&mut store, &known), vec!["+3545550999", "bob@example.com"]);
+    }
+
+    #[test]
+    fn accepting_returns_the_contact_to_save_and_dismissing_blocks_the_address() {
+        let mut store = DonationStore::new();
+        donate(&mut store, "mail", "Ada Lovelace", "email", "ada@example.com").unwrap();
+        donate(&mut store, "mail", "Bob", "email", "bob@example.com").unwrap();
+        let (reply, changed) = feedback(&mut store, "ada@example.com", "accepted").unwrap();
+        assert!(changed);
+        let contact = reply.get("contact").unwrap();
+        assert_eq!(contact.get("given_name").and_then(Json::as_str), Some("Ada"));
+        assert_eq!(contact.get("family_name").and_then(Json::as_str), Some("Lovelace"));
+        assert_eq!(contact.get("email").and_then(Json::as_str), Some("ada@example.com"));
+        assert_eq!(contact.get("phone"), Some(&Json::Null));
+        assert!(feedback(&mut store, "nobody@example.com", "accepted").is_err());
+        feedback(&mut store, "bob@example.com", "dismissed").unwrap();
+        assert!(suggested(&mut store, &[]).is_empty(), "an answered suggestion is gone");
+        let (again, saved) = donate(&mut store, "mail", "Bob", "email", "bob@example.com").unwrap();
+        assert_eq!(again.get("donated"), Some(&Json::Bool(false)), "a dismissed address stays dismissed");
+        assert!(!saved);
+        assert!(feedback(&mut store, "bob@example.com", "maybe").is_err());
     }
 
     #[test]
@@ -455,6 +970,31 @@ mod tests {
 
     fn ids_of(book: &[Contact]) -> Vec<u64> {
         book.iter().map(|c| c.id).collect()
+    }
+
+    #[test]
+    fn groups_hold_only_known_contacts_and_report_their_members() {
+        let id = "is.example.contacts-groups-full";
+        answer_prompt(id, Choice::All).unwrap();
+        let mut groups = Groups::new();
+        let book = book();
+        let (reply, changed) = groups_answer(id, "group_add", &obj(&[("name", text("Family"))]), &book, &mut groups).unwrap();
+        assert!(changed);
+        let family = Json::Num(reply.get("id").and_then(Json::as_u64).unwrap() as f64);
+        let add = obj(&[("group", family.clone()), ("contact", Json::Num(1.0))]);
+        assert!(groups_answer(id, "group_add_member", &add, &book, &mut groups).unwrap().1);
+        let (listed, _) = groups_answer(id, "group_members", &obj(&[("group", family.clone())]), &book, &mut groups).unwrap();
+        assert_eq!(listed.get("contacts").and_then(Json::as_array).map(|a| a.len()), Some(1));
+        let unknown = obj(&[("group", family), ("contact", Json::Num(99.0))]);
+        assert!(groups_answer(id, "group_add_member", &unknown, &book, &mut groups).is_err());
+    }
+
+    #[test]
+    fn group_writes_are_refused_without_full_access() {
+        let id = "is.example.contacts-groups-undecided";
+        let mut groups = Groups::new();
+        assert!(groups_answer(id, "group_add", &obj(&[("name", text("Family"))]), &book(), &mut groups).is_err());
+        assert!(groups.is_empty());
     }
 
     #[test]
@@ -604,13 +1144,32 @@ mod tests {
     }
 
     #[test]
-    fn a_name_splits_into_given_and_family_on_the_last_space() {
+    fn a_name_splits_into_given_middle_and_family() {
         let r = record_of(&contact(9, "Mary Ann Smith", "", "", ""));
-        assert_eq!(r.get(Key::GivenName), Some(&Value::Text("Mary Ann".into())));
+        assert_eq!(r.get(Key::GivenName), Some(&Value::Text("Mary".into())));
+        assert_eq!(r.get(Key::MiddleName), Some(&Value::Text("Ann".into())));
         assert_eq!(r.get(Key::FamilyName), Some(&Value::Text("Smith".into())));
+        let two = record_of(&contact(11, "Jan van der Berg", "", "", ""));
+        assert_eq!(two.get(Key::MiddleName), Some(&Value::Text("van der".into())));
         let one = record_of(&contact(10, "Cher", "", "", ""));
         assert_eq!(one.get(Key::GivenName), Some(&Value::Text("Cher".into())));
         assert_eq!(one.get(Key::FamilyName), None);
+    }
+
+    #[test]
+    fn a_trailing_suffix_is_split_off_the_name() {
+        let r = record_of(&contact(12, "Martin Luther King Jr.", "", "", ""));
+        assert_eq!(r.get(Key::GivenName), Some(&Value::Text("Martin".into())));
+        assert_eq!(r.get(Key::MiddleName), Some(&Value::Text("Luther".into())));
+        assert_eq!(r.get(Key::FamilyName), Some(&Value::Text("King".into())));
+        assert_eq!(r.get(Key::NameSuffix), Some(&Value::Text("Jr.".into())));
+    }
+
+    #[test]
+    fn a_name_joins_back_to_the_same_string_when_nothing_changes() {
+        for name in ["Mary Ann Smith", "Cher", "Henry Ford III", "Jan van der Berg"] {
+            assert_eq!(join_name(&name_parts(name)), name);
+        }
     }
 
     fn extras_for_ada() -> Book {

@@ -40,6 +40,8 @@ pub enum Class {
     Clock,
     Tap,
     AggregateDevice,
+    /// An application that uses audio: one per connected process, with its session (category, activity).
+    Process,
 }
 
 /// Which side of a device a property addresses.

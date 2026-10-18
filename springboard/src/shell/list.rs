@@ -6,7 +6,7 @@
 use super::battery::Graph;
 use super::icons::{self, Icon, BLUE, RED};
 use super::pages::{Action, PageId};
-use super::ui::{home_zone, Ui, Weight, AVATAR_BG, AVATAR_FG, CARD_BG, DETAIL_BG, LABEL, LABEL_2, ROW_PRESSED, SECONDARY, SEPARATOR_C, WHITE, MAC_BODY_PT};
+use super::ui::{home_zone, Ui, Weight, AVATAR_BG, AVATAR_FG, CARD_BG, DETAIL_BG, LABEL, LABEL_2, ROW_PRESSED, SECONDARY, SEPARATOR_C, WHITE, MAC_BODY_PT, MATERIAL_MENU, MENU_HIGHLIGHT, MENU_RADIUS_PT};
 use super::controls::{self, draw_slider, draw_switch, switch_progress, KNOB_PT, SWITCH_H_PT, SWITCH_MS, SWITCH_W_PT};
 use crate::deildu::scroll::Scroller;
 use crate::gfx::{pack, Image, Surface};
@@ -56,6 +56,16 @@ pub enum Accessory {
     Info,
     /// a Wi-Fi network's padlock and signal fan
     Wifi { secure: bool, bars: u8 },
+    /// a trailing pop-up button: the chosen label and up/down chevrons (the row's `popup` holds the choices)
+    Popup,
+}
+
+/// A trailing pop-up button's choices and the one chosen. Tapping the row opens a menu of the choices under the row;
+/// choosing one sends the row's action with the choice's index (see `pages::chosen`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Popup {
+    pub choices: Vec<String>,
+    pub selected: usize,
 }
 
 /// The ends of a slider.
@@ -112,12 +122,16 @@ pub struct Item {
     pub leading_check: bool,
     /// bifrost red badge before the chevron (0 = none)
     pub badge: usize,
+    /// the leading app icon: an installed app's id, drawn at the icon token (blank for a built-in app)
+    pub app_icon: Option<String>,
+    /// the pop-up button's choices (set with `popup`, drawn by `Accessory::Popup`)
+    pub popup: Option<Popup>,
 }
 
 impl Item {
     /// A plain row with a label.
     pub fn new(label: impl Into<String>) -> Self {
-        Item { icon: None, glyph: None, label: label.into(), value: String::new(), accessory: Accessory::None, body: Body::Row, action: Action::None, tint: Tint::Plain, leading_check: false, badge: 0 }
+        Item { icon: None, glyph: None, label: label.into(), value: String::new(), accessory: Accessory::None, body: Body::Row, action: Action::None, tint: Tint::Plain, leading_check: false, badge: 0, app_icon: None, popup: None }
     }
 
     pub fn icon(mut self, icon: Icon) -> Self {
@@ -150,6 +164,20 @@ impl Item {
 
     pub fn check(mut self, on: bool, action: Action) -> Self {
         self.accessory = Accessory::Check(on);
+        self.action = action;
+        self
+    }
+
+    /// A leading app icon for the installed app `app_id`.
+    pub fn app_icon(mut self, app_id: impl Into<String>) -> Self {
+        self.app_icon = Some(app_id.into());
+        self
+    }
+
+    /// A trailing pop-up button showing `choices[selected]`. The row's action is sent with the chosen index.
+    pub fn popup(mut self, choices: Vec<String>, selected: usize, action: Action) -> Self {
+        self.accessory = Accessory::Popup;
+        self.popup = Some(Popup { choices, selected });
         self.action = action;
         self
     }
@@ -237,6 +265,10 @@ pub enum Hit {
     /// group, item
     Row(usize, usize),
     Slider(usize, usize),
+    /// a choice in the open pop-up menu (its index)
+    Choice(usize),
+    /// a touch outside the open pop-up menu: it closes
+    Dismiss,
 }
 
 struct RowGeom {
@@ -250,6 +282,54 @@ struct RowGeom {
 struct RowImages {
     label: Image,
     value: Option<Image>,
+    /// the leading app icon at the icon token, when the app has one installed
+    icon: Option<Image>,
+    /// a pop-up button's chosen label (white, drawn in the label colour)
+    popup: Option<Image>,
+}
+
+/// The pop-up menu open on a row: the row, its menu, and the menu's label images and width in px.
+struct OpenPopup {
+    g: usize,
+    i: usize,
+    menu: bifrost_ui::menu::Menu,
+    labels: Vec<Image>,
+    w: f32,
+}
+
+/// Menu rows, separators and padding in pt (the desktop menus' metrics), the text inset and the width of a menu.
+const POPUP_ROW_PT: f32 = 24.0;
+const POPUP_SEP_PT: f32 = 11.0;
+const POPUP_PAD_PT: f32 = 5.0;
+const POPUP_MIN_W_PT: f32 = 160.0;
+/// the label's inset from a menu's left edge (the checkmark sits in front of it), and the space after the widest label
+const POPUP_TEXT_PT: f32 = 28.0;
+const POPUP_TAIL_PT: f32 = 16.0;
+/// a pop-up button's chevron block at the row's right edge, and the gap between the label and it
+const POPUP_CHEV_PT: f32 = 10.0;
+const POPUP_GAP_PT: f32 = 6.0;
+
+/// Whether a row has something before its label: an icon, a symbol tile or an app icon.
+fn has_leading(item: &Item) -> bool {
+    item.icon.is_some() || item.glyph.is_some() || item.app_icon.is_some()
+}
+
+/// A row's leading slot in px: the icon's left edge and the label's left edge (the icon's slot plus its gap when the
+/// row has one, else the plain text inset).
+fn leading_x(ui: &Ui, margin: f32, item: &Item, sidebar: bool) -> (f32, f32) {
+    let (icon_pt, icon_x, gap_pt) = row_icon(sidebar);
+    if has_leading(item) {
+        (margin + ui.pt(icon_x), margin + ui.pt(icon_x + icon_pt + gap_pt))
+    } else {
+        (margin + ui.pt(TEXT_INSET_PT), margin + ui.pt(TEXT_INSET_PT))
+    }
+}
+
+/// A pop-up button's geometry in px for a row whose right edge is `right` and whose label is `label_w` wide: the
+/// chevrons' centre and the label's left edge. The chevron block is the row's right edge; the label sits before it.
+fn popup_layout(ui: &Ui, right: f32, label_w: f32) -> (f32, f32) {
+    let label_left = right - ui.pt(POPUP_CHEV_PT + POPUP_GAP_PT) - label_w;
+    (right - ui.pt(POPUP_CHEV_PT / 2.0), label_left)
 }
 
 pub struct ListPage {
@@ -282,6 +362,8 @@ pub struct ListPage {
     sidebar: Option<Sidebar>,
     /// changes whenever the content (rows, values, switches, sliders) changes, never on scroll
     gen: u64,
+    /// the pop-up menu open on a row, if any
+    open: Option<OpenPopup>,
 }
 
 /// Where a page sits: the phone's full-width column or an bifrost split-view pane.
@@ -597,12 +679,21 @@ impl ListPage {
                 };
                 // the value keeps its natural width (up to half the row); the label gets the rest
                 let value_img = (!item.value.is_empty() && !pane.sidebar).then(|| ui.text(&ui.fit(&item.value, MAC_BODY_PT, value_w), MAC_BODY_PT, Weight::Regular, SECONDARY));
-                let value_room = value_img.as_ref().map_or(0.0, |v| v.w as f32 + ui.pt(8.0) + if matches!(item.accessory, Accessory::Chevron) { ui.pt(20.0) } else { 0.0 });
+                let popup_img = item.popup.as_ref().filter(|_| !pane.sidebar).map(|p| {
+                    let chosen = p.choices.get(p.selected).map_or("", String::as_str);
+                    ui.text(&ui.fit(chosen, MAC_BODY_PT, value_w), MAC_BODY_PT, Weight::Regular, WHITE)
+                });
+                let value_room = value_img.as_ref().map_or(0.0, |v| v.w as f32 + ui.pt(8.0) + if matches!(item.accessory, Accessory::Chevron) { ui.pt(20.0) } else { 0.0 })
+                    + popup_img.as_ref().map_or(0.0, |p| p.w as f32 + ui.pt(POPUP_CHEV_PT + POPUP_GAP_PT));
                 let (icon_pt, _, gap_pt) = row_icon(pane.sidebar);
-                let label_w = cw - ui.pt(2.0 * TEXT_INSET_PT) - if item.icon.is_some() || item.glyph.is_some() { ui.pt(icon_pt + gap_pt) } else { 0.0 } - value_room;
+                let label_w = cw - ui.pt(2.0 * TEXT_INSET_PT) - if has_leading(item) { ui.pt(icon_pt + gap_pt) } else { 0.0 } - value_room;
+                // the app's icon at the icon token; a built-in app has none and leaves the slot blank
+                let icon_img = item.app_icon.as_ref().filter(|_| has_leading(item)).and_then(|id| super::apphost::icon_image(id, ui.pt(icon_pt).round() as usize));
                 images.push(RowImages {
                     label: ui.text(&ui.fit(&item.label, MAC_BODY_PT, label_w), MAC_BODY_PT, if pane.sidebar { Weight::Regular } else { Weight::Regular }, color),
                     value: value_img,
+                    icon: icon_img,
+                    popup: popup_img,
                 });
                 y += rh;
             }
@@ -632,6 +723,7 @@ impl ListPage {
             images,
             flipped,
             scroll,
+            open: None,
             search_y,
             margin: m,
             nav_pt: pane.nav_pt,
@@ -762,9 +854,55 @@ impl ListPage {
         (x + inset, y + h / 2.0, w - 2.0 * inset)
     }
 
+    /// Opens the pop-up menu of row (g, i): its choices, the selected one checked. False when the row has no pop-up.
+    pub fn open_popup(&mut self, ui: &Ui, g: usize, i: usize) -> bool {
+        let Some(pop) = self.spec.groups[g].items[i].popup.clone() else { return false };
+        let items = pop.choices.iter().enumerate().map(|(k, c)| bifrost_ui::menu::MenuItem::new(k as u32, c)).collect();
+        let labels: Vec<Image> = pop.choices.iter().map(|c| ui.text(&ui.fit(c, MAC_BODY_PT, self.w as f32 * 0.6), MAC_BODY_PT, Weight::Regular, WHITE)).collect();
+        let widest = labels.iter().map(|l| l.w as f32).fold(0.0, f32::max);
+        let w = (widest + ui.pt(POPUP_TEXT_PT + POPUP_TAIL_PT)).max(ui.pt(POPUP_MIN_W_PT));
+        self.open = Some(OpenPopup { g, i, menu: bifrost_ui::menu::Menu::popup(items, pop.selected), labels, w });
+        self.gen = next_gen();
+        true
+    }
+
+    /// Closes the open pop-up menu; the row it was opened from.
+    pub fn close_popup(&mut self) -> Option<(usize, usize)> {
+        self.gen = next_gen();
+        self.open.take().map(|p| (p.g, p.i))
+    }
+
+    /// Whether a pop-up menu is open.
+    pub fn popup_open(&self) -> bool {
+        self.open.is_some()
+    }
+
+    /// The open menu's rect (x, y, w, h) in px on screen: the menu sits over its button so the chosen item covers it,
+    /// and stays inside the list below the bar (`bifrost_ui::menu::popup_origin`).
+    pub fn popup_rect(&self, ui: &Ui) -> Option<(f32, f32, f32, f32)> {
+        let p = self.open.as_ref()?;
+        let (spans, total) = p.menu.rows(POPUP_ROW_PT, POPUP_SEP_PT, POPUP_PAD_PT);
+        let (rx, ry, rw, rh) = self.row_rect(ui, p.g, p.i);
+        let right = rx + rw - ui.pt(TEXT_INSET_PT);
+        let button = bifrost_ui::Rect { x: right - p.w, y: ry, w: p.w, h: rh };
+        let sel_top = spans.get(p.menu.selected().unwrap_or(0)).map_or(0.0, |s| s.0);
+        let nav = self.nav_bottom(ui);
+        let bounds = bifrost_ui::Rect { x: 0.0, y: nav, w: self.w as f32, h: self.h as f32 - nav };
+        let (x, y) = bifrost_ui::menu::popup_origin(button, p.w, ui.pt(total), ui.pt(sel_top), bounds);
+        Some((x, y, p.w, ui.pt(total)))
+    }
+
     pub fn hit(&self, ui: &Ui, x: f32, y: f32) -> Option<Hit> {
         if y < self.nav_bottom(ui) {
             return self.nav.hit_back(ui, x, y).then_some(Hit::Back);
+        }
+        // an open menu takes the touch: a row of it chooses, its rim does nothing, anything else closes it
+        if let Some((mx, my, mw, mh)) = self.popup_rect(ui) {
+            if x < mx || x >= mx + mw || y < my || y >= my + mh {
+                return Some(Hit::Dismiss);
+            }
+            let p = self.open.as_ref()?;
+            return p.menu.hit((y - my) / ui.pt(1.0), POPUP_ROW_PT, POPUP_SEP_PT, POPUP_PAD_PT).map(Hit::Choice);
         }
         let m = self.margin;
         if x < m || x >= self.w as f32 - m {
@@ -886,6 +1024,7 @@ impl ListPage {
         if let Some(sb) = &self.sidebar {
             self.draw_card(s, ui, sb, dy);
         }
+        self.draw_popup(s, ui, pressed);
         if let (Some(title), None) = (&self.title_large, &self.sidebar) {
             // fades out as it slides under the bar, while the inline title fades in
             let fade = 1.0 - (self.draw_offset().max(0.0) / ui.pt(LARGE_TITLE_PT - 8.0)).clamp(0.0, 1.0);
@@ -899,6 +1038,35 @@ impl ListPage {
             blur_strip(s, self.nav_bottom(ui) as usize, ui.pt(10.0) as usize);
         }
         self.nav.draw(s, ui, self.w, alpha, if self.spec.large || self.header.is_some() { alpha } else { 1.0 });
+    }
+
+    /// The open pop-up menu: a translucent rounded card, a checkmark on the chosen item and the highlighted item filled.
+    fn draw_popup(&self, s: &mut Surface, ui: &Ui, pressed: Option<Hit>) {
+        let (Some(p), Some((x, y, w, _))) = (&self.open, self.popup_rect(ui)) else { return };
+        let (spans, total) = p.menu.rows(POPUP_ROW_PT, POPUP_SEP_PT, POPUP_PAD_PT);
+        s.fill_rrect(x, y, w, ui.pt(total), ui.pt(MENU_RADIUS_PT), MATERIAL_MENU.now());
+        for (k, item) in p.menu.items.iter().enumerate() {
+            let (top, h) = spans[k];
+            let ty = y + ui.pt(top);
+            if item.separator {
+                s.fill_rrect(x + ui.pt(10.0), ty + ui.pt(h) / 2.0 - 0.5, w - ui.pt(20.0), 1.0, 0.0, SEPARATOR_C.now());
+                continue;
+            }
+            let mid = ty + ui.pt(h) / 2.0;
+            let picked = pressed == Some(Hit::Choice(k));
+            if picked {
+                s.fill_rrect(x + ui.pt(4.0), ty, w - ui.pt(8.0), ui.pt(h), ui.pt(5.0), MENU_HIGHLIGHT);
+            }
+            if item.checked {
+                s.blit(&self.check, (x + ui.pt(8.0)) as i32, (mid - self.check.h as f32 / 2.0) as i32, 255, 255);
+            }
+            let label = &p.labels[k];
+            if picked {
+                s.blit(label, (x + ui.pt(POPUP_TEXT_PT)) as i32, (mid - label.h as f32 / 2.0) as i32, 255, 255);
+            } else {
+                s.blit_colored(label, (x + ui.pt(POPUP_TEXT_PT)) as i32, (mid - label.h as f32 / 2.0) as i32, LABEL.now(), 255);
+            }
+        }
     }
 
     /// The account block: avatar, the local user's name and a two-line caption (no cloud sign-in). It has no plate; the
@@ -961,15 +1129,19 @@ impl ListPage {
             Body::Bar(bar) => bar.draw(s, ui, (m + ui.pt(TEXT_INSET_PT), ry, cw - ui.pt(2.0 * TEXT_INSET_PT), rh)),
             Body::Chart(chart) => chart.draw(s, ui, (m + ui.pt(TEXT_INSET_PT), ry + ui.pt(12.0), cw - ui.pt(2.0 * TEXT_INSET_PT), rh - ui.pt(24.0))),
             Body::Row => {
-                if item.icon.is_some() || item.glyph.is_some() {
-                    let (icon_pt, icon_x, gap_pt) = row_icon(self.sidebar.is_some());
-                    lx = m + ui.pt(icon_x);
+                let (icon_left, text_left) = leading_x(ui, m, item, self.sidebar.is_some());
+                lx = text_left;
+                if has_leading(item) {
+                    let icon_pt = row_icon(self.sidebar.is_some()).0;
                     match (item.icon, item.glyph) {
-                        (Some(icon), _) => icons::tile_sized(s, ui, icon, lx, mid - ui.pt(icon_pt) / 2.0, icon_pt),
-                        (None, Some(glyph)) => super::row_glyphs::tile(s, ui, glyph, lx, mid - ui.pt(icon_pt) / 2.0, icon_pt),
-                        (None, None) => {}
+                        (Some(icon), _) => icons::tile_sized(s, ui, icon, icon_left, mid - ui.pt(icon_pt) / 2.0, icon_pt),
+                        (None, Some(glyph)) => super::row_glyphs::tile(s, ui, glyph, icon_left, mid - ui.pt(icon_pt) / 2.0, icon_pt),
+                        (None, None) => {
+                            if let Some(img) = &self.images[k].icon {
+                                s.blit(img, icon_left as i32, (mid - img.h as f32 / 2.0) as i32, 255, 255);
+                            }
+                        }
                     }
-                    lx += ui.pt(icon_pt + gap_pt);
                 }
                 if item.leading_check {
                     s.blit(&self.check, lx as i32, (mid - self.check.h as f32 / 2.0) as i32, 255, 255);
@@ -1001,6 +1173,20 @@ impl ListPage {
                             s.blit(&self.check, (right - self.check.w as f32) as i32, (mid - self.check.h as f32 / 2.0) as i32, 255, 255);
                         }
                         right -= self.check.w as f32 + ui.pt(8.0);
+                    }
+                    Accessory::Popup => {
+                        // the chosen label, then up and down chevrons at the right edge
+                        let label_w = self.images[k].popup.as_ref().map_or(0.0, |v| v.w as f32);
+                        let (cx, label_left) = popup_layout(ui, right, label_w);
+                        let (a, g, th, col) = (ui.pt(2.5), ui.pt(2.0), ui.pt(1.5), LABEL_2.now());
+                        icons::line(s, (cx - a, mid - g + a), (cx, mid - g), th, col);
+                        icons::line(s, (cx, mid - g), (cx + a, mid - g + a), th, col);
+                        icons::line(s, (cx - a, mid + g - a), (cx, mid + g), th, col);
+                        icons::line(s, (cx, mid + g), (cx + a, mid + g - a), th, col);
+                        if let Some(v) = &self.images[k].popup {
+                            s.blit_colored(v, label_left as i32, (mid - v.h as f32 / 2.0) as i32, LABEL.now(), 255);
+                        }
+                        right = label_left;
                     }
                     Accessory::Info => {
                         icons::info(s, ui, right - ui.pt(11.0), mid);
@@ -1296,6 +1482,68 @@ mod tests {
         draw(&page, &ui, &mut pressed, Some(Hit::Row(0, 1)), 0.0);
         let (_, y, _, h) = page.row_rect(&ui, 0, 1);
         assert_eq!(pressed[(y + h / 2.0) as usize * 1200 + (rx + 4.0) as usize], ROW_PRESSED.now());
+    }
+
+    #[test]
+    fn a_leading_app_icon_takes_the_icon_slot_and_pushes_the_label() {
+        let ui = ui();
+        let plain = Item::new("Camera").value("v");
+        let app = Item::new("Camera").app_icon("is.example.camera");
+        let m = ui.pt(MARGIN_PT);
+        let (icon_x, label_x) = leading_x(&ui, m, &app, false);
+        assert_eq!(icon_x, m + ui.pt(bifrost_ui::prefs_layout::m::ROW_ICON_X), "the icon at the detail row's icon token");
+        assert!((label_x - (m + ui.pt(bifrost_ui::prefs_layout::m::ROW_LABEL_X))).abs() < 0.01, "the label after the icon and its gap");
+        let (plain_icon, plain_label) = leading_x(&ui, m, &plain, false);
+        assert_eq!(plain_label, m + ui.pt(TEXT_INSET_PT), "a plain row keeps the text inset");
+        assert_eq!(plain_icon, plain_label, "no icon slot without a leading accessory");
+        let (sidebar_icon, sidebar_label) = leading_x(&ui, m, &app, true);
+        assert!(sidebar_label > sidebar_icon, "the label follows the sidebar icon");
+        // a built-in app has no installed package, so its icon is blank, but the label still moves in
+        let page = ListPage::new(&ui, Spec { id: PageId::Root, title: "T".into(), large: false, groups: vec![Group::new(vec![app.clone()])] }, 1200, 1920, None);
+        assert!(page.images[0].icon.is_none());
+        assert_eq!(leading_x(&ui, page.margin, page.item(0, 0), false).1, label_x);
+    }
+
+    #[test]
+    fn a_popup_button_sits_at_the_row_edge_with_its_chevrons_and_label_before_them() {
+        let ui = ui();
+        let right = 1000.0;
+        let (chev, label_left) = popup_layout(&ui, right, 120.0);
+        assert_eq!(chev, right - ui.pt(POPUP_CHEV_PT / 2.0), "the chevron pair is the row's last slot");
+        assert_eq!(label_left, right - ui.pt(POPUP_CHEV_PT + POPUP_GAP_PT) - 120.0, "the label ends a gap before the chevrons");
+        assert!(label_left < chev, "the label is left of the chevrons");
+        assert_eq!(popup_layout(&ui, right, 0.0).1, right - ui.pt(POPUP_CHEV_PT + POPUP_GAP_PT));
+    }
+
+    #[test]
+    fn a_pop_up_row_opens_a_menu_over_its_button_and_keeps_it_inside_the_list() {
+        let ui = ui();
+        let choices = vec!["Never".to_string(), "Ask Next Time".to_string(), "While Using the App".to_string()];
+        let access = Item::new("Maps").app_icon("is.example.maps").popup(choices.clone(), 1, Action::Pick(crate::shell::pages::Pick::AutoLock(0)));
+        let spec = Spec { id: PageId::AutoLock, title: "Privacy".into(), large: false, groups: vec![Group::new(vec![Item::new("Before"), access, Item::new("After")])] };
+        let mut page = ListPage::new(&ui, spec, 1200, 1920, Some("Privacy"));
+        assert!(!page.popup_open());
+        assert!(!page.open_popup(&ui, 0, 0), "a plain row has no pop-up");
+        assert!(page.open_popup(&ui, 0, 1));
+        assert!(page.popup_open());
+        assert_eq!(page.hit(&ui, 5.0, 300.0), Some(Hit::Dismiss), "a touch outside the menu closes it");
+        // the selected choice sits over the button: the menu's top is the row's top less the selected choice's offset
+        let (mx, my, mw, mh) = page.popup_rect(&ui).expect("open");
+        let (_, ry, _, _) = page.row_rect(&ui, 0, 1);
+        let menu = bifrost_ui::menu::Menu::popup((0..3).map(|k| bifrost_ui::menu::MenuItem::new(k, &choices[k as usize])).collect(), 1);
+        let (spans, total) = menu.rows(POPUP_ROW_PT, POPUP_SEP_PT, POPUP_PAD_PT);
+        assert!((my - (ry - ui.pt(spans[1].0))).abs() < 1.0, "the selected choice covers the row");
+        assert!((mh - ui.pt(total)).abs() < 0.5 && mw >= ui.pt(POPUP_MIN_W_PT));
+        // each choice is hit by its own centre; the top padding is not
+        for (k, (top, h)) in spans.iter().enumerate().take(3) {
+            let (cx, cy) = (mx + mw / 2.0, my + ui.pt(top + h / 2.0));
+            assert_eq!(page.hit(&ui, cx, cy), Some(Hit::Choice(k)), "choice {k}");
+        }
+        assert_eq!(page.hit(&ui, mx + mw / 2.0, my + 0.5), None, "the top padding does nothing");
+        assert_eq!(page.close_popup(), Some((0, 1)));
+        assert!(!page.popup_open());
+        let (rx, rcy) = page.row_centre(&ui, 0, 1);
+        assert_eq!(page.hit(&ui, rx, rcy), Some(Hit::Row(0, 1)), "closed, the row is tappable again");
     }
 
     #[test]

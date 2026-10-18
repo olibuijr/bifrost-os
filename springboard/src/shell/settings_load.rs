@@ -50,6 +50,13 @@ impl<T: Send + 'static> Loaded<T> {
         }
     }
 
+    /// Lands `value` as if a read had, for tests that start from a known page.
+    #[cfg(test)]
+    pub fn set(&mut self, value: T) {
+        self.value = value;
+        self.landed = true;
+    }
+
     /// A read is running.
     pub fn busy(&self) -> bool {
         self.rx.is_some()

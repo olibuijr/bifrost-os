@@ -18,11 +18,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/recognition_task.rs, springboard/ui/src/recognition.rs",
+   "bifrost": "springboard/sdk/src/speech_whisper.rs, springboard/src/shell/services/recognizer.rs, springboard/apps/keyboard/src/main.rs",
    "status": "partial",
-   "note": "existing speech task and result models; no recognizer engine and no insertion into text fields",
+   "note": "the on-screen keyboard's microphone key starts dictation: the shell's speech_recognizer service captures the microphone and runs the local whisper element (gst-plugin-whisper; the model is downloaded only after the person consents in Settings), the keyboard app polls the transcripts and types each final one into the focused field. English only, and no audio leaves the machine. Not built: showing partial readings as marked text (the ui dictation_insert model is not used by the keyboard yet) and a hardware-keyboard dictation key.",
    "rea": [],
-   "method": "manual"
+   "method": "manual",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "speech_whisper::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::recognizer::tests"
+    }
+   ],
+   "ready_note": "dictation is the keyboard's microphone key over the local whisper recognizer service, typing final transcripts into the focused field; the checks run the SDK client and the shell service"
   },
   {
    "id": "path:/System/Library/Input Methods/EmojiFunctionRowIM.app",

@@ -37,17 +37,23 @@ pub struct CaptureSession {
     width: u32,
     height: u32,
     state: SessionState,
+    plan: Option<StreamPlan>,
 }
 
 impl CaptureSession {
     /// A stopped session with no input that asks for frames of `width` by `height`.
     pub fn new(width: u32, height: u32) -> Result<Self, CaptureError> {
         check_size(width, height)?;
-        Ok(Self { input: None, width, height, state: SessionState::Stopped })
+        Ok(Self { input: None, width, height, state: SessionState::Stopped, plan: None })
     }
 
     pub fn state(&self) -> SessionState {
         self.state
+    }
+
+    /// The stream the running session opened: the node, the chosen format and the buffers. None while stopped.
+    pub fn running_plan(&self) -> Option<&StreamPlan> {
+        self.plan.as_ref()
     }
 
     pub fn input(&self) -> Option<&VideoDevice> {
@@ -92,12 +98,14 @@ impl CaptureSession {
         let input = self.input.as_ref().ok_or(CaptureError::NoInput)?;
         let plan = plan_stream(std::slice::from_ref(input), self.width, self.height).map_err(CaptureError::Stream)?;
         self.state = SessionState::Running;
+        self.plan = Some(plan.clone());
         Ok(plan)
     }
 
-    /// Stops the session and unlocks its configuration. Stopping a stopped session does nothing.
+    /// Stops the session, forgets its stream plan and unlocks its configuration. Stopping a stopped session does nothing.
     pub fn stop(&mut self) {
         self.state = SessionState::Stopped;
+        self.plan = None;
     }
 
     fn ensure_stopped(&self) -> Result<(), CaptureError> {

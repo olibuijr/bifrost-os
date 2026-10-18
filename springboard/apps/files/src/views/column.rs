@@ -73,6 +73,7 @@ impl Files {
                 rect(s, ui, x0, y, w - x0, ROW_H, SELECTION.now());
             }
             column_row(s, ui, e, x0, y, self.vo.col_w);
+            self.paint_badges(ui, s, &e.path, x0 + 8. + SPACE_XL - 2., y + 13.);
         }
         self.paint_column_preview(ui, s, x0 + self.vo.col_w);
     }

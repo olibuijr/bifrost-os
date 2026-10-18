@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Build the BifrOSt installer ISO.
 #   tools/build-iso.sh [--lab|--release] [--profile fast|release] [--skip-cargo] [--deploy]
+#     BIFROST_ISO_OUTPUT_DIR=PATH writes the finished ISO outside out/ (for example, to a mounted USB drive).
 #     --debug    lab + full trace: graphical splash + journal diagnostics streamed to titan
 #                (run tools/lab-log-sink.py), BIFROST_TRACE for the installer
 #     --lab      (default) adds remote access for testing: root SSH key (out/lab), bifrost-lab token + API
@@ -41,6 +42,8 @@ remove_work() {
 }
 PROFILE=out/bifrost-iso; AIROOT=$PROFILE/airootfs; PKG=packaging/archiso/airootfs; STAMP=$(date +%Y%m%d-%H%M%S)
 WORK=out/archiso-work-$STAMP; OUT=out/iso-$MODE-$STAMP
+ISO_OUT=${BIFROST_ISO_OUTPUT_DIR:-$OUT}
+T2=${BIFROST_ISO_T2:-0}
 
 PD=$CPROF
 if [ "$CARGO" = 1 ]; then
@@ -48,9 +51,26 @@ if [ "$CARGO" = 1 ]; then
 fi
 tools/build-efi-boot.sh "$CPROF"
 python3 tools/apply-archiso-profile.py "$PROFILE"
+if [ "$T2" = 1 ]; then
+  T2PKG=out/t2-package/linux-lts-t2-6.18.56-2-x86_64.pkg.tar.zst
+  test -s "$T2PKG" || { echo "missing pinned T2 kernel package: $T2PKG" >&2; exit 1; }
+  printf '%s  %s\n' 8a28a43d483d65eea0bb9ad5600df1cbcbd35eedee0be0817de92e1e084f3e33 "$T2PKG" | sha256sum -c -
+  T2REPO="$PWD/out/t2-package/repo"
+  mkdir -p "$T2REPO"
+  cp "$T2PKG" "$T2REPO/"
+  # Pacman derives the database filename from the repository section name.
+  repo-add -q "$T2REPO/t2local.db.tar.gz" "$T2REPO"/linux-lts-t2-*.pkg.tar.zst
+  printf '\n[t2local]\nSigLevel = Never\nServer = file://%s/\n' "$T2REPO" >> "$PROFILE/pacman.conf"
+  # This profile's archiso MODULES are T2-kernel-specific. Keep the live image to
+  # one kernel so mkinitcpio does not try to resolve T2 modules against generic linux.
+  sed -i '/^linux$/d' "$PROFILE/packages.x86_64"
+  grep -qxF linux-lts-t2 "$PROFILE/packages.x86_64" || echo linux-lts-t2 >> "$PROFILE/packages.x86_64"
+  : > "$PROFILE/bifrost-t2"
+  sed -i 's/^MODULES=(.*/MODULES=(t2bce_core t2bce_dma t2bce_vhci hid_appletb_kbd applespi virtio_gpu virtio_pci)/' "$AIROOT/etc/mkinitcpio.conf.d/archiso.conf"
+fi
 # An installed release has no network route. Package the complete system dependency closure and default apps into the
 # live image before mkarchiso; the bundler verifies every package, app and hash and fails closed on a missing input.
-python3 tools/bundle-iso-offline.py --dest "$AIROOT/usr/share/bifrost/offline"
+BIFROST_ISO_T2="$T2" python3 tools/bundle-iso-offline.py --dest "$AIROOT/usr/share/bifrost/offline"
 test -s "$AIROOT/usr/share/bifrost/offline/manifest.json" || { echo "offline bundle manifest missing" >&2; exit 1; }
 test -s "$AIROOT/usr/share/bifrost/offline/repo/offline.db" || { echo "offline package database missing" >&2; exit 1; }
 test -s "$AIROOT/usr/share/bifrost/offline/springboard-shell.pkg.tar.zst" || { echo "offline springboard-shell package missing" >&2; exit 1; }
@@ -163,10 +183,10 @@ add = "".join(f'  ["{k}"]="{v}"\n' for k, v in perm.items() if f'["{k}"]' not in
 open(p, "w").write(s.replace("file_permissions=(\n", "file_permissions=(\n" + add, 1))
 PY
 
-mkdir -p "$OUT"
-sudo python3 tools/prepare-mkarchiso.py -v -w "$WORK" -o "$OUT" -m iso -L BIFROST "$PROFILE"
-sudo chown -R "$USER" "$OUT"
-ISO=$(ls "$OUT"/*.iso | head -1)
+mkdir -p "$ISO_OUT"
+sudo python3 tools/prepare-mkarchiso.py -v -w "$WORK" -o "$ISO_OUT" -m iso -L BIFROST "$PROFILE"
+sudo chown "$USER" "$ISO_OUT"/*.iso
+ISO=$(ls "$ISO_OUT"/*.iso | head -1)
 remove_work "$WORK"
 echo "ISO ($MODE): $ISO"
 # keep at most KEEP local ISO builds and KEEP_WORK work dirs left behind by interrupted builds

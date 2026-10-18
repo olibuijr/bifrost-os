@@ -45,6 +45,9 @@ mod ssh;
 mod tabs;
 mod view;
 mod window;
+mod copy;
+mod look_panel;
+mod open;
 #[cfg(test)]
 mod tests;
 pub const HEADER_PT: f32 = 40.0;
@@ -56,7 +59,7 @@ const BADGE: u32 = pack(38, 38, 38, 255);
 const RED: u32 = pack(224, 90, 79, 255);
 const ACCENT: u32 = pack(42, 166, 106, 255);
 const ROW: f32 = 40.0;
-const MENU: [&str; 36] = [
+const MENU: [&str; 39] = [
     "Find in scrollback",
     "Smaller text",
     "Larger text",
@@ -93,6 +96,9 @@ const MENU: [&str; 36] = [
     "Use selection for find",
     "Move tab left",
     "Move tab right",
+    "Copy Special: Text with Colors",
+    "Copy Special: Without Background Colour",
+    "Profile Editor",
 ];
 /// True for the Find line's "n of m" match count (secondary), false for "No matches" and warnings (red).
 fn find_count(message: &str) -> bool {
@@ -122,6 +128,8 @@ pub enum Panel {
     More,
     /// New command: a line typed here runs in a new tab that closes when the command ends
     Command,
+    /// Profile Editor: the ANSI palette, Bold as Bright, Allow Blink, spacing and the cursor
+    Look,
 }
 pub struct TerminalUi {
     pub settings: Settings,
@@ -161,6 +169,10 @@ pub struct TerminalUi {
     title_edit: bool,
     /// View > Allow Mouse Reporting (saved in prefs)
     pub mouse_reporting: bool,
+    /// the profile look the Profile Editor edits and every tab paints with (saved in prefs as terminal.look.*)
+    pub look: crate::term::look::Look,
+    /// the ANSI well the Profile Editor's channel steppers edit
+    pub look_well: usize,
 }
 impl Default for TerminalUi {
     fn default() -> Self {
@@ -196,6 +208,8 @@ impl Default for TerminalUi {
             command: None,
             title_edit: false,
             mouse_reporting: true,
+            look: crate::term::look::Look::default(),
+            look_well: 0,
         }
     }
 }
@@ -217,6 +231,7 @@ impl TerminalUi {
         self.blink = prefs.get("terminal.blink") == Some("1");
         self.secure = prefs.get("terminal.secure_input") == Some("1");
         self.mouse_reporting = prefs.get("terminal.mouse_reporting") != Some("0");
+        self.look = crate::term::look::Look::from_prefs(|key| prefs.get(key).map(str::to_string));
     }
     pub fn next_wake(&self) -> Option<f64> {
         Some(if self.panel == Panel::Processes {

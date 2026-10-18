@@ -162,7 +162,7 @@ impl Calendar {
                     location: String::new(),
                     notes: String::new(),
                     repeat: 0,
-                    alert: self.prefs.alert,
+                    alert: self.prefs.alert, uid: String::new(),
                 };
                 self.selected = d.day;
                 self.open_draft(ui, event, false);

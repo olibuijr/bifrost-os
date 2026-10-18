@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.16.0 — 2026-10-17
+
+- Model for the merge review (`dupes::review`, `dupes::merge_with`): it lists the fields where duplicates disagree, and folds the cards with the value picked for each field (a phone or email takes its label along). The review sheet is not drawn yet, so Card > Merge Duplicates still keeps the first card's values.
+
+## 1.15.0 — 2026-10-17
+
+- Cmd+W closes the card window it is typed in. Keys and menu items follow the key window: the shell tells the app which window is key (`WindowFocus`) and sends it the input (`WindowInput`), and the app's `window_input` closes the card (`ctx.close_window`).
+
+## 1.14.0 — 2026-10-17
+
+- A tap on an email in a card opens a new message in Mail, prefilled with the address (`bifrost_app::mail_compose`); a tap on a phone number opens a `tel:` link through the shell. Other values still copy on a tap, and the Copy buttons still copy.
+
+## 1.13.0 — 2026-10-17
+
+- Card windows take touches: the card scrolls on its own scroller, a tap on a value copies it, and Edit shows the contact in the main window and opens its editor (`touch_card`, `edit_from_card`, `window_event`). Touches do not change the main window's screen.
+
+## 1.12.0 — 2026-10-17
+
+- Card windows draw: Card > Open in Separate Window and a double-click on a list row open the contact's card in its own window (`Ctx::open_window`, `CardWindows`). The window draws the card at its size (`Contacts::draw_card`, `draw_window`) and its close unbinds the card (`window_closed`). Touches in a card window are not routed yet, so the card is read-only.
+
+## 1.11.1 — 2026-10-17
+
+- Card windows now bind to the SDK window ids (`card_windows.rs`, `CardWindows::bind`), so the app keeps one window registry. Nothing is opened from the UI yet.
+
+## 1.11.0 — 2026-10-17
+
+- Card windows model (`card_windows.rs`): a contact can be opened in its own window through the SDK window registry, and a card that is already open is focused. The window is not drawn yet, because the shell does not host a second window of an app; the Card > Open in New Window menu item and the double-click are not wired.
+
 ## 1.10.1 — 2026-10-14
 
 - Removed unused keychain access; the company avatar and background printing now use shared appearance-aware colours and dispatch.

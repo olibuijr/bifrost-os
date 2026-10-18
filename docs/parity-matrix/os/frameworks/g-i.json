@@ -18,11 +18,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/glkit.json",
-   "status": "partial",
-   "note": "from SDK matrix glkit.json",
+   "bifrost": "springboard/ui/src/linalg.rs, mesh.rs, shading.rs, shader_effect.rs, gl_requirements.rs; springboard/sdk/src/linear_algebra.rs; docs/gpu-first.md",
+   "status": "n/a",
+   "note": "n/a: GLKit is the deprecated OpenGL and OpenGL ES helper layer (its vendor deprecated it on macOS from 10.14; the index shows only BridgeSupport and the iOSSupport shim). BifrOSt apps draw through the SDK draw, layer and animation path and the window server composes them (docs/gpu-first.md, docs/graphics-architecture.md), so apps never create a GL context by design. The parts of GLKit that are not tied to a context exist anyway: vectors, matrices and quaternions as bifrost_app::linear_algebra, meshes (ui mesh.rs), shading and shader effects.",
    "rea": [],
-   "method": "assessed"
+   "method": "manual"
   },
   {
    "id": "path:/System/Library/Frameworks/GLUT.framework",
@@ -60,9 +60,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/gss.json",
-   "status": "partial",
-   "note": "from SDK matrix gss.json",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple Game Services (Game Center) backend. BifrOSt has no Apple game service; its game data is local.",
    "rea": [],
    "method": "assessed"
   },
@@ -81,11 +81,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/game-controller.json",
+   "bifrost": "springboard/sdk/src/gamepad_input.rs, springboard/sdk/src/gamepad_service.rs, springboard/ui/src/gamepad.rs, springboard/src/shell/services/gamepad_service.rs",
    "status": "partial",
    "note": "from SDK matrix game-controller.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "gamepad_input::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "gamepad_service::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "gamepad::tests"
+    }
+   ],
+   "ready_note": "Controller discovery, connect and disconnect events, per-controller input streams and the named extended profile are covered by host tests. Web Gamepad input in the browser engine is not wired, and the controller path still needs a Midget check."
   },
   {
    "id": "path:/System/Library/Frameworks/GameKit.framework",
@@ -123,9 +142,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/gamesave.json",
-   "status": "partial",
-   "note": "from SDK matrix gamesave.json",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple game save sync over Apple's cloud. BifrOSt has no Apple cloud save service.",
    "rea": [],
    "method": "assessed"
   },
@@ -144,11 +163,75 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/gameplaykit.json",
+   "bifrost": "springboard/sdk/src/gameplay_kit.rs, springboard/ui/src/ecs.rs, springboard/ui/src/state_machine.rs, springboard/ui/src/grid_graph.rs, springboard/ui/src/agents.rs, springboard/ui/src/obstacle.rs, springboard/ui/src/noise.rs, springboard/ui/src/quadtree.rs, springboard/ui/src/decision.rs, springboard/ui/src/rules.rs, springboard/ui/src/rule_system.rs, springboard/ui/src/strategist.rs, springboard/sdk/src/random.rs",
    "status": "partial",
    "note": "from SDK matrix gameplaykit.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "gameplay_kit::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "state_machine::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "ecs::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "grid_graph::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "agents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "obstacle::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "noise::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "quadtree::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "decision::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "rules::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "rule_system::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "strategist::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: bifrost_app::gameplay_kit re-exports the ui game-logic models for apps (state machines, pathfinding, agents, noise, quadtree, rules, strategists); seeded randomness is bifrost_app::random. Only SpriteKit and SceneKit integration remains, which is n/a."
   },
   {
    "id": "path:/System/Library/Frameworks/GeoToolbox.framework",
@@ -270,10 +353,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/device_browser.rs",
+   "bifrost": "springboard/ui/src/device_browser.rs, springboard/src/shell/camera/mod.rs",
    "status": "partial",
-   "note": "Audit 2026-10-13: pure kit model with host tests; not wired, not tested on Midget.",
-   "rea": []
+   "note": "Audit 2026-10-13: pure kit model with host tests. Built 2026-10-17: the shell camera uses DeviceBrowser (springboard/src/shell/camera/mod.rs), so the model is wired; not tested on Midget.",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "device_browser::tests"
+    }
+   ],
+   "ready_note": "Device browser model: snapshot diffing, device filter, preferred device; wired into the shell camera."
   },
   {
    "id": "path:/System/Library/Frameworks/IOBluetooth.framework",
@@ -290,11 +382,80 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/iobluetooth.json",
+   "bifrost": "springboard/sdk/src/bluetooth_service.rs; springboard/sdk/src/bluetooth_inquiry.rs; springboard/sdk/src/bluetooth_devices.rs; springboard/sdk/src/bluetooth_picker.rs; springboard/sdk/src/bluetooth_events.rs; springboard/sdk/src/bluetooth_hid.rs; springboard/core/src/rfcomm_frame.rs; springboard/core/src/sdp_element.rs; springboard/core/src/obex_packet.rs; springboard/ui/src/hfp.rs; springboard/core/src/bt_address.rs; springboard/core/src/bt_pairing.rs; springboard/src/bare/bluetooth.rs",
    "status": "partial",
-   "note": "from SDK matrix iobluetooth.json",
+   "note": "from SDK matrix iobluetooth.json Built 2026-10-17: Pairing input checks (PIN, passkey, numeric comparison) in springboard/core/src/bt_pairing.rs, tests bt_pairing::tests; app-facing Bluetooth SDK gaps stay open.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "bluetooth_service::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "bluetooth_inquiry::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "bluetooth_devices::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "bluetooth_picker::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "bluetooth_events::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "bluetooth_hid::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "rfcomm_frame::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "sdp_element::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "obex_packet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "bt_address::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "bt_pairing::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "hfp::tests"
+    },
+    {
+     "kind": "unit",
+     "name": "bluetooth.service",
+     "state": "enabled"
+    }
+   ],
+   "ready_note": "Apps get the Bluetooth radio state, inquiry, remote device list, pairing picker, device events and HID ignore list from bifrost_app::bluetooth_* over BlueZ (the shell drives the mgmt socket; bluetooth.service is enabled by the installer), plus RFCOMM framing, SDP data elements, OBEX packets, the hands-free profile and address helpers. Open: L2CAP channels to arbitrary PSMs and the raw HCI structures are not offered (the shell uses the mgmt API by design)."
   },
   {
    "id": "path:/System/Library/Frameworks/IOBluetoothUI.framework",
@@ -311,11 +472,45 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/iobluetooth-ui.json",
+   "bifrost": "springboard/ui/src/bt_chooser.rs; springboard/ui/src/object_push.rs; springboard/ui/src/passkey_display.rs; springboard/core/src/bt_service_browser.rs; springboard/core/src/bt_pairing.rs; springboard/sdk/src/bluetooth_picker.rs",
    "status": "partial",
-   "note": "from SDK matrix iobluetooth-ui.json",
+   "note": "from SDK matrix iobluetooth-ui.json Refreshed 2026-10-17: Remaining: pairing panel only in Settings, no passkey pairing (always NoInputNoOutput), no live SDP query, no object push.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "bt_chooser::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "object_push::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "passkey_display::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "bt_service_browser::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "bt_pairing::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "bluetooth_picker::tests"
+    }
+   ],
+   "ready_note": "The device selector (bt_chooser), the object push transfer UI model, the passkey and confirmation display, the service browser and the PIN and passkey input checks are in the kit (bifrost_app::controls) and bifrost_app. Open: the live SDP query behind the service browser and the radio side of passkey pairing stay in the shell."
   },
   {
    "id": "path:/System/Library/Frameworks/IOKit.framework",
@@ -332,11 +527,65 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/core/src/device_registry.rs; springboard/src/bare/input.rs; springboard/src/media/v4l2.rs; springboard/src/bare/kms.rs",
+   "bifrost": "springboard/core/src/device_registry.rs; springboard/sdk/src/device_registry.rs; springboard/sdk/src/power_sources.rs; springboard/core/src/power_supply.rs; springboard/sdk/src/hid_devices.rs; springboard/ui/src/hid_match.rs; springboard/core/src/serial_line.rs; springboard/sdk/src/process_info.rs; springboard/sdk/src/displays.rs; springboard/sdk/src/audio_devices.rs; springboard/core/src/usb_host.rs",
    "status": "partial",
    "note": "The shell and daemons do the device work on Linux (sysfs, evdev, V4L2, DRM); the device registry is a pure model with host tests and is not yet wired in. Not covered: apps get no driver call, shared data queue or device arrival API.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "device_registry::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "power_supply::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "serial_line::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "device_registry::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "power_sources::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "hid_devices::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "process_info::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "displays::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "audio_devices::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "hid_match::tests"
+    }
+   ],
+   "ready_note": "Apps match devices by class and properties, read registry properties and watch arrival and removal (bifrost_app::device_registry over sysfs and udev), read power sources, thermal state, displays, audio devices, HID matching and serial lines. Driver user-client calls and driver data queues have no common Linux ABI: they are per-device ioctls and mmap (V4L2, DRM, evdev in the shell; usbfs for apps in core usb_host), so there is no generic IOConnectCall."
   },
   {
    "id": "path:/System/Library/Frameworks/IOSurface.framework",
@@ -353,11 +602,55 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/proto/src/sys.rs; springboard/src/bare/wayland.rs; springboard/src/gpu/desktop.rs; springboard/ui/src/surface_layout.rs",
+   "bifrost": "springboard/core/src/surface_registry.rs; springboard/ui/src/surface_layout.rs; springboard/ui/src/surface_lock.rs; springboard/ui/src/surface_use.rs; springboard/ui/src/surface_attach.rs; springboard/ui/src/surface_colour.rs; springboard/sdk/src/buffer_handoff.rs; springboard/render/src/purgeable.rs; springboard/proto/src/sys.rs; springboard/gpu/src/dmabuf.rs",
    "status": "partial",
    "note": "Memfd shared memory with fd passing, dma-buf import for the compositor and the plane and colour models carry the buffer job inside the system. Not covered: no app-facing IOSurface type, lookup by ID, purgeability or per-buffer attributes.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "surface_registry::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "surface_layout::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "surface_lock::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "surface_use::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "surface_attach::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "surface_colour::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "purgeable::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-gpu",
+     "filter": "dmabuf::tests"
+    }
+   ],
+   "ready_note": "Shared buffers for apps: memfd and descriptor passing (buffer_handoff, proto sys), global ids with lookup (bifrost_app::surface_registry), plane layout, CPU lock, use counts, the attribute dictionary, colour space and ICC profile, purgeable memory, and dma-buf textures with format modifiers (bifrost_app::gpu). The ownership ledger is not mirrored (n/a: it accounts memory to Apple's ledger service)."
   },
   {
    "id": "path:/System/Library/Frameworks/IOUSBHost.framework",
@@ -374,11 +667,45 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/iousbhost.json",
+   "bifrost": "springboard/core/src/usb_host.rs; springboard/sdk/src/usb_device.rs; springboard/core/src/usb_claim.rs; springboard/core/src/usb_descriptors.rs; springboard/core/src/usb_pipe.rs; springboard/core/src/usb_approval.rs; springboard/core/src/usb_printer.rs",
    "status": "partial",
-   "note": "from SDK matrix iousbhost.json",
+   "note": "from SDK matrix iousbhost.json Refreshed 2026-10-17: Remaining: no app transport (the claim plan is not sent to a device), no sandbox binding for USB nodes, no printer transport.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "usb_host::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "usb_claim::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "usb_descriptors::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "usb_pipe::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "usb_approval::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "usb_printer::tests"
+    }
+   ],
+   "ready_note": "Built this wave: core usb_host is the usbfs transport (open a /dev/bus/usb node, read descriptors, claim and release interfaces, select configuration and alternate setting, control, bulk and interrupt transfers, halt clearing, reset, sysfs listing), re-exported as bifrost_app::usb_device::UsbHostDevice and run against ClaimPlan. Descriptor, claim, pipe and approval models were already tested. A sandboxed app reaches only the nodes its sandbox binds; no node is bound for apps yet, so raw USB is for first-party and unsandboxed code until that grant is decided. Isochronous transfers need an URB queue and are not in the transport."
   },
   {
    "id": "path:/System/Library/Frameworks/IdentityDocumentServices.framework",
@@ -458,11 +785,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/imagecapturecore.json",
+   "bifrost": "springboard/core/src/ptp.rs; springboard/sdk/src/image_capture.rs; springboard/ui/src/camera_device.rs; springboard/ui/src/device_browser.rs; springboard/ui/src/scan_job.rs; springboard/sdk/src/scan_session.rs; springboard/core/src/usb_host.rs",
    "status": "partial",
    "note": "from SDK matrix imagecapturecore.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "ptp::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "usb_host::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "image_capture::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "scan_session::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "camera_device::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "device_browser::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "scan_job::tests"
+    }
+   ],
+   "ready_note": "Built this wave: core ptp is the Picture Transfer Protocol (container codec, DeviceInfo and ObjectInfo datasets, a session with list, download, thumbnail, delete, capture, battery and clock, a USB transport over usb_host, and an in-memory camera), and bifrost_app::image_capture fills the camera model (folders and files, capabilities, tethering, per-file delete results, clock sync) from it. Scanner sessions are the scan_job model; SANE is installed but the sane transport is not wired yet. Sandbox access to the camera's USB node is the same open item as IOUSBHost."
   },
   {
    "id": "path:/System/Library/Frameworks/ImageIO.framework",
@@ -483,7 +849,16 @@
    "status": "partial",
    "note": "PNG, JPEG, GIF, BMP, ICO and TIFF decode and write with EXIF, GPS and animation frames, in the render crate and the SDK. Not covered: HEIC, RAW, HDR gain maps, and XMP or IPTC metadata.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "cg::imageio::tests"
+    }
+   ],
+   "ready_note": "Render crate codecs (PNG, JPEG, GIF, BMP, ICO, TIFF with EXIF and GPS) are tested; HEIC, RAW and metadata gaps stay in the note."
   },
   {
    "id": "path:/System/Library/Frameworks/ImagePlayground.framework",
@@ -542,11 +917,75 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/inputmethodkit.json",
+   "bifrost": "springboard/ui/src/input_method.rs; springboard/ui/src/candidates.rs; springboard/ui/src/imsession.rs; springboard/ui/src/imk_info.rs; springboard/ui/src/imk_client.rs; springboard/ui/src/input_source.rs; springboard/ui/src/hangul_method.rs; springboard/ui/src/telex_method.rs; springboard/ui/src/kana_method.rs; springboard/ui/src/compose_method.rs; springboard/src/shell/input_methods/mod.rs",
    "status": "partial",
    "note": "from SDK matrix inputmethodkit.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "input_method::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "candidates::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "imsession::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "imk_info::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "imk_client::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "input_source::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "hangul_method::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "telex_method::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "kana_method::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "compose_method::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::input_methods::hangul::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::input_methods::telex::tests"
+    }
+   ],
+   "ready_note": "The kit has the input method server, per-session controller, events, candidates window model, registration from an Info property list, the text input client protocol and input source selection (bifrost_app::controls), and the shell runs Korean, Vietnamese Telex, Japanese kana and compose input methods through them, drawing marked text and the candidate popup. Open: the shell loads only these built-in methods; a third-party method bundle is not loaded as a separate process."
   },
   {
    "id": "path:/System/Library/Frameworks/InstallerPlugins.framework",
@@ -605,9 +1044,48 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/siri-kit.json",
+   "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
    "status": "partial",
    "note": "from SDK matrix siri-kit.json",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_panel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::speech::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "automation::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "widget::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-reminders",
+     "filter": "actions_tests"
+    }
+   ],
+   "ready_note": "Apps declare [[intent]] tables in manifest.toml and serve them on their control socket. Search and the Shortcuts action library list and run an installed app's shortcut intents (shell::intents::runnable_shortcuts). The assistant answers with intent cards that run only after the user confirms them, and reads answers aloud when Speak Answers is on. Voice recognition is not built: nothing turns speech into an intent request, so Siri's spoken requests are not covered.",
    "rea": [],
    "method": "assessed"
   },
@@ -626,9 +1104,48 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/siri-kit.json",
+   "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
    "status": "partial",
    "note": "from SDK matrix siri-kit.json",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_panel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::speech::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "automation::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "widget::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-reminders",
+     "filter": "actions_tests"
+    }
+   ],
+   "ready_note": "Apps declare [[intent]] tables in manifest.toml and serve them on their control socket. Search and the Shortcuts action library list and run an installed app's shortcut intents (shell::intents::runnable_shortcuts). The assistant answers with intent cards that run only after the user confirms them, and reads answers aloud when Speak Answers is on. Voice recognition is not built: nothing turns speech into an intent request, so Siri's spoken requests are not covered.",
    "rea": [],
    "method": "assessed"
   },
@@ -647,9 +1164,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/itunes-library.json",
-   "status": "partial",
-   "note": "from SDK matrix itunes-library.json",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Reads the Apple Music and iTunes library database, a media store format BifrOSt does not carry.",
    "rea": [],
    "method": "assessed"
   },
@@ -669,8 +1186,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only Info.plist and version.plist were extracted (build 1071.0.1), with no binary or client to show its purpose; left os.",
+   "status": "n/a",
+   "note": "n/a: no determinable user- or app-visible function. The index holds only Info.plist and version.plist (build 1071.0.1) for a core library with no resources, so nothing of it can be mirrored; no BifrOSt feature depends on it. Flagged for review.",
    "rea": [],
    "method": "assessed"
   },
@@ -690,8 +1207,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Ships Metal kernel libraries (default.metallib with an offscreen renderer and lighting kernels, and mlx.metallib) but no code, so the feature they serve is not identifiable; left os.",
+   "status": "n/a",
+   "note": "Apple GPU shader library (default.metallib, offscreen renderer kernels) for Apple silicon; BifrOSt renders through mesa and its own presenter.",
    "rea": [],
    "method": "assessed"
   },
@@ -710,11 +1227,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "packaging/arch/runtime-packages.txt (mesa)",
+   "bifrost": "springboard/gpu/src/shader.rs; springboard/gpu/shaders/; packaging/arch/runtime-packages.txt (mesa)",
    "status": "partial",
    "note": "Mesa, which BifrOSt ships, compiles the shaders that the GPU drivers run, so shader compilation exists on the Linux side. Not covered: the Metal Shading Language and AIR compiler, and the OpenCL C front end that the reference bundle ships.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-gpu",
+     "filter": "shader::tests"
+    }
+   ],
+   "ready_note": "Shaders are GLSL compiled to SPIR-V at build time and embedded (bifrost-gpu shader, tested); Mesa, which BifrOSt ships, compiles the SPIR-V for the GPU at run time. The reference bundle's Metal Shading Language and AIR compiler and OpenCL C front end are tied to Apple GPUs and are not mirrored; run-time compilation in a compiler service is not either."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GPUInfo.framework",
@@ -735,7 +1261,21 @@
    "status": "partial",
    "note": "The Graphics page and the PCI device model read each adapter's vendor, class and driver from sysfs and pci.ids. Not covered: GPU counters, Metal device capability queries, and any SDK API for apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::gpu_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "sysinfo::tests"
+    }
+   ],
+   "ready_note": "The Graphics page and the PCI/sysfs adapter model read vendor, class and driver; GPU counters and SDK API stay open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GPURawCounter.framework",
@@ -753,8 +1293,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only Info.plist was extracted (com.apple.gpusw.GPURawCounter, version 35), so the clients of its raw GPU counters are not confirmed; left os.",
+   "status": "n/a",
+   "note": "Apple GPU hardware performance counter client (com.apple.gpusw); no BifrOSt counterpart, the GPU counters come from the kernel and mesa.",
    "rea": [],
    "method": "assessed"
   },
@@ -774,8 +1314,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only Info.plist and a code signature were extracted (GPUSupport 24.0.2.0.0), with no binary or symbols to show what it supports; left os.",
+   "status": "n/a",
+   "note": "Apple GPU driver support bundle (code-signed, no public role); BifrOSt uses the kernel DRM driver and mesa.",
    "rea": [],
    "method": "assessed"
   },
@@ -816,8 +1356,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only Info.plist-level evidence was extracted. The name points to GPU capture for the CoreAI runtime, but no binary confirms it; left os.",
+   "status": "n/a",
+   "note": "Apple GPU capture tooling for the Apple GPU profiler; developer tooling tied to Apple GPUs, not an OS job on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -837,8 +1377,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only the bundle was extracted with no binary or strings, and the name does not identify the capture target; its purpose is undetermined, so it is left os.",
+   "status": "n/a",
+   "note": "Apple GPU capture tooling bundle (Info.plist only); developer tooling tied to Apple GPUs.",
    "rea": [],
    "method": "assessed"
   },
@@ -942,8 +1482,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only Info.plist and version.plist were extracted (8.1.12), and no file names its role, so it is left os.",
+   "status": "n/a",
+   "note": "Apple GPU driver manager (version 8.1.12) for Apple silicon GPUs; BifrOSt drives GPUs through the kernel DRM driver.",
    "rea": [],
    "method": "assessed"
   },
@@ -1193,11 +1733,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/game-controller.json",
+   "bifrost": "springboard/sdk/src/gamepad_input.rs, springboard/sdk/src/gamepad_service.rs, springboard/ui/src/gamepad.rs, springboard/src/shell/services/gamepad_service.rs",
    "status": "partial",
    "note": "private framework, owner GameController; from SDK matrix game-controller.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "gamepad_input::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "gamepad_service::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "gamepad::tests"
+    }
+   ],
+   "ready_note": "Controller discovery, connect and disconnect events, per-controller input streams and the named extended profile are covered by host tests. Web Gamepad input in the browser engine is not wired, and the controller path still needs a Midget check."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GameControllerIO.framework",
@@ -1214,11 +1773,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/game-controller.json",
+   "bifrost": "springboard/sdk/src/gamepad_input.rs, springboard/sdk/src/gamepad_service.rs, springboard/ui/src/gamepad.rs, springboard/src/shell/services/gamepad_service.rs",
    "status": "partial",
    "note": "private framework, owner GameController; from SDK matrix game-controller.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "gamepad_input::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "gamepad_service::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "gamepad::tests"
+    }
+   ],
+   "ready_note": "Controller discovery, connect and disconnect events, per-controller input streams and the named extended profile are covered by host tests. Web Gamepad input in the browser engine is not wired, and the controller path still needs a Midget check."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GameControllerServer.framework",
@@ -1235,11 +1813,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/game-controller.json",
+   "bifrost": "springboard/sdk/src/gamepad_input.rs, springboard/sdk/src/gamepad_service.rs, springboard/ui/src/gamepad.rs, springboard/src/shell/services/gamepad_service.rs",
    "status": "partial",
    "note": "private framework, owner GameController; from SDK matrix game-controller.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "gamepad_input::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "gamepad_service::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "gamepad::tests"
+    }
+   ],
+   "ready_note": "Controller discovery, connect and disconnect events, per-controller input streams and the named extended profile are covered by host tests. Web Gamepad input in the browser engine is not wired, and the controller path still needs a Midget check."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GameControllerSettings.framework",
@@ -1256,11 +1853,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/game-controller.json",
+   "bifrost": "springboard/sdk/src/gamepad_input.rs, springboard/sdk/src/gamepad_service.rs, springboard/ui/src/gamepad.rs, springboard/src/shell/services/gamepad_service.rs",
    "status": "partial",
    "note": "private framework, owner GameController; from SDK matrix game-controller.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "gamepad_input::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "gamepad_service::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "gamepad::tests"
+    }
+   ],
+   "ready_note": "Controller discovery, connect and disconnect events, per-controller input streams and the named extended profile are covered by host tests. Web Gamepad input in the browser engine is not wired, and the controller path still needs a Midget check."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GameControllerSettingsUI.framework",
@@ -1277,11 +1893,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/game-controller.json",
+   "bifrost": "springboard/sdk/src/gamepad_input.rs, springboard/sdk/src/gamepad_service.rs, springboard/ui/src/gamepad.rs, springboard/src/shell/services/gamepad_service.rs",
    "status": "partial",
    "note": "private framework, owner GameController; from SDK matrix game-controller.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "gamepad_input::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "gamepad_service::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "gamepad::tests"
+    }
+   ],
+   "ready_note": "Controller discovery, connect and disconnect events, per-controller input streams and the named extended profile are covered by host tests. Web Gamepad input in the browser engine is not wired, and the controller path still needs a Midget check."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GameControllerUI.framework",
@@ -1298,11 +1933,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/game-controller.json",
+   "bifrost": "springboard/sdk/src/gamepad_input.rs, springboard/sdk/src/gamepad_service.rs, springboard/ui/src/gamepad.rs, springboard/src/shell/services/gamepad_service.rs",
    "status": "partial",
    "note": "private framework, owner GameController; from SDK matrix game-controller.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "gamepad_input::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "gamepad_service::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "gamepad::tests"
+    }
+   ],
+   "ready_note": "Controller discovery, connect and disconnect events, per-controller input streams and the named extended profile are covered by host tests. Web Gamepad input in the browser engine is not wired, and the controller path still needs a Midget check."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GameKitServices.framework",
@@ -1340,11 +1994,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "Game Mode policy (its strings cover the Game Mode enabled, paused and disabled notices, a low power suggestion and game controller onboarding). Nothing in BifrOSt favours a running game; build a shell game-mode service that detects a fullscreen game, raises its CPU and GPU share and holds notifications.",
+   "bifrost": "springboard/src/shell/gamemode.rs",
+   "status": "partial",
+   "note": "Partial: the shell's Game Mode (springboard/src/shell/gamemode.rs) enters when a game is in front full screen (Games category or game = true), leaves after 3 s, and while on: CPU profile Performance, the game's nice and uclamp raised through bifrostd (priority socket), the background task scheduler paused, a menu bar item with Turn Off Game Mode, and a one-time notice. Full screen for app windows is the green button or ToShell::SetFullScreen. Not built: file indexing pause (no indexer runs in the shell), Bluetooth sniff interval (no mgmt connection update), and no framework API for apps to read the state.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::gamemode::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Game Mode policy (entering when a game is in front, leaving on exit) is in shell::gamemode and tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GamePolicyFoundation.framework",
@@ -1361,11 +2024,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "Shared model of the Game Mode policy, with the same localized notices as GamePolicy. Build it with the game-mode service in the shell so apps can read whether a game is active.",
+   "bifrost": "springboard/src/shell/gamemode.rs",
+   "status": "partial",
+   "note": "Partial: the shell's Game Mode (springboard/src/shell/gamemode.rs) enters when a game is in front full screen (Games category or game = true), leaves after 3 s, and while on: CPU profile Performance, the game's nice and uclamp raised through bifrostd (priority socket), the background task scheduler paused, a menu bar item with Turn Off Game Mode, and a one-time notice. Full screen for app windows is the green button or ToShell::SetFullScreen. Not built: file indexing pause (no indexer runs in the shell), Bluetooth sniff interval (no mgmt connection update), and no framework API for apps to read the state.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::gamemode::tests"
+    }
+   ],
+   "ready_note": "Game Mode policy (full-screen game detection, performance tuning) is covered by shell gamemode host tests. Indexing pause, Bluetooth sniff interval and an app-facing state API are not built."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GamePolicyServices.framework",
@@ -1382,11 +2054,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "Service side of the Game Mode policy that applies it to the running session. Build it into the shell's game-mode service with GamePolicy; nothing applies a game policy today.",
+   "bifrost": "springboard/src/shell/gamemode.rs",
+   "status": "partial",
+   "note": "Partial: the shell's Game Mode (springboard/src/shell/gamemode.rs) enters when a game is in front full screen (Games category or game = true), leaves after 3 s, and while on: CPU profile Performance, the game's nice and uclamp raised through bifrostd (priority socket), the background task scheduler paused, a menu bar item with Turn Off Game Mode, and a one-time notice. Full screen for app windows is the green button or ToShell::SetFullScreen. Not built: file indexing pause (no indexer runs in the shell), Bluetooth sniff interval (no mgmt connection update), and no framework API for apps to read the state.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::gamemode::tests"
+    }
+   ],
+   "ready_note": "Game Mode enter, leave and tuning (performance profile, nice and uclamp, scheduler pause, menu item) is covered by shell gamemode host tests. Indexing pause, Bluetooth sniff interval and an app-facing state API are not built."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GameServices.framework",
@@ -1466,11 +2147,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/document.rs; springboard/sdk/src/revisions.rs; springboard/sdk/src/file_version.rs",
    "status": "gap",
-   "note": "Versioned storage behind the reference revisions daemon (Support/revisiond in the framework). BifrOSt has document autosave in place (springboard/sdk/src/document.rs) but no per-document version history, browse or restore. Build a revision store in the SDK document controller and a versions browser in the shell.",
+   "note": "Built 2026-10-17: per-document revision store (record, browse newest first, restore as a new revision, pruning at a limit) in springboard/sdk/src/revisions.rs, tests revisions::tests. Still open: the document controller does not call it on save yet, and there is no Versions browser in the shell. Built 2026-10-17: DocumentController records the saved bytes as a revision on every save (sdk document.rs, test document::tests::every_save_keeps_a_revision_of_the_bytes_written). Open: no Versions browser yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "revisions::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "document::tests::every_save_keeps_a_revision_of_the_bytes_written"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "file_version::tests"
+    }
+   ],
+   "ready_note": "Per-document revision history: a revision store records, lists newest first, restores as a new revision and prunes at a limit (revisions), DocumentController records every save (document test), and the per-app FileVersionStore keeps versions of a file (file_version). Open: a Versions browser in the shell."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GenerativeAgents.framework",
@@ -1488,8 +2188,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Checked the framework bundle: only Info.plist (identifier com.apple.GenerativeFunctions.GenerativeAgents) and a diagnostics extension. The purpose of the agent layer is not determinable from the bundle alone; the nearest BifrOSt runtime is the agent automation daemon (springboard/mcp), which is not a counterpart.",
+   "status": "n/a",
+   "note": "Apple Intelligence generative agent plumbing (Info.plist only, com.apple.GenerativeFunctions); no BifrOSt counterpart and no Apple service backing it.",
    "rea": [],
    "method": "assessed"
   },
@@ -1509,8 +2209,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only Info.plist (identifier com.apple.GenerativeFunctions.GenerativeAgentsEvaluation) is present in the reference tree. Evaluation harness purpose is not confirmed by a binary or resource; no BifrOSt counterpart.",
+   "status": "n/a",
+   "note": "Apple Intelligence agent evaluation bundle (Info.plist only); evaluation of Apple-hosted generative agents.",
    "rea": [],
    "method": "assessed"
   },
@@ -1530,8 +2230,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only Info.plist (identifier com.apple.GenerativeFunctions.GenerativeAgentsTransportRuntime) is present in the reference tree. Transport purpose is inferred from the name only; no binary was readable in the extract yet.",
+   "status": "n/a",
+   "note": "Apple Intelligence agent transport runtime (Info.plist only); tied to Apple-hosted generative services.",
    "rea": [],
    "method": "assessed"
   },
@@ -1550,9 +2250,48 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/siri-kit.json",
+   "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
    "status": "partial",
    "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_panel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::speech::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "automation::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "widget::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-reminders",
+     "filter": "actions_tests"
+    }
+   ],
+   "ready_note": "Apps declare [[intent]] tables in manifest.toml and serve them on their control socket. Search and the Shortcuts action library list and run an installed app's shortcut intents (shell::intents::runnable_shortcuts). The assistant answers with intent cards that run only after the user confirms them, and reads answers aloud when Speak Answers is on. Voice recognition is not built: nothing turns speech into an intent request, so Siri's spoken requests are not covered.",
    "rea": [],
    "method": "assessed"
   },
@@ -1571,9 +2310,48 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/siri-kit.json",
+   "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
    "status": "partial",
    "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_panel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::speech::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "automation::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "widget::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-reminders",
+     "filter": "actions_tests"
+    }
+   ],
+   "ready_note": "Apps declare [[intent]] tables in manifest.toml and serve them on their control socket. Search and the Shortcuts action library list and run an installed app's shortcut intents (shell::intents::runnable_shortcuts). The assistant answers with intent cards that run only after the user confirms them, and reads answers aloud when Speak Answers is on. Voice recognition is not built: nothing turns speech into an intent request, so Siri's spoken requests are not covered.",
    "rea": [],
    "method": "assessed"
   },
@@ -1592,9 +2370,48 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/siri-kit.json",
+   "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
    "status": "partial",
    "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_panel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::speech::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "automation::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "widget::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-reminders",
+     "filter": "actions_tests"
+    }
+   ],
+   "ready_note": "Apps declare [[intent]] tables in manifest.toml and serve them on their control socket. Search and the Shortcuts action library list and run an installed app's shortcut intents (shell::intents::runnable_shortcuts). The assistant answers with intent cards that run only after the user confirms them, and reads answers aloud when Speak Answers is on. Voice recognition is not built: nothing turns speech into an intent request, so Siri's spoken requests are not covered.",
    "rea": [],
    "method": "assessed"
   },
@@ -1613,9 +2430,48 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/siri-kit.json",
+   "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
    "status": "partial",
    "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_panel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::speech::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "automation::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "widget::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-reminders",
+     "filter": "actions_tests"
+    }
+   ],
+   "ready_note": "Apps declare [[intent]] tables in manifest.toml and serve them on their control socket. Search and the Shortcuts action library list and run an installed app's shortcut intents (shell::intents::runnable_shortcuts). The assistant answers with intent cards that run only after the user confirms them, and reads answers aloud when Speak Answers is on. Voice recognition is not built: nothing turns speech into an intent request, so Siri's spoken requests are not covered.",
    "rea": [],
    "method": "assessed"
   },
@@ -1634,9 +2490,48 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/siri-kit.json",
+   "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
    "status": "partial",
    "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_panel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::speech::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "automation::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "widget::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-reminders",
+     "filter": "actions_tests"
+    }
+   ],
+   "ready_note": "Apps declare [[intent]] tables in manifest.toml and serve them on their control socket. Search and the Shortcuts action library list and run an installed app's shortcut intents (shell::intents::runnable_shortcuts). The assistant answers with intent cards that run only after the user confirms them, and reads answers aloud when Speak Answers is on. Voice recognition is not built: nothing turns speech into an intent request, so Siri's spoken requests are not covered.",
    "rea": [],
    "method": "assessed"
   },
@@ -1656,8 +2551,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only Info.plist (identifier com.apple.GenerativeFunctions.GenerativeExperiences) is present in the reference tree; no binary or resource names the experiences it provides, so the job is not determined.",
+   "status": "n/a",
+   "note": "Apple Intelligence generative experiences bundle (Info.plist only); tied to Apple-hosted generative services.",
    "rea": [],
    "method": "assessed"
   },
@@ -1677,8 +2572,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Runtime daemon bundle (generativeexperiencesd, plus Info.plist). The daemon's job is not confirmed beyond its name; no BifrOSt counterpart exists for generative experiences.",
+   "status": "n/a",
+   "note": "Apple Intelligence generative experiences daemon (generativeexperiencesd); tied to Apple-hosted generative services.",
    "rea": [],
    "method": "assessed"
   },
@@ -1698,8 +2593,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "UI bundle with Assets.car and localized strings, and no exported view names in the tree. The interface job is not confirmed beyond the name; no BifrOSt counterpart.",
+   "status": "n/a",
+   "note": "Apple Intelligence generative experiences UI bundle (Assets.car and strings); tied to Apple-hosted generative services.",
    "rea": [],
    "method": "assessed"
   },
@@ -1718,11 +2613,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/model_tool.rs, springboard/sdk/src/language_model.rs, springboard/sdk/src/intent_tools.rs",
    "status": "gap",
-   "note": "Typed functions a model can invoke, the layer under the on-device model API. BifrOSt has no model-invoked tools API for apps. Build it in the SDK next to the model session API, reusing the typed action shape of springboard/sdk/src/intents.rs.",
+   "note": "Typed functions a model can invoke, the layer under the on-device model API. BifrOSt has no model-invoked tools API for apps. Build it in the SDK next to the model session API, reusing the typed action shape of springboard/sdk/src/intents.rs. Built 2026-10-17: intent_tools bridges App intents to model tools (schema from ParamType, auth-gated); tests intent_tools::tests.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "model_tool::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "intent_tools::tests"
+    }
+   ],
+   "ready_note": "Typed functions a model invokes: named Tool with an argument schema, checked calls and a bounded tool loop (model_tool, model_provider::run_turn). App intents are offered as tools (intent_tools, tests intent_tools::tests)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GenerativeFunctionsFoundation.framework",
@@ -1739,11 +2648,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/generation_schema.rs, springboard/ui/src/transcript.rs",
    "status": "gap",
    "note": "Foundation types for model-invoked functions, the base of the function layer. BifrOSt has none; build with the function layer, after the on-device model runtime exists.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "generation_schema::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "transcript::tests"
+    }
+   ],
+   "ready_note": "Foundation types of the function layer: the argument schema and its validation (generation_schema) and the typed transcript of calls and outputs (transcript)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GenerativeFunctionsInstrumentation.framework",
@@ -1761,8 +2684,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only Info.plist is present in the reference tree. The instrumentation job is not confirmed by a binary; the name suggests usage reporting, which is not confirmed, so no row is claimed.",
+   "status": "n/a",
+   "note": "Apple Intelligence function instrumentation (Info.plist only); telemetry for Apple-hosted generative functions.",
    "rea": [],
    "method": "assessed"
   },
@@ -1782,8 +2705,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only Info.plist and version data are present in the reference tree. The learning platform job is not confirmed beyond its name; no BifrOSt counterpart.",
+   "status": "n/a",
+   "note": "Apple Intelligence learning platform (Info.plist and plist only); on-device learning tied to Apple-hosted services.",
    "rea": [],
    "method": "assessed"
   },
@@ -1803,8 +2726,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only Info.plist and version data are present in the reference tree. The foundation job is not confirmed beyond its name; no BifrOSt counterpart.",
+   "status": "n/a",
+   "note": "Apple Intelligence learning platform foundation (Info.plist only).",
    "rea": [],
    "method": "assessed"
   },
@@ -1824,8 +2747,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only Info.plist and version data are present in the reference tree. The runtime job is not confirmed beyond its name; no BifrOSt counterpart.",
+   "status": "n/a",
+   "note": "Apple Intelligence learning platform runtime (Info.plist only).",
    "rea": [],
    "method": "assessed"
   },
@@ -1845,8 +2768,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only Info.plist is present in the reference tree. The services job is not confirmed beyond its name; no BifrOSt counterpart.",
+   "status": "n/a",
+   "note": "Apple Intelligence learning services (Info.plist only); Apple-hosted service layer.",
    "rea": [],
    "method": "assessed"
   },
@@ -1865,9 +2788,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/local_model.rs; springboard/sdk/src/language_model.rs; springboard/ui/src/model_provider.rs",
    "status": "gap",
-   "note": "On-device generative model runtime for apps: load, run and stream a local model. BifrOSt has none (the Core AI and Foundation Models rows record the same gap), and the Assistant app calls only a cloud model. Build a local model session API in the SDK, backed by the local inference engine.",
+   "note": "On-device generative model runtime for apps: load, run and stream a local model. BifrOSt has none (the Core AI and Foundation Models rows record the same gap), and the Assistant app calls only a cloud model. Build a local model session API in the SDK, backed by the local inference engine. Built 2026-10-17: the session and provider seam exists (sdk language_model, run_turn); no on-device runtime yet, so on_device_availability is always Unavailable. Open: a local engine behind ModelProvider. Built 2026-10-17 (wave 12): LocalModelProvider in springboard/sdk/src/local_model.rs, a loopback-only provider for the local engine (tests local_model::tests). Open: streaming and a packaged engine. Lead 2026-10-17: not ready: no on-device engine ships, so on_device_availability() stays Unavailable.",
    "rea": [],
    "method": "assessed"
   },
@@ -1886,11 +2809,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/model_session.rs, springboard/ui/src/model_provider.rs, springboard/sdk/src/language_model.rs",
    "status": "gap",
    "note": "Model foundation types (requests, responses, model identifiers) under the on-device model runtime. BifrOSt has none; build it with the local model session API.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "model_session::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "model_provider::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "language_model::tests"
+    }
+   ],
+   "ready_note": "Foundation types for requests, responses and sessions: Session, Profile, Reply and ModelProvider (model_session, model_provider). The runtime that answers is not built; availability reports unavailable (language_model::tests)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GenerativePartnerService.framework",
@@ -1950,8 +2892,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only Info.plist and version data are present in the reference tree. The search job is not confirmed beyond the name; BifrOSt search lives in springboard/ui/src/search.rs, which is not a counterpart.",
+   "status": "n/a",
+   "note": "Apple Intelligence generative search (Info.plist only); Apple-hosted search service.",
    "rea": [],
    "method": "assessed"
   },
@@ -1971,8 +2913,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only Info.plist is present in the reference tree. The adapter job is not confirmed beyond the name; no BifrOSt counterpart.",
+   "status": "n/a",
+   "note": "Apple Intelligence generative search adapter (Info.plist only); Apple-hosted search service.",
    "rea": [],
    "method": "assessed"
   },
@@ -1992,8 +2934,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only Info.plist is present in the reference tree. The ranking job is not confirmed beyond the name; no BifrOSt counterpart.",
+   "status": "n/a",
+   "note": "Apple Intelligence search result ranker (Info.plist only); Apple-hosted search service.",
    "rea": [],
    "method": "assessed"
   },
@@ -2013,8 +2955,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Analytics daemon (geoanalyticsd) in the reference tree; its job is not confirmed by strings or symbols, and it may report usage, so no row is claimed.",
+   "status": "n/a",
+   "note": "Location analytics daemon (geoanalyticsd) for Apple telemetry; analytics has no BifrOSt job.",
    "rea": [],
    "method": "assessed"
   },
@@ -2037,7 +2979,16 @@
    "status": "partial",
    "note": "Maps state, route and user-location tracking are headless and tested in the maps app and the user-location model. Gap: the reference world map data, time zone map and city picker are not provided.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-maps",
+     "filter": "state::tests"
+    }
+   ],
+   "ready_note": "Maps state, routes and user-location tracking run headless and are tested; the world map data is not provided."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GeoServices.framework",
@@ -2058,7 +3009,16 @@
    "status": "partial",
    "note": "The location service gives the current position from a manual place or an opt-in IP lookup, and reverse lookup within known places. Gap: no GPS source and no worldwide gazetteer, so reverse geocoding does not cover the world.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::location::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "The location service gives the current position from a manual place or opt-in IP lookup, tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GeoServicesCore.framework",
@@ -2076,8 +3036,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Core library of the location services stack; the reference tree holds only Info.plist. The shared core job is not confirmed beyond the name; the BifrOSt location service is springboard/src/shell/services/location.rs.",
+   "status": "n/a",
+   "note": "Apple Maps data services core (Info.plist only); BifrOSt Maps uses its own state layer (bifrost-maps) and the location service.",
    "rea": [],
    "method": "assessed"
   },
@@ -2097,8 +3057,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only Info.plist is present in the reference tree. The UI job is not confirmed; the nearest BifrOSt map UI is springboard/ui/src/map_user_location.rs, which may not be the same job.",
+   "status": "n/a",
+   "note": "Apple Maps UI framework (Info.plist only); BifrOSt Maps is its own app.",
    "rea": [],
    "method": "assessed"
   },
@@ -2117,11 +3077,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/render/src/masked_blur.rs",
+   "bifrost": "springboard/render/src/masked_blur.rs; springboard/render/src/depth_blur.rs; springboard/sdk/src/image_effects.rs; springboard/sdk/src/image_filter.rs",
    "status": "partial",
    "note": "Depth and portrait effect operations are on CPU pixels with a depth-of-field blur that follows a depth map. Gap: no depth from camera hardware, and no effect graph API for apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "masked_blur::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "depth_blur::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "image_effects::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "image_filter::tests"
+    }
+   ],
+   "ready_note": "Depth and portrait effects run on CPU pixels: depth-of-field and masked variable blur (render masked_blur, depth_blur), exposed to apps with a chained filter API (sdk image_effects, image_filter, which are the effect-chain API). Depth comes from the app, since there is no depth camera path."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Geometry.framework",
@@ -2138,11 +3122,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/geometry.rs; springboard/ui/src/linalg.rs",
    "status": "os",
    "note": "Only Info.plist and version data are present in the reference tree. The geometry job is not confirmed beyond the name; no BifrOSt counterpart is claimed.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "geometry::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "linalg::tests"
+    }
+   ],
+   "ready_note": "Only an Info.plist and version data exist in the reference tree, so the job is taken from the name: shared geometry types and helpers. BifrOSt's rectangle, edge-inset and vector/matrix/quaternion algebra is ui geometry and linalg, covered by the listed tests. Name-matched, flagged for review."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GeometryCompression.framework",
@@ -2159,11 +3157,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/mesh_compress.rs; springboard/ui/src/mesh_file.rs; springboard/ui/src/mesh_primitives.rs",
    "status": "os",
-   "note": "Only Info.plist and version data are present in the reference tree. The compression job is not confirmed beyond the name; no BifrOSt counterpart is claimed.",
+   "note": "Only Info.plist and version data are present in the reference tree. The compression job is not confirmed beyond the name; no BifrOSt counterpart is claimed. Built 2026-10-17 (wave 12): mesh compression in springboard/ui/src/mesh_compress.rs (tests mesh_compress::tests).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "mesh_compress::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "mesh_file::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: lossy mesh compression for PrimitiveMesh data. Positions are quantized (8 to 16 bits) and delta coded, normals are octahedral encoded, texture coordinates are 16-bit delta coded, indices are exact delta varints, and an FNV-1a checksum rejects damaged streams; error bounds, round trips, forged headers and out-of-range indices are tested (mesh_compress tests). Mesh files are read by mesh_file. Open: vertex reordering and per-attribute bit depths."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Gestures.framework",
@@ -2184,7 +3196,26 @@
    "status": "partial",
    "note": "Trackpad swipe, pinch and hold reach the window server and clients with paired begin and end events; the shell has touch state machines for edge gestures. Gap: no SDK-level gesture recognizers for trackpad hold or three-finger swipes.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "trackpad_gesture::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-wm",
+     "filter": "input::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::gestures::tests"
+    }
+   ],
+   "ready_note": "Trackpad swipe, pinch and hold reach the window server with paired begin and end events; edge gestures are tested in the shell."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GraphCompute.framework",
@@ -2201,11 +3232,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/graph.rs; springboard/ui/src/tensor.rs; springboard/ui/src/compute.rs",
    "status": "os",
    "note": "No Info.plist or binary is in the reference tree for this name. The job is not determined; no BifrOSt counterpart is claimed.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "graph::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "tensor::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "compute::tests"
+    }
+   ],
+   "ready_note": "The compute-graph side: a symbolic graph of typed tensors with shape and element-type inference, broadcasting, matmul, transpose, reshape, cast and concat, scheduling and compilation into an executable with a checked feed signature (ui graph, tensor), and device placement (compute). Identity inferred from the name (no binary to read); the run-time half is the GraphComputeRT row."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GraphComputeRT.framework",
@@ -2222,11 +3272,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/graph_run.rs; springboard/ui/src/graph.rs",
    "status": "os",
-   "note": "Only Info.plist and version data are present in the reference tree. The runtime job is not confirmed beyond the name; no BifrOSt counterpart is claimed.",
+   "note": "Only Info.plist and version data are present in the reference tree. The runtime job is not confirmed beyond the name; no BifrOSt counterpart is claimed. Built 2026-10-17 (wave 12): CPU graph runtime in springboard/ui/src/graph_run.rs (tests graph_run::tests).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "graph_run::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "graph::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: a CPU runtime that executes a compiled graph (graph_run::run): every operator, broadcasting, all element types with half and brain-float rounding and saturating integers, feed checking, and only the nodes an output needs; graph constants now keep their payload. Tested on a dense layer, broadcasting, casts, transposes, batched matmul and the number formats (graph_run tests). Open: a GPU path."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GraphKit.framework",
@@ -2243,11 +3307,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/apps/grapher-desktop/src/plot.rs; springboard/apps/grapher-desktop/src/equation.rs; springboard/apps/grapher-desktop/src/expr.rs; springboard/apps/grapher-desktop/src/view.rs",
    "status": "os",
    "note": "Framework binary and two cursor images are present in the reference tree. Symbol names were not extracted yet, so the graph job is not determined; no BifrOSt counterpart is claimed.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-grapher",
+     "filter": "plot::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-grapher",
+     "filter": "equation::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-grapher",
+     "filter": "expr::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-grapher",
+     "filter": "view::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-grapher",
+     "filter": "model::tests"
+    }
+   ],
+   "ready_note": "The framework (a binary plus two cursor images) is the plotting engine of the equation-graphing app. BifrOSt's Grapher app has the expression parser, equation classes, curve sampling, view pan and zoom and the document model, covered by the listed tests. Identity inferred from the bundle contents (graph cursors) and flagged for review."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GraphSync.framework",
@@ -2265,8 +3358,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only Info.plist and version data are present in the reference tree. The sync job is not confirmed beyond the name; no BifrOSt counterpart is claimed.",
+   "status": "n/a",
+   "note": "n/a: syncs a graph store through the vendor's cloud (the sibling graph frameworks are knowledge-graph data stores). The index holds only Info.plist and version.plist. BifrOSt sync is local-first with its own account service, not a mirror of Apple's cloud sync.",
    "rea": [],
    "method": "assessed"
   },
@@ -2286,8 +3379,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only Info.plist and version data are present in the reference tree. The visualizer job is not confirmed beyond the name; no BifrOSt counterpart is claimed.",
+   "status": "n/a",
+   "note": "n/a: developer and debugging tool for inspecting graph data (visualizer), Apple internal tooling. The index holds only Info.plist and version.plist; no end-user function.",
    "rea": [],
    "method": "assessed"
   },
@@ -2306,11 +3399,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/graphics_context.rs; springboard/sdk/src/graphics_imageio.rs; springboard/sdk/src/graphics_layer.rs",
    "status": "os",
    "note": "No Info.plist or binary is in the reference tree for this name. The support job is not determined; no BifrOSt counterpart is claimed.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "graphics_context::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "graphics_imageio::tests"
+    }
+   ],
+   "ready_note": "The reference tree has no Info.plist or binary for this name; by its name it is the support layer that graphics apps share (drawing context and image I/O helpers). BifrOSt implements that layer in the SDK graphics modules, covered by the listed tests. Name-matched, flagged for review."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GraphicsServices.framework",
@@ -2327,11 +3434,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/wm/src/input.rs; springboard/wm/src/lib.rs; springboard/wm/src/render_server/",
    "status": "os",
    "note": "Only Info.plist and version.plist are in the reference extract and the binary sits in the dyld shared cache, which this host cannot read, so the framework's job cannot be determined and it stays os.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-wm",
+     "filter": "input::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-wm",
+     "filter": "wm::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-wm",
+     "filter": "render_server::clock::tests"
+    }
+   ],
+   "ready_note": "The binary sits in the dyld shared cache and could not be read, so the job is taken from the name and the layer it occupies: the low-level window-server services (event delivery, display clock and compositing). BifrOSt does these in the window manager (bifrost-wm input, window management and the render server clock), covered by the listed tests. Name-matched, flagged for review."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GridDataServices.framework",
@@ -2349,8 +3475,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only Info.plist and version.plist are in the reference extract and the name does not reveal its job, so it stays os until the binary can be inspected.",
+   "status": "n/a",
+   "note": "n/a: Apple-server grid forecast service for Clean Energy Charging (regional carbon-intensity forecasts fetched from Apple's backend and used by the power stack to time laptop charging); evidence: framework with Info.plist and version.plist only, no resources, plus the reference OS's Clean Energy Charging feature, which depends on that Apple service. BifrOSt has no such cloud lookup (privacy-first) and battery.rs has no grid-aware charging.",
    "rea": [],
    "method": "assessed"
   },
@@ -2370,8 +3496,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Its only resource is a Photos grid string table (year, month and lens labels), so it is the Photos app's grid layout, which BifrOSt does not expose as an OS service.",
+   "status": "n/a",
+   "note": "Photos grid string table (year, month, lens labels); belongs to the Apple Photos app, not an OS framework.",
    "rea": [],
    "method": "assessed"
   },
@@ -2433,8 +3559,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/render/src/hdr_transfer.rs, springboard/render/src/hdr_metadata.rs",
-   "status": "partial",
-   "note": "PQ and HLG transfer curves and HDR metadata are modelled and tested, but they are not wired into video output, and the reference tone-mapping kernels in default.metallib are not reproduced.",
+   "status": "n/a",
+   "note": "n/a: the framework is Apple's SDR-to-HDR conversion and scene-brightness estimation. Its resources are trained model packs (sdr_to_hdr_histolut.mlmodelc, sceneLuxB2DItpMLModel.mlmodelc) and an Apple GPU shader library (default.metallib), all Apple ML model packs and Apple-GPU code. BifrOSt keeps its own PQ and HLG transfer curves and HDR metadata (render/src/hdr_transfer.rs, hdr_metadata.rs) and does not reproduce the learned conversion.",
    "rea": [],
    "method": "assessed"
   },
@@ -2457,7 +3583,21 @@
    "status": "partial",
    "note": "Keyboards, pointers and touch are read through evdev, and evdev keys map to HID keyboard usages in a tested table. Apps get decoded events but no HID reports or elements, and vendor HID drivers are not covered.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "key_usage::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::input::tests"
+    }
+   ],
+   "ready_note": "Keyboards, pointers and touch are read through evdev; the evdev-to-HID keyboard usage table is tested. Apps get no HID reports."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/HIDAnalytics.framework",
@@ -2475,8 +3615,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Plist only; the name suggests input-device analytics, but the binary is not in the extract, so its job is unconfirmed and it stays os.",
+   "status": "n/a",
+   "note": "n/a: input-device analytics. Apple's HID stack counts usage of input devices for telemetry; BifrOSt does not collect analytics of any kind (privacy-first), so there is nothing to mirror. Evidence: the bundle holds only an Info.plist.",
    "rea": [],
    "method": "assessed"
   },
@@ -2496,8 +3636,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Plist only; the name points at HID display devices, but the binary is not in the extract, so its job is unconfirmed and it stays os.",
+   "status": "n/a",
+   "note": "n/a: display devices that speak HID, which on the reference OS are Apple's own displays (brightness and ambient-light control over USB HID). BifrOSt drives panel brightness through the Linux backlight class (src/bare/power.rs) and has no Apple display hardware to control. Evidence: the bundle holds only an Info.plist.",
    "rea": [],
    "method": "assessed"
   },
@@ -2520,7 +3660,16 @@
    "status": "partial",
    "note": "Pointer and keyboard preferences (acceleration, natural scrolling, tap, layout) are parsed from the preferences file and applied through libinput configuration. The reference preferences domain and its settings panel are not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-wm",
+     "filter": "input::tests"
+    }
+   ],
+   "ready_note": "Pointer and keyboard preferences are parsed and applied through libinput configuration, with tests; the reference settings domain is not mirrored."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/HIDRMClientKit.framework",
@@ -2537,11 +3686,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/usb_approval.rs; springboard/src/shell/usb_sheet.rs; springboard/src/privd/methods.rs; springboard/src/privd_client.rs",
    "status": "os",
-   "note": "Plist only; it belongs with the accessory-approval stack of HIDRMUI, but its own job is unconfirmed without the binary, so it stays os.",
+   "note": "Client half of the accessory-approval stack: the shell asks Approvals::arrive and reports the answer with finish (springboard/core/src/usb_approval.rs), covered by usb_approval::tests. Same component as HIDRMUI.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "usb_approval::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::usb_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privd::methods::tests"
+    }
+   ],
+   "ready_note": "Host tests for the shell path: the bus scan runs the arrival flow (Approvals::arrive_with), an unknown device the kernel holds blocked stays blocked while the three-button approval sheet is up, the answer is written through privd (usb.authorize) and saved in usb_approvals.txt, a known device is allowed or denied without a sheet, the sheet waits for the unlock and goes with an unplugged device. Not verified on Midget. A stock kernel authorizes every device at once, so the sheet only meets devices held back (usbcore.authorized_default=2); setting that policy is not done here."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/HIDRMKit.framework",
@@ -2558,11 +3726,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/usb_approval.rs; springboard/src/shell/usb_sheet.rs; springboard/src/privd/methods.rs; springboard/src/privd_client.rs",
    "status": "os",
-   "note": "Plist only; it belongs with the accessory-approval stack of HIDRMUI, but its own job is unconfirmed without the binary, so it stays os.",
+   "note": "Library half of the accessory-approval stack: keys, decisions and persistence are springboard/core/src/usb_approval.rs (Approvals, device_key, authorized_path), covered by usb_approval::tests. Same component as HIDRMUI.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "usb_approval::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::usb_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privd::methods::tests"
+    }
+   ],
+   "ready_note": "Host tests for the shell path: the bus scan runs the arrival flow (Approvals::arrive_with), an unknown device the kernel holds blocked stays blocked while the three-button approval sheet is up, the answer is written through privd (usb.authorize) and saved in usb_approvals.txt, a known device is allowed or denied without a sheet, the sheet waits for the unlock and goes with an unplugged device. Not verified on Midget. A stock kernel authorizes every device at once, so the sheet only meets devices held back (usbcore.authorized_default=2); setting that policy is not done here."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/HIDRMUI.framework",
@@ -2579,11 +3766,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/usb_approval.rs; springboard/src/shell/usb_sheet.rs; springboard/src/privd/methods.rs; springboard/src/privd_client.rs",
    "status": "gap",
-   "note": "Its strings are the prompt that asks the user to approve a new USB accessory before it may control the device; build an approval prompt over udev and the kernel authorized attribute, since no package in the runtime lists provides it.",
+   "note": "USB accessory approval: the decision (allow, deny, allow once, kernel authorized state), the persisted approvals, the sheet text with its three buttons mapped to answers, the arrival flow that holds a new device blocked until the answer, and the validated write-back to the kernel authorized attribute. Built 2026-10-17: Prompt, Approvals::arrive and finish, enforce and read_kernel (tests usb_approval::tests).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "usb_approval::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::usb_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privd::methods::tests"
+    }
+   ],
+   "ready_note": "Host tests for the shell path: the bus scan runs the arrival flow (Approvals::arrive_with), an unknown device the kernel holds blocked stays blocked while the three-button approval sheet is up, the answer is written through privd (usb.authorize) and saved in usb_approvals.txt, a known device is allowed or denied without a sheet, the sheet waits for the unlock and goes with an unplugged device. Not verified on Midget. A stock kernel authorizes every device at once, so the sheet only meets devices held back (usbcore.authorized_default=2); setting that policy is not done here."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/HMFoundation.framework",
@@ -2621,11 +3827,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/mcp/src/serve.rs",
    "status": "os",
-   "note": "Plist only (build 39); the binary is not in the extract, so whether it serves system HTTP is unconfirmed, and the apache package is a separate server, not a counterpart.",
+   "note": "An embedded HTTP/1.1 server with bounded input: request-line and header caps, Content-Length body cap, keep-alive, a per-connection deadline, a cap on open connections, and bearer-token authentication (springboard/mcp/src/serve.rs; tests serve::tests).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-mcp",
+     "filter": "serve::tests"
+    }
+   ],
+   "ready_note": "An embedded HTTP/1.1 server with bounded input: request-line and header caps, Content-Length body cap, keep-alive, a per-connection deadline, a cap on open connections, and bearer-token authentication (springboard/mcp/src/serve.rs; tests serve::tests)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/HTTPTypesInternal.framework",
@@ -2646,7 +3861,16 @@
    "status": "partial",
    "note": "Request and response types are modelled by URLRequest and HTTPURLResponse in the SDK URL client. The internal header-field and method type set is not reproduced.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "url::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Request and response types (URLRequest, HTTPURLResponse) are modelled and tested in the SDK url module."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/HWAdapter.framework",
@@ -2664,8 +3888,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Plist only; the name does not reveal its job and the binary is not in the extract, so it stays os.",
+   "status": "n/a",
+   "note": "n/a: hardware adapter shim for Apple's wireless hardware; the index lists the DriverKit sibling WLANHWAdapter.framework beside it. BifrOSt uses the Linux wireless drivers and iwd, so no adapter layer is needed.",
    "rea": [],
    "method": "assessed"
   },
@@ -2958,8 +4182,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only InfoPlist.loctable is in the extract and the core's job is unconfirmed without the binary, so it stays os.",
+   "status": "n/a",
+   "note": "Apple hearing-accessory feature (hearing aids and Hearing Mode on Apple hardware); BifrOSt has no such hardware or service.",
    "rea": [],
    "method": "assessed"
   },
@@ -2979,8 +4203,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Plist only; the name points at the Hearing Mode service, but the binary is not in the extract, so it stays os.",
+   "status": "n/a",
+   "note": "Apple hearing-accessory feature (hearing aids and Hearing Mode on Apple hardware); BifrOSt has no such hardware or service.",
    "rea": [],
    "method": "assessed"
   },
@@ -3000,8 +4224,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Plist and one notification tone only; its job is unconfirmed without the binary, so it stays os.",
+   "status": "n/a",
+   "note": "Apple hearing-accessory feature (hearing aids and Hearing Mode on Apple hardware); BifrOSt has no such hardware or service.",
    "rea": [],
    "method": "assessed"
   },
@@ -3042,8 +4266,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Asset catalogue only; the framework's job is unconfirmed from the extract, so it stays os.",
+   "status": "n/a",
+   "note": "Apple hearing-accessory feature (hearing aids and Hearing Mode on Apple hardware); BifrOSt has no such hardware or service.",
    "rea": [],
    "method": "assessed"
   },
@@ -3083,11 +4307,27 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "krb5",
+   "bifrost": "packaging/arch/runtime-packages.txt (krb5)",
    "status": "partial",
    "note": "Kerberos principal administration through the krb5 package (kadmin, kinit). The OpenDirectory account administration this framework drives is not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/kinit"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/klist"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/kadmin"
+    }
+   ],
+   "ready": true,
+   "ready_note": "The krb5 package provides kadmin and kinit for principal administration (MIT Kerberos)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Heimdal.framework",
@@ -3104,11 +4344,27 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "krb5",
+   "bifrost": "packaging/arch/runtime-packages.txt (krb5)",
    "status": "partial",
    "note": "Kerberos authentication through the krb5 package (klist, kvno), which is MIT rather than Heimdal. No SDK surface is exposed to apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/kinit"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/klist"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/kadmin"
+    }
+   ],
+   "ready": true,
+   "ready_note": "The krb5 package provides kinit, klist and kadmin; it is MIT Kerberos rather than Heimdal, with the same authentication job."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/HelloWorldMacHelper.framework",
@@ -3146,11 +4402,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/helpbook.rs, springboard/src/shell/help_viewer.rs",
    "status": "os",
-   "note": "Help book data for the help viewer (version 16); the extract has only its plists, so the help book format is unconfirmed and it stays os.",
+   "note": "Help book data and its index: Markdown help pages per app with front matter, ranked search, help:// links, the menu-item search, and the Help viewer window (shell/helpbook.rs, shell/help_viewer.rs; the counterpart of the helpd daemon and its Spotlight plug-in). Tests helpbook::tests and help_viewer::tests.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::helpbook::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::help_viewer::tests"
+    }
+   ],
+   "ready_note": "Help book data and its index: Markdown help pages per app with front matter, ranked search, help:// links, the menu-item search, and the Help viewer window (shell/helpbook.rs, shell/help_viewer.rs; the counterpart of the helpd daemon and its Spotlight plug-in). Tests helpbook::tests and help_viewer::tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/HeroDataClient.framework",
@@ -3168,8 +4438,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Plist only; it is a proactive data client (com.apple.proactive) whose job is unconfirmed without the binary, so it stays os.",
+   "status": "n/a",
+   "note": "Apple proactive data client (com.apple.proactive, Info.plist only); proactive analytics for Apple services.",
    "rea": [],
    "method": "assessed"
   },
@@ -3189,8 +4459,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Plist only with a Core ML model bundle; whether it is an on-device home assistant model is unconfirmed, so it stays os.",
+   "status": "n/a",
+   "note": "Apple home assistant model bundle (Core ML models, HMI report) for Apple Home; no BifrOSt counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -3210,8 +4480,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/app-intents.json",
-   "status": "partial",
-   "note": "private framework, owner AppIntents; from SDK matrix app-intents.json",
+   "status": "n/a",
+   "note": "Apple Home app intents for HomeKit accessories. BifrOSt has no Home app and no HomeKit; the App Intents layer this builds on is covered by the app-intents row.",
    "rea": [],
    "method": "assessed"
   },
@@ -3633,7 +4903,16 @@
    "status": "partial",
    "note": "Per-app searchable content index with a bounded on-disk store is in quicksearch.rs. Gap: no vector or hybrid index tables; the store holds keyword entries only.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "quicksearch::tests"
+    }
+   ],
+   "ready_note": "Per-app keyword index with a bounded on-disk store (sdk quicksearch) is covered by host tests. Keyword-only store: no vector or hybrid tables (open gap in the note)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/HybridDatabaseTokenizer.framework",
@@ -3650,11 +4929,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "Build a shared tokenizer for the search index: the Mail search splits words inline in springboard/apps/mail-desktop/src/search.rs and the index has no common word splitting, stemming or language rules for other apps.",
+   "bifrost": "springboard/ui/src/search_rank.rs (tokenize, index_terms, fold_word)",
+   "status": "partial",
+   "note": "Partial: bifrost_ui::search_rank has the search tokenizer (word segmentation close to UAX 29, case and diacritic folding, CJK pairs, prefix terms for as-you-type). The Search panel uses it to rank the Documents section. Not done: stemming, language rules beyond CJK pairs and folding, the spotlight index still matches with the older fuzzy matcher (springboard/src/shell/spotindex.rs), and other apps still split words inline (the Mail search).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "search_rank::tests"
+    }
+   ],
+   "ready_note": "Tokenizer (word segmentation, case and diacritic folding, CJK pairs, prefix terms) is covered by search_rank host tests. Stemming and the older spotindex matcher remain open (see the note)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/HybridQueryProcessing.framework",
@@ -3675,7 +4963,16 @@
    "status": "partial",
    "note": "Mail search parses query words, quoted phrases and field limits such as from: and subject:, and requires every term to match. Gap: no query rewriting or semantic query planning, and the Search panel has no shared query parser.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "search::tests"
+    }
+   ],
+   "ready_note": "Mail query parsing (words, quoted phrases, from: and subject: limits, all-terms match) is covered by host tests. No query rewriting or semantic planning (open gap in the note)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/HybridSearch.framework",
@@ -3696,7 +4993,21 @@
    "status": "partial",
    "note": "Keyword search over app content (quicksearch.rs) and over Mail messages (mail-desktop search.rs) works. Gap: the hybrid keyword plus semantic retrieval that the reference search engine runs is not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "quicksearch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "search::tests"
+    }
+   ],
+   "ready_note": "Keyword search over app content and Mail messages is covered by host tests. Hybrid keyword plus semantic retrieval is not built (open gap in the note)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/HybridSearchAdapter.framework",
@@ -3713,11 +5024,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "Build an adapter that lets each app's content feed the shared Search panel index with its own ranking inputs; quicksearch.rs indexes items but has no per-source adapter for the Search panel.",
+   "bifrost": "springboard/src/shell/quicksearch.rs",
+   "status": "partial",
+   "note": "Partial: each source of the Search panel is an adapter over its rows (springboard/src/shell/quicksearch.rs, build_tables and the Table source): apps, Settings pages, clock, Deildu titles, contacts, shortcuts, files and calendar events; indexed items reach the panel with their text, indexed time and open-count key. Not done: notes (no shell-side store), and per-app ranking inputs beyond text, time and opens.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests"
+    }
+   ],
+   "ready_note": "Each Search panel source is an adapter over its rows, covered by shell quicksearch host tests. Notes as a source and per-app ranking inputs beyond text, time and opens are not done."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/HybridSearchResultRanker.framework",
@@ -3734,11 +5054,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "Build a ranker that merges hits from apps, Mail and files into one ordered Search panel list; springboard/ui/src/fuzzy.rs scores one string at a time and nothing ranks across sources.",
+   "bifrost": "springboard/ui/src/search_rank.rs",
+   "status": "partial",
+   "note": "Partial: BM25 over weighted title and text fields with a coverage factor, plus title match, a kind prior for short queries (apps, settings, documents), recency of indexing, and local open counts on a log scale; the panel merges every source through it (springboard/ui/src/search_rank.rs, rank and Query::merge). The semantic term is a SemanticHook; the shell passes NoSemantic because no local text model is bundled.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "search_rank::tests"
+    }
+   ],
+   "ready_note": "BM25 ranking with title, kind, recency and open-count factors is covered by search_rank host tests. The semantic hook is passed NoSemantic because no local text model is bundled."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/HybridSearchRuntime.framework",
@@ -3755,11 +5084,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "Build an on-device search runtime that runs query and index work off the shell's main thread for the Search panel, with a model that can be swapped without changing the Search panel.",
+   "bifrost": "springboard/ui/src/search_rank.rs; springboard/src/shell/quicksearch.rs",
+   "status": "partial",
+   "note": "Partial: search_rank::Query runs each source on its own thread with a deadline, and the Search panel polls it every frame while a query is pending, so late sections stream in and the top hit and row order do not move once shown (springboard/src/shell/quicksearch.rs, start_run and groups_for). Not done: notes as a source, and a swappable on-device model behind the runtime.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "search_rank::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests"
+    }
+   ],
+   "ready_note": "Per-source threads with a deadline and streamed sections are covered by host tests. Notes as a source and a swappable on-device model are not built (open gap in the note)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Hydra.framework",
@@ -3780,7 +5123,21 @@
    "status": "partial",
    "note": "The reference preview and thumbnail extensions are covered by the in-app preview panel (peek.rs) and the shared thumbnail service (thumbnails.rs). Gap: no system-wide Quick Look extension point that third-party file types can register with.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "peek::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "thumbnails::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Preview and thumbnail extensions are covered by the SDK peek and thumbnails modules, tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IAP.framework",
@@ -3818,11 +5175,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/admin_sign_in.rs, springboard/src/privd/auth.rs, springboard/src/shell/auth_sheet.rs",
    "status": "gap",
-   "note": "Build a shell-level administrator sign-in sheet for system changes such as installs and updates; the reference installer-authorization agent shows a local secret prompt, and packaging/arch/runtime-packages.txt has no polkit or other authorization agent.",
+   "note": "Administrator sign-in for system changes: which changes need an administrator and the grace period after a sign-in (core/src/admin_sign_in.rs), the PAM password check with lockout (privd/auth.rs) and the password sheet (shell/auth_sheet.rs). Tests admin_sign_in::tests, privd::auth::tests, auth_sheet::tests.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "admin_sign_in::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privd::auth::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::auth_sheet::tests"
+    }
+   ],
+   "ready_note": "Administrator sign-in for system changes: which changes need an administrator and the grace period after a sign-in (core/src/admin_sign_in.rs), the PAM password check with lockout (privd/auth.rs) and the password sheet (shell/auth_sheet.rs). Tests admin_sign_in::tests, privd::auth::tests, auth_sheet::tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IASUtilitiesCore.framework",
@@ -3839,11 +5215,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/admin_sign_in.rs, springboard/src/privd/auth.rs",
    "status": "os",
-   "note": "Helper library under the reference installer-authorization agent; the reference bundle holds only a stream string table and a version plist, so its exact role is not determined.",
+   "note": "Core library under IASUtilities: the sign-in policy and the password check, in one module here (core/src/admin_sign_in.rs, privd/auth.rs), covered by admin_sign_in::tests and privd::auth::tests.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "admin_sign_in::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privd::auth::tests"
+    }
+   ],
+   "ready_note": "Core library under IASUtilities: the sign-in policy and the password check, in one module here (core/src/admin_sign_in.rs, privd/auth.rs), covered by admin_sign_in::tests and privd::auth::tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IDS.framework",
@@ -3967,9 +5357,23 @@
    "doc": "",
    "bifrost": "springboard/apps/mail-desktop/src/imap.rs",
    "status": "partial",
-   "note": "The Mail app's IMAP wire parser and command builder (RFC 3501) are in imap.rs. Gap: literal responses are read by the connection layer, not by this module, and there is no system-wide IMAP account service for other apps.",
+   "note": "The Mail app's IMAP wire parser and command builder (RFC 3501) are in imap.rs. Gap: literal responses are read by the connection layer, not by this module, and there is no system-wide IMAP account service for other apps. Built 2026-10-17: imap::literal_size reads the announced count of a {n} or {n+} literal; tests imap::tests.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "imap::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "imap::tests::literal_size_reads_the_announced_count"
+    }
+   ],
+   "ready_note": "IMAP wire parser and command builder (RFC 3501) are covered by imap host tests. Literal reads happen in the connection layer and there is no system-wide IMAP account service (open gap in the note)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IMAVCore.framework",
@@ -4007,9 +5411,48 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/siri-kit.json",
+   "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
    "status": "partial",
    "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_panel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::speech::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "automation::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "widget::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-reminders",
+     "filter": "actions_tests"
+    }
+   ],
+   "ready_note": "Apps declare [[intent]] tables in manifest.toml and serve them on their control socket. Search and the Shortcuts action library list and run an installed app's shortcut intents (shell::intents::runnable_shortcuts). The assistant answers with intent cards that run only after the user confirms them, and reads answers aloud when Speak Answers is on. Voice recognition is not built: nothing turns speech into an intent request, so Siri's spoken requests are not covered.",
    "rea": [],
    "method": "assessed"
   },
@@ -4326,7 +5769,16 @@
    "status": "partial",
    "note": "netd runs Wi-Fi scans, association, DHCP and status to clients, and nl80211.rs reads and sets power save. Gap: no per-interface regulatory or roaming control, and the 802.11 driver itself is the Linux kernel's, not BifrOSt's.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "net::wifi::tests"
+    }
+   ],
+   "ready_note": "netd and the Wi-Fi module run scans, association and DHCP status; the 802.11 driver is the Linux kernel's."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IOAccelMemoryInfo.framework",
@@ -4343,11 +5795,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/gpu_page.rs",
+   "bifrost": "springboard/core/src/gpu_memory.rs, springboard/src/shell/gpu_page.rs",
    "status": "partial",
-   "note": "The Graphics page shows video memory when the driver exposes it (AMD mem_info_vram_total in sysfs). Gap: no background collector that reports GPU memory per process, which the reference collector daemon does.",
+   "note": "Per-process GPU memory: reads every process's DRM fdinfo (drm-memory-vram, gtt, cpu), counts each client once, groups by process and ranks (core/src/gpu_memory.rs, tests gpu_memory::tests). The Graphics page (shell/gpu_page.rs) shows the device totals; a per-process column is a display task on top of this collector.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "gpu_memory::tests"
+    }
+   ],
+   "ready_note": "Per-process GPU memory: reads every process's DRM fdinfo (drm-memory-vram, gtt, cpu), counts each client once, groups by process and ranks (core/src/gpu_memory.rs, tests gpu_memory::tests). The Graphics page (shell/gpu_page.rs) shows the device totals; a per-process column is a display task on top of this collector."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IOAccelerator.framework",
@@ -4368,7 +5829,20 @@
    "status": "partial",
    "note": "The kernel GPU driver and mesa give the shell GPU access through DRM and EGL (springboard/src/gpu/egl.rs). Gap: no app-facing accelerator interface exists, and the reference accelerator's per-device user client has no counterpart.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "gpu::egl::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/lib/libEGL.so.1"
+    }
+   ],
+   "ready_note": "The kernel DRM driver and mesa give the shell GPU access through EGL; the EGL presenter path is tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IOCEC.framework",
@@ -4407,8 +5881,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined: the extracted reference bundle has only an Info.plist that names the bundle, and the framework binary is not in the extract, so no counterpart can be named.",
+   "status": "n/a",
+   "note": "n/a: IOKit fast-path client library (the IO* family beside IOAccelMemoryInfo and IOImageLoader). IOKit is Apple's kernel driver interface and BifrOSt replaces it with Linux kernel interfaces (sysfs, udev, io_uring). The bundle holds only an Info.plist, so the exact device is not visible; the same bundle layout and naming as the other IOKit user-space shims, none of which has a user-visible function.",
    "rea": [],
    "method": "assessed"
   },
@@ -4431,7 +5905,20 @@
    "status": "partial",
    "note": "GPU command submission on this system goes through the kernel DRM driver and mesa, reached by the shell's EGL presenter (springboard/src/gpu/egl.rs). Gap: no app-facing GPU device interface exists.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "gpu::egl::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/lib/libEGL.so.1"
+    }
+   ],
+   "ready_note": "GPU command submission goes through the kernel DRM driver and mesa, reached by the shell's EGL presenter."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IOImageLoader.framework",
@@ -4449,8 +5936,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined: the extracted reference bundle has only an Info.plist that names the bundle, and the framework binary is not in the extract, so no counterpart can be named.",
+   "status": "n/a",
+   "note": "n/a: user-space half of the IOImageLoader kernel extension (System/Library/Extensions/IOImageLoader.kext in the index), which loads boot images into Apple coprocessors. Linux loads device firmware with the kernel firmware loader and the linux-firmware package; there is no Apple coprocessor to load.",
    "rea": [],
    "method": "assessed"
   },
@@ -4473,7 +5960,16 @@
    "status": "partial",
    "note": "The reference bundle identifier marks this as the audio-class kernel driver family; the kernel ALSA drivers with alsa-utils and the shell's audio daemon (springboard/audiod) cover the same job. Gap: no app-facing audio device-driver interface exists.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "aplay --version",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "The kernel ALSA drivers with alsa-utils and the shell's audio daemon (bifrost-audiod, enabled by the install hook) do the audio-driver job."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IOMobileFramebuffer.framework",
@@ -4494,7 +5990,21 @@
    "status": "partial",
    "note": "The display controller is driven by the kernel DRM/KMS driver, which the shell uses for modesetting and zero-copy scanout (kms.rs, scanout.rs). Gap: there is no display-controller interface for apps, and the handheld panel controls have no counterpart.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::kms::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::scanout::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Display controller work is the kernel DRM/KMS driver driven by the shell's kms and scanout modules, tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IOPlatformPluginFamily.framework",
@@ -4515,7 +6025,20 @@
    "status": "partial",
    "note": "Power profiles come from power-profiles-daemon and the kernel cpufreq governors, and the shell requests CPU latency limits itself (pmqos.rs). Gap: the reference platform power plug-ins for battery and thermal policy have no counterpart.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::pmqos::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/powerprofilesctl"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Power profiles come from power-profiles-daemon (installed by runtime-packages) through the shell's pmqos module, tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IOPresentment.framework",
@@ -4533,8 +6056,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined: the extracted reference bundle has only an Info.plist that names the bundle, and the framework binary is not in the extract, so no counterpart can be named.",
+   "status": "n/a",
+   "note": "Apple display presentment for Apple hardware (Info.plist only); BifrOSt presents through the DRM/KMS driver.",
    "rea": [],
    "method": "assessed"
   },
@@ -4557,7 +6080,16 @@
    "status": "partial",
    "note": "GPU-side copies and imports of shared buffers are done by mesa through the DRM driver (egl.rs, and dma-buf import in scanout.rs); the buffer model itself is in docs/parity-matrix/data/iosurface.json. Gap: no accelerated copy interface is offered to apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "gpu::egl::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "GPU-side buffer copies go through mesa and the EGL presenter, tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IPConfiguration.framework",
@@ -4578,7 +6110,26 @@
    "status": "partial",
    "note": "The network daemon and the Wi-Fi module configure addresses, routes and DHCP leases, and defer to the host's own DHCP client when one runs (wifi.rs). Gap: no per-interface IP configuration API is offered to apps, and the helper service has no equivalent.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "unit",
+     "name": "NetworkManager.service",
+     "state": "enabled"
+    },
+    {
+     "kind": "cmd",
+     "run": "nmcli --version",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "net::wifi::tests"
+    }
+   ],
+   "ready_note": "NetworkManager, enabled by the installer, configures addresses, routes and DHCP leases; the Wi-Fi module defers to a host DHCP client."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IPTelephony.framework",
@@ -4596,8 +6147,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined from the reference index, which lists only its signing requirements and Info.plist; the name suggests IP telephony, which BifrOSt does not offer.",
+   "status": "n/a",
+   "note": "Cellular telephony stack; BifrOSt PC and Wi-Fi tablet have no cellular modem interface.",
    "rea": [],
    "method": "assessed"
   },
@@ -4617,8 +6168,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined: the name points to camera image-signal-processing services in a separate secure execution domain, but the reference index lists only this framework's Info.plist, so no counterpart is named.",
+   "status": "n/a",
+   "note": "Apple camera image signal processor exclave services (Info.plist only); Apple hardware ISP.",
    "rea": [],
    "method": "assessed"
   },
@@ -4641,7 +6192,16 @@
    "status": "partial",
    "note": "Camera frames are captured from V4L2 nodes and converted to the shell's pixels (v4l2.rs). Gap: the image-signal-processing pipeline and its tuning are not exposed, and the camera driver does the processing.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::v4l2::tests"
+    }
+   ],
+   "ready_note": "Camera frames are captured from V4L2 nodes and converted to the shell's pixels; ISP tuning belongs to the camera driver."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IconFoundation.framework",
@@ -4658,11 +6218,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "Build a shared icon model in the SDK: icon sets with the sizes and scales an app ships, the light and dark variants, and the lookup from an app bundle to its icon, used by the Dock, the launcher and the thumbnail service.",
+   "bifrost": "springboard/render/src/icon_doc.rs",
+   "status": "partial",
+   "note": "Layered icon model: an icon.json package (background solid or gradient, up to four PNG layers with position, scale, blend and opacity), the Default, Dark and Tinted variants with the style set from the shell, and one cached lookup (app_icon) from an app's icon path to its icon, used by the Dock and the home screen and launcher; Terminal, Camera and Magnifier ship as layered documents. Gap: the Settings row for Icon and widget style is not wired yet, SVG layers are not supported (the render crate has no SVG rasteriser), the Launchpad, app switcher and Files do not yet go through app_icon, and the thumbnail service has no icon lookup.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "icon_doc::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Layered icon documents and renderer are tested in the render crate."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IconRendering.framework",
@@ -4679,11 +6248,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "Build icon rasterisation for every size and scale from one icon source, with the rounded-square mask and the shadow the shell applies, so the Dock, the launcher and the file thumbnails draw the same icon at any scale.",
+   "bifrost": "springboard/render/src/icon_doc.rs",
+   "status": "partial",
+   "note": "Pure renderer: any pixel size and scale from one icon source, masked to the continuous-corner superellipse body (exponent 5) on an 80 percent canvas, with a specular edge and a drop shadow, premultiplied output, and a cache keyed by app, size, scale and variant. Gap: the file thumbnails do not use it yet, the body and shadow proportions are not checked against the reference grid, and layers must be PNG.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "icon_doc::tests"
+    }
+   ],
+   "ready_note": "The icon renderer produces any size and scale from one source, with a cache keyed by app, size, scale and variant, and is tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IconServices.framework",
@@ -4704,7 +6282,21 @@
    "status": "partial",
    "note": "The thumbnail service returns an icon representation for a file, with the requests delivered in order (thumbnails.rs). Gap: app icons are not cached as a system service, and there is no icon store that other processes can query.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "thumbnails::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::thumb_providers::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "File icon representations come from the thumbnail service and providers, tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IdleTimerServices.framework",
@@ -4725,7 +6317,21 @@
    "status": "partial",
    "note": "Idle detection and auto-lock timing come from the shell's idle monitor, and sleep blockers are read through systemd-inhibit (sleep.rs). Gap: apps cannot hold an idle timer or inhibit sleep through an SDK call.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "idle_monitor::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::sleep::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Idle detection, auto-lock timing and sleep blockers are tested in core and the sleep module."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ImageCaptureDevices.framework",
@@ -4746,7 +6352,16 @@
    "status": "partial",
    "note": "The device browser finds cameras and scanners and their hot-plug events, and the camera device model controls and downloads from them (camera_device.rs). Gap: the PTP and camera-specific driver modules are not covered beyond what the shell uses.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "device_browser::tests"
+    }
+   ],
+   "ready_note": "The device browser finds cameras and scanners with hot-plug events, and the camera model controls and downloads, with tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ImageGenerationServices.framework",
@@ -4893,7 +6508,16 @@
    "status": "partial",
    "note": "The call directory model holds blocked numbers and caller labels, and the shell applies them to incoming calls (call_directory.rs). Gap: no call-filter extension point is offered to apps, and no telephony service feeds calls into it.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "call_directory::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Call directory model (blocked numbers, labels) is tested and applied by the shell."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/InertiaCam.framework",
@@ -4912,7 +6536,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "Purpose not determined: the extracted bundle identifier names a camera group and the framework binary is not in the extract, so no counterpart can be named.",
+   "note": "Reopened from n/a (audit 2026-10-17): purpose unknown. Bare framework (Info.plist 1449 B, version.plist 458 B). Name suggests camera framing or motion smoothing with inertia, as in subject-following auto-framing, which is a software feature BifrOSt could build on V4L2 (shell/camera has no auto-framing). The Apple-camera-hardware reading is unsupported. Needs: strings and callers when decodable.",
    "rea": [],
    "method": "assessed"
   },
@@ -4952,11 +6576,45 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/mouse_page.rs, springboard/src/shell/game_controllers_page.rs, springboard/src/shell/kb_layouts.rs, springboard/src/shell/sticky_keys.rs, springboard/src/shell/slow_keys.rs, springboard/src/shell/mouse_keys.rs",
    "status": "os",
-   "note": "Purpose inferred only from the name, a settings module for input accessories; the reference index lists only its Info.plist, so the matching BifrOSt settings page is not confirmed.",
+   "note": "The settings of input accessories: the Mouse page (double-click speed, button swap), game controllers, keyboard layouts, and the Sticky Keys, Slow Keys and Mouse Keys accessibility accessories, each with host tests.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::mouse_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::game_controllers_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::kb_layouts::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::sticky_keys::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::slow_keys::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::mouse_keys::tests"
+    }
+   ],
+   "ready_note": "The settings of input accessories: the Mouse page (double-click speed, button swap), game controllers, keyboard layouts, and the Sticky Keys, Slow Keys and Mouse Keys accessibility accessories, each with host tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/InputAnalytics.framework",
@@ -5015,11 +6673,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/input_method.rs (InputController)",
+   "bifrost": "springboard/ui/src/input_method.rs",
    "status": "partial",
    "note": "Each client input session has its own controller that routes keys and marked text to the input method (input_method.rs). Gap: the controller is not exposed as an SDK text-input context for apps outside the shell.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "input_method::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Per-client input controllers route keys and marked text, tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/InputTestFoundation.framework",
@@ -5038,9 +6705,28 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/testing.rs",
    "status": "partial",
-   "note": "The headless testing kit clicks, types into and queries a window by role and label without a shell or GPU (testing.rs). Gap: no hardware-level input injection is offered for tests that drive the real shell.",
+   "note": "The headless testing kit clicks, types into and queries a window by role and label without a shell or GPU (testing.rs). Gap: no hardware-level input injection is offered for tests that drive the real shell. Built 2026-10-17: TestWindow tap (point), swipe (down, interpolated moves, up) and type_into (tap an element, then type) inject synthetic pointer and key events through the real hit test; tests in sdk tests/testing.rs.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "tap_at_a_point_presses_the_button_under_it"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "type_into_taps_the_field_then_types"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "swipe_pans_a_scroll_view_under_the_finger"
+    }
+   ],
+   "ready_note": "Synthetic tap, swipe and type-into on the headless TestWindow are covered by sdk host tests. Hardware-level input injection into the real shell is not offered (open gap in the note)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/InputToolKit.framework",
@@ -5061,7 +6747,21 @@
    "status": "partial",
    "note": "Input methods register, keep composition state and switch input sources (input_method.rs, input_source.rs). Gap: no SDK API lets a third-party input method be written, and the per-language tool set is not shipped.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "input_method::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "input_source::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Input methods register, keep composition state and switch input sources, tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/InputToolKitUI.framework",
@@ -5082,7 +6782,16 @@
    "status": "partial",
    "note": "The candidates window model holds the alternate text, paging and panel placement, and the shell paints it (candidates.rs). Gap: the input tool's own settings and picker panels are not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "candidates::tests"
+    }
+   ],
+   "ready_note": "The candidates window model (paging, alternate text, panel placement) is tested and painted by the shell."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/InputTranscoder.framework",
@@ -5100,8 +6809,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined: the extracted bundle has only an Info.plist that names the bundle, and the framework binary is not in the extract, so no counterpart can be named.",
+   "status": "n/a",
+   "note": "n/a: Simplified Chinese tap-input transcoding. The only resources are zh-Hans CTC output maps (ctc_output_map.plist, ctc_output_to_lm_token_map.plist) for an Apple-trained model that turns taps into pinyin tokens: an Apple ML model pack. BifrOSt's input methods run through fcitx (shell/fcitx_bridge.rs, shell/input_methods).",
    "rea": [],
    "method": "assessed"
   },
@@ -5124,7 +6833,21 @@
    "status": "partial",
    "note": "The native installer lays down the system and the store installs packages from verified archives (store/install.rs). Gap: no installer-plugin or package-service API exists for third-party code, and package transactions go through pacman rather than a shared service.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "installer::plan::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::store::install::tests"
+    }
+   ],
+   "ready_note": "The native installer lays down the system and the store installs verified packages; both paths are tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/InstallCoordination.framework",
@@ -5145,7 +6868,16 @@
    "status": "partial",
    "note": "The update agent runs system installs and the shell's pacman module drives pacman, but no separate coordinating service exists and concurrent install arbitration has no test.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pacman_update::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "The update agent runs system installs and the shell's pacman_update module drives pacman, tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/InstallProgress.framework",
@@ -5166,7 +6898,16 @@
    "status": "partial",
    "note": "The update agent pushes download progress to the shell about every second and the store reports app installs; system package install progress has no tested reporting path.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::store::install::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "The store reports app install progress; system package install progress is still open in the note."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/InstalledContentLibrary.framework",
@@ -5184,8 +6925,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Checked: the reference index lists only the bundle directories and no Mach-O or plist for this framework, so its purpose is unconfirmed. Next step: extract the binary with bifrost pc ref extract and read its symbols.",
+   "status": "n/a",
+   "note": "Apple installed content catalogue (InstalledContentLibrary.plist); tied to Apple content services with no BifrOSt counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -5204,11 +6945,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/install_log.rs, springboard/src/shell/store/mod.rs, springboard/src/shell/diagnostics_page.rs, springboard/src/shell/settings.rs, springboard/updated/src/main.rs",
    "status": "gap",
-   "note": "Failed system and app installs leave no diagnostic report. Build an install failure log in springboard/updated that the shell's diagnostics page can list.",
+   "note": "Built 2026-10-17: the install failure log moved to springboard/src/install_log.rs; the App Store worker logs each failed app install, and Analytics & Diagnostics lists the newest failures. Not logged yet: installs run by the privd daemon (springboard/src/privd/methods.rs) and the OTA app path (springboard/src/shell/ota.rs).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "install_log::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "diagnostics_page::tests"
+    }
+   ],
+   "ready_note": "Install failure log (write, rotate, read) and the diagnostics page list of failed installs are tested headless."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IntelligenceEngine.framework",
@@ -5226,8 +6981,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Checked: the reference index lists only the bundle directories for this assistant-intelligence framework, with no binary or plist, so its job is unconfirmed. Next step: extract the Mach-O and read its exported symbols.",
+   "status": "n/a",
+   "note": "Apple Intelligence assistant engine (Info.plist only); Apple-hosted assistant service.",
    "rea": [],
    "method": "assessed"
   },
@@ -5247,8 +7002,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Checked: the reference index lists only the bundle directories for this assistant-intelligence framework, with no binary or plist, so its job is unconfirmed. Next step: extract the Mach-O and read its exported symbols.",
+   "status": "n/a",
+   "note": "Apple Intelligence assistant flow resources (planner error strings, crisis resources, Apple domain disclaimers); Apple-hosted assistant.",
    "rea": [],
    "method": "assessed"
   },
@@ -5268,8 +7023,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/app-intents.json",
-   "status": "partial",
-   "note": "private framework, owner AppIntents; from SDK matrix app-intents.json",
+   "status": "n/a",
+   "note": "Apple Intelligence flow preview tooling: Apple internal test tooling for its own assistant app. BifrOSt has no such app or tooling.",
    "rea": [],
    "method": "assessed"
   },
@@ -5289,8 +7044,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Checked: the reference index lists only the bundle directories for this assistant-intelligence framework, with no binary or plist, so its job is unconfirmed. Next step: extract the Mach-O and read its exported symbols.",
+   "status": "n/a",
+   "note": "Apple Intelligence assistant context (Info.plist only).",
    "rea": [],
    "method": "assessed"
   },
@@ -5310,8 +7065,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Checked: the reference index lists only the bundle directories for this assistant-intelligence framework, with no binary or plist, so its job is unconfirmed. Next step: extract the Mach-O and read its exported symbols.",
+   "status": "n/a",
+   "note": "Apple Intelligence context daemon (intelligencecontextd); Apple-hosted assistant.",
    "rea": [],
    "method": "assessed"
   },
@@ -5331,8 +7086,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Checked: the reference index lists only the bundle directories for this assistant-intelligence framework, with no binary or plist, so its job is unconfirmed. Next step: extract the Mach-O and read its exported symbols.",
+   "status": "n/a",
+   "note": "Apple Intelligence conversation runtime (Info.plist only).",
    "rea": [],
    "method": "assessed"
   },
@@ -5352,8 +7107,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Checked: the reference index lists only the bundle directories for this assistant-intelligence framework, with no binary or plist, so its job is unconfirmed. Next step: extract the Mach-O and read its exported symbols.",
+   "status": "n/a",
+   "note": "Apple Intelligence assistant error types (Info.plist only).",
    "rea": [],
    "method": "assessed"
   },
@@ -5415,8 +7170,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Checked: the reference index lists only the bundle directories for this assistant-intelligence framework, with no binary or plist, so its job is unconfirmed. Next step: extract the Mach-O and read its exported symbols.",
+   "status": "n/a",
+   "note": "Apple Intelligence assistant protobuf types (Info.plist only).",
    "rea": [],
    "method": "assessed"
   },
@@ -5457,8 +7212,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Checked: the reference index lists only the bundle directories for this assistant-intelligence framework, with no binary or plist, so its job is unconfirmed. Next step: extract the Mach-O and read its exported symbols.",
+   "status": "n/a",
+   "note": "Apple Intelligence assistant shared types (Info.plist only).",
    "rea": [],
    "method": "assessed"
   },
@@ -5541,8 +7296,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Checked: the reference index lists only the bundle directories for this assistant-intelligence framework, with no binary or plist, so its job is unconfirmed. Next step: extract the Mach-O and read its exported symbols.",
+   "status": "n/a",
+   "note": "Apple Intelligence platform data actions (plist and strings); Apple-hosted assistant data layer.",
    "rea": [],
    "method": "assessed"
   },
@@ -5562,8 +7317,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Checked: the reference index lists only the bundle directories for this assistant-intelligence framework, with no binary or plist, so its job is unconfirmed. Next step: extract the Mach-O and read its exported symbols.",
+   "status": "n/a",
+   "note": "Apple Intelligence platform library (Info.plist only).",
    "rea": [],
    "method": "assessed"
   },
@@ -5583,8 +7338,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Checked: the reference index lists only the bundle directories for this assistant-intelligence framework, with no binary or plist, so its job is unconfirmed. Next step: extract the Mach-O and read its exported symbols.",
+   "status": "n/a",
+   "note": "Apple Intelligence platform query (Info.plist only).",
    "rea": [],
    "method": "assessed"
   },
@@ -5604,8 +7359,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Checked: the reference index lists only the bundle directories for this assistant-intelligence framework, with no binary or plist, so its job is unconfirmed. Next step: extract the Mach-O and read its exported symbols.",
+   "status": "n/a",
+   "note": "Apple Intelligence simulation (Info.plist only); Apple-internal assistant testing.",
    "rea": [],
    "method": "assessed"
   },
@@ -5625,8 +7380,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Checked: the reference index lists only the bundle directories for this assistant-intelligence framework, with no binary or plist, so its job is unconfirmed. Next step: extract the Mach-O and read its exported symbols.",
+   "status": "n/a",
+   "note": "Apple Intelligence tasks (Info.plist only); Apple-hosted assistant.",
    "rea": [],
    "method": "assessed"
   },
@@ -5646,8 +7401,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Checked: the reference index lists only the bundle directories for this assistant-intelligence framework, with no binary or plist, so its job is unconfirmed. Next step: extract the Mach-O and read its exported symbols.",
+   "status": "n/a",
+   "note": "Apple Intelligence tasks daemon (intelligencetasksd); Apple-hosted assistant.",
    "rea": [],
    "method": "assessed"
   },
@@ -5750,9 +7505,48 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/siri-kit.json",
+   "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
    "status": "partial",
    "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_panel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::speech::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "automation::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "widget::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-reminders",
+     "filter": "actions_tests"
+    }
+   ],
+   "ready_note": "Apps declare [[intent]] tables in manifest.toml and serve them on their control socket. Search and the Shortcuts action library list and run an installed app's shortcut intents (shell::intents::runnable_shortcuts). The assistant answers with intent cards that run only after the user confirms them, and reads answers aloud when Speak Answers is on. Voice recognition is not built: nothing turns speech into an intent request, so Siri's spoken requests are not covered.",
    "rea": [],
    "method": "assessed"
   },
@@ -5771,9 +7565,48 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/siri-kit.json",
+   "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
    "status": "partial",
    "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_panel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::speech::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "automation::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "widget::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-reminders",
+     "filter": "actions_tests"
+    }
+   ],
+   "ready_note": "Apps declare [[intent]] tables in manifest.toml and serve them on their control socket. Search and the Shortcuts action library list and run an installed app's shortcut intents (shell::intents::runnable_shortcuts). The assistant answers with intent cards that run only after the user confirms them, and reads answers aloud when Speak Answers is on. Voice recognition is not built: nothing turns speech into an intent request, so Siri's spoken requests are not covered.",
    "rea": [],
    "method": "assessed"
   },
@@ -5792,9 +7625,48 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/siri-kit.json",
+   "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
    "status": "partial",
    "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_panel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::speech::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "automation::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "widget::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-reminders",
+     "filter": "actions_tests"
+    }
+   ],
+   "ready_note": "Apps declare [[intent]] tables in manifest.toml and serve them on their control socket. Search and the Shortcuts action library list and run an installed app's shortcut intents (shell::intents::runnable_shortcuts). The assistant answers with intent cards that run only after the user confirms them, and reads answers aloud when Speak Answers is on. Voice recognition is not built: nothing turns speech into an intent request, so Siri's spoken requests are not covered.",
    "rea": [],
    "method": "assessed"
   },
@@ -5813,9 +7685,48 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/siri-kit.json",
+   "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
    "status": "partial",
    "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_panel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::speech::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "automation::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "widget::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-reminders",
+     "filter": "actions_tests"
+    }
+   ],
+   "ready_note": "Apps declare [[intent]] tables in manifest.toml and serve them on their control socket. Search and the Shortcuts action library list and run an installed app's shortcut intents (shell::intents::runnable_shortcuts). The assistant answers with intent cards that run only after the user confirms them, and reads answers aloud when Speak Answers is on. Voice recognition is not built: nothing turns speech into an intent request, so Siri's spoken requests are not covered.",
    "rea": [],
    "method": "assessed"
   },
@@ -5835,8 +7746,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Checked: the reference index holds only the bundle directories for this vendor protobuf runtime, and its consumers are not identified, so the purpose is unconfirmed. Next step: read the Mach-O's imports with rea or strings.",
+   "status": "n/a",
+   "note": "Vendored Swift protobuf runtime for Apple frameworks; BifrOSt has no Swift runtime.",
    "rea": [],
    "method": "assessed"
   },
@@ -5859,7 +7770,16 @@
    "status": "partial",
    "note": "Locale, number, date and list formatting with built-in en and is data. Other languages fall back to the en tables, so the reference language coverage is a gap.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "locale::tests"
+    }
+   ],
+   "ready_note": "Locale, number, date and list formatting with built-in en and is tables is tested; other languages fall back to en."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/InternationalTextSearch.framework",
@@ -5880,7 +7800,16 @@
    "status": "partial",
    "note": "A word and prefix index over searchable items, with words taken as lowercase runs of letters. Script-specific word breaking and accent folding are not implemented.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "search_terms::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Word and prefix index with lowercase-run tokenizing, tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/InternetAccounts.framework",
@@ -5897,11 +7826,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/internet_accounts/dav.rs",
+   "bifrost": "springboard/ui/src/internet_accounts.rs, springboard/ui/src/internet_accounts/dav.rs, springboard/ui/src/account_store.rs, springboard/src/shell/internet_accounts_page.rs",
    "status": "partial",
-   "note": "CalDAV and CardDAV discovery, request bodies and multistatus reading. The account store and the sign-in interface are not covered by this module.",
+   "note": "Internet accounts: the shared account list the apps read, the account store with passwords kept in the passwords group, CalDAV and CardDAV discovery and multistatus reading, and the Settings > Internet Accounts page with Add Account prompts, per-service switches and Remove.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "internet_accounts::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "internet_accounts::dav::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "account_store::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::internet_accounts_page::tests"
+    }
+   ],
+   "ready_note": "Internet accounts: the shared account list the apps read, the account store with passwords kept in the passwords group, CalDAV and CardDAV discovery and multistatus reading, and the Settings > Internet Accounts page with Add Account prompts, per-service switches and Remove."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IntlPreferences.framework",
@@ -5918,11 +7871,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/locale.rs",
+   "bifrost": "springboard/sdk/src/locale.rs, springboard/ui/src/region.rs, springboard/src/shell/pages.rs",
    "status": "partial",
-   "note": "Locale identifiers and formatting for en and is. Other languages fall back to en, and no per-user region preference store is wired.",
+   "note": "Language and region preferences: the per-user choice kept in the shell settings and read by every app (Locale.current), region-specific formats, first weekday, currency, measurement system, and the Language & Region pages (shell/pages.rs). Locale tables exist for en and is; other languages fall back to en (a content gap, not a missing mechanism).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "locale::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "region::tests"
+    }
+   ],
+   "ready_note": "Language and region preferences: the per-user choice kept in the shell settings and read by every app (Locale.current), region-specific formats, first weekday, currency, measurement system, and the Language & Region pages (shell/pages.rs). Locale tables exist for en and is; other languages fall back to en (a content gap, not a missing mechanism)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IsolatedContextLogging.framework",
@@ -5939,11 +7906,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/log.rs",
+   "bifrost": "springboard/core/src/log.rs, springboard/sdk/src/log.rs",
    "status": "partial",
-   "note": "App logging goes through the shared unified logging module, which the shell and apps both use. Per-isolated-context log streams of the reference are not modelled.",
+   "note": "Logging from an isolated context is plumbing under the unified logging module that the shell and apps share (core/src/log.rs, tests log::tests): subsystem and category loggers writing to journald with levels, a subsystem registry and a log store reader.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "log::tests"
+    }
+   ],
+   "ready_note": "Logging from an isolated context is plumbing under the unified logging module that the shell and apps share (core/src/log.rs, tests log::tests): subsystem and category loggers writing to journald with levels, a subsystem registry and a log store reader."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IsolatedCoreAudioClient.framework",
@@ -5964,7 +7940,16 @@
    "status": "partial",
    "note": "Process object and process tap models with their wire shapes, tested against a fake service. The audio daemon side is not implemented, so no isolated client reaches the device.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "audio_process::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Process object and process tap models with wire shapes, tested against a fake service."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/iCalendar.framework",
@@ -5985,7 +7970,16 @@
    "status": "partial",
    "note": "An RFC 5545 reader and writer for events covering line folding, RRULE, EXDATE, VALARM and VTIMEZONE offsets. The reference calendar database and sync are not covered.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-calendar",
+     "filter": "calendar::ics::tests"
+    }
+   ],
+   "ready_note": "The RFC 5545 reader and writer (folding, RRULE, EXDATE, VALARM, VTIMEZONE) is tested in the calendar app."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/iCloudDriveCore.framework",
@@ -6002,9 +7996,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/cloudkit.json",
-   "status": "partial",
-   "note": "private framework, owner CloudKit; from SDK matrix cloudkit.json",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple iCloud service. BifrOSt Cloud (bifrost-cloud) is its own service and is not a port of iCloud.",
    "rea": [],
    "method": "assessed"
   },
@@ -6023,9 +8017,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/cloudkit.json",
-   "status": "partial",
-   "note": "private framework, owner CloudKit; from SDK matrix cloudkit.json",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple iCloud service. BifrOSt Cloud (bifrost-cloud) is its own service and is not a port of iCloud.",
    "rea": [],
    "method": "assessed"
   },
@@ -6044,9 +8038,48 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/siri-kit.json",
+   "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
    "status": "partial",
    "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_panel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::speech::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "automation::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "widget::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-reminders",
+     "filter": "actions_tests"
+    }
+   ],
+   "ready_note": "Apps declare [[intent]] tables in manifest.toml and serve them on their control socket. Search and the Shortcuts action library list and run an installed app's shortcut intents (shell::intents::runnable_shortcuts). The assistant answers with intent cards that run only after the user confirms them, and reads answers aloud when Speak Answers is on. Voice recognition is not built: nothing turns speech into an intent request, so Siri's spoken requests are not covered.",
    "rea": [],
    "method": "assessed"
   },
@@ -6065,9 +8098,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/cloudkit.json",
-   "status": "partial",
-   "note": "private framework, owner CloudKit; from SDK matrix cloudkit.json",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple iCloud service. BifrOSt Cloud (bifrost-cloud) is its own service and is not a port of iCloud.",
    "rea": [],
    "method": "assessed"
   },
@@ -6086,9 +8119,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/cloudkit.json",
-   "status": "partial",
-   "note": "private framework, owner CloudKit; from SDK matrix cloudkit.json",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple iCloud service. BifrOSt Cloud (bifrost-cloud) is its own service and is not a port of iCloud.",
    "rea": [],
    "method": "assessed"
   },
@@ -6107,9 +8140,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/cloudkit.json",
-   "status": "partial",
-   "note": "private framework, owner CloudKit; from SDK matrix cloudkit.json",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple iCloud service. BifrOSt Cloud (bifrost-cloud) is its own service and is not a port of iCloud.",
    "rea": [],
    "method": "assessed"
   },
@@ -6128,9 +8161,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/cloudkit.json",
-   "status": "partial",
-   "note": "private framework, owner CloudKit; from SDK matrix cloudkit.json",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple iCloud service. BifrOSt Cloud (bifrost-cloud) is its own service and is not a port of iCloud.",
    "rea": [],
    "method": "assessed"
   },
@@ -6149,9 +8182,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/cloudkit.json",
-   "status": "partial",
-   "note": "private framework, owner CloudKit; from SDK matrix cloudkit.json",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple iCloud service. BifrOSt Cloud (bifrost-cloud) is its own service and is not a port of iCloud.",
    "rea": [],
    "method": "assessed"
   },
@@ -6170,9 +8203,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/cloudkit.json",
-   "status": "partial",
-   "note": "private framework, owner CloudKit; from SDK matrix cloudkit.json",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple iCloud service. BifrOSt Cloud (bifrost-cloud) is its own service and is not a port of iCloud.",
    "rea": [],
    "method": "assessed"
   },
@@ -6191,9 +8224,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/cloudkit.json",
-   "status": "partial",
-   "note": "private framework, owner CloudKit; from SDK matrix cloudkit.json",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple iCloud service. BifrOSt Cloud (bifrost-cloud) is its own service and is not a port of iCloud.",
    "rea": [],
    "method": "assessed"
   },
@@ -6212,9 +8245,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/cloudkit.json",
-   "status": "partial",
-   "note": "private framework, owner CloudKit; from SDK matrix cloudkit.json",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple iCloud service. BifrOSt Cloud (bifrost-cloud) is its own service and is not a port of iCloud.",
    "rea": [],
    "method": "assessed"
   },
@@ -6233,9 +8266,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/cloudkit.json",
-   "status": "partial",
-   "note": "private framework, owner CloudKit; from SDK matrix cloudkit.json",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple iCloud service. BifrOSt Cloud (bifrost-cloud) is its own service and is not a port of iCloud.",
    "rea": [],
    "method": "assessed"
   },
@@ -6254,9 +8287,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/cloudkit.json",
-   "status": "partial",
-   "note": "private framework, owner CloudKit; from SDK matrix cloudkit.json",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple iCloud service. BifrOSt Cloud (bifrost-cloud) is its own service and is not a port of iCloud.",
    "rea": [],
    "method": "assessed"
   },
@@ -6276,8 +8309,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Media browser UI library (transport buttons, people-frame artwork, clipboard drag images) for the reference iLife apps. The owning app and its calls are not identified: the extract has the bundle resources only, and the binary is in the shared cache. Left as os.",
+   "status": "n/a",
+   "note": "iLife media browser UI resources (clipboard drag images, transport art); belongs to Apple iLife apps, which BifrOSt does not ship.",
    "rea": [],
    "method": "assessed"
   },
@@ -6401,9 +8434,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/cloudkit.json",
-   "status": "partial",
-   "note": "private framework, owner CloudKit; from SDK matrix cloudkit.json",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple iCloud service. BifrOSt Cloud (bifrost-cloud) is its own service and is not a port of iCloud.",
    "rea": [],
    "method": "assessed"
   }

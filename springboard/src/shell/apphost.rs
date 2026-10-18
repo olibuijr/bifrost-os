@@ -6,9 +6,10 @@
 //! switcher card and the crash screenshot) and releases the older one when a
 //! newer frame arrives, so the app always has exactly one free buffer.
 
+use super::app_window_table::WindowTable;
 use crate::gfx::{Damage, Surface};
 use bifrost_proto::sys::{self, Channel, Map, Recv};
-use bifrost_proto::{Configure, KeyInput, ToApp, ToShell, TouchKind, CHORD_CTRL, CHORD_SHIFT, SDK_VERSION};
+use bifrost_proto::{Configure, KeyInput, ToApp, ToShell, TouchKind, WindowInput, CHORD_CTRL, CHORD_SHIFT, SDK_VERSION};
 use std::os::unix::process::{CommandExt, ExitStatusExt};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -26,6 +27,8 @@ pub struct Manifest {
     pub min_shell: String,
     pub summary: String,
     pub category: String,
+    /// `game = true`: a game even outside the Games category (Game Mode, see `shell::gamemode`).
+    pub game: bool,
     pub permissions: Vec<String>,
     /// `keychain_groups = ["is.example.group"]`: keychain access groups the app shares items through (the
     /// `keychain-groups` service). Honoured only with the `keychain` permission; see `services::keychain_groups`.
@@ -36,6 +39,17 @@ pub struct Manifest {
     /// `"app"` (default), `"system-app"`, `"system"` or `"service"`; see `shell::kinds`. Unknown kinds fail to parse.
     pub kind: String,
     pub provides: Vec<String>,
+    /// `package_types = ["rtfd"]`: the folder-package extensions the app reads and writes (`sdk::document_package`).
+    /// Files and the file panels treat a folder with a known extension as one document; declaring it here is what
+    /// lets the app open one.
+    pub package_types: Vec<String>,
+    /// `index_extension = true`: the app answers the shell's reindex requests (`CSIndexExtensionRequestHandler`). The
+    /// shell asks once per run, when the app has no items in the Search index (see `request_index_extensions`).
+    pub index_extension: bool,
+    /// `file_manager_folders = ["~/Cloud"]`: the app is a file-manager sync extension for these folders (`~/` is the
+    /// home folder). Files runs the extension through the app's control socket and only ever asks it about items inside
+    /// them (`bifrost_app::file_manager_sync`, [`Manifest::file_manager_dirs`]).
+    pub file_manager_folders: Vec<String>,
     /// `"native"`: a native Wayland app owns its GPU surfaces instead of using SDK frames. `"full-size"`: an SDK app
     /// with a full-size-content window (no title row; the traffic lights sit over its sidebar).
     pub window: String,
@@ -48,14 +62,32 @@ pub struct Manifest {
     /// `animation_behavior = "default" | "document" | "utility" | "alert" | "none"`: which window animations play.
     pub animation_behavior: String,
     pub wayland_app_id: String,
+    /// `[background] tasks = ["com.x.refresh"]`: the task identifiers the app may submit to Background App Refresh
+    /// (`shell::services::background`). A request for any other identifier is refused.
+    pub background_tasks: Vec<String>,
     /// What the app opens, `type` or `type:rank` (rank owner, default, alternate, none; default is `default`): `handles = ["public.png:owner", "public.text"]`.
     pub handles: Vec<String>,
     /// URL schemes the app opens: `schemes = ["https"]`.
     pub schemes: Vec<String>,
     /// App Intents declared as `[[intent]]` tables (`shell::intents`); Search lists the shortcuts.
     pub intents: Vec<super::intents::ManifestIntent>,
+    /// entity types the app offers to Search (`[[entity]]` tables with `type = "Note"`); `entity_index` indexes them
+    pub entity_types: Vec<String>,
+    /// `[[control]]` tables: buttons and toggles the app adds to Control Center (`shell::app_controls`).
+    pub controls: Vec<super::app_controls::ManifestControl>,
+    /// the `[[focus_filter]] intent` ids: run when the Focus changes (`services::focus_filter::focus_calls`)
+    pub focus_intents: Vec<String>,
+    /// `[[service]]` tables: Services menu entries this app provides for a selection (`bifrost_ui::app_services`).
+    pub services: Vec<bifrost_ui::app_services::ServiceDecl>,
     /// `[[quick_action]]` tables: the static Home Screen quick actions (`shell::quick_actions`).
     pub quick_actions: Vec<bifrost_ui::quick_actions::ShortcutItem>,
+    /// `[[settings_pane]]` tables: the app's panes, listed under the app in Settings (`shell::settings_panes`).
+    pub settings_panes: Vec<super::settings_panes::SettingsPane>,
+    /// `[privacy] location = "..."`: the reason shown when the app asks for location (the purpose string). A
+    /// location request without it is refused, so no prompt shows without a reason.
+    pub location_purpose: String,
+    /// `[[script.command]]` and `[[script.class]]` tables: the scripting dictionary (`bifrost_core::script`).
+    pub scripting: bifrost_core::script::dictionary::Dictionary,
 }
 
 impl Manifest {
@@ -74,6 +106,23 @@ impl Manifest {
         let max = fixed.or_else(|| parse_size(&self.max_size));
         SizeLimits { initial, min, max, fixed: fixed.is_some() }
     }
+    /// The folders of `file_manager_folders` as absolute paths: `~/x` is under `home`, a relative path, a path with `..`,
+    /// the root and the home folder itself are left out (an extension watches folders, never everything).
+    pub fn file_manager_dirs(&self, home: &Path) -> Vec<PathBuf> {
+        let mut out: Vec<PathBuf> = Vec::new();
+        for raw in &self.file_manager_folders {
+            let path = match raw.strip_prefix("~/") {
+                Some(rest) => home.join(rest),
+                None => PathBuf::from(raw),
+            };
+            let clean = path.is_absolute() && !path.components().any(|c| matches!(c, std::path::Component::ParentDir));
+            if clean && path != Path::new("/") && path != home && !out.contains(&path) {
+                out.push(path);
+            }
+        }
+        out
+    }
+
     /// Not an app: a system package or service (never on the home grid, never spawned by the shell).
     pub fn is_system(&self) -> bool {
         super::kinds::Kind::of(&self.kind).hidden_from_grid()
@@ -85,6 +134,12 @@ impl Manifest {
         let mut m = Manifest::default();
         // inside an `[[intent]]` table keys belong to the intent; any other table header ends it (its keys are ignored)
         let mut table: Option<bool> = None;
+        // inside a `[privacy]` table the keys are the purpose strings (`location`); any other header ends it
+        let mut privacy = false;
+        // inside a `[[service]]` table keys belong to the service
+        let mut service = false;
+        // inside an `[[entity]]` table the `type` key names an entity type Search indexes
+        let mut entity = false;
         for line in text.lines() {
             let line = line.trim();
             if line.is_empty() || line.starts_with('#') {
@@ -92,14 +147,38 @@ impl Manifest {
             }
             if line.starts_with('[') && !line.contains('=') {
                 table = Some(line == "[[intent]]");
+                privacy = line == "[privacy]";
                 if line == "[[intent]]" {
                     m.intents.push(Default::default());
                 }
+                service = line == "[[service]]";
+                if service {
+                    m.services.push(Default::default());
+                }
+                entity = line == "[[entity]]";
                 continue;
             }
             let Some((k, v)) = line.split_once('=') else { continue };
             let (k, v) = (k.trim(), v.trim());
+            if service {
+                if let Some(d) = m.services.last_mut() {
+                    d.set(k, v);
+                }
+                continue;
+            }
             let strs = || -> Vec<String> { v.trim_start_matches('[').trim_end_matches(']').split(',').map(|s| unquote(s.trim())).filter(|s| !s.is_empty()).collect() };
+            if entity {
+                if k == "type" {
+                    m.entity_types.push(unquote(v));
+                }
+                continue;
+            }
+            if privacy {
+                if k == "location" {
+                    m.location_purpose = unquote(v);
+                }
+                continue;
+            }
             if let Some(is_intent) = table {
                 if let (true, Some(i)) = (is_intent, m.intents.last_mut()) {
                     match k {
@@ -122,10 +201,14 @@ impl Manifest {
                 "min_shell" => m.min_shell = unquote(v),
                 "summary" => m.summary = unquote(v),
                 "category" => m.category = unquote(v),
+                "game" => m.game = unquote(v) == "true",
+                "index_extension" => m.index_extension = unquote(v) == "true",
+                "file_manager_folders" => m.file_manager_folders = strs(),
                 "permissions" => m.permissions = strs(),
                 "keychain_groups" => m.keychain_groups = strs(),
                 "entitlements" => m.entitlements = strs(),
                 "provides" => m.provides = strs(),
+                "package_types" => m.package_types = strs(),
                 "handles" => m.handles = strs(),
                 "schemes" => m.schemes = strs(),
                 "kind" => m.kind = unquote(v),
@@ -138,7 +221,13 @@ impl Manifest {
                 _ => {}
             }
         }
+        m.controls = super::app_controls::parse_controls(text);
+        m.focus_intents = super::services::focus_filter::parse_declarations(text).into_iter().filter_map(|d| d.intent).collect();
         m.quick_actions = super::quick_actions::parse_static(text);
+        m.settings_panes = super::settings_panes::parse_static(text);
+        m.background_tasks = super::services::background::parse_tasks(text);
+        // the `[[script.*]]` tables are skipped above (their header ends any open table) and read here
+        m.scripting = bifrost_core::script::dictionary::Dictionary::parse(text);
         // ids become directory names: keep them to a safe alphabet
         let safe = !m.id.is_empty() && m.id.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_');
         if super::kinds::Kind::parse(&m.kind).is_none() {
@@ -182,7 +271,12 @@ impl Installed {
     pub fn exec_path(&self) -> PathBuf {
         self.dir.join(&self.manifest.exec)
     }
+    /// The app's icon file: its `icon.json` (layers) when the package has one, else the manifest's flat icon.
     pub fn icon_path(&self) -> PathBuf {
+        let doc = self.dir.join("icon.json");
+        if doc.is_file() {
+            return doc;
+        }
         self.dir.join(&self.manifest.icon)
     }
 }
@@ -249,7 +343,19 @@ pub fn late_crashes() -> Vec<(String, i32)> {
 }
 pub fn register(root: &Path) {
     let _ = ROOT.set(root.to_path_buf());
-    if let Ok(mut g) = INSTALLED.write() { *g = Some(scan(root).into()); }
+    let apps = scan(root);
+    sync_app_types(&apps);
+    if let Ok(mut g) = INSTALLED.write() { *g = Some(apps.into()); }
+}
+/// Registers the document types every installed app declares in its manifest (`[[exported_types]]` and
+/// `[[imported_types]]`), so `uttype` lookups, Open With and the share menu see them. An app whose declarations
+/// conflict is left out and reported on stderr; the others still register (`register_manifests`).
+fn sync_app_types(apps: &[Installed]) {
+    let texts: Vec<(&str, String)> = apps.iter().filter_map(|a| std::fs::read_to_string(a.dir.join("manifest.toml")).ok().map(|t| (a.manifest.id.as_str(), t))).collect();
+    let refs: Vec<&str> = texts.iter().map(|(_, t)| t.as_str()).collect();
+    for (i, e) in bifrost_ui::uttype_declarations::register_manifests(&refs) {
+        eprintln!("springboard: app {} declares document types that were not registered: {e:?}", texts[i].0);
+    }
 }
 fn merge_installed(old: &[Installed], scanned: Vec<Installed>) -> Vec<Installed> {
     let mut all = old.to_vec();
@@ -265,6 +371,7 @@ pub fn refresh() -> bool {
     let Ok(mut g) = INSTALLED.write() else { return false };
     let all = merge_installed(g.as_deref().unwrap_or(&[]), scanned);
     if g.as_deref() == Some(all.as_slice()) { return false; }
+    sync_app_types(&all);
     *g = Some(all.into());
     true
 }
@@ -295,6 +402,9 @@ pub fn root() -> PathBuf {
 
 static INCOMPATIBLE: std::sync::Mutex<Vec<(String, PathBuf)>> = std::sync::Mutex::new(Vec::new());
 
+/// The apps asked for a reindex this run (see `request_index_extensions`).
+static REINDEX_ASKED: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+
 /// Records that the binary at `exec` for app `id` speaks another SDK protocol.
 fn remember_incompatible(id: &str, exec: &Path) {
     if exec.as_os_str().is_empty() {
@@ -308,7 +418,7 @@ fn remember_incompatible(id: &str, exec: &Path) {
 }
 
 /// True when this exact binary was already found incompatible with the shell's SDK protocol.
-fn is_known_incompatible(id: &str, exec: &Path) -> bool {
+pub(super) fn is_known_incompatible(id: &str, exec: &Path) -> bool {
     INCOMPATIBLE.lock().map(|g| g.iter().any(|(i, e)| i == id && e == exec)).unwrap_or(false)
 }
 
@@ -339,6 +449,17 @@ pub struct Pumped {
 
 struct Buf {
     map: Map,
+}
+
+/// One extra window's shared buffers and what the shell holds of its frames (the same roles as the main window's
+/// `bufs`, `shown`, `release_after_blit` and `pending`).
+struct WinBufs {
+    generation: u32,
+    bufs: Vec<Buf>,
+    size: (usize, usize),
+    shown: Option<usize>,
+    release_after_blit: Option<usize>,
+    pending: Damage,
 }
 
 /// Packets queued for an app whose socket is full; past this the app is killed.
@@ -394,6 +515,8 @@ pub struct AppHost {
     pub announcements: Vec<(String, bifrost_proto::AnnouncePriority)>,
     /// The same announcements, waiting for the on-screen banner (`accessibility::banner`); the shell takes them each tick.
     pub announce_banner: Vec<(String, bifrost_proto::AnnouncePriority)>,
+    /// Element notifications the app posted (`ToShell::AxNotify`), waiting for the bridge to emit their AT-SPI signals; at most 64.
+    pub ax_notes: Vec<(u64, bifrost_ui::ax::AxNotification)>,
     /// The app's custom rotors (`ToShell::AxRotors`), cleaned with `bifrost_ui::ax_rotor::clean`; empty when it declares none.
     pub custom_rotors: Vec<bifrost_ui::ax::AxCustomRotor>,
     /// Guided Access requests (`ToShell::GuidedAccessRequest`: start with restrictions, or end), oldest first, taken by the shell each tick.
@@ -404,6 +527,8 @@ pub struct AppHost {
     /// `ToShell::Activity`: the union of the app's live `ActivityOptions`; a user-initiated or latency-critical
     /// activity keeps the app from being suspended when it leaves the foreground.
     pub activity: u32,
+    /// `ToShell::WindowLevel`: the stacking level the app asked for its window (`Normal` until it asks).
+    pub window_level: bifrost_proto::WindowLevel,
     /// Set by `begin_quit`: when (monotonic ms) a Quit that was not answered turns into SIGKILL.
     quit_at: Option<f64>,
     /// The dock badge the app set (`ToShell::SetBadge`), already cleaned by `clean_badge`.
@@ -434,6 +559,13 @@ pub struct AppHost {
     frame_scale: f32,
     /// Set when a direct app demoted to `Route::Shm`; `take_fallback` reads it once so the shell opens its window.
     fallback: bool,
+    /// The extra windows the app has open, front to back (`ToShell::WindowOpen` and friends). The desk draws each one.
+    pub windows: WindowTable,
+    /// The window with key focus: 0 is the main window, otherwise an extra window's id. Keys, commands, menu items and
+    /// text edits go to it (`input`); the desk sets it (`set_key_window`).
+    pub key_window: u32,
+    /// Each extra window's buffers, by window id (`ToShell::WindowBuffers`).
+    window_bufs: std::collections::BTreeMap<u32, WinBufs>,
 }
 
 impl AppHost {
@@ -447,6 +579,10 @@ impl AppHost {
         let route = launch_route();
         let (mine, theirs) = sys::socketpair_pair()?;
         let _ = std::fs::create_dir_all(data_dir);
+        // the app container: its Documents, Library, Caches and tmp folders exist from the first launch on
+        if let Err(e) = bifrost_core::container_layout::ContainerLayout::new(data_dir).ensure() {
+            eprintln!("springboard: app container for {id}: {e}");
+        }
         let fd = theirs.fd();
         #[cfg(feature="desktop-wayland")]
         let mut cmd = if std::env::var_os("SPRINGBOARD_WAYLAND").is_some() {
@@ -475,6 +611,8 @@ impl AppHost {
         let child = cmd.spawn()?;
         drop(theirs);
         let mut h = AppHost::with_channel(id, mine, Some(child), cfg);
+        crate::shell::services::metric_reports::note_launch(id);
+        crate::shell::services::metric_reports::note_foreground(id);
         h.exec = exec.to_path_buf();
         h.route = route;
         h.send(&ToApp::Configure(cfg));
@@ -512,6 +650,7 @@ impl AppHost {
             ax_meta: Vec::new(),
             announcements: Vec::new(),
             announce_banner: Vec::new(),
+            ax_notes: Vec::new(),
             custom_rotors: Vec::new(),
             guided_requests: Vec::new(),
             last_notification: None,
@@ -521,6 +660,7 @@ impl AppHost {
             quick_actions: Vec::new(),
             sudden: false,
             activity: 0,
+            window_level: Default::default(),
             quit_at: None,
             doc_title: String::new(),
             doc_edited: false,
@@ -534,6 +674,9 @@ impl AppHost {
             frames: bifrost_ui::touch::TouchTracker::with_scale(cfg.scale),
             frame_scale: cfg.scale,
             fallback: false,
+            windows: WindowTable::new(),
+            key_window: 0,
+            window_bufs: std::collections::BTreeMap::new(),
         }
     }
 
@@ -739,7 +882,24 @@ impl AppHost {
     }
 
     pub fn key(&mut self, k: KeyInput) {
-        self.send(&ToApp::Key(k));
+        self.input(WindowInput::Key(k));
+    }
+
+    /// Input for the key window: the message carries the window id when it is an extra window (`WindowInput::to_app`).
+    pub fn input(&mut self, input: WindowInput) {
+        let m = input.to_app(self.key_window);
+        self.send(&m);
+    }
+
+    /// The desk made `window` the key window (0 is the main window). The app hears that the old one lost focus and that
+    /// the new one gained it, so an app with extra windows always knows which one takes the keys.
+    pub fn set_key_window(&mut self, window: u32) {
+        if self.key_window == window {
+            return;
+        }
+        let old = std::mem::replace(&mut self.key_window, window);
+        self.send(&ToApp::WindowFocus { window: old, focused: false });
+        self.send(&ToApp::WindowFocus { window, focused: true });
     }
 
     pub fn suspend(&mut self) {
@@ -871,6 +1031,14 @@ impl AppHost {
             ToShell::ControlsTree(tree) => self.controls_tree=tree,
             ToShell::AxText(list) => self.ax_text=list,
             ToShell::AxMeta(list) => self.ax_meta=list,
+            ToShell::AxNotify(list) => {
+                for note in list {
+                    if self.ax_notes.len() >= 64 {
+                        self.ax_notes.remove(0);
+                    }
+                    self.ax_notes.push(note);
+                }
+            }
             ToShell::Announce { text, priority } => {
                 if self.announcements.len() >= 8 {
                     self.announcements.remove(0);
@@ -909,7 +1077,57 @@ impl AppHost {
                 self.activity = options;
                 crate::bare::sleep::note_app_activity(&self.id, options);
             }
+            ToShell::WindowLevel(level) => {
+                if self.window_level != level {
+                    self.window_level = level;
+                    out.frame = true;
+                }
+            }
+            ToShell::WindowLevelOf { id, level } => {
+                // the main window (id 0) has its own level; an unknown extra window is ignored
+                if self.windows.set_floating(&self.id, id, level == bifrost_proto::WindowLevel::Floating) {
+                    out.frame = true;
+                }
+            }
             ToShell::InputAccessory(items) => self.accessory = items.into_iter().take(bifrost_proto::MAX_ACCESSORY_ITEMS).collect(),
+            ToShell::WindowOpen { id, title, w, h, position, flags } => {
+                // no room for the window, or its id is taken: the app is told to drop it, so the two sides agree
+                if self.windows.open(&self.id, id, &title, w, h).is_err() {
+                    self.send(&ToApp::WindowClosed { id });
+                } else {
+                    if let Some((x, y)) = position {
+                        self.windows.request_position(&self.id, id, x, y);
+                    }
+                    self.windows.set_title_double_click(&self.id, id, flags & bifrost_proto::window_flags::TITLE_DOUBLE_CLICK != 0);
+                }
+                out.frame = true;
+            }
+            ToShell::WindowMove { window, x, y } => {
+                // an unknown window is ignored; the desk applies the position on its next sync
+                if self.windows.request_position(&self.id, window, x, y) {
+                    out.frame = true;
+                }
+            }
+            ToShell::WindowCollapse { window, collapsed } => {
+                if self.windows.set_collapsed(&self.id, window, collapsed) {
+                    out.frame = true;
+                }
+            }
+            ToShell::WindowClose { id } => {
+                self.windows.close(&self.id, id);
+                self.window_bufs.remove(&id);
+                out.frame = true;
+            }
+            ToShell::WindowTitle { id, title } => {
+                self.windows.retitle(&self.id, id, &title);
+                out.frame = true;
+            }
+            ToShell::WindowResize { id, w, h } => {
+                let _ = self.windows.resize(&self.id, id, w, h);
+                out.frame = true;
+            }
+            ToShell::WindowBuffers { id, w, h, generation } => self.window_buffers(id, w, h, generation, fds),
+            ToShell::WindowFrame { id, buf, damage } => self.window_frame_arrived(id, buf, damage, out),
             ToShell::Materials(list) => {if self.materials!=list {self.materials=list;out.frame=true;}},
             ToShell::Commands(commands) => {if self.commands!=commands {self.commands=commands;out.frame=true;}},
             ToShell::UndoTitles { undo, redo } => {if self.undo_titles!=(undo.clone(),redo.clone()) {self.undo_titles=(undo,redo);out.frame=true;}},
@@ -922,6 +1140,141 @@ impl AppHost {
     pub fn frame(&self) -> Option<(&[u32], usize, usize)> {
         let b = self.bufs.get(self.shown?)?;
         Some((b.map.pixels(), self.buffer_size.0, self.buffer_size.1))
+    }
+
+    /// `ToShell::WindowBuffers`: maps one extra window's two buffers, with the main window's size and seal checks. A window
+    /// the table does not hold gets nothing.
+    fn window_buffers(&mut self, id: u32, w: u32, h: u32, generation: u32, fds: Vec<sys::Owned>) {
+        let (w, h) = (w as usize, h as usize);
+        let bytes = w * h * 4;
+        if fds.len() != 2 || w == 0 || h == 0 || w > 8192 || h > 8192 || !self.window_open(id) {
+            return;
+        }
+        let safe = fds.iter().all(|f| sys::shm_len(f).is_ok_and(|n| n >= bytes) && sys::seal_shrink(f).is_ok());
+        if !safe {
+            return;
+        }
+        let bufs: Vec<Buf> = fds.iter().filter_map(|f| Map::new(f, bytes).ok()).map(|map| Buf { map }).collect();
+        if bufs.len() == 2 {
+            self.window_bufs.insert(id, WinBufs { generation, bufs, size: (w, h), shown: None, release_after_blit: None, pending: Damage::new(w, h) });
+        }
+    }
+
+    /// `ToShell::WindowFrame`: the window's newest frame. The buffer it replaced is given back once that one is blitted.
+    fn window_frame_arrived(&mut self, id: u32, buf: u32, damage: Vec<bifrost_proto::Rect>, out: &mut Pumped) {
+        let buf = buf as usize;
+        let Some(wb) = self.window_bufs.get_mut(&id) else { return };
+        if buf >= wb.bufs.len() {
+            return;
+        }
+        let mut give_back = None;
+        if let Some(old) = wb.shown.filter(|&o| o != buf) {
+            give_back = wb.release_after_blit.replace(old).filter(|&p| p != old && p != buf);
+        }
+        wb.shown = Some(buf);
+        for r in damage {
+            wb.pending.add(r[0] as i32, r[1] as i32, r[2] as i32, r[3] as i32);
+        }
+        let generation = wb.generation;
+        out.frame = true;
+        if let Some(prev) = give_back {
+            self.send(&ToApp::WindowRelease { id, buf: prev as u32, generation });
+        }
+    }
+
+    fn window_open(&self, id: u32) -> bool {
+        self.windows.of_app(&self.id).iter().any(|w| w.id == id)
+    }
+
+    /// The newest frame of one extra window: its pixels, width and height (the desk draws it like the main window).
+    #[allow(dead_code)] // the desk draws the windows once it reads the table (docs/bifrost-ui.md, "Several windows per app")
+    pub fn window_frame(&self, id: u32) -> Option<(&[u32], usize, usize)> {
+        let wb = self.window_bufs.get(&id)?;
+        let b = wb.bufs.get(wb.shown?)?;
+        Some((b.map.pixels(), wb.size.0, wb.size.1))
+    }
+
+    /// Copies an extra window's newest frame into `s` (top left, clipped to `s`), then gives the frame back to the app.
+    /// False when the window has no frame yet.
+    pub fn blit_window(&mut self, s: &mut Surface, id: u32) -> bool {
+        let copied = match self.window_frame(id) {
+            Some((px, w, h)) => {
+                let n = w.min(s.w);
+                for y in 0..h.min(s.h) {
+                    let to = y * s.stride;
+                    s.px[to..to + n].copy_from_slice(&px[y * w..y * w + n]);
+                }
+                true
+            }
+            None => false,
+        };
+        if copied {
+            self.window_blitted(id);
+        }
+        copied
+    }
+
+    /// The desk copied an extra window's newest frame: the buffer that frame replaced goes back to the app.
+    #[allow(dead_code)]
+    pub fn window_blitted(&mut self, id: u32) {
+        let Some(wb) = self.window_bufs.get_mut(&id) else { return };
+        wb.pending.clear();
+        let Some(old) = wb.release_after_blit.take() else { return };
+        let generation = wb.generation;
+        self.send(&ToApp::WindowRelease { id, buf: old as u32, generation });
+    }
+
+    /// The shell's close control on one of the app's extra windows: the table drops it and the app is told. False when
+    /// the window is not open.
+    #[allow(dead_code)]
+    pub fn close_window_from_shell(&mut self, id: u32) -> bool {
+        if self.windows.close(&self.id, id).is_none() {
+            return false;
+        }
+        self.window_bufs.remove(&id);
+        self.send(&ToApp::WindowClosed { id });
+        true
+    }
+
+    /// The shell resized one of the app's extra windows (points). False when the window is not open.
+    #[allow(dead_code)]
+    pub fn configure_window(&mut self, id: u32, w: f32, h: f32) -> bool {
+        if self.windows.resize(&self.id, id, w, h).is_err() {
+            return false;
+        }
+        self.send(&ToApp::WindowConfigure { id, w, h });
+        true
+    }
+
+    /// A touch inside one of the app's extra windows, with window-local coordinates in points. False when it is not open.
+    #[allow(dead_code)]
+    pub fn touch_window(&mut self, id: u32, touch: u32, kind: TouchKind, x: f32, y: f32, t_ms: u32) -> bool {
+        if !self.window_open(id) {
+            return false;
+        }
+        self.send(&ToApp::WindowTouch { id, touch, kind, x, y, t_ms });
+        true
+    }
+
+    /// The person dragged window `id` to (x, y) points (the shell's clamped position): the table keeps it and the app is
+    /// told (`WindowMoved`). False when the window is not open.
+    pub fn window_dragged(&mut self, id: u32, x: f32, y: f32) -> bool {
+        if !self.windows.note_position(&self.id, id, x, y) {
+            return false;
+        }
+        self.send(&ToApp::WindowMoved { window: id, x, y });
+        true
+    }
+
+    /// The person double-clicked the title bar of window `id`. True when the app opted in and was told; otherwise the
+    /// shell keeps its own handling (zoom).
+    pub fn window_title_double_clicked(&mut self, id: u32) -> bool {
+        let wanted = self.windows.of_app(&self.id).iter().any(|w| w.id == id && w.title_double_click);
+        if !wanted {
+            return false;
+        }
+        self.send(&ToApp::WindowTitleDoubleClick { window: id });
+        true
     }
 
     /// Whether frames arrived that `blit` has not yet copied.
@@ -958,6 +1311,9 @@ impl AppHost {
 
     fn finish(&mut self, code: i32) {
         self.status = Status::Exited(code);
+        // an app that exits takes its extra windows with it
+        self.windows.close_app(&self.id);
+        self.window_bufs.clear();
         bifrost_core::log::shell_logger("apphost").notice(format!("app {} exited {code}", self.id));
     }
 
@@ -1160,6 +1516,7 @@ impl Drop for AppHost {
     fn drop(&mut self) {
         self.kill();
         crate::bare::sleep::forget_app(&self.id);
+        crate::shell::services::metric_reports::note_close(&self.id);
     }
 }
 
@@ -1170,8 +1527,10 @@ pub const CALCULATOR: &str = "is.olibuijr.calculator";
 pub fn icon_image(id: &str, size: usize) -> Option<crate::gfx::Image> {
     let registered = installed();
     let app = registered.iter().find(|a| a.manifest.id == id)?;
-    let img = crate::cg::imageio::decode(&std::fs::read(app.icon_path()).ok()?)?;
-    Some(if img.w == size { img } else { img.resized(size, size) })
+    // the one icon path: the package's icon.json (layers) or its flat icon.png, drawn at `size` px
+    let (variant, _) = bifrost_render::icon_doc::current_style();
+    let icon = bifrost_render::icon_doc::app_icon(id, &app.icon_path(), size as f32, 1.0, variant)?;
+    Some((*icon).clone())
 }
 
 use super::{home_zone, keyboard::Out, AppId, Event, Screen, Shell};
@@ -1278,6 +1637,7 @@ impl Shell {
         match AppHost::spawn_with(&app.manifest.id, &app.exec_path(), &data, &root(), self.ext_cfg(), self.session_restore_flag()) {
             Ok(h) => {
                 self.ext[slot] = Some(h);
+                super::entity_index::start(&app.manifest.id, &app.manifest.entity_types);
                 self.usernotif_started(slot);
                 self.extras_started(slot);
                 self.workspace_app_event(bifrost_proto::WorkspaceEventKind::DidLaunchApplication, slot as u8);
@@ -1343,6 +1703,25 @@ impl Shell {
     pub(super) fn ext_send(&mut self, slot: usize, m: &bifrost_proto::ToApp) {
         if let Some(h) = self.ext.get_mut(slot).and_then(Option::as_mut) {
             h.send(m);
+        }
+    }
+
+    /// Asks each running app that declares `index_extension` and has no items in the Search index to index again. Each
+    /// app is asked once per run, so an app that indexes nothing is not asked on every open of the Search panel.
+    pub(super) fn request_index_extensions(&mut self) {
+        let apps = installed();
+        for (slot, a) in apps.iter().enumerate() {
+            let running = self.ext.get(slot).and_then(Option::as_ref).is_some();
+            if !running || !a.manifest.index_extension || super::spotindex::has_items(&a.manifest.id) {
+                continue;
+            }
+            let Ok(mut asked) = REINDEX_ASKED.lock() else { return };
+            if asked.iter().any(|id| *id == a.manifest.id) {
+                continue;
+            }
+            asked.push(a.manifest.id.clone());
+            drop(asked);
+            self.ext_send(slot, &bifrost_proto::ToApp::ReindexAll);
         }
     }
 
@@ -1428,11 +1807,12 @@ impl Shell {
     /// Routes the shell keyboard's output to the foreground external app.
     /// Sends a Ctrl/Cmd chord to the external app in front. False when no external app is in front.
     pub(super) fn ext_chord(&mut self, key: u32, mods: u32) -> bool {
+        self.sync_key_windows();
         match self.ext_fg.and_then(|n| self.ext.get_mut(n as usize)) {
             Some(Some(h)) => {
                 // a key equivalent of the app's own menu is a menu action, not a key (`performKeyEquivalent:`)
                 if let Some(id) = super::evkeys::char_for(key as u16, false).and_then(|c| super::desktop_bar::app_menu_chord(&h.app_menus, c, mods)) {
-                    h.send(&bifrost_proto::ToApp::MenuAction(id));
+                    h.input(WindowInput::MenuAction(id));
                     return true;
                 }
                 h.key(KeyInput::chord(key, mods));
@@ -1443,6 +1823,7 @@ impl Shell {
     }
 
     pub(super) fn ext_type_out(&mut self, out: Out, t: f64) {
+        self.sync_key_windows();
         if out == Out::Hide {
             self.ext_set_keyboard(false, t);
             return;
@@ -1505,7 +1886,7 @@ impl Shell {
         }
         let Some(Some(h)) = self.ext_fg.and_then(|n| self.ext.get_mut(n as usize)) else { return };
         for c in comp {
-            h.send(&super::textinput::to_app(c));
+            h.input(super::textinput::to_input(c));
         }
     }
 
@@ -1585,6 +1966,7 @@ impl Shell {
         let mut context=None;
         let mut open_url=None;
         let mut badge_changed=false;
+        let mut full_screen: Vec<(usize, bool)> = Vec::new();
         let mut notifications = Vec::new();
         let mut rich_msgs = Vec::new();
         #[cfg(feature = "desktop-wayland")]
@@ -1652,6 +2034,7 @@ impl Shell {
                             badge_changed = true;
                         }
                     }
+                    ToShell::SetFullScreen { on } => full_screen.push((slot, on)),
                     ToShell::SetBadge { label } => {
                         let permitted = installed().get(slot).is_some_and(|a| a.manifest.permissions.iter().any(|p| p == "notifications"));
                         let label = clean_badge(&label);
@@ -1674,6 +2057,7 @@ impl Shell {
                         h.send(&ToApp::KeychainReply { request, status, value });
                     }
                     ToShell::OpenUrl { url } => open_url=Some(url),
+                    ToShell::PlaySystemSound { name } => queue_system_sound(name),
                     r @ ToShell::Share { .. } if fg == Some(slot as u8) => rich_msgs.push((slot as u8, r)),
                     r @ (ToShell::DragBegin { .. } | ToShell::DragRegister { .. } | ToShell::DragReply { .. } | ToShell::DragPerformed { .. } | ToShell::DragCancel { .. }) => rich_msgs.push((slot as u8, r)),
                     r @ (ToShell::LoginItem { .. } | ToShell::StatusItemSet { .. } | ToShell::StatusItemRemove { .. }) => rich_msgs.push((slot as u8, r)),
@@ -1682,7 +2066,7 @@ impl Shell {
                     r @ ToShell::ServiceCall { .. } => rich_msgs.push((slot as u8, r)),
                     r @ (ToShell::Preview { .. } | ToShell::PreviewClose) => rich_msgs.push((slot as u8, r)),
                     r @ (ToShell::WorkspaceRequest { .. } | ToShell::WorkspaceSubscribe { .. }) => rich_msgs.push((slot as u8, r)),
-                    r @ (ToShell::NotifyCategories(_) | ToShell::NotifyRequest { .. } | ToShell::NotifyRemove { .. } | ToShell::NotifyQuery { .. } | ToShell::NotifySettings { .. }) => rich_msgs.push((slot as u8, r)),
+                    r @ (ToShell::NotifyCategories(_) | ToShell::NotifyRequest { .. } | ToShell::NotifyRemove { .. } | ToShell::NotifyQuery { .. } | ToShell::NotifySettings { .. } | ToShell::NotifyAuthorize { .. } | ToShell::NotifySchedule { .. }) => rich_msgs.push((slot as u8, r)),
                     #[cfg(feature = "desktop-wayland")]
                     r @ (ToShell::DocOpen { .. } | ToShell::DocOpenEx { .. } | ToShell::DocSave { .. } | ToShell::DocCommit { .. } | ToShell::DocAbort { .. } | ToShell::DocReopen { .. } | ToShell::DocRelease { .. } | ToShell::DocSaveGrant { .. } | ToShell::DocGrantPath { .. }) => docs.push((slot as u8, r)),
                     _ => {}
@@ -1705,7 +2089,11 @@ impl Shell {
         if self.desk.is_some() {
             for slot in fell_back { self.desk_open(super::AppId::External(slot), t); }
         }
+        // the extra windows follow each app's table: opened ones get a desk window, closed ones leave the desk
+        self.desk_sync_extra_windows();
+        self.sync_key_windows();
         if badge_changed { self.dirty = true; }
+        for (slot, on) in full_screen { self.desk_set_full_screen(super::AppId::External(slot as u8), on); }
         let indexed = rich_msgs.iter().any(|(_, r)| matches!(r, ToShell::QuickSearchIndex(_) | ToShell::QuickSearchDelete { .. }));
         for (slot, r) in rich_msgs { self.rich_msg(slot, r, t); }
         self.services_tick(t);
@@ -1769,6 +2157,13 @@ impl Shell {
         }
     }
 
+    /// The desk copies an extra window's newest frame into its body (`s`).
+    pub(super) fn ext_window_blit(&mut self, s: &mut Surface, slot: usize, id: u32) {
+        if let Some(Some(h)) = self.ext.get_mut(slot) {
+            h.blit_window(s, id);
+        }
+    }
+
     pub(super) fn ext_blit_damage(&mut self, s: &mut Surface, slot: usize, damage: &mut Damage) {
         if let Some(Some(h)) = self.ext.get_mut(slot) {
             let d = h.blit(s, false);
@@ -1798,10 +2193,43 @@ fn exit_status_soon(c: &mut std::process::Child) -> std::io::Result<Option<std::
 #[cfg(test)]
 mod tests {
     #[test]
+    fn package_types_are_declared_in_the_manifest() {
+        let m = Manifest::parse("id = \"is.a.edit\"\nname = \"Edit\"\nexec = \"x\"\npackage_types = [\"rtfd\"]\n").unwrap();
+        assert_eq!(m.package_types, vec!["rtfd".to_string()]);
+        let none = Manifest::parse("id = \"is.a.edit\"\nname = \"Edit\"\nexec = \"x\"\n").unwrap();
+        assert!(none.package_types.is_empty());
+    }
+    #[test]
+    fn file_manager_extensions_declare_the_folders_they_watch() {
+        let m = Manifest::parse("id = \"is.a.cloud\"\nname = \"Cloud\"\nexec = \"x\"\nfile_manager_folders = [\"~/Cloud\", \"/mnt/sync\", \"~/\", \"/\", \"docs\", \"~/../etc\", \"/mnt/sync\"]\n").unwrap();
+        assert_eq!(m.file_manager_folders.len(), 7);
+        let home = Path::new("/home/ann");
+        assert_eq!(m.file_manager_dirs(home), vec![PathBuf::from("/home/ann/Cloud"), PathBuf::from("/mnt/sync")]);
+        let none = Manifest::parse("id = \"is.a.edit\"\nname = \"Edit\"\nexec = \"x\"\n").unwrap();
+        assert!(none.file_manager_dirs(home).is_empty());
+    }
+    #[test]
     fn quit_plan_kills_terminable_apps_and_gives_the_rest_a_deadline() {
         assert_eq!(super::quit_plan(true), super::QuitPlan::KillNow);
         assert_eq!(super::quit_plan(false), super::QuitPlan::QuitThenKill(super::QUIT_GRACE_MS));
     }
+    #[test]
+    fn entity_tables_declare_the_types_search_indexes() {
+        let m = Manifest::parse("id = \"a.b\"\nname = \"Notes\"\nexec = \"x\"\n\n[[entity]]\ntype = \"Note\"\n\n[[entity]]\ntype = \"Folder\"\nname = \"ignored\"\n\n[[intent]]\nid = \"open\"\ntitle = \"Open\"\n").unwrap();
+        assert_eq!(m.entity_types, vec!["Note", "Folder"]);
+        assert_eq!(m.name, "Notes", "an entity table does not change the app keys");
+        assert_eq!(m.intents.len(), 1);
+        assert!(Manifest::parse("id = \"a.b\"\nname = \"x\"\nexec = \"x\"\n").unwrap().entity_types.is_empty());
+    }
+
+    #[test]
+    fn control_tables_reach_the_manifest_for_control_center() {
+        let m = Manifest::parse("id = \"a.b\"\nname = \"Notes\"\nexec = \"x\"\n\n[[control]]\nkind = \"toggle\"\ntitle = \"Quiet Hours\"\nsymbol = \"moon\"\nintent = \"set-quiet\"\n").unwrap();
+        assert_eq!(m.controls.len(), 1);
+        assert_eq!((m.controls[0].title.as_str(), m.controls[0].intent.as_str()), ("Quiet Hours", "set-quiet"));
+        assert_eq!(m.name, "Notes", "a control table does not change the app keys");
+    }
+
     #[test]
     fn intent_tables_do_not_leak_into_the_app_keys() {
         let m = Manifest::parse("id = \"a.b\"\nname = \"Notes\"\nexec = \"x\"\n\n[[intent]]\nid = \"new-note\"\ntitle = \"New Note\"\nshortcut = true\nparams = []\n\n[[intent]]\nid = \"find\"\ntitle = \"Find\"\nparams = [\"text:string\", \"due:date?\"]\n\n[other]\nname = \"ignored\"\n").unwrap();
@@ -1963,6 +2391,16 @@ mod tests {
     }
 
     #[test]
+    fn privacy_location_purpose_is_read_from_its_own_table() {
+        let text = "id = \"a.b\"\nname = \"x\"\nexec = \"x\"\n[privacy]\nlocation = \"Finna næstu stöð\"\n[[intent]]\nid = \"i\"\nlocation = \"not this\"\n";
+        let m = Manifest::parse(text).unwrap();
+        assert_eq!(m.location_purpose, "Finna næstu stöð");
+        assert!(Manifest::parse("id = \"a.b\"\nname = \"x\"\nexec = \"x\"").unwrap().location_purpose.is_empty());
+        let after = Manifest::parse("id = \"a.b\"\nname = \"x\"\nexec = \"x\"\n[privacy]\n[window]\nlocation = \"other table\"\n").unwrap();
+        assert!(after.location_purpose.is_empty(), "a later table ends [privacy]");
+    }
+
+    #[test]
     fn scan_hides_system_packages_from_the_home_grid() {
         let root = std::env::temp_dir().join(format!("system-pkgs-scan-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
@@ -2026,6 +2464,141 @@ pub fn migrate_legacy(root: &Path, id: &str, data: &Path) {
             std::fs::rename(&from, data.join(new)).is_ok()
         };
         eprintln!("springboard: moved {} into {} for {id}: {}", from.display(), data.display(), if ok { "ok" } else { "FAILED" });
+    }
+}
+
+#[cfg(test)]
+mod window_table_tests {
+    use super::*;
+
+    fn cfg() -> Configure {
+        Configure { w: 4, h: 3, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false }
+    }
+
+    /// Every message the shell has queued for the app so far.
+    fn sent(peer: &Channel) -> Vec<ToApp> {
+        let mut out = Vec::new();
+        while let Recv::Packet(p, _) = peer.recv(false).unwrap() {
+            out.push(ToApp::decode(&p).unwrap());
+        }
+        out
+    }
+
+    #[test]
+    fn the_key_window_gets_the_input_and_the_app_hears_each_focus_change() {
+        let (channel, peer) = sys::socketpair_pair().unwrap();
+        let mut host = AppHost::with_channel("fixture", channel, None, cfg());
+        host.set_key_window(4);
+        host.input(WindowInput::Command(bifrost_proto::Command::SelectAll));
+        host.key(KeyInput::Code(30));
+        host.set_key_window(4);
+        host.set_key_window(0);
+        host.key(KeyInput::Code(9));
+        assert_eq!(
+            sent(&peer),
+            vec![
+                ToApp::WindowFocus { window: 0, focused: false },
+                ToApp::WindowFocus { window: 4, focused: true },
+                ToApp::WindowInput { window: 4, input: WindowInput::Command(bifrost_proto::Command::SelectAll) },
+                ToApp::WindowInput { window: 4, input: WindowInput::Key(KeyInput::Code(30)) },
+                ToApp::WindowFocus { window: 4, focused: false },
+                ToApp::WindowFocus { window: 0, focused: true },
+                ToApp::Key(KeyInput::Code(9)),
+            ],
+            "a repeated focus sends nothing; the main window's keys keep the legacy message"
+        );
+    }
+
+    #[test]
+    fn a_window_takes_a_position_collapses_and_opts_in_to_the_title_double_click() {
+        let (channel, peer) = sys::socketpair_pair().unwrap();
+        let mut host = AppHost::with_channel("fixture", channel, None, cfg());
+        let mut out = Pumped::default();
+        let flags = bifrost_proto::window_flags::TITLE_DOUBLE_CLICK;
+        host.handle(ToShell::WindowOpen { id: 4, title: "Note".into(), w: 200.0, h: 150.0, position: Some((12.0, 40.0)), flags }, Vec::new(), &mut out);
+        assert_eq!(host.windows.take_pending_move("fixture", 4), Some((12.0, 40.0)), "the requested position is applied once");
+        host.handle(ToShell::WindowCollapse { window: 4, collapsed: true }, Vec::new(), &mut out);
+        assert!(host.windows.of_app("fixture")[0].collapsed);
+        assert!(host.window_title_double_clicked(4));
+        assert_eq!(sent(&peer), vec![ToApp::WindowTitleDoubleClick { window: 4 }]);
+        assert!(host.window_dragged(4, 100.0, 60.0));
+        assert_eq!(sent(&peer), vec![ToApp::WindowMoved { window: 4, x: 100.0, y: 60.0 }]);
+        host.handle(ToShell::WindowOpen { id: 5, title: "Plain".into(), w: 10.0, h: 10.0, position: None, flags: 0 }, Vec::new(), &mut out);
+        assert!(!host.window_title_double_clicked(5), "an app that did not opt in gets no message");
+        assert!(sent(&peer).is_empty());
+    }
+
+    #[test]
+    fn the_window_table_follows_the_messages_the_app_sends() {
+        let (channel, _peer) = sys::socketpair_pair().unwrap();
+        let mut host = AppHost::with_channel("fixture", channel, None, cfg());
+        let mut out = Pumped::default();
+        host.handle(ToShell::WindowOpen { id: 1, title: "Ada".into(), w: 480.0, h: 560.0, position: None, flags: 0 }, Vec::new(), &mut out);
+        host.handle(ToShell::WindowOpen { id: 2, title: "Grace".into(), w: 480.0, h: 560.0, position: None, flags: 0 }, Vec::new(), &mut out);
+        let ids = |h: &AppHost| h.windows.of_app("fixture").iter().map(|w| w.id).collect::<Vec<u32>>();
+        assert_eq!(ids(&host), vec![2, 1], "the newest window is in front");
+        assert!(out.frame, "a window change asks the desk for a frame");
+        host.handle(ToShell::WindowTitle { id: 1, title: "Ada L.".into() }, Vec::new(), &mut out);
+        host.handle(ToShell::WindowResize { id: 1, w: 320.0, h: 240.0 }, Vec::new(), &mut out);
+        let one = host.windows.of_app("fixture")[1];
+        assert_eq!((one.title.as_str(), one.w, one.h), ("Ada L.", 320.0, 240.0));
+        host.handle(ToShell::WindowClose { id: 2 }, Vec::new(), &mut out);
+        assert_eq!(ids(&host), vec![1]);
+    }
+
+    #[test]
+    fn a_window_the_table_refuses_is_closed_again_for_the_app() {
+        let (channel, peer) = sys::socketpair_pair().unwrap();
+        let mut host = AppHost::with_channel("fixture", channel, None, cfg());
+        let mut out = Pumped::default();
+        let refused = crate::shell::app_window_table::MAX_PER_APP as u32 + 1;
+        for id in 1..=refused {
+            host.handle(ToShell::WindowOpen { id, title: "w".into(), w: 10.0, h: 10.0, position: None, flags: 0 }, Vec::new(), &mut out);
+        }
+        assert_eq!(host.windows.of_app("fixture").len(), crate::shell::app_window_table::MAX_PER_APP);
+        assert_eq!(sent(&peer), vec![ToApp::WindowClosed { id: refused }]);
+    }
+
+    #[test]
+    fn a_window_gets_its_own_buffers_and_its_frame_is_given_back_once_blitted() {
+        let (channel, peer) = sys::socketpair_pair().unwrap();
+        let mut host = AppHost::with_channel("fixture", channel, None, cfg());
+        let mut out = Pumped::default();
+        host.handle(ToShell::WindowOpen { id: 1, title: "Ada".into(), w: 2.0, h: 2.0, position: None, flags: 0 }, Vec::new(), &mut out);
+        let bytes = 2 * 2 * 4;
+        let fds = vec![sys::shm_create("test-window-0", bytes).unwrap(), sys::shm_create("test-window-1", bytes).unwrap()];
+        host.handle(ToShell::WindowBuffers { id: 1, w: 2, h: 2, generation: 7 }, fds, &mut out);
+        assert!(host.window_frame(1).is_none(), "no frame before the first one");
+        host.handle(ToShell::WindowFrame { id: 1, buf: 0, damage: vec![[0, 0, 2, 2]] }, Vec::new(), &mut out);
+        assert_eq!(host.window_frame(1).map(|(_, w, h)| (w, h)), Some((2, 2)));
+        host.handle(ToShell::WindowFrame { id: 1, buf: 1, damage: vec![[0, 0, 2, 2]] }, Vec::new(), &mut out);
+        assert!(sent(&peer).is_empty(), "the replaced buffer waits until its frame is blitted");
+        host.window_blitted(1);
+        assert_eq!(sent(&peer), vec![ToApp::WindowRelease { id: 1, buf: 0, generation: 7 }]);
+        host.handle(ToShell::WindowFrame { id: 9, buf: 0, damage: vec![] }, Vec::new(), &mut out);
+        assert!(host.window_frame(9).is_none(), "a frame for a window that is not open is dropped");
+    }
+
+    #[test]
+    fn the_shell_closing_a_window_drops_it_and_tells_the_app_once() {
+        let (channel, peer) = sys::socketpair_pair().unwrap();
+        let mut host = AppHost::with_channel("fixture", channel, None, cfg());
+        let mut out = Pumped::default();
+        host.handle(ToShell::WindowOpen { id: 3, title: "Card".into(), w: 10.0, h: 10.0, position: None, flags: 0 }, Vec::new(), &mut out);
+        assert!(host.configure_window(3, 20.0, 30.0));
+        assert!(host.touch_window(3, 1, TouchKind::Down, 1.0, 2.0, 5));
+        assert!(host.close_window_from_shell(3));
+        assert!(!host.close_window_from_shell(3), "a window closes once");
+        assert!(!host.touch_window(3, 1, TouchKind::Down, 1.0, 2.0, 6), "no touch reaches a closed window");
+        assert!(host.windows.of_app("fixture").is_empty());
+        assert_eq!(
+            sent(&peer),
+            vec![
+                ToApp::WindowConfigure { id: 3, w: 20.0, h: 30.0 },
+                ToApp::WindowTouch { id: 3, touch: 1, kind: TouchKind::Down, x: 1.0, y: 2.0, t_ms: 5 },
+                ToApp::WindowClosed { id: 3 },
+            ]
+        );
     }
 }
 
@@ -2249,6 +2822,32 @@ mod route_tests {
     }
 
     #[test]
+    fn a_window_level_of_an_extra_window_is_kept_in_the_table() {
+        let (mut host, _peer) = fixture_host();
+        let mut out = Pumped::default();
+        host.handle(ToShell::WindowOpen { id: 2, title: "CPU".into(), w: 300.0, h: 200.0, position: None, flags: 0 }, Vec::new(), &mut out);
+        host.handle(ToShell::WindowLevelOf { id: 2, level: bifrost_proto::WindowLevel::Floating }, Vec::new(), &mut out);
+        assert_eq!(host.windows.floating_ids(&host.id), vec![2]);
+        assert_eq!(host.window_level, bifrost_proto::WindowLevel::Normal, "the main window keeps its level");
+        host.handle(ToShell::WindowLevelOf { id: 0, level: bifrost_proto::WindowLevel::Floating }, Vec::new(), &mut out);
+        assert!(host.windows.floating_ids(&host.id).contains(&2));
+        host.kill();
+    }
+
+    #[test]
+    fn a_window_level_request_is_kept_for_the_app() {
+        let (mut host, _peer) = fixture_host();
+        assert_eq!(host.window_level, bifrost_proto::WindowLevel::Normal);
+        let mut out = Pumped::default();
+        host.handle(ToShell::WindowLevel(bifrost_proto::WindowLevel::Floating), Vec::new(), &mut out);
+        assert_eq!(host.window_level, bifrost_proto::WindowLevel::Floating);
+        assert!(out.requests.is_empty(), "the level is not passed on to the shell's requests");
+        host.handle(ToShell::WindowLevel(bifrost_proto::WindowLevel::Normal), Vec::new(), &mut out);
+        assert_eq!(host.window_level, bifrost_proto::WindowLevel::Normal);
+        host.kill();
+    }
+
+    #[test]
     fn quitting_never_blocks_on_an_app_that_stopped_reading() {
         let (mut host, _peer) = fixture_host();
         // fill the socket: nothing reads the peer end
@@ -2257,4 +2856,62 @@ mod route_tests {
         let _ = host.begin_quit(0.0);
         host.kill();
     }
+}
+
+#[cfg(test)]
+mod service_manifest_tests {
+    use super::Manifest;
+
+    #[test]
+    fn service_tables_are_read_and_do_not_leak_into_the_app_keys() {
+        let m = Manifest::parse(
+            "id = \"is.olibuijr.preview.desktop\"\nname = \"Viewer\"\nversion = \"0.11.8\"\nexec = \"bifrost-viewer\"\n\n[[service]]\ntitle = \"Open Images in Viewer\"\nsend_types = [\"public.image\", \"public.pdf\"]\nreturn_types = []\nmethod = \"open_images\"\n\n[[service]]\ntitle = \"Copy Path\"\nsend_types = [\"bifrost.file-path-text\"]\nreturn_types = [\"public.utf8-plain-text\"]\nmethod = \"copy_path\"\n",
+        )
+        .unwrap();
+        assert_eq!(m.id, "is.olibuijr.preview.desktop");
+        assert_eq!(m.name, "Viewer");
+        assert!(m.intents.is_empty());
+        assert_eq!(m.services.len(), 2);
+        assert_eq!(m.services[0].title, "Open Images in Viewer");
+        assert_eq!(m.services[0].send_types, vec!["public.image".to_string(), "public.pdf".to_string()]);
+        assert!(m.services[0].return_types.is_empty());
+        assert_eq!(m.services[0].method, "open_images");
+        assert_eq!(m.services[1].return_types, vec!["public.utf8-plain-text".to_string()]);
+        assert_eq!(m.services[1].rpc_method(), "service.copy_path");
+    }
+
+    #[test]
+    fn a_manifest_without_services_has_none() {
+        let m = Manifest::parse("id = \"a.b\"\nname = \"X\"\nexec = \"x\"\n").unwrap();
+        assert!(m.services.is_empty());
+    }
+}
+
+/// The sounds apps asked for since the shell's audio worker last looked, in order. Each is an alert tone name.
+static SYSTEM_SOUNDS: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+
+/// At most this many sounds wait for one frame; the rest are dropped so an app cannot flood the audio worker.
+const MAX_SYSTEM_SOUNDS: usize = 4;
+
+/// Queues an app's system sound when the name is one of the shell's alert tones or interface cues.
+fn queue_system_sound(name: String) {
+    let known = super::options::ALERT_SOUNDS.contains(&name.as_str()) || super::ui_sounds::index_of(&name).is_some();
+    if !known {
+        return;
+    }
+    let mut queue = SYSTEM_SOUNDS.lock().unwrap_or_else(|e| e.into_inner());
+    if queue.len() < MAX_SYSTEM_SOUNDS {
+        queue.push(name);
+    }
+}
+
+/// Queues the sound of a request the shell delivers for an app (`UNNotificationSound`); names outside the alert tones
+/// are dropped, as for `PlaySystemSound`.
+pub(super) fn queue_request_sound(name: &str) {
+    queue_system_sound(name.to_string());
+}
+
+/// Takes the queued system sounds. The shell's frame loop plays each one on the sound-effects role.
+pub fn take_system_sounds() -> Vec<String> {
+    std::mem::take(&mut *SYSTEM_SOUNDS.lock().unwrap_or_else(|e| e.into_inner()))
 }

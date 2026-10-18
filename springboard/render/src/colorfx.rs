@@ -133,6 +133,22 @@ pub fn vignette(c: Rgb, x: f32, y: f32, w: f32, h: f32, strength: f32) -> Rgb {
     c.map(|v| v * f).clamped()
 }
 
+/// Scales each channel by the matching channel of `white`, so `white` itself maps to white. A
+/// channel whose white value is zero or less is left unchanged, which keeps the function defined for
+/// a black reference. White (1, 1, 1) is the identity.
+pub fn white_point(c: Rgb, white: Rgb) -> Rgb {
+    let gain = |v: f32, w: f32| if w > 0.0 { v / w } else { v };
+    Rgb::new(gain(c.r, white.r), gain(c.g, white.g), gain(c.b, white.b)).clamped()
+}
+
+/// Replaces the colour with shades of `colour`: the Rec. 601 luma of `c` times `colour`, mixed
+/// with `c` by `intensity` (0 keeps the colour, 1 is full monochrome).
+pub fn monochrome(c: Rgb, colour: Rgb, intensity: f32) -> Rgb {
+    let l = c.luma().clamp(0.0, 1.0);
+    let tone = Rgb::new(colour.r * l, colour.g * l, colour.b * l).clamped();
+    c.mix(tone, intensity.clamp(0.0, 1.0)).clamped()
+}
+
 /// Applies `f` to a packed pixel (red in the low byte, then green, blue and alpha) and keeps its alpha.
 pub fn map_pixel(px: u32, f: impl Fn(Rgb) -> Rgb) -> u32 {
     let ch = |shift: u32| ((px >> shift) & 0xff) as f32 / 255.0;
@@ -218,6 +234,29 @@ mod tests {
         let edge = vignette_factor(100.0, 50.0, 100.0, 100.0, 0.6);
         assert!(edge < 1.0 && edge > 0.4);
         assert!(close(vignette_factor(3.0, 3.0, 0.0, 0.0, 0.6), 1.0));
+    }
+
+    #[test]
+    fn white_point_maps_the_reference_white_to_white() {
+        let c = Rgb::new(0.2, 0.4, 0.8);
+        assert!(same(white_point(c, Rgb::new(1.0, 1.0, 1.0)), c));
+        let warm = Rgb::new(1.0, 0.8, 0.5);
+        let out = white_point(Rgb::new(0.5, 0.4, 0.25), warm);
+        assert!(close(out.r, 0.5) && close(out.g, 0.5) && close(out.b, 0.5));
+        // A zero channel in the reference leaves that channel alone.
+        assert!(close(white_point(Rgb::new(0.3, 0.3, 0.3), Rgb::new(0.0, 1.0, 1.0)).r, 0.3));
+    }
+
+    #[test]
+    fn monochrome_is_luma_tinted_and_blends_by_intensity() {
+        let c = Rgb::new(0.9, 0.2, 0.1);
+        let tint = Rgb::new(1.0, 0.5, 0.0);
+        assert!(same(monochrome(c, tint, 0.0), c));
+        let full = monochrome(c, tint, 1.0);
+        let l = c.luma();
+        assert!(close(full.r, l) && close(full.g, 0.5 * l) && close(full.b, 0.0));
+        let white = monochrome(Rgb::new(1.0, 1.0, 1.0), Rgb::new(1.0, 1.0, 1.0), 1.0);
+        assert!(same(white, Rgb::new(1.0, 1.0, 1.0)));
     }
 
     #[test]

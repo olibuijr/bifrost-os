@@ -88,7 +88,7 @@ impl From<PolicyError> for io::Error {
 
 /// Every name an entitlement query accepts: the manifest permissions and the first-party entitlements, in the order
 /// [`Policy::held`] lists them.
-pub const ENTITLEMENT_NAMES: [&str; 12] = [
+pub const ENTITLEMENT_NAMES: [&str; 14] = [
     "network",
     "storage",
     "audio",
@@ -99,6 +99,8 @@ pub const ENTITLEMENT_NAMES: [&str; 12] = [
     "keychain",
     "accessibility",
     "display-config",
+    "sensors",
+    "contacts",
     "remote-desktop",
     bifrost_core::log::ENTITLEMENT,
 ];
@@ -128,6 +130,12 @@ pub struct Policy {
     pub accessibility: bool,
     /// `display-config`: may ask the shell's `display` service for a different display mode. Checked by the service.
     pub display_config: bool,
+    /// `sensors`: may read the device sensors (magnetometer, altimeter, motion, pedometer) through the SDK. The
+    /// readings come from the shell; the manifest permission is what lets an app ask for them.
+    pub sensors: bool,
+    /// `contacts`: declares that the app reads and saves the person's contacts through the SDK contacts module. The
+    /// manifest permission is the declaration; the contacts service does not gate calls on it yet.
+    pub contacts: bool,
     /// `entitlements = ["log-store"]` on a `system-app`: the system journal is mounted read-only so
     /// `LogStore::local()` works (Console). Set through `with_entitlements`, never from `permissions`.
     pub log_store: bool,
@@ -154,6 +162,8 @@ impl Policy {
             "keychain" => self.keychain,
             "accessibility" => self.accessibility,
             "display-config" => self.display_config,
+            "sensors" => self.sensors,
+            "contacts" => self.contacts,
             "remote-desktop" => self.remote,
             other => other == bifrost_core::log::ENTITLEMENT && self.log_store,
         }
@@ -178,6 +188,8 @@ impl Policy {
                 "keychain" => p.keychain = true,
                 "accessibility" => p.accessibility = true,
                 "display-config" => p.display_config = true,
+                "sensors" => p.sensors = true,
+                "contacts" => p.contacts = true,
                 "remote-desktop" if id == "is.olibuijr.remote.desktop" => p.remote = true,
                 _ => return Err(PolicyError::UnsupportedPermission(permission.clone()).into()),
             }
@@ -409,6 +421,8 @@ pub fn command(
             .env("WAYLAND_DISPLAY", display)
             .env("WINIT_UNIX_BACKEND", "wayland");
     }
+    // remembered locally so the shell can warm the apps likely to open next (core launch_prefetch)
+    bifrost_core::launch_prefetch::note_launch(id, &exec);
     c.arg("--chdir")
         .arg(data)
         .arg("--")
@@ -496,6 +510,24 @@ mod tests {
         let p = Policy::from_permissions("example", &["accessibility".into(), "display-config".into()]).unwrap();
         assert!(p.accessibility && p.display_config);
         assert!(!p.network && !p.storage && !p.remote);
+    }
+
+    #[test]
+    fn sensors_permission_is_recognised_and_binds_nothing() {
+        let p = Policy::from_permissions("example", &["sensors".into()]).unwrap();
+        assert!(p.sensors && p.holds("sensors"));
+        assert!(!p.network && !p.storage && !p.camera && !p.remote);
+        assert!(p.held().contains(&"sensors"));
+        assert!(!Policy::default().holds("sensors"));
+    }
+
+    #[test]
+    fn contacts_permission_is_recognised_and_binds_nothing() {
+        let p = Policy::from_permissions("example", &["contacts".into()]).unwrap();
+        assert!(p.contacts && p.holds("contacts"));
+        assert!(!p.network && !p.storage && !p.sensors && !p.remote);
+        assert!(p.held().contains(&"contacts"));
+        assert!(!Policy::default().holds("contacts"));
     }
 
     #[test]

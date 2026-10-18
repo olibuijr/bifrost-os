@@ -6,11 +6,16 @@ use notes::notes;
 use ::notes::notes::system;
 
 use bifrost_app::kit::{Damage, Event, Surface};
+use bifrost_app::app_windows::WindowId;
+use bifrost_app::windows::{self, Level};
+use ::notes::notes::note_windows;
 use bifrost_app::widgets_timeline;
 use bifrost_app::KeyInput;
 use bifrost_app::proto::{DocErrorCode, DocMode};
 use bifrost_app::{App, AppMenu, AppMenuItem, Command, Commands, Ctx, DocumentEvent, Input, TouchKind};
 use bifrost_app::control::{RpcError, INVALID_PARAMS};
+use bifrost_app::app_events::AppEvent;
+use ::notes::scripting;
 use bifrost_app::intents::{self, Intent, IntentResult, Param, ParamType};
 use bifrost_app::status_item::{MenuItem as StatusMenuItem, StatusBar, StatusItem, StatusItemLength};
 use bifrost_core::json::Json;
@@ -33,6 +38,8 @@ struct NotesApp {
     widget: Option<Vec<String>>,
     /// the menu bar extra with New Quick Note, made once the window is configured
     quick: Option<StatusItem>,
+    /// Internet Accounts: the Exchange account whose Notes service is on is read and written in the background
+    exchange: bifrost_app::exchange_notes::Sync,
 }
 
 /// The list view as a restoration key: `all`, `trash` or `folder:<name>`.
@@ -133,6 +140,20 @@ const MENU_COPY_MD: u32 = 6;
 const MENU_PASTE_MD: u32 = 7;
 const MENU_PASTE_PLAIN: u32 = 8;
 const MENU_MATH: u32 = 9;
+/// The Speech submenu: start speaking the selection (else the note), and stop.
+const MENU_SPEAK_START: u32 = 10;
+const MENU_SPEAK_STOP: u32 = 11;
+/// View > as List / as Gallery.
+const MENU_LAYOUT_LIST: u32 = 12;
+const MENU_LAYOUT_GALLERY: u32 = 13;
+/// Note > Open in Separate Window.
+const MENU_OPEN_WINDOW: u32 = 14;
+/// Window > Float on Top, for the focused note window.
+const MENU_FLOAT_ON_TOP: u32 = 15;
+/// Note > Sync Exchange Notes: a round now, not at the next interval.
+const MENU_EXCHANGE: u32 = 17;
+/// Notes > Settings: the pane over the window (text size, new note start, dark background, sort and grouping).
+const MENU_SETTINGS: u32 = 16;
 /// The Recent Notes submenu: `MENU_RECENT + n` is the n-th newest note.
 const MENU_RECENT: u32 = 100;
 /// The Format menu: `FORMAT_BASE + n` is the n-th row of `format_table`, `TABLE_BASE + n` the n-th table command.
@@ -183,6 +204,11 @@ fn format_table() -> Vec<Option<(&'static str, &'static str, FormatCmd)>> {
         None,
         Some(("Add Link...", "cmd+k", Do(Format::AddLink))),
         Some(("Calculate Math Results", "", Do(Format::CalculateMath))),
+        None,
+        Some(("Collapse Section", "", Do(Format::CollapseSection))),
+        Some(("Expand Section", "", Do(Format::ExpandSection))),
+        Some(("Collapse All Sections", "", Do(Format::CollapseAll))),
+        Some(("Expand All Sections", "", Do(Format::ExpandAll))),
     ]
 }
 
@@ -193,6 +219,18 @@ fn format_command(id: u32) -> Option<FormatCmd> {
     }
     let i = id.checked_sub(TABLE_BASE)?;
     notes::table::Op::ALL.get(i as usize).map(|op| FormatCmd::Do(notes::Format::Table(*op)))
+}
+
+/// The View menu: the note list as rows or as a gallery of cards.
+fn view_menu(n: &notes::Notes) -> AppMenu {
+    let layout = n.prefs().layout;
+    AppMenu {
+        title: "View".into(),
+        items: vec![
+            AppMenuItem::new(MENU_LAYOUT_LIST, "as List").checked(layout == notes::gallery::Layout::List),
+            AppMenuItem::new(MENU_LAYOUT_GALLERY, "as Gallery").checked(layout == notes::gallery::Layout::Gallery),
+        ],
+    }
 }
 
 /// The Format menu for the open note (every row is disabled while no note is open).
@@ -231,6 +269,25 @@ const KEY_Z: u32 = 44;
 const KEY_C: u32 = 46;
 
 impl NotesApp {
+    /// Opens a note in a window of its own (`Ctx::open_window`). A note that is already open is focused, not opened
+    /// twice; a window the shell refuses leaves the note where it was.
+    fn open_note_window(&mut self, ctx: &Ctx, id: &str) -> bool {
+        let Some(n) = &mut self.notes else { return false };
+        if let Some(window) = n.windows.window_of(id) {
+            n.windows.focus(window);
+            return true;
+        }
+        let Some(title) = n.note_title(id) else { return false };
+        match ctx.open_window(note_windows::window_spec(&title)) {
+            Ok(window) => {
+                n.windows.bind(window, id);
+                n.windows.focus(window);
+                true
+            }
+            Err(_) => false,
+        }
+    }
+
     /// File > Import to Notes (Cmd+O): the open panel answers in `document`.
     fn open_import(&mut self, ctx: &Ctx) {
         self.import = Some(ctx.open_document(DocMode::Read, "Import to Notes", &["public.text", "public.html", "public.rtf"]));
@@ -252,6 +309,27 @@ impl NotesApp {
         };
         let request = ctx.save_document(&name, &[]);
         self.export = Some((request, bytes));
+    }
+}
+
+/// The AppEvents Notes answers: `make new note` (`notes.make`, through the Create Note intent) and the core `getd` read
+/// of a note property. Setting properties and deleting notes from a script are refused for now.
+fn app_event(app: &mut NotesApp, ctx: Option<&Ctx>, data_dir: &std::path::Path, ev: &AppEvent) -> Result<bifrost_core::json::Json, RpcError> {
+    use bifrost_core::json::Json;
+    match (ev.class.as_str(), ev.id.as_str()) {
+        ("notes", "make") => {
+            let text = scripting::note_text(&ev.params)?;
+            let made = app.perform_intent(ctx, data_dir, "create-note", &Json::Obj(vec![("text".into(), Json::Str(text))]))?;
+            Ok(made.to_json())
+        }
+        ("core", "getd") => {
+            let object = ev.params.get("object").cloned().ok_or_else(|| RpcError::new(INVALID_PARAMS, "getd needs an object"))?;
+            let property = object.str_field("property");
+            let rows = notes::rpc::call(data_dir, "notes.list", &Json::Obj(vec![]))?;
+            scripting::get_property(&rows, &object, property.as_deref())
+        }
+        ("core", "setd") | ("core", "delt") => Err(RpcError::new(bifrost_app::control::METHOD_NOT_FOUND, "Notes cannot change notes from a script yet")),
+        _ => Err(scripting::unhandled(&ev.method())),
     }
 }
 
@@ -330,8 +408,21 @@ impl App for NotesApp {
             }
         }
         note.push(AppMenuItem::separator());
+        note.push(AppMenuItem::submenu("Speech"));
+        note.push(AppMenuItem::new(MENU_SPEAK_START, "Start Speaking").enabled(n.speakable_text().is_some()).depth(1));
+        note.push(AppMenuItem::new(MENU_SPEAK_STOP, "Stop Speaking").depth(1));
+        note.push(AppMenuItem::separator());
         note.push(AppMenuItem::new(MENU_PRINT, "Print...").key("cmd+p").enabled(editing));
-        vec![AppMenu { title: "Note".into(), items: note }, format_menu(n)]
+        note.push(AppMenuItem::separator());
+        note.push(AppMenuItem::new(MENU_OPEN_WINDOW, "Open in Separate Window").enabled(editing));
+        note.push(AppMenuItem::new(MENU_EXCHANGE, "Sync Exchange Notes").enabled(!self.exchange.busy()));
+        note.push(AppMenuItem::new(MENU_SETTINGS, "Settings...").key("cmd+,"));
+        let focused = n.windows.focused();
+        let float = AppMenu {
+            title: "Window".into(),
+            items: vec![AppMenuItem::new(MENU_FLOAT_ON_TOP, "Float on Top").enabled(focused.is_some()).checked(focused.is_some_and(|w| n.windows.is_floating(w)))],
+        };
+        vec![AppMenu { title: "Note".into(), items: note }, view_menu(n), format_menu(n), float]
     }
 
     fn commands(&self, _ctx: &Ctx) -> Commands {
@@ -386,6 +477,16 @@ impl App for NotesApp {
                 true
             }
             MENU_DELETE => n.delete_current(&ctx.ui, now),
+            MENU_SPEAK_START => {
+                if let Some(text) = n.speakable_text() {
+                    bifrost_app::speech::speak(ctx, &bifrost_app::speech::Utterance::new(&text));
+                }
+                false
+            }
+            MENU_SPEAK_STOP => {
+                bifrost_app::speech::stop(ctx);
+                false
+            }
             MENU_COPY_MD => {
                 if let Some(markdown) = n.selected_markdown() {
                     system::copy_markdown(ctx, &markdown);
@@ -396,6 +497,11 @@ impl App for NotesApp {
             MENU_PASTE_PLAIN => n.paste_match_style(&ctx.ui, now),
             MENU_MATH => {
                 n.toggle_math_results();
+                true
+            }
+            MENU_LAYOUT_LIST | MENU_LAYOUT_GALLERY => {
+                let layout = if id == MENU_LAYOUT_GALLERY { notes::gallery::Layout::Gallery } else { notes::gallery::Layout::List };
+                n.set_layout(&ctx.ui, layout);
                 true
             }
             id if (MENU_RECENT..MENU_RECENT + notes::RECENT_MENU as u32).contains(&id) => {
@@ -414,9 +520,29 @@ impl App for NotesApp {
                 n.find(&ctx.ui, now);
                 true
             }
+            MENU_EXCHANGE => {
+                self.exchange.refresh();
+                false
+            }
+            MENU_OPEN_WINDOW => {
+                n.request_window();
+                true
+            }
+            MENU_SETTINGS => {
+                n.open_settings();
+                true
+            }
+            MENU_FLOAT_ON_TOP => {
+                let Some(n) = &mut self.notes else { return false };
+                let Some(window) = n.windows.focused() else { return false };
+                let Some(on) = n.windows.toggle_floating(window) else { return false };
+                windows::set_window_level(ctx, window, if on { Level::Floating } else { Level::Normal });
+                true
+            }
             _ => false,
         }
     }
+
 
     fn intents(&self) -> Vec<Intent> {
         vec![
@@ -467,9 +593,17 @@ impl App for NotesApp {
         }
     }
 
-    fn rpc(&mut self, _ctx: Option<&Ctx>, data_dir: &std::path::Path, method: &str, params: &bifrost_core::json::Json) -> Result<bifrost_core::json::Json, bifrost_app::control::RpcError> {
+    fn rpc(&mut self, ctx: Option<&Ctx>, data_dir: &std::path::Path, method: &str, params: &bifrost_core::json::Json) -> Result<bifrost_core::json::Json, bifrost_app::control::RpcError> {
         if method == "notes.state" {
             return Ok(bifrost_core::json::Json::Str(self.notes.as_ref().map_or_else(String::new, |n| n.describe())));
+        }
+        // the shell's preview panel asks for a picture of a note (`[[preview]]` in the manifest)
+        if method == ::notes::notes::preview::METHOD {
+            return ::notes::notes::preview::handle(ctx.map(|c| &c.ui), data_dir, params);
+        }
+        // scripting: `tell app "Notes"` commands arrive as AppEvents (see `scripting` and the manifest's [[script.*]])
+        if let Some(ev) = AppEvent::from_method(method, params) {
+            return app_event(self, ctx, data_dir, &ev);
         }
         notes::rpc::call(data_dir, method, params)
     }
@@ -637,11 +771,34 @@ impl App for NotesApp {
 
     /// A service call's error (an older shell answers "no service ..." for a service it does not have) is logged;
     /// the app keeps going without the feature.
-    fn service_reply(&mut self, ctx: &Ctx, _request: u32, result: &Result<Json, String>) -> bool {
+    fn service_reply(&mut self, ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
+        // the password the Exchange sync asked Passwords for
+        if self.exchange.reply(request, result) {
+            return false;
+        }
         if let Err(e) = result {
             ctx.log(&format!("service: {e}"));
         }
         true
+    }
+
+    /// The shell asks Notes to index again (`index_extension = true` in its manifest). A reindex-all clears the Search
+    /// index of Notes and indexes every note again; identifiers are indexed again on their own.
+    fn index_request(&mut self, ctx: &Ctx, request: bifrost_app::quicksearch::IndexRequest) -> bool {
+        use bifrost_app::quicksearch::{CSSearchableIndex, IndexRequest};
+        match request {
+            IndexRequest::ReindexAll => {
+                CSSearchableIndex::default_index().delete_all_searchable_items(ctx);
+                self.indexed.clear();
+            }
+            IndexRequest::ReindexIdentifiers(ids) => {
+                for id in &ids {
+                    self.indexed.remove(id);
+                }
+            }
+        }
+        self.sync_index(ctx);
+        false
     }
 
     fn continue_activity(&mut self, ctx: &Ctx, activity: bifrost_app::quicksearch::UserActivity) -> bool {
@@ -660,13 +817,50 @@ impl App for NotesApp {
             self.last_wall = t;
             n.set_wall(Wall::sample(t));
         }
-        let redraw = n.tick(&ctx.ui, t);
+        // Internet Accounts > Exchange: a finished round is taken into the Notes folder of the account
+        let mut exchanged = false;
+        if let Some(done) = self.exchange.poll_local(ctx, t, &mut |account| n.exchange_plan(account)) {
+            let applied = n.exchange_apply(&ctx.ui, t, &done.account, &done.report);
+            for e in &applied.errors {
+                ctx.log(&format!("exchange notes: {e}"));
+            }
+            exchanged = applied.changed();
+        }
+        let redraw = n.tick(&ctx.ui, t) || exchanged;
+        let requested = n.take_window_request();
         self.track_restorable(ctx);
-        redraw
+        let opened = requested.is_some_and(|id| self.open_note_window(ctx, &id));
+        redraw || opened
     }
 
     fn next_wake(&self, t: f64) -> Option<f64> {
         self.notes.as_ref().and_then(|n| n.next_wake(t))
+    }
+
+    /// A note window draws its note (`Notes::draw_window`); any other extra window draws nothing.
+    fn draw_window(&mut self, ctx: &Ctx, window: WindowId, s: &mut Surface, _t: f64) -> Damage {
+        if let Some(n) = &mut self.notes {
+            n.draw_window(s, &ctx.ui, window);
+        }
+        let mut d = Damage::new(s.w, s.h);
+        d.all();
+        d
+    }
+
+    /// A touch in a note window focuses it (the Window menu's Float on Top acts on it). The window takes no typing yet.
+    fn window_event(&mut self, ctx: &Ctx, window: WindowId, ev: Input) -> bool {
+        if window.is_main() {
+            return self.event(ctx, ev);
+        }
+        if let (Input::Touch { kind: TouchKind::Down, .. }, Some(n)) = (&ev, &mut self.notes) {
+            n.windows.focus(window);
+        }
+        false
+    }
+
+    /// The shell or the app closed a note window: it is no longer bound to its note.
+    fn window_closed(&mut self, _ctx: &Ctx, window: WindowId) -> bool {
+        self.notes.as_mut().is_some_and(|n| n.windows.unbind(window).is_some())
     }
 
     fn draw(&mut self, ctx: &Ctx, s: &mut Surface, t: f64) -> Damage {
@@ -681,5 +875,5 @@ impl App for NotesApp {
 
 
 fn main() {
-    bifrost_app::run(NotesApp { notes: None, last_wall: 0.0, export: None, import: None, indexed: Default::default(), next_index: 0.0, restorable: None, widget: None, quick: None });
+    bifrost_app::run(NotesApp { notes: None, last_wall: 0.0, export: None, import: None, indexed: Default::default(), next_index: 0.0, restorable: None, widget: None, quick: None, exchange: bifrost_app::exchange_notes::Sync::new() });
 }

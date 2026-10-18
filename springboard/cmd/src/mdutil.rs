@@ -1,10 +1,15 @@
 //! `mdutil`: shows and changes whether a volume is indexed for search, and erases its index. The index settings are kept
 //! per volume under the user's state folder (`bifrost/index/<volume>/`): an `enabled` file holding `on` or `off`
 //! (a volume is indexed until it says otherwise), and a `store` folder that holds the index data.
-//! Gap: the desktop's quick search does not read these settings yet, so `-i off` does not stop its index today, and
-//! `-E` only removes the command line's own store.
+//! The desktop's Search reads the same choice: `-i off` adds the volume to the Spotlight exclusions in the shell's
+//! settings (`spotlight_excluded`, Settings > Spotlight > Search Privacy, `shell::spotlight_scope`), so Search lists
+//! nothing under it, and `-i on` takes it off again; `-s` reports a volume as disabled when either place says so. The
+//! shell reads the exclusions when it starts or when Settings changes them, so a running shell picks the change up then.
+//! Gap: `-E` removes only the command line's own store; the quick-search index keeps one file per app, not per volume.
 //! Supported: `-s` (status), `-i on|off` and `-E` (erase), each with one or more volume paths.
 
+use springboard::shell::prefs::Prefs;
+use springboard::shell::spotlight_scope::Scope;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -107,8 +112,32 @@ pub fn erase(root: &Path, volume: &str) -> io::Result<()> {
 
 /// The status lines for one volume, in the same shape `mdutil -s` prints.
 pub fn status_text(root: &Path, volume: &str) -> String {
-    let state = if is_enabled(root, volume) { "enabled" } else { "disabled" };
+    status_text_in(root, volume, false)
+}
+
+/// Like `status_text`, for a volume that Search excludes (`search_excluded`) reading as disabled whatever the file says.
+pub fn status_text_in(root: &Path, volume: &str, search_excluded: bool) -> String {
+    let state = if is_enabled(root, volume) && !search_excluded { "enabled" } else { "disabled" };
     format!("{volume}:\nIndexing {state}.\n")
+}
+
+/// Whether the Spotlight exclusions in `prefs` cover the volume.
+pub fn search_excludes(prefs: &Prefs, volume: &str) -> bool {
+    Scope::load(prefs).excludes(Path::new(volume))
+}
+
+/// Makes Search skip the volume (`on` false) or list it again (`on` true), in the shell's settings. Turning it on removes
+/// the exact entry for the volume; an exclusion of a folder above it is the user's own choice and stays.
+pub fn apply_to_search(prefs: &mut Prefs, volume: &str, on: bool) -> io::Result<()> {
+    let mut scope = Scope::load(prefs);
+    if on {
+        while let Some(i) = scope.excluded().iter().position(|f| f == Path::new(volume)) {
+            scope.remove_excluded(i);
+        }
+    } else {
+        scope.exclude(Path::new(volume));
+    }
+    scope.save(prefs)
 }
 
 #[cfg(test)]
@@ -159,6 +188,32 @@ mod tests {
         assert_eq!(status_text(&root, "/"), "/:\nIndexing disabled.\n");
         set_enabled(&root, "/", true).unwrap();
         assert!(is_enabled(&root, "/"));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn turning_indexing_off_excludes_the_volume_from_search_and_on_restores_it() {
+        let mut prefs = Prefs::memory();
+        assert!(!search_excludes(&prefs, "/mnt/data"));
+        apply_to_search(&mut prefs, "/mnt/data", false).unwrap();
+        assert!(search_excludes(&prefs, "/mnt/data"));
+        assert!(search_excludes(&prefs, "/mnt/data/deep/file.txt"), "everything under the volume is hidden");
+        assert!(!search_excludes(&prefs, "/mnt/other"));
+        // the shell's own Search scope reads the same keys
+        assert!(Scope::load(&prefs).hides(springboard::shell::spotlight_scope::Category::Files, Some(Path::new("/mnt/data/a.txt"))));
+        apply_to_search(&mut prefs, "/mnt/data", false).unwrap();
+        assert_eq!(Scope::load(&prefs).excluded().len(), 1, "no duplicate entry");
+        apply_to_search(&mut prefs, "/mnt/data", true).unwrap();
+        assert!(!search_excludes(&prefs, "/mnt/data"));
+    }
+
+    #[test]
+    fn status_reads_disabled_when_either_the_setting_or_search_says_so() {
+        let root = scratch("status");
+        assert_eq!(status_text_in(&root, "/v", false), "/v:\nIndexing enabled.\n");
+        assert_eq!(status_text_in(&root, "/v", true), "/v:\nIndexing disabled.\n");
+        set_enabled(&root, "/v", false).unwrap();
+        assert_eq!(status_text_in(&root, "/v", false), "/v:\nIndexing disabled.\n");
         let _ = fs::remove_dir_all(&root);
     }
 

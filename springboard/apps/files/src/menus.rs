@@ -57,6 +57,14 @@ pub(crate) const MENU_COMPRESS_TGZ: u32 = 26;
 pub(crate) const MENU_COMPRESS_TXZ: u32 = 27;
 
 pub(crate) const MENU_EMPTY_TRASH: u32 = 28;
+pub(crate) const MENU_ALIAS: u32 = 29;
+pub(crate) const MENU_COPY_PATH: u32 = 30;
+pub(crate) const MENU_SAVE_SEARCH: u32 = 31;
+/// File > New Window (⌘N): a second Files window at the home folder.
+pub(crate) const MENU_NEW_WINDOW: u32 = 32;
+/// View > Group By Name and Group By Size (the panel offers None, Kind and Date).
+pub(crate) const MENU_GROUP_NAME: u32 = 33;
+pub(crate) const MENU_GROUP_SIZE: u32 = 34;
 
 impl Files {
     /// Right-click: selects the item under the pointer and opens the item or folder menu.
@@ -78,6 +86,7 @@ impl Files {
                 ContextItem { id: MENU_OPEN, label: "Open".into(), enabled: single },
                 ContextItem { id: MENU_QUICK_LOOK, label: "Preview".into(), enabled: single },
                 ContextItem { id: MENU_COPY_NAME, label: "Copy Name".into(), enabled: single },
+                ContextItem { id: MENU_COPY_PATH, label: "Copy Item Path".into(), enabled: single },
                 ContextItem { id: MENU_INFO, label: "Get Info".into(), enabled: single },
                 ContextItem { id: MENU_OPEN_WITH, label: "Open With…".into(), enabled: single && self.focus_entry().is_some_and(|e| !e.is_dir) },
                 ContextItem { id: MENU_COMPRESS, label: "Compress".into(), enabled: !in_bin && !self.in_recents() },
@@ -90,6 +99,7 @@ impl Files {
                 ContextItem { id: MENU_CUT, label: "Cut".into(), enabled: true },
                 ContextItem { id: MENU_PASTE, label: "Paste".into(), enabled: self.clip.is_some() },
                 ContextItem { id: MENU_DUPLICATE, label: "Duplicate".into(), enabled: !in_bin },
+                ContextItem { id: MENU_ALIAS, label: "Make Alias".into(), enabled: !in_bin && !self.in_recents() },
                 if in_bin {
                     ContextItem { id: MENU_PUT_BACK, label: "Put Back".into(), enabled: true }
                 } else {
@@ -98,6 +108,7 @@ impl Files {
             ]
         } else {
             let mut items = vec![
+                ContextItem { id: MENU_NEW_WINDOW, label: "New Window".into(), enabled: true },
                 ContextItem { id: MENU_NEW_FOLDER, label: "New Folder".into(), enabled: !self.in_bin() },
                 ContextItem { id: MENU_PASTE, label: "Paste".into(), enabled: self.clip.is_some() },
                 ContextItem { id: MENU_HIDDEN, label: if self.show_hidden { "Hide Hidden Files".into() } else { "Show Hidden Files".into() }, enabled: true },
@@ -108,8 +119,13 @@ impl Files {
                 ContextItem { id: MENU_GROUP_NONE, label: if self.vo.group == Group::None { "✓ Group By None".into() } else { "Group By None".into() }, enabled: true },
                 ContextItem { id: MENU_GROUP_KIND, label: if self.vo.group == Group::Kind { "✓ Group By Kind".into() } else { "Group By Kind".into() }, enabled: true },
                 ContextItem { id: MENU_GROUP_DATE, label: if self.vo.group == Group::Date { "✓ Group By Date".into() } else { "Group By Date".into() }, enabled: true },
+                ContextItem { id: MENU_GROUP_NAME, label: if self.vo.group == Group::Name { "✓ Group By Name".into() } else { "Group By Name".into() }, enabled: true },
+                ContextItem { id: MENU_GROUP_SIZE, label: if self.vo.group == Group::Size { "✓ Group By Size".into() } else { "Group By Size".into() }, enabled: true },
                 ContextItem { id: MENU_STATUS_BAR, label: if self.status_bar { "Hide Status Bar".into() } else { "Show Status Bar".into() }, enabled: true },
             ];
+            if !self.query.trim().is_empty() && !self.in_recents() && !self.in_bin() {
+                items.push(ContextItem { id: MENU_SAVE_SEARCH, label: "Save Search as Smart Folder".into(), enabled: true });
+            }
             if self.in_bin() {
                 items.push(ContextItem { id: MENU_EMPTY_TRASH, label: "Empty Trash".into(), enabled: true });
             }
@@ -118,7 +134,15 @@ impl Files {
         if hit.is_none() && self.in_bin() {
             items.push(ContextItem { id: MENU_EMPTY_TRASH, label: "Empty Trash…".into(), enabled: true });
         }
+        // the rows file-manager extensions add for the selection, or for the folder
+        items.extend(self.extension_menu_items(hit.is_some()));
         ctx.context_menu(x, y, items);
+    }
+    /// Copy Item Path (Option+Cmd+C): the focused item's full path as text on the clipboard.
+    pub(crate) fn copy_item_path(&mut self) {
+        if let Some(entry) = self.focus_entry() {
+            bifrost_app::kit::clipboard::set_text(&entry.path.to_string_lossy());
+        }
     }
     /// Runs a context-menu choice. Returns false for an id that is not ours.
     pub(crate) fn context_action(&mut self, id: u32) -> bool {
@@ -133,6 +157,9 @@ impl Files {
             MENU_TAGS => self.open_tags(),
             MENU_EXTRACT => self.extract(),
             MENU_COPY_NAME => if let Some(entry) = self.focus_entry() { bifrost_app::kit::clipboard::set_text(&entry.name); },
+            MENU_COPY_PATH => self.copy_item_path(),
+            MENU_ALIAS => self.make_alias(),
+            MENU_SAVE_SEARCH => self.save_search(),
             MENU_REFRESH => { let dir = self.path.clone(); self.navigate(dir, false) }
             MENU_RENAME => self.start_rename(),
             MENU_COPY => self.copy_selected(false),
@@ -148,12 +175,12 @@ impl Files {
             MENU_STATUS_BAR => self.toggle_status_bar(),
             MENU_GALLERY => self.set_gallery(),
             MENU_VIEW_OPTIONS => { self.vo.show = !self.vo.show; self.revision += 1 }
-            MENU_GROUP_NONE | MENU_GROUP_KIND | MENU_GROUP_DATE => {
-                self.vo.group = match id { MENU_GROUP_KIND => Group::Kind, MENU_GROUP_DATE => Group::Date, _ => Group::None };
+            MENU_GROUP_NONE | MENU_GROUP_KIND | MENU_GROUP_DATE | MENU_GROUP_NAME | MENU_GROUP_SIZE => {
+                self.vo.group = match id { MENU_GROUP_KIND => Group::Kind, MENU_GROUP_DATE => Group::Date, MENU_GROUP_NAME => Group::Name, MENU_GROUP_SIZE => Group::Size, _ => Group::None };
                 self.sort_rows();
                 self.revision += 1;
             }
-            _ => return false,
+            _ => return self.extension_action(id),
         }
         true
     }

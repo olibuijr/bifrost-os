@@ -29,6 +29,8 @@ const CELL_PT: f32 = 40.0;
 const MEMBER_ROWS: usize = 8;
 /// How many shared picture names the details panel lists.
 const SHARED_ROWS: usize = 4;
+/// The most devices the details panel lists.
+const DEVICE_ROWS: usize = 8;
 const SEND_W_PT: f32 = 64.0;
 const BUBBLE_PAD_PT: f32 = 10.0;
 const BUBBLE_LINE_PT: f32 = 18.0;
@@ -39,6 +41,7 @@ const BUBBLE_SHARE: f32 = 0.62;
 /// Width of the outline around the message a quoted line jumped to.
 const HIGHLIGHT_PT: f32 = 2.0;
 const RADIUS_PT: f32 = m::CARD_RADIUS;
+#[allow(dead_code)] // not wired yet
 const BADGE_PT: f32 = 16.0;
 const SHEET_W_PT: f32 = 420.0;
 const SHEET_HEAD_PT: f32 = 44.0;
@@ -312,7 +315,7 @@ impl MessagesWindow {
         ]
     }
 
-    fn room_source_list(&self, lay: &Layout) -> SourceList {
+    fn room_source_list(&self, _lay: &Layout) -> SourceList {
         let rooms = self.model.visible_rooms();
         let items = rooms.iter().enumerate().map(|(i, room)| {
             let tags = room_tags(self.model.is_pinned(&room.id), self.model.is_muted(&room.id));
@@ -492,7 +495,13 @@ impl MessagesWindow {
                 let pictures = self.model.selected_room().map_or(0, |r| r.shared_pictures().len());
                 let media = media_rows(pictures);
                 let media_h = if media == 0 { 0.0 } else { lay.pad + media as f32 * lay.line };
-                let ph = head + lay.pad + lay.button_h + lay.pad + lay.line + rows as f32 * lay.line + media_h + ui.pt(SHEET_FOOT_PT);
+                let devices = self.devices_for_room().len();
+                let device_h = if devices == 0 {
+                    0.0
+                } else {
+                    lay.pad + (1 + devices.min(DEVICE_ROWS) + usize::from(devices > DEVICE_ROWS)) as f32 * lay.line
+                };
+                let ph = head + lay.pad + lay.button_h + lay.pad + lay.line + rows as f32 * lay.line + device_h + media_h + ui.pt(SHEET_FOOT_PT);
                 let r = place(ph, pw);
                 let content_y = r[1] + head + lay.pad;
                 let rename = [r[0] + pw - lay.pad - bw, content_y, bw, lay.button_h];
@@ -625,6 +634,17 @@ impl MessagesWindow {
         let right = if has_room { lay.info_w + lay.gap } else { 0.0 };
         let title = fit(ui, &title, MAC_TITLE1_PT, Weight::Semibold, (width / 2.0 - lay.pad).max(0.0));
         put_mid(s, &mut self.labels, ui, &title, MAC_TITLE1_PT, Weight::Semibold, LABEL.now(), x0 + lay.pad, lay.header / 2.0);
+        if self.model.selected_room().is_some_and(|r| r.encrypted) {
+            // A padlock drawn from rectangles in the secondary label colour, after the title, for an end to end encrypted
+            // room.
+            let lock = LABEL_2.now();
+            let lx = x0 + lay.pad + ui.measure(&title, MAC_TITLE1_PT, Weight::Semibold) + lay.gap;
+            let ly = lay.header / 2.0 - 6.0;
+            s.fill_rect(px(lx + 2.0), px(ly), px(6.0), px(2.0), lock);
+            s.fill_rect(px(lx + 2.0), px(ly), px(2.0), px(5.0), lock);
+            s.fill_rect(px(lx + 6.0), px(ly), px(2.0), px(5.0), lock);
+            s.fill_rect(px(lx), px(ly + 4.0), px(10.0), px(8.0), lock);
+        }
         let status = self.model.status.clone();
         if !status.is_empty() {
             let shown = fit(ui, &status, MAC_FOOTNOTE_PT, Weight::Regular, (width / 2.0 - right).max(0.0));
@@ -848,6 +868,7 @@ impl MessagesWindow {
                 put(s, &mut self.labels, ui, "You leave the conversation and it is removed from the list.", MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), text_x, panel.content_y + lay.line);
             }
             Overlay::Details => {
+                let devices = self.devices_for_room();
                 if let Some(room) = self.model.selected_room() {
                     let rename_x = panel.buttons.first().map_or(px_ + pw, |b| b.rect[0]);
                     let name = fit(ui, &room.title(&me), MAC_BODY_PT, Weight::Semibold, (rename_x - text_x - lay.gap).max(0.0));
@@ -865,6 +886,23 @@ impl MessagesWindow {
                         let more = format!("and {} more", room.members.len() - MEMBER_ROWS);
                         put(s, &mut self.labels, ui, &more, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), text_x, y);
                         y += lay.line;
+                    }
+                    // The devices of the members. None is verified yet, so each line says Unverified.
+                    if !devices.is_empty() {
+                        y += lay.pad;
+                        let heading = format!("Devices ({})", devices.len());
+                        put(s, &mut self.labels, ui, &heading, MAC_FOOTNOTE_PT, Weight::Semibold, LABEL_2.now(), text_x, y);
+                        y += lay.line;
+                        for (user, device) in devices.iter().take(DEVICE_ROWS) {
+                            let shown = fit(ui, &format!("{user}  {device}  Unverified"), MAC_FOOTNOTE_PT, Weight::Regular, text_w);
+                            put(s, &mut self.labels, ui, &shown, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), text_x, y);
+                            y += lay.line;
+                        }
+                        if devices.len() > DEVICE_ROWS {
+                            let more = format!("and {} more", devices.len() - DEVICE_ROWS);
+                            put(s, &mut self.labels, ui, &more, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), text_x, y);
+                            y += lay.line;
+                        }
                     }
                     let pictures = room.shared_pictures();
                     if !pictures.is_empty() {
@@ -1051,7 +1089,9 @@ fn full_text(body: &Body) -> String {
         other => preview(other),
     }
 }
+#[cfg(test)]
 
+#[cfg(test)]
 fn badge_text(unread: u64) -> String {
     if unread > 99 {
         "99+".to_string()

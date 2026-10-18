@@ -5,6 +5,8 @@
 /// What the info sheet shows about a picture.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Exif {
+    /// the raw maker note (Exif MakerNote, tag 0x927C), as the camera wrote it; Apple's holds the Live Photo identifier
+    pub maker_note: Option<Vec<u8>>,
     pub make: Option<String>,
     pub model: Option<String>,
     /// the lens model (Exif LensModel), as stored
@@ -297,6 +299,11 @@ impl<'a> Tiff<'a> {
         out
     }
 
+    /// The raw bytes of an entry of a one-byte type (undefined, as a maker note is).
+    fn bytes(&self, e: Entry) -> Option<Vec<u8>> {
+        Some(self.d.get(e.at..e.at.checked_add(e.count as usize)?)?.to_vec())
+    }
+
     fn text(&self, e: Entry) -> Option<String> {
         if e.typ != 2 {
             return None;
@@ -365,6 +372,7 @@ fn read_tiff(d: &[u8], out: &mut Exif) {
                 0x920A => out.focal_mm = t.real(e, 0).map(|v| v as f32),
                 0xA002 => out.width = t.uint(e),
                 0xA003 => out.height = t.uint(e),
+                0x927C => out.maker_note = t.bytes(e),
                 _ => {}
             }
         }

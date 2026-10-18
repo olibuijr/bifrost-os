@@ -2,8 +2,11 @@
 //! download, kept out of the shell. The shell tells it which version it runs and what the device is
 //! doing (`Conditions`), and shows the `State` it pushes (badges, Software Update page).
 
+mod assets;
+
 use bifrost_proto::svc;
 use bifrost_proto::svc::update::{Cmd, Evt, Offer, Phase, State};
+use springboard::install_log;
 use springboard::shell::ota::{self, Ota};
 use springboard::shell::update::{self, State as UpdState};
 use std::os::unix::net::UnixStream;
@@ -25,6 +28,10 @@ struct Core {
     charging: bool,
     started: Instant,
     subscribers: Vec<UnixStream>,
+    /// the last failure written to the install log, so one failure is recorded once
+    last_failure: Option<String>,
+    /// background asset pack downloads of the apps (the asset daemon)
+    assets: assets::AssetDaemon,
 }
 
 fn offer(m: &update::Manifest) -> Offer {
@@ -83,13 +90,43 @@ impl Core {
         None
     }
 
+    /// Writes a system update failure to the install log once; a failure that clears re-arms the log.
+    fn record_failure(&mut self) {
+        match &self.ota.updater.state {
+            UpdState::Failed(e) => {
+                if self.last_failure.as_deref() != Some(e.as_str()) {
+                    let unix = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0);
+                    if let Err(err) = install_log::append(&self.dir, unix, "system update", e) {
+                        eprintln!("updated: install log: {err}");
+                    }
+                    self.last_failure = Some(e.clone());
+                }
+            }
+            _ => self.last_failure = None,
+        }
+    }
+
     /// Advances the checker and pushes what changed; once a second.
     fn tick(&mut self) {
         if self.version.is_empty() {
             return;
         }
+        // the asset daemon runs the apps' queued packs on an unmetered link; packs come from the local pack folder
+        // (BIFROST_ASSET_PACKS, default /usr/share/bifrost/asset-packs), never from a third party
+        if let Some(conditions) = assets::background_conditions(self.wifi, self.low_power) {
+            let day = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() / 86_400).unwrap_or(0);
+            let source = assets::LocalPackSource::new(std::env::var("BIFROST_ASSET_PACKS").unwrap_or_else(|_| assets::DEFAULT_SOURCE.to_string()), &self.dir);
+            self.assets.pass(day, conditions, |app, pack| {
+                let ok = source.transfer(app, pack);
+                if !ok {
+                    eprintln!("updated: asset pack {app}/{pack}: not available in the local pack folder");
+                }
+                ok
+            });
+        }
         let now = self.started.elapsed().as_secs_f64();
         let changed = self.ota.tick(now, self.wifi, self.low_power, self.charging, self.auto_download, &self.version.clone(), &self.git.clone());
+        self.record_failure();
         let installed = self.ota.take_installed();
         if !installed.is_empty() {
             self.broadcast(&Evt::SystemInstalled(installed.iter().map(|a| a.id.clone()).collect()));
@@ -141,6 +178,8 @@ fn main() -> std::io::Result<()> {
         charging: false,
         started: Instant::now(),
         subscribers: Vec::new(),
+        last_failure: None,
+        assets: assets::AssetDaemon::new(),
     }));
     if let Some(parent) = std::path::Path::new(&sock).parent() {
         let _ = std::fs::create_dir_all(parent);
@@ -179,7 +218,7 @@ mod tests {
     }
 
     fn core_in(dir: PathBuf) -> Core {
-        Core { ota: Ota::new(dir.clone(), None), dir, version: String::new(), git: String::new(), auto_download: false, wifi: false, low_power: false, charging: false, started: Instant::now(), subscribers: Vec::new() }
+        Core { ota: Ota::new(dir.clone(), None), dir, version: String::new(), git: String::new(), auto_download: false, wifi: false, low_power: false, charging: false, started: Instant::now(), subscribers: Vec::new(), last_failure: None, assets: assets::AssetDaemon::new() }
     }
 
     fn core(name: &str) -> Core {

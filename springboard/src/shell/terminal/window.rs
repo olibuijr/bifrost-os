@@ -220,6 +220,14 @@ impl Shell {
                     self.set_keyboard(true, t);
                 }
             }
+            Panel::Look => {
+                if ly < 44.0 && lx >= w - 44.0 {
+                    self.terminal_close_panel(t);
+                } else if ly >= 44.0 {
+                    let row = ((ly - 44.0 + self.terminal_ui.scroll / self.ui.s) / 44.0) as usize;
+                    self.terminal_look_tap(row, lx, w);
+                }
+            }
             Panel::More => {
                 if ly < 44.0 && lx >= w - 80.0 {
                     self.terminal_close_panel(t);

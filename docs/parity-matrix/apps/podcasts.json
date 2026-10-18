@@ -63,10 +63,10 @@
    "feature": "Playback speed",
    "area": "menu",
    "apple": "Controls > Playback Speed",
-   "status": "parity",
-   "bifrost": "springboard/apps/podcasts-desktop/src/transport.rs:31",
-   "note": "",
-   "wire": ""
+   "status": "partial",
+   "bifrost": "springboard/apps/podcasts-desktop/src/podcasts.rs (set_rate, sync_audio); springboard/apps/podcasts-desktop/src/transport.rs (RATES)",
+   "note": "The speed menu, Controls > Playback Speed and Slower/Faster send each rate to the audio service as SetRate (0.5 to 3x; audiod time-stretches, so the pitch stays), and the rate is sent again when the service restarts. It was shown but not applied before. Not yet checked on Midget.",
+   "wire": "Check on Midget that 3x plays at the right tempo with the pitch kept, and that the chosen speed carries over to the next episode."
   },
   {
    "feature": "Sleep timer",
@@ -128,8 +128,8 @@
    "apple": "Home / New",
    "status": "partial",
    "bifrost": "springboard/apps/podcasts-desktop/src/library.rs:123",
-   "note": "New Episodes sidebar row: unplayed episodes of all shows, newest first (limit 100). Needs a lab check.",
-   "wire": "Sidebar row merging every show's episodes by date"
+   "note": "New Episodes sidebar row: episodes of all shows, newest first (limit 100). The View menu's smart filters pick Unplayed (the default), Downloaded, Played or All episodes, and the list follows the choice. Needs a lab check.",
+   "wire": "Verify the four New Episodes filters on Midget."
   },
   {
    "feature": "Episode notes",
@@ -147,7 +147,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/podcasts-desktop/src/chapters.rs:13",
    "note": "Podcast namespace chapter marks parsed from the feed, or read from the JSON file a podcast:chapters link names (fetched when the episode plays or its page opens; hidden entries skipped); listed on the episode page and in a Now Playing Chapters panel (tap to seek, current one highlighted). Built on parity/team-d-podcasts; not yet verified on Midget.",
-   "wire": "Parse chapter metadata and list chapters in the player sheet"
+   "wire": "Chapter marks in ID3 CHAP and MP4 chapter lists are read now: springboard/src/media/chapters.rs and Tags::chapters (audiofile::read_tags). Still to do: feed a downloaded episode's Tags::chapters into the Now Playing Chapters panel and add previous and next chapter skip buttons; streamed episodes are not read. Then verify on Midget."
   },
   {
    "feature": "Per-show settings (auto-download, keep, order)",
@@ -212,5 +212,13 @@
    "note": "Vendor-hosted catalogue and accounts",
    "wire": ""
   }
- ]
+ ],
+ "summary": {
+  "features": 23,
+  "parity": 8,
+  "partial": 14,
+  "gap": 0,
+  "n/a": 1,
+  "coverage_pct": 68.2
+ }
 }

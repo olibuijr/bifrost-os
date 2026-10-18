@@ -1,5 +1,5 @@
 //! IMAP (RFC 3501) on the wire: a parser for the server lines this app reads, and a builder for the commands it sends.
-//! Responses with literals (`{n}` followed by data) are not parsed here; the connection layer reads those itself.
+//! Literals (`{n}` followed by data): [`literal_size`] reads the announced count; the connection layer reads the bytes.
 
 use crate::flags::Flags;
 
@@ -39,6 +39,19 @@ pub fn parse_line(line: &str) -> Reply {
         _ => return Reply::Unknown(line.to_string()),
     };
     Reply::Tagged { tag: tag.to_string(), status, text: text.to_string() }
+}
+
+/// The byte count of the literal a server line announces: a line ending in `{n}` (or `{n+}`, LITERAL+) is followed by
+/// `n` bytes of data before the rest of the response. None for a line with no literal. The connection layer reads the
+/// bytes; this only says how many to read.
+pub fn literal_size(line: &str) -> Option<usize> {
+    let body = line.strip_suffix('}')?;
+    let open = body.rfind('{')?;
+    let digits = body[open + 1..].strip_suffix('+').unwrap_or(&body[open + 1..]);
+    if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    digits.parse().ok()
 }
 
 /// A parsed IMAP list value: an atom, a quoted string, `NIL`, or a parenthesised list.
@@ -115,6 +128,16 @@ impl Mailbox {
     pub fn selectable(&self) -> bool {
         !self.attributes.iter().any(|a| a.eq_ignore_ascii_case("\\Noselect"))
     }
+
+    /// True for the server's Drafts mailbox by RFC 6154 special use (`\Drafts`), whatever it is called.
+    pub fn is_drafts(&self) -> bool {
+        self.attributes.iter().any(|a| a.eq_ignore_ascii_case("\\Drafts"))
+    }
+}
+
+/// The name of the Drafts mailbox in a listing: the one flagged `\Drafts`, or `None` when the server flags none.
+pub fn drafts_name(mailboxes: &[Mailbox]) -> Option<&str> {
+    mailboxes.iter().find(|m| m.is_drafts()).map(|m| m.name.as_str())
 }
 
 /// Parses the untagged text of a `LIST` response: `LIST (\HasNoChildren) "/" "INBOX"`.
@@ -270,6 +293,17 @@ mod tests {
     use crate::flags::Flag;
 
     #[test]
+    fn literal_size_reads_the_announced_count() {
+        assert_eq!(literal_size("* 1 FETCH (BODY[] {342}"), Some(342));
+        assert_eq!(literal_size("* 1 FETCH (BODY[] {7+}"), Some(7), "LITERAL+ uses the same count");
+        assert_eq!(literal_size("A001 OK done"), None);
+        assert_eq!(literal_size("* 1 FETCH (BODY[] {x}"), None, "a brace that is not a count is not a literal");
+        assert_eq!(literal_size("* 1 FETCH (BODY[] {})"), None);
+        assert_eq!(literal_size("{5}"), Some(5), "a bare literal line");
+        assert_eq!(literal_size("* 1 FETCH (BODY[] {5} trailing"), None, "a literal must end the line");
+    }
+
+    #[test]
     fn classifies_server_lines() {
         assert_eq!(parse_line("+ go ahead"), Reply::Continuation("go ahead".into()));
         assert_eq!(parse_line("* OK ready"), Reply::Untagged("OK ready".into()));
@@ -291,6 +325,18 @@ mod tests {
         assert_eq!(folder.delimiter, None);
         assert_eq!(folder.name, "Archive \"old\"");
         assert!(!folder.selectable());
+    }
+
+    #[test]
+    fn finds_the_special_use_drafts_mailbox() {
+        let list = [
+            parse_list("LIST (\\HasNoChildren) \"/\" \"INBOX\"").unwrap(),
+            parse_list("LIST (\\HasNoChildren \\Drafts) \"/\" \"Kladdur\"").unwrap(),
+        ];
+        assert!(list[1].is_drafts());
+        assert!(!list[0].is_drafts());
+        assert_eq!(drafts_name(&list), Some("Kladdur"));
+        assert_eq!(drafts_name(&list[..1]), None);
     }
 
     #[test]

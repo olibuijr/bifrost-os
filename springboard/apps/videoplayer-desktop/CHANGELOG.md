@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Playback menu: a speed picker (0.5x to 3x, the sound time-stretched so its pitch holds) and a subtitle picker.
+- Subtitle files per language (`name.en.srt`) are all loaded and offered in the picker, not only the first sidecar.
+
 ## 0.2.4 — 2026-10-14
 
 - Size notice and subtitle text margins from shared spacing tokens so captions remain readable across window scales.

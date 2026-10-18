@@ -12,14 +12,14 @@
       "apple": "SCNetworkReachabilityCreateWithName, SCNetworkReachabilityCreateWithAddress, SCNetworkReachabilityGetFlags, SCNetworkReachabilitySetCallback",
       "bifrost": "springboard/src/net/wifi.rs (Status: state, ip, router); no host-reachability probe found",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 8 tests. The daemon reports link and address state only. No API tests whether a named host is reachable, and apps have no client for the state either."
+      "note": "verified on Midget 0.7.25 by 8 tests. The daemon reports link and address state only. No API tests whether a named host is reachable, and apps have no client for the state either. Built 2026-10-17: route flags for a host or address (reachable, connection required, local, cellular) from the network path, with no probe; springboard/sdk/src/reachability_flags.rs; tests reachability_flags::tests."
     },
     {
       "feature": "Change notifications for network state",
       "apple": "SCDynamicStore, SCDynamicStoreSetNotificationKeys, SCDynamicStoreCreateRunLoopSource",
       "bifrost": "springboard/sdk/src/network_path.rs (PathMonitor::update, PATH_EVENT, path_event); springboard/netd/src/main.rs (Status event on every change); springboard/proto/src/svc.rs",
       "status": "partial",
-      "note": "Apps receive path changes from the shell's network service, and the monitor reports only real changes, with tests. netd polls every 250 ms and pushes a Status event on change; apps cannot subscribe to individual link or address keys."
+      "note": "Apps receive path changes from the shell's network service, and the monitor reports only real changes, with tests. netd polls every 250 ms and pushes a Status event on change; apps cannot subscribe to individual link or address keys. Refreshed 2026-10-17: Wi-Fi changes come from springboard/sdk/src/wlan_events.rs (snapshot diff, tests wlan_events::tests). Gap removed."
     },
     {
       "feature": "Network interface enumeration",
@@ -121,10 +121,8 @@
     }
   ],
   "gaps": [
-    "No SDK client for the network service (svc::net). Apps cannot read Wi-Fi or link state, which the Apple reachability and dynamic-store APIs would give them. springboard/docs/services.md lists the client as planned.",
-    "No reachability test for a named host or address (SCNetworkReachability).",
     "No system-wide preferences store for apps (SCPreferences), and no way to read or set the computer or host name.",
-    "No proxy configuration, and no VPN or PPP connection control (SCNetworkConnection).",
+    "Proxy settings are read from the environment the shell publishes (sdk proxy_settings.rs); no VPN or PPP connection control (SCNetworkConnection).",
     "No network services, sets or locations, so service order and per-location settings do not exist.",
     "The Network page cannot edit IPv4 or IPv6 settings (manual addressing, DNS servers)."
   ]

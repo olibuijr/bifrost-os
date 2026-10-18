@@ -19,7 +19,7 @@
       "apple": "didReceive(_:completionHandler:), UNNotificationContentExtensionResponseOption",
       "bifrost": "springboard/sdk/src/usernotif.rs (Event::Response), springboard/src/shell/usernotif.rs; springboard/sdk/tests/parity_sdk-tests-04.rs (tests)",
       "status": "partial",
-      "note": "category actions (button, destructive, foreground, text reply) and Response events exist, and the action model and the text reply response are tested headless in springboard/sdk/tests/parity_sdk-tests-04.rs; no content-extension response options or per-view action dismissal"
+      "note": "category actions (button, destructive, foreground, text reply) and Response events exist, and the action model and the text reply response are tested headless in springboard/sdk/tests/parity_sdk-tests-04.rs; no content-extension response options or per-view action dismissal Built 2026-10-17: the request's userInfo comes back with every response (ToApp NotificationAction, field user_info; SDK Response.user_info). Tests: proto rich::tests::notification_messages_round_trip, shell usernotif::tests::responses_check_the_category, sdk tests parity_sdk-tests-04 headless_a_text_reply_response_carries_the_typed_text. Attachments are not built."
     },
     {
       "feature": "Media play and pause in notifications",
@@ -33,7 +33,7 @@
       "apple": "UNNotificationContent delivery into the system banner, lock screen and Notification Center (framework context)",
       "bifrost": "springboard/src/shell/notify/mod.rs (Shell post path), springboard/src/shell/notify/center.rs, springboard/src/shell/notify/banner.rs; springboard/tests/parity_sdk-tests-04.rs (tests)",
       "status": "partial",
-      "note": "banner, lock screen stack and Notification Center exist; subtitle and body are shown but there is no sound, attachment or userInfo. The notification store behind the lists (grouping, clearing per app, the 50-entry limit, mute state) is tested headless in springboard/tests/parity_sdk-tests-04.rs; the drawn cards are not tested"
+      "note": "banner, lock screen stack and Notification Center exist; subtitle and body are shown but there is no sound, attachment or userInfo. The notification store behind the lists (grouping, clearing per app, the 50-entry limit, mute state) is tested headless in springboard/tests/parity_sdk-tests-04.rs; the drawn cards are not tested Built 2026-10-17: the first attachment is decoded (PNG, under 4 MiB, from the app's data directory) and drawn at the right of the card; private text hides it. Test: notify::list::tests::an_attachment_shows_as_a_thumbnail_unless_previews_are_hidden."
     }
   ],
   "gaps": [

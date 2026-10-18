@@ -7,12 +7,16 @@
 //! Device lifecycle: a device starts when its first IO procedure starts running and stops `idle_stop` (2 s) after
 //! the last one stopped. With no running device the loop blocks in `poll` with no timeout: no wakeups when idle.
 
+use crate::apps::{plan_text, AppState};
 use crate::client::{recv_msg, send_msg, Conn, HELLO_TIMEOUT, MAX_STALLED};
+use crate::dsp::{Plan, Stages};
 use crate::io::{
     log, set_realtime, ClientSlot, DeviceRunner, RunnerConfig, Shared, WaitPolicy, CLIENT_PRIORITY, DEFAULT_QUANTUM,
     MAX_CH, MAX_QUANTUM, MIN_QUANTUM,
 };
 use bifrost_audio_driver::{DeviceDesc, Driver, DriverEvent, IoConfig};
+use bifrost_audio_policy::dsp::DspManager;
+use bifrost_audio_policy::sessions::{Action, Category, Denied, Direction};
 use bifrost_audio_types::control::{
     decode_request, encode_reply, IoProcRequest, Reply, Request, CONTROL_SOCKET, MAX_LEN, PROTOCOL_VERSION,
 };
@@ -102,6 +106,8 @@ struct DeviceHost {
     stopping: Option<std::thread::JoinHandle<()>>,
     running: bool,
     idle_since: Option<Instant>,
+    /// Frames of the output and input level taps the analysis has already seen.
+    levels_seen: [u64; 2],
 }
 
 struct ClientRec {
@@ -130,6 +136,35 @@ fn err(e: AudioError) -> Handled {
     plain(Reply::Error(e))
 }
 
+/// What a refused stream is told: the session category does not allow it, or another session has the audio.
+fn denied(d: Denied) -> AudioError {
+    match d {
+        Denied::Category(_) => AudioError::PermissionDenied,
+        Denied::Interrupted => AudioError::Hogged,
+    }
+}
+
+/// The rate a device is opened at: 48 kHz when it supports it, else its lowest.
+fn device_rate(desc: &DeviceDesc) -> f64 {
+    if desc.rates.iter().any(|r| 48_000.0 >= r.0 && 48_000.0 <= r.1) {
+        48_000.0
+    } else {
+        desc.rates.first().map(|r| r.0).unwrap_or(48_000.0)
+    }
+}
+
+/// The stream ids the process registry knows a slot's directions by.
+fn out_stream(slot: u32) -> u32 {
+    slot * 2
+}
+
+fn in_stream(slot: u32) -> u32 {
+    slot * 2 + 1
+}
+
+/// How often the level taps of running devices are analysed.
+pub const LEVEL_PERIOD: Duration = Duration::from_millis(100);
+
 pub struct ServerCore {
     drivers: Vec<Box<dyn Driver>>,
     devices: Vec<DeviceHost>,
@@ -139,6 +174,9 @@ pub struct ServerCore {
     objects: Box<dyn ObjectApi>,
     cfg: CoreConfig,
     server_uid: u32,
+    /// The applications, their sessions, the DSP plan and the levels (`apps.rs`).
+    apps: AppState,
+    levels_at: Option<Instant>,
 }
 
 impl ServerCore {
@@ -148,18 +186,35 @@ impl ServerCore {
             let mut descs = Vec::new();
             d.enumerate(&mut descs);
             for desc in descs {
-                log("driver", &format!("{}: device {} ({})", d.name(), desc.uid, desc.name));
+                log("driver", &format!("{}: device {} ({}, {})", d.name(), desc.uid, desc.name, desc.transport));
                 devices.push(Self::host(i, desc));
             }
         }
         // SAFETY: getuid cannot fail.
         let server_uid = unsafe { libc::getuid() };
-        ServerCore { drivers, devices, clients: HashMap::new(), slots: HashMap::new(), next_slot: 1, objects, cfg, server_uid }
+        let mut apps = AppState::new();
+        for (i, d) in devices.iter().enumerate() {
+            apps.add_device(ObjectId(DEVICE_ID_BASE + i as u32), &d.desc);
+        }
+        let mut core = ServerCore { drivers, devices, clients: HashMap::new(), slots: HashMap::new(), next_slot: 1, objects, cfg, server_uid, apps, levels_at: None };
+        core.refresh_dsp_all();
+        core
+    }
+
+    /// Installs the DSP configuration (which stages run for each device) and posts the plans to the devices.
+    pub fn set_dsp(&mut self, manager: DspManager) {
+        self.apps.set_dsp(manager);
+        self.refresh_dsp_all();
+    }
+
+    /// The applications, sessions and measurements the server publishes.
+    pub fn apps(&self) -> &AppState {
+        &self.apps
     }
 
     fn host(driver: usize, desc: DeviceDesc) -> DeviceHost {
         let q = DEFAULT_QUANTUM.clamp(desc.buffer_frames_range.0.max(MIN_QUANTUM), desc.buffer_frames_range.1.min(MAX_QUANTUM));
-        DeviceHost { driver, desc, shared: Shared::new(q), thread: None, manual: None, abort: None, stopping: None, running: false, idle_since: None }
+        DeviceHost { driver, desc, shared: Shared::new(q), thread: None, manual: None, abort: None, stopping: None, running: false, idle_since: None, levels_seen: [0; 2] }
     }
 
     pub fn device_count(&self) -> usize {
@@ -203,6 +258,8 @@ impl ServerCore {
         }
         self.clients.remove(&id);
         self.objects.client_gone(id);
+        let released = self.apps.client_gone(id);
+        self.apply_actions(released);
         log("client", &format!("client {id} gone"));
     }
 
@@ -226,36 +283,84 @@ impl ServerCore {
                     return err(AudioError::PermissionDenied);
                 }
                 log("client", &format!("client {client}: {name} (pid {}, policy {policy})", c.pid));
-                c.name = Some(name);
+                let pid = c.pid;
+                c.name = Some(name.clone());
                 c.policy = policy;
+                self.apps.client_hello(client, &name, pid);
                 plain(Reply::Welcome { version: PROTOCOL_VERSION, client_id: client })
             }
-            Request::Get { object, address } => match self.objects.get(object, address) {
-                Ok(v) => plain(Reply::Value(v)),
-                Err(e) => err(e),
-            },
+            // The applications, devices and system lists are answered by `apps`; what it does not publish goes on to the
+            // object tree behind `objects`.
+            Request::Get { object, address } => {
+                if self.apps.owns(object) {
+                    match self.apps.get(object, address) {
+                        Ok(v) => return plain(Reply::Value(v)),
+                        Err(AudioError::UnknownObject | AudioError::UnknownProperty) => {}
+                        Err(e) => return err(e),
+                    }
+                }
+                match self.objects.get(object, address) {
+                    Ok(v) => plain(Reply::Value(v)),
+                    Err(e) => err(e),
+                }
+            }
             Request::Set { object, address, value } => {
                 let policy = self.clients[&client].policy;
+                if self.apps.owns(object) {
+                    match self.apps.set(client, policy, object, address, value.clone()) {
+                        Ok(actions) => {
+                            self.apply_actions(actions);
+                            return plain(Reply::Done);
+                        }
+                        Err(AudioError::UnknownObject | AudioError::UnknownProperty) => {}
+                        Err(e) => return err(e),
+                    }
+                }
                 match self.objects.set(client, policy, object, address, value) {
                     Ok(()) => plain(Reply::Done),
                     Err(e) => err(e),
                 }
             }
-            Request::Listen { object, address } => match self.objects.listen(client, object, address) {
-                Ok(()) => plain(Reply::Done),
-                Err(e) => err(e),
-            },
-            Request::Unlisten { object, address } => match self.objects.unlisten(client, object, address) {
-                Ok(()) => plain(Reply::Done),
-                Err(e) => err(e),
-            },
-            Request::Owned { object } => match self.objects.owned(object) {
-                Ok(v) => plain(Reply::Objects(v)),
-                Err(AudioError::UnknownObject) if object == SYSTEM_OBJECT => {
-                    plain(Reply::Objects((0..self.devices.len()).map(|i| self.device_id(i)).collect()))
+            Request::Listen { object, address } => {
+                if self.apps.owns(object) {
+                    match self.apps.listen(client, object, address) {
+                        Ok(()) => return plain(Reply::Done),
+                        Err(AudioError::UnknownObject | AudioError::UnknownProperty) => {}
+                        Err(e) => return err(e),
+                    }
                 }
-                Err(e) => err(e),
-            },
+                match self.objects.listen(client, object, address) {
+                    Ok(()) => plain(Reply::Done),
+                    Err(e) => err(e),
+                }
+            }
+            Request::Unlisten { object, address } => {
+                if self.apps.owns(object) {
+                    match self.apps.unlisten(client, object, address) {
+                        Ok(()) => return plain(Reply::Done),
+                        Err(AudioError::UnknownObject | AudioError::UnknownProperty) => {}
+                        Err(e) => return err(e),
+                    }
+                }
+                match self.objects.unlisten(client, object, address) {
+                    Ok(()) => plain(Reply::Done),
+                    Err(e) => err(e),
+                }
+            }
+            Request::Owned { object } => {
+                if object != SYSTEM_OBJECT && self.apps.owns(object) {
+                    if let Ok(v) = self.apps.owned(object) {
+                        return plain(Reply::Objects(v));
+                    }
+                }
+                match self.objects.owned(object) {
+                    Ok(v) => plain(Reply::Objects(v)),
+                    Err(AudioError::UnknownObject) if object == SYSTEM_OBJECT => {
+                        plain(Reply::Objects((0..self.devices.len()).map(|i| self.device_id(i)).collect()))
+                    }
+                    Err(e) => err(e),
+                }
+            }
             Request::AddIoProc(r) => self.add_io_proc(client, r),
             Request::RemoveIoProc { id } => match self.owned_slot(client, id) {
                 Ok(_) => {
@@ -266,12 +371,19 @@ impl ServerCore {
             },
             Request::StartIoProc { id } => match self.owned_slot(client, id) {
                 Ok(r) => {
+                    if let Err(e) = self.check_session(client, r.slot.output_channels > 0, r.slot.input_channels > 0) {
+                        return err(e);
+                    }
                     r.slot.running.store(true, Ordering::Release);
                     let dev = r.device;
                     self.recompute_quantum(dev);
                     self.devices[dev].idle_since = None;
                     match self.start_device(dev) {
-                        Ok(()) => plain(Reply::Done),
+                        Ok(()) => {
+                            self.register_streams(client, id, &r.slot);
+                            self.refresh_dsp(dev);
+                            plain(Reply::Done)
+                        }
                         Err(e) => {
                             self.slots[&id].slot.running.store(false, Ordering::Release);
                             err(e)
@@ -284,6 +396,9 @@ impl ServerCore {
                 Ok(r) => {
                     r.slot.running.store(false, Ordering::Release);
                     self.recompute_quantum(r.device);
+                    self.apps.stream_stopped(out_stream(id));
+                    self.apps.stream_stopped(in_stream(id));
+                    self.refresh_dsp(r.device);
                     plain(Reply::Done)
                 }
                 Err(e) => err(e),
@@ -327,6 +442,9 @@ impl ServerCore {
         {
             return err(AudioError::BadValue);
         }
+        if let Err(e) = self.check_session(client, r.output_channels > 0, r.input_channels > 0) {
+            return err(e);
+        }
         let id = self.next_slot;
         self.next_slot += 1;
         let ring_frames = (r.buffer_frames.max(DEFAULT_QUANTUM) * 4).next_power_of_two();
@@ -339,6 +457,9 @@ impl ServerCore {
         };
         let (Ok(mem), Ok(ev)) = (slot.region.fd.try_clone(), slot.wake_fd.try_clone()) else { return err(AudioError::Io) };
         let layout = slot.layout;
+        if let Some(app) = self.apps.app_of(client) {
+            slot.set_session_gain(self.apps.gain_of(app));
+        }
         self.slots.insert(id, SlotRec { device: dev, slot });
         self.publish(dev);
         log("client", &format!("client {client}: io proc {id} on device {dev} ({} frames)", r.buffer_frames));
@@ -350,6 +471,9 @@ impl ServerCore {
             r.slot.running.store(false, Ordering::Release);
             self.publish(r.device);
             self.recompute_quantum(r.device);
+            self.apps.stream_stopped(out_stream(id));
+            self.apps.stream_stopped(in_stream(id));
+            self.refresh_dsp(r.device);
         }
     }
 
@@ -385,12 +509,10 @@ impl ServerCore {
             return Err(AudioError::Io);
         }
         let desc = self.devices[idx].desc.clone();
-        let rate = if desc.rates.iter().any(|r| 48_000.0 >= r.0 && 48_000.0 <= r.1) {
-            48_000.0
-        } else {
-            desc.rates.first().map(|r| r.0).unwrap_or(48_000.0)
-        };
+        let rate = device_rate(&desc);
         let shared = self.devices[idx].shared.clone();
+        shared.level_out.set_rate(rate as u32);
+        shared.level_in.set_rate(rate as u32);
         let quantum = shared.quantum.load(Ordering::Acquire);
         let cfg = IoConfig { rate, quantum, input: desc.input_channels > 0, output: desc.output_channels > 0 };
         let io = self.drivers[self.devices[idx].driver].open(&desc.uid, &cfg).map_err(|e| {
@@ -419,6 +541,8 @@ impl ServerCore {
             self.devices[idx].manual = Some(runner);
         }
         self.devices[idx].running = true;
+        let id = self.device_id(idx);
+        self.apps.device_running(id, true);
         log("io", &format!("device {} started at {rate} Hz, quantum {quantum}", desc.uid));
         Ok(())
     }
@@ -462,7 +586,10 @@ impl ServerCore {
         }
         d.running = false;
         d.idle_since = None;
-        log("io", &format!("device {} stopped", d.desc.uid));
+        let uid = d.desc.uid.clone();
+        let id = self.device_id(idx);
+        self.apps.device_running(id, false);
+        log("io", &format!("device {uid} stopped"));
     }
 
     /// Joins a stop-requested IO thread that has ended since. False while one is still alive.
@@ -522,10 +649,131 @@ impl ServerCore {
                 DriverEvent::DeviceAdded(desc) => {
                     if !self.devices.iter().any(|d| d.desc.uid == desc.uid) {
                         log("driver", &format!("device added: {}", desc.uid));
+                        let index = self.devices.len();
+                        self.apps.add_device(ObjectId(DEVICE_ID_BASE + index as u32), &desc);
                         self.devices.push(Self::host(driver, desc));
+                        self.refresh_dsp(index);
                     }
                 }
                 other => log("driver", &format!("event: {other:?}")),
+            }
+        }
+        if self.levels_at.map_or(true, |at| now.duration_since(at) >= LEVEL_PERIOD) {
+            self.levels_at = Some(now);
+            self.publish_levels();
+        }
+    }
+
+    /// Whether the application's session allows streams in the directions of a new or starting stream.
+    fn check_session(&self, client: u32, output: bool, input: bool) -> Result<(), AudioError> {
+        if output {
+            self.apps.check_stream(client, Direction::Output).map_err(denied)?;
+        }
+        if input {
+            self.apps.check_stream(client, Direction::Input).map_err(denied)?;
+        }
+        Ok(())
+    }
+
+    /// A slot started: its streams count as running for the application.
+    fn register_streams(&mut self, client: u32, id: u32, slot: &ClientSlot) {
+        if slot.output_channels > 0 {
+            self.apps.stream_started(client, out_stream(id), Direction::Output);
+        }
+        if slot.input_channels > 0 {
+            self.apps.stream_started(client, in_stream(id), Direction::Input);
+        }
+    }
+
+    /// Applies what the session arbiter decided: the gain of every stream of each application it names follows the
+    /// arbiter (0 while interrupted, the duck gain while ducked), and the DSP plans are worked out again because the
+    /// categories in force may have changed.
+    fn apply_actions(&mut self, actions: Vec<Action>) {
+        for action in &actions {
+            let app = match action {
+                Action::Pause(a) | Action::Resume(a) | Action::Unduck(a) => a,
+                Action::Duck(a, _) => a,
+            };
+            let gain = self.apps.gain_of(app);
+            for client in self.apps.clients_of(app) {
+                for r in self.slots.values().filter(|r| r.slot.owner == client) {
+                    r.slot.set_session_gain(gain);
+                }
+            }
+        }
+        self.refresh_dsp_all();
+    }
+
+    /// The application and session category the oldest running stream of a device in `direction` belongs to.
+    fn plan_stream(&self, dev: usize, direction: Direction) -> Option<Category> {
+        let oldest = self
+            .slots
+            .iter()
+            .filter(|(_, r)| {
+                r.device == dev
+                    && r.slot.running.load(Ordering::Acquire)
+                    && if direction == Direction::Output { r.slot.output_channels > 0 } else { r.slot.input_channels > 0 }
+            })
+            .min_by_key(|(id, _)| **id)
+            .map(|(_, r)| r.slot.owner)?;
+        let app = self.apps.app_of(oldest)?;
+        self.apps.category_of(app)
+    }
+
+    /// Works out the DSP plan of a device from the configuration and the session category of the stream that has been
+    /// running longest in each direction (a recording session bypasses the stages that colour the microphone), publishes
+    /// it as the device's `DSP_PLAN` and `DSP_LATENCY`, and posts it to the IO thread.
+    fn refresh_dsp(&mut self, dev: usize) {
+        let (uid, rate, out_ch, in_ch) = {
+            let d = &self.devices[dev].desc;
+            (d.uid.clone(), device_rate(d) as f32, d.output_channels as usize, d.input_channels as usize)
+        };
+        let id = self.device_id(dev);
+        let mut plan = Plan::default();
+        for (output, channels) in [(true, out_ch), (false, in_ch)] {
+            if channels == 0 {
+                continue;
+            }
+            let direction = if output { Direction::Output } else { Direction::Input };
+            let category = self.plan_stream(dev, direction);
+            let assignment = self.apps.dsp().assignment(&uid, direction, None, category);
+            let stages = Stages::compile(&assignment, rate, channels);
+            self.apps.publish_dsp(id, output, plan_text(&assignment), stages.latency_frames());
+            if output {
+                plan.output = stages;
+            } else {
+                plan.input = stages;
+            }
+        }
+        self.devices[dev].shared.dsp.post(plan);
+    }
+
+    fn refresh_dsp_all(&mut self) {
+        for dev in 0..self.devices.len() {
+            self.refresh_dsp(dev);
+        }
+    }
+
+    /// Analyses what each running device played and captured since the last time and publishes it as the device's
+    /// `LEVEL`.
+    fn publish_levels(&mut self) {
+        for i in 0..self.devices.len() {
+            if !self.devices[i].running {
+                continue;
+            }
+            let id = self.device_id(i);
+            let shared = self.devices[i].shared.clone();
+            for output in [true, false] {
+                let tap = if output { &shared.level_out } else { &shared.level_in };
+                let written = tap.written();
+                if written == 0 || written == self.devices[i].levels_seen[output as usize] {
+                    continue;
+                }
+                self.devices[i].levels_seen[output as usize] = written;
+                if let Some(window) = tap.window() {
+                    let planes: Vec<&[f32]> = window.iter().map(|v| v.as_slice()).collect();
+                    self.apps.publish_level(id, output, &planes, tap.rate());
+                }
             }
         }
     }
@@ -561,7 +809,9 @@ impl ServerCore {
     }
 
     pub fn take_changes(&mut self) -> Vec<(u32, Reply)> {
-        self.objects.drain_changes().into_iter().map(|(c, v)| (c, Reply::Changed(v))).collect()
+        let mut all = self.objects.drain_changes();
+        all.extend(self.apps.drain_changes());
+        all.into_iter().map(|(c, v)| (c, Reply::Changed(v))).collect()
     }
 
     pub fn shutdown(&mut self) {
@@ -1026,5 +1276,220 @@ mod tests {
         drop(sock);
         let _ = t.join();
         let _ = std::fs::remove_file(&path);
+    }
+
+    // -- applications, sessions, DSP and levels ---------------------------------------------------------------------
+
+    use crate::apps::process_object;
+    use bifrost_audio_engine::analysis::Measurement;
+    use bifrost_audio_policy::dsp::{Chain, Kind, Stage};
+    use bifrost_audio_types::{props, FourCC, Scope};
+
+    fn hello_named(c: &mut ServerCore, id: u32, name: &str) -> Reply {
+        c.handle(id, Request::Hello { version: PROTOCOL_VERSION, client: name.into(), policy: false }).reply
+    }
+
+    fn set_process(c: &mut ServerCore, client: u32, process: u32, selector: FourCC, value: PropertyValue) -> Reply {
+        c.handle(client, Request::Set { object: process_object(process), address: PropertyAddress::global(selector), value }).reply
+    }
+
+    fn get(c: &mut ServerCore, client: u32, object: ObjectId, address: PropertyAddress) -> Reply {
+        c.handle(client, Request::Get { object, address }).reply
+    }
+
+    /// Fills each slot's output ring with a constant block, advances the clock one quantum and runs one cycle.
+    fn play(c: &mut ServerCore, h: &NullHandle, levels: &[(u32, f32)]) {
+        for (id, v) in levels {
+            let s = c.slot(*id).unwrap();
+            let p = vec![*v; 256];
+            s.output_ring().unwrap().write(&[&p[..], &p[..]], 256);
+        }
+        h.advance(5_333_333);
+        let t = h.clock().now();
+        c.manual_runner(0).unwrap().cycle(t);
+    }
+
+    #[test]
+    fn each_connected_application_is_a_process_object_the_clients_can_read_and_listen_to() {
+        let (mut c, _) = core();
+        hello_named(&mut c, 1, "is.olibuijr.music");
+        let procs = PropertyAddress::global(props::PROCESSES);
+        assert_eq!(get(&mut c, 1, SYSTEM_OBJECT, procs), Reply::Value(PropertyValue::Objects(vec![process_object(1)])));
+        assert_eq!(c.handle(1, Request::Listen { object: SYSTEM_OBJECT, address: procs }).reply, Reply::Done);
+        hello_named(&mut c, 2, "is.olibuijr.notes");
+        assert_eq!(c.take_changes(), vec![(1, Reply::Changed(vec![(SYSTEM_OBJECT, procs)]))]);
+        assert_eq!(
+            get(&mut c, 1, process_object(2), PropertyAddress::global(props::APP_ID)),
+            Reply::Value(PropertyValue::String("is.olibuijr.notes".into()))
+        );
+        assert_eq!(c.handle(1, Request::Owned { object: SYSTEM_OBJECT }).reply, Reply::Objects(vec![ObjectId(1000)]), "the system still owns its devices");
+        assert_eq!(get(&mut c, 1, SYSTEM_OBJECT, PropertyAddress::global(props::DEVICES)), Reply::Value(PropertyValue::Objects(vec![ObjectId(1000)])));
+        assert_eq!(get(&mut c, 1, ObjectId(1000), PropertyAddress::global(props::DEVICE_UID)), Reply::Value(PropertyValue::String("n0".into())));
+        c.remove_client(2);
+        assert_eq!(get(&mut c, 1, SYSTEM_OBJECT, procs), Reply::Value(PropertyValue::Objects(vec![process_object(1)])));
+        assert_eq!(get(&mut c, 1, process_object(2), PropertyAddress::global(props::APP_ID)), Reply::Error(AudioError::UnknownObject));
+    }
+
+    #[test]
+    fn running_streams_show_on_the_process_object() {
+        let (mut c, _) = core();
+        hello_named(&mut c, 1, "player");
+        let running = PropertyAddress::global(props::RUNNING_OUTPUT);
+        let a = add(&mut c, 1, 256);
+        assert_eq!(get(&mut c, 1, process_object(1), running), Reply::Value(PropertyValue::Bool(false)));
+        c.handle(1, Request::StartIoProc { id: a });
+        assert_eq!(get(&mut c, 1, process_object(1), running), Reply::Value(PropertyValue::Bool(true)));
+        assert_eq!(get(&mut c, 1, ObjectId(1000), PropertyAddress::global(props::IS_RUNNING)), Reply::Value(PropertyValue::Bool(true)));
+        c.handle(1, Request::StopIoProc { id: a });
+        assert_eq!(get(&mut c, 1, process_object(1), running), Reply::Value(PropertyValue::Bool(false)));
+    }
+
+    #[test]
+    fn a_session_category_is_enforced_on_the_clients_streams() {
+        let (mut c, _) = core();
+        hello_named(&mut c, 1, "recorder");
+        hello_named(&mut c, 2, "player");
+        let category = |name: &str| PropertyValue::String(name.into());
+        assert_eq!(set_process(&mut c, 1, 1, props::SESSION_CATEGORY, category("record")), Reply::Done);
+        assert_eq!(c.handle(1, proc_req(256)).reply, Reply::Error(AudioError::PermissionDenied), "a recording session cannot play");
+        let input = Request::AddIoProc(IoProcRequest { device: ObjectId(DEVICE_ID_BASE), input_channels: 2, output_channels: 0, buffer_frames: 256 });
+        assert!(matches!(c.handle(1, input).reply, Reply::IoProcAdded { .. }), "but it can record");
+        assert!(matches!(c.handle(2, proc_req(256)).reply, Reply::IoProcAdded { .. }), "an application with no session is unmanaged");
+        assert_eq!(
+            set_process(&mut c, 2, 1, props::SESSION_CATEGORY, category("playback")),
+            Reply::Error(AudioError::PermissionDenied),
+            "another application cannot change the session"
+        );
+        assert_eq!(set_process(&mut c, 1, 1, props::SESSION_CATEGORY, category("loud")), Reply::Error(AudioError::BadValue));
+        // a stream that was added while the category allowed it cannot be started after the category changed
+        assert_eq!(set_process(&mut c, 1, 1, props::SESSION_CATEGORY, category("playback")), Reply::Done);
+        let a = add(&mut c, 1, 256);
+        assert_eq!(set_process(&mut c, 1, 1, props::SESSION_CATEGORY, category("record")), Reply::Done);
+        assert_eq!(c.handle(1, Request::StartIoProc { id: a }).reply, Reply::Error(AudioError::PermissionDenied));
+        assert!(!c.device_running(0));
+    }
+
+    #[test]
+    fn a_new_session_pauses_the_other_apps_output_and_ending_it_brings_it_back() {
+        let (mut c, h) = core();
+        hello_named(&mut c, 1, "music");
+        hello_named(&mut c, 2, "video");
+        let playback = PropertyValue::String("playback".into());
+        set_process(&mut c, 1, 1, props::SESSION_CATEGORY, playback.clone());
+        set_process(&mut c, 2, 2, props::SESSION_CATEGORY, playback);
+        assert_eq!(set_process(&mut c, 1, 1, props::SESSION_ACTIVE, PropertyValue::Bool(true)), Reply::Done);
+        let a = add(&mut c, 1, 256);
+        let b = add(&mut c, 2, 256);
+        c.handle(1, Request::StartIoProc { id: a });
+        c.handle(2, Request::StartIoProc { id: b });
+        assert_eq!(set_process(&mut c, 2, 2, props::SESSION_ACTIVE, PropertyValue::Bool(true)), Reply::Done);
+        assert_eq!((c.slot(a).unwrap().session_gain(), c.slot(b).unwrap().session_gain()), (0.0, 1.0));
+        assert_eq!(c.handle(1, proc_req(256)).reply, Reply::Error(AudioError::Hogged), "an interrupted application cannot start another stream");
+        play(&mut c, &h, &[(a, 0.25), (b, 0.5)]);
+        assert_eq!(h.written("n0")[0], vec![0.5; 256], "only the video is heard");
+        // the video ends: the music comes back over one volume ramp
+        assert_eq!(set_process(&mut c, 2, 2, props::SESSION_ACTIVE, PropertyValue::Bool(false)), Reply::Done);
+        assert_eq!(c.slot(a).unwrap().session_gain(), 1.0);
+        for _ in 0..3 {
+            play(&mut c, &h, &[(a, 0.25), (b, 0.5)]);
+        }
+        assert_eq!(h.written("n0")[0][3 * 256..], vec![0.75; 256][..], "both are heard again");
+    }
+
+    #[test]
+    fn a_session_goes_when_its_client_does_and_what_it_held_is_released() {
+        let (mut c, _) = core();
+        hello_named(&mut c, 1, "music");
+        hello_named(&mut c, 2, "call");
+        let playback = PropertyValue::String("playback".into());
+        set_process(&mut c, 1, 1, props::SESSION_CATEGORY, playback.clone());
+        set_process(&mut c, 2, 2, props::SESSION_CATEGORY, playback);
+        set_process(&mut c, 1, 1, props::SESSION_ACTIVE, PropertyValue::Bool(true));
+        let a = add(&mut c, 1, 256);
+        set_process(&mut c, 2, 2, props::SESSION_ACTIVE, PropertyValue::Bool(true));
+        assert_eq!(c.slot(a).unwrap().session_gain(), 0.0);
+        c.remove_client(2);
+        assert_eq!(c.slot(a).unwrap().session_gain(), 1.0, "the interruption ended with the call");
+    }
+
+    #[test]
+    fn the_per_device_dsp_plan_runs_on_the_mix_and_shows_on_the_device() {
+        let (mut c, h) = core();
+        hello(&mut c, 1, false);
+        let mut m = DspManager::new();
+        m.set_device_chain("n0", Direction::Output, Chain::new(vec![Stage::new("trim", Kind::Gain).with("db", -6.0206), Stage::new("lim", Kind::Limiter).with("lookahead", 24.0)])).unwrap();
+        c.set_dsp(m);
+        let plan = PropertyAddress::scoped(props::DSP_PLAN, Scope::Output);
+        assert_eq!(get(&mut c, 1, ObjectId(DEVICE_ID_BASE), plan), Reply::Value(PropertyValue::String("gain trim\nlimiter lim".into())));
+        assert_eq!(get(&mut c, 1, ObjectId(DEVICE_ID_BASE), PropertyAddress::scoped(props::DSP_LATENCY, Scope::Output)), Reply::Value(PropertyValue::U32(24)));
+        assert_eq!(get(&mut c, 1, ObjectId(DEVICE_ID_BASE), PropertyAddress::scoped(props::DSP_PLAN, Scope::Input)), Reply::Value(PropertyValue::String(String::new())));
+        let a = add(&mut c, 1, 256);
+        c.handle(1, Request::StartIoProc { id: a });
+        for _ in 0..2 {
+            play(&mut c, &h, &[(a, 0.5)]);
+        }
+        let out = &h.written("n0")[0];
+        // the limiter's 24-frame lookahead delays the signal; after it the trimmed level (half) is what the device gets
+        assert!(out[256..].iter().all(|x| (x - 0.25).abs() < 1e-3), "the gain stage ran on the mix");
+        assert!(out[..24].iter().all(|x| *x == 0.0), "and the lookahead latency is real");
+    }
+
+    #[test]
+    fn a_recording_session_bypasses_the_stages_that_colour_the_microphone() {
+        let (mut c, h) = core();
+        hello_named(&mut c, 1, "recorder");
+        let mut m = DspManager::new();
+        m.set_device_chain("n0", Direction::Input, Chain::new(vec![Stage::new("trim", Kind::Gain).with("db", -6.0206), Stage::new("delay", Kind::Delay).with("frames", 8.0)])).unwrap();
+        c.set_dsp(m);
+        let plan = PropertyAddress::scoped(props::DSP_PLAN, Scope::Input);
+        let dev = ObjectId(DEVICE_ID_BASE);
+        let input = Request::AddIoProc(IoProcRequest { device: dev, input_channels: 2, output_channels: 0, buffer_frames: 256 });
+        let Reply::IoProcAdded { id, .. } = c.handle(1, input).reply else { panic!("no io proc") };
+        c.handle(1, Request::StartIoProc { id });
+        assert_eq!(get(&mut c, 1, dev, plan), Reply::Value(PropertyValue::String("gain trim\ndelay delay".into())), "no session: everything runs");
+        c.handle(1, Request::StopIoProc { id });
+        assert_eq!(set_process(&mut c, 1, 1, props::SESSION_CATEGORY, PropertyValue::String("record".into())), Reply::Done);
+        c.handle(1, Request::StartIoProc { id });
+        assert_eq!(get(&mut c, 1, dev, plan), Reply::Value(PropertyValue::String("gain trim".into())), "the recording session bypasses the delay");
+        assert_eq!(get(&mut c, 1, dev, PropertyAddress::scoped(props::DSP_LATENCY, Scope::Input)), Reply::Value(PropertyValue::U32(0)));
+        // and the capture goes through the stage that remains: half the level reaches the client
+        h.push_input("n0", &[vec![0.5; 256], vec![0.5; 256]]);
+        h.advance(5_333_333);
+        let t = h.clock().now();
+        c.manual_runner(0).unwrap().cycle(t);
+        let mut ring = [vec![0.0f32; 256], vec![0.0f32; 256]];
+        let [l, r] = &mut ring;
+        c.slot(id).unwrap().input_ring().unwrap().read(&mut [&mut l[..], &mut r[..]], 256);
+        assert!(l.iter().all(|x| (x - 0.25).abs() < 1e-3));
+    }
+
+    #[test]
+    fn the_level_of_what_a_device_plays_reaches_a_listening_client() {
+        let (mut c, h) = core();
+        hello(&mut c, 1, false);
+        let dev = ObjectId(DEVICE_ID_BASE);
+        let level = PropertyAddress::scoped(props::LEVEL, Scope::Output);
+        assert_eq!(c.handle(1, Request::Listen { object: dev, address: level }).reply, Reply::Done);
+        let a = add(&mut c, 1, 256);
+        c.handle(1, Request::StartIoProc { id: a });
+        // a 1 kHz sine of amplitude 0.5, twelve quanta (64 whole periods)
+        for q in 0..12 {
+            let block: Vec<f32> = (0..256).map(|i| 0.5 * (2.0 * std::f32::consts::PI * 1000.0 * (q * 256 + i) as f32 / 48_000.0).sin()).collect();
+            let s = c.slot(a).unwrap();
+            s.output_ring().unwrap().write(&[&block[..], &block[..]], 256);
+            h.advance(5_333_333);
+            let t = h.clock().now();
+            c.manual_runner(0).unwrap().cycle(t);
+        }
+        c.tick(Instant::now());
+        let Reply::Value(PropertyValue::String(text)) = get(&mut c, 1, dev, level) else { panic!("no level") };
+        let m = Measurement::decode(&text).expect("the level is the measurement's text form");
+        assert!((m.peak - 0.5).abs() < 0.01 && (m.bands[4] - 0.5).abs() < 0.02, "{m:?}");
+        let changes = c.take_changes();
+        assert!(changes.iter().any(|(client, r)| *client == 1 && matches!(r, Reply::Changed(v) if v.contains(&(dev, level)))), "{changes:?}");
+        // nothing new was played: the next analysis publishes nothing
+        c.take_changes();
+        c.tick(Instant::now() + Duration::from_secs(1));
+        assert!(c.take_changes().iter().all(|(_, r)| !matches!(r, Reply::Changed(v) if v.contains(&(dev, level)))));
     }
 }

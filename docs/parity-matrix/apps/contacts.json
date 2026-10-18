@@ -104,9 +104,9 @@
    "area": "menu",
    "apple": "Card > Look for Duplicates, Merge Selected Cards; ABDuplicateReviewSheet.nib",
    "status": "partial",
-   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:1216",
-   "note": "Card > Merge Duplicates merges the open card with its twins (dupes.rs:117); no review sheet, group membership of merged cards is dropped",
-   "wire": "Add a review sheet that lets the person pick the value to keep for each field before merging."
+   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:1216; springboard/apps/contacts-desktop/src/dupes.rs (review, merge_with)",
+   "note": "Card > Merge Duplicates merges the open card with its twins (dupes.rs merge). dupes::review lists the fields where duplicates disagree and dupes::merge_with folds the cards with the value picked for each field; no review sheet is drawn yet, and group membership of merged cards is dropped.",
+   "wire": "Draw the review sheet over dupes::review, fold with dupes::merge_with after the person picks, and keep the merged card's group membership."
   },
   {
    "feature": "Import vCard",
@@ -160,7 +160,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:1207",
    "note": "Card menu Make This My Card / Go to My Card, saved in mycard.txt; no marker on the list row",
-   "wire": "Share My Card, and use the card as the sender identity in Mail."
+   "wire": "Share My Card needs a grant for a .vcf the app writes itself (mail_compose takes grants, not paths), so a save panel or a shell grant for app-written files is needed first; use the card as the sender identity in Mail."
   },
   {
    "feature": "Mark as company",
@@ -190,6 +190,15 @@
    "wire": ""
   },
   {
+   "feature": "Card phone and email links (tap to Call, tap to Send Email)",
+   "area": "panel",
+   "apple": "Card: Call and Send Email actions on phone and email rows",
+   "status": "partial",
+   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs (Target::Use, Handoff, tel_url, take_handoff); springboard/apps/contacts-desktop/src/services.rs (hand_off); springboard/apps/contacts-desktop/src/main.rs",
+   "note": "A tap on an email row opens a new message in Mail prefilled with the address (bifrost_app::mail_compose::compose); a tap on a phone row hands a tel: link to the shell (ctx.open_url). Built in 1.14.0; host test a_tap_on_a_phone_or_email_hands_it_off_and_other_values_copy. Not verified on Midget, and the shell may have no tel: handler yet.",
+   "wire": "Confirm a tel: handler on Midget (or hand the call to a telephony app), and send the card itself to Mail through Share My Card."
+  },
+  {
    "feature": "Next / previous card",
    "area": "menu",
    "apple": "Card > Go to Next/Previous Card",
@@ -202,10 +211,10 @@
    "feature": "Open card in separate window",
    "area": "menu",
    "apple": "Card > Open in Separate Window; ABContactCardWindowController.nib",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Open a second SDK window showing one card."
+   "status": "partial",
+   "bifrost": "springboard/apps/contacts-desktop/src/main.rs:71 (open_card_window, Ctx::open_window); main.rs:286 (draw_window); main.rs:296 (window_event); main.rs:315 (window_closed); springboard/apps/contacts-desktop/src/contacts.rs:864 (draw_card); contacts.rs:888 (touch_card: scroll, tap copies, Edit); contacts.rs:942 (edit_from_card); contacts.rs:1957 (Card > Open in Separate Window); contacts.rs:3053 (double-click on a row); springboard/apps/contacts-desktop/src/card_windows.rs (CardWindows); springboard/sdk/src/app_windows.rs",
+   "note": "Works end to end on the desk: the shell opens a window per card (ExternalWindow), the app draws the card at its size and takes touches in it. A tap on an email opens Mail with the address (mail_compose) and a tap on a phone opens a tel: link (see Card phone and email links). Differences from Apple: the Edit button shows the contact and opens its editor in the main window but cannot raise that window (the SDK has no focus call for the main window). Not verified on Midget or on the host.",
+   "wire": "Check on Midget: open a card from Card > Open in Separate Window and by double-click, scroll it, tap an email or phone, press Edit. Add a focus call so Edit raises the main window."
   },
   {
    "feature": "Show / hide sidebar",
@@ -326,11 +335,11 @@
   }
  ],
  "summary": {
-  "features": 35,
+  "features": 36,
   "parity": 14,
-  "partial": 18,
-  "gap": 1,
+  "partial": 20,
+  "gap": 0,
   "n/a": 2,
-  "coverage_pct": 69.7
+  "coverage_pct": 70.6
  }
 }

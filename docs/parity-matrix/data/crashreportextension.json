@@ -66,7 +66,7 @@
   ],
   "gaps": [
     "No app extension point for an app to run its own crash handler on another app's crash (the CrashReporterExtension role).",
-    "No SDK API to read a crashed process's reason, binary images or stack, or to symbolicate addresses in it.",
+    "The SDK crash report model takes a crashed process's reason and binary images as values and symbolicates addresses (sdk crash_report.rs); no shell path feeds it yet.",
     "No SDK API for an app to build and send a crash report to its own server; the only path is the manual diagnostics bundle.",
     "Crash records for apps come from systemd-coredump; the SDK does not surface them to apps."
   ]

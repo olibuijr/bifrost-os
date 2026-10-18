@@ -1,7 +1,9 @@
 //! The connection handshake: protocol version, security choice, the security result and ServerInit.
 //!
-//! The viewer answers with the highest version both sides know (3.8, 3.7 or 3.3). Only security None is accepted;
-//! a server that offers only VNC authentication gets `Error::Unsupported`.
+//! The viewer answers with the highest version both sides know (3.8, 3.7 or 3.3). Security None is taken when the
+//! server offers it. VNC authentication (type 2, a DES challenge, see `des`) is used only when the caller passed a
+//! password; without one, a server that offers only VNC authentication gets `Error::Unsupported` with the text
+//! [`PASSWORD_REQUIRED`], which [`needs_password`] recognises so the app can ask for it.
 
 use crate::{Error, PixelFormat};
 use std::io::{Read, Write};
@@ -15,8 +17,15 @@ pub struct Version {
 
 /// Security type None: no authentication.
 pub const SECURITY_NONE: u8 = 1;
-/// Security type VNC Authentication (DES challenge). Not implemented by this viewer.
+/// Security type VNC Authentication (DES challenge).
 pub const SECURITY_VNC: u8 = 2;
+/// The text of the `Error::Unsupported` a password-only server gets when no password was given.
+pub const PASSWORD_REQUIRED: &str = "password (VNC) authentication";
+
+/// Whether `e` says the server wants a password the caller did not give.
+pub fn needs_password(e: &Error) -> bool {
+    matches!(e, Error::Unsupported(m) if m == PASSWORD_REQUIRED)
+}
 
 /// ServerInit: the framebuffer size, the server's pixel format and the desktop name.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -69,14 +78,26 @@ pub fn negotiate_version<S: Read + Write>(s: &mut S) -> Result<Version, Error> {
     Ok(answer)
 }
 
-/// Reads the security types the server offers and picks None. In 3.3 the server chooses for us, so the reply is
-/// the one type it sends; in 3.7 and later the viewer answers with the type it picked.
-pub fn negotiate_security<S: Read + Write>(s: &mut S, v: Version) -> Result<(), Error> {
+/// Answers a VNC authentication challenge: reads the 16 random bytes and writes them back encrypted under the password.
+fn vnc_authenticate<S: Read + Write>(s: &mut S, password: &str) -> Result<(), Error> {
+    let mut challenge = [0u8; 16];
+    s.read_exact(&mut challenge)?;
+    s.write_all(&crate::des::vnc_response(&challenge, password))?;
+    Ok(())
+}
+
+/// Reads the security types the server offers and picks one: None when offered, else VNC authentication when a
+/// password was given (its challenge is answered here). In 3.3 the server chooses for us, so the reply is the one type
+/// it sends; in 3.7 and later the viewer answers with the type it picked. Returns the type in use.
+pub fn negotiate_security<S: Read + Write>(s: &mut S, v: Version, password: Option<&str>) -> Result<u8, Error> {
     if v.minor == 3 {
         return match read_u32(s)? {
             0 => Err(Error::Protocol(read_reason(s)?)),
-            1 => Ok(()),
-            2 => Err(Error::Unsupported("password (VNC) authentication".into())),
+            1 => Ok(SECURITY_NONE),
+            2 => match password {
+                Some(p) => vnc_authenticate(s, p).map(|()| SECURITY_VNC),
+                None => Err(Error::Unsupported(PASSWORD_REQUIRED.into())),
+            },
             t => Err(Error::Unsupported(format!("security type {t}"))),
         };
     }
@@ -87,26 +108,30 @@ pub fn negotiate_security<S: Read + Write>(s: &mut S, v: Version) -> Result<(), 
     }
     let mut types = vec![0u8; count[0] as usize];
     s.read_exact(&mut types)?;
-    if !types.contains(&SECURITY_NONE) {
-        return if types.contains(&SECURITY_VNC) {
-            Err(Error::Unsupported("password (VNC) authentication".into()))
-        } else {
-            Err(Error::Unsupported(format!("security types {types:?}")))
-        };
+    if types.contains(&SECURITY_NONE) {
+        s.write_all(&[SECURITY_NONE])?;
+        return Ok(SECURITY_NONE);
     }
-    s.write_all(&[SECURITY_NONE])?;
-    Ok(())
+    if types.contains(&SECURITY_VNC) {
+        let Some(p) = password else { return Err(Error::Unsupported(PASSWORD_REQUIRED.into())) };
+        s.write_all(&[SECURITY_VNC])?;
+        vnc_authenticate(s, p)?;
+        return Ok(SECURITY_VNC);
+    }
+    Err(Error::Unsupported(format!("security types {types:?}")))
 }
 
-/// Reads the SecurityResult that follows the security choice. It is sent for every type in 3.8; in 3.3 and 3.7 it
-/// is not sent for None, so this returns at once for those versions.
-pub fn read_security_result<S: Read>(s: &mut S, v: Version) -> Result<(), Error> {
-    if v.minor < 8 {
+/// Reads the SecurityResult that follows the security choice. It is sent for every type in 3.8; in 3.3 and 3.7 it is
+/// not sent for None but is for VNC authentication (`chosen`), so this returns at once for the others. A failure
+/// carries the server's reason in 3.8; older versions send none.
+pub fn read_security_result<S: Read>(s: &mut S, v: Version, chosen: u8) -> Result<(), Error> {
+    if v.minor < 8 && chosen != SECURITY_VNC {
         return Ok(());
     }
     match read_u32(s)? {
         0 => Ok(()),
-        _ => Err(Error::Protocol(read_reason(s)?)),
+        _ if v.minor >= 8 => Err(Error::Protocol(read_reason(s)?)),
+        _ => Err(Error::Protocol("authentication failed".into())),
     }
 }
 
@@ -131,11 +156,17 @@ pub fn read_server_init<S: Read>(s: &mut S) -> Result<ServerInit, Error> {
     Ok(ServerInit { width, height, format, name: String::from_utf8_lossy(&name).into_owned() })
 }
 
-/// Runs the whole handshake up to ServerInit.
+/// Runs the whole handshake up to ServerInit, with no password.
 pub fn connect<S: Read + Write>(s: &mut S) -> Result<ServerInit, Error> {
+    connect_with(s, None)
+}
+
+/// Runs the whole handshake up to ServerInit. A password makes VNC authentication available to a server that does not
+/// offer security None.
+pub fn connect_with<S: Read + Write>(s: &mut S, password: Option<&str>) -> Result<ServerInit, Error> {
     let v = negotiate_version(s)?;
-    negotiate_security(s, v)?;
-    read_security_result(s, v)?;
+    let chosen = negotiate_security(s, v, password)?;
+    read_security_result(s, v, chosen)?;
     s.write_all(&client_init_bytes(true))?;
     read_server_init(s)
 }
@@ -246,6 +277,70 @@ mod tests {
         input.extend_from_slice(&[1, SECURITY_VNC]);
         let mut s = Duplex::new(input);
         assert!(matches!(connect(&mut s), Err(Error::Unsupported(_))));
+    }
+
+    #[test]
+    fn password_only_server_names_the_password_it_needs() {
+        let mut input = b"RFB 003.008\n".to_vec();
+        input.extend_from_slice(&[1, SECURITY_VNC]);
+        let err = connect(&mut Duplex::new(input)).unwrap_err();
+        assert!(needs_password(&err));
+        assert!(!needs_password(&Error::Protocol("x".into())));
+    }
+
+    fn vnc_server(version: &[u8; 12], offer: &[u8], challenge: [u8; 16], result: &[u8]) -> Vec<u8> {
+        let mut input = version.to_vec();
+        input.extend_from_slice(offer);
+        input.extend_from_slice(&challenge);
+        input.extend_from_slice(result);
+        input.extend_from_slice(&server_init(80, 60, "pw"));
+        input
+    }
+
+    #[test]
+    fn vnc_authentication_answers_the_challenge_in_three_eight() {
+        let challenge: [u8; 16] = *b"0123456789abcdef";
+        let mut ok = 0u32.to_be_bytes().to_vec();
+        let mut s = Duplex::new(vnc_server(b"RFB 003.008\n", &[1, SECURITY_VNC], challenge, &ok));
+        let init = connect_with(&mut s, Some("hunter2")).unwrap();
+        assert_eq!((init.width, init.height, init.name.as_str()), (80, 60, "pw"));
+        assert_eq!(&s.out[..12], b"RFB 003.008\n");
+        assert_eq!(s.out[12], SECURITY_VNC, "the viewer picked VNC authentication");
+        assert_eq!(&s.out[13..29], &crate::des::vnc_response(&challenge, "hunter2"));
+        assert_eq!(*s.out.last().unwrap(), 1, "then ClientInit");
+        // a wrong password is a failed result with the server's reason
+        ok = 1u32.to_be_bytes().to_vec();
+        ok.extend_from_slice(&5u32.to_be_bytes());
+        ok.extend_from_slice(b"wrong");
+        let mut bad = Duplex::new(vnc_server(b"RFB 003.008\n", &[1, SECURITY_VNC], challenge, &ok));
+        assert_eq!(connect_with(&mut bad, Some("nope")), Err(Error::Protocol("wrong".into())));
+    }
+
+    #[test]
+    fn vnc_authentication_reads_a_result_in_three_three_and_three_seven_too() {
+        let challenge = [7u8; 16];
+        // 3.3: the server sends the type as a 32-bit number
+        let mut s = Duplex::new(vnc_server(b"RFB 003.003\n", &2u32.to_be_bytes(), challenge, &0u32.to_be_bytes()));
+        assert!(connect_with(&mut s, Some("pw")).is_ok());
+        assert_eq!(&s.out[12..28], &crate::des::vnc_response(&challenge, "pw"));
+        // 3.7: a type list, the viewer picks, and a failed result has no reason text
+        let mut t = Duplex::new(vnc_server(b"RFB 003.007\n", &[1, SECURITY_VNC], challenge, &1u32.to_be_bytes()));
+        assert_eq!(connect_with(&mut t, Some("pw")), Err(Error::Protocol("authentication failed".into())));
+        // without a password the 3.3 server is refused before anything is sent but the version
+        let mut u = Duplex::new(vnc_server(b"RFB 003.003\n", &2u32.to_be_bytes(), challenge, &[]));
+        assert!(needs_password(&connect_with(&mut u, None).unwrap_err()));
+        assert_eq!(u.out.len(), 12);
+    }
+
+    #[test]
+    fn none_security_is_preferred_even_when_a_password_was_given() {
+        let mut input = b"RFB 003.008\n".to_vec();
+        input.extend_from_slice(&[2, SECURITY_VNC, SECURITY_NONE]);
+        input.extend_from_slice(&0u32.to_be_bytes());
+        input.extend_from_slice(&server_init(10, 10, ""));
+        let mut s = Duplex::new(input);
+        connect_with(&mut s, Some("pw")).unwrap();
+        assert_eq!(s.out[12], SECURITY_NONE);
     }
 
     #[test]

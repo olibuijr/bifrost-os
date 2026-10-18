@@ -1,14 +1,16 @@
 //! `pbcopy` and `pbpaste`: the general clipboard from the command line. Both use the Wayland selection through the `wl-copy`
-//! and `wl-paste` tools, the same path the shell offers its typed items on (`shell::pasteboard`). Named boards (ruler,
-//! find, font) live in the shell's pasteboard service, which the command line cannot reach yet, so they are refused
-//! rather than written to the general board.
+//! and `wl-paste` tools, the same path the shell offers its typed items on (`shell::pasteboard`).
+//! Named boards (ruler, find, font) are kept as one file each under `board_dir()`, with the MIME type beside it. The
+//! shell's own pasteboard service is in-process and does not read these files yet, so an app's Find or Ruler board is
+//! not the same data as `pbpaste -pboard find` until that bridge exists.
 //! Gap: the shell's service keeps item grouping and several representations per copy; this tool reads and writes one
 //! flat item.
 
 use std::io::Write;
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
-/// The general board, the only one the command line reaches.
+/// The general board, the Wayland selection. Named boards are the other entries of `BOARDS`.
 pub const GENERAL: &str = "general";
 /// The board names `-pboard` accepts.
 pub const BOARDS: &[&str] = &["general", "ruler", "find", "font"];
@@ -44,9 +46,11 @@ impl Prefer {
 pub struct Args {
     pub help: bool,
     pub prefer: Option<Prefer>,
+    /// The named board, `None` for the general board.
+    pub board: Option<String>,
 }
 
-/// Reads the options. `paste` enables `-Prefer`, which only `pbpaste` has. A `-pboard` other than general is an error.
+/// Reads the options. `paste` enables `-Prefer`, which only `pbpaste` has. An unknown `-pboard` name is an error.
 pub fn parse(args: &[String], paste: bool) -> Result<Args, String> {
     let mut out = Args::default();
     let mut it = args.iter();
@@ -58,9 +62,7 @@ pub fn parse(args: &[String], paste: bool) -> Result<Args, String> {
                 if !BOARDS.contains(&board.as_str()) {
                     return Err(format!("unknown pasteboard {board}"));
                 }
-                if board != GENERAL {
-                    return Err(format!("the {board} pasteboard is not reachable from the command line yet"));
-                }
+                out.board = (board != GENERAL).then(|| board.clone());
             }
             "-Prefer" if paste => {
                 let v = it.next().ok_or("-Prefer needs txt, rtf or ps")?;
@@ -139,6 +141,60 @@ pub fn paste(prefer: Option<Prefer>) -> Result<Vec<u8>, String> {
     Ok(Vec::new())
 }
 
+/// The folder named boards are kept in: `$XDG_DATA_HOME/bifrost/pasteboards`, else under `$HOME/.local/share`.
+pub fn board_dir() -> Result<PathBuf, String> {
+    let base = std::env::var_os("XDG_DATA_HOME")
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share")))
+        .ok_or("neither XDG_DATA_HOME nor HOME is set")?;
+    Ok(base.join("bifrost").join("pasteboards"))
+}
+
+/// Puts `input` on the named `board` (one of `BOARDS` other than general). Empty input clears it. The board's bytes go
+/// in a file named for the board, and its MIME type in `<board>.type`.
+pub fn copy_to_board(board: &str, input: &[u8]) -> Result<(), String> {
+    let dir = board_dir()?;
+    let data = dir.join(board);
+    if input.is_empty() {
+        return match std::fs::remove_file(&data) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(format!("{}: {e}", data.display())),
+        };
+    }
+    std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    std::fs::write(&data, input).map_err(|e| format!("{}: {e}", data.display()))?;
+    let kind = dir.join(format!("{board}.type"));
+    std::fs::write(&kind, mime_for_input(input)).map_err(|e| format!("{}: {e}", kind.display()))
+}
+
+/// The bytes on the named `board`, empty when it holds nothing. The type is not applied: a named board holds one flat item.
+pub fn paste_from_board(board: &str) -> Result<Vec<u8>, String> {
+    let data = board_dir()?.join(board);
+    match std::fs::read(&data) {
+        Ok(bytes) => Ok(bytes),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+        Err(e) => Err(format!("{}: {e}", data.display())),
+    }
+}
+
+/// Copies to the general board or the named one, as `-pboard` chose.
+pub fn copy_for(board: Option<&str>, input: &[u8]) -> Result<(), String> {
+    match board {
+        Some(b) => copy_to_board(b, input),
+        None => copy(input),
+    }
+}
+
+/// Reads the general board or the named one, as `-pboard` chose.
+pub fn paste_for(board: Option<&str>, prefer: Option<Prefer>) -> Result<Vec<u8>, String> {
+    match board {
+        Some(b) => paste_from_board(b),
+        None => paste(prefer),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -148,13 +204,30 @@ mod tests {
     }
 
     #[test]
-    fn copy_accepts_the_general_board_and_refuses_the_others() {
+    fn copy_accepts_every_board_name_and_refuses_unknown_ones() {
         assert_eq!(parse(&args(&["-pboard", "general"]), false), Ok(Args::default()));
-        assert_eq!(parse(&args(&["-help"]), false), Ok(Args { help: true, prefer: None }));
-        assert!(parse(&args(&["-pboard", "ruler"]), false).unwrap_err().contains("not reachable"));
+        assert_eq!(parse(&args(&["-help"]), false), Ok(Args { help: true, ..Args::default() }));
+        assert_eq!(parse(&args(&["-pboard", "ruler"]), false).unwrap().board.as_deref(), Some("ruler"));
+        assert_eq!(parse(&args(&["-pboard", "font"]), true).unwrap().board.as_deref(), Some("font"));
         assert!(parse(&args(&["-pboard", "nope"]), false).unwrap_err().contains("unknown pasteboard"));
         assert!(parse(&args(&["-pboard"]), false).is_err());
         assert!(parse(&args(&["-Prefer", "rtf"]), false).is_err(), "pbcopy has no -Prefer");
+    }
+
+    #[test]
+    fn named_boards_round_trip_through_their_own_files() {
+        let dir = std::env::temp_dir().join(format!("bifrost-pb-test-{}", std::process::id()));
+        std::env::set_var("XDG_DATA_HOME", &dir);
+        assert_eq!(board_dir().unwrap(), dir.join("bifrost").join("pasteboards"));
+        assert_eq!(paste_from_board("find").unwrap(), Vec::<u8>::new());
+        copy_to_board("find", b"needle").unwrap();
+        assert_eq!(paste_from_board("find").unwrap(), b"needle".to_vec());
+        assert_eq!(paste_for(Some("find"), None).unwrap(), b"needle".to_vec());
+        assert_eq!(std::fs::read_to_string(board_dir().unwrap().join("find.type")).unwrap(), TEXT_MIME);
+        copy_to_board("find", b"").unwrap();
+        assert_eq!(paste_from_board("find").unwrap(), Vec::<u8>::new());
+        copy_to_board("find", b"").unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

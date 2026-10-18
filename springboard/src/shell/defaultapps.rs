@@ -144,6 +144,15 @@ impl super::Shell {
         self.defaults.as_ref().map_or_else(Vec::new, |(_, r, _)| r.open_with(name))
     }
 
+    /// The apps that can open a picture named `name` for editing (Image > Edit With): every app that opens its type
+    /// except Photos itself, the default first. Empty until the registry is built (`ensure_defaults`).
+    #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+    pub(super) fn edit_with_choices(&self, name: &str) -> Vec<Choice> {
+        let own = apps().iter().find(|a| a.id == AppId::Photos).map(|a| a.icon);
+        let Some((_, r, _)) = self.defaults.as_ref() else { return Vec::new() };
+        r.open_with(name).into_iter().filter(|c| Some(c.app.as_str()) != own).collect()
+    }
+
     /// The app that opens a URL scheme, from the user's choice or the best declaration (the `launch` service).
     pub(super) fn default_app_for_scheme(&mut self, scheme: &str) -> Option<String> {
         self.ensure_defaults();
@@ -319,6 +328,16 @@ mod tests {
     }
 
     #[test]
+    fn edit_with_lists_the_other_apps_that_open_the_type_but_not_photos() {
+        let mut sh = crate::shell::tests::shell();
+        sh.ensure_defaults();
+        let c = sh.edit_with_choices("holiday.PNG");
+        assert!(c.iter().all(|x| x.app != "bifrost.photos"), "Photos is not offered to itself: {c:?}");
+        assert!(c.iter().any(|x| x.app == "bifrost.files"), "Files opens PNG too: {c:?}");
+        assert!(sh.edit_with_choices("notes.unknownext").is_empty());
+    }
+
+    #[test]
     fn the_settings_page_lists_every_category_with_the_default_checked() {
         use crate::shell::list::Accessory;
         use crate::shell::pages::{spec, Action, Model, PageId};
@@ -328,7 +347,7 @@ mod tests {
         let v = views(&r);
         let info = crate::shell::Info::default();
         let opts = crate::shell::options::Options::default();
-        let m = Model { info: &info, opts: &opts, a11y: &crate::shell::accessibility::AccessibilitySettings::DEFAULT, airplane: false, haptics: false, wifi_on: true, brightness: 0.5, wallpaper: String::new(), detail: "", now: 0, update_badge: false, dock: Default::default(), defaults: &v, login_items: &[], login_pending: &[], ext: &crate::shell::login_items_page::NO_EXTENSIONS, fonts: &crate::shell::pages::NO_FONTS, refresh: crate::shell::services::display_services::RefreshChoice::Max, sound: &crate::shell::sound_page::NO_SOUND, sharing: None, printers: None, users: &crate::shell::pages::NO_USERS };
+        let m = Model { info: &info, opts: &opts, a11y: &crate::shell::accessibility::AccessibilitySettings::DEFAULT, airplane: false, haptics: false, wifi_on: true, brightness: 0.5, wallpaper: String::new(), detail: "", now: 0, update_badge: false, dock: Default::default(), account: "", defaults: &v, login_items: &[], login_pending: &[], firewall: &[], ext: &crate::shell::login_items_page::NO_EXTENSIONS, fonts: &crate::shell::pages::NO_FONTS, refresh: crate::shell::services::display_services::RefreshChoice::Max, resolution: None, sound: &crate::shell::sound_page::NO_SOUND, sharing: None, printers: None, users: &crate::shell::pages::NO_USERS };
         let s = spec(PageId::DefaultApps, &m);
         assert!(s.groups.len() > CATEGORIES.len(), "a group per category plus the footer");
         let images = &s.groups[1];

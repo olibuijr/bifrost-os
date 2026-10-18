@@ -3,6 +3,10 @@
 //! (atomically replaced, only when it changed), and the Search panel searches it ("Documents" section). Opening a
 //! result starts the app and sends `ToApp::ContinueActivity` (see `Shell::quicksearch_act`).
 //!
+//! The Search panel re-orders the matches this index returns with `bifrost_ui::search_rank` (BM25 over title and text,
+//! recency of indexing, local open counts). The order below is this index's own matching order, which the panel keeps
+//! for the items the ranker does not score.
+//!
 //! Ranking: the query is split into words (`bifrost_ui::lexical_tags::words`) and every word must match an item
 //! (case and accent folded; prefix, word start or subsequence, see `super::fuzzy`). A title match outranks a keyword
 //! match, which outranks a description match; then an item in the query's language (`bifrost_ui::language`) ranks
@@ -28,15 +32,96 @@ use bifrost_proto::quicksearch::{SearchableItem, DELETE_ALL, DELETE_DOMAINS, DEL
 use bifrost_ui::language::{dominant_language, Language};
 use bifrost_ui::lexical_tags;
 use bifrost_ui::metaquery::{self, Predicate};
+use bifrost_ui::searchindex::{validate_name, IndexDescription, NameError, ProtectionClass};
+use bifrost_ui::searchquery::{Query, Record};
+use bifrost_ui::searchstore::{self, IndexStore, StoreSet, StoredItem};
 use bifrost_ui::uttype;
 use std::cell::RefCell;
+use crate::keychain::Store;
+use chacha20poly1305::aead::{Aead, KeyInit, Payload};
+use chacha20poly1305::{Key, XChaCha20Poly1305, XNonce};
 use std::collections::BTreeMap;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub const MAX_PER_APP: usize = 1000;
 pub const MAX_APPS: usize = 64;
+
+/// The header of an index file sealed at rest: this magic, a 24-byte nonce, then the XChaCha20-Poly1305 box of the
+/// JSON. The file's stem (`<app>` or `<app>@<index>`) is bound as associated data, so a file renamed to another app
+/// fails to open. A file without the magic is the plain JSON of an older shell; it is read once and sealed on its next
+/// save.
+const SEALED_MAGIC: &[u8] = b"SQIX2\n";
+const NONCE_LEN: usize = 24;
+/// The keychain entry that holds the key of the index files (`<root>/keychain/bifrost.quicksearch.kc`).
+const KEY_APP: &str = "bifrost.quicksearch";
+const KEY_ACCOUNT: &str = "index-key";
+
+/// The index key: read from the keychain, or created on first use from `/dev/urandom`.
+fn index_key(root: &Path) -> io::Result<[u8; 32]> {
+    let store = Store::open(root, KEY_APP).map_err(|e| io::Error::other(e.to_string()))?;
+    match store.get(KEY_APP, KEY_ACCOUNT) {
+        Ok(bytes) => bytes.as_slice().try_into().map_err(|_| io::Error::other("the index key has the wrong length")),
+        Err(crate::keychain::Error::ItemNotFound) => {
+            let key: [u8; 32] = random_bytes()?;
+            store.add(KEY_APP, KEY_ACCOUNT, &key).map_err(|e| io::Error::other(e.to_string()))?;
+            Ok(key)
+        }
+        Err(e) => Err(io::Error::other(e.to_string())),
+    }
+}
+
+fn random_bytes<const N: usize>() -> io::Result<[u8; N]> {
+    use std::io::Read;
+    let mut buf = [0u8; N];
+    std::fs::File::open("/dev/urandom").and_then(|mut f| f.read_exact(&mut buf))?;
+    Ok(buf)
+}
+
+/// The key of this shell's index files, read once. None when the keychain cannot be opened: the index then stays in
+/// memory and is not written, rather than written in plain text.
+static DISK_KEY: Mutex<Option<[u8; 32]>> = Mutex::new(None);
+
+fn disk_key() -> Option<[u8; 32]> {
+    let mut slot = DISK_KEY.lock().unwrap_or_else(|e| e.into_inner());
+    if slot.is_none() {
+        *slot = index_key(&super::apphost::root()).ok();
+    }
+    *slot
+}
+
+fn seal_file(key: &[u8; 32], stem: &str, json: &[u8]) -> io::Result<Vec<u8>> {
+    let nonce: [u8; NONCE_LEN] = random_bytes()?;
+    let cipher = XChaCha20Poly1305::new(Key::from_slice(key));
+    let aad = [SEALED_MAGIC, stem.as_bytes()].concat();
+    let ct = cipher
+        .encrypt(XNonce::from_slice(&nonce), Payload { msg: json, aad: &aad })
+        .map_err(|_| io::Error::other("index encryption failed"))?;
+    let mut out = Vec::with_capacity(SEALED_MAGIC.len() + NONCE_LEN + ct.len());
+    out.extend_from_slice(SEALED_MAGIC);
+    out.extend_from_slice(&nonce);
+    out.extend_from_slice(&ct);
+    Ok(out)
+}
+
+/// Reads an index file: a sealed file needs `key`; a file without the magic is taken as plain JSON.
+fn read_file(path: &Path, stem: &str, key: Option<&[u8; 32]>) -> Option<String> {
+    let bytes = std::fs::read(path).ok()?;
+    if !bytes.starts_with(SEALED_MAGIC) {
+        return String::from_utf8(bytes).ok();
+    }
+    let sealed = &bytes[SEALED_MAGIC.len()..];
+    if sealed.len() < NONCE_LEN {
+        return None;
+    }
+    let (nonce, ct) = sealed.split_at(NONCE_LEN);
+    let cipher = XChaCha20Poly1305::new(Key::from_slice(key?));
+    let aad = [SEALED_MAGIC, stem.as_bytes()].concat();
+    let plain = cipher.decrypt(XNonce::from_slice(nonce), Payload { msg: ct, aad: &aad }).ok()?;
+    String::from_utf8(plain).ok()
+}
 
 /// An indexed item with its folded search text.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -108,6 +193,10 @@ pub struct Found {
     pub kind: Option<&'static str>,
     /// the thumbnail path the app gave, relative to its data dir ("" when none)
     pub thumbnail: String,
+    /// keywords and description, joined: the text the ranker searches besides the title
+    pub text: String,
+    /// Unix seconds the item was indexed (or last replaced); 0 when unknown
+    pub modified: u64,
 }
 
 /// The entries a word query matched, and the query they matched for. A query whose words extend these (more typing)
@@ -131,6 +220,10 @@ pub struct Index {
     /// no item expires before this (Unix seconds), so `prune` returns early until then; 0 when not known
     next_expiry: u64,
     narrow: RefCell<Option<Narrow>>,
+    /// the named indexes (`CSSearchableIndex(name:protectionClass:)`), per app, kept apart from the default ones
+    named: StoreSet,
+    /// named indexes changed since the last save, as `<app>@<name>` file stems
+    named_dirty: Vec<String>,
 }
 
 /// True when every word of `new` extends the word of `old` at its place (the last word of `old` may be shorter). Then
@@ -267,7 +360,8 @@ impl Index {
             .map(|(_, ai, ei)| {
                 let (app, list) = lists[ai];
                 let e = &list[ei];
-                Found { app_id: app.to_string(), unique_id: e.item.unique_id.clone(), domain: e.item.domain.clone(), title: e.item.title.clone(), kind: e.kind, thumbnail: e.item.thumbnail.clone() }
+                let text = format!("{} {}", e.item.keywords.join(" "), e.item.description);
+                Found { app_id: app.to_string(), unique_id: e.item.unique_id.clone(), domain: e.item.domain.clone(), title: e.item.title.clone(), kind: e.kind, thumbnail: e.item.thumbnail.clone(), text, modified: e.indexed }
             })
             .collect()
     }
@@ -357,17 +451,31 @@ impl Index {
             .collect()
     }
 
-    /// Reads every `<app id>.json` under `dir`.
+    /// Reads every `<app id>.json` under `dir`, with the key of this shell's index files.
     pub fn load(dir: &Path) -> Index {
+        Index::load_keyed(dir, disk_key().as_ref())
+    }
+
+    /// Reads every `<app id>.json` under `dir`. A sealed file needs `key`; without it only plain files load.
+    pub fn load_keyed(dir: &Path, key: Option<&[u8; 32]>) -> Index {
         let mut ix = Index::default();
         let Ok(rd) = std::fs::read_dir(dir) else { return ix };
         for ent in rd.flatten() {
             let name = ent.file_name().to_string_lossy().to_string();
             let Some(app) = name.strip_suffix(".json").filter(|a| safe_name(a)) else { continue };
+            if let Some((app, index)) = name.strip_suffix(".json").and_then(|s| s.split_once('@')) {
+                // a named index, `<app>@<name>.json`, which the default-index loader below skips
+                if safe_name(app) && validate_name(index).is_ok() {
+                    if let Some(store) = read_file(&ent.path(), &format!("{app}@{index}"), key).and_then(|t| named_from_json(&t)) {
+                        ix.named.put(app, Some(index), store);
+                    }
+                }
+                continue;
+            }
             if ix.apps.len() >= MAX_APPS {
                 break;
             }
-            let list = Index::from_json(&std::fs::read_to_string(ent.path()).unwrap_or_default());
+            let list = Index::from_json(&read_file(&ent.path(), app, key).unwrap_or_default());
             if !list.is_empty() {
                 ix.apps.insert(app.to_string(), list);
             }
@@ -387,22 +495,35 @@ impl Index {
             .collect()
     }
 
-    /// Writes the apps that changed since the last call (and removes the file of an emptied app).
+    /// Writes the apps that changed since the last call (and removes the file of an emptied app), then the named
+    /// indexes that changed.
     pub fn save(&mut self, dir: &Path) {
+        self.save_keyed(dir, disk_key().as_ref());
+    }
+
+    /// `save` with the key given: each changed file is sealed under it.
+    pub fn save_keyed(&mut self, dir: &Path, key: Option<&[u8; 32]>) {
         for (app, text) in self.take_writes() {
-            write_app(dir, &app, text);
+            write_app(dir, &app, text, key);
+        }
+        for stem in std::mem::take(&mut self.named_dirty) {
+            let text = stem.split_once('@').and_then(|(app, index)| self.named.get(app, Some(index))).map(named_to_json);
+            write_app(dir, &stem, text, key);
         }
     }
 }
 
-/// Replaces `<dir>/<app>.json` with `text` (through a temporary file), or removes it when `text` is None.
-fn write_app(dir: &Path, app: &str, text: Option<String>) {
+/// Replaces `<dir>/<app>.json` with `text` (through a temporary file), or removes it when `text` is None. The text is
+/// sealed under `key`; without a key nothing is written.
+fn write_app(dir: &Path, app: &str, text: Option<String>, key: Option<&[u8; 32]>) {
     let path = dir.join(format!("{app}.json"));
     match text {
         Some(text) => {
+            let Some(key) = key else { return };
+            let Ok(sealed) = seal_file(key, app, text.as_bytes()) else { return };
             let _ = std::fs::create_dir_all(dir);
             let tmp = dir.join(format!("{app}.json.tmp"));
-            if std::fs::write(&tmp, text).and_then(|_| std::fs::rename(&tmp, &path)).is_err() {
+            if std::fs::write(&tmp, sealed).and_then(|_| std::fs::rename(&tmp, &path)).is_err() {
                 let _ = std::fs::remove_file(&tmp);
             }
         }
@@ -412,8 +533,8 @@ fn write_app(dir: &Path, app: &str, text: Option<String>) {
     }
 }
 
-/// The writer thread's queue: (index dir, writes), in the order they were taken.
-type SaveJob = (PathBuf, Vec<(String, Option<String>)>);
+/// The writer thread's queue: (index dir, key, writes), in the order they were taken.
+type SaveJob = (PathBuf, Option<[u8; 32]>, Vec<(String, Option<String>)>);
 static SAVER: Mutex<Option<std::sync::mpsc::Sender<SaveJob>>> = Mutex::new(None);
 
 impl Index {
@@ -423,7 +544,133 @@ impl Index {
         if self.apps.remove(app_id).is_some() {
             self.mark(app_id);
         }
+        let named: Vec<String> = self.named.keys().into_iter().filter(|(a, _)| *a == app_id).filter_map(|(_, n)| n.map(str::to_string)).collect();
+        for index in named {
+            self.named.delete_named_index(app_id, &index);
+            self.mark_named(app_id, &index);
+        }
     }
+
+    /// Drops the items of every app not in `installed`; returns how many apps went.
+    pub fn forget_missing(&mut self, installed: &[&str]) -> usize {
+        let gone: Vec<String> = self.apps.keys().filter(|app| !installed.contains(&app.as_str())).cloned().collect();
+        for app in &gone {
+            self.forget_app(app);
+        }
+        gone.len()
+    }
+}
+
+impl Index {
+    fn mark_named(&mut self, app_id: &str, index: &str) {
+        let stem = format!("{app_id}@{index}");
+        if !self.named_dirty.contains(&stem) {
+            self.named_dirty.push(stem);
+        }
+    }
+
+    /// `indexSearchableItems` on the named index `desc` of `app_id`: items with a known identifier replace the old
+    /// one. A new index is refused once the shell holds [`MAX_APPS`] named indexes.
+    pub fn index_named(&mut self, app_id: &str, desc: &IndexDescription, items: Vec<StoredItem>) -> Result<(), NameError> {
+        let known = self.named.get(app_id, Some(&desc.name)).is_some();
+        if !known && self.named.keys().len() >= MAX_APPS {
+            return Ok(());
+        }
+        self.named.named_index(app_id, desc)?.index(items);
+        self.mark_named(app_id, &desc.name);
+        Ok(())
+    }
+
+    /// `deleteSearchableItems(withIdentifiers:)` on a named index.
+    pub fn delete_named_identifiers(&mut self, app_id: &str, index: &str, ids: &[&str]) {
+        if let Some(store) = self.named.get_mut(app_id, Some(index)) {
+            store.delete_identifiers(ids);
+            self.mark_named(app_id, index);
+        }
+    }
+
+    /// `deleteSearchableItems(withDomainIdentifiers:)` on a named index.
+    pub fn delete_named_domains(&mut self, app_id: &str, index: &str, domains: &[&str]) {
+        if let Some(store) = self.named.get_mut(app_id, Some(index)) {
+            store.delete_domains(domains);
+            self.mark_named(app_id, index);
+        }
+    }
+
+    /// `deleteAllSearchableItems` on a named index; the index itself stays.
+    pub fn delete_named_all(&mut self, app_id: &str, index: &str) {
+        if let Some(store) = self.named.get_mut(app_id, Some(index)) {
+            store.delete_all();
+            self.mark_named(app_id, index);
+        }
+    }
+
+    /// Deletes a named index and its items (`CSSearchableIndex.deleteIndex`). False when it did not exist.
+    pub fn delete_named_index(&mut self, app_id: &str, index: &str) -> bool {
+        let gone = self.named.delete_named_index(app_id, index);
+        if gone {
+            self.mark_named(app_id, index);
+        }
+        gone
+    }
+
+    /// Runs `query` over the named index `index` of `owner` as `requester`: the owner sees its live items, another app
+    /// only the public ones. At most `limit` hits, best first. A missing index gives none.
+    pub fn search_named(&self, requester: &str, owner: &str, index: &str, query: &str, limit: usize, now: i64) -> Result<Vec<searchstore::Found>, bifrost_ui::searchquery::Error> {
+        let mut hits = self.named.search(requester, owner, Some(index), &Query::new(query), now)?;
+        hits.truncate(limit);
+        Ok(hits)
+    }
+}
+
+/// The saved form of a named index: its protection class and its items, with the expiry and the public flag.
+fn named_to_json(store: &IndexStore) -> String {
+    let q = json::quote;
+    let items: Vec<String> = store
+        .items()
+        .iter()
+        .map(|i| {
+            let kw: Vec<String> = i.record.keywords.iter().map(|k| q(k)).collect();
+            let expires = i.expiration.map(|t| format!(",\"expires\":{t}")).unwrap_or_default();
+            format!(
+                "{{\"id\":{},\"domain\":{},\"title\":{},\"desc\":{},\"keywords\":[{}],\"public\":{}{}}}",
+                q(&i.unique_identifier),
+                q(&i.domain_identifier),
+                q(&i.record.title),
+                q(&i.record.description),
+                kw.join(","),
+                i.public,
+                expires
+            )
+        })
+        .collect();
+    let protection = store.protection().map_or("null".to_string(), |p| q(p.raw()));
+    format!("{{\"protection\":{protection},\"items\":[{}]}}\n", items.join(",\n"))
+}
+
+/// Reads a saved named index. None when the text is not one.
+fn named_from_json(text: &str) -> Option<IndexStore> {
+    let v = json::parse(text).ok()?;
+    let protection = v.get("protection").and_then(Json::as_str).and_then(ProtectionClass::from_raw);
+    let items = parse_named_items(v.get("items").and_then(Json::array)?);
+    Some(IndexStore::from_items(items, protection))
+}
+
+/// Items of a named index, from a list of objects with `id`, `domain`, `title`, `desc`, `keywords` (strings),
+/// `public` (bool) and `expires` (Unix seconds). An object without an `id` is skipped; at most `MAX_ITEMS`.
+pub fn parse_named_items(list: &[Json]) -> Vec<StoredItem> {
+    list.iter()
+        .filter_map(|o| {
+            let id = o.str_field("id").filter(|s| !s.is_empty())?;
+            let keywords = o.get("keywords").and_then(Json::array).map(|a| a.iter().filter_map(|k| k.as_str().map(str::to_string)).collect()).unwrap_or_default();
+            let record = Record { title: o.str_field("title").unwrap_or_default(), description: o.str_field("desc").unwrap_or_default(), keywords };
+            let mut item = StoredItem::new(&id, &o.str_field("domain").unwrap_or_default(), record);
+            item.expiration = o.get("expires").and_then(Json::as_u64).map(|t| t as i64);
+            item.public = matches!(o.get("public"), Some(Json::Bool(true)));
+            Some(item)
+        })
+        .take(searchstore::MAX_ITEMS)
+        .collect()
 }
 
 // ---- filters: file types and time phrases -------------------------------------------------------------------------
@@ -626,7 +873,7 @@ pub fn load_thumbnail(app_id: &str, thumb: &str, size: usize) -> Option<Image> {
     decode_thumbnail(&std::fs::read(&path).ok()?, size)
 }
 
-fn decode_thumbnail(bytes: &[u8], size: usize) -> Option<Image> {
+pub(super) fn decode_thumbnail(bytes: &[u8], size: usize) -> Option<Image> {
     use png::{BitDepth, ColorType, Transformations};
     let mut d = png::Decoder::new(std::io::Cursor::new(bytes));
     d.set_transformations(Transformations::EXPAND | Transformations::STRIP_16);
@@ -707,9 +954,173 @@ pub fn expire_due() -> usize {
     with(|ix| ix.prune(now))
 }
 
+/// Items of the default index from the `search-index` service's `index` objects: `id`, `domain`, `title`, `desc`,
+/// `keywords` (strings), `thumb`, `url` and `expires` (Unix seconds). An object without an `id` is skipped. Returns each
+/// item with its expiry, if it has one.
+pub fn parse_items(list: &[Json]) -> Vec<(SearchableItem, Option<u64>)> {
+    list.iter()
+        .filter_map(|o| {
+            let unique_id = o.str_field("id").filter(|s| !s.is_empty())?;
+            let keywords = o.get("keywords").and_then(Json::array).map(|a| a.iter().filter_map(|k| k.as_str().map(str::to_string)).collect()).unwrap_or_default();
+            let item = SearchableItem {
+                unique_id,
+                domain: o.str_field("domain").unwrap_or_default(),
+                title: o.str_field("title").unwrap_or_default(),
+                description: o.str_field("desc").unwrap_or_default(),
+                keywords,
+                thumbnail: o.str_field("thumb").unwrap_or_default(),
+                content_url: o.str_field("url").unwrap_or_default(),
+            };
+            Some((item, o.get("expires").and_then(Json::as_u64)))
+        })
+        .take(MAX_PER_APP)
+        .collect()
+}
+
+/// The searchable item for a file: the title, description and keywords its importer reads from the content (see
+/// `bifrost_ui::mdimport`), the path as the unique ID and the file's URL as the content URL, so the type filters and the
+/// kind apply. Fails when the file cannot be read.
+pub fn file_item(domain: &str, path: &Path) -> io::Result<SearchableItem> {
+    let found = bifrost_ui::mdimport::import_path(path)?;
+    Ok(SearchableItem {
+        unique_id: path.display().to_string(),
+        domain: domain.to_string(),
+        title: found.title,
+        description: found.description,
+        keywords: found.keywords,
+        thumbnail: String::new(),
+        content_url: format!("file://{}", path.display()),
+    })
+}
+
+/// The most files one folder scan turns into items (the index keeps at most [`MAX_PER_APP`] per app).
+pub const SCAN_MAX_FILES: usize = MAX_PER_APP;
+/// The deepest folder level a scan enters; `root` itself is level 0.
+pub const SCAN_MAX_DEPTH: usize = 6;
+
+/// The searchable items for the files under `root`, read by the importers (`bifrost_ui::mdimport`): the folder is
+/// walked breadth first, names in alphabetical order, so the files nearest the root come first and the result is the
+/// same on every run. Only regular files count: symbolic links are not followed, hidden names (a leading dot) are
+/// skipped, and so are devices, sockets and pipes, so a scan never blocks on a special file. A file that cannot be
+/// read is left out. The scan stops at [`SCAN_MAX_FILES`] files and enters folders no deeper than [`SCAN_MAX_DEPTH`].
+pub fn scan_folder(domain: &str, root: &Path) -> Vec<SearchableItem> {
+    scan_folder_limited(domain, root, SCAN_MAX_FILES)
+}
+
+/// Like [`scan_folder`], stopping at `max` files (at most [`SCAN_MAX_FILES`]), so several folders can share one app's budget.
+pub fn scan_folder_limited(domain: &str, root: &Path, max: usize) -> Vec<SearchableItem> {
+    let max = max.min(SCAN_MAX_FILES);
+    let mut items = Vec::new();
+    if max == 0 {
+        return items;
+    }
+    let mut level = vec![root.to_path_buf()];
+    for depth in 0..=SCAN_MAX_DEPTH {
+        let mut next = Vec::new();
+        for dir in &level {
+            let Ok(read) = std::fs::read_dir(dir) else { continue };
+            let mut names: Vec<PathBuf> = read.filter_map(|e| e.ok()).map(|e| e.path()).collect();
+            names.sort();
+            for path in names {
+                let hidden = path.file_name().and_then(|n| n.to_str()).is_none_or(|n| n.starts_with('.'));
+                if hidden {
+                    continue;
+                }
+                let Ok(meta) = std::fs::symlink_metadata(&path) else { continue };
+                if meta.is_dir() {
+                    if depth < SCAN_MAX_DEPTH {
+                        next.push(path);
+                    }
+                } else if meta.is_file() {
+                    if let Ok(item) = file_item(domain, &path) {
+                        items.push(item);
+                        if items.len() >= max {
+                            return items;
+                        }
+                    }
+                }
+            }
+        }
+        if next.is_empty() {
+            break;
+        }
+        level = next;
+    }
+    items
+}
+
+/// Scans `root` ([`scan_folder`]) and indexes what it finds under `app_id`. Returns the number of files indexed.
+pub fn index_folder(app_id: &str, domain: &str, root: &Path) -> usize {
+    let items = scan_folder(domain, root);
+    let n = items.len();
+    index_items(app_id, items.into_iter().map(|i| (i, None)).collect());
+    n
+}
+
+/// Scans `root` for at most `max` files ([`scan_folder_limited`]) and replaces the items of `app_id` in `domain` with what
+/// it finds, in one step, so a file that was deleted or renamed leaves the index. The scan runs before the index lock is
+/// taken. Returns the number of files indexed.
+pub fn reindex_folder(app_id: &str, domain: &str, root: &Path, max: usize) -> usize {
+    let items = scan_folder_limited(domain, root, max);
+    let n = items.len();
+    with(|ix| {
+        ix.delete(app_id, DELETE_DOMAINS, &[domain.to_string()]);
+        ix.index(app_id, items);
+    });
+    n
+}
+
+/// `indexSearchableItems` on the default index of `app_id`, with each item's expiry set once it is stored.
+pub fn index_items(app_id: &str, items: Vec<(SearchableItem, Option<u64>)>) {
+    with(|ix| {
+        let expiries: Vec<(String, u64)> = items.iter().filter_map(|(i, at)| at.map(|t| (i.unique_id.clone(), t))).collect();
+        ix.index(app_id, items.into_iter().map(|(i, _)| i).collect());
+        for (id, at) in expiries {
+            ix.set_expiry(app_id, &id, Some(at));
+        }
+    })
+}
+
 /// Sets (or clears, with `None`) the expiry of an item of `app_id`; false when there is no such item.
 pub fn set_expiry(app_id: &str, unique_id: &str, at: Option<u64>) -> bool {
     with(|ix| ix.set_expiry(app_id, unique_id, at))
+}
+
+/// `indexSearchableItems` on the named index `desc` of `app_id`.
+pub fn index_named(app_id: &str, desc: &IndexDescription, items: Vec<StoredItem>) -> Result<(), NameError> {
+    with(|ix| ix.index_named(app_id, desc, items))
+}
+
+/// Deletes items of the named index `index` of `app_id`: `kind` is a `DELETE_*` and `values` are identifiers or
+/// domains (ignored for `DELETE_ALL`).
+pub fn delete_named(app_id: &str, index: &str, kind: u8, values: &[&str]) {
+    with(|ix| match kind {
+        DELETE_IDS => ix.delete_named_identifiers(app_id, index, values),
+        DELETE_DOMAINS => ix.delete_named_domains(app_id, index, values),
+        DELETE_ALL => ix.delete_named_all(app_id, index),
+        _ => {}
+    })
+}
+
+/// Deletes the named index `index` of `app_id` and its items; false when it did not exist.
+pub fn delete_named_index(app_id: &str, index: &str) -> bool {
+    with(|ix| ix.delete_named_index(app_id, index))
+}
+
+/// The items of the named index `index` of `app_id` matching `query`, at most `limit`. Expired items are not returned.
+pub fn search_named(app_id: &str, index: &str, query: &str, limit: usize) -> Result<Vec<searchstore::Found>, bifrost_ui::searchquery::Error> {
+    let now = now_secs() as i64;
+    with(|ix| ix.search_named(app_id, app_id, index, query, limit, now))
+}
+
+/// Drops the items of apps that are no longer installed (an uninstalled app's items go with it); returns how many apps.
+pub fn forget_missing(installed: &[&str]) -> usize {
+    with(|ix| ix.forget_missing(installed))
+}
+
+/// True when the default index holds items of `app_id`.
+pub fn has_items(app_id: &str) -> bool {
+    with(|ix| ix.apps.get(app_id).is_some_and(|list| !list.is_empty()))
 }
 
 /// Items of `app_id` matching `query`, at most `limit`. Expired items are not returned.
@@ -742,7 +1153,7 @@ pub fn flush() {
     if writes.is_empty() {
         return;
     }
-    let mut job: SaveJob = (dir(), writes);
+    let mut job: SaveJob = (dir(), disk_key(), writes);
     let mut saver = SAVER.lock().unwrap_or_else(|e| e.into_inner());
     if let Some(tx) = saver.as_ref() {
         match tx.send(job) {
@@ -752,9 +1163,9 @@ pub fn flush() {
     }
     let (tx, rx) = std::sync::mpsc::channel::<SaveJob>();
     crate::bare::sys::spawn_named("quicksearch-save", move || {
-        for (dir, writes) in rx {
+        for (dir, key, writes) in rx {
             for (app, text) in writes {
-                write_app(&dir, &app, text);
+                write_app(&dir, &app, text, key.as_ref());
             }
         }
     });
@@ -768,6 +1179,74 @@ mod tests {
 
     fn it(id: &str, domain: &str, title: &str, desc: &str, kw: &[&str]) -> SearchableItem {
         SearchableItem { unique_id: id.into(), domain: domain.into(), title: title.into(), description: desc.into(), keywords: kw.iter().map(|s| s.to_string()).collect(), ..Default::default() }
+    }
+
+    #[test]
+    fn a_file_becomes_an_item_with_its_imported_metadata() {
+        let dir = std::env::temp_dir().join(format!("bifrost-spot-file-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("Trip plan.txt");
+        std::fs::write(&path, "Lisbon trip\nflights and hotel\n").unwrap();
+        let item = file_item("Documents", &path).unwrap();
+        assert_eq!(item.title, "Lisbon trip");
+        assert_eq!(item.description, "flights and hotel");
+        assert_eq!(item.domain, "Documents");
+        assert!(item.content_url.starts_with("file://") && item.content_url.ends_with("Trip plan.txt"));
+        let mut ix = Index::default();
+        ix.index("files", vec![item]);
+        assert_eq!(ix.search("lisbon", 5).len(), 1);
+        assert!(file_item("Documents", &dir.join("missing.txt")).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_folder_scan_indexes_regular_files_only_and_in_a_stable_order() {
+        let dir = std::env::temp_dir().join(format!("bifrost-spot-scan-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("sub/deeper")).unwrap();
+        std::fs::create_dir_all(dir.join(".hidden")).unwrap();
+        std::fs::write(dir.join("b.txt"), "Budget\nyearly numbers\n").unwrap();
+        std::fs::write(dir.join("a.txt"), "Aurora notes\nnorthern lights\n").unwrap();
+        std::fs::write(dir.join(".secret.txt"), "Hidden file\n").unwrap();
+        std::fs::write(dir.join(".hidden/inside.txt"), "Inside hidden folder\n").unwrap();
+        std::fs::write(dir.join("sub/c.txt"), "Cabin booking\nweekend\n").unwrap();
+        std::fs::write(dir.join("sub/deeper/d.txt"), "Deep file\n").unwrap();
+        std::os::unix::fs::symlink(dir.join("a.txt"), dir.join("link.txt")).unwrap();
+        std::os::unix::fs::symlink(&dir, dir.join("sub/loop")).unwrap();
+        let items = scan_folder("Documents", &dir);
+        let titles: Vec<&str> = items.iter().map(|i| i.title.as_str()).collect();
+        assert_eq!(titles, ["Aurora notes", "Budget", "Cabin booking", "Deep file"], "level by level, names in order, no links, no hidden");
+        assert!(items.iter().all(|i| i.domain == "Documents" && i.content_url.starts_with("file://")));
+        let mut ix = Index::default();
+        ix.index("files", items);
+        assert_eq!(ix.search("cabin", 5).len(), 1);
+        assert!(ix.search("hidden", 5).is_empty());
+        assert!(scan_folder("Documents", &dir.join("missing")).is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_folder_scan_stops_at_its_depth_and_file_limits() {
+        let dir = std::env::temp_dir().join(format!("bifrost-spot-limits-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut deep = dir.clone();
+        for level in 0..=SCAN_MAX_DEPTH + 1 {
+            deep = deep.join(format!("d{level}"));
+        }
+        std::fs::create_dir_all(&deep).unwrap();
+        std::fs::write(deep.join("too-deep.txt"), "Too deep\n").unwrap();
+        std::fs::write(dir.join("d0/d1/ok.txt"), "Reachable\n").unwrap();
+        let titles: Vec<String> = scan_folder("Documents", &dir).into_iter().map(|i| i.title).collect();
+        assert_eq!(titles, ["Reachable"]);
+        let _ = std::fs::remove_dir_all(&dir);
+        let many = std::env::temp_dir().join(format!("bifrost-spot-many-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&many);
+        std::fs::create_dir_all(&many).unwrap();
+        for i in 0..SCAN_MAX_FILES + 5 {
+            std::fs::write(many.join(format!("f{i:05}.txt")), format!("File {i}\n")).unwrap();
+        }
+        assert_eq!(scan_folder("Documents", &many).len(), SCAN_MAX_FILES);
+        let _ = std::fs::remove_dir_all(&many);
     }
 
     #[test]
@@ -862,6 +1341,18 @@ mod tests {
     }
 
     #[test]
+    fn forgetting_missing_apps_drops_only_their_items() {
+        let mut ix = Index::default();
+        ix.index("notes", vec![it("1", "", "Groceries", "", &[])]);
+        ix.index("mail", vec![it("1", "", "Groceries receipt", "", &[])]);
+        ix.index("gone", vec![it("1", "", "Groceries list", "", &[])]);
+        assert_eq!(ix.forget_missing(&["notes", "mail"]), 1);
+        assert_eq!(ix.search_app("gone", "groceries", 10).len(), 0);
+        assert_eq!(ix.search("groceries", 10).len(), 2);
+        assert_eq!(ix.forget_missing(&["notes", "mail"]), 0, "nothing left to forget");
+    }
+
+    #[test]
     fn saves_and_loads_from_disk() {
         let dir = std::env::temp_dir().join(format!("bifrost-spotidx-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
@@ -870,14 +1361,55 @@ mod tests {
         item.content_url = "file:///x".into();
         ix.index_at("is.example.notes", vec![item.clone()], 1_700_000_000);
         ix.index("../evil", vec![it("1", "", "x", "", &[])]);
-        ix.save(&dir);
+        ix.save_keyed(&dir, Some(&KEY));
         assert!(!dir.join("../evil.json").exists());
-        let back = Index::load(&dir);
+        let back = Index::load_keyed(&dir, Some(&KEY));
         assert_eq!(back.apps["is.example.notes"], vec![Entry::new(item, 1_700_000_000)]);
         let mut back = back;
         back.delete("is.example.notes", DELETE_ALL, &[]);
-        back.save(&dir);
+        back.save_keyed(&dir, Some(&KEY));
         assert!(!dir.join("is.example.notes.json").exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    const KEY: [u8; 32] = [7; 32];
+
+    #[test]
+    fn index_files_are_sealed_and_bound_to_their_app() {
+        let dir = std::env::temp_dir().join(format!("bifrost-spotseal-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut ix = Index::default();
+        ix.index("is.example.notes", vec![it("1", "", "Secret milk", "", &[])]);
+        ix.save_keyed(&dir, Some(&KEY));
+        let raw = std::fs::read(dir.join("is.example.notes.json")).unwrap();
+        assert!(raw.starts_with(SEALED_MAGIC));
+        assert!(!raw.windows(6).any(|w| w == b"Secret"), "the title is not stored in plain text");
+        assert!(Index::load_keyed(&dir, None).apps.is_empty(), "a sealed index needs the key");
+        assert!(Index::load_keyed(&dir, Some(&[8; 32])).apps.is_empty(), "a wrong key reads nothing");
+        // renamed to another app, the file no longer opens: the app id is bound as associated data
+        std::fs::rename(dir.join("is.example.notes.json"), dir.join("is.example.mail.json")).unwrap();
+        assert!(Index::load_keyed(&dir, Some(&KEY)).apps.is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_plain_index_from_an_older_shell_loads_and_is_sealed_on_save() {
+        let dir = std::env::temp_dir().join(format!("bifrost-spotplain-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut ix = Index::default();
+        ix.index("is.example.notes", vec![it("1", "", "Milk", "", &[])]);
+        ix.save_keyed(&dir, None);
+        assert!(!dir.join("is.example.notes.json").exists(), "without a key nothing is written");
+        std::fs::create_dir_all(&dir).unwrap();
+        let plain = Index::to_json(&ix.apps["is.example.notes"]);
+        std::fs::write(dir.join("is.example.notes.json"), plain).unwrap();
+        let mut back = Index::load_keyed(&dir, None);
+        assert_eq!(back.apps["is.example.notes"].len(), 1);
+        back.index("is.example.notes", vec![it("2", "", "Eggs", "", &[])]);
+        back.save_keyed(&dir, Some(&KEY));
+        let raw = std::fs::read(dir.join("is.example.notes.json")).unwrap();
+        assert!(raw.starts_with(SEALED_MAGIC));
+        assert_eq!(Index::load_keyed(&dir, Some(&KEY)).apps["is.example.notes"].len(), 2);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -1085,5 +1617,67 @@ mod tests {
         let writes = ix.take_writes();
         assert_eq!(writes.len(), 1);
         assert_eq!(writes[0], ("b".to_string(), None));
+    }
+
+    fn named_item(id: &str, title: &str) -> StoredItem {
+        StoredItem::new(id, "notes", Record { title: title.into(), description: "d".into(), keywords: vec!["shop".into()] })
+    }
+
+    #[test]
+    fn named_indexes_keep_their_items_apart_and_only_public_items_reach_other_apps() {
+        let mut ix = Index::default();
+        let desc = IndexDescription::new("archive").unwrap().protection(ProtectionClass::Complete);
+        ix.index_named("notes", &desc, vec![named_item("a", "Milk"), named_item("b", "Tea").public()]).unwrap();
+        // the owner sees both, another app only the public one
+        assert_eq!(ix.search_named("notes", "notes", "archive", "milk", 5, 0).unwrap().len(), 1);
+        assert_eq!(ix.search_named("notes", "notes", "archive", "shop", 5, 0).unwrap().len(), 2);
+        assert_eq!(ix.search_named("mail", "notes", "archive", "shop", 5, 0).unwrap().iter().map(|f| f.unique_identifier.as_str()).collect::<Vec<_>>(), ["b"]);
+        // the default index is a different index
+        assert!(ix.search_named("notes", "notes", "missing", "milk", 5, 0).unwrap().is_empty());
+        assert_eq!(ix.search_named("notes", "notes", "archive", "shop", 1, 0).unwrap().len(), 1, "limit caps the hits");
+        // a bad name is refused
+        assert_eq!(ix.index_named("notes", &IndexDescription { name: "a/b".into(), protection_class: None }, vec![]), Err(NameError::BadCharacter('/')));
+    }
+
+    #[test]
+    fn named_index_deletes_and_forgetting_an_app_mark_the_files() {
+        let mut ix = Index::default();
+        let desc = IndexDescription::new("archive").unwrap();
+        ix.index_named("notes", &desc, vec![named_item("a", "Milk"), named_item("b", "Tea")]).unwrap();
+        ix.named_dirty.clear();
+        ix.delete_named_identifiers("notes", "archive", &["a"]);
+        assert_eq!(ix.named_dirty, ["notes@archive"]);
+        assert!(ix.search_named("notes", "notes", "archive", "milk", 5, 0).unwrap().is_empty());
+        ix.named_dirty.clear();
+        ix.forget_app("notes");
+        assert_eq!(ix.named_dirty, ["notes@archive"]);
+        assert!(ix.search_named("notes", "notes", "archive", "tea", 5, 0).unwrap().is_empty());
+    }
+
+    #[test]
+    fn parsed_items_keep_their_expiry_and_the_index_call_sets_it() {
+        let list = bifrost_core::json::parse(r#"[{"id":"a","domain":"notes","title":"Milk","keywords":["shop"],"url":"file:///a.pdf","expires":500},{"title":"no id"}]"#).unwrap();
+        let parsed = parse_items(list.as_array().unwrap());
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].0.title, "Milk");
+        assert_eq!(parsed[0].0.content_url, "file:///a.pdf");
+        assert_eq!(parsed[0].1, Some(500));
+        let mut ix = Index::default();
+        ix.index_at("notes", vec![parsed[0].0.clone()], 1);
+        assert!(ix.set_expiry("notes", "a", parsed[0].1));
+        assert_eq!(ix.prune(500), 1);
+    }
+
+    #[test]
+    fn a_named_index_round_trips_through_its_saved_form() {
+        let desc = IndexDescription::new("archive").unwrap().protection(ProtectionClass::CompleteUnlessOpen);
+        let mut store = IndexStore::from_items(vec![], Some(desc.protection_class.unwrap()));
+        let mut expiring = named_item("a", "Milk \"fresh\"");
+        expiring.expiration = Some(1_800_000_000);
+        store.index(vec![expiring, named_item("b", "Tea").public()]);
+        let back = named_from_json(&named_to_json(&store)).unwrap();
+        assert_eq!(back.protection(), Some(ProtectionClass::CompleteUnlessOpen));
+        assert_eq!(back.items(), store.items());
+        assert!(named_from_json("not json").is_none());
     }
 }

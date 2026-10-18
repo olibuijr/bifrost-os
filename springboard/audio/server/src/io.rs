@@ -12,6 +12,8 @@
 //! generation changed) or makes a syscall other than the futex. `unsafe` is confined to the shared-memory accessors
 //! of `ClientSlot` and the scheduling syscalls; each block has a SAFETY comment. Owner: task 05.
 
+use crate::dsp::{DspMailbox, Plan};
+use crate::level::LevelTap;
 use crate::mixer::{self, VolumeRamp, RAMP_FRAMES};
 use bifrost_audio_driver::{DeviceIo, DriverError, HwPosition, ZeroTimeStamp};
 use bifrost_audio_shm::{self as shm, Activation, Region, Ring, RingHeader, ZeroStamp, ZeroStampValue};
@@ -116,6 +118,9 @@ pub struct ClientSlot {
     /// `f32::to_bits` of the stream volume (0..=1 scalar).
     pub volume: AtomicU32,
     pub muted: AtomicBool,
+    /// `f32::to_bits` of the gain the audio session policy applies (0 while another session interrupted this one, the duck
+    /// gain while another ducks it, else 1). The mixer multiplies it into the stream's volume.
+    pub session_gain: AtomicU32,
     /// Deadline misses not yet reported to the client.
     pub overloads: AtomicU32,
     pub missed_total: AtomicU64,
@@ -154,6 +159,7 @@ impl ClientSlot {
             running: AtomicBool::new(false),
             volume: AtomicU32::new(1.0f32.to_bits()),
             muted: AtomicBool::new(false),
+            session_gain: AtomicU32::new(1.0f32.to_bits()),
             overloads: AtomicU32::new(0),
             missed_total: AtomicU64::new(0),
         };
@@ -218,6 +224,15 @@ impl ClientSlot {
         self.volume.store(v.clamp(0.0, 1.0).to_bits(), Ordering::Relaxed);
     }
 
+    /// The gain the audio session policy applies on top of the stream volume.
+    pub fn session_gain(&self) -> f32 {
+        f32::from_bits(self.session_gain.load(Ordering::Relaxed))
+    }
+
+    pub fn set_session_gain(&self, g: f32) {
+        self.session_gain.store(g.clamp(0.0, 1.0).to_bits(), Ordering::Relaxed);
+    }
+
     pub fn raw_wake_fd(&self) -> i32 {
         self.wake_fd.as_raw_fd()
     }
@@ -258,6 +273,11 @@ pub struct Shared {
     /// Number of sustained-xrun fallbacks, and the quantum the last one raised to.
     pub ev_fallbacks: AtomicU64,
     pub ev_fallback_quantum: AtomicU32,
+    /// The DSP plan for the device, posted by the control thread and picked up by the IO thread (`dsp::DspMailbox`).
+    pub dsp: DspMailbox,
+    /// The newest samples of what the device plays and what it captures, for the level analysis (`level::LevelTap`).
+    pub level_out: LevelTap,
+    pub level_in: LevelTap,
 }
 
 impl Shared {
@@ -277,6 +297,9 @@ impl Shared {
             ev_restarts: AtomicU64::new(0),
             ev_fallbacks: AtomicU64::new(0),
             ev_fallback_quantum: AtomicU32::new(0),
+            dsp: DspMailbox::new(),
+            level_out: LevelTap::new(),
+            level_in: LevelTap::new(),
         })
     }
 
@@ -356,6 +379,9 @@ pub struct DeviceRunner {
     drv: Box<Activation>,
     snapshot: Arc<Vec<Arc<ClientSlot>>>,
     gen_seen: u32,
+    /// The DSP plan in force and the mailbox generation it came from.
+    dsp: Plan,
+    dsp_seen: u32,
     states: Vec<SlotState>,
     spare: Vec<SlotState>,
     master: BufferList,
@@ -387,6 +413,8 @@ impl DeviceRunner {
             drv: Box::default(),
             snapshot: Arc::default(),
             gen_seen: 0,
+            dsp: Plan::default(),
+            dsp_seen: 0,
             states: Vec::with_capacity(MAX_CLIENTS),
             spare: Vec::with_capacity(MAX_CLIENTS),
             master: planes(cfg.out_channels as usize),
@@ -456,7 +484,7 @@ impl DeviceRunner {
         for s in self.snapshot.iter().take(MAX_CLIENTS) {
             let st = self.states.iter().find(|st| st.id == s.id).copied().unwrap_or(SlotState {
                 id: s.id,
-                ramp: VolumeRamp::new(if s.muted.load(Ordering::Relaxed) { 0.0 } else { s.volume() }),
+                ramp: VolumeRamp::new(if s.muted.load(Ordering::Relaxed) { 0.0 } else { s.volume() * s.session_gain() }),
                 active: false,
                 start_cycle: 0,
                 every: 1,
@@ -517,6 +545,9 @@ impl DeviceRunner {
         let mut report = CycleReport { frames: want, quantum_changed, ..Default::default() };
 
         self.refresh_snapshot();
+        if let Some(g) = self.shared.dsp.take_into(self.dsp_seen, &mut self.dsp) {
+            self.dsp_seen = g;
+        }
 
         // 2. position and zero timestamp
         let pos = self.io.position();
@@ -531,6 +562,9 @@ impl DeviceRunner {
                 self.shared.xruns.fetch_add(1, Ordering::Relaxed);
                 report.device_xrun = true;
             }
+            // the device's input stages, then the level tap sees what the clients get
+            self.dsp.input.process(&mut self.in_buf.buffers, q);
+            self.shared.level_in.write(&self.in_buf.buffers, q);
             for s in self.snapshot.iter() {
                 if s.input_channels == 0 || !s.running.load(Ordering::Acquire) {
                     continue;
@@ -625,14 +659,19 @@ impl DeviceRunner {
             let mut it = self.scratch.iter_mut();
             let mut d: [&mut [f32]; MAX_CH] = std::array::from_fn(|_| &mut it.next().unwrap()[..q]);
             ring.read(&mut d[..ch], want);
-            let target = if s.muted.load(Ordering::Relaxed) { 0.0 } else { s.volume() };
+            let target = if s.muted.load(Ordering::Relaxed) { 0.0 } else { s.volume() * s.session_gain() };
             if st.ramp.target() != target {
                 st.ramp.set_target(target, RAMP_FRAMES);
             }
             mixer::mix_stream(&mut self.master, &d[..ch], &mut st.ramp, q);
         }
 
-        // 6. ConvertMix and WriteMix (the driver converts to its physical format)
+        // 6. the device's output stages and the level tap, then ConvertMix and WriteMix (the driver converts to its
+        // physical format)
+        if self.cfg.out_channels > 0 {
+            self.dsp.output.process(&mut self.master.buffers, q);
+            self.shared.level_out.write(&self.master.buffers, q);
+        }
         if self.cfg.out_channels > 0 && self.io.write_mix(want, &self.master).is_err() {
             self.shared.xruns.fetch_add(1, Ordering::Relaxed);
             report.device_xrun = true;

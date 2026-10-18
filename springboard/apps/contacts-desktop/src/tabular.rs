@@ -168,7 +168,7 @@ pub fn import_csv(text: &str, mapping: Option<&[Column]>) -> Import {
 }
 
 fn contact(name: String, company: String, phone: String, email: String, address: String, notes: String) -> Contact {
-    Contact { id: 0, name, phone, email, notes, favorite: false, company, address, labels: [0; 3] }
+    Contact { id: 0, name, phone, email, notes, favorite: false, company, address, uid: String::new(), labels: [0; 3] }
 }
 
 fn push(out: &mut Import, c: Contact) {

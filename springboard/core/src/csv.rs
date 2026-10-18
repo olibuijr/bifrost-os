@@ -24,12 +24,18 @@ pub enum CsvError {
 /// at the start of a field; a quote inside an unquoted field is kept as text.
 /// An unclosed quote runs to the end of the text.
 pub fn parse_rows(text: &str) -> Vec<Vec<String>> {
-    scan(text).0
+    scan(text, ',').0
 }
 
 /// Like [`parse_rows`], but an unclosed quote is an error.
 pub fn try_parse_rows(text: &str) -> Result<Vec<Vec<String>>, CsvError> {
-    match scan(text) {
+    try_parse_rows_delimited(text, ',')
+}
+
+/// Like [`try_parse_rows`], with `delimiter` between the fields instead of a comma, such as a tab for TSV. The
+/// delimiter must not be a quote or a line break; the scanner then has no way to tell it apart from the syntax.
+pub fn try_parse_rows_delimited(text: &str, delimiter: char) -> Result<Vec<Vec<String>>, CsvError> {
+    match scan(text, delimiter) {
         (_, true) => Err(CsvError::UnterminatedQuote),
         (rows, false) => Ok(rows),
     }
@@ -47,7 +53,12 @@ pub struct Table {
 /// Reads `text` as a table: the first non-blank record is the header, and every
 /// later non-blank record must have as many fields as the header.
 pub fn parse_table(text: &str) -> Result<Table, CsvError> {
-    let mut records = try_parse_rows(text)?.into_iter().filter(|record| !is_blank(record));
+    parse_table_delimited(text, ',')
+}
+
+/// Like [`parse_table`], with fields split on `delimiter`, such as a tab for TSV exports.
+pub fn parse_table_delimited(text: &str, delimiter: char) -> Result<Table, CsvError> {
+    let mut records = try_parse_rows_delimited(text, delimiter)?.into_iter().filter(|record| !is_blank(record));
     let header = records.next().ok_or(CsvError::NoHeader)?;
     let mut rows = Vec::new();
     for (i, record) in records.enumerate() {
@@ -64,6 +75,20 @@ fn is_blank(record: &[String]) -> bool {
 }
 
 impl Table {
+    /// Builds a table from a header and data records. The header must have at least one name, and every record must
+    /// have as many fields as the header.
+    pub fn from_parts(header: Vec<String>, rows: Vec<Vec<String>>) -> Result<Table, CsvError> {
+        if header.is_empty() {
+            return Err(CsvError::NoHeader);
+        }
+        for (i, row) in rows.iter().enumerate() {
+            if row.len() != header.len() {
+                return Err(CsvError::RaggedRecord { record: i + 1, expected: header.len(), found: row.len() });
+            }
+        }
+        Ok(Table { header, rows })
+    }
+
     pub fn header(&self) -> &[String] {
         &self.header
     }
@@ -90,7 +115,7 @@ impl Table {
 }
 
 /// The scanner behind every reader: the records, and whether a quoted field was still open at the end.
-fn scan(text: &str) -> (Vec<Vec<String>>, bool) {
+fn scan(text: &str, delimiter: char) -> (Vec<Vec<String>>, bool) {
     let mut rows = Vec::new();
     let mut row = Vec::new();
     let mut field = String::new();
@@ -113,7 +138,7 @@ fn scan(text: &str) -> (Vec<Vec<String>>, bool) {
         }
         match c {
             '"' if field.is_empty() => quoted = true,
-            ',' => row.push(std::mem::take(&mut field)),
+            d if d == delimiter => row.push(std::mem::take(&mut field)),
             '\r' if chars.peek() == Some(&'\n') => {}
             '\n' => {
                 row.push(std::mem::take(&mut field));

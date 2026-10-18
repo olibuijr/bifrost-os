@@ -48,6 +48,12 @@ pub fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 impl Connection {
     /// Starts connecting to `addr` (`host`, `host:port`, or an IPv6 literal) and returns at once.
     pub fn open(addr: &str) -> Connection {
+        Connection::open_with(addr, None)
+    }
+
+    /// Like `open`, with the password to answer VNC authentication with when the server asks for one (a server that
+    /// offers no authentication never sees it).
+    pub fn open_with(addr: &str, password: Option<String>) -> Connection {
         let shared = Arc::new(Shared {
             frame: Mutex::new(Framebuffer::new(0, 0)),
             generation: AtomicU64::new(0),
@@ -59,11 +65,12 @@ impl Connection {
         let target = bifrost_rfb::with_default_port(addr);
         let (s, sock, out) = (shared.clone(), socket.clone(), outbox.clone());
         DispatchQueue::global(Qos::Utility).async_(move || {
-            let result = run(&target, &s, &sock, out, outbox_rx, &cut_tx);
+            let result = run(&target, password.as_deref(), &s, &sock, out, outbox_rx, &cut_tx);
             let mut st = lock(&s.status);
             if !matches!(*st, Status::Closed(_)) {
                 *st = Status::Closed(match result {
                     Ok(()) => "The server closed the connection.".to_string(),
+                    Err(e) if handshake::needs_password(&e) => "This computer needs a password. Type it in the Password box, then Connect.".to_string(),
                     Err(e) => e.to_string(),
                 });
             }
@@ -108,6 +115,7 @@ impl Drop for Connection {
 
 fn run(
     target: &str,
+    password: Option<&str>,
     shared: &Arc<Shared>,
     socket: &Arc<Mutex<Option<TcpStream>>>,
     outbox: mpsc::Sender<Vec<u8>>,
@@ -117,7 +125,7 @@ fn run(
     let addr = target.to_socket_addrs()?.next().ok_or_else(|| Error::Io(format!("no address for {target}")))?;
     let mut stream = TcpStream::connect_timeout(&addr, CONNECT_TIMEOUT)?;
     stream.set_nodelay(true)?;
-    let init = handshake::connect(&mut stream)?;
+    let init = handshake::connect_with(&mut stream, password)?;
     *lock(socket) = Some(stream.try_clone()?);
     {
         // The window may have hung up while the handshake ran; a close already recorded is kept.
@@ -234,6 +242,93 @@ mod tests {
             assert_eq!(fb.px, vec![0x00ff_0000, 0x0000_ff00]);
         }
         server.join().unwrap();
+    }
+
+    /// A password server on loopback: the viewer answers the challenge with the DES response for its password.
+    #[test]
+    fn connects_to_a_password_server_with_the_right_password() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let challenge: [u8; 16] = *b"abcdefghijklmnop";
+        let server = std::thread::spawn(move || {
+            let (mut s, _) = listener.accept().unwrap();
+            s.write_all(b"RFB 003.008\n").unwrap();
+            let mut version = [0u8; 12];
+            s.read_exact(&mut version).unwrap();
+            s.write_all(&[1, 2]).unwrap();
+            let mut choice = [0u8; 1];
+            s.read_exact(&mut choice).unwrap();
+            assert_eq!(choice[0], 2, "the viewer picks VNC authentication");
+            s.write_all(&challenge).unwrap();
+            let mut response = [0u8; 16];
+            s.read_exact(&mut response).unwrap();
+            let ok = response == bifrost_rfb::des::vnc_response(&challenge, "letmein");
+            s.write_all(&(if ok { 0u32 } else { 1u32 }).to_be_bytes()).unwrap();
+            if !ok {
+                let reason = b"Authentication failed";
+                s.write_all(&(reason.len() as u32).to_be_bytes()).unwrap();
+                s.write_all(reason).unwrap();
+                return false;
+            }
+            let mut client_init = [0u8; 1];
+            s.read_exact(&mut client_init).unwrap();
+            let mut init = Vec::new();
+            init.extend_from_slice(&2u16.to_be_bytes());
+            init.extend_from_slice(&1u16.to_be_bytes());
+            init.extend_from_slice(&PixelFormat::VIEWER.encode());
+            init.extend_from_slice(&1u32.to_be_bytes());
+            init.push(b'x');
+            s.write_all(&init).unwrap();
+            // keep the connection open until the viewer hangs up
+            let mut sink = [0u8; 64];
+            while s.read(&mut sink).map_or(false, |n| n > 0) {}
+            true
+        });
+        let conn = Connection::open_with(&format!("127.0.0.1:{port}"), Some("letmein".to_string()));
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            match lock(&conn.shared.status).clone() {
+                Status::Connected { .. } => break,
+                Status::Closed(reason) => panic!("closed: {reason}"),
+                Status::Connecting => {}
+            }
+            assert!(Instant::now() < deadline, "the handshake never finished");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        drop(conn); // hangs up, which lets the server thread finish
+        assert!(server.join().unwrap(), "the server accepted the response");
+    }
+
+    #[test]
+    fn a_wrong_password_is_reported_with_the_servers_reason() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let challenge = [9u8; 16];
+        std::thread::spawn(move || {
+            let (mut s, _) = listener.accept().unwrap();
+            let _ = s.write_all(b"RFB 003.008\n");
+            let mut version = [0u8; 12];
+            let _ = s.read_exact(&mut version);
+            let _ = s.write_all(&[1, 2]);
+            let mut choice = [0u8; 1];
+            let _ = s.read_exact(&mut choice);
+            let _ = s.write_all(&challenge);
+            let mut response = [0u8; 16];
+            let _ = s.read_exact(&mut response);
+            let _ = s.write_all(&1u32.to_be_bytes());
+            let _ = s.write_all(&6u32.to_be_bytes());
+            let _ = s.write_all(b"denied");
+        });
+        let conn = Connection::open_with(&format!("127.0.0.1:{port}"), Some("wrong".to_string()));
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            if let Status::Closed(reason) = lock(&conn.shared.status).clone() {
+                assert!(reason.contains("denied"), "{reason}");
+                break;
+            }
+            assert!(Instant::now() < deadline, "the refusal never arrived");
+            std::thread::sleep(Duration::from_millis(10));
+        }
     }
 
     #[test]

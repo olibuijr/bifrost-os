@@ -213,9 +213,35 @@ impl<T: Scalar> NDArray<T> {
     }
 }
 
+impl NDArray<f32> {
+    /// Reads a float32 array from little-endian bytes, the layout of a stored weights block. `bytes` must be exactly the
+    /// shape's storage (`4 * element_count`), so a short or padded block is refused rather than read partly.
+    pub fn from_le_bytes(bytes: &[u8], shape: &[usize]) -> Result<Self, NDArrayError> {
+        let expected = NDArrayDescriptor::new(shape, ScalarType::Float32)?.minimum_byte_count();
+        if bytes.len() != expected {
+            return Err(NDArrayError::CountMismatch { expected, got: bytes.len() });
+        }
+        let scalars = bytes.chunks_exact(4).map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
+        Self::new(scalars, shape)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_float32_block_loads_in_row_major_order_and_must_match_the_shape() {
+        let bytes: Vec<u8> = [1.0f32, 2.5, -3.0, 4.0].iter().flat_map(|v| v.to_le_bytes()).collect();
+        let a = NDArray::<f32>::from_le_bytes(&bytes, &[2, 2]).unwrap();
+        assert_eq!(a.get(&[0, 1]), Ok(2.5));
+        assert_eq!(a.get(&[1, 0]), Ok(-3.0));
+        assert_eq!(
+            NDArray::<f32>::from_le_bytes(&bytes[..15], &[2, 2]),
+            Err(NDArrayError::CountMismatch { expected: 16, got: 15 })
+        );
+        assert!(NDArray::<f32>::from_le_bytes(&bytes, &[3]).is_err(), "16 bytes are not 3 floats");
+    }
 
     #[test]
     fn preferred_strides_are_row_major() {

@@ -87,9 +87,25 @@ impl RunStyle {
 // ---- painter ----
 
 /// What drawing needs from the outside. The SDK implements it over a surface.
+/// The character that stands for an inline object in the text (OBJECT REPLACEMENT CHARACTER).
+pub const INLINE_OBJECT_CHAR: char = '\u{FFFC}';
+
+/// A box that sits inline on a line. It takes `width` points, rises `ascent` above the baseline and drops `descent`
+/// below it, and its left edge is where its placeholder character starts. `id` is the caller's key (a formula, an
+/// attachment); the typesetter never looks inside it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct InlineObject {
+    pub width: f32,
+    pub ascent: f32,
+    pub descent: f32,
+    pub id: u64,
+}
+
 pub trait TextPainter {
     /// The colour of text with no foreground set.
     fn default_color(&self) -> u32;
+    /// Paints an inline object whose left edge is at `x` and whose baseline is `baseline`. The default draws nothing.
+    fn draw_inline(&mut self, _object: &InlineObject, _x: f32, _baseline: f32) {}
     fn fill_rect(&mut self, rect: Rect, color: u32);
     /// Draws `text` left to right with its baseline start at (`x`, `baseline`). Fill colour, stroke and font come from
     /// `style`.
@@ -150,6 +166,8 @@ struct Inner {
     grapheme: Vec<bool>,
     breaks: Vec<Brk>,
     adv: Vec<f32>,
+    /// The inline object of each character, if it is an object placeholder.
+    objects: Vec<Option<InlineObject>>,
     source: Rc<dyn GlyphSource>,
 }
 
@@ -343,6 +361,7 @@ impl Inner {
                     descent: (m.descent + shift).max(0.0),
                     leading: m.leading,
                     metrics: m,
+                    inline: Vec::new(),
                 });
             }
             let text: String = match &c.token {
@@ -359,6 +378,7 @@ impl Inner {
                 r.advances.push(adv[k]);
                 r.natural.push(if c.tab { 0.0 } else { c.adv + c.spacing });
                 r.glyph_text.push(text);
+                r.inline.push(rc.objects.get(c.chars.start).copied().flatten());
             }
         }
         // Line metrics.
@@ -373,6 +393,12 @@ impl Inner {
             ascent = ascent.max(r.ascent);
             descent = descent.max(r.descent);
             leading = leading.max(r.leading);
+        }
+        for c in &clusters {
+            if let Some(Some(o)) = rc.objects.get(c.chars.start) {
+                ascent = ascent.max(o.ascent);
+                descent = descent.max(o.descent);
+            }
         }
         let boxes = (0..n)
             .map(|k| ClusterBox {
@@ -418,6 +444,20 @@ impl Typesetter {
         paragraphs: &[(Range<usize>, ParagraphStyle)],
         options: TypesetterOptions,
         source: Rc<dyn GlyphSource>,
+    ) -> Typesetter {
+        Typesetter::with_inline_objects(text, spans, paragraphs, options, source, &[])
+    }
+
+    /// `new`, with inline objects. Each `(offset, object)` names the UTF-16 offset of an
+    /// [`INLINE_OBJECT_CHAR`] placeholder in `text`; the placeholder takes the object's width and the line grows to
+    /// its ascent and descent. An offset that is not a placeholder is ignored.
+    pub fn with_inline_objects(
+        text: &str,
+        spans: &[(Range<usize>, RunStyle)],
+        paragraphs: &[(Range<usize>, ParagraphStyle)],
+        options: TypesetterOptions,
+        source: Rc<dyn GlyphSource>,
+        objects: &[(usize, InlineObject)],
     ) -> Typesetter {
         let chars: Vec<char> = text.chars().collect();
         let n = chars.len();
@@ -514,6 +554,14 @@ impl Typesetter {
             }
             a = b;
         }
+        let mut inline: Vec<Option<InlineObject>> = vec![None; n];
+        for (off, obj) in objects {
+            let ci = char_at(*off);
+            if ci < n && chars[ci] == INLINE_OBJECT_CHAR {
+                inline[ci] = Some(*obj);
+                adv[ci] = obj.width;
+            }
+        }
 
         Typesetter {
             inner: Rc::new(Inner {
@@ -529,6 +577,7 @@ impl Typesetter {
                 grapheme,
                 breaks,
                 adv,
+                objects: inline,
                 source,
             }),
         }
@@ -722,6 +771,8 @@ pub struct TextRun {
     descent: f32,
     leading: f32,
     metrics: FontMetrics,
+    /// Per glyph: the inline object the glyph stands for, if any.
+    inline: Vec<Option<InlineObject>>,
 }
 
 impl TextRun {
@@ -789,8 +840,16 @@ impl TextRun {
         }
         let mut k = s;
         while k < e {
+            if let Some(obj) = self.inline.get(k).copied().flatten() {
+                p.draw_inline(&obj, ox + self.positions[k].0, oy + self.positions[k].1);
+                k += 1;
+                continue;
+            }
             let mut j = k + 1;
             while j < e {
+                if self.inline.get(j).copied().flatten().is_some() {
+                    break;
+                }
                 let expect = self.positions[j - 1].0 + self.natural[j - 1];
                 if (self.positions[j].0 - expect).abs() < 0.01 && self.positions[j].1 == self.positions[k].1 {
                     j += 1;
@@ -1639,11 +1698,15 @@ mod tests {
         texts: Vec<(String, f32, f32)>,
         rects: Vec<(Rect, u32)>,
         rules: Vec<(f32, f32, f32, u32)>,
+        inline: Vec<(u64, f32, f32)>,
     }
 
     impl TextPainter for Log {
         fn default_color(&self) -> u32 {
             1
+        }
+        fn draw_inline(&mut self, o: &InlineObject, x: f32, baseline: f32) {
+            self.inline.push((o.id, x, baseline));
         }
         fn fill_rect(&mut self, rect: Rect, color: u32) {
             self.rects.push((rect, color));
@@ -1654,6 +1717,32 @@ mod tests {
         fn draw_rule(&mut self, x0: f32, x1: f32, y: f32, _t: f32, color: u32) {
             self.rules.push((x0, x1, y, color));
         }
+    }
+
+    #[test]
+    fn inline_object_takes_its_width_and_is_drawn_by_the_painter() {
+        // "a", object, "b": the object is 20 points wide, 15 up and 4 down, so it grows the line.
+        let text = format!("a{}b", INLINE_OBJECT_CHAR);
+        let n = text.encode_utf16().count();
+        let obj = InlineObject { width: 20.0, ascent: 15.0, descent: 4.0, id: 7 };
+        let t = Typesetter::with_inline_objects(
+            &text,
+            &[(0..n, plain())],
+            &[],
+            TypesetterOptions::default(),
+            source(),
+            &[(1, obj)],
+        );
+        let line = t.create_line(0..3);
+        let b = line.typographic_bounds();
+        assert!((b.width - 40.0).abs() < 0.01, "width {}", b.width);
+        assert!((b.ascent - 15.0).abs() < 0.01, "ascent {}", b.ascent);
+        assert!((b.descent - 4.0).abs() < 0.01, "descent {}", b.descent);
+        let mut log = Log::default();
+        line.draw(&mut log, 0.0, 30.0);
+        assert_eq!(log.inline, vec![(7, 10.0, 30.0)]);
+        let drawn: Vec<&str> = log.texts.iter().map(|t| t.0.as_str()).collect();
+        assert_eq!(drawn, vec!["a", "b"]);
     }
 
     #[test]

@@ -18,8 +18,10 @@ use super::textfield::TextField;
 use super::ui::{home_indicator, home_zone, Ui, Weight, CELL, LABEL, LABEL_2, MAC_LARGE_TITLE_PT, MAC_SUBHEAD_PT, MAC_TITLE2_PT, MENU_SOLID, MENU_TINT, SECONDARY, SIDEBAR_PLATE, WHITE};
 use super::{fuzzy, glyphs, settings, AppId, Effect, Event, Screen, Shell, apps};
 use crate::gfx::{rgba, scale, Image, Surface};
-use bifrost_ui::uttype;
+use bifrost_ui::{search_rank, uttype};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 const CARD_W_PT: f32 = 556.0;
 const CARD_TOP_PT: f32 = 41.0;
@@ -58,6 +60,10 @@ const TAP_PT: f32 = 8.0;
 const RECENTS: usize = 6;
 const SEARCHES: usize = 4;
 const PER_GROUP: usize = 3;
+/// The file beside quicksearch.ini that keeps how often each indexed result was opened (local only).
+const USAGE_FILE: &str = "search-usage.txt";
+/// The opens of indexed results, read by the Documents section; loaded by `QuickSearch::load`.
+static OPENS: std::sync::Mutex<Option<bifrost_ui::search_rank::Usage>> = std::sync::Mutex::new(None);
 /// How long a scan of the Files root is reused by later opens before the next opening scans again.
 const FILES_MAX_AGE: std::time::Duration = std::time::Duration::from_secs(20);
 const QUERY_MAX: usize = 64;
@@ -173,9 +179,31 @@ pub enum Hit {
     Reveal { folder: PathBuf, name: String },
     /// an app shortcut (`AppShortcut`): an intent declared in the app's manifest; opens the app and runs `intent.<id>`
     Shortcut { app_id: String, app_name: String, intent: String, title: String },
+    /// a Settings intent (`settings_intents`, "Open Keyboard"): opens the pane it names in Settings
+    SettingsIntent { id: &'static str, title: &'static str },
+    /// a shell action intent (`settings_actions`) with its parameters already set: runs the same effect the Settings pane does
+    SettingsAction { intent: super::settings_actions::SettingsIntent, title: String },
+    /// a transport command of the Now Playing session (`media_intents::TRANSPORT`): play or pause, next, previous.
+    /// Sent to the session's owner; no window opens.
+    MediaTransport { command: bifrost_ui::media_session::RemoteCommand, title: String },
     /// an item an app put into the Core Search index: opens the app and sends it a continue-activity message.
     /// `kind` is the file type's name ("PDF document", "" when unknown); `thumb` the thumbnail path in the app's data dir.
     Indexed { app_id: String, unique_id: String, domain: String, title: String, kind: String, thumb: String },
+    /// a calendar event: opens the Calendar app
+    Event { title: String },
+}
+
+#[cfg(test)]
+mod app_section_title_tests {
+    use super::app_section_title;
+
+    #[test]
+    fn an_app_section_is_titled_by_the_app_name_and_the_name_is_kept_once() {
+        let a = app_section_title("Notes");
+        assert_eq!(a, "Notes");
+        assert!(std::ptr::eq(a, app_section_title("Notes")), "the same name is kept once");
+        assert_eq!(app_section_title("Mail"), "Mail");
+    }
 }
 
 /// The label of an indexed result: its title, then its content type when it has one ("Q1 report · PDF document").
@@ -200,14 +228,67 @@ mod indexed_label_tests {
 
 /// The runnable `[[intent]]` shortcuts of the installed apps, with their folded search text.
 fn shortcut_items() -> Vec<(Hit, String)> {
-    let mut v = vec![];
-    for app in super::apphost::installed().iter() {
-        for i in app.manifest.intents.iter().filter(|i| i.runnable()) {
-            let hit = Hit::Shortcut { app_id: app.manifest.id.clone(), app_name: app.manifest.name.clone(), intent: i.id.clone(), title: i.title.clone() };
-            v.push((hit, fuzzy::fold(&format!("{} {}", i.title, app.manifest.name))));
-        }
+    super::intents::runnable_shortcuts(&super::apphost::installed())
+        .into_iter()
+        .map(|s| {
+            let folded = fuzzy::fold(&format!("{} {}", s.intent.title, s.app_name));
+            let hit = Hit::Shortcut { app_id: s.app_id, app_name: s.app_name, intent: s.intent.id, title: s.intent.title };
+            (hit, folded)
+        })
+        .collect()
+}
+
+/// The Settings intents as Shortcuts rows: each opens its pane. Searched by title, listed with its description.
+fn settings_intent_rows(hits: &mut BTreeMap<String, Hit>) -> Vec<(search_rank::Item, String)> {
+    super::settings_intents::CATALOGUE
+        .iter()
+        .map(|intent| table_row(hits, format!("settings-intent:{}", intent.id), intent.title, intent.description.to_string(), search_rank::Kind::Settings, Hit::SettingsIntent { id: intent.id, title: intent.title }, fuzzy::fold(intent.title)))
+        .collect()
+}
+
+/// The wallpaper catalogue as (id, name), for the "Set Wallpaper to" Search rows. The shell sets it whenever its
+/// wallpaper list changes (`Shell::set_wallpapers`).
+static WALLPAPERS: std::sync::Mutex<Vec<(String, String)>> = std::sync::Mutex::new(Vec::new());
+
+/// Records the wallpaper catalogue Search offers rows for.
+pub fn set_wallpaper_catalogue(list: Vec<(String, String)>) {
+    *WALLPAPERS.lock().unwrap_or_else(|e| e.into_inner()) = list;
+}
+
+/// The shell action intents (`settings_actions`) Search lists: the Wi-Fi scan, the two Wi-Fi switch states, and one
+/// "Set Wallpaper to" row per picture in the catalogue.
+fn settings_action_rows(hits: &mut BTreeMap<String, Hit>) -> Vec<(search_rank::Item, String)> {
+    use super::settings_actions::SettingsIntent;
+    let fixed: [(&str, &str, &str, SettingsIntent); 4] = [
+        ("wifi-scan", "Scan for Wi-Fi Networks", "Look for Wi-Fi networks nearby", SettingsIntent::WifiScan),
+        ("wifi-on", "Turn Wi-Fi On", "Switch the Wi-Fi radio on", SettingsIntent::WifiPower(true)),
+        ("wifi-off", "Turn Wi-Fi Off", "Switch the Wi-Fi radio off", SettingsIntent::WifiPower(false)),
+        ("lock-screen", "Lock Screen", "Lock the screen now", SettingsIntent::LockScreen),
+    ];
+    let mut rows: Vec<(search_rank::Item, String)> = fixed
+        .into_iter()
+        .map(|(key, title, text, intent)| table_row(hits, format!("settings-action:{key}"), title, text.to_string(), search_rank::Kind::Settings, Hit::SettingsAction { intent, title: title.to_string() }, fuzzy::fold(title)))
+        .collect();
+    let pictures = WALLPAPERS.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    for (id, name) in pictures {
+        let title = format!("Set Wallpaper to {name}");
+        let folded = fuzzy::fold(&title);
+        let hit = Hit::SettingsAction { intent: SettingsIntent::SetWallpaper(id.clone()), title: title.clone() };
+        rows.push(table_row(hits, format!("settings-action:wallpaper:{id}"), &title, "Use this picture as the desktop wallpaper".to_string(), search_rank::Kind::Settings, hit, folded));
     }
-    v
+    rows
+}
+
+/// The Now Playing transport commands as Search rows: play or pause, next and previous. Each sends its command to the
+/// session's owner, which decides whether it applies (`services::now_playing::send`).
+fn media_transport_rows(hits: &mut BTreeMap<String, Hit>) -> Vec<(search_rank::Item, String)> {
+    super::media_intents::TRANSPORT
+        .iter()
+        .map(|&(id, title, command)| {
+            let hit = Hit::MediaTransport { command, title: title.to_string() };
+            table_row(hits, format!("media-transport:{id}"), title, "Control the playing media".to_string(), search_rank::Kind::Settings, hit, fuzzy::fold(title))
+        })
+        .collect()
 }
 
 /// The row `step` places from `cur` in `rows` (section, row pairs in list order), clamped to the ends.
@@ -270,7 +351,9 @@ fn folded_fields(contact: &super::contactstore::Contact) -> [String; 3] {
 
 /// Candidates of the sources that never change while the shell runs, folded once.
 struct Fixed {
+    #[allow(dead_code)]
     settings: Vec<(Hit, String)>,
+    #[allow(dead_code)]
     cities: Vec<(Hit, String)>,
     aliases: Vec<(Hit, String)>,
 }
@@ -287,87 +370,364 @@ fn fixed() -> &'static Fixed {
     })
 }
 
+/// Deildu titles, contacts, files and calendar events as a query searches them, each with its folded form (`fuzzy::fold`,
+/// or the folded fields for a contact), kept by the caller between keystrokes.
+struct Corpus<'a> {
+    deildu: &'a [String],
+    deildu_folded: &'a [String],
+    contacts: &'a [super::contactstore::Contact],
+    contacts_folded: &'a [[String; 3]],
+    files: &'a [crate::files::fs::Entry],
+    files_folded: &'a [String],
+    events: &'a [super::calendar::store::CalendarEvent],
+}
+
+/// The usage key of an app: its opens are counted under it (see `QuickSearch::note_open`).
+fn app_usage_key(app: AppId) -> String {
+    format!("app:{}", app_key(app))
+}
+
+/// The usage key of a Settings page.
+fn settings_usage_key(page: &str) -> String {
+    format!("settings:{page}")
+}
+
+fn now_secs() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs())
+}
+
+/// How long a query waits for its sources before the panel shows what has come in (kept small: it runs on the UI
+/// thread inside a frame). The rest streams in afterwards.
+const RUN_GRACE: std::time::Duration = std::time::Duration::from_millis(4);
+/// The longest a query waits for its slowest source before it goes on without it.
+const RUN_DEADLINE: std::time::Duration = std::time::Duration::from_millis(300);
+/// The wait of a query merged at once (`results`, used by the look-up popover and by tests).
+const SYNC_DEADLINE: std::time::Duration = std::time::Duration::from_millis(300);
+
+/// One section of results as a search source: its rows (the item the ranker sees, and the folded text the fuzzy matcher
+/// tests). It owns its rows, so a query can run it on its own thread. The hit a row opens is kept by `build_tables`.
+struct Table {
+    name: &'static str,
+    rows: Vec<(search_rank::Item, String)>,
+}
+
+impl search_rank::Source for Table {
+    fn name(&self) -> &'static str {
+        self.name
+    }
+
+    fn search(&self, query: &str) -> Vec<search_rank::Item> {
+        let m = fuzzy::Matcher::new(query);
+        self.rows.iter().filter(|(_, folded)| m.rank_folded(folded).is_some()).map(|(item, _)| item.clone()).collect()
+    }
+}
+
+/// One row of a section: its item, and the hit it opens (kept under the item's id).
+fn table_row(hits: &mut BTreeMap<String, Hit>, key: String, title: &str, text: String, kind: search_rank::Kind, hit: Hit, folded: String) -> (search_rank::Item, String) {
+    hits.insert(key.clone(), hit);
+    (search_rank::Item { id: key, title: title.to_string(), text, kind, modified: 0 }, folded)
+}
+
+/// The sections of a query in display order (apps, Settings, clock, Deildu, contacts, shortcuts, files, calendar), and
+/// the hit each item id opens.
+fn build_tables(c: &Corpus) -> (Vec<Table>, BTreeMap<String, Hit>) {
+    let mut hits: BTreeMap<String, Hit> = BTreeMap::new();
+    let fx = fixed();
+    let apps_rows = apps().iter().map(|a| table_row(&mut hits, app_usage_key(a.id), a.name, String::new(), search_rank::Kind::App, Hit::App(a.id), fuzzy::fold(a.name))).collect();
+    let settings_rows = settings::PAGES
+        .iter()
+        .map(|&page| {
+            // the keyword aliases ("brightness", "dark mode") are part of the page's text
+            let aliases: Vec<&str> = fx.aliases.iter().filter(|(h, _)| *h == Hit::Settings(page)).map(|(_, f)| f.as_str()).collect();
+            let text = aliases.join(" ");
+            let folded = format!("{} {}", fuzzy::fold(page), text);
+            table_row(&mut hits, settings_usage_key(page), page, text, search_rank::Kind::Settings, Hit::Settings(page), folded)
+        })
+        .collect();
+    let city_rows = CITIES.iter().map(|city| table_row(&mut hits, format!("city:{}", city.name), city.name, String::new(), search_rank::Kind::Other, Hit::City(city.name), fuzzy::fold(city.name))).collect();
+    let deildu_rows = c.deildu.iter().zip(c.deildu_folded).map(|(title, f)| table_row(&mut hits, format!("deildu:{title}"), title, String::new(), search_rank::Kind::Other, Hit::Deildu(title.clone()), f.clone())).collect();
+    let contact_rows = c
+        .contacts
+        .iter()
+        .zip(c.contacts_folded)
+        .map(|(contact, f)| {
+            let name = contact.display_name().to_string();
+            let text = format!("{} {}", contact.phone, contact.email);
+            let hit = Hit::Contact { id: contact.id, name: name.clone() };
+            table_row(&mut hits, format!("contact:{}", contact.id), &name, text, search_rank::Kind::Contact, hit, f.join(" "))
+        })
+        .collect();
+    let mut shortcut_rows: Vec<(search_rank::Item, String)> = shortcut_items().into_iter().enumerate().map(|(i, (hit, folded))| table_row(&mut hits, format!("shortcut:{i}"), &folded, String::new(), search_rank::Kind::Other, hit, folded.clone())).collect();
+    shortcut_rows.extend(settings_intent_rows(&mut hits));
+    shortcut_rows.extend(settings_action_rows(&mut hits));
+    shortcut_rows.extend(media_transport_rows(&mut hits));
+    let file_rows = c.files.iter().zip(c.files_folded).map(|(e, f)| table_row(&mut hits, format!("file:{}", e.path.display()), &e.name, String::new(), search_rank::Kind::File, Hit::File { path: e.path.clone(), name: e.name.clone() }, f.clone())).collect();
+    let event_rows = c
+        .events
+        .iter()
+        .map(|e| {
+            let text = format!("{} {}", e.location, e.notes);
+            let folded = fuzzy::fold(&format!("{} {}", e.title, e.location));
+            table_row(&mut hits, format!("event:{}", e.id), &e.title, text, search_rank::Kind::Other, Hit::Event { title: e.title.clone() }, folded)
+        })
+        .collect();
+    let tables = vec![
+        Table { name: "Applications", rows: apps_rows },
+        Table { name: "Settings", rows: settings_rows },
+        Table { name: "Clock", rows: city_rows },
+        Table { name: "Deildu", rows: deildu_rows },
+        Table { name: "Contacts", rows: contact_rows },
+        Table { name: "Shortcuts", rows: shortcut_rows },
+        Table { name: "Files", rows: file_rows },
+        Table { name: "Calendar", rows: event_rows },
+    ];
+    (tables, hits)
+}
+
+/// The tables as the sources a query runs on.
+fn sources_of(tables: Vec<Table>) -> Vec<Arc<dyn search_rank::Source>> {
+    // Settings > Search switches a section off: its source is not queried
+    let prefs = super::search_prefs::current();
+    tables.into_iter().filter(|t| prefs.source_on(t.name)).map(|t| Arc::new(t) as Arc<dyn search_rank::Source>).collect()
+}
+
+/// The calculator answer for the query, as its group.
+fn calculator_group(query: &str) -> Option<Group> {
+    quicksearch_math::answer(query).map(|a| Group { title: "Calculator", hits: vec![Hit::Answer(a)] })
+}
+
+/// Splits a merged query into the Top Hit group, the sections, and the files group (with "Show in Folder" after it).
+/// `top` is the hit shown as the top hit; it is taken out of the sections, so no row is listed twice.
+fn split_merged(merged: &search_rank::Merged, hits: &BTreeMap<String, Hit>, top: Option<Hit>) -> (Option<Group>, Vec<Group>, Vec<Group>) {
+    let top_group = top.clone().map(|h| Group { title: "Top Hit", hits: vec![h] });
+    let mut sections = vec![];
+    let mut files = vec![];
+    for section in &merged.sections {
+        let rows: Vec<Hit> = section.hits.iter().filter_map(|r| hits.get(&r.item.id).cloned()).filter(|h| top.as_ref() != Some(h)).collect();
+        if rows.is_empty() {
+            continue;
+        }
+        if section.source == "Files" {
+            let show = match rows.first() {
+                Some(Hit::File { path, name }) => Some(Group { title: "Show in Folder", hits: vec![Hit::Reveal { folder: path.parent().map_or_else(|| path.clone(), Path::to_path_buf), name: name.clone() }] }),
+                _ => None,
+            };
+            files.push(Group { title: "Files", hits: rows });
+            files.extend(show);
+        } else {
+            sections.push(Group { title: section.source, hits: rows });
+        }
+    }
+    (top_group, sections, files)
+}
+
+/// The groups in display order: the calculator answer, the Top Hit, the sections, the Documents, the files, and the
+/// "Search in Apps" action last.
+fn compose(query: &str, calc: Option<Group>, top: Option<Group>, sections: Vec<Group>, documents: Vec<Group>, files: Vec<Group>) -> Vec<Group> {
+    let mut groups: Vec<Group> = calc.into_iter().chain(top).collect();
+    groups.extend(sections);
+    groups.extend(documents);
+    groups.extend(files);
+    groups.push(Group { title: "Search in Apps", hits: vec![Hit::Terminal(query.to_string())] });
+    scoped(groups, &super::spotlight_scope::current())
+}
+
+/// The category a hit is listed under in Settings > Spotlight, and the path it names when it is a file. `None` for
+/// the hits that no switch controls (the Search in Apps action, the Top Hit's own kind, the calculator answer).
+fn hit_category(hit: &Hit) -> (Option<super::spotlight_scope::Category>, Option<&Path>) {
+    use super::spotlight_scope::Category as C;
+    match hit {
+        Hit::App(_) | Hit::Shortcut { .. } => (Some(C::Applications), None),
+        Hit::Settings(_) | Hit::SettingsIntent { .. } | Hit::SettingsAction { .. } | Hit::MediaTransport { .. } => (Some(C::Settings), None),
+        Hit::Contact { .. } => (Some(C::Contacts), None),
+        Hit::Event { .. } => (Some(C::CalendarEvents), None),
+        Hit::File { path, .. } | Hit::Reveal { folder: path, .. } => (Some(C::Files), Some(path.as_path())),
+        Hit::Indexed { .. } => (Some(C::Documents), None),
+        Hit::City(_) => (Some(C::Cities), None),
+        Hit::Answer(_) => (Some(C::Calculator), None),
+        Hit::Deildu(_) | Hit::Terminal(_) => (None, None),
+    }
+}
+
+/// Drops the hits Settings > Spotlight hides, and any group left empty. A group with no hits stays only when it was
+/// empty to begin with (the "Search in Apps" action is never hidden).
+fn scoped(groups: Vec<Group>, scope: &super::spotlight_scope::Scope) -> Vec<Group> {
+    groups
+        .into_iter()
+        .filter_map(|mut g| {
+            let had = !g.hits.is_empty();
+            g.hits.retain(|h| {
+                let (cat, path) = hit_category(h);
+                !cat.is_some_and(|c| scope.hides(c, path))
+            });
+            (!had || !g.hits.is_empty()).then_some(g)
+        })
+        .collect()
+}
+
 /// `deildu_folded` holds `fuzzy::fold` of each `deildu` title and `contacts_folded` the `folded_fields` of each contact,
-/// both kept by the caller between keystrokes.
+/// both kept by the caller between keystrokes. The sources are merged at once here; the Search panel streams them.
 fn results_folded(query: &str, deildu: &[String], deildu_folded: &[String], contacts: &[super::contactstore::Contact], contacts_folded: &[[String; 3]]) -> Vec<Group> {
     let query = query.trim();
     if query.is_empty() {
         return vec![];
     }
-    let m = fuzzy::Matcher::new(query);
-    let fx = fixed();
-    let rank_all = |items: &[(Hit, String)]| fuzzy::sorted_folded(&m, items.iter().map(|(h, f)| (h.clone(), f.as_str())));
-    let app_items: Vec<(Hit, String)> = apps().iter().map(|a| (Hit::App(a.id), fuzzy::fold(a.name))).collect();
-    let deildu_items: Vec<(Hit, &str)> = deildu.iter().zip(deildu_folded).map(|(t, f)| (Hit::Deildu(t.clone()), f.as_str())).collect();
-    let titles = ["Applications", "Settings", "Clock", "Deildu"];
-    let mut ranked: Vec<Vec<(fuzzy::Rank, Hit)>> =
-        vec![rank_all(&app_items), rank_all(&fx.settings), rank_all(&fx.cities), fuzzy::sorted_folded(&m, deildu_items)];
-    // keyword aliases ("brightness", "dark mode") lead to their Settings page
-    let mut seen: Vec<Hit> = vec![];
-    ranked[1].retain(|(_, h)| !seen.contains(h) && { seen.push(h.clone()); true });
-    for (rank, hit) in rank_all(&fx.aliases) {
-        if !seen.contains(&hit) {
-            seen.push(hit.clone());
-            ranked[1].push((rank, hit));
-        }
-    }
-    let mut people: Vec<_> = contacts.iter().zip(contacts_folded).filter_map(|(contact, folded)| {
-        folded.iter().filter_map(|field| m.rank_folded(field)).min()
-            .map(|rank| (rank, Hit::Contact { id: contact.id, name: contact.display_name().into() }))
-    }).collect();
-    people.sort_by_key(|(rank, _)| *rank);
-    ranked.push(people);
-    ranked.push(rank_all(&shortcut_items()));
-    let mut groups = vec![];
-    if let Some(a) = quicksearch_math::answer(query) {
-        groups.push(Group { title: "Calculator", hits: vec![Hit::Answer(a)] });
-    }
-    if let Some(i) = ranked.iter().enumerate().filter_map(|(i, v)| v.first().map(|(r, _)| (r.kind, i, r.len))).min().map(|(_, i, _)| i) {
-        let (_, hit) = ranked[i].remove(0);
-        groups.push(Group { title: "Top Hit", hits: vec![hit] });
-    }
-    for (title, v) in titles.into_iter().chain(["Contacts", "Shortcuts"]).zip(ranked) {
-        if !v.is_empty() {
-            groups.push(Group { title, hits: v.into_iter().take(PER_GROUP).map(|(_, h)| h).collect() });
-        }
-    }
-    groups.push(Group { title: "Search in Apps", hits: vec![Hit::Terminal(query.to_string())] });
-    groups
+    let corpus = Corpus { deildu, deildu_folded, contacts, contacts_folded, files: &[], files_folded: &[], events: &[] };
+    let (tables, hits) = build_tables(&corpus);
+    let mut run = search_rank::Query::start(query, &sources_of(tables), SYNC_DEADLINE);
+    run.wait();
+    let merged = run.merge(PER_GROUP, &search_rank::Usage::default(), now_secs(), &search_rank::NoSemantic);
+    let top = merged.top.as_ref().and_then(|t| hits.get(&t.item.id).cloned());
+    let (top, sections, files) = split_merged(&merged, &hits, top);
+    compose(query, calculator_group(query), top, sections, vec![], files)
 }
 
-/// "Documents" section: items apps indexed with `CSSearchableIndex`, up to `PER_GROUP` rows.
+impl QuickSearch {
+    /// Starts `query` on every source. Waits a moment for the quick ones, so the first frame usually has them; the
+    /// rest come in through `run_groups` as they answer.
+    fn start_run(&mut self, query: &str) {
+        let corpus = Corpus {
+            deildu: &self.deildu_titles,
+            deildu_folded: &self.deildu_folded,
+            contacts: &self.contacts,
+            contacts_folded: &self.contacts_folded,
+            files: &self.files,
+            files_folded: &self.files_folded,
+            events: &self.events,
+        };
+        let (tables, hits) = build_tables(&corpus);
+        let mut run = search_rank::Query::start(query, &sources_of(tables), RUN_DEADLINE);
+        run.wait_for(RUN_GRACE);
+        self.run = Some(run);
+        self.run_hits = hits;
+        self.run_query = query.to_string();
+        self.frozen_top = None;
+        self.shown.clear();
+    }
+
+    /// Takes the answers that have arrived and merges them into (Top Hit, sections, files). The top hit is frozen the
+    /// first time one is shown for the query, so a late source cannot move the row the person is looking at.
+    fn run_groups(&mut self) -> (Option<Group>, Vec<Group>, Vec<Group>) {
+        let Some(run) = self.run.as_mut() else { return (None, vec![], vec![]) };
+        run.poll();
+        let guard = OPENS.lock().unwrap_or_else(|e| e.into_inner());
+        let empty = search_rank::Usage::default();
+        let usage = guard.as_ref().unwrap_or(&empty);
+        let merged = run.merge(PER_GROUP, usage, now_secs(), &search_rank::NoSemantic);
+        drop(guard);
+        if self.frozen_top.is_none() {
+            let hits = &self.run_hits;
+            self.frozen_top = merged.top.as_ref().and_then(|t| hits.get(&t.item.id).cloned());
+        }
+        split_merged(&merged, &self.run_hits, self.frozen_top.clone())
+    }
+
+    /// The result groups for the query, as they stand now. Groups already on screen keep their order, and new ones
+    /// follow them (before "Search in Apps"), so a late source adds rows below what is shown.
+    fn groups_for(&mut self, query: &str) -> Vec<Group> {
+        let query = query.trim().to_string();
+        if query.is_empty() {
+            self.run = None;
+            self.run_query.clear();
+            self.frozen_top = None;
+            self.shown.clear();
+            return vec![];
+        }
+        if query != self.run_query {
+            self.start_run(&query);
+        }
+        let (top, sections, files) = self.run_groups();
+        let groups = compose(&query, calculator_group(&query), top, sections, indexed_groups(&query), files);
+        let groups = self.keep_shown_order(groups);
+        self.shown = groups.iter().map(|g| g.title).collect();
+        groups
+    }
+
+    /// The groups already shown keep their order; new groups follow them, and "Search in Apps" stays last.
+    fn keep_shown_order(&self, mut groups: Vec<Group>) -> Vec<Group> {
+        let tail = groups.iter().position(|g| g.title == "Search in Apps").map(|i| groups.remove(i));
+        let mut out: Vec<Group> = vec![];
+        for title in &self.shown {
+            if let Some(i) = groups.iter().position(|g| g.title == *title) {
+                out.push(groups.remove(i));
+            }
+        }
+        out.extend(groups);
+        out.extend(tail);
+        out
+    }
+}
+
+/// The key an indexed result's opens are counted under.
+fn indexed_key(app_id: &str, unique_id: &str) -> String {
+    format!("{app_id}/{unique_id}")
+}
+
+/// The section title of an app's indexed items: the app's name. Names are kept for the rest of the run (an app name is
+/// a few bytes and there are at most a few dozen installed apps), so a section title stays a `&'static str`.
+fn app_section_title(name: &str) -> &'static str {
+    static NAMES: std::sync::Mutex<Vec<&'static str>> = std::sync::Mutex::new(Vec::new());
+    let mut names = NAMES.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(known) = names.iter().copied().find(|known| *known == name) {
+        return known;
+    }
+    let kept: &'static str = Box::leak(name.to_string().into_boxed_str());
+    names.push(kept);
+    kept
+}
+
+/// One section per app that has matching items, titled with the app's name. Items are ordered by the hybrid ranker
+/// (`bifrost_ui::search_rank`) across all apps at once: title and word match, recency of indexing, and local opens.
+/// Each section keeps its first `PER_GROUP` items in ranked order, and sections follow the best item of each app.
+/// Matches the ranker does not score keep their index order after the ranked ones.
 fn indexed_groups(query: &str) -> Vec<Group> {
-    let hits: Vec<Hit> = super::spotindex::search(query, PER_GROUP)
-        .into_iter()
-        .map(|f| Hit::Indexed {
+    // Settings > Search: the Documents source or an app's items switched off are left out
+    let prefs = super::search_prefs::current();
+    if !prefs.source_on("Documents") {
+        return vec![];
+    }
+    let found: Vec<super::spotindex::Found> = super::spotindex::search(query, PER_GROUP * 4).into_iter().filter(|f| prefs.app_on(&f.app_id)).collect();
+    if found.is_empty() {
+        return vec![];
+    }
+    let names: BTreeMap<String, String> = super::apphost::installed().iter().map(|a| (a.manifest.id.clone(), a.manifest.name.clone())).collect();
+    let items: Vec<search_rank::Item> = found
+        .iter()
+        .map(|f| search_rank::Item {
+            id: indexed_key(&f.app_id, &f.unique_id),
+            title: f.title.clone(),
+            text: f.text.clone(),
+            kind: search_rank::Kind::Document,
+            modified: f.modified,
+        })
+        .collect();
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+    let guard = OPENS.lock().unwrap_or_else(|e| e.into_inner());
+    let empty = search_rank::Usage::default();
+    let usage = guard.as_ref().unwrap_or(&empty);
+    let order = search_rank::order(query, &items, usage, now, &search_rank::NoSemantic);
+    let mut groups: Vec<Group> = vec![];
+    for i in order {
+        let f = found[i].clone();
+        let title = app_section_title(names.get(&f.app_id).map_or(f.app_id.as_str(), String::as_str));
+        let hit = Hit::Indexed {
             kind: f.kind.map_or(String::new(), |k| uttype::description(k).to_string()),
             thumb: f.thumbnail,
             app_id: f.app_id,
             unique_id: f.unique_id,
             domain: f.domain,
             title: f.title,
-        })
-        .collect();
-    if hits.is_empty() {
-        vec![]
-    } else {
-        vec![Group { title: "Documents", hits }]
+        };
+        match groups.iter_mut().find(|g| g.title == title) {
+            Some(g) => {
+                if g.hits.len() < PER_GROUP {
+                    g.hits.push(hit);
+                }
+            }
+            None => groups.push(Group { title, hits: vec![hit] }),
+        }
     }
-}
-
-/// "Files" section (names containing the query, newest first), up to three rows, then a
-/// "Show in Folder" row for the top match. `folded` holds `fuzzy::fold` of each file's name,
-/// so "bjork" finds "Björk.mp3".
-fn file_note_groups(query: &str, files: &[crate::files::fs::Entry], folded: &[String]) -> Vec<Group> {
-    let q = fuzzy::fold(query.trim());
-    if q.is_empty() {
-        return vec![];
-    }
-    let matches: Vec<&crate::files::fs::Entry> = files.iter().zip(folded).filter(|(_, f)| f.contains(&q)).map(|(e, _)| e).take(PER_GROUP).collect();
-    let Some(top) = matches.first() else { return vec![] };
-    let hits = matches.iter().map(|e| Hit::File { path: e.path.clone(), name: e.name.clone() }).collect();
-    let folder = top.path.parent().map_or_else(|| top.path.clone(), Path::to_path_buf);
-    vec![Group { title: "Files", hits }, Group { title: "Show in Folder", hits: vec![Hit::Reveal { folder, name: top.name.clone() }] }]
+    groups
 }
 
 /// A release title from a torrent name: dots and underscores become
@@ -409,6 +769,8 @@ struct SourcesRead {
     contacts_stamp: Option<(PathBuf, std::time::SystemTime)>,
     titles: Option<Vec<String>>,
     deildu_stamp: Option<(PathBuf, std::time::SystemTime)>,
+    events: Option<Vec<super::calendar::store::CalendarEvent>>,
+    calendar_stamp: Option<(PathBuf, std::time::SystemTime)>,
 }
 
 /// What a touch on the home screen turned out to be.
@@ -533,6 +895,21 @@ pub struct QuickSearch {
     /// modification times the contacts and Deildu title caches were read at
     contacts_stamp: Option<(PathBuf, std::time::SystemTime)>,
     deildu_stamp: Option<(PathBuf, std::time::SystemTime)>,
+    /// where the indexed-result open counts are saved (beside quicksearch.ini); None until `load`
+    usage_path: Option<PathBuf>,
+    /// the query being shown: its sources (started by `start_run`) and what they answer with
+    run: Option<search_rank::Query>,
+    /// the query `run` was started for ("" when none)
+    run_query: String,
+    /// the hit each item id of `run` opens
+    run_hits: BTreeMap<String, Hit>,
+    /// the top hit of `run_query`, kept once shown so a late source cannot replace it
+    frozen_top: Option<Hit>,
+    /// the titles of the groups on screen, in order
+    shown: Vec<&'static str>,
+    /// the calendar events, read on a worker (see `refresh_sources`)
+    events: Vec<super::calendar::store::CalendarEvent>,
+    calendar_stamp: Option<(PathBuf, std::time::SystemTime)>,
     suggestions: Image,
     chevron: Image,
     icon_colour: Vec<(&'static str, u32)>,
@@ -597,6 +974,14 @@ impl QuickSearch {
             files_at: None,
             contacts_stamp: None,
             deildu_stamp: None,
+            usage_path: None,
+            run: None,
+            run_query: String::new(),
+            run_hits: BTreeMap::new(),
+            frozen_top: None,
+            shown: vec![],
+            events: vec![],
+            calendar_stamp: None,
             suggestions: ui.text("Assistant Suggestions", 20.0, Weight::Semibold, WHITE),
             chevron: ui.text("›", 22.0, Weight::Semibold, SECONDARY),
             icon_colour: vec![
@@ -616,10 +1001,34 @@ impl QuickSearch {
 
     /// Reads the recents from `path` (an ini file) and saves there from now on.
     pub fn load(&mut self, path: impl Into<PathBuf>) {
+        let path: PathBuf = path.into();
+        let usage_path = path.with_file_name(USAGE_FILE);
+        let opens = std::fs::read_to_string(&usage_path).map(|t| search_rank::Usage::from_text(&t)).unwrap_or_default();
+        if let Ok(mut g) = OPENS.lock() {
+            *g = Some(opens);
+        }
+        self.usage_path = Some(usage_path);
         self.prefs = Prefs::load(path);
         self.recents = self.prefs.get("recents").unwrap_or("").split(',').filter_map(app_named).take(RECENTS).collect();
         self.searches = self.prefs.get("searches").unwrap_or("").split(',').map(str::trim).filter(|q| !q.is_empty()).map(String::from).take(SEARCHES).collect();
         self.search_imgs.clear();
+    }
+
+    /// Counts an open of an indexed result (`indexed_key`) and saves the counts beside quicksearch.ini. Local only.
+    pub fn note_open(&mut self, key: &str) {
+        let text = match OPENS.lock() {
+            Ok(mut g) => {
+                let u = g.get_or_insert_with(Default::default);
+                u.bump(key);
+                u.to_text()
+            }
+            Err(_) => return,
+        };
+        if let Some(path) = &self.usage_path {
+            if let Err(e) = std::fs::write(path, text) {
+                eprintln!("springboard: {USAGE_FILE}: {e}");
+            }
+        }
     }
 
     /// Records a launch: `app` becomes the first suggestion.
@@ -658,6 +1067,12 @@ impl QuickSearch {
         &self.recents
     }
 
+    /// Forgets the app icons, so the next pull takes them from the home screen's tiles again (an icon style change
+    /// or an install).
+    pub fn clear_icons(&mut self) {
+        self.icons.clear();
+    }
+
     /// Icons for the suggestion row and the result rows, from the home
     /// screen's tiles; built once by the shell before the first show.
     pub fn set_icons(&mut self, ui: &Ui, icons: Vec<(AppId, &Image)>) {
@@ -686,17 +1101,20 @@ impl QuickSearch {
     /// cache can hold many torrents). Scans `root` for files on a worker thread when the list is older than
     /// `FILES_MAX_AGE` (or was scanned under another root). The list shown meanwhile is the last one, so the card
     /// opens with results; a new list fills in on a later tick.
-    pub fn refresh_sources(&mut self, contacts: &Path, deildu_dir: &Path, root: PathBuf) {
+    pub fn refresh_sources(&mut self, contacts: &Path, deildu_dir: &Path, calendar: &Path, root: PathBuf) {
         let mtime = |p: &Path| std::fs::metadata(p).and_then(|m| m.modified()).ok();
         let contacts_stamp = mtime(contacts).map(|t| (contacts.to_path_buf(), t));
         let want_contacts = contacts_stamp.is_none() || contacts_stamp != self.contacts_stamp;
         let cache = deildu_dir.join("cache");
         let deildu_stamp = mtime(&cache).map(|t| (cache.clone(), t));
         let want_titles = deildu_stamp.is_none() || deildu_stamp != self.deildu_stamp;
-        if (want_contacts || want_titles) && self.sources_rx.is_none() {
+        let calendar_stamp = mtime(calendar).map(|t| (calendar.to_path_buf(), t));
+        let want_events = calendar_stamp.is_some() && calendar_stamp != self.calendar_stamp;
+        if (want_contacts || want_titles || want_events) && self.sources_rx.is_none() {
             let (tx, rx) = std::sync::mpsc::channel();
             let contacts = contacts.to_path_buf();
             let deildu_dir = deildu_dir.to_path_buf();
+            let calendar = calendar.to_path_buf();
             crate::bare::sys::spawn_named("quicksearch-sources", move || {
                 let loaded = want_contacts.then(|| super::contactstore::load_checked(&contacts).unwrap_or_default());
                 let contacts_folded: Option<Vec<[String; 3]>> = loaded.as_ref().map(|c| c.iter().map(folded_fields).collect());
@@ -706,6 +1124,8 @@ impl QuickSearch {
                     contacts_stamp,
                     titles: want_titles.then(|| cached_titles(&deildu_dir)),
                     deildu_stamp,
+                    events: want_events.then(|| super::calendar::store::load(&calendar).unwrap_or_default()),
+                    calendar_stamp,
                 });
             });
             self.sources_rx = Some(rx);
@@ -715,7 +1135,10 @@ impl QuickSearch {
             self.files_root = Some(root.clone());
             let (tx, rx) = std::sync::mpsc::channel();
             crate::bare::sys::spawn_named("quicksearch-files", move || {
-                let _ = tx.send(crate::files::fs::recent_in(&[root], 2000));
+                // Privacy: files in the folders Settings > Search excludes are never listed
+                let excluded = super::search_prefs::current();
+                let files: Vec<crate::files::fs::Entry> = crate::files::fs::recent_in(&[root], 2000).into_iter().filter(|e| !excluded.folder_excluded(&e.path)).collect();
+                let _ = tx.send(files);
             });
             self.files_rx = Some(rx);
         }
@@ -733,7 +1156,11 @@ impl QuickSearch {
             }
         };
         self.sources_rx = None;
-        let changed = read.contacts.is_some() || read.titles.is_some();
+        let changed = read.contacts.is_some() || read.titles.is_some() || read.events.is_some();
+        if let Some(events) = read.events {
+            self.events = events;
+        }
+        self.calendar_stamp = read.calendar_stamp;
         if let Some(contacts) = read.contacts {
             self.contacts = contacts;
         }
@@ -850,7 +1277,12 @@ impl QuickSearch {
         let mut dirty = false;
         let files = self.take_files();
         let sources = self.take_sources();
-        if (files || sources) && self.active() && !self.field.text().is_empty() {
+        // a new file scan or contacts read changes the rows, so the query starts again on them
+        if files || sources {
+            self.run_query.clear();
+        }
+        let answered = self.run.as_mut().is_some_and(|r| r.poll());
+        if (files || sources || answered) && self.active() && !self.field.text().is_empty() {
             self.search(ui, h);
             dirty = true;
         }
@@ -884,7 +1316,7 @@ impl QuickSearch {
         if self.keyboard.animating() {
             return Some(t);
         }
-        if self.files_rx.is_some() || self.sources_rx.is_some() {
+        if self.files_rx.is_some() || self.sources_rx.is_some() || self.run.as_ref().is_some_and(|r| r.pending()) {
             return Some(t + 50.0);
         }
         self.is_shown().then(|| self.field.next_blink(t)).flatten()
@@ -941,13 +1373,10 @@ impl QuickSearch {
     /// Rebuilds the result rows for the query, keeping what fits above the keyboard.
     fn search(&mut self, ui: &Ui, h: i32) {
         let m = self.m();
-        let mut groups = results_folded(self.field.text(), &self.deildu_titles, &self.deildu_folded, &self.contacts, &self.contacts_folded);
-        let mut extra = indexed_groups(self.field.text());
-        extra.extend(file_note_groups(self.field.text(), &self.files, &self.files_folded));
-        if !groups.is_empty() {
-            let at = groups.len() - 1;
-            groups.splice(at..at, extra);
-        }
+        let query = self.field.text().to_string();
+        let groups = self.groups_for(&query);
+        // the row the person is on stays selected, wherever the late rows put it
+        let keep = self.selected_hit();
         let mut sections = vec![];
         let mut y = self.content_top(ui) + ui.pt(m.bottom_pad);
         let bottom = if self.mac { h as f32 - ui.pt(12.0) } else { self.keyboard_top(ui, h) - ui.pt(8.0) };
@@ -977,11 +1406,14 @@ impl QuickSearch {
                     Hit::Settings(name) | Hit::City(name) => name.to_string(),
                     Hit::Deildu(title) => title.clone(),
                     Hit::Contact { name, .. } => name.clone(),
+                    Hit::Event { title } => title.clone(),
                     Hit::Terminal(_) => "Search in Terminal".to_string(),
                     Hit::Answer(a) => format!("= {a}"),
                     Hit::File { name, .. } => name.clone(),
                     Hit::Reveal { name, .. } => format!("Show {name} in Folder"),
                     Hit::Shortcut { title, app_name, .. } => format!("{title} ({app_name})"),
+                    Hit::SettingsIntent { title, .. } => title.to_string(),
+                    Hit::SettingsAction { title, .. } | Hit::MediaTransport { title, .. } => title.clone(),
                     Hit::Indexed { title, kind, .. } => indexed_label(title, kind),
                 };
                 let max_w = ui.pt(m.card_w - m.row_text_x - m.inset);
@@ -993,6 +1425,7 @@ impl QuickSearch {
             }
         }
         self.sections = sections;
+        self.selected = keep.and_then(|wanted| self.sections.iter().enumerate().find_map(|(si, s)| s.rows.iter().position(|(r, _)| *r == wanted).map(|ri| (si, ri))));
         self.selected = None;
     }
 
@@ -1347,7 +1780,8 @@ impl QuickSearch {
                         Hit::Answer(_) => super::apphost::slot_of(super::apphost::CALCULATOR).map(|n| AppId::External(n as u8)),
                         Hit::File { .. } | Hit::Reveal { .. } => Some(AppId::Files),
                         Hit::Shortcut { app_id, .. } | Hit::Indexed { app_id, .. } => super::apphost::slot_of(app_id).map(|n| AppId::External(n as u8)),
-                        Hit::Settings(_) => None,
+                        Hit::Event { .. } => super::apphost::slot_of(super::services::calendar::STORE_APP).map(|n| AppId::External(n as u8)),
+                        Hit::Settings(_) | Hit::SettingsIntent { .. } | Hit::SettingsAction { .. } | Hit::MediaTransport { .. } => None,
                     };
                     // an indexed item with a readable thumbnail shows it in place of its app's icon
                     let thumb_img = match hit {
@@ -1472,13 +1906,14 @@ impl Shell {
 
     /// Starts the pull: icons and cached titles are refreshed first.
     fn quicksearch_open(&mut self, y0: f32, y: f32, t: f64, range: f32) {
+        self.request_index_extensions();
         self.quicksearch.set_mac(&self.ui, self.desk_active());
         if !self.quicksearch.has_icons() {
             let icons = apps().iter().enumerate().map(|(i, a)| (a.id, if i < super::IN_DOCK { &self.dock[i].icon } else { &self.grid[i - super::IN_DOCK].icon })).collect();
             self.quicksearch.set_icons(&self.ui, icons);
         }
         let root = self.files_locations.first().map_or_else(|| crate::files::fs::home(), |l| l.path.clone());
-        self.quicksearch.refresh_sources(&super::contactstore::store_path(&self.data_dir), &self.deildu_dir, root);
+        self.quicksearch.refresh_sources(&super::contactstore::store_path(&self.data_dir), &self.deildu_dir, &super::services::calendar::store_path(&self.data_dir), root);
         self.quicksearch.open(&self.ui, self.h, y0, y, t, range);
     }
 
@@ -1503,8 +1938,19 @@ impl Shell {
         self.quicksearch.note_search();
         self.quicksearch.hide();
         match hit {
-            Hit::App(app) => self.open(app, t),
-            Hit::Settings(name) => return self.open_settings_page(name, t),
+            Hit::App(app) => {
+                self.quicksearch.note_open(&app_usage_key(app));
+                self.open(app, t)
+            }
+            Hit::Settings(name) => {
+                self.quicksearch.note_open(&settings_usage_key(name));
+                return self.open_settings_page(name, t);
+            }
+            Hit::Event { .. } => {
+                if let Some(n) = super::apphost::slot_of(super::services::calendar::STORE_APP) {
+                    self.open(AppId::External(n as u8), t);
+                }
+            }
             Hit::Contact { id, .. } => {
                 let _ = id;
                 if let Some(n) = super::apphost::slot_of("is.olibuijr.contacts") {
@@ -1540,6 +1986,24 @@ impl Shell {
                     f.show_folder(&self.ui, &folder, t);
                 }
             }
+            Hit::SettingsAction { intent: super::settings_actions::SettingsIntent::LockScreen, .. } => {
+                // locking changes the lock state too, so it goes through the same path as the menu item
+                return self.lock_screen();
+            }
+            Hit::MediaTransport { command, .. } => {
+                // the Now Playing owner decides whether the command applies; no window opens
+                super::services::now_playing::send(command);
+            }
+            Hit::SettingsAction { intent, .. } => {
+                // the same effect the Settings pane and the agent socket apply; no window opens
+                return vec![intent.into_effect()];
+            }
+            Hit::SettingsIntent { id, .. } => {
+                self.quicksearch.note_open(&format!("settings-intent:{id}"));
+                if let Some(page) = super::settings_intents::page_for(id) {
+                    return self.open_settings_intent_page(page, t);
+                }
+            }
             Hit::Shortcut { app_id, intent, .. } => {
                 if let Some(n) = super::apphost::slot_of(&app_id) {
                     self.open(AppId::External(n as u8), t);
@@ -1552,6 +2016,7 @@ impl Shell {
                 }
             }
             Hit::Indexed { app_id, unique_id, domain, .. } => {
+                self.quicksearch.note_open(&indexed_key(&app_id, &unique_id));
                 if let Some(n) = super::apphost::slot_of(&app_id) {
                     self.open(AppId::External(n as u8), t);
                     // the app may still be starting: the message waits in its socket until it reads it
@@ -1575,6 +2040,13 @@ impl Shell {
         self.open(AppId::Settings, t);
         let ui = &self.ui;
         self.settings.as_mut().map_or(vec![], |st| st.open_page(ui, name, t))
+    }
+
+    /// Launches Settings on the pane a Settings intent names (`settings_intents::page_for`).
+    fn open_settings_intent_page(&mut self, page: super::pages::PageId, t: f64) -> Vec<Effect> {
+        self.open(AppId::Settings, t);
+        let ui = &self.ui;
+        self.settings.as_mut().map_or(vec![], |st| st.open_page_id(ui, page, t))
     }
 
     /// Records a launch for the suggestions row (the shell does this on every open).
@@ -1681,6 +2153,53 @@ mod tests {
         let none = results("zzzz", &[]);
         assert_eq!(none.len(), 1, "only the terminal action: {none:?}");
         assert_eq!(none[0].hits, vec![Hit::Terminal("zzzz".into())]);
+    }
+
+    #[test]
+    fn settings_intents_are_found_as_shortcuts_and_open_their_pane() {
+        let groups = results("open keyboard", &[]);
+        let wanted = Hit::SettingsIntent { id: "open-keyboard", title: "Open Keyboard" };
+        assert!(groups.iter().flat_map(|g| g.hits.iter()).any(|h| *h == wanted), "{groups:?}");
+        assert!(super::super::settings_intents::page_for("open-keyboard").is_some());
+        assert!(super::super::settings_intents::page_for("no-such-intent").is_none());
+    }
+
+    #[test]
+    fn wifi_action_intents_are_found_and_run_their_effect_without_a_window() {
+        use super::super::settings_actions::SettingsIntent;
+        let groups = results("turn wi-fi off", &[]);
+        let wanted = Hit::SettingsAction { intent: SettingsIntent::WifiPower(false), title: "Turn Wi-Fi Off".into() };
+        assert!(groups.iter().flat_map(|g| g.hits.iter()).any(|h| *h == wanted), "{groups:?}");
+        let scan = Hit::SettingsAction { intent: SettingsIntent::WifiScan, title: "Scan for Wi-Fi Networks".into() };
+        assert!(results("scan for wi-fi", &[]).iter().flat_map(|g| g.hits.iter()).any(|h| *h == scan));
+        set_wallpaper_catalogue(vec![("kirkjufell_dusk".into(), "Kirkjufell Dusk".into())]);
+        let picture = Hit::SettingsAction { intent: SettingsIntent::SetWallpaper("kirkjufell_dusk".into()), title: "Set Wallpaper to Kirkjufell Dusk".into() };
+        assert!(results("kirkjufell", &[]).iter().flat_map(|g| g.hits.iter()).any(|h| *h == picture));
+        set_wallpaper_catalogue(Vec::new());
+        let lock = Hit::SettingsAction { intent: SettingsIntent::LockScreen, title: "Lock Screen".into() };
+        assert!(results("lock screen", &[]).iter().flat_map(|g| g.hits.iter()).any(|h| *h == lock));
+        let next = Hit::MediaTransport { command: bifrost_ui::media_session::RemoteCommand::Next, title: "Next Track".into() };
+        assert!(results("next track", &[]).iter().flat_map(|g| g.hits.iter()).any(|h| *h == next));
+    }
+
+    #[test]
+    fn spotlight_scope_hides_switched_off_kinds_and_excluded_folders() {
+        use super::super::spotlight_scope::{Category, Scope};
+        let mut scope = Scope::default();
+        scope.set_allowed(Category::Settings, false);
+        scope.exclude(Path::new("/home/u/Private"));
+        let groups = vec![Group {
+            title: "Top Hit",
+            hits: vec![
+                Hit::SettingsIntent { id: "open-keyboard", title: "Open Keyboard" },
+                Hit::File { path: PathBuf::from("/home/u/Private/a.txt"), name: "a.txt".into() },
+                Hit::File { path: PathBuf::from("/home/u/Work/b.txt"), name: "b.txt".into() },
+            ],
+        }, Group { title: "Settings", hits: vec![Hit::SettingsIntent { id: "open-sound", title: "Open Sound" }] }, Group { title: "Search in Apps", hits: vec![Hit::Terminal("x".into())] }];
+        let kept = scoped(groups, &scope);
+        assert_eq!(kept.len(), 2, "the Settings group empties and goes: {kept:?}");
+        assert_eq!(kept[0].hits, vec![Hit::File { path: PathBuf::from("/home/u/Work/b.txt"), name: "b.txt".into() }]);
+        assert_eq!(kept[1].title, "Search in Apps", "the action is never hidden");
     }
 
     /// A one-piece torrent named `name`.
@@ -2065,7 +2584,7 @@ mod tests {
 /// The desktop Search material: the shared `HudWindow` material request (the presenter's blur under the named
 /// menu tint, the solid colour with Reduce Transparency, the tint alone without a GPU presenter). The panel
 /// fades in with `alpha`; the blur shape is declared only once it is fully opaque, so it never pops mid-fade.
-fn mac_glass(s: &mut Surface, x: f32, y: f32, w: f32, h: f32, r: f32, alpha: u32) {
+pub(super) fn mac_glass(s: &mut Surface, x: f32, y: f32, w: f32, h: f32, r: f32, alpha: u32) {
     use bifrost_ui::material_request::ShellSurface;
     let req = ShellSurface::Search.request((x, y, w, h), r);
     let fill = if alpha == 255 {
@@ -2110,17 +2629,38 @@ mod file_actions_tests {
         Entry { kind: kind_of(name, false), name: name.into(), path: PathBuf::from(dir).join(name), is_dir: false, size: 1, mtime: 0, items: None }
     }
 
+    /// The Files and Show in Folder groups of `query` over `files`, merged the way the panel merges them.
+    fn file_groups(query: &str, files: &[crate::files::fs::Entry]) -> Vec<Group> {
+        let folded: Vec<String> = files.iter().map(|e| fuzzy::fold(&e.name)).collect();
+        let corpus = Corpus { deildu: &[], deildu_folded: &[], contacts: &[], contacts_folded: &[], files, files_folded: &folded, events: &[] };
+        let (tables, hits) = build_tables(&corpus);
+        let mut run = search_rank::Query::start(query, &sources_of(tables), SYNC_DEADLINE);
+        run.wait();
+        let merged = run.merge(PER_GROUP, &search_rank::Usage::default(), 0, &search_rank::NoSemantic);
+        split_merged(&merged, &hits, None).2
+    }
+
+    #[test]
+    fn groups_that_arrive_late_follow_the_ones_on_screen() {
+        let u = ui();
+        let mut q = QuickSearch::new(&u, 800.0, 1.0);
+        q.shown = vec!["Applications", "Files"];
+        let g = |title: &'static str| Group { title, hits: vec![] };
+        let out = q.keep_shown_order(vec![g("Search in Apps"), g("Settings"), g("Applications"), g("Files")]);
+        let titles: Vec<&str> = out.iter().map(|g| g.title).collect();
+        assert_eq!(titles, vec!["Applications", "Files", "Settings", "Search in Apps"]);
+    }
+
     #[test]
     fn a_file_match_comes_with_show_in_folder_for_the_top_match() {
         let files = vec![entry("/home/me/Docs", "Q1 report.pdf"), entry("/home/me/Pics", "Beach.png")];
-        let folded: Vec<String> = files.iter().map(|e| fuzzy::fold(&e.name)).collect();
-        let groups = file_note_groups("report", &files, &folded);
+        let groups = file_groups("report", &files);
         assert_eq!(groups.len(), 2, "{groups:?}");
         assert_eq!(groups[0].title, "Files");
         assert_eq!(groups[0].hits, vec![Hit::File { path: PathBuf::from("/home/me/Docs/Q1 report.pdf"), name: "Q1 report.pdf".into() }]);
         assert_eq!(groups[1], Group { title: "Show in Folder", hits: vec![Hit::Reveal { folder: PathBuf::from("/home/me/Docs"), name: "Q1 report.pdf".into() }] });
-        assert!(file_note_groups("zzz", &files, &folded).is_empty());
-        assert!(file_note_groups("  ", &files, &folded).is_empty());
+        assert!(file_groups("zzz", &files).is_empty());
+        assert!(file_groups("  ", &files).is_empty());
     }
 
     #[test]

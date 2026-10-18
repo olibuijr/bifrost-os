@@ -27,6 +27,7 @@ pub mod system;
 pub mod tempo;
 pub mod equalizer;
 pub mod upnext;
+pub mod miniplayer;
 pub mod playback;
 pub mod visualizer;
 
@@ -357,6 +358,8 @@ pub struct Music {
     rule_edit: Option<(usize, String)>,
     /// ratings, favourites, play counts and the play history, and the logic that counts plays
     stats: Stats,
+    /// the playback settings (crossfade), kept in `playback.txt` of the library store
+    playback: playback::Playback,
     tracker: PlayTracker,
     /// which list the Songs tab shows (all songs, recently added, recently played, favourites)
     scope: Scope,
@@ -504,6 +507,7 @@ impl Music {
             smart_rev: 0,
             rule_edit: None,
             stats: Stats::default(),
+            playback: playback::Playback::default(),
             tracker: PlayTracker::default(),
             scope: Scope::All,
             lyrics: None,
@@ -549,6 +553,9 @@ impl Music {
         self.stats = Stats::open(dir.join("stats.txt"));
         self.folders = Folders::open(dir.join("Playlists").join("folders.txt"));
         self.info = Info::open(dir.join("info.txt"));
+        self.playback = std::fs::read_to_string(dir.join("playback.txt")).map(|t| playback::Playback::parse(&t)).unwrap_or_default();
+        // the audio service keeps the last crossfade it was given until it restarts, so the saved choice is sent again
+        self.player.set_crossfade_ms(self.playback.crossfade_secs * 1000);
         self.smart_rev += 1;
         self.restore = std::fs::read_to_string(dir.join("queue.txt")).ok().and_then(|t| UpNext::from_text(&t));
         self.store = Some(dir);
@@ -1619,6 +1626,26 @@ impl Music {
         self.scanning
     }
 
+    /// The Up Next list Control Center shows: the songs after the current one.
+    pub fn up_next_entries(&self) -> Vec<bifrost_app::now_playing::QueueEntry> {
+        nowplay::up_next_entries(self.queue.upcoming(), |path| {
+            self.path_id.get(path).and_then(|&id| self.library.songs.get(id)).map(|song| (song.title.clone(), song.artist.clone()))
+        })
+    }
+
+    /// Plays the Up Next song Control Center picked, by its place among the upcoming songs. False when there is no such
+    /// song in the library.
+    pub fn remote_queue_pick(&mut self, index: usize) -> bool {
+        let absolute = self.queue.current() + 1 + index;
+        let playable = self.queue.items().get(absolute).is_some_and(|path| self.path_id.contains_key(path));
+        if !playable {
+            return false;
+        }
+        self.queue.set_current(absolute);
+        self.push_queue(0.0, true);
+        true
+    }
+
     /// A seek from Control Center, in milliseconds. False when the session does not allow it now: no song, a station,
     /// or no length. The position is clamped to the song's length.
     pub fn remote_seek(&mut self, position_ms: f64) -> bool {
@@ -1882,7 +1909,45 @@ impl Music {
             descending: self.descending,
             lyrics_shown: self.lyrics_on,
             has_lyrics: self.lyrics.is_some(),
+            crossfade_secs: self.playback.crossfade_secs,
         }
+    }
+
+    /// What the MiniPlayer window shows of the current song.
+    pub fn mini_info(&self) -> miniplayer::Info {
+        let (title, artist) = match &self.snap.track {
+            Some(t) => {
+                let texts = self.texts(t, self.snap.live.as_ref());
+                (texts.2, texts.3)
+            }
+            None => ("Not Playing".to_string(), String::new()),
+        };
+        let progress = match self.snap.duration_ms {
+            Some(d) if d > 0.0 => (self.snap.position_ms / d).clamp(0.0, 1.0) as f32,
+            _ => 0.0,
+        };
+        miniplayer::Info { title, artist, playing: self.snap.playing, progress, volume: self.volume, live: self.is_live() }
+    }
+
+    /// The artwork of the current song for the MiniPlayer, when the cache has it.
+    pub fn mini_art(&mut self) -> Option<Image> {
+        let key = self.snap.track.as_ref().and_then(|t| self.art_key(t))?;
+        self.art.get(&key, BIG).cloned()
+    }
+
+    /// Seeks the current song to `f` of its length (0 to 1). A live station has no length to seek in.
+    pub fn seek_to_fraction(&mut self, f: f32) {
+        if self.is_live() {
+            return;
+        }
+        let Some(d) = self.snap.duration_ms.filter(|d| *d > 0.0) else { return };
+        self.player.seek_ms(d * f.clamp(0.0, 1.0) as f64);
+        self.take_snapshot();
+    }
+
+    /// Sets the volume to `f` (0 to 1), as the MiniPlayer's volume bar does.
+    pub fn set_volume_fraction(&mut self, f: f32) {
+        let _ = self.set_volume_from(f.clamp(0.0, 1.0));
     }
 
     /// Runs a menu command; true when the screen needs a frame. File > Import is the window's (it owns the open panel)
@@ -1890,7 +1955,7 @@ impl Music {
     pub fn run_command(&mut self, cmd: Command) -> bool {
         let song = self.current_song();
         match cmd {
-            Command::Import => return false,
+            Command::Import | Command::MiniPlayer | Command::KeepMiniOnTop => return false,
             Command::PlayPause => self.control(nowplaying::Target::Play),
             Command::Next => self.control(nowplaying::Target::Next),
             Command::Previous => self.control(nowplaying::Target::Prev),
@@ -1930,6 +1995,13 @@ impl Music {
                 }
                 self.descending = !self.descending;
                 self.refilter();
+            }
+            Command::Crossfade(secs) => {
+                self.playback = self.playback.with_crossfade(secs);
+                self.player.set_crossfade_ms(self.playback.crossfade_secs * 1000);
+                if let Some(dir) = &self.store {
+                    let _ = std::fs::write(dir.join("playback.txt"), self.playback.to_text());
+                }
             }
             Command::Lyrics => {
                 if self.lyrics.is_some() && !self.is_live() {
@@ -3204,7 +3276,7 @@ mod tests {
     fn scanned(title: &str, artist: &str, added: u64) -> Scanned {
         Scanned {
             path: PathBuf::from(format!("/m/{title}.mp3")),
-            tags: Tags { title: Some(title.into()), artist: Some(artist.into()), album: Some("Album".into()), album_artist: None, track: None, year: None, cover: None },
+            tags: Tags { title: Some(title.into()), artist: Some(artist.into()), album: Some("Album".into()), album_artist: None, track: None, year: None, cover: None, lyrics: None, chapters: Vec::new(), replaygain_db: None },
             duration_ms: Some(200_000.0),
             has_cover: false,
             added,
@@ -3275,6 +3347,24 @@ mod tests {
         m.run_command(Command::Show(Place::History));
         assert_eq!((m.page(), m.menu_state().place), (Page::History, Place::History));
         assert!(!m.run_command(Command::Import), "the window owns the open panel");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_crossfade_choice_is_kept_in_the_menu_state_and_the_library_store() {
+        let dir = folder("crossfade");
+        let mut m = music(&dir);
+        assert_eq!(m.menu_state().crossfade_secs, 0, "gapless until chosen");
+        assert!(m.run_command(Command::Crossfade(6)));
+        assert_eq!(m.menu_state().crossfade_secs, 6);
+        assert!(m.run_command(Command::Crossfade(99)));
+        assert_eq!(m.menu_state().crossfade_secs, 12, "cut to the longest crossfade");
+        m.run_command(Command::Crossfade(4));
+        let saved = std::fs::read_to_string(dir.join("data").join("playback.txt")).expect("the choice is written");
+        assert!(saved.contains("crossfade 4"), "{saved}");
+        // a new session over the same store starts with the saved choice
+        let again = music(&dir);
+        assert_eq!(again.menu_state().crossfade_secs, 4);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

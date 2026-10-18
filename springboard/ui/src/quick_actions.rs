@@ -79,6 +79,33 @@ pub fn combine(dynamic: &[ShortcutItem], static_items: &[ShortcutItem]) -> Vec<S
     dynamic.iter().chain(static_items).filter(|item| seen.insert(item.kind.clone())).take(MAX_ITEMS).cloned().collect()
 }
 
+/// The suggested actions: the quick actions used most often, most used first. `usage` pairs each action with its use
+/// count. An action used never is left out, and a type appears once (its first entry wins among equal counts). At most
+/// `limit` items come back, and never more than [`MAX_ITEMS`].
+pub fn suggest(usage: &[(ShortcutItem, u32)], limit: usize) -> Vec<ShortcutItem> {
+    let mut ranked: Vec<&(ShortcutItem, u32)> = usage.iter().filter(|(_, uses)| *uses > 0).collect();
+    ranked.sort_by(|a, b| b.1.cmp(&a.1));
+    let mut seen: HashSet<&str> = HashSet::new();
+    ranked
+        .into_iter()
+        .filter(|(item, _)| seen.insert(item.kind.as_str()))
+        .take(limit.min(MAX_ITEMS))
+        .map(|(item, _)| item.clone())
+        .collect()
+}
+
+/// Counts one use of `item` in a usage ledger, the input [`suggest`] ranks. An action is matched by its type, so a second
+/// use of the same type raises the count of the entry already there and the entry keeps its first title and symbol.
+/// A type seen for the first time is added with a count of one. A ledger never holds more than `MAX_ITEMS` types: once
+/// it is full, uses of other types are not recorded, so the ledger stays small.
+pub fn record_use(usage: &mut Vec<(ShortcutItem, u32)>, item: &ShortcutItem) {
+    if let Some((_, uses)) = usage.iter_mut().find(|(known, _)| known.kind == item.kind) {
+        *uses = uses.saturating_add(1);
+    } else if usage.len() < MAX_ITEMS {
+        usage.push((item.clone(), 1));
+    }
+}
+
 /// A `key=value` pair from a manifest's `user_info` list. The key is trimmed and must not be empty.
 pub fn user_info_pair(text: &str) -> Option<(String, String)> {
     let (key, value) = text.split_once('=')?;
@@ -141,6 +168,46 @@ mod tests {
         let all = combine(&dynamic, &fixed);
         assert_eq!(all.len(), MAX_ITEMS);
         assert_eq!(all[0].kind, "d");
+    }
+
+    #[test]
+    fn suggestions_are_the_most_used_actions_without_repeats() {
+        let usage = vec![(item("search", "Search"), 2), (item("compose", "Compose"), 5), (item("open", "Open"), 0), (item("compose", "Again"), 9)];
+        let kinds: Vec<String> = suggest(&usage, 4).into_iter().map(|i| i.kind).collect();
+        assert_eq!(kinds, ["compose", "search"], "an unused action is left out and a type is shown once");
+    }
+
+    #[test]
+    fn suggestions_respect_the_limit_and_the_maximum() {
+        let usage: Vec<(ShortcutItem, u32)> = (0..6).map(|n| (item(&format!("k{n}"), "x"), 10 - n)).collect();
+        assert_eq!(suggest(&usage, 2).len(), 2);
+        assert_eq!(suggest(&usage, 20).len(), MAX_ITEMS);
+        assert!(suggest(&usage, 0).is_empty());
+        assert!(suggest(&[], 4).is_empty());
+    }
+
+    #[test]
+    fn recording_a_use_counts_each_type_once() {
+        let mut usage = Vec::new();
+        record_use(&mut usage, &item("compose", "Compose"));
+        record_use(&mut usage, &item("compose", "Renamed"));
+        record_use(&mut usage, &item("search", "Search"));
+        assert_eq!(usage.len(), 2);
+        assert_eq!(usage[0].0.title, "Compose", "the first title is kept");
+        assert_eq!(usage[0].1, 2);
+        let kinds: Vec<String> = suggest(&usage, 4).into_iter().map(|i| i.kind).collect();
+        assert_eq!(kinds, ["compose", "search"]);
+    }
+
+    #[test]
+    fn the_usage_ledger_stops_growing_at_the_maximum() {
+        let mut usage = Vec::new();
+        for n in 0..(MAX_ITEMS + 3) {
+            record_use(&mut usage, &item(&format!("k{n}"), "x"));
+        }
+        assert_eq!(usage.len(), MAX_ITEMS);
+        record_use(&mut usage, &item("k0", "x"));
+        assert_eq!(usage[0].1, 2, "a type already in the ledger still counts");
     }
 
     #[test]

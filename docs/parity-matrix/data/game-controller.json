@@ -12,21 +12,21 @@
       "apple": "GCController, GCDevice, GCController.controllers(), controllerDidConnectNotification",
       "bifrost": "springboard/core/src/gamepad.rs (Capabilities::is_game_controller, Registry::connected, Registry::disconnected); wired: springboard/src/shell/services/gamepad_service.rs (views, snapshot); springboard/src/shell/game_controllers_page.rs (list page); springboard/core/tests/parity_sdk-tests-18.rs",
       "status": "partial",
-      "note": "Headless tests in parity_sdk-tests-18 cover the controller test, id assignment, connect and disconnect events and rumble detection. The shell's gamepad service keeps a Registry and the controllers page lists the pads. Gap: apps receive no connect or disconnect event, and the hot-plug path is not yet verified on Midget."
+      "note": "Headless tests in parity_sdk-tests-18 cover the controller test, id assignment, connect and disconnect events and rumble detection. The shell's gamepad service keeps a Registry and the controllers page lists the pads. Gap: apps receive no connect or disconnect event, and the hot-plug path is not yet verified on Midget. Built 2026-10-17: SDK bifrost_app::gamepad_input re-exports the registry and its Connected and Disconnected events, and describe_connection gives their one-line text; tests gamepad_input::tests. Wave 4 (2026-10-17): the shell sends connected and disconnected service events to every app, and bifrost_app::gamepad_input::Session tracks the pads from them; tests gamepad_input::tests."
     },
     {
       "feature": "Input events (polling and callbacks)",
       "apple": "GCController input profiles, valueChangedHandler, GCDevicePhysicalInput",
       "bifrost": "springboard/ui/src/gamepad.rs (ControllerInput); springboard/sdk/src/gamepad_input.rs (describe, button_name, axis_name); wired: springboard/src/shell/services/gamepad_service.rs (tick, remap_change)",
       "status": "partial",
-      "note": "The model maps 13 buttons, two sticks with clicks, two triggers and the direction pad, with dead zones, change callbacks, a polling queue and a plain-text description per change; the SDK exposes it as bifrost_app::gamepad_input (headless tests in sdk/tests/parity_sdk-complete-34.rs). Needs hardware: no real controller has been read on Midget, and the shell's event decoder still treats the stick axes as a pointer until the event loop feeds this model (see ui/src/gamepad.rs)."
+      "note": "The model maps 13 buttons, two sticks with clicks, two triggers and the direction pad, with dead zones, change callbacks, a polling queue and a plain-text description per change; the SDK exposes it as bifrost_app::gamepad_input (headless tests in sdk/tests/parity_sdk-complete-34.rs). Needs hardware: no real controller has been read on Midget, and the shell's event decoder still treats the stick axes as a pointer until the event loop feeds this model (see ui/src/gamepad.rs). Built 2026-10-17: SDK ExtendedProfile (bifrost_app::gamepad_input) copies one pad's state with named sticks, triggers, direction pad and buttons; tests gamepad_input::tests. Wave 4 (2026-10-17): the shell's input events reach the focused app, and Session pushes each one onto its controller's ControllerInput (Gamepad::apply, ControllerInput::push); tests gamepad_input::tests and ui gamepad::tests."
     },
     {
       "feature": "Button, axis, switch and direction-pad elements",
       "apple": "GCButtonElement, GCAxisElement, GCSwitchElement, GCDirectionPadElement, GCPhysicalInputElementCollection",
       "bifrost": "springboard/ui/src/gamepad.rs (element, Gamepad::feed, ControllerInput); wired: springboard/apps/games-desktop/src/games.rs (gamepad_slide, gamepad_new_game) fed by springboard/apps/games-desktop/src/system.rs; wired: springboard/src/shell/game_controllers_page.rs (Remap, controller_spec, live_rows); springboard/ui/tests/parity_sdk-tests-18.rs",
       "status": "partial",
-      "note": "Headless tests in parity_sdk-tests-18 cover the Linux gamepad codes mapped to buttons, sticks, triggers and the direction pad, button edges, dead zones and the queued change stream. Gap: switch elements are not modelled, and apps receive mapped actions rather than raw elements. The shell's controllers page uses the model; verify on Midget for parity."
+      "note": "Headless tests in parity_sdk-tests-18 cover the Linux gamepad codes mapped to buttons, sticks, triggers and the direction pad, button edges, dead zones and the queued change stream. Gap: switch elements are not modelled, and apps receive mapped actions rather than raw elements. The shell's controllers page uses the model; verify on Midget for parity. Built 2026-10-17: ExtendedProfile exposes the buttons, both sticks, triggers and the direction pad by name; tests gamepad_input::tests. Switch elements still not modelled."
     },
     {
       "feature": "Keyboard and mouse as game input",

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<protocol name="bifrost_window_level_v1">
+  <copyright>
+    Copyright 2026 BifrOSt. Private protocol of the BifrOSt window server (docs/bifrost-ui.md, "Window level").
+  </copyright>
+
+  <interface name="bifrost_window_level_manager_v1" version="1">
+    <description summary="stacking level of a toplevel">
+      Lets the shell put a toplevel on the floating level. A floating window stays above the normal windows of the
+      desktop and is raised only within its own band; menus, panels and the menu bar are not affected. The level
+      belongs to the surface: the window server keeps it for the window's next map too.
+    </description>
+
+    <request name="destroy" type="destructor"/>
+
+    <request name="set_level">
+      <description summary="set the stacking level of the toplevel of a surface">
+        Applies at once to a mapped toplevel, and on its next map otherwise.
+      </description>
+      <arg name="surface" type="object" interface="wl_surface"/>
+      <arg name="level" type="uint" summary="0 normal, 1 floating"/>
+    </request>
+
+    <enum name="level">
+      <entry name="normal" value="0"/>
+      <entry name="floating" value="1"/>
+    </enum>
+
+    <enum name="error">
+      <entry name="invalid_level" value="0"/>
+    </enum>
+  </interface>
+</protocol>

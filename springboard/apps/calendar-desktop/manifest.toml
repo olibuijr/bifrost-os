@@ -1,6 +1,6 @@
 id = "is.olibuijr.calendar.desktop"
 name = "Calendar"
-version = "1.16.1"
+version = "1.18.0"
 exec = "bifrost-calendar"
 icon = "icon.png"
 min_shell = "0.4.84"
@@ -33,3 +33,14 @@ title = "Create Event"
 description = "Adds an event to the calendar."
 shortcut = false
 params = ["title:string", "start:date?", "minutes:int?", "location:string?", "notes:string?", "all_day:bool?"]
+
+[[script.command]]
+name = "make new event"
+event = "calendar.make"
+params = ["title", "start", "minutes", "location", "notes", "all_day"]
+result = "event"
+
+[[script.class]]
+name = "event"
+properties = []
+elements = []

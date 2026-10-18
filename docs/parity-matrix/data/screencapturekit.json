@@ -72,12 +72,12 @@
     }
   ],
   "gaps": [
-    "No app-facing capture stream API (SCStream with an output delegate) in springboard/sdk/src/.",
+    "No SCStream output-delegate object: screen streams deliver frames as service events (springboard/sdk/src/screen_stream.rs).",
     "No content enumeration API for apps (SCShareableContent and its displays, applications and windows).",
     "No content filter (SCContentFilter) for per-window or per-app capture.",
     "No system content-sharing picker or xdg-desktop-portal screencast frontend.",
     "No screen-recording permission flow for apps.",
-    "Screenshot API for apps is missing: the shell chord works, but apps cannot request a frame with size, scale or format options (SCScreenshotConfiguration).",
+    "Apps with the Screen permission can request a screenshot (springboard/sdk/src/screenshot.rs), but cannot request a frame with size, scale or format options (SCScreenshotConfiguration).",
     "No clip buffering or recording editor (SCClipBufferingOutput, SCRecordingEditor)."
   ]
 }

@@ -361,6 +361,14 @@ impl Clock {
         &self.alarms
     }
 
+    /// Adds `alarm` (an App Intent: `set-alarm`) and writes the alarm file. The shell's headless Clock service reads that
+    /// file when it changes, arms the RTC wake and rings the alarm with this app closed. Returns the new alarm's id.
+    pub fn add_alarm(&mut self, alarm: Alarm, t: f64) -> u32 {
+        let id = self.alarms.add(alarm);
+        self.persist(t);
+        id
+    }
+
     /// The add-alarm popover's label field, while it is open.
     pub fn label_field(&self) -> Option<&TextField> {
         self.add.as_ref().map(|a| &a.label)
@@ -1706,6 +1714,31 @@ pub(crate) mod tests {
         assert_eq!(fx, vec![Effect::WakeAt(end)]);
         assert!(again.stopwatch().running());
         assert_eq!(again.stopwatch().laps(500.0).len(), 2, "the lap is still there");
+    }
+
+    #[test]
+    fn an_alarm_added_by_an_intent_is_listed_and_written_for_the_shell_service() {
+        let ui = ui();
+        let path = scratch("intent_alarm");
+        let mut c = clock(&ui);
+        c.load(&path, 1000.0);
+        let mut alarm = Alarm::new(6, 30);
+        alarm.label = "Gym".into();
+        alarm.repeat = alarm::WEEKDAYS;
+        let id = c.add_alarm(alarm, 1000.0);
+        assert_eq!(c.alarms().list.len(), 1);
+        assert_eq!(c.alarms().list[0].id, id);
+        assert!(c.next_alarm_text(1000.0).unwrap().starts_with("Alarm in "), "the new alarm is the next one");
+        // the shell's service reads this file: the alarm survives a reload with its label and repeat
+        let reloaded = Alarms::parse(&std::fs::read_to_string(&path).unwrap());
+        assert_eq!(reloaded.list.len(), 1);
+        assert_eq!((reloaded.list[0].hour, reloaded.list[0].min), (6, 30));
+        assert_eq!(reloaded.list[0].label, "Gym");
+        assert_eq!(reloaded.list[0].repeat, alarm::WEEKDAYS);
+        // a second alarm gets its own id and the list stays sorted by time
+        let second = c.add_alarm(Alarm::new(5, 0), 1000.0);
+        assert_ne!(second, id);
+        assert_eq!(c.alarms().list[0].hour, 5);
     }
 
     #[test]

@@ -3,6 +3,7 @@
 //! Results are byte ranges into the input, cut only at ASCII bytes, so they are always char boundaries.
 //! Overlaps are resolved by kind priority (link, then date, then phone), so "2026-10-09" is a date, not a phone number.
 
+use crate::phone_rules;
 use std::ops::Range;
 
 /// The kinds of content the detector knows, the `NativeTextCheckingType` subset Bifrost uses.
@@ -32,6 +33,12 @@ impl Match {
     pub fn text<'a>(&self, source: &'a str) -> &'a str {
         &source[self.range.clone()]
     }
+}
+
+/// The E.164 form (`+` then digits) of a phone match, checked against the per-region rules in [`phone_rules`] for
+/// `region` (a region code such as `IS`). `None` for a match of another kind or a number the rules do not accept.
+pub fn phone_e164(m: &Match, source: &str, region: &str) -> Option<String> {
+    (m.kind == Kind::Phone).then(|| phone_rules::to_e164(m.text(source), region)).flatten()
 }
 
 /// Finds every `kinds` item in `text`, sorted by position and without overlaps.
@@ -465,9 +472,42 @@ fn suffixed_money(bytes: &[u8], at: usize) -> Option<usize> {
     Some(p + code.len())
 }
 
+/// The actions a context menu on a detected item offers, in menu order. The menu host (the shell's context menu over
+/// selected text) shows these titles and runs the one chosen; this table is the model the host reads.
+pub fn menu_actions(kind: Kind) -> &'static [&'static str] {
+    match kind {
+        Kind::Link => &["Open Link", "Copy Link", "Add to Reading List"],
+        Kind::Date => &["Add to Calendar", "Copy Date"],
+        Kind::Address => &["Open in Maps", "Copy Address"],
+        Kind::Phone => &["Call", "Send Message", "Copy Number"],
+        Kind::Email => &["Compose Email", "Copy Address"],
+        Kind::Money => &["Copy Amount"],
+        Kind::Flight => &["Show Flight Status"],
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_kind_offers_at_least_one_action_and_copy_where_text_is_copied() {
+        let kinds = [Kind::Link, Kind::Date, Kind::Address, Kind::Phone, Kind::Email, Kind::Money, Kind::Flight];
+        for k in kinds {
+            assert!(!menu_actions(k).is_empty(), "{k:?} offers an action");
+        }
+        assert_eq!(menu_actions(Kind::Phone)[0], "Call", "the phone's first action calls it");
+        assert!(menu_actions(Kind::Link).contains(&"Copy Link"));
+        assert!(menu_actions(Kind::Money).contains(&"Copy Amount"));
+    }
+
+    #[test]
+    fn each_kind_leads_with_its_own_action() {
+        assert_eq!(menu_actions(Kind::Phone)[0], "Call");
+        assert_eq!(menu_actions(Kind::Email)[0], "Compose Email");
+        assert_eq!(menu_actions(Kind::Link)[0], "Open Link");
+        assert_ne!(menu_actions(Kind::Date)[0], menu_actions(Kind::Money)[0]);
+    }
 
     fn texts(s: &str, kinds: &[Kind]) -> Vec<(Kind, String)> {
         find(s, kinds).into_iter().map(|m| (m.kind, m.text(s).to_string())).collect()
@@ -520,6 +560,23 @@ mod tests {
         assert_eq!(texts("(021) 555-1234", &all), vec![(Kind::Phone, "(021) 555-1234".into())]);
         assert!(texts("id 12345678", &all).is_empty(), "a bare run of digits is not a phone number");
         assert!(texts("abc555 1234", &all).is_empty(), "digits glued to a word are not a number");
+    }
+
+    #[test]
+    fn a_phone_match_gives_its_e164_form_for_a_known_region() {
+        let s = "Hringdu í +354 555-1234 eða 555 1234";
+        let found = find(s, &[Kind::Phone]);
+        assert_eq!(found.len(), 2);
+        assert_eq!(phone_e164(&found[0], s, "IS").as_deref(), Some("+3545551234"));
+        assert_eq!(phone_e164(&found[1], s, "is").as_deref(), Some("+3545551234"), "the region code is case-insensitive");
+        assert_eq!(phone_e164(&found[0], s, "XX"), None, "an unknown region gives no number");
+    }
+
+    #[test]
+    fn a_match_of_another_kind_gives_no_phone_number() {
+        let s = "https://x.is/555 1234";
+        let found = find(s, &[Kind::Link]);
+        assert_eq!(phone_e164(&found[0], s, "IS"), None);
     }
 
     #[test]

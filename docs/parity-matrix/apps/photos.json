@@ -212,10 +212,10 @@
    "feature": "Places / map view",
    "area": "view",
    "apple": "sidebar Map",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add a Places collection grouping photos by exif GPS, drawn on the shell map component"
+   "status": "partial",
+   "bifrost": "springboard/src/shell/photos/places.rs; springboard/src/shell/photos/mod.rs (Album::Places, draw_places, draw_place_tiles, refresh_places); springboard/src/maptiles",
+   "note": "Places album of photos with EXIF GPS; GPS is read on a worker; pins cluster by screen distance at the fitted zoom over the shared map tiles; tapping a pin lists its photos; < Places returns to the map. Not yet checked on Midget",
+   "wire": "Check tiles load and the < Places control on Midget, then promote to parity"
   },
   {
    "feature": "People & Pets face recognition",
@@ -320,10 +320,10 @@
    "feature": "Video / Live Photo playback and poster frame",
    "area": "view",
    "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Image > Turn On Live Photo; Make Poster Frame; Save Video Frame as Photo",
-   "status": "gap",
-   "bifrost": "",
-   "note": "library scans stills only",
-   "wire": "Include video files in library.rs and play them through the shell media player in the viewer"
+   "status": "partial",
+   "bifrost": "springboard/src/shell/photos/video.rs (poster, open, is_playing); springboard/src/shell/photos/library.rs (is_video_name); springboard/src/shell/photos/mod.rs (follow_clip, draw_clip_controls, Target::ClipToggle, Target::ClipSeek)",
+   "note": "Movies (MP4, M4V, MOV) are in the library with poster frames from the media player; the viewer plays them with play/pause and a seek bar. Live Photo pairing and Make Poster Frame are not done. Not yet checked on Midget",
+   "wire": "Pair a Live Photo still with its movie and add Make Poster Frame; check playback and posters on Midget, then promote to parity"
   },
   {
    "feature": "Duplicates and bursts",
@@ -446,10 +446,10 @@
    "feature": "Library chooser / multiple libraries",
    "area": "panel",
    "apple": "IPXLibraryChooser*.nib",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Allow choosing a library folder at launch, stored in prefs"
+   "status": "partial",
+   "bifrost": "springboard/src/shell/photos/libraries.rs (decode, remember, writes); springboard/src/shell/photos/mod.rs:1220 (switch_library), mod.rs:639 (launch uses the remembered library); springboard/src/shell/photos/commands.rs:SwitchLibrary; springboard/src/shell/photos/extras.rs:405 (apply_entry SwitchLibrary); springboard/src/shell/photos/library_tests.rs",
+   "note": "File > Switch Library… opens the Open Library card: a typed absolute folder (created when missing) becomes the only library shown, is moved to the front of the remembered list (lib.0..lib.7 and lib.current in photos.ini), and is the library Photos opens at the next launch when the folder still exists. Host-side cases cover the list, persistence, switching back and a refused folder. No known-library list sheet, no Other Library… folder panel, no Create New… row, no Option-held launch chooser yet. The shell's screenshot and capture folder stays in ~/Pictures. Not yet verified on Midget.",
+   "wire": "Add a library sheet opened by File > Switch Library… and at launch with Option held: list the remembered libraries (libraries::decode) with Other Library… (a folder open panel) and Create New…; keep the shell's capture folder (mod.rs photo_dirs) in step with the library in use; verify on Midget."
   },
   {
    "feature": "Cloud library, shared albums, shared library",
@@ -464,10 +464,10 @@
    "feature": "Edit With another app",
    "area": "menu",
    "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Image > Edit With",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "List apps registered for image types via the shell launch service and open the file with the chosen one"
+   "status": "partial",
+   "bifrost": "springboard/src/shell/photos/mod.rs:4380 (ensure_photos rescans on open); springboard/src/shell/desktop_bar.rs:photo_edit_with_rows (Image menu rows); springboard/src/shell/docpanel.rs:photo_edit_with (write grant, desk_open_or_start, doc_send); springboard/src/shell/defaultapps.rs:edit_with_choices (apps opening the type, Photos left out)",
+   "note": "Image > Edit With lists each app the registry says opens the photo's type (Photos left out), default first, and opens the original file in that app with a write grant through the document broker, so the app saves the original in place. Photos rescans when it is next opened, so the edit shows then; a Photos window already open does not refresh by itself. A host-side case covers the handler list. The grant path needs the installed account, so it has no host-side case. Not yet verified on Midget.",
+   "wire": "Verify on Midget that Image > Edit With opens the picture in the chosen app, that a save there is picked up when Photos is reopened, and that a photo outside the home folder is refused; make the open Photos window rescan after the app closes."
   },
   {
    "feature": "Show Histogram",
@@ -536,9 +536,9 @@
  "summary": {
   "features": 58,
   "parity": 16,
-  "partial": 31,
-  "gap": 6,
+  "partial": 35,
+  "gap": 2,
   "n/a": 5,
-  "coverage_pct": 59.4
+  "coverage_pct": 63.2
  }
 }

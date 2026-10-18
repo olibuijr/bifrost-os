@@ -10,7 +10,8 @@ use bifrost_app::kit::{Event, Image, Surface, Ui, Weight};
 use bifrost_app::kit::ui;
 use springboard::deildu::play::{mime_for, PlayState, Player};
 use springboard::deildu::player_view::{Outcome, PlayerView};
-use springboard::media::subtitles::{sidecar_candidates, Track};
+use springboard::media::pickers::Subtitles;
+use springboard::media::subtitles::{sidecars_in, Track};
 use springboard::shell::video::MediaPlayer;
 use std::fs;
 use std::io;
@@ -24,8 +25,10 @@ pub struct Movie {
     path: PathBuf,
     player: MediaPlayer,
     view: PlayerView,
-    subtitles: Option<Track>,
-    subtitles_on: bool,
+    /// the parsed subtitle files, in the order of the picker's rows after Off
+    tracks: Vec<Track>,
+    /// the choice: Off or one of `tracks`
+    subtitles: Subtitles,
     trim: Option<Trim>,
     /// the cue text being shown, and its lines rendered once per change
     caption: Option<String>,
@@ -38,20 +41,33 @@ pub fn clock(seconds: f64) -> String {
     format!("{}:{:02}", s / 60, s % 60)
 }
 
-/// The subtitle track next to `movie`: the first sidecar file that exists, is small enough and has a cue.
-fn load_subtitles(movie: &Path) -> Option<Track> {
-    for candidate in sidecar_candidates(movie) {
-        let Ok(meta) = fs::metadata(&candidate) else { continue };
+/// The subtitle files next to `movie` (`name.srt`, `name.vtt` and one per language, `name.en.srt`): the label of each
+/// and its parsed track. A file that is too large, unreadable or without a cue is left out.
+fn load_subtitles(movie: &Path) -> (Vec<String>, Vec<Track>) {
+    let dir = match movie.parent() {
+        Some(d) if !d.as_os_str().is_empty() => d.to_path_buf(),
+        _ => PathBuf::from("."),
+    };
+    let names: Vec<String> = match fs::read_dir(&dir) {
+        Ok(entries) => entries.flatten().filter_map(|e| e.file_name().into_string().ok()).collect(),
+        Err(_) => Vec::new(),
+    };
+    let mut labels = Vec::new();
+    let mut tracks = Vec::new();
+    for sidecar in sidecars_in(movie, &names) {
+        let path = dir.join(&sidecar.file_name);
+        let Ok(meta) = fs::metadata(&path) else { continue };
         if !meta.is_file() || meta.len() > MAX_SUBTITLE_BYTES {
             continue;
         }
-        let Ok(text) = fs::read_to_string(&candidate) else { continue };
+        let Ok(text) = fs::read_to_string(&path) else { continue };
         let track = Track::parse(&text);
         if !track.is_empty() {
-            return Some(track);
+            labels.push(sidecar.label);
+            tracks.push(track);
         }
     }
-    None
+    (labels, tracks)
 }
 
 impl Movie {
@@ -60,12 +76,18 @@ impl Movie {
         let mut player = MediaPlayer::new(w, h);
         player.open(path, mime_for(&path.to_string_lossy()))?;
         let view = PlayerView::new(ui, w, h, title, "");
+        let (labels, tracks) = load_subtitles(path);
+        let mut subtitles = Subtitles::new(labels);
+        if !tracks.is_empty() {
+            // the first file shows at once, as a sidecar always did
+            subtitles.choose(1);
+        }
         Ok(Movie {
             path: path.to_path_buf(),
             player,
             view,
-            subtitles: load_subtitles(path),
-            subtitles_on: true,
+            tracks,
+            subtitles,
             trim: None,
             caption: None,
             caption_lines: Vec::new(),
@@ -86,16 +108,38 @@ impl Movie {
     }
 
     pub fn has_subtitles(&self) -> bool {
-        self.subtitles.is_some()
+        !self.tracks.is_empty()
     }
 
-    pub fn subtitles_on(&self) -> bool {
-        self.subtitles_on
+    /// The subtitle picker's rows: Off, then one per subtitle file.
+    pub fn subtitle_rows(&self) -> Vec<String> {
+        self.subtitles.rows()
     }
 
-    pub fn toggle_subtitles(&mut self) {
-        self.subtitles_on = !self.subtitles_on;
-        self.caption = None;
+    /// The picker row that is chosen (0 is Off).
+    pub fn subtitle_row(&self) -> usize {
+        self.subtitles.selected_row()
+    }
+
+    /// Chooses a subtitle row (0 is Off); the caption on screen is dropped so the new track draws from the next tick.
+    /// False for a row that does not exist.
+    pub fn choose_subtitles(&mut self, row: usize) -> bool {
+        let ok = self.subtitles.choose(row);
+        if ok {
+            self.caption = None;
+            self.caption_lines.clear();
+        }
+        ok
+    }
+
+    /// The playback speed in force (1.0 is normal).
+    pub fn speed(&self) -> f32 {
+        self.player.rate()
+    }
+
+    /// Plays at `rate` times normal speed (0.5 to 3.0); the sound is time-stretched so its pitch holds.
+    pub fn set_speed(&mut self, rate: f32) {
+        self.player.set_rate(rate);
     }
 
     /// The trim range, if one is set.
@@ -179,7 +223,7 @@ impl Movie {
     /// Picks the cue for the playhead and renders its lines when it changed. True when the caption changed.
     fn update_caption(&mut self, ui: &Ui) -> bool {
         let ms = self.player.position_ms().max(0.0) as u64;
-        let text = if self.subtitles_on { self.subtitles.as_ref().and_then(|s| s.text_at(ms)).map(str::to_string) } else { None };
+        let text = self.subtitles.track().and_then(|i| self.tracks.get(i)).and_then(|t| t.text_at(ms)).map(str::to_string);
         if text == self.caption {
             return false;
         }
@@ -249,10 +293,31 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("videoplayer-test-{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         let movie = dir.join("clip.mp4");
-        assert!(load_subtitles(&movie).is_none());
+        assert!(load_subtitles(&movie).1.is_empty());
         fs::write(dir.join("clip.srt"), "1\n00:00:00,500 --> 00:00:02,000\nHi\n").unwrap();
-        let track = load_subtitles(&movie).expect("the srt sidecar");
-        assert_eq!(track.text_at(1000), Some("Hi"));
+        let (labels, tracks) = load_subtitles(&movie);
+        assert_eq!(labels, vec!["Subtitles".to_string()]);
+        assert_eq!(tracks[0].text_at(1000), Some("Hi"));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn every_language_file_is_loaded_in_name_order_and_the_empty_ones_are_skipped() {
+        let dir = std::env::temp_dir().join(format!("videoplayer-test-lang-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let movie = dir.join("clip.mp4");
+        fs::write(dir.join("clip.is.srt"), "1\n00:00:00,500 --> 00:00:02,000\nHalo\n").unwrap();
+        fs::write(dir.join("clip.en.srt"), "1\n00:00:00,500 --> 00:00:02,000\nHello\n").unwrap();
+        fs::write(dir.join("clip.de.srt"), "no cues here").unwrap();
+        let (labels, tracks) = load_subtitles(&movie);
+        assert_eq!(labels, vec!["en".to_string(), "is".to_string()]);
+        assert_eq!(tracks[0].text_at(1000), Some("Hello"));
+        assert_eq!(tracks[1].text_at(1000), Some("Halo"));
+        let mut picker = Subtitles::new(labels);
+        assert_eq!(picker.rows(), vec!["Off", "en", "is"]);
+        assert!(picker.choose(2));
+        assert_eq!(picker.track(), Some(1));
         let _ = fs::remove_dir_all(&dir);
     }
 }

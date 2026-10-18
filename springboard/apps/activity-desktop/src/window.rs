@@ -103,6 +103,10 @@ pub const MENU_COLUMN: u32 = 100;
 pub const MENU_DOCK: u32 = 80;
 /// Process > Sample Duration items: MENU_SAMPLE_LENGTH + index into `sample_proc::DURATIONS`.
 pub const MENU_SAMPLE_LENGTH: u32 = 140;
+/// Window > CPU Usage, Window > CPU History and Window > Keep CPU Windows on Top.
+pub const MENU_WINDOW_CPU_USAGE: u32 = 160;
+pub const MENU_WINDOW_CPU_HISTORY: u32 = 161;
+pub const MENU_WINDOW_KEEP_TOP: u32 = 162;
 
 /// Height of one line of the report view (points) and how often a running job is looked at (milliseconds).
 pub const REPORT_LINE_PT: f32 = 16.0;

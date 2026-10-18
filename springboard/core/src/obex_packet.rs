@@ -120,6 +120,13 @@ pub fn fixed_len(op: u8, response: bool) -> usize {
     }
 }
 
+/// The total length of the packet that starts with `prefix`: the length field counts the whole packet, opcode and
+/// length included. `None` until the three head bytes have arrived, or when the field is below three.
+pub fn packet_len(prefix: &[u8]) -> Option<usize> {
+    let len = u16::from_be_bytes([*prefix.get(1)?, *prefix.get(2)?]) as usize;
+    (len >= 3).then_some(len)
+}
+
 /// A CONNECT request: version 1.0, no flags, and the largest packet the sender accepts.
 pub fn connect_request(max_len: u16, headers: Vec<Header>) -> Packet {
     Packet { code: OP_CONNECT | FINAL, fixed: connect_fixed(max_len), headers }
@@ -255,6 +262,14 @@ fn length_prefixed(rest: &[u8]) -> Result<(&[u8], usize), Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_length_field_gives_the_whole_packet_once_three_bytes_arrive() {
+        assert_eq!(packet_len(&[0x80]), None);
+        assert_eq!(packet_len(&[0x80, 0x00]), None);
+        assert_eq!(packet_len(&[0x80, 0x00, 0x0A, 0xFF]), Some(10));
+        assert_eq!(packet_len(&[0x80, 0x00, 0x02]), None);
+    }
 
     fn name(s: &str) -> Header {
         Header { id: H_NAME, value: Value::Text(s.to_string()) }

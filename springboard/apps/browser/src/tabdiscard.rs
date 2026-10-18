@@ -72,7 +72,7 @@ pub struct Policy {
 
 impl Default for Policy {
     fn default() -> Self {
-        Policy { idle_s: Some(15.0 * 60.0), budget_kib: Some(1536 * 1024), keep_recent: 2 }
+        Policy { idle_s: Some(15.0 * 60.0), budget_kib: Some(512 * 1024), keep_recent: 2 }
     }
 }
 

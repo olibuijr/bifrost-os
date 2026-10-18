@@ -80,7 +80,7 @@ pub fn function_key_code(name: &str) -> Option<u16> {
 
 /// The shell shortcuts Settings > Keyboard Shortcuts can switch off: (action, keys). Bit `i` of
 /// `KeyPrefs::shortcuts_off` turns off entry `i`.
-pub const BINDINGS: [(&str, &str); 11] = [
+pub const BINDINGS: [(&str, &str); 12] = [
     ("Search", "Cmd+Space"),
     ("Switch Application", "Cmd+Tab"),
     ("Close Window", "Cmd+W"),
@@ -92,6 +92,7 @@ pub const BINDINGS: [(&str, &str); 11] = [
     ("Settings", "Cmd+,"),
     ("Home", "Cmd"),
     ("Screenshot Toolbar", "Shift+Cmd+5"),
+    ("Assistant", "Shift+Cmd+A"),
 ];
 
 /// The index into [`BINDINGS`] of a shortcut the user can switch off; None for the keys that are always on.
@@ -108,6 +109,7 @@ pub fn binding_of(sc: Shortcut) -> Option<usize> {
         Shortcut::Settings => 8,
         Shortcut::Home => 9,
         Shortcut::Capture => 10,
+        Shortcut::Assistant => 11,
         _ => return None,
     })
 }
@@ -269,6 +271,7 @@ mod tests {
             Shortcut::Settings,
             Shortcut::Home,
             Shortcut::Capture,
+            Shortcut::Assistant,
         ];
         let mut seen: Vec<usize> = all.iter().filter_map(|s| binding_of(*s)).collect();
         seen.push(binding_of(Shortcut::Tile(super::super::desk::Tile::Center)).unwrap());

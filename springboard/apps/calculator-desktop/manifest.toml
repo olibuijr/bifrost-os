@@ -1,6 +1,6 @@
 id = "is.olibuijr.calculator.desktop"
 name = "Calculator"
-version = "1.11.3"
+version = "1.13.0"
 exec = "bifrost-calculator"
 icon = "icon.png"
 min_shell = "0.4.84"

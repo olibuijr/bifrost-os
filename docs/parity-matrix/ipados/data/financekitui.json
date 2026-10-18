@@ -1,0 +1,35 @@
+{
+  "framework": "FinanceKitUI",
+  "doc": "https://developer.apple.com/documentation/financekitui",
+  "macos_since": "",
+  "status": "n/a",
+  "bifrost": "none",
+  "summary": "Add-to-Wallet button for orders, a transaction picker and a financial connection extension. These depend on Wallet and on the FinanceKit data, which BifrOSt does not have. iPadOS 17.0 and later per the index.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run this round; owner rule); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Add order to Wallet button",
+      "apple": "AddOrderToWalletButton, AddOrderToWalletButtonStyle",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Adds to Apple Wallet only."
+    },
+    {
+      "feature": "Transaction picker",
+      "apple": "TransactionPicker",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Picks transactions from FinanceKit data."
+    },
+    {
+      "feature": "Financial connection extension",
+      "apple": "FinancialConnectionUIExtension",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Authorization scene for Wallet connections."
+    }
+  ],
+  "gaps": [
+    "Not planned: depends on Apple Wallet and FinanceKit data."
+  ]
+}

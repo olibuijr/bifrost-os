@@ -4,7 +4,7 @@
   "macos_since": "10.0",
   "status": "partial",
   "bifrost": "bifrost_app::keychain (springboard/sdk/src/keychain.rs), springboard/src/keychain.rs, springboard/proto/src/lib.rs (KeychainOp), springboard/src/bare/app_policy.rs, springboard/src/shell/update.rs, springboard/src/shell/sha256.rs, springboard/sdk/src/url.rs, springboard/src/privd/auth.rs, springboard/src/shell/passcode.rs",
-  "summary": "BifrOSt covers generic-password keychain items for apps (asynchronous, per-app store), app sandboxing, login authentication and HTTPS transport for the shell. It has no SDK API for code signing, certificate trust evaluation, Authorization Services, or the SecRandom and crypto transform calls, and it has no code signing or notarization at all.",
+  "summary": "BifrOSt covers generic-password keychain items for apps (asynchronous, per-app store), app sandboxing, login authentication and HTTPS transport for the shell. It has no SDK API for code signing, certificate trust evaluation, Authorization Services, or the SecRandom and crypto transform calls, and it has no code signing or notarization at all. Refreshed 2026-10-17: Key objects and crypto transforms are covered by springboard/sdk/src/crypto_kit.rs (AesGcmKey, KeyAgreementKey, SigningKey, seal, open, sign, verify_signature; tests crypto_kit::tests), so that gap is closed.",
   "rea_evidence": "ev_3bcba33c922f0c6a1f91f930d57aed415e4f75de88d819ed415661efaa4fcee6",
   "features": [
     {
@@ -89,7 +89,7 @@
       "apple": "SecRandomCopyBytes",
       "bifrost": "springboard/sdk/src/entropy.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (w4-security, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SDK call returns random bytes to apps. Internal use only."
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (w4-security, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SDK call returns random bytes to apps. Internal use only. Built 2026-10-17 (correction): the SDK entropy module is public to apps (copy_bytes, bytes, below); tests entropy::tests."
     },
     {
       "feature": "Security transforms (encryption, signing, verification)",
@@ -110,7 +110,7 @@
       "apple": "One-time codes (textContentType oneTimeCode)",
       "bifrost": "springboard/ui/src/one_time_code.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (theme-28, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SDK text-field content type for one-time codes or autofill from messages."
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (theme-28, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SDK text-field content type for one-time codes or autofill from messages. Built 2026-10-17 (correction): the SDK content type ContentType::OneTimeCode in springboard/sdk/src/autofill.rs is the SDK text-field type; tests autofill::tests."
     },
     {
       "feature": "Security framework result codes",
@@ -128,14 +128,11 @@
     }
   ],
   "gaps": [
-    "Certificate and trust evaluation API (SecTrust, SecPolicy, SecIdentity) for apps; the SDK has no certificate types",
-    "Code signing and signature verification for apps and updates; the update manifest is not signed",
+    "Trust evaluation is a model over Ed25519-signed links (springboard/sdk/src/trust.rs; shell springboard/src/shell/services/trust_eval.rs); there is no DER certificate parsing and no SecIdentity or client-certificate type.",
+    "Update manifests are not signed: springboard/ui/src/ed25519.rs verifies signatures, but the shell update path (springboard/src/shell/update.rs) checks only a digest and size, and apps are not code-signed.",
     "Authorization Services: an app-facing authorization API for privileged operations",
-    "Randomization API (SecRandomCopyBytes equivalent) in the SDK",
-    "Key objects and crypto transforms (encrypt, sign, verify) in the SDK",
-    "Keychain item classes beyond generic passwords, access groups, and data protection classes",
+    "Keychain item classes beyond generic and internet passwords (no certificate or key classes); the data protection classes are not enforced at rest (feature 1)",
     "Keychain master key is on the same disk as the items (no TPM or login-password key source)",
-    "One-time code text content type for autofill",
     "Synchronous keychain calls (Apple's are synchronous; BifrOSt's are asynchronous by design)"
   ]
 }

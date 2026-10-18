@@ -1,0 +1,58 @@
+{
+  "framework": "Messages",
+  "doc": "https://developer.apple.com/documentation/messages",
+  "macos_since": "",
+  "status": "partial",
+  "bifrost": "springboard/sdk/src/messaging.rs, springboard/ui/src/notifcomm.rs, springboard/apps/messages-desktop",
+  "summary": "Apps can receive conversations, people, send and search requests, and communication notifications. Message extensions, sticker packs, interactive messages and critical SMS have no counterpart.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run in this batch); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Communication notifications",
+      "apple": "INSendMessageIntent-style communication notifications",
+      "bifrost": "springboard/ui/src/notifcomm.rs, springboard/sdk/src/messaging.rs",
+      "status": "partial",
+      "note": "sender as title, conversation as subtitle for groups; the notice model is shared code"
+    },
+    {
+      "feature": "Conversations and send and search requests",
+      "apple": "MSConversation, send and search of messages",
+      "bifrost": "springboard/sdk/src/messaging.rs",
+      "status": "partial",
+      "note": "people in a conversation and the send and search requests an app receives; no transcript object"
+    },
+    {
+      "feature": "Messages app",
+      "apple": "The system Messages app",
+      "bifrost": "springboard/apps/messages-desktop",
+      "status": "partial",
+      "note": "a messages app ships in the PC desktop"
+    },
+    {
+      "feature": "Default messaging app",
+      "apple": "Preparing your app to be the default messaging app",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no registration of a third-party messaging app as the default"
+    },
+    {
+      "feature": "Sticker packs and iMessage app extensions",
+      "apple": "MSStickerBrowserViewController, MSMessagesAppViewController, MSMessage",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no sticker or extension surface in the messaging path"
+    },
+    {
+      "feature": "Critical SMS messages",
+      "apple": "MSCriticalSMSMessenger, MSCriticalMessage",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "needs carrier SMS and an Apple authorization for critical messaging"
+    }
+  ],
+  "gaps": [
+    "No message extension, sticker or interactive message surface for apps.",
+    "No default messaging app registration.",
+    "No critical messaging path."
+  ]
+}

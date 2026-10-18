@@ -52,6 +52,21 @@ def main() -> int:
             p.unlink()
         elif p.is_dir():
             shutil.rmtree(p)
+    # The T2 profile is opt-in per ISO build; never let a prior T2 build change the next standard image.
+    (profile / "bifrost-t2").unlink(missing_ok=True)
+    pk = profile / "packages.x86_64"
+    pk.write_text("\n".join(l for l in pk.read_text().splitlines() if l.split("#")[0].strip() != "linux-lts-t2") + "\n")
+    pacman = profile / "pacman.conf"
+    if pacman.exists():
+        lines, skip = [], False
+        for line in pacman.read_text().splitlines():
+            trimmed = line.strip()
+            if trimmed.startswith("[") and trimmed.endswith("]"):
+                skip = trimmed == "[t2local]"
+            if not skip:
+                lines.append(line)
+        pacman.write_text("\n".join(lines) + "\n")
+    shutil.copyfile(SRC / "airootfs/etc/mkinitcpio.conf.d/archiso.conf", profile / "airootfs/etc/mkinitcpio.conf.d/archiso.conf")
     subprocess.run(["rsync", "-a", f"{SRC}/airootfs/", f"{profile}/airootfs/"], check=True)   # keeps symlinks (masked units point at /dev/null)
     # the SpringBoard binary, the installer binary and the opencore tree are build outputs, not sources
     shutil.rmtree(profile / "airootfs/usr/share/bifrost/opencore", ignore_errors=True)
@@ -68,7 +83,6 @@ def main() -> int:
     text = re.sub(r"'-Xcompression-level' '\d+'", "'-Xcompression-level' '15'", text)
     pd.write_text(text)
 
-    pk = profile / "packages.x86_64"
     lines = [l for l in pk.read_text().splitlines() if l.split("#")[0].strip() not in DROP and l.split("#")[0].strip() != "plymouth"]
     for p in NEED:
         if p not in lines:

@@ -80,9 +80,16 @@ pub enum Verdict {
     Locked(u64),
 }
 
+/// The keychain item that holds a keychain-backed store (the Screen Time passcode).
+const KEYCHAIN_APP: &str = "bifrost.screentime";
+const KEYCHAIN_SERVICE: &str = "passcode";
+const KEYCHAIN_ACCOUNT: &str = "screentime";
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Store {
     path: Option<PathBuf>,
+    /// the shell data dir when the record lives in the keychain instead of a file
+    keychain: Option<PathBuf>,
     salt: Vec<u8>,
     hash: Vec<u8>,
     len: usize,
@@ -102,6 +109,21 @@ impl Store {
     /// An in-memory store that never touches the disk.
     pub fn memory() -> Self {
         Store::default()
+    }
+
+    /// The store kept as a keychain item under the shell data dir `root` (salted, stretched hash, same format as
+    /// the file). A file from before the keychain, `legacy`, is migrated once: its record is written to the keychain
+    /// and the file is removed. A damaged file counts as no passcode and is removed too.
+    pub fn load_keychain(root: &Path, legacy: &Path) -> Self {
+        if let Ok(text) = std::fs::read_to_string(legacy) {
+            let s = Store { keychain: Some(root.to_path_buf()), ..Self::parse(&text) };
+            if !s.enabled() || s.save().is_ok() {
+                let _ = std::fs::remove_file(legacy);
+            }
+            return s;
+        }
+        let text = read_keychain(root).unwrap_or_default();
+        Store { keychain: Some(root.to_path_buf()), ..Self::parse(&text) }
     }
 
     fn parse(text: &str) -> Self {
@@ -156,6 +178,10 @@ impl Store {
 
     /// Turns the passcode off.
     pub fn clear(&mut self) -> io::Result<()> {
+        if let Some(root) = self.keychain.clone() {
+            *self = Store { keychain: Some(root.clone()), ..Store::default() };
+            return delete_keychain(&root);
+        }
         *self = Store { path: self.path.take(), ..Store::default() };
         match &self.path {
             Some(p) => match std::fs::remove_file(p) {
@@ -200,6 +226,9 @@ impl Store {
     }
 
     fn save(&self) -> io::Result<()> {
+        if let Some(root) = &self.keychain {
+            return write_keychain(root, &self.text());
+        }
         let Some(path) = &self.path else { return Ok(()) };
         use std::io::Write;
         use std::os::unix::fs::OpenOptionsExt;
@@ -209,11 +238,45 @@ impl Store {
         let mut tmp = path.file_name().map(|n| n.to_os_string()).unwrap_or_default();
         tmp.push(".tmp");
         let tmp = path.with_file_name(tmp);
-        let text = format!("salt={}\nhash={}\nlen={}\nfails={}\nuntil={}\n", hex(&self.salt), hex(&self.hash), self.len, self.fails, self.until);
+        let text = self.text();
         let mut f = std::fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(&tmp)?;
         f.write_all(text.as_bytes())?;
         f.sync_all()?;
         std::fs::rename(&tmp, path)
+    }
+}
+
+impl Store {
+    /// The record as text: the same `key=value` lines whether it goes to a file or the keychain.
+    fn text(&self) -> String {
+        format!("salt={}\nhash={}\nlen={}\nfails={}\nuntil={}\n", hex(&self.salt), hex(&self.hash), self.len, self.fails, self.until)
+    }
+}
+
+/// The keychain item of the store under `root` (see `Store::load_keychain`).
+fn keychain_item(root: &Path) -> Result<crate::keychain::Store, io::Error> {
+    crate::keychain::Store::open(root, KEYCHAIN_APP).map_err(|e| io::Error::other(e.to_string()))
+}
+
+fn read_keychain(root: &Path) -> Option<String> {
+    let store = keychain_item(root).ok()?;
+    String::from_utf8(store.get(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT).ok()?).ok()
+}
+
+fn write_keychain(root: &Path, text: &str) -> io::Result<()> {
+    use crate::keychain::Error as KcError;
+    let store = keychain_item(root)?;
+    let result = match store.add(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT, text.as_bytes()) {
+        Err(KcError::DuplicateItem) => store.update(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT, text.as_bytes()),
+        other => other,
+    };
+    result.map_err(|e| io::Error::other(e.to_string()))
+}
+
+fn delete_keychain(root: &Path) -> io::Result<()> {
+    match keychain_item(root)?.delete(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT) {
+        Ok(()) | Err(crate::keychain::Error::ItemNotFound) => Ok(()),
+        Err(e) => Err(io::Error::other(e.to_string())),
     }
 }
 
@@ -561,8 +624,13 @@ pub enum OverlayOut {
 }
 
 impl Overlay {
+    /// The flow over the device passcode file at `path` (Screen Time's passcode uses `with_store`).
     pub fn new(path: &Path, purpose: Purpose, custom: bool, w: i32, h: i32) -> Self {
-        let store = Store::load(path);
+        Self::with_store(Store::load(path), purpose, custom, w, h)
+    }
+
+    /// The flow over an already loaded store (the keychain-backed Screen Time passcode).
+    pub fn with_store(store: Store, purpose: Purpose, custom: bool, w: i32, h: i32) -> Self {
         let flow = Flow::new(purpose, custom);
         let mut pad = Keypad::new(flow.title(), flow.auto_len(&store).unwrap_or(DEFAULT_LEN), flow.auto_len(&store).is_none());
         pad.message = String::new();
@@ -643,7 +711,11 @@ pub struct Lock {
 
 impl Lock {
     pub fn new(path: &Path, w: i32, h: i32) -> Self {
-        let store = Store::load(path);
+        Self::with_store(Store::load(path), w, h)
+    }
+
+    /// The prompt over an already loaded store (the keychain-backed Screen Time passcode).
+    pub fn with_store(store: Store, w: i32, h: i32) -> Self {
         let pad = Keypad::new("Enter Passcode", store.len().max(MIN_LEN), false);
         let mut lock = Lock { pad, store, w, h, last_msg: String::new() };
         lock.refresh(unix_now());
@@ -1015,5 +1087,68 @@ mod tests {
         assert_eq!(o.pad.title, "Re-enter your passcode");
         assert_eq!(type_code(&mut o, "246810"), OverlayOut::Done);
         assert!(Store::load(&path).enabled());
+    }
+}
+
+#[cfg(test)]
+mod keychain_tests {
+    use super::*;
+
+    /// A fresh shell data dir for one test, and the legacy ini path inside it.
+    fn dirs(name: &str) -> (PathBuf, PathBuf) {
+        let root = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/target/test-passcode-kc")).join(format!("{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let legacy = root.join("screentime_passcode.ini");
+        (root, legacy)
+    }
+
+    const NOW: i64 = 1_700_000_000;
+
+    #[test]
+    fn the_ini_moves_into_the_keychain_once_and_is_removed() {
+        let (root, legacy) = dirs("migrate");
+        Store::load(&legacy).set("135790").unwrap();
+        assert!(legacy.exists());
+        let mut moved = Store::load_keychain(&root, &legacy);
+        assert!(moved.enabled() && !legacy.exists(), "the file is gone once its record is in the keychain");
+        assert_eq!(moved.verify("135790", NOW), Verdict::Ok);
+        assert!(Store::load_keychain(&root, &legacy).enabled(), "later loads read the keychain item");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_wrong_code_is_counted_in_the_keychain_and_the_right_one_is_still_checked_against_the_hash() {
+        let (root, legacy) = dirs("count");
+        Store::load(&legacy).set("135790").unwrap();
+        let mut s = Store::load_keychain(&root, &legacy);
+        assert!(matches!(s.verify("000000", NOW), Verdict::Wrong { fails: 1, .. }));
+        assert!(matches!(Store::load_keychain(&root, &legacy).verify("000000", NOW), Verdict::Wrong { fails: 2, .. }), "the count persists");
+        assert_eq!(Store::load_keychain(&root, &legacy).verify("135790", NOW + 3600), Verdict::Ok);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn turning_the_passcode_off_removes_the_keychain_item() {
+        let (root, legacy) = dirs("clear");
+        let mut s = Store::load_keychain(&root, &legacy);
+        s.set("2468").unwrap();
+        assert!(Store::load_keychain(&root, &legacy).enabled());
+        let mut s = Store::load_keychain(&root, &legacy);
+        s.clear().unwrap();
+        assert!(!Store::load_keychain(&root, &legacy).enabled());
+        assert!(s.clear().is_ok(), "clearing again is not an error");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn the_stored_record_is_a_salted_hash_not_the_code() {
+        let (root, legacy) = dirs("hash");
+        let mut s = Store::load_keychain(&root, &legacy);
+        s.set("135790").unwrap();
+        let text = s.text();
+        assert!(!text.contains("135790"), "the code itself is never stored");
+        assert!(text.contains("salt=") && text.contains("hash="));
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

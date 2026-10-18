@@ -61,7 +61,7 @@
    "apple": "QLPreviewPanel protocols, QLPreviewItem, QLPreviewPanelDelegate",
    "bifrost": "springboard/sdk/src/peek.rs (PreviewPanel, PreviewItem); springboard/proto/src/lib.rs:678 (ToShell::Preview), :1354; wired: springboard/src/shell/preview_panel.rs",
    "status": "partial",
-   "note": "The SDK has the panel model: items, index clamp, step, toggle, show and close. The shell decodes the Preview message but never draws the panel, so nothing shows on screen. No app is adopted yet. Model tests (springboard/sdk/tests/parity_sdk-tests-01c.rs): the_panel_steps_without_wrapping_and_the_index_stays_in_range, a_pull_clamps_the_current_index_into_the_new_list, a_display_state_past_the_end_is_refused. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+   "note": "The SDK has the panel model: items, index clamp, step, toggle, show and close. Refreshed 2026-10-17: the shell draws the panel (springboard/src/shell/preview_panel.rs), opened by ToShell::Preview and the quick-look service. No app is adopted yet. Model tests (springboard/sdk/tests/parity_sdk-tests-01c.rs): the_panel_steps_without_wrapping_and_the_index_stays_in_range, a_pull_clamps_the_current_index_into_the_new_list, a_display_state_past_the_end_is_refused. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
   },
   {
    "feature": "Quick Look thumbnails (QLThumbnailGenerator, QLThumbnailGenerator update)",
@@ -103,7 +103,7 @@
    "apple": "QuartzFilter, QuartzFilterManager, QuartzFilterView, Quartz Filter Constants",
    "bifrost": "springboard/sdk/src/graphics_pdf.rs (PdfWriter, PdfPage), springboard/render/src/cg/pdf/writer.rs, springboard/ui/src/print.rs (PrintOperation, Destination::Pdf), springboard/src/shell/print_sheet.rs (write_pdf); tests sdk/tests/parity_sdk-tests-09.rs",
    "status": "partial",
-   "note": "PdfWriter creates files from pages of rectangles, lines and images, tested headless in sdk/tests/parity_sdk-tests-09.rs. Gap: no text, no print-to-PDF filter pipeline and no QuartzFilter manager; Save as PDF in the print sheet still copies the file."
+   "note": "PdfWriter creates files from pages of rectangles, lines and images, tested headless in sdk/tests/parity_sdk-tests-09.rs. Text in the four standard faces is built (PdfPage::draw_text, tests graphics_pdf::tests::text_is_drawn_as_hex_in_a_standard_face). Gap: no print-to-PDF filter pipeline and no QuartzFilter manager; Save as PDF in the print sheet still copies the file."
   },
   {
    "feature": "Quartz Composer compositions and custom patches (QCComposition, QCView, QCPlugIn, QCRenderer)",
@@ -117,10 +117,10 @@
   "No SDK image view or image browser for apps (ImageKit IKImageView and IKImageBrowserView); image viewing exists only inside the Photos shell app.",
   "No parameterised image filter API (Core Image CIFilter) and no filter browser; Photos has five fixed colour filters.",
   "No scanner support (IKScannerDeviceView) and no SDK camera device browser or picture taker.",
-  "The Quick Look panel model in springboard/sdk/src/peek.rs is not drawn by the shell (ToShell::Preview is decoded and ignored) and no app adopts it; no QLPreviewView.",
-  "No PDF outline, selection or text access for apps (PDFOutline, PDFSelection); graphics_pdf::Document exposes page count, size and rendering only.",
+  "The Quick Look panel model in springboard/sdk/src/peek.rs is drawn by the shell for ToShell::Preview (src/shell/preview_panel.rs), but no app adopts it; no QLPreviewView.",
+  "No PDF selection for apps (PDFSelection). graphics_pdf::Document exposes page count, size, rendering, the outline tree and page text search.",
   "No PDF annotation or form widget support in the PDF engine, which reads no annotations or AcroForm fields; PDFCraft's annotation UI is not reachable from apps.",
-  "No PDF text in PdfWriter and no print-to-PDF filter pipeline (QuartzFilter); Save as PDF in the print sheet copies the file.",
+  "No print-to-PDF filter pipeline (QuartzFilter); Save as PDF in the print sheet copies the file.",
   "No Quartz Composer equivalent (QCComposition, QCView, custom patches)."
  ]
 }

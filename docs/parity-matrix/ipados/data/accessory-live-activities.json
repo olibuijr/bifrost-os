@@ -1,0 +1,42 @@
+{
+  "framework": "Accessory Live Activities (AccessoryLiveActivities)",
+  "doc": "https://developer.apple.com/documentation/accessoryliveactivities",
+  "macos_since": "",
+  "status": "n/a",
+  "bifrost": "springboard/ui/src/live_activity.rs, springboard/sdk/src/widgets_timeline.rs",
+  "summary": "Forwards Live Activities from an iPhone to a third-party accessory through a data provider extension. It needs an iPhone as the source of the activities and Apple's forwarding service, which the tablet port does not have. Local live activities exist (see ActivityKit) but nothing here forwards them to an accessory. iPadOS 26.5 and later per the index.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run this round; owner rule); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Forwarding permission prompt",
+      "apple": "LiveActivityForwarding, AccessoryAuthorizationResult",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "The prompt is part of Apple's iPhone-to-accessory pairing; no counterpart on the tablet."
+    },
+    {
+      "feature": "Accessory handler protocol",
+      "apple": "LiveActivityForwarding.AccessoryLiveActivitiesHandler",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Callbacks come from the iPhone life cycle; BifrOSt has no iPhone source."
+    },
+    {
+      "feature": "Forwarding session",
+      "apple": "LiveActivityForwarding.Session",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Depends on the system connection to the iPhone."
+    },
+    {
+      "feature": "Forwarded activity data",
+      "apple": "AccessoryLiveActivity",
+      "bifrost": "springboard/ui/src/live_activity.rs",
+      "status": "n/a",
+      "note": "The local activity model is not the forwarded payload; the payload itself is Apple's."
+    }
+  ],
+  "gaps": [
+    "Nothing to forward: BifrOSt has no iPhone source of Live Activities. Revisit only if a BifrOSt phone or accessory protocol exists."
+  ]
+}

@@ -3,7 +3,11 @@ use super::*;
 
 impl Shell {
 
-    /// Term key equivalents while Term is in front (see `hwkeys::TermKey`).
+    /// Term key equivalents while Term is in front (see `hwkeys::TermKey`):
+    /// Cmd chords drive the chrome; Ctrl and Alt chords carry the bytes the
+    /// pty expects (`bifrost_ui::terminal_keys`), so readline editing
+    /// (Ctrl+A/E/B/F/P/N/D/K/U/W/Y/L/R/T), job control (Ctrl+C/Z) and
+    /// word jumps (Alt+F/B) all reach the shell.
     pub(crate) fn terminal_hw_key(&mut self, key: TermKey, t: f64) -> Vec<super::super::Effect> {
         let modal = !matches!(self.terminal_ui.panel, Panel::None | Panel::Find);
         let pending_close = self.terminal_ui.pending_close.take();
@@ -21,6 +25,8 @@ impl Shell {
                     clipboard::set_text(&text);
                 }
             }
+            TermKey::CopyStyled => self.terminal_copy_special(copy::Mode::Colors),
+            TermKey::CopyStyledPlain => self.terminal_copy_special(copy::Mode::ColorsNoBackground),
             TermKey::SelectAll => {
                 if let Some(term) = self.term.as_mut() {
                     term.select_all();
@@ -41,6 +47,37 @@ impl Shell {
                 }
             }
             TermKey::UseSelectionForFind => self.terminal_use_selection_for_find(t),
+            // Control bytes and ESC-prefixed bytes for the pty. They only
+            // run with no panel open: a Find query, SSH form or command line
+            // keeps its own typing, as before.
+            TermKey::Ctrl(b) => {
+                if matches!(self.terminal_ui.panel, Panel::None) {
+                    if let Some(term) = self.term.as_mut() {
+                        term.write(&[b]);
+                    }
+                }
+            }
+            TermKey::Alt(b) => {
+                if matches!(self.terminal_ui.panel, Panel::None) {
+                    if let Some(term) = self.term.as_mut() {
+                        term.write(&[0x1b, b]);
+                    }
+                }
+            }
+            TermKey::AltWord(right) => {
+                if matches!(self.terminal_ui.panel, Panel::None) {
+                    if let Some(term) = self.term.as_mut() {
+                        term.write(&bifrost_ui::terminal_keys::alt_word_bytes(right));
+                    }
+                }
+            }
+            TermKey::Named(name) => {
+                if matches!(self.terminal_ui.panel, Panel::None) {
+                    if let Some(term) = self.term.as_mut() {
+                        term.key(name);
+                    }
+                }
+            }
             TermKey::ClearScrollback => {
                 if let Some(term) = self.term.as_mut() {
                     term.clear_history();
@@ -105,7 +142,7 @@ impl Shell {
         };
         let modal = matches!(
             self.terminal_ui.panel,
-            Panel::Connections | Panel::Processes | Panel::Form | Panel::More | Panel::Command
+            Panel::Connections | Panel::Processes | Panel::Form | Panel::More | Panel::Command | Panel::Look
         );
         match ev {
             Event::Down(x, y)
@@ -134,6 +171,7 @@ impl Shell {
                         Panel::Connections => (self.terminal_ui.config.entries().len(), 52.0),
                         Panel::Processes => (self.terminal_ui.processes.len(), 40.0),
                         Panel::More => (MENU.len(), 44.0),
+                        Panel::Look => (look_panel::ROWS, 44.0),
                         _ => (0, 0.0),
                     };
                     let limit =

@@ -422,6 +422,20 @@ pub fn add_device<T: Transport>(client: &mut Client<T>, device_uri: &str) -> Res
     Ok(name)
 }
 
+/// Joins template entries that share a name into one attribute with several values, in order (IPP multi-valued
+/// attributes such as one `page-ranges` value per range). Names keep the order they first appear in.
+pub fn merge_attributes(template: Vec<(String, Value)>) -> Vec<(String, Vec<Value>)> {
+    let mut merged: Vec<(String, Vec<Value>)> = Vec::new();
+    for (name, value) in template {
+        let index = merged.iter().position(|(n, _)| *n == name);
+        match index {
+            Some(i) => merged[i].1.push(value),
+            None => merged.push((name, vec![value])),
+        }
+    }
+    merged
+}
+
 fn base(operation: u16) -> Request {
     Request::new(operation)
         .with(group::OPERATION, "attributes-charset", vec![Value::charset("utf-8")])
@@ -653,8 +667,8 @@ impl<T: Transport> Client<T> {
             .with(group::OPERATION, "requesting-user-name", vec![Value::name(user)])
             .with(group::OPERATION, "job-name", vec![Value::name(job_name)])
             .with(group::OPERATION, "document-format", vec![Value::mime(mime)]);
-        for (name, value) in template {
-            req = req.with(group::JOB, &name, vec![value]);
+        for (name, values) in merge_attributes(template) {
+            req = req.with(group::JOB, &name, values);
         }
         let resp = self.exchange(req.document(data))?;
         // bind the id first: the iterator borrows `resp`, which a tail expression would outlive
@@ -821,6 +835,22 @@ mod tests {
         assert!(find(sent, b"copies").is_some());
         assert!(find(sent, b"orientation-requested").is_some());
         assert!(sent.ends_with(b"%PDF"));
+    }
+
+    #[test]
+    fn merge_attributes_keeps_one_attribute_per_name_with_its_values_in_order() {
+        let merged = merge_attributes(vec![
+            ("page-ranges".to_string(), Value::Integer(1)),
+            ("copies".to_string(), Value::Integer(2)),
+            ("page-ranges".to_string(), Value::Integer(3)),
+        ]);
+        assert_eq!(
+            merged,
+            vec![
+                ("page-ranges".to_string(), vec![Value::Integer(1), Value::Integer(3)]),
+                ("copies".to_string(), vec![Value::Integer(2)]),
+            ]
+        );
     }
 
     #[test]

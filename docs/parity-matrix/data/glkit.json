@@ -74,7 +74,7 @@
  "gaps": [
   "No app-facing GL view or drawable: apps cannot create an OpenGL or GLES context on BifrOSt (springboard/src/gpu/mod.rs is internal). The drawable_view model is not wired to a context.",
   "No app-supplied shaders: the effect model in shader_effect.rs computes shading on the CPU and cannot run a custom GPU program.",
-  "No 3D math types beyond the pure models: matrix, vector and quaternion types are in springboard/ui/src/linalg.rs and are not re-exported through the SDK.",
+  "Closed 2026-10-17: vector, matrix and quaternion types are re-exported as bifrost_app::linear_algebra (tests linear_algebra::tests). No mesh, buffer or GPU upload API yet.",
   "No mesh or 3D buffer API in the SDK; the buffer model in mesh.rs does not touch GPU memory.",
   "No GPU texture upload for apps; texture_loader.rs models the requests and image decode is CPU-only (springboard/render/src/imgdec.rs).",
   "Apple deprecated most of GLKit on macOS from 10.14. Parity work here would target the Metal-equivalent path rather than GLKit, so this framework may stay a documented n/a for new apps."

@@ -17,6 +17,16 @@ pub const DOWNTIME_ON: &str = "downtime.on";
 /// The prefix of every per-app daily limit key, in minutes.
 pub const LIMIT_PREFIX: &str = "limit.";
 
+/// The shell's default root directory, where `screentime.ini` lives (`apphost::root` in the shell).
+pub const SYSTEM_ROOT: &str = "/var/lib/springboard";
+/// The settings file name the shell uses under its root.
+pub const SETTINGS_FILE: &str = "screentime.ini";
+
+/// The path of the device's Screen Time settings file under the shell's default root.
+pub fn system_settings_path() -> PathBuf {
+    Path::new(SYSTEM_ROOT).join(SETTINGS_FILE)
+}
+
 /// The configuration for this device (`configuration` on the observer).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Configuration {
@@ -74,6 +84,13 @@ impl ConfigurationObserver {
         ConfigurationObserver { source: source.into(), observing: false, stamp: None, current: Configuration::default() }
     }
 
+    /// An observer of the device's own settings file, `screentime.ini` under the shell's default root
+    /// (`SYSTEM_ROOT`). The shell writes that file; an app cannot read another path. A file the app may not read
+    /// reads as no restrictions, the same as a missing one.
+    pub fn system() -> Self {
+        Self::new(system_settings_path())
+    }
+
     /// The configuration last read. It is the default until `start_observing` runs.
     pub fn configuration(&self) -> Configuration {
         self.current
@@ -120,6 +137,14 @@ impl ConfigurationObserver {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_system_observer_watches_the_shells_settings_file() {
+        assert_eq!(system_settings_path(), Path::new("/var/lib/springboard/screentime.ini"));
+        let obs = ConfigurationObserver::system();
+        assert!(!obs.is_observing(), "a system observer waits for start_observing like any other");
+        assert_eq!(obs.configuration(), Configuration::default());
+    }
 
     #[test]
     fn empty_or_unrelated_settings_enforce_nothing() {

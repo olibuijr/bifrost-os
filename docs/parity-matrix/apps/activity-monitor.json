@@ -123,18 +123,18 @@
    "area": "view",
    "apple": "CPU tab footer graph, Window > CPU History",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/window.rs:692",
-   "note": "View > CPU History swaps the CPU graph for one strip per core, kept in app defaults. No floating CPU History window: the SDK opens one window per app and the shell protocol has no floating app panel.",
-   "wire": "Needs an app panel request in the shell protocol before a floating CPU History window can be added."
+   "bifrost": "springboard/apps/activity-desktop/src/window.rs:692; springboard/apps/activity-desktop/src/main.rs (toggle_cpu_window); springboard/apps/activity-desktop/src/draw.rs (draw_cpu_history_window, core_strips)",
+   "note": "View > CPU History swaps the CPU graph for one strip per core, kept in app defaults. Window > CPU History opens a floating window with the same per-core strips. The CPU load graph stays in the main window; the GPU History floating window is still missing. Not yet verified on Midget.",
+   "wire": "Add a Window > GPU History floating window (the GPU tab's history in its own window) with the same toggle and level handling as the CPU windows in main.rs."
   },
   {
    "feature": "Floating CPU Usage window and Keep on Top",
    "area": "menu",
    "apple": "Window > CPU Usage, Keep CPU Windows on Top",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Not built. The SDK opens only the app's main window and the shell protocol (proto ToShell) has no floating app panel with a window level, so a floating per-core window needs a shell change first.",
-   "wire": "Add a small always-on-top window via the SDK floating-panel level showing per-core bars, once the shell can host an app panel."
+   "status": "partial",
+   "bifrost": "springboard/apps/activity-desktop/src/main.rs (toggle_cpu_window, toggle_keep_on_top, forget_window); springboard/apps/activity-desktop/src/draw.rs (draw_cpu_usage, usage_window_size)",
+   "note": "Window > CPU Usage opens a small floating window with the total and one bar per core, and closes again from the same item. Window > Keep CPU Windows on Top floats the open CPU windows above the normal windows and is remembered. The app opens the window with Ctx::open_window and sets its level with windows::set_window_level; the shell keeps the level per window (ToShell::WindowLevelOf, tag 0x1cc; app_window_table.rs set_floating; desk.rs floating_apps and sync_levels). Built and reviewed by reading only. Not yet verified on Midget.",
+   "wire": "Check on Midget that the CPU Usage window stays above the other windows with Keep CPU Windows on Top on, drops back when it is off, and that its close control closes only that window."
   },
   {
    "feature": "Dock icon modes (CPU/Network/Disk/Memory graph)",
@@ -221,9 +221,9 @@
  "summary": {
   "features": 23,
   "parity": 6,
-  "partial": 15,
-  "gap": 1,
+  "partial": 16,
+  "gap": 0,
   "n/a": 1,
-  "coverage_pct": 61.4
+  "coverage_pct": 63.6
  }
 }

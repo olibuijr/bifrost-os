@@ -54,6 +54,11 @@ mod keyanim;
 mod overlay;
 mod scroll;
 mod picker;
+mod local_auth_view;
+mod map_widget;
+mod scene_widget;
+mod security_views;
+mod sprite_widget;
 mod content_unavailable;
 mod large_content;
 pub use keyanim::ViewState;
@@ -69,6 +74,14 @@ pub use context::with_context;
 pub use controls::{Align, Button, Label, Segmented, Slider, Stack, Switch};
 pub use overlay::{Columns, Grid, ViewThatFits, ZStack};
 pub use picker::PickerView;
+pub use local_auth_view::{kind_label, LocalAuthenticationView};
+pub use map_widget::{picture_to_image, MapWidget};
+pub use sprite_widget::{Placed as SpritePlaced, SpriteWidget, StepFn as SpriteStepFn, ACTION_TOUCH};
+pub use scene_widget::{SceneDrawable, SceneWidget, ACTION_PICK};
+pub use security_views::{
+    CertificatePanelView, IdentityChooserView, TrustEditorView, ACTION_CERTIFICATE_DISCLOSURE, ACTION_CERTIFICATE_SELECT,
+    ACTION_IDENTITY_CANCEL, ACTION_IDENTITY_CHOOSE, ACTION_IDENTITY_SELECT, ACTION_TRUST_RESET, ACTION_TRUST_SETTING,
+};
 pub use content_unavailable::ContentUnavailableView;
 pub use large_content::LargeContentView;
 

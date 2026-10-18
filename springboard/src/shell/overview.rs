@@ -242,6 +242,12 @@ struct Geo {
 }
 
 impl Overview {
+    /// Forgets the scaled app icons and the grid's, after the icons were drawn again.
+    pub(super) fn clear_icons(&mut self) {
+        self.scaled.clear();
+        self.grid.clear_icons();
+    }
+
     /// Whether the user minimized this window, as opposed to Overview or another desktop hiding it: only those
     /// windows get a dock slot.
     pub(super) fn user_minimized(&self, w: &super::desk::Win) -> bool {

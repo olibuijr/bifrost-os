@@ -68,10 +68,10 @@
    "feature": "New Window / New Tab",
    "area": "menu",
    "apple": "MainMenu.nib File > New Window, New Tab",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Not done: the SDK has no multi-window or tab API",
-   "wire": "Support several windows through the SDK multi-window API"
+   "status": "partial",
+   "bifrost": "springboard/apps/dictionary-desktop/src/main.rs (ExtraWindow, open_new_window, window_event, draw_window, window_closed; File > New Window)",
+   "note": "File > New Window (cmd+n) opens a window with its own lookup, history, scope and find through the SDK multi-window API. Touch reaches every window; the keyboard and the menus belong to the main window. Tabs are not done. Not yet run on Midget.",
+   "wire": "Check the window on Midget (open, touch, close, Back per window). Tabs: the SDK has no tab strip yet."
   },
   {
    "feature": "Print definition",
@@ -163,5 +163,13 @@
    "note": "",
    "wire": ""
   }
- ]
+ ],
+ "summary": {
+  "features": 17,
+  "parity": 3,
+  "partial": 13,
+  "gap": 0,
+  "n/a": 1,
+  "coverage_pct": 59.4
+ }
 }

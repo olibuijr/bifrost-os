@@ -129,3 +129,40 @@ mod tests {
         assert_eq!(set.excluded_paths(), vec!["/a", "/m", "/z"]);
     }
 }
+
+/// The set as text: one normalized absolute path per line, in path order. The shell stores this text in the backup
+/// folder and reads it back with [`from_text`].
+pub fn to_text(set: &ExclusionSet) -> String {
+    let mut out = String::new();
+    for path in set.excluded_paths() {
+        out.push_str(path);
+        out.push('\n');
+    }
+    out
+}
+
+/// Reads the text written by [`to_text`]. A line that is not an absolute path (a blank line included) is skipped, so
+/// a damaged line never excludes an item the user did not choose.
+pub fn from_text(text: &str) -> ExclusionSet {
+    let mut set = ExclusionSet::new();
+    for line in text.lines() {
+        let _ = set.set_excluded(line.trim(), true);
+    }
+    set
+}
+
+#[cfg(test)]
+mod text_tests {
+    use super::*;
+
+    #[test]
+    fn text_round_trip_keeps_only_valid_absolute_paths() {
+        let mut set = ExclusionSet::new();
+        set.set_excluded("/a/b/", true).unwrap();
+        set.set_excluded("/c", true).unwrap();
+        let text = to_text(&set);
+        assert_eq!(text, "/a/b\n/c\n");
+        let back = from_text(&format!("{text}relative/x\n\n"));
+        assert_eq!(back, set);
+    }
+}

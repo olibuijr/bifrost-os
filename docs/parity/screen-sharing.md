@@ -38,7 +38,8 @@ reference files are copied into the repo.
 - The protocol lives in its own crate, `springboard/rfb`, std-only, with no sockets in the protocol functions. The app
   owns the threads. Tests cover the handshake, pixel formats, message bytes, Raw and CopyRect decoding, and a loopback
   session in `apps/screen-sharing/src/connection.rs`.
-- Not implemented: VNC (DES) password authentication (refused with "password (VNC) authentication"), TLS, Tight, ZRLE,
+- VNC (DES) password authentication was added after this round: `springboard/rfb/src/des.rs` (checked against published DES vectors) and `handshake::connect_with`; the viewer has a Password box. The scheme is weak by design (8 characters, 56-bit key), so it is offered only when a password is typed.
+- Not implemented: TLS, Tight, ZRLE,
   Hextile, RRE, cursor pseudo-encodings, scrolling in actual-size mode (the desktop is centred and cropped), and a saved
   address book.
 
@@ -48,7 +49,7 @@ reference files are copied into the repo.
    (`apps/remote/assets/server.py`). Settings > Sharing > Screen Sharing calls privd `service.set` for `wayvnc.service`,
    which has no unit in the repo. Making a raw VNC endpoint reachable needs a unit, a listening address, and an
    authentication decision: enabling it without a password would expose the desktop. This round did not add a unit.
-2. The viewer needs a password path before it can reach an authenticated server. That means DES for VNC authentication.
+2. (Closed) The viewer now answers VNC authentication; see Decisions.
 3. The app's compliance test (`tests/compliance.rs`) and snapshots are not generated. Run
    `tools/gen-app-compliance-tests.py` for `screen-sharing` and bless the goldens on Midget.
 4. The app icon is a copy of the Remote icon. Replace it with a dedicated icon.

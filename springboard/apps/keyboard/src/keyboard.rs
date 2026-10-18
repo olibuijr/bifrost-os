@@ -43,6 +43,8 @@ pub enum Out {
     Hide,
     /// terminal keys: "Escape", "Tab", "Paste", "Up", "Down", "Left", "Right"
     Named(&'static str),
+    /// the microphone key: the app starts or stops on-device dictation
+    Dictate,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -784,7 +786,7 @@ impl Keyboard {
                 Some(Out::Enter)
             }
             Kind::Hide => Some(Out::Hide),
-            Kind::Mic => None,
+            Kind::Mic => Some(Out::Dictate),
             Kind::Named(n) => {
                 if matches!(n, "Left" | "Right" | "Up" | "Down") {
                     self.break_word();
@@ -857,8 +859,11 @@ impl Keyboard {
         self.last = c.chars().next();
         if self.ctrl {
             self.ctrl = false;
-            let b = c.as_bytes().first().copied().unwrap_or(0);
-            return Some(Out::Text(char::from(b.to_ascii_lowercase() & 0x1f).to_string()));
+            // One source for Ctrl bytes: the terminal-keys SDK kit. Keys
+            // Ctrl does not combine with are dropped, consuming the Ctrl tap
+            // instead of sending a bogus code.
+            let byte = c.chars().next().and_then(bifrost_app::controls::terminal_keys::control_byte);
+            return byte.map(|b| Out::Text((b as char).to_string()));
         }
         self.track(&text);
         Some(Out::Text(text))
@@ -877,6 +882,14 @@ impl Keyboard {
     }
 
     fn space(&mut self, t: f64) -> Option<Out> {
+        // Ctrl+Space is NUL (readline set-mark), from the terminal-keys SDK
+        // kit; it never ends a word or triggers smart typing.
+        if self.ctrl {
+            self.ctrl = false;
+            self.finish_word();
+            self.last = None;
+            return Some(Out::Text('\0'.to_string()));
+        }
         let after_alnum = self.last.is_some_and(char::is_alphanumeric);
         let sentence_end = matches!(self.last, Some('.' | '!' | '?'));
         self.undo_correction = None;
@@ -1703,6 +1716,17 @@ mod tests {
         tap(&mut k, &Kind::Ctrl, 1.0);
         assert_eq!(tap(&mut k, &Kind::Char("c"), 2.0), Some(Out::Text("\u{3}".into())));
         assert_eq!(tap(&mut k, &Kind::Char("c"), 3.0), Some(Out::Text("c".into())));
+        tap(&mut k, &Kind::Ctrl, 4.0);
+        assert_eq!(tap(&mut k, &Kind::Char("a"), 5.0), Some(Out::Text("\u{1}".into())), "Ctrl+A line start");
+        tap(&mut k, &Kind::Ctrl, 6.0);
+        assert_eq!(tap(&mut k, &Kind::Char("e"), 7.0), Some(Out::Text("\u{5}".into())), "Ctrl+E line end");
+        tap(&mut k, &Kind::Ctrl, 8.0);
+        assert_eq!(tap(&mut k, &Kind::Space, 9.0), Some(Out::Text("\0".into())), "Ctrl+Space is NUL");
+        tap(&mut k, &Kind::Ctrl, 10.0);
+        tap(&mut k, &Kind::ToNumbers, 10.5);
+        assert_eq!(tap(&mut k, &Kind::Char("1"), 11.0), None, "Ctrl+1 is dropped, consuming Ctrl");
+        tap(&mut k, &Kind::ToLetters, 11.5);
+        assert_eq!(tap(&mut k, &Kind::Char("c"), 12.0), Some(Out::Text("c".into())), "Ctrl was consumed");
         let l = key(&k, &Kind::Named("Left"));
         k.down(l.x + 2.0, l.y + 2.0, 100.0);
         assert_eq!(k.tick(500.0), vec![Out::Named("Left")]);

@@ -73,16 +73,16 @@
     {
       "feature": "Apple Events (inter-process messages with replies)",
       "apple": "AESendMessage, AEInstallEventHandler, AECreateAppleEvent, AEProcessMessage",
-      "bifrost": "springboard/sdk/src/control.rs (JSON-RPC over an owner-only socket); springboard/sdk/src/intents.rs (App Intents); springboard/sdk/src/runtime.rs (document requests and replies); springboard/sdk/src/app_events.rs; springboard/sdk/src/event_descriptor.rs (Descriptor::coerce, ObjectSpecifier::resolve)",
+      "bifrost": "springboard/sdk/src/control.rs (JSON-RPC over an owner-only socket); springboard/sdk/src/intents.rs (App Intents); springboard/sdk/src/runtime.rs (document requests and replies); springboard/sdk/src/app_events.rs; springboard/sdk/src/event_descriptor.rs (Descriptor::coerce, ObjectSpecifier::resolve); springboard/core/src/script/ (scripting language, dictionaries); springboard/cmd/src/osascript.rs and osacompile.rs; springboard/src/shell/services/scripting.rs",
       "status": "partial",
-      "note": "springboard/sdk/src/app_events.rs sends a typed AppEvent (class, id, record) over the control socket with reply descriptor and timeout, plus AppleEventHandlers. event_descriptor.rs adds typed descriptors with coercion (text, integer, real, boolean, list) and object specifiers (index, name, identifier, first, last, nested in a container), tested headless in springboard/sdk/tests/parity_sdk-complete-44.rs. Gap: no wire encoding of descriptors into the control socket and no Midget check."
+      "note": "springboard/sdk/src/app_events.rs sends a typed AppEvent (class, id, record) over the control socket with reply descriptor and timeout, plus AppleEventHandlers. event_descriptor.rs adds typed descriptors with coercion (text, integer, real, boolean, list) and object specifiers (index, name, identifier, first, last, nested in a container), tested headless in springboard/sdk/tests/parity_sdk-complete-44.rs. Scripting: apps declare [[script.command]] and [[script.class]] tables in manifest.toml (springboard/core/src/script/dictionary.rs); the shell's scripting service lists them. osascript (springboard/cmd) runs tell app blocks and sends each command as an AppEvent with a reply and a 120 s timeout (springboard/core/src/script/interp.rs), and Notes and Calendar answer their dictionaries. Gaps: events carry JSON parameters, not Apple event descriptors; osascript does not launch apps; display dialog and notification print on standard error; no Midget check yet."
     },
     {
       "feature": "Search index of documents (Search Kit)",
       "apple": "SKIndexCreateWithURL, SKIndexAddDocument, SKSearchCreate, SKSearchFindMatches, SKSummaryCreateWithString",
       "bifrost": "springboard/sdk/src/quicksearch.rs (CSSearchableIndex: per-app content index for the Search panel)",
       "status": "partial",
-      "note": "Covers indexing app content for Search. No term-level index API, no summaries, no app-owned index files."
+      "note": "Covers indexing app content for Search. No term-level index API, no summaries, no app-owned index files. Built 2026-10-17: term-level document index in the SDK (springboard/sdk/src/search_kit.rs: SearchIndex add_document, remove_document, find_matches with prefix words and AND, summary of the matching sentence, to_text/from_text for an app-owned file); tests search_kit::tests. Not run: lead runs the tests."
     },
     {
       "feature": "File metadata search (MDQuery, kMDItem*, MDLabel)",
@@ -96,7 +96,7 @@
       "apple": "DCSCopyTextDefinition, DCSGetTermRangeInString, DCSDictionary",
       "bifrost": "springboard/sdk/src/definitions.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 5 tests. Wave 3 (theme-27, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No definition lookup API."
+      "note": "verified on Midget 0.7.25 by 5 tests. Wave 3 (theme-27, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No definition lookup API. Refreshed 2026-10-17: covered by springboard/sdk/src/definitions.rs (term store and lookup at a text position); tests definitions::tests. Gap removed."
     },
     {
       "feature": "Backup exclusion",
@@ -117,14 +117,14 @@
       "apple": "IOPM and NSProcessInfo activity APIs; sleep and wake notifications through NSWorkspace",
       "bifrost": "springboard/src/bare/sleep.rs (note_app_activity, forget_app, app_sleep_blockers; suspend after screen off, logind); springboard/src/shell/apphost.rs (ToShell::Activity, Drop); springboard/sdk/src/process_info.rs (beginActivity, endActivity, thermal state, low power mode); springboard/sdk/src/workspace.rs (sleep and wake events)",
       "status": "partial",
-      "note": "An app's beginActivity with idleSystemSleepDisabled blocks the shell's system sleep, and the activity union is tested headless in sdk/tests/parity_sdk-rest-11.rs and springboard/tests/parity_sdk-rest-11.rs. Gap: the block is a shell-side registry, not a logind inhibitor, so other programs do not see it, and a real refused suspend needs the lab machine."
+      "note": "An app's beginActivity with idleSystemSleepDisabled blocks the shell's system sleep, and the activity union is tested headless in sdk/tests/parity_sdk-rest-11.rs and springboard/tests/parity_sdk-rest-11.rs. Gap: the block is a shell-side registry, not a logind inhibitor, so other programs do not see it, and a real refused suspend needs the lab machine. Built 2026-10-17: the shell holds a logind sleep inhibitor (systemd-inhibit --what=sleep, held by cat until released) for each app that sets idleSystemSleepDisabled, released when the app clears it or goes away (springboard/src/bare/sleep.rs, app_inhibitor_args; test an_app_sleep_block_is_a_sleep_inhibitor_named_for_the_app). Not run: lead runs the tests."
     },
     {
       "feature": "Icons for files and content types",
       "apple": "NSWorkspace.icon(forFile:), Icon Storage article",
       "bifrost": "springboard/sdk/src/workspace.rs (icon_for_content_type, icon_for_file); springboard/sdk/src/widgets.rs (folder_icon)",
       "status": "partial",
-      "note": "Glyph names for content types and file names, and the procedural folder icon drawn offscreen and checked pixel by pixel, are tested in springboard/sdk/tests/parity_sdk-tests-16.rs. Gap: no bitmap icon sets or custom folder icons."
+      "note": "Glyph names for content types and file names, and the procedural folder icon drawn offscreen and checked pixel by pixel, are tested in springboard/sdk/tests/parity_sdk-tests-16.rs. Gap: no bitmap icon sets or custom folder icons. Built 2026-10-17: Built 2026-10-17: bitmap icon sets per content type with nearest-ancestor lookup, a custom folder icon, and the best representation for a target and scale (springboard/sdk/src/icon_images.rs, IconImages, on ImageObject); tests icon_images::tests. Gap left: the shell does not draw these sets in Finder-style views yet. Not run: lead runs the tests."
     },
     {
       "feature": "Carbon Core (legacy managers)",
@@ -135,14 +135,12 @@
     }
   ],
   "gaps": [
-    "Apple Events: no typed inter-app messages with reply descriptors; the control socket and intents do not replace them.",
+    "Apple Events: typed inter-app messages with replies exist (app_events, dictionaries, osascript) but use JSON parameters rather than Apple event descriptors, and the scripting path is not yet verified on Midget.",
     "File metadata: no attribute store or MDQuery-style query API for apps.",
-    "Dictionary Services: no definition lookup (spellcheck.rs covers spelling only).",
     "Backup Core: no per-item backup exclusion.",
-    "Identity Services: no user or group API for apps.",
-    "File system events: no persistent event IDs, so a change stream cannot replay events after a restart.",
+    "Identity Services: no user or group lookup for apps. springboard/sdk/src/identity_events.rs models ID-change events only, and no shell path calls it.",
+    "File system events: springboard/sdk/src/fswatch.rs EventJournal keeps event IDs, replays since an ID and round-trips through text, but no shell path persists it, so replay after a restart is not wired.",
     "Launch Services: no role handlers, shared file lists or quarantine properties.",
-    "Search Kit: the per-app content index has no term-level or summarization API.",
     "Docs mismatch: docs/bifrost-ui.md names the FSEvents module fsevents; the code module is springboard/sdk/src/fswatch.rs."
   ]
 }

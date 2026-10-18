@@ -51,7 +51,7 @@ fn shell_record(number: u32, name: &str, kind: ShellWindowKind, bounds: Rect, pi
 
 fn app_record(shell: &Shell, app: AppId, bounds: Rect, on_screen: bool) -> Option<WindowInfo> {
     let idx = apps().iter().position(|a| a.id == app)?;
-    let pid = match app {
+    let pid = match app.parent() {
         AppId::External(slot) => shell.ext.get(slot as usize).and_then(|h| h.as_ref()).and_then(|h| h.pid()),
         _ => None,
     }

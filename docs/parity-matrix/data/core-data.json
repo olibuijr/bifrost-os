@@ -130,7 +130,7 @@
   "gaps": [
     "No object graph: no entity model, relationships, inverse relationships or delete rules.",
     "No fetch requests or predicates; apps filter in-memory vectors.",
-    "No managed object context with change tracking, dirty state or faulting.",
+    "Faulting is built: fault_out, fault_in and is_fault in springboard/ui/src/managed_context.rs (tests there). Gap: faults are held in the same process, so there is no database store beneath them.",
     "No database-backed store, so stores are rewritten whole on each save and do not scale past the bounded lists (contacts MAX_ITEMS 10000, calendar MAX_EVENTS 2048).",
     "No persistent history or transaction log of store changes.",
     "No migration path between store versions (lightweight, staged or manual).",

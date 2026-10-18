@@ -65,9 +65,9 @@
     }
   ],
   "gaps": [
-    "No disk mount, unmount, eject or appearance events for apps or shell (DARegister*Callback family).",
-    "No mount, unmount or eject approval hook, so nothing can block a volume change (DADissenter).",
-    "No app-facing disk or volume object with its description (DADisk, DADiskCopyDescription).",
+    "No mount, unmount or eject events for apps. Appearance and disappearance callbacks are in springboard/sdk/src/disk_arbitration.rs; a mount change arrives only as a description change.",
+    "No mount, unmount or eject approval hook reaches apps; approvals stay on the shell side (bifrost_core::disk_events::Approvals).",
+    "No DADisk handle or lookup by volume path. The Disk struct in springboard/sdk/src/disk_arbitration.rs carries the description fields.",
     "Files does not show mounted volumes or a Volumes sidebar section; document grants are confined to the account home.",
     "No disk claim (DADiskClaim) for exclusive access.",
     "The installer's lsblk and umount calls are not reusable by apps. Apple's framework runs on a daemon, which BifrOSt has no equivalent for."

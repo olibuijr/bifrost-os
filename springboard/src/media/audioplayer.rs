@@ -1,15 +1,18 @@
 //! The Music app's playback engine: one thread decodes the queue through
 //! `audiofile` and writes 48 kHz stereo S16 to an `AudioOut`, gapless (the
 //! next song is opened and written as soon as the current one ends; the
-//! device never drains between them). It keeps running while the app is
-//! closed; the UI reads a `Snapshot` and is woken through `fd()` when the
-//! song or the state changes.
+//! device never drains between them), or crossfaded (`set_crossfade_ms`: the
+//! end of a song is held back and the next song's start is mixed under it). It
+//! keeps running while the app is closed; the UI reads a `Snapshot` and is woken
+//! through `fd()` when the song or the state changes.
 //!
 //! The samples are written MUTED (zeroed) until `set_muted(false)`: the
 //! speaker route is the lead's to open, nothing here ever makes a sound on
 //! its own.
 
 use super::aac::{Resampler, OUT_RATE};
+use super::crossfade_overlap::{overlap_frames, Crossfader};
+use super::timestretch::{self, Stretcher};
 use super::speaker::SpeakerOut;
 use super::audio_out::AudioOut;
 #[cfg(test)]
@@ -67,6 +70,8 @@ pub struct Snapshot {
     pub repeat: Repeat,
     pub queue_len: usize,
     pub volume: f32,
+    /// the playback rate (0.5 to 3.0); positions are song time, whatever the rate
+    pub rate: f32,
     pub error: Option<String>,
     /// the state of the stream while a live track is current
     pub live: Option<LiveStatus>,
@@ -81,6 +86,10 @@ struct Shared {
     /// where to start the reopened song, in ms
     start_ms: f64,
     volume: f32,
+    /// the playback rate asked for; the thread applies it at its next turn
+    rate: f32,
+    /// the crossfade between songs asked for, in milliseconds (0 is gapless); the thread applies it at its next turn
+    crossfade_ms: u32,
     muted: bool,
     // -- reported by the thread --
     /// the song the device is playing: (index into the queue, track)
@@ -134,6 +143,8 @@ impl AudioPlayer {
             generation: 0,
             start_ms: 0.0,
             volume: 0.6,
+            rate: 1.0,
+            crossfade_ms: 0,
             muted: true,
             position_ms: 0.0,
             duration_ms: None,
@@ -179,6 +190,7 @@ impl AudioPlayer {
             repeat: s.queue.repeat(),
             queue_len: s.queue.len(),
             volume: s.volume,
+            rate: s.rate,
             error: s.error.clone(),
             live: s.live.as_ref().map(LiveHandle::status),
         }
@@ -280,6 +292,25 @@ impl AudioPlayer {
         self.shared.lock().unwrap_or_else(|p| p.into_inner()).queue.set_repeat(r);
     }
 
+    /// Playback speed, 0.5 to 3.0 (NaN is normal speed). The pitch is kept: the audio is time-stretched, not resampled.
+    /// The rate stays set across songs until it is changed again.
+    pub fn set_rate(&mut self, rate: f32) {
+        self.shared.lock().unwrap_or_else(|p| p.into_inner()).rate = timestretch::clamp_rate(rate);
+    }
+
+    /// The crossfade between songs, in milliseconds: one song fades out as the next fades in over this long (equal power,
+    /// so the loudness holds). 0, the default, plays gapless. It is capped at `crossfade_overlap::MAX_OVERLAP_MS`, applies
+    /// from the next block the thread decodes, never applies to live stations, and a song never fades over more than its
+    /// own half. The overlap shortens the two songs' total play time by its length.
+    pub fn set_crossfade_ms(&mut self, ms: u32) {
+        self.shared.lock().unwrap_or_else(|p| p.into_inner()).crossfade_ms = ms.min(super::crossfade_overlap::MAX_OVERLAP_MS);
+    }
+
+    /// The crossfade asked for, in milliseconds.
+    pub fn crossfade_ms(&self) -> u32 {
+        self.shared.lock().unwrap_or_else(|p| p.into_inner()).crossfade_ms
+    }
+
     /// Software gain 0..=1, applied before the device.
     pub fn set_volume(&mut self, v: f32) {
         self.shared.lock().unwrap_or_else(|p| p.into_inner()).volume = v.clamp(0.0, 1.0);
@@ -325,6 +356,20 @@ impl Drop for AudioPlayer {
     }
 }
 
+/// Song milliseconds for `frames` device frames played at `rate`: a faster rate covers more of the song in each frame.
+fn song_ms(frames: u64, rate: f32) -> f64 {
+    frames as f64 * 1000.0 / OUT_RATE as f64 * rate as f64
+}
+
+/// The most a song of `duration_ms` may overlap its neighbour: half its length, in output frames. A song of unknown length
+/// has no cap.
+fn overlap_cap(duration_ms: Option<f64>) -> usize {
+    match duration_ms {
+        Some(d) if d.is_finite() && d > 0.0 => overlap_frames((d / 2.0) as u32, OUT_RATE),
+        _ => usize::MAX,
+    }
+}
+
 /// The audio thread's state.
 struct Engine {
     shared: Arc<Mutex<Shared>>,
@@ -336,6 +381,18 @@ struct Engine {
     generation: u64,
     decoder: Option<Box<dyn AudioDecoder>>,
     resampler: Resampler,
+    /// the time-stretch for rates other than 1; fed only while `applied_rate` is not 1
+    stretch: Stretcher,
+    /// the rate the device output is at (the stretcher's rate), which may lag the request by one turn
+    applied_rate: f32,
+    /// the stretched block being written (reused between blocks)
+    stretched: Vec<i16>,
+    /// holds the end of a song back for the crossfade and mixes the next song's start under it
+    xfade: Crossfader,
+    /// the overlap asked for, in frames (0 for gapless and for live stations)
+    xfade_want: usize,
+    /// the most the current song may overlap: half its length, so a short song is not faded over its own start
+    xfade_cap: usize,
     /// frames written to the device since its last discard
     written: u64,
     /// `written` when the song now playing started, and its start time
@@ -370,7 +427,7 @@ fn fade_in(pcm: &mut [i16], frames: usize) {
 
 impl Engine {
     fn new(shared: Arc<Mutex<Shared>>, waker: Waker, out: Box<dyn AudioOut>, transport: Option<Arc<dyn Transport>>, tuning: Tuning) -> Self {
-        Engine { shared, waker, out, transport, tuning, generation: 0, decoder: None, resampler: Resampler::new(OUT_RATE, 2), written: 0, song_start: (0, 0.0), pending: Default::default(), paused: false, played_at_pause: 0, fade_in: true, drained: false, samples: Vec::new(), pcm: Vec::new(), traced: std::time::Instant::now() }
+        Engine { shared, waker, out, transport, tuning, generation: 0, decoder: None, resampler: Resampler::new(OUT_RATE, 2), stretch: Stretcher::new(1.0), applied_rate: 1.0, stretched: Vec::new(), xfade: Crossfader::new(0), xfade_want: 0, xfade_cap: usize::MAX, written: 0, song_start: (0, 0.0), pending: Default::default(), paused: false, played_at_pause: 0, fade_in: true, drained: false, samples: Vec::new(), pcm: Vec::new(), traced: std::time::Instant::now() }
     }
 
     /// Opens the current song at `start_ms`; None (with the error noted)
@@ -415,9 +472,13 @@ impl Engine {
         self.written = 0;
         self.pending.clear();
         self.drained = false;
+        self.stretch.reset();
+        // a skip or a seek: what was held back for the old song's ending is not wanted
+        self.xfade.reset();
         self.decoder = self.open_current(start_ms);
         self.song_start = (0, start_ms);
         let duration = self.decoder.as_ref().and_then(|d| d.duration_ms());
+        self.xfade_cap = overlap_cap(duration);
         let mut s = self.shared.lock().unwrap_or_else(|p| p.into_inner());
         s.duration_ms = duration;
         s.position_ms = start_ms;
@@ -427,6 +488,21 @@ impl Engine {
         }
         drop(s);
         self.waker.wake();
+    }
+
+    /// Applies a rate the player was asked for. The position mapping is re-anchored at the device's current frame, so
+    /// the reported song position stays continuous across the change.
+    fn sync_rate(&mut self, want: f32) {
+        let played = self.out.played();
+        let (first, start) = self.song_start;
+        let pos = start + song_ms(played.saturating_sub(first), self.applied_rate);
+        self.song_start = (played, pos);
+        self.applied_rate = want;
+        self.stretch.set_rate(want);
+        if want == 1.0 {
+            // the stretcher is bypassed at 1: drop what it still holds so a later stretch starts clean
+            self.stretch.reset();
+        }
     }
 
     /// Updates the reported position; switches the reported song when the
@@ -448,7 +524,7 @@ impl Engine {
             // a pause landed while a write was in flight: the position stays put
             return;
         }
-        let pos = start + played.saturating_sub(first) as f64 * 1000.0 / OUT_RATE as f64;
+        let pos = start + song_ms(played.saturating_sub(first), self.applied_rate);
         s.position_ms = match s.duration_ms {
             Some(d) => pos.min(d),
             None => pos,
@@ -460,13 +536,18 @@ impl Engine {
         // no deep C-state exit while a song plays (see bare::pmqos); dropped on pause, stop and quit
         let mut latency: Option<crate::bare::pmqos::CpuDmaLatency> = None;
         loop {
-            let (quit, generation, playing, start_ms) = {
+            let (quit, generation, playing, start_ms, rate, crossfade_ms, live) = {
                 let s = self.shared.lock().unwrap_or_else(|p| p.into_inner());
-                (s.quit, s.generation, s.playing, s.start_ms)
+                (s.quit, s.generation, s.playing, s.start_ms, s.rate, s.crossfade_ms, s.queue.current().is_some_and(Track::is_live))
             };
             if quit {
                 return;
             }
+            if rate != self.applied_rate {
+                self.sync_rate(rate);
+            }
+            // a live station never ends, so holding its end back would only delay it
+            self.xfade_want = if live { 0 } else { overlap_frames(crossfade_ms, OUT_RATE) };
             if playing && !self.paused {
                 if latency.is_none() {
                     latency = crate::bare::pmqos::CpuDmaLatency::hold();
@@ -514,6 +595,7 @@ impl Engine {
                 std::thread::sleep(Duration::from_millis(10));
                 continue;
             }
+            self.sync_crossfade();
             let more = {
                 let d = self.decoder.as_mut().unwrap();
                 match d.next(&mut self.samples) {
@@ -560,34 +642,92 @@ impl Engine {
             }
         };
         self.decoder = None;
+        // the held-back tail of the song that ended is not the next song's start
+        self.stretch.reset();
         if let Some((index, track)) = next {
             self.decoder = self.open_current(0.0);
             let duration = self.decoder.as_ref().and_then(|d| d.duration_ms());
+            // the next song starts at the first frame not yet written: with a crossfade that is where the mix begins
             self.pending.push_back((self.written, duration, index, track));
             if self.decoder.is_none() {
                 // an unplayable song: stop there
                 self.drained = true;
+                self.flush_tail();
+            } else {
+                // the held end of this song fades out under the start of the next
+                self.xfade.begin_mix();
+                self.xfade_cap = overlap_cap(duration);
             }
         } else {
             self.drained = true;
+            self.flush_tail();
+        }
+    }
+
+    /// Applies the overlap in force to the crossfader: what was asked for, held to half the song. Frames it no longer holds
+    /// play at once.
+    fn sync_crossfade(&mut self) {
+        let frames = self.xfade_want.min(self.xfade_cap);
+        if frames != self.xfade.frames() {
+            self.pcm.clear();
+            self.xfade.set_frames(frames, &mut self.pcm);
+            if !self.pcm.is_empty() {
+                self.emit();
+            }
+        }
+    }
+
+    /// Plays what the crossfade still holds back: the queue has ended, or the next song would not open.
+    fn flush_tail(&mut self) {
+        self.pcm.clear();
+        self.xfade.flush(&mut self.pcm);
+        if !self.pcm.is_empty() {
+            self.emit();
         }
     }
 
     fn write_samples(&mut self) {
+        let (rate, channels) = {
+            let d = self.decoder.as_ref().unwrap();
+            (d.rate(), d.channels())
+        };
+        self.resampler.retune(rate, channels);
+        self.pcm.clear();
+        self.resampler.convert(&self.samples, &mut self.pcm);
+        if self.applied_rate != 1.0 {
+            self.stretched.clear();
+            self.stretch.push(&self.pcm, &mut self.stretched);
+            std::mem::swap(&mut self.pcm, &mut self.stretched);
+            if self.pcm.is_empty() {
+                // the stretcher is still filling its first window
+                return;
+            }
+        }
+        if self.xfade.active() {
+            // the end of the song is held back for the crossfade, and the start of the next one is mixed under it
+            std::mem::swap(&mut self.pcm, &mut self.stretched);
+            self.pcm.clear();
+            self.xfade.push(&self.stretched, &mut self.pcm);
+            if self.pcm.is_empty() {
+                return;
+            }
+        }
+        self.emit();
+    }
+
+    /// Writes `pcm` to the device: muted or at the player's volume, ramped up after a flush.
+    fn emit(&mut self) {
         let (volume, muted) = {
             let s = self.shared.lock().unwrap_or_else(|p| p.into_inner());
             (s.volume, s.muted)
         };
-        let d = self.decoder.as_ref().unwrap();
-        self.resampler.retune(d.rate(), d.channels());
-        self.pcm.clear();
-        self.resampler.convert(&self.samples, &mut self.pcm);
         if self.traced.elapsed() >= Duration::from_secs(1) {
             self.traced = std::time::Instant::now();
             let peak = |v: &[i16]| v.iter().map(|s| s.unsigned_abs()).max().unwrap_or(0);
+            let (rate, channels) = self.decoder.as_ref().map_or((0, 0), |d| (d.rate(), d.channels()));
             eprintln!(
                 "audioplayer: trace decoded {} samples peak {} @ {} Hz x{} -> {} frames peak {}, volume {:.2} muted {muted}",
-                self.samples.len(), peak(&self.samples), d.rate(), d.channels(), self.pcm.len() / 2, peak(&self.pcm), volume
+                self.samples.len(), peak(&self.samples), rate, channels, self.pcm.len() / 2, peak(&self.pcm), volume
             );
         }
         if muted {
@@ -628,6 +768,28 @@ mod tests {
         super::super::volume::scale(&mut pcm, g);
         assert!((pcm[0] as f32 - 10000.0 * g).abs() <= 1.0 && pcm[0] == -pcm[1]);
         assert!(g > 0.0 && g < 1.0);
+    }
+
+    #[test]
+    fn set_rate_clamps_and_the_snapshot_reports_it() {
+        let mut p = AudioPlayer::new(Box::new(NullOut::new())).unwrap();
+        assert_eq!(p.snapshot().rate, 1.0, "normal speed until asked");
+        p.set_rate(4.0);
+        assert_eq!(p.snapshot().rate, 3.0, "the ceiling is 3x");
+        p.set_rate(0.25);
+        assert_eq!(p.snapshot().rate, 0.5);
+        p.set_rate(f32::NAN);
+        assert_eq!(p.snapshot().rate, 1.0);
+        p.set_rate(1.5);
+        assert_eq!(p.snapshot().rate, 1.5);
+    }
+
+    #[test]
+    fn song_time_runs_faster_than_the_device_at_a_higher_rate() {
+        // a second of device time is two seconds of song at 2x and half a second at 0.5x
+        assert_eq!(song_ms(OUT_RATE as u64, 1.0), 1000.0);
+        assert_eq!(song_ms(OUT_RATE as u64, 2.0), 2000.0);
+        assert_eq!(song_ms(OUT_RATE as u64 * 2, 0.5), 1000.0);
     }
 
     #[test]
@@ -782,6 +944,69 @@ mod tests {
         assert!(!s.playing);
         p.play();
         assert!(!p.snapshot().playing || p.snapshot().queue_len == 1);
+    }
+
+    /// An output that counts the frames written to it and otherwise behaves like `NullOut`.
+    struct Tap {
+        inner: NullOut,
+        frames: Arc<std::sync::atomic::AtomicU64>,
+    }
+
+    impl AudioOut for Tap {
+        fn write(&mut self, frames: &[i16]) -> io::Result<()> {
+            self.frames.fetch_add(frames.len() as u64 / 2, std::sync::atomic::Ordering::SeqCst);
+            self.inner.write(frames)
+        }
+        fn played(&mut self) -> u64 {
+            self.inner.played()
+        }
+        fn pause(&mut self, on: bool) {
+            self.inner.pause(on)
+        }
+        fn discard(&mut self) {
+            self.inner.discard()
+        }
+    }
+
+    /// The frames written while the first two test songs play through, with a crossfade of `ms`.
+    fn frames_for_two_songs(ms: u32) -> u64 {
+        let frames = Arc::new(std::sync::atomic::AtomicU64::new(0));
+        let mut p = AudioPlayer::new(Box::new(Tap { inner: NullOut::new(), frames: frames.clone() })).unwrap();
+        p.set_crossfade_ms(ms);
+        p.play_queue(tracks()[..2].to_vec(), 0, false, 1);
+        let s = wait(&mut p, 10_000, |s| !s.playing);
+        assert!(!s.playing && s.error.is_none(), "the queue plays to its end: {s:?}");
+        let total = frames.load(std::sync::atomic::Ordering::SeqCst);
+        p.stop();
+        total
+    }
+
+    #[test]
+    fn the_crossfade_is_capped_and_remembered() {
+        let mut p = player();
+        assert_eq!(p.crossfade_ms(), 0, "gapless until asked");
+        p.set_crossfade_ms(3000);
+        assert_eq!(p.crossfade_ms(), 3000);
+        p.set_crossfade_ms(60_000);
+        assert_eq!(p.crossfade_ms(), super::super::crossfade_overlap::MAX_OVERLAP_MS);
+    }
+
+    #[test]
+    fn a_song_overlaps_its_neighbour_by_at_most_half_its_length() {
+        assert_eq!(overlap_cap(Some(10_000.0)), 5 * OUT_RATE as usize);
+        assert_eq!(overlap_cap(Some(60_000.0)), 12 * OUT_RATE as usize, "and never more than the longest crossfade");
+        assert_eq!(overlap_cap(None), usize::MAX, "a song of unknown length is not capped");
+        assert_eq!(overlap_cap(Some(0.0)), usize::MAX);
+    }
+
+    #[test]
+    fn a_crossfade_plays_the_end_of_one_song_under_the_start_of_the_next() {
+        let gapless = frames_for_two_songs(0);
+        let faded = frames_for_two_songs(400);
+        let overlap = overlap_frames(400, OUT_RATE) as u64;
+        assert!(gapless > 2 * overlap, "{gapless} frames for two songs");
+        // the overlapped frames play once, not twice
+        assert!(gapless.abs_diff(faded).abs_diff(overlap) <= 480, "gapless {gapless}, crossfaded {faded}, overlap {overlap}");
     }
 
     const FAST: Tuning = Tuning { prebuffer: 4096, backoff_first_ms: 10, backoff_max_ms: 40 };

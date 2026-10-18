@@ -64,6 +64,35 @@ pub struct Edits {
     pub rotate: Vec<(usize, i64)>,
     /// Annotations to add.
     pub annotations: Vec<Annotation>,
+    /// Pages to add to the page order, from another document or blank.
+    pub insert: Option<Insert>,
+    /// Form field values to set.
+    pub fields: Vec<FieldEdit>,
+}
+
+/// Pages to add: their page dictionaries (in order) and the objects they reach, numbered as in their own file. The
+/// writer gives every object a new number. `at` is the place in the page order that the first new page takes.
+#[derive(Clone, Debug, PartialEq, Default)]
+pub struct Insert {
+    pub at: usize,
+    pub pages: Vec<Dict>,
+    pub objects: BTreeMap<u32, Obj>,
+}
+
+/// A value to write into a form field: the text of a text field, or the name of a check box's state.
+#[derive(Clone, Debug, PartialEq)]
+pub enum FieldValue {
+    Text(String),
+    State(String),
+}
+
+/// A form field value to write. `node` is the object of the field dictionary that holds /V. `widgets` are the check
+/// box widgets to set, each as its object number and the /AS state name.
+#[derive(Clone, Debug, PartialEq)]
+pub struct FieldEdit {
+    pub node: u32,
+    pub value: FieldValue,
+    pub widgets: Vec<(u32, String)>,
 }
 
 /// The WinAnsi byte for a character, `?` when the standard faces have no glyph for it.
@@ -206,7 +235,7 @@ pub fn save(base: &[u8], doc: &Doc, edits: &Edits) -> Result<Vec<u8>, String> {
     if doc.is_encrypted() {
         return Err("an encrypted PDF cannot be changed in place".into());
     }
-    if edits.order.is_none() && edits.rotate.is_empty() && edits.annotations.is_empty() {
+    if edits.order.is_none() && edits.rotate.is_empty() && edits.annotations.is_empty() && edits.insert.is_none() && edits.fields.is_empty() {
         return Ok(base.to_vec());
     }
     let pages = page::pages(doc);
@@ -219,8 +248,9 @@ pub fn save(base: &[u8], doc: &Doc, edits: &Edits) -> Result<Vec<u8>, String> {
 
     let mut objects: BTreeMap<u32, Obj> = BTreeMap::new();
     let mut page_dicts: BTreeMap<usize, Dict> = BTreeMap::new();
-    let mut expected_pages = pages.len();
 
+    // the pages kept, in their order (a deletion or a move changes it); an insert adds its pages at a place in it
+    let mut kept: Vec<usize> = (0..pages.len()).collect();
     if let Some(order) = &edits.order {
         let mut seen = BTreeSet::new();
         if order.is_empty() {
@@ -229,29 +259,57 @@ pub fn save(base: &[u8], doc: &Doc, edits: &Edits) -> Result<Vec<u8>, String> {
         if order.iter().any(|&i| i >= pages.len() || !seen.insert(i)) {
             return Err("the page order names a page twice or names no page".into());
         }
-        expected_pages = order.len();
-        let identity = order.len() == pages.len() && order.iter().enumerate().all(|(i, &p)| i == p);
-        if !identity {
-            let cat = doc.catalog().ok_or("the file has no catalog")?;
-            let pages_num = match cat.get("Pages") {
-                Some(Obj::Ref(n, _)) => *n,
-                _ => return Err("the page tree root is not an object of its own".into()),
-            };
-            let Obj::Dict(mut root) = doc.load(pages_num) else {
-                return Err("the page tree root is damaged".into());
-            };
-            let flat = match doc.field(&root, "Kids") {
-                Obj::Array(kids) => kids.iter().all(|k| matches!(doc.get(k), Obj::Dict(d) if !d.contains_key("Kids"))),
-                _ => false,
-            };
-            if !flat {
-                return Err("this PDF's page tree is nested, so its pages cannot be reordered or deleted".into());
-            }
-            let kids = order.iter().map(|&i| num_of(i).map(|n| Obj::Ref(n, 0))).collect::<Result<Vec<Obj>, String>>()?;
-            root.insert("Kids".into(), Obj::Array(kids));
-            root.insert("Count".into(), Obj::Int(order.len() as i64));
-            objects.insert(pages_num, Obj::Dict(root));
+        kept = order.clone();
+    }
+    let mut expected_pages = kept.len();
+    let identity = kept.len() == pages.len() && kept.iter().enumerate().all(|(i, &p)| i == p);
+    if !identity || edits.insert.is_some() {
+        let cat = doc.catalog().ok_or("the file has no catalog")?;
+        let pages_num = match cat.get("Pages") {
+            Some(Obj::Ref(n, _)) => *n,
+            _ => return Err("the page tree root is not an object of its own".into()),
+        };
+        let Obj::Dict(mut root) = doc.load(pages_num) else {
+            return Err("the page tree root is damaged".into());
+        };
+        let flat = match doc.field(&root, "Kids") {
+            Obj::Array(kids) => kids.iter().all(|k| matches!(doc.get(k), Obj::Dict(d) if !d.contains_key("Kids"))),
+            _ => false,
+        };
+        if !flat {
+            return Err("this PDF's page tree is nested, so its pages cannot be reordered, deleted or inserted into".into());
         }
+        let mut kids = kept.iter().map(|&i| num_of(i).map(|n| Obj::Ref(n, 0))).collect::<Result<Vec<Obj>, String>>()?;
+        if let Some(ins) = &edits.insert {
+            if ins.pages.is_empty() || ins.at > kids.len() {
+                return Err("the pages to insert do not fit at that place".into());
+            }
+            // every object of the insert gets a number of this file, then the pages get theirs
+            let map: BTreeMap<u32, u32> = ins
+                .objects
+                .keys()
+                .map(|&src| {
+                    let n = next;
+                    next += 1;
+                    (src, n)
+                })
+                .collect();
+            for (src, obj) in &ins.objects {
+                objects.insert(map[src], renumber(obj, &map));
+            }
+            for (j, dict) in ins.pages.iter().enumerate() {
+                let num = next;
+                next += 1;
+                let mut d = renumber_dict(dict, &map);
+                d.insert("Parent".into(), Obj::Ref(pages_num, 0));
+                objects.insert(num, Obj::Dict(d));
+                kids.insert(ins.at + j, Obj::Ref(num, 0));
+            }
+            expected_pages += ins.pages.len();
+        }
+        root.insert("Kids".into(), Obj::Array(kids));
+        root.insert("Count".into(), Obj::Int(expected_pages as i64));
+        objects.insert(pages_num, Obj::Dict(root));
     }
 
     for &(i, degrees) in &edits.rotate {
@@ -298,6 +356,12 @@ pub fn save(base: &[u8], doc: &Doc, edits: &Edits) -> Result<Vec<u8>, String> {
         pd.insert("Annots".into(), Obj::Array(list));
     }
 
+    for edit in &edits.fields {
+        set_field(doc, &mut objects, edit)?;
+    }
+    if !edits.fields.is_empty() {
+        set_need_appearances(doc, &mut objects)?;
+    }
     for (i, dict) in page_dicts {
         let num = num_of(i)?;
         objects.insert(num, Obj::Dict(dict));
@@ -364,6 +428,139 @@ pub fn save(base: &[u8], doc: &Doc, edits: &Edits) -> Result<Vec<u8>, String> {
 
 fn rect_obj(r: Rect) -> Obj {
     Obj::Array(r.iter().map(|v| Obj::Real(*v)).collect())
+}
+
+/// A text string as PDF writes it: UTF-16BE with a byte order mark, so any character reads back.
+pub fn text_string(text: &str) -> Obj {
+    let mut bytes = vec![0xfe, 0xff];
+    for unit in text.encode_utf16() {
+        bytes.extend_from_slice(&unit.to_be_bytes());
+    }
+    Obj::Str(bytes)
+}
+
+/// The pages `which` of `source` (indices in its page order) as an insert at `at`. Each page keeps its size, turn and
+/// resources, which a flat page tree passes down to its pages, so they are written into the page. The objects are the
+/// ones the pages reach through references, except the links back to the page tree (/Parent and /P).
+pub fn import(source: &Doc, which: &[usize], at: usize) -> Result<Insert, String> {
+    let pages = page::pages(source);
+    let mut out = Insert { at, ..Insert::default() };
+    for &i in which {
+        let p = pages.get(i).ok_or("a page to insert is missing")?;
+        let mut d = p.dict.clone();
+        d.remove("Parent");
+        d.insert("Type".into(), Obj::Name("Page".into()));
+        d.insert("MediaBox".into(), rect_obj(p.media));
+        d.insert("Rotate".into(), Obj::Int(p.rotation() as i64));
+        d.insert("Resources".into(), Obj::Dict(p.resources.clone()));
+        for v in d.values() {
+            reach(source, v, &mut out.objects);
+        }
+        out.pages.push(d);
+    }
+    Ok(out)
+}
+
+/// A blank insert at `at`: one page of `width` by `height` points, with no content.
+pub fn blank(at: usize, width: f64, height: f64) -> Insert {
+    let mut d = Dict::new();
+    d.insert("Type".into(), Obj::Name("Page".into()));
+    d.insert("MediaBox".into(), rect_obj([0.0, 0.0, width, height]));
+    Insert { at, pages: vec![d], objects: BTreeMap::new() }
+}
+
+/// Adds to `out` the object `o` and, through its references, every object it reaches in `source`.
+fn reach(source: &Doc, o: &Obj, out: &mut BTreeMap<u32, Obj>) {
+    match o {
+        Obj::Ref(n, _) => {
+            if out.contains_key(n) {
+                return;
+            }
+            // marked before the walk, so a reference cycle ends here
+            out.insert(*n, Obj::Null);
+            let body = source.load(*n);
+            reach(source, &body, out);
+            out.insert(*n, body);
+        }
+        Obj::Array(items) => items.iter().for_each(|x| reach(source, x, out)),
+        Obj::Dict(d) => reach_dict(source, d, out),
+        Obj::Stream(s) => reach_dict(source, &s.dict, out),
+        _ => {}
+    }
+}
+
+fn reach_dict(source: &Doc, d: &Dict, out: &mut BTreeMap<u32, Obj>) {
+    for (k, v) in d {
+        if k.as_str() != "Parent" && k.as_str() != "P" {
+            reach(source, v, out);
+        }
+    }
+}
+
+/// `o` with its references renumbered by `map`. A reference the map does not name is dropped to null.
+fn renumber(o: &Obj, map: &BTreeMap<u32, u32>) -> Obj {
+    match o {
+        Obj::Ref(n, g) => match map.get(n) {
+            Some(&m) => Obj::Ref(m, *g),
+            None => Obj::Null,
+        },
+        Obj::Array(items) => Obj::Array(items.iter().map(|x| renumber(x, map)).collect()),
+        Obj::Dict(d) => Obj::Dict(renumber_dict(d, map)),
+        Obj::Stream(s) => Obj::Stream(Rc::new(Stream { dict: renumber_dict(&s.dict, map), data: s.data.clone() })),
+        other => other.clone(),
+    }
+}
+
+fn renumber_dict(d: &Dict, map: &BTreeMap<u32, u32>) -> Dict {
+    d.iter().filter(|(k, _)| k.as_str() != "Parent" && k.as_str() != "P").map(|(k, v)| (k.clone(), renumber(v, map))).collect()
+}
+
+/// Sets the value of one form field and the states of its check box widgets.
+fn set_field(doc: &Doc, objects: &mut BTreeMap<u32, Obj>, edit: &FieldEdit) -> Result<(), String> {
+    let value = match &edit.value {
+        FieldValue::Text(text) => text_string(text),
+        FieldValue::State(name) => Obj::Name(name.clone()),
+    };
+    update_dict(doc, objects, edit.node, "V", value)?;
+    for (num, state) in &edit.widgets {
+        update_dict(doc, objects, *num, "AS", Obj::Name(state.clone()))?;
+    }
+    Ok(())
+}
+
+/// Sets `key` in the dictionary of object `num`, as an earlier edit left it or as the file has it.
+fn update_dict(doc: &Doc, objects: &mut BTreeMap<u32, Obj>, num: u32, key: &str, value: Obj) -> Result<(), String> {
+    let mut dict = match objects.get(&num) {
+        Some(Obj::Dict(d)) => d.clone(),
+        Some(_) => return Err(format!("object {num} is not a dictionary")),
+        None => match doc.load(num) {
+            Obj::Dict(d) => d,
+            _ => return Err(format!("object {num} is not a form field")),
+        },
+    };
+    dict.insert(key.into(), value);
+    objects.insert(num, Obj::Dict(dict));
+    Ok(())
+}
+
+/// Asks viewers to draw the form again from its values (/NeedAppearances), because the fields' own appearance streams
+/// are not rewritten here.
+fn set_need_appearances(doc: &Doc, objects: &mut BTreeMap<u32, Obj>) -> Result<(), String> {
+    let root = match doc.trailer.get("Root") {
+        Some(Obj::Ref(n, _)) => *n,
+        _ => return Err("the file has no catalog".into()),
+    };
+    let mut cat = doc.catalog().ok_or("the file has no catalog")?;
+    match cat.get("AcroForm").cloned() {
+        Some(Obj::Ref(n, _)) => update_dict(doc, objects, n, "NeedAppearances", Obj::Bool(true)),
+        Some(Obj::Dict(mut form)) => {
+            form.insert("NeedAppearances".into(), Obj::Bool(true));
+            cat.insert("AcroForm".into(), Obj::Dict(form));
+            objects.insert(root, Obj::Dict(cat));
+            Ok(())
+        }
+        _ => Err("the file has no form".into()),
+    }
 }
 
 /// The offset in `base` named by its last `startxref` line.
@@ -528,6 +725,62 @@ mod tests {
         assert!(save(&base, &doc, &Edits { order: Some(vec![0, 0]), ..Edits::default() }).is_err());
         assert!(save(&base, &doc, &Edits { order: Some(vec![]), ..Edits::default() }).is_err());
         assert!(save(&base, &doc, &Edits { order: Some(vec![5]), ..Edits::default() }).is_err());
+    }
+
+    #[test]
+    fn imported_pages_are_renumbered_placed_and_keep_their_size() {
+        let base = file(&TWO);
+        let doc = Doc::open(base.clone()).unwrap();
+        let other = Doc::open(file(&TWO)).unwrap();
+        let ins = import(&other, &[0], 1).unwrap();
+        let out = save(&base, &doc, &Edits { insert: Some(ins), ..Edits::default() }).unwrap();
+        let check = Doc::open(out).unwrap();
+        let pages = page::pages(&check);
+        assert_eq!(pages.len(), 3);
+        // the target's own pages keep their objects and their places around the insert
+        assert_eq!(pages[0].num, Some(3));
+        assert_eq!(pages[2].num, Some(4));
+        assert_eq!(pages[2].rotation(), 90);
+        // the inserted page takes the size its source tree gave it, and its own object
+        assert_eq!(pages[1].media, [0.0, 0.0, 200.0, 100.0]);
+        let new_num = pages[1].num.expect("the inserted page is an object");
+        assert!(new_num > 4);
+        let page_obj = check.load(new_num);
+        let dict = page_obj.dict().expect("the inserted page is a dictionary");
+        assert_eq!(dict["Type"], Obj::Name("Page".into()));
+        assert_eq!(dict["Parent"], Obj::Ref(2, 0));
+    }
+
+    #[test]
+    fn a_blank_page_takes_the_size_it_is_given() {
+        let base = file(&TWO);
+        let doc = Doc::open(base.clone()).unwrap();
+        let out = save(&base, &doc, &Edits { insert: Some(blank(0, 300.0, 400.0)), ..Edits::default() }).unwrap();
+        let pages = page::pages(&Doc::open(out).unwrap());
+        assert_eq!(pages.len(), 3);
+        assert_eq!(pages[0].media, [0.0, 0.0, 300.0, 400.0]);
+        assert_eq!(pages[1].num, Some(3));
+    }
+
+    #[test]
+    fn a_form_value_is_written_into_its_field_and_viewers_are_asked_to_redraw() {
+        let objects = [
+            "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [4 0 R] >> >>",
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 /MediaBox [0 0 200 100] >>",
+            "<< /Type /Page /Parent 2 0 R /Annots [4 0 R] >>",
+            "<< /Type /Annot /Subtype /Widget /FT /Tx /T (name) /V (old) /Rect [10 10 90 30] /P 3 0 R >>",
+        ];
+        let base = file(&objects);
+        let doc = Doc::open(base.clone()).unwrap();
+        let edit = FieldEdit { node: 4, value: FieldValue::Text("Ada".into()), widgets: Vec::new() };
+        let out = save(&base, &doc, &Edits { fields: vec![edit], ..Edits::default() }).unwrap();
+        let check = Doc::open(out).unwrap();
+        let field = check.load(4);
+        let field_dict = field.dict().expect("the field is a dictionary");
+        assert_eq!(field_dict["V"], text_string("Ada"));
+        let cat = check.catalog().expect("the catalog");
+        let form = cat["AcroForm"].dict().expect("the form");
+        assert_eq!(form["NeedAppearances"], Obj::Bool(true));
     }
 
     #[test]

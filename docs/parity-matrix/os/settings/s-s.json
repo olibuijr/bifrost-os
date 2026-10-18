@@ -40,8 +40,22 @@
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
    "status": "partial",
-   "note": "open-screen-time intent opens the Screen Time page; built on os/team-m-05-settings; not yet verified on Midget",
-   "rea": []
+   "note": "has: open-screen-time intent opens the Screen Time page (screentime/page.rs); missing: App Intents runtime serving it",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found"
+    }
+   ],
+   "ready_note": "covers: the open-screen-time intent in the settings catalogue (settings_intents.rs); Search lists it and it opens its pane."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/ScreenTimePreferencesExtension.appex",
@@ -60,8 +74,17 @@
    "doc": "",
    "bifrost": "springboard/src/shell/screentime/page.rs",
    "status": "partial",
-   "note": "Screen Time page",
-   "rea": []
+   "note": "has: Screen Time page with downtime and app limits (screentime/page.rs:91); missing: family sharing",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::screentime"
+    }
+   ],
+   "ready_note": "covers: Screen Time page with downtime and app limits (screentime/page.rs:91)"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/ScreenTimeSettingsResponseExtension.appex",
@@ -79,8 +102,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/screentime/page.rs",
-   "status": "partial",
-   "note": "Screen Time page",
+   "status": "n/a",
+   "note": "answers Family Sharing screen-time requests from Apple family accounts; BifrOSt has no family group",
    "rea": []
   },
   {
@@ -100,7 +123,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/pacman_update.rs",
    "status": "partial",
-   "note": "Security fixes reach the machine through the pacman check and the user-confirmed install in pacman_update.rs, which are tested headless in its unit tests. Gap: there is no separate background security channel and no automatic security-only install.",
+   "note": "has: Software Update checks pacman for the shell package and installs it after the person confirms, through the recovery guard (pacman_update.rs). Missing: security fixes for the rest of the system. The guard rejects base-system upgrades until a whole-root recovery path exists, and pacman output carries no advisory field, so a security-only install policy needs an advisory feed as well (for example arch-audit against the Arch security tracker, a lookup the person would have to consent to). Left open: it depends on the whole-root recovery design, which is not one agent's task.",
    "rea": []
   },
   {
@@ -118,10 +141,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/pages.rs:1361",
    "status": "partial",
-   "note": "Privacy page",
-   "rea": []
+   "note": "has: Privacy page (pages.rs:1361): App Permissions, Location Services (location_page.rs:159), Analytics & Diagnostics; missing: advanced protections",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: Privacy page (pages.rs:1361): App Permissions, Location Services (location_page.rs:159), Analytics & Diagnostics"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SecurityPrivacyIntentsExtension.appex",
@@ -140,8 +172,22 @@
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
    "status": "partial",
-   "note": "open-privacy intent opens the Privacy page; built on os/team-m-05-settings; not yet verified on Midget",
-   "rea": []
+   "note": "has: open-privacy intent; missing: App Intents runtime serving it",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found"
+    }
+   ],
+   "ready_note": "covers: the open-privacy intent in the settings catalogue (settings_intents.rs); Search lists it and it opens its pane."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SettingsSystemExtensionController.appex",
@@ -158,10 +204,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/settings.rs",
+   "bifrost": "springboard/src/shell/login_items_page.rs",
    "status": "partial",
-   "note": "Settings app pages and actions; intent routing in springboard/src/shell/settings_intents.rs is not yet wired to the app RPC; built on os/team-m-05-settings; not yet verified on Midget",
-   "rea": []
+   "note": "Settings > General > Login Items & Extensions lists the app extensions the installed manifests declare, grouped by kind, and the background agents with a switch per app (login_items_page.rs). System extensions in the sense of kernel and driver extensions do not exist on Linux; kernel modules are the system's.",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::login_items_page::tests"
+    }
+   ],
+   "ready_note": "the Login Items & Extensions pane lists extensions by kind and switches background agents; the checks run the page"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/Sharing.appex",
@@ -180,8 +235,17 @@
    "doc": "",
    "bifrost": "springboard/src/shell/sharing_page.rs",
    "status": "partial",
-   "note": "Same Sharing page; see SharingPref.",
-   "rea": []
+   "note": "has: Sharing page (pages.rs:943, sharing_page.rs:73): computer name, Remote Login, File Sharing, Screen Sharing, Nearby Share, AirPlay & Handoff; missing: Media Sharing and Printer Sharing",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::sharing_page"
+    }
+   ],
+   "ready_note": "covers: Sharing page (pages.rs:943, sharing_page.rs:73): computer name, Remote Login, File Sharing, Screen Sharing, Nearby Share, AirPlay & Handoff"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SharingIntents.appex",
@@ -200,8 +264,22 @@
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
    "status": "partial",
-   "note": "open-sharing intent opens the Sharing page; built on os/team-m-05-settings; not yet verified on Midget",
-   "rea": []
+   "note": "has: open-sharing intent; missing: App Intents runtime serving it",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found"
+    }
+   ],
+   "ready_note": "covers: the open-sharing intent in the settings catalogue (settings_intents.rs); Search lists it and it opens its pane."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SiriAttentionAndInvocationExtension.appex",
@@ -359,8 +437,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/notes-desktop/manifest.toml",
-   "status": "partial",
-   "note": "Notes declares its own intents; no Siri domain intents; built on os/team-m-05-settings; not yet verified on Midget",
+   "status": "n/a",
+   "note": "Siri system-domain App Intents (the Notes domain) belong to Apple's assistant schema; BifrOSt has no assistant. Notes declares its own intents in its manifest, and Search lists them.",
    "rea": []
   },
   {
@@ -579,8 +657,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/videoplayer-desktop/manifest.toml",
-   "status": "partial",
-   "note": "Video Player declares its own intents; no Siri domain intents; built on os/team-m-05-settings; not yet verified on Midget",
+   "status": "n/a",
+   "note": "Siri system-domain App Intents (the video domain) belong to Apple's assistant schema; BifrOSt has no assistant. Video Player declares its own intents in its manifest, and Search lists them.",
    "rea": []
   },
   {
@@ -600,8 +678,17 @@
    "doc": "",
    "bifrost": "springboard/src/shell/update.rs",
    "status": "partial",
-   "note": "Software Update",
-   "rea": []
+   "note": "has: Software Update page (update.rs): version and OTA; missing: update history",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::update"
+    }
+   ],
+   "ready_note": "covers: Software Update page (update.rs): version and OTA"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SoftwareUpdateSettingsExtensionIntents.appex",
@@ -620,8 +707,22 @@
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
    "status": "partial",
-   "note": "open-software-update intent opens the Software Update page; built on os/team-m-05-settings; not yet verified on Midget",
-   "rea": []
+   "note": "has: open-software-update intent; missing: App Intents runtime serving it",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found"
+    }
+   ],
+   "ready_note": "covers: the open-software-update intent in the settings catalogue (settings_intents.rs); Search lists it and it opens its pane."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/Sound.appex",
@@ -640,8 +741,17 @@
    "doc": "",
    "bifrost": "springboard/src/shell/sound_page.rs",
    "status": "partial",
-   "note": "Sound page",
-   "rea": []
+   "note": "has: Sound page (pages.rs:880, sound_page.rs:34): alert volume, alert sound picker, keyboard clicks and haptics, output device list, input device list and input level; missing: per-device output and input volume sliders and balance",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::sound_page"
+    }
+   ],
+   "ready_note": "covers: Sound page (pages.rs:880, sound_page.rs:34): alert volume, alert sound picker, keyboard clicks and haptics, output device list, input device list and input level"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SoundIntentsExtension.appex",
@@ -660,8 +770,22 @@
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
    "status": "partial",
-   "note": "open-sound intent opens the Sounds page; built on os/team-m-05-settings; not yet verified on Midget",
-   "rea": []
+   "note": "has: open-sound intent; missing: App Intents runtime serving it",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found"
+    }
+   ],
+   "ready_note": "covers: the open-sound intent in the settings catalogue (settings_intents.rs); Search lists it and it opens its pane."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SpotlightPreferenceExtension.appex",
@@ -678,10 +802,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/quicksearch.rs",
+   "bifrost": "springboard/src/shell/spotlight_scope.rs, springboard/src/shell/pages.rs, springboard/src/shell/quicksearch.rs",
    "status": "partial",
-   "note": "search and index; no Spotlight settings page",
-   "rea": []
+   "note": "has: search and index (quicksearch.rs); missing: a Spotlight settings page with indexed locations",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotlight_scope::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::spotlight_scope_hides"
+    }
+   ],
+   "ready_note": "covers: Settings > Spotlight with a switch per kind of result and the excluded folder list; Search applies both (quicksearch::scoped)."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SpotlightSettingsIntentsExtension.appex",
@@ -698,10 +836,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/settings_intents.rs",
+   "bifrost": "springboard/src/shell/settings_intents.rs, springboard/src/shell/quicksearch.rs",
    "status": "partial",
-   "note": "The catalogue of pane-opening settings intents is tested in settings_intents::tests (ids valid and unique, pages resolve, manifest listing). Gap: Search does not read the catalogue yet; it matches quicksearch_math::settings_aliases instead.",
-   "rea": []
+   "note": "Settings intents are listed in Search and open their pane (quicksearch settings_intent_rows); not yet verified on Midget.",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found"
+    }
+   ],
+   "ready_note": "Search lists every settings intent as a Shortcuts row (quicksearch settings_intent_rows, called from the shortcut rows) and opens its pane; tested in settings_intents::tests and quicksearch::tests::settings_intents_are_found_as_shortcuts_and_open_their_pane."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/Storage.appex",
@@ -720,8 +872,17 @@
    "doc": "",
    "bifrost": "springboard/src/shell/storage_page.rs",
    "status": "partial",
-   "note": "Storage page",
-   "rea": []
+   "note": "has: Storage page (storage_page.rs:68): per-category usage bars; missing: recommendation actions",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::storage_page"
+    }
+   ],
+   "ready_note": "covers: Storage page (storage_page.rs:68): per-category usage bars"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/StorageDESDXC.appex",
@@ -780,8 +941,22 @@
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
    "status": "partial",
-   "note": "open-storage intent opens the Storage page; built on os/team-m-05-settings; not yet verified on Midget",
-   "rea": []
+   "note": "has: open-storage intent; missing: App Intents runtime serving it",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found"
+    }
+   ],
+   "ready_note": "covers: the open-storage intent in the settings catalogue (settings_intents.rs); Search lists it and it opens its pane."
   },
   {
    "id": "path:/System/Library/PreferencePanes/ScreenTime.prefPane",
@@ -800,8 +975,17 @@
    "doc": "",
    "bifrost": "springboard/src/shell/screentime/page.rs",
    "status": "partial",
-   "note": "Screen Time page",
-   "rea": []
+   "note": "has: Screen Time page (screentime/page.rs:91): downtime and limits; missing: communication limits",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::screentime"
+    }
+   ],
+   "ready_note": "covers: Screen Time page (screentime/page.rs:91): downtime and limits"
   },
   {
    "id": "path:/System/Library/PreferencePanes/Security.prefPane",
@@ -818,10 +1002,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/pages.rs:1361",
    "status": "partial",
-   "note": "Privacy page",
-   "rea": []
+   "note": "has: Privacy page (pages.rs:1361): App Permissions, Location Services, Analytics & Diagnostics; missing: advanced protections",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: Privacy page (pages.rs:1361): App Permissions, Location Services, Analytics & Diagnostics"
   },
   {
    "id": "path:/System/Library/PreferencePanes/SharingPref.prefPane",
@@ -840,8 +1033,17 @@
    "doc": "",
    "bifrost": "springboard/src/shell/sharing_page.rs",
    "status": "partial",
-   "note": "Sharing page: computer name, Remote Login, File Sharing, Screen Sharing via the privileged service, Nearby Share, AirPlay & Handoff. Missing: Media Sharing, Printer Sharing, Content Caching, Internet Sharing, local host name rows. Host only.",
-   "rea": []
+   "note": "has: Sharing page (sharing_page.rs:73): computer name, Remote Login, File Sharing, Screen Sharing, Nearby Share, AirPlay & Handoff; missing: Media Sharing and Printer Sharing",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::sharing_page"
+    }
+   ],
+   "ready_note": "covers: Sharing page (sharing_page.rs:73): computer name, Remote Login, File Sharing, Screen Sharing, Nearby Share, AirPlay & Handoff"
   },
   {
    "id": "path:/System/Library/PreferencePanes/SoftwareUpdate.prefPane",
@@ -860,8 +1062,17 @@
    "doc": "",
    "bifrost": "springboard/src/shell/update.rs",
    "status": "partial",
-   "note": "Software Update",
-   "rea": []
+   "note": "has: Software Update page (update.rs); missing: update history",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::update"
+    }
+   ],
+   "ready_note": "covers: Software Update page (update.rs)"
   },
   {
    "id": "path:/System/Library/PreferencePanes/Sound.prefPane",
@@ -880,8 +1091,17 @@
    "doc": "",
    "bifrost": "springboard/src/shell/sound_page.rs",
    "status": "partial",
-   "note": "Sound page",
-   "rea": []
+   "note": "has: Sound page (pages.rs:880, sound_page.rs:34): alert volume, alert sound picker, keyboard clicks and haptics, output device list, input device list and input level; missing: per-device output and input volume sliders and balance",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::sound_page"
+    }
+   ],
+   "ready_note": "covers: Sound page (pages.rs:880, sound_page.rs:34): alert volume, alert sound picker, keyboard clicks and haptics, output device list, input device list and input level"
   },
   {
    "id": "path:/System/Library/PreferencePanes/Speech.prefPane",
@@ -898,10 +1118,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/accessibility/speech.rs",
+   "bifrost": "springboard/src/shell/accessibility/speech.rs, springboard/src/shell/pages.rs",
    "status": "partial",
-   "note": "screen reader speech through espeak-ng at a fixed rate; no voice or rate settings page; built on os/team-m-05-settings; not yet verified on Midget",
-   "rea": []
+   "note": "has: screen reader speech through espeak-ng at a fixed rate; missing: voice and rate settings page",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::speech::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages::tests::the_speech_voice_row"
+    }
+   ],
+   "ready_note": "covers: Screen Reader speech with the voice and rate page (pages.rs ScreenReaderSpeech, SPEECH_RATES, SPEECH_VOICES) and the speaker (speech.rs)."
   },
   {
    "id": "path:/System/Library/PreferencePanes/Spotlight.prefPane",
@@ -920,8 +1154,17 @@
    "doc": "",
    "bifrost": "springboard/src/shell/quicksearch.rs",
    "status": "partial",
-   "note": "search and index; no Spotlight settings page",
-   "rea": []
+   "note": "has: search and index (quicksearch.rs); missing: Spotlight settings page",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch"
+    }
+   ],
+   "ready_note": "covers: search and index (quicksearch.rs)"
   },
   {
    "id": "path:/System/Library/PreferencePanes/StartupDisk.prefPane",

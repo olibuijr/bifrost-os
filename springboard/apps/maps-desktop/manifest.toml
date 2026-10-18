@@ -1,6 +1,6 @@
 id = "is.olibuijr.maps.desktop"
 name = "Maps"
-version = "0.5.1"
+version = "0.6.3"
 exec = "bifrost-maps"
 icon = "icon.png"
 min_shell = "0.4.84"
@@ -13,3 +13,5 @@ window = "full-size"
 schemes = ["maps", "map", "geo"]
 handles = ["com.topografix.gpx:default"]
 
+[privacy]
+location = "Maps shows where you are on the map and the directions from there."

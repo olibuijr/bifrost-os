@@ -114,6 +114,93 @@ impl DonationLog {
     }
 }
 
+/// One suggestion from the shell-wide index: which app donated it, and the decayed score.
+#[derive(Clone, Debug, PartialEq)]
+pub struct AppRelevant {
+    pub app_id: String,
+    pub intent_id: String,
+    pub entity: Option<String>,
+    pub score: f64,
+}
+
+/// The cross-app donation index that the system keeps (the shell's suggestion list reads it): one [`DonationLog`] per
+/// app, ranked together. Each app's donations keep their own cap; the index only combines them, so an app that donates
+/// a lot does not crowd out the others' history.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SharedDonationIndex {
+    apps: std::collections::BTreeMap<String, DonationLog>,
+}
+
+impl SharedDonationIndex {
+    pub fn new() -> SharedDonationIndex {
+        SharedDonationIndex::default()
+    }
+    /// Number of apps that have donated.
+    pub fn app_count(&self) -> usize {
+        self.apps.len()
+    }
+    /// Records one run of `intent_id` by `app_id` at unix second `at`.
+    pub fn donate(&mut self, app_id: &str, intent_id: &str, entity: Option<&str>, at: u64) {
+        self.apps.entry(app_id.to_string()).or_default().donate(intent_id, entity, at);
+    }
+    /// Removes every donation of an app that was removed from the system; returns how many went.
+    pub fn forget_app(&mut self, app_id: &str) -> usize {
+        self.apps.remove(app_id).map_or(0, |log| log.len())
+    }
+    /// The best `limit` (app, intent, entity) suggestions across all apps at unix second `now`. Scores use the same
+    /// decay as [`DonationLog::relevant`]. Equal scores are ordered by app id, then intent id, then entity.
+    pub fn relevant(&self, now: u64, limit: usize) -> Vec<AppRelevant> {
+        let mut out: Vec<AppRelevant> = Vec::new();
+        for (app, log) in &self.apps {
+            for r in log.relevant(now, usize::MAX) {
+                out.push(AppRelevant { app_id: app.clone(), intent_id: r.intent_id, entity: r.entity, score: r.score });
+            }
+        }
+        out.sort_by(|a, b| {
+            b.score
+                .total_cmp(&a.score)
+                .then_with(|| a.app_id.cmp(&b.app_id))
+                .then_with(|| a.intent_id.cmp(&b.intent_id))
+                .then_with(|| a.entity.cmp(&b.entity))
+        });
+        out.truncate(limit);
+        out
+    }
+}
+
+impl SharedDonationIndex {
+    /// The index as a JSON object with one key per app, each holding that app's donation array (`DonationLog::to_json`).
+    pub fn to_json(&self) -> Json {
+        Json::Obj(self.apps.iter().map(|(app, log)| (app.clone(), log.to_json())).collect())
+    }
+    /// Reads an index written by `to_json`. One damaged app entry fails the whole read (`None`).
+    pub fn from_json(j: &Json) -> Option<SharedDonationIndex> {
+        let Json::Obj(entries) = j else { return None };
+        let mut ix = SharedDonationIndex::new();
+        for (app, v) in entries {
+            ix.apps.insert(app.clone(), DonationLog::from_json(v)?);
+        }
+        Some(ix)
+    }
+    /// Writes the index to `path` through a temporary file and a rename, so a crash never leaves half an index.
+    pub fn save(&self, path: &std::path::Path) -> std::io::Result<()> {
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
+        let tmp = path.with_extension("tmp");
+        std::fs::write(&tmp, self.to_json().encode())?;
+        std::fs::rename(&tmp, path)
+    }
+    /// The index at `path`. An empty index when the file is missing or damaged, so the suggestions start over.
+    pub fn load(path: &std::path::Path) -> SharedDonationIndex {
+        std::fs::read_to_string(path)
+            .ok()
+            .and_then(|t| bifrost_core::json::parse(&t).ok())
+            .and_then(|j| SharedDonationIndex::from_json(&j))
+            .unwrap_or_default()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -226,5 +313,60 @@ mod tests {
         assert!(DonationLog::from_json(&json::parse(r#"[{"intent":"x","entity":3,"at":1}]"#).unwrap()).is_none());
         assert!(DonationLog::from_json(&json::parse(r#"[{"intent":"x","entity":null,"at":-1}]"#).unwrap()).is_none(), "time is not negative");
         assert!(DonationLog::from_json(&json::parse(r#"{"intent":"x"}"#).unwrap()).is_none(), "a log is an array");
+    }
+}
+
+#[cfg(test)]
+mod shared_tests {
+    use super::*;
+
+    #[test]
+    fn donations_from_several_apps_rank_together_and_keep_their_app() {
+        let mut ix = SharedDonationIndex::new();
+        let now = 1_000_000;
+        ix.donate("mail", "compose", None, now);
+        ix.donate("music", "play", Some("album-1"), now);
+        ix.donate("music", "play", Some("album-1"), now);
+        assert_eq!(ix.app_count(), 2);
+        let top = ix.relevant(now, 10);
+        assert_eq!(top.len(), 2);
+        assert_eq!((top[0].app_id.as_str(), top[0].intent_id.as_str()), ("music", "play"));
+        assert_eq!(top[0].entity.as_deref(), Some("album-1"));
+        assert!((top[0].score - 2.0).abs() < 1e-9);
+        assert_eq!(top[1].app_id, "mail");
+    }
+
+    #[test]
+    fn the_limit_applies_across_apps_and_a_removed_app_leaves_nothing_behind() {
+        let mut ix = SharedDonationIndex::new();
+        ix.donate("a", "x", None, 10);
+        ix.donate("b", "y", None, 10);
+        ix.donate("c", "z", None, 10);
+        assert_eq!(ix.relevant(10, 2).len(), 2);
+        assert_eq!(ix.forget_app("b"), 1);
+        assert_eq!(ix.forget_app("b"), 0);
+        assert_eq!(ix.relevant(10, 10).iter().map(|r| r.app_id.as_str()).collect::<Vec<_>>(), vec!["a", "c"]);
+    }
+
+    #[test]
+    fn the_shared_index_survives_a_save_and_a_load() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("donations.json");
+        assert_eq!(SharedDonationIndex::load(&path), SharedDonationIndex::new(), "no file yet");
+        let mut ix = SharedDonationIndex::new();
+        ix.donate("music", "play", Some("album-1"), 500);
+        ix.donate("mail", "compose", None, 400);
+        ix.save(&path).unwrap();
+        let again = SharedDonationIndex::load(&path);
+        assert_eq!(again, ix);
+        assert_eq!(again.relevant(500, 10), ix.relevant(500, 10));
+    }
+
+    #[test]
+    fn a_damaged_index_file_loads_as_empty() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("donations.json");
+        std::fs::write(&path, "{\"mail\": 3}").unwrap();
+        assert_eq!(SharedDonationIndex::load(&path), SharedDonationIndex::new());
     }
 }

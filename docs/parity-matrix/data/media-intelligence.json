@@ -45,7 +45,6 @@
   ],
   "gaps": [
     "Face detection and person grouping for images, with a query API by asset, entity or face ID",
-    "On-device ML inference runtime that the analysis requests would run on",
     "Video highlight scoring (engaging segments) over decoded frames",
     "Content-based keyframe selection (representative frame) beyond container sync samples",
     "Media analysis errors for asset loading and video analysis (face grouping errors are typed)"

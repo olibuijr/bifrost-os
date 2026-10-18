@@ -13,6 +13,7 @@ use super::audio_out::AudioOut;
 use super::audio_out::NullOut;
 use super::mp4::{self, Demuxer, Kind};
 use super::source::{FileSource, Source};
+use super::timestretch::{self, Stretcher};
 use super::{aac, convert, Codec, Error, Picture, Pixels, VideoDecoder};
 use crate::gfx::Image;
 use std::ffi::c_int;
@@ -48,15 +49,24 @@ struct Clock {
     media_ms: f64,
     anchor: Instant,
     running: bool,
+    /// media milliseconds that pass per wall-clock millisecond: the playback rate
+    rate: f64,
 }
 
 impl Clock {
     fn now(&self) -> f64 {
         if self.running {
-            self.media_ms + self.anchor.elapsed().as_secs_f64() * 1000.0
+            self.media_ms + self.anchor.elapsed().as_secs_f64() * 1000.0 * self.rate
         } else {
             self.media_ms
         }
+    }
+
+    /// Changes the rate without moving the clock: the time so far is kept and counted from now on at the new rate.
+    fn set_rate(&mut self, rate: f64) {
+        self.media_ms = self.now();
+        self.anchor = Instant::now();
+        self.rate = rate;
     }
 
     fn set(&mut self, media_ms: f64, running: bool) {
@@ -86,6 +96,8 @@ struct Shared {
     viewport: (u32, u32),
     /// the UI draws pictures on the GPU: leave them in the decoder's buffers
     zero_copy: bool,
+    /// the playback rate asked for (0.5 to 3.0); the audio thread time-stretches to it and the clock runs at it
+    rate: f32,
     clock: Clock,
 }
 
@@ -160,7 +172,8 @@ impl Player {
             frame: None,
             viewport: DEFAULT_VIEWPORT,
             zero_copy: false,
-            clock: Clock { media_ms: 0.0, anchor: Instant::now(), running: false },
+            rate: 1.0,
+            clock: Clock { media_ms: 0.0, anchor: Instant::now(), running: false, rate: 1.0 },
         }));
         let worker = {
             let shared = shared.clone();
@@ -191,6 +204,20 @@ impl Player {
             let t = s.clock.now();
             s.clock.set(t, false);
         }
+    }
+
+    /// Sets the playback rate, clamped to 0.5 to 3.0 (`timestretch::clamp_rate`). The audio is time-stretched so its pitch
+    /// holds, and the clock the pictures follow runs at the same rate. The position stays continuous across the change.
+    pub fn set_rate(&mut self, rate: f32) {
+        let rate = timestretch::clamp_rate(rate);
+        let mut s = self.shared.lock().unwrap_or_else(|p| p.into_inner());
+        s.rate = rate;
+        s.clock.set_rate(rate as f64);
+    }
+
+    /// The playback rate in force (1.0 is normal speed).
+    pub fn rate(&self) -> f32 {
+        self.shared.lock().unwrap_or_else(|p| p.into_inner()).rate
     }
 
     /// Stops the threads; the player is finished afterwards.
@@ -602,6 +629,10 @@ fn audio_loop(shared: Arc<Mutex<Shared>>, notify_fd: c_int, demux: Demux, mut ou
     let mut eof = false;
     // frames written to the device since the last discard
     let mut written = 0u64;
+    // the time-stretch for rates other than 1 (fed only while `applied_rate` is not 1), and the rate the output is at
+    let mut stretch = Stretcher::new(1.0);
+    let mut applied_rate = 1.0f32;
+    let mut stretched = Vec::new();
     loop {
         {
             let mut s = shared.lock().unwrap_or_else(|p| p.into_inner());
@@ -617,6 +648,16 @@ fn audio_loop(shared: Arc<Mutex<Shared>>, notify_fd: c_int, demux: Demux, mut ou
                 out.discard();
                 decoder.reset();
                 resampler = aac::Resampler::new(decoder.rate(), decoder.channels());
+                stretch.reset();
+            }
+        }
+        let want = shared.lock().unwrap_or_else(|p| p.into_inner()).rate;
+        if want != applied_rate {
+            applied_rate = want;
+            stretch.set_rate(want);
+            if want == 1.0 {
+                // the stretcher is bypassed at 1: drop what it still holds so a later stretch starts clean
+                stretch.reset();
             }
         }
         if !apply_seek(&shared, &demux, |s| &mut s.audio_wait) {
@@ -650,6 +691,15 @@ fn audio_loop(shared: Arc<Mutex<Shared>>, notify_fd: c_int, demux: Demux, mut ou
                 resampler.retune(decoder.rate(), decoder.channels());
                 pcm.clear();
                 resampler.convert(&samples, &mut pcm);
+                if applied_rate != 1.0 {
+                    stretched.clear();
+                    stretch.push(&pcm, &mut stretched);
+                    std::mem::swap(&mut pcm, &mut stretched);
+                    if pcm.is_empty() {
+                        // the stretcher is still filling its first window
+                        continue;
+                    }
+                }
                 if let Err(e) = super::audio_out::write_with_retry(&mut *out, &pcm, &super::audio_out::WRITE_RETRY_BACKOFF) {
                     shared.lock().unwrap_or_else(|p| p.into_inner()).error = Some(format!("audio output: {e}"));
                     notify(notify_fd);
@@ -662,7 +712,8 @@ fn audio_loop(shared: Arc<Mutex<Shared>>, notify_fd: c_int, demux: Demux, mut ou
                 let end_ms = sample.pts_ms + sample.duration_ms;
                 let mut s = shared.lock().unwrap_or_else(|p| p.into_inner());
                 if s.generation == generation && s.playing {
-                    s.clock.set(end_ms - queued as f64 * 1000.0 / aac::OUT_RATE as f64, true);
+                    // the frames still queued are stretched: each covers `applied_rate` frames of the movie
+                    s.clock.set(end_ms - queued as f64 * 1000.0 / aac::OUT_RATE as f64 * applied_rate as f64, true);
                 }
             }
             Ok(None) => eof = true,
@@ -919,5 +970,40 @@ mod tests {
         assert!(matches!(p.state(), State::Error(ref e) if e.contains("VSP") || e.contains("libavcodec") || e.contains("decoder") || e.starts_with("audio output:")) || !matches!(p.state(), State::Error(_)), "{:?}", p.state());
         assert!(Player::open(&dir.join("missing.mp4")).is_err());
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn the_clock_runs_at_the_playback_rate_and_keeps_its_place_when_the_rate_changes() {
+        let back = Instant::now().checked_sub(Duration::from_millis(200)).unwrap();
+        let mut c = Clock { media_ms: 100.0, anchor: back, running: true, rate: 2.0 };
+        let at_double = c.now();
+        // 100 ms already counted plus 200 ms of wall time at 2x (generous bounds: the test thread may be descheduled)
+        assert!((500.0..600.0).contains(&at_double), "{at_double}");
+        c.set_rate(1.0);
+        let after = c.now();
+        assert!(after >= at_double && after < at_double + 100.0, "the clock does not jump when the rate changes: {after}");
+        let stopped = Clock { media_ms: 10.0, anchor: back, running: false, rate: 3.0 };
+        assert_eq!(stopped.now(), 10.0, "a stopped clock does not move at any rate");
+    }
+
+    #[test]
+    fn the_rate_is_clamped_to_what_the_stretcher_accepts() {
+        let mut p = player(BASELINE);
+        assert_eq!(p.rate(), 1.0, "normal speed until asked");
+        p.set_rate(9.0);
+        assert_eq!(p.rate(), 3.0, "the ceiling is 3x");
+        p.set_rate(0.1);
+        assert_eq!(p.rate(), 0.5, "the floor is half speed");
+        p.set_rate(f32::NAN);
+        assert_eq!(p.rate(), 1.0, "NaN means normal speed");
+    }
+
+    #[test]
+    fn a_faster_rate_moves_the_playhead_faster() {
+        let mut p = player(BASELINE);
+        p.set_rate(3.0);
+        pump(&mut p, 400, |_| false);
+        // 400 ms of wall time at 3x is the whole one-second movie; at 1x the playhead would be under 400 ms
+        assert!(p.position_ms() > 600.0, "{} ms", p.position_ms());
     }
 }

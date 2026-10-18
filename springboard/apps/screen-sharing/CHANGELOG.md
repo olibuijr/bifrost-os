@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Password (VNC) authentication: a Password box next to the address, Tab moves between them, and the password is used only when the server asks for one and is forgotten once connected. Servers that need a password and get none say so.
+
 ## 0.1.3 — 2026-10-14
 
 - Remove the unused connection polling hook; dispatch completions and the shell service pipe wake the viewer when its state changes.

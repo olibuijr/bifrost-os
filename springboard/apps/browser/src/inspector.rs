@@ -364,17 +364,6 @@ impl Inspector {
         self.set(Some(!self.open), None, pool);
     }
 
-    pub fn forget(&mut self, view: WebViewId) {
-        self.logs.remove(&view);
-        self.net.forget(view);
-        self.trees.remove(&view);
-        self.sources.remove(&view);
-        self.storage.remove(&view);
-        self.caps.remove(&view);
-        if self.sel.as_ref().is_some_and(|s| s.view == view) {
-            self.sel = None;
-        }
-    }
 
     pub fn blur(&mut self) {
         self.focus = Focus::None;
@@ -458,8 +447,39 @@ impl Inspector {
                 }
                 false
             }
+            WebViewEvent::Closed(id) => {
+                self.forget(*id);
+                false
+            }
+            WebViewEvent::EngineExited => {
+                self.clear_all();
+                false
+            }
             _ => false,
         }
+    }
+
+    /// Discards all cached trees, sources, storage, logs and network state for `view` when its tab closes.
+    pub fn forget(&mut self, view: WebViewId) {
+        self.logs.remove(&view);
+        self.caps.remove(&view);
+        self.trees.remove(&view);
+        self.sources.remove(&view);
+        self.storage.remove(&view);
+        self.net.forget(view);
+        if self.sel.as_ref().is_some_and(|s| s.view == view) {
+            self.sel = None;
+        }
+    }
+
+    /// Clears all inspector state when the engine exits.
+    pub fn clear_all(&mut self) {
+        self.logs.clear();
+        self.caps.clear();
+        self.trees.clear();
+        self.sources.clear();
+        self.storage.clear();
+        self.sel = None;
     }
 
     /// Takes the token-correlated answers that belong to the panel (network drain, element tree).
@@ -772,7 +792,7 @@ impl Inspector {
             self.select(pool, v, Some(path));
             self.request_tree(pool, v);
         }
-        if self.con_req.is_none() && self.con_polled.is_none_or(|t| t.elapsed() >= CON_POLL) {
+        if self.panel == Panel::Console && self.con_req.is_none() && self.con_polled.is_none_or(|t| t.elapsed() >= CON_POLL) {
             self.request_console(pool, view);
         }
         if let Some(v) = self.refresh.take() {

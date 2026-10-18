@@ -66,6 +66,39 @@ pub fn mode_request(target: &DisplayMode, hz: f32) -> ModeRequest {
 
 /// The file (in the shell's data directory) that keeps the Refresh Rate choice.
 pub const REFRESH_CHOICE_FILE: &str = "display-refresh";
+/// The file that keeps the Resolution choice: "native" or "WIDTHxHEIGHT".
+pub const RESOLUTION_CHOICE_FILE: &str = "display-resolution";
+
+/// The text stored for a Resolution choice: `None` is the panel's native size.
+pub fn resolution_text(choice: Option<(u32, u32)>) -> String {
+    choice.map_or_else(|| "native".to_string(), |(w, h)| format!("{w}x{h}"))
+}
+
+/// The Resolution choice a stored text names (`None` for native, or when the text is not a size).
+pub fn parse_resolution(text: &str) -> Option<(u32, u32)> {
+    let (w, h) = text.trim().split_once('x')?;
+    Some((w.parse().ok()?, h.parse().ok()?))
+}
+
+/// The Resolution choice kept in the data directory: native when the file is missing.
+pub fn load_resolution(dir: &std::path::Path) -> Option<(u32, u32)> {
+    std::fs::read_to_string(dir.join(RESOLUTION_CHOICE_FILE)).ok().and_then(|t| parse_resolution(&t))
+}
+
+/// Keeps the Resolution choice in the data directory.
+pub fn save_resolution(dir: &std::path::Path, choice: Option<(u32, u32)>) -> std::io::Result<()> {
+    std::fs::write(dir.join(RESOLUTION_CHOICE_FILE), resolution_text(choice))
+}
+
+/// Settings > Displays > Resolution row label: "Native" or "2560 × 1440".
+pub fn resolution_label(choice: Option<(u32, u32)>) -> String {
+    choice.map_or_else(|| "Native".to_string(), |(w, h)| format!("{w} × {h}"))
+}
+
+/// Resolution picker row `k`: 0 is the native size, n the (n-1)th size the panel offers (largest first).
+pub fn resolution_at(k: usize, sizes: &[(u32, u32)]) -> Option<(u32, u32)> {
+    k.checked_sub(1).and_then(|i| sizes.get(i).copied())
+}
 
 /// Settings > Displays > Refresh Rate: the fastest refresh the panel offers at its size (the default), the panel's
 /// preferred mode, or one rate in hertz.
@@ -461,7 +494,7 @@ pub fn require_screen_recording(app_id: &str) -> Result<(), String> {
         Status::Authorized => Ok(()),
         Status::NotDetermined => {
             let name = apphost::installed().iter().find(|a| a.manifest.id == app_id).map(|a| a.manifest.name.clone()).unwrap_or_else(|| app_id.to_string());
-            privacy_permissions::queue_prompt(app_id, &name, Kind::Media(Media::Screen));
+            privacy_permissions::queue_prompt(app_id, &name, Kind::Media(Media::Screen), "");
             Err("screen recording is not authorized yet: the person has been asked".into())
         }
         Status::Restricted => Err("screen recording is restricted on this system".into()),
@@ -472,6 +505,25 @@ pub fn require_screen_recording(app_id: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_resolution_choice_is_native_by_default_and_round_trips_a_size() {
+        let dir = std::env::temp_dir().join(format!("display-resolution-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        assert_eq!(load_resolution(&dir), None, "a missing file is the native size");
+        save_resolution(&dir, Some((1920, 1200))).unwrap();
+        assert_eq!(std::fs::read_to_string(dir.join(RESOLUTION_CHOICE_FILE)).unwrap(), "1920x1200");
+        assert_eq!(load_resolution(&dir), Some((1920, 1200)));
+        save_resolution(&dir, None).unwrap();
+        assert_eq!(std::fs::read_to_string(dir.join(RESOLUTION_CHOICE_FILE)).unwrap(), "native");
+        assert_eq!(load_resolution(&dir), None);
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(parse_resolution("garbage"), None);
+        assert_eq!(resolution_at(0, &[(2560, 1600)]), None, "row 0 is native");
+        assert_eq!(resolution_at(1, &[(2560, 1600), (1920, 1200)]), Some((2560, 1600)));
+        assert_eq!(resolution_at(3, &[(2560, 1600)]), None, "a row past the list is refused");
+        assert_eq!(resolution_label(Some((2560, 1440))), "2560 × 1440");
+    }
 
     #[test]
     fn the_refresh_choice_file_defaults_to_highest_and_round_trips_a_picked_rate() {

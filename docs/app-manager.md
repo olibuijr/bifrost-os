@@ -17,7 +17,8 @@ relative scheduling priority under contention, not a fixed CPU quota.
 
 SDK Suspend/Resume adjusts resource priority alongside existing save-state
 callbacks. Native focus comes from Wayland foreign-window events. Unfocused
-desktop apps are not frozen. SDK close still sends Quit before terminating the
+desktop apps are not frozen unless the Settings switch "Suspend Background Apps"
+is on (see Background suspension below). SDK close still sends Quit before terminating the
 whole owned cgroup. Remote's explicitly brokered sharing service lives outside
 its UI cgroup, so closing the UI does not stop sharing.
 
@@ -31,10 +32,18 @@ No resource polling or sleep is added to the render loop.
 Desktop native app ids with open windows are saved to `open-native-windows.json`
 in the shell data dir when that set changes, and reopened at shell start. Window
 geometry and documents are not restored. This resource manager does not add
-app-specific memory-warning callbacks, or suspension based on occlusion. Apps
+app-specific memory-warning callbacks. Apps
 retain their existing state-save behavior. Unpackaged Arch launchers remain
 outside installed-package policy. Budgets are system defaults, not tuned
 per-app measurements or claimed memory savings.
+
+## Background suspension (`springboard/src/shell/background.rs`)
+
+With Settings > "Suspend Background Apps" on (`suspend_background`), an external app that nothing shows is stopped with
+`SIGSTOP` after the grace period in `bifrost_core::occlusion`. It is resumed with `SIGCONT` when it is focused or seen
+again. Turning the switch off resumes every app the shell stopped. The shell keeps one model per external app slot and
+feeds it whether the app is focused and whether any of its windows is on screen. Covering is not tracked yet, so an app
+with any shown window counts as on screen.
 
 ## Window lifecycle on the desktop (2026-10-08)
 

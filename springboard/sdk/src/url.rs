@@ -6,6 +6,8 @@
 //! too (lab servers, tests); redirects (301/302/303/307/308) are followed up to 5 hops.
 
 use crate::dispatch::{DispatchQueue, Qos};
+use crate::proxy_settings::{ProxyServer, ProxySettings};
+use crate::url_configuration::URLSessionConfiguration;
 use springboard::deildu::http::{Stream, Tls, Transport};
 use std::collections::HashMap;
 use std::io::{Read, Write};
@@ -145,6 +147,10 @@ impl URLCache {
 pub struct URLSession {
     transport: Arc<dyn Transport>,
     cache: Option<Arc<URLCache>>,
+    /// The session's defaults: request and resource timeouts, and the headers every request carries.
+    configuration: URLSessionConfiguration,
+    /// The system proxies and the hosts that skip them.
+    proxy: ProxySettings,
 }
 
 /// `NSURLSessionTransferSizeUnknown`.
@@ -243,11 +249,32 @@ impl URLSession {
     /// `URLSession.shared`: the real TLS transport and a 16 MiB memory cache.
     pub fn shared() -> URLSession {
         static SHARED: OnceLock<URLSession> = OnceLock::new();
-        SHARED.get_or_init(|| URLSession { transport: Arc::new(Tls::new()), cache: Some(Arc::new(URLCache::new(16 << 20))) }).clone()
+        SHARED
+            .get_or_init(|| URLSession {
+                transport: Arc::new(Tls::new()),
+                cache: Some(Arc::new(URLCache::new(16 << 20))),
+                configuration: URLSessionConfiguration::default(),
+                proxy: ProxySettings::from_env(|k| std::env::var(k).ok()),
+            })
+            .clone()
     }
-    /// A session over any transport (tests), optionally with a cache.
+    /// A session over any transport (tests), optionally with a cache. No proxy and the default configuration.
     pub fn with_transport(transport: Arc<dyn Transport>, cache: Option<Arc<URLCache>>) -> URLSession {
-        URLSession { transport, cache }
+        URLSession { transport, cache, configuration: URLSessionConfiguration::default(), proxy: ProxySettings::default() }
+    }
+    /// The same session with `configuration` as its defaults (`URLSession(configuration:)`).
+    pub fn with_configuration(mut self, configuration: URLSessionConfiguration) -> URLSession {
+        self.configuration = configuration;
+        self
+    }
+    /// The same session with `proxy` in place of the system's (`connectionProxyDictionary`).
+    pub fn with_proxy(mut self, proxy: ProxySettings) -> URLSession {
+        self.proxy = proxy;
+        self
+    }
+    /// The session's configuration.
+    pub fn configuration(&self) -> &URLSessionConfiguration {
+        &self.configuration
     }
     pub fn url_cache(&self) -> Option<&Arc<URLCache>> {
         self.cache.as_ref()
@@ -438,6 +465,40 @@ impl URLSession {
         }
     }
 
+    /// The connection to `p` through `proxy`. A plain `http` request goes to the proxy as it is (the proxy
+    /// reads the absolute target, see [`request_target`]). An `https` request asks the proxy for a tunnel with
+    /// `CONNECT` and runs TLS over it once the proxy answers `200`.
+    fn connect_via_proxy(&self, proxy: &ProxyServer, p: &Parsed) -> Result<Box<dyn Stream>, URLError> {
+        let mut conn = self
+            .transport
+            .connect(&proxy.host, proxy.port, false)
+            .map_err(|e| URLError::CannotConnect(format!("proxy {}: {e}", proxy.host)))?;
+        if !p.tls {
+            return Ok(conn);
+        }
+        let authority = format!("{}:{}", p.host, p.port);
+        let connect = format!("CONNECT {authority} HTTP/1.1\r\nHost: {authority}\r\n\r\n");
+        conn.write_all(connect.as_bytes()).map_err(|e| URLError::CannotConnect(e.to_string()))?;
+        conn.flush().map_err(|e| URLError::CannotConnect(e.to_string()))?;
+        let mut head = Vec::new();
+        let mut byte = [0u8; 1];
+        while !head.ends_with(b"\r\n\r\n") {
+            if head.len() > MAX_HEADER_LEN {
+                return Err(URLError::BadServerResponse("proxy header too long".into()));
+            }
+            match conn.read(&mut byte) {
+                Ok(0) => return Err(URLError::BadServerResponse("proxy closed the tunnel".into())),
+                Ok(_) => head.push(byte[0]),
+                Err(e) => return Err(URLError::CannotConnect(e.to_string())),
+            }
+        }
+        let status = connect_status(&head).ok_or_else(|| URLError::BadServerResponse("proxy sent no status line".into()))?;
+        if status != 200 {
+            return Err(URLError::CannotConnect(format!("proxy refused the tunnel to {authority} with status {status}")));
+        }
+        self.transport.upgrade(&p.host, conn).map_err(|e| URLError::CannotConnect(format!("{}: {e}", p.host)))
+    }
+
     /// One request with redirects. Redirect bodies are skipped; `on_sent` sees each body chunk written, and
     /// `on_response`/`on_chunk` see the final reply.
     fn fetch(
@@ -449,7 +510,11 @@ impl URLSession {
         on_response: &mut dyn FnMut(&HTTPURLResponse),
         on_chunk: &mut dyn FnMut(&[u8]) -> bool,
     ) -> Result<HTTPURLResponse, URLError> {
-        let deadline = Instant::now() + req.timeout;
+        let mut prepared = req.clone();
+        self.configuration.prepare(&mut prepared);
+        let req = &prepared;
+        // the request timeout (capped by the session) and the resource timeout both bound the transfer
+        let deadline = Instant::now() + req.timeout.min(self.configuration.timeout_interval_for_resource);
         let (mut url, mut method, mut payload) = (req.url.clone(), req.method.clone(), payload);
         for _ in 0..=MAX_REDIRECTS {
             let (resp, redirect) = self.once(&url, &method, &req.headers, payload, cancel, deadline, on_sent, on_response, on_chunk)?;
@@ -481,8 +546,13 @@ impl URLSession {
         on_chunk: &mut dyn FnMut(&[u8]) -> bool,
     ) -> Result<(HTTPURLResponse, Option<String>), URLError> {
         let p = parse_url(url)?;
-        let mut conn = self.transport.connect(&p.host, p.port, p.tls).map_err(|e| URLError::CannotConnect(format!("{}: {e}", p.host)))?;
-        let mut head = format!("{method} {} HTTP/1.1\r\nHost: {}\r\nUser-Agent: BifrostApp/1\r\nAccept: */*\r\nConnection: close\r\n", p.target, p.host_header);
+        let proxy = self.proxy.proxy_for(if p.tls { "https" } else { "http" }, &p.host).cloned();
+        let mut conn = match &proxy {
+            Some(px) => self.connect_via_proxy(px, &p)?,
+            None => self.transport.connect(&p.host, p.port, p.tls).map_err(|e| URLError::CannotConnect(format!("{}: {e}", p.host)))?,
+        };
+        let target = request_target(&p, url, proxy.is_some());
+        let mut head = format!("{method} {target} HTTP/1.1\r\nHost: {}\r\nUser-Agent: BifrostApp/1\r\nAccept: */*\r\nConnection: close\r\n", p.host_header);
         for (k, v) in headers {
             head.push_str(&format!("{k}: {v}\r\n"));
         }
@@ -601,6 +671,24 @@ pub(crate) struct Parsed {
     host_header: String,
     port: u16,
     target: String,
+}
+
+/// The request target written on the request line: the path and query, or the whole absolute URL when a plain
+/// `http` request goes through a proxy (a proxy forwards the absolute form).
+pub(crate) fn request_target(p: &Parsed, url: &str, proxied: bool) -> String {
+    if proxied && !p.tls {
+        url.to_string()
+    } else {
+        p.target.clone()
+    }
+}
+
+/// The status code of a proxy's reply to `CONNECT`, read from its status line (`HTTP/1.1 200 Connection
+/// established`). None when the line has no numeric code.
+pub(crate) fn connect_status(head: &[u8]) -> Option<u16> {
+    let line = head.split(|b| *b == b'\n').next()?;
+    let text = String::from_utf8_lossy(line);
+    text.split_whitespace().nth(1)?.parse().ok()
 }
 
 pub(crate) fn parse_url(url: &str) -> Result<Parsed, URLError> {
@@ -812,6 +900,22 @@ mod upload_tests {
         let path = dir.path().join("payload.bin");
         std::fs::write(&path, bytes).unwrap();
         (dir, path)
+    }
+
+    #[test]
+    fn a_plain_http_request_through_a_proxy_uses_the_absolute_target() {
+        let p = parse_url("http://example.com/a?b=1").unwrap();
+        assert_eq!(request_target(&p, "http://example.com/a?b=1", true), "http://example.com/a?b=1");
+        assert_eq!(request_target(&p, "http://example.com/a?b=1", false), "/a?b=1");
+        let s = parse_url("https://example.com/a").unwrap();
+        assert_eq!(request_target(&s, "https://example.com/a", true), "/a");
+    }
+
+    #[test]
+    fn the_connect_reply_status_is_read_from_the_status_line() {
+        assert_eq!(connect_status(b"HTTP/1.1 200 Connection established\r\n\r\n"), Some(200));
+        assert_eq!(connect_status(b"HTTP/1.1 407 Proxy Authentication Required\r\n\r\n"), Some(407));
+        assert_eq!(connect_status(b"garbage\r\n\r\n"), None);
     }
 
     #[test]

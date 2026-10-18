@@ -33,7 +33,7 @@
       "apple": "MTKMesh, MTKSubmesh, MTKMeshBuffer, MTKMeshBufferAllocator, newMeshes(asset:device:)",
       "bifrost": "springboard/render/src/mesh.rs, springboard/render/src/texture.rs",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No mesh, vertex-descriptor or index-buffer type outside the shell's internal 2D batch (springboard/src/gpu/batch.rs, a fixed 64-byte quad vertex)"
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No mesh, vertex-descriptor or index-buffer type outside the shell's internal 2D batch (springboard/src/gpu/batch.rs, a fixed 64-byte quad vertex) Refreshed 2026-10-17: the mesh model and loader exist in bifrost-ui (ui/src/mesh.rs, mesh_primitives.rs, mesh_file.rs; tests in those modules) and in render/src/mesh.rs; they are not re-exported to apps and have no GPU draw path."
     },
     {
       "feature": "Vertex batching for 2D draws",
@@ -53,7 +53,7 @@
   "gaps": [
     "No app-facing GPU view with a per-frame delegate (MTKView and MTKViewDelegate equivalent) in springboard/sdk/src/",
     "No app-facing GPU texture loader (MTKTextureLoader equivalent); springboard/render/src/imgdec.rs decodes on the CPU only",
-    "No mesh container or mesh loading path (MTKMesh, MTKSubmesh equivalent); nothing under springboard/sdk/src/ or springboard/render/src/",
+    "No app-facing mesh API: the mesh model and loader (ui/src/mesh.rs, mesh_file.rs, render/src/mesh.rs) are not re-exported by bifrost_app and no GPU path draws a mesh.",
     "Presenter (springboard/src/gpu/wl.rs) is shell-internal; its Metal-shaped API has no SDK binding",
     "The GPU stack is GLES on GBM and EGL, not Metal; a Metal-shaped API is only a design note in docs/gpu-first.md"
   ]

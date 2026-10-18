@@ -69,6 +69,21 @@ fn metric_compatible_targets_come_first() {
     assert_eq!(first("Courier New"), "Liberation Mono");
 }
 
+/// The Source Sans 3 italic face is pinned in the font library (Settings > Fonts), with a 64-hex digest.
+#[test]
+fn library_pins_the_source_sans_italic_face() {
+    let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tools/pack.py");
+    let pack = fs::read_to_string(&p).unwrap_or_else(|e| panic!("{}: {e}", p.display()));
+    let line = pack
+        .lines()
+        .find(|l| l.contains("\"SourceSans3-Italic-Variable.ttf\""))
+        .expect("pack.py LIBRARY_FONTS lacks the Source Sans 3 italic face");
+    assert!(line.contains("sourcesans3/SourceSans3-Italic[wght].ttf"), "wrong upstream path: {line}");
+    let digest = line.rsplit('"').nth(1).unwrap_or("");
+    assert_eq!(digest.len(), 64, "digest is not sha256: {line}");
+    assert!(digest.chars().all(|c| c.is_ascii_hexdigit()), "digest is not hex: {line}");
+}
+
 #[test]
 fn installer_ships_the_alias_file() {
     let sh = arch("package-files.sh");

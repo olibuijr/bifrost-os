@@ -2,7 +2,7 @@
 //! in-memory context (`Ctx::testing`): what the app sends to the shell is collected by `take_sent`, and the trigger,
 //! presentation, authorization, sound and attachment rules are plain functions. No shell, no display, no network.
 
-use bifrost_app::proto::{Configure, NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, TextInput, ToShell, NOTIF_DEFAULT_ACTION};
+use bifrost_app::proto::{Configure, NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, NotifTrigger, TextInput, ToShell, NOTIF_DEFAULT_ACTION};
 use bifrost_app::usernotif::{
     self, Attachment, AuthorizationOptions, AuthorizationStatus, AuthorizationStore, CalendarTrigger, DateComponents, Decision, Event, InterruptionLevel,
     IntervalTrigger, PresentationOptions, Request, Response, Setting, Settings, Sound,
@@ -115,6 +115,7 @@ fn headless_user_info_refuses_more_than_sixteen_entries_or_long_values() {
 fn headless_set_categories_sends_the_actions_in_their_order() {
     let ctx = testing_ctx();
     let categories = vec![NotifCategory {
+        options: 0,
         id: "reply".into(),
         actions: vec![
             NotifAction::button("ok", "OK"),
@@ -141,6 +142,15 @@ fn headless_remove_pending_without_identifiers_asks_for_all_of_them() {
 }
 
 #[test]
+fn headless_a_scheduled_request_sends_its_trigger_with_its_content() {
+    let ctx = testing_ctx();
+    let trigger = NotifTrigger::Calendar { hour: 8, minute: 30, weekdays: 0b10, repeats: true };
+    let request = usernotif::schedule(&ctx, Request::new("morning", "Morning"), trigger);
+    let req = NotifRequest { id: "morning".into(), title: "Morning".into(), ..Default::default() };
+    assert_eq!(ctx.take_sent(), vec![ToShell::NotifySchedule { request, req, trigger }]);
+}
+
+#[test]
 fn headless_the_delivered_and_pending_queries_carry_their_own_request_ids() {
     let ctx = testing_ctx();
     let delivered = usernotif::delivered(&ctx);
@@ -157,6 +167,36 @@ fn headless_the_settings_query_is_sent_with_its_request_id() {
     let ctx = testing_ctx();
     let request = usernotif::settings(&ctx);
     assert_eq!(ctx.take_sent(), vec![ToShell::NotifySettings { request }]);
+}
+
+#[test]
+fn headless_request_authorization_sends_the_known_option_bits_and_drops_the_rest() {
+    let ctx = testing_ctx();
+    let request = usernotif::request_authorization(&ctx, AuthorizationOptions(2 | 4 | 0x80));
+    assert_eq!(ctx.take_sent(), vec![ToShell::NotifyAuthorize { request, options: 2 | 4 }]);
+}
+
+#[test]
+fn headless_will_present_opt_in_and_reply_send_the_known_bits_only() {
+    let ctx = testing_ctx();
+    usernotif::set_presentation_delegate(&ctx, true);
+    usernotif::will_present(&ctx, 7, usernotif::PresentationOptions(16 | 2 | 0x40));
+    usernotif::will_present(&ctx, 8, usernotif::PresentationOptions::NONE);
+    assert_eq!(
+        ctx.take_sent(),
+        vec![
+            ToShell::NotifyPresentDelegate { enabled: true },
+            ToShell::NotifyPresentReply { token: 7, options: 16 | 2 },
+            ToShell::NotifyPresentReply { token: 8, options: 0 },
+        ]
+    );
+}
+
+#[test]
+fn headless_will_present_event_keeps_the_token_and_the_content() {
+    let e = Event::WillPresent { token: 3, id: "n".into(), thread: "t".into(), category: "c".into(), title: "T".into(), body: "B".into() };
+    assert_eq!(e.clone(), e);
+    assert_ne!(e, Event::WillPresent { token: 4, id: "n".into(), thread: "t".into(), category: "c".into(), title: "T".into(), body: "B".into() });
 }
 
 #[test]
@@ -181,13 +221,13 @@ fn headless_status_and_list_events_keep_their_request_ids() {
 
 #[test]
 fn headless_a_text_reply_response_carries_the_typed_text() {
-    let e = Event::Response(Response { id: "msg".into(), action: "reply".into(), text: "on my way".into(), thread: "t".into(), category: "reply".into() });
+    let e = Event::Response(Response { id: "msg".into(), action: "reply".into(), text: "on my way".into(), thread: "t".into(), category: "reply".into(), user_info: vec![] });
     assert!(matches!(&e, Event::Response(r) if r.text == "on my way" && r.action == "reply"));
 }
 
 #[test]
 fn headless_the_default_action_response_has_no_text_and_differs_from_dismiss() {
-    let e = Event::Response(Response { id: "msg".into(), action: NOTIF_DEFAULT_ACTION.into(), text: String::new(), thread: String::new(), category: String::new() });
+    let e = Event::Response(Response { id: "msg".into(), action: NOTIF_DEFAULT_ACTION.into(), text: String::new(), thread: String::new(), category: String::new(), user_info: vec![] });
     assert!(matches!(&e, Event::Response(r) if r.action == NOTIF_DEFAULT_ACTION && r.text.is_empty()));
     assert_ne!(NOTIF_DEFAULT_ACTION, bifrost_app::proto::NOTIF_DISMISS_ACTION);
 }

@@ -245,6 +245,22 @@ impl Gamepad {
         }
     }
 
+    /// Applies a change that arrived already decoded (the shell sends them as `input` events). Sets the state the
+    /// matching raw record would set, without the raw record.
+    pub fn apply(&mut self, change: Change) {
+        match change {
+            Change::Button { button, pressed } => {
+                if pressed {
+                    self.buttons |= button.bit();
+                } else {
+                    self.buttons &= !button.bit();
+                }
+            }
+            Change::Axis { axis, value } => self.axes[axis as usize] = value,
+            Change::Dpad { x, y } => self.dpad = [x, y],
+        }
+    }
+
     fn set_dpad(&mut self, slot: usize, value: i32) -> Option<Change> {
         let v = value.clamp(-1, 1) as i8;
         if self.dpad[slot] == v {
@@ -309,6 +325,19 @@ impl ControllerInput {
         }
         self.queue.push_back(change);
         Some(change)
+    }
+
+    /// Applies a change decoded elsewhere (the shell's `input` event): updates the state, runs the callbacks and
+    /// queues it, as [`ControllerInput::feed`] does for a raw record.
+    pub fn push(&mut self, change: Change) {
+        self.pad.apply(change);
+        for listener in self.listeners.iter_mut() {
+            listener(&change);
+        }
+        if self.queue.len() == QUEUE_LIMIT {
+            self.queue.pop_front();
+        }
+        self.queue.push_back(change);
     }
 
     /// The oldest change not yet polled.
@@ -492,6 +521,25 @@ mod tests {
         }
         assert_eq!(input.pending(), QUEUE_LIMIT);
         // the 44 oldest (changes 0 to 43) were dropped, so the first one left is change 44, a press
+        assert_eq!(input.poll(), Some(Change::Button { button: Button::South, pressed: true }));
+    }
+
+    #[test]
+    fn pushed_changes_update_the_state_run_the_callbacks_and_queue() {
+        let mut input = ControllerInput::new();
+        let seen = Rc::new(RefCell::new(0));
+        let counter = seen.clone();
+        input.on_change(move |_| *counter.borrow_mut() += 1);
+        input.push(Change::Button { button: Button::South, pressed: true });
+        input.push(Change::Dpad { x: 1, y: -1 });
+        input.push(Change::Axis { axis: Axis::LeftX, value: 0.5 });
+        assert!(input.gamepad().is_pressed(Button::South));
+        assert_eq!(input.gamepad().dpad(), (1, -1));
+        assert!(close(input.gamepad().axis(Axis::LeftX), 0.5));
+        assert_eq!(*seen.borrow(), 3);
+        assert_eq!(input.pending(), 3);
+        input.push(Change::Button { button: Button::South, pressed: false });
+        assert!(!input.gamepad().is_pressed(Button::South));
         assert_eq!(input.poll(), Some(Change::Button { button: Button::South, pressed: true }));
     }
 }

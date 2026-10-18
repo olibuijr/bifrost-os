@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.19.0 — 2026-10-17
+
+- Core Search indexes every reminder with a title: the title, and the first lines of its notes. Edited reminders are indexed again, deleted or untitled ones leave the index, and a Search result opens the reminder in the list.
+
+## 1.18.0 — 2026-10-17
+
+- A reminder's row shows its notes with the Markdown marks taken away (bold as plain words, bullets as bullets), through `format::preview` and the shell's `md::to_plain`.
+- A reminder can carry a place (a circle of latitude, longitude and radius with an arriving or leaving trigger). The place is stored as a 20th field in the store, which moves to format v4 (v1 to v3 still load; older versions refuse a v4 file). `place::Watch` reports the reminders whose place was entered or left. The form does not edit places yet and the location watch is not called, so no alert fires yet. The manifest has the location privacy purpose string.
+
+## 1.17.0 — 2026-10-17
+
+- Format menu (Bold, Bullet List, Numbered List) writes Markdown marks into a reminder's notes while the Notes field has the focus; a command again takes the mark away. The notes are stored as Markdown text and shown as typed, not rendered.
+- Scripting: `tell app "Reminders"` can `make new reminder with properties {name, due}` and `make new list with properties {name}`, and get the name, id, notes, completed, flagged, priority, due day and list of reminders (`scripting.rs`, `[[script.*]]` in the manifest). Setting properties and deleting reminders from a script is refused.
+
 ## 1.16.0 — 2026-10-14
 
 - Settings: the all-day alert time offers every half hour from 6:00 to 20:00 (it offered ten fixed times).

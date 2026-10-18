@@ -1,0 +1,16 @@
+[Unit]
+Description=BifrOSt zram swap (half of RAM, at most 8 GiB; memory pressure)
+Documentation=file:///usr/share/doc/bifrost/services.md
+# Boot step, before the swap target and any user session: zram needs no disk and no desktop. Disk swap files under
+# pressure are added later by bifrostd (springboard/bifrostd/src/pager.rs).
+DefaultDependencies=no
+After=systemd-modules-load.service local-fs.target
+Before=swap.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/bifrostd zram-setup
+
+[Install]
+WantedBy=sysinit.target

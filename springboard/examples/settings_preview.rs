@@ -106,11 +106,14 @@ fn main() {
         .collect();
     let info = Info {
         captive_portal: None,
+        display_sizes: Vec::new(),
         battery_present: true,
         desktop_network: Default::default(),
         display_mode: None,
         display_rates: Vec::new(),
         brightness_supported: true,
+        ambient_light_supported: false,
+        motion_sensor_supported: false,
         power_profile: "Auto".into(),
         wifi_notice: None,
         battery_health: Vec::new(),

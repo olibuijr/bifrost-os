@@ -3,37 +3,37 @@
   "doc": "https://developer.apple.com/documentation/colorsync",
   "macos_since": "10.13",
   "status": "partial",
-  "bifrost": "springboard/render/src/colorspace.rs, springboard/render/src/icc.rs, springboard/render/src/rendering_intent.rs, springboard/render/src/hdr_transfer.rs, springboard/render/src/hdr_metadata.rs, springboard/sdk/src/colorsync.rs, springboard/src/shell/night_shift.rs, springboard/render/src/imgdec.rs, springboard/src/gpu/nv12.rs",
-  "summary": "ColorSync is the ICC profile and colour-transform engine. BifrOSt now reads RGB matrix-shaper ICC profiles (colorants and tone curves) and converts them into the named working spaces (sRGB, Display P3, Adobe RGB, ROMM RGB), reads display gamma tables, models PQ and HLG transfer curves and extended-range headroom, and exposes profile conversion to apps through bifrost_app::colorsync. Lookup-table profiles, profile creation and embedding, HAGC metadata and the shell or image paths that would use these conversions are still missing; Night Shift remains a scalar tint.",
+  "bifrost": "springboard/render/src/colorspace.rs, springboard/render/src/icc.rs, springboard/render/src/icc_lut.rs, springboard/render/src/icc_transform.rs, springboard/render/src/icc_builtin.rs, springboard/render/src/edid.rs, springboard/render/src/rendering_intent.rs, springboard/render/src/hdr_transfer.rs, springboard/render/src/hdr_metadata.rs, springboard/sdk/src/colorsync.rs, springboard/src/shell/night_shift.rs, springboard/render/src/imgdec.rs, springboard/render/src/cg/imageio/mod.rs, springboard/src/gpu/nv12.rs",
+  "summary": "ColorSync is the ICC profile and colour-transform engine. BifrOSt reads ICC profiles with matrix-shaper and lookup-table pipelines (mft1, mft2, mAB, mBA), converts between any two profiles through the D50 connection space with the four rendering intents and black point compensation, bakes cached 3D tables, generates its built-in profiles (sRGB, Display P3, Adobe RGB (1998), Rec. 2020, grey 2.2) as ICC bytes, builds the display profile from the connected display's EDID, and converts decoded pictures with an embedded profile to that display. Profile creation and embedding, the hardware gamma ramp, the PDF ICCBased path, HAGC metadata and an app-facing profile-to-profile API are still missing; Night Shift remains a scalar tint.",
   "rea_evidence": "ev_30be09349fd96962c2c0d304f23da436d4e22734281493023b9095453ed6b510",
   "features": [
     {
       "feature": "Color transforms",
       "apple": "ColorSyncTransformCreate, ColorSyncTransformConvert, ColorSyncProfileCreateLink, rendering intents",
-      "bifrost": "springboard/render/src/colorspace.rs, springboard/render/src/icc.rs (MatrixShaper), springboard/render/src/pixel_layout.rs, springboard/sdk/src/colorsync.rs",
+      "bifrost": "springboard/render/src/icc_transform.rs (Model, Conversion, Lut3d, cache), springboard/render/src/colorspace.rs, springboard/render/src/icc.rs (MatrixShaper), springboard/render/src/icc_lut.rs, springboard/sdk/src/colorsync.rs",
       "status": "partial",
-      "note": "Pure models with host unit tests, not yet verified on Midget. colorspace::Transform converts between named spaces; icc::MatrixShaper::convert takes an RGB matrix-shaper profile into any named space through the D50 connection space (colorspace::from_xyz_d50). No transform object for profile-to-profile pipelines and no LUT-based transforms (mft/mAB). imgdec.rs still assumes sRGB for decoded images, and nv12.rs picks Rec.601 or Rec.709 for video only."
+      "note": "Profile-to-profile conversion through the D50 PCS: Conversion::new(src, dst, intent, black_point_compensation) runs device to PCS to device, using the A2B and B2A tables of the intent when the profile has them and the matrix-shaper path otherwise. Lut3d bakes a 33-point grid per (source profile, display, intent) and samples it trilinearly; eight tables are cached. Unit tests in render/src/icc_transform.rs cover the sRGB and Display P3 round trip, sRGB red in P3, white preservation, the grey conversion and table-to-direct agreement. Not verified on Midget. No app-facing transform object yet, and CMYK profiles do not convert. Built 2026-10-17: ProfileToProfile in springboard/sdk/src/colorsync.rs converts between two ICC profiles under a rendering intent, with black point compensation; tests colorsync::tests. Not yet checked on Midget."
     },
     {
       "feature": "Pixel format and data layout",
       "apple": "ColorSyncDataLayout, ColorSyncAlphaInfo, ColorSyncDataDepth (8/16/32-bit, float, premultiplied alpha)",
-      "bifrost": "springboard/render/src/imgdec.rs (fit, cover, contain); springboard/render/src/cg/imageio/mod.rs (decode)",
+      "bifrost": "springboard/render/src/imgdec.rs (fit, cover, contain); springboard/render/src/cg/imageio/mod.rs (decode, to_display converts the 8-bit and 16-bit frames)",
       "status": "partial",
-      "note": "The 8-bit premultiplied RGBA byte layout of decoded pictures is tested headless in springboard/render/tests/parity_sdk-tests-07-w7.rs. Gap: no layout descriptor is exposed, and no 16-bit, float or extended-range buffers exist."
+      "note": "The 8-bit premultiplied RGBA byte layout of decoded pictures is tested headless in springboard/render/tests/parity_sdk-tests-07-w7.rs. Profile conversion applies to the straight 8-bit and 16-bit frames before premultiplication. Gap: no layout descriptor is exposed, and no float or extended-range buffers exist."
     },
     {
       "feature": "Color profiles (ICC load, create, inspect, embed)",
       "apple": "ColorSyncProfileCreateWithURL, ColorSyncProfileCopyTag, ColorSyncMutableProfile, ColorSyncProfileCopyData",
-      "bifrost": "springboard/render/src/icc.rs, springboard/sdk/src/colorsync.rs; tests: springboard/render/tests/parity_sdk-tests-06.rs, springboard/sdk/tests/parity_sdk-tests-06.rs",
+      "bifrost": "springboard/render/src/icc.rs, springboard/render/src/icc_lut.rs, springboard/render/src/icc_builtin.rs, springboard/sdk/src/colorsync.rs; tests: springboard/render/tests/parity_sdk-tests-06.rs, springboard/sdk/tests/parity_sdk-tests-06.rs",
       "status": "partial",
-      "note": "Headless tests in render/tests/parity_sdk-tests-06.rs cover the header and tag table checks (a_profile_header_gives..., a_tag_that_runs_past_the_profile...), the desc and mluc reads (a_version_four_description_reads_utf16...) and the matrix-shaper curves; sdk/tests/parity_sdk-tests-06.rs covers gamma_ramps and ProfileConverter. Gap: lookup-table profiles (A2B/B2A, mft1/mft2/mAB), profile creation, tag writing and embedding are not built; not yet verified on Midget. The PDF reader still takes ICCBased images only by component count and ignores the profile bytes."
+      "note": "Headers, tag tables, desc and mluc text, matrix-shaper curves, wtpt, and the mft1, mft2, mAB and mBA lookup-table pipelines (icc_lut.rs, with a hand-built lut16 test) are read. icc_builtin.rs writes matrix-shaper RGB profiles and grey profiles as ICC bytes, and the tests check that the reader parses them back. Gap: no general profile creation or tag writing API, and no embedding into output files; profiles are read only for apps. Not yet verified on Midget. The PDF reader still takes ICCBased images only by component count and ignores the profile bytes."
     },
     {
-      "feature": "Standard RGB profiles (sRGB, Display P3, Adobe RGB, ProPhoto)",
-      "apple": "kColorSyncSRGBProfile, kColorSyncDisplayP3Profile, kColorSyncAdobeRGB1998Profile, kColorSyncROMMRGBProfile",
-      "bifrost": "springboard/render/src/colorspace.rs, springboard/render/src/pixel_layout.rs, springboard/sdk/src/colorsync.rs",
+      "feature": "Standard RGB profiles (sRGB, Display P3, Adobe RGB, ProPhoto, Rec. 2020, grey)",
+      "apple": "kColorSyncSRGBProfile, kColorSyncDisplayP3Profile, kColorSyncAdobeRGB1998Profile, kColorSyncROMMRGBProfile, generic gray and BT.2020",
+      "bifrost": "springboard/render/src/icc_builtin.rs (Builtin), springboard/render/src/colorspace.rs, springboard/render/src/pixel_layout.rs, springboard/sdk/src/colorsync.rs",
       "status": "partial",
-      "note": "built on parity/team-j-colorsync; not yet verified on Midget. Space enumerates Srgb, DisplayP3, AdobeRgb and RommRgb with their primaries, white points and transfer curves. Apps reach them through bifrost_app::colorsync (ProfileConverter, Space). Not used by the shell, the image decoder or the PDF path, and no wide-gamut display output exists."
+      "note": "Builtin::{Srgb, DisplayP3, AdobeRgb1998, Rec2020, Gray22} are generated as ICC bytes at run time from the chromaticities and transfer curves, then read back through the same parser; no profile files are embedded. ProPhoto (ROMM RGB) exists as a named working space in colorspace.rs. Built 2026-10-17: Builtin::RommRgb generates it as a profile; tests icc_builtin::tests. Apps reach the named spaces through bifrost_app::colorsync (ProfileConverter, Space). The built-in profiles are the decode target of pictures (see the image decode row); no wide-gamut display output exists."
     },
     {
       "feature": "Display colour adjustment (warmth)",
@@ -45,16 +45,23 @@
     {
       "feature": "Device and display profiles",
       "apple": "ColorSyncRegisterDevice, ColorSyncIterateDeviceProfiles, ColorSyncDeviceSetCustomProfiles, ColorSyncProfileCreateWithDisplayID",
-      "bifrost": "springboard/render/src/icc.rs (Devices); tests: springboard/render/tests/parity_sdk-tests-06.rs",
+      "bifrost": "springboard/render/src/edid.rs (display_edid, parse), springboard/render/src/icc_transform.rs (display_target), springboard/render/src/icc.rs (Devices); tests: springboard/render/tests/parity_sdk-tests-06.rs, unit tests in edid.rs and icc_transform.rs",
       "status": "partial",
-      "note": "The device registry is tested headless in render/tests/parity_sdk-tests-06.rs: registration, custom profile override and clearing (a_custom_profile_overrides...), the sRGB fallback for an unregistered display and the iteration order. Gap: kms.rs reads the CRTC gamma_size field but does not load a gamma ramp or a profile, no device registry or custom-profile setting exists in the shell, and nothing is verified on Midget."
+      "note": "The display profile is built from the first connected connector's EDID under /sys/class/drm: the red, green, blue and white chromaticities as ten-bit values, with the gamma from byte 23 or the sRGB curve. With no readable EDID the built-in sRGB profile is used. The device registry (Devices) is tested headless in render/tests/parity_sdk-tests-06.rs: registration, custom profile override and clearing, the sRGB fallback and the iteration order. Gap: the EDID profile is not registered as the device profile of the display, the shell has no custom-profile setting, kms.rs does not load a gamma ramp, and nothing is verified on Midget."
     },
     {
       "feature": "Rendering intents and black point compensation",
-      "apple": "kColorSyncRenderingIntentPerceptual, kColorSyncRenderingIntentRelative, kColorSyncBlackPointCompensation",
-      "bifrost": "springboard/render/src/rendering_intent.rs (IntentTransform, BlackPoints, compensate_black; intents are cg::color::RenderingIntent)",
+      "apple": "kColorSyncRenderingIntentPerceptual, kColorSyncRenderingIntentRelative, kColorSyncRenderingIntentSaturation, kColorSyncRenderingIntentAbsolute, kColorSyncBlackPointCompensation",
+      "bifrost": "springboard/render/src/icc_transform.rs (Conversion, compensate_black), springboard/render/src/rendering_intent.rs (IntentTransform, BlackPoints, compensate_black), springboard/render/src/cg/color.rs (RenderingIntent)",
       "status": "partial",
-      "note": "Tested headless in springboard/render/tests/parity_sdk-tests-16.rs: the four intents (perceptual with gamut compression, relative colorimetric, saturation with clipping, absolute colorimetric without white adaptation) and affine black point compensation, on linear light. Intents from a profile's own tables are not read, and cg::color::ColorConversionInfo still treats perceptual and saturation as relative. A pure model with no caller outside its tests yet. Built on parity/team-a-09; not yet verified on Midget."
+      "note": "The profile engine picks the A2B and B2A table of the intent (perceptual, relative, saturation, falling back to relative), and absolute colorimetric scales by the media white. Black point compensation uses the ICC v4 formula on the PCS black point, which is zero for matrix profiles. Tests in icc_transform.rs cover conversions under relative colorimetric and absolute. The named-space path in rendering_intent.rs keeps its own tests in render/tests/parity_sdk-tests-16.rs. Gaps: matrix profiles have no perceptual gamut mapping (out-of-gamut colours clip), and cg::color::ColorConversionInfo still treats perceptual and saturation as relative. Not yet verified on Midget."
+    },
+    {
+      "feature": "Image colour conversion on decode",
+      "apple": "CGImageSource and CGImage colour spaces converted to the display by ColorSync; PNG iCCP, JPEG APP2 and TIFF and WebP profiles",
+      "bifrost": "springboard/render/src/cg/imageio/mod.rs (ImageSource::all, image_at), springboard/render/src/icc_transform.rs (to_display, picture_table)",
+      "status": "partial",
+      "note": "Every decoded frame whose file carries an embedded profile is converted once per decode from that profile to the display profile (perceptual intent with black point compensation, baked into a cached table). The profile bytes come from the existing probes for PNG iCCP, JPEG APP2, TIFF and WebP. sRGB-tagged pictures on an sRGB display pass through unchanged. Apps that decode through ImageSource (Preview, Photos, the shell) get this path. Gap: the PDF ICCBased path is not converted. Not yet verified on Midget."
     },
     {
       "feature": "HDR, extended range and tone mapping",
@@ -72,12 +79,12 @@
     }
   ],
   "gaps": [
-    "No lookup-table ICC transforms (A2B, B2A, mft and mAB tags) and no profile-to-profile transform pipeline; ColorSyncTransformCreate and ColorSyncTransformConvert have only the matrix path.",
-    "No profile creation, tag writing or profile embedding (ColorSyncMutableProfile, ColorSyncProfileCopyData); profiles are read only.",
-    "The working spaces are not applied to images or PDF content: decoded JPEG and PNG (imgdec.rs) stay sRGB, and PDF ICCBased colour (springboard/render/src/cg/pdf/image.rs) is drawn by component count.",
-    "No display profile path to the hardware: kms.rs reads gamma_size but loads no vcgt ramp, and Night Shift does not use the display profile.",
+    "No profile creation, tag writing or profile embedding (ColorSyncMutableProfile, ColorSyncProfileCopyData); profiles are read, and the built-in ones are generated only for internal use.",
+    "CMYK and other non-RGB device profiles do not convert; matrix profiles have no perceptual gamut mapping.",
+    "The PDF ICCBased path (springboard/render/src/cg/pdf/image.rs) is drawn by component count and does not use the profile.",
+    "No display profile path to the hardware: kms.rs reads gamma_size but loads no vcgt ramp, the EDID profile is not registered as the device profile, and Night Shift does not use the display profile.",
     "No HAGC (SMPTE ST 2094-50) metadata and no tone mapping into a display; the HDR models are not wired into video output.",
-    "No app-facing rendering intent API; rendering_intent.rs has no caller outside its tests, and cg::color::ColorConversionInfo still treats perceptual and saturation as relative.",
+    "cg::color::ColorConversionInfo still treats perceptual and saturation as relative; the named-space intents in rendering_intent.rs have no caller outside their tests.",
     "Colour management modules (CMM plug-ins) remain n/a."
   ]
 }

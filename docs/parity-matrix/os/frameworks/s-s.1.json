@@ -1,0 +1,5181 @@
+{
+ "category": "frameworks",
+ "shard": "s-s.1",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Library/Frameworks/SafetyKit.framework",
+   "category": "frameworks",
+   "name": "SafetyKit",
+   "path": "/System/Library/Frameworks/SafetyKit.framework",
+   "kind": "public framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "docs/parity-matrix/data/safetykit.json",
+   "status": "n/a",
+   "note": "from SDK matrix safetykit.json",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/Frameworks/SceneKit.framework",
+   "category": "frameworks",
+   "name": "SceneKit",
+   "path": "/System/Library/Frameworks/SceneKit.framework",
+   "kind": "public framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/ui/src/scene3d.rs, springboard/ui/src/scene_view.rs, springboard/ui/src/raster3d.rs, springboard/ui/src/shading.rs, springboard/ui/src/primitives3d.rs, springboard/ui/src/physics3d.rs, springboard/ui/src/particle_system3d.rs, springboard/ui/src/morph_skin.rs, springboard/ui/src/scene_audio.rs, springboard/ui/src/scene_source.rs, springboard/ui/src/shader_library.rs, springboard/ui/src/linalg.rs, springboard/sdk/src/framework_kits.rs, springboard/sdk/src/view/scene_widget.rs",
+   "status": "partial",
+   "note": "from SDK matrix scenekit.json",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "view::scene_widget::tests"
+    }
+   ],
+   "ready_note": "A SceneWidget view in the SDK (bifrost_app::view::SceneWidget) renders a scene3d Scene through its camera into the app window with the CPU triangle rasteriser (raster3d: flat shading and a depth buffer; drawables tie scene nodes to primitives3d geometry and materials), redrawing only when something changed. Dragging orbits the camera, scroll() and the + and - keys zoom, and a click picks the nearest drawable by bounding sphere through SceneView and sends an action. Host tests only. Not covered: GPU rendering, per-triangle picking, clipping of triangles that cross the near plane (they are dropped), textures, a wheel event (the SDK delivers none to views yet, so scroll() is for the app to call) and importing a scene file into drawables."
+  },
+  {
+   "id": "path:/System/Library/Frameworks/ScreenCaptureKit.framework",
+   "category": "frameworks",
+   "name": "ScreenCaptureKit",
+   "path": "/System/Library/Frameworks/ScreenCaptureKit.framework",
+   "kind": "public framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/screenshot.rs; springboard/ui/src/capture_content.rs; springboard/ui/src/capture_picker.rs; springboard/ui/src/capture_access.rs; springboard/ui/src/capture_shot.rs; springboard/ui/src/capture_stream.rs; springboard/shell/services/screen_stream.rs; springboard/sdk/src/screen_stream.rs; springboard/ui/src/capture_stream.rs; springboard/src/shell/services/screen_stream.rs; springboard/sdk/src/screen_stream.rs; springboard/ui/src/capture_filter.rs; springboard/sdk/src/screen_stream.rs; springboard/src/shell/services/screen_stream.rs",
+   "status": "partial",
+   "note": "Pure models exist for shareable content, the content-sharing picker, capture permission and single-frame screenshots, and the shell's screenshot chord saves frames. Built 2026-10-17: pure frame pacer ScreenStream in springboard/ui/src/capture_stream.rs (permission gate, fresh and repeated frames, no catch-up bursts; tests capture_stream::tests). Built 2026-10-17: a permitted app starts a display stream through the screen_stream service (shell/services/screen_stream.rs); frames arrive as fresh or repeated PNG events (sdk/src/screen_stream.rs). Built 2026-10-17: the stream takes a content filter (one window, one app, or the display minus excluded apps) and an optional movie through the recorder encoder; the pointer is drawn into frames; a stream ends with its app; an idle shell reuses its presented picture (shell/services/screen_stream.rs, ui/src/capture_filter.rs, sdk/src/screen_stream.rs).",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::screen_stream::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "capture_filter::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "capture_stream::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_stream::tests"
+    }
+   ],
+   "ready_note": "Display, window and app streams with a movie option, pointer, exit handling and presented-picture reuse are tested in the shell service, the content model and the SDK. Not yet run on Midget."
+  },
+  {
+   "id": "path:/System/Library/Frameworks/ScreenSaver.framework",
+   "category": "frameworks",
+   "name": "ScreenSaver",
+   "path": "/System/Library/Frameworks/ScreenSaver.framework",
+   "kind": "public framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/screen_saver.rs, springboard/sdk/src/idle_watch.rs, springboard/sdk/src/defaults.rs, springboard/src/shell/screensaver.rs, springboard/ui/src/screensaver.rs, springboard/core/src/idle_monitor.rs, springboard/render/src/gamma_fade.rs, springboard/core/src/sleep_assertions.rs",
+   "status": "partial",
+   "note": "from SDK matrix screen-saver.json Refreshed 2026-10-17: not ready; open items are in data/screen-saver.json gaps.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_saver::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "idle_watch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "defaults::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screensaver::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "screensaver::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "idle_monitor::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "gamma_fade::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "sleep_assertions::tests"
+    }
+   ],
+   "ready_note": "The saver view lifecycle and runner (bifrost_app::screen_saver), preference storage (defaults), idle detection (IdleWatch and core idle_monitor), the shell saver window and the gamma fade. Host tests only. Not covered: loading third-party saver bundles."
+  },
+  {
+   "id": "path:/System/Library/Frameworks/ScreenTime.framework",
+   "category": "frameworks",
+   "name": "ScreenTime",
+   "path": "/System/Library/Frameworks/ScreenTime.framework",
+   "kind": "public framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/screen_time.rs, springboard/sdk/src/screen_usage.rs, springboard/src/shell/screentime/config.rs, springboard/src/shell/screentime/shield.rs, springboard/src/shell/screentime/page.rs, springboard/ui/src/os_services/time_limits.rs, springboard/ui/src/os_services/usage_record.rs",
+   "status": "partial",
+   "note": "from SDK matrix screen-time.json",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_time::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_usage::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::config::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::shield::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "a_stored_grant_is_restored_as_it_was_written"
+    }
+   ],
+   "ready_note": "Covers the Screen Time model, the shell rule that now reads it, the Settings wiring, the configuration observer and the app's own usage, with headless tests. Web usage reporting, the Content Restrictions page and drawing the shield in the model are not covered."
+  },
+  {
+   "id": "path:/System/Library/Frameworks/ScriptingBridge.framework",
+   "category": "frameworks",
+   "name": "ScriptingBridge",
+   "path": "/System/Library/Frameworks/ScriptingBridge.framework",
+   "kind": "public framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/script_target.rs, springboard/sdk/src/workspace.rs, springboard/sdk/src/control.rs, springboard/ui/src/scripting.rs, springboard/sdk/src/script_value.rs, springboard/sdk/src/script_syntax.rs, springboard/sdk/src/script_export.rs",
+   "status": "partial",
+   "note": "from SDK matrix scripting-bridge.json Built 2026-10-17: the scripting object model (get, set, elements, last error, error delegate) is exposed to apps as sdk scripting. Still open: no running app is attached to it, and launch flags are not exposed.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "script_target::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "workspace::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "control::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "scripting::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "script_value::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "script_syntax::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "script_export::tests"
+    }
+   ],
+   "ready_note": "Apps attach to a running scriptable app and read and set its properties and element arrays with last-error reporting through the app control socket (bifrost_app::{script_target, control, scripting, script_value}); launch and activate through workspace. Host tests only. Not covered: generated client proxies from dictionaries."
+  },
+  {
+   "id": "path:/System/Library/Frameworks/SecureConfigDB.framework",
+   "category": "frameworks",
+   "name": "SecureConfigDB",
+   "path": "/System/Library/Frameworks/SecureConfigDB.framework",
+   "kind": "public framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "The configuration database holds Apple managed-profile state. BifrOSt keeps its settings in its own preferences store and has no counterpart.",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/Frameworks/Security.framework",
+   "category": "frameworks",
+   "name": "Security",
+   "path": "/System/Library/Frameworks/Security.framework",
+   "kind": "public framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/keychain.rs, springboard/sdk/src/keychain_query.rs, springboard/sdk/src/keychain_protection.rs, springboard/sdk/src/local_auth.rs, springboard/sdk/src/entropy.rs, springboard/sdk/src/digest.rs, springboard/sdk/src/autofill.rs, springboard/sdk/src/security_status.rs, springboard/ui/src/trust.rs, springboard/ui/src/access_control.rs, springboard/ui/src/one_time_code.rs, springboard/core/src/code_seal.rs, springboard/src/keychain.rs",
+   "status": "partial",
+   "note": "from SDK matrix security.json Built 2026-10-17: randomization (sdk entropy) and one-time code content type (sdk autofill) confirmed public to apps. Still open: certificate trust, code signing, key objects and crypto transforms. Refreshed 2026-10-17: Still open: certificate trust has no DER parsing or client-certificate types, update manifests are unsigned, and Authorization Services is missing.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "keychain::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "keychain_query::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "keychain_protection::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "local_auth::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "entropy::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "digest::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "autofill::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "security_status::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "trust::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "access_control::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "one_time_code::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "code_seal::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "keychain::tests"
+    }
+   ],
+   "ready_note": "Keychain items with queries and at-rest protection, local authentication, randomization, digests, one-time codes, trust evaluation, access control and code sealing: bifrost_app::{keychain, keychain_query, keychain_protection, local_auth, entropy, digest, autofill, security_status} over the shell keychain service. Host tests only. Not covered: DER certificate parsing, key and certificate keychain classes."
+  },
+  {
+   "id": "path:/System/Library/Frameworks/SecurityFoundation.framework",
+   "category": "frameworks",
+   "name": "SecurityFoundation",
+   "path": "/System/Library/Frameworks/SecurityFoundation.framework",
+   "kind": "public framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/authorization.rs; springboard/src/bare/app_policy.rs",
+   "status": "partial",
+   "note": "Apps obtain named authorization rights through the SDK Authorization object (bifrost_ui RightStore: user presence, refusal grants nothing, invalidate). The shell still enforces only the manifest permission at launch.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "authorization::tests"
+    }
+   ],
+   "ready_note": "SDK Authorization.obtain and invalidate_credentials are tested; rights are held in the app object and not yet enforced by the shell (see authorization.rs)."
+  },
+  {
+   "id": "path:/System/Library/Frameworks/SecurityInterface.framework",
+   "category": "frameworks",
+   "name": "SecurityInterface",
+   "path": "/System/Library/Frameworks/SecurityInterface.framework",
+   "kind": "public framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/ui/src/certificate_panel.rs, springboard/ui/src/certificate_trust.rs, springboard/ui/src/identity_chooser.rs, springboard/ui/src/keychain_save.rs, springboard/ui/src/keychain_settings.rs, springboard/ui/src/trust.rs, springboard/sdk/src/framework_kits.rs, springboard/sdk/src/view/security_views.rs, springboard/src/shell/trust_sheet.rs, springboard/src/deildu/http.rs, springboard/src/shell/browser/mod.rs",
+   "status": "partial",
+   "note": "from SDK matrix security-interface.json",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "view::security_views::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::trust_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::browser::tests::a_page_the_tls_stack_refused_keeps_its_chain_for_the_shell_and_says_why"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "deildu::http::tests"
+    }
+   ],
+   "ready_note": "Apps get three drawn views over the models: CertificatePanelView (chain, validity dots, Details disclosure), TrustEditorView (Default, Always or Never for each certificate, the chain verdict, Reset to Defaults) and IdentityChooserView (the identities that pass the policy, Choose and Cancel), each sending action strings through the responder chain. The shell shows the certificate panel when the TLS stack refuses a site in the Browser: the verifier remembers the refused chain, the Browser hands it over when the page fails, and the trust sheet offers Cancel and Show Certificate. Host tests only. Not covered: the shell does not show the trust editor or the identity chooser itself, there is no trust exception for a refused site (the connection stays refused), and a chain the strict DER reader cannot parse offers only Cancel."
+  },
+  {
+   "id": "path:/System/Library/Frameworks/SecurityUI.framework",
+   "category": "frameworks",
+   "name": "SecurityUI",
+   "path": "/System/Library/Frameworks/SecurityUI.framework",
+   "kind": "public framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/login.rs, springboard/sdk/src/secure_entry.rs",
+   "status": "partial",
+   "note": "Password entry for the session runs in the login window, which checks it through the root helper; apps get no secure entry API. Built 2026-10-17: an app-facing secure entry (springboard/sdk/src/secure_entry.rs, SecureEntry: masked display, refused control characters, constant-time match, text taken once and wiped on clear or drop); tests secure_entry::tests.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "secure_entry::tests"
+    }
+   ],
+   "ready_note": "Session password entry is the login window (login.rs); the app-facing secure entry API is the SDK SecureEntry model with its tests."
+  },
+  {
+   "id": "path:/System/Library/Frameworks/SensitiveContentAnalysis.framework",
+   "category": "frameworks",
+   "name": "SensitiveContentAnalysis",
+   "path": "/System/Library/Frameworks/SensitiveContentAnalysis.framework",
+   "kind": "public framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "docs/parity-matrix/data/sensitive-content-analysis.json",
+   "status": "n/a",
+   "note": "from SDK matrix sensitive-content-analysis.json",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/Frameworks/SensorKit.framework",
+   "category": "frameworks",
+   "name": "SensorKit",
+   "path": "/System/Library/Frameworks/SensorKit.framework",
+   "kind": "public framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Research sensor data is gated by Apple entitlements and consent flows. BifrOSt exposes no sensor framework to apps.",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/Frameworks/ServiceManagement.framework",
+   "category": "frameworks",
+   "name": "ServiceManagement",
+   "path": "/System/Library/Frameworks/ServiceManagement.framework",
+   "kind": "public framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/service_management.rs, springboard/sdk/src/service_bundle.rs, springboard/src/shell/login_items_page.rs, springboard/src/shell/extras.rs, springboard/src/shell/services/login_items_approval.rs",
+   "status": "partial",
+   "note": "from SDK matrix service-management.json",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "service_management::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "service_bundle::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "login_items_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "extras::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "login_items_approval::tests"
+    }
+   ],
+   "ready_note": "Login item registration, status and approval for the main app and bundled helpers (bifrost_app::{service_management, service_bundle}) and the Login Items settings page. Host tests only. Not covered: starting launch agents and daemons from the bundle."
+  },
+  {
+   "id": "path:/System/Library/Frameworks/SharedWithYou.framework",
+   "category": "frameworks",
+   "name": "SharedWithYou",
+   "path": "/System/Library/Frameworks/SharedWithYou.framework",
+   "kind": "public framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "docs/parity-matrix/data/shared-with-you.json",
+   "status": "n/a",
+   "note": "from SDK matrix shared-with-you.json",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/Frameworks/SharedWithYouCore.framework",
+   "category": "frameworks",
+   "name": "SharedWithYouCore",
+   "path": "/System/Library/Frameworks/SharedWithYouCore.framework",
+   "kind": "public framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Sharing links and media received in messages is a reference-platform service; BifrOSt has no counterpart, and the matching SDK row is n/a.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/Frameworks/ShazamKit.framework",
+   "category": "frameworks",
+   "name": "ShazamKit",
+   "path": "/System/Library/Frameworks/ShazamKit.framework",
+   "kind": "public framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "docs/parity-matrix/data/shazamkit.json",
+   "status": "n/a",
+   "note": "from SDK matrix shazamkit.json",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/Frameworks/Social.framework",
+   "category": "frameworks",
+   "name": "Social",
+   "path": "/System/Library/Frameworks/Social.framework",
+   "kind": "public framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/social.rs, springboard/sdk/src/social_account.rs, springboard/sdk/src/social_oauth2.rs, springboard/sdk/src/accounts.rs, springboard/sdk/src/multipart.rs, springboard/src/shell/compose_sheet.rs, springboard/src/shell/sharing.rs, springboard/ui/src/compose.rs",
+   "status": "partial",
+   "note": "from SDK matrix social.json Built 2026-10-17: OAuth 2 token model in springboard/sdk/src/social_oauth2.rs (tests social_oauth2::tests); compose sheet editing and sign-in still open.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "social::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "social_account::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "social_oauth2::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "accounts::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "multipart::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "compose_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "sharing::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "compose::tests"
+    }
+   ],
+   "ready_note": "Compose sheet and service availability, multipart post bodies, signed service requests with account credentials and OAuth 2 token refresh: bifrost_app::{social, social_account, social_oauth2, accounts} with the shell compose sheet. Host tests only. Not covered: a sign-in flow in the shell; the compose sheet copies the draft until an account is added."
+  },
+  {
+   "id": "path:/System/Library/Frameworks/SoundAnalysis.framework",
+   "category": "frameworks",
+   "name": "SoundAnalysis",
+   "path": "/System/Library/Frameworks/SoundAnalysis.framework",
+   "kind": "public framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/ui/src/sound_classify.rs, springboard/ui/src/sound_analyzer.rs, springboard/sdk/src/framework_kits.rs",
+   "status": "partial",
+   "note": "from SDK matrix sound-analysis.json Refreshed 2026-10-17: not ready, remaining: No sound classifier: no built-in label set (over 300 sounds) and no Core ML audio model path | No SDK audio input API: the audio service records to a file only (RecordStart and RecordStop), so apps cannot receive a live buffer stream | No analysis of audio files: springboard/src/media/audiofile.rs decodes files only | No result types for time-ranged classifications with confidences, and no observer delivery to apps Lead 2026-10-17: not ready: no live audio input stream for apps and no built-in classifier.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/Frameworks/SpatialPreview.framework",
+   "category": "frameworks",
+   "name": "SpatialPreview",
+   "path": "/System/Library/Frameworks/SpatialPreview.framework",
+   "kind": "public framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "docs/parity-matrix/data/spatial-preview.json",
+   "status": "n/a",
+   "note": "from SDK matrix spatial-preview.json",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/Frameworks/Speech.framework",
+   "category": "frameworks",
+   "name": "Speech",
+   "path": "/System/Library/Frameworks/Speech.framework",
+   "kind": "public framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/ui/src/whisper.rs, springboard/sdk/src/speech_whisper.rs, springboard/src/shell/services/recognizer.rs, springboard/apps/keyboard/src/main.rs",
+   "status": "partial",
+   "note": "from SDK matrix speech.json",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "whisper::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "speech_whisper::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::recognizer::tests"
+    }
+   ],
+   "ready_note": "On-device recognition: the whisper pipeline, the consent gate, the shell recognizer service and the SDK client are covered by unit tests. It needs the model download (Settings, Keyboard, Dictation, after consent) and a run on Midget; the pipeline transcript format is checked there."
+  },
+  {
+   "id": "path:/System/Library/Frameworks/SpriteKit.framework",
+   "category": "frameworks",
+   "name": "SpriteKit",
+   "path": "/System/Library/Frameworks/SpriteKit.framework",
+   "kind": "public framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/ui/src/scene_loop.rs, springboard/ui/src/sk_action.rs, springboard/ui/src/sk_atlas.rs, springboard/ui/src/sk_tilemap.rs, springboard/ui/src/tilemap.rs, springboard/ui/src/scene2d.rs, springboard/ui/src/physics.rs, springboard/ui/src/emitter.rs, springboard/ui/src/node_constraint.rs, springboard/ui/src/warp.rs, springboard/sdk/src/framework_kits.rs",
+   "status": "partial",
+   "note": "from SDK matrix spritekit.json",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "scene_loop::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "sk_action::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "sk_atlas::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "sk_tilemap::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "tilemap::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "scene2d::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "physics::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "emitter::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "node_constraint::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "warp::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "framework_kits::tests"
+    }
+   ],
+   "ready_note": "The 2D scene loop, actions, texture atlases, tile maps, rigid bodies and joints, particle emitters, node constraints and warp geometry, under bifrost_app::framework_kits::spritekit. Host tests only. Not covered: GPU shader nodes bound to app nodes."
+  },
+  {
+   "id": "path:/System/Library/Frameworks/StateReporting.framework",
+   "category": "frameworks",
+   "name": "StateReporting",
+   "path": "/System/Library/Frameworks/StateReporting.framework",
+   "kind": "public framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/ui/src/state_report.rs, springboard/sdk/src/crash_report.rs, springboard/core/src/log.rs, springboard/core/src/signpost.rs, springboard/src/shell/diag.rs, springboard/src/shell/diagnostics_page.rs",
+   "status": "partial",
+   "note": "from SDK matrix statereporting.json Refreshed 2026-10-17: not ready. The SDK has a state reporter and a signposter (bifrost_ui::state_report, sdk signpost). Still open: reports are not delivered to the shell or a developer, no derive macro attaches metadata, crash logs are not linked to app state, and the analytics page has no SDK extension point. See data/statereporting.json gaps.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "state_report::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "crash_report::triage_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "log::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "signpost::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "diag::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "diagnostics_page::tests"
+    }
+   ],
+   "ready_note": "State reporters with domains, transitions and reportable metadata (bifrost_app::state_reporting), crash records, unified logging and signposts; reports stay on the device and are shown in the Diagnostics settings page (no developer upload by design). Host tests only."
+  },
+  {
+   "id": "path:/System/Library/Frameworks/StickerFoundation.framework",
+   "category": "frameworks",
+   "name": "StickerFoundation",
+   "path": "/System/Library/Frameworks/StickerFoundation.framework",
+   "kind": "public framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Messages sticker packs belong to the Apple Messages service, which BifrOSt does not run.",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/Frameworks/StickerKit.framework",
+   "category": "frameworks",
+   "name": "StickerKit",
+   "path": "/System/Library/Frameworks/StickerKit.framework",
+   "kind": "public framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Message sticker extensions have no BifrOSt counterpart.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/Frameworks/StoreKit.framework",
+   "category": "frameworks",
+   "name": "StoreKit",
+   "path": "/System/Library/Frameworks/StoreKit.framework",
+   "kind": "public framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/ui/src/purchase.rs, springboard/ui/src/entitlement.rs, springboard/ui/src/subscription.rs, springboard/ui/src/offer.rs, springboard/ui/src/promotion.rs, springboard/ui/src/product.rs, springboard/ui/src/jws.rs, springboard/sdk/src/store_receipt.rs, springboard/sdk/src/app_transaction.rs, springboard/sdk/src/review.rs, springboard/sdk/src/testing.rs, springboard/src/shell/store/products.rs, springboard/src/shell/store/install.rs",
+   "status": "partial",
+   "note": "from SDK matrix storekit.json Built 2026-10-17: StoreSession scripted store for purchase tests (sdk testing.rs, testing::store_session_tests). Still open: subscriptions, offers, JWS verification, review prompt UI. Refreshed 2026-10-17 (still open): No payment: bifrost_app::purchase and product model the purchase and the price, but no store payment sheet, payment service or paid-app install path exists; No transaction feed for apps: bifrost_app::entitlement is a ledger, but nothing feeds it from a payment and the shell reads apps/installed.json; No signed transaction verification (JWS) beyond the package sha256 check in springboard/src/shell/store/install.rs.; No offers, offer codes or win-back offers; subscription periods, renewal states and groups are modelled (bifrost_app::subscription) with no billing backend; No review prompt: sdk review::ReviewRequests keeps the ask policy, but no call shows the store rating prompt; Storefront, App Store messages, ad attribution, external purchase and payment method binding are Apple-service specific and have no counterpart (status n/a).",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "purchase::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "entitlement::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "subscription::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "offer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "promotion::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "product::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "jws::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "store_receipt::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "app_transaction::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "review::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "testing::store_session_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "products::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "install::tests"
+    }
+   ],
+   "ready_note": "Products, purchases, entitlements, subscriptions, offers, promoted purchases, signed receipt verification, app transactions and review prompts for the BifrOSt App Store: bifrost_app::{product, purchase, entitlement, subscription, promotion, store_receipt, app_transaction, review} with the StoreSession test double and the shell store catalogue and checked installs. Host tests only. Not covered: a payment backend (no paid apps yet); the Apple-service parts (storefront, ad attribution, external purchase) are intentionally absent."
+  },
+  {
+   "id": "path:/System/Library/Frameworks/SuggestedActions.framework",
+   "category": "frameworks",
+   "name": "SuggestedActions",
+   "path": "/System/Library/Frameworks/SuggestedActions.framework",
+   "kind": "public framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "docs/parity-matrix/data/suggested-actions.json",
+   "status": "n/a",
+   "note": "from SDK matrix suggested-actions.json",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/Frameworks/SwiftData.framework",
+   "category": "frameworks",
+   "name": "SwiftData",
+   "path": "/System/Library/Frameworks/SwiftData.framework",
+   "kind": "public framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/ui/src/model_schema.rs, springboard/ui/src/model_store.rs, springboard/ui/src/relations.rs, springboard/ui/src/history.rs, springboard/ui/src/data_store.rs, springboard/ui/src/record_sync.rs, springboard/ui/src/undo.rs, springboard/sdk/src/observable.rs, springboard/sdk/src/document.rs, springboard/sdk/src/restoration.rs, springboard/sdk/src/framework_kits.rs",
+   "status": "partial",
+   "note": "From SDK matrix swiftdata.json. Open: no shared model container or context for apps; no predicate fetch over persistent records; no live fetched results; no uniqueness or relationship constraints in the app stores; no iCloud sync.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "model_schema::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "model_store::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "relations::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "history::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "data_store::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "record_sync::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "undo::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "observable::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "document::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "restoration::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "framework_kits::tests"
+    }
+   ],
+   "ready_note": "Model schema (unique, indexes, transient), the record store with predicate fetch, relations and delete rules, change history, pluggable data stores, record sync, undo, observation and document persistence (bifrost_app::framework_kits::swiftdata plus observable, document, restoration). Host tests only. Not covered: a derive macro for model types."
+  },
+  {
+   "id": "path:/System/Library/Frameworks/SwiftUI.framework",
+   "category": "frameworks",
+   "name": "SwiftUI",
+   "path": "/System/Library/Frameworks/SwiftUI.framework",
+   "kind": "public framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/view/mod.rs, springboard/sdk/src/view/animation.rs, springboard/sdk/src/view/scroll.rs, springboard/sdk/src/layout.rs, springboard/sdk/src/view/autolayout.rs, springboard/sdk/src/widgets.rs, springboard/sdk/src/document.rs, springboard/sdk/src/observable.rs, springboard/ui/src/nav.rs, springboard/ui/src/environment.rs, springboard/ui/src/preferences.rs, springboard/ui/src/stack.rs, springboard/ui/src/table.rs, springboard/ui/src/collection.rs, springboard/ui/src/sidebar.rs, springboard/ui/src/split.rs, springboard/ui/src/sheet.rs, springboard/ui/src/menu.rs, springboard/ui/src/gesture.rs, springboard/ui/src/focus.rs, springboard/ui/src/layout_protocol.rs, springboard/ui/src/ax.rs",
+   "status": "partial",
+   "note": "from SDK matrix swiftui-app-data.json, swiftui-events-a11y-integration.json, swiftui-views-layout.json Built 2026-10-17: TabView selection model (ui tab_selection, tests tab_selection::tests); no view yet. Refreshed 2026-10-17 (events and accessibility area): custom rotors and display flags exist for apps. Still open: the declarative modifier API, user activity handoff, an SDK map view, and text controls routing through EditCommand.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "view::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "animation::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "scroll::physics_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "layout::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "autolayout::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "widgets::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "document::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "observable::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "nav::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "environment::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "preferences::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "stack::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "table::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "collection::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "sidebar::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "split::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "menu::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "gesture::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "focus::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "layout_protocol::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "ax::settable_tests"
+    }
+   ],
+   "ready_note": "The retained view kit does the framework's job for BifrOSt apps: bifrost_app::view (stacks, forms, scroll views, animation), layout, widgets, documents and observable data, with navigation, environment, preferences, tables, lists, sidebars, split views, sheets, menus, gestures, focus, custom layout and accessibility from bifrost_ui. It is imperative rather than a declarative View protocol. Host tests only."
+  },
+  {
+   "id": "path:/System/Library/Frameworks/SwiftUICore.framework",
+   "category": "frameworks",
+   "name": "SwiftUICore",
+   "path": "/System/Library/Frameworks/SwiftUICore.framework",
+   "kind": "public framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/view/mod.rs, springboard/sdk/src/layout.rs, springboard/ui/src/environment.rs, springboard/ui/src/preferences.rs, springboard/ui/src/stack.rs, springboard/ui/src/layout_protocol.rs, springboard/ui/src/gesture.rs, springboard/ui/src/ax.rs, springboard/sdk/src/observable.rs",
+   "status": "partial",
+   "note": "from SDK matrix swiftui-app-data.json, swiftui-events-a11y-integration.json, swiftui-views-layout.json Built 2026-10-17: TabView selection model (ui tab_selection, tests tab_selection::tests); no view yet. Refreshed 2026-10-17 (events and accessibility area): custom rotors and display flags exist for apps. Still open: the declarative modifier API, user activity handoff, an SDK map view, and text controls routing through EditCommand.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "view::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "layout::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "environment::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "preferences::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "stack::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "layout_protocol::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "gesture::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "ax::settable_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "observable::tests"
+    }
+   ],
+   "ready_note": "Core split of SwiftUI (view fundamentals, environment, preferences, layout, gestures, accessibility, observation), implemented by the same view kit as the SwiftUI row: bifrost_app::{view, layout, observable} and bifrost_ui::{environment, preferences, stack, layout_protocol, gesture, ax}. Host tests only."
+  },
+  {
+   "id": "path:/System/Library/Frameworks/Symbols.framework",
+   "category": "frameworks",
+   "name": "Symbols",
+   "path": "/System/Library/Frameworks/Symbols.framework",
+   "kind": "public framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/ui/src/symbol_effect.rs, springboard/ui/src/symbol_layers.rs, springboard/sdk/src/glyphs.rs, springboard/sdk/src/glyph_draw.rs, springboard/render/src/symbols.rs, springboard/render/src/sdf_glyphs.rs, springboard/sdk/src/framework_kits.rs",
+   "status": "partial",
+   "note": "from SDK matrix symbols.json Refreshed 2026-10-17: not ready; open items are in data/symbols.json gaps.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "symbol_effect::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "symbol_layers::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "glyphs::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "glyph_draw::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "symbols::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "sdf_glyphs::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "framework_kits::tests"
+    }
+   ],
+   "ready_note": "Named glyph lookup and drawing (bifrost_app::{glyphs, glyph_draw}), symbol effects (appear, disappear, bounce, pulse, scale, breathe, rotate, wiggle, replace transitions) with repeat and speed options, and weights, scales and rendering layers, under bifrost_app::framework_kits::symbols. Host tests only. Not covered: the full licensed catalogue; the glyph set is BifrOSt's own."
+  },
+  {
+   "id": "path:/System/Library/Frameworks/SyncServices.framework",
+   "category": "frameworks",
+   "name": "SyncServices",
+   "path": "/System/Library/Frameworks/SyncServices.framework",
+   "kind": "public framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/dav_sync.rs (Sync, poll)",
+   "status": "n/a",
+   "note": "Legacy framework for syncing data with Apple's own handheld and music devices. BifrOSt has no such devices; account sync to DAV services is in springboard/sdk/src/dav_sync.rs.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/Frameworks/System.framework",
+   "category": "frameworks",
+   "name": "System",
+   "path": "/System/Library/Frameworks/System.framework",
+   "kind": "public framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/file_descriptor.rs, springboard/sdk/src/typed_path.rs, springboard/sdk/src/file_identity.rs, springboard/sdk/src/volume.rs, springboard/sdk/src/fswatch.rs, springboard/src/bare/docbroker.rs",
+   "status": "partial",
+   "note": "from SDK matrix system.json",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "file_descriptor::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "volume::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "fswatch::tests"
+    }
+   ],
+   "ready_note": "Typed file descriptors, paths, file identity, volume capacity and the filesystem watch are in the SDK. Advisory coordination and document grants stay partial (see the data file gaps)."
+  },
+  {
+   "id": "path:/System/Library/Frameworks/SystemConfiguration.framework",
+   "category": "frameworks",
+   "name": "SystemConfiguration",
+   "path": "/System/Library/Frameworks/SystemConfiguration.framework",
+   "kind": "public framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/reachability_flags.rs, springboard/sdk/src/network_path.rs, springboard/sdk/src/wifi_status.rs, springboard/sdk/src/wlan_events.rs, springboard/core/src/network_sets.rs, springboard/core/src/pref_session.rs, springboard/core/src/host_name.rs, springboard/core/src/tunnel.rs, springboard/core/src/proxy.rs, springboard/core/src/console_user.rs, springboard/core/src/vlan_plan.rs",
+   "status": "partial",
+   "note": "from SDK matrix system-configuration.json Built 2026-10-17: route reachability flags for a named host or address (sdk reachability_flags, tests reachability_flags::tests). Still open: IPv4 and IPv6 configuration from apps, network sets, and name-based reachability callbacks. Built 2026-10-17: reachability callbacks for a host or address (sdk reachability_watch, tests reachability_watch::tests): a watch reports its flags only when a path change alters them. Still open: IPv4 and IPv6 configuration from apps, network sets.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "reachability_flags::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "network_path::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "wifi_status::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "wlan_events::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "network_sets::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "pref_session::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "host_name::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "tunnel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "proxy::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "console_user::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "vlan_plan::tests"
+    }
+   ],
+   "ready_note": "Reachability of hosts, network path and interface changes, Wi-Fi status, services, sets and locations, the preferences session, computer and host names, tunnel control, proxies, console user and VLAN planning: bifrost_app::{reachability_flags, network_path, wifi_status, wlan_events} over bifrost_core. Host tests only."
+  },
+  {
+   "id": "path:/System/Library/Frameworks/SystemExtensions.framework",
+   "category": "frameworks",
+   "name": "SystemExtensions",
+   "path": "/System/Library/Frameworks/SystemExtensions.framework",
+   "kind": "public framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "docs/parity-matrix/data/system-extensions.json",
+   "status": "n/a",
+   "note": "from SDK matrix system-extensions.json",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SAML.framework",
+   "category": "frameworks",
+   "name": "SAML",
+   "path": "/System/Library/PrivateFrameworks/SAML.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "os",
+   "note": "Left open, needs an XML-DSig engine. The job is to read and validate SAML 2.0 assertions and responses (the bundle carries the OASIS assertion, protocol, metadata and xmldsig schemas). A safe version needs a strict XML reader, exclusive canonicalization, reference and digest checks, RSA signature verification against the identity provider's certificate (rustls-graviola exposes the verifier) and signature-wrapping defences. That cannot be written and trusted without being compiled and run against real provider output, which this wave forbids; the BifrOSt accounts code has no SAML path and no XML parser. Next step: a bifrost-saml crate with the reader, c14n and verifier, tested against published SAML conformance vectors.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SAObjects.framework",
+   "category": "frameworks",
+   "name": "SAObjects",
+   "path": "/System/Library/PrivateFrameworks/SAObjects.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: the Siri assistant request and response object model exchanged with Apple's assistant servers (serialized assistant commands such as speech, UI and domain objects). Evidence: no user-facing resources in the reference index; BifrOSt's assistant (springboard/apps/assistant-desktop, assistant-client) uses its own local protocol and sends nothing to Apple.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SCEP.framework",
+   "category": "frameworks",
+   "name": "SCEP",
+   "path": "/System/Library/PrivateFrameworks/SCEP.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Certificate enrollment client for the Simple Certificate Enrollment Protocol, used by the vendor's device-management profiles, which BifrOSt does not have; the name is the only evidence, as the reference index has no binary for it.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SDAPI.framework",
+   "category": "frameworks",
+   "name": "SDAPI",
+   "path": "/System/Library/PrivateFrameworks/SDAPI.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: identity not determinable and no user- or app-visible surface. The reference index holds only Info.plist, version.plist and the code signature for this bundle (no localized UI strings, no plug-in, no XPC service, no hosting bundle that links it), so it is treated as Apple-internal plumbing with nothing for BifrOSt to mirror. Revisit if the binary is ever decoded with REA.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SESMacUIHelper.framework",
+   "category": "frameworks",
+   "name": "SESMacUIHelper",
+   "path": "/System/Library/PrivateFrameworks/SESMacUIHelper.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "UI helper for the vendor's secure element service, which fronts that vendor's secure hardware for payments and credentials; BifrOSt keeps credentials in springboard/src/keychain.rs and has no secure element.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SESShared.framework",
+   "category": "frameworks",
+   "name": "SESShared",
+   "path": "/System/Library/PrivateFrameworks/SESShared.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: Apple Secure Element service shared types (secure element and secure transaction plumbing used by Apple Pay and credentials in hardware). Evidence: bundle holds only Info.plist and version.plist; no equivalent hardware exists on the PC or the Samsung tablet.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SESUIService.framework",
+   "category": "frameworks",
+   "name": "SESUIService",
+   "path": "/System/Library/PrivateFrameworks/SESUIService.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "UI front end of the vendor secure element service; BifrOSt has no secure element to front.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SESUIServiceCore.framework",
+   "category": "frameworks",
+   "name": "SESUIServiceCore",
+   "path": "/System/Library/PrivateFrameworks/SESUIServiceCore.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Core of the vendor secure element UI service; BifrOSt has no secure element to front.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SEService.framework",
+   "category": "frameworks",
+   "name": "SEService",
+   "path": "/System/Library/PrivateFrameworks/SEService.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Secure element service for the vendor secure hardware that holds payment and credential keys; BifrOSt has no secure element (see SESMacUIHelper).",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SFSymbols.framework",
+   "category": "frameworks",
+   "name": "SFSymbols",
+   "path": "/System/Library/PrivateFrameworks/SFSymbols.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/glyphs.rs, springboard/ui/src/symbol_effect.rs",
+   "status": "os",
+   "note": "System symbol catalog and rendering: clean-room glyph set drawn from primitives (sdk glyphs.rs) with symbol effects (ui symbol_effect).",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "glyphs::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "symbol_effect::tests"
+    }
+   ],
+   "ready_note": "The reference framework is the system symbol catalog (CoreGlyphs bundles, the semantic-to-descriptive name table) and its drawing. BifrOSt names its glyphs after the same set and draws them from lines, arcs and discs (sdk glyphs.rs) so they scale to any size with no symbol font; symbol effects are bifrost_ui::symbol_effect. No Apple artwork is used."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SILManager.framework",
+   "category": "frameworks",
+   "name": "SILManager",
+   "path": "/System/Library/PrivateFrameworks/SILManager.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: Apple hardware policy for the camera and microphone indicator lights (the sensor indicator light manager). Evidence: the sibling SILManagerAssets bundle holds only cam_mic_mac.plist, cam_mic_mac_constraints.plist and cam_mic_mac.bin, the per-model indicator constraints; it drives Apple silicon indicator LEDs that PC and tablet hardware do not have.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SILManagerAssets.framework",
+   "category": "frameworks",
+   "name": "SILManagerAssets",
+   "path": "/System/Library/PrivateFrameworks/SILManagerAssets.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: per-model constraint tables for Apple's camera and microphone indicator light hardware. Evidence: the reference index lists exactly cam_mic_mac.plist, cam_mic_mac_constraints.plist and cam_mic_mac.bin and nothing else.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SMBClient.framework",
+   "category": "frameworks",
+   "name": "SMBClient",
+   "path": "/System/Library/PrivateFrameworks/SMBClient.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/smb.rs; springboard/apps/files/src/server.rs; springboard/src/keychain.rs; packaging/arch/runtime-packages.txt",
+   "status": "os",
+   "note": "Built 2026-10-17: bifrost_app::smb, the SMB client model and runner over smbclient. Wired 2026-10-17: Files, Go > Connect to Server, accepts smb:// addresses. With no user in the address it tries a guest listing of the server's shares; a user in the address, or a refused login, opens a sheet with a name and a masked password field. The browser then walks shares and folders. The login stays in memory for that browser and is not saved to the keychain or the recent-servers list.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-files",
+     "filter": "server::tests"
+    }
+   ],
+   "ready_note": "Connect to Server lists smb:// shares and folders and asks for the login on a sheet; tests cover address planning, share and folder rows, navigation and the sheet. A listing against a real server is tried on Midget."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SMBClientEngine.framework",
+   "category": "frameworks",
+   "name": "SMBClientEngine",
+   "path": "/System/Library/PrivateFrameworks/SMBClientEngine.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/smb.rs; springboard/apps/files/src/server.rs; packaging/arch/runtime-packages.txt",
+   "status": "os",
+   "note": "Built 2026-10-17: smbclient runner with timeout, status mapping and listing parsers in bifrost_app::smb. Wired 2026-10-17: Files calls list_shares and list_dir through the smbclient runner from a background job and maps a refused login to the login sheet (apps/files/src/server.rs).",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-files",
+     "filter": "server::tests"
+    }
+   ],
+   "ready_note": "Files runs the smbclient listing calls and turns the client's answers into browser rows or a login prompt; the mapping is tested without a server."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SMCT.framework",
+   "category": "frameworks",
+   "name": "SMCT",
+   "path": "/System/Library/PrivateFrameworks/SMCT.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: an Apple System Management Controller (SMC) client or test (name-based). SMC is Apple-only hardware with no PC counterpart.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SPFinder.framework",
+   "category": "frameworks",
+   "name": "SPFinder",
+   "path": "/System/Library/PrivateFrameworks/SPFinder.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: the finder side of Apple's Find My network (this device relaying Bluetooth beacons of other people's lost devices and items to Apple). Evidence: SPOwner's plug-in is SearchPartyDiagnosticExtension (SearchParty is the Find My network); it needs Apple accounts, Apple's cloud and Apple accessory radios, and BifrOSt sends no crowdsourced location data to anyone.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SPINANDClient.framework",
+   "category": "frameworks",
+   "name": "SPINANDClient",
+   "path": "/System/Library/PrivateFrameworks/SPINANDClient.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: an Apple SoC NAND flash driver (name-based). Apple-only storage hardware; the PC uses Linux storage drivers.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SPOwner.framework",
+   "category": "frameworks",
+   "name": "SPOwner",
+   "path": "/System/Library/PrivateFrameworks/SPOwner.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/cloud_findmy.rs",
+   "status": "os",
+   "note": "Owner side of Find My for own devices through BifrOSt Cloud (sdk cloud_findmy); no crowdsourced network.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "cloud_findmy::tests"
+    }
+   ],
+   "ready_note": "The owner side of Find My for the user's own devices: list the account's devices, queue locate, play sound or erase commands and report this device's battery and position, over the BifrOSt Cloud API (sdk cloud_findmy.rs). Items and the crowdsourced network (AirTag style accessories) are not mirrored, which is the SPFinder row."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SPShared.framework",
+   "category": "frameworks",
+   "name": "SPShared",
+   "path": "/System/Library/PrivateFrameworks/SPShared.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/cloud_findmy.rs",
+   "status": "os",
+   "note": "Shared Find My types (device, command, report) in sdk cloud_findmy for the account's own devices.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "cloud_findmy::tests"
+    }
+   ],
+   "ready_note": "The shared types between owner and finder roles: device record, command, report. In BifrOSt these are the request and answer types of sdk cloud_findmy.rs. The crowdsourced finder role is n/a (SPFinder)."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SPSupport.framework",
+   "category": "frameworks",
+   "name": "SPSupport",
+   "path": "/System/Library/PrivateFrameworks/SPSupport.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/cloud_findmy.rs",
+   "status": "os",
+   "note": "Find My support helpers: request building and answer reading in sdk cloud_findmy and cloud_account.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "cloud_findmy::tests"
+    }
+   ],
+   "ready_note": "Support types for the owner and finder roles (checked tokens, answer reading, failure mapping). In BifrOSt these are cloud_findmy's checked_token, endpoint and failure helpers shared with the other cloud modules (cloud_account)."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/STSXPCHelperClient.framework",
+   "category": "frameworks",
+   "name": "STSXPCHelperClient",
+   "path": "/System/Library/PrivateFrameworks/STSXPCHelperClient.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: client of the Secure Transaction Services helper (NFC and secure-element transactions such as payments and passes in hardware). Evidence: bundle holds only Info.plist and version.plist; neither the PC nor the tablet has the secure element or NFC stack it fronts.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SUDocAssets.framework",
+   "category": "frameworks",
+   "name": "SUDocAssets",
+   "path": "/System/Library/PrivateFrameworks/SUDocAssets.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/update.rs, springboard/src/shell/pacman_update.rs, springboard/src/shell/store/api.rs",
+   "status": "os",
+   "note": "Update documentation: release notes and changelog parsed from the update manifest and package updates.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::update::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pacman_update::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::store::api::tests"
+    }
+   ],
+   "ready_note": "SUDoc assets are the documentation shown with a software update: release notes and the per-release changelog. BifrOSt reads them from the update manifest (notes and changelog fields, update.rs) and from the package database (pacman_update.rs), with the store's release parser (store/api.rs); they are shown on the Software Update page."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SUDocAssetsUI.framework",
+   "category": "frameworks",
+   "name": "SUDocAssetsUI",
+   "path": "/System/Library/PrivateFrameworks/SUDocAssetsUI.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/update.rs, springboard/src/shell/pacman_update.rs, springboard/src/shell/store/api.rs",
+   "status": "os",
+   "note": "Update documentation UI: Software Update page content from update.rs and pacman_update.rs.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::update::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pacman_update::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::store::api::tests"
+    }
+   ],
+   "ready_note": "The UI half of the update documentation: the Software Update page shows the notes and changelog parsed by update.rs and pacman_update.rs. The tests cover the parsing that feeds it."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SafariSafeBrowsing.framework",
+   "category": "frameworks",
+   "name": "SafariSafeBrowsing",
+   "path": "/System/Library/PrivateFrameworks/SafariSafeBrowsing.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "private framework, owner n/a: browser internals",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SafariSearchSchemaManifest.framework",
+   "category": "frameworks",
+   "name": "SafariSearchSchemaManifest",
+   "path": "/System/Library/PrivateFrameworks/SafariSearchSchemaManifest.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "private framework, owner n/a: browser internals",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SafariUsageRetentionFramework.framework",
+   "category": "frameworks",
+   "name": "SafariUsageRetentionFramework",
+   "path": "/System/Library/PrivateFrameworks/SafariUsageRetentionFramework.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "private framework, owner n/a: browser internals",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SafeEjectGPU.framework",
+   "category": "frameworks",
+   "name": "SafeEjectGPU",
+   "path": "/System/Library/PrivateFrameworks/SafeEjectGPU.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: eject support for Apple external GPU hardware over Thunderbolt (name-based). Apple-only hardware.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SafetyMonitor.framework",
+   "category": "frameworks",
+   "name": "SafetyMonitor",
+   "path": "/System/Library/PrivateFrameworks/SafetyMonitor.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Vendor safety feature (check-in and urgent alerts, LOMO check-in model and urgent alert sounds in the bundle). It depends on the vendor phone safety service, which BifrOSt does not run.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SafetyMonitorUI.framework",
+   "category": "frameworks",
+   "name": "SafetyMonitorUI",
+   "path": "/System/Library/PrivateFrameworks/SafetyMonitorUI.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "User interface of the vendor safety check-in feature (see SafetyMonitor). It depends on the vendor phone safety service, which BifrOSt does not run.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/Sage.framework",
+   "category": "frameworks",
+   "name": "Sage",
+   "path": "/System/Library/PrivateFrameworks/Sage.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: identity not determinable and no user- or app-visible surface. The reference index holds only Info.plist, version.plist and the code signature for this bundle (no localized UI strings, no plug-in, no XPC service, no hosting bundle that links it), so it is treated as Apple-internal plumbing with nothing for BifrOSt to mirror. Revisit if the binary is ever decoded with REA.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SampleAnalysis.framework",
+   "category": "frameworks",
+   "name": "SampleAnalysis",
+   "path": "/System/Library/PrivateFrameworks/SampleAnalysis.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/activity-desktop/src/sample_proc.rs",
+   "status": "os",
+   "note": "Sample Process engine in Activity Monitor (activity-desktop sample_proc).",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-activity",
+     "filter": "sample_proc::tests"
+    }
+   ],
+   "ready_note": "SampleAnalysis is the engine behind Activity Monitor's Sample Process: sample every thread many times a second and report where each spent its time. BifrOSt does the same in activity-desktop sample_proc.rs from /proc/<pid>/task/<tid>/stack, wchan and state, with pure counting and report text tested on the host."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SceneHosting.framework",
+   "category": "frameworks",
+   "name": "SceneHosting",
+   "path": "/System/Library/PrivateFrameworks/SceneHosting.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/ui/src/remote_view.rs, springboard/src/shell/services/scene_services.rs",
+   "status": "os",
+   "note": "Host side of a view another process draws (ui remote_view) plus per-app scene windows (scene_services).",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "remote_view::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::scene_services::tests"
+    }
+   ],
+   "ready_note": "SceneHosting shows a scene that another process draws inside a host window. BifrOSt has the host side as bifrost_ui::remote_view (connect, keep within bounds, placeholder, lost and retry) and gives each app its scene windows through the scenes service (scene_services.rs); external apps render as their own toplevels composed by the window server."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SchemaTypesCore.framework",
+   "category": "frameworks",
+   "name": "SchemaTypesCore",
+   "path": "/System/Library/PrivateFrameworks/SchemaTypesCore.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: Apple's analytics and instrumentation message schema types (the typed events that Siri and system components report back for analytics). Evidence: bundle holds only Info.plist and version.plist; BifrOSt does no telemetry upload by design (privacy-first).",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/ScoreBoard.framework",
+   "category": "frameworks",
+   "name": "ScoreBoard",
+   "path": "/System/Library/PrivateFrameworks/ScoreBoard.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: identity not determinable and no user- or app-visible surface. The reference index holds only Info.plist, version.plist and the code signature for this bundle (no localized UI strings, no plug-in, no XPC service, no hosting bundle that links it), so it is treated as Apple-internal plumbing with nothing for BifrOSt to mirror. Revisit if the binary is ever decoded with REA.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/ScreenContinuityServices.framework",
+   "category": "frameworks",
+   "name": "ScreenContinuityServices",
+   "path": "/System/Library/PrivateFrameworks/ScreenContinuityServices.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: cross-device continuity between Apple devices (name-based). BifrOSt has no Apple device pairing to mirror.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework",
+   "category": "frameworks",
+   "name": "ScreenReader",
+   "path": "/System/Library/PrivateFrameworks/ScreenReader.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/accessibility/reader.rs, springboard/src/shell/accessibility/braille_out.rs, springboard/src/shell/accessibility/mod.rs, springboard/src/shell/services/braille_text.rs, springboard/ui/src/braille.rs",
+   "status": "os",
+   "note": "Screen reader (shell accessibility reader, rotors, speech) with Braille output and translation.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::reader::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::braille_out::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::braille_text::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "braille::tests"
+    }
+   ],
+   "ready_note": "ScreenReader is the screen reader and its Braille output. BifrOSt has a keyboard-cursor reader over the menu bar, open menus and the front window (rotors for controls, fields, lists, menu items, text and progress; press the element under the cursor), speech through the announcement queue and the AT-SPI bridge, a Braille display output and the Braille translation (bifrost_ui::braille, the braille_text service)."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/ScreenReaderCore.framework",
+   "category": "frameworks",
+   "name": "ScreenReaderCore",
+   "path": "/System/Library/PrivateFrameworks/ScreenReaderCore.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/accessibility/reader.rs, springboard/src/shell/accessibility/braille_out.rs, springboard/src/shell/accessibility/mod.rs, springboard/src/shell/services/braille_text.rs, springboard/ui/src/braille.rs",
+   "status": "os",
+   "note": "Screen reader core model: Reader, rotors, speech and Braille translation, all pure and tested.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::reader::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::braille_out::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::braille_text::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "braille::tests"
+    }
+   ],
+   "ready_note": "The core of the screen reader: the element walk, rotors, speech strings and Braille translation are the pure, host-tested model in reader.rs (Reader, speech, page_elements), braille_out.rs and bifrost_ui::braille."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/ScreenSharing.framework",
+   "category": "frameworks",
+   "name": "ScreenSharing",
+   "path": "/System/Library/PrivateFrameworks/ScreenSharing.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/rfb/src/lib.rs, springboard/rfb/src/handshake.rs, springboard/rfb/src/message.rs, springboard/rfb/src/framebuffer.rs, springboard/apps/screen-sharing/src/connection.rs, springboard/apps/screen-sharing/src/view.rs",
+   "status": "os",
+   "note": "VNC screen sharing viewer: Screen Sharing app over the bifrost-rfb client.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-rfb",
+     "filter": "handshake::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-rfb",
+     "filter": "message::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-rfb",
+     "filter": "framebuffer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-rfb",
+     "filter": "pixel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-rfb",
+     "filter": "keysym::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-screen-sharing",
+     "filter": "connection::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-screen-sharing",
+     "filter": "view::tests"
+    }
+   ],
+   "ready_note": "ScreenSharing is the viewer app's engine and UI (connect to another computer's screen over VNC and send keys and pointer). BifrOSt has the Screen Sharing app (apps/screen-sharing) over the bifrost-rfb protocol client: RFB 3.3 to 3.8, true-colour formats, Raw and CopyRect rectangles, DesktopSize, key and pointer input. Not built: password (VNC) authentication and compressed encodings, so a server must allow no authentication and send Raw."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/ScreenSharingKit.framework",
+   "category": "frameworks",
+   "name": "ScreenSharingKit",
+   "path": "/System/Library/PrivateFrameworks/ScreenSharingKit.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/rfb/src/lib.rs, springboard/rfb/src/handshake.rs, springboard/rfb/src/message.rs, springboard/rfb/src/framebuffer.rs, springboard/apps/screen-sharing/src/connection.rs, springboard/apps/screen-sharing/src/view.rs",
+   "status": "os",
+   "note": "Screen sharing session kit: bifrost-rfb client plus the Screen Sharing app; Messages and FaceTime transport not mirrored.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-rfb",
+     "filter": "handshake::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-rfb",
+     "filter": "message::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-rfb",
+     "filter": "framebuffer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-rfb",
+     "filter": "pixel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-rfb",
+     "filter": "keysym::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-screen-sharing",
+     "filter": "connection::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-screen-sharing",
+     "filter": "view::tests"
+    }
+   ],
+   "ready_note": "The kit behind screen sharing sessions: connection, framebuffer view and input forwarding, which BifrOSt has in bifrost-rfb and the Screen Sharing app. The Messages and FaceTime share-sheet transport that the reference kit also serves is Apple-only and is not mirrored."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/ScreenSharingServer.framework",
+   "category": "frameworks",
+   "name": "ScreenSharingServer",
+   "path": "/System/Library/PrivateFrameworks/ScreenSharingServer.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/sharing_page.rs, springboard/src/privd/accounts.rs, packaging/arch/runtime-packages.txt",
+   "status": "os",
+   "note": "Screen sharing server: wayvnc.service switched from the Sharing page via privd.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::sharing_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privd::accounts::tests"
+    }
+   ],
+   "ready_note": "The server side that lets other computers view this screen. BifrOSt runs wayvnc (packaged in runtime-packages.txt) as wayvnc.service; Settings > General > Sharing flips the Screen Sharing switch through privd, which maps screen_sharing to that unit and nothing else. The tests cover the page model and the privd service map."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/ScreenTimeCore.framework",
+   "category": "frameworks",
+   "name": "ScreenTimeCore",
+   "path": "/System/Library/PrivateFrameworks/ScreenTimeCore.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/screen_time.rs, springboard/sdk/src/screen_usage.rs, springboard/src/shell/screentime/config.rs, springboard/src/shell/screentime/shield.rs, springboard/src/shell/screentime/page.rs, springboard/ui/src/os_services/time_limits.rs, springboard/ui/src/os_services/usage_record.rs",
+   "status": "partial",
+   "note": "private framework, owner ScreenTime; from SDK matrix screen-time.json",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_time::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_usage::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::config::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::shield::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "a_stored_grant_is_restored_as_it_was_written"
+    }
+   ],
+   "ready_note": "Covers the Screen Time model, the shell rule that now reads it, the Settings wiring, the configuration observer and the app's own usage, with headless tests. Web usage reporting, the Content Restrictions page and drawing the shield in the model are not covered."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/ScreenTimeServiceUI.framework",
+   "category": "frameworks",
+   "name": "ScreenTimeServiceUI",
+   "path": "/System/Library/PrivateFrameworks/ScreenTimeServiceUI.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/screen_time.rs, springboard/sdk/src/screen_usage.rs, springboard/src/shell/screentime/config.rs, springboard/src/shell/screentime/shield.rs, springboard/src/shell/screentime/page.rs, springboard/ui/src/os_services/time_limits.rs, springboard/ui/src/os_services/usage_record.rs",
+   "status": "partial",
+   "note": "private framework, owner ScreenTime; from SDK matrix screen-time.json",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_time::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_usage::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::config::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::shield::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "a_stored_grant_is_restored_as_it_was_written"
+    }
+   ],
+   "ready_note": "Covers the Screen Time model, the shell rule that now reads it, the Settings wiring, the configuration observer and the app's own usage, with headless tests. Web usage reporting, the Content Restrictions page and drawing the shield in the model are not covered."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/ScreenTimeSettingsFoundation.framework",
+   "category": "frameworks",
+   "name": "ScreenTimeSettingsFoundation",
+   "path": "/System/Library/PrivateFrameworks/ScreenTimeSettingsFoundation.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/screen_time.rs, springboard/sdk/src/screen_usage.rs, springboard/src/shell/screentime/config.rs, springboard/src/shell/screentime/shield.rs, springboard/src/shell/screentime/page.rs, springboard/ui/src/os_services/time_limits.rs, springboard/ui/src/os_services/usage_record.rs",
+   "status": "partial",
+   "note": "private framework, owner ScreenTime; from SDK matrix screen-time.json",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_time::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_usage::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::config::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::shield::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "a_stored_grant_is_restored_as_it_was_written"
+    }
+   ],
+   "ready_note": "Covers the Screen Time model, the shell rule that now reads it, the Settings wiring, the configuration observer and the app's own usage, with headless tests. Web usage reporting, the Content Restrictions page and drawing the shield in the model are not covered."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/ScreenTimeSettingsServices.framework",
+   "category": "frameworks",
+   "name": "ScreenTimeSettingsServices",
+   "path": "/System/Library/PrivateFrameworks/ScreenTimeSettingsServices.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/screen_time.rs, springboard/sdk/src/screen_usage.rs, springboard/src/shell/screentime/config.rs, springboard/src/shell/screentime/shield.rs, springboard/src/shell/screentime/page.rs, springboard/ui/src/os_services/time_limits.rs, springboard/ui/src/os_services/usage_record.rs",
+   "status": "partial",
+   "note": "private framework, owner ScreenTime; from SDK matrix screen-time.json",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_time::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_usage::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::config::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::shield::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "a_stored_grant_is_restored_as_it_was_written"
+    }
+   ],
+   "ready_note": "Covers the Screen Time model, the shell rule that now reads it, the Settings wiring, the configuration observer and the app's own usage, with headless tests. Web usage reporting, the Content Restrictions page and drawing the shield in the model are not covered."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/ScreenTimeSettingsServicesUI.framework",
+   "category": "frameworks",
+   "name": "ScreenTimeSettingsServicesUI",
+   "path": "/System/Library/PrivateFrameworks/ScreenTimeSettingsServicesUI.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/screen_time.rs, springboard/sdk/src/screen_usage.rs, springboard/src/shell/screentime/config.rs, springboard/src/shell/screentime/shield.rs, springboard/src/shell/screentime/page.rs, springboard/ui/src/os_services/time_limits.rs, springboard/ui/src/os_services/usage_record.rs",
+   "status": "partial",
+   "note": "private framework, owner ScreenTime; from SDK matrix screen-time.json",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_time::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_usage::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::config::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::shield::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "a_stored_grant_is_restored_as_it_was_written"
+    }
+   ],
+   "ready_note": "Covers the Screen Time model, the shell rule that now reads it, the Settings wiring, the configuration observer and the app's own usage, with headless tests. Web usage reporting, the Content Restrictions page and drawing the shield in the model are not covered."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/ScreenTimeSettingsUI.framework",
+   "category": "frameworks",
+   "name": "ScreenTimeSettingsUI",
+   "path": "/System/Library/PrivateFrameworks/ScreenTimeSettingsUI.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/screen_time.rs, springboard/sdk/src/screen_usage.rs, springboard/src/shell/screentime/config.rs, springboard/src/shell/screentime/shield.rs, springboard/src/shell/screentime/page.rs, springboard/ui/src/os_services/time_limits.rs, springboard/ui/src/os_services/usage_record.rs",
+   "status": "partial",
+   "note": "private framework, owner ScreenTime; from SDK matrix screen-time.json",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_time::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_usage::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::config::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::shield::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "a_stored_grant_is_restored_as_it_was_written"
+    }
+   ],
+   "ready_note": "Covers the Screen Time model, the shell rule that now reads it, the Settings wiring, the configuration observer and the app's own usage, with headless tests. Web usage reporting, the Content Restrictions page and drawing the shield in the model are not covered."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/ScreenTimeSwift.framework",
+   "category": "frameworks",
+   "name": "ScreenTimeSwift",
+   "path": "/System/Library/PrivateFrameworks/ScreenTimeSwift.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/screen_time.rs, springboard/sdk/src/screen_usage.rs, springboard/src/shell/screentime/config.rs, springboard/src/shell/screentime/shield.rs, springboard/src/shell/screentime/page.rs, springboard/ui/src/os_services/time_limits.rs, springboard/ui/src/os_services/usage_record.rs",
+   "status": "partial",
+   "note": "private framework, owner ScreenTime; from SDK matrix screen-time.json",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_time::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_usage::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::config::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::shield::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "a_stored_grant_is_restored_as_it_was_written"
+    }
+   ],
+   "ready_note": "Covers the Screen Time model, the shell rule that now reads it, the Settings wiring, the configuration observer and the app's own usage, with headless tests. Web usage reporting, the Content Restrictions page and drawing the shield in the model are not covered."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/ScreenTimeUI.framework",
+   "category": "frameworks",
+   "name": "ScreenTimeUI",
+   "path": "/System/Library/PrivateFrameworks/ScreenTimeUI.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/screen_time.rs, springboard/sdk/src/screen_usage.rs, springboard/src/shell/screentime/config.rs, springboard/src/shell/screentime/shield.rs, springboard/src/shell/screentime/page.rs, springboard/ui/src/os_services/time_limits.rs, springboard/ui/src/os_services/usage_record.rs",
+   "status": "partial",
+   "note": "private framework, owner ScreenTime; from SDK matrix screen-time.json",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_time::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_usage::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::config::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::shield::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "a_stored_grant_is_restored_as_it_was_written"
+    }
+   ],
+   "ready_note": "Covers the Screen Time model, the shell rule that now reads it, the Settings wiring, the configuration observer and the app's own usage, with headless tests. Web usage reporting, the Content Restrictions page and drawing the shield in the model are not covered."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/ScreenTimeUICore.framework",
+   "category": "frameworks",
+   "name": "ScreenTimeUICore",
+   "path": "/System/Library/PrivateFrameworks/ScreenTimeUICore.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/screen_time.rs, springboard/sdk/src/screen_usage.rs, springboard/src/shell/screentime/config.rs, springboard/src/shell/screentime/shield.rs, springboard/src/shell/screentime/page.rs, springboard/ui/src/os_services/time_limits.rs, springboard/ui/src/os_services/usage_record.rs",
+   "status": "partial",
+   "note": "private framework, owner ScreenTime; from SDK matrix screen-time.json",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_time::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_usage::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::config::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::shield::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "a_stored_grant_is_restored_as_it_was_written"
+    }
+   ],
+   "ready_note": "Covers the Screen Time model, the shell rule that now reads it, the Settings wiring, the configuration observer and the app's own usage, with headless tests. Web usage reporting, the Content Restrictions page and drawing the shield in the model are not covered."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SearchAds.framework",
+   "category": "frameworks",
+   "name": "SearchAds",
+   "path": "/System/Library/PrivateFrameworks/SearchAds.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple Search Ads advertising service; BifrOSt runs no ad network.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SearchAssets.framework",
+   "category": "frameworks",
+   "name": "SearchAssets",
+   "path": "/System/Library/PrivateFrameworks/SearchAssets.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: downloadable Apple-served asset packs for search (ranking and understanding data fetched from Apple's asset service). Evidence: the reference index lists only Info.plist and version.plist; BifrOSt ranks locally (ui search_rank) and downloads nothing for search.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SearchFoundation.framework",
+   "category": "frameworks",
+   "name": "SearchFoundation",
+   "path": "/System/Library/PrivateFrameworks/SearchFoundation.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/quicksearch.rs, springboard/src/shell/spotindex.rs, springboard/sdk/src/quicksearch.rs, springboard/ui/src/search_rank.rs",
+   "status": "os",
+   "note": "Spotlight search layer: query, results, ranking and local index (quicksearch, spotindex, search_rank).",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "quicksearch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "search_rank::tests"
+    }
+   ],
+   "ready_note": "SearchFoundation is the shared Spotlight search layer: query, results and ranking. BifrOSt has the search panel (quicksearch.rs), the on-device index (spotindex.rs), the app-side indexing API (sdk quicksearch.rs) and ranking (bifrost_ui::search_rank), all local."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SearchIntrospectionKit.framework",
+   "category": "frameworks",
+   "name": "SearchIntrospectionKit",
+   "path": "/System/Library/PrivateFrameworks/SearchIntrospectionKit.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: Apple internal debugging tooling that introspects Spotlight queries and the search index. Evidence: the bundle holds only Info.plist, version.plist and code signature; no user-facing resources. BifrOSt exposes no equivalent debug surface.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SearchUI.framework",
+   "category": "frameworks",
+   "name": "SearchUI",
+   "path": "/System/Library/PrivateFrameworks/SearchUI.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/quicksearch.rs; springboard/src/shell/spotindex.rs; springboard/ui/src/search_rank.rs",
+   "status": "partial",
+   "note": "The search card and its results are covered: quicksearch.rs draws the query field, the suggestions and the grouped rows and opens a result; spotindex.rs is the per-app Core Search index behind the Documents group; search_rank.rs ranks the matches. Providers are the shell's own sources plus every app that indexes items, which is the same split the reference makes.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "search_rank::tests"
+    }
+   ],
+   "ready_note": "Query, grouped results, ranking and opening a result are exercised by the quicksearch, spotindex and search_rank tests. Apps contribute results by sending searchable items to the shell (spotindex); a separate third-party provider process is not needed."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SearchUICardKitProviderSupport.framework",
+   "category": "frameworks",
+   "name": "SearchUICardKitProviderSupport",
+   "path": "/System/Library/PrivateFrameworks/SearchUICardKitProviderSupport.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/spotindex.rs; springboard/sdk/src/search_card_provider.rs; springboard/sdk/src/searchable_entity.rs",
+   "status": "partial",
+   "note": "Apps supply their own search result rows: they send searchable items (title, description, thumbnail, content URL) to the shell's index (spotindex.rs), and the Search panel shows them in the Documents group and opens them in the owning app. sdk/src/search_card_provider.rs adds an in-process card registry with the same matching rule for an app that wants to preview its own cards.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "search_card_provider::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "searchable_entity::tests"
+    }
+   ],
+   "ready_note": "The provider layer is the searchable-item path: spotindex tests cover bounded per-app storage, ranking, expiry and opening; search_card_provider and searchable_entity tests cover the SDK side. The registry is not read by the shell (the shell reads the index), so it is an SDK convenience, not a second path."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SecCodeWrapper.framework",
+   "category": "frameworks",
+   "name": "SecCodeWrapper",
+   "path": "/System/Library/PrivateFrameworks/SecCodeWrapper.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/core/src/codereq.rs; springboard/core/src/code_seal.rs; springboard/core/src/codesign_events.rs",
+   "status": "os",
+   "note": "The typed wrapper over code identity checks is covered: codereq.rs evaluates code requirements over an identity, code_seal.rs verifies a bundle's files against recorded digests, codesign_events.rs reports when a running process stops matching. BifrOSt does not sign code yet, so identities come from the package manifest.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "codereq::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "code_seal::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "codesign_events::tests"
+    }
+   ],
+   "ready_note": "Requirement evaluation, seal verification and validity events are exercised by the codereq, code_seal and codesign_events tests. Signature checking against a signing key waits for code signing itself."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SecureChannel.framework",
+   "category": "frameworks",
+   "name": "SecureChannel",
+   "path": "/System/Library/PrivateFrameworks/SecureChannel.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/ui/src/secure_channel.rs; springboard/ui/src/hpke.rs",
+   "status": "os",
+   "note": "Built 2026-10-17: ui/src/secure_channel.rs, a two-way authenticated encrypted channel between peers that pinned each other's X25519 key. One ephemeral key each way; the traffic keys come from three Diffie-Hellman results plus a transcript hash through HKDF; each direction has its own ChaCha20-Poly1305 key with the message counter as nonce (replay, reorder and tamper are refused, 2^32 message cap). Not wired into the nearby transfer yet, which still uses a shared-secret MAC. Lead 2026-10-17: not ready: no transport uses the channel yet (nearby transfer still uses a shared-secret MAC).",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SecureMessaging.framework",
+   "category": "frameworks",
+   "name": "SecureMessaging",
+   "path": "/System/Library/PrivateFrameworks/SecureMessaging.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "End-to-end encryption for the vendor's own message service (iMessage and its business chats); BifrOSt Messages does not use that service.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SecureMessagingAgentCore.framework",
+   "category": "frameworks",
+   "name": "SecureMessagingAgentCore",
+   "path": "/System/Library/PrivateFrameworks/SecureMessagingAgentCore.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "The agent core of the vendor's message encryption service, which exists only to keep the vendor's message service end to end encrypted.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SecureSessionManagement.framework",
+   "category": "frameworks",
+   "name": "SecureSessionManagement",
+   "path": "/System/Library/PrivateFrameworks/SecureSessionManagement.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/ui/src/secure_session.rs; springboard/ui/src/secure_channel.rs; springboard/core/src/auth_session.rs; springboard/core/src/session_events.rs",
+   "status": "os",
+   "note": "Built 2026-10-17: ui/src/secure_session.rs, the table of open secure channels one process holds. One live session per peer (a reconnect replaces it), a limit on sessions, an age limit and an idle limit enforced on use and by a sweep, failed messages do not count as use, and a closed session wipes its keys. Authentication-session lifecycle and login/su/sudo/ssh session events were already in core (auth_session.rs, session_events.rs). Lead 2026-10-17: not ready: no transport uses the channel yet.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SecureTransactionService.framework",
+   "category": "frameworks",
+   "name": "SecureTransactionService",
+   "path": "/System/Library/PrivateFrameworks/SecureTransactionService.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "The secure element service for the vendor's payment cards and transit passes; the payment hardware and network do not exist on BifrOSt.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SecureVectorStore.framework",
+   "category": "frameworks",
+   "name": "SecureVectorStore",
+   "path": "/System/Library/PrivateFrameworks/SecureVectorStore.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/ui/src/secure_vector_store.rs; springboard/ui/src/sealed_box.rs; springboard/sdk/src/embedding.rs",
+   "status": "os",
+   "note": "Built 2026-10-17: ui/src/secure_vector_store.rs keeps embedding vectors by id, answers nearest-by-cosine queries and is stored only as one AES-GCM sealed blob under a raw key from the keychain, bound to a context string so one app's store does not open as another's. The vectors themselves come from sdk/src/embedding.rs.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "secure_vector_store::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "sealed_box::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "embedding::tests"
+    }
+   ],
+   "ready_note": "secure_vector_store::tests cover ranking, replacement, bad ids, dimensions and non-finite values, the sealed round trip with hidden ids, wrong key, wrong context and tampered bytes; sealed_box and embedding tests cover the container and the vectors."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SecureVoiceTriggerAssets.framework",
+   "category": "frameworks",
+   "name": "SecureVoiceTriggerAssets",
+   "path": "/System/Library/PrivateFrameworks/SecureVoiceTriggerAssets.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Speech model assets for the vendor's always-listening voice trigger, which runs on the vendor's audio hardware.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SecurityTokend.framework",
+   "category": "frameworks",
+   "name": "SecurityTokend",
+   "path": "/System/Library/PrivateFrameworks/SecurityTokend.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/ui/src/token_watch.rs; springboard/ui/src/token_objects.rs; springboard/ui/src/token_registry.rs; springboard/ui/src/token_registration.rs; springboard/ui/src/smartcard_slot.rs",
+   "status": "partial",
+   "note": "The token layer is modelled: the token watcher and session authentication state (token_watch.rs), the keys, certificates and identities a token stores (token_objects.rs), registration of cards for sign-in (token_registry.rs, token_registration.rs) and reader slots (smartcard_slot.rs). A card driver (PC/SC) feeds these models; the models hold no key material.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "token_watch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "token_objects::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "token_registry::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "token_registration::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "smartcard_slot::tests"
+    }
+   ],
+   "ready_note": "All five models have tests: insert and remove events, authenticated-only objects, registration persistence and login policy, slot reports. The reader transport is the driver's job and is not part of the models."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SecurityUICore.framework",
+   "category": "frameworks",
+   "name": "SecurityUICore",
+   "path": "/System/Library/PrivateFrameworks/SecurityUICore.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/ui/src/auth_prompt.rs; springboard/ui/src/auth_view.rs; springboard/sdk/src/secure_entry.rs; springboard/src/shell/auth_sheet.rs; springboard/src/shell/permission_sheet.rs",
+   "status": "partial",
+   "note": "The security prompts are covered: the device-owner password sheet and its attempt/lock-out model (auth_sheet.rs, auth_prompt.rs), the biometric state icon (auth_view.rs), the secure text entry (secure_entry.rs) and the permission question sheet (permission_sheet.rs).",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "auth_prompt::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "auth_view::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "secure_entry::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::auth_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::permission_sheet::tests"
+    }
+   ],
+   "ready_note": "Attempt counting and lock-out, icon states, masked entry that never leaks the text, and the allow/deny permission sheet are exercised by the listed tests."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/Seeding.framework",
+   "category": "frameworks",
+   "name": "Seeding",
+   "path": "/System/Library/PrivateFrameworks/Seeding.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Delivers the vendor's beta feature flags from its cloud seed program to enrolled devices; BifrOSt has its own update channel.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SemanticDocumentManagement.framework",
+   "category": "frameworks",
+   "name": "SemanticDocumentManagement",
+   "path": "/System/Library/PrivateFrameworks/SemanticDocumentManagement.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/embedding.rs; springboard/sdk/src/search_kit.rs; springboard/ui/src/secure_vector_store.rs; springboard/src/shell/spotindex.rs",
+   "status": "os",
+   "note": "Documents are managed for meaning-based retrieval: an app adds, replaces and removes document vectors (sdk embedding index), searches them by cosine (and by word with search_kit), keeps the vectors sealed on disk (secure_vector_store.rs) and indexes the documents for the system search (spotindex.rs). The vectors are hashed bags of words, not a neural model, so they match shared words and not synonyms.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "embedding::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "search_kit::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "secure_vector_store::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::tests"
+    }
+   ],
+   "ready_note": "Insert, remove, nearest and summary are exercised by the embedding and search_kit tests; sealed storage by secure_vector_store tests; system-search indexing by spotindex tests."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SemanticPerception.framework",
+   "category": "frameworks",
+   "name": "SemanticPerception",
+   "path": "/System/Library/PrivateFrameworks/SemanticPerception.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: Apple's trained image-perception model runtime. The framework carries only Info.plist and version.plist in the reference index (no UI, no XPC service); the perception models are Apple ML model packs. BifrOSt does scene understanding through visual_search providers and subject_lift with an open segmenter, tracked in their own rows.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SensingPredict.framework",
+   "category": "frameworks",
+   "name": "SensingPredict",
+   "path": "/System/Library/PrivateFrameworks/SensingPredict.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: Apple's on-device sensing-prediction service. The reference index shows only Info.plist and version.plist for the framework, a launch agent (sensingpredictd) and its sandbox profile; it runs Apple-trained prediction models over device context signals, an Apple ML model pack with no user-visible function.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SensingPredictDaemon.framework",
+   "category": "frameworks",
+   "name": "SensingPredictDaemon",
+   "path": "/System/Library/PrivateFrameworks/SensingPredictDaemon.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: the sensingpredictd daemon of Apple's sensing-prediction service (launch agent com.apple.sensingpredictd, sandbox profile sensingpredictd.sb in the reference index). It hosts Apple-trained prediction models; there is no user-visible function to mirror.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SensingPredictServices.framework",
+   "category": "frameworks",
+   "name": "SensingPredictServices",
+   "path": "/System/Library/PrivateFrameworks/SensingPredictServices.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: the SensingPredictXPCService client side of Apple's sensing-prediction service (one XPC service and its sandbox profile in the reference index). It serves Apple-trained prediction models to clients; there is no user-visible function to mirror.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SensitiveContentAnalysisML.framework",
+   "category": "frameworks",
+   "name": "SensitiveContentAnalysisML",
+   "path": "/System/Library/PrivateFrameworks/SensitiveContentAnalysisML.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "docs/parity-matrix/data/sensitive-content-analysis.json",
+   "status": "n/a",
+   "note": "private framework, owner SensitiveContentAnalysis; from SDK matrix sensitive-content-analysis.json",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SensitiveContentAnalysisUI.framework",
+   "category": "frameworks",
+   "name": "SensitiveContentAnalysisUI",
+   "path": "/System/Library/PrivateFrameworks/SensitiveContentAnalysisUI.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "docs/parity-matrix/data/sensitive-content-analysis.json",
+   "status": "n/a",
+   "note": "private framework, owner SensitiveContentAnalysis; from SDK matrix sensitive-content-analysis.json",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SensorAccess.framework",
+   "category": "frameworks",
+   "name": "SensorAccess",
+   "path": "/System/Library/PrivateFrameworks/SensorAccess.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/sensors.rs; springboard/src/bare/app_policy.rs",
+   "status": "partial",
+   "note": "The sensor models (magnetometer, altimeter, motion activity, pedometer, attitude) are tested. The sensors manifest permission is recognised by the shell policy and the SDK SensorAccess gate fails closed without it.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "sensors::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::app_policy::tests::sensors_permission"
+    }
+   ],
+   "ready_note": "SensorAccess: sensors permission in app_policy (Policy.sensors, holds, ENTITLEMENT_NAMES) and sdk sensors::SensorAccess with SensorKind; tests in both crates."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SentencePieceInternal.framework",
+   "category": "frameworks",
+   "name": "SentencePieceInternal",
+   "path": "/System/Library/PrivateFrameworks/SentencePieceInternal.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "An internal copy of the SentencePiece tokenizer for the vendor's on-device language models; BifrOSt ships no vendor model.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/Sentry.framework",
+   "category": "frameworks",
+   "name": "Sentry",
+   "path": "/System/Library/PrivateFrameworks/Sentry.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: Apple-internal monitoring framework behind the sentryd daemon (man page sentryd.8 and the logging subsystems Framework.Lifecycle and FrameworkSignposts in the reference index; no resources, no UI). It exists for Apple's own diagnostics and signposts; BifrOSt's local crash and signpost reporting is tracked in the diagnostics rows.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/ServerInformation.framework",
+   "category": "frameworks",
+   "name": "ServerInformation",
+   "path": "/System/Library/PrivateFrameworks/ServerInformation.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Information for the macOS Server product, which the vendor withdrew in 2022; no server product exists on BifrOSt.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/ServiceDiscovery.framework",
+   "category": "frameworks",
+   "name": "ServiceDiscovery",
+   "path": "/System/Library/PrivateFrameworks/ServiceDiscovery.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/service_discovery.rs; springboard/sdk/src/net_service.rs; springboard/apps/printers-desktop/src/discover.rs; packaging/arch/runtime-packages.txt (avahi)",
+   "status": "partial",
+   "note": "DNS-SD browse and advertise over multicast DNS, plus a system-wide ServiceRegistry that keeps each app's publications, renames conflicting labels (\"Den (2)\") and removes one owner's services when it leaves.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "service_discovery::tests"
+    },
+    {
+     "kind": "cmd",
+     "run": "avahi-browse --help",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "Browse and advertise (ServiceBrowser, ServiceAdvertiser) and the session registry (ServiceRegistry) with conflict renaming and per-owner removal; tests in service_discovery::tests. avahi is installed."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/ServicesAnalyticsCore.framework",
+   "category": "frameworks",
+   "name": "ServicesAnalyticsCore",
+   "path": "/System/Library/PrivateFrameworks/ServicesAnalyticsCore.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "The analytics event model of the vendor's services, which reports usage to the vendor's servers; BifrOSt sends no vendor telemetry.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/ServicesAnalyticsDaemon.framework",
+   "category": "frameworks",
+   "name": "ServicesAnalyticsDaemon",
+   "path": "/System/Library/PrivateFrameworks/ServicesAnalyticsDaemon.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "The background daemon that batches the vendor's service analytics and uploads them to the vendor's servers; BifrOSt sends no vendor telemetry.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/ServicesAnalyticsKit.framework",
+   "category": "frameworks",
+   "name": "ServicesAnalyticsKit",
+   "path": "/System/Library/PrivateFrameworks/ServicesAnalyticsKit.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "The client API that lets vendor apps submit service analytics events to the vendor's servers; BifrOSt sends no vendor telemetry.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SessionAlert.framework",
+   "category": "frameworks",
+   "name": "SessionAlert",
+   "path": "/System/Library/PrivateFrameworks/SessionAlert.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/ui/src/live_activity.rs; springboard/src/shell/services/widgets_timeline.rs; springboard/sdk/src/widgets_timeline.rs",
+   "status": "os",
+   "note": "Live activities reach the person as rows in Notification Centre's widget area with a state (pending, active, stale, ended), updated by their owning app only; an ended activity leaves after its dismissal policy.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "live_activity::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::widgets_timeline::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "widgets_timeline::tests"
+    }
+   ],
+   "ready_note": "Starting, updating, ending and dismissing an activity, and the rows the shell shows for it, are exercised by the live_activity and widgets_timeline tests. A separate alert presentation (banner with sound on update) is not built."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SessionAssertion.framework",
+   "category": "frameworks",
+   "name": "SessionAssertion",
+   "path": "/System/Library/PrivateFrameworks/SessionAssertion.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/cmd/src/caffeinate.rs; springboard/sdk/src/session_assertion.rs",
+   "status": "partial",
+   "note": "Idle and system-sleep inhibitors are taken through systemd-inhibit (logind), as caffeinate and the lid inhibitor do. The SDK PowerAssertion builds the same block inhibitor for apps (hold kind, reason, app name, command or sleep).",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "session_assertion::tests"
+    },
+    {
+     "kind": "cmd",
+     "run": "systemd-inhibit --help",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "PowerAssertion (sdk session_assertion) builds the systemd-inhibit argv for idle, sleep or both, with the reason and app name, and wraps a command or sleep infinity; tests in session_assertion::tests."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SessionCore.framework",
+   "category": "frameworks",
+   "name": "SessionCore",
+   "path": "/System/Library/PrivateFrameworks/SessionCore.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/ui/src/live_activity.rs; springboard/src/shell/services/widgets_timeline.rs; springboard/sdk/src/widgets_timeline.rs",
+   "status": "os",
+   "note": "liveactivitiesd's job is covered: the life cycle registry (request, update, end, dismissal window, the person's off switch) in ui/src/live_activity.rs, served to apps by the widgets_timeline shell service and its SDK client.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "live_activity::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::widgets_timeline::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "widgets_timeline::tests"
+    }
+   ],
+   "ready_note": "Registry life cycle, owner-only updates, stale and end handling are exercised by live_activity::tests and the widgets_timeline tests in the shell and the SDK."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SessionFoundation.framework",
+   "category": "frameworks",
+   "name": "SessionFoundation",
+   "path": "/System/Library/PrivateFrameworks/SessionFoundation.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/ui/src/live_activity.rs; springboard/src/shell/services/widgets_timeline.rs; springboard/sdk/src/widgets_timeline.rs",
+   "status": "os",
+   "note": "Shared types of the live-activity daemon (content, state, dismissal, errors) are the public types of ui/src/live_activity.rs, used by the shell service and the SDK; BifrOSt keeps them in one module instead of a separate foundation layer.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "live_activity::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::widgets_timeline::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "widgets_timeline::tests"
+    }
+   ],
+   "ready_note": "Internal plumbing of the live-activity function covered by live_activity::tests and the service tests."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SessionPushNotifications.framework",
+   "category": "frameworks",
+   "name": "SessionPushNotifications",
+   "path": "/System/Library/PrivateFrameworks/SessionPushNotifications.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Receives the push tokens and wake-ups of the vendor's push service for its cloud features; BifrOSt has no such push service.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SessionSQL.framework",
+   "category": "frameworks",
+   "name": "SessionSQL",
+   "path": "/System/Library/PrivateFrameworks/SessionSQL.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/ui/src/live_activity.rs; springboard/src/shell/services/widgets_timeline.rs; springboard/sdk/src/widgets_timeline.rs",
+   "status": "os",
+   "note": "The session store of the live-activity daemon is the in-memory Registry in ui/src/live_activity.rs, owned by the shell service (process-wide store in widgets_timeline.rs). Activities are short lived (an ended one leaves within four hours) and the owning app starts them again, so BifrOSt keeps no SQL file for them.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "live_activity::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::widgets_timeline::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "widgets_timeline::tests"
+    }
+   ],
+   "ready_note": "Internal storage of the live-activity function; the Registry and the service store are covered by live_activity::tests and widgets_timeline tests. Activities do not survive a shell restart."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SessionSyncEngine.framework",
+   "category": "frameworks",
+   "name": "SessionSyncEngine",
+   "path": "/System/Library/PrivateFrameworks/SessionSyncEngine.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: mirrors live activities from other Apple devices (iPhone to Mac) through the Apple account and its cloud/continuity transport. Account-bound cross-device sync is deliberately not mirrored; the reference index shows only Info.plist for this framework.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/Settings.framework",
+   "category": "frameworks",
+   "name": "Settings",
+   "path": "/System/Library/PrivateFrameworks/Settings.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/settings.rs; springboard/src/shell/pages.rs; springboard/src/shell/settings_load.rs; springboard/src/shell/settings_search.rs",
+   "status": "partial",
+   "note": "The Settings app is covered: a navigation stack of list pages built from data (pages.rs), persisted options and device effects for each row (settings.rs), off-thread reads for slow panes (settings_load.rs) and a search over every pane and row (settings_search.rs). Which panes exist is tracked by the pane rows of the Settings app; this row is the framework that hosts them.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_load::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_search::tests"
+    }
+   ],
+   "ready_note": "Page specs, row actions, option persistence, loading and search are exercised by the four test modules."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SettingsHost.framework",
+   "category": "frameworks",
+   "name": "SettingsHost",
+   "path": "/System/Library/PrivateFrameworks/SettingsHost.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/settings.rs; springboard/src/shell/settings_load.rs; springboard/src/shell/settings_panes.rs; springboard/sdk/src/settings_panes.rs",
+   "status": "partial",
+   "note": "The shell hosts the settings pages in-process (settings.rs), and settings_load.rs reads their stored values. Built 2026-10-17: [[settings_pane]] manifest tables parsed into the app manifest (shell/settings_panes.rs, tests settings_panes::tests). Built 2026-10-17: Settings root lists each app that declares panes, its page lists the panes, and picking one sends ae.settings.openPane over the control socket (shell/settings_panes.rs, tests settings_panes::tests; the SDK handler is sdk/src/settings_panes.rs).",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_panes::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "settings_panes::tests"
+    }
+   ],
+   "ready_note": "Settings pane registration: the manifest tables, the Settings rows and page, and the SDK open handler are tested. The Settings page is not yet drawn on Midget."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SettingsHostUI.framework",
+   "category": "frameworks",
+   "name": "SettingsHostUI",
+   "path": "/System/Library/PrivateFrameworks/SettingsHostUI.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/settings_panes.rs; springboard/sdk/src/settings_panes.rs; springboard/src/shell/settings.rs",
+   "status": "partial",
+   "note": "The host extension point is covered: an app declares [[settings_pane]] tables in its manifest, the shell lists them in Settings and opens the pane over the app's control socket (ae.settings.openPane); the SDK installs the handler. The pages, the Wi-Fi password sheet and the confirmation alerts are in settings.rs.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_panes::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "settings_panes::tests"
+    }
+   ],
+   "ready_note": "Manifest parsing, listing, the open request and its handler are exercised by settings_panes tests in the shell and the SDK; page drawing and alerts by settings tests."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SettingsServices.framework",
+   "category": "frameworks",
+   "name": "SettingsServices",
+   "path": "/System/Library/PrivateFrameworks/SettingsServices.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/settings_search.rs; springboard/src/shell/settings_intents.rs",
+   "status": "os",
+   "note": "SettingsSearchReindexService's job is covered: the Settings search index is built from the page specs every time Settings searches (settings_search.rs), so it cannot go stale and needs no reindex service; the pane intents (settings_intents.rs) let Search and the agent socket list and open panes.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_search::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    }
+   ],
+   "ready_note": "Index building, matching by name and keyword, and the pane intent catalogue are exercised by the two test modules."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SettingsServicesXPC.framework",
+   "category": "frameworks",
+   "name": "SettingsServicesXPC",
+   "path": "/System/Library/PrivateFrameworks/SettingsServicesXPC.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/settings_actions.rs; springboard/src/shell/settings_intents.rs; springboard/src/shell/settings_panes.rs",
+   "status": "os",
+   "note": "The service protocol to Settings is the shell's own: pane-opening intents and Wi-Fi/wallpaper action intents (settings_intents.rs, settings_actions.rs) and the app pane open method over the control socket (settings_panes.rs). There is no separate XPC process.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_actions::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_panes::tests"
+    }
+   ],
+   "ready_note": "Plumbing of the Settings services covered by the intent, action and pane tests."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SetupAssistantFramework.framework",
+   "category": "frameworks",
+   "name": "SetupAssistantFramework",
+   "path": "/System/Library/PrivateFrameworks/SetupAssistantFramework.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
+   "status": "partial",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_panel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::speech::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "automation::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "widget::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-reminders",
+     "filter": "actions_tests"
+    }
+   ],
+   "ready_note": "Apps declare [[intent]] tables in manifest.toml and serve them on their control socket. Search and the Shortcuts action library list and run an installed app's shortcut intents (shell::intents::runnable_shortcuts). The assistant answers with intent cards that run only after the user confirms them, and reads answers aloud when Speak Answers is on. Voice recognition is not built: nothing turns speech into an intent request, so Siri's spoken requests are not covered.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SetupAssistantPane.framework",
+   "category": "frameworks",
+   "name": "SetupAssistantPane",
+   "path": "/System/Library/PrivateFrameworks/SetupAssistantPane.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
+   "status": "partial",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_panel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::speech::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "automation::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "widget::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-reminders",
+     "filter": "actions_tests"
+    }
+   ],
+   "ready_note": "Apps declare [[intent]] tables in manifest.toml and serve them on their control socket. Search and the Shortcuts action library list and run an installed app's shortcut intents (shell::intents::runnable_shortcuts). The assistant answers with intent cards that run only after the user confirms them, and reads answers aloud when Speak Answers is on. Voice recognition is not built: nothing turns speech into an intent request, so Siri's spoken requests are not covered.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SetupAssistantPaneUI.framework",
+   "category": "frameworks",
+   "name": "SetupAssistantPaneUI",
+   "path": "/System/Library/PrivateFrameworks/SetupAssistantPaneUI.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
+   "status": "partial",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_panel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::speech::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "automation::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "widget::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-reminders",
+     "filter": "actions_tests"
+    }
+   ],
+   "ready_note": "Apps declare [[intent]] tables in manifest.toml and serve them on their control socket. Search and the Shortcuts action library list and run an installed app's shortcut intents (shell::intents::runnable_shortcuts). The assistant answers with intent cards that run only after the user confirms them, and reads answers aloud when Speak Answers is on. Voice recognition is not built: nothing turns speech into an intent request, so Siri's spoken requests are not covered.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SetupAssistantSupport.framework",
+   "category": "frameworks",
+   "name": "SetupAssistantSupport",
+   "path": "/System/Library/PrivateFrameworks/SetupAssistantSupport.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
+   "status": "partial",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_panel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::speech::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "automation::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "widget::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-reminders",
+     "filter": "actions_tests"
+    }
+   ],
+   "ready_note": "Apps declare [[intent]] tables in manifest.toml and serve them on their control socket. Search and the Shortcuts action library list and run an installed app's shortcut intents (shell::intents::runnable_shortcuts). The assistant answers with intent cards that run only after the user confirms them, and reads answers aloud when Speak Answers is on. Voice recognition is not built: nothing turns speech into an intent request, so Siri's spoken requests are not covered.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SetupAssistantSupportUI.framework",
+   "category": "frameworks",
+   "name": "SetupAssistantSupportUI",
+   "path": "/System/Library/PrivateFrameworks/SetupAssistantSupportUI.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
+   "status": "partial",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_panel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::speech::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "automation::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "widget::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-reminders",
+     "filter": "actions_tests"
+    }
+   ],
+   "ready_note": "Apps declare [[intent]] tables in manifest.toml and serve them on their control socket. Search and the Shortcuts action library list and run an installed app's shortcut intents (shell::intents::runnable_shortcuts). The assistant answers with intent cards that run only after the user confirms them, and reads answers aloud when Speak Answers is on. Voice recognition is not built: nothing turns speech into an intent request, so Siri's spoken requests are not covered.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SetupKit.framework",
+   "category": "frameworks",
+   "name": "SetupKit",
+   "path": "/System/Library/PrivateFrameworks/SetupKit.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: Apple's proximity setup framework for Apple devices and accessories (HomePod, Apple TV, iPhone-assisted setup), a sibling of AccessorySetupKitCore in the reference index and localised for the Apple setup flows. It runs an Apple-only pairing protocol with no open equivalent; BifrOSt's own first-run Setup Assistant app and Bluetooth accessory picker are separate rows.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/ShareKit.framework",
+   "category": "frameworks",
+   "name": "ShareKit",
+   "path": "/System/Library/PrivateFrameworks/ShareKit.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/sharing.rs; springboard/src/shell/share/mod.rs; springboard/sdk/src/share.rs; springboard/ui/src/reading_list.rs",
+   "status": "os",
+   "note": "The share sheet and its destinations are covered: the picker lists installed apps that open every shared item plus Copy and Compose Post (sharing.rs), the nearby sheet adds Save to Files and Send Nearby (share/mod.rs), and the Reading List and mail/message destinations are apps that declare what they open. The SDK sends and receives shared items (share.rs).",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::sharing::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::share::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "share::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "reading_list::tests"
+    }
+   ],
+   "ready_note": "Target selection by type, delivery of text, URLs and files with read-only grants, the sheet model and the reading list are exercised by the listed tests. Account-picture and desktop-picture destinations are the Settings pages' own actions."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SharePointManagement.framework",
+   "category": "frameworks",
+   "name": "SharePointManagement",
+   "path": "/System/Library/PrivateFrameworks/SharePointManagement.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: management of Microsoft SharePoint sites in Apple's file integration (name-based). It needs a Microsoft service BifrOSt does not have.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/ShareReporting.framework",
+   "category": "frameworks",
+   "name": "ShareReporting",
+   "path": "/System/Library/PrivateFrameworks/ShareReporting.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: the sharereportingd launch agent reports sharing events (a daemon only; the reference index shows no resources and no UI for the framework). That is usage telemetry, which BifrOSt does not collect; local recipient suggestions are in recipient_recents.rs.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/ShareServicesCore.framework",
+   "category": "frameworks",
+   "name": "ShareServicesCore",
+   "path": "/System/Library/PrivateFrameworks/ShareServicesCore.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/sharing.rs; springboard/src/shell/share/mod.rs; springboard/sdk/src/share.rs; springboard/src/net/share.rs",
+   "status": "os",
+   "note": "The core of the share services (the service list and its plug-ins such as Add to Photos) is the target list of the share sheet: any installed app that declares the item types it opens is a destination, and the transfer to a nearby device is net/share.rs.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::sharing::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "net::share::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "share::tests"
+    }
+   ],
+   "ready_note": "Service discovery by manifest, delivery and the nearby transfer are exercised by the sharing, SDK share and net::share tests."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SharedWebCredentials.framework",
+   "category": "frameworks",
+   "name": "SharedWebCredentials",
+   "path": "/System/Library/PrivateFrameworks/SharedWebCredentials.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: shared web credential lookup through Apple's associated-domain service, which ties into Apple's Passwords. BifrOSt keeps saved logins locally (springboard/sdk/src/passwords.rs).",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/Sharing.framework",
+   "category": "frameworks",
+   "name": "Sharing",
+   "path": "/System/Library/PrivateFrameworks/Sharing.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/share/mod.rs; springboard/src/net/share.rs; springboard/src/shell/sharing_page.rs; springboard/src/shell/sharing.rs",
+   "status": "os",
+   "note": "The job of the sharing framework is covered by BifrOSt's own nearby sharing: discovery by multicast beacon, an Accept or Decline prompt, a checksummed file transfer with progress (net/share.rs, share/*), the Settings > Sharing page with the computer name and Remote Login, File Sharing and Screen Sharing switches (sharing_page.rs) and the app share picker. The proprietary AirDrop radio protocol is not mirrored; the nearby transfer is plain LAN with a shared-secret MAC (secure_channel.rs is the building block to encrypt it).",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::share::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "net::share::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::sharing_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::sharing::tests"
+    }
+   ],
+   "ready_note": "Beacons, offers, transfers, progress, the Sharing settings page and the picker are exercised by the listed tests."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SharingCore.framework",
+   "category": "frameworks",
+   "name": "SharingCore",
+   "path": "/System/Library/PrivateFrameworks/SharingCore.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/net/share.rs; springboard/src/shell/share/progress.rs; springboard/src/shell/share/glue.rs",
+   "status": "os",
+   "note": "The core of sharing (peers, offers, transfers and their status) is net/share.rs, with the progress rows in share/progress.rs and the shell wiring in share/glue.rs.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "net::share::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::share::progress::tests"
+    }
+   ],
+   "ready_note": "Internal plumbing of the nearby sharing function, covered by the net::share and progress tests."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SharingUI.framework",
+   "category": "frameworks",
+   "name": "SharingUI",
+   "path": "/System/Library/PrivateFrameworks/SharingUI.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/share/mod.rs; springboard/src/shell/share/progress.rs; springboard/src/shell/share/prompt.rs",
+   "status": "os",
+   "note": "The sharing UI is covered: the share sheet with the preview, the row of nearby devices and the actions (share/mod.rs), the incoming-file Accept or Decline prompt (share/prompt.rs) and the transfer progress card (share/progress.rs). It draws BifrOSt's own artwork, not the AirDrop artwork.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::share::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::share::progress::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::share::prompt::tests"
+    }
+   ],
+   "ready_note": "Layout, hit testing, results, prompt and progress rows are exercised by the three test modules."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SharingXPCServices.framework",
+   "category": "frameworks",
+   "name": "SharingXPCServices",
+   "path": "/System/Library/PrivateFrameworks/SharingXPCServices.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/sharing.rs; springboard/sdk/src/share.rs",
+   "status": "os",
+   "note": "SharingXPCHelper lets sandboxed apps use sharing. In BifrOSt an app asks the shell through ToShell::Share and receives items as document grants (sharing.rs, sdk share.rs), so the shell is the helper and no separate XPC process exists.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::sharing::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "share::tests"
+    }
+   ],
+   "ready_note": "Plumbing of the share function: requests, grants and the answer to the sender are exercised by the shell and SDK share tests."
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/ShazamCore.framework",
+   "category": "frameworks",
+   "name": "ShazamCore",
+   "path": "/System/Library/PrivateFrameworks/ShazamCore.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Music recognition backend of the Shazam service that ShazamKit fronts; the SDK matrix marks ShazamKit n/a, so there is no BifrOSt counterpart.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/ShazamEvents.framework",
+   "category": "frameworks",
+   "name": "ShazamEvents",
+   "path": "/System/Library/PrivateFrameworks/ShazamEvents.framework",
+   "kind": "private framework",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Event reporting for the Shazam music recognition service; no BifrOSt counterpart (SDK matrix marks ShazamKit n/a).",
+   "rea": [],
+   "method": "assessed"
+  }
+ ]
+}

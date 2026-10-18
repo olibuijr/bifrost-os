@@ -4,9 +4,11 @@
 
 pub mod accounts;
 pub mod attachments;
+pub mod background;
 pub mod body;
 pub mod category;
 pub mod codec;
+pub mod compose_windows;
 pub mod draw;
 pub mod export;
 pub mod mute;
@@ -14,6 +16,7 @@ pub mod people;
 pub mod prefs;
 pub mod findbar;
 pub mod flags;
+pub mod found;
 pub mod html;
 pub mod imap;
 pub mod layout;
@@ -35,6 +38,8 @@ pub mod submit;
 pub mod sync;
 pub mod threads;
 pub mod transport;
+pub mod viewer;
 pub mod window;
 pub mod signature;
+pub mod index;
 pub mod organize;

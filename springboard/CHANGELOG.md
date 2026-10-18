@@ -1,6 +1,48 @@
 # BifrOSt changelog
 
-## 0.8.0 — 2026-10-14
+## Unreleased
+
+- Video: the media player takes a playback rate (0.5x to 3x; the audio is time-stretched and the picture clock runs at the rate).
+- Music engine: crossfade between songs (`Crossfader`: the end of a song is held back and the next start is mixed under it with
+  equal-power gains, at most half a song, never on live stations); audiod has a `SetCrossfade` command.
+- Settings > Displays: Automatically Adjust Brightness on machines with an ambient light sensor (`auto_brightness`, off by default).
+- Settings > Accessibility: Show Vehicle Motion Cues (machines with an accelerometer), Switch Control and Voice Control
+  switches, and a Punctuation choice (None, Some, All) for the Screen Reader's voice.
+- Terminal: the profile look stores a window opacity (0.5 to 1.0), a background image with fit mode (fill, fit, tile) and a dim, saved in prefs and clamped on read. The grid does not paint them yet, and the Profile Editor does not set them yet.
+
+## 0.9.0 — 2026-10-17
+
+OS-layer parity rounds (waves 1-9, about 1,500 commits from Haiku builders, merged and checked by the lead).
+- Parity matrix: OS rows carry `ready` + `checks` (file, cmd, unit, test); `bifrost pc parity os-verify plan|run|promote`
+  runs them on an installed system and promotes the rows that pass. About 2,400 rows are ready for verification.
+- Privacy and accounts: password sheet for app authentication (PAM, three tries), account access prompts with a manifest
+  permission, contacts picker and access sheet, guardian questions, saved privacy grants, account content limits.
+- Notifications: app authorization with per-option grants, provisional authorization, calendar/interval triggers over
+  the wire, foreground presentation delegate, action buttons on banners, lock screen and Notification Center cards,
+  attachments, custom dismiss, hidden previews, per-app settings.
+- Speech: on-device dictation through gst-plugin-whisper after explicit consent (model download in Settings); spoken
+  assistant answers (off by default).
+- Accessibility: Dwell Control, Slow Keys, Mouse Keys, Sticky Keys switch, popup earcons, interface sounds, Speak
+  Selection, AT-SPI notifications, Voice Control and Switch Control models.
+- System: encrypted backups (XChaCha20-Poly1305, key in the keychain) with a destination disk, Spotlight scope settings,
+  background app suspension (off by default), picture in picture, install coordinator and uninstall, migration helper,
+  regulatory domain from the region, app settings panes, screen capture streams with filters and recording.
+- Fonts: licensed reference families resolve to packaged open-source faces (TeX Gyre, Liberation, Libertinus, Source
+  Serif/Sans, Lato, Nunito, IBM Plex, Noto, DejaVu, Inter, JetBrains Mono, Montserrat, Roboto).
+- Graphics: Core Image style filter catalogue (47+ filters, tiles, transitions), PBR shading, demosaic, depth relight,
+  stereo disparity, optical flow, HDR merge, SVG reader, ink strokes.
+- SDK: about 120 new modules (crypto, networking, TLS, HTTP, Kerberos/LDAP, contacts, calendar, photos, media, maps,
+  gamepads, PDF, tabular data, DSP, scripting, search, StoreKit test session, ...). See docs/bifrost-ui.md.
+
+## 0.8.2 — 2026-10-16
+
+- Installer: explicitly install `mkinitcpio` on the target system so offline installs can generate the initial initramfs and finish boot setup.
+- T2 MacBook Pro installer media: opt-in ISO builds use the pinned `linux-lts-t2` kernel, include T2BCE and built-in keyboard/trackpad modules in the live initramfs, and set the T2 EFI kernel parameters. The installer selects the T2 kernel and carries it in its offline package bundle.
+
+## 0.8.1 — 2026-10-15
+
+- Terminal: common control keys reach the shell. Plain Ctrl chords send their control bytes to the pty (Ctrl+A/E line start/end, Ctrl+B/F/N/P move and history, Ctrl+D/H delete, Ctrl+K/U/W kill, Ctrl+Y yank, Ctrl+L clear, Ctrl+R/S search, Ctrl+T transpose, Ctrl+C/Z interrupt/suspend), Alt sends ESC plus the key (Alt+B/F/D word edits, Alt+Backspace kill word, Alt+Left/Right word jumps), and Home/End/Delete/PageUp/PageDown work with a hardware keyboard. One new SDK kit maps them all (`bifrost_ui::terminal_keys`, shared by the hardware path, the on-screen Ctrl key and `term send_keys`); Ctrl+Space (input source), Tab chords (app switcher), Ctrl+Alt chords (screen reader) and Cmd chords (copy/paste, tabs, find) are untouched, and an open panel keeps pty input out.
+- Keyboard: the on-screen Ctrl key uses the same terminal-keys kit (Ctrl+Space is NUL, keys Ctrl does not combine with are dropped instead of sending a bogus code).
 
 - Installer: release ISOs carry a checksum-verified offline package repository, shell and default apps; dependency resolution is preflighted from an empty package database before disk changes.
 - App isolation: camera permission is limited to Photo Booth and supported capture devices; screen sampling is limited to Color Meter and requires the existing privacy consent. Undeclared or unauthorized capabilities remain denied.
@@ -8,6 +50,10 @@
 - App compliance: repaired lifecycle, worker wake, layout and annotation findings across the reviewed apps; added executable-target validation so incomplete Screenshot packaging is reported rather than published.
 - Preview: replaced its custom toolbar drawing with grouped Golden Gate kit controls, including accessible button nodes; the page-thumbnail gallery remains custom because its rows vary with document page sizes.
 - Release metadata: aligned the Keyboard system manifest with app version 1.1.3.
+
+- Terminal: Edit > Copy Special has Text with Colors and Without Background Colour. Both put plain text and RTF on the pasteboard, and the RTF keeps each cell's colours.
+- Terminal: the Profile Editor (More > Profile Editor) sets the 16 ANSI colours with colour wells and red, green and blue steppers, Bold as Bright, Allow Blink (stored; blinking text is not drawn yet), character and line spacing, and the cursor style. It is saved in prefs and applies to every tab.
+- Terminal: a .command file, or an executable, opened with Terminal runs in its own new tab in its folder, and the tab stays at a login shell.
 
 - Photos: album folders have a tested model (names, one folder per album, slots kept in step when an album is deleted, stored under uf.<n> in photos.ini). The picker does not show folders yet.
 - Terminal: Edit Title for a tab, Allow Mouse Reporting, Search the Web and Open man Page for the selection, Save Selected Text, and Use Selection for Find (Cmd+E).

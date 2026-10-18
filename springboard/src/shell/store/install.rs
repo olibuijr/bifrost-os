@@ -115,6 +115,15 @@ pub struct Manifest {
     /// `"full-size"`: a full-size-content window (`NativeWindowStyleMaskFullSizeContentView`). The shell draws no
     /// title row; the traffic lights sit over the app at the top left and the app's toolbar band drags the window.
     pub window: String,
+    /// Relative directory of the app's help book (`help = "help"`): Markdown pages with front matter, read by the
+    /// shell's help index (`shell::helpbook`). Empty when the app ships no help.
+    pub help: String,
+    /// `"still"` or `"day"`: the kind of wallpaper the app provides (`shell::wallpaper_types`); empty for none.
+    pub wallpaper_kind: String,
+    /// The app's wallpaper pictures, package-relative (`wallpapers = ["wallpapers/a.png"]`).
+    pub wallpapers: Vec<String>,
+    /// Input source plugins the app adds, one `id|name|language|engine` each (`input_methods::plugins`).
+    pub input_sources: Vec<String>,
 }
 
 impl Manifest {
@@ -166,12 +175,14 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, String> {
             match k {
                 "permissions" => m.permissions = items,
                 "provides" => m.provides = items,
+                "wallpapers" => m.wallpapers = items,
+                "input_sources" => m.input_sources = items,
                 _ => {}
             }
             continue;
         }
         if (k == "sdk_protocol" || v.parse::<u64>().is_ok() || v == "true" || v == "false")
-            && !matches!(k, "id" | "name" | "version" | "exec" | "icon" | "min_shell" | "summary" | "category" | "kind" | "window") {
+            && !matches!(k, "id" | "name" | "version" | "exec" | "icon" | "min_shell" | "summary" | "category" | "kind" | "window" | "help") {
             continue;
         }
         let Some(s) = toml_string(v) else {
@@ -188,6 +199,8 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, String> {
             "category" => m.category = s,
             "kind" => m.kind = s,
             "window" => m.window = s,
+            "help" => m.help = s,
+            "wallpaper_kind" => m.wallpaper_kind = s,
             _ => {}
         }
     }
@@ -251,6 +264,15 @@ pub fn validate(m: &Manifest, files: &[TarEntry], shell: &str) -> Result<(), Str
     }
     if !m.icon.is_empty() && !has(&m.icon) {
         return Err(format!("icon {:?} is not inside the package", m.icon));
+    }
+    if !m.input_sources.is_empty() {
+        crate::shell::input_methods::plugins::parse(&m.input_sources.join("\n"))
+            .map_err(|e| format!("input_sources entry {} is refused: {}", e.line, e.reason))?;
+    }
+    if let Some(wallpaper) = crate::shell::wallpaper_types::from_manifest(&m.id, &m.wallpaper_kind, &m.wallpapers)? {
+        if let Some(missing) = wallpaper.images.iter().find(|p| !has(p)) {
+            return Err(format!("wallpaper {missing:?} is not inside the package"));
+        }
     }
     Ok(())
 }
@@ -462,6 +484,92 @@ pub fn install_package(root: &Path, bytes: &[u8], sha256: &str, shell: &str) -> 
     install_archive(root, &mut std::io::Cursor::new(bytes), shell)
 }
 
+/// The ML-DSA context string that separates package signatures from other uses of a publisher key.
+pub const PACKAGE_SIGNATURE_CONTEXT: &[u8] = b"bifrost-package";
+
+/// Checks a detached ML-DSA-65 signature over the package `bytes` against one publisher's public key.
+pub fn package_signature_is_valid(bytes: &[u8], signature: &[u8], publisher_key: &[u8]) -> bool {
+    matches!(
+        bifrost_core::mldsa::verify(bifrost_core::mldsa::Params::MlDsa65, publisher_key, bytes, PACKAGE_SIGNATURE_CONTEXT, signature),
+        Ok(true)
+    )
+}
+
+/// Verifies `bytes` against `sha256` and a detached `signature` from one of the `publisher_keys`, then installs the
+/// package. A package with no valid signature from a known publisher is discarded before anything is unpacked.
+pub fn install_package_signed(root: &Path, bytes: &[u8], sha256: &str, signature: &[u8], publisher_keys: &[&[u8]], shell: &str) -> Result<InstalledApp, String> {
+    if !publisher_keys.iter().any(|k| package_signature_is_valid(bytes, signature, k)) {
+        return Err("signature check failed; package discarded".into());
+    }
+    install_package(root, bytes, sha256, shell)
+}
+
+/// Where the shell pins the ML-DSA-65 publisher public keys: one raw key per `*.pub` file.
+pub const PINNED_PUBLISHER_KEYS: &str = "/etc/bifrost/publisher-keys";
+
+/// Loads the pinned publisher keys from `dir`. Only `*.pub` files whose length is exactly one ML-DSA-65 public key
+/// count; anything else in the directory is ignored. A missing directory yields no keys, so every signed package is
+/// refused.
+pub fn pinned_publisher_keys(dir: &Path) -> Vec<Vec<u8>> {
+    let want = bifrost_core::mldsa::Params::MlDsa65.public_key_len();
+    let Ok(rd) = std::fs::read_dir(dir) else { return Vec::new() };
+    let mut keys: Vec<Vec<u8>> = rd
+        .flatten()
+        .filter(|e| e.path().extension().is_some_and(|x| x == "pub"))
+        .filter_map(|e| std::fs::read(e.path()).ok())
+        .filter(|k| k.len() == want)
+        .collect();
+    keys.sort();
+    keys
+}
+
+/// The signature policy for a downloaded package. With no publisher key pinned, nothing can be checked and the
+/// package passes on its checksum alone (packaging signs only when a publisher key is configured). Once any key is
+/// pinned, a package needs a detached signature that one of them verifies, and an unsigned package is refused.
+pub fn check_package_policy(pinned: &[Vec<u8>], bytes: &[u8], signature: Option<&[u8]>) -> Result<(), String> {
+    if pinned.is_empty() {
+        return Ok(());
+    }
+    let Some(signature) = signature else {
+        return Err("signature check failed; the package is unsigned and publisher keys are pinned".into());
+    };
+    if pinned.iter().any(|k| package_signature_is_valid(bytes, signature, k)) {
+        Ok(())
+    } else {
+        Err("signature check failed; package discarded".into())
+    }
+}
+
+/// Signs `bytes` with an ML-DSA-65 publisher secret key and returns the detached signature that
+/// [`package_signature_is_valid`] checks. `rnd` is the 32-byte signing randomness.
+pub fn sign_package(secret_key: &[u8], bytes: &[u8], rnd: &[u8; 32]) -> Result<Vec<u8>, String> {
+    bifrost_core::mldsa::sign(bifrost_core::mldsa::Params::MlDsa65, secret_key, bytes, PACKAGE_SIGNATURE_CONTEXT, rnd).map_err(|e| format!("signing failed: {e:?}"))
+}
+
+/// Makes a publisher key pair from a 32-byte `seed` and writes `<name>.pub` (to pin under [`PINNED_PUBLISHER_KEYS`])
+/// and `<name>.key` (the secret, mode 0600) into `dir`.
+pub fn write_publisher_key(dir: &Path, name: &str, seed: &[u8; 32]) -> Result<(), String> {
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+    let pair = bifrost_core::mldsa::keygen(bifrost_core::mldsa::Params::MlDsa65, seed);
+    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    std::fs::write(dir.join(format!("{name}.pub")), &pair.public_key).map_err(|e| e.to_string())?;
+    let mut key = std::fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(dir.join(format!("{name}.key"))).map_err(|e| e.to_string())?;
+    key.write_all(&pair.secret_key).map_err(|e| e.to_string())
+}
+
+/// Applies the pinned-key policy to the downloaded package at `part`: the detached signature is fetched from
+/// `<url>.sig` only when a key is pinned.
+fn enforce_signature_policy(keys_dir: &Path, part: &Path, url: &str) -> Result<(), String> {
+    let pinned = pinned_publisher_keys(keys_dir);
+    if pinned.is_empty() {
+        return Ok(());
+    }
+    let bytes = std::fs::read(part).map_err(|e| e.to_string())?;
+    let signature = super::net::get(&format!("{url}.sig"), 16 * 1024).ok();
+    check_package_policy(&pinned, &bytes, signature.as_deref())
+}
+
 /// Installs the (already verified) package `r` holds: the archive is indexed and
 /// unpacked straight from where it is, never loaded whole.
 fn install_archive<R: Read + Seek>(root: &Path, r: &mut R, shell: &str) -> Result<InstalledApp, String> {
@@ -545,10 +653,11 @@ pub fn install_download_local(root: &Path, url: &str, size: u64, sha256: &str, s
         if got != sha256.to_ascii_lowercase() {
             return Err("checksum mismatch; package discarded".to_string());
         }
+        enforce_signature_policy(Path::new(PINNED_PUBLISHER_KEYS), &part, url)?;
         let mut file = std::fs::File::open(&part).map_err(|e| e.to_string())?;
         install_archive(root, &mut file, shell)
     });
-    if result.is_ok() || result.as_ref().is_err_and(|e| e.contains("checksum mismatch")) {let _ = std::fs::remove_file(&part);}
+    if result.is_ok() || result.as_ref().is_err_and(|e| e.contains("checksum mismatch") || e.contains("signature check failed")) {let _ = std::fs::remove_file(&part);}
     result
 }
 
@@ -770,6 +879,40 @@ pub mod tests {
     }
 
     #[test]
+    fn an_app_provides_its_wallpapers_through_the_manifest() {
+        let text = format!("{MANIFEST}wallpaper_kind = \"day\"\nwallpapers = [\"wallpapers/a.png\", \"wallpapers/b.png\"]\n");
+        let m = parse_manifest(&text).unwrap();
+        assert_eq!(m.wallpaper_kind, "day");
+        assert_eq!(m.wallpapers, vec!["wallpapers/a.png".to_string(), "wallpapers/b.png".to_string()]);
+        // the pictures must be in the package: without them the install is refused
+        let files = read_tar(&pkg(&text)).unwrap();
+        assert!(validate(&m, &files, "0.1.0").unwrap_err().contains("not inside the package"));
+        let with_pictures = read_tar(&tar(&[
+            ("manifest.toml", text.as_bytes(), 0o644),
+            ("bin/calc", b"ELF", 0o644),
+            ("icon.png", b"PNG", 0o644),
+            ("wallpapers/a.png", b"PNG", 0o644),
+            ("wallpapers/b.png", b"PNG", 0o644),
+        ]))
+        .unwrap();
+        assert!(validate(&m, &with_pictures, "0.1.0").is_ok());
+        // an app that declares no wallpaper is unaffected
+        assert!(parse_manifest(MANIFEST).unwrap().wallpapers.is_empty());
+    }
+
+    #[test]
+    fn an_app_adds_input_sources_that_must_name_a_built_in_engine() {
+        let text = format!("{MANIFEST}input_sources = [\"is.x.calc.kana|Kana|ja|kana-typing\"]\n");
+        let m = parse_manifest(&text).unwrap();
+        assert_eq!(m.input_sources, vec!["is.x.calc.kana|Kana|ja|kana-typing".to_string()]);
+        let files = read_tar(&pkg(&text)).unwrap();
+        assert!(validate(&m, &files, "0.1.0").is_ok());
+        let bad = parse_manifest(&format!("{MANIFEST}input_sources = [\"is.x.calc.kana|Kana|ja|shell-code\"]\n")).unwrap();
+        assert!(validate(&bad, &files, "0.1.0").unwrap_err().contains("refused"));
+        assert!(parse_manifest(MANIFEST).unwrap().input_sources.is_empty());
+    }
+
+    #[test]
     fn tar_reads_files_and_rejects_unsafe_paths() {
         let files = read_tar(&tar(&[("./a.txt", b"hi", 0o644), ("d/b.sh", b"#!", 0o755)])).unwrap();
         assert_eq!(files.len(), 2);
@@ -785,6 +928,92 @@ pub mod tests {
         let sum: u32 = link[..512].iter().enumerate().map(|(i, &b)| if (148..156).contains(&i) { 32 } else { b as u32 }).sum();
         link[148..155].copy_from_slice(format!("{sum:06o}\0").as_bytes());
         assert!(read_tar(&link).unwrap_err().contains("unsupported"));
+    }
+
+    #[test]
+    fn a_package_needs_a_signature_from_a_known_publisher() {
+        use bifrost_core::mldsa::{keygen, sign, verify, Params};
+        let bytes = pkg(MANIFEST);
+        let publisher = keygen(Params::MlDsa65, &[7u8; 32]);
+        let other = keygen(Params::MlDsa65, &[9u8; 32]);
+        let sig = sign(Params::MlDsa65, &publisher.secret_key, &bytes, PACKAGE_SIGNATURE_CONTEXT, &[0u8; 32]).unwrap();
+        assert_eq!(verify(Params::MlDsa65, &publisher.public_key, &bytes, PACKAGE_SIGNATURE_CONTEXT, &sig), Ok(true));
+        assert!(package_signature_is_valid(&bytes, &sig, &publisher.public_key));
+        assert!(!package_signature_is_valid(&bytes, &sig, &other.public_key), "a key that did not sign the package");
+        assert!(!package_signature_is_valid(&bytes, &sig, b"short"), "a malformed key");
+        let mut edited = bytes.clone();
+        edited[10] ^= 1;
+        assert!(!package_signature_is_valid(&edited, &sig, &publisher.public_key), "edited bytes");
+
+        let root = scratch("signed");
+        assert!(install_package_signed(&root, &bytes, &sum(&bytes), &sig, &[&other.public_key], "0.1.0").is_err());
+        assert!(!apps_dir(&root).join("is.olibuijr.calc").exists(), "nothing unpacked without a valid signature");
+        let keys: [&[u8]; 2] = [&other.public_key, &publisher.public_key];
+        let app = install_package_signed(&root, &bytes, &sum(&bytes), &sig, &keys, "0.1.0").unwrap();
+        assert_eq!(app.id, "is.olibuijr.calc");
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn the_signature_policy_is_open_until_a_key_is_pinned_then_strict() {
+        use bifrost_core::mldsa::{keygen, Params};
+        let bytes = pkg(MANIFEST);
+        let publisher = keygen(Params::MlDsa65, &[3u8; 32]);
+        let other = keygen(Params::MlDsa65, &[4u8; 32]);
+        let sig = sign_package(&publisher.secret_key, &bytes, &[0u8; 32]).unwrap();
+        assert_eq!(check_package_policy(&[], &bytes, None), Ok(()), "no key pinned: the checksum alone decides");
+        let pinned = vec![other.public_key.clone(), publisher.public_key.clone()];
+        assert_eq!(check_package_policy(&pinned, &bytes, Some(&sig)), Ok(()));
+        assert!(check_package_policy(&pinned, &bytes, None).unwrap_err().contains("unsigned"), "a pinned key makes a signature mandatory");
+        assert!(check_package_policy(&[other.public_key.clone()], &bytes, Some(&sig)).is_err(), "signed by an unknown publisher");
+        let mut edited = bytes.clone();
+        edited[20] ^= 1;
+        assert!(check_package_policy(&pinned, &edited, Some(&sig)).is_err(), "bytes changed after signing");
+    }
+
+    #[test]
+    fn a_written_publisher_key_signs_packages_the_pinned_key_accepts() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = scratch("publisher-keygen");
+        write_publisher_key(&dir, "release", &[6u8; 32]).unwrap();
+        assert!(write_publisher_key(&dir, "release", &[6u8; 32]).is_err(), "an existing secret key is never overwritten");
+        assert_eq!(std::fs::metadata(dir.join("release.key")).unwrap().permissions().mode() & 0o777, 0o600);
+        let pinned = pinned_publisher_keys(&dir);
+        assert_eq!(pinned.len(), 1, "the .pub file is pinnable and the .key file is not");
+        let bytes = pkg(MANIFEST);
+        let sig = sign_package(&std::fs::read(dir.join("release.key")).unwrap(), &bytes, &[1u8; 32]).unwrap();
+        assert_eq!(check_package_policy(&pinned, &bytes, Some(&sig)), Ok(()));
+        assert!(sign_package(b"short", &bytes, &[1u8; 32]).is_err(), "a malformed secret key");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn an_unsigned_download_is_refused_when_a_key_is_pinned() {
+        use bifrost_core::mldsa::{keygen, Params};
+        let dir = scratch("policy-keys");
+        let none = scratch("policy-nokeys");
+        let part = dir.join("pkg.part");
+        std::fs::write(&part, pkg(MANIFEST)).unwrap();
+        assert_eq!(enforce_signature_policy(&none.join("missing"), &part, "http://127.0.0.1:9/p.aap"), Ok(()), "no key pinned");
+        std::fs::write(dir.join("pub.pub"), keygen(Params::MlDsa65, &[8u8; 32]).public_key).unwrap();
+        let err = enforce_signature_policy(&dir, &part, "http://127.0.0.1:9/p.aap").unwrap_err();
+        assert!(err.contains("signature check failed"), "{err}");
+        let _ = std::fs::remove_dir_all(dir);
+        let _ = std::fs::remove_dir_all(none);
+    }
+
+    #[test]
+    fn pinned_publisher_keys_load_only_well_formed_pub_files() {
+        use bifrost_core::mldsa::{keygen, Params};
+        let dir = scratch("pinned-keys");
+        let publisher = keygen(Params::MlDsa65, &[5u8; 32]);
+        std::fs::write(dir.join("publisher.pub"), &publisher.public_key).unwrap();
+        std::fs::write(dir.join("short.pub"), b"short").unwrap();
+        std::fs::write(dir.join("notes.txt"), &publisher.public_key).unwrap();
+        let keys = pinned_publisher_keys(&dir);
+        assert_eq!(keys, vec![publisher.public_key.clone()], "only the well-formed .pub key is pinned");
+        assert!(pinned_publisher_keys(&dir.join("missing")).is_empty(), "no directory, no keys");
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

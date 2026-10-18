@@ -18,10 +18,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/backup_page.rs",
+   "bifrost": "springboard/src/shell/backup.rs, springboard/src/shell/backup_page.rs",
    "status": "partial",
-   "note": "Backup page",
-   "rea": []
+   "note": "has: Backup page (backup_page.rs:34): Backup now, latest backup, backup before update; missing: choosing a backup disk",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::backup::tests::a_chosen_disk"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::backup_page::tests::the_destination_group"
+    }
+   ],
+   "ready_note": "covers: the Backup page with the choice of backup disk (This Computer or a removable disk); backups, restore and delete use the chosen place."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/TimeMachineSettingsIntents.appex",
@@ -38,10 +52,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/timemachine.rs; springboard/src/shell/backup_page.rs",
+   "bifrost": "springboard/src/shell/settings_intents.rs, springboard/src/shell/timemachine.rs",
    "status": "partial",
-   "note": "Time Machine and Backup pages exist; App Intents declarations are not exposed.",
-   "rea": []
+   "note": "has: Time Machine and Backup pages (timemachine.rs, backup_page.rs:34); missing: App Intents declarations",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found"
+    }
+   ],
+   "ready_note": "covers: the open-backup intent in the settings catalogue (settings_intents.rs); Search lists it and it opens its pane."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/TimerIntentsExtension.appex",
@@ -58,10 +86,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/clock/timer.rs",
+   "bifrost": "springboard/src/shell/clock/timer.rs, springboard/sdk/src/system_intents.rs",
    "status": "partial",
-   "note": "Clock timer exists; App Intents declarations are not exposed.",
-   "rea": []
+   "note": "has: Clock timer; App Intent for starting a timer declared (sdk system_intents, intent.timer_start); the shell does not serve it yet",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "system_intents::tests"
+    }
+   ],
+   "ready_note": "covers: the timer start App Intent declaration (sdk system_intents::timer_intents)"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/Touch ID & Password.appex",
@@ -98,10 +135,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs (PageId::Trackpad)",
+   "bifrost": "springboard/src/shell/pages.rs:1035",
    "status": "partial",
-   "note": "Same Trackpad page; see Trackpad.",
-   "rea": []
+   "note": "has: Trackpad page (pages.rs:1035): tracking speed, tap to click, secondary click (corner or two fingers), natural scrolling, gesture links; missing: click pressure, force touch, look up, scroll and zoom switches",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: Trackpad page (pages.rs:1035): tracking speed, tap to click, secondary click (corner or two fingers), natural scrolling, gesture links"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/TrackpadIntentsExtension.appex",
@@ -118,10 +164,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/mouse_page.rs",
+   "bifrost": "springboard/src/shell/settings_intents.rs, springboard/src/shell/mouse_page.rs",
    "status": "partial",
-   "note": "Pointer settings page exists; the Trackpad pane and its App Intents are not exposed.",
-   "rea": []
+   "note": "has: Pointer settings page (mouse_page.rs); missing: the Trackpad pane intent and its App Intents",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found"
+    }
+   ],
+   "ready_note": "covers: the open-trackpad intent in the settings catalogue (settings_intents.rs); Search lists it and it opens its pane."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/TransparencySettingsIntents.appex",
@@ -138,10 +198,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/accessibility/mod.rs",
+   "bifrost": "springboard/src/shell/accessibility/mod.rs, springboard/sdk/src/system_intents.rs",
    "status": "partial",
-   "note": "Reduce Transparency setting exists under accessibility; App Intents declarations are not exposed.",
-   "rea": []
+   "note": "has: Reduce Transparency under Accessibility; App Intent for setting it declared (sdk system_intents, intent.set_reduce_transparency); the shell does not serve it yet",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "system_intents::tests"
+    }
+   ],
+   "ready_note": "covers: the Reduce Transparency App Intent declaration (sdk system_intents::setting_intents)"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/UsersGroups.appex",
@@ -160,8 +229,17 @@
    "doc": "",
    "bifrost": "springboard/src/shell/users_page.rs",
    "status": "partial",
-   "note": "Users & Groups page: accounts and groups from the system, create, delete, admin flag, password change via the login service, login options. Missing: login-item and parental-control rows, picture picker, sharing-only users. Host only.",
-   "rea": []
+   "note": "has: Users & Groups page (users_page.rs:153): accounts and groups, create, delete, admin flag, password change, login options; missing: per-user login-item options",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::users_page"
+    }
+   ],
+   "ready_note": "covers: Users & Groups page (users_page.rs:153): accounts and groups, create, delete, admin flag, password change, login options"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/UsersGroupsIntentsExtension.appex",
@@ -178,10 +256,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/users_page.rs",
+   "bifrost": "springboard/src/shell/settings_intents.rs, springboard/src/shell/users_page.rs",
    "status": "partial",
-   "note": "Settings Users page exists; App Intents declarations are not exposed.",
-   "rea": []
+   "note": "has: Users page; missing: App Intents declarations",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found"
+    }
+   ],
+   "ready_note": "covers: the open-users-groups intent in the settings catalogue (settings_intents.rs); Search lists it and it opens its pane."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/VpnSettingsIntents.appex",
@@ -198,10 +290,29 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/vpn_configuration.rs",
+   "bifrost": "springboard/src/shell/settings_intents.rs, springboard/src/shell/desktop_network.rs, springboard/src/shell/pages.rs (VPN page), springboard/sdk/src/vpn_configuration.rs",
    "status": "partial",
-   "note": "VPN configuration SDK exists; no shell VPN settings page yet.",
-   "rea": []
+   "note": "the open-vpn intent opens the VPN pane from Search. Built 2026-10-17: the pane lists the VPN and WireGuard connections NetworkManager holds (read with nmcli on the network service's thread) and a tap connects or disconnects one (desktop_network Request::Vpn, nmcli connection up/down), and the Network page shows whether a VPN is up. Not built: creating a configuration in the page (import with nmcli), and running the SDK's vpn_connect and vpn_disconnect intent descriptors from Search.",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::desktop_network::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages::tests::the_vpn_page_lists_the_held_connections_and_a_tap_flips_one"
+    }
+   ],
+   "ready_note": "the VPN settings intent opens the pane, which lists and switches the system's VPN connections; the checks run the settings catalogue, the nmcli parsing and request, and the page"
   },
   {
    "id": "path:/System/Library/PreferencePanes/TimeMachine.prefPane",
@@ -218,10 +329,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/backup_page.rs",
+   "bifrost": "springboard/src/shell/backup.rs, springboard/src/shell/backup_page.rs",
    "status": "partial",
-   "note": "Backup page",
-   "rea": []
+   "note": "has: Backup page (backup_page.rs:34); missing: choosing a backup disk",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::backup::tests::a_chosen_disk"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::backup_page::tests::the_destination_group"
+    }
+   ],
+   "ready_note": "covers: Settings > Backup with the backup destination choice and the backup, restore and delete actions."
   },
   {
    "id": "path:/System/Library/PreferencePanes/TouchID.prefPane",
@@ -258,10 +383,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs (PageId::Trackpad)",
+   "bifrost": "springboard/src/shell/pages.rs:1035",
    "status": "partial",
-   "note": "Trackpad page: tracking speed, tap to click, secondary click, natural scrolling, gesture links. Missing: click pressure, force touch, look up, scroll and zoom gesture rows, per-device settings. Host only.",
-   "rea": []
+   "note": "has: Trackpad page (pages.rs:1035): tracking speed, tap to click, secondary click, natural scrolling, gesture links; missing: click pressure, force touch, look up, scroll and zoom switches",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: Trackpad page (pages.rs:1035): tracking speed, tap to click, secondary click, natural scrolling, gesture links"
   },
   {
    "id": "path:/System/Library/PreferencePanes/UniversalAccessPref.prefPane",
@@ -278,10 +412,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/pages.rs:1290",
    "status": "partial",
-   "note": "Accessibility page",
-   "rea": []
+   "note": "has: Accessibility page (pages.rs:1290): Vision, Motion, Pointer, Touch, Shortcut, Screen Reader; missing: live captions, voice control, hearing",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: Accessibility page (pages.rs:1290): Vision, Motion, Pointer, Touch, Shortcut, Screen Reader"
   }
  ]
 }

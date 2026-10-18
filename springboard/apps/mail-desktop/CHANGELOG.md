@@ -1,5 +1,65 @@
 # Changelog
 
+## 0.15.0 — 2026-10-17
+
+Drafts:
+
+- Drafts go to the server's own Drafts mailbox when it is flagged `\Drafts` (RFC 6154), and to the fixed Drafts name
+  otherwise.
+- Message > Edit Draft (in the Drafts mailbox) reopens a saved draft in a compose sheet with its addresses, subject,
+  text, files and threading headers. Saving it again replaces the saved copy.
+
+HTML mail:
+
+- Inline `cid:` images resolve to the message's own picture parts in the sanitiser. Scripts, forms and event handlers
+  stay removed and remote images stay blocked. The reader does not draw images yet.
+
+## 0.14.0 — 2026-10-17
+
+- Core Search finds the subjects and senders of the newest messages of the mailbox on screen (up to 200). Bodies are never indexed. Mail Settings "Show in Search" (on by default) turns it off and removes what was indexed. A result opens the message.
+
+## 0.13.0 — 2026-10-17
+
+Viewer windows:
+
+- Double-click on a message row, or File > New Viewer Window, opens the message in a window of its own. The viewer is
+  read-only: it shows the header, the files and the body of the copy the main window fetched, and it scrolls.
+
+Compose windows:
+
+- A new message, reply, forward or mailto link opens in a window of its own, and several can be open at once. Sending
+  or cancelling closes the window.
+
+Mail links:
+
+- Mail opens `mailto:` links (manifest `schemes = ["mailto"]`). A new message opens with the To, Cc, Bcc, Subject and
+  Body of the link filled in. The SDK call `bifrost_app::mail_compose::compose` hands a draft to the default mail app,
+  with the files it names as read grants; Mail attaches them. A file named by path is refused.
+
+Privacy:
+
+- Remote content is blocked by default. The reader shows a note with Load Remote Content for the open message, and Mail
+  Settings has a "Load remote content" switch, off by default.
+
+Signatures:
+
+- Mail Settings has "Signature above the quoted text": a reply's signature goes before the quote.
+
+Drafts:
+
+- Closing a message with changes asks Save This Message, Don't Save, or Cancel. Changed messages are also saved every
+  30 seconds. Drafts go to the Drafts mailbox over IMAP, or to a file on this computer when the account cannot sign in.
+  Sending removes the draft.
+
+Compose windows:
+
+- Send, Cancel and keys act on the compose window they came from. While a send is on its way, or a question is open, the
+  window stays the active one.
+
+Rules:
+
+- Mailbox > Rules lists the rules, with a name that opens its editor, Add Rule, and Remove.
+
 ## 0.12.2 — 2026-10-14
 
 - Draw and hit-test the mailbox toolbar and sidebar with the shared Golden Gate widgets.

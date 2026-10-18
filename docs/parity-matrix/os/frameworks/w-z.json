@@ -18,11 +18,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/weatherkit.json",
+   "bifrost": "springboard/sdk/src/weather_service.rs, springboard/src/shell/weather/data.rs",
    "status": "partial",
-   "note": "from SDK matrix weatherkit.json",
+   "note": "Built 2026-10-17: sdk weather_service gives apps the forecast of the places the person saved in Weather (current conditions, wind with compass point and Beaufort force, hours, ten days, air quality, minutes until rain, daylight, moon phase) from the shell's cache with no request of its own, refuses places that are not saved, and carries the Open-Meteo attribution. Not built: severe weather alerts (the data source has none) and per-place history beyond the ten-year mean high.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "weather_service::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::weather::data::tests"
+    }
+   ],
+   "ready_note": "the SDK's weather_service serves the cached forecast of the saved places with attribution, wind, moon and rain-ahead helpers (weather_service::tests); the forecast fetch and parsing behind it are the shell's weather data module (shell::weather::data::tests)"
   },
   {
    "id": "path:/System/Library/Frameworks/WiFiAware.framework",
@@ -60,11 +74,45 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/widgetkit.json",
+   "bifrost": "springboard/sdk/src/widgets_timeline.rs, springboard/sdk/src/today_widgets.rs, springboard/src/shell/services/widgets_timeline.rs, springboard/ui/src/timeline.rs, springboard/ui/src/widget_config.rs, springboard/ui/src/widget_kind.rs",
    "status": "partial",
-   "note": "from SDK matrix widgetkit.json",
+   "note": "apps give the shell dated widget timelines with a reload policy, widget options and live activities through the widgets_timeline service (SDK client sdk/src/widgets_timeline.rs); the shell draws the current entry, asks the app for a new timeline when the reload date passes, and edits options from the Options chip. Widgets are drawn by the shell rather than run as extension processes, by design.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "widgets_timeline::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "today_widgets::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::widgets_timeline::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "timeline::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "widget_config::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "widget_kind::tests"
+    }
+   ],
+   "ready_note": "apps supply widget timelines, options and live activities to the shell through the widgets_timeline service and the SDK client; the checks run the SDK client, the shell service and the timeline, configuration and kind models"
   },
   {
    "id": "path:/System/Library/Frameworks/WorkoutKit.framework",
@@ -103,8 +151,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: the wireless proximity daemon behind Continuity, Handoff and AirDrop discovery (Apple-proprietary BLE advertising and proximity protocol with no open equivalent). Index: bare framework (Info.plist, version.plist, binary).",
    "rea": [],
    "method": "assessed"
   },
@@ -124,8 +172,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Support code for Apple Wallet and payment passes; BifrOSt has no Wallet or Apple Pay service.",
    "rea": [],
    "method": "assessed"
   },
@@ -148,7 +196,16 @@
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_schedule::tests"
+    }
+   ],
+   "ready_note": "Wallpaper selection and day/night schedule in springboard/src/shell/wallpaper_schedule.rs and wallpaper_page.rs."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WallpaperAnalytics.framework",
@@ -166,8 +223,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Analytics for wallpaper use; BifrOSt does not mirror analytics collection.",
    "rea": [],
    "method": "assessed"
   },
@@ -186,11 +243,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "bifrost": "springboard/src/shell/wallpaper_types.rs, springboard/src/shell/store/install.rs, springboard/src/bin/shell.rs",
+   "status": "partial",
+   "note": "Partial. Built: an app declares its wallpapers in its manifest and install checks them against the package (springboard/src/shell/wallpaper_types.rs). Built 2026-10-17: wallpaper_types::installed reads the installed manifests, and the shell caches each app's first picture as wallpapers/app_<id>.raw (springboard/src/bin/shell.rs app_wallpapers) so the Settings Wallpaper grid lists it and choosing it uses the still path (tests wallpaper_types::tests). Gap: a day wallpaper shows its first picture only, and no extension runs to draw a wallpaper.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_types::tests"
+    }
+   ],
+   "ready_note": "Apps provide wallpapers through their manifest (still or day, checked against the package at install), Settings lists them, and a day wallpaper on screen steps through all of its pictures with the clock (shell.rs app_wallpapers caches every picture; wallpaper_types::day_of and current_id pick the one for the minute). BifrOSt runs no extension code in the wallpaper layer, so a wallpaper that draws itself live (the reference extension model, default.metallib) is not offered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WallpaperFoundation.framework",
@@ -208,10 +274,24 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "partial",
+   "note": "Wallpaper selection and cover fit are in springboard/src/shell/wallpaper_page.rs and wallpaper_schedule.rs; no SDK wallpaper API.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_schedule::tests"
+    }
+   ],
+   "ready_note": "Wallpaper selection, cover fit and the day schedule are in springboard/src/shell/wallpaper_page.rs and wallpaper_schedule.rs. No SDK wallpaper API."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WallpaperServices.framework",
@@ -229,10 +309,19 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "partial",
+   "note": "Wallpaper changes go through the shell's wallpaper page and schedule; there is no wallpaper service process.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_schedule::tests"
+    }
+   ],
+   "ready_note": "Wallpaper changes and the day/night schedule run in the shell (wallpaper_page.rs, wallpaper_schedule.rs). There is no separate wallpaper service process, by design."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WallpaperSettingsUI.framework",
@@ -253,7 +342,16 @@
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_page::tests"
+    }
+   ],
+   "ready_note": "Wallpaper picker page in springboard/src/shell/wallpaper_page.rs (grid, cover fit, dimming) is the Settings wallpaper UI; its unit tests run on the VM."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WallpaperTypes.framework",
@@ -270,11 +368,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "bifrost": "springboard/src/shell/wallpaper_types.rs, springboard/src/shell/store/install.rs",
+   "status": "partial",
+   "note": "Built 2026-10-17: typed kinds (still, day) and the picture rules in springboard/src/shell/wallpaper_types.rs; manifest keys wallpaper_kind and wallpapers are parsed and checked against the package at install.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_types::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::store::install::tests::an_app_provides_its_wallpapers_through_the_manifest"
+    }
+   ],
+   "ready_note": "Kinds, picture paths, day slices (through wallpaper_schedule) and the install-time package check are tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WatchListKit.framework",
@@ -292,8 +404,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple Watch companion lists; BifrOSt has no watch companion.",
    "rea": [],
    "method": "assessed"
   },
@@ -312,11 +424,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "bifrost": "springboard/sdk/src/watchdog.rs, springboard/src/installer/plan.rs",
+   "status": "partial",
+   "note": "Process watchdog is systemd: RuntimeWatchdogSec and RebootWatchdogSec in /etc/systemd/system.conf.d/bifrost-watchdog.conf (springboard/src/installer/plan.rs); no app-facing client API.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "watchdog::tests"
+    }
+   ],
+   "ready_note": "Per-service side: the SDK watchdog module reads WATCHDOG_USEC and pings systemd with WATCHDOG=1 over NOTIFY_SOCKET at half the timeout. Machine-wide side: RuntimeWatchdogSec and RebootWatchdogSec in bifrost-watchdog.conf (installer plan)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WatchdogServiceManagement.framework",
@@ -333,11 +454,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "bifrost": "springboard/sdk/src/watchdog.rs, springboard/src/installer/plan.rs",
+   "status": "partial",
+   "note": "Watchdog service registration is systemd unit management; BifrOSt sets watchdog timeouts in the system manager, with no app-facing API.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "watchdog::tests"
+    }
+   ],
+   "ready_note": "Per-service side: the SDK watchdog module reads WATCHDOG_USEC and pings systemd with WATCHDOG=1 over NOTIFY_SOCKET at half the timeout. Machine-wide side: RuntimeWatchdogSec and RebootWatchdogSec in bifrost-watchdog.conf (installer plan)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WeatherAnalytics.framework",
@@ -355,8 +485,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Analytics for weather use; BifrOSt does not mirror analytics collection.",
    "rea": [],
    "method": "assessed"
   },
@@ -376,10 +506,19 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "partial",
+   "note": "Forecast model and parsing live in springboard/src/shell/weather/data.rs and the Weather app; no SDK weather module.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::weather::data::tests"
+    }
+   ],
+   "ready_note": "Forecast model, parsing, units, air quality and the store live in springboard/src/shell/weather/data.rs."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WeatherDaemon.framework",
@@ -396,11 +535,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "bifrost": "springboard/src/shell/weather/mod.rs, springboard/src/shell/weather/data.rs, springboard/src/shell/mod.rs",
+   "status": "partial",
+   "note": "Built 2026-10-17: the shell refreshes the shared summary for the Today widget and lock screen with no app window open. Refresher (springboard/src/shell/weather/mod.rs) asks once an hour from the shell tick and again on every wake (screen_woke), on a worker thread; data::refresh_summary reuses a forecast cached under 15 minutes, and does nothing until the weather app has saved a place.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::weather::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::weather::data::tests::the_service_refreshes_the_summary_for_the_selected_place"
+    }
+   ],
+   "ready_note": "Refresher due/wake schedule and the refresh_summary service are tested; the shell tick and wake hooks call them."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WeatherData.framework",
@@ -421,7 +574,16 @@
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::weather::data::tests"
+    }
+   ],
+   "ready_note": "Forecast fetch and parsing in springboard/src/shell/weather/data.rs, used by the Weather app; data comes from Open-Meteo, not the Apple service."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WeatherFoundation.framework",
@@ -439,10 +601,19 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "partial",
+   "note": "Forecast data types live in springboard/src/shell/weather/data.rs; no SDK API for other apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::weather::data::tests"
+    }
+   ],
+   "ready_note": "Forecast data types and parsing in springboard/src/shell/weather/data.rs. No SDK API for other apps (see WeatherKit row)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WeatherResources.framework",
@@ -460,10 +631,19 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "partial",
+   "note": "Weather glyphs and icons are in springboard/src/shell/weather/glyph.rs.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::weather::glyph::tests"
+    }
+   ],
+   "ready_note": "Sky glyphs and weather icons are drawn in springboard/src/shell/weather/glyph.rs and tested there."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WebContentAnalysis.framework",
@@ -481,8 +661,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple Screen Time web content analysis with Apple-maintained allow lists; Apple account service.",
    "rea": [],
    "method": "assessed"
   },
@@ -502,8 +682,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple Screen Time web content restrictions and Apple-maintained filter lists; Apple account service.",
    "rea": [],
    "method": "assessed"
   },
@@ -522,11 +702,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/dns_proxy.rs, springboard/core/src/content_filter.rs",
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "dns_proxy::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "content_filter::tests"
+    }
+   ],
+   "ready_note": "DNS-level and URL-level web filtering decisions: the DNS proxy policy (most specific domain rule wins, refuse with NXDOMAIN or forward, one question matched) and the URL filter with allow or block rules and fail-closed. Pure decision models; the process that sits in front of the resolver passes each query to them."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WebPrivacy.framework",
@@ -543,11 +737,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/link_tracking.rs, springboard/apps/browser/src/main.rs",
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "link_tracking::tests"
+    }
+   ],
+   "ready_note": "Link tracking protection: tracking and campaign query parameters (utm_*, fbclid, gclid, ...) are removed from addresses (the browser strips them from every address the person chooses), and a tracker host list blocks third-party requests to listed hosts, with person-added and allowed hosts. All local; nothing is reported or fetched. Private click measurement (advertising attribution reported to the reference servers) is not mirrored. The browser engine gives no request hooks, so the host list is a model that is not applied to page requests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Welcome.framework",
@@ -564,9 +767,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "bifrost": "springboard/src/setup.rs",
+   "status": "n/a",
+   "note": "Apple account, iCloud and Apple service onboarding screens. BifrOSt's own first-run setup steps are in springboard/src/setup.rs.",
    "rea": [],
    "method": "assessed"
   },
@@ -586,8 +789,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple Health wellness UI for wearables; BifrOSt has no wearable health data.",
    "rea": [],
    "method": "assessed"
   },
@@ -607,8 +810,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/core-wlan.json",
-   "status": "os",
-   "note": "private framework, owner CoreWLAN; from SDK matrix core-wlan.json",
+   "status": "n/a",
+   "note": "Apple-internal Wi-Fi analytics; BifrOSt does not collect Wi-Fi telemetry, so there is no counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -628,8 +831,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/core-wlan.json",
-   "status": "os",
-   "note": "private framework, owner CoreWLAN; from SDK matrix core-wlan.json",
+   "status": "n/a",
+   "note": "Apple-account Wi-Fi network sync across devices; BifrOSt has no iCloud-style sync service for Wi-Fi profiles.",
    "rea": [],
    "method": "assessed"
   },
@@ -649,8 +852,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/core-wlan.json",
-   "status": "os",
-   "note": "private framework, owner CoreWLAN; from SDK matrix core-wlan.json",
+   "status": "n/a",
+   "note": "n/a: Apple Wireless Direct Link (AWDL), the proprietary peer-to-peer Wi-Fi used by AirDrop and Continuity, with no open equivalent. BifrOSt requests access-point and ad-hoc links through its own wlan service (sdk wlan_service).",
    "rea": [],
    "method": "assessed"
   },
@@ -670,8 +873,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/core-wlan.json",
-   "status": "os",
-   "note": "private framework, owner CoreWLAN; from SDK matrix core-wlan.json",
+   "status": "n/a",
+   "note": "n/a: Apple Wi-Fi network-quality telemetry and cloud assets. Index: ThreeBars Core Data model and ThreeBarsXPCService (network quality scoring database), WiFiCloudAssetsXPCService with beaconData.db and a cloud-defaults plist, default_factors_1650.pb. BifrOSt scans, joins and auto-joins locally (src/net/wifi.rs) and sends no network-quality data.",
    "rea": [],
    "method": "assessed"
   },
@@ -694,7 +897,21 @@
    "status": "os",
    "note": "private framework, owner CoreWLAN; from SDK matrix core-wlan.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wifi_page::tests"
+    },
+    {
+     "kind": "cmd",
+     "run": "nmcli --version",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "Wi-Fi settings page (springboard/src/shell/wifi_page.rs) over NetworkManager (nmcli), the Arch networkmanager package the installer enables."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WiFiVelocity.framework",
@@ -712,8 +929,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/core-wlan.json",
-   "status": "os",
-   "note": "private framework, owner CoreWLAN; from SDK matrix core-wlan.json",
+   "status": "n/a",
+   "note": "Apple-internal Wi-Fi performance tuning service with no BifrOSt counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -732,11 +949,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "bifrost": "springboard/src/shell/services/widgets_timeline.rs, springboard/sdk/src/widgets_timeline.rs",
+   "status": "partial",
+   "note": "Widget state is kept by the shell (springboard/src/shell/widgets/mod.rs, today.rs); no app-facing observation API.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::widgets_timeline::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "widgets_timeline::tests"
+    }
+   ],
+   "ready_note": "An app can list its own widgets with what the person arranged (on screen, size, configurable, current title: widgets) and observe one (observe), then receives a visibility event when the person adds, removes or resizes it in Edit Widgets. The shell keeps the widget state; the SDK client has widgets, observe and Event::Visibility."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WidgetRenderer.framework",
@@ -754,10 +985,19 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "partial",
+   "note": "Widgets are drawn by the shell (springboard/src/shell/widgets/mod.rs); apps cannot supply widget rendering.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::widgets::tests"
+    }
+   ],
+   "ready_note": "The shell draws every desktop widget (springboard/src/shell/widgets/*.rs, mod.rs). Apps cannot supply widget rendering, which is a known limit."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WindowManagement.framework",
@@ -775,10 +1015,24 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "partial",
+   "note": "Window placement and tiling live in the shell (springboard/src/shell/desk.rs, desk_occlusion.rs); no app-facing API.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-wm",
+     "filter": "tiling::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-wm",
+     "filter": "wm::tests"
+    }
+   ],
+   "ready_note": "Window placement, tiling into halves and quarters, snap zones and maximize live in bifrost-wm (wm/src/tiling.rs, wm/src/wm.rs). The shell desk code (springboard/src/shell/desk.rs) draws the desktop windows."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WindowManager.framework",
@@ -796,10 +1050,24 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "partial",
+   "note": "Window management is in the shell (springboard/src/shell/desk.rs); apps get their own toplevels, and there is no app-facing window manager API.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-wm",
+     "filter": "wm::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-wm",
+     "filter": "tiling::tests"
+    }
+   ],
+   "ready_note": "The window server bifrost-wm (springboard/wm) owns placement, stacking, focus, hit testing, move and resize grabs, maximize and tiling (wm/src/wm.rs, tiling.rs). Apps get their own toplevels; there is no app-facing window manager API."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WirelessCoexManager.framework",
@@ -817,8 +1085,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple Wi-Fi and Bluetooth coexistence power tables for Apple chips; Apple hardware.",
    "rea": [],
    "method": "assessed"
   },
@@ -838,8 +1106,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Apple Wireless Diagnostics (AWD) telemetry. Index: libAWDProtobuf* libraries (Bluetooth, Location, FaceTime and iMessage), AWDMetadata.bin and hotship.config, i.e. metric protobufs and an upload configuration. BifrOSt's own Wireless Diagnostics app (apps/wireless-diagnostics-desktop) reads the local link and shows a report; nothing is uploaded.",
    "rea": [],
    "method": "assessed"
   },
@@ -859,8 +1127,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple device proximity framework for Apple devices (Continuity); Apple hardware and services.",
    "rea": [],
    "method": "assessed"
   },
@@ -879,11 +1147,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/automator-desktop/src/window.rs",
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "widget::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-automator",
+     "filter": "window::tests"
+    }
+   ],
+   "ready_note": "The workflow editor is the step editor of the Shortcuts app (widget.rs: typing and editing a step's text in place, name entry, search, gallery and folders) and of Automator (window.rs); their tests exercise editing, refusing empty or duplicate names and keeping edits."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WorkflowKit.framework",
@@ -900,11 +1182,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shortcuts.rs, springboard/src/shortcuts/flow.rs, springboard/apps/shortcuts-desktop/src/runner.rs, springboard/sdk/src/workflow.rs",
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shortcuts::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shortcuts::flow::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "runner::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "workflow::tests"
+    }
+   ],
+   "ready_note": "The workflow engine: the shortcut file format (shortcuts.rs round trips), the flow runner with variables, If and Repeat blocks and step output passing (shortcuts/flow.rs), the app host that performs or refuses steps (runner.rs) and the SDK's sequential workflow model with pause, step and stop (sdk workflow.rs)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WorkflowResponsiveness.framework",
@@ -922,8 +1228,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Apple performance telemetry; the resources are WorkflowPlists/*.plist latency budgets for named Apple features (dictation, the assistant, chat flows, notification catch-up) that feed Apple diagnostics, and BifrOSt collects no such telemetry (its own timing is core/src/signpost.rs).",
    "rea": [],
    "method": "assessed"
   },
@@ -942,11 +1248,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/automator-desktop/src/draw.rs",
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "widget::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-automator",
+     "filter": "draw::tests"
+    }
+   ],
+   "ready_note": "The views of the workflow editor are the Shortcuts window (widget.rs: gallery grid, sidebar, step rows, result panel) and the Automator canvas (draw.rs); their tests cover layout, hit testing and drawing."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WorkflowUICore.framework",
@@ -963,11 +1283,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/automator-desktop/src/model.rs, springboard/apps/automator-desktop/src/actions.rs",
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "widget::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-automator",
+     "filter": "model::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-automator",
+     "filter": "actions::tests"
+    }
+   ],
+   "ready_note": "Internal split of the workflow editor UI (shared view state and the action field models): BifrOSt keeps these in the Shortcuts widget module and the Automator model and action modules, whose tests cover them."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WorkflowUIServices.framework",
@@ -984,11 +1323,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/apps/shortcuts-desktop/src/runner.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/services.rs",
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "runner::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "automation::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "services::tests"
+    }
+   ],
+   "ready_note": "The services that show a workflow's run to the person: the in-app run host with notification and result panel (runner.rs), the picker and onscreen-context queries other apps use (automation.rs) and the reminder and login-item services (services.rs)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WorkoutAnnouncements.framework",
@@ -1026,11 +1384,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/app-intents.json",
+   "bifrost": "springboard/apps/clock-desktop/src/clock/intent.rs",
    "status": "partial",
-   "note": "private framework, owner AppIntents; from SDK matrix app-intents.json",
+   "note": "private framework, owner AppIntents; from SDK matrix app-intents.json The App Intents framework layer is ready (see the AppIntents row); this Apple app's own intents are not ported.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-clock",
+     "filter": "clock::intent::tests"
+    }
+   ],
+   "ready_note": "The Clock app declares the world-clock-time and next-alarm App Intents (clock/intent.rs) as runnable shortcuts; the tests cover the declarations, city lookup ignoring case, daylight saving, the device-time default and rejection of unknown intents and cities."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WritingTools.framework",
@@ -1048,8 +1415,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple Intelligence writing assistance; BifrOSt has no OS-level writing model service.",
    "rea": [],
    "method": "assessed"
   },
@@ -1069,8 +1436,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple Intelligence writing assistance UI; BifrOSt has no OS-level writing model service.",
    "rea": [],
    "method": "assessed"
   },
@@ -1090,8 +1457,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Apple silicon secure-storage hardware (xART anti-replay tokens held with the Secure Enclave); the bundle holds only Info.plist and version.plist and BifrOSt runs on Arch with no such hardware.",
    "rea": [],
    "method": "assessed"
   },
@@ -1111,8 +1478,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Xcode UI automation internals; BifrOSt drives apps through its control sockets and MCP tools.",
    "rea": [],
    "method": "assessed"
   },
@@ -1132,8 +1499,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Xcode test bootstrap internals; BifrOSt tests run with cargo test.",
    "rea": [],
    "method": "assessed"
   },
@@ -1153,8 +1520,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Xcode test-runner internals; BifrOSt tests run with cargo test.",
    "rea": [],
    "method": "assessed"
   },
@@ -1174,8 +1541,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple internal XGBoost model runtime for Apple ML models; Apple ML, not mirrored.",
    "rea": [],
    "method": "assessed"
   },
@@ -1195,8 +1562,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple JIT for Xcode and playground tooling; Apple developer tooling, no BifrOSt job.",
    "rea": [],
    "method": "assessed"
   },
@@ -1216,8 +1583,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple JIT executor for Xcode and playground tooling; Apple developer tooling.",
    "rea": [],
    "method": "assessed"
   },
@@ -1237,8 +1604,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Apple-only proprietary cross-device transport (XPC carried between a user's Apple devices); the bundle holds only Info.plist and a logging subsystem plist, and no open equivalent exists. BifrOSt's app IPC is the control socket in sdk/src/control.rs.",
    "rea": [],
    "method": "assessed"
   },
@@ -1257,11 +1624,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/control.rs",
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "control::tests"
+    }
+   ],
+   "ready_note": "XPC plumbing for apps and their helpers; BifrOSt's inter-process layer is the app control endpoint (JSON-RPC 2.0 over an owner-only Unix socket with peer-credential checks, sdk control.rs), covered by its tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/XQuery.framework",
@@ -1278,11 +1654,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/xml_query.rs",
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "xml_query::tests"
+    }
+   ],
+   "ready_note": "Built in core/src/xml_query.rs: an XML parser (elements, attributes, CDATA, entities, depth and size limits) and a path-query evaluator (steps, // and .., predicates with comparisons and and/or/not, count/string/exists/contains/starts-with/name/position/last). The XQuery language beyond paths (FLWOR, constructors, arithmetic) is not supported and is refused with an error."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/XprotectFramework.framework",
@@ -1299,9 +1684,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/malware_scan.rs; springboard/core/src/pattern_rules.rs; springboard/core/src/quarantine.rs; springboard/src/shell/malware_gate.rs; springboard/src/shell/workspace.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "private framework, no plausible owner found Wired 2026-10-17: the workspace open path (Open and Open With, which Files and the Dock drop use) scans each file or folder against the installed signature rules (/var/lib/bifrost/malware-rules, BIFROST_MALWARE_RULES in the lab) before handing it to an app. A clean file opens; a suspicious one shows an alert card with Cancel and Open Anyway and the open waits; a known threat, or a warning on a file that carries a download quarantine record (user.bifrost.quarantine), is refused with an OK-only card. A missing rule store opens the file; a damaged one is logged and opens it. Lead 2026-10-17: not ready: the open path is gated, but no rule set ships, so nothing is ever flagged.",
    "rea": [],
    "method": "assessed"
   },
@@ -1321,8 +1706,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Apple on-device ML evaluation tooling; the only dependent in the index is ZeoliteEvalExtension.appex (an evaluation harness extension) and the bundle holds only Info.plist. BifrOSt ships no Apple-style on-device model.",
    "rea": [],
    "method": "assessed"
   },
@@ -1342,8 +1727,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Apple on-device language model evaluation support, paired with ZeoliteFramework; the bundle holds only Info.plist and the sole dependent is ZeoliteEvalExtension.appex. BifrOSt ships no Apple-style on-device model.",
    "rea": [],
    "method": "assessed"
   },
@@ -1362,11 +1747,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/pattern_rules.rs",
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "pattern_rules::tests"
+    }
+   ],
+   "ready_note": "Built in core/src/pattern_rules.rs: a rule language with text patterns (nocase, wide, ascii, fullword), hex patterns with wildcards, counts, offsets, filesize, any/all/N of sets and and/or/not. Hex jumps, regular expressions and modules are not supported and are refused at compile time."
   }
  ]
 }

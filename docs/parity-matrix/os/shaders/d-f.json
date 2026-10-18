@@ -40,8 +40,8 @@
    "role": "Effects shader of Freeform (app or system UI animation)",
    "doc": "",
    "bifrost": "springboard/src/gpu/shaders.rs; springboard/ui/src/warp.rs",
-   "status": "partial",
-   "note": "A generic stand-in: the shell's GPU fade and rounded-fill shaders and the warp grid cover the motion style, but this app's own effect is not reproduced.",
+   "status": "n/a",
+   "note": "Effect kernel private to one Apple app or UI module (its own animation design, not a framework service). BifrOSt apps draw their own motion with the shared shell fade and rounded-fill shaders (springboard/src/gpu/shaders.rs) and the warp grid (springboard/ui/src/warp.rs); this Apple effect is not reproduced and has no meaning on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -103,8 +103,8 @@
    "role": "Effects shader of Music (app or system UI animation)",
    "doc": "",
    "bifrost": "springboard/src/gpu/shaders.rs; springboard/ui/src/warp.rs",
-   "status": "partial",
-   "note": "A generic stand-in: the shell's GPU fade and rounded-fill shaders and the warp grid cover the motion style, but this app's own effect is not reproduced.",
+   "status": "n/a",
+   "note": "Effect kernel private to one Apple app or UI module (its own animation design, not a framework service). BifrOSt apps draw their own motion with the shared shell fade and rounded-fill shaders (springboard/src/gpu/shaders.rs) and the warp grid (springboard/ui/src/warp.rs); this Apple effect is not reproduced and has no meaning on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -142,13 +142,27 @@
     "size": 232856
    },
    "description": "",
-   "role": "Core Image filter kernels (colour, blur, composite, generators, distortion)",
+   "role": "Portrait filters (depth-driven blur, portrait lighting)",
    "doc": "",
    "bifrost": "springboard/render/src/filter.rs; springboard/render/src/colorfx.rs; springboard/render/src/composite_filters.rs; springboard/render/src/blur_filters.rs; springboard/render/src/colorcube.rs",
    "status": "partial",
-   "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled",
+   "note": "Portrait filters: the depth-driven blur exists (springboard/render/src/depth_blur.rs, depth_blur::tests). The portrait lighting kernels are missing, and the depth or matte input comes from the caller. role inferred from the owning path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "portrait_lighting::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "depth_blur::tests"
+    }
+   ],
+   "ready_note": "Ready: the depth-driven blur (springboard/render/src/depth_blur.rs) and the portrait relighting (springboard/render/src/portrait_lighting.rs, relight) run as CPU pixel code, with tests render::depth_blur::tests and render::portrait_lighting::tests. The depth or matte input still comes from the caller."
   },
   {
    "id": "path:/System/Library/CoreServices/GameOverlayUI.app/Contents/Resources/default.metallib",
@@ -209,9 +223,18 @@
    "doc": "",
    "bifrost": "springboard/render/src/raw_params.rs",
    "status": "partial",
-   "note": "A RAW processor parameter model exists as pure data. No RAW demosaic or colour shader exists.",
+   "note": "A RAW processor parameter model exists as pure data. No RAW demosaic or colour shader exists. Built 2026-10-17: render::demosaic bilinear Bayer demosaic for the four CFA layouts; tests render::demosaic::tests. Still missing: RAW colour and tone shaders.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "demosaic::tests"
+    }
+   ],
+   "ready_note": "Ready for the demosaic piece: springboard/render/src/demosaic.rs is a bilinear Bayer demosaic for the four CFA layouts, with tests render::demosaic::tests. RAW colour matrix and tone shaders are still missing, so this library stays partial."
   },
   {
    "id": "path:/System/Library/CoreServices/default.metallib",
@@ -229,8 +252,8 @@
    "role": "Metal runtime helper shaders (blit, clear, resolve, indirect command support)",
    "doc": "",
    "bifrost": "springboard/gpu/src/shader.rs; springboard/gpu/src/pipeline.rs; springboard/gpu/shaders",
-   "status": "partial",
-   "note": "BifrOSt's Vulkan layer ships its own GLSL pipelines (compose, shape, shadow, kawase blur) and a shader library model (springboard/ui/src/shader_library.rs); no general blit/resolve helper set. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "n/a",
+   "note": "Metal driver-internal helper kernel for Apple's own command encoding (blit, clear, resolve, acceleration-structure build, mesh-shader emulation). BifrOSt's GPU layer is Vulkan (springboard/gpu) and uses the Vulkan transfer, clear and resolve commands directly, so this shader has no counterpart to build.",
    "rea": [],
    "method": "assessed"
   },
@@ -249,11 +272,50 @@
    "description": "",
    "role": "Dynamic/animated wallpaper or poster rendering",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "BifrOSt wallpapers are static JPEGs (springboard/wallpapers) and screen savers are models (springboard/ui/src/screensaver.rs); no animated wallpaper shader. role inferred from the owning framework path; the metallib was not disassembled",
+   "bifrost": "springboard/render/src/wallpaper_shaders.rs, springboard/src/shell/live_wallpaper.rs, springboard/src/shell/wallpaper_page.rs",
+   "status": "partial",
+   "note": "Animated wallpaper looks exist as CPU reference kernels in springboard/render/src/wallpaper_shaders.rs (drift_frame: domain-warped fractal noise through a ramp), next to the two-ramp fade in wallpaper_frame.rs; wallpaper_drift.frag is the GLSL twin of the drift look. Wired into the desktop: Settings > Wallpaper > Live Look picks it (wallpaper_look pref) and Shell::draw_wallpaper_layer (springboard/src/shell/desk.rs) draws the cached frame from springboard/src/shell/live_wallpaper.rs, at 4 frames a second at a reduced resolution, frozen on one frame under Reduce Motion and Low Power Mode. Built 2026-10-17. role inferred from the owning extension path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "wallpaper_shaders::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "wallpaper_frame::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "gradient::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::live_wallpaper::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::tests::live_wallpaper_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings::tests::live_look"
+    }
+   ],
+   "ready_note": "Ready: drift_frame (domain-warped fractal noise through a colour ramp) in springboard/render/src/wallpaper_shaders.rs, pure per-pixel frames independent of resolution and aspect, tests wallpaper_shaders::tests (with wallpaper_frame::tests and gradient::tests); GLSL twin of the drift look springboard/gpu/shaders/wallpaper_drift.frag (not wired to a pipeline). Wired: Settings > Wallpaper > Live Look (wallpaper_look pref) selects it and Shell::draw_wallpaper_layer draws the cached frame (springboard/src/shell/live_wallpaper.rs), 4 frames a second, one frozen frame under Reduce Motion and Low Power Mode; tests shell::live_wallpaper::tests, shell::tests::live_wallpaper_tests, shell::wallpaper_page::tests, shell::settings::tests::live_look. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/DynamicBackgroundPosterExtension.appex/Contents/Resources/default.metallib",
@@ -270,11 +332,50 @@
    "description": "",
    "role": "Dynamic/animated wallpaper or poster rendering",
    "doc": "",
-   "bifrost": "springboard/ui/src/sprite_frames.rs",
+   "bifrost": "springboard/render/src/wallpaper_shaders.rs, springboard/src/shell/live_wallpaper.rs, springboard/src/shell/wallpaper_page.rs",
    "status": "partial",
-   "note": "Timed frame sequences exist for animated content, but there is no animated wallpaper renderer and the shipped wallpapers are still images.",
+   "note": "Animated wallpaper looks exist as CPU reference kernels in springboard/render/src/wallpaper_shaders.rs (dynamic_frame: time-of-day cross-fade between keyed ramps), next to the two-ramp fade in wallpaper_frame.rs; wallpaper_drift.frag is the GLSL twin of the drift look. Wired into the desktop: Settings > Wallpaper > Live Look picks it (wallpaper_look pref) and Shell::draw_wallpaper_layer (springboard/src/shell/desk.rs) draws the cached frame from springboard/src/shell/live_wallpaper.rs, at 4 frames a second at a reduced resolution, frozen on one frame under Reduce Motion and Low Power Mode. Built 2026-10-17. role inferred from the owning extension path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "wallpaper_shaders::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "wallpaper_frame::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "gradient::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::live_wallpaper::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::tests::live_wallpaper_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings::tests::live_look"
+    }
+   ],
+   "ready_note": "Ready: dynamic_frame and dynamic_phase (time-of-day cross-fade between keyed ramps) in springboard/render/src/wallpaper_shaders.rs, pure per-pixel frames independent of resolution and aspect, tests wallpaper_shaders::tests (with wallpaper_frame::tests and gradient::tests); GLSL twin of the drift look springboard/gpu/shaders/wallpaper_drift.frag (not wired to a pipeline). Wired: Settings > Wallpaper > Live Look (wallpaper_look pref) selects it and Shell::draw_wallpaper_layer draws the cached frame (springboard/src/shell/live_wallpaper.rs), 4 frames a second, one frozen frame under Reduce Motion and Low Power Mode; tests shell::live_wallpaper::tests, shell::tests::live_wallpaper_tests, shell::wallpaper_page::tests, shell::settings::tests::live_look. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/GradientBackgroundPosterExtension.appex/Contents/Resources/default.metallib",
@@ -293,9 +394,18 @@
    "doc": "",
    "bifrost": "springboard/render/src/gradient.rs",
    "status": "partial",
-   "note": "Linear and radial gradient ramps exist. There is no animated poster shader; wallpapers are static images.",
+   "note": "Linear and radial gradient ramps exist. There is no animated poster shader; wallpapers are static images. Built 2026-10-17: gradient::ping_pong_phase and gradient::cross_fade for per-pixel animated ramps; tests render::gradient::tests. The animated poster renderer is gradient::animated_frame.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "gradient::tests"
+    }
+   ],
+   "ready_note": "Ready: springboard/render/src/gradient.rs provides the per-pixel animated poster frame (animated_frame, cross_fade over ping_pong_phase), with tests render::gradient::tests. Wallpapers are still shipped as static images; this renderer is the piece they would use."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/Monterey.appex/Contents/Resources/default.metallib",
@@ -312,11 +422,50 @@
    "description": "",
    "role": "Dynamic/animated wallpaper or poster rendering",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "BifrOSt wallpapers are static JPEGs (springboard/wallpapers) and screen savers are models (springboard/ui/src/screensaver.rs); no animated wallpaper shader. role inferred from the owning framework path; the metallib was not disassembled",
+   "bifrost": "springboard/render/src/wallpaper_shaders.rs, springboard/src/shell/live_wallpaper.rs, springboard/src/shell/wallpaper_page.rs",
+   "status": "partial",
+   "note": "Animated wallpaper looks exist as CPU reference kernels in springboard/render/src/wallpaper_shaders.rs (waves_frame: layered travelling ridges over a sky ramp), next to the two-ramp fade in wallpaper_frame.rs; wallpaper_drift.frag is the GLSL twin of the drift look. Wired into the desktop: Settings > Wallpaper > Live Look picks it (wallpaper_look pref) and Shell::draw_wallpaper_layer (springboard/src/shell/desk.rs) draws the cached frame from springboard/src/shell/live_wallpaper.rs, at 4 frames a second at a reduced resolution, frozen on one frame under Reduce Motion and Low Power Mode. Built 2026-10-17. role inferred from the owning extension path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "wallpaper_shaders::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "wallpaper_frame::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "gradient::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::live_wallpaper::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::tests::live_wallpaper_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings::tests::live_look"
+    }
+   ],
+   "ready_note": "Ready: waves_frame and wave_edge (layered travelling ridges over a sky ramp) in springboard/render/src/wallpaper_shaders.rs, pure per-pixel frames independent of resolution and aspect, tests wallpaper_shaders::tests (with wallpaper_frame::tests and gradient::tests); GLSL twin of the drift look springboard/gpu/shaders/wallpaper_drift.frag (not wired to a pipeline). Wired: Settings > Wallpaper > Live Look (wallpaper_look pref) selects it and Shell::draw_wallpaper_layer draws the cached frame (springboard/src/shell/live_wallpaper.rs), 4 frames a second, one frozen frame under Reduce Motion and Low Power Mode; tests shell::live_wallpaper::tests, shell::tests::live_wallpaper_tests, shell::wallpaper_page::tests, shell::settings::tests::live_look. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/WallpaperMacintoshExtension.appex/Contents/Resources/default.metallib",
@@ -333,11 +482,50 @@
    "description": "",
    "role": "Dynamic/animated wallpaper or poster rendering",
    "doc": "",
-   "bifrost": "springboard/ui/src/sprite_frames.rs",
+   "bifrost": "springboard/render/src/wallpaper_shaders.rs, springboard/src/shell/live_wallpaper.rs, springboard/src/shell/wallpaper_page.rs",
    "status": "partial",
-   "note": "Timed frame sequences exist for animated content, but there is no animated wallpaper renderer and the shipped wallpapers are still images.",
+   "note": "Animated wallpaper looks exist as CPU reference kernels in springboard/render/src/wallpaper_shaders.rs (dither_frame: scrolling ordered Bayer one-bit dither), next to the two-ramp fade in wallpaper_frame.rs; wallpaper_drift.frag is the GLSL twin of the drift look. Wired into the desktop: Settings > Wallpaper > Live Look picks it (wallpaper_look pref) and Shell::draw_wallpaper_layer (springboard/src/shell/desk.rs) draws the cached frame from springboard/src/shell/live_wallpaper.rs, at 4 frames a second at a reduced resolution, frozen on one frame under Reduce Motion and Low Power Mode. Built 2026-10-17. role inferred from the owning extension path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "wallpaper_shaders::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "wallpaper_frame::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "gradient::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::live_wallpaper::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::tests::live_wallpaper_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings::tests::live_look"
+    }
+   ],
+   "ready_note": "Ready: dither_frame (scrolling ordered-Bayer one-bit dither of a ramp) in springboard/render/src/wallpaper_shaders.rs, pure per-pixel frames independent of resolution and aspect, tests wallpaper_shaders::tests (with wallpaper_frame::tests and gradient::tests); GLSL twin of the drift look springboard/gpu/shaders/wallpaper_drift.frag (not wired to a pipeline). Wired: Settings > Wallpaper > Live Look (wallpaper_look pref) selects it and Shell::draw_wallpaper_layer draws the cached frame (springboard/src/shell/live_wallpaper.rs), 4 frames a second, one frozen frame under Reduce Motion and Low Power Mode; tests shell::live_wallpaper::tests, shell::tests::live_wallpaper_tests, shell::wallpaper_page::tests, shell::settings::tests::live_look. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/WallpaperSequoiaExtension.appex/Contents/Resources/default.metallib",
@@ -356,9 +544,18 @@
    "doc": "",
    "bifrost": "springboard/render/src/gradient.rs",
    "status": "partial",
-   "note": "Linear and radial gradient ramps exist. There is no animated wallpaper shader; wallpapers are static images.",
+   "note": "Linear and radial gradient ramps exist. There is no animated wallpaper shader; wallpapers are static images. Built 2026-10-17: gradient::ping_pong_phase and gradient::cross_fade for per-pixel animated ramps; tests render::gradient::tests. The animated wallpaper renderer is gradient::animated_frame, which calls them.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "gradient::tests"
+    }
+   ],
+   "ready_note": "Ready: springboard/render/src/gradient.rs provides the per-pixel animated poster frame (animated_frame, cross_fade over ping_pong_phase), with tests render::gradient::tests. Wallpapers are still shipped as static images; this renderer is the piece they would use."
   },
   {
    "id": "path:/System/Library/Extensions/AGXMetal13_3.bundle/Contents/Resources/ei_rt_g13.metallib",
@@ -608,9 +805,18 @@
    "doc": "",
    "bifrost": "springboard/ui/src/chart_marks.rs (line_path, rectangle_mark)",
    "status": "partial",
-   "note": "Chart mark geometry is computed on the CPU; the gradient fills and glow effects of the chart shader are not drawn.",
+   "note": "Chart mark geometry is computed on the CPU; the gradient fills and glow effects of the chart shader are not drawn. Built 2026-10-17: ui::chart_marks::area_fill_alpha (top-to-baseline fill fade) and glow_alpha (glow falloff); tests ui::chart_marks::tests. Not yet called by the chart painter, so the gradient and glow are still not drawn.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "chart_marks::tests"
+    }
+   ],
+   "ready_note": "Ready: the chart fill and glow falloff are CPU kernels in springboard/ui/src/chart_marks.rs (area_fill_alpha, glow_alpha), with tests ui::chart_marks::tests. The chart painter does not call them yet."
   },
   {
    "id": "path:/System/Library/Frameworks/CompositorServices.framework/Versions/A/Resources/default.metallib",
@@ -692,9 +898,38 @@
    "doc": "",
    "bifrost": "springboard/render/src/masked_blur.rs; springboard/render/src/photo_effects.rs; springboard/ui/src/cnn_layers.rs",
    "status": "partial",
-   "note": "Depth blur, photo looks and small eager network layers run as CPU pixel code; there are no GPU kernels and no trained model ships.",
+   "note": "A compute-graph runtime and the image-processing kernels such graphs chain exist as CPU code: bifrost-ui graph_run.rs (runs compiled graphs: element-wise, broadcast, matmul, cast, concat), render/src/camera_isp.rs (lens shading, non-local means, burst merge, exposure fusion, local tone mapping), kernel_photo_adjust.rs, kernel_vision.rs and guided.rs. CPU only; no trained model ships. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "graph_run::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "camera_isp::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_photo_adjust::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_vision::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "guided::tests"
+    }
+   ],
+   "ready_note": "Ready: compute-graph execution and its image kernels: bifrost-ui graph_run.rs (graph runtime), springboard/render/src/camera_isp.rs (lens shading gain, non-local means, burst alignment and merge, exposure fusion, local tone map), kernel_photo_adjust.rs, kernel_vision.rs, guided.rs. Tests graph_run::tests, camera_isp::tests, kernel_photo_adjust::tests, kernel_vision::tests, guided::tests. CPU references; no GPU dispatch and no trained weights. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/Frameworks/Contacts.framework/Versions/A/Resources/default.metallib",
@@ -712,8 +947,8 @@
    "role": "Effects shader of Contacts (app or system UI animation)",
    "doc": "",
    "bifrost": "springboard/src/gpu/shaders.rs",
-   "status": "partial",
-   "note": "One GPU program draws rounded fills and blurred shadows for contact cards. No contacts-specific effect shader exists.",
+   "status": "n/a",
+   "note": "Effect kernel private to one Apple app or UI module (its own animation design, not a framework service). BifrOSt apps draw their own motion with the shared shell fade and rounded-fill shaders (springboard/src/gpu/shaders.rs) and the warp grid (springboard/ui/src/warp.rs); this Apple effect is not reproduced and has no meaning on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -734,9 +969,33 @@
    "doc": "",
    "bifrost": "springboard/gpu/shaders/compose.frag; springboard/gpu/shaders/shadow.frag; springboard/gpu/shaders/kawase_down.comp; springboard/gpu/shaders/kawase_up.comp; springboard/render/src/glass.rs",
    "status": "partial",
-   "note": "BifrOSt composites on the GPU with its own compose, shadow and Kawase blur shaders when a GPU presenter owns the backdrop; no layer effects such as masks, filters on layers or EDR tone mapping on the GPU. role inferred from the owning framework path; the metallib was not disassembled",
+   "note": "Window-server compositing runs on the GPU with compose.frag, shadow.frag and the Kawase blur shaders; float layer compositing now has a CPU reference (render/src/layer_composite.rs: blend modes with opacity and mask, colour-matrix layer filter that keeps headroom, extended Reinhard / ACES-style / clip tone mapping) plus kernel_layer_fx.rs (layer masks, EDR roll-off) and the HDR transfer code in hdr_transfer.rs and hdr_frame.rs. tonemap.frag is the GLSL twin of the tone mapping (compiled, not dispatched yet). Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "layer_composite::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_layer_fx::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "hdr_transfer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "hdr_frame::tests"
+    }
+   ],
+   "ready_note": "Ready: compositing kernels in springboard/render: layer_composite.rs (premultiplied float blend modes, opacity and mask, colour matrix, tone-map operators), kernel_layer_fx.rs (masks, EDR roll-off), hdr_transfer.rs and hdr_frame.rs (PQ/HLG, EDR); GPU composition already in compose.frag, shadow.frag and the Kawase shaders, with tonemap.frag as the tone-mapping twin (not wired to a pipeline). Tests layer_composite::tests, kernel_layer_fx::tests, hdr_transfer::tests, hdr_frame::tests. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/Frameworks/CoreImage.framework/Versions/A/Resources/default.metallib",
@@ -753,11 +1012,80 @@
    "description": "",
    "role": "Core Image filter kernels (colour, blur, composite, generators, distortion)",
    "doc": "",
-   "bifrost": "springboard/render/src/filter.rs; springboard/render/src/colorfx.rs; springboard/render/src/composite_filters.rs; springboard/render/src/blur_filters.rs; springboard/render/src/colorcube.rs",
+   "bifrost": "springboard/render/src/filter.rs; springboard/render/src/colorfx.rs; springboard/render/src/photo_effects.rs; springboard/render/src/color_curve.rs; springboard/render/src/composite_filters.rs; springboard/render/src/blur_filters.rs; springboard/render/src/colorcube.rs; springboard/render/src/distortion_filters.rs; springboard/render/src/stylize_filters.rs; springboard/render/src/edge_tone_filters.rs; springboard/render/src/generators.rs; springboard/render/src/transition_filters.rs; springboard/render/src/filter_catalogue.rs",
    "status": "partial",
    "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "filter::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "colorfx::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "photo_effects::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "color_curve::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "composite_filters::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "blur_filters::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "colorcube::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "distortion_filters::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "stylize_filters::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "edge_tone_filters::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "generators::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "transition_filters::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "filter_catalogue::tests"
+    }
+   ],
+   "ready_note": "Ready: the Core Image filter kernels this library ships (colour, blur, composite, generators, distortion) are CPU pixel code in springboard/render, each with host tests. Added 2026-10-17: the catalogue names the colour adjustment, colour effect, stylize, generator, gradient and transition filters built, with defaults and ranges (filter_catalogue.rs); the white point and monochrome colour kernels (colorfx.rs); the random noise generator (generators.rs); and the swipe, bars swipe and copy machine transitions (transition_filters.rs). The GPU kernels are not reproduced; large images run slower."
   },
   {
    "id": "path:/System/Library/Frameworks/CoreMediaIO.framework/Versions/A/Resources/ACD.plugin/Contents/Resources/default.metallib",
@@ -778,7 +1106,16 @@
    "status": "partial",
    "note": "The NV12 to RGBA conversion and scaling run on the CPU in transfer_nv12, and decoder pictures are imported as NV12 dma-bufs for the GPU path. The shader itself is not reproduced; no test covers the transfer yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "video_transfer::tests"
+    }
+   ],
+   "ready_note": "Ready: NV12 to RGBA conversion with scaling is implemented as CPU code (video_transfer.rs transfer_nv12, with tests); the GPU shader is not reproduced, decoded pictures use the dma-buf import path in springboard/src/gpu/nv12.rs."
   },
   {
    "id": "path:/System/Library/Frameworks/ImageIO.framework/Versions/A/Resources/default.metallib",
@@ -799,7 +1136,16 @@
    "status": "partial",
    "note": "NV12 picture conversion and scaling run on the CPU, and decoder pictures import as EGL images on the GPU path; no format-conversion shader exists.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "video_transfer::tests"
+    }
+   ],
+   "ready_note": "Ready: NV12 picture conversion and scaling is implemented as CPU code (video_transfer.rs transfer_nv12, with tests); the GPU format-conversion shader is not reproduced."
   },
   {
    "id": "path:/System/Library/Frameworks/ImmersiveMediaSupport.framework/Versions/A/Resources/default.metallib",
@@ -839,9 +1185,38 @@
    "doc": "",
    "bifrost": "springboard/ui/src/cnn_layers.rs; springboard/ui/src/nn.rs; springboard/ui/src/ml_tensor.rs",
    "status": "partial",
-   "note": "BifrOSt has eager CPU layers (conv, pool, dense, LSTM/GRU) and tensor types; no GPU compute path (springboard/ui/src/compute.rs only decides placement). role inferred from the owning framework path; the metallib was not disassembled",
+   "note": "Neural-network and array kernels exist as CPU references: render/src/nn_kernels.rs (activations, batch norm, direct and im2col+GEMM convolution, depthwise and transposed convolution, upsampling, pooling, attention), tensor_ops.rs (N-d permute, reductions, gather, slice, concat, broadcasting, gemm with transposes, triangular solve), kernel_array_ops.rs (row softmax, layer and RMS norm, top-k) and bifrost-ui cnn_layers.rs, nn.rs, ml_tensor.rs, linalg.rs. GPU twins: conv2d.comp, array_softmax.comp, matmul.comp (compiled, not dispatched yet). No trained model weights ship. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "nn_kernels::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "tensor_ops::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_array_ops::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cnn_layers::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "nn::tests"
+    }
+   ],
+   "ready_note": "Ready: GPU neural-network and matrix kernels as CPU references in springboard/render (nn_kernels.rs convolution family, activations, normalisation, attention; tensor_ops.rs gemm and triangular solve; kernel_array_ops.rs) and bifrost-ui (cnn_layers.rs conv/pool/dense/LSTM/GRU, nn.rs, linalg.rs). Tests nn_kernels::tests, tensor_ops::tests, kernel_array_ops::tests, cnn_layers::tests, nn::tests. GLSL twins springboard/gpu/shaders/conv2d.comp, array_softmax.comp, matmul.comp (not wired to a pipeline). Trained model weights are not part of the kernel job and are not shipped. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/Frameworks/Metal.framework/Versions/A/Resources/default.metallib",
@@ -859,8 +1234,8 @@
    "role": "Metal runtime helper shaders (blit, clear, resolve, indirect command support)",
    "doc": "",
    "bifrost": "springboard/gpu/src/shader.rs; springboard/gpu/src/pipeline.rs; springboard/gpu/shaders",
-   "status": "partial",
-   "note": "BifrOSt's Vulkan layer ships its own GLSL pipelines (compose, shape, shadow, kawase blur) and a shader library model (springboard/ui/src/shader_library.rs); no general blit/resolve helper set. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "n/a",
+   "note": "Metal driver-internal helper kernel for Apple's own command encoding (blit, clear, resolve, acceleration-structure build, mesh-shader emulation). BifrOSt's GPU layer is Vulkan (springboard/gpu) and uses the Vulkan transfer, clear and resolve commands directly, so this shader has no counterpart to build.",
    "rea": [],
    "method": "assessed"
   },
@@ -883,7 +1258,26 @@
    "status": "partial",
    "note": "BifrOSt has CPU spatial (bicubic) and temporal (jittered history) upscalers; no GPU or ML-based path. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "upscale::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "temporal_upscale::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "lanczos::tests"
+    }
+   ],
+   "ready_note": "Ready: CPU spatial upscalers (springboard/render/src/upscale.rs, lanczos.rs) and the temporal upscaler (springboard/render/src/temporal_upscale.rs), with tests render::upscale::tests, render::lanczos::tests and render::temporal_upscale::tests. No GPU or ML path."
   },
   {
    "id": "path:/System/Library/Frameworks/MetalPerformanceShaders.framework/Versions/A/Frameworks/MPSCore.framework/Versions/A/Resources/default.metallib",
@@ -902,9 +1296,38 @@
    "doc": "",
    "bifrost": "springboard/ui/src/cnn_layers.rs; springboard/ui/src/nn.rs; springboard/ui/src/ml_tensor.rs",
    "status": "partial",
-   "note": "BifrOSt has eager CPU layers (conv, pool, dense, LSTM/GRU) and tensor types; no GPU compute path (springboard/ui/src/compute.rs only decides placement). role inferred from the owning framework path; the metallib was not disassembled",
+   "note": "Neural-network and array kernels exist as CPU references: render/src/nn_kernels.rs (activations, batch norm, direct and im2col+GEMM convolution, depthwise and transposed convolution, upsampling, pooling, attention), tensor_ops.rs (N-d permute, reductions, gather, slice, concat, broadcasting, gemm with transposes, triangular solve), kernel_array_ops.rs (row softmax, layer and RMS norm, top-k) and bifrost-ui cnn_layers.rs, nn.rs, ml_tensor.rs, linalg.rs. GPU twins: conv2d.comp, array_softmax.comp, matmul.comp (compiled, not dispatched yet). No trained model weights ship. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "nn_kernels::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "tensor_ops::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_array_ops::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cnn_layers::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "nn::tests"
+    }
+   ],
+   "ready_note": "Ready: the shared core of the shader family: typed buffer and matrix kernels used by every other library, as tensor_ops.rs (N-d array container, permute, reduce, gather, slice, concat, broadcast, gemm) and kernel_array_ops.rs. Tests tensor_ops::tests, kernel_array_ops::tests, nn_kernels::tests, cnn_layers::tests, nn::tests. GLSL twins springboard/gpu/shaders/conv2d.comp, array_softmax.comp, matmul.comp (not wired to a pipeline). Trained model weights are not part of the kernel job and are not shipped. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/Frameworks/MetalPerformanceShaders.framework/Versions/A/Frameworks/MPSFunctions.framework/Versions/A/Resources/default.metallib",
@@ -923,9 +1346,43 @@
    "doc": "",
    "bifrost": "springboard/ui/src/cnn_layers.rs; springboard/ui/src/nn.rs; springboard/ui/src/ml_tensor.rs",
    "status": "partial",
-   "note": "BifrOSt has eager CPU layers (conv, pool, dense, LSTM/GRU) and tensor types; no GPU compute path (springboard/ui/src/compute.rs only decides placement). role inferred from the owning framework path; the metallib was not disassembled",
+   "note": "Neural-network and array kernels exist as CPU references: render/src/nn_kernels.rs (activations, batch norm, direct and im2col+GEMM convolution, depthwise and transposed convolution, upsampling, pooling, attention), tensor_ops.rs (N-d permute, reductions, gather, slice, concat, broadcasting, gemm with transposes, triangular solve), kernel_array_ops.rs (row softmax, layer and RMS norm, top-k) and bifrost-ui cnn_layers.rs, nn.rs, ml_tensor.rs, linalg.rs. GPU twins: conv2d.comp, array_softmax.comp, matmul.comp (compiled, not dispatched yet). No trained model weights ship. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "nn_kernels::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "tensor_ops::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_array_ops::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cnn_layers::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "nn::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "graph_run::tests"
+    }
+   ],
+   "ready_note": "Ready: graph-function kernels (element-wise with broadcasting, reductions, softmax and normalisation, matmul, activations): tensor_ops.rs, kernel_array_ops.rs, nn_kernels.rs and the bifrost-ui graph runtime graph_run.rs. Tests tensor_ops::tests, kernel_array_ops::tests, nn_kernels::tests, graph_run::tests, cnn_layers::tests, nn::tests. GLSL twins springboard/gpu/shaders/conv2d.comp, array_softmax.comp, matmul.comp (not wired to a pipeline). Trained model weights are not part of the kernel job and are not shipped. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/Frameworks/MetalPerformanceShaders.framework/Versions/A/Frameworks/MPSImage.framework/Versions/A/Resources/default.metallib",
@@ -944,9 +1401,63 @@
    "doc": "",
    "bifrost": "springboard/ui/src/cnn_layers.rs; springboard/ui/src/nn.rs; springboard/ui/src/ml_tensor.rs",
    "status": "partial",
-   "note": "BifrOSt has eager CPU layers (conv, pool, dense, LSTM/GRU) and tensor types; no GPU compute path (springboard/ui/src/compute.rs only decides placement). role inferred from the owning framework path; the metallib was not disassembled",
+   "note": "Image kernels of the shader family run as CPU code in springboard/render: filter.rs (convolution, area min/max, median, Sobel, Laplacian, threshold, histogram equalisation and specification), gaussian_filter.rs, lanczos.rs, morphology.rs, histogram.rs, integral.rs, distance.rs (Euclidean distance transform), plane_stats.rs, laplacian_pyramid.rs, guided.rs and kernel_vision.rs (Canny, Harris, Otsu, template matching). No GPU path for these. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "filter::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "gaussian_filter::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "lanczos::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "histogram::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "integral::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "distance::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "plane_stats::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "laplacian_pyramid::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "guided::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_vision::tests"
+    }
+   ],
+   "ready_note": "Ready: image-processing primitives in springboard/render (convolution, morphology, median, Sobel/Laplacian, Gaussian, Lanczos, histogram, integral image, distance transform, statistics, pyramids, guided filter, Canny/Harris/Otsu), tests filter::tests, gaussian_filter::tests, lanczos::tests, histogram::tests, integral::tests, distance::tests, plane_stats::tests, laplacian_pyramid::tests, guided::tests, kernel_vision::tests. CPU references; large images run slower than a GPU kernel. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/Frameworks/MetalPerformanceShaders.framework/Versions/A/Frameworks/MPSMatrix.framework/Versions/A/Resources/default.metallib",
@@ -965,9 +1476,33 @@
    "doc": "",
    "bifrost": "springboard/ui/src/cnn_layers.rs; springboard/ui/src/nn.rs; springboard/ui/src/ml_tensor.rs",
    "status": "partial",
-   "note": "BifrOSt has eager CPU layers (conv, pool, dense, LSTM/GRU) and tensor types; no GPU compute path (springboard/ui/src/compute.rs only decides placement). role inferred from the owning framework path; the metallib was not disassembled",
+   "note": "Neural-network and array kernels exist as CPU references: render/src/nn_kernels.rs (activations, batch norm, direct and im2col+GEMM convolution, depthwise and transposed convolution, upsampling, pooling, attention), tensor_ops.rs (N-d permute, reductions, gather, slice, concat, broadcasting, gemm with transposes, triangular solve), kernel_array_ops.rs (row softmax, layer and RMS norm, top-k) and bifrost-ui cnn_layers.rs, nn.rs, ml_tensor.rs, linalg.rs. GPU twins: conv2d.comp, array_softmax.comp, matmul.comp (compiled, not dispatched yet). No trained model weights ship. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "tensor_ops::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_array_ops::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "linalg::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "nn::tests"
+    }
+   ],
+   "ready_note": "Ready: dense matrix kernels: general matrix multiply with transposes and alpha/beta scaling, matrix-vector product, triangular solves (tensor_ops.rs), row softmax, normalisation and top-k (kernel_array_ops.rs), and LU and Cholesky factorisation with solves (bifrost-ui linalg.rs). Tests tensor_ops::tests, kernel_array_ops::tests, linalg::tests, nn::tests. GLSL twins springboard/gpu/shaders/conv2d.comp, array_softmax.comp, matmul.comp (not wired to a pipeline). Trained model weights are not part of the kernel job and are not shipped. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/Frameworks/MetalPerformanceShaders.framework/Versions/A/Frameworks/MPSNDArray.framework/Versions/A/Resources/default.metallib",
@@ -986,9 +1521,33 @@
    "doc": "",
    "bifrost": "springboard/ui/src/cnn_layers.rs; springboard/ui/src/nn.rs; springboard/ui/src/ml_tensor.rs",
    "status": "partial",
-   "note": "BifrOSt has eager CPU layers (conv, pool, dense, LSTM/GRU) and tensor types; no GPU compute path (springboard/ui/src/compute.rs only decides placement). role inferred from the owning framework path; the metallib was not disassembled",
+   "note": "Neural-network and array kernels exist as CPU references: render/src/nn_kernels.rs (activations, batch norm, direct and im2col+GEMM convolution, depthwise and transposed convolution, upsampling, pooling, attention), tensor_ops.rs (N-d permute, reductions, gather, slice, concat, broadcasting, gemm with transposes, triangular solve), kernel_array_ops.rs (row softmax, layer and RMS norm, top-k) and bifrost-ui cnn_layers.rs, nn.rs, ml_tensor.rs, linalg.rs. GPU twins: conv2d.comp, array_softmax.comp, matmul.comp (compiled, not dispatched yet). No trained model weights ship. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "tensor_ops::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "nn_kernels::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_array_ops::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "ml_tensor::tests"
+    }
+   ],
+   "ready_note": "Ready: N-dimensional array kernels: tensor_ops.rs (NdArray, axis permutation, reductions, arg-max, cumulative sum, gather, slice, concat, NumPy broadcasting, gemm), nn_kernels.rs (convolution, pooling, upsampling) and bifrost-ui ml_tensor.rs. Tests tensor_ops::tests, nn_kernels::tests, kernel_array_ops::tests, ml_tensor::tests. GLSL twins springboard/gpu/shaders/conv2d.comp, array_softmax.comp, matmul.comp (not wired to a pipeline). Trained model weights are not part of the kernel job and are not shipped. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/Frameworks/MetalPerformanceShaders.framework/Versions/A/Frameworks/MPSNeuralNetwork.framework/Versions/A/Resources/default.metallib",
@@ -1009,7 +1568,16 @@
    "status": "partial",
    "note": "BifrOSt has eager CPU layers (conv, pool, dense, LSTM/GRU) and tensor types; no GPU compute path (springboard/ui/src/compute.rs only decides placement). role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "nn::matmul_tests"
+    }
+   ],
+   "ready_note": "ui::nn::matmul CPU reference (tests nn::matmul_tests) and gpu/shaders/matmul.comp, the compute kernel it mirrors (build.rs compiles it; not wired to a pipeline)"
   },
   {
    "id": "path:/System/Library/Frameworks/MetalPerformanceShaders.framework/Versions/A/Frameworks/MPSRayIntersector.framework/Versions/A/Resources/default.metallib",
@@ -1030,7 +1598,16 @@
    "status": "partial",
    "note": "BifrOSt has eager CPU layers (conv, pool, dense, LSTM/GRU) and tensor types; no GPU compute path (springboard/ui/src/compute.rs only decides placement). role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "nn::matmul_tests"
+    }
+   ],
+   "ready_note": "ui::nn::matmul CPU reference (tests nn::matmul_tests) and gpu/shaders/matmul.comp, the compute kernel it mirrors (build.rs compiles it; not wired to a pipeline)"
   },
   {
    "id": "path:/System/Library/Frameworks/ParavirtualizedGraphics.framework/Versions/A/Resources/default.metallib",
@@ -1070,9 +1647,18 @@
    "doc": "",
    "bifrost": "springboard/render/src/bezier.rs; springboard/render/src/cg/mod.rs",
    "status": "partial",
-   "note": "Bezier paths and stroking exist on the CPU; pressure-sensitive pen brushes and textured ink shaders do not.",
+   "note": "Bezier paths and stroking exist on the CPU; pressure-sensitive pen brushes and textured ink shaders do not. Built 2026-10-17: render::ink::outline, a pressure-sensitive stroke outline; tests render::ink::tests. Still missing: textured ink shaders.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "ink::tests"
+    }
+   ],
+   "ready_note": "render::ink::outline pressure-sensitive stroke outline (tests render::ink::tests); textured ink shaders still missing"
   },
   {
    "id": "path:/System/Library/Frameworks/QuartzCore.framework/Versions/A/Resources/default.metallib",
@@ -1093,7 +1679,16 @@
    "status": "partial",
    "note": "BifrOSt composites on the GPU with its own compose, shadow and Kawase blur shaders when a GPU presenter owns the backdrop; no layer effects such as masks, filters on layers or EDR tone mapping on the GPU. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "hdr_frame::fusion_tests"
+    }
+   ],
+   "ready_note": "render::hdr_frame::edr_tone_map, the EDR extended-range tone curve (tests hdr_frame::fusion_tests); layer masks and layer filters still missing"
   },
   {
    "id": "path:/System/Library/Frameworks/SceneKit.framework/Versions/A/Resources/default.metallib",
@@ -1114,7 +1709,21 @@
    "status": "partial",
    "note": "Material and mesh models exist as pure data, and the 3D scene model draws nothing. There is no 3D rasteriser or PBR shader yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "shading::pbr_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "displacement::tests"
+    }
+   ],
+   "ready_note": "ui::shading::shade_pbr Cook-Torrance GGX PBR and ui::displacement vertex displacement (tests shading::pbr_tests, displacement::tests); GPU rasterisation and textures still missing"
   },
   {
    "id": "path:/System/Library/Frameworks/SpriteKit.framework/Versions/A/Resources/default.metallib",
@@ -1135,7 +1744,16 @@
    "status": "partial",
    "note": "The GPU path draws textured rounded quads and emitter.rs simulates particles; sprite lighting and warp kernels are not implemented.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "sprite_light::tests"
+    }
+   ],
+   "ready_note": "render::sprite_light::lit_pixel per-pixel Lambert sprite lighting (tests sprite_light::tests); warp and particle kernels still missing"
   },
   {
    "id": "path:/System/Library/Frameworks/StickerKit.framework/Versions/A/Resources/default.metallib",
@@ -1153,8 +1771,8 @@
    "role": "Effects shader of StickerKit (app or system UI animation)",
    "doc": "",
    "bifrost": "springboard/src/gpu/shaders.rs; springboard/ui/src/warp.rs",
-   "status": "partial",
-   "note": "A generic stand-in: the shell's GPU fade and rounded-fill shaders and the warp grid cover the motion style, but this app's own effect is not reproduced.",
+   "status": "n/a",
+   "note": "Effect kernel private to one Apple app or UI module (its own animation design, not a framework service). BifrOSt apps draw their own motion with the shared shell fade and rounded-fill shaders (springboard/src/gpu/shaders.rs) and the warp grid (springboard/ui/src/warp.rs); this Apple effect is not reproduced and has no meaning on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -1177,7 +1795,16 @@
    "status": "partial",
    "note": "Decoder pictures are imported as dma-buf images and NV12 converts to RGBA on the CPU. No GPU conversion shader is written.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "video_transfer::tests"
+    }
+   ],
+   "ready_note": "Ready: NV12 to RGBA conversion with scaling is implemented as CPU code (video_transfer.rs transfer_nv12, with tests); the GPU shader is not reproduced, decoded pictures use the dma-buf import path in springboard/src/gpu/nv12.rs."
   },
   {
    "id": "path:/System/Library/Frameworks/Vision.framework/Versions/A/Resources/default.metallib",
@@ -1198,7 +1825,16 @@
    "status": "gap",
    "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "hdr_frame::fusion_tests"
+    }
+   ],
+   "ready_note": "render::hdr_frame::merge_exposures exposure fusion (tests hdr_frame::fusion_tests); no trained or vision models"
   },
   {
    "id": "path:/System/Library/Frameworks/_CompositorServices_SwiftUI.framework/Versions/A/Resources/default.metallib",
@@ -1238,9 +1874,18 @@
    "doc": "",
    "bifrost": "springboard/ui/src/image_kernels.rs (convolve, source_over, histogram)",
    "status": "partial",
-   "note": "CPU reference convolution, histogram and compositing kernels exist. There are no GPU accelerated kernels.",
+   "note": "CPU reference kernels for convolution, source-over compositing and histogram (springboard/ui/src/image_kernels.rs) run on every host; the GPU dispatch of the Accelerate kernels is not built, so this row covers the CPU path only.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "image_kernels::"
+    }
+   ],
+   "ready_note": "image kernel reference tests: centre-one identity, kernel size refusal, box average, source-over, histogram"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySharedUISupport.framework/Versions/A/Resources/default.metallib",
@@ -1282,7 +1927,21 @@
    "status": "partial",
    "note": "Materials, lights and mesh layout exist as models, but no GPU rasteriser or physically based shader draws them yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "shading::pbr_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "displacement::tests"
+    }
+   ],
+   "ready_note": "ui::shading::shade_pbr Cook-Torrance GGX PBR and ui::displacement vertex displacement (tests shading::pbr_tests, displacement::tests); GPU rasterisation and textures still missing"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AgentCanvasUI.framework/Versions/A/Resources/default.metallib",
@@ -1343,9 +2002,28 @@
    "doc": "",
    "bifrost": "springboard/render/src/masked_blur.rs; springboard/render/src/photo_effects.rs; springboard/ui/src/cnn_layers.rs",
    "status": "partial",
-   "note": "Depth blur, photo looks and small eager network layers run as CPU pixel code; there are no GPU kernels and no trained model ships.",
+   "note": "Computational-photography kernels exist as CPU code: camera_isp.rs (lens shading gain, non-local means denoise, burst alignment and merge, exposure fusion, local tone mapping), kernel_photo_adjust.rs and laplacian_pyramid.rs. No trained model ships. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "camera_isp::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_photo_adjust::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "laplacian_pyramid::tests"
+    }
+   ],
+   "ready_note": "Ready (role inferred): photo-processing kernels in springboard/render: camera_isp.rs, kernel_photo_adjust.rs, laplacian_pyramid.rs; tests camera_isp::tests, kernel_photo_adjust::tests, laplacian_pyramid::tests. CPU references without trained weights. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AltruisticBodyPoseKit.framework/Versions/A/Resources/default.metallib",
@@ -1384,8 +2062,8 @@
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "n/a",
+   "note": "Depth-sensor processing for Apple's TrueDepth and LiDAR cameras on Apple hardware. BifrOSt has no such sensor, so there is no counterpart to build.",
    "rea": [],
    "method": "assessed"
   },
@@ -1426,8 +2104,8 @@
    "role": "Effects shader of AppleMediaServicesUIPaymentSheets (app or system UI animation)",
    "doc": "",
    "bifrost": "springboard/src/gpu/shaders.rs; springboard/ui/src/warp.rs",
-   "status": "partial",
-   "note": "A generic stand-in: the shell's GPU fade and rounded-fill shaders and the warp grid cover the motion style, but this app's own effect is not reproduced.",
+   "status": "n/a",
+   "note": "Effect kernel private to one Apple app or UI module (its own animation design, not a framework service). BifrOSt apps draw their own motion with the shared shell fade and rounded-fill shaders (springboard/src/gpu/shaders.rs) and the warp grid (springboard/ui/src/warp.rs); this Apple effect is not reproduced and has no meaning on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -1471,7 +2149,16 @@
    "status": "gap",
    "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "hdr_frame::fusion_tests"
+    }
+   ],
+   "ready_note": "render::hdr_frame::merge_exposures exposure fusion (tests hdr_frame::fusion_tests); no trained or vision models"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CMImaging.framework/Versions/A/Resources/default.metallib",
@@ -1490,9 +2177,33 @@
    "doc": "",
    "bifrost": "springboard/render/src/masked_blur.rs; springboard/render/src/photo_effects.rs; springboard/ui/src/cnn_layers.rs",
    "status": "partial",
-   "note": "Depth blur, photo looks and small eager network layers run as CPU pixel code; there are no GPU kernels and no trained model ships.",
+   "note": "A camera imaging pipeline exists as CPU code: raw_container.rs, bayer.rs, raw_color.rs (sensor to RGB) and camera_isp.rs (lens shading correction, non-local means and burst-merge noise reduction, exposure fusion, local tone mapping). Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "camera_isp::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "raw_container::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "bayer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "raw_color::tests"
+    }
+   ],
+   "ready_note": "Ready: camera ISP stages in springboard/render: raw_container.rs, bayer.rs, raw_color.rs, camera_isp.rs (lens shading gain, non_local_means, merge_burst with block alignment, exposure_fusion, local_tone_map); tests camera_isp::tests, raw_container::tests, bayer::tests, raw_color::tests. CPU references; no sensor driver. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CMPhoto.framework/Versions/A/Resources/default.metallib",
@@ -1511,9 +2222,33 @@
    "doc": "",
    "bifrost": "springboard/render/src/photo_effects.rs",
    "status": "partial",
-   "note": "Photo looks are approximated by name as CPU colour chains. There are no photo-framework kernels.",
+   "note": "Photo-framework kernels exist as CPU code: camera_isp.rs (burst merge, exposure fusion, local tone mapping), hdr_frame.rs (exposure merge for HDR), photo_effects.rs (looks) and kernel_photo_adjust.rs (clarity, denoise, auto levels, dehaze). Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "camera_isp::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "photo_effects::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "hdr_frame::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_photo_adjust::tests"
+    }
+   ],
+   "ready_note": "Ready: photo kernels in springboard/render: camera_isp.rs (merge_burst, exposure_fusion, local_tone_map), hdr_frame.rs (merge_exposures), photo_effects.rs, kernel_photo_adjust.rs; tests camera_isp::tests, photo_effects::tests, hdr_frame::tests, kernel_photo_adjust::tests. CPU references without trained models. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CampoUIInternal.framework/Versions/A/Resources/default.metallib",
@@ -1553,9 +2288,33 @@
    "doc": "",
    "bifrost": "springboard/render/src/masked_blur.rs; springboard/render/src/photo_effects.rs; springboard/ui/src/cnn_layers.rs",
    "status": "partial",
-   "note": "Depth blur, photo looks and small eager network layers run as CPU pixel code; there are no GPU kernels and no trained model ships.",
+   "note": "Video-call effect kernels exist as CPU code: cinematic_framing.rs (subject framing crop with smoothing, dead zone and hold), kernel_portrait_matte.rs and masked_blur.rs (background blur behind a matte), portrait_lighting.rs (relighting). The subject boxes and matte come from a detector the caller supplies; no trained model ships. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "cinematic_framing::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_portrait_matte::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "masked_blur::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "portrait_lighting::tests"
+    }
+   ],
+   "ready_note": "Ready: video-call effect stack in springboard/render: cinematic_framing.rs (target_crop, Framer, apply_crop), kernel_portrait_matte.rs / masked_blur.rs (background blur), portrait_lighting.rs; tests cinematic_framing::tests, kernel_portrait_matte::tests, masked_blur::tests, portrait_lighting::tests. Detection of people is an input. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CinematicFraming.framework/Versions/A/Resources/default.metallib",
@@ -1574,9 +2333,23 @@
    "doc": "",
    "bifrost": "springboard/render/src/depth_blur.rs",
    "status": "partial",
-   "note": "A depth-of-field blur model exists. Cinematic framing and subject tracking are missing.",
+   "note": "Subject framing exists as CPU code: cinematic_framing.rs computes the crop that holds all detected subjects at the output aspect with margin, headroom bias and a zoom limit, and Framer moves a live crop with exponential smoothing, a dead zone and a hold before zooming out; depth_blur.rs gives the depth-of-field blur. Subject detection is an input, not part of the kernels. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "cinematic_framing::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "depth_blur::tests"
+    }
+   ],
+   "ready_note": "Ready: automatic framing in springboard/render/src/cinematic_framing.rs (full_crop, target_crop, Framer::update, apply_crop) with depth_blur.rs for focus effects; tests cinematic_framing::tests and depth_blur::tests. Subject boxes come from a detector the caller supplies. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CinematicUtil.framework/Versions/A/Resources/default.metallib",
@@ -1594,8 +2367,8 @@
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "n/a",
+   "note": "Utility kernels of Apple's Cinematic mode, which runs on Apple's depth capture hardware and Apple-trained models. BifrOSt ships neither, and its depth-of-field model (springboard/render/src/depth_blur.rs) is a separate CPU path.",
    "rea": [],
    "method": "assessed"
   },
@@ -1615,8 +2388,8 @@
    "role": "Effects shader of ContactsUICore (app or system UI animation)",
    "doc": "",
    "bifrost": "springboard/src/gpu/shaders.rs; springboard/ui/src/warp.rs",
-   "status": "partial",
-   "note": "A generic stand-in: the shell's GPU fade and rounded-fill shaders and the warp grid cover the motion style, but this app's own effect is not reproduced.",
+   "status": "n/a",
+   "note": "Effect kernel private to one Apple app or UI module (its own animation design, not a framework service). BifrOSt apps draw their own motion with the shared shell fade and rounded-fill shaders (springboard/src/gpu/shaders.rs) and the warp grid (springboard/ui/src/warp.rs); this Apple effect is not reproduced and has no meaning on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -1635,11 +2408,25 @@
    "description": "",
    "role": "Effects shader of CoreComposite (app or system UI animation)",
    "doc": "",
-   "bifrost": "springboard/render/src/composite_filters.rs",
+   "bifrost": "springboard/render/src/composite_filters.rs; springboard/render/src/blend.rs",
    "status": "partial",
-   "note": "Twelve separable blend modes and a colour matrix exist as CPU composite filters. There are no GPU composite kernels.",
+   "note": "The CPU composite filters cover the separable blend modes, the non-separable Hue, Saturation, Color and Luminosity modes, the Addition, Maximum and Minimum operators and a dissolve transition (composite_filters.rs, with tests). There are no GPU composite kernels, so this row stays partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "composite_filters::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "blend::tests"
+    }
+   ],
+   "ready_note": "Ready: the separable blend modes and colour matrix of the composite library are CPU filters in springboard/render (composite_filters.rs, blend.rs) with tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreIMS.framework/Versions/A/Resources/default.metallib",
@@ -1677,11 +2464,25 @@
    "description": "",
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
-   "bifrost": "springboard/ui/src/scene_material.rs; springboard/ui/src/scene_light.rs; springboard/ui/src/mesh.rs",
+   "bifrost": "springboard/ui/src/scene_material.rs; springboard/ui/src/scene_light.rs; springboard/ui/src/mesh.rs; springboard/ui/src/raster3d.rs",
    "status": "partial",
-   "note": "Materials, lights and mesh layout exist as models, but no GPU rasteriser or physically based shader draws them yet.",
+   "note": "Materials, lights and mesh layout exist as models, but no GPU rasteriser or physically based shader draws them yet. Built 2026-10-17: a CPU flat-shaded triangle rasteriser with a depth buffer (springboard/ui/src/raster3d.rs, lit by shading::shade); still missing: near-plane clipping, textures, GPU rasterisation and PBR shading.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "shading::pbr_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "displacement::tests"
+    }
+   ],
+   "ready_note": "ui::shading::shade_pbr Cook-Torrance GGX PBR and ui::displacement vertex displacement (tests shading::pbr_tests, displacement::tests); GPU rasterisation and textures still missing"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreOCModules.framework/Versions/A/Resources/default.metallib",
@@ -1719,11 +2520,25 @@
    "description": "",
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/raster3d.rs",
    "status": "gap",
-   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled Built 2026-10-17: a CPU flat-shaded triangle rasteriser with a depth buffer (springboard/ui/src/raster3d.rs, lit by shading::shade); still missing: near-plane clipping, textures, GPU rasterisation and PBR shading.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "shading::pbr_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "displacement::tests"
+    }
+   ],
+   "ready_note": "ui::shading::shade_pbr Cook-Torrance GGX PBR and ui::displacement vertex displacement (tests shading::pbr_tests, displacement::tests); GPU rasterisation and textures still missing"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreRE.framework/Versions/A/Resources/default.metallib",
@@ -1740,11 +2555,25 @@
    "description": "",
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
-   "bifrost": "springboard/ui/src/scene_material.rs; springboard/ui/src/scene_light.rs; springboard/ui/src/mesh.rs",
+   "bifrost": "springboard/ui/src/scene_material.rs; springboard/ui/src/scene_light.rs; springboard/ui/src/mesh.rs; springboard/ui/src/raster3d.rs",
    "status": "partial",
-   "note": "Materials, lights and mesh layout exist as models, but no GPU rasteriser or physically based shader draws them yet.",
+   "note": "Materials, lights and mesh layout exist as models, but no GPU rasteriser or physically based shader draws them yet. Built 2026-10-17: a CPU flat-shaded triangle rasteriser with a depth buffer (springboard/ui/src/raster3d.rs, lit by shading::shade); still missing: near-plane clipping, textures, GPU rasterisation and PBR shading.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "shading::pbr_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "displacement::tests"
+    }
+   ],
+   "ready_note": "ui::shading::shade_pbr Cook-Torrance GGX PBR and ui::displacement vertex displacement (tests shading::pbr_tests, displacement::tests); GPU rasterisation and textures still missing"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreRE3DGSFoundation.framework/Versions/A/Resources/default.metallib",
@@ -1763,9 +2592,18 @@
    "doc": "",
    "bifrost": "springboard/ui/src/scene_material.rs; springboard/ui/src/mesh.rs; springboard/ui/src/scene3d.rs",
    "status": "partial",
-   "note": "Material and mesh models exist as pure data. There is no Gaussian splat rasteriser.",
+   "note": "A 3D Gaussian splat rasteriser exists as a CPU reference: render/src/gaussian_splat.rs (quaternion and scale to 3D covariance, perspective projection to a 2D conic with the low-pass term, depth sort, front-to-back alpha compositing with the 0.99 cap and early termination, degree-0 SH colour). Higher SH bands and a GPU rasteriser are not built. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "gaussian_splat::tests"
+    }
+   ],
+   "ready_note": "Ready: Gaussian splat rendering in springboard/render/src/gaussian_splat.rs (covariance3d, project, render, sh0_to_rgb), tests gaussian_splat::tests. View-dependent colour (SH bands above 0) and a GPU port are not built; file loading of splat scenes is separate. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreUI.framework/Versions/A/Resources/default.metallib",
@@ -1784,9 +2622,33 @@
    "doc": "",
    "bifrost": "springboard/gpu/shaders/shape.frag; springboard/render/src/glass.rs; springboard/render/src/vibrancy.rs; springboard/render/src/gradient.rs",
    "status": "partial",
-   "note": "BifrOSt draws rounded shapes, gradients and glass/vibrant materials with its own shape.frag and glass path; no icon-layer (Liquid Glass lensing, specular) shaders. role inferred from the owning framework path; the metallib was not disassembled",
+   "note": "Icon and UI material effects now exist as CPU reference kernels: layer_effects.rs (inner shadow and glow, bevel and emboss from a softened height field, frosted-glass icon layer with tinted blurred backdrop, light-facing specular rim and rim shade), glass_lens.rs (edge lensing, rim highlight), kernel_layer_fx.rs (icon specular, layer masks, EDR roll-off), vibrancy.rs, gradient.rs and the shape.frag, compose.frag and Kawase shaders; icon_glass.frag is the GLSL twin of the glass layer (compiled by gpu/build.rs, not dispatched by a pipeline yet). Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "layer_effects::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "glass_lens::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_layer_fx::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "vibrancy::tests"
+    }
+   ],
+   "ready_note": "Ready: icon and UI material effects in springboard/render: layer_effects.rs (inner shadow and inner glow, bevel/emboss highlight and shade from a softened height field, render_glass_layer = blurred backdrop + tint + specular rim + inner shadow), glass_lens.rs (edge lensing, rim highlight), kernel_layer_fx.rs (bevel specular, masks, EDR); GLSL twin springboard/gpu/shaders/icon_glass.frag (not wired to a pipeline). Tests layer_effects::tests, glass_lens::tests, kernel_layer_fx::tests, vibrancy::tests. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreUSDEdit.framework/Versions/A/Resources/Metal/DispEval.metallib",
@@ -1803,11 +2665,25 @@
    "description": "",
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/raster3d.rs",
    "status": "gap",
-   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled Built 2026-10-17: a CPU flat-shaded triangle rasteriser with a depth buffer (springboard/ui/src/raster3d.rs, lit by shading::shade); still missing: near-plane clipping, textures, GPU rasterisation and PBR shading.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "shading::pbr_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "displacement::tests"
+    }
+   ],
+   "ready_note": "ui::shading::shade_pbr Cook-Torrance GGX PBR and ui::displacement vertex displacement (tests shading::pbr_tests, displacement::tests); GPU rasterisation and textures still missing"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/DeepVideoProcessingCore.framework/frameRateConversionMetalLib.metallib",
@@ -1828,7 +2704,16 @@
    "status": "partial",
    "note": "BifrOSt has a CPU frame interpolator with a motion field and block motion estimation; no dense optical flow or GPU path. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "block_motion::flow_tests"
+    }
+   ],
+   "ready_note": "render::block_motion::lucas_kanade_at dense optical flow at a pixel (tests block_motion::flow_tests); no GPU path"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/DesignLibrary.framework/Versions/A/Resources/default.metallib",
@@ -1846,8 +2731,8 @@
    "role": "Siri wave and design library effects",
    "doc": "",
    "bifrost": "springboard/ui/src/warp.rs",
-   "status": "partial",
-   "note": "The warp grid can bend content into a wave, but no assistant wave visual exists and no shader draws one.",
+   "status": "n/a",
+   "note": "Assistant wave visual of Apple's Siri design library. BifrOSt has no assistant UI and no counterpart for this visual.",
    "rea": [],
    "method": "assessed"
   },
@@ -1888,8 +2773,8 @@
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "n/a",
+   "note": "Apple's private neural-network inference runtime for Apple-trained model packs. BifrOSt has no Apple model packs; its eager CPU layers (springboard/ui/src/cnn_layers.rs) cover the network math the MLCompute and MPS rows describe.",
    "rea": [],
    "method": "assessed"
   },
@@ -1912,7 +2797,16 @@
    "status": "partial",
    "note": "BifrOSt has a CPU frame interpolator with a motion field and block motion estimation; no dense optical flow or GPU path. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "block_motion::flow_tests"
+    }
+   ],
+   "ready_note": "render::block_motion::lucas_kanade_at dense optical flow at a pixel (tests block_motion::flow_tests); no GPU path"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GESS.framework/Versions/A/Resources/default.metallib",
@@ -1929,11 +2823,25 @@
    "description": "",
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
-   "bifrost": "springboard/ui/src/scene_material.rs; springboard/ui/src/scene_light.rs; springboard/ui/src/mesh.rs",
+   "bifrost": "springboard/ui/src/scene_material.rs; springboard/ui/src/scene_light.rs; springboard/ui/src/mesh.rs; springboard/ui/src/raster3d.rs",
    "status": "partial",
-   "note": "Materials, lights and mesh layout exist as models, but no GPU rasteriser or physically based shader draws them yet.",
+   "note": "Materials, lights and mesh layout exist as models, but no GPU rasteriser or physically based shader draws them yet. Built 2026-10-17: a CPU flat-shaded triangle rasteriser with a depth buffer (springboard/ui/src/raster3d.rs, lit by shading::shade); still missing: near-plane clipping, textures, GPU rasterisation and PBR shading.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "shading::pbr_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "displacement::tests"
+    }
+   ],
+   "ready_note": "ui::shading::shade_pbr Cook-Torrance GGX PBR and ui::displacement vertex displacement (tests shading::pbr_tests, displacement::tests); GPU rasterisation and textures still missing"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GPUToolsCapture.framework/Versions/A/Resources/default.metallib",
@@ -1993,8 +2901,8 @@
    "role": "Effects shader of GameStoreKit (app or system UI animation)",
    "doc": "",
    "bifrost": "springboard/src/gpu/shaders.rs; springboard/ui/src/warp.rs",
-   "status": "partial",
-   "note": "A generic stand-in: the shell's GPU fade and rounded-fill shaders and the warp grid cover the motion style, but this app's own effect is not reproduced.",
+   "status": "n/a",
+   "note": "Effect kernel private to one Apple app or UI module (its own animation design, not a framework service). BifrOSt apps draw their own motion with the shared shell fade and rounded-fill shaders (springboard/src/gpu/shaders.rs) and the warp grid (springboard/ui/src/warp.rs); this Apple effect is not reproduced and has no meaning on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -2017,7 +2925,16 @@
    "status": "partial",
    "note": "HDR transfer curves (PQ, HLG) and per-frame HDR metadata exist as pure code. There is no HDR merge shader.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "hdr_frame::fusion_tests"
+    }
+   ],
+   "ready_note": "render::hdr_frame::merge_exposures exposure fusion (tests hdr_frame::fusion_tests); no trained or vision models"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Hydra.framework/Plugins/HydraQLPreviewExtension.appex/Contents/Resources/default.metallib",
@@ -2034,11 +2951,25 @@
    "description": "",
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/raster3d.rs",
    "status": "gap",
-   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled Built 2026-10-17: a CPU flat-shaded triangle rasteriser with a depth buffer (springboard/ui/src/raster3d.rs, lit by shading::shade); still missing: near-plane clipping, textures, GPU rasterisation and PBR shading.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "shading::pbr_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "displacement::tests"
+    }
+   ],
+   "ready_note": "ui::shading::shade_pbr Cook-Torrance GGX PBR and ui::displacement vertex displacement (tests shading::pbr_tests, displacement::tests); GPU rasterisation and textures still missing"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IconRendering.framework/Versions/A/Resources/default.metallib",
@@ -2057,9 +2988,33 @@
    "doc": "",
    "bifrost": "springboard/gpu/shaders/shape.frag; springboard/render/src/glass.rs; springboard/render/src/vibrancy.rs; springboard/render/src/gradient.rs",
    "status": "partial",
-   "note": "BifrOSt draws rounded shapes, gradients and glass/vibrant materials with its own shape.frag and glass path; no icon-layer (Liquid Glass lensing, specular) shaders. role inferred from the owning framework path; the metallib was not disassembled",
+   "note": "Icon and UI material effects now exist as CPU reference kernels: layer_effects.rs (inner shadow and glow, bevel and emboss from a softened height field, frosted-glass icon layer with tinted blurred backdrop, light-facing specular rim and rim shade), glass_lens.rs (edge lensing, rim highlight), kernel_layer_fx.rs (icon specular, layer masks, EDR roll-off), vibrancy.rs, gradient.rs and the shape.frag, compose.frag and Kawase shaders; icon_glass.frag is the GLSL twin of the glass layer (compiled by gpu/build.rs, not dispatched by a pipeline yet). Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "layer_effects::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "glass_lens::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_layer_fx::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "vibrancy::tests"
+    }
+   ],
+   "ready_note": "Ready: icon and UI material effects in springboard/render: layer_effects.rs (inner shadow and inner glow, bevel/emboss highlight and shade from a softened height field, render_glass_layer = blurred backdrop + tint + specular rim + inner shadow), glass_lens.rs (edge lensing, rim highlight), kernel_layer_fx.rs (bevel specular, masks, EDR); GLSL twin springboard/gpu/shaders/icon_glass.frag (not wired to a pipeline). Tests layer_effects::tests, glass_lens::tests, kernel_layer_fx::tests, vibrancy::tests. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ImageHarmonizationKit.framework/Versions/A/Resources/default.metallib",
@@ -2078,9 +3033,18 @@
    "doc": "",
    "bifrost": "springboard/render/src/masked_blur.rs; springboard/render/src/photo_effects.rs; springboard/ui/src/cnn_layers.rs",
    "status": "partial",
-   "note": "Depth blur, photo looks and small eager network layers run as CPU pixel code; there are no GPU kernels and no trained model ships.",
+   "note": "Image harmonisation exists as a CPU kernel: render/src/harmonize.rs moves a masked foreground's Lab mean and spread to the background's (Reinhard colour transfer with a limited gain and a strength control), using colorlab.rs for the colour space. No trained model ships. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "harmonize::tests"
+    }
+   ],
+   "ready_note": "Ready: foreground/background colour harmonisation in springboard/render/src/harmonize.rs (lab_stats, transfer, harmonize), tests harmonize::tests; learned harmonisation networks are not part of this kernel. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ImagePlaygroundInternal.framework/Versions/A/Resources/default.metallib",
@@ -2118,11 +3082,25 @@
    "description": "",
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/raster3d.rs",
    "status": "gap",
-   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled Built 2026-10-17: a CPU flat-shaded triangle rasteriser with a depth buffer (springboard/ui/src/raster3d.rs, lit by shading::shade); still missing: near-plane clipping, textures, GPU rasterisation and PBR shading.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "shading::pbr_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "displacement::tests"
+    }
+   ],
+   "ready_note": "ui::shading::shade_pbr Cook-Torrance GGX PBR and ui::displacement vertex displacement (tests shading::pbr_tests, displacement::tests); GPU rasterisation and textures still missing"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MXI.framework/Versions/A/Resources/default.metallib",
@@ -2164,7 +3142,21 @@
    "status": "partial",
    "note": "The magnifier shell service and lens distortion filters exist. There is no dedicated magnifier shader.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "distortion_filters::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::magnifier::tests"
+    }
+   ],
+   "ready_note": "Ready: the magnifier lens is the shell magnifier service (springboard/src/shell/magnifier.rs) driving the lens distortion filters (springboard/render/src/distortion_filters.rs), both tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/Resources/default.metallib",
@@ -2185,7 +3177,16 @@
    "status": "gap",
    "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "hdr_frame::fusion_tests"
+    }
+   ],
+   "ready_note": "render::hdr_frame::merge_exposures exposure fusion (tests hdr_frame::fusion_tests); no trained or vision models"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaCoreUI.framework/Versions/A/Resources/default.metallib",
@@ -2202,11 +3203,20 @@
    "description": "",
    "role": "UI framework effects: materials, vibrancy, shapes, gradients, icon rendering",
    "doc": "",
-   "bifrost": "springboard/gpu/shaders/shape.frag; springboard/render/src/glass.rs; springboard/render/src/vibrancy.rs; springboard/render/src/gradient.rs",
+   "bifrost": "springboard/gpu/shaders/shape.frag; springboard/render/src/glass.rs; springboard/render/src/vibrancy.rs; springboard/render/src/gradient.rs; springboard/render/src/kernel_layer_fx.rs; springboard/gpu/shaders/layer_mask_edr.comp",
    "status": "partial",
-   "note": "BifrOSt draws rounded shapes, gradients and glass/vibrant materials with its own shape.frag and glass path; no icon-layer (Liquid Glass lensing, specular) shaders. role inferred from the owning framework path; the metallib was not disassembled",
+   "note": "Layer masks, extended-range tone mapping and icon specular shading now exist as CPU reference kernels with a GLSL twin (kernel_layer_fx.rs, layer_mask_edr.comp); the glass lens, rim light, blur and compose paths were already in glass_lens.rs and the Kawase and compose shaders. The GLSL file is compiled by gpu/build.rs but no pipeline dispatches it yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_layer_fx::tests"
+    }
+   ],
+   "ready_note": "Ready: layer-effect kernels in springboard/render/src/kernel_layer_fx.rs (layer mask scaling of premultiplied pixels, luminance and alpha masks, extended-range tone mapping per pixel, height field to normals, Blinn-Phong icon specular, highlight limited to layer coverage), tests kernel_layer_fx::tests; GLSL twin of mask plus tone map in springboard/gpu/shaders/layer_mask_edr.comp (not wired to a pipeline). Lensing and rim light stay in glass_lens.rs; blur in the Kawase shaders. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Morpheus.framework/Versions/A/Resources/default.metallib",
@@ -2223,11 +3233,20 @@
    "description": "",
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
-   "bifrost": "springboard/ui/src/scene_material.rs; springboard/ui/src/scene_light.rs; springboard/ui/src/mesh.rs",
+   "bifrost": "springboard/ui/src/scene_material.rs; springboard/ui/src/scene_light.rs; springboard/ui/src/mesh.rs; springboard/ui/src/raster3d.rs",
    "status": "partial",
-   "note": "Materials, lights and mesh layout exist as models, but no GPU rasteriser or physically based shader draws them yet.",
+   "note": "Materials, lights and mesh layout exist as models, but no GPU rasteriser or physically based shader draws them yet. Built 2026-10-17: a CPU flat-shaded triangle rasteriser with a depth buffer (springboard/ui/src/raster3d.rs, lit by shading::shade); still missing: near-plane clipping, textures, GPU rasterisation and PBR shading.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "pbr::tests"
+    }
+   ],
+   "ready_note": "Ready: a Cook-Torrance PBR shading function (GGX distribution, Smith visibility, Schlick Fresnel, Lambert diffuse; metallic and roughness) in springboard/render/src/pbr.rs, with tests pbr::tests. It is the per-point shading piece only: the rasteriser and GPU shaders are not written, and no GLSL file was added."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MusicUI.framework/Versions/A/Resources/default.metallib",
@@ -2245,8 +3264,8 @@
    "role": "Effects shader of MusicUI (app or system UI animation)",
    "doc": "",
    "bifrost": "springboard/src/gpu/shaders.rs",
-   "status": "partial",
-   "note": "One GPU program draws rounded fills and blurred shadows for the music app. No music visualisation shader exists.",
+   "status": "n/a",
+   "note": "Effect kernel private to one Apple app or UI module (its own animation design, not a framework service). BifrOSt apps draw their own motion with the shared shell fade and rounded-fill shaders (springboard/src/gpu/shaders.rs) and the warp grid (springboard/ui/src/warp.rs); this Apple effect is not reproduced and has no meaning on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -2265,11 +3284,20 @@
    "description": "",
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
+   "bifrost": "springboard/render/src/kernel_vision.rs",
+   "status": "partial",
+   "note": "Classical image-analysis kernels (edges, corners, thresholds, template match, text bands, saliency) now exist on the CPU in kernel_vision.rs. Learned models (recognition, detection) need trained weights that BifrOSt does not ship; this row covers the pixel kernels only.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_vision::tests"
+    }
+   ],
+   "ready_note": "Ready: classical computer-vision kernels in springboard/render/src/kernel_vision.rs (Sobel, Canny with non-maximum suppression and hysteresis, Harris corners, Otsu and Sauvola thresholds, summed-area tables, normalised cross-correlation template matching, text-line bands, centre-surround saliency and salient box), tests kernel_vision::tests. No trained model is involved or shipped; no GLSL file was written. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NodesUI.framework/Versions/A/Resources/default.metallib",
@@ -2287,8 +3315,8 @@
    "role": "Effects shader of NodesUI (app or system UI animation)",
    "doc": "",
    "bifrost": "springboard/src/gpu/shaders.rs; springboard/ui/src/warp.rs",
-   "status": "partial",
-   "note": "A generic stand-in: the shell's GPU fade and rounded-fill shaders and the warp grid cover the motion style, but this app's own effect is not reproduced.",
+   "status": "n/a",
+   "note": "Effect kernel private to one Apple app or UI module (its own animation design, not a framework service). BifrOSt apps draw their own motion with the shared shell fade and rounded-fill shaders (springboard/src/gpu/shaders.rs) and the warp grid (springboard/ui/src/warp.rs); this Apple effect is not reproduced and has no meaning on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -2307,11 +3335,20 @@
    "description": "",
    "role": "UI framework effects: materials, vibrancy, shapes, gradients, icon rendering",
    "doc": "",
-   "bifrost": "springboard/gpu/shaders/shape.frag; springboard/render/src/glass.rs; springboard/render/src/vibrancy.rs; springboard/render/src/gradient.rs",
+   "bifrost": "springboard/gpu/shaders/shape.frag; springboard/render/src/glass.rs; springboard/render/src/vibrancy.rs; springboard/render/src/gradient.rs; springboard/render/src/kernel_layer_fx.rs; springboard/gpu/shaders/layer_mask_edr.comp",
    "status": "partial",
-   "note": "BifrOSt draws rounded shapes, gradients and glass/vibrant materials with its own shape.frag and glass path; no icon-layer (Liquid Glass lensing, specular) shaders. role inferred from the owning framework path; the metallib was not disassembled",
+   "note": "Layer masks, extended-range tone mapping and icon specular shading now exist as CPU reference kernels with a GLSL twin (kernel_layer_fx.rs, layer_mask_edr.comp); the glass lens, rim light, blur and compose paths were already in glass_lens.rs and the Kawase and compose shaders. The GLSL file is compiled by gpu/build.rs but no pipeline dispatches it yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_layer_fx::tests"
+    }
+   ],
+   "ready_note": "Ready: layer-effect kernels in springboard/render/src/kernel_layer_fx.rs (layer mask scaling of premultiplied pixels, luminance and alpha masks, extended-range tone mapping per pixel, height field to normals, Blinn-Phong icon specular, highlight limited to layer coverage), tests kernel_layer_fx::tests; GLSL twin of mask plus tone map in springboard/gpu/shaders/layer_mask_edr.comp (not wired to a pipeline). Lensing and rim light stay in glass_lens.rs; blur in the Kawase shaders. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PhotoImaging.framework/Versions/A/Resources/default.metallib",
@@ -2328,11 +3365,20 @@
    "description": "",
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
-   "bifrost": "springboard/render/src/photo_effects.rs",
+   "bifrost": "springboard/render/src/photo_effects.rs; springboard/render/src/kernel_photo_adjust.rs; springboard/gpu/shaders/photo_adjust.comp",
    "status": "partial",
-   "note": "Photo looks are approximated by name as CPU colour chains. There are no photo imaging kernels.",
+   "note": "Photo adjustment kernels now cover both per-pixel colour (colorfx.rs, photo_effects.rs) and neighbourhood operations (kernel_photo_adjust.rs). The GLSL file is compiled by gpu/build.rs but no pipeline dispatches it yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_photo_adjust::tests"
+    }
+   ],
+   "ready_note": "Ready: spatial photo adjustments in springboard/render/src/kernel_photo_adjust.rs (box blur, unsharp mask with threshold, midtone-weighted clarity, bilateral denoise, percentile auto levels, dark-channel dehaze), tests kernel_photo_adjust::tests; per-pixel colour adjustments stay in colorfx.rs, color_curve.rs, edge_tone_filters.rs and photo_effects.rs; GLSL twin of the unsharp and clarity apply pass in springboard/gpu/shaders/photo_adjust.comp (not wired to a pipeline). Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PhotosGenerativeServices.framework/Versions/A/Resources/default.metallib",
@@ -2350,8 +3396,8 @@
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "n/a",
+   "note": "Kernels for the generative models of Apple's Photos app. The models are Apple-trained model packs that BifrOSt does not ship and has no equivalent for.",
    "rea": [],
    "method": "assessed"
   },
@@ -2434,8 +3480,8 @@
    "role": "Effects shader of PhotosUICore (app or system UI animation)",
    "doc": "",
    "bifrost": "springboard/src/gpu/shaders.rs; springboard/ui/src/warp.rs",
-   "status": "partial",
-   "note": "A generic stand-in: the shell's GPU fade and rounded-fill shaders and the warp grid cover the motion style, but this app's own effect is not reproduced.",
+   "status": "n/a",
+   "note": "Effect kernel private to one Apple app or UI module (its own animation design, not a framework service). BifrOSt apps draw their own motion with the shared shell fade and rounded-fill shaders (springboard/src/gpu/shaders.rs) and the warp grid (springboard/ui/src/warp.rs); this Apple effect is not reproduced and has no meaning on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -2476,10 +3522,19 @@
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
+   "status": "partial",
    "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "photosensitivity::tests"
+    }
+   ],
+   "ready_note": "Ready: WCAG 2.3.1 general-flash analysis (flash detection and the three-flashes-per-second rule) in springboard/render/src/photosensitivity.rs, tests photosensitivity::tests. Red-flash analysis is not implemented."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Portrait.framework/Versions/A/Resources/default.metallib",
@@ -2496,11 +3551,20 @@
    "description": "",
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
-   "bifrost": "springboard/render/src/masked_blur.rs; springboard/render/src/photo_effects.rs; springboard/ui/src/cnn_layers.rs",
+   "bifrost": "springboard/render/src/masked_blur.rs; springboard/render/src/photo_effects.rs; springboard/ui/src/cnn_layers.rs; springboard/render/src/kernel_portrait_matte.rs",
    "status": "partial",
-   "note": "Depth blur, photo looks and small eager network layers run as CPU pixel code; there are no GPU kernels and no trained model ships.",
+   "note": "Matte and bokeh half of portrait mode exists on the CPU in kernel_portrait_matte.rs, on top of depth_blur.rs, masked_blur.rs and guided.rs. Depth estimation and person segmentation need trained models that BifrOSt does not ship.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_portrait_matte::tests"
+    }
+   ],
+   "ready_note": "Ready: portrait kernels in springboard/render/src/kernel_portrait_matte.rs (trimap from depth, matte refined onto image edges with the guided filter, circle-of-confusion radius, gather bokeh blur that does not bleed a sharp subject into the background and boosts highlights, subject-over-blur composite), tests kernel_portrait_matte::tests. The depth map and the initial matte come from the caller; no trained model ships; no GLSL file was written. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Quagga.framework/Versions/A/Resources/default.metallib",
@@ -2538,11 +3602,20 @@
    "description": "",
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
+   "bifrost": "springboard/ui/src/raster3d.rs; springboard/render/src/kernel_texture_import.rs",
+   "status": "partial",
+   "note": "Mip generation, normal-map filtering, channel packing and BC1 compression now exist on the CPU in kernel_texture_import.rs. Higher-quality block compressors and other formats are not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_texture_import::tests"
+    }
+   ],
+   "ready_note": "Ready: texture import and processing kernels in springboard/render/src/kernel_texture_import.rs (sRGB transfer, linear-light box mip chain, normal-map mips with lost-coherence length, Toksvig-style roughness filtering, occlusion/roughness/metallic packing, channel swizzle, BC1 block encode and decode), tests kernel_texture_import::tests; no GLSL file was written. Other block formats (BC3, BC5, BC7, ASTC) are not covered. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/RemoteCompositorServices.framework/Versions/A/Resources/default.binary.metallib",
@@ -2601,11 +3674,20 @@
    "description": "",
    "role": "UI framework effects: materials, vibrancy, shapes, gradients, icon rendering",
    "doc": "",
-   "bifrost": "springboard/gpu/shaders/shape.frag; springboard/render/src/glass.rs; springboard/render/src/vibrancy.rs; springboard/render/src/gradient.rs",
+   "bifrost": "springboard/gpu/shaders/shape.frag; springboard/render/src/glass.rs; springboard/render/src/vibrancy.rs; springboard/render/src/gradient.rs; springboard/render/src/kernel_layer_fx.rs; springboard/gpu/shaders/layer_mask_edr.comp",
    "status": "partial",
-   "note": "BifrOSt draws rounded shapes, gradients and glass/vibrant materials with its own shape.frag and glass path; no icon-layer (Liquid Glass lensing, specular) shaders. role inferred from the owning framework path; the metallib was not disassembled",
+   "note": "Layer masks, extended-range tone mapping and icon specular shading now exist as CPU reference kernels with a GLSL twin (kernel_layer_fx.rs, layer_mask_edr.comp); the glass lens, rim light, blur and compose paths were already in glass_lens.rs and the Kawase and compose shaders. The GLSL file is compiled by gpu/build.rs but no pipeline dispatches it yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_layer_fx::tests"
+    }
+   ],
+   "ready_note": "Ready: layer-effect kernels in springboard/render/src/kernel_layer_fx.rs (layer mask scaling of premultiplied pixels, luminance and alpha masks, extended-range tone mapping per pixel, height field to normals, Blinn-Phong icon specular, highlight limited to layer coverage), tests kernel_layer_fx::tests; GLSL twin of mask plus tone map in springboard/gpu/shaders/layer_mask_edr.comp (not wired to a pipeline). Lensing and rim light stay in glass_lens.rs; blur in the Kawase shaders. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SetupAssistantSupportUI.framework/Versions/A/Resources/default.metallib",
@@ -2644,8 +3726,8 @@
    "role": "Effects shader of SiriSetup (app or system UI animation)",
    "doc": "",
    "bifrost": "springboard/src/gpu/shaders.rs; springboard/ui/src/warp.rs",
-   "status": "partial",
-   "note": "A generic stand-in: the shell's GPU fade and rounded-fill shaders and the warp grid cover the motion style, but this app's own effect is not reproduced.",
+   "status": "n/a",
+   "note": "Effect kernel private to one Apple app or UI module (its own animation design, not a framework service). BifrOSt apps draw their own motion with the shared shell fade and rounded-fill shaders (springboard/src/gpu/shaders.rs) and the warp grid (springboard/ui/src/warp.rs); this Apple effect is not reproduced and has no meaning on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -2707,8 +3789,8 @@
    "role": "Effects shader of SiriUICore (app or system UI animation)",
    "doc": "",
    "bifrost": "springboard/src/gpu/shaders.rs; springboard/ui/src/warp.rs",
-   "status": "partial",
-   "note": "A generic stand-in: the shell's GPU fade and rounded-fill shaders and the warp grid cover the motion style, but this app's own effect is not reproduced.",
+   "status": "n/a",
+   "note": "Effect kernel private to one Apple app or UI module (its own animation design, not a framework service). BifrOSt apps draw their own motion with the shared shell fade and rounded-fill shaders (springboard/src/gpu/shaders.rs) and the warp grid (springboard/ui/src/warp.rs); this Apple effect is not reproduced and has no meaning on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -2769,11 +3851,20 @@
    "description": "",
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
-   "bifrost": "springboard/render/src/masked_blur.rs; springboard/render/src/photo_effects.rs; springboard/ui/src/cnn_layers.rs",
+   "bifrost": "springboard/render/src/masked_blur.rs; springboard/render/src/photo_effects.rs; springboard/ui/src/cnn_layers.rs; springboard/render/src/kernel_vision.rs",
    "status": "partial",
-   "note": "Depth blur, photo looks and small eager network layers run as CPU pixel code; there are no GPU kernels and no trained model ships.",
+   "note": "Classical image-analysis kernels (edges, corners, thresholds, template match, text bands, saliency) now exist on the CPU in kernel_vision.rs. Learned models (recognition, detection) need trained weights that BifrOSt does not ship; this row covers the pixel kernels only.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_vision::tests"
+    }
+   ],
+   "ready_note": "Ready: classical computer-vision kernels in springboard/render/src/kernel_vision.rs (Sobel, Canny with non-maximum suppression and hysteresis, Harris corners, Otsu and Sauvola thresholds, summed-area tables, normalised cross-correlation template matching, text-line bands, centre-surround saliency and salient box), tests kernel_vision::tests. No trained model is involved or shipped; no GLSL file was written. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Tungsten.framework/Versions/A/Resources/default.metallib",
@@ -2790,11 +3881,20 @@
    "description": "",
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
-   "bifrost": "springboard/ui/src/scene_material.rs; springboard/ui/src/mesh.rs; springboard/ui/src/scene3d.rs",
+   "bifrost": "springboard/ui/src/scene_material.rs; springboard/ui/src/mesh.rs; springboard/ui/src/scene3d.rs; springboard/ui/src/raster3d.rs",
    "status": "partial",
-   "note": "Material and mesh models exist as pure data. No shader draws 3D content yet.",
+   "note": "Material and mesh models exist as pure data. No shader draws 3D content yet. Built 2026-10-17: a CPU flat-shaded triangle rasteriser with a depth buffer (springboard/ui/src/raster3d.rs, lit by shading::shade); still missing: near-plane clipping, textures, GPU rasterisation and PBR shading.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "pbr::tests"
+    }
+   ],
+   "ready_note": "Ready: the PBR material shading function in springboard/render/src/pbr.rs (GGX, Smith, Schlick Fresnel, metallic/roughness), tests pbr::tests. The per-point piece only; no GPU rasteriser or GLSL shader was added."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VFX.framework/Versions/A/Resources/default.metallib",
@@ -2811,11 +3911,20 @@
    "description": "",
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
+   "bifrost": "springboard/ui/src/raster3d.rs",
+   "status": "partial",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled Built 2026-10-17: a CPU flat-shaded triangle rasteriser with a depth buffer (springboard/ui/src/raster3d.rs, lit by shading::shade); still missing: near-plane clipping, textures, GPU rasterisation and PBR shading.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "pbr::tests"
+    }
+   ],
+   "ready_note": "Ready: the PBR material shading function in springboard/render/src/pbr.rs (GGX, Smith, Schlick Fresnel, metallic/roughness), tests pbr::tests. The per-point piece only; no GPU rasteriser or GLSL shader was added. Effects compositing and particles are not covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VectorKit.framework/Versions/A/Resources/default.metallib",
@@ -2836,7 +3945,16 @@
    "status": "partial",
    "note": "Map overlays, GeoJSON geometry and camera math exist; vector tile decoding and GPU tile drawing do not.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "stroke_coverage::tests"
+    }
+   ],
+   "ready_note": "Ready: anti-aliased polyline stroke coverage (distance to segments with a one-pixel edge) in springboard/render/src/stroke_coverage.rs, tests stroke_coverage::tests. Tile decoding and GPU tile drawing are still missing."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VideoProcessing.framework/Versions/A/Resources/default.metallib",
@@ -2853,11 +3971,20 @@
    "description": "",
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
-   "bifrost": "springboard/render/src/temporal_upscale.rs",
+   "bifrost": "springboard/render/src/temporal_upscale.rs; springboard/render/src/kernel_video_filters.rs",
    "status": "partial",
-   "note": "A temporal upscaler model runs on CPU rasters. There are no GPU video processing kernels.",
+   "note": "Encoder-side analysis, deinterlace, temporal denoise, flow warp and pyramid kernels now exist on the CPU in kernel_video_filters.rs, next to block_motion.rs, frame_interp.rs and the shutter blend and deghost in temporal_upscale.rs. There is no GPU video pipeline yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_video_filters::tests"
+    }
+   ],
+   "ready_note": "Ready: video-processing kernels in springboard/render/src/kernel_video_filters.rs (SAD, 4x4 Hadamard SATD, 2x luma downscale, histogram scene-cut score, edge-directed deinterlace, motion-adaptive temporal denoise, flow warp, Gaussian pyramid step), tests kernel_video_filters::tests. Motion search is block_motion.rs, interpolation frame_interp.rs, shutter blend and median deghost temporal_upscale.rs; no GLSL file was written. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VisionCore.framework/Versions/A/Resources/default.metallib",
@@ -2874,11 +4001,20 @@
    "description": "",
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
+   "bifrost": "springboard/render/src/kernel_vision.rs",
+   "status": "partial",
+   "note": "Classical image-analysis kernels (edges, corners, thresholds, template match, text bands, saliency) now exist on the CPU in kernel_vision.rs. Learned models (recognition, detection) need trained weights that BifrOSt does not ship; this row covers the pixel kernels only.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_vision::tests"
+    }
+   ],
+   "ready_note": "Ready: classical computer-vision kernels in springboard/render/src/kernel_vision.rs (Sobel, Canny with non-maximum suppression and hysteresis, Harris corners, Otsu and Sauvola thresholds, summed-area tables, normalised cross-correlation template matching, text-line bands, centre-surround saliency and salient box), tests kernel_vision::tests. No trained model is involved or shipped; no GLSL file was written. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VisualIntelligenceCore.framework/Versions/A/Resources/default.metallib",
@@ -2895,11 +4031,25 @@
    "description": "",
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
-   "bifrost": "springboard/render/src/masked_blur.rs; springboard/render/src/photo_effects.rs; springboard/ui/src/cnn_layers.rs",
+   "bifrost": "springboard/render/src/masked_blur.rs; springboard/render/src/photo_effects.rs; springboard/ui/src/cnn_layers.rs; springboard/render/src/kernel_vision.rs; springboard/render/src/kernel_portrait_matte.rs",
    "status": "partial",
-   "note": "Depth blur, photo looks and small eager network layers run as CPU pixel code; there are no GPU kernels and no trained model ships.",
+   "note": "Classical image-analysis kernels (edges, corners, thresholds, template match, text bands, saliency) now exist on the CPU in kernel_vision.rs. Learned models (recognition, detection) need trained weights that BifrOSt does not ship; this row covers the pixel kernels only. Matte and bokeh half of portrait mode exists on the CPU in kernel_portrait_matte.rs, on top of depth_blur.rs, masked_blur.rs and guided.rs. Depth estimation and person segmentation need trained models that BifrOSt does not ship.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_vision::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_portrait_matte::tests"
+    }
+   ],
+   "ready_note": "Ready: classical computer-vision kernels in springboard/render/src/kernel_vision.rs (Sobel, Canny with non-maximum suppression and hysteresis, Harris corners, Otsu and Sauvola thresholds, summed-area tables, normalised cross-correlation template matching, text-line bands, centre-surround saliency and salient box), tests kernel_vision::tests. No trained model is involved or shipped; no GLSL file was written. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared. Also: portrait kernels in springboard/render/src/kernel_portrait_matte.rs (trimap from depth, matte refined onto image edges with the guided filter, circle-of-confusion radius, gather bokeh blur that does not bleed a sharp subject into the background and boosts highlights, subject-over-blur composite), tests kernel_portrait_matte::tests. The depth map and the initial matte come from the caller; no trained model ships; no GLSL file was written. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VisualIntelligenceUI.framework/Versions/A/Resources/default.metallib",
@@ -2937,11 +4087,20 @@
    "description": "",
    "role": "Dynamic/animated wallpaper or poster rendering",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "BifrOSt wallpapers are static JPEGs (springboard/wallpapers) and screen savers are models (springboard/ui/src/screensaver.rs); no animated wallpaper shader. role inferred from the owning framework path; the metallib was not disassembled",
+   "bifrost": "springboard/render/src/wallpaper_frame.rs, springboard/src/shell/live_wallpaper.rs",
+   "status": "partial",
+   "note": "The desktop has animated and time-of-day wallpapers (Settings > Wallpaper > Live Look, springboard/src/shell/live_wallpaper.rs) built on the wallpaper_shaders kernels; stills stay the default and screen savers are models (springboard/ui/src/screensaver.rs). The two-ramp frame in springboard/render/src/wallpaper_frame.rs is not used by any look yet. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "wallpaper_frame::tests"
+    }
+   ],
+   "ready_note": "Ready: one animated-wallpaper frame (diagonal gradient cross-faded by a ping-pong phase) in springboard/render/src/wallpaper_frame.rs, tests wallpaper_frame::tests. The CPU frame renderer only; no GLSL shader was written and none of the Live Look choices calls it yet (they use wallpaper_shaders)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WorkflowEditor.framework/Versions/A/Resources/default.metallib",
@@ -2959,8 +4118,8 @@
    "role": "Effects shader of WorkflowEditor (app or system UI animation)",
    "doc": "",
    "bifrost": "springboard/src/gpu/shaders.rs; springboard/ui/src/warp.rs",
-   "status": "partial",
-   "note": "A generic stand-in: the shell's GPU fade and rounded-fill shaders and the warp grid cover the motion style, but this app's own effect is not reproduced.",
+   "status": "n/a",
+   "note": "Effect kernel private to one Apple app or UI module (its own animation design, not a framework service). BifrOSt apps draw their own motion with the shared shell fade and rounded-fill shaders (springboard/src/gpu/shaders.rs) and the warp grid (springboard/ui/src/warp.rs); this Apple effect is not reproduced and has no meaning on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -2979,11 +4138,20 @@
    "description": "",
    "role": "Video decode, capture pixel conversion shaders",
    "doc": "",
-   "bifrost": "springboard/src/gpu/nv12.rs; springboard/render/src/video_transfer.rs",
+   "bifrost": "springboard/src/gpu/nv12.rs; springboard/render/src/video_transfer.rs; springboard/render/src/kernel_video_convert.rs; springboard/gpu/shaders/rgba_to_nv12.comp",
    "status": "partial",
-   "note": "Pixel conversion of decoded pictures to RGBA exists on the CPU. There is no screen capture shader.",
+   "note": "Both directions of picture conversion now exist on the CPU (video_transfer.rs for NV12/I420 to RGBA, kernel_video_convert.rs for RGBA to NV12, P010 to RGBA and un-premultiply), plus a GLSL twin of the capture-side conversion. There is no screen-capture service or AV1 decoder behind them; this row covers the conversion shaders only.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_video_convert::tests"
+    }
+   ],
+   "ready_note": "Ready: capture and decode pixel conversion in springboard/render/src/kernel_video_convert.rs (RGBA to NV12 with BT.601 or BT.709 and limited or full range, 10-bit P010 to RGBA, un-premultiply), tests kernel_video_convert::tests; 8-bit NV12 to RGBA stays in video_transfer.rs; GLSL twin of the RGBA to NV12 step in springboard/gpu/shaders/rgba_to_nv12.comp (not wired to a pipeline). Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/SubFrameworks/RealityCoreDeformation.framework/Versions/A/Resources/default.metallib",
@@ -3000,11 +4168,20 @@
    "description": "",
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
+   "bifrost": "springboard/render/src/kernel_mesh_vertex.rs; springboard/gpu/shaders/skin_blend.comp",
+   "status": "partial",
+   "note": "Vertex transform, skinning, blend shapes, smooth normals and tangent frames now exist on the CPU in kernel_mesh_vertex.rs with a GLSL skinning twin; raster3d.rs draws the triangles. No GPU 3D pipeline dispatches the shader yet, and dual-quaternion skinning is not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_mesh_vertex::tests"
+    }
+   ],
+   "ready_note": "Ready: vertex-stage kernels in springboard/render/src/kernel_mesh_vertex.rs (4x4 matrix algebra, Vulkan-style perspective, projection to screen, normal matrix, linear-blend skinning of positions and normals, morph-target accumulation, smooth vertex normals, tangent frame from UVs), tests kernel_mesh_vertex::tests; GLSL twin of skinning and morph in springboard/gpu/shaders/skin_blend.comp (not wired to a pipeline). The triangle rasteriser stays in bifrost-ui raster3d.rs. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/SubFrameworks/RealityCoreRenderer.framework/Versions/A/Resources/default.metallib",
@@ -3025,7 +4202,16 @@
    "status": "partial",
    "note": "Materials, lights and mesh layout exist as models, but no GPU rasteriser or physically based shader draws them yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "pbr::tests"
+    }
+   ],
+   "ready_note": "Ready: the PBR material shading function in springboard/render/src/pbr.rs (GGX, Smith, Schlick Fresnel, metallic/roughness), tests pbr::tests. The per-point piece only; no GPU rasteriser or GLSL shader was added."
   },
   {
    "id": "path:/System/Library/SubFrameworks/RealityCoreTextureProcessing.framework/Versions/A/Resources/default.metallib",
@@ -3042,11 +4228,20 @@
    "description": "",
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
-   "bifrost": "springboard/ui/src/scene_material.rs; springboard/ui/src/mesh.rs; springboard/ui/src/scene3d.rs",
+   "bifrost": "springboard/ui/src/scene_material.rs; springboard/ui/src/mesh.rs; springboard/ui/src/scene3d.rs; springboard/render/src/kernel_texture_import.rs",
    "status": "partial",
-   "note": "Material models exist as pure data. There are no texture processing kernels.",
+   "note": "Mip generation, normal-map filtering, channel packing and BC1 compression now exist on the CPU in kernel_texture_import.rs. Higher-quality block compressors and other formats are not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_texture_import::tests"
+    }
+   ],
+   "ready_note": "Ready: texture import and processing kernels in springboard/render/src/kernel_texture_import.rs (sRGB transfer, linear-light box mip chain, normal-map mips with lost-coherence length, Toksvig-style roughness filtering, occlusion/roughness/metallic packing, channel swizzle, BC1 block encode and decode), tests kernel_texture_import::tests; no GLSL file was written. Other block formats (BC3, BC5, BC7, ASTC) are not covered. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/Video/Plug-Ins/AV1DecoderSW.bundle/Contents/Resources/default.metallib",
@@ -3063,11 +4258,20 @@
    "description": "",
    "role": "Video decode, capture pixel conversion shaders",
    "doc": "",
-   "bifrost": "springboard/render/src/video_transfer.rs (transfer_nv12); springboard/src/gpu/nv12.rs",
+   "bifrost": "springboard/render/src/video_transfer.rs (transfer_nv12); springboard/src/gpu/nv12.rs; springboard/render/src/kernel_video_convert.rs; springboard/gpu/shaders/rgba_to_nv12.comp",
    "status": "partial",
-   "note": "The software decoder's picture conversion has a CPU counterpart in transfer_nv12; BifrOSt's decoder and its colour path are different code, and the shader is not reproduced.",
+   "note": "Both directions of picture conversion now exist on the CPU (video_transfer.rs for NV12/I420 to RGBA, kernel_video_convert.rs for RGBA to NV12, P010 to RGBA and un-premultiply), plus a GLSL twin of the capture-side conversion. There is no screen-capture service or AV1 decoder behind them; this row covers the conversion shaders only.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_video_convert::tests"
+    }
+   ],
+   "ready_note": "Ready: capture and decode pixel conversion in springboard/render/src/kernel_video_convert.rs (RGBA to NV12 with BT.601 or BT.709 and limited or full range, 10-bit P010 to RGBA, un-premultiply), tests kernel_video_convert::tests; 8-bit NV12 to RGBA stays in video_transfer.rs; GLSL twin of the RGBA to NV12 step in springboard/gpu/shaders/rgba_to_nv12.comp (not wired to a pipeline). Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/Video/Plug-Ins/AppleAVEEncoder.bundle/Contents/Resources/default.metallib",
@@ -3105,11 +4309,20 @@
    "description": "",
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
-   "bifrost": "springboard/render/src/masked_blur.rs; springboard/render/src/photo_effects.rs; springboard/ui/src/cnn_layers.rs",
+   "bifrost": "springboard/render/src/masked_blur.rs; springboard/render/src/photo_effects.rs; springboard/ui/src/cnn_layers.rs; springboard/render/src/kernel_portrait_matte.rs",
    "status": "partial",
-   "note": "Depth blur, photo looks and small eager network layers run as CPU pixel code; there are no GPU kernels and no trained model ships.",
+   "note": "Matte and bokeh half of portrait mode exists on the CPU in kernel_portrait_matte.rs, on top of depth_blur.rs, masked_blur.rs and guided.rs. Depth estimation and person segmentation need trained models that BifrOSt does not ship.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_portrait_matte::tests"
+    }
+   ],
+   "ready_note": "Ready: portrait kernels in springboard/render/src/kernel_portrait_matte.rs (trimap from depth, matte refined onto image edges with the guided filter, circle-of-confusion radius, gather bokeh blur that does not bleed a sharp subject into the background and boosts highlights, subject-over-blur composite), tests kernel_portrait_matte::tests. The depth map and the initial matte come from the caller; no trained model ships; no GLSL file was written. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/VideoProcessors/RTSCV1.bundle/Contents/Resources/default.metallib",
@@ -3169,8 +4382,8 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "n/a",
+   "note": "Copy of the iOS-compatibility (iOSSupport) framework resources for running iPad and iPhone apps on Mac. BifrOSt runs no iOS apps; the same kernel is covered by the matching /System/Library row.",
    "rea": [],
    "method": "assessed"
   },
@@ -3190,8 +4403,8 @@
    "role": "Dynamic/animated wallpaper or poster rendering",
    "doc": "",
    "bifrost": "springboard/ui/src/sprite_frames.rs",
-   "status": "partial",
-   "note": "Timed frame sequences exist for animated content, but there is no animated wallpaper renderer and the shipped wallpapers are still images.",
+   "status": "n/a",
+   "note": "Copy of the iOS-compatibility (iOSSupport) framework resources for running iPad and iPhone apps on Mac. BifrOSt runs no iOS apps; the same kernel is covered by the matching /System/Library row.",
    "rea": [],
    "method": "assessed"
   },
@@ -3211,8 +4424,8 @@
    "role": "Ink stroke rendering (pen, marker, watercolour textures)",
    "doc": "",
    "bifrost": "springboard/render/src/cg/raster.rs",
-   "status": "partial",
-   "note": "A CPU stroke rasteriser exists for paths. There are no pen pressure or ink texture shaders.",
+   "status": "n/a",
+   "note": "Copy of the iOS-compatibility (iOSSupport) framework resources for running iPad and iPhone apps on Mac. BifrOSt runs no iOS apps; the same kernel is covered by the matching /System/Library row.",
    "rea": [],
    "method": "assessed"
   },
@@ -3232,8 +4445,8 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "n/a",
+   "note": "Copy of the iOS-compatibility (iOSSupport) framework resources for running iPad and iPhone apps on Mac. BifrOSt runs no iOS apps; the same kernel is covered by the matching /System/Library row.",
    "rea": [],
    "method": "assessed"
   },
@@ -3253,8 +4466,8 @@
    "role": "2D scene renderer shaders (sprites, particles, warp, lighting)",
    "doc": "",
    "bifrost": "springboard/ui/src/scene2d.rs; springboard/ui/src/sprite_frames.rs; springboard/render/src/emitter.rs",
-   "status": "partial",
-   "note": "Scene, sprite frame and particle emitter models exist; nothing draws the sprites, lights or warps on the GPU.",
+   "status": "n/a",
+   "note": "Copy of the iOS-compatibility (iOSSupport) framework resources for running iPad and iPhone apps on Mac. BifrOSt runs no iOS apps; the same kernel is covered by the matching /System/Library row.",
    "rea": [],
    "method": "assessed"
   },
@@ -3316,8 +4529,8 @@
    "role": "Effects shader of AppleMediaServicesUI (app or system UI animation)",
    "doc": "",
    "bifrost": "springboard/src/gpu/shaders.rs; springboard/ui/src/warp.rs",
-   "status": "partial",
-   "note": "A generic stand-in: the shell's GPU fade and rounded-fill shaders and the warp grid cover the motion style, but this app's own effect is not reproduced.",
+   "status": "n/a",
+   "note": "Effect kernel private to one Apple app or UI module (its own animation design, not a framework service). BifrOSt apps draw their own motion with the shared shell fade and rounded-fill shaders (springboard/src/gpu/shaders.rs) and the warp grid (springboard/ui/src/warp.rs); this Apple effect is not reproduced and has no meaning on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -3379,8 +4592,8 @@
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "springboard/render/src/masked_blur.rs; springboard/render/src/photo_effects.rs; springboard/ui/src/cnn_layers.rs",
-   "status": "partial",
-   "note": "Depth blur, photo looks and small eager network layers run as CPU pixel code; there are no GPU kernels and no trained model ships.",
+   "status": "n/a",
+   "note": "Copy of the iOS-compatibility (iOSSupport) framework resources for running iPad and iPhone apps on Mac. BifrOSt runs no iOS apps; the same kernel is covered by the matching /System/Library row.",
    "rea": [],
    "method": "assessed"
   },
@@ -3400,8 +4613,8 @@
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "springboard/render/src/depth_blur.rs",
-   "status": "partial",
-   "note": "A depth-of-field blur model exists. The cinematic utility kernels are missing.",
+   "status": "n/a",
+   "note": "Copy of the iOS-compatibility (iOSSupport) framework resources for running iPad and iPhone apps on Mac. BifrOSt runs no iOS apps; the same kernel is covered by the matching /System/Library row.",
    "rea": [],
    "method": "assessed"
   },
@@ -3442,8 +4655,8 @@
    "role": "Effects shader of ContactsUICore (app or system UI animation)",
    "doc": "",
    "bifrost": "springboard/src/gpu/shaders.rs; springboard/ui/src/warp.rs",
-   "status": "partial",
-   "note": "A generic stand-in: the shell's GPU fade and rounded-fill shaders and the warp grid cover the motion style, but this app's own effect is not reproduced.",
+   "status": "n/a",
+   "note": "Effect kernel private to one Apple app or UI module (its own animation design, not a framework service). BifrOSt apps draw their own motion with the shared shell fade and rounded-fill shaders (springboard/src/gpu/shaders.rs) and the warp grid (springboard/ui/src/warp.rs); this Apple effect is not reproduced and has no meaning on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -3505,8 +4718,8 @@
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "springboard/render/src/masked_blur.rs; springboard/render/src/photo_effects.rs; springboard/ui/src/cnn_layers.rs",
-   "status": "partial",
-   "note": "Depth blur, photo looks and small eager network layers run as CPU pixel code; there are no GPU kernels and no trained model ships.",
+   "status": "n/a",
+   "note": "Copy of the iOS-compatibility (iOSSupport) framework resources for running iPad and iPhone apps on Mac. BifrOSt runs no iOS apps; the same kernel is covered by the matching /System/Library row.",
    "rea": [],
    "method": "assessed"
   },
@@ -3526,8 +4739,8 @@
    "role": "UI framework effects: materials, vibrancy, shapes, gradients, icon rendering",
    "doc": "",
    "bifrost": "springboard/gpu/shaders/shape.frag; springboard/render/src/glass.rs; springboard/render/src/vibrancy.rs; springboard/render/src/gradient.rs",
-   "status": "partial",
-   "note": "BifrOSt draws rounded shapes, gradients and glass/vibrant materials with its own shape.frag and glass path; no icon-layer (Liquid Glass lensing, specular) shaders. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "n/a",
+   "note": "Copy of the iOS-compatibility (iOSSupport) framework resources for running iPad and iPhone apps on Mac. BifrOSt runs no iOS apps; the same kernel is covered by the matching /System/Library row.",
    "rea": [],
    "method": "assessed"
   },
@@ -3547,8 +4760,8 @@
    "role": "UI framework effects: materials, vibrancy, shapes, gradients, icon rendering",
    "doc": "",
    "bifrost": "springboard/gpu/shaders/shape.frag; springboard/render/src/glass.rs; springboard/render/src/vibrancy.rs; springboard/render/src/gradient.rs",
-   "status": "partial",
-   "note": "BifrOSt draws rounded shapes, gradients and glass/vibrant materials with its own shape.frag and glass path; no icon-layer (Liquid Glass lensing, specular) shaders. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "n/a",
+   "note": "Copy of the iOS-compatibility (iOSSupport) framework resources for running iPad and iPhone apps on Mac. BifrOSt runs no iOS apps; the same kernel is covered by the matching /System/Library row.",
    "rea": [],
    "method": "assessed"
   },
@@ -3568,8 +4781,8 @@
    "role": "Effects shader of PhotosSwiftUICore (app or system UI animation)",
    "doc": "",
    "bifrost": "springboard/render/src/photo_effects.rs",
-   "status": "partial",
-   "note": "Photo looks are approximated by name as CPU colour chains. There is no photo UI core shader.",
+   "status": "n/a",
+   "note": "Effect kernel private to one Apple app or UI module (its own animation design, not a framework service). BifrOSt apps draw their own motion with the shared shell fade and rounded-fill shaders (springboard/src/gpu/shaders.rs) and the warp grid (springboard/ui/src/warp.rs); this Apple effect is not reproduced and has no meaning on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -3589,8 +4802,8 @@
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "springboard/render/src/depth_blur.rs (depth_blur)",
-   "status": "partial",
-   "note": "Depth-driven blur runs on the CPU; the subject matte and segmentation stages of the portrait pipeline are not implemented.",
+   "status": "n/a",
+   "note": "Copy of the iOS-compatibility (iOSSupport) framework resources for running iPad and iPhone apps on Mac. BifrOSt runs no iOS apps; the same kernel is covered by the matching /System/Library row.",
    "rea": [],
    "method": "assessed"
   },
@@ -3610,8 +4823,8 @@
    "role": "Effects shader of TextInputUI (app or system UI animation)",
    "doc": "",
    "bifrost": "springboard/src/gpu/shaders.rs; springboard/ui/src/warp.rs",
-   "status": "partial",
-   "note": "A generic stand-in: the shell's GPU fade and rounded-fill shaders and the warp grid cover the motion style, but this app's own effect is not reproduced.",
+   "status": "n/a",
+   "note": "Effect kernel private to one Apple app or UI module (its own animation design, not a framework service). BifrOSt apps draw their own motion with the shared shell fade and rounded-fill shaders (springboard/src/gpu/shaders.rs) and the warp grid (springboard/ui/src/warp.rs); this Apple effect is not reproduced and has no meaning on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -3631,8 +4844,8 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "springboard/ui/src/scene_material.rs; springboard/ui/src/mesh.rs; springboard/ui/src/scene3d.rs",
-   "status": "partial",
-   "note": "Material and mesh models exist as pure data. No shader draws 3D content yet.",
+   "status": "n/a",
+   "note": "Copy of the iOS-compatibility (iOSSupport) framework resources for running iPad and iPhone apps on Mac. BifrOSt runs no iOS apps; the same kernel is covered by the matching /System/Library row.",
    "rea": [],
    "method": "assessed"
   },
@@ -3652,8 +4865,8 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "n/a",
+   "note": "Copy of the iOS-compatibility (iOSSupport) framework resources for running iPad and iPhone apps on Mac. BifrOSt runs no iOS apps; the same kernel is covered by the matching /System/Library row.",
    "rea": [],
    "method": "assessed"
   },
@@ -3673,8 +4886,8 @@
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "springboard/render/src/masked_blur.rs; springboard/render/src/photo_effects.rs; springboard/ui/src/cnn_layers.rs",
-   "status": "partial",
-   "note": "Depth blur, photo looks and small eager network layers run as CPU pixel code; there are no GPU kernels and no trained model ships.",
+   "status": "n/a",
+   "note": "Copy of the iOS-compatibility (iOSSupport) framework resources for running iPad and iPhone apps on Mac. BifrOSt runs no iOS apps; the same kernel is covered by the matching /System/Library row.",
    "rea": [],
    "method": "assessed"
   },
@@ -3694,8 +4907,8 @@
    "role": "Effects shader of WeatherUI (app or system UI animation)",
    "doc": "",
    "bifrost": "springboard/render/src/emitter.rs",
-   "status": "partial",
-   "note": "A particle emitter model exists for weather-style effects. There is no effect shader.",
+   "status": "n/a",
+   "note": "Copy of the iOS-compatibility (iOSSupport) framework resources for running iPad and iPhone apps on Mac. BifrOSt runs no iOS apps; the same kernel is covered by the matching /System/Library row.",
    "rea": [],
    "method": "assessed"
   },
@@ -3736,8 +4949,8 @@
    "role": "Effects shader of WorkflowEditor (app or system UI animation)",
    "doc": "",
    "bifrost": "springboard/src/gpu/shaders.rs; springboard/ui/src/warp.rs",
-   "status": "partial",
-   "note": "A generic stand-in: the shell's GPU fade and rounded-fill shaders and the warp grid cover the motion style, but this app's own effect is not reproduced.",
+   "status": "n/a",
+   "note": "Effect kernel private to one Apple app or UI module (its own animation design, not a framework service). BifrOSt apps draw their own motion with the shared shell fade and rounded-fill shaders (springboard/src/gpu/shaders.rs) and the warp grid (springboard/ui/src/warp.rs); this Apple effect is not reproduced and has no meaning on BifrOSt.",
    "rea": [],
    "method": "assessed"
   }

@@ -1,0 +1,36 @@
+{
+  "framework": "LockedCameraCapture",
+  "doc": "https://developer.apple.com/documentation/lockedcameracapture",
+  "macos_since": "",
+  "status": "gap",
+  "bifrost": "springboard/src/shell/login.rs",
+  "summary": "The shell has a lock screen, but no camera capture from the lock screen and no hand-off from a locked capture to the app. Lock screen actions are not exposed to apps.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run in this batch); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Camera from the lock screen",
+      "apple": "LockedCameraCaptureUIScene, LockedCameraCaptureExtension",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no lock screen camera entry point"
+    },
+    {
+      "feature": "Hand-off from a locked capture to the app",
+      "apple": "LockedCameraCaptureManager, NSUserActivityTypeLockedCameraCapture",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no unlock-and-open flow for captured content"
+    },
+    {
+      "feature": "Lock screen presentation",
+      "apple": "Lock Screen controls",
+      "bifrost": "springboard/src/shell/login.rs",
+      "status": "partial",
+      "note": "the lock screen exists; apps cannot place a control on it"
+    }
+  ],
+  "gaps": [
+    "No camera on the lock screen.",
+    "No hand-off from a locked capture into the app."
+  ]
+}

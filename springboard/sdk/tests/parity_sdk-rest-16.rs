@@ -250,6 +250,7 @@ fn a_reply_with_an_unknown_tag_is_a_protocol_error() {
 
 fn idle_snapshot() -> Snapshot {
     Snapshot {
+        rate: 1.0,
         track: None,
         index: None,
         playing: false,

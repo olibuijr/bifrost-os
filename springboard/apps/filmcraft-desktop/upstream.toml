@@ -1,5 +1,5 @@
 repo = "storytold/filmcraft"
-url = "https://github.com/storytold/filmcraft/releases/download/v0.7.2/filmcraft-0.8.0-linux-x86_64.tar.gz"
+url = "https://github.com/storytold/filmcraft/releases/download/v0.8.0/filmcraft-0.8.0-linux-x86_64.tar.gz"
 sha256 = "b166877905ae8a1b5505066d6dde60d7ce05831cfb309bacd5d7970f4bb017e1"
 binary = "filmcraft-0.8.0-linux-x86_64/bin/filmcraft"
 licenses = "filmcraft-0.8.0-linux-x86_64/share/doc/filmcraft"

@@ -3,17 +3,25 @@
 
 mod alerts;
 mod app;
+mod archive;
 mod attach;
 mod model;
 mod organize;
 mod quick;
+mod format;
+// the location watch is not called by the window yet (the form has no place fields), so its items are unused for now
+#[allow(dead_code)]
+mod place;
 mod repeat;
+mod scripting;
+mod search;
 mod smartdef;
 mod settings;
 mod store;
 mod system;
 mod zones;
 
+use bifrost_app::app_events::AppEvent;
 use bifrost_app::kit::{Damage, Event, Surface};
 use bifrost_app::share::INBOUND;
 use bifrost_app::control::{RpcError, INVALID_PARAMS};
@@ -49,6 +57,9 @@ const MENU_NEW_SMART: u32 = 18;
 const MENU_SETTINGS: u32 = 19;
 const MENU_URGENT: u32 = 24;
 const MENU_SAVE_AS: u32 = 25;
+const MENU_BOLD: u32 = 26;
+const MENU_BULLETS: u32 = 27;
+const MENU_NUMBERS: u32 = 28;
 /// Item ids of the menus that list things: the base plus the position in the list.
 const MENU_MARK_BASE: u32 = 20;
 const MENU_SORT_BASE: u32 = 30;
@@ -88,6 +99,9 @@ struct RemindersApp {
     quick: Option<StatusItem>,
     /// The open panel asked for by a reminder form's Add Image.
     pick: Option<u32>,
+    /// The reminders as the Core Search index holds them (see `search.rs`), and the store generation they were read at.
+    indexed: std::collections::HashMap<u64, String>,
+    indexed_gen: Option<u32>,
     /// The save panel asked for by File > Save List As, with the checklist it will write.
     save: Option<(u32, String)>,
 }
@@ -115,6 +129,24 @@ impl RemindersApp {
         }
     }
 
+    /// Keeps the Core Search index in step with the reminders: runs when the store generation changed.
+    fn sync_index(&mut self, ctx: &Ctx) {
+        let Some(a) = &self.app else { return };
+        if self.indexed_gen == Some(a.generation()) {
+            return;
+        }
+        self.indexed_gen = Some(a.generation());
+        let (changed, gone) = search::sync(&mut self.indexed, a.items());
+        let index = bifrost_app::quicksearch::CSSearchableIndex::default_index();
+        if !changed.is_empty() {
+            index.index_searchable_items(ctx, &changed);
+        }
+        if !gone.is_empty() {
+            let refs: Vec<&str> = gone.iter().map(String::as_str).collect();
+            index.delete_searchable_items(ctx, &refs);
+        }
+    }
+
     /// Every change is saved as it is made, so the app may be ended at once (sudden termination) except while an
     /// editor holds a draft that is not saved yet.
     fn sync_termination(&mut self, ctx: &Ctx) {
@@ -126,6 +158,35 @@ impl RemindersApp {
             } else {
                 ctx.disable_sudden_termination();
             }
+        }
+    }
+}
+
+impl RemindersApp {
+    /// The AppEvents Reminders answers (`scripting`): `make new reminder` and `make new list`, which go through the
+    /// Add Reminder and Create List intents, and the core `getd` read of a reminder property. Setting properties and
+    /// deleting reminders from a script are refused for now.
+    fn script_event(&mut self, ctx: Option<&Ctx>, data_dir: &Path, ev: &AppEvent) -> Result<Json, RpcError> {
+        match (ev.class.as_str(), ev.id.as_str()) {
+            ("reminders", "make") => {
+                let params = scripting::reminder_params(&ev.params)?;
+                Ok(self.perform_intent(ctx, data_dir, "add-reminder", &params)?.to_json())
+            }
+            ("reminders", "makelist") => {
+                let params = scripting::list_params(&ev.params)?;
+                Ok(self.perform_intent(ctx, data_dir, "create-list", &params)?.to_json())
+            }
+            ("core", "getd") => {
+                let object = ev.params.get("object").cloned().ok_or_else(|| RpcError::new(INVALID_PARAMS, "getd needs an object"))?;
+                let property = object.str_field("property");
+                let Some(a) = self.app.as_ref() else { return Err(RpcError::new(INVALID_PARAMS, "Reminders is not running yet")) };
+                let rows = scripting::rows(a.items(), a.lists());
+                scripting::get_property(&rows, &object, property.as_deref())
+            }
+            ("core", "setd") | ("core", "delt") => {
+                Err(RpcError::new(bifrost_app::control::METHOD_NOT_FOUND, "Reminders cannot change reminders from a script yet"))
+            }
+            _ => Err(scripting::unhandled(&ev.method())),
         }
     }
 }
@@ -242,6 +303,15 @@ impl App for RemindersApp {
                 ],
             },
             AppMenu { title: "View".into(), items: view },
+            AppMenu {
+                title: "Format".into(),
+                items: vec![
+                    AppMenuItem::new(MENU_BOLD, "Bold").key("cmd+b").enabled(a.notes_focused()),
+                    AppMenuItem::separator(),
+                    AppMenuItem::new(MENU_BULLETS, "Bullet List").enabled(a.notes_focused()),
+                    AppMenuItem::new(MENU_NUMBERS, "Numbered List").enabled(a.notes_focused()),
+                ],
+            },
         ]
     }
 
@@ -319,6 +389,9 @@ impl App for RemindersApp {
             MENU_NEW_SMART => a.new_smart_list(ui, t),
             MENU_SETTINGS => a.open_settings(t),
             MENU_URGENT => a.toggle_urgent_selected(ui),
+            MENU_BOLD => a.format_notes(ui, format::Style::Bold),
+            MENU_BULLETS => a.format_notes(ui, format::Style::Bullets),
+            MENU_NUMBERS => a.format_notes(ui, format::Style::Numbers),
             MENU_SUBTASKS => {
                 a.toggle_all_subtasks(ui);
                 true
@@ -376,6 +449,10 @@ impl App for RemindersApp {
             Intent::new("add-reminder", "Add Reminder", "Adds a reminder to the default list, with an optional due date.")
                 .param(Param::new("title", "Title", ParamType::String))
                 .param(Param::new("due", "Due", ParamType::Date).optional()),
+            Intent::new("create-list-item", "Create List Item", "Adds a reminder to the named list, with an optional due date.")
+                .param(Param::new("title", "Title", ParamType::String))
+                .param(Param::new("list", "List", ParamType::String))
+                .param(Param::new("due", "Due", ParamType::Date).optional()),
             Intent::new("quick-reminder", "Add Quick Reminder", "Adds a reminder from a line such as \"call mum tomorrow 9am\".")
                 .param(Param::new("text", "Text", ParamType::String)),
             Intent::new("create-list", "Create List", "Creates a new list.").param(Param::new("name", "Name", ParamType::String)),
@@ -390,7 +467,7 @@ impl App for RemindersApp {
     }
 
     fn perform_intent(&mut self, ctx: Option<&Ctx>, _data_dir: &Path, id: &str, params: &Json) -> Result<IntentResult, RpcError> {
-        if !matches!(id, "add-reminder" | "quick-reminder" | "create-list" | "open-list" | "open-smart-list" | "search-reminders") {
+        if !matches!(id, "add-reminder" | "create-list-item" | "quick-reminder" | "create-list" | "open-list" | "open-smart-list" | "search-reminders") {
             return Err(RpcError::new(INVALID_PARAMS, format!("no intent {id}")));
         }
         let (Some(ctx), Some(a)) = (ctx, self.app.as_mut()) else { return Err(intents::failed("Reminders is not running yet")) };
@@ -401,6 +478,13 @@ impl App for RemindersApp {
                 let due = params.get("due").and_then(Json::as_str);
                 let id = a.add_reminder(ui, title, due).map_err(intents::failed)?;
                 IntentResult::value(Json::Num(id as f64)).with_dialog(&format!("Added \"{title}\""))
+            }
+            "create-list-item" => {
+                let title = intents::str_param(params, "title")?;
+                let list = intents::str_param(params, "list")?;
+                let due = params.get("due").and_then(Json::as_str);
+                let id = a.add_reminder_to_named(ui, title, due, list).map_err(intents::failed)?;
+                IntentResult::value(Json::Num(id as f64)).with_dialog(&format!("Added \"{title}\" to {}", list.trim()))
             }
             "quick-reminder" => {
                 let text = intents::str_param(params, "text")?;
@@ -429,6 +513,14 @@ impl App for RemindersApp {
         };
         self.sync_keyboard(ctx);
         Ok(result)
+    }
+
+    fn rpc(&mut self, ctx: Option<&Ctx>, data_dir: &Path, method: &str, params: &Json) -> Result<Json, RpcError> {
+        // scripting: `tell app "Reminders"` commands arrive as AppEvents (see `scripting` and the manifest's [[script.*]])
+        match AppEvent::from_method(method, params) {
+            Some(ev) => self.script_event(ctx, data_dir, &ev),
+            None => Err(RpcError::new(bifrost_app::control::METHOD_NOT_FOUND, format!("no method {method}"))),
+        }
     }
 
     fn controls(&self, ctx: &Ctx) -> Vec<bifrost_app::controls::Node> {
@@ -579,6 +671,11 @@ impl App for RemindersApp {
         }
     }
 
+    fn continue_activity(&mut self, _ctx: &Ctx, activity: bifrost_app::quicksearch::UserActivity) -> bool {
+        let Ok(id) = activity.unique_identifier.parse::<u64>() else { return false };
+        activity.activity_type == bifrost_app::quicksearch::ACTION_TYPE && self.app.as_mut().is_some_and(|a| a.show_item(id))
+    }
+
     fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
         let Some(a) = &mut self.app else { return false };
         self.wall = Wall::sample(t);
@@ -611,6 +708,7 @@ impl App for RemindersApp {
                 alerts::apply(ctx, &change, via_service);
             }
         }
+        self.sync_index(ctx);
         self.sync_keyboard(ctx);
         redraw
     }
@@ -677,5 +775,5 @@ fn tip_store(data_dir: &Path) -> bifrost_app::controls::tips::Datastore {
 }
 
 fn main() {
-    bifrost_app::run(RemindersApp { app: None, kb: false, alerts: alerts::AlertState::default(), wall: Wall::default(), badge: None, badge_req: None, schedule: None, probe: None, widget_gen: None, terminable: false, import: None, quick: None, pick: None, save: None });
+    bifrost_app::run(RemindersApp { app: None, kb: false, alerts: alerts::AlertState::default(), wall: Wall::default(), badge: None, badge_req: None, schedule: None, probe: None, widget_gen: None, terminable: false, import: None, quick: None, pick: None, save: None, indexed: Default::default(), indexed_gen: None });
 }

@@ -12,7 +12,7 @@
       "apple": "Speech (collection); SpeechAnalyzer, SpeechTranscriber, DictationTranscriber, SpeechDetector, SpeechModule",
       "bifrost": "springboard/sdk/src/speech_recognizer.rs, springboard/ui/src/recognition.rs",
       "status": "partial",
-      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (speech_recognizer.rs, recognition.rs); not wired into the shell or apps, not tested on Midget. No transcription anywhere in springboard/sdk/src or springboard/ui/src. Apple's SpeechAnalyzer and module classes have no counterpart."
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (speech_recognizer.rs, recognition.rs); not wired into the shell or apps, not tested on Midget. No transcription anywhere in springboard/sdk/src or springboard/ui/src. Apple's SpeechAnalyzer and module classes have no counterpart. Built 2026-10-17: on-device recognition through the gst-plugin-whisper element: the pipeline argv and transcript parser (bifrost_ui::whisper; tests whisper::tests), the shell service speech_recognizer (shell::services::recognizer::tests) and the SDK client and backend (bifrost_app speech_whisper::tests). Recognition needs the model, which the person downloads after consent in Settings, Keyboard, Dictation. Audio never leaves the machine. Not yet run on Midget."
     },
     {
       "feature": "Analyzer modules and voice activity detection",
@@ -61,23 +61,21 @@
       "apple": "Keyboard dictation (the framework says it matches keyboard dictation)",
       "bifrost": "springboard/ui/src/dictation_entry.rs (Dictation, Availability); springboard/apps/keyboard/src/keyboard.rs:782 (Kind::Mic yields no action), :1516 (glyph draw)",
       "status": "partial",
-      "note": "The dictation session model starts only when dictation is available, collects phrases while listening and hands the text over on stop; tested headless in springboard/ui/tests/parity_sdk-gaps-03.rs. Gap: no speech recognizer exists, and the keyboard Mic key still yields no action, so tapping it does not start a session."
+      "note": "The dictation session model starts only when dictation is available, collects phrases while listening and hands the text over on stop; tested headless in springboard/ui/tests/parity_sdk-gaps-03.rs. Gap: no speech recognizer exists, and the keyboard Mic key still yields no action, so tapping it does not start a session. Built 2026-10-17: the keyboard Mic key emits Out::Dictate and the keyboard app starts, polls and stops the shell recognizer, typing final transcripts into the focus (apps/keyboard main.rs). The keyboard change has no unit test yet; it needs Midget. Built 2026-10-17 (wave 12): spoken punctuation, new line and paragraph, case, no space, literal and scratch that for dictation (ui dictation_commands, English and Icelandic; tests dictation_commands::tests); the keyboard types dictation through it and Dictation::with_commands offers it to controls."
     },
     {
       "feature": "Legacy Objective-C recognizer API",
       "apple": "Speech Recognition in Objective-C (SFSpeechRecognizer and related classes)",
       "bifrost": "springboard/sdk/src/speech_recognizer.rs (SFSpeechRecognizer, SFSpeechAudioBufferRecognitionRequest, SFSpeechURLRecognitionRequest, SFSpeechRecognitionTask, SFSpeechRecognitionResult, SFTranscription, SFTranscriptionSegment)",
       "status": "partial",
-      "note": "Host unit tests with a fake backend: authorization, availability, partial then final results, segment timing, cancel. No real recognition engine yet (backend trait only); not tested on Midget."
+      "note": "Host unit tests with a fake backend: authorization, availability, partial then final results, segment timing, cancel. No real recognition engine yet (backend trait only); not tested on Midget. Built 2026-10-17: WhisperBackend implements RecognitionBackend over the shell transcripts, so SFSpeechRecognizer tasks get whisper results (bifrost_app speech_whisper::tests). The on-device engine is now the whisper element; the model download is required. Built 2026-10-17: supportedLocales from the backend (RecognitionBackend::supported_locales, empty by default; sorted and unique); tests speech_recognizer::tests."
     }
   ],
   "gaps": [
-    "No speech recognizer or transcription module (SpeechAnalyzer, SpeechTranscriber, DictationTranscriber) in the SDK, the UI kit or the shell.",
+    "Live recognition is an SDK model over the shell's whisper recognizer (sdk speech_whisper.rs), but there are no SpeechAnalyzer, SpeechTranscriber or DictationTranscriber types.",
     "No SDK API that streams time-coded microphone audio to an app, so a recognizer cannot be fed from an app.",
-    "No recognition result type with alternatives, confidence or time ranges.",
+    "No alternatives list on recognition results: SFTranscription carries segments with timing and confidence (sdk speech_recognizer.rs) but no alternative transcriptions.",
     "No custom vocabulary or contextual strings for recognition.",
-    "No on-device speech model install or inventory path.",
-    "Keyboard Mic key is inert; system dictation is missing.",
     "No app-facing microphone permission prompt. The audio service records only on an explicit user action (springboard/proto/src/svc.rs:218)."
   ]
 }

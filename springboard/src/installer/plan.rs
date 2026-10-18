@@ -52,6 +52,26 @@ pub struct Config {
     pub wallpaper: String,
 }
 
+/// Units the installer enables on the installed system (`systemctl enable`). `avahi-daemon` is the system's
+/// multicast DNS and DNS-SD responder (the `.local` names and service browsing), and `cups.socket` starts the
+/// print scheduler on the first client connection, so printing needs no always-on daemon. `pcscd.socket` does the
+/// same for the smart card daemon that the `smartcards` shell service reads through `pcsc_scan`.
+/// print scheduler on the first client connection, so printing needs no always-on daemon. `pcscd.socket` does the same
+/// for the smart card daemon, which card readers and the PC/SC API need.
+pub const ENABLED_UNITS: &[&str] = &[
+    "bifrost-update-guard.service",
+    "springboard.service",
+    "NetworkManager.service",
+    "sshd.service",
+    "seatd.service",
+    "power-profiles-daemon.service",
+    "bluetooth.service",
+    "bifrost-irq-priority.service",
+    "bifrost-mcp.service",
+    "avahi-daemon.service",
+    "cups.socket",
+    "pcscd.socket",
+];
 pub const DEFAULT_APPEARANCE: &str = "dark";
 pub const DEFAULT_ACCENT: &str = "blue";
 /// The shell's wallpaper pref (see `bin/shell.rs`: `prefs.get("wallpaper")`).
@@ -245,9 +265,14 @@ pub fn discover_offline_bundle(root: &Path) -> Result<Option<OfflineBundle>, Str
     Ok(Some(OfflineBundle { root: root.canonicalize().map_err(|e| e.to_string())?, repo, database, shell, shell_sha256, apps, packages }))
 }
 
-fn offline_required_packages(gpu: &[&'static str]) -> Vec<&'static str> {
+pub const KERNEL_T2: &str = "linux-lts-t2";
+
+fn offline_required_packages(gpu: &[&'static str], kernel: &'static str) -> Vec<&'static str> {
     let mut out = packages();
-    for name in [KERNEL_FALLBACK, "vulkan-intel", "intel-media-driver", "vulkan-radeon", "nvidia-open", "nvidia-utils", "libva-nvidia-driver"] {
+    out.retain(|name| *name != KERNEL_RT && *name != KERNEL_FALLBACK);
+    out.push(kernel);
+    if kernel != KERNEL_T2 { out.push(KERNEL_FALLBACK); }
+    for name in ["vulkan-intel", "intel-media-driver", "vulkan-radeon", "nvidia-open", "nvidia-utils", "libva-nvidia-driver"] {
         if !out.contains(&name) { out.push(name); }
     }
     for name in gpu { if !out.contains(name) { out.push(*name); } }
@@ -294,8 +319,8 @@ fn offline_resolve_args(config: &str, dbpath: &str, packages: &[&str]) -> Vec<St
     args
 }
 
-fn offline_resolve(r: &Run, bundle: &OfflineBundle, gpu: &[&'static str]) -> Result<(), String> {
-    let required = offline_required_packages(gpu);
+fn offline_resolve(r: &Run, bundle: &OfflineBundle, gpu: &[&'static str], kernel: &'static str) -> Result<(), String> {
+    let required = offline_required_packages(gpu, kernel);
     let config = "/run/bifrost-offline-pacman.conf";
     // Never let the live ISO's installed-package database make a missing dependency look satisfied. This DB is
     // deliberately empty and separate from the config used later by pacstrap.
@@ -464,13 +489,23 @@ pub fn initramfs_hooks(encrypted: bool) -> String {
 /// An empty systemd.tty.rows.console= makes PID 1 skip its ANSI size query on /dev/console. Nothing answers
 /// that query behind the boot frame, so PID 1 otherwise waits out its 333 ms reply timeout every boot.
 pub fn cmdline_txt(root_uuid: &str, kernel: &str) -> String {
-    cmdline_with(root_uuid, kernel, AUDIO_CORE)
+    let mut line = cmdline_with(root_uuid, kernel, AUDIO_CORE);
+    if t2_hardware() {
+        line = line.replace("threadirqs", "threadirqs efi=noruntime intel_iommu=on iommu=pt pm_async=off");
+    }
+    line
 }
 
 /// The installed kernel package: `linux-rt` (PREEMPT_RT, the default since 2026-10-12, docs/audio-latency.md
 /// "Kernel"), or the stock `linux` when the package source had no linux-rt (see `KERNEL_FALLBACK`).
 pub const KERNEL_RT: &str = "linux-rt";
 pub const KERNEL_FALLBACK: &str = "linux";
+
+fn t2_hardware() -> bool {
+    let vendor = std::fs::read_to_string("/sys/class/dmi/id/sys_vendor").unwrap_or_default();
+    let product = std::fs::read_to_string("/sys/class/dmi/id/product_name").unwrap_or_default();
+    vendor.trim() == "Apple Inc." && product.trim().starts_with("MacBookPro1")
+}
 
 /// The kernel for a machine with these GPU packages. `nvidia-open` ships prebuilt modules that match only the stock
 /// `linux` kernel, and NVIDIA's modules refuse to build on PREEMPT_RT by default, so an NVIDIA machine gets `linux`.
@@ -523,9 +558,9 @@ pub fn gpu_packages(lspci: &str) -> Vec<&'static str> {
     for l in lspci.lines().filter(display) {
         let l = l.to_lowercase();
         let add: &[&str] = if l.contains("[8086:") || l.contains("intel corporation") {
-            &["vulkan-intel", "intel-media-driver"]
+            &["vulkan-intel", "intel-media-driver", "opencl-mesa"]
         } else if l.contains("[1002:") || l.contains("advanced micro devices") || l.contains("[amd/ati]") {
-            &["vulkan-radeon"]
+            &["vulkan-radeon", "opencl-mesa"]
         } else if l.contains("[10de:") || l.contains("nvidia") {
             &["nvidia-open", "nvidia-utils", "libva-nvidia-driver"]
         } else {
@@ -547,6 +582,8 @@ pub const RUNTIME_PACKAGES: &str = include_str!("../../../packaging/arch/runtime
 pub const BASE_PACKAGES: &[&str] = &[
     "btrfs-progs",
     "base",
+    // The installer writes the system's mkinitcpio preset and generates the first boot image below.
+    "mkinitcpio",
     // linux-rt is the default kernel; the installer retries with `linux` when the source lacks it. No headers
     // package: nothing on the installed system builds DKMS modules.
     "linux-rt",
@@ -713,10 +750,11 @@ pub fn install(cfg: &Config, progress: &Shared) {
         let offline = offline_source(&cfg.mirror, Path::new(OFFLINE_BUNDLE_ROOT))?;
         let lspci = r.cmd(&["lspci", "-nn"]).unwrap_or_default();
         let gpu = gpu_packages(&lspci);
-        let mut kernel = kernel_for(&gpu);
+        let is_t2 = t2_hardware();
+        let mut kernel = if is_t2 { KERNEL_T2 } else { kernel_for(&gpu) };
         if let Some(bundle) = offline.as_ref() {
             r.set(0, 1, "Verifying the offline installer bundle");
-            offline_resolve(&r, bundle, &gpu)?;
+            offline_resolve(&r, bundle, &gpu, kernel)?;
             r.log(format!("verified offline package source {}", bundle.repo.display()));
         }
         r.cmd(&["btrfs","--version"])?;
@@ -931,6 +969,9 @@ pub fn install(cfg: &Config, progress: &Shared) {
             if l.starts_with("HOOKS=") { initramfs_hooks(false) } else if l.starts_with("MODULES=(") { let mut line=l.to_string(); for module in ["virtio_gpu", "btrfs"] { if !line.contains(module) { line=line.replacen("MODULES=(", &format!("MODULES=({module} "), 1); } } line } else { l.to_string() }
         }).collect::<Vec<_>>().join("\n");
         r.write(&sys("/etc/mkinitcpio.conf"), &(mc + "\n"))?;
+        if is_t2 {
+            r.cmd(&["sh", "-c", "set -- /mnt/usr/lib/modules/*/vmlinuz; test -f \"$1\" && install -m0644 \"$1\" /mnt/boot/vmlinuz-linux-lts-t2"])?;
+        }
         // the package ships the hook; an older package from the update repo may not, so keep a local copy then
         if !std::path::Path::new(&sys("/usr/lib/initcpio/install/bifrost-mounts")).exists() {
             r.write(&sys("/etc/initcpio/install/bifrost-mounts"), include_str!("../../../packaging/arch/initcpio/install/bifrost-mounts"))?;
@@ -944,7 +985,9 @@ pub fn install(cfg: &Config, progress: &Shared) {
         // unit immediately inside the target root and otherwise aborts the
         // install with status 1 on a fresh system.
         r.write(&sys("/etc/systemd/system/bifrost-irq-priority.service"), irq_priority_unit())?;
-        r.chroot(&["systemctl", "enable", "bifrost-update-guard.service", "springboard.service", "NetworkManager.service", "sshd.service", "seatd.service", "power-profiles-daemon.service", "bifrost-irq-priority.service", "bifrost-mcp.service"])?;
+        let mut enable = vec!["systemctl", "enable"];
+        enable.extend(ENABLED_UNITS.iter().copied());
+        r.chroot(&enable)?;
         r.chroot(&["systemctl", "set-default", "graphical.target"])?;
         // one initramfs: the fallback image is a second full build nobody boots on a fresh install
         r.write(&sys(&format!("/etc/mkinitcpio.d/{kernel}.preset")), &mkinitcpio_preset(kernel))?;
@@ -1073,6 +1116,16 @@ fn prune_assets(dir: &std::path::Path) -> std::io::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_installer_enables_the_mdns_responder_and_the_print_scheduler() {
+        assert!(super::ENABLED_UNITS.contains(&"avahi-daemon.service"));
+        assert!(super::ENABLED_UNITS.contains(&"cups.socket"));
+        assert!(super::ENABLED_UNITS.contains(&"pcscd.socket"), "smart card readers work without a manual start");
+        assert!(super::ENABLED_UNITS.contains(&"pcscd.socket"), "card readers need the PC/SC daemon on demand");
+        assert!(super::ENABLED_UNITS.contains(&"bifrost-update-guard.service"), "the boot guard stays enabled");
+        assert_eq!(super::ENABLED_UNITS.iter().filter(|u| u.ends_with(".service") || u.ends_with(".socket")).count(), super::ENABLED_UNITS.len());
+    }
+
     #[test]
     fn prune_assets_keeps_only_the_packed_set() {
         let dir = std::env::temp_dir().join(format!("prune-assets-{}", std::process::id()));
@@ -1247,6 +1300,7 @@ mod tests {
         assert!(cmdline_txt("abcd", KERNEL_FALLBACK).starts_with("initrd=\\initramfs-linux.img "));
         assert!(mkinitcpio_preset(KERNEL_RT).contains("/boot/vmlinuz-linux-rt") && mkinitcpio_preset(KERNEL_RT).contains("initramfs-linux-rt.img"));
         assert!(BASE_PACKAGES.contains(&"linux-rt") && !BASE_PACKAGES.contains(&"linux") && BASE_PACKAGES.contains(&"linux-firmware"));
+        assert!(BASE_PACKAGES.contains(&"mkinitcpio"), "the installer generates the installed system's initramfs");
         let iso = cmdline_with("abcd", KERNEL_FALLBACK, Some("7"));
         assert!(iso.contains(" threadirqs isolcpus=7 nohz_full=7 rcu_nocbs=7\n"));
         assert_eq!(audio_modprobe(), "options snd_hda_intel power_save=0\n");
@@ -1301,10 +1355,13 @@ mod tests {
     fn gpu_packages_follow_the_hardware() {
         let intel = "00:02.0 VGA compatible controller [0300]: Intel Corporation HD Graphics 530 [8086:1912] (rev 06)";
         assert!(gpu_packages(intel).contains(&"intel-media-driver") && gpu_packages(intel).contains(&"vulkan-intel"));
+        assert!(gpu_packages(intel).contains(&"opencl-mesa"), "Intel gets the rusticl OpenCL driver from mesa");
         let amd = "06:00.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Navi 22 [1002:73df]";
         assert!(gpu_packages(amd).contains(&"vulkan-radeon") && !gpu_packages(amd).contains(&"nvidia-open"));
+        assert!(gpu_packages(amd).contains(&"opencl-mesa"), "AMD gets the rusticl OpenCL driver from mesa");
         let nv = "01:00.0 VGA compatible controller [0300]: NVIDIA Corporation GA102 [10de:2216]";
         assert!(gpu_packages(nv).contains(&"nvidia-open") && gpu_packages(nv).contains(&"libva-nvidia-driver"));
+        assert!(!gpu_packages(nv).contains(&"opencl-mesa"), "NVIDIA keeps its own OpenCL");
         assert_eq!(kernel_for(&gpu_packages(nv)), KERNEL_FALLBACK, "nvidia-open matches the stock kernel only");
         assert_eq!(kernel_for(&gpu_packages(amd)), KERNEL_RT);
         assert_eq!(kernel_for(&gpu_packages(intel)), KERNEL_RT);

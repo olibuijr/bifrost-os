@@ -100,7 +100,7 @@ impl SystemService for DockService {
         let hop = motion::duration(Kind::DockBounce) as f64;
         let permitted = installed().get(slot).is_some_and(|a| a.manifest.permissions.iter().any(|p| p == "notifications"));
         // an app that is already in front has nothing to attract
-        let fronted = matches!(shell.desk.as_ref().and_then(|d| d.front()).map(|w| w.app), Some(AppId::External(s)) if s as usize == slot);
+        let fronted = matches!(shell.desk.as_ref().and_then(|d| d.front()).map(|w| w.app.parent()), Some(AppId::External(s)) if s as usize == slot);
         let Some(host) = shell.ext.get_mut(slot).and_then(Option::as_mut) else {
             return Err("dock: the app is not running".into());
         };
@@ -148,7 +148,7 @@ impl SystemService for DockService {
     /// request), so the icon settles on its own and the dock is drawn once more.
     fn tick(&mut self, shell: &mut Shell, t: f64) -> Vec<Event> {
         let now = t / 1000.0;
-        let front = shell.desk.as_ref().and_then(|d| d.front()).map(|w| w.app);
+        let front = shell.desk.as_ref().and_then(|d| d.front()).map(|w| w.app.parent());
         let mut ended = false;
         for (slot, host) in shell.ext.iter_mut().enumerate() {
             let Some(host) = host else { continue };

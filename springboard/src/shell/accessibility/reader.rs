@@ -12,12 +12,12 @@
 //! Every move speaks the element as `kind, name, value` (`button, Close`) through the announcement queue, so the banner shows
 //! it and the AT-SPI bridge speaks it, and a focus ring is drawn around it. The model (`Reader`, `speech`, `page_elements`)
 //! is pure and tested on the host; the `Shell` methods at the bottom are the glue. Not walked: the Dock (its icons move with
-//! magnification and are not laid out as a list yet), a Settings sidebar in a split window, rows scrolled out of view, and
+//! magnification and are not laid out as a list yet), rows scrolled out of view, and
 //! the built-in apps. See docs/parity/wire6-a11y-roles.md.
 
 use super::earcons::{Earcon, ReaderEvent};
 use super::tree::{add_app_tree, AxState};
-use super::walk::{self, SETTINGS};
+use super::walk::{self, SETTINGS, SETTINGS_SIDEBAR};
 #[cfg(feature = "desktop-wayland")]
 use super::walk::{BAR, BAR_ROW};
 use super::AccessibilitySettings;
@@ -26,7 +26,7 @@ use crate::shell::axmap::item_role;
 use crate::shell::desk::full_size;
 #[cfg(feature = "desktop-wayland")]
 use crate::shell::desktop_bar::menu_spans;
-use crate::shell::list::Spec;
+use crate::shell::list::{Accessory, Spec};
 use crate::shell::ui::LINK;
 use crate::shell::{AppId, Effect, Event, Shell};
 use bifrost_proto::AnnouncePriority;
@@ -52,6 +52,10 @@ pub struct Reader {
     silent: bool,
     /// earcons asked for since the shell last took them
     earcons: Vec<Earcon>,
+    /// the screen reader mode seen by the last `note_mode` (None before the first, so a start is not a toggle)
+    mode: Option<bool>,
+    /// Switch Scanning: the time the highlight steps next (None while scanning is off or has only just started)
+    scan_at: Option<f64>,
 }
 
 impl Reader {
@@ -114,6 +118,38 @@ impl Reader {
         std::mem::take(&mut self.earcons)
     }
 
+    /// Records whether the screen reader is on this frame. A change after the first call queues the mode cue.
+    pub fn note_mode(&mut self, on: bool) {
+        match self.mode {
+            Some(prev) if prev == on => {}
+            Some(_) => {
+                self.mode = Some(on);
+                self.cue(ReaderEvent::ModeToggled(on));
+            }
+            None => self.mode = Some(on),
+        }
+    }
+
+    /// Switch Scanning: whether the highlight steps on now. With `on` false the timer is dropped; the first call after that
+    /// starts it (and does not step), then every `interval_ms` of `now` gives one step.
+    pub fn scan_due(&mut self, on: bool, now: f64, interval_ms: f64) -> bool {
+        if !on {
+            self.scan_at = None;
+            return false;
+        }
+        match self.scan_at {
+            None => {
+                self.scan_at = Some(now + interval_ms);
+                false
+            }
+            Some(at) if now >= at => {
+                self.scan_at = Some(now + interval_ms);
+                true
+            }
+            Some(_) => false,
+        }
+    }
+
     /// The rotor index the cursor walks.
     pub fn rotor(&self) -> usize {
         self.rotor
@@ -142,7 +178,14 @@ pub fn page_elements(spec: &Spec, rect: &dyn Fn(usize, usize) -> Option<Rect>) -
     let mut map = Map::new();
     for (g, group) in spec.groups.iter().enumerate() {
         for (i, item) in group.items.iter().enumerate() {
-            let (role, value) = item_role(item);
+            let (mut role, mut value) = item_role(item);
+            // a trailing pop-up button is read as one (its chosen label is the value), not as a list choice
+            if item.accessory == Accessory::Popup {
+                role = "popup";
+                if let Some(p) = item.popup.as_ref().and_then(|p| p.choices.get(p.selected)) {
+                    value = p.clone();
+                }
+            }
             let enabled = item.tappable() || role == "text";
             map.add("settings", role, &item.label, &value, enabled, rect(g, i), "");
         }
@@ -156,23 +199,66 @@ impl Shell {
         self.settings.as_ref().map_or_else(|| AccessibilitySettings::load(&self.prefs).screen_reader, |st| st.accessibility().screen_reader)
     }
 
+    /// Whether Switch Control is on (Settings > Accessibility > Touch > Switch Control).
+    pub(in crate::shell) fn switch_control_on(&self) -> bool {
+        self.settings.as_ref().map_or_else(|| AccessibilitySettings::load(&self.prefs).switch_control, |st| st.accessibility().switch_control)
+    }
+
+    /// Whether the keyboard cursor and its ring are in use: the screen reader is on, or Switch Control steps through the screen
+    /// with the same cursor (and selects with the same press), without the speech.
+    pub(in crate::shell) fn reader_active(&self) -> bool {
+        self.screen_reader_on() || self.switch_control_on()
+    }
+
     /// The rows of the front Settings page (window-local points) and the window-local origin of its content, when the front
     /// window is Settings.
+    /// The rows of the front Settings page (screen pixels, before the window origin is added) and the screen origin of the
+    /// page pane's content, when the front window is Settings. In the split layout the pane starts right of the sidebar, so a
+    /// row's window-local position is the origin plus its pane position.
     fn settings_page(&self) -> Option<(Vec<Element>, (f32, f32))> {
         let desk = self.desk.as_ref()?;
         let front = desk.front()?;
         if front.app != AppId::Settings {
             return None;
         }
-        let list = self.settings.as_ref()?.list()?;
+        let st = self.settings.as_ref()?;
+        let list = st.list()?;
         let ui = &self.ui;
         let title = if full_size(front.app) { 0 } else { self.desk_metrics().title };
-        let origin = (front.r.x as f32, (front.r.y + title) as f32);
+        let origin = (front.r.x as f32 + st.pane_x(), (front.r.y + title) as f32);
         let els = page_elements(list.spec(), &|g, i| {
             let (x, y, w, h) = list.row_rect(ui, g, i);
             Some(Rect { x, y, w, h })
         });
         Some((els, origin))
+    }
+
+    /// The window origin (screen pixels) Settings rows are placed from: the window's content, below a title bar that is not
+    /// full-size.
+    fn settings_origin(&self) -> Option<(f32, f32)> {
+        let front = self.desk.as_ref()?.front()?;
+        let title = if full_size(front.app) { 0 } else { self.desk_metrics().title };
+        Some((front.r.x as f32, (front.r.y + title) as f32))
+    }
+
+    /// The rows of the split layout's sidebar (screen pixels), when the front window is Settings. Their addresses sit under
+    /// `settings-sidebar/`, so a sidebar row and a page row of the same name stay apart.
+    fn settings_sidebar(&self) -> Vec<Element> {
+        let (Some((ox, oy)), Some(front)) = (self.settings_origin(), self.desk.as_ref().and_then(|d| d.front())) else { return Vec::new() };
+        if front.app != AppId::Settings {
+            return Vec::new();
+        }
+        let Some(list) = self.settings.as_ref().and_then(|st| st.sidebar_list()) else { return Vec::new() };
+        let ui = &self.ui;
+        let mut els = page_elements(list.spec(), &|g, i| {
+            let (x, y, w, h) = list.row_rect(ui, g, i);
+            Some(Rect { x: x + ox, y: y + oy, w, h })
+        });
+        for e in &mut els {
+            e.address = e.address.replacen("settings/", "settings-sidebar/", 1);
+            e.handle = SETTINGS_SIDEBAR.to_string();
+        }
+        els
     }
 
     /// The elements an app window declared, with bounds in screen pixels: `origin` is the window's body and a point is
@@ -222,9 +308,20 @@ impl Shell {
             }
         }
         }
+        // every window of the front app is a window of that app for the reader, its extra windows included
+        if let Some(front) = desk.front() {
+            let app = front.app.parent();
+            for w in desk.wins.iter().filter(|w| w.app.parent() == app && !w.minimized) {
+                let name = self.window_menu_name(w.app);
+                let bounds = Rect { x: w.r.x as f32, y: w.r.y as f32, w: w.r.w as f32, h: w.r.h as f32 };
+                let id = crate::shell::desk::win_id(w.app).unwrap_or(0);
+                out.push(walk::window(id, &name, bounds));
+            }
+        }
         if let Some(front) = desk.front() {
             match front.app {
                 AppId::Settings => {
+                    out.extend(self.settings_sidebar());
                     if let Some((els, (ox, oy))) = self.settings_page() {
                         for mut e in els {
                             e.bounds = e.bounds.map(|b| Rect { x: b.x + ox, y: b.y + oy, ..b });
@@ -244,12 +341,28 @@ impl Shell {
         out
     }
 
+    /// Whether Switch Scanning is on (Settings > Accessibility > Switch Scanning).
+    pub(in crate::shell) fn switch_scan_on(&self) -> bool {
+        self.settings.as_ref().map_or_else(|| AccessibilitySettings::load(&self.prefs).switch_scan, |st| st.accessibility().switch_scan)
+    }
+
+    /// The scan clock, once per tick: while Switch Scanning is on and the screen is in use, the highlight steps to the next
+    /// element every `SWITCH_SCAN_MS`, speaking it as a keyboard move does. A press of Ctrl+Alt+Space picks it.
+    pub(in crate::shell) fn switch_scan_tick(&mut self, t: f64) {
+        let on = self.switch_scan_on() && self.screen_on && !self.is_locked();
+        if self.reader.scan_due(on, t, super::SWITCH_SCAN_MS) {
+            self.reader_step(true, t);
+        }
+    }
+
     /// Ctrl+Alt+Right or Left: moves the screen reader's cursor within the current rotor and speaks the element it lands on.
     pub(in crate::shell) fn reader_step(&mut self, forward: bool, _t: f64) -> Vec<Effect> {
         let els = self.reader_walk();
         let rotor = self.reader.rotor();
         if let Some(e) = self.reader.step_in(&els, rotor, forward) {
-            self.announce.post(&walk::speech(e), AnnouncePriority::High);
+            let said = walk::speech(e);
+            self.braille.show(&said);
+            self.announce.post(&said, AnnouncePriority::High);
         }
         self.dirty = true;
         Vec::new()
@@ -258,6 +371,7 @@ impl Shell {
     /// Ctrl+Alt+Down (true) or Up (false): picks the next or previous rotor and speaks its name.
     pub(in crate::shell) fn reader_rotor(&mut self, forward: bool, _t: f64) -> Vec<Effect> {
         let rotor = self.reader.cycle_rotor(forward);
+        self.braille.show(walk::rotor_name(rotor));
         self.announce.post(walk::rotor_name(rotor), AnnouncePriority::High);
         self.dirty = true;
         Vec::new()
@@ -272,8 +386,18 @@ impl Shell {
             self.announce.post(&walk::speech(&el), AnnouncePriority::High);
             return Vec::new();
         }
+        let fx = self.press_walked(&el, t);
+        self.reader.cue(ReaderEvent::Activated);
+        self.dirty = true;
+        fx
+    }
+
+    /// Presses one element of `reader_walk` the way a tap on it would: opens a menu title, runs a menu row, taps a Settings
+    /// row, or presses an app element through the app's own tap path. The screen reader's cursor and Voice Control's numbered
+    /// labels both press through here. A problem is spoken, not raised.
+    pub(in crate::shell) fn press_walked(&mut self, el: &Element, t: f64) -> Vec<Effect> {
         let centre = el.bounds.map(|b| (b.x + b.w / 2.0, b.y + b.h / 2.0));
-        let fx = match (el.handle.as_str(), centre) {
+        match (el.handle.as_str(), centre) {
             #[cfg(feature = "desktop-wayland")]
             (BAR, Some((x, y))) => self.desktop_bar_event(Event::Down(x, y), t).unwrap_or_default(),
             #[cfg(feature = "desktop-wayland")]
@@ -282,8 +406,21 @@ impl Shell {
                 fx.extend(self.desktop_bar_event(Event::Up(x, y), t + 0.04).unwrap_or_default());
                 fx
             }
+            (SETTINGS_SIDEBAR, Some((x, y))) => {
+                let (ox, oy) = self.settings_origin().unwrap_or((0.0, 0.0));
+                let ui = &self.ui;
+                match self.settings.as_mut() {
+                    Some(st) => {
+                        let mut fx = st.touch(ui, &mut self.prefs, Event::Down(x - ox, y - oy), t);
+                        fx.extend(st.touch(ui, &mut self.prefs, Event::Up(x - ox, y - oy), t + 0.01));
+                        fx
+                    }
+                    None => Vec::new(),
+                }
+            }
             (SETTINGS, Some((x, y))) => {
-                let (ox, oy) = self.settings_page().map_or((0.0, 0.0), |(_, o)| o);
+                // the touch is window-local, sidebar included: the page pane's own offset is the list's to remove
+                let (ox, oy) = self.settings_origin().unwrap_or((0.0, 0.0));
                 let ui = &self.ui;
                 match self.settings.as_mut() {
                     Some(st) => {
@@ -302,10 +439,7 @@ impl Shell {
                 }
             },
             _ => Vec::new(),
-        };
-        self.reader.cue(ReaderEvent::Activated);
-        self.dirty = true;
-        fx
+        }
     }
 
     /// Whether the frame must repaint everything under the focus ring.
@@ -316,7 +450,7 @@ impl Shell {
     /// Draws the focus ring around the cursor's element when the screen reader is on.
     pub(in crate::shell) fn draw_reader(&mut self, s: &mut Surface) {
         let mut drawn = false;
-        if self.screen_reader_on() {
+        if self.reader_active() || self.switch_scan_on() {
             let els = self.reader_walk();
             if let Some(b) = self.reader.focused(&els).and_then(|e| e.bounds) {
                 let t = self.ui.pt(RING_PT);
@@ -346,6 +480,19 @@ mod tests {
             el("settings/c", "toggle", "C", "on", true),
             el("settings/d", "page", "D", "", true),
         ]
+    }
+
+    #[test]
+    fn scanning_steps_on_the_interval_and_starts_over_when_switched_off() {
+        let mut r = Reader::default();
+        assert!(!r.scan_due(false, 0.0, 1500.0), "off never steps");
+        assert!(!r.scan_due(true, 100.0, 1500.0), "the first call only starts the timer");
+        assert!(!r.scan_due(true, 1599.0, 1500.0), "the interval is not up");
+        assert!(r.scan_due(true, 1600.0, 1500.0), "the interval is up");
+        assert!(!r.scan_due(true, 2000.0, 1500.0), "the next step is a full interval later");
+        assert!(r.scan_due(true, 3100.0, 1500.0));
+        assert!(!r.scan_due(false, 3200.0, 1500.0));
+        assert!(!r.scan_due(true, 9000.0, 1500.0), "switching back on starts the timer again instead of stepping at once");
     }
 
     #[test]
@@ -440,6 +587,39 @@ mod tests {
         r.set_sounds(true);
         r.step(&els, true);
         assert_eq!(r.take_earcons(), vec![Earcon::Focus]);
+    }
+
+    #[test]
+    fn switching_the_reader_on_or_off_queues_its_mode_cue_but_starting_does_not() {
+        let mut r = Reader::default();
+        r.note_mode(false);
+        assert!(r.take_earcons().is_empty(), "the first state is not a change");
+        r.note_mode(true);
+        assert_eq!(r.take_earcons(), vec![Earcon::ModeOn]);
+        r.note_mode(true);
+        assert!(r.take_earcons().is_empty(), "the same mode again is not a change");
+        r.note_mode(false);
+        assert_eq!(r.take_earcons(), vec![Earcon::ModeOff]);
+    }
+
+    #[test]
+    fn a_pop_up_row_is_read_as_a_pop_up_button_with_its_choice() {
+        use crate::shell::list::{Group, Item, Spec};
+        use crate::shell::pages::{Action, Pick, PageId};
+        let spec = Spec {
+            id: PageId::Accessibility,
+            title: "Accessibility".into(),
+            large: false,
+            groups: vec![Group::new(vec![
+                Item::new("Speech").popup(vec!["System Default".into(), "Icelandic".into()], 1, Action::Pick(Pick::SpeechVoice(3))),
+                Item::new("Display Zoom").link(PageId::DisplayZoom),
+            ])],
+        };
+        let els = page_elements(&spec, &|_: usize, _: usize| None::<Rect>);
+        assert_eq!(els[0].role, "popup");
+        assert_eq!(speech(&els[0]), "pop-up button, Speech, Icelandic", "the chosen label is the value");
+        assert!(els[0].enabled, "a pop-up row opens its menu, so it can be pressed");
+        assert_eq!(els[1].role, "page", "a row that opens a page keeps its button role");
     }
 
     #[test]

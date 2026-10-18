@@ -3,19 +3,21 @@
 //! row does. Rendering and hit testing live in `list`.
 
 use super::accessibility::shortcut::Feature;
-use super::accessibility::{AccessibilitySettings, HOLD_MS, ZOOMS};
+use super::accessibility::{AccessibilitySettings, HOLD_MS, SPEECH_PITCHES, SPEECH_PUNCTUATION, SPEECH_RATES, SPEECH_VOICES, ZOOMS};
+use super::accessibility::dwell::DELAYS_MS as DWELL_MS;
+use super::slow_keys::DELAYS_MS as SLOW_MS;
 use super::battery::{self, Graph};
 use super::desktop_dock::Position;
 use super::icons::Icon;
 use super::row_glyphs::Glyph;
 use super::low_battery::last_charged;
 use super::list::{Accessory, Ends, Group, Item, Spec, Tint};
-use super::options::{speed_slider, Options, AUTO_LOCK, REQUIRE_AFTER, SYSTEM_SLEEP, ICON_SIZES, POWER_MODES, TEXT_SIZES, TRACKPAD_SECONDARY};
+use super::options::{speed_slider, Options, AUTO_LOCK, GAME_MODES, REQUIRE_AFTER, SYSTEM_SLEEP, ICON_SIZES, POWER_MODES, TEXT_SIZES, TRACKPAD_SECONDARY};
 use super::{Info, WifiAction};
 use bifrost_render::fontprefs::{FontRole, Installed};
 use bifrost_ui::capture_access::Media;
 use super::services::privacy_permissions::{self, Row};
-use super::services::display_services::{rate_label, RefreshChoice};
+use super::services::display_services::{rate_label, resolution_label, RefreshChoice};
 use crate::bare::bluetooth::{Cmd, State as BtState};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -49,12 +51,16 @@ pub enum PageId {
     FontPick(FontRole),
     Dictionary,
     Vpn,
+    /// Network > Firewall (desktop): the incoming connection choice for each app (see `firewall_sheet`)
+    Firewall,
     SoftwareUpdate,
     Backup,
     DateTime,
     Keyboard,
     /// Keyboard > Keyboards
     Keyboards,
+    /// Keyboard > Dictation: the on-device speech model, its consent and its removal
+    Dictation,
     /// Keyboard > Text Replacements: shortcuts that expand to a phrase
     TextReplacements,
     Language,
@@ -64,11 +70,15 @@ pub enum PageId {
     Display,
     /// Displays > Refresh Rate: Highest Available or one of the panel's rates (see `refresh_rate_page`)
     RefreshRate,
+    /// Displays > Resolution: Native or one of the sizes the panel offers (see `resolution_page`)
+    Resolution,
     NightShift,
     AutoLock,
     /// Lock Screen > Require Password: the grace after the display goes off (see `options::REQUIRE_AFTER`)
     RequirePassword,
     Energy,
+    /// Battery > Schedule: the repeating wake and power-on times (see `wake_page`)
+    WakeSchedule,
     HomeScreen,
     Battery,
     ControlCentre,
@@ -76,16 +86,25 @@ pub enum PageId {
     Accessibility,
     DisplayZoom,
     TouchHold,
+    /// Accessibility > Touch > Dwell Control: the delay before a resting pointer clicks (`a11y.dwell`)
+    DwellControl,
+    /// Accessibility > Keyboard > Slow Keys: how long a key must be held before it counts (`a11y.slow`)
+    SlowKeys,
     /// Accessibility › Accessibility Shortcut: the feature Option+Cmd+F5 switches
     AccessibilityShortcut,
+    /// Accessibility › Screen Reader › Speech: rate, pitch and voice
+    ScreenReaderSpeech,
     /// Display & Brightness › Interface Scale (desktop only)
     InterfaceScale,
     Appearance,
     Privacy,
+    Spotlight,
     /// Privacy › Analytics & Diagnostics
     Diagnostics,
     /// Privacy › App Permissions: which installed apps may use the camera, microphone or screen
     PrivacyPermissions,
+    /// Privacy › Location Services: the global switch, System location and each app (see `location_page::spec`)
+    LocationServices,
     Storage,
     /// Display & Brightness > Graphics (desktop): adapters and displays, read-only
     Graphics,
@@ -94,6 +113,8 @@ pub enum PageId {
     Passwords,
     /// Settings > Internet Accounts: the mail, calendar and contact accounts (see `internet_accounts_page`)
     InternetAccounts,
+    /// Settings > BifrOSt Account: the signed-in account, its devices and Sign Out (see `account_page`)
+    Account,
     Developer,
     ScreenTime,
     StDowntime,
@@ -111,10 +132,14 @@ pub enum PageId {
     HotCorners,
     /// Keyboard Shortcuts (desktop): the shortcuts the shell answers to
     Shortcuts,
+    /// Settings > Assistant: the assistant's switch, backend, history and per-app access to intents (`assistant_page`)
+    Assistant,
     /// Overview (desktop): how windows are grouped and when desktops switch
     Overview,
     /// Sharing (desktop): the computer name, the sharing services, Nearby Share and AirPlay & Handoff
     Sharing,
+    /// General > Startup Disk (desktop): the systems the firmware can start and the one it starts (see `startup_disk_page`)
+    StartupDisk,
     /// Print & Scan (desktop): the printers the printing service knows, the default one, and adding one (`print_scan_page`)
     PrintScan,
     /// Lock Screen: the passcode, inactivity lock and screen saver in one place (links to their own pages)
@@ -133,12 +158,16 @@ pub enum PageId {
     GroupDetail,
     /// Keyboard > Modifier Keys: what Caps Lock, Control, Option and Command do (see `kb_input`)
     ModifierKeys,
+    /// Settings > one app's panes: the installed app at this slot (see `settings_panes::spec`)
+    AppPanes(usize),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Toggle {
     /// Settings › Menu Bar: shows or hides one menu extra
     MenuExtra(super::options::MenuExtra),
+    /// Settings › App Permissions › Contacts: the n-th installed app may read contacts
+    Contacts(usize),
     AutoUpdate,
     BackupBeforeUpdate,
     Airplane,
@@ -173,6 +202,24 @@ pub enum Toggle {
     GuidedAccess,
     /// Accessibility > Screen Reader (`a11y_screen_reader`)
     ScreenReader,
+    /// Accessibility > Switch Scanning (`a11y_switch_scan`)
+    SwitchScan,
+    /// Accessibility > Voice Control (`voice_control`)
+    VoiceControl,
+    /// Accessibility > Keyboard > Sticky Keys (`a11y_sticky_keys`)
+    StickyKeys,
+    /// Accessibility > Keyboard > Mouse Keys: the keypad moves and clicks the pointer (`a11y.mouse_keys`)
+    MouseKeys,
+    /// Accessibility > Touch > Switch Control: the keyboard steps a highlight through the screen and selects (`a11y.switch_control`)
+    SwitchControl,
+    /// Accessibility > Touch > Voice Control: spoken commands press what they name (`a11y.voice_control`)
+    VoiceControl,
+    /// Accessibility > Motion > Show Vehicle Motion Cues: dots at the screen edge follow the accelerometer (`a11y.motion_cues`)
+    MotionCues,
+    /// Accessibility > Hearing > Live Captions: captions for the sound the computer plays (`a11y_live_captions`)
+    LiveCaptions,
+    /// Accessibility > Switch Control: the switch keys scan a panel of controls (`a11y.switch_control`)
+    SwitchControl,
     AutoTime,
     LowPower,
     BatteryPercent,
@@ -195,10 +242,17 @@ pub enum Toggle {
     /// Developer: GPU frames flip straight to the display (next start)
     GpuScanout,
     Handoff,
+    /// Continuity: share copies between the account's devices (sealed; off by default)
+    UniversalClipboard,
     PipAuto,
+    /// Displays > Automatically Adjust Brightness: the ambient light sensor drives the panel (needs a sensor)
+    AutoBrightness,
     BgRefresh,
+    SuspendBackground,
     FourFinger,
     CornerSwipe,
+    /// Settings > Spotlight: a kind of result Search lists, switched on or off
+    SpotlightCategory(super::spotlight_scope::Category),
     /// App Permissions: the app at this index (of `apphost::installed()`) may use this media type
     Permission(Media, usize),
     /// App Permissions > Location: the app at this index may use location while it is in use
@@ -223,8 +277,14 @@ pub enum Toggle {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Pick {
+    /// Privacy > Allow Apps From: the index into `launch_gate::SETTINGS`
+    AllowAppsFrom(usize),
     /// Mouse > Secondary Click: index into `mouse_page::SECONDARY_BUTTON`
     MouseSecondary(usize),
+    /// Settings > Spotlight > Privacy: stop excluding the folder at this index
+    SpotlightExclude(usize),
+    /// Settings > Backup > Backup Destination: the index into `backup_page::destination_choices`
+    BackupDestination(usize),
     /// Keyboard > Modifier Keys: the modifier key (index into `kb_input::REMAPPABLE`) sends the choice (index into `kb_input::REMAP_TARGETS`)
     Remap(usize, usize),
     /// Settings > Sound: the n-th listed output / input becomes the default
@@ -235,10 +295,21 @@ pub enum Pick {
     SystemSleep(usize),
     IconSize(usize),
     PowerMode(usize),
+    GameMode(usize),
     DisplayZoom(usize),
     TouchHold(usize),
+    /// Accessibility > Touch > Dwell Control: the n-th of `dwell::DELAYS_MS`
+    Dwell(usize),
+    /// Accessibility > Keyboard > Slow Keys: the n-th of `slow_keys::DELAYS_MS`
+    Slow(usize),
     /// Accessibility > Accessibility Shortcut: the n-th of `accessibility::SHORTCUT_CHOICES` (0 is None)
     AccessibilityShortcut(usize),
+    /// Screen Reader > Speech: the n-th of `accessibility::SPEECH_RATES`, `SPEECH_PITCHES`, `SPEECH_VOICES`
+    SpeechRate(usize),
+    SpeechPitch(usize),
+    SpeechVoice(usize),
+    /// Screen Reader > Speech > Punctuation: an index into `SPEECH_PUNCTUATION`
+    SpeechPunctuation(usize),
     /// 0 is Auto, n the n-th of `layout::SCALE_CHOICES`
     InterfaceScale(usize),
     /// Displays > Appearance: 0 Light, 1 Dark, 2 Auto
@@ -247,6 +318,8 @@ pub enum Pick {
     Accent(usize),
     /// Appearance > Liquid Glass style: 0 Clear, 1 Tinted
     GlassStyle(usize),
+    /// Appearance > Icon & widget style: the index into `ICON_STYLES` (0 Default, 1 Dark, 2 Tinted)
+    IconStyle(usize),
     Nearby(usize),
     /// Language & Region > Preferred Language: the index into `bifrost_ui::region::LANGUAGES`
     Language(usize),
@@ -278,6 +351,8 @@ pub enum Pick {
     TrackpadSecondary(usize),
     /// Displays > Refresh Rate: 0 is Highest Available, n the (n-1)th rate the panel offers (see `services::display_services::choice_at`)
     RefreshRate(usize),
+    /// Displays > Resolution: 0 is Native, n the (n-1)th size the panel offers (see `services::display_services::resolution_at`)
+    Resolution(usize),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -312,6 +387,8 @@ pub enum Slider {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Command {
     ResetSettings,
+    /// Transfer or Reset › Erase All Content and Settings: staged, done at the next start (`bifrost_core::erase_content`)
+    EraseContent,
     Restart,
     /// power the computer off (General › Shut Down)
     ShutDown,
@@ -328,6 +405,8 @@ pub enum Command {
     RootedOff,
     BackUpNow,
     RestoreBackup,
+    /// delete every backup archive (Backup page); the data itself is kept
+    DeleteBackups,
     CheckUpdate,
     DownloadUpdate,
     /// restarts the shell so boot.sh promotes the staged binary
@@ -337,6 +416,12 @@ pub enum Command {
     /// Analytics & Diagnostics: upload the bundle to the update server
     ShareDiagnostics,
     DeleteCrashLogs,
+    /// Keyboard > Dictation: the person agrees to the model download (consent is recorded first)
+    DownloadSpeechModel,
+    /// Keyboard > Dictation: removes the model and withdraws consent
+    RemoveSpeechModel,
+    /// Storage > Applications: removes one package with pacman, after the confirmation alert
+    RemovePackage(String),
     /// Users & Groups: delete an account or a group
     Account(super::users_page::Danger),
     /// a failed change, shown as an alert with OK (its text is the reason)
@@ -368,6 +453,12 @@ pub enum Action {
     /// a notification setting: DND schedule rows or a per-app mute
     Notify(super::notify_page::NotifyEdit),
     Night(super::night_shift::NightEdit),
+    /// a Battery > Schedule row (see `wake_page::WakeEdit`)
+    Wake(super::wake_page::WakeEdit),
+    /// Network > Diagnose: run the connection probes on a worker thread (see `net_diagnose_page`)
+    NetDiagnose,
+    /// Privacy > Security: let the program that was blocked open (see `launch_gate`)
+    OpenAnyway,
     /// a Screen Time row: range, limits, Downtime, allowed apps, its passcode
     ScreenTime(super::screentime::page::StEdit),
     /// opens the "Other Network" sheet
@@ -384,10 +475,18 @@ pub enum Action {
     DefaultApp(usize, String),
     /// Login Items: stop starting this app (id) at login
     LoginItemRemove(String),
+    /// Network > Firewall: allow or block this app's (id) incoming connections, or forget the choice
+    Firewall(String, super::firewall_sheet::Edit),
     /// a tap on a Settings > Passwords row (see `passwords_page::Act`)
     Passwords(super::passwords_page::Act),
     /// a tap on a Settings > Internet Accounts row (see `internet_accounts_page::Act`)
     InternetAccounts(super::internet_accounts_page::Act),
+    /// a tap on the Settings > BifrOSt Account page (see `account_page::Act`)
+    Account(super::account_page::Act),
+    /// Bluetooth: type the PIN or passkey the device asked for while pairing (`addr`)
+    BluetoothPrompt { addr: String, passkey: bool },
+    /// VPN: bring the NetworkManager connection `name` up (`up`) or down
+    Vpn { name: String, up: bool },
     /// Login Items: allow this pending app (id) to open at login
     LoginItemApprove(String),
     /// Game Controllers: change one button's output, or restore a controller's defaults
@@ -396,14 +495,26 @@ pub enum Action {
     LoginItemMove(String),
     /// Login Items & Extensions: turn an app's background agent on or off (the switch in ALLOW IN THE BACKGROUND)
     BackgroundAgentToggle(String),
+    /// Login Items > Extensions: turn the extension with this key (`login_items_page::extension_key`) on or off
+    ExtensionToggle(String),
+    /// Background App Refresh: turn one app's refresh on or off (the APPS switches under General > Background App Refresh)
+    RefreshToggle(String),
     /// Fonts: draw `role` with this font file from now on (None is the default)
     Font(FontRole, Option<String>),
     /// Users & Groups: add, promote, set a password, edit a group (see `users_page`)
     Users(super::users_page::Edit),
     /// Sharing: change the computer name or switch a sharing service (see `sharing_page`)
     Sharing(super::sharing_page::Edit),
+    /// Startup Disk: choose the system to start from, after an administrator approves (see `startup_disk_page`)
+    StartupDisk(super::startup_disk_page::Edit),
     /// Print & Scan: make a printer the default, or add one (see `print_scan_page`)
     PrintScan(super::print_scan_page::Edit),
+    /// Location Services: the switches, the place and the apps' access (see `location_page::Edit`)
+    Location(super::location_page::Edit),
+    /// Settings > Assistant: a switch, the backend, or an app's access to its intents (see `assistant_page::Edit`)
+    Assistant(super::assistant_page::Edit),
+    /// Settings > an app's pane: ask the app in this slot to open the pane with this id (`settings_panes::open`)
+    AppPane(usize, String),
 }
 
 /// Compile-time identity of this build (build.rs supplies the git fields).
@@ -436,18 +547,24 @@ pub struct Model<'a> {
     pub update_badge: bool,
     /// the desktop dock as the shell holds it (Desktop & Dock page)
     pub dock: super::desktop_dock::Preferences,
+    /// the value of the BifrOSt Account row at the top of Settings (`account_page::label`)
+    pub account: &'a str,
     /// the Default Apps page: categories, candidates and the current default
     pub defaults: &'a [super::defaultapps::CategoryView],
     /// the Login Items page: (app id, name) of each login item
     pub login_items: &'a [(String, String)],
     /// the Login Items page: (app id, name) of each registration waiting for approval
     pub login_pending: &'a [(String, String)],
+    /// the Firewall page: each app with a remembered incoming connection choice
+    pub firewall: &'a [super::firewall_sheet::FirewallView],
     /// the background agents and app extensions of the Login Items & Extensions page
     pub ext: &'a super::login_items_page::LoginExtensions,
     /// the Fonts pages: each role's default and override, and the font library
     pub fonts: &'a FontsView,
     /// Displays > Refresh Rate: the choice kept in the display-refresh file (Highest Available when missing)
     pub refresh: RefreshChoice,
+    /// Displays > Resolution: the size chosen (None is Native), kept in the display-resolution file
+    pub resolution: Option<(u32, u32)>,
     /// Settings > Sound: the device lists from the audio object model
     pub sound: &'a super::sound_page::SoundView,
     /// the Sharing page: the computer name and the service states (read off the UI thread, see `settings_load`)
@@ -463,7 +580,7 @@ pub struct Model<'a> {
 /// The Sharing page before its first read lands.
 /// The Print & Scan page before its first read lands.
 /// The Users & Groups pages before their first read lands.
-pub static NO_USERS: super::users_page::View = super::users_page::View { users: Vec::new(), groups: Vec::new(), me: String::new() };
+pub static NO_USERS: super::users_page::View = super::users_page::View { users: Vec::new(), groups: Vec::new(), me: String::new(), limits: bifrost_ui::account_policy::PolicyTable::empty(), limits_damaged: false };
 
 /// Settings > Fonts as the page shows it, indexed by `FontRole::index`.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -560,6 +677,14 @@ fn bluetooth_spec(m: &Model, page: impl Fn(&str, bool, Vec<Group>) -> Spec) -> S
         return page("Bluetooth", false, groups);
     }
     if bt.on() {
+        if let Some(p) = &bt.prompt {
+            let label = bt.device(&p.addr).map_or(p.addr.as_str(), |d| d.label());
+            let passkey = p.method == bifrost_core::bt_pairing::PairingMethod::Passkey;
+            let ask = Item::new(format!("Enter the {} for {label}", if passkey { "passkey" } else { "PIN" }))
+                .tint(Tint::Blue)
+                .action(Action::BluetoothPrompt { addr: p.addr.clone(), passkey });
+            groups.push(Group::new(vec![ask]).footer("The device is waiting for this code to finish pairing."));
+        }
         let note = |addr: &str, connected: bool| match (bt.busy.as_deref() == Some(addr), connected) {
             (true, _) => "Connecting…",
             (_, true) => "Connected",
@@ -609,11 +734,12 @@ const KEYWORDS: &[(&str, &str)] = &[
     ("ethernet", "wired cable lan network"),
     ("bluetooth", "wireless devices pair headphones speaker mouse keyboard"),
     ("vpn", "tunnel private network"),
+    ("firewall", "incoming connections block allow ports listening network security"),
     ("airplane mode", "flight offline wireless radio"),
     ("display & brightness", "screen monitor brightness resolution scale night shift text size"),
     ("displays", "screen monitor brightness resolution scale appearance"),
     ("appearance", "dark light mode theme accent color"),
-    ("wallpaper", "background desktop picture image"),
+    ("wallpaper", "background desktop picture image animated live dynamic time of day drift waves dither"),
     ("screen saver", "idle screen saver slideshow"),
     ("sounds", "sound volume alert audio output input speaker microphone"),
     ("sound", "volume alert audio output input speaker microphone"),
@@ -622,6 +748,9 @@ const KEYWORDS: &[(&str, &str)] = &[
     ("notifications", "alerts banners badges sounds do not disturb"),
     ("accessibility", "zoom magnifier voiceover text size contrast reduce motion hearing screen reader speech spoken transparency animation shortcut pointer cursor switch scanning flashing lights vision touch"),
     ("assistivetouch", "accessibility touch pointer hold"),
+    ("dwellcontrol", "accessibility dwell click pointer rest hover"),
+    ("slowkeys", "accessibility keyboard acceptance hold delay"),
+    ("mousekeys", "accessibility keypad numbers pointer move click"),
     ("battery", "power charge energy low power"),
     ("energy", "power battery sleep display"),
     ("about", "name version serial model build computer"),
@@ -693,6 +822,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
             "Settings",
             true,
             vec![
+                Group::new(vec![Item::new("BifrOSt Account").value(m.account).link(PageId::Account)]),
                 Group::new(vec![
                     Item::new("Airplane Mode").icon(Icon::Airplane).switch(m.airplane, Action::Toggle(Toggle::Airplane)),
                     if info.desktop_network.is_some() {Item::new("Network").icon(Icon::Wifi).value(if info.online {"Connected"}else{"Not Connected"}).link(PageId::Network)} else {Item::new("Wi-Fi").icon(Icon::Wifi).value(if m.wifi_on { info.wifi.as_str() } else { "Off" }).link(PageId::Wifi)},
@@ -714,6 +844,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                     Item::new("Sharing").icon(Icon::Wifi).link(PageId::Sharing),
                     Item::new("Print & Scan").icon(Icon::General).link(PageId::PrintScan),
                     Item::new("Keyboard Shortcuts").icon(Icon::General).link(PageId::Shortcuts),
+                    Item::new("Assistant").icon(Icon::General).link(PageId::Assistant),
                     Item::new("Trackpad").icon(Icon::General).link(PageId::Trackpad),
                     Item::new("Mouse").icon(Icon::General).link(PageId::Mouse),
                     Item::new("Users & Groups").icon(Icon::Passcode).link(PageId::Users),
@@ -722,6 +853,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                     Item::new("Screen Saver").icon(Icon::Wallpaper).value(if o.screensaver_minutes == 0 { "Never" } else { super::screensaver::saver_name(o.screensaver_module) }).link(PageId::ScreenSaver),
                     Item::new("Battery").icon(Icon::Battery).value(battery_level(info)).link(PageId::Battery),
                     Item::new("Privacy").icon(Icon::Privacy).link(PageId::Privacy),
+                    Item::new("Spotlight").icon(Icon::General).link(PageId::Spotlight),
                     Item::new("Lock Screen").icon(Icon::Passcode).link(PageId::LockScreen),
                     Item::new("Passcode").icon(Icon::Passcode).link(PageId::Passcode),
                     Item::new("Passwords").icon(Icon::Passcode).link(PageId::Passwords),
@@ -733,6 +865,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
         PageId::Network => desktop_network_page(info),
         PageId::Ethernet => desktop_ethernet_page(info),
         PageId::Vpn => desktop_vpn_page(info),
+        PageId::Firewall => super::firewall_sheet::page(m.firewall),
         PageId::Wifi if info.desktop_network.as_ref().is_some_and(|n|!n.wifi_available) => page("Wi-Fi",false,vec![Group::new(vec![Item::new("No Wi-Fi adapter").tint(Tint::Dim)]).footer("Connect a supported Wi-Fi adapter to browse and join wireless networks. Ethernet is managed separately in Network settings.")]),
         PageId::Wifi => {
             let current = info.current_ssid.as_deref().filter(|_| m.wifi_on);
@@ -757,6 +890,8 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                 if !info.saved.is_empty() {
                     groups.push(Group::new(vec![Item::new("Known Networks").value(info.saved.len().to_string()).link(PageId::KnownNetworks)]).footer("Known networks are joined automatically when they are in range."));
                 }
+                // the country whose radio rules the Wi-Fi chip follows; netd applies it from the same region setting
+                groups.push(Group::new(vec![Item::new("Country or Region").value(bifrost_ui::region::current().region_name())]).footer("The Wi-Fi chip uses the channels and power levels allowed in this country. It follows the Region in Language & Region."));
             }
             page("Wi-Fi", false, groups)
         }
@@ -822,6 +957,8 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                         ("Address", d.addr.clone()),
                         ("Type", d.type_label().to_string()),
                         ("Status", if d.connected { "Connected" } else { "Not Connected" }.to_string()),
+                        // the properties rows of the SDK's device model (`RemoteDevice::properties`) end with the signal
+                        ("Signal", d.rssi.map_or("Not reported".to_string(), |r| format!("{r} dBm"))),
                     ]),
                     // The service browser model: no service records are read yet, so the list is empty and says so.
                     Group::new(vec![Item::new("Services").value("None listed")]).header("SERVICES").footer(super::services::bluetooth_service::SERVICE_NOTE),
@@ -888,7 +1025,10 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                 vec![
                     Group::new(vec![Item::new("About").glyph(Glyph::About).link(PageId::About), Item::new("Software Update").glyph(Glyph::Update).badge(usize::from(m.update_badge)).link(PageId::SoftwareUpdate)]),
                     Group::new(vec![Item::new("Nearby Share").glyph(Glyph::Nearby).link(PageId::Nearby)]),
-                    Group::new(vec![Item::new("Storage").glyph(Glyph::Storage).link(PageId::Storage), Item::new("Background App Refresh").glyph(Glyph::Refresh).link(PageId::BackgroundRefresh)]),
+                    Group::new(GAME_MODES.iter().enumerate().map(|(i, (l, p))| Item::new(*l).check(*p == o.game_mode, Action::Pick(Pick::GameMode(i)))).collect())
+                        .header("GAME MODE")
+                        .footer("Automatic gives a full-screen game the whole processor while it is in front, and lets go a few seconds after the game leaves the front."),
+                    Group::new(vec![Item::new("Storage").glyph(Glyph::Storage).link(PageId::Storage), Item::new("Startup Disk").glyph(Glyph::Storage).link(PageId::StartupDisk), Item::new("Background App Refresh").glyph(Glyph::Refresh).link(PageId::BackgroundRefresh)]),
                     Group::new(vec![
                         Item::new("Date & Time").glyph(Glyph::DateTime).link(PageId::DateTime),
                         Item::new("Keyboard").glyph(Glyph::Keyboard).link(PageId::Keyboard),
@@ -943,6 +1083,8 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                 Group::new(vec![Item::new("Automatically AirPlay to TVs").value("Never")]),
                 Group::new(vec![Item::new("Handoff").switch(o.handoff, Action::Toggle(Toggle::Handoff))])
                     .footer("Handoff lets you start something on one device and instantly pick it up on other devices nearby."),
+                Group::new(vec![Item::new("Share Clipboard Between Your Devices").switch(o.universal_clipboard, Action::Toggle(Toggle::UniversalClipboard))])
+                    .footer("Copies of text, links and images are encrypted on this device before they leave it, and are kept in the cloud for two minutes at most. Passwords from password managers are never shared."),
             ],
         ),
         PageId::DefaultApps => page(
@@ -995,8 +1137,14 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
         PageId::BackgroundRefresh => page(
             "Background App Refresh",
             false,
-            vec![Group::new(vec![Item::new("Background App Refresh").switch(o.bg_refresh, Action::Toggle(Toggle::BgRefresh))])
-                .footer("Allow apps to refresh their content when on Wi-Fi in the background. Turning off apps may help preserve battery life.")],
+            {
+                let mut groups = vec![Group::new(vec![Item::new("Background App Refresh").switch(o.bg_refresh, Action::Toggle(Toggle::BgRefresh))])
+                    .footer("Allow apps to refresh their content in the background. Turning off apps may help preserve battery life. Refresh is paused in Low Power Mode.")];
+                groups.push(Group::new(vec![Item::new("Suspend Background Apps").switch(o.suspend_background, Action::Toggle(Toggle::SuspendBackground))])
+                    .footer("Stop apps that nothing shows after a short wait, and resume them when you return to them. A stopped app does no work, so it also stops playing audio in the background."));
+                groups.extend(super::login_items_page::refresh_group(m.ext));
+                groups
+            },
         ),
         PageId::Gestures => page(
             "Gestures",
@@ -1029,6 +1177,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
         PageId::Fonts => fonts_page(m),
         PageId::FontPick(role) => font_pick_page(m, role),
         PageId::RefreshRate => refresh_rate_page(m),
+        PageId::Resolution => resolution_page(m),
         PageId::Dictionary => page(
             "Dictionary",
             false,
@@ -1064,6 +1213,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                 Group::new(vec![
                     Item::new("Keyboards").value(super::kb_layouts::summary()).link(PageId::Keyboards),
                     Item::new("Text Replacements").value(super::services::text_services::replacements_summary()).link(PageId::TextReplacements),
+                    Item::new("Dictation").link(PageId::Dictation),
                 ]),
                 Group::new(vec![
                     Item::new("Auto-Capitalisation").switch(o.auto_caps, Action::Toggle(Toggle::AutoCaps)),
@@ -1110,6 +1260,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
             "Keyboards",
             false,
             vec![Group::new(super::kb_layouts::Layout::ALL.iter().enumerate().map(|(i, l)| Item::new(l.name()).switch(super::kb_layouts::is_enabled(*l), Action::Toggle(Toggle::Layout(i)))).collect()).footer("The globe key switches between enabled keyboards; touch and hold it to choose one."), Group::new(vec![Item::new("Remember Input Source for Each App").switch(super::kb_layouts::remembers(), Action::Toggle(Toggle::RememberInputSource))]).footer("Each app gets back the keyboard it had when it was last in front.")]),
+        PageId::Dictation => dictation_page(&super::services::recognizer::model_state(&super::services::recognizer::user_data_dir())),
         PageId::TextReplacements => {
             let mut items: Vec<Item> = super::services::text_services::replacement_rows()
                 .iter()
@@ -1181,6 +1332,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
             vec![
                 Group::new(vec![Item::new("Reset All Settings").tint(Tint::Blue).action(Action::Run(Command::ResetSettings))]).footer("Returns every setting, including the wallpaper, to its default. Saved Wi-Fi networks are kept."),
                 Group::new(vec![Item::new("Restart BifrOSt").tint(Tint::Blue).action(Action::Run(Command::Restart))]).footer("Quits the shell and starts it again."),
+                Group::new(vec![Item::new("Erase All Content and Settings").tint(Tint::Red).action(Action::Run(Command::EraseContent))]).footer("Removes your files, accounts, passwords and settings from this computer and starts again as new. The system stays installed."),
             ],
         ),
         PageId::Display => page(
@@ -1278,29 +1430,84 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                         Item::new("Dim Flashing Lights").switch(a.dim_flashing_lights, Action::Toggle(Toggle::DimFlashingLights)),
                         Item::new("Guided Access").switch(a.guided_access, Action::Toggle(Toggle::GuidedAccess)),
                         Item::new("Screen Reader").switch(a.screen_reader, Action::Toggle(Toggle::ScreenReader)),
+                        Item::new("Speech").value(SPEECH_VOICES[speech_voice_index(&a.speech_voice)].0).link(PageId::ScreenReaderSpeech),
                     ])
                     .header("VISION")
                     .footer("Screen Reader speaks the element under the keyboard cursor. Ctrl+Alt+Right and Ctrl+Alt+Left move it."),
+                    Group::new(vec![Item::new("Voice Control").switch(a.voice_control, Action::Toggle(Toggle::VoiceControl))])
+                        .header("SPEECH")
+                        .footer("Say \"show numbers\", \"show names\" or \"show grid\" to label what is on screen, then \"press 3\" or \"press Save\". Listening happens on this computer with the Dictation speech model, and your speech is never uploaded."),
+                    Group::new(vec![
+                        Item::new("Sticky Keys").switch(a.sticky_keys, Action::Toggle(Toggle::StickyKeys)),
+                        Item::new("Mouse Keys").switch(a.mouse_keys, Action::Toggle(Toggle::MouseKeys)),
+                        Item::new("Slow Keys").value(SLOW_MS[a.slow.min(SLOW_MS.len() - 1)].0).link(PageId::SlowKeys),
+                    ])
+                        .header("KEYBOARD")
+                        .footer("Press a modifier key once to hold it for the next key you press, or twice to hold it until you press it again. Slow Keys ignores a key that is not held long enough."),
+                    Group::new({
+                        let mut rows = vec![Item::new("Reduce Motion").switch(a.reduce_motion, Action::Toggle(Toggle::ReduceMotion))];
+                        if m.info.motion_sensor_supported {
+                            rows.push(Item::new("Show Vehicle Motion Cues").switch(a.motion_cues, Action::Toggle(Toggle::MotionCues)));
+                        }
+                        rows
+                    })
+                    Group::new(vec![Item::new("Live Captions").switch(a.live_captions, Action::Toggle(Toggle::LiveCaptions))])
+                        .header("HEARING")
+                        .footer("Shows what is said in the sound this computer plays as captions at the bottom of the screen. It uses the on-device speech model from Keyboard > Dictation, English only, and nothing leaves the computer."),
                     Group::new(vec![Item::new("Reduce Motion").switch(a.reduce_motion, Action::Toggle(Toggle::ReduceMotion))])
                         .header("MOTION")
-                        .footer("Opening, closing and switching apps cross-fade instead of zooming."),
+                        .footer(if m.info.motion_sensor_supported {
+                            "Opening, closing and switching apps cross-fade instead of zooming. Vehicle Motion Cues show dots at the edge of the screen that follow the motion of a moving vehicle."
+                        } else {
+                            "Opening, closing and switching apps cross-fade instead of zooming."
+                        }),
                     Group::new(vec![Item::slider(Ends::Cursor, a.cursor_size, Action::Slider(Slider::CursorSize))]).header("POINTER").footer("The pointer grows as you drag the slider."),
+                    Group::new(vec![Item::new("Switch Scanning").switch(a.switch_scan, Action::Toggle(Toggle::SwitchScan))])
+                        .header("SWITCH")
+                        .footer("A highlight steps through the screen by itself. Press Ctrl+Alt+Space to press the highlighted element, or Ctrl+Alt+Right to step by hand."),
                     Group::new(vec![Item::new("Accessibility Shortcut").value(shortcut_label(&a.shortcut)).link(PageId::AccessibilityShortcut)])
                         .header("SHORTCUT")
                         .footer("Press Option+Cmd+F5 to open a panel where you switch the chosen features on or off."),
                     Group::new(vec![
                         Item::new("AssistiveTouch").switch(o.assistive_touch, Action::Toggle(Toggle::AssistiveTouch)),
                         Item::new("Touch Accommodations").value(HOLD_MS[a.hold.min(HOLD_MS.len() - 1)].0).link(PageId::TouchHold),
+                        Item::new("Dwell Control").value(DWELL_MS[a.dwell.min(DWELL_MS.len() - 1)].0).link(PageId::DwellControl),
+                        Item::new("Switch Control").switch(a.switch_control, Action::Toggle(Toggle::SwitchControl)),
+                        Item::new("Voice Control").switch(a.voice_control, Action::Toggle(Toggle::VoiceControl)),
                     ])
                     .header("TOUCH")
+                    .footer("Use the floating button to reach Home, Control Centre, notifications and other controls. Switch Control highlights one item at a time: Ctrl+Alt+Right and Left move the highlight and Ctrl+Alt+Space selects it. Voice Control listens through the microphone on this computer, with the dictation model from Keyboard settings, and presses what you name: say \"press Save\"."),
                     .footer("Use the floating button to reach Home, Control Centre, notifications and other controls."),
+                    Group::new(vec![Item::new("Switch Control").switch(a.switch_control, Action::Toggle(Toggle::SwitchControl))])
+                        .header("SWITCH CONTROL")
+                        .footer("Press Space to move through a panel of controls and Enter to choose the highlighted one. Escape closes the panel."),
                 ],
             )
         }
+        PageId::ScreenReaderSpeech => page(
+            "Speech",
+            false,
+            vec![
+                Group::new(SPEECH_RATES.iter().enumerate().map(|(i, (l, wpm))| Item::new(*l).check(*wpm == m.a11y.speech_rate, Action::Pick(Pick::SpeechRate(i)))).collect())
+                    .header("SPEAKING RATE")
+                    .footer("How fast the screen reader speaks."),
+                Group::new(SPEECH_PITCHES.iter().enumerate().map(|(i, (l, p))| Item::new(*l).check(*p == m.a11y.speech_pitch, Action::Pick(Pick::SpeechPitch(i)))).collect())
+                    .header("PITCH")
+                    .footer("A higher pitch sounds lighter."),
+                Group::new(SPEECH_VOICES.iter().enumerate().map(|(i, (l, v))| Item::new(*l).check(*v == m.a11y.speech_voice, Action::Pick(Pick::SpeechVoice(i)))).collect())
+                    .header("VOICE")
+                    .footer("Needs the espeak-ng speech engine. Without it the screen reader stays silent and shows the text."),
+                Group::new(SPEECH_PUNCTUATION.iter().enumerate().map(|(i, (l, _))| Item::new(*l).check(i == m.a11y.speech_punctuation.min(SPEECH_PUNCTUATION.len() - 1), Action::Pick(Pick::SpeechPunctuation(i)))).collect())
+                    .header("PUNCTUATION")
+                    .footer("None only pauses at punctuation. Some names symbols such as @ and #. All names every mark."),
+            ],
+        ),
         PageId::DisplayZoom => page("Display Zoom", false, vec![Group::new(ZOOMS.iter().enumerate().map(|(i, (l, _))| Item::new(*l).check(i == m.a11y.zoom, Action::Pick(Pick::DisplayZoom(i)))).collect()).header("VIEW")]),
         PageId::Appearance => appearance_page(m, &DeskPrefs::default()),
         PageId::HotCorners => hot_corners_page(&DeskPrefs::default()),
         PageId::Shortcuts => shortcuts_page(o),
+        // the Settings window builds the live page from the saved settings (`settings::spec_for`)
+        PageId::Assistant => super::assistant_page::spec(&super::assistant::Settings::default(), &[]),
         PageId::Overview => overview_page(&DeskPrefs::default()),
         PageId::InterfaceScale => {
             let now = crate::layout::user_scale();
@@ -1320,6 +1527,20 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                 .header("HOLD DURATION")
                 .footer("A press must last this long before it counts as a touch and hold.")],
         ),
+        PageId::DwellControl => page(
+            "Dwell Control",
+            false,
+            vec![Group::new(DWELL_MS.iter().enumerate().map(|(i, (l, _))| Item::new(*l).check(i == m.a11y.dwell, Action::Pick(Pick::Dwell(i)))).collect())
+                .header("DWELL DELAY")
+                .footer("Rest the pointer in one place for this long and it clicks there, without a button press. Off turns Dwell Control off.")],
+        ),
+        PageId::SlowKeys => page(
+            "Slow Keys",
+            false,
+            vec![Group::new(SLOW_MS.iter().enumerate().map(|(i, (l, _))| Item::new(*l).check(i == m.a11y.slow, Action::Pick(Pick::Slow(i)))).collect())
+                .header("ACCEPTANCE DELAY")
+                .footer("A key must be held this long before it types. Off turns Slow Keys off.")],
+        ),
         PageId::AccessibilityShortcut => page(
             "Accessibility Shortcut",
             false,
@@ -1330,15 +1551,64 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
         // built by `game_controllers_page::spec`, which reads the live controllers
         PageId::GameControllers | PageId::GameController(_) => page("", false, vec![]),
         // built by `storage_page::spec`, which also knows the live state
-        PageId::Storage | PageId::Graphics | PageId::Passcode | PageId::Passwords | PageId::InternetAccounts | PageId::Developer | PageId::Backup | PageId::ScreenTime | PageId::StDowntime | PageId::StLimits | PageId::StAllowed => page("", false, vec![]),
+        PageId::Storage | PageId::Graphics | PageId::StartupDisk | PageId::Passcode | PageId::Passwords | PageId::InternetAccounts | PageId::Account | PageId::Developer | PageId::Backup | PageId::ScreenTime | PageId::StDowntime | PageId::StLimits | PageId::StAllowed => page("", false, vec![]),
         // built by `notify_page::spec`
-        PageId::Notifications | PageId::NotificationApp | PageId::NightShift => page("Notifications", false, vec![]),
-        PageId::Privacy => page("Privacy", false, vec![Group::new(vec![Item::new("App Permissions").link(PageId::PrivacyPermissions), Item::new("Analytics & Diagnostics").link(PageId::Diagnostics)]).footer("BifrOSt keeps everything on this computer and sends nothing anywhere unless you share a diagnostics report.")]),
+        PageId::Notifications | PageId::NotificationApp | PageId::NightShift | PageId::WakeSchedule => page("Notifications", false, vec![]),
+        PageId::Spotlight => {
+            use super::spotlight_scope::Category;
+            let scope = &o.spotlight;
+            let kinds = Category::ALL.into_iter().map(|c| Item::new(c.title()).switch(scope.allows(c), Action::Toggle(Toggle::SpotlightCategory(c)))).collect();
+            let folders: Vec<Item> = scope.excluded().iter().enumerate().map(|(i, f)| Item::new(f.display().to_string()).action(Action::Pick(Pick::SpotlightExclude(i)))).collect();
+            let folders = if folders.is_empty() { vec![Item::new("No Excluded Folders").tint(Tint::Dim)] } else { folders };
+            page(
+                "Spotlight",
+                false,
+                vec![
+                    Group::new(kinds).header("RESULTS").footer("Turn off a kind of result to keep it out of Search."),
+                    Group::new(folders).header("PRIVACY").footer("Search never lists files in an excluded folder or inside it. Tap a folder to include it again."),
+                ],
+            )
+        }
+        PageId::Privacy => page("Privacy", false, vec![Group::new(vec![Item::new("App Permissions").link(PageId::PrivacyPermissions), Item::new("Location Services").link(PageId::LocationServices), Item::new("Analytics & Diagnostics").link(PageId::Diagnostics)]).footer("BifrOSt keeps everything on this computer and sends nothing anywhere unless you share a diagnostics report.")]),
         // built by `diagnostics_page::spec`, which knows the crash logs
         PageId::Diagnostics => page("Analytics & Diagnostics", false, vec![]),
         // built by `permissions_page`, which reads the installed apps and their answers
         PageId::PrivacyPermissions => page("App Permissions", false, vec![]),
+        PageId::AppPanes(slot) => super::settings_panes::spec(slot),
+        // built by `location_page::spec`, which reads the prefs and the location answers
+        PageId::LocationServices => page("Location Services", false, vec![]),
     }
+}
+
+/// Keyboard > Dictation: the speech model state, what it needs from the person, and the download or removal.
+pub fn dictation_page(v: &super::services::recognizer::ModelView) -> Spec {
+    let state = if v.downloading {
+        "Downloading…"
+    } else if v.installed {
+        "Installed"
+    } else {
+        "Not Downloaded"
+    };
+    let size = format!("{} MB", bifrost_ui::whisper::MODEL_SIZE_BYTES / 1_000_000);
+    let mut groups = vec![Group::new(vec![Item::new("Speech Model").value(state), Item::new("Size").value(size)])
+        .header("ON-DEVICE DICTATION")
+        .footer("The microphone key dictates text into the focused field. The model runs on this computer, and your speech is never uploaded.")];
+    if v.installed {
+        groups.push(Group::new(vec![Item::new("Remove Speech Model").tint(Tint::Red).action(Action::Run(Command::RemoveSpeechModel))])
+            .footer("Removing it turns dictation off until the model is downloaded again."));
+    } else if !v.downloading {
+        let footer = match &v.failed {
+            Some(e) => e.clone(),
+            None => "Downloading the model needs your consent. It is about 148 MB and comes from the model's public download address; no audio is sent anywhere.".to_string(),
+        };
+        groups.push(Group::new(vec![Item::new("Download Speech Model").tint(Tint::Blue).action(Action::Run(Command::DownloadSpeechModel))]).footer(&footer));
+    }
+    Spec { id: PageId::Dictation, title: "Dictation".into(), large: false, groups }
+}
+
+/// The index of the `SPEECH_VOICES` choice for an engine voice name; an unknown name shows as the default voice (0).
+pub fn speech_voice_index(voice: &str) -> usize {
+    SPEECH_VOICES.iter().position(|(_, v)| *v == voice).unwrap_or(0)
 }
 
 /// The value the Accessibility Shortcut row shows: the features it switches, or None.
@@ -1347,6 +1617,18 @@ pub fn shortcut_label(features: &[Feature]) -> String {
         [] => "None".into(),
         [one] => one.name().into(),
         many => format!("{} Features", many.len()),
+    }
+}
+
+/// The setting a pop-up row sends for its `choice` index: the row's action with the choice in place of its own.
+/// None when the row's action has no choices or the index is out of range.
+pub fn chosen(row: &Action, index: usize) -> Option<Action> {
+    match row {
+        Action::Location(super::location_page::Edit::Access { app, .. }) => {
+            let choice = *super::services::privacy_permissions::LocationAccess::ALL.get(index)?;
+            Some(Action::Location(super::location_page::Edit::Access { app: app.clone(), choice }))
+        }
+        _ => None,
     }
 }
 
@@ -1368,7 +1650,7 @@ pub fn permissions_page(rows: &[Row]) -> Spec {
             } else {
                 rows.iter()
                     .enumerate()
-                    .map(|(i, r)| Item::new(r.name.as_str()).switch(r.access.can_capture(*media), Action::Toggle(Toggle::Permission(*media, i))))
+                    .map(|(i, r)| Item::new(r.name.as_str()).app_icon(r.app_id.as_str()).switch(r.access.can_capture(*media), Action::Toggle(Toggle::Permission(*media, i))))
                     .collect()
             };
             Group::new(items).header(header).footer(footer)
@@ -1380,10 +1662,20 @@ pub fn permissions_page(rows: &[Row]) -> Spec {
     } else {
         rows.iter()
             .enumerate()
-            .map(|(i, r)| Item::new(r.name.as_str()).switch(r.location.is_authorized(), Action::Toggle(Toggle::Location(i))))
+            .map(|(i, r)| Item::new(r.name.as_str()).app_icon(r.app_id.as_str()).switch(r.location.is_authorized(), Action::Toggle(Toggle::Location(i))))
             .collect()
     };
     groups.push(Group::new(location).header("LOCATION").footer("Apps that may use your location while you use them. A switch is on only when you allow it."));
+    // Contacts (last, so the group indexes above stay the same): on only when the person lets the app read contacts.
+    let contacts: Vec<Item> = if rows.is_empty() {
+        vec![Item::new("No apps installed")]
+    } else {
+        rows.iter()
+            .enumerate()
+            .map(|(i, r)| Item::new(r.name.as_str()).app_icon(r.app_id.as_str()).switch(r.contacts, Action::Toggle(Toggle::Contacts(i))))
+            .collect()
+    };
+    groups.push(Group::new(contacts).header("CONTACTS").footer("Apps that may read your contacts. A switch is on only when you allow it."));
     Spec { id: PageId::PrivacyPermissions, title: "App Permissions".into(), large: false, groups }
 }
 
@@ -1506,6 +1798,14 @@ impl DeskPrefs {
     }
 }
 
+/// Appearance > Icon & widget style, in the order of `icon_doc::Variant` (Default 0, Dark 1, Tinted 2).
+pub const ICON_STYLES: [&str; 3] = ["Default", "Dark", "Tinted"];
+
+/// The row that is checked: the variant the icon renderer draws with.
+fn icon_style_index() -> usize {
+    bifrost_render::icon_doc::current_style().0 as usize
+}
+
 /// Appearance: the scheme, accent and highlight colour, sidebar icon size, scroll bars and transparency.
 pub fn appearance_page(m: &Model<'_>, d: &DeskPrefs) -> Spec {
     use bifrost_render::appearance::{accent, mode, mode_label, Accent, Mode};
@@ -1525,6 +1825,9 @@ pub fn appearance_page(m: &Model<'_>, d: &DeskPrefs) -> Spec {
             .header("SIDEBAR ICON SIZE"),
         Group::new(SCROLL_BAR_MODES.iter().enumerate().map(|(i, l)| Item::new(*l).check(i == d.scroll_bars, Action::Pick(Pick::ScrollBars(i)))).collect())
             .header("SHOW SCROLL BARS"),
+        Group::new(ICON_STYLES.iter().enumerate().map(|(i, l)| Item::new(*l).check(i == icon_style_index(), Action::Pick(Pick::IconStyle(i)))).collect())
+            .header("ICON & WIDGET STYLE")
+            .footer("Dark draws app icons on a dark tile. Tinted draws them in the accent colour over grey."),
         Group::new(vec![
             Item::slider(Ends::Glass, bifrost_render::glass::clarity(), Action::Slider(Slider::LiquidGlass)),
             reduce_transparency_item(m.a11y.reduce_transparency, m.a11y.increase_contrast),
@@ -1625,17 +1928,21 @@ pub fn shortcuts_page(o: &Options) -> Spec {
 pub fn desktop_display(m: &Model<'_>) -> Spec {
     let page = |title: &str, large, groups| Spec { id: PageId::Display, title: title.into(), large, groups };
     let mut display = vec![];
-    if let Some((w, h, _)) = m.info.display_mode {
-        display.push(Item::new("Resolution").value(format!("{w} × {h}")));
+    if m.info.display_mode.is_some() {
+        display.push(Item::new("Resolution").value(resolution_label(m.resolution)).link(PageId::Resolution));
         display.push(Item::new("Refresh Rate").value(m.refresh.label()).link(PageId::RefreshRate));
     }
     display.push(Item::new("Appearance").value(bifrost_render::appearance::mode_label(bifrost_render::appearance::mode())).link(PageId::Appearance));
     display.push(Item::new("Interface Scale").value(scale_label(crate::layout::user_scale())).link(PageId::InterfaceScale));
     display.push(Item::new("Graphics").link(PageId::Graphics));
     let mut groups = vec![Group::new(display).header("CONNECTED DISPLAY")
-        .footer("The native resolution is selected automatically. The highest refresh rate is used unless another is chosen. Interface Scale changes the size of windows, menus and controls.")];
+        .footer("Native is the panel's own resolution unless another is chosen. The highest refresh rate is used unless another is chosen. Interface Scale changes the size of windows, menus and controls.")];
     if m.info.brightness_supported {
-        groups.push(Group::new(vec![Item::slider(Ends::Brightness, m.brightness, Action::Slider(Slider::Brightness))]).header("BRIGHTNESS"));
+        let mut rows = vec![Item::slider(Ends::Brightness, m.brightness, Action::Slider(Slider::Brightness))];
+        if m.info.ambient_light_supported {
+            rows.push(Item::new("Automatically Adjust Brightness").switch(m.opts.auto_brightness, Action::Toggle(Toggle::AutoBrightness)));
+        }
+        groups.push(Group::new(rows).header("BRIGHTNESS"));
     }
     groups.push(Group::new(vec![Item::new("Night Shift").value(super::night_shift::published().label()).link(PageId::NightShift)]));
     groups.push(Group::new(vec![Item::slider(Ends::Glass, bifrost_render::glass::clarity(), Action::Slider(Slider::LiquidGlass))]).header("LIQUID GLASS")
@@ -1660,6 +1967,17 @@ pub fn refresh_rate_page(m: &Model<'_>) -> Spec {
     ] }
 }
 
+/// Displays > Resolution: Native (the default) and each size the panel offers, the chosen one checked.
+pub fn resolution_page(m: &Model<'_>) -> Spec {
+    let mut rows = vec![Item::new(resolution_label(None)).check(m.resolution.is_none(), Action::Pick(Pick::Resolution(0)))];
+    rows.extend(m.info.display_sizes.iter().enumerate().map(|(i, &(w, h))| {
+        Item::new(resolution_label(Some((w, h)))).check(m.resolution == Some((w, h)), Action::Pick(Pick::Resolution(i + 1)))
+    }));
+    Spec { id: PageId::Resolution, title: "Resolution".into(), large: false, groups: vec![
+        Group::new(rows).footer("Native is the panel's own size. Choosing another size changes the whole screen until it is changed back."),
+    ] }
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::desktop_dock::Preferences as DockPrefs;
@@ -1677,6 +1995,13 @@ mod tests {
         assert_eq!(battery_level(&info), "64%", "a desktop with a battery shows it");
     }
     use crate::shell::{Network, SavedNetwork};
+
+    #[test]
+    fn the_speech_voice_row_names_the_saved_voice_and_falls_back_to_the_default() {
+        assert_eq!(speech_voice_index(""), 0, "the engine's default voice");
+        assert_eq!(super::super::accessibility::SPEECH_VOICES[speech_voice_index("is")].0, "Icelandic");
+        assert_eq!(speech_voice_index("no-such-voice"), 0, "an unknown saved voice shows as the default");
+    }
 
     fn info() -> Info {
         Info {
@@ -1739,16 +2064,16 @@ mod tests {
     static A11Y_DEFAULT: AccessibilitySettings = AccessibilitySettings::DEFAULT;
 
     fn model<'a>(info: &'a Info, opts: &'a Options) -> Model<'a> {
-        Model { info, opts, a11y: &A11Y_DEFAULT, airplane: false, haptics: false, wifi_on: true, brightness: 0.5, wallpaper: "Lake Day".into(), detail: "WIFI-5G", now: 1_000_000, update_badge: false, dock: DockPrefs::default(), defaults: &[], login_items: &[], login_pending: &[], ext: &crate::shell::login_items_page::NO_EXTENSIONS, fonts: &NO_FONTS, refresh: RefreshChoice::Max, sound: &crate::shell::sound_page::NO_SOUND, sharing: None, printers: None, users: &NO_USERS }
+        Model { info, opts, a11y: &A11Y_DEFAULT, airplane: false, haptics: false, wifi_on: true, brightness: 0.5, wallpaper: "Lake Day".into(), detail: "WIFI-5G", now: 1_000_000, update_badge: false, dock: DockPrefs::default(), defaults: &[], login_items: &[], login_pending: &[], firewall: &[], ext: &crate::shell::login_items_page::NO_EXTENSIONS, fonts: &NO_FONTS, refresh: RefreshChoice::Max, resolution: None, sound: &crate::shell::sound_page::NO_SOUND, sharing: None, printers: None, users: &NO_USERS, account: "" }
     }
 
     #[test]
     fn app_permissions_lists_each_media_type_with_one_switch_per_app() {
         use bifrost_ui::capture_access::CaptureAccess;
         use bifrost_ui::location_auth::AuthorizationStatus;
-        let rows = vec![Row { app_id: "is.example.a".into(), name: "Alpha".into(), access: CaptureAccess::default(), location: AuthorizationStatus::AuthorizedWhenInUse }];
+        let rows = vec![Row { app_id: "is.example.a".into(), name: "Alpha".into(), access: CaptureAccess::default(), location: AuthorizationStatus::AuthorizedWhenInUse, contacts: false }];
         let s = permissions_page(&rows);
-        assert_eq!(s.groups.len(), 4, "camera, microphone, screen recording, location");
+        assert_eq!(s.groups.len(), 5, "camera, microphone, screen recording, location, contacts");
         assert_eq!(s.groups[3].header.as_deref(), Some("LOCATION"));
         assert_eq!(s.groups[3].items[0].accessory, Accessory::Switch(true), "an app the person allowed while in use is on");
         assert_eq!(s.groups[3].items[0].action, Action::Toggle(Toggle::Location(0)));
@@ -1801,25 +2126,82 @@ mod tests {
     }
 
     #[test]
+    fn the_menu_bar_page_has_one_switch_per_control_and_follows_the_saved_choice() {
+        use crate::shell::options::MenuExtra;
+        let info = info();
+        let mut opts = Options::default();
+        let s = spec(PageId::MenuBar, &model(&info, &opts));
+        let labels: Vec<&str> = s.groups[0].items.iter().map(|i| i.label.as_str()).collect();
+        assert_eq!(labels, ["CPU Usage", "Memory Usage", "Battery", "Wi-Fi and Network", "Control Center"]);
+        assert!(s.groups[0].items.iter().all(|i| i.accessory == Accessory::Switch(true)), "every control shows by default");
+        assert_eq!(s.groups[0].items[2].action, Action::Toggle(Toggle::MenuExtra(MenuExtra::Battery)));
+        opts.menu_extras = MenuExtra::Battery.bit() | MenuExtra::ControlCenter.bit();
+        let s = spec(PageId::MenuBar, &model(&info, &opts));
+        let on: Vec<bool> = s.groups[0].items.iter().map(|i| i.accessory == Accessory::Switch(true)).collect();
+        assert_eq!(on, [false, false, true, false, true]);
+    }
+
+    #[test]
+    fn the_control_centre_page_lists_the_controls_it_holds() {
+        let (info, opts) = (info(), Options::default());
+        let s = spec(PageId::ControlCentre, &model(&info, &opts));
+        let labels: Vec<&str> = s.groups[0].items.iter().map(|i| i.label.as_str()).collect();
+        assert_eq!(labels, ["Brightness", "Volume", "Wi-Fi", "Screen Lock", "Focus"]);
+        assert_eq!(s.groups[0].items[4].value, "Off");
+    }
+
+    #[test]
+    fn the_vpn_page_lists_the_held_connections_and_a_tap_flips_one() {
+        use crate::shell::desktop_network::{Snapshot, VpnConnection};
+        let (mut info, opts) = (info(), Options::default());
+        let empty = spec(PageId::Vpn, &model(&info, &opts));
+        assert_eq!(empty.groups[0].items[0].label, "No VPN Configurations");
+        info.desktop_network = Some(Snapshot {
+            vpns: vec![
+                VpnConnection { name: "Office".into(), kind: "vpn".into(), active: false },
+                VpnConnection { name: "wg0".into(), kind: "wireguard".into(), active: true },
+            ],
+            ..Snapshot::default()
+        });
+        let s = spec(PageId::Vpn, &model(&info, &opts));
+        let items = &s.groups[0].items;
+        assert_eq!((items[0].label.as_str(), items[0].value.as_str()), ("Office", "Not Connected"));
+        assert_eq!((items[1].label.as_str(), items[1].value.as_str()), ("wg0", "Connected"));
+        assert_eq!(items[0].action, Action::Vpn { name: "Office".into(), up: true }, "a tap on a disconnected VPN connects it");
+        assert_eq!(items[1].action, Action::Vpn { name: "wg0".into(), up: false }, "a tap on a connected one disconnects it");
+    }
+
+    #[test]
     fn root_lists_the_bifrost_sections_with_live_values() {
         let (info, opts) = (info(), Options::default());
         let s = spec(PageId::Root, &model(&info, &opts));
         assert!(s.large);
         let labels: Vec<&str> = s.groups.iter().flat_map(|g| g.items.iter().map(|i| i.label.as_str())).collect();
-        assert_eq!(labels[..3], ["Airplane Mode", "Wi-Fi", "Bluetooth"]);
-        assert_eq!(labels[3..7], ["Notifications", "Sounds", "Focus", "Screen Time"]);
-        assert_eq!(labels[7..], ["General", "Control Centre", "Menu Bar", "Display & Brightness", "Home Screen & Dock", "Overview", "Sharing", "Print & Scan", "Keyboard Shortcuts", "Trackpad", "Mouse", "Users & Groups", "Accessibility", "Wallpaper", "Screen Saver", "Battery", "Privacy", "Lock Screen", "Passcode", "Passwords", "Internet Accounts", "Developer"]);
+        assert_eq!(labels[..4], ["BifrOSt Account", "Airplane Mode", "Wi-Fi", "Bluetooth"]);
+        assert_eq!(labels[4..8], ["Notifications", "Sounds", "Focus", "Screen Time"]);
+        assert_eq!(labels[8..], ["General", "Control Centre", "Menu Bar", "Display & Brightness", "Home Screen & Dock", "Overview", "Sharing", "Print & Scan", "Keyboard Shortcuts", "Assistant", "Trackpad", "Mouse", "Users & Groups", "Accessibility", "Wallpaper", "Screen Saver", "Battery", "Privacy", "Spotlight", "Lock Screen", "Passcode", "Passwords", "Internet Accounts", "Developer"]);
         assert_eq!(s.groups[0].items[1].value, "WIFI-5G");
         // Sharing, Trackpad, Mouse and Users & Groups sit before Wallpaper
-        assert_eq!(s.groups[2].items[13].value, "Lake Day");
-        assert_eq!(s.groups[2].items[14].value, "Never", "the screen saver is off by default");
-        assert_eq!(s.groups[2].items[15].value, "63%");
-        assert_eq!(s.groups[0].items[0].accessory, Accessory::Switch(false));
-        assert_eq!(s.groups[1].items[0].action, Action::Push(PageId::Notifications));
+        assert_eq!(s.groups[3].items[14].value, "Lake Day");
+        assert_eq!(s.groups[3].items[15].value, "Never", "the screen saver is off by default");
+        assert_eq!(s.groups[3].items[16].value, "63%");
+        assert_eq!(s.groups[1].items[0].accessory, Accessory::Switch(false));
+        assert_eq!(s.groups[2].items[0].action, Action::Push(PageId::Notifications));
         let off = Model { wifi_on: false, airplane: true, ..model(&info, &opts) };
         let s = spec(PageId::Root, &off);
-        assert_eq!(s.groups[0].items[1].value, "Off");
-        assert_eq!(s.groups[0].items[0].accessory, Accessory::Switch(true));
+        assert_eq!(s.groups[1].items[1].value, "Off");
+        assert_eq!(s.groups[1].items[0].accessory, Accessory::Switch(true));
+    }
+
+    #[test]
+    fn the_desktop_network_page_links_to_the_firewall() {
+        let mut info = Info { desktop_network: Some(Default::default()), ..Info::default() };
+        info.battery_present = true;
+        let opts = Options::default();
+        let s = spec(PageId::Network, &model(&info, &opts));
+        let firewall = s.groups[0].items.iter().find(|i| i.label == "Firewall").expect("a Firewall row");
+        assert_eq!(firewall.action, Action::Push(PageId::Firewall));
+        assert!(spec(PageId::Firewall, &model(&info, &opts)).groups[0].items[0].label.starts_with("No Apps"));
     }
 
     #[test]
@@ -1832,6 +2214,7 @@ mod tests {
         assert_eq!(s.groups[1].header.as_deref(), Some("NETWORKS"));
         assert_eq!(s.groups[1].items[0].action, Action::Network("Cafe".into()));
         assert_eq!(s.groups[1].items[0].accessory, Accessory::Wifi { secure: false, bars: 1 });
+        assert_eq!(s.groups.last().unwrap().items[0].label, "Country or Region", "the regulatory domain shows under the networks");
         let off = spec(PageId::Wifi, &Model { wifi_on: false, ..model(&info, &opts) });
         assert_eq!(off.groups.len(), 1, "nothing but the switch while off");
         assert_eq!(off.groups[0].items.len(), 1);
@@ -1895,13 +2278,22 @@ mod tests {
     }
 
     #[test]
+    fn the_reset_page_offers_a_confirmed_erase_of_all_content() {
+        let info = info();
+        let opts = Options::default();
+        let s = spec(PageId::Reset, &model(&info, &opts));
+        let erase = s.groups.iter().flat_map(|g| &g.items).find(|i| i.label == "Erase All Content and Settings").expect("the Reset page has the erase row");
+        assert_eq!(erase.action, Action::Run(Command::EraseContent), "the row asks for confirmation through the command");
+    }
+
+    #[test]
     fn desktop_display_shows_panel_mode_and_only_working_controls() {
         let mut info = info();
         info.display_mode = Some((2048, 1152, 60));
         let opts = Options::default();
         let s = desktop_display(&model(&info, &opts));
         assert_eq!(s.title, "Displays");
-        assert_eq!(s.groups[0].items[0].value, "2048 × 1152");
+        assert_eq!(s.groups[0].items[0].value, "Native", "the Resolution row shows the choice, Native by default");
         assert_eq!(s.groups[0].items[1].value, "Highest Available", "the row shows the choice, Highest Available by default");
         assert_eq!(s.groups[0].items[1].action, Action::Push(PageId::RefreshRate));
         assert!(s.groups[0].items.iter().any(|i| i.label == "Graphics" && i.action == Action::Push(PageId::Graphics)), "the Graphics page is reachable");
@@ -1911,6 +2303,88 @@ mod tests {
         info.brightness_supported = true;
         let s = desktop_display(&model(&info, &opts));
         assert!(matches!(s.groups[1].items[0].body, super::super::list::Body::Slider { ends: Ends::Brightness, .. }));
+        assert_eq!(s.groups[1].items.len(), 1, "no light sensor, no automatic brightness switch");
+    }
+
+    #[test]
+    fn the_speech_page_offers_the_punctuation_levels_and_checks_the_chosen_one() {
+        let opts = Options::default();
+        let info = info();
+        let groups = |a: &AccessibilitySettings| {
+            let m = Model { a11y: a, ..model(&info, &opts) };
+            spec(PageId::ScreenReaderSpeech, &m).groups
+        };
+        let off = groups(&AccessibilitySettings::default());
+        let punct = off.iter().find(|g| g.header.as_deref() == Some("PUNCTUATION")).expect("the Punctuation group");
+        let labels: Vec<&str> = punct.items.iter().map(|i| i.label.as_str()).collect();
+        assert_eq!(labels, ["None", "Some", "All"]);
+        assert_eq!(punct.items[0].accessory, Accessory::Check(true));
+        assert_eq!(punct.items[2].action, Action::Pick(Pick::SpeechPunctuation(2)));
+        let all = groups(&AccessibilitySettings { speech_punctuation: 2, ..Default::default() });
+        let punct = all.iter().find(|g| g.header.as_deref() == Some("PUNCTUATION")).unwrap();
+        assert_eq!((punct.items[0].accessory.clone(), punct.items[2].accessory.clone()), (Accessory::Check(false), Accessory::Check(true)));
+    }
+
+    #[test]
+    fn the_touch_group_has_the_switch_control_and_voice_control_switches() {
+        let opts = Options::default();
+        let info = info();
+        let touch_rows = |a: &AccessibilitySettings| -> Vec<(String, Accessory, Action)> {
+            let m = Model { a11y: a, ..model(&info, &opts) };
+            let s = spec(PageId::Accessibility, &m);
+            let group = s.groups.iter().find(|g| g.header.as_deref() == Some("TOUCH")).expect("the Touch group");
+            group.items.iter().map(|i| (i.label.clone(), i.accessory.clone(), i.action.clone())).collect()
+        };
+        let off = touch_rows(&AccessibilitySettings::default());
+        let find = |rows: &[(String, Accessory, Action)], name: &str| rows.iter().find(|r| r.0 == name).cloned().expect(name);
+        assert_eq!(find(&off, "Switch Control").1, Accessory::Switch(false));
+        assert_eq!(find(&off, "Voice Control").2, Action::Toggle(Toggle::VoiceControl));
+        let on = touch_rows(&AccessibilitySettings { switch_control: true, voice_control: true, ..Default::default() });
+        assert_eq!(find(&on, "Switch Control").1, Accessory::Switch(true));
+        assert_eq!(find(&on, "Voice Control").1, Accessory::Switch(true));
+        assert_eq!(find(&on, "Switch Control").2, Action::Toggle(Toggle::SwitchControl));
+    }
+
+    #[test]
+    fn the_motion_group_offers_vehicle_motion_cues_only_with_an_accelerometer() {
+        let opts = Options::default();
+        let mut info = info();
+        let motion_rows = |info: &Info, a: &AccessibilitySettings| -> Vec<(String, Accessory)> {
+            let m = Model { a11y: a, ..model(info, &opts) };
+            let s = spec(PageId::Accessibility, &m);
+            let group = s.groups.iter().find(|g| g.header.as_deref() == Some("MOTION")).expect("the Motion group");
+            group.items.iter().map(|i| (i.label.clone(), i.accessory.clone())).collect()
+        };
+        let off = AccessibilitySettings::default();
+        let rows = motion_rows(&info, &off);
+        assert_eq!(rows.len(), 1, "no accelerometer, no cues switch: {rows:?}");
+        info.motion_sensor_supported = true;
+        let rows = motion_rows(&info, &off);
+        assert_eq!(rows[1], ("Show Vehicle Motion Cues".to_string(), Accessory::Switch(false)));
+        let on = AccessibilitySettings { motion_cues: true, ..Default::default() };
+        assert_eq!(motion_rows(&info, &on)[1].1, Accessory::Switch(true), "the switch follows the setting");
+    }
+
+    #[test]
+    fn a_light_sensor_adds_the_automatic_brightness_switch_under_the_slider() {
+        let mut info = info();
+        info.display_mode = Some((2048, 1152, 60));
+        info.brightness_supported = true;
+        info.ambient_light_supported = true;
+        let mut opts = Options::default();
+        let rows = |opts: &Options| desktop_display(&model(&info, opts)).groups[1].items.clone();
+        let off = rows(&opts);
+        assert_eq!(off.len(), 2);
+        assert_eq!(off[1].label, "Automatically Adjust Brightness");
+        assert_eq!(off[1].action, Action::Toggle(Toggle::AutoBrightness));
+        assert_eq!(off[1].accessory, super::super::list::Accessory::Switch(false));
+        opts.auto_brightness = true;
+        let on = rows(&opts);
+        assert_eq!(on[1].accessory, super::super::list::Accessory::Switch(true), "the switch follows the option");
+        // a panel that cannot be dimmed shows neither the slider nor the switch
+        info.brightness_supported = false;
+        let none = desktop_display(&model(&info, &opts));
+        assert!(!none.groups.iter().flat_map(|g| &g.items).any(|i| i.label == "Automatically Adjust Brightness"));
     }
 
     #[test]
@@ -1925,6 +2399,38 @@ mod tests {
         assert_eq!((row.label.as_str(), row.value.as_str()), ("Refresh Rate", "144 Hz"));
         assert_eq!(row.action, Action::Push(PageId::RefreshRate));
         assert!(s.groups[0].footer.as_deref().unwrap_or("").contains("highest refresh rate is used unless another is chosen"));
+    }
+
+    #[test]
+    fn the_resolution_row_shows_native_or_the_chosen_size_and_opens_the_picker() {
+        let mut info = info();
+        info.display_mode = Some((2560, 1600, 165));
+        info.display_sizes = vec![(2560, 1600), (1920, 1200)];
+        let opts = Options::default();
+        let s = desktop_display(&Model { resolution: Some((1920, 1200)), ..model(&info, &opts) });
+        let row = &s.groups[0].items[0];
+        assert_eq!((row.label.as_str(), row.value.as_str()), ("Resolution", "1920 × 1200"));
+        assert_eq!(row.action, Action::Push(PageId::Resolution));
+        let native = desktop_display(&model(&info, &opts));
+        assert_eq!(native.groups[0].items[0].value, "Native");
+    }
+
+    #[test]
+    fn the_resolution_picker_lists_native_then_each_size_with_the_choice_checked() {
+        let mut info = info();
+        info.display_sizes = vec![(2560, 1600), (1920, 1200), (1280, 800)];
+        let opts = Options::default();
+        let p = spec(PageId::Resolution, &Model { resolution: Some((1920, 1200)), ..model(&info, &opts) });
+        assert_eq!(p.title, "Resolution");
+        let rows = &p.groups[0].items;
+        let labels: Vec<&str> = rows.iter().map(|i| i.label.as_str()).collect();
+        assert_eq!(labels, ["Native", "2560 × 1600", "1920 × 1200", "1280 × 800"]);
+        let checked: Vec<bool> = rows.iter().map(|i| i.accessory == Accessory::Check(true)).collect();
+        assert_eq!(checked, [false, false, true, false], "only the chosen size is checked");
+        assert_eq!(rows[0].action, Action::Pick(Pick::Resolution(0)));
+        assert_eq!(rows[3].action, Action::Pick(Pick::Resolution(3)));
+        let native = spec(PageId::Resolution, &model(&info, &opts));
+        assert!(native.groups[0].items[0].accessory == Accessory::Check(true), "Native is checked when nothing is chosen");
     }
 
     #[test]
@@ -1956,14 +2462,14 @@ mod tests {
         assert!(items.iter().any(|i| i.action == Action::Push(PageId::LockScreen)), "Lock Screen is in the root list");
 
         // the computer name and the sharing services come first; Nearby Share and AirPlay & Handoff are the last group
-        let view = super::super::sharing_page::View { computer: "Midget".into(), services: Vec::new() };
+        let view = super::super::sharing_page::View { computer: "Midget".into(), services: Vec::new(), screen_user: None };
         let sharing = sharing_spec(&opts, Some(&view));
         assert_eq!(sharing.groups[0].items[0].action, Action::Sharing(super::super::sharing_page::Edit::ComputerName));
-        assert_eq!(sharing.groups[2].items[0].action, Action::Push(PageId::Nearby));
-        assert_eq!(sharing.groups[2].items[0].value, NEARBY_CHOICES[opts.nearby.min(NEARBY_CHOICES.len() - 1)]);
-        assert_eq!(sharing.groups[2].items[1].action, Action::Push(PageId::AirPlayHandoff), "AirPlay & Handoff is reachable, not an orphan page");
+        assert_eq!(sharing.groups[3].items[0].action, Action::Push(PageId::Nearby));
+        assert_eq!(sharing.groups[3].items[0].value, NEARBY_CHOICES[opts.nearby.min(NEARBY_CHOICES.len() - 1)]);
+        assert_eq!(sharing.groups[3].items[1].action, Action::Push(PageId::AirPlayHandoff), "AirPlay & Handoff is reachable, not an orphan page");
         opts.handoff = true;
-        assert_eq!(sharing_spec(&opts, Some(&view)).groups[2].items[1].value, "Handoff On");
+        assert_eq!(sharing_spec(&opts, Some(&view)).groups[3].items[1].value, "Handoff On");
         assert_eq!(sharing_spec(&opts, None).groups[0].items[0].value, "Loading…", "the page shows a placeholder until the read lands");
 
         let lock = spec(PageId::LockScreen, &model(&info, &opts));
@@ -2061,7 +2567,7 @@ mod tests {
         assert_eq!(s.groups[1].items[0].action, Action::Push(PageId::BluetoothDetail));
         assert_eq!(s.groups[2].items[0].action, Action::Bluetooth(Cmd::Pair("B".into())));
         let root = spec(PageId::Root, &model(&info, &opts));
-        assert_eq!(root.groups[0].items[2].value, "Connected");
+        assert_eq!(root.groups[1].items[2].value, "Connected");
         info.bt.state = State::Off;
         assert_eq!(spec(PageId::Bluetooth, &model(&info, &opts)).groups.len(), 1, "off: just the switch");
         info.bt.state = State::Unavailable;
@@ -2106,6 +2612,12 @@ mod tests {
         assert_eq!(detail.groups[0].items[1].action, Action::AudioOutput);
         let kind = &detail.groups[2].items[1];
         assert_eq!((kind.label.as_str(), kind.value.as_str()), ("Type", "Unknown"));
+        // the signal row reads "Not reported" until a scan heard the device, then its strength
+        let signal = &detail.groups[2].items[3];
+        assert_eq!((signal.label.as_str(), signal.value.as_str()), ("Signal", "Not reported"));
+        info.bt.devices[0].rssi = Some(-61);
+        let heard = spec(PageId::BluetoothDetail, &Model { detail: "Buds", ..model(&info, &opts) });
+        assert_eq!(heard.groups[2].items[3].value.as_str(), "-61 dBm");
         let services = &detail.groups[3];
         assert_eq!((services.items[0].label.as_str(), services.items[0].value.as_str()), ("Services", "None listed"));
         assert_eq!(services.header.as_deref(), Some("SERVICES"));
@@ -2141,7 +2653,7 @@ fn desktop_network_page(info:&Info)->Spec {
     let wifi=network.is_some_and(|n|n.wifi_available);
     let eth_status=ethernet.map(|i|if i.connected(){"Connected"}else{"Not Connected"}).unwrap_or("No adapter");
     Spec{id:PageId::Network,title:"Network".into(),large:false,groups:vec![
-        Group::new(vec![Item::new("Ethernet").icon(Icon::General).value(eth_status).link(PageId::Ethernet),Item::new("Wi-Fi").icon(Icon::Wifi).value(if wifi {info.wifi.as_str()}else{"No adapter"}).link(PageId::Wifi),Item::new("VPN").icon(Icon::General).value(if super::desktop_network::vpn_profiles().is_empty(){"None"}else{"Configured"}).link(PageId::Vpn)]).header("CONNECTIONS"),
+        Group::new(vec![Item::new("Ethernet").icon(Icon::General).value(eth_status).link(PageId::Ethernet), Item::new("Wi-Fi").icon(Icon::Wifi).value(if wifi {info.wifi.as_str()}else{"No adapter"}).link(PageId::Wifi), Item::new("VPN").icon(Icon::General).value(if super::desktop_network::vpn_profiles().is_empty(){"None"}else{"Configured"}).link(PageId::Vpn), Item::new("Firewall").icon(Icon::Passcode).link(PageId::Firewall)]).header("CONNECTIONS", Item::new("VPN").icon(Icon::General).value(match network.map_or(&[][..], |n|n.vpns.as_slice()){[]=>"None", v if v.iter().any(|c|c.active)=>"Connected", _=>"Not Connected"}).link(PageId::Vpn)]).header("CONNECTIONS"),
         rows(vec![("Network Manager", "NetworkManager".into())]).footer("Ethernet and Wi-Fi use separate connection settings. Changes are applied by the system network service."),
     ]}
 }
@@ -2158,5 +2670,9 @@ fn desktop_ethernet_page(info:&Info)->Spec {
 fn desktop_vpn_page(_info:&Info)->Spec {
     let profiles=super::desktop_network::vpn_profiles();
     let items:Vec<Item>=if profiles.is_empty(){vec![Item::new("No VPN Configurations").tint(Tint::Dim)]}else{profiles.iter().map(|p|Item::new(p.name.clone()).value(super::desktop_network::vpn_summary(p))).collect()};
-    Spec{id:PageId::Vpn,title:"VPN".into(),large:false,groups:vec![Group::new(items).header("CONFIGURATIONS").footer("VPN configurations are kept by the system network service. Adding one needs the tunnel client, which is not built yet, so this list stays empty.")]}
+    Spec{id:PageId::Vpn,title:"VPN".into(),large:false,groups:vec![Group::new(items).header("CONFIGURATIONS").footer("VPN configurations are kept by the system network service (NetworkManager). Shortcuts and Search connect and disconnect one by its name; this list does not show them yet.")]}
+fn desktop_vpn_page(info:&Info)->Spec {
+    let vpns:&[super::desktop_network::VpnConnection]=info.desktop_network.as_ref().map_or(&[],|n|n.vpns.as_slice());
+    let items:Vec<Item>=if vpns.is_empty(){vec![Item::new("No VPN Configurations").tint(Tint::Dim)]}else{vpns.iter().map(|v|Item::new(v.name.clone()).value(v.status_label()).action(Action::Vpn{name:v.name.clone(),up:!v.active})).collect()};
+    Spec{id:PageId::Vpn,title:"VPN".into(),large:false,groups:vec![Group::new(items).header("CONFIGURATIONS").footer("These are the VPN and WireGuard connections the system network service holds. Tap one to connect or disconnect it. Adding a configuration is done with the network service (nmcli connection import) and is not built into this page yet.")]}
 }

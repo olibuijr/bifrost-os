@@ -39,6 +39,35 @@ pub fn expire(ctx: &Ctx, id: &str, at: Option<u64>) -> u32 {
     service::call(ctx, SERVICE, "expire", &Json::Obj(vec![("id".into(), Json::Str(id.into())), ("at".into(), at)]))
 }
 
+/// Indexes `items` (objects as the service's `index_named` describes) into the named index `index` of this app, with its
+/// protection class. The reply is the count sent.
+pub fn index_named(ctx: &Ctx, index: &str, protection: Option<bifrost_ui::searchindex::ProtectionClass>, items: Vec<Json>) -> u32 {
+    let protection = protection.map_or(Json::Null, |p| Json::Str(p.raw().into()));
+    service::call(ctx, SERVICE, "index_named", &Json::Obj(vec![("index".into(), Json::Str(index.into())), ("protection".into(), protection), ("items".into(), Json::Arr(items))]))
+}
+
+/// Deletes items of the named index `index`: `kind` is "ids", "domains" or "all", and `values` are the identifiers or
+/// domains.
+pub fn delete_named(ctx: &Ctx, index: &str, kind: &str, values: &[String]) -> u32 {
+    let values = values.iter().map(|v| Json::Str(v.clone())).collect();
+    service::call(ctx, SERVICE, "delete_named", &Json::Obj(vec![("index".into(), Json::Str(index.into())), ("kind".into(), Json::Str(kind.into())), ("values".into(), Json::Arr(values))]))
+}
+
+/// Removes the named index `index` of this app and its items.
+pub fn delete_named_index(ctx: &Ctx, index: &str) -> u32 {
+    service::call(ctx, SERVICE, "delete_named_index", &Json::Obj(vec![("index".into(), Json::Str(index.into()))]))
+}
+
+/// Searches the named index `index` of this app for `query`, at most `limit` items.
+pub fn search_named(ctx: &Ctx, index: &str, query: &str, limit: usize) -> u32 {
+    service::call(
+        ctx,
+        SERVICE,
+        "search_named",
+        &Json::Obj(vec![("index".into(), Json::Str(index.into())), ("query".into(), Json::Str(query.into())), ("limit".into(), Json::Num(limit as f64))]),
+    )
+}
+
 /// Identifies the dominant language of `text`; the reply is its BCP 47 code, or null.
 pub fn language(ctx: &Ctx, text: &str) -> u32 {
     service::call(ctx, SERVICE, "language", &Json::Obj(vec![("text".into(), Json::Str(text.into()))]))

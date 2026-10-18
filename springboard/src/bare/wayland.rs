@@ -24,7 +24,7 @@ struct Lock { obj:lock::ExtSessionLockV1, surface:wl_surface::WlSurface, role:lo
 pub struct ChromeFrame {pub id:u32,pub x:i32,pub y:i32,pub width:usize,pub height:usize,pub pixels:Vec<u32>}
 struct ChromeWindow {surface:wl_surface::WlSurface,layer:surface::ZwlrLayerSurfaceV1,slots:Vec<Slot>,configured:bool,frame:ChromeFrame,pending:Damage}
 #[derive(Clone)]
-pub struct WindowFrame { pub id:u32, pub title:&'static str, pub x:i32, pub y:i32, pub width:usize, pub height:usize, pub pixels:Option<std::sync::Arc<[u32]>>, pub damage:Damage, pub maximized:bool, pub title_height:i32,
+pub struct WindowFrame { pub id:u32, pub title:&'static str, pub x:i32, pub y:i32, pub width:usize, pub height:usize, pub pixels:Option<std::sync::Arc<[u32]>>, pub damage:Damage, pub maximized:bool, pub floating:bool, pub title_height:i32,
     /// A press above `drag_height` (window px) moves the window, unless it lands in one of `no_drag` (x, y, w, h):
     /// the traffic lights and an app's toolbar controls in a full-size-content window.
     pub drag_height:i32, pub no_drag:Vec<[i32;4]>,
@@ -34,7 +34,7 @@ pub struct WindowFrame { pub id:u32, pub title:&'static str, pub x:i32, pub y:i3
     /// that covers another one lets the presenter skip drawing the hidden one (`gpu::occlusion`).
     pub opaque:bool }
 pub enum WindowEvent { Focus(u32), Resize(u32,i32,i32), Close(u32), Maximized(u32,bool) }
-struct Window { surface:wl_surface::WlSurface, xdg:xdg_surface::XdgSurface, top:xdg_toplevel::XdgToplevel, slots:Vec<Slot>, buffer_size:(usize,usize), configured:bool, frame:WindowFrame,
+struct Window { surface:wl_surface::WlSurface, level_sent:Option<bool>, xdg:xdg_surface::XdgSurface, top:xdg_toplevel::XdgToplevel, slots:Vec<Slot>, buffer_size:(usize,usize), configured:bool, frame:WindowFrame,
     /// GPU path: content damage not presented yet, the shadow margin around the content, the drawable size
     pending:Damage, margin:i32, gpu_size:(usize,usize),
     /// window-server materials (ext-background-effect): the effect object and the blur rects last sent (surface px)
@@ -61,6 +61,7 @@ use crate::gpu::wl::{Backdrop, BufferInfo, Magnify, Presenter};
 use crate::shell::accessibility::zoom::{self as zoom_model, Mode, ScreenZoom};
 use bifrost_render::glass::Rect as Glass;
 use super::material_client::{args as material_args, protocol::{bifrost_material_manager_v1 as mat_manager, bifrost_material_surface_v1 as mat_surface}};
+use super::window_level_client::protocol::bifrost_window_level_manager_v1 as lvl_manager;
 /// The presenter's key for the desktop background (and the lock surface, which shares its drawables).
 const GPU_BG: u32 = u32::MAX;
 /// A dma-buf `wl_buffer` around one presenter drawable.
@@ -83,7 +84,7 @@ struct State {
     /// The window server's output management (mode requests from the shell), its first head, the last serial it sent,
     /// and whether a configuration is in flight.
     output_manager:Option<om_manager::ZwlrOutputManagerV1>, output_head:Option<om_head::ZwlrOutputHeadV1>, output_serial:u32, output_busy:bool,
-    bg_manager:Option<bg_manager::ExtBackgroundEffectManagerV1>, bg_blur:bool, mat_manager:Option<mat_manager::BifrostMaterialManagerV1>,
+    bg_manager:Option<bg_manager::ExtBackgroundEffectManagerV1>, bg_blur:bool, mat_manager:Option<mat_manager::BifrostMaterialManagerV1>, level_mgr:Option<lvl_manager::BifrostWindowLevelManagerV1>,
     foreign_manager:Option<foreign_manager::ZwlrForeignToplevelManagerV1>, foreign:Vec<Foreign>, foreign_dirty:bool,
     cursor_manager: Option<cursor_manager::WpCursorShapeManagerV1>, cursor_device: Option<cursor_device::WpCursorShapeDeviceV1>, pointer: Option<wl_pointer::WlPointer>, cursor_serial:u32,
     /// the seat's keyboard: one object only, or every capability change would add one and each key would arrive again
@@ -319,6 +320,7 @@ impl Display {
     }
     pub fn windows(&mut self, frames: Vec<WindowFrame>) -> io::Result<()> {
         let ids:Vec<u32> = frames.iter().map(|f|f.id).collect();
+        let levels:Vec<(u32,bool)> = frames.iter().map(|f|(f.id,f.floating)).collect();
         let front=ids.last().copied();
         self.state.z=ids.clone();
         let activate=front.filter(|id|Some(*id)!=self.state.focused);
@@ -349,7 +351,18 @@ impl Display {
                 let top = xdg.get_toplevel(&qh,frame.id); top.set_title(frame.title.to_string()); top.set_app_id(format!("is.olibuijr.bifrost.{}",frame.id));
                 top.set_min_size(320,220); surface.commit();
                 let mut pending=Damage::new(frame.width,frame.height); pending.all();
-                self.state.windows.insert(frame.id,Window { surface,xdg,top,slots:vec![],buffer_size:(0,0),configured:false,frame,pending,margin:0,gpu_size:(0,0),bg:None,bg_rects:Vec::new(),mat:None,mat_sent:(0,Vec::new()) });
+                self.state.windows.insert(frame.id,Window { surface,xdg,top,level_sent:None,slots:vec![],buffer_size:(0,0),configured:false,frame,pending,margin:0,gpu_size:(0,0),bg:None,bg_rects:Vec::new(),mat:None,mat_sent:(0,Vec::new()) });
+            }
+        }
+        // bifrost_window_level_v1: a window whose band changed is told the new level (the window server keeps it per surface)
+        if let Some(mgr)=self.state.level_mgr.as_ref() {
+            for (id,floating) in levels {
+                if let Some(w)=self.state.windows.get_mut(&id) {
+                    if w.level_sent!=Some(floating) {
+                        mgr.set_level(&w.surface,super::window_level_client::wire(floating));
+                        w.level_sent=Some(floating);
+                    }
+                }
             }
         }
         if let (Some(id),Some(activation),Some(seat))=(activate,self.state.activation.as_ref(),self.state.seat.as_ref()) {
@@ -576,8 +589,8 @@ fn place_chrome(l:&surface::ZwlrLayerSurfaceV1,frame:&ChromeFrame,screen:(u32,u3
                 let s=self.state.compositor.as_ref().unwrap().create_surface(&qh,());
                 let l=self.state.layer.as_ref().unwrap().get_layer_surface(&s,None,if frame.id==0 {layer::Layer::Top}else{layer::Layer::Overlay},"bifrost-desktop-chrome".into(),&qh,frame.id);
                 l.set_size(frame.width as u32,frame.height as u32);Self::place_chrome(&l,&frame,screen);
-                // id 3 is Search: it takes the keyboard from the window in front while it is open
-                l.set_keyboard_interactivity(if frame.id==3 {surface::KeyboardInteractivity::Exclusive} else {surface::KeyboardInteractivity::None});s.commit();
+                // id 3 is Search and id 6 the assistant panel: they take the keyboard from the window in front while open
+                l.set_keyboard_interactivity(if frame.id==3 || frame.id==6 {surface::KeyboardInteractivity::Exclusive} else {surface::KeyboardInteractivity::None});s.commit();
                 let mut pending=Damage::new(frame.width,frame.height);pending.all();
                 self.state.chrome.insert(frame.id,ChromeWindow{surface:s,layer:l,slots:vec![],configured:false,frame,pending});
             }
@@ -797,6 +810,7 @@ impl Dispatch<wl_registry::WlRegistry, ()> for State {
     fn event(s: &mut Self, reg: &wl_registry::WlRegistry, e: wl_registry::Event, _: &(), _: &Connection, q: &QueueHandle<Self>) {
         if let wl_registry::Event::Global { name,interface,version } = e { match interface.as_str() {
             "bifrost_material_manager_v1" => s.mat_manager=Some(reg.bind(name,1,q,())),
+            "bifrost_window_level_manager_v1" => s.level_mgr=Some(reg.bind(name,1,q,())),
             "ext_background_effect_manager_v1" => s.bg_manager=Some(reg.bind(name,1,q,())),
             "zwlr_foreign_toplevel_manager_v1" => s.foreign_manager=Some(reg.bind(name,version.min(3),q,())),
             "ext_idle_notifier_v1" => s.idle_notifier=Some(reg.bind(name,version.min(2),q,())),
@@ -1418,6 +1432,9 @@ impl Dispatch<im::ZwpInputMethodV2,()> for State {
 }
 impl Dispatch<mat_manager::BifrostMaterialManagerV1,()> for State {
     fn event(_:&mut Self,_:&mat_manager::BifrostMaterialManagerV1,_:mat_manager::Event,_:&(),_:&Connection,_:&QueueHandle<Self>) {}
+}
+impl Dispatch<lvl_manager::BifrostWindowLevelManagerV1,()> for State {
+    fn event(_:&mut Self,_:&lvl_manager::BifrostWindowLevelManagerV1,_:lvl_manager::Event,_:&(),_:&Connection,_:&QueueHandle<Self>) {}
 }
 impl Dispatch<mat_surface::BifrostMaterialSurfaceV1,()> for State {
     fn event(_:&mut Self,_:&mat_surface::BifrostMaterialSurfaceV1,_:mat_surface::Event,_:&(),_:&Connection,_:&QueueHandle<Self>) {}

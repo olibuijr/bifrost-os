@@ -1,6 +1,6 @@
 id = "is.olibuijr.console.desktop"
 name = "Console"
-version = "1.7.1"
+version = "1.8.0"
 exec = "bifrost-console"
 icon = "icon.png"
 min_shell = "0.5.4"

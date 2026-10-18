@@ -79,11 +79,11 @@
     }
   ],
   "gaps": [
-    "No screen video recording for apps, the shell or the MCP tools (only still screenshots in springboard/src/shell/screenshot.rs).",
+    "No screen video recording for apps, the shell or the MCP tools (screen streams deliver one frame per event, sdk screen_stream.rs, and nothing encodes a movie).",
     "No SDK API for recording: no RPScreenRecorder equivalent in springboard/sdk/src/.",
     "Microphone recording (springboard/src/media/capture.rs) is not reachable from app SDK code; it is used by Voice Memos only.",
     "No app or system audio capture; audiod does not loop back output.",
-    "No clip buffer, clip export, preview or trim UI.",
+    "No clip export, preview or trim UI; the clip buffer model is in springboard/ui/src/clip_buffer.rs.",
     "No live broadcast extension point or broadcast picker."
   ]
 }

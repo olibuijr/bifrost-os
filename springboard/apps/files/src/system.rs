@@ -362,7 +362,7 @@ mod tests {
     use bifrost_app::proto::{Configure, ToShell};
 
     fn test_ctx() -> Ctx {
-        let font = Font::parse(include_bytes!("../../../../bifrost-ref/fonts/SFUI.ttf")).unwrap();
+        let font = Font::parse(Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice())).unwrap();
         let cfg = Configure { w: 100, h: 100, scale: 1.0, safe_top: 0.0, safe_bottom: 0.0, dark: true, text_scale: 1.0, reduce_motion: false };
         Ctx::testing(Ui::new(font, 1.0), cfg)
     }

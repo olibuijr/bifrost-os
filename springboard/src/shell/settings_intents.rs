@@ -3,7 +3,8 @@
 //! through the pane's own actions (`pages::Action`); an intent never writes a setting itself.
 //!
 //! The catalogue uses the same `[[intent]]` manifest spelling as app manifests (`manifest_lines`), so the shell can
-//! list these in the same way it lists app shortcuts (`intents.rs`). Search does not read this list yet.
+//! list these in the same way it lists app shortcuts (`intents.rs`). Search lists them among its Shortcuts
+//! (`quicksearch.rs`, `settings_intent_rows`) and opens the pane with `Settings::open_page_id`.
 
 use super::pages::PageId;
 
@@ -27,7 +28,7 @@ pub const CATALOGUE: &[SettingsIntent] = &[
     SettingsIntent { id: "open-sharing", title: "Open Sharing", description: "Show the sharing settings", page: PageId::Sharing },
     SettingsIntent { id: "open-software-update", title: "Open Software Update", description: "Show the software update settings", page: PageId::SoftwareUpdate },
     SettingsIntent { id: "open-about", title: "Open About", description: "Show information about this computer", page: PageId::About },
-    SettingsIntent { id: "open-account", title: "Open BifrOSt Account", description: "Show the account settings", page: PageId::Root },
+    SettingsIntent { id: "open-account", title: "Open BifrOSt Account", description: "Show the account settings", page: PageId::Account },
     SettingsIntent { id: "open-accessibility", title: "Open Accessibility", description: "Show the accessibility settings", page: PageId::Accessibility },
     SettingsIntent { id: "open-users-groups", title: "Open Users & Groups", description: "Show the users and groups on this computer", page: PageId::Users },
     SettingsIntent { id: "open-appearance", title: "Open Appearance", description: "Show the light, dark and accent settings", page: PageId::Appearance },
@@ -42,6 +43,22 @@ pub const CATALOGUE: &[SettingsIntent] = &[
     SettingsIntent { id: "open-keyboard", title: "Open Keyboard", description: "Show the keyboard settings", page: PageId::Keyboard },
     SettingsIntent { id: "open-keyboard-shortcuts", title: "Open Keyboard Shortcuts", description: "Show the keyboard shortcuts the shell answers to", page: PageId::Shortcuts },
     SettingsIntent { id: "open-login-items", title: "Open Login Items", description: "Show the apps that start at login and the app extensions", page: PageId::LoginItems },
+    SettingsIntent { id: "open-network", title: "Open Network", description: "Show the network interfaces and their settings", page: PageId::Network },
+    SettingsIntent { id: "open-firewall", title: "Open Firewall", description: "Show which apps may accept incoming connections", page: PageId::Firewall },
+    SettingsIntent { id: "open-vpn", title: "Open VPN", description: "Show the VPN configurations", page: PageId::Vpn },
+    SettingsIntent { id: "open-notifications",title: "Open Notifications", description: "Show the notification settings for each app", page: PageId::Notifications },
+    SettingsIntent { id: "open-mouse", title: "Open Mouse", description: "Show the pointer and mouse settings", page: PageId::Mouse },
+    SettingsIntent { id: "open-trackpad", title: "Open Trackpad", description: "Show the trackpad gesture and pointer settings", page: PageId::Trackpad },
+    SettingsIntent { id: "open-game-controllers", title: "Open Game Controllers", description: "Show the connected game controllers", page: PageId::GameControllers },
+    SettingsIntent { id: "open-backup", title: "Open Backup", description: "Show the backups of this computer's data", page: PageId::Backup },
+    SettingsIntent { id: "open-language-region", title: "Open Language & Region", description: "Show the preferred language and the region", page: PageId::Language },
+    SettingsIntent { id: "open-dock", title: "Open Home Screen & Dock", description: "Show the Dock and home screen settings", page: PageId::HomeScreen },
+    SettingsIntent { id: "open-menu-bar", title: "Open Menu Bar", description: "Show which controls the menu bar shows", page: PageId::MenuBar },
+    SettingsIntent { id: "open-screen-saver", title: "Open Screen Saver", description: "Show the screen saver settings", page: PageId::ScreenSaver },
+    SettingsIntent { id: "open-lock-screen", title: "Open Lock Screen", description: "Show the lock screen settings", page: PageId::LockScreen },
+    SettingsIntent { id: "open-spotlight", title: "Open Spotlight", description: "Show what Search looks in", page: PageId::Spotlight },
+    SettingsIntent { id: "open-hot-corners", title: "Open Hot Corners", description: "Show what the screen corners do", page: PageId::HotCorners },
+    SettingsIntent { id: "open-accessibility-shortcut", title: "Open Accessibility Shortcut", description: "Show the features the Accessibility Shortcut switches", page: PageId::AccessibilityShortcut },
 ];
 
 /// The intent with this id, if the catalogue has one.
@@ -96,9 +113,53 @@ mod tests {
     fn find_and_page_for_resolve_catalogue_entries() {
         assert_eq!(page_for("open-keyboard"), Some(PageId::Keyboard));
         assert_eq!(page_for("open-login-items"), Some(PageId::LoginItems));
+        assert_eq!(page_for("open-network"), Some(PageId::Network));
+        assert_eq!(page_for("open-vpn"), Some(PageId::Vpn));
+        assert_eq!(page_for("open-trackpad"), Some(PageId::Trackpad));
+        assert_eq!(page_for("open-backup"), Some(PageId::Backup));
         assert_eq!(find("open-displays").map(|i| i.title), Some("Open Displays"));
         assert_eq!(page_for("missing"), None);
         assert_eq!(find(""), None);
+    }
+
+    #[test]
+    fn the_settings_extensions_each_have_the_intent_that_opens_their_pane() {
+        // AboutSettingsIntents, AccessibilitySettingsWidgetExtension, BluetoothSettings..., BiometricsAndPassword...,
+        // ControlCenterSettings, DesktopSettingsIntents and VpnSettingsIntents
+        for (id, page) in [
+            ("open-about", PageId::About),
+            ("open-accessibility", PageId::Accessibility),
+            ("open-accessibility-shortcut", PageId::AccessibilityShortcut),
+            ("open-bluetooth", PageId::Bluetooth),
+            ("open-passcode", PageId::Passcode),
+            ("open-passwords", PageId::Passwords),
+            ("open-control-centre", PageId::ControlCentre),
+            ("open-menu-bar", PageId::MenuBar),
+            ("open-dock", PageId::HomeScreen),
+            ("open-wallpaper", PageId::Wallpaper),
+            ("open-screen-saver", PageId::ScreenSaver),
+            ("open-lock-screen", PageId::LockScreen),
+            ("open-vpn", PageId::Vpn),
+        ] {
+            assert_eq!(page_for(id), Some(page), "{id}");
+        }
+    }
+
+    #[test]
+    fn open_account_opens_the_account_page() {
+        assert_eq!(page_for("open-account"), Some(PageId::Account));
+    }
+
+    #[test]
+    fn users_and_groups_intent_opens_the_users_pane_that_lists_groups() {
+        assert_eq!(page_for("open-users-groups"), Some(PageId::Users));
+        assert_eq!(find("open-users-groups").map(|i| i.title), Some("Open Users & Groups"));
+    }
+
+    #[test]
+    fn language_and_region_is_reachable_outside_setup() {
+        assert_eq!(page_for("open-language-region"), Some(PageId::Language));
+        assert_eq!(find("open-language-region").map(|i| i.title), Some("Open Language & Region"));
     }
 
     #[test]

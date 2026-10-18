@@ -1,46 +1,49 @@
 {
   "app": "Find My",
-  "bifrost_app": "none (no BifrOSt app)",
+  "bifrost_app": "springboard/apps/locate-desktop (Locate, is.olibuijr.locate.desktop, window full-size; model crate bifrost-locate)",
   "evidence": [
     "ref27/System/Applications/FindMy.app/Contents/Info.plist via bifrost pc ref extract (URL schemes grenada, findmyfriends, fmf1, findmy, fmip1; user activities LocateDeviceIntent, LocateIntent, PlaySoundIntent, ToggleLocationSharingIntent; contacts and location usage strings; regulatory privacy disclosure keys for camera, contacts, location; extension FindMyNotificationsService.appex)",
     "ref27/System/Applications/FindMy.app/Contents/PlugIns/FindMyNotificationsService.appex (the only other file in the bundle; the UI is in private frameworks, so the feature list also follows the shipped app's documented behaviour)",
-    "No BifrOSt source: grep of springboard for the feature finds only springboard/docs/parity/windows-spaces.md (unrelated)"
+    "No BifrOSt source: grep of springboard for the feature finds only springboard/docs/parity/windows-spaces.md (unrelated)",
+    "Locate app (round 2): springboard/apps/locate-desktop/src/window.rs, panel.rs, control.rs, main.rs; SDK springboard/sdk/src/cloud_findmy.rs (cloud device list, command and report requests); cloud routes are specified for bifrost-cloud, not yet built",
+    "Locate 0.3.0: springboard/apps/locate-desktop/src/sealing.rs (HPKE report and account-key seal), pairing.rs (enrollment and approval list), reporting.rs (throttle, clear, live share copies); SDK springboard/sdk/src/cloud_findmy.rs (key, pending, sealed-location and share routes with tests). Headless only: nothing is wired to a window, keychain or poll thread, so no row moved.",
+    "Locate 0.4.0: springboard/apps/locate-desktop/src/cloud.rs (worker), keys.rs (keychain account key), sync.rs and surfaces.rs (window cloud side and controls), springboard/proto/src/lib.rs ToShell::PlaySystemSound with the shell queue in springboard/src/shell/apphost.rs. Nothing is in production until the account sign-in stores the session in the is.bifrost.account keychain group, so no row moved."
   ],
   "summary": {
     "features": 18,
     "parity": 0,
-    "partial": 8,
-    "gap": 7,
+    "partial": 12,
+    "gap": 3,
     "n/a": 3,
-    "coverage_pct": 26.7
+    "coverage_pct": 40.0
   },
   "features": [
     {
       "feature": "App exists",
       "area": "app",
       "apple": "Find My app with People, Devices, Items and Me tabs",
-      "status": "gap",
-      "bifrost": "",
-      "note": "The locator model crate exists in springboard/apps/locate-desktop, but there is no window, manifest or shell listing yet.",
-      "wire": "Create springboard/apps/findmy-desktop (new crate; copy the layout of apps/weather-desktop: manifest.toml, Cargo.toml, src/main.rs, src/window.rs) with a source_list sidebar (People, Devices, Items) and a map pane using the bifrost-maps model crate (apps/maps-desktop), registered in the shell app list."
+      "status": "partial",
+      "bifrost": "springboard/apps/locate-desktop/src/window.rs:94 (LocateWindow::draw: sidebar of People, Devices, Items, Me; the content of each section); springboard/apps/locate-desktop/src/main.rs:26 (configure); springboard/apps/locate-desktop/manifest.toml (is.olibuijr.locate.desktop, window = full-size)",
+      "note": "Locate is a full-size window with the four sections and a device list. There is no map pane yet, and nothing feeds the device list from the cloud, so it shows the empty state.",
+      "wire": "Add the map pane with device pins using bifrost-maps (springboard/apps/maps-desktop) in window.rs draw. Load the device list with a background thread that calls cloud_findmy::devices_request and parse_devices (springboard/sdk/src/cloud_findmy.rs:78, :84) against GET {base}/findmy/devices, then Panel::apply_list. Route not built yet: bifrost-cloud feat/findmy-devices."
     },
     {
       "feature": "Devices tab: locate own devices",
       "area": "devices",
       "apple": "List of the account's devices with last known location on a map and battery state",
       "status": "partial",
-      "bifrost": "springboard/apps/locate-desktop/src/devices.rs (Device::report, Devices::get)",
-      "note": "The device model keeps the newest position fix and battery level per device, tested headless in springboard/apps/locate-desktop/tests/parity_app-find-my.rs. Gap: no cloud endpoint delivers positions and there is no device list or map view.",
-      "wire": "Add POST /api/cloud/devices/{id}/location (latitude, longitude, accuracy, battery, timestamp) and GET /api/cloud/devices to ~/Projects/bifrost-cloud, have the shell upload its location when a location service exists, and list them in the app."
+      "bifrost": "springboard/apps/locate-desktop/src/panel.rs:120 (Panel::rows, this device first); springboard/apps/locate-desktop/src/panel.rs:104 (apply_list); springboard/apps/locate-desktop/src/window.rs:116 (body, Devices lines and empty state)",
+      "note": "The Devices section lists the devices the cloud returned, this machine first, with battery and whether a position is known. No map and no live fetch: the list is empty until the cloud client runs.",
+      "wire": "Poll GET {base}/findmy/devices every 60 s from a background thread and feed Panel::apply_list (cloud_findmy::devices_request, parse_devices). Route built in bifrost-cloud feat/findmy-devices (no position in the answer yet). Location is end to end encrypted (decided by the owner): the device seals {lat, lon, accuracy, timestamp, battery} with HPKE base mode to the account's Find My public key (bifrost_ui::hpke::seal_base, device id as info) and uploads one opaque location_sealed blob (migration 0006, not written yet); the cloud keeps only the public key (PUT /api/cloud/v1/findmy/keys, GET /findmy/keys/{account}). See docs/bifrost-ui.md 'Locate'."
     },
     {
       "feature": "Play a sound on a device",
       "area": "devices",
       "apple": "Play Sound (PlaySoundIntent) to find a nearby device",
       "status": "partial",
-      "bifrost": "springboard/apps/locate-desktop/src/devices.rs (Device::request, Device::take_commands)",
-      "note": "The command queue accepts Play Sound once per device and hands it to the sync, tested headless in springboard/apps/locate-desktop/tests/parity_app-find-my.rs. Gap: no button in a window and no cloud delivery yet.",
-      "wire": "Add a command queue to the cloud device record (play_sound, lock, erase) polled by the shell's cloud sync, and a Play Sound button in the device card; honour the no-unasked-sound rule by requiring the person to press the button."
+      "bifrost": "springboard/apps/locate-desktop/src/control.rs:51 (parse locate.play_sound); springboard/apps/locate-desktop/src/window.rs:73 (rpc queues Request::PlaySound); springboard/sdk/src/cloud_findmy.rs:141 (command_request, CommandKind::PlaySound)",
+      "note": "The control method queues play_sound for a device id, and the SDK builds the cloud command request. There is no Play Sound button in a window, and nothing is sent yet.",
+      "wire": "Add a Play Sound button on the device card in window.rs, pressed by the person (no automatic sound). Send the queued request with command_request to POST {base}/findmy/devices/{id}/commands. The device polls GET {base}/findmy/devices/self/commands for pending commands (route not built: bifrost-cloud feat/findmy-devices)."
     },
     {
       "feature": "Lost mode",
@@ -49,16 +52,16 @@
       "status": "partial",
       "bifrost": "springboard/apps/locate-desktop/src/devices.rs (Device::mark_lost, Device::clear_lost)",
       "note": "Lost mode keeps the message and contact number and queues a lock, tested headless in springboard/apps/locate-desktop/tests/parity_app-find-my.rs. Gap: the lock screen does not show the message yet and nothing is delivered to a device.",
-      "wire": "Add a lost flag and message to the cloud device record; the shell lock screen shows the message and phone number when the flag is set."
+      "wire": "Send kind lost_mode with message and phone through POST {base}/findmy/devices/{id}/commands (the device_commands table in bifrost-cloud migration 0003 already holds the kind). The shell lock screen shows the message and phone number when the flag is set."
     },
     {
       "feature": "Erase a device remotely",
       "area": "devices",
       "apple": "Erase This Device",
       "status": "partial",
-      "bifrost": "springboard/apps/locate-desktop/src/devices.rs (Device::request, CommandError::NeedsConfirmation)",
-      "note": "Erase is queued only after an explicit confirmation, tested headless in springboard/apps/locate-desktop/tests/parity_app-find-my.rs. Gap: the factory reset path and cloud delivery are not wired.",
-      "wire": "Add an erase command to the queue; the shell confirms the signed command and runs the factory reset path of the installer."
+      "bifrost": "springboard/sdk/src/cloud_findmy.rs:141 (command_request refuses erase unless confirmed); springboard/apps/locate-desktop/src/devices.rs (Device::request, CommandError::NeedsConfirmation)",
+      "note": "The SDK refuses an erase command that is not confirmed, and the device model queues erase only after confirmation. No confirmation sheet and no cloud delivery yet.",
+      "wire": "Confirmation sheet in the Devices section, then POST {base}/findmy/devices/{id}/commands with kind erase and confirmed true. The shell runs the installer's factory reset path when the device polls the command."
     },
     {
       "feature": "Directions to a device",
@@ -76,16 +79,16 @@
       "status": "gap",
       "bifrost": "",
       "note": "No notification pipeline from the cloud.",
-      "wire": "Add push-style long polling from the shell to the cloud device endpoint and post a shell notification on the event."
+      "wire": "Long poll GET {base}/findmy/events?after=N&wait=25 is built in bifrost-cloud. The app's background thread must post a shell notification for command_done and share_received events (not built)."
     },
     {
       "feature": "People tab: share location",
       "area": "people",
       "apple": "Share location with contacts for an hour, a day or indefinitely (ToggleLocationSharingIntent)",
       "status": "partial",
-      "bifrost": "springboard/apps/locate-desktop/src/share.rs (Shares::share, Shares::stop, Shares::active)",
-      "note": "Share grants last an hour, a day or indefinitely, replace earlier grants and check the address, tested headless in springboard/apps/locate-desktop/tests/parity_app-find-my.rs. Gap: no Share My Location sheet and no cloud storage of grants.",
-      "wire": "Add share grants (from, to, until) to the cloud account API and a Share My Location sheet that picks Contacts entries by BifrOSt Account address."
+      "bifrost": "springboard/apps/locate-desktop/src/panel.rs:92 (Panel::set_sharing); springboard/apps/locate-desktop/src/window.rs:73 (rpc locate.share)",
+      "note": "The Share My Location switch is a state with a control method. It does not grant sharing to any contact yet, and the switch on the Me page cannot be clicked. Round 3: the sealed copy model (reporting.rs copy_targets, sealing.rs) and the share route exist and are tested headless; the copies are not sent yet.",
+      "wire": "Share grants are built in bifrost-cloud: POST {base}/findmy/shares (contact's email, until or null) and DELETE /findmy/shares/{id}. Sealed copies: while a grant is active the owner's device also seals each report to the contact's account public key; revoking stops new copies and deletes stored ones (not built). Still to do: a Share My Location sheet that picks contacts, and the clickable switch."
     },
     {
       "feature": "People tab: follow friends",
@@ -127,10 +130,10 @@
       "feature": "Me tab: this device and location settings",
       "area": "settings",
       "apple": "Share My Location switch, device name, location services state (NSLocationWhenInUseUsageDescription)",
-      "status": "gap",
-      "bifrost": "",
-      "note": "No settings page.",
-      "wire": "Add a Me page with the share switch, this device's name from BifrOSt Account and the location authorization state."
+      "status": "partial",
+      "bifrost": "springboard/apps/locate-desktop/src/window.rs:116 (body, Me lines); springboard/apps/locate-desktop/src/panel.rs:99 (location_text, LOCATION_UNAVAILABLE)",
+      "note": "The Me page shows the sharing state and the location state. Location reads 'Location services unavailable' because the SDK has no location authorization service to read. The switch cannot be clicked yet, and this device's name is not read from the BifrOSt Account.",
+      "wire": "Make the Share My Location switch clickable (hit test in window.rs; the switch is not drawn yet). Location reporting is off until the person turns it on here; turning it off or clearing deletes this device's cloud rows (DELETE sealed location, not built). Read this device's name from the cloud (GET /findmy/devices, this_device). When the SDK gains a location service, set Panel.location_status from its authorization state."
     },
     {
       "feature": "Contacts access",
@@ -145,10 +148,10 @@
       "feature": "User activities and intents",
       "area": "system",
       "apple": "LocateDeviceIntent, LocateIntent, PlaySoundIntent, ToggleLocationSharingIntent",
-      "status": "gap",
-      "bifrost": "",
-      "note": "No automation.",
-      "wire": "Expose locate, play_sound and share as app control methods (bifrost-app-control)."
+      "status": "partial",
+      "bifrost": "springboard/apps/locate-desktop/src/control.rs:9 (METHODS: locate.locate, locate.play_sound, locate.share); springboard/apps/locate-desktop/src/control.rs:51 (parse)",
+      "note": "The three control methods are served and their parameters are parsed and tested. They are not yet intents for Search or Shortcuts.",
+      "wire": "Register locate, play sound and share as intents, as weather-desktop/src/main.rs (intents, perform_intent) does."
     },
     {
       "feature": "URL schemes",
@@ -166,16 +169,16 @@
       "status": "gap",
       "bifrost": "",
       "note": "No extension model for notifications from an app.",
-      "wire": "Deliver through the shell notification centre from the cloud poll in the new app's background helper."
+      "wire": "Deliver through the shell notification centre from the cloud long poll in the app's background helper (not built, see Notify when found)."
     },
     {
       "feature": "Onboarding and privacy disclosure",
       "area": "privacy",
       "apple": "First-run onboarding bundle and privacy disclosure",
-      "status": "gap",
-      "bifrost": "",
-      "note": "None.",
-      "wire": "Add a first-run sheet that explains what is uploaded (device position, battery) and links the BifrOSt Account privacy page."
+      "status": "partial",
+      "bifrost": "springboard/apps/locate-desktop/src/panel.rs:32 (ONBOARDING_LINES); springboard/apps/locate-desktop/src/window.rs:137 (draw_onboarding); springboard/apps/locate-desktop/src/main.rs:40 (Return dismisses, marker file in the data folder)",
+      "note": "A first-run sheet explains what is uploaded (position and battery level) and is shown once per data folder. It has no button and does not link the BifrOSt Account privacy page.",
+      "wire": "The first-run sheet must say exactly what is uploaded (position, accuracy, time and battery level), that it is encrypted end to end, and that reporting is off until the person turns it on in Me. Add a Continue button and link the BifrOSt Account privacy page."
     }
   ]
 }

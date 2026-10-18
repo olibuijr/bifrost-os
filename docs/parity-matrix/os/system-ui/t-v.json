@@ -41,7 +41,16 @@
    "bifrost": "springboard/src/shell/kb_layouts.rs",
    "status": "partial",
    "note": "keyboard layouts and input menu",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::kb_layouts"
+    }
+   ],
+   "ready_note": "covers: keyboard layouts and input menu"
   },
   {
    "id": "path:/System/Library/CoreServices/TextInputSwitcher.app",
@@ -61,7 +70,16 @@
    "bifrost": "springboard/src/shell/kb_layouts.rs",
    "status": "partial",
    "note": "input source switching",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::kb_layouts"
+    }
+   ],
+   "ready_note": "covers: input source switching"
   },
   {
    "id": "path:/System/Library/CoreServices/ThermalTrap.app",
@@ -78,10 +96,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/thermal_alert.rs, springboard/core/src/thermal.rs, springboard/src/shell/services/power_service.rs",
    "status": "os",
    "note": "thermal event trap, the Linux kernel manages thermal control",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::thermal_alert::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "thermal::tests"
+    }
+   ],
+   "ready_note": "The thermal warning: the shell reads the kernel thermal zones every five seconds (core thermal) and posts a notification when they climb to Serious (\"Computer Is Running Hot\") and to Critical (\"Computer Is Too Hot\"), once per rise. Apps get the same state from the power service."
   },
   {
    "id": "path:/System/Library/CoreServices/TipsSpotlightHandler.app",
@@ -141,7 +173,16 @@
    "bifrost": "springboard/src/shell/accessibility/mod.rs",
    "status": "partial",
    "note": "accessibility controls",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility"
+    }
+   ],
+   "ready_note": "covers: accessibility controls"
   },
   {
    "id": "path:/System/Library/CoreServices/UniversalControl.app",
@@ -178,10 +219,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/files/volumes.rs, springboard/apps/files/src/sidebar.rs, springboard/apps/files/src/main.rs",
    "status": "os",
    "note": "unmount assistant, the Linux base unmounts volumes",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "files::volumes::tests"
+    }
+   ],
+   "ready_note": "When Eject in Files fails, volumes::blockers scans /proc for programs with a file or folder of the volume open and the status bar names them (\"In use by ... Close them and try again.\") instead of only logging the failure."
   },
   {
    "id": "path:/System/Library/CoreServices/UserNotificationCenter.app",
@@ -201,7 +251,16 @@
    "bifrost": "springboard/src/shell/usernotif.rs",
    "status": "partial",
    "note": "user notifications",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::usernotif"
+    }
+   ],
+   "ready_note": "covers: user notifications"
   },
   {
    "id": "path:/System/Library/CoreServices/VoiceOver.app",
@@ -221,7 +280,16 @@
    "bifrost": "springboard/src/shell/atspi/mod.rs",
    "status": "partial",
    "note": "AT-SPI bridge, screen reader support",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::atspi"
+    }
+   ],
+   "ready_note": "covers: AT-SPI bridge, screen reader support"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/TGOnDeviceInferenceProviderService.appex",
@@ -281,7 +349,16 @@
    "bifrost": "springboard/src/thumbs/ (thumbnails service)",
    "status": "partial",
    "note": "Draws: first page of plain text laid out on a paper page (thumbs::text::TextProvider). Needs a Midget check for parity.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "thumbs"
+    }
+   ],
+   "ready_note": "covers: Draws: first page of plain text laid out on a paper page (thumbs::text::TextProvider). Needs a Midget check for parity."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/TransferResetExtension.appex",
@@ -338,10 +415,29 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/translation.rs",
+   "bifrost": "springboard/sdk/src/translation.rs, springboard/sdk/src/translation_popover.rs, springboard/ui/src/translation_popover.rs",
    "status": "partial",
    "note": "In-app TranslationSession only; no system translation popover or language packs. built on os/team-l-08-system-ui; not yet verified on Midget",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "translation::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "translation_popover::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "translation_popover::tests"
+    }
+   ],
+   "ready_note": "The Translation API for apps: TranslationSession with an app-supplied engine, on-device language packs (<source>-<target>.tsv) and availability checks, and the translation popover presenter that places the panel beside the selection and hands the translated text back."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/TranslationAPISupportExtension.appex",
@@ -461,7 +557,16 @@
    "bifrost": "springboard/src/shell/pages.rs",
    "status": "partial",
    "note": "VPN page",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: VPN page"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/VPNAppIntentWidgetExtension.appex",
@@ -478,10 +583,29 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/vpn_intents.rs",
+   "bifrost": "springboard/sdk/src/vpn_intents.rs, springboard/src/shell/services/system_intents.rs, springboard/src/shell/desktop_network.rs",
    "status": "partial",
    "note": "Connect and disconnect intent descriptors only; the tunnel client is not built, so nothing runs them. built on os/team-l-08-system-ui; not yet verified on Midget",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "vpn_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::system_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::desktop_network::tests"
+    }
+   ],
+   "ready_note": "The vpn_connect and vpn_disconnect App Intents are served by the system_intents service: the network worker brings the named NetworkManager VPN connection (VPN or WireGuard type) up or down, or every connected VPN when no name is given, and reports a failure through the network service error. The tunnel itself is NetworkManager's."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/Ventura.appex",

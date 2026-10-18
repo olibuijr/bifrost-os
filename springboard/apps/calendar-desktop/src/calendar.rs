@@ -20,14 +20,18 @@ pub mod invitees;
 pub mod layout;
 pub mod notes;
 pub mod overlay;
+pub mod places;
 pub mod prefs;
 pub mod printing;
 pub mod quick;
 pub mod recur;
+pub mod reminders;
+pub mod rsvp;
 pub mod search;
 pub use springboard::shell::calendar::{store, Date};
 pub mod subscribe;
 pub mod timeview;
+pub mod window;
 
 use bifrost_app::layout::top_inset;
 use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_L, SPACE_XL, SPACE_XS, SPACE_XXS};
@@ -128,8 +132,16 @@ enum Target {
     FillAddress,
     /// Copies the phone number written in the notes to the pasteboard.
     CopyPhone,
+    /// Opens the location in Maps (`places.rs`), under the Location field while it has text.
+    ShowInMaps,
     /// A read-only row: the invitees of an imported event and how each one answered.
     Invitees,
+    /// Accept, Maybe and Decline on an invitation the account has not answered (an index into `rsvp::Answer::ALL`).
+    Rsvp(usize),
+    /// View > Show Reminders.
+    ToggleReminders,
+    /// View > Show Declined Events.
+    ToggleDeclined,
     Toggle(Slot),
     DateStep(i32),
     MonthStep(i32),
@@ -254,9 +266,23 @@ pub struct Calendar {
     overlay: Vec<CalendarEvent>,
     overlay_for: Option<(i64, u64)>,
     overlay_version: u64,
+    /// The account's own address (the CalDAV account's username): the invitations it can answer, and the events it declined.
+    account_email: Option<String>,
+    /// The saved events the account declined, worked out for the saved-event count `declined_for` (see `sync_declined`).
+    declined: std::collections::HashSet<u64>,
+    declined_for: Option<usize>,
     subs: Vec<subscribe::Subscription>,
     /// Title, Location, Notes.
     fields: [TextField; 3],
+    /// Event editors shown in windows of their own (`window.rs`), the event a double-click asked to open, and the last
+    /// tap on an event with its time (a second tap in time is a double-click).
+    panes: Vec<window::Pane>,
+    open_request: Option<u64>,
+    last_tap: Option<(u64, f64)>,
+    /// Replies and invitations waiting for Mail (`rsvp.rs`); the app takes them with `take_outgoing`.
+    outbox: Vec<rsvp::Outgoing>,
+    /// A `maps:` link the editor asked to open (`places.rs`); the app opens it (`take_map_link`).
+    map_link: Option<String>,
     labels: TextCache,
     scroll: Scroller,
     pressed: Option<Target>,
@@ -315,12 +341,7 @@ impl Calendar {
             }
         };
         let today = today(wall, wall.at);
-        let fields = [("Title", MAC_TITLE3_PT), ("Location", MAC_BODY_PT), ("Notes", MAC_BODY_PT)]
-            .map(|(p, pt)| {
-                let mut f = TextField::new(ui, p, pt, false, 160);
-                f.focused = false;
-                f
-            });
+        let fields = window::new_fields(ui);
         let prefs = prefs::Prefs::load(&path);
         let subs = subscribe::load(&path);
         let mut extras = extras::Extras::load(&path);
@@ -364,9 +385,17 @@ impl Calendar {
             saved_scroll: 0.0,
             overlay: vec![],
             overlay_for: None,
+            account_email: None,
+            declined: Default::default(),
+            declined_for: None,
             overlay_version: 0,
             subs,
             fields,
+            panes: Vec::new(),
+            open_request: None,
+            last_tap: None,
+            outbox: Vec::new(),
+            map_link: None,
             labels: TextCache::default(),
             scroll: Scroller::new(),
             pressed: None,
@@ -453,6 +482,9 @@ impl Calendar {
         };
         let e = &draft.event;
         let mut items: Vec<Option<Target>> = vec![Some(Target::Title), Some(Target::Location), None];
+        if places::search_link(self.fields[1].text()).is_some() {
+            items.insert(2, Some(Target::ShowInMaps));
+        }
         items.push(Some(Target::AllDay));
         items.push(Some(Target::Toggle(Slot::Start)));
         if draft.open == Some(Slot::Start) {
@@ -480,6 +512,9 @@ impl Calendar {
         }
         if !draft.invitees.is_empty() {
             items.extend([None, Some(Target::Invitees)]);
+        }
+        if self.awaiting_reply(&draft.invitees) {
+            items.extend([None, Some(Target::Rsvp(0)), Some(Target::Rsvp(1)), Some(Target::Rsvp(2))]);
         }
         if draft.existing {
             items.extend([None, Some(Target::Duplicate)]);
@@ -667,7 +702,7 @@ impl Calendar {
                 location: String::new(),
                 notes: String::new(),
                 repeat: 0,
-                alert: self.prefs.alert,
+                alert: self.prefs.alert, uid: String::new(),
             }
         };
         self.open_draft(ui, event, id.is_some());
@@ -713,7 +748,7 @@ impl Calendar {
             location: q.location.unwrap_or_default(),
             notes: String::new(),
             repeat: 0,
-            alert: self.prefs.alert,
+            alert: self.prefs.alert, uid: String::new(),
         };
         self.open_draft(ui, event, false);
         self.dirty = true;
@@ -736,6 +771,11 @@ impl Calendar {
     /// The phone number the editor last asked to copy, once (the app writes it to the pasteboard).
     pub fn take_copied(&mut self) -> Option<String> {
         self.copied.take()
+    }
+
+    /// The `maps:` link the editor asked to open, once (the app opens it with the shell).
+    pub fn take_map_link(&mut self) -> Option<String> {
+        self.map_link.take()
     }
 
     fn close(&mut self) {
@@ -883,6 +923,7 @@ impl Calendar {
         let Some(draft) = &self.editor else {
             return;
         };
+        let (original, existing) = (draft.event.clone(), draft.existing);
         let mut event = draft.event.clone();
         event.title = self.fields[0].text().trim().to_string();
         event.location = self.fields[1].text().trim().to_string();
@@ -924,6 +965,10 @@ impl Calendar {
                 self.error = None;
                 self.picked = (!delete).then_some(event.id);
                 self.undo = removed.map(|e| (e, t + UNDO_MS));
+                // an event the account organises, with invitees, goes to them again (`rsvp::invite_attendees`)
+                if !delete && existing {
+                    self.invite_attendees(&original, &event);
+                }
                 self.close();
                 self.scroll.jump_top();
                 self.fit_scroll(ui);
@@ -1050,7 +1095,14 @@ impl Calendar {
                 }
             }
             Target::CopyPhone => self.copy_phone(),
+            Target::ShowInMaps => self.map_link = places::search_link(self.fields[1].text()),
             Target::Invitees => {}
+            Target::Rsvp(i) => self.respond_to_invitation(rsvp::Answer::ALL[i]),
+            Target::ToggleReminders => self.toggle_layer(overlay::LAYER_REMINDERS),
+            Target::ToggleDeclined => {
+                self.prefs.show_declined = !self.prefs.show_declined;
+                self.save_prefs();
+            }
             Target::Repeat
             | Target::Alert
             | Target::RepeatFreq
@@ -1262,6 +1314,13 @@ impl Calendar {
                 };
                 if tap {
                     if let Some(target) = pressed.filter(|p| Some(*p) == self.hit(ui, x, y)) {
+                        // an event is selected by a tap and opened in its own window by a double-click (`window.rs`)
+                        if let Target::Row(id) = target {
+                            if !overlay::is_overlay(id) && self.editor.is_none() {
+                                self.tap_event(id, t);
+                                return;
+                            }
+                        }
                         self.activate(ui, target, t);
                     }
                 }
@@ -1535,6 +1594,7 @@ impl Calendar {
                     let text = self.notes_address().map_or_else(String::new, |a| format!("Use {a} as Location"));
                     self.centre(s, ui, &text, MAC_BODY_PT, Weight::Regular, colors::LINK.now(), w / 2.0, mid)
                 }
+                Target::ShowInMaps => self.centre(s, ui, "Show in Maps", MAC_BODY_PT, Weight::Regular, colors::LINK.now(), w / 2.0, mid),
                 Target::CopyPhone => {
                     let text = self.notes_phone().map_or_else(String::new, |p| format!("Copy {p}"));
                     self.centre(s, ui, &text, MAC_BODY_PT, Weight::Regular, colors::LINK.now(), w / 2.0, mid)
@@ -1543,6 +1603,7 @@ impl Calendar {
                     let text = invitees::summary(&people);
                     self.centre(s, ui, &text, MAC_BODY_PT, Weight::Regular, LABEL_2.now(), w / 2.0, mid)
                 }
+                Target::Rsvp(i) => self.centre(s, ui, rsvp::Answer::ALL[i].label(), MAC_BODY_PT, Weight::Regular, colors::LINK.now(), w / 2.0, mid),
                 Target::Duplicate => {
                     self.centre(s, ui, "Duplicate Event", MAC_BODY_PT, Weight::Regular, colors::LINK.now(), w / 2.0, mid)
                 }
@@ -1636,10 +1697,14 @@ pub enum Command {
     NewCalendar,
     /// View > Refresh Calendars: the CalDAV calendars are read now (the app asks `dav_sync` to start).
     RefreshCalendars,
+    /// View > Show Reminders: the open dated reminders of the Reminders app are drawn as all-day items.
+    ShowReminders,
+    /// View > Show Declined Events: the events the account declined are drawn (hidden by default).
+    ShowDeclined,
 }
 
 impl Command {
-    pub const ALL: [Command; 28] = [
+    pub const ALL: [Command; 30] = [
         Command::NewEvent,
         Command::Save,
         Command::Duplicate,
@@ -1668,6 +1733,8 @@ impl Command {
         Command::QuickEvent,
         Command::NewCalendar,
         Command::RefreshCalendars,
+        Command::ShowReminders,
+        Command::ShowDeclined,
     ];
 
     pub fn id(self) -> u32 {
@@ -1708,6 +1775,8 @@ impl Command {
             Command::QuickEvent => "Quick Event...",
             Command::NewCalendar => "New Calendar...",
             Command::RefreshCalendars => "Refresh Calendars",
+            Command::ShowReminders => "Show Reminders",
+            Command::ShowDeclined => "Show Declined Events",
         }
     }
 
@@ -1759,6 +1828,8 @@ impl Calendar {
             Command::ShowMonth => self.view == View::Month,
             Command::ShowYear => self.view == View::Year,
             Command::WeekNumbers => self.prefs.week_numbers,
+            Command::ShowReminders => self.prefs.show_reminders,
+            Command::ShowDeclined => self.prefs.show_declined,
             Command::CalendarList => !self.side_hidden,
             _ => false,
         }
@@ -1803,6 +1874,8 @@ impl Calendar {
             Command::ShowYear => Target::View(View::Year),
             Command::WeekNumbers => Target::WeekNumbers,
             Command::CalendarList => Target::Sidebar,
+            Command::ShowReminders => Target::ToggleReminders,
+            Command::ShowDeclined => Target::ToggleDeclined,
             // the app reads the pasteboard and calls `new_event_from_text`; this path is only a plain New Event
             Command::NewEventFromText => Target::Add,
             Command::GoToDate => Target::GoOpen,

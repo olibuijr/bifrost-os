@@ -12,7 +12,7 @@
       "apple": "ABAddressBook, ABPerson, ABRecord, ABAddressBookSave",
       "bifrost": "springboard/sdk/src/contacts.rs (access, fetch, save, decode_contacts); springboard/src/shell/contactstore.rs (Contact struct, atomic save to Contacts/contacts.tsv)",
       "status": "partial",
-      "note": "Apps ask for access, fetch the fields they may see and save changes through the contacts service, and the reply decoding is tested inline in contacts.rs. Gap: the shell keeps the store and the record format, and no person record type is shared with the shell."
+      "note": "Apps ask for access, fetch the fields they may see and save changes through the contacts service, and the reply decoding is tested inline in contacts.rs. Gap: the shell keeps the store and the record format, and no person record type is shared with the shell. Built 2026-10-17: SDK contacts::fetch, save and matching cover read, write and search for apps (SDK contacts tests)."
     },
     {
       "feature": "Multi-value properties and labels",
@@ -26,21 +26,21 @@
       "apple": "ABSearchElement, ABCopyArrayOfMatchingRecords, ABSearchElementCreateWithConjunction, ABPersonCreateSearchElement",
       "bifrost": "springboard/src/shell/contactstore.rs (search, substring match over name, phone, email, notes, company, address); wired: springboard/apps/contacts-desktop/src/contacts.rs (list_hits)",
       "status": "partial",
-      "note": "The case-insensitive substring match over name, phone, email, notes, company and address is tested headless in springboard/tests/parity_sdk-tests-03.rs (search). Gap: only a single text query; no property-scoped or compound search elements. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "The case-insensitive substring match over name, phone, email, notes, company and address is tested headless in springboard/tests/parity_sdk-tests-03.rs (search). Gap: only a single text query; no property-scoped or compound search elements. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity. Built 2026-10-17: SDK contacts::matching searches one property case-insensitively over fetched records (test a_search_matches_one_property_ignoring_case)."
     },
     {
       "feature": "People picker and person view",
       "apple": "ABPeoplePickerView, ABPersonView",
       "bifrost": "springboard/ui/src/contact_picker.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 7 tests. Wave 6 (b02, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No SDK picker or embeddable person view; each app would have to rebuild one"
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 6 (b02, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No SDK picker or embeddable person view; each app would have to rebuild one Built 2026-10-17: SDK contacts::picker exposes the picker model to apps (picker test in the SDK contacts tests). No embeddable person view yet. Built 2026-10-17 (shell): The contacts service pick and pick_result start and read the picker (contactpick.rs; SDK contacts::picker). The picker sheet that draws the list is not built yet. Built 2026-10-17 (shell, round 4): The picker sheet is drawn by the shell (contact_pick_sheet.rs). No embeddable person view yet."
     },
     {
       "feature": "Groups",
       "apple": "ABGroup, ABGroupAddMember, ABGroupRemoveMember, ABGroupCopyArrayOfAllMembers, subgroups",
       "bifrost": "springboard/ui/src/contact_groups.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 6 tests. Wave 6 (b02, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. Favorites is a flag on the contact; there are no group records or membership"
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 6 (b02, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. Favorites is a flag on the contact; there are no group records or membership Built 2026-10-17: SDK contacts::groups exposes the group model (test groups_nest_and_list_members_recursively). Built 2026-10-17 (shell): Groups are kept by the contacts service (sidecar contactgroups.rs) and the SDK calls it (contacts::groups); membership persists and is shared. Tests: contactgroups tests."
     },
     {
       "feature": "vCard import and export",
@@ -54,7 +54,7 @@
       "apple": "ABPersonSetImageData, ABPersonCopyImageData, ABImageClient, ABBeginLoadingImageDataForClient",
       "bifrost": "springboard/ui/src/contact_photo.rs (Photos::set",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (w4-address-book, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Contact struct has no image field"
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (w4-address-book, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Contact struct has no image field Built 2026-10-17: SDK contacts::photos exposes the picture model (test a_refused_picture_keeps_the_contacts_old_picture). Built 2026-10-17 (shell): Pictures are kept by the contacts service as files beside the contacts file (contactphotos.rs), and apps get them through contacts::photos get, set and remove. Tests: contactphotos tests."
     },
     {
       "feature": "Formatted postal addresses",
@@ -82,14 +82,14 @@
       "apple": "ABAddressBookRegisterExternalChangeCallback, ABAddressBookUnregisterExternalChangeCallback",
       "bifrost": "springboard/ui/src/contact_changes.rs (Observers::register",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 11 tests. Wave 4 (w4-address-book, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No callback when the contact store changes outside the app"
+      "note": "verified on Midget 0.7.25 by 11 tests. Wave 4 (w4-address-book, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No callback when the contact store changes outside the app Built 2026-10-17: SDK contacts::history exposes the change store and observers (test a_batch_of_contact_changes_is_recorded_and_fetched_by_token). Built 2026-10-17 (shell): The shell logs each save (contactchanges.rs) and apps read the log with contacts::history::changes(token). Tests: contactchanges tests."
     },
     {
       "feature": "Access authorization",
       "apple": "ABAddressBookRequestAccessWithCompletion, ABAddressBookGetAuthorizationStatus",
       "bifrost": "springboard/ui/src/contact_access.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 8 tests. Wave 2 (theme-30, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No contacts permission type; the manifest only has storage"
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 2 (theme-30, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No contacts permission type; the manifest only has storage Built 2026-10-17 (shell): Settings > App Permissions has a Contacts switch per app, and undecided apps queue the access sheet (privacy_permissions Kind::Contacts). Grants still reset on restart. Built 2026-10-17 (shell, round 4): Contact grants persist with the other privacy grants (privacy-grants.tsv); the picker sheet draws the open pick (contact_pick_sheet.rs)."
     },
     {
       "feature": "Action plug-in delegate",
@@ -100,15 +100,13 @@
     }
   ],
   "gaps": [
-    "No SDK API for apps to read, write, or search contacts (the store is shell-internal).",
     "No people picker or person view for apps to embed.",
     "Contacts have one phone, one email and one address; no multi-value properties or primary value.",
     "No groups or group membership; Favorites is a flag only.",
     "No contact photos.",
     "No structured postal address fields or formatter.",
-    "No change notification when the store changes.",
+    "Changes are polled through contacts::history; there is no push notification when the store changes.",
     "No contacts permission in the app manifest.",
-    "No vCard import.",
     "Apple deprecated this framework; the modern Contacts framework is the reference and is not covered in this batch."
   ]
 }

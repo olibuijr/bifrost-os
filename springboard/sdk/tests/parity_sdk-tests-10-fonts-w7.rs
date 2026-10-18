@@ -33,7 +33,7 @@ fn headless_a_reference_family_name_maps_to_its_class_ignoring_case_and_spacing(
 
 #[test]
 fn headless_a_known_family_substitutes_the_open_equivalents_of_its_class_in_order() {
-    assert_eq!(substitute("Helvetica Neue"), vec!["Inter", "Geist", "Source Sans 3"]);
+    assert_eq!(substitute("Helvetica Neue"), vec!["TeX Gyre Heros", "Inter", "Geist", "Source Sans 3"]);
     assert_eq!(substitute("Menlo")[0], "JetBrains Mono");
     assert!(substitute("Comic Nonsense Face").is_empty());
 }

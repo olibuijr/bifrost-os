@@ -12,14 +12,14 @@
       "apple": "NCWidgetProviding: widgetPerformUpdate(completionHandler:), widgetMarginInsets(forProposedMarginInsets:), widgetActiveDisplayModeDidChange(_:withMaximumSize:), NCWidgetDisplayMode, NCUpdateResult (https://developer.apple.com/documentation/notificationcenter/ncwidgetproviding)",
       "bifrost": "springboard/ui/src/widget.rs (DisplayMode, Insets, margin_insets, Limits), springboard/ui/src/widget_list.rs; tests: springboard/ui/tests/parity_sdk-tests-15.rs",
       "status": "partial",
-      "note": "Display modes, margin insets and the per-mode maximum size are tested headless in ui/tests/parity_sdk-tests-15.rs. Wave 1 (parity/integration 0d0412c3): pure model; not wired into apps or the shell, not yet tested on the VM or Midget. The shell renders its own widgets (battery, calendar, clock, deildu, weather and others). Apps cannot supply a widget: there is no extension point and no SDK type for NCWidgetProviding."
+      "note": "Display modes, margin insets and the per-mode maximum size are tested headless in ui/tests/parity_sdk-tests-15.rs. Wave 1 (parity/integration 0d0412c3): pure model; not wired into apps or the shell, not yet tested on the VM or Midget. The shell renders its own widgets (battery, calendar, clock, deildu, weather and others). Apps cannot supply a widget: there is no extension point and no SDK type for NCWidgetProviding. Built 2026-10-17: SDK type sdk today_widgets::WidgetSet (ordered widgets, has-content flags, visible list); tests today_widgets::tests. Apps still have no widget view extension point."
     },
     {
       "feature": "Widget content controller (NCWidgetController)",
       "apple": "NCWidgetController: widgetController(), setHasContent(_:forWidgetWithBundleIdentifier:), default()",
       "bifrost": "springboard/ui/src/widget.rs (Controller); tests: springboard/ui/tests/parity_sdk-tests-15.rs",
       "status": "partial",
-      "note": "The has-content flag per widget is tested headless in ui/tests/parity_sdk-tests-15.rs: unreported widgets show, empty ones are left out in order, and forgetting an app restores its widget. Wave 1 (parity/integration 0d0412c3): pure model; not wired into apps or the shell, not yet tested on the VM or Midget. Nothing lets an app tell the shell that its widget has content to show or hide, so the shell cannot hide an empty widget on the app's behalf."
+      "note": "The has-content flag per widget is tested headless in ui/tests/parity_sdk-tests-15.rs: unreported widgets show, empty ones are left out in order, and forgetting an app restores its widget. Wave 1 (parity/integration 0d0412c3): pure model; not wired into apps or the shell, not yet tested on the VM or Midget. Nothing lets an app tell the shell that its widget has content to show or hide, so the shell cannot hide an empty widget on the app's behalf. Refreshed 2026-10-17: covered by springboard/sdk/src/today_widgets.rs (WidgetSet::set_has_content, visible); tests today_widgets::tests."
     },
     {
       "feature": "Widget editing and ordering",
@@ -47,7 +47,7 @@
       "apple": "Not part of this framework. Apple's user-facing Notification Center is system UI; apps post notifications through UserNotifications.",
       "bifrost": "springboard/src/shell/notify/center.rs (column of glass cards, one per app, clear per app or all); springboard/src/shell/notify/mod.rs (Notification Center in the notification store); springboard/sdk/src/usernotif.rs (app-facing UNUserNotificationCenter-style API); springboard/tests/parity_sdk-tests-04.rs (tests)",
       "status": "partial",
-      "note": "The column and delivery exist and apps can post through usernotif. The store behind the column (grouping per app, clear per app or all, the 50-entry limit) and the sheet's hidden state are tested headless in springboard/tests/parity_sdk-tests-04.rs; the drawn cards and the swipe gestures are not tested. Widgets are left out of the column (center.rs comment: the shell has no widget data source on the PC yet). Included only for context: it is not an API of this framework."
+      "note": "The column and delivery exist and apps can post through usernotif. The store behind the column (grouping per app, clear per app or all, the 50-entry limit) and the sheet's hidden state are tested headless in springboard/tests/parity_sdk-tests-04.rs; the drawn cards and the swipe gestures are not tested. Widgets are left out of the column (center.rs comment: the shell has no widget data source on the PC yet). Included only for context: it is not an API of this framework. Round (notify-stacks): groups are per app and thread, and the column's close control and Clear clear one stack (springboard/src/shell/notify/center.rs DeskHit::Close, springboard/src/shell/notify/mod.rs:447 clear_group). Stack headers read 'App · thread'. Not verified on Midget."
     },
     {
       "feature": "Widgets in the column layout",
@@ -65,8 +65,7 @@
     }
   ],
   "gaps": [
-    "No app-facing Today widget extension point (NCWidgetProviding): apps cannot supply widget content to the Today View or the home-screen gallery.",
-    "No NCWidgetController equivalent: apps cannot report whether their widget has content.",
+    "No app-drawn widget content: springboard/sdk/src/today_widgets.rs (WidgetSet) sets the order and the has-content flags only, and the shell draws its own widgets (NCWidgetProviding).",
     "No search results view or list view for widgets (NCWidgetSearchViewController, NCWidgetListViewController).",
     "The Notification Center column does not show widgets: springboard/src/shell/notify/center.rs says the shell has no widget data source on the PC yet. The layout model in springboard/ui/src/widget_column.rs exists but nothing calls it yet.",
     "WidgetKit (Apple's replacement) is not in the SDK; it is outside this framework but is where Apple's widget work now lives."

@@ -21,7 +21,10 @@ mod testutil;
 
 use bifrost_app::proto::{kbflags, KeyboardConfig, KeyboardLayout, KeyboardOut, ReturnKey};
 use bifrost_app::kit::{Damage, Surface};
+use bifrost_app::speech_recognizer::SFSpeechAudioBufferRecognitionRequest;
+use bifrost_app::speech_whisper;
 use bifrost_app::{App, Ctx, Input, TouchKind};
+use bifrost_core::json::Json;
 use keyboard::{Keyboard, Mode, Out};
 use springboard::shell::kb_capslock::KbPrefs;
 use springboard::shell::kb_clicks::Click;
@@ -34,6 +37,27 @@ struct KeyboardApp {
     reported: u32,
     /// the input language the shell last knew (index)
     language: u8,
+    dictation: Dictation,
+}
+
+/// The locale the on-device recognizer serves.
+const DICTATION_LOCALE: &str = "en_US";
+/// How often a running dictation asks the shell for its transcripts, ms.
+const POLL_MS: f64 = 250.0;
+
+/// The microphone key. Final transcripts are typed where the focus is; the shell keeps the audio on this machine.
+#[derive(Default)]
+struct Dictation {
+    /// the `start` request in flight
+    start: Option<u32>,
+    /// the `poll` request in flight
+    poll: Option<u32>,
+    /// true from `start` until the shell reports the pipeline ended
+    active: bool,
+    next_poll: f64,
+    /// Reads the spoken punctuation and editing words ("comma", "new line", "scratch that") in the transcripts and
+    /// keeps the text typed so far, so a take-back can be sent as backspaces.
+    commands: bifrost_app::controls::dictation_commands::Interpreter,
 }
 
 fn mode_of(layout: KeyboardLayout) -> Mode {
@@ -68,7 +92,28 @@ fn send_out(ctx: &Ctx, out: Out) {
         Out::Enter => KeyboardOut::Enter,
         Out::Hide => KeyboardOut::Hide,
         Out::Named(n) => KeyboardOut::Named(n.into()),
+        Out::Dictate => return,
     });
+}
+
+impl KeyboardApp {
+    /// Sends an output, starting or stopping dictation for the microphone key.
+    fn route(&mut self, ctx: &Ctx, out: Out) {
+        match out {
+            Out::Dictate => self.toggle_dictation(ctx),
+            other => send_out(ctx, other),
+        }
+    }
+
+    fn toggle_dictation(&mut self, ctx: &Ctx) {
+        if self.dictation.active {
+            speech_whisper::stop(ctx);
+            return;
+        }
+        let mut request = SFSpeechAudioBufferRecognitionRequest::new();
+        request.should_report_partial_results = false;
+        self.dictation = Dictation { start: Some(speech_whisper::start(ctx, DICTATION_LOCALE, &request)), poll: None, active: true, next_poll: 0.0, commands: Default::default() };
+    }
 }
 
 impl KeyboardApp {
@@ -152,15 +197,15 @@ impl App for KeyboardApp {
         let Input::Touch { kind, x, y, t, .. } = ev else { return false };
         let Some(kb) = &mut self.kb else { return false };
         let t = t as f64;
+        let mut released = None;
         match kind {
             TouchKind::Down => kb.down(x, y, t),
             TouchKind::Move => kb.moved(x, y),
-            TouchKind::Up => {
-                if let Some(out) = kb.up(x, y, t) {
-                    send_out(ctx, out);
-                }
-            }
+            TouchKind::Up => released = kb.up(x, y, t),
             _ => {}
+        }
+        if let Some(out) = released {
+            self.route(ctx, out);
         }
         self.flush(ctx);
         true
@@ -168,15 +213,55 @@ impl App for KeyboardApp {
 
     fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
         let Some(kb) = &mut self.kb else { return false };
-        for out in kb.tick(t) {
-            send_out(ctx, out);
-        }
+        let outs = kb.tick(t);
         let animating = kb.animating();
+        for out in outs {
+            self.route(ctx, out);
+        }
+        if self.dictation.active && self.dictation.start.is_none() && self.dictation.poll.is_none() && t >= self.dictation.next_poll {
+            self.dictation.poll = Some(speech_whisper::poll(ctx));
+            self.dictation.next_poll = t + POLL_MS;
+        }
         self.flush(ctx);
         animating
     }
 
+    fn service_reply(&mut self, ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
+        if self.dictation.start == Some(request) {
+            self.dictation.start = None;
+            if result.is_err() {
+                self.dictation.active = false;
+            }
+            return true;
+        }
+        if self.dictation.poll == Some(request) {
+            self.dictation.poll = None;
+            match speech_whisper::poll_from_reply(result) {
+                Ok(reply) => {
+                    for t in reply.transcripts.iter().filter(|t| t.is_final) {
+                        let edit = self.dictation.commands.feed_edit(&t.text);
+                        for _ in 0..edit.backspaces {
+                            send_out(ctx, Out::Backspace);
+                        }
+                        if !edit.insert.is_empty() {
+                            send_out(ctx, Out::Text(edit.insert));
+                        }
+                    }
+                    if !reply.running {
+                        self.dictation.active = false;
+                    }
+                }
+                Err(_) => self.dictation.active = false,
+            }
+            return true;
+        }
+        false
+    }
+
     fn next_wake(&self, t: f64) -> Option<f64> {
+        if self.dictation.active {
+            return Some(t + POLL_MS);
+        }
         self.kb.as_ref().filter(|kb| kb.animating()).map(|_| t + 16.0)
     }
 
@@ -197,5 +282,5 @@ fn main() {
     springboard::emoji::reload_from(&predict::package_dir().join("assets/NotoColorEmoji.ttf"));
     predict::reload_words(&predict::package_words());
     let config = KeyboardConfig { flags: kbflags::SHOWN, languages: 1, language: 0, ..Default::default() };
-    bifrost_app::run(KeyboardApp { kb: None, config, reported: 0, language: 0 });
+    bifrost_app::run(KeyboardApp { kb: None, config, reported: 0, language: 0, dictation: Dictation::default() });
 }

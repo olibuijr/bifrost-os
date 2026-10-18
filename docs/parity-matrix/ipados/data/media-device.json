@@ -1,0 +1,43 @@
+{
+  "framework": "Media Device",
+  "doc": "https://developer.apple.com/documentation/mediadevice",
+  "macos_since": "",
+  "status": "partial",
+  "bifrost": "springboard/sdk/src/route_discovery.rs, springboard/sdk/src/route_events.rs",
+  "summary": "An app-facing receiver discovery model and route events exist. The device extension that discovers, activates and plays on a remote device is not built, so no receiver is ever listed or driven.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run in this batch); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Discovery of media output devices",
+      "apple": "MediaOutputDevice, MediaDeviceExtension",
+      "bifrost": "springboard/sdk/src/route_discovery.rs",
+      "status": "partial",
+      "note": "receiver description and discovery model; no extension process runs it"
+    },
+    {
+      "feature": "Session and playback on a device",
+      "apple": "MediaOutputSession, MediaDeviceRoutingManager",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no playback session on a remote output"
+    },
+    {
+      "feature": "Realtime sample delivery",
+      "apple": "RealtimeSampleHandling",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no realtime sample path to a receiver"
+    },
+    {
+      "feature": "Authorization UI for a device",
+      "apple": "MediaOutputDevice.AuthorizationMethod",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no authorization prompt for a remote output"
+    }
+  ],
+  "gaps": [
+    "No device extension that discovers and plays on a remote output.",
+    "No realtime sample delivery."
+  ]
+}

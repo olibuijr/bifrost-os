@@ -55,6 +55,8 @@ pub enum Action {
     OpenQuickSearch,
     OpenCalendar,
     OpenWeather,
+    /// the Photos widget was tapped: show the photo picker to choose its picture
+    ChoosePhoto,
     /// open the last played Deildu title
     OpenDeildu(deildu::Played),
 }
@@ -163,6 +165,8 @@ pub struct Today {
     played: Option<deildu::Played>,
     poster: Option<Image>,
     photos: Option<Image>,
+    /// the thumbnail key of the picture the person chose for the Photos widget (`photos.pin`); None: a new one each minute
+    pinned: Option<String>,
     mono: Font<'static>,
     deildu_dir: PathBuf,
     thumbs_dir: PathBuf,
@@ -201,6 +205,7 @@ impl Today {
             played: None,
             poster: None,
             photos: None,
+            pinned: None,
             mono: Font::parse(mono).expect("mono font"),
             deildu_dir: crate::deildu::data_dir(),
             thumbs_dir: photos::thumbs_dir().into(),
@@ -239,7 +244,23 @@ impl Today {
         self.off = list(self.prefs.get("off"));
         self.off.dedup();
         self.played = self.prefs.get("deildu.last").and_then(deildu::Played::decode);
+        self.pinned = self.prefs.get("photos.pin").filter(|k| !k.is_empty()).map(str::to_string);
         self.gen += 1;
+    }
+
+    /// Pins the Photos widget to the picture whose thumbnail key is `key`, or lets it rotate again with `None`. Saved.
+    pub fn pin_photo(&mut self, key: Option<&str>) {
+        self.pinned = key.filter(|k| !k.is_empty()).map(str::to_string);
+        if let Err(e) = self.prefs.set("photos.pin", self.pinned.as_deref().unwrap_or("")) {
+            eprintln!("springboard: {PREFS_FILE}: {e}");
+        }
+        self.keys.remove(&Kind::Photos);
+        self.last_refresh = f64::NEG_INFINITY;
+    }
+
+    /// The thumbnail key the Photos widget is pinned to.
+    pub fn pinned_photo(&self) -> Option<&str> {
+        self.pinned.as_deref()
     }
 
     fn save(&mut self) {
@@ -364,7 +385,9 @@ impl Today {
         let (poster, dkey) = (&self.poster, format!("{poster_key}:{}", deildu::key(played.as_ref(), self.poster.is_some())));
         update(Kind::Deildu, dkey, &mut self.tiles, &mut self.keys, &mut || Some(deildu::render(ui, played.as_ref(), poster.as_ref())));
         let thumbs = photos::thumbs(&self.thumbs_dir);
-        let pick = photos::pick(&thumbs, src.unix).cloned();
+        // the picture the person chose, while its thumbnail exists; else a new one every minute
+        let pinned = self.pinned.as_deref().and_then(|k| photos::pinned(&self.thumbs_dir, k));
+        let pick = pinned.or_else(|| photos::pick(&thumbs, src.unix).cloned());
         let s = self.s;
         let mut img = None;
         update(Kind::Photos, photos::key(pick.as_deref()), &mut self.tiles, &mut self.keys, &mut || {
@@ -564,6 +587,7 @@ impl Today {
                     Kind::Deildu => self.played.clone().map(Action::OpenDeildu),
                     Kind::Calendar => Some(Action::OpenCalendar),
                     Kind::Weather => Some(Action::OpenWeather),
+                    Kind::Photos => Some(Action::ChoosePhoto),
                     _ => None,
                 }
             }
@@ -850,6 +874,47 @@ pub(crate) mod tests {
         assert!(refresh(&ui, &mut t, &info(), 60, 60_000.0));
         assert!(t.enabled().contains(&Kind::Photos));
         assert_eq!(t.placed().last().map(|p| p.kind), Some(Kind::Photos));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_photos_widget_asks_for_a_picture_and_shows_the_pinned_one() {
+        let (ui, mut t) = today();
+        let dir = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/target/test-today-pin")).join(std::process::id().to_string());
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let raw = |color: u32| {
+            let mut b = b"RIMG".to_vec();
+            b.extend(2u32.to_le_bytes());
+            b.extend(2u32.to_le_bytes());
+            for _ in 0..4 {
+                b.extend(color.to_le_bytes());
+            }
+            b
+        };
+        std::fs::write(dir.join("aaaa.raw"), raw(pack(200, 100, 50, 255))).unwrap();
+        std::fs::write(dir.join("bbbb.raw"), raw(pack(10, 20, 30, 255))).unwrap();
+        t.set_dirs(&dir, &dir);
+        refresh(&ui, &mut t, &info(), 0, 0.0);
+        let photos = t.placed().into_iter().find(|p| p.kind == Kind::Photos).expect("the Photos widget is on the page");
+        let (px, py) = centre(photos.rect);
+        assert_eq!(tap(&mut t, px, py, 100.0), Some(Action::ChoosePhoto), "a tap opens the picker");
+        // the person chose the second picture: the widget shows it, every minute
+        t.pin_photo(Some("bbbb"));
+        assert_eq!(t.pinned_photo(), Some("bbbb"));
+        assert_eq!(t.prefs.get("photos.pin"), Some("bbbb"), "the choice is saved");
+        for (i, minute) in [0i64, 1, 2, 3].into_iter().enumerate() {
+            refresh(&ui, &mut t, &info(), minute * 60, 120_000.0 + i as f64 * 60_000.0);
+            let tile = t.tile(Kind::Photos).expect("the tile is drawn");
+            assert_eq!(tile.px[tile.w * tile.h / 2 + tile.w / 2], pack(10, 20, 30, 255), "minute {minute}: still the pinned picture");
+        }
+        // a pinned picture whose thumbnail is gone falls back to the rotation
+        std::fs::remove_file(dir.join("bbbb.raw")).unwrap();
+        refresh(&ui, &mut t, &info(), 600, 900_000.0);
+        let tile = t.tile(Kind::Photos).expect("the tile is drawn");
+        assert_eq!(tile.px[tile.w * tile.h / 2 + tile.w / 2], pack(200, 100, 50, 255));
+        t.pin_photo(None);
+        assert_eq!(t.pinned_photo(), None);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

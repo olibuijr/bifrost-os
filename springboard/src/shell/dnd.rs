@@ -270,7 +270,7 @@ impl super::Shell {
         let m = self.desk_metrics();
         let (i, hit) = d.pick(&m, x, y)?;
         let w = d.wins[i];
-        let super::AppId::External(slot) = w.app else { return None };
+        let super::AppId::External(slot) = w.app.parent() else { return None };
         if hit != super::desk::Hit::Content {
             return None;
         }

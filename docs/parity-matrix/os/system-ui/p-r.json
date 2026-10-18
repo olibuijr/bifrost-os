@@ -18,10 +18,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/pip_window.rs",
+   "bifrost": "springboard/ui/src/pip_window.rs, springboard/src/shell/pip.rs, springboard/src/shell/services/picture_in_picture.rs, springboard/sdk/src/picture_in_picture.rs",
    "status": "partial",
    "note": "Picture in Picture state and window geometry; no shell window yet. built on arm; not yet verified on Midget",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "pip_window::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pip::tests"
+    }
+   ],
+   "ready_note": "The Picture in Picture window: state and geometry (pip_window), the shell window drawn over the screen in its corner (shell::pip, Shell::draw while it is showing), the picture_in_picture service that apps call, and the SDK controller."
   },
   {
    "id": "path:/System/Library/CoreServices/Paired Devices.app",
@@ -118,10 +132,29 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/contactstore.rs",
+   "bifrost": "springboard/src/shell/services/contacts.rs, springboard/src/shell/contactstore.rs, springboard/ui/src/contact_card.rs, springboard/apps/contacts-desktop/src/contacts.rs",
    "status": "partial",
    "note": "contact parsing, sorting and search; no people card view yet. built on arm; not yet verified on Midget",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::contacts::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "contact_card::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::contact_pick_sheet::tests"
+    }
+   ],
+   "ready_note": "Other apps get the people views from the shell: the contacts service's view method opens a contact's card in Contacts (the app draws the card from contact_card rows), and its pick method shows the contact picker sheet. Neither gives the caller the book."
   },
   {
    "id": "path:/System/Library/CoreServices/PowerChime.app",
@@ -161,7 +194,16 @@
    "bifrost": "springboard/src/shell/services/quick_look.rs",
    "status": "partial",
    "note": "Quick Look",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::quick_look"
+    }
+   ],
+   "ready_note": "covers: Quick Look"
   },
   {
    "id": "path:/System/Library/CoreServices/PreviewShellMac.app",
@@ -181,7 +223,16 @@
    "bifrost": "springboard/src/shell/services/quick_look.rs",
    "status": "partial",
    "note": "Quick Look",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::quick_look"
+    }
+   ],
+   "ready_note": "covers: Quick Look"
   },
   {
    "id": "path:/System/Library/CoreServices/Pro Display Calibrator.app",
@@ -221,7 +272,16 @@
    "bifrost": "springboard/src/shell/diag.rs",
    "status": "partial",
    "note": "diagnostics",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::diag"
+    }
+   ],
+   "ready_note": "covers: diagnostics"
   },
   {
    "id": "path:/System/Library/CoreServices/ProfileHelper.app",
@@ -278,10 +338,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/input_methods/mod.rs",
+   "bifrost": "springboard/src/shell/input_methods/plugins.rs, springboard/src/shell/store/install.rs, springboard/src/shell/input_methods/mod.rs",
    "status": "partial",
-   "note": "input source list and controllers; no plugin registration for third-party input method apps. built on arm; not yet verified on Midget",
-   "rea": []
+   "note": "input source list and controllers; no plugin registration for third-party input method apps. built on arm; not yet verified on Midget. Built 2026-10-17: a manifest declares input_sources, install validates them against the built-in engines, and input_methods::plugins::installed lists the installed sources (tests input_methods::plugins::tests, store::install::tests). Gap: the shell's input source list (sources() is static) does not show them yet. Built 2026-10-17: listed_sources (built-in sources, then plugin sources whose id is new) and controller_for (builds a built-in or plugin source); tests input_methods::plugins::tests. Still missing: no shell input source picker calls them yet, so the row stays open.",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::input_methods::plugins::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::store::install::tests"
+    }
+   ],
+   "ready_note": "Registration of an input method: an app manifest declares input_sources, install validates each against the built-in engines and records it (store::install), and plugins::installed, listed_sources and controller_for list and build the registered sources. Showing the sources in the input source menu belongs to the Text Input rows."
   },
   {
    "id": "path:/System/Library/CoreServices/Rosetta 2 Updater.app",
@@ -381,7 +455,16 @@
    "bifrost": "springboard/src/thumbs/ (thumbnails service)",
    "status": "partial",
    "note": "Draws: archive card with format badge and entry count for zip and tar, else type icon with badge (thumbs::cards, shell/services/thumb_providers.rs). Needs a Midget check for parity.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "thumbs"
+    }
+   ],
+   "ready_note": "covers: Draws: archive card with format badge and entry count for zip and tar, else type icon with badge (thumbs::cards, shell/services/thumb_providers.rs). Needs a Midget check for parity."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/PaperKitExtension.appex",
@@ -401,7 +484,16 @@
    "bifrost": "springboard/src/shell/markup.rs",
    "status": "partial",
    "note": "markup tools in the shell",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::markup"
+    }
+   ],
+   "ready_note": "covers: markup tools in the shell"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/PhoneAppIntentsExtension.appex",
@@ -441,7 +533,16 @@
    "bifrost": "springboard/src/shell/photos/mod.rs",
    "status": "partial",
    "note": "photo picker",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos"
+    }
+   ],
+   "ready_note": "covers: photo picker"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/PhotosPicker.appex",
@@ -461,7 +562,16 @@
    "bifrost": "springboard/src/shell/photos/mod.rs",
    "status": "partial",
    "note": "photo picker",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos"
+    }
+   ],
+   "ready_note": "covers: photo picker"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/PhotosPosterProvider.appex",
@@ -478,10 +588,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/photos/mod.rs",
+   "bifrost": "springboard/src/shell/photos/mod.rs, springboard/src/shell/wallpaper_page.rs, springboard/src/bin/shell.rs",
    "status": "partial",
    "note": "photo-backed wallpapers (set_wallpaper) feed the lock screen; no poster layers. built on arm; not yet verified on Midget",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::tests::set_as_wallpaper"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_page::tests"
+    }
+   ],
+   "ready_note": "Photo posters: Photos' Set as Wallpaper packs a photo (with its edits) as a still with a thumbnail, and Settings > Wallpaper lists the pictures in Pictures (photo_wallpapers) so any of them can be set for the lock and home screens."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/PlatformSSOToken.appex",
@@ -558,10 +682,29 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/print_scan_page.rs",
+   "bifrost": "springboard/sdk/src/scanner_intents.rs, springboard/src/shell/services/system_intents.rs, springboard/ui/src/scanner.rs, springboard/src/shell/print_scan_page.rs",
    "status": "partial",
-   "note": "Scanners group lists devices via bifrost_ui::scanner; no App Intents for scanning. built on arm; not yet verified on Midget",
-   "rea": []
+   "note": "Scanners group lists devices via bifrost_ui::scanner; no App Intents for scanning. built on arm; not yet verified on Midget Built 2026-10-17: scanner App Intents (scan_document, scan_to_folder) in springboard/sdk/src/scanner_intents.rs; tests scanner_intents::tests. Calls are not served yet (they must go through bifrost_ui::scanner::scan_to).",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "scanner_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::system_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "scanner::tests"
+    }
+   ],
+   "ready_note": "The scan_document and scan_to_folder App Intents are served by the system_intents service: it picks the scanner by name (scanner::list), scans through bifrost_ui::scanner::scan_to, saves to Documents or the named folder under the home folder and reports the file or the failure through its last method. PDF is refused because scanimage cannot write it."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/PrivateEvolutionPlugin.appex",

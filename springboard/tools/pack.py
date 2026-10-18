@@ -47,6 +47,7 @@ LIBRARY_FONTS = {
     "Geist-Variable.ttf": ("geist/Geist[wght].ttf", "73894e0448cae90a92b6c2f8732b7bb9acb7b94c418bff559dad4a18e1de9659"),
     "IBMPlexSans-Variable.ttf": ("ibmplexsans/IBMPlexSans[wdth,wght].ttf", "3b031aa4216174205bd8471f88a49b91f093169e9e87bd5262242bc5967fe2e3"),
     "SourceSans3-Variable.ttf": ("sourcesans3/SourceSans3[wght].ttf", "042fe2cc0b933e328410d7acbd0aa6a1873dca5aef81875f4bc214b08825c7b9"),
+    "SourceSans3-Italic-Variable.ttf": ("sourcesans3/SourceSans3-Italic[wght].ttf", "39e3ab05ccd7cb94907c31005bb5bec1d5432f0b096a2b782976e217a540eb6c"),
     "GeistMono-Variable.ttf": ("geistmono/GeistMono[wght].ttf", "d00e590b8eb3a59acc329b2d044fd143ae935090b7da33199ebee27cc7de8196"),
     "FiraCode-Variable.ttf": ("firacode/FiraCode[wght].ttf", "9335b082b3c7850d98a64b584f3417f65355f3471278bb5eeb8c6c0e8657aeeb"),
     "SourceCodePro-Variable.ttf": ("sourcecodepro/SourceCodePro[wght].ttf", "b400fc584e10aff25d0e775ce181b4fc1c5ea1b5dc37b81aeb2084375b945790"),

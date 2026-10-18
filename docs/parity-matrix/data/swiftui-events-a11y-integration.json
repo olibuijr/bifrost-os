@@ -4,7 +4,7 @@
   "macos_since": "10.15",
   "status": "partial",
   "bifrost": "springboard/ui/src/{gesture,keys,focus,responder,ax}.rs, springboard/sdk/src/{pasteboard,dnd,workspace}.rs, springboard/src/shell/atspi/",
-  "summary": "Imperative equivalents exist for gestures, shortcuts, focus, clipboard, drag and drop, and an AT-SPI accessibility bridge. There is no declarative modifier API, rotors, or live-region announcements, and no Xcode tooling.",
+  "summary": "Imperative equivalents exist for gestures, shortcuts, focus, clipboard, drag and drop, and an AT-SPI accessibility bridge. Custom rotors and the display accommodation flags (reduce motion, increase contrast) now exist for apps (sdk/src/accessibility_rotor.rs, sdk/src/accessibility_display.rs). There is no declarative modifier API, no app-facing announcement call, and no Xcode tooling.",
   "rea_evidence": "ev_bbfb997837e04677c361c8a1baef569207c04cd765d58ab1f277e3f1865f456a",
   "features": [
     {
@@ -121,9 +121,7 @@
     }
   ],
   "gaps": [
-    "Accessibility rotors",
-    "Live-region announcements and custom actions",
-    "Reduce-motion and increase-contrast flags",
+    "Live-region announcements and custom actions reach the model only: bifrost_ui::ax has Announcements and add_custom_action (tests ax::tests), and custom rotors are in sdk/src/accessibility_rotor.rs (tests in ui/src/ax_rotor.rs); no SDK call posts an announcement.",
     "Declarative gesture composition",
     "Focused values across scenes",
     "User activity/handoff"

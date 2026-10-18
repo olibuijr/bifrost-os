@@ -33,7 +33,7 @@
    "apple": "SKTexture, SKTextureAtlas, SKMutableTexture",
    "bifrost": "springboard/render/src/cg/imageio/mod.rs (PNG and JPEG decode); springboard/render/src/imgdec.rs (fit, cover, contain)",
    "status": "partial",
-   "note": "Images decode to pixels, as tested headless in springboard/render/tests/parity_sdk-tests-07-w7.rs. Gap: there is no GPU-side texture object, atlas packing or dynamically updatable texture for apps"
+   "note": "Images decode to pixels, as tested headless in springboard/render/tests/parity_sdk-tests-07-w7.rs. Gap: there is no GPU-side texture object, atlas packing or dynamically updatable texture for apps Built 2026-10-17: atlas packing (springboard/ui/src/sk_atlas.rs, pack, Atlas::uv; tests sk_atlas::tests) places named images on one sheet with shelf packing and padding. Still open: a GPU texture object and dynamically updatable textures."
   },
   {
    "feature": "Actions",
@@ -47,7 +47,7 @@
    "apple": "SKActionTimingMode, SKActionTimingFunction, SKKeyframeSequence interpolation",
    "bifrost": "springboard/ui/src/anim.rs, springboard/render/src/motion.rs, springboard/ui/src/sk_action.rs (Keyframes, Key)",
    "status": "partial",
-   "note": "curves and springs exist as pure functions. Keyframes now give each key its own timing, hold or linear, and an easing curve for its segment, tested headless in ui/tests/parity_sdk-complete-35.rs. Gap: no node action uses Keyframes yet, so the timing modes apply only to the keyframe model. built on parity/team-a-07; not yet verified on Midget"
+   "note": "curves and springs exist as pure functions. Keyframes now give each key its own timing, hold or linear, and an easing curve for its segment, tested headless in ui/tests/parity_sdk-complete-35.rs. Gap: no node action uses Keyframes yet, so the timing modes apply only to the keyframe model. built on parity/team-a-07; not yet verified on Midget Refreshed 2026-10-17: the per-key timing and easing of Keyframes are covered by springboard/ui/src/sk_action.rs (tests in ui/tests/parity_sdk-complete-35.rs), so the keyframe gap is closed."
   },
   {
    "feature": "Node constraints",
@@ -125,11 +125,10 @@
   "No 2D scene graph with a per-frame update cycle and a camera node for apps (SKScene, SKCameraNode).",
   "No physics world (rigid bodies, gravity, contacts, joints, fields); only list scroll deceleration exists in springboard/ui/src/scroll.rs.",
   "No particle emitter system (SKEmitterNode).",
-  "No tile map system (SKTileMapNode and its tile set and rules).",
+  "No tile map node for apps or drawing (SKTileMapNode). Built 2026-10-17: the model is springboard/ui/src/sk_tilemap.rs (TileMap, cell_at, center, neighbour_mask for auto-tiling, cells_in for culling; tests sk_tilemap::tests). No node or renderer draws it yet, and no tile set rules are loaded from a file.",
   "No app-facing custom shader API (SKShader, SKUniform); shaders exist only inside the system presenter.",
-  "No texture atlas or GPU texture object (SKTexture, SKTextureAtlas).",
+  "No GPU texture object or dynamically updatable texture (SKTexture, SKMutableTexture). Atlas packing is a model in springboard/ui/src/sk_atlas.rs (pack, Atlas::uv; tests sk_atlas::tests); nothing uploads the sheet.",
   "No warp geometry or inverse-kinematics constraints (SKWarpGeometry, SKReachConstraints).",
-  "The Games app (springboard/apps/games-desktop/src/games.rs) is hand-written with no engine; it is not evidence of a reusable SpriteKit-style layer.",
-  "No per-key easing in keyframe sequences (SKKeyframeSequence timing modes); only linear and hold interpolation exist"
+  "The Games app (springboard/apps/games-desktop/src/games.rs) is hand-written with no engine; it is not evidence of a reusable SpriteKit-style layer."
  ]
 }

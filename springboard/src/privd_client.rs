@@ -113,6 +113,15 @@ impl Client {
         bifrost_core::privd_wire::call(sock, token.as_deref(), method, fields, timeout).map_err(|e| ClientError { code: e.code, message: e.message })
     }
 
+    /// Opens a locked encrypted volume with its passphrase and mounts it (`disk.unlock_volume`). The reply names the
+    /// mapping and whether it mounted. The passphrase is sent to the helper only.
+    pub fn unlock_volume(&self, device: &str, password: &str) -> Result<Json, ClientError> {
+        self.call(
+            bifrost_core::volume_unlock::M_UNLOCK_VOLUME,
+            vec![("device", Json::Str(device.to_string())), ("password", Json::Str(password.to_string()))],
+        )
+    }
+
     /// Runs one privileged disk request (`disk.*`, see `bifrost_core::disk_request`) and returns the tools that
     /// completed, in order. The helper plans it against its own snapshot of the disks; a refusal comes back as
     /// `bad_params` with the reason as the message.
@@ -155,6 +164,43 @@ impl Client {
         self.call("time.set_ntp", vec![("on", Json::Bool(on))]).map(|_| ())
     }
 
+    /// Turns the Storage policy "empty the Trash after 30 days" on or off (`storage.policy_set`), which bifrostd's
+    /// purge reads from `/etc/bifrost/storage.conf`.
+    pub fn set_storage_empty_trash(&self, on: bool) -> Result<(), ClientError> {
+        self.call("storage.policy_set", vec![("empty_trash_after_30_days", Json::Bool(on))]).map(|_| ())
+    }
+
+    /// The firmware boot entries in boot order (`startup_disk.list`): `(id, label, active, current, next, default)`.
+    pub fn startup_disks(&self) -> Result<Vec<(String, String, bool, bool, bool, bool)>, ClientError> {
+        let r = self.call("startup_disk.list", vec![])?;
+        let flag = |e: &Json, k: &str| matches!(e.get(k), Some(Json::Bool(true)));
+        Ok(r.get("entries")
+            .and_then(Json::as_array)
+            .map(|a| {
+                a.iter()
+                    .filter_map(|e| {
+                        let id = e.get("id")?.as_str()?.to_string();
+                        let label = e.get("label")?.as_str()?.to_string();
+                        Some((id, label, flag(e, "active"), flag(e, "current"), flag(e, "next"), flag(e, "default")))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default())
+    }
+
+    /// Makes boot entry `id` (four hex digits from `startup_disks`) the default start, or the next start only with
+    /// `once` (`startup_disk.set`).
+    pub fn set_startup_disk(&self, id: &str, once: bool) -> Result<(), ClientError> {
+        self.call("startup_disk.set", vec![("id", privd::s(id)), ("once", Json::Bool(once))]).map(|_| ())
+    }
+
+    /// Sets the DNS servers the user chose (`network.dns_set`, at most four IPv4 or IPv6 addresses, in order); an empty
+    /// list goes back to the servers the network provides. privd writes them as a systemd-resolved drop-in.
+    pub fn set_dns_servers(&self, servers: &[String]) -> Result<(), ClientError> {
+        let list = servers.iter().map(|a| privd::s(a.as_str())).collect();
+        self.call("network.dns_set", vec![("servers", Json::Arr(list))]).map(|_| ())
+    }
+
     /// Sets the system language (`lang`, LANG) and formats (`region`, LC_TIME and the other format categories)
     /// through `localectl`; both are locale identifiers such as "is_IS".
     pub fn set_locale(&self, lang: &str, region: &str) -> Result<(), ClientError> {
@@ -183,6 +229,12 @@ impl Client {
 
     pub fn user_set_admin(&self, name: &str, admin: bool) -> Result<(), ClientError> {
         self.call("user.set_admin", vec![("name", privd::s(name)), ("admin", Json::Bool(admin))]).map(|_| ())
+    }
+
+    /// Settings > Users & Groups > content limits: replaces a managed account's app blocks and feature switches.
+    pub fn set_account_policy(&self, account: &str, blocked: &[&str], disabled: &[&str]) -> Result<(), ClientError> {
+        let list = |items: &[&str]| Json::Arr(items.iter().map(|item| privd::s(*item)).collect());
+        self.call("account.set_policy", vec![("account", privd::s(account)), ("blocked", list(blocked)), ("disabled", list(disabled))]).map(|_| ())
     }
 
     /// Another account's password (the installed account changes its own through `account.set_password`).
@@ -224,6 +276,43 @@ impl Client {
         self.call("service.set", vec![("id", privd::s(id)), ("on", Json::Bool(on))]).map(|_| ())
     }
 
+    /// Endpoint security: subscribes `app` to the file events of `sub` (`endpoint_security.subscribe`). The shell calls
+    /// this only for an app that declares the `endpoint-security` entitlement. Returns the subscription id.
+    pub fn endpoint_subscribe(&self, app: &str, sub: &bifrost_core::endpoint_security::Subscription) -> Result<u32, ClientError> {
+        let j = sub.to_json();
+        let mut p = vec![("app", privd::s(app))];
+        for key in ["kinds", "auth", "muted"] {
+            if let Some(v) = j.get(key) {
+                p.push((key, v.clone()));
+            }
+        }
+        let r = self.call("endpoint_security.subscribe", p)?;
+        r.get("id").and_then(Json::as_u64).map(|n| n as u32).ok_or(ClientError { code: "internal".into(), message: "reply has no subscription id".into() })
+    }
+
+    pub fn endpoint_unsubscribe(&self, app: &str, id: u32) -> Result<(), ClientError> {
+        self.call("endpoint_security.unsubscribe", vec![("app", privd::s(app)), ("id", Json::Num(f64::from(id)))]).map(|_| ())
+    }
+
+    /// The queued events of a subscription, oldest first, and how many were dropped from a full queue since the start.
+    pub fn endpoint_poll(&self, app: &str, id: u32, max: usize) -> Result<(Vec<bifrost_core::endpoint_security::Delivered>, u64), ClientError> {
+        let r = self.call("endpoint_security.poll", vec![("app", privd::s(app)), ("id", Json::Num(f64::from(id))), ("max", Json::Num(max as f64))])?;
+        let events = r.get("events").and_then(Json::as_array).map(|a| a.iter().filter_map(bifrost_core::endpoint_security::Delivered::from_json).collect()).unwrap_or_default();
+        Ok((events, r.get("dropped").and_then(Json::as_u64).unwrap_or(0)))
+    }
+
+    /// An app's answer to an authorization event; true when it completed the round.
+    pub fn endpoint_answer(&self, app: &str, id: u32, round: u64, allow: bool) -> Result<bool, ClientError> {
+        let r = self.call("endpoint_security.answer", vec![("app", privd::s(app)), ("id", Json::Num(f64::from(id))), ("round", Json::Num(round as f64)), ("allow", Json::Bool(allow))])?;
+        Ok(r.get("resolved") == Some(&Json::Bool(true)))
+    }
+
+    /// Settings > Sharing > Screen Sharing: the account whose password lets a viewer in (`screen_sharing.configure`).
+    /// privd makes this computer's RSA key on the first call and writes the server configuration.
+    pub fn screen_sharing_configure(&self, user: &str) -> Result<(), ClientError> {
+        self.call_timeout("screen_sharing.configure", vec![("user", privd::s(user))], Duration::from_secs(120)).map(|_| ())
+    }
+
     pub fn update_check(&self) -> Result<UpdateInfo, ClientError> {
         let r = self.call_timeout("update.check", vec![], Duration::from_secs(300))?;
         Ok(UpdateInfo { installed: r.str_field("installed"), version: r.str_field("version"), size: r.get("size").and_then(Json::as_u64).unwrap_or(0), notes: r.str_field("notes") })
@@ -247,6 +336,43 @@ impl Client {
     pub fn store_install(&self, id: &str) -> Result<String, ClientError> {
         let r = self.call_timeout("store.install", vec![("id", privd::s(id))], Duration::from_secs(900))?;
         r.str_field("id").ok_or(ClientError { code: "internal".into(), message: "reply has no app id".into() })
+    }
+
+    /// Asks privd to remove the package `name` with pacman. privd refuses the shell and the base system.
+    pub fn package_remove(&self, name: &str) -> Result<(), ClientError> {
+        self.call_timeout("package.remove", vec![("name", privd::s(name))], Duration::from_secs(600)).map(|_| ())
+    }
+
+    /// Asks privd to authorize (`allow`) or block a USB device port, for the accessory approval sheet. privd writes only
+    /// device ports, never a root hub.
+    pub fn usb_authorize(&self, port: &str, allow: bool) -> Result<(), ClientError> {
+        self.call(bifrost_core::usb_approval::M_USB_AUTHORIZE, vec![("port", privd::s(port)), ("allow", Json::Bool(allow))]).map(|_| ())
+    }
+
+    /// Asks privd to install the package archive at `path` with pacman (`package.install_file`). privd copies the file
+    /// into its own staging folder before pacman reads it.
+    /// `grant` is the single-use proof of a fresh administrator password from [`Client::elevate`]; privd refuses the
+    /// install without it.
+    pub fn package_install_file(&self, path: &str, grant: &str) -> Result<(), ClientError> {
+        self.call_timeout("package.install_file", vec![("path", privd::s(path)), ("grant", privd::s(grant))], Duration::from_secs(3600)).map(|_| ())
+    }
+
+    /// Asks privd to install packages from the sync databases (`package.install_repo`), with the `grant` of
+    /// [`Client::elevate`].
+    pub fn package_install_repo(&self, names: &[String], grant: &str) -> Result<(), ClientError> {
+        let names = Json::Arr(names.iter().map(|n| privd::s(n.as_str())).collect());
+        self.call_timeout("package.install_repo", vec![("names", names), ("grant", privd::s(grant))], Duration::from_secs(3600)).map(|_| ())
+    }
+
+    /// Re-checks the administrator's password with privd (`auth.elevate`) and returns the single-use grant for `scope`
+    /// (`privd::SCOPE_PACKAGE_INSTALL` for installs). The error code is `wrong_password` or `locked_out` when the
+    /// password was not accepted. The in-process client (a root shell) has no daemon to ask and returns an empty grant.
+    pub fn elevate(&self, scope: &str, password: &str) -> Result<String, ClientError> {
+        if self.is_local() {
+            return Ok(String::new());
+        }
+        let reply = self.call("auth.elevate", vec![("scope", privd::s(scope)), ("password", privd::s(password))])?;
+        reply.str_field("grant").ok_or_else(|| ClientError { code: "internal".into(), message: "privd sent no grant".into() })
     }
 
     pub fn store_uninstall(&self, id: &str) -> Result<(), ClientError> {
@@ -314,6 +440,7 @@ mod tests {
         let u = c.update_check().unwrap();
         assert_eq!((u.installed.as_deref(), u.version.as_deref(), u.size), (Some("1-1"), Some("2-1"), 9));
         assert_eq!(c.store_uninstall("x").unwrap_err().code, "bad_params");
+        assert_eq!(c.package_remove("base").unwrap_err().code, "bad_params");
         set_token(None);
         assert_eq!(Client::remote(dir.join("missing.sock")).ping().unwrap_err().code, "unavailable");
     }

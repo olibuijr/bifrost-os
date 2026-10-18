@@ -8,8 +8,29 @@
 //! events to reach the app (see `docs/parity/wire-app-music.md`).
 
 use crate::music::engine::{Repeat, Snapshot, Track};
-use bifrost_app::now_playing::{CommandState, MediaContent, MediaDuration, MediaSession, MediaType, PlaybackState, RemoteCommand};
+use bifrost_app::now_playing::{CommandState, MediaContent, MediaDuration, MediaSession, MediaType, PlaybackState, QueueEntry, RemoteCommand};
 use springboard::shell::music::nowplaying::Target;
+use std::path::PathBuf;
+
+/// The most Up Next entries the app publishes. The shell refuses a longer queue, so the list is cut to this.
+pub const UP_NEXT_MAX: usize = 200;
+
+/// The Up Next entries for the songs after the current one, in play order (at most `UP_NEXT_MAX`). `lookup` gives a
+/// song's title and artist when the library holds the file; a file it does not hold is listed but cannot be picked.
+pub fn up_next_entries(upcoming: &[PathBuf], lookup: impl Fn(&PathBuf) -> Option<(String, String)>) -> Vec<QueueEntry> {
+    upcoming
+        .iter()
+        .take(UP_NEXT_MAX)
+        .map(|path| match lookup(path) {
+            Some((title, artist)) => QueueEntry { title, artist: text(&artist), playable: true },
+            None => QueueEntry {
+                title: path.file_name().map_or_else(|| "Unknown".to_string(), |n| n.to_string_lossy().into_owned()),
+                artist: None,
+                playable: false,
+            },
+        })
+        .collect()
+}
 
 /// The session identifier: the app's bundle id.
 pub const SESSION_ID: &str = "is.olibuijr.music.desktop";
@@ -127,6 +148,19 @@ mod tests {
 
     fn song() -> Track {
         Track::file(7, PathBuf::from("/music/a.mp3"))
+    }
+
+    #[test]
+    fn up_next_lists_the_library_songs_and_marks_the_others_unplayable() {
+        let paths: Vec<PathBuf> = vec![PathBuf::from("/m/a.mp3"), PathBuf::from("/m/gone.flac"), PathBuf::from("/m/c.mp3")];
+        let lookup = |p: &PathBuf| (p.to_string_lossy() != "/m/gone.flac").then(|| (p.file_stem().unwrap().to_string_lossy().into_owned(), if p.ends_with("a.mp3") { "Band".to_string() } else { " ".to_string() }));
+        let entries = up_next_entries(&paths, lookup);
+        assert_eq!(entries.len(), 3);
+        assert_eq!((entries[0].title.as_str(), entries[0].artist.as_deref(), entries[0].playable), ("a", Some("Band"), true));
+        assert_eq!((entries[1].title.as_str(), entries[1].playable), ("gone.flac", false));
+        assert_eq!((entries[2].title.as_str(), entries[2].artist.clone()), ("c", None), "a blank artist is no artist");
+        let many: Vec<PathBuf> = (0..UP_NEXT_MAX + 5).map(|i| PathBuf::from(format!("/m/{i}.mp3"))).collect();
+        assert_eq!(up_next_entries(&many, |_: &PathBuf| None::<(String, String)>).len(), UP_NEXT_MAX, "the list is cut to what the shell accepts");
     }
 
     #[test]

@@ -1,3 +1,30 @@
+## 1.32.0 — 2026-10-17
+
+- File-manager sync extensions go through the extension host, the one file providers use. An app that declares `file_manager_folders` is now an extension of the system point `is.bifrost.file-manager-sync`; Files starts it in extension mode when one of its folders is shown, and the host stops it again after it has been idle. The app no longer has to be running. The shortcut menu never waits for a launch: if the extension is not running it is started in the background and shows its rows from the next menu.
+
+## 1.31.0 — 2026-10-17
+
+- File-manager sync extensions: an installed app that declares `file_manager_folders` in its manifest is hosted for those folders (`extensions.rs`, `bifrost_app::file_manager_sync`). Files tells it which folder is shown, draws the badges it returns on the icon, list and column items, adds its rows to the item and folder shortcut menus and sends the chosen row back. It is asked through its control socket on a worker thread, so a slow or missing extension never stalls the window, and nothing outside its declared folders is sent. The extension app has to be running.
+
+## 1.30.0 — 2026-10-17
+
+- New Window (Cmd+N, and New Window in the empty-area menu) opens a second Files window at the home folder, with its own folder view.
+- Removable volumes mounted under /run/media or /media are listed in Locations after Trash; the Eject text unmounts the volume and powers its disk off.
+- Search terms: `kind:images`, `kind:folders` and the other kinds narrow the results, and `tag:red` keeps the items with that tag.
+- View > Group By Name (first letter) and Group By Size (folders, under 1 MB, up to 100 MB, up to 1 GB, over 1 GB).
+- Undo after Make Alias removes the link it made.
+
+## 1.29.0 — 2026-10-17
+
+- Make Alias (Cmd+L and the context menu) links each selected item beside it as "name alias", a symbolic link.
+- Copy Item Path (Option+Cmd+C and the context menu) puts the full path of the focused item on the clipboard.
+- Save Search as Smart Folder (empty-area menu, when the search field has words) saves the search as a smart folder in the sidebar and `.smart-folders`.
+- Parity inventory for Finder: `docs/parity-matrix/apps/finder.json`.
+
+## 1.28.4 — 2026-10-17
+
+- Ships a help book (`help/`: files basics, organize, get info and archives), indexed by the shell help index for the Help menu and `help://is.olibuijr.files.desktop` links.
+
 ## 1.28.3 — 2026-10-14
 
 - Keep idle wake scheduling event-driven: folder listing and search results use the dispatch-backed `Feed`, and an idle window has no polling deadline. Add regression coverage for the idle deadline and dispatch completion.

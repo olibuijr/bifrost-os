@@ -135,6 +135,11 @@ pub fn spec(id: PageId, v: &View) -> Spec {
                 Item::new("App Limits").value(if limits == 0 { "None".to_string() } else { limits.to_string() }).link(PageId::StLimits),
                 Item::new("Always Allowed").link(PageId::StAllowed),
             ]));
+            // Placeholder: content and privacy restrictions have no enforcement yet.
+            groups.push(
+                Group::new(vec![Item::new("Content & Privacy Restrictions").value("Not Available").tint(Tint::Dim)])
+                    .footer("Content and privacy restrictions are not enforced on this device yet. Downtime, App Limits and Always Allowed are."),
+            );
             groups.push(if v.passcode_on {
                 Group::new(vec![
                     Item::new("Change Screen Time Passcode").tint(Tint::Blue).action(Action::ScreenTime(StEdit::Passcode(Purpose::Change, false))),
@@ -189,6 +194,15 @@ mod tests {
         assert_eq!(used.items[1].label, "Files");
         let act = &s.groups[3];
         assert_eq!((act.items[0].value.as_str(), act.items[1].value.as_str()), ("3", "2"));
+    }
+
+    #[test]
+    fn content_and_privacy_is_an_honest_placeholder() {
+        let (d, cfg) = (days(Day::default()), Config::memory());
+        let s = spec(PageId::ScreenTime, &view(&d, &cfg, false, false));
+        let row = s.groups.iter().flat_map(|g| g.items.iter()).find(|i| i.label == "Content & Privacy Restrictions").expect("placeholder row");
+        assert_eq!(row.value, "Not Available");
+        assert!(matches!(row.action, Action::None), "no action: nothing is enforced yet");
     }
 
     #[test]

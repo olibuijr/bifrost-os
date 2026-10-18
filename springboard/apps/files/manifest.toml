@@ -1,6 +1,6 @@
 id = "is.olibuijr.files.desktop"
 name = "Files"
-version = "1.28.3"
+version = "1.32.0"
 exec = "bifrost-files"
 icon = "icon.png"
 min_shell = "0.4.84"
@@ -9,3 +9,4 @@ category = "Utilities"
 architecture = "x86_64-linux"
 permissions = ["storage", "documents"]
 window = "full-size"
+help = "help"

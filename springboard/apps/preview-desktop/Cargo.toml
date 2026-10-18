@@ -1,10 +1,11 @@
 [package]
 name = "bifrost-viewer"
-version = "0.11.5"
+version = "0.11.8"
 edition = "2021"
 
 [dependencies]
 bifrost-app = { path = "../../sdk" }
+bifrost-core = { path = "../../core" }
 url = "2.5"
 springboard = { path = "../.." }
 

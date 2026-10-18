@@ -235,6 +235,7 @@ impl Shell {
             Panel::Processes => "Processes",
             Panel::Command if self.terminal_ui.title_edit => "Edit Title",
             Panel::Command => "New Command",
+            Panel::Look => "Profile Editor",
             _ => "Terminal",
         };
         if panel == Panel::Form {
@@ -568,6 +569,7 @@ impl Shell {
                     killable,
                 );
             }
+            Panel::Look => self.terminal_draw_look(s, ui, px, pw, content_top, content_bottom),
             Panel::More => {
                 let mut list = s.rows(content_top as usize, content_bottom as usize);
                 for (i, label) in MENU.iter().enumerate() {
@@ -685,6 +687,7 @@ impl Shell {
                 Panel::Processes => "Select a process to inspect or terminate.",
                 Panel::Command if self.terminal_ui.title_edit => "An empty title goes back to the automatic one.",
                 Panel::Command => "The command runs in a new tab that closes when it ends.",
+                Panel::Look => "Tap a colour well, then use the steppers. Changes are saved and apply to every tab.",
                 _ => "Changes to text size and theme are saved automatically.",
             }
         };

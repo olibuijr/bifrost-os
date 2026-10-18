@@ -18,10 +18,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/pages.rs:931",
    "status": "partial",
-   "note": "About page",
-   "rea": []
+   "note": "has: About page (pages.rs:931): model, OS version and build; missing: serial and name editing, hardware detail beyond the Model row",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: About page (pages.rs:931): model, OS version and build"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/AboutSettingsIntents.appex",
@@ -40,8 +49,22 @@
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
    "status": "partial",
-   "note": "About pane intent (settings_intents.rs); the App Intents runtime that serves it is not wired. built on os/team-m-01-settings; not yet verified on Midget",
-   "rea": []
+   "note": "the open-about intent opens the About pane; Search lists every settings intent among its Shortcuts and opens the pane (quicksearch.rs, Settings::open_page_id).",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found_as_shortcuts_and_open_their_pane"
+    }
+   ],
+   "ready_note": "the open-about App Intent is in the settings catalogue, found in Search and opens the About pane; the checks run the catalogue and the Search path"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/AccessibilitySettingsExtension.appex",
@@ -58,10 +81,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/pages.rs:1290",
    "status": "partial",
-   "note": "Accessibility page",
-   "rea": []
+   "note": "has: Vision (Display Zoom, Larger Text, Bold Text, Increase Contrast, Show Borders, Dim Flashing Lights), Motion (Reduce Motion), Pointer, Touch (AssistiveTouch, Touch Accommodations), Shortcut, Screen Reader; missing: Live Captions, Voice Control, hearing and speech panes",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: Vision (Display Zoom, Larger Text, Bold Text, Increase Contrast, Show Borders, Dim Flashing Lights), Motion (Reduce Motion), Pointer, Touch (AssistiveTouch, Touch Accommodations), Shortcut, Screen Reader"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/AccessibilitySettingsSearchExtension.appex",
@@ -80,8 +112,17 @@
    "doc": "",
    "bifrost": "springboard/src/shell/settings_search.rs",
    "status": "partial",
-   "note": "settings search index",
-   "rea": []
+   "note": "has: settings search over the Accessibility pages; missing: search terms served to the system index",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_search"
+    }
+   ],
+   "ready_note": "covers: settings search over the Accessibility pages"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/AccessibilitySettingsWidgetExtension.appex",
@@ -98,10 +139,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/settings_intents.rs",
+   "bifrost": "springboard/src/shell/settings_intents.rs, springboard/src/shell/accessibility/shortcut.rs, springboard/src/shell/accessibility/shortcut_panel.rs",
    "status": "partial",
-   "note": "Accessibility pane intent only; the glanceable widget itself is not built. built on os/team-m-01-settings; not yet verified on Midget",
-   "rea": []
+   "note": "the open-accessibility and open-accessibility-shortcut intents open those panes from Search, and Option+Cmd+F5 opens the Accessibility Shortcut panel, the glanceable switch panel for the chosen features.",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::shortcut::tests"
+    }
+   ],
+   "ready_note": "the accessibility intents open the Accessibility and Shortcut panes and the Accessibility Shortcut panel is the glanceable switch; the checks run the intent catalogue and the shortcut feature switching"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/AccountsUISettingsAppIntents.appex",
@@ -118,10 +173,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/settings_intents.rs",
+   "bifrost": "springboard/src/shell/settings_intents.rs, springboard/src/shell/users_page.rs",
    "status": "partial",
-   "note": "Users & Groups pane intent (local account); built on os/team-m-01-settings; not yet verified on Midget",
-   "rea": []
+   "note": "has: open-users pane intent for the local accounts page (users_page.rs:153); missing: intents for groups",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    }
+   ],
+   "ready_note": "covers: open-users-groups intent opens the Users & Groups pane (settings_intents.rs), which lists the accounts and groups (users_page.rs); tests shell::settings_intents::tests. The pane model has no separate group intent."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/Appearance.appex",
@@ -138,10 +202,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/pages.rs:1326",
    "status": "partial",
-   "note": "Appearance page (Light, Dark, Auto)",
-   "rea": []
+   "note": "has: appearance_page (pages.rs:1545) with Light, Dark, Auto and the 280 ms cross-fade (render/src/appearance.rs); Built 2026-10-17: the accent choice drives controlAccentColor (Pair::following_accent); links stay systemBlue; tests appearance::tests::the_control_accent_pair_follows_the_chosen_accent",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: appearance_page (pages.rs:1545) with Light, Dark, Auto and the 280 ms cross-fade (render/src/appearance.rs)"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/AppearanceIntentsExtension.appex",
@@ -160,8 +233,22 @@
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
    "status": "partial",
-   "note": "Appearance pane intent; built on os/team-m-01-settings; not yet verified on Midget",
-   "rea": []
+   "note": "has: open-appearance intent; missing: App Intents runtime serving it",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found"
+    }
+   ],
+   "ready_note": "covers: the open-appearance intent in the settings catalogue (settings_intents.rs); Search lists it and it opens its pane."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/AppleAccountIntents_macOS.appex",
@@ -178,9 +265,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/settings_intents.rs",
-   "status": "partial",
-   "note": "Account intent opens the BifrOSt Account card on the root page; no sign-in intents; built on os/team-m-01-settings; not yet verified on Midget",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: App Intents of the Apple Account settings (sign in, account recovery and iCloud services) for Apple's account servers; the index shows only an ExtensionKit appex with Metadata.appintents. BifrOSt has its own BifrOSt Account pane with sign-in against BifrOSt Cloud (account_page.rs) and the open-account intent, which are separate features, not a mirror of the Apple account.",
    "rea": []
   },
   {
@@ -198,9 +285,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/account.rs",
-   "status": "partial",
-   "note": "BifrOSt Account page",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: the Apple Account pane (iCloud, media purchases, device list, recovery) for Apple's account servers; the index shows an appex with an Assets.car, icon and search terms for that pane. BifrOSt has its own BifrOSt Account pane and sign-in against BifrOSt Cloud (account_page.rs), a separate feature.",
    "rea": []
   },
   {
@@ -220,8 +307,22 @@
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
    "status": "partial",
-   "note": "Battery pane intent; built on os/team-m-01-settings; not yet verified on Midget",
-   "rea": []
+   "note": "has: open-battery pane intent; missing: App Intents runtime serving it",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found"
+    }
+   ],
+   "ready_note": "covers: the open-battery intent in the settings catalogue (settings_intents.rs); Search lists it and it opens its pane."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/BiometricsAndPasswordSettingsAppIntentsExtension.appex",
@@ -238,10 +339,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/settings_intents.rs",
+   "bifrost": "springboard/src/shell/settings_intents.rs, springboard/src/shell/passcode.rs, springboard/src/shell/passwords_page.rs",
    "status": "partial",
-   "note": "Passcode and Passwords pane intents; no biometric sensor intents (hardware); built on os/team-m-01-settings; not yet verified on Midget",
-   "rea": []
+   "note": "the open-passcode and open-passwords intents open the Passcode and Passwords panes from Search. The fingerprint-sensor part of the reference pane is Apple sensor hardware and is not mirrored.",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    }
+   ],
+   "ready_note": "the Passcode and Passwords panes have App Intents that open them from Search; the checks run the catalogue (the biometric sensor intents are Apple hardware and out of scope)"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/Bluetooth.appex",
@@ -258,10 +368,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/pages.rs:816",
    "status": "partial",
-   "note": "Bluetooth page",
-   "rea": []
+   "note": "has: Bluetooth on/off and device list (bluetooth_spec pages.rs:572); detail page pages.rs:817 has connect, disconnect, use for sound output, forget; missing: pairing passkey sheet",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: Bluetooth on/off and device list (bluetooth_spec pages.rs:572); detail page pages.rs:817 has connect, disconnect, use for sound output, forget"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/BluetoothSettingsAppIntentsWidgetExtension.appex",
@@ -278,10 +397,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/settings_intents.rs",
+   "bifrost": "springboard/src/shell/settings_intents.rs, springboard/src/shell/control_center.rs",
    "status": "partial",
-   "note": "Bluetooth pane intent only; the widget is not built; built on os/team-m-01-settings; not yet verified on Midget",
-   "rea": []
+   "note": "the open-bluetooth intent opens the Bluetooth pane from Search, and Control Centre has a Bluetooth tile that flips the radio (control_center.rs, toggle_bluetooth), the glanceable control.",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::control_center::tests::bluetooth_hook_flips_the_radio_only_with_a_controller"
+    }
+   ],
+   "ready_note": "the Bluetooth pane has an App Intent and Control Centre has the Bluetooth switch tile; the checks run the intent catalogue and the tile's radio hook"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/CDs & DVDs Settings Extension.appex",
@@ -378,10 +511,29 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/pages.rs (Control Centre and Menu Bar pages), springboard/src/shell/options.rs (MenuExtra)",
    "status": "partial",
-   "note": "Control Centre page",
-   "rea": []
+   "note": "Settings > Control Centre lists the controls it holds, and Settings > Menu Bar has a switch per control for what the menu bar shows (CPU, memory, battery, network, Control Centre), saved as menu_extras and read by the menu bar (desktop_bar.rs).",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages::tests::the_menu_bar_page_has_one_switch_per_control_and_follows_the_saved_choice"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages::tests::the_control_centre_page_lists_the_controls_it_holds"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::options::tests"
+    }
+   ],
+   "ready_note": "the Control Centre page lists its controls and the Menu Bar page chooses which controls the menu bar shows, saved in the options; the checks run both pages and the option round trip"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/ControlCenterSettingsIntents.appex",
@@ -400,8 +552,22 @@
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
    "status": "partial",
-   "note": "Control Centre pane intent; built on os/team-m-01-settings; not yet verified on Midget",
-   "rea": []
+   "note": "has: Control Centre pane intent; missing: App Intents runtime serving it",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found"
+    }
+   ],
+   "ready_note": "covers: the open-control-centre intent in the settings catalogue (settings_intents.rs); Search lists it and it opens its pane."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/CoverageSettings.appex",
@@ -438,10 +604,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/account.rs",
+   "bifrost": "springboard/src/shell/users_page.rs",
    "status": "partial",
-   "note": "BifrOSt Account sign-in and profile",
-   "rea": []
+   "note": "this legacy pane is Users & Groups: Settings > Users & Groups lists the people and shared groups, adds and removes accounts, sets passwords (old password asked first for the installed account), edits groups and managed-account content limits through privd (users_page.rs).",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::users_page::tests"
+    }
+   ],
+   "ready_note": "Users & Groups is the Settings pane that replaces Accounts: people, groups, passwords and limits; the checks run its pages and edit rules"
   },
   {
    "id": "path:/System/Library/PreferencePanes/Appearance.prefPane",
@@ -458,10 +633,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/pages.rs:1326",
    "status": "partial",
-   "note": "Appearance page (Light, Dark, Auto)",
-   "rea": []
+   "note": "has: appearance_page (pages.rs:1545) with Light, Dark, Auto and the 280 ms cross-fade (render/src/appearance.rs); Built 2026-10-17: the accent choice drives controlAccentColor (Pair::following_accent); links stay systemBlue; tests appearance::tests::the_control_accent_pair_follows_the_chosen_accent",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: appearance_page (pages.rs:1545) with Light, Dark, Auto and the 280 ms cross-fade (render/src/appearance.rs)"
   },
   {
    "id": "path:/System/Library/PreferencePanes/AppleIDPrefPane.prefPane",
@@ -478,9 +662,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/account.rs",
-   "status": "partial",
-   "note": "BifrOSt Account page",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: the legacy Apple Account pane (iCloud sign-in and services) for Apple's account servers. BifrOSt has its own BifrOSt Account pane and sign-in against BifrOSt Cloud (account_page.rs), a separate feature.",
    "rea": []
   },
   {
@@ -498,10 +682,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/pages.rs:1253",
    "status": "partial",
-   "note": "Battery page",
-   "rea": []
+   "note": "has: Battery page (pages.rs:1253): energy graph, battery percentage, low power mode, battery health, power mode; missing: per-app energy list",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: Battery page (pages.rs:1253): energy graph, battery percentage, low power mode, battery health, power mode"
   },
   {
    "id": "path:/System/Library/PreferencePanes/Bluetooth.prefPane",
@@ -518,10 +711,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/pages.rs:816",
    "status": "partial",
-   "note": "Bluetooth page",
-   "rea": []
+   "note": "has: Bluetooth on/off and device list (bluetooth_spec pages.rs:572); detail page pages.rs:817 has connect, disconnect, use for sound output, forget; missing: pairing passkey sheet",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: Bluetooth on/off and device list (bluetooth_spec pages.rs:572); detail page pages.rs:817 has connect, disconnect, use for sound output, forget"
   },
   {
    "id": "path:/System/Library/PreferencePanes/ClassKitPreferencePane.prefPane",

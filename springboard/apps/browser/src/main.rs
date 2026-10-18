@@ -361,6 +361,7 @@ impl Browser {
         let Some(pool) = &mut self.pool else { return };
         let view = pool.create(url);
         self.tabs.push(Tab { view });
+        self.session.dirty = true;
         self.select(self.tabs.len() - 1);
         if url == START {
             self.begin_editing();
@@ -372,6 +373,7 @@ impl Browser {
             return;
         }
         self.current = i;
+        self.session.dirty = true;
         self.editing = false;
         self.downloads.open = false;
         let Some(view) = self.tabs.get(i).map(|t| t.view) else { return };
@@ -386,6 +388,7 @@ impl Browser {
         if i >= self.tabs.len() {
             return;
         }
+        self.session.dirty = true;
         self.remember_closed(i);
         let tab = self.tabs.remove(i);
         self.inspector.forget(tab.view);
@@ -770,6 +773,7 @@ impl Browser {
         for ev in events {
             match ev {
                 WebViewEvent::LoadStarted(v) | WebViewEvent::UrlChanged(v) if self.pool.as_ref().and_then(|p| p.state(v)).is_some() => {
+                    self.session.dirty = true;
                     // a response the browser cannot display is saved instead (downloads.rs)
                     let url = self.pool.as_ref().and_then(|p| p.state(v)).map(|s| s.url.clone()).unwrap_or_default();
                     self.downloads.ua = self
@@ -783,6 +787,9 @@ impl Browser {
                     if Some(v) == self.view() {
                         self.sync_address();
                     }
+                }
+                WebViewEvent::TitleChanged(_) => {
+                    self.session.dirty = true;
                 }
                 WebViewEvent::EvalResult(v, text) if self.downloads.on_eval(v, &text) => {}
                 WebViewEvent::EvalResult(v, text) if self.favicons.on_eval(v, &text) => {}
@@ -806,10 +813,13 @@ impl Browser {
                     }
                 }
                 WebViewEvent::CreateWebView { id, .. } => {
+                    self.session.dirty = true;
                     self.tabs.push(Tab { view: id });
                     self.select(self.tabs.len() - 1);
                 }
                 WebViewEvent::Closed(v) => {
+                    self.session.dirty = true;
+                    self.inspector.forget(v);
                     self.downloads.forget(v);
                     self.reader.forget(v);
                     self.favicons.forget(v);
@@ -822,6 +832,8 @@ impl Browser {
                     }
                 }
                 WebViewEvent::EngineExited => {
+                    self.session.dirty = true;
+                    self.inspector.clear_all();
                     let urls: Vec<String> = self
                         .tabs
                         .iter()
@@ -875,8 +887,11 @@ impl Browser {
     }
 
     /// Loads an address the user chose. While the network is down the tab shows the offline page instead, and the
-    /// address loads again when the network comes back.
+    /// address loads again when the network comes back. Campaign and click-identifier parameters (`utm_source`,
+    /// `fbclid`, ...) are dropped from the address first (`bifrost_core::link_tracking`).
     fn load_chosen(&mut self, view: WebViewId, url: &str) {
+        let cleaned = bifrost_core::link_tracking::strip_tracking(url);
+        let url = cleaned.url.as_str();
         let offline = self.net.offline();
         let Some(p) = self.pool.as_mut() else { return };
         if offline {
@@ -1747,7 +1762,10 @@ impl App for Browser {
         let ui = &ctx.ui;
         let (w, h) = (ctx.cfg.w, ctx.cfg.h);
         let wpt = w as f32 / Self::pt(ui);
-        s.fill_rect(0, 0, s.w, s.h, CONTENT_BG.now());
+        let has_full_web = self.pool.as_ref().is_some_and(|p| p.has_frame()) && self.dev.responsive.is_none() && self.error.is_none();
+        if !has_full_web {
+            s.fill_rect(0, 0, s.w, s.h, CONTENT_BG.now());
+        }
         if let Some(p) = &mut self.pool {
             p.draw(s);
         }

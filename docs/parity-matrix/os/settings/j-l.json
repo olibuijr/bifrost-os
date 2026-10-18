@@ -18,10 +18,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs; springboard/src/shell/pages.rs, settings.rs, kb_input.rs, options.rs",
+   "bifrost": "springboard/src/shell/pages.rs:1085",
    "status": "partial",
-   "note": "Keyboard page round 75, host only: Keyboard pane drives repeat, modifiers, function keys, shortcuts.",
-   "rea": []
+   "note": "has: Keyboard page (pages.rs:1085): Keyboards and Text Replacements (pages.rs:1138), auto-capitalisation, caps lock, period shortcut, key repeat delay and rate, Modifier Keys (pages.rs:1115), F1-F12 standard keys, Tab focus; Keyboard Shortcuts list (shortcuts_page pages.rs:1648); missing: dictation and keyboard brightness",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: Keyboard page (pages.rs:1085): Keyboards and Text Replacements (pages.rs:1138), auto-capitalisation, caps lock, period shortcut, key repeat delay and rate, Modifier Keys (pages.rs:1115), F1-F12 standard keys, Tab focus; Keyboard Shortcuts list (shortcuts_page pages.rs:1648)"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/KeyboardSettingsIntents.appex",
@@ -40,8 +49,22 @@
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
    "status": "partial",
-   "note": "settings App Intents catalogue (open-pane intents) in springboard/src/shell/settings_intents.rs; not yet listed in Search or served on the agent socket; built on os/team-m-02-settings; not yet verified on Midget",
-   "rea": []
+   "note": "has: open-keyboard pane intent; missing: App Intents runtime serving it",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found"
+    }
+   ],
+   "ready_note": "covers: the open-keyboard intent in the settings catalogue (settings_intents.rs); Search lists it and it opens its pane."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/LoginItems.appex",
@@ -60,8 +83,17 @@
    "doc": "",
    "bifrost": "springboard/src/shell/login_items_page.rs",
    "status": "partial",
-   "note": "Login Items page",
-   "rea": []
+   "note": "has: Login Items page (pages.rs:981, login_items_page.rs): open at login list, requires-approval group, extensions group; missing: add a login item from a picker",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::login_items_page"
+    }
+   ],
+   "ready_note": "covers: Login Items page (pages.rs:981, login_items_page.rs): open at login list, requires-approval group, extensions group"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/LoginItemsIntentsExtension.appex",
@@ -80,8 +112,22 @@
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
    "status": "partial",
-   "note": "settings App Intents catalogue (open-pane intents) in springboard/src/shell/settings_intents.rs; not yet listed in Search or served on the agent socket; built on os/team-m-02-settings; not yet verified on Midget",
-   "rea": []
+   "note": "has: open-login-items intent; missing: App Intents runtime serving it",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found"
+    }
+   ],
+   "ready_note": "covers: the open-login-items intent in the settings catalogue (settings_intents.rs); Search lists it and it opens its pane."
   },
   {
    "id": "path:/System/Library/PreferencePanes/Keyboard.prefPane",
@@ -98,10 +144,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs; springboard/src/shell/pages.rs (PageId::Keyboard)",
+   "bifrost": "springboard/src/shell/pages.rs:1085",
    "status": "partial",
-   "note": "Keyboard page round 75, host only: same Keyboard page.",
-   "rea": []
+   "note": "has: Keyboard page (pages.rs:1085) with key repeat, modifier keys, text replacements and keyboard list; missing: input-source HUD settings and dictation",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: Keyboard page (pages.rs:1085) with key repeat, modifier keys, text replacements and keyboard list"
   },
   {
    "id": "path:/System/Library/PreferencePanes/Localization.prefPane",
@@ -118,10 +173,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/pages.rs:1154",
    "status": "partial",
-   "note": "Language & Region page",
-   "rea": []
+   "note": "has: Language & Region (pages.rs:1154): preferred language, first day, date, currency; missing: per-app language override",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: Language & Region (pages.rs:1154): preferred language, first day, date, currency"
   }
  ]
 }

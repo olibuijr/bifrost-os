@@ -251,6 +251,33 @@ pub fn node_path(slot: u8, id: u64) -> String {
     format!("{ROOT_PATH}/app{slot}/n{id}")
 }
 
+/// The AT-SPI signal an element notification becomes (`bridge::Bridge::notify`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NoteSignal {
+    /// `Object:StateChanged` "focused" on the element
+    Focused,
+    /// `Object:PropertyChange` "accessible-value" on the element
+    Value,
+    /// `Object:SelectionChanged` on the element
+    Selection,
+    /// `Object:ChildrenChanged` "add" on the app: the layout moved
+    Layout,
+    /// `Object:ChildrenChanged` "remove" on the app: an element went away
+    Removed,
+}
+
+/// The signal each notification maps to. Total: every notification has one.
+pub fn note_signal(n: bifrost_ui::ax::AxNotification) -> NoteSignal {
+    use bifrost_ui::ax::AxNotification as N;
+    match n {
+        N::FocusedUIElementChanged => NoteSignal::Focused,
+        N::ValueChanged => NoteSignal::Value,
+        N::SelectedChildrenChanged => NoteSignal::Selection,
+        N::LayoutChanged => NoteSignal::Layout,
+        N::ElementDestroyed => NoteSignal::Removed,
+    }
+}
+
 /// What an object path refers to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Key {
@@ -334,6 +361,16 @@ pub fn numeric(value: &str) -> Option<(f64, f64)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_element_notification_names_one_signal() {
+        use bifrost_ui::ax::AxNotification as N;
+        assert_eq!(note_signal(N::FocusedUIElementChanged), NoteSignal::Focused);
+        assert_eq!(note_signal(N::ValueChanged), NoteSignal::Value);
+        assert_eq!(note_signal(N::SelectedChildrenChanged), NoteSignal::Selection);
+        assert_eq!(note_signal(N::LayoutChanged), NoteSignal::Layout);
+        assert_eq!(note_signal(N::ElementDestroyed), NoteSignal::Removed);
+    }
 
     fn node(id: u64, role: Role, value: &str) -> Node {
         Node { id, role, label: format!("n{id}"), value: value.into(), bounds: Rect { x: 1., y: 2., w: 30., h: 40. }, enabled: true }

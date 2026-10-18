@@ -10,7 +10,8 @@
 //! reference describes the default; an empty list allows none.
 //!
 //! Not here: the ticket exchange, the lucid context export and the cache copy, which need a Kerberos library. The
-//! settings are only recorded; no ticket is requested or read by this module.
+//! settings are only recorded; no ticket is requested or read by this module. The ticket tools (`kinit`, `klist`)
+//! are in [`crate::krb5_client`], which reads the cache named here.
 
 use std::collections::BTreeSet;
 use std::fmt;

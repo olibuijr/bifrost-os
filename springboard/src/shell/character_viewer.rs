@@ -4,14 +4,132 @@
 //! picks. It takes every touch while it is up; Close or Escape hides it. Pure geometry and paging live here; the shell
 //! wiring is in `Shell::char_viewer_*`.
 //!
-//! Not yet: a search field over the catalogue, recent emoji, and the symbols tabs of the reference viewer (the catalogue
-//! holds emoji only).
+//! The Symbols tab (`SYMBOLS`) is the symbol emoji the emoji font draws. The last tab is Text Symbols (`TEXT_SYMBOLS`):
+//! arrows, math, currency and punctuation marks in text presentation. Those glyphs are drawn with the UI text font, not
+//! the emoji font, and a pick copies or types the same character.
+//!
+//! The Kana tab is the 50-on palette (`input_methods::gojuon`): the hiragana chart, a point on it hits the kana under it
+//! (`gojuon::cell_at`), and a pick types or copies that kana.
+//!
+//! Search: typing while the panel is up (and no Search field is open) fills the panel's query. The results are the text
+//! symbols whose names hold every word (`search_text_symbols`) and the kana a romaji word names (`search_kana`); Escape
+//! clears the query before it closes the panel, and Return picks the first result. Not yet: names for the emoji, and
+//! recent emoji.
 
+use super::input_methods::gojuon;
 use super::keyboard::Out;
 use super::ui::{Ui, Weight, CARD_BG, FILL_GRAY, LABEL, LINK, MAC_BODY_PT, MAC_TITLE3_PT, SEPARATOR, WHITE};
 use super::{Drawn, Effect, Event, Shell};
-use crate::emoji::CATEGORIES;
+use crate::emoji::{Category, CATEGORIES};
 use crate::gfx::Surface;
+
+/// The Symbols tab, after the emoji categories: symbol emoji with a default emoji presentation (plus and minus, digit and
+/// letter blocks, the boxed words, the arrows-in-circles and the coloured shapes).
+pub const SYMBOLS: Category = Category {
+    icon: "🔣",
+    emoji: &[
+        "➕", "➖", "➗", "💲", "💱", "🔠", "🔡", "🔢", "🔣", "🔤", "🆗", "🆕", "🆙", "🆒", "🆓", "🆖", "🆑", "🔝", "🔙", "🔚", "🔛",
+        "🔜", "🔀", "🔁", "🔂", "🔃", "🔄", "⏩", "⏪", "⏫", "⏬", "🔟", "💯", "🔴", "🔵", "🔘", "🔺", "🔻", "🔶", "🔷", "🔸", "🔹",
+    ],
+};
+
+/// Text-presentation symbols, drawn with the UI text font: arrows, math, currency and punctuation marks.
+pub const TEXT_SYMBOLS: &[&str] = &[
+    "←", "↑", "→", "↓", "↔", "↕", "⇐", "⇑", "⇒", "⇓", "⇔", "↩", "↪", "↰", "↱", "↲", "↳", "↺", "↻", "±", "×", "÷", "≠", "≈",
+    "≤", "≥", "∞", "√", "∑", "∏", "∫", "∂", "∆", "∇", "∈", "∉", "∩", "∪", "⊂", "⊃", "∀", "∃", "∅", "∴", "∝", "°", "€", "£",
+    "¥", "$", "¢", "₹", "₩", "₿", "₽", "₺", "₪", "₫", "₴", "₦", "₡", "₵", "§", "¶", "†", "‡", "•", "′", "″", "‰", "©",
+];
+
+/// The name a person types to find each text symbol. Every symbol of `TEXT_SYMBOLS` has one.
+const TEXT_NAMES: &[(&str, &str)] = &[
+    ("←", "left arrow"), ("↑", "up arrow"), ("→", "right arrow"), ("↓", "down arrow"), ("↔", "left right arrow"),
+    ("↕", "up down arrow"), ("⇐", "left double arrow"), ("⇑", "up double arrow"), ("⇒", "right double arrow"),
+    ("⇓", "down double arrow"), ("⇔", "left right double arrow"), ("↩", "return arrow"), ("↪", "redo arrow"),
+    ("↰", "up left arrow"), ("↱", "up right arrow"), ("↲", "down left arrow"), ("↳", "down right arrow"),
+    ("↺", "counterclockwise arrow"), ("↻", "clockwise arrow"), ("±", "plus minus"), ("×", "multiply times"),
+    ("÷", "divide"), ("≠", "not equal"), ("≈", "approximately equal"), ("≤", "less than or equal"),
+    ("≥", "greater than or equal"), ("∞", "infinity"), ("√", "square root"), ("∑", "sum"), ("∏", "product"),
+    ("∫", "integral"), ("∂", "partial derivative"), ("∆", "delta increment"), ("∇", "nabla gradient"), ("∈", "element of"),
+    ("∉", "not element of"), ("∩", "intersection"), ("∪", "union"), ("⊂", "subset"), ("⊃", "superset"),
+    ("∀", "for all"), ("∃", "there exists"), ("∅", "empty set"), ("∴", "therefore"), ("∝", "proportional"),
+    ("°", "degree"), ("€", "euro"), ("£", "pound"), ("¥", "yen"), ("$", "dollar"), ("¢", "cent"), ("₹", "rupee"),
+    ("₩", "won"), ("₿", "bitcoin"), ("₽", "ruble"), ("₺", "lira"), ("₪", "shekel"), ("₫", "dong"), ("₴", "hryvnia"),
+    ("₦", "naira"), ("₡", "colon"), ("₵", "cedi"), ("§", "section"), ("¶", "paragraph pilcrow"), ("†", "dagger"),
+    ("‡", "double dagger"), ("•", "bullet"), ("′", "prime minute"), ("″", "double prime second"), ("‰", "per mille"),
+    ("©", "copyright"),
+];
+
+/// The text symbols a search finds: those whose name holds every word of `query` (case-insensitive) or whose glyph is
+/// the query itself. Results keep the tab's order. An empty query finds nothing.
+pub fn search_text_symbols(query: &str) -> Vec<&'static str> {
+    let words: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
+    if words.is_empty() {
+        return vec![];
+    }
+    TEXT_NAMES
+        .iter()
+        .filter(|&&(glyph, name)| words.iter().all(|w| glyph == w.as_str() || name.split_whitespace().any(|n| n == w.as_str())))
+        .map(|&(glyph, _)| glyph)
+        .collect()
+}
+
+/// The kana a romaji word names on the 50-on palette: `ka` finds か. A word that is not a syllable of the chart, or is a
+/// syllable the chart does not hold on its own (a voiced or small kana), finds nothing.
+pub fn search_kana(query: &str) -> Vec<char> {
+    let all = gojuon::all();
+    query
+        .split_whitespace()
+        .filter_map(|w| bifrost_ui::kana_method::syllable_hiragana(&w.to_lowercase()))
+        .filter_map(|k| {
+            let mut chars = k.chars();
+            match (chars.next(), chars.next()) {
+                (Some(c), None) if all.contains(&c) => Some(c),
+                _ => None,
+            }
+        })
+        .collect()
+}
+
+/// The Text Symbols tab: after the Symbols tab.
+pub fn text_tab() -> usize {
+    CATEGORIES.len() + 1
+}
+
+/// The Kana tab: the 50-on palette, the last tab.
+pub fn kana_tab() -> usize {
+    text_tab() + 1
+}
+
+/// Number of tabs: the emoji categories, then Symbols, Text Symbols and Kana.
+pub fn tab_count() -> usize {
+    kana_tab() + 1
+}
+
+/// The emoji on tab `tab`, empty past the last tab. The Text Symbols tab has no emoji (see `tab_items`).
+fn tab_emoji(tab: usize) -> &'static [&'static str] {
+    match CATEGORIES.get(tab) {
+        Some(c) => c.emoji,
+        None if tab == CATEGORIES.len() => SYMBOLS.emoji,
+        None => &[],
+    }
+}
+
+/// The tab's icon, empty past the last tab.
+fn tab_icon(tab: usize) -> &'static str {
+    match CATEGORIES.get(tab) {
+        Some(c) => c.icon,
+        None if tab == CATEGORIES.len() => SYMBOLS.icon,
+        None if tab == text_tab() => TEXT_ICON,
+        None if tab == kana_tab() => KANA_ICON,
+        None => "",
+    }
+}
+
+/// The Text Symbols tab's icon: an emoji, because tab icons are drawn with the emoji font.
+const TEXT_ICON: &str = "🔢";
+
+/// The Kana tab's icon: the first kana of the chart, drawn with the text font (it is not an emoji).
+const KANA_ICON: &str = "あ";
 
 /// Emoji per row and rows per page: one page is a 10 by 5 grid.
 const COLS: usize = 10;
@@ -42,6 +160,10 @@ pub enum Hit {
     Tab(usize),
     /// index into the page's emoji
     Emoji(usize),
+    /// the kana under the point on the Kana tab
+    Kana(char),
+    /// index into the search results
+    Result(usize),
     Previous,
     Next,
     /// the panel itself, where no control is
@@ -52,11 +174,13 @@ fn inside(r: Rect, x: f32, y: f32) -> bool {
     x >= r.0 && x < r.0 + r.2 && y >= r.1 && y < r.1 + r.3
 }
 
-/// The viewer's state: the open tab and the page within it.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+/// The viewer's state: the open tab and the page within it, and the search typed into the panel.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct CharacterViewer {
     tab: usize,
     page: usize,
+    query: String,
+    results: Vec<String>,
 }
 
 impl CharacterViewer {
@@ -73,22 +197,87 @@ impl CharacterViewer {
         self.page
     }
 
-    /// The emoji of the open tab, in display order.
+    /// The emoji of the open tab, in display order (the text symbols on the Text Symbols tab).
     pub fn tab_items(&self) -> &'static [&'static str] {
-        match CATEGORIES.get(self.tab) {
-            Some(c) => c.emoji,
-            None => &[],
+        if self.is_text_tab() {
+            TEXT_SYMBOLS
+        } else {
+            tab_emoji(self.tab)
         }
     }
 
-    /// The pages in the open tab (at least one, so an empty tab still shows a page).
+    /// Whether the open tab holds text-presentation symbols, drawn with the text font rather than the emoji font.
+    pub fn is_text_tab(&self) -> bool {
+        self.tab == text_tab()
+    }
+
+    /// Whether the open tab is the 50-on palette.
+    pub fn is_kana_tab(&self) -> bool {
+        self.tab == kana_tab()
+    }
+
+    /// The search typed so far.
+    pub fn query(&self) -> &str {
+        &self.query
+    }
+
+    /// Whether a search is on: the panel then shows `results` instead of the open tab.
+    pub fn searching(&self) -> bool {
+        !self.query.trim().is_empty()
+    }
+
+    /// What the search found, in display order: text symbols, then kana. Empty when no search is on.
+    pub fn results(&self) -> &[String] {
+        &self.results
+    }
+
+    /// Types `text` into the search (control characters are dropped) and finds the results again.
+    pub fn type_text(&mut self, text: &str) {
+        self.query.extend(text.chars().filter(|c| !c.is_control()));
+        self.refresh();
+    }
+
+    /// Deletes the last character of the search. False when the search was empty.
+    pub fn backspace(&mut self) -> bool {
+        let had = self.query.pop().is_some();
+        self.refresh();
+        had
+    }
+
+    /// Clears the search. False when it was already empty.
+    pub fn clear_search(&mut self) -> bool {
+        let had = !self.query.is_empty();
+        self.query.clear();
+        self.refresh();
+        had
+    }
+
+    fn refresh(&mut self) {
+        self.results = if self.searching() {
+            search_text_symbols(&self.query)
+                .into_iter()
+                .map(str::to_string)
+                .chain(search_kana(&self.query).into_iter().map(String::from))
+                .collect()
+        } else {
+            Vec::new()
+        };
+    }
+
+    /// The pages in the open tab (at least one, so an empty tab still shows a page). The palette and the results are one page.
     pub fn pages(&self) -> usize {
+        if self.is_kana_tab() || self.searching() {
+            return 1;
+        }
         let n = self.tab_items().len();
         ((n + PER_PAGE - 1) / PER_PAGE).max(1)
     }
 
-    /// The emoji on the open page.
+    /// The emoji on the open page (none on the palette, which hits kana, and none while a search shows its results).
     pub fn page_items(&self) -> &'static [&'static str] {
+        if self.is_kana_tab() || self.searching() {
+            return &[];
+        }
         let all = self.tab_items();
         let start = (self.page * PER_PAGE).min(all.len());
         let end = (start + PER_PAGE).min(all.len());
@@ -97,7 +286,7 @@ impl CharacterViewer {
 
     /// Opens tab `tab` on its first page. A tab past the catalogue is ignored.
     pub fn select_tab(&mut self, tab: usize) {
-        if tab < CATEGORIES.len() {
+        if tab < tab_count() {
             self.tab = tab;
             self.page = 0;
         }
@@ -124,7 +313,7 @@ impl CharacterViewer {
 
     fn tab_rect(ui: &Ui, w: i32, h: i32, i: usize) -> Rect {
         let (x, y, _, _) = Self::panel(ui, w, h);
-        let tw = ui.pt(COLS as f32 * CELL_PT) / CATEGORIES.len() as f32;
+        let tw = ui.pt(COLS as f32 * CELL_PT) / tab_count() as f32;
         (x + ui.pt(PAD_PT) + tw * i as f32, y + ui.pt(TITLE_PT), tw, ui.pt(TAB_PT))
     }
 
@@ -133,6 +322,12 @@ impl CharacterViewer {
         let cell = ui.pt(CELL_PT);
         let (col, row) = (i % COLS, i / COLS);
         (x + ui.pt(PAD_PT) + cell * col as f32, y + ui.pt(TITLE_PT + TAB_PT) + cell * row as f32, cell, cell)
+    }
+
+    /// The palette's area: where the emoji grid sits, `(x, y, w, h)` in px. The chart's cells are laid out in it by `gojuon::layout`.
+    fn kana_area(ui: &Ui, w: i32, h: i32) -> Rect {
+        let (x, y, _, _) = Self::panel(ui, w, h);
+        (x + ui.pt(PAD_PT), y + ui.pt(TITLE_PT + TAB_PT), ui.pt(COLS as f32 * CELL_PT), ui.pt(ROWS as f32 * CELL_PT))
     }
 
     fn foot_y(ui: &Ui, w: i32, h: i32) -> f32 {
@@ -163,8 +358,21 @@ impl CharacterViewer {
         if inside(Self::done_rect(ui, w, h), x, y) {
             return Some(Hit::Done);
         }
-        if let Some(i) = (0..CATEGORIES.len()).find(|&i| inside(Self::tab_rect(ui, w, h, i), x, y)) {
+        if let Some(i) = (0..tab_count()).find(|&i| inside(Self::tab_rect(ui, w, h, i), x, y)) {
             return Some(Hit::Tab(i));
+        }
+        if self.searching() {
+            return match (0..self.results.len().min(PER_PAGE)).find(|&i| inside(Self::cell_rect(ui, w, h, i), x, y)) {
+                Some(i) => Some(Hit::Result(i)),
+                None => Some(Hit::Panel),
+            };
+        }
+        if self.is_kana_tab() {
+            let (ax, ay, aw, ah) = Self::kana_area(ui, w, h);
+            return match gojuon::cell_at(x - ax, y - ay, aw, ah) {
+                Some(kana) => Some(Hit::Kana(kana)),
+                None => Some(Hit::Panel),
+            };
         }
         if let Some(i) = (0..self.page_items().len()).find(|&i| inside(Self::cell_rect(ui, w, h, i), x, y)) {
             return Some(Hit::Emoji(i));
@@ -185,23 +393,53 @@ impl CharacterViewer {
 
         let title = ui.text("Emoji & Symbols", MAC_TITLE3_PT, Weight::Semibold, WHITE);
         s.blit_colored(&title, (x + ui.pt(PAD_PT)) as i32, (y + (ui.pt(TITLE_PT) - title.h as f32) / 2.0) as i32, LABEL.now(), 255);
+        if self.searching() {
+            let q = ui.text(&self.query, MAC_BODY_PT, Weight::Regular, WHITE);
+            s.blit_colored(&q, (x + pw / 2.0 - q.w as f32 / 2.0 + ui.pt(40.0)) as i32, (y + (ui.pt(TITLE_PT) - q.h as f32) / 2.0) as i32, LINK, 255);
+        }
         let (dx, dy, dw, dh) = Self::done_rect(ui, w, h);
         let done = ui.text("Done", MAC_BODY_PT, Weight::Semibold, WHITE);
         s.blit_colored(&done, (dx + (dw - done.w as f32) / 2.0) as i32, (dy + (dh - done.h as f32) / 2.0) as i32, LINK, 255);
 
-        for i in 0..CATEGORIES.len() {
+        for i in 0..tab_count() {
             let (tx, ty, tw, th) = Self::tab_rect(ui, w, h, i);
             if i == self.tab() {
                 s.fill_rrect(tx + 1.0, ty + 1.0, tw - 2.0, th - 2.0, ui.pt(TAB_RADIUS_PT), FILL_GRAY);
             }
-            if let Some(img) = crate::emoji::render(CATEGORIES[i].icon, ui.pt(TAB_GLYPH_PT)) {
+            if i == kana_tab() {
+                let g = ui.text(tab_icon(i), TAB_GLYPH_PT, Weight::Regular, WHITE);
+                s.blit_colored(&g, (tx + (tw - g.w as f32) / 2.0) as i32, (ty + (th - g.h as f32) / 2.0) as i32, LABEL.now(), 255);
+            } else if let Some(img) = crate::emoji::render(tab_icon(i), ui.pt(TAB_GLYPH_PT)) {
                 s.blit(&img, (tx + (tw - img.w as f32) / 2.0) as i32, (ty + (th - img.h as f32) / 2.0) as i32, 255, 255);
+            }
+        }
+
+        if self.searching() {
+            for (i, r) in self.results.iter().take(PER_PAGE).enumerate() {
+                let (cx, cy, cw, ch) = Self::cell_rect(ui, w, h, i);
+                let g = ui.text(r, GLYPH_PT, Weight::Regular, WHITE);
+                s.blit_colored(&g, (cx + (cw - g.w as f32) / 2.0) as i32, (cy + (ch - g.h as f32) / 2.0) as i32, LABEL.now(), 255);
+            }
+            let (fy, fh) = (Self::foot_y(ui, w, h), ui.pt(FOOT_PT));
+            let count = if self.results.is_empty() { "No results".to_string() } else { format!("{} results", self.results.len()) };
+            let note = ui.text(&count, MAC_BODY_PT, Weight::Regular, WHITE);
+            s.blit_colored(&note, (x + (pw - note.w as f32) / 2.0) as i32, (fy + (fh - note.h as f32) / 2.0) as i32, LABEL.now(), 255);
+            return;
+        }
+        if self.is_kana_tab() {
+            let (ax, ay, aw, ah) = Self::kana_area(ui, w, h);
+            for (kana, (kx, ky, kw, kh)) in gojuon::layout(aw, ah) {
+                let g = ui.text(&kana.to_string(), MAC_BODY_PT, Weight::Regular, WHITE);
+                s.blit_colored(&g, (ax + kx + (kw - g.w as f32) / 2.0) as i32, (ay + ky + (kh - g.h as f32) / 2.0) as i32, LABEL.now(), 255);
             }
         }
 
         for (i, e) in self.page_items().iter().enumerate() {
             let (cx, cy, cw, ch) = Self::cell_rect(ui, w, h, i);
-            if let Some(img) = crate::emoji::render(e, ui.pt(GLYPH_PT)) {
+            if self.is_text_tab() {
+                let g = ui.text(e, GLYPH_PT, Weight::Regular, WHITE);
+                s.blit_colored(&g, (cx + (cw - g.w as f32) / 2.0) as i32, (cy + (ch - g.h as f32) / 2.0) as i32, LABEL.now(), 255);
+            } else if let Some(img) = crate::emoji::render(e, ui.pt(GLYPH_PT)) {
                 s.blit(&img, (cx + (cw - img.w as f32) / 2.0) as i32, (cy + (ch - img.h as f32) / 2.0) as i32, 255, 255);
             }
         }
@@ -233,6 +471,14 @@ impl Shell {
 
     /// Escape hides the viewer. True when it was up (the key is then used up).
     pub(super) fn char_viewer_escape(&mut self) -> bool {
+        // a search is cleared first; the panel closes on the next Escape
+        if let Some(v) = self.char_viewer.as_mut() {
+            if v.clear_search() {
+                self.drawn = Drawn::Nothing;
+                self.dirty = true;
+                return true;
+            }
+        }
         if self.char_viewer.take().is_none() {
             return false;
         }
@@ -268,10 +514,35 @@ impl Shell {
                 None
             }
             Some(Hit::Emoji(i)) => viewer.page_items().get(i).map(|e| (*e).to_string()),
+            Some(Hit::Kana(kana)) => Some(kana.to_string()),
+            Some(Hit::Result(i)) => viewer.results().get(i).cloned(),
         };
         self.drawn = Drawn::Nothing;
         match picked {
             Some(emoji) => self.char_viewer_pick(&emoji),
+            None => vec![],
+        }
+    }
+
+    /// Typing while the panel is up fills its search: text is added, Backspace removes, Return picks the first result.
+    pub(super) fn char_viewer_key(&mut self, out: Out) -> Vec<Effect> {
+        let Some(v) = self.char_viewer.as_mut() else { return vec![] };
+        let picked = match out {
+            Out::Text(text) => {
+                v.type_text(&text);
+                None
+            }
+            Out::Backspace => {
+                v.backspace();
+                None
+            }
+            Out::Enter => v.results().first().cloned(),
+            _ => return vec![],
+        };
+        self.drawn = Drawn::Nothing;
+        self.dirty = true;
+        match picked {
+            Some(text) => self.char_viewer_pick(&text),
             None => vec![],
         }
     }
@@ -312,8 +583,42 @@ mod tests {
         let mut v = CharacterViewer::new();
         v.select_tab(2);
         assert_eq!(v.tab(), 2);
-        v.select_tab(CATEGORIES.len());
+        v.select_tab(tab_count());
         assert_eq!(v.tab(), 2, "a tab past the catalogue is ignored");
+    }
+
+    #[test]
+    fn the_symbols_tab_is_after_the_categories_and_shows_the_symbol_set() {
+        let mut v = CharacterViewer::new();
+        v.select_tab(CATEGORIES.len());
+        assert_eq!(v.tab(), CATEGORIES.len());
+        assert_eq!(v.tab_items(), SYMBOLS.emoji);
+        assert!(!v.is_text_tab());
+        assert!(!v.tab_items().is_empty());
+        assert_eq!(v.page_items().len(), v.tab_items().len().min(PER_PAGE));
+    }
+
+    #[test]
+    fn the_text_symbols_tab_follows_symbols_and_holds_text_presentation_symbols() {
+        let mut v = CharacterViewer::new();
+        v.select_tab(text_tab());
+        assert_eq!(v.tab(), text_tab());
+        assert!(v.is_text_tab());
+        assert_eq!(v.tab_items(), TEXT_SYMBOLS);
+        for want in ["→", "≠", "€", "₿"] {
+            assert!(TEXT_SYMBOLS.contains(&want), "{want} is on the Text Symbols tab");
+        }
+        assert!(!TEXT_SYMBOLS.iter().any(|s| SYMBOLS.emoji.contains(s)), "no symbol is listed twice across tabs");
+        assert!(v.pages() >= 1);
+        assert_eq!(v.page_items().len(), TEXT_SYMBOLS.len().min(PER_PAGE));
+    }
+
+    #[test]
+    fn text_symbols_are_single_characters_without_emoji_presentation() {
+        for s in TEXT_SYMBOLS {
+            assert_eq!(s.chars().count(), 1, "{s} is one character");
+            assert!(!s.contains('\u{fe0f}'), "{s} keeps text presentation");
+        }
     }
 
     #[test]
@@ -339,8 +644,115 @@ mod tests {
     }
 
     #[test]
+    fn every_text_symbol_has_a_name_once() {
+        assert_eq!(TEXT_NAMES.len(), TEXT_SYMBOLS.len());
+        for s in TEXT_SYMBOLS {
+            assert_eq!(TEXT_NAMES.iter().filter(|(g, _)| g == s).count(), 1, "{s} is named once");
+        }
+    }
+
+    #[test]
+    fn a_search_finds_symbols_by_their_name_words() {
+        assert_eq!(search_text_symbols("euro"), vec!["€"]);
+        assert_eq!(search_text_symbols("Dollar"), vec!["$"], "case does not matter");
+        assert_eq!(search_text_symbols("not equal"), vec!["≠"]);
+        assert_eq!(search_text_symbols("square root"), vec!["√"]);
+        let arrows = search_text_symbols("arrow");
+        assert!(arrows.contains(&"←") && arrows.contains(&"⇔"));
+        assert!(!arrows.contains(&"€"));
+    }
+
+    #[test]
+    fn a_search_matches_the_glyph_and_finds_nothing_for_empty_or_unknown_text() {
+        assert_eq!(search_text_symbols("→"), vec!["→"]);
+        assert!(search_text_symbols("").is_empty());
+        assert!(search_text_symbols("   ").is_empty());
+        assert!(search_text_symbols("zzzz").is_empty());
+        assert!(search_text_symbols("arrow zzzz").is_empty(), "every word must match");
+    }
+
+    #[test]
+    fn the_kana_tab_is_last_and_a_point_on_the_chart_hits_the_kana_under_it() {
+        let ui = crate::shell::tests::ui();
+        let (w, h) = (1200, 800);
+        let mut v = CharacterViewer::new();
+        v.select_tab(tab_count() - 1);
+        assert_eq!(v.tab(), kana_tab());
+        assert!(v.is_kana_tab());
+        assert_eq!(v.pages(), 1, "the chart is one page");
+        assert!(v.page_items().is_empty(), "the chart hits kana, not emoji");
+        let (ax, ay, aw, ah) = CharacterViewer::kana_area(&ui, w, h);
+        let cells = gojuon::layout(aw, ah);
+        assert_eq!(cells.len(), 46);
+        for (kana, (kx, ky, kw, kh)) in cells {
+            assert_eq!(v.hit(&ui, w, h, ax + kx + kw / 2.0, ay + ky + kh / 2.0), Some(Hit::Kana(kana)), "{kana}");
+        }
+        // the cell the chart leaves empty (row y, column i) is the panel
+        let (ex, ey, ew, eh) = gojuon::cell_rect(0, 0, aw, ah).expect("the first cell");
+        assert_eq!(v.hit(&ui, w, h, ax + ew * 1.5, ay + eh * 7.5), Some(Hit::Panel));
+        assert!(ex == 0.0 && ey == 0.0);
+    }
+
+    #[test]
+    fn a_romaji_word_finds_its_kana_on_the_chart() {
+        assert_eq!(search_kana("ka"), vec!['か']);
+        assert_eq!(search_kana("ka SA shi"), vec!['か', 'さ', 'し'], "case does not matter and order follows the query");
+        assert!(search_kana("zzz").is_empty());
+        assert!(search_kana("").is_empty());
+        assert!(search_kana("ga").is_empty(), "が is not a cell of the chart");
+    }
+
+    #[test]
+    fn typing_searches_symbols_by_name_and_kana_by_romaji() {
+        let mut v = CharacterViewer::new();
+        assert!(!v.searching());
+        assert!(v.results().is_empty());
+        v.type_text("euro");
+        assert!(v.searching());
+        assert_eq!(v.results().to_vec(), vec!["€".to_string()]);
+        assert_eq!(v.pages(), 1);
+        assert!(v.page_items().is_empty(), "the results replace the tab while a search is on");
+        assert!(v.clear_search());
+        assert!(!v.searching());
+        assert!(!v.clear_search(), "nothing left to clear");
+        v.type_text("ka");
+        assert_eq!(v.results().to_vec(), vec!["か".to_string()]);
+    }
+
+    #[test]
+    fn backspace_trims_the_search_and_control_characters_are_dropped() {
+        let mut v = CharacterViewer::new();
+        v.type_text("eu\n");
+        assert_eq!(v.query(), "eu");
+        v.type_text("ro");
+        assert_eq!(v.results().to_vec(), vec!["€".to_string()]);
+        assert!(v.backspace());
+        assert_eq!(v.query(), "eur");
+        for _ in 0..3 {
+            v.backspace();
+        }
+        assert!(!v.backspace(), "an empty search has nothing to delete");
+        assert!(!v.searching());
+        assert!(v.results().is_empty());
+    }
+
+    #[test]
+    fn a_touch_on_a_search_result_picks_it() {
+        let ui = crate::shell::tests::ui();
+        let (w, h) = (1200, 800);
+        let mut v = CharacterViewer::new();
+        v.type_text("arrow");
+        assert!(v.results().len() > 2);
+        let (cx, cy, cw, ch) = CharacterViewer::cell_rect(&ui, w, h, 1);
+        assert_eq!(v.hit(&ui, w, h, cx + cw / 2.0, cy + ch / 2.0), Some(Hit::Result(1)));
+        let past = v.results().len();
+        let (px, py, pw, ph) = CharacterViewer::cell_rect(&ui, w, h, past);
+        assert_eq!(v.hit(&ui, w, h, px + pw / 2.0, py + ph / 2.0), Some(Hit::Panel), "a cell past the last result is the panel");
+    }
+
+    #[test]
     fn every_category_has_emoji_and_an_icon() {
-        for c in CATEGORIES.iter() {
+        for c in CATEGORIES.iter().chain(std::iter::once(&SYMBOLS)) {
             assert!(!c.emoji.is_empty());
             assert!(!c.icon.is_empty());
         }

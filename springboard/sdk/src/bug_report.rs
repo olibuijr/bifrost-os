@@ -14,11 +14,13 @@
 //! Nothing here logs report text or diagnostics.
 
 use crate::http_auth::base64_encode;
+use crate::cloud_account::{self, Session};
 use crate::url::URLRequest;
+use crate::Ctx;
 use bifrost_core::json::{self, Json};
 use bifrost_core::log::{format_entry, LogEntry, LogStore, Query};
 use std::fmt;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
 
 /// The cloud API's base URL.
@@ -746,31 +748,27 @@ impl fmt::Debug for CloudSession {
 }
 
 impl CloudSession {
-    /// The file name of the session, in the `bifrost` directory of the data directory (next to `accounts.ini`).
-    pub const FILE: &'static str = "cloud_session";
-
     pub fn new(token: &str) -> Option<CloudSession> {
         let token = token.trim();
         (!token.is_empty() && !token.contains(char::is_whitespace)).then(|| CloudSession { token: token.to_string() })
     }
 
-    /// Reads `token=<value>` from the file's text.
-    pub fn parse(text: &str) -> Option<CloudSession> {
-        text.lines().find_map(|l| l.trim().strip_prefix("token=")).and_then(CloudSession::new)
+    /// The bearer token of a stored BifrOSt Account session (`cloud_account::session`).
+    pub fn from_session(session: &Session) -> CloudSession {
+        CloudSession { token: session.token.clone() }
     }
+}
 
-    pub fn path() -> Option<PathBuf> {
-        crate::accounts::shared_path().and_then(|p| p.parent().map(|d| d.join(CloudSession::FILE)))
-    }
+/// Asks the keychain for this device's BifrOSt Account session: the first step of a bug-report flow, answered through
+/// the app's service reply. Read the answer with [`session_from_reply`].
+pub fn session_request(ctx: &Ctx) -> u32 {
+    cloud_account::session(ctx)
+}
 
-    pub fn load_from(path: &Path) -> Option<CloudSession> {
-        CloudSession::parse(&std::fs::read_to_string(path).ok()?)
-    }
-
-    /// The session of this user, if they are signed in to BifrOSt Account on this device.
-    pub fn load() -> Option<CloudSession> {
-        CloudSession::path().and_then(|p| CloudSession::load_from(&p))
-    }
+/// Reads the answer to [`session_request`]. No session, or a keychain refusal (this app is not granted the account
+/// group), is `NotSignedIn`.
+pub fn session_from_reply(result: &Result<Json, String>) -> Result<CloudSession, ApiError> {
+    cloud_account::decode_session(result).map(|s| CloudSession::from_session(&s)).map_err(|_| ApiError::NotSignedIn)
 }
 
 /// Why a call to the bug API failed.
@@ -1270,17 +1268,17 @@ mod tests {
     // client
 
     #[test]
-    fn session_is_read_from_its_file_and_hides_the_token() {
-        assert!(CloudSession::parse("token=abc\n").is_some());
-        assert!(CloudSession::parse("token=\n").is_none());
-        assert!(CloudSession::parse("other=1\n").is_none());
+    fn a_stored_session_gives_the_bearer_token_and_hides_it() {
+        let stored = Session::new("tok77", "a1", "https://bifrost.olibuijr.com/api/cloud/v1", None).unwrap();
+        assert!(!format!("{:?}", CloudSession::from_session(&stored)).contains("tok77"));
         assert!(CloudSession::new("a b").is_none());
-        assert!(!format!("{:?}", CloudSession::new("secret").unwrap()).contains("secret"));
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join(CloudSession::FILE);
-        assert!(CloudSession::load_from(&path).is_none());
-        std::fs::write(&path, "token=xyz\n").unwrap();
-        assert!(CloudSession::load_from(&path).is_some());
+        let reply: Result<Json, String> = Ok(Json::Obj(vec![
+            ("status".into(), Json::Num(0.0)),
+            ("value".into(), Json::Str(springboard::keychain::hex(&stored.encode()))),
+        ]));
+        assert!(session_from_reply(&reply).is_ok());
+        let absent: Result<Json, String> = Ok(Json::Obj(vec![("status".into(), Json::Num(-25300.0)), ("value".into(), Json::Str(String::new()))]));
+        assert_eq!(session_from_reply(&absent).unwrap_err(), ApiError::NotSignedIn);
     }
 
     #[test]

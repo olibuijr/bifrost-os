@@ -16,6 +16,13 @@ fn main() {
     match action {
         Action::Help => println!("{USAGE}"),
         Action::Show => print!("{}", pmset::show_text(&Prefs::load(&path))),
+        Action::ShowBatt => print!("{}", pmset::batt_text(&bifrost_core::power_supply::sources_in(std::path::Path::new(pmset::SUPPLY_CLASS)))),
+        Action::SetLowPower(on) => {
+            let mut prefs = Prefs::load(&path);
+            if let Err(e) = pmset::set_low_power(&mut prefs, on) {
+                die("pmset", &format!("{}: {e}", path.display()), 1);
+            }
+        }
         Action::SetSleep(minutes) => {
             let mut prefs = Prefs::load(&path);
             if let Err(e) = pmset::set_sleep(&mut prefs, minutes) {

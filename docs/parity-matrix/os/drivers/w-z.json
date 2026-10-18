@@ -22,7 +22,26 @@
    "status": "partial",
    "note": "Gamepads that speak the xpad protocol are driven by the Linux xpad kernel module and appear as evdev input nodes. The shell's game controller page lists them and pad_rumble.rs drives their motors. No app-facing controller API exists.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "modinfo -F filename xpad",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::game_controllers_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::pad_rumble::tests"
+    }
+   ],
+   "ready_note": "The xpad kernel module drives xpad-protocol gamepads; the controller page and rumble code are tested."
   }
  ]
 }

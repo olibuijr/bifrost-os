@@ -1,6 +1,6 @@
 id = "is.olibuijr.preview.desktop"
 name = "Viewer"
-version = "0.11.5"
+version = "0.11.8"
 exec = "bifrost-viewer"
 icon = "icon.png"
 min_shell = "0.4.84"
@@ -8,5 +8,11 @@ summary = "Views images and PDFs with zoom, rotation, page thumbnails, outline, 
 category = "Utilities"
 kind = "system-app"
 architecture = "x86_64-linux"
-permissions = ["storage", "documents"]
+permissions = ["storage", "documents", "screen"]
 window = "full-size"
+
+[[service]]
+title = "Open Images in Viewer"
+send_types = ["public.image", "public.pdf"]
+return_types = []
+method = "open_images"

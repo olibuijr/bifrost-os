@@ -2,7 +2,7 @@
 //! read from the shared list (`bifrost_ui::internet_accounts`).
 //!
 //! Each account lists its services with a switch per service (Mail; Calendars and Reminders for CalDAV; Contacts for
-//! CardDAV), then a Remove row. Add Account asks for the address, the user name and the password in three one-field
+//! CardDAV; Notes for Exchange), then a Remove row. Add Account asks for the address, the user name and the password in three one-field
 //! prompts ([`super::forms`]). The password goes to the passwords group; the list file never holds one.
 //!
 //! The page is built from the list read at build time, so it needs no state of its own. The file operations here
@@ -11,6 +11,7 @@
 use super::forms::{Prompt, Purpose};
 use super::list::{Group, Item, Spec, Tint};
 use super::pages::{Action, PageId};
+use bifrost_ui::account_store::{self as store, Contents};
 use bifrost_ui::internet_accounts::{self as shared, Account, Kind, Security, Server, Service};
 use std::path::{Path, PathBuf};
 
@@ -23,11 +24,15 @@ pub enum Act {
     Toggle { id: String, service: Service },
     /// Remove an account and its saved password.
     Remove { id: String },
+    /// Clear a refused account-type request, so the app may ask again.
+    ForgetRefusal { app: String, account_type: String },
 }
 
 /// What the page is built from.
 pub struct PageState<'a> {
     pub accounts: &'a [Account],
+    /// The accounts saved by apps in the accounts store, listed read only under their account types.
+    pub store: &'a Contents,
     /// Why the last change did not happen (empty when nothing failed).
     pub note: &'a str,
 }
@@ -51,8 +56,34 @@ pub fn spec(s: &PageState) -> Spec {
         groups.push(Group::new(rows).header(&a.name).footer(&detail(a)));
         groups.push(Group::new(vec![Item::new("Remove Account").tint(Tint::Red).action(Action::InternetAccounts(Act::Remove { id: a.id.clone() }))]));
     }
+    // the accounts apps saved, under each account type the store holds (read only: an app manages its own)
+    for t in &s.store.types {
+        let saved = s.store.accounts_with_type(&t.identifier);
+        if saved.is_empty() {
+            continue;
+        }
+        let rows: Vec<Item> = saved
+            .iter()
+            .map(|a| Item::new(if a.account_description.is_empty() { a.username.clone() } else { a.account_description.clone() }))
+            .collect();
+        let access = if t.access_granted { "Apps may use these accounts." } else { "Apps may not use these accounts yet." };
+        groups.push(Group::new(rows).header(&t.description).footer(&format!("Saved by apps. {access}")));
+    }
+    // the requests the person refused: an app asks again only after its row is cleared here
+    if !s.store.refusals.is_empty() {
+        let rows: Vec<Item> = s
+            .store
+            .refusals
+            .iter()
+            .map(|r| {
+                let label = format!("{} · {}", r.app, s.store.type_description(&r.account_type));
+                Item::new(label).action(Action::InternetAccounts(Act::ForgetRefusal { app: r.app.clone(), account_type: r.account_type.clone() }))
+            })
+            .collect();
+        groups.push(Group::new(rows).header("DECLINED REQUESTS").footer("Apps that asked for an account type you refused. Tap one to let it ask again."));
+    }
     let adds: Vec<Item> = Kind::ALL.iter().map(|&k| Item::new(k.label()).tint(Tint::Blue).action(Action::InternetAccounts(Act::Add(k)))).collect();
-    groups.push(Group::new(adds).header("ADD ACCOUNT").footer("Mail reads IMAP and SMTP at the servers of the address's domain. Passwords are saved in Passwords."));
+    groups.push(Group::new(adds).header("ADD ACCOUNT").footer("Mail reads IMAP and SMTP at the servers of the address's domain. Exchange gives Notes the notes of a mailbox. Passwords are saved in Passwords."));
     Spec { id: PageId::InternetAccounts, title: "Internet Accounts".into(), large: false, groups }
 }
 
@@ -60,14 +91,17 @@ pub fn spec(s: &PageState) -> Spec {
 fn detail(a: &Account) -> String {
     let place = match a.kind {
         Kind::Mail => a.email.as_str(),
-        Kind::CalDav | Kind::CardDav => a.url.as_str(),
+        Kind::CalDav | Kind::CardDav | Kind::Exchange => a.url.as_str(),
     };
     format!("{}  ·  {}  ·  {}", a.kind.label(), a.username, place)
 }
 
-/// The accounts in the shared list. An unreadable list shows as none; changes use [`load_for_change`] instead.
-pub fn load() -> Vec<Account> {
-    shared::store_path().and_then(|p| shared::load(&p).ok()).unwrap_or_default()
+/// The accounts in the shared list and in the accounts store. An unreadable file shows as none; changes to the shared
+/// list use [`load_for_change`] instead.
+pub fn load() -> (Vec<Account>, Contents) {
+    let accounts = shared::store_path().and_then(|p| shared::load(&p).ok()).unwrap_or_default();
+    let saved = store::store_path().and_then(|p| store::read(&p).ok()).unwrap_or_default();
+    (accounts, saved)
 }
 
 /// Where the shared list is kept, or why it has no place.
@@ -87,6 +121,12 @@ pub fn toggle(path: &Path, id: &str, service: Service) -> Result<(), String> {
     let on = !account.has(service);
     account.set_service(service, on);
     shared::save(path, &all).map_err(|e| format!("The change could not be saved: {e}"))
+}
+
+/// Clears a refused request from the accounts store, so the app is asked again the next time it asks.
+pub fn forget_refusal(app: &str, account_type: &str) -> Result<(), String> {
+    let path = store::store_path().ok_or_else(|| "The accounts file has no home folder".to_string())?;
+    store::remove_refusal(&path, app, account_type).map(|_| ()).map_err(|e| format!("The change could not be saved: {e}"))
 }
 
 /// Removes an account from the list and its password from the passwords group.
@@ -113,11 +153,13 @@ pub fn finish(path: &Path, root: &Path, purpose: &Purpose, text: &str) -> Result
             let ok = match kind {
                 Kind::Mail => shared::valid_address(address),
                 Kind::CalDav | Kind::CardDav => shared::valid_dav_url(address),
+                Kind::Exchange => shared::valid_exchange_url(address),
             };
             if !ok {
                 return Err(match kind {
                     Kind::Mail => "Enter an email address, such as name@example.com.".to_string(),
                     Kind::CalDav | Kind::CardDav => "Enter a web address that starts with https://.".to_string(),
+                    Kind::Exchange => "Enter the Exchange server address; it must start with https://.".to_string(),
                 });
             }
             Ok(Some(Prompt::new_account_user(*kind, address)))
@@ -141,8 +183,8 @@ fn add(path: &Path, root: &Path, kind: Kind, address: &str, username: &str, pass
     crate::credentials::save(root, &account.password_site(), &account.username, password).map_err(|_| "The password could not be saved in Passwords.".to_string())
 }
 
-/// The account for an address (mail) or server URL (CalDAV, CardDAV). Mail takes its servers from the address's
-/// domain: IMAP on 993 with TLS and SMTP on 587 with STARTTLS. The DAV account is named by its host.
+/// The account for an address (mail) or server URL (CalDAV, CardDAV, Exchange). Mail takes its servers from the address's
+/// domain: IMAP on 993 with TLS and SMTP on 587 with STARTTLS. The DAV and Exchange accounts are named by their host.
 pub fn build(kind: Kind, id: &str, address: &str, username: &str) -> Result<Account, String> {
     let account = match kind {
         Kind::Mail => {
@@ -154,7 +196,7 @@ pub fn build(kind: Kind, id: &str, address: &str, username: &str) -> Result<Acco
                 ..Account::new(kind, id, address, username)
             }
         }
-        Kind::CalDav | Kind::CardDav => {
+        Kind::CalDav | Kind::CardDav | Kind::Exchange => {
             let host = shared::url_host(address).unwrap_or("").to_string();
             Account { url: address.to_string(), ..Account::new(kind, id, &host, username) }
         }
@@ -181,21 +223,90 @@ mod tests {
     }
 
     #[test]
-    fn an_empty_list_says_so_and_offers_three_kinds() {
-        let s = spec(&PageState { accounts: &[], note: "" });
+    fn accounts_apps_saved_are_listed_under_their_type() {
+        use bifrost_ui::account_store::{AccountEntry, TypeEntry};
+        let saved = Contents {
+            refusals: Vec::new(),
+            next_id: 2,
+            types: vec![TypeEntry { identifier: "bifrost.mail".into(), description: "Mail".into(), access_granted: true }],
+            accounts: vec![AccountEntry {
+                identifier: "account-1".into(),
+                account_type: "bifrost.mail".into(),
+                username: "ann".into(),
+                user_full_name: String::new(),
+                account_description: String::new(),
+            }],
+        };
+        let empty = spec(&PageState { accounts: &[], store: &Contents::default(), note: "" });
+        let listed = spec(&PageState { accounts: &[], store: &saved, note: "" });
+        assert_eq!(listed.groups.len(), empty.groups.len() + 1, "one group for the one type with accounts");
+        let other_type = Contents { types: saved.types.clone(), ..Contents::default() };
+        assert_eq!(spec(&PageState { accounts: &[], store: &other_type, note: "" }).groups.len(), empty.groups.len(), "a type without accounts adds no group");
+    }
+
+    #[test]
+    fn a_refused_request_is_listed_and_clearing_it_is_an_action() {
+        use bifrost_ui::account_store::RefusalEntry;
+        let refused = Contents {
+            refusals: vec![RefusalEntry { app: "app.notes".into(), account_type: "bifrost.mail".into() }],
+            ..Contents::default()
+        };
+        let empty = spec(&PageState { accounts: &[], store: &Contents::default(), note: "" });
+        let s = spec(&PageState { accounts: &[], store: &refused, note: "" });
+        assert_eq!(s.groups.len(), empty.groups.len() + 1, "one group for the declined requests");
+        let row = &s.groups[1].items[0];
+        assert_eq!(row.action, Action::InternetAccounts(Act::ForgetRefusal { app: "app.notes".into(), account_type: "bifrost.mail".into() }));
+    }
+
+    #[test]
+    fn an_empty_list_says_so_and_offers_four_kinds() {
+        let s = spec(&PageState { accounts: &[], store: &Contents::default(), note: "" });
         assert_eq!(s.id, PageId::InternetAccounts);
         assert_eq!(s.title, "Internet Accounts");
         assert_eq!(s.groups[0].items[0].label, "No Accounts");
         let adds = s.groups.last().unwrap();
         assert_eq!(adds.header.as_deref(), Some("ADD ACCOUNT"));
         let kinds: Vec<Action> = adds.items.iter().map(|i| i.action.clone()).collect();
-        assert_eq!(kinds, vec![Action::InternetAccounts(Act::Add(Kind::Mail)), Action::InternetAccounts(Act::Add(Kind::CalDav)), Action::InternetAccounts(Act::Add(Kind::CardDav))]);
+        assert_eq!(kinds, vec![Action::InternetAccounts(Act::Add(Kind::Mail)), Action::InternetAccounts(Act::Add(Kind::CalDav)), Action::InternetAccounts(Act::Add(Kind::CardDav)), Action::InternetAccounts(Act::Add(Kind::Exchange))]);
+    }
+
+    #[test]
+    fn an_exchange_account_is_added_in_three_prompts_and_gives_notes() {
+        let dir = std::env::temp_dir().join(format!("ia-exchange-{}", std::process::id()));
+        let path = dir.join(shared::STORE_FILE);
+        let kind = Kind::Exchange;
+        // http:// is refused with its reason before a second prompt
+        let err = finish(&path, &dir, &Purpose::NewAccountAddress { kind }, "http://mail.example.com/EWS/Exchange.asmx").unwrap_err();
+        assert!(err.contains("https://"), "{err}");
+        let user = finish(&path, &dir, &Purpose::NewAccountAddress { kind }, "https://mail.example.com/EWS/Exchange.asmx").unwrap().unwrap();
+        assert_eq!(user.purpose, Purpose::NewAccountUser { kind, address: "https://mail.example.com/EWS/Exchange.asmx".into() });
+        let pass = finish(&path, &dir, &user.purpose, "ann").unwrap().unwrap();
+        assert!(pass.secure);
+        assert_eq!(finish(&path, &dir, &pass.purpose, "secret"), Ok(None));
+        let saved = shared::load(&path).unwrap();
+        assert_eq!(saved.len(), 1);
+        assert_eq!(saved[0].kind, Kind::Exchange);
+        assert_eq!(saved[0].id, "exchange-1");
+        assert_eq!(saved[0].name, "mail.example.com");
+        assert!(saved[0].has(Service::Notes));
+        // the page lists it with a Notes switch and the server in the footer
+        let s = spec(&PageState { accounts: &saved, store: &Contents::default(), note: "" });
+        assert_eq!(s.groups[0].items[0].label, "Notes");
+        assert!(s.groups[0].footer.as_deref().unwrap_or("").contains("Notes (Exchange)"));
+        assert_eq!(s.groups[0].items[0].action, Action::InternetAccounts(Act::Toggle { id: "exchange-1".into(), service: Service::Notes }));
+        // the password sits in the passwords group, not in the list
+        assert!(!std::fs::read_to_string(&path).unwrap().contains("secret"));
+        toggle(&path, "exchange-1", Service::Notes).unwrap();
+        assert!(!shared::load(&path).unwrap()[0].has(Service::Notes));
+        remove(&path, &dir, "exchange-1").unwrap();
+        assert!(shared::load(&path).unwrap().is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn a_caldav_account_has_calendar_and_reminder_switches() {
         let accounts = [caldav()];
-        let s = spec(&PageState { accounts: &accounts, note: "" });
+        let s = spec(&PageState { accounts: &accounts, store: &Contents::default(), note: "" });
         let services = &s.groups[0];
         assert_eq!(services.header.as_deref(), Some("dav.example.com"));
         let labels: Vec<&str> = services.items.iter().map(|i| i.label.as_str()).collect();
@@ -207,7 +318,7 @@ mod tests {
 
     #[test]
     fn a_note_shows_first() {
-        let s = spec(&PageState { accounts: &[], note: "The change could not be saved." });
+        let s = spec(&PageState { accounts: &[], store: &Contents::default(), note: "The change could not be saved." });
         assert_eq!(s.groups[0].items[0].label, "The change could not be saved.");
     }
 

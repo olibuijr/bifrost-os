@@ -1,0 +1,43 @@
+{
+  "framework": "Watch Connectivity",
+  "doc": "https://developer.apple.com/documentation/watchconnectivity",
+  "macos_since": "",
+  "status": "partial",
+  "bifrost": "springboard/sdk/src/peer_session.rs",
+  "summary": "BifrOSt has no Apple Watch and no WCSession. The generic request and reply peer session covers two-way messages between two BifrOSt devices, which is the nearest counterpart.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run in this batch); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Two-way messages between a phone app and its companion",
+      "apple": "WCSession, WCSessionDelegate",
+      "bifrost": "springboard/sdk/src/peer_session.rs",
+      "status": "partial",
+      "note": "request and reply messages between a client and a server side; not a companion-app pairing"
+    },
+    {
+      "feature": "File transfer to the companion",
+      "apple": "WCSessionFileTransfer, WCSessionFile",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no file transfer between peers"
+    },
+    {
+      "feature": "Queued user info transfer",
+      "apple": "WCSessionUserInfoTransfer",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no queued transfer that survives a disconnect"
+    },
+    {
+      "feature": "Watch hardware and companion app pairing",
+      "apple": "WCSession with a paired Apple Watch",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "requires an Apple Watch, which BifrOSt does not support"
+    }
+  ],
+  "gaps": [
+    "No companion-app pairing and no queued transfers.",
+    "No file transfer between peers."
+  ]
+}

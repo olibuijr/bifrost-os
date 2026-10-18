@@ -43,7 +43,51 @@
    "status": "partial",
    "note": "no plain text editor app round 75, host only: rich text editing, spelling, print; was gap.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-textedit",
+     "filter": "text::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-textedit",
+     "filter": "rtf::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-textedit",
+     "filter": "docx::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-textedit",
+     "filter": "odt::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-textedit",
+     "filter": "html::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-textedit",
+     "filter": "encoding::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-textedit",
+     "filter": "spell::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-textedit",
+     "filter": "print::tests"
+    }
+   ],
+   "ready_note": "Text Editor: rich text (RTF, RTFD, HTML, DOCX, ODT, web archive) editing and saving, plain text encodings, spelling, links and print; model tests per format."
   },
   {
    "id": "path:/System/Applications/Time Machine.app",
@@ -64,7 +108,16 @@
    "status": "partial",
    "note": "Backup page, the backup settings",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::backup_page::tests"
+    }
+   ],
+   "ready_note": "backup settings page: shell::backup_page::tests"
   },
   {
    "id": "path:/System/Applications/Tips.app",
@@ -85,7 +138,26 @@
    "status": "partial",
    "note": "new app (Team H, 0.1.0); not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-tips",
+     "filter": "model::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-tips",
+     "filter": "catalogue::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-tips",
+     "filter": "store::tests"
+    }
+   ],
+   "ready_note": "Tips app: how-to cards with the catalogue, search and what-is-new store; model, catalogue and store tests."
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app",
@@ -106,7 +178,16 @@
    "status": "partial",
    "note": "Term (is.olibuijr.term) terminal",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::terminal::tests"
+    }
+   ],
+   "ready_note": "Term terminal: the terminal module tests (sessions, tabs, profiles, search, links, input and layout)"
   },
   {
    "id": "path:/System/Applications/Utilities/VoiceOver Utility.app",
@@ -123,11 +204,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/accessibility/mod.rs",
+   "bifrost": "springboard/src/shell/accessibility/mod.rs, springboard/src/shell/accessibility/speech.rs, springboard/src/shell/accessibility/reader.rs, springboard/src/shell/pages.rs",
    "status": "partial",
    "note": "accessibility tree and reader; no VoiceOver utility",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::speech::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::reader::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::braille_out::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::earcons::tests"
+    }
+   ],
+   "ready_note": "VoiceOver Utility configures the screen reader. BifrOSt does that in Settings > Accessibility > Screen Reader: the on/off switch, speaking rate, pitch and voice (pages.rs, accessibility::speech), the reader's rotors and keyboard cursor (accessibility::reader), Braille output and earcons. Gap: no activities, verbosity matrix or custom command assignments."
   },
   {
    "id": "path:/System/Applications/VoiceMemos.app",
@@ -148,7 +253,31 @@
    "status": "partial",
    "note": "Voice Memos app",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-voicememos",
+     "filter": "store::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-voicememos",
+     "filter": "voicememos::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-voicememos",
+     "filter": "enhance::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-voicememos",
+     "filter": "services::tests"
+    }
+   ],
+   "ready_note": "Voice Memos app: recording library store, peak view, enhancement and services; store, voicememos, enhance and services tests."
   }
  ]
 }

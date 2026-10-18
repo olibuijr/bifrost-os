@@ -1,5 +1,5 @@
 repo = "storytold/deckcraft"
-url = "https://github.com/storytold/deckcraft/releases/download/v0.6.1/deckcraft-0.7.0-linux-x86_64.tar.gz"
+url = "https://github.com/storytold/deckcraft/releases/download/v0.7.0/deckcraft-0.7.0-linux-x86_64.tar.gz"
 sha256 = "330a2fb2ef8890daded91084e5bfd29dfa411e33a2b27c01ac3b9e520ff98d9f"
 binary = "deckcraft-0.7.0-linux-x86_64/bin/deckcraft"
 licenses = "deckcraft-0.7.0-linux-x86_64/share/doc/deckcraft"

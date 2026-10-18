@@ -255,10 +255,136 @@ pub fn merge(contacts: &[Contact], values: &Extras, card_details: &Details, ids:
     })
 }
 
+/// A name field of a card that the merge review sheet lets the person choose from.
+#[allow(dead_code)] // the review sheet is not drawn yet; the model is tested
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MergeField {
+    Name,
+    Company,
+    Phone,
+    Email,
+    Address,
+    Notes,
+}
+
+/// One field where the duplicates disagree: each distinct value with the card it comes from, in card order.
+#[allow(dead_code)] // the review sheet is not drawn yet; the model is tested
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MergeChoice {
+    pub field: MergeField,
+    pub options: Vec<(u64, String)>,
+}
+
+fn field_value(c: &Contact, field: MergeField) -> &str {
+    match field {
+        MergeField::Name => &c.name,
+        MergeField::Company => &c.company,
+        MergeField::Phone => &c.phone,
+        MergeField::Email => &c.email,
+        MergeField::Address => &c.address,
+        MergeField::Notes => &c.notes,
+    }
+}
+
+/// The fields of the cards `ids` that differ, for the review sheet. A field where every card is blank, or where all
+/// the cards agree, is not offered. The first option is the first card's value (the card that stays).
+#[allow(dead_code)] // the review sheet is not drawn yet; the model is tested
+pub fn review(contacts: &[Contact], ids: &[u64]) -> Vec<MergeChoice> {
+    let cards: Vec<&Contact> = ids.iter().filter_map(|id| contacts.iter().find(|c| c.id == *id)).collect();
+    [MergeField::Name, MergeField::Company, MergeField::Phone, MergeField::Email, MergeField::Address, MergeField::Notes]
+        .into_iter()
+        .filter_map(|field| {
+            let mut options: Vec<(u64, String)> = Vec::new();
+            for c in &cards {
+                let value = field_value(c, field).trim();
+                if !value.is_empty() && !options.iter().any(|(_, v)| v == value) {
+                    options.push((c.id, value.to_string()));
+                }
+            }
+            (options.len() > 1).then_some(MergeChoice { field, options })
+        })
+        .collect()
+}
+
+/// Folds the cards `ids` like `merge`, but first takes each picked field from the card the person chose: `picks` pairs
+/// a field with the id of its card. A phone takes its label from the same card. `None` when a pick names a card that is
+/// not in `ids`, or the merge itself is refused.
+#[allow(dead_code)] // the review sheet is not drawn yet; the model is tested
+pub fn merge_with(contacts: &[Contact], values: &Extras, card_details: &Details, ids: &[u64], picks: &[(MergeField, u64)]) -> Option<Merged> {
+    if picks.iter().any(|(_, from)| !ids.contains(from)) {
+        return None;
+    }
+    let mut list = contacts.to_vec();
+    let keep_at = list.iter().position(|c| Some(&c.id) == ids.first())?;
+    for (field, from) in picks {
+        let src = list.iter().find(|c| c.id == *from)?.clone();
+        let keep = &mut list[keep_at];
+        match field {
+            MergeField::Name => keep.name = src.name,
+            MergeField::Company => keep.company = src.company,
+            MergeField::Phone => {
+                keep.phone = src.phone;
+                keep.labels[0] = src.labels[0];
+            }
+            MergeField::Email => {
+                keep.email = src.email;
+                keep.labels[1] = src.labels[1];
+            }
+            MergeField::Address => keep.address = src.address,
+            MergeField::Notes => keep.notes = src.notes,
+        }
+    }
+    merge(&list, values, card_details, ids)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::details::Detail;
+
+    #[test]
+    fn review_offers_only_the_fields_where_the_duplicates_disagree() {
+        let mut a = c(1, "Anna As", "555 0100", "");
+        a.company = "Acme".into();
+        let mut b = c(2, "Anna A.", "555 0100", "");
+        b.company = "Acme".into();
+        b.address = "Gata 1".into();
+        let choices = review(&[a, b], &[1, 2]);
+        let fields: Vec<MergeField> = choices.iter().map(|ch| ch.field).collect();
+        assert_eq!(fields, vec![MergeField::Name], "the phone and company agree; the address has one value");
+        assert_eq!(choices[0].options, vec![(1, "Anna As".to_string()), (2, "Anna A.".to_string())]);
+    }
+
+    #[test]
+    fn a_pick_takes_the_field_and_its_label_from_the_chosen_card() {
+        let mut a = c(1, "Anna As", "555 0100", "");
+        a.labels = [0, 1, 2];
+        let mut b = c(2, "Anna As", "555 0200", "");
+        b.labels = [2, 1, 2];
+        let picks = [(MergeField::Phone, 2)];
+        let merged = merge_with(&[a, b], &Extras::default(), &Details::default(), &[1, 2], &picks).unwrap();
+        assert_eq!(merged.keep.phone, "555 0200");
+        assert_eq!(merged.keep.labels[0], 2, "the chosen card's phone label comes with it");
+        assert_eq!(merged.removed, vec![2]);
+    }
+
+    #[test]
+    fn a_pick_from_a_card_outside_the_merge_is_refused() {
+        let a = c(1, "Anna As", "", "");
+        let b = c(2, "Anna As", "", "");
+        let outside = c(3, "Bo Berg", "", "");
+        assert!(merge_with(&[a, b, outside], &Extras::default(), &Details::default(), &[1, 2], &[(MergeField::Name, 3)]).is_none());
+    }
+
+    #[test]
+    fn without_picks_the_merge_is_the_plain_fold() {
+        let a = c(1, "Anna As", "555 0100", "");
+        let b = c(2, "A. As", "555 0100", "");
+        let list = [a, b];
+        let plain = merge(&list, &Extras::default(), &Details::default(), &[1, 2]);
+        let picked = merge_with(&list, &Extras::default(), &Details::default(), &[1, 2], &[]);
+        assert_eq!(plain, picked);
+    }
 
     fn c(id: u64, name: &str, phone: &str, email: &str) -> Contact {
         Contact { id, name: name.into(), phone: phone.into(), email: email.into(), ..Default::default() }

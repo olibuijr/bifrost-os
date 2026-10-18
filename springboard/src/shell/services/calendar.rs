@@ -12,6 +12,15 @@
 //!   event spans its whole civil day. A repeating event appears once for each occurrence that overlaps the range, all
 //!   with its id; an occurrence that starts the day before the range and runs into it is included.
 //!
+//! - `save_event {title, start, end, all_day, location}` appends one event to the shared store and returns `{id}`. A
+//!   timed event lasts 15 minutes to 24 hours; an all-day event takes the civil day of `start`. The store is read and
+//!   rewritten whole, so a save made while the Calendar app is writing can be lost; the Calendar app is the owner.
+//!
+//! - `update_event {id, title, start, end, all_day, location}` replaces the fields of event `id` and returns `{ok}`. The
+//!   repeat rule, alert, notes and account UID are kept; for a repeating event `start` is its first occurrence. An
+//!   unknown id is an error.
+//! - `delete_event {id}` removes event `id` from the shared store and returns `{ok}`. An unknown id is an error.
+//!
 //! Without the `calendars` permission every method but `access` is an error.
 use super::{Shell, SystemService};
 use crate::shell::calendar::store::{self, CalendarEvent};
@@ -136,6 +145,103 @@ pub fn answer(app_id: &str, permitted: bool, method: &str, params: &Json, events
     }
 }
 
+/// The event a `save_event` call names, with the next free id. Pure: the caller stores the list. The params are
+/// `{title, start, end, all_day, location}`: a timed event lasts 15 minutes to 24 hours from `start` to `end`; an
+/// all-day event takes the civil day of `start` and may not run past the next midnight.
+pub fn new_event(params: &Json, events: &[CalendarEvent]) -> Result<CalendarEvent, String> {
+    if events.len() >= store::MAX_EVENTS {
+        return Err("the calendar is full".into());
+    }
+    built_event(params, store::next_id(events))
+}
+
+/// The event the `{title, start, end, all_day, location}` params describe, with id `id`. Repeat, alert, notes and the
+/// account UID are left empty. Validates the fields; pure.
+fn built_event(params: &Json, id: u64) -> Result<CalendarEvent, String> {
+    let text = |key: &str| params.get(key).and_then(Json::as_str).ok_or_else(|| format!("{key} is required"));
+    let title = text("title")?.to_string();
+    let location = params.get("location").and_then(Json::as_str).unwrap_or("").to_string();
+    let all_day = matches!(params.get("all_day"), Some(Json::Bool(true)));
+    let (start, end) = range_of(params)?;
+    let (minute, duration) = if all_day {
+        if end - start > 1440 {
+            return Err("an all-day event spans one civil day".into());
+        }
+        (0, 1440)
+    } else {
+        let len = end - start;
+        if !(15..=1440).contains(&len) {
+            return Err("a timed event lasts between 15 minutes and 24 hours".into());
+        }
+        (start.rem_euclid(1440) as u16, len as u16)
+    };
+    let event = CalendarEvent {
+        id,
+        uid: String::new(),
+        date: Date::from_days(start.div_euclid(1440)),
+        minute,
+        duration,
+        all_day,
+        title,
+        location,
+        notes: String::new(),
+        repeat: 0,
+        alert: 0,
+    };
+    if !event.valid() {
+        return Err("the event has an invalid title or location".into());
+    }
+    Ok(event)
+}
+
+/// The `id` an `update_event` or `delete_event` call names.
+fn target_id(params: &Json) -> Result<u64, String> {
+    params.get("id").and_then(Json::as_u64).ok_or_else(|| "id is required".to_string())
+}
+
+/// The list with the event `params.id` names replaced by the fields the `{title, start, end, all_day, location}` params
+/// give. The repeat rule, alert, notes and account UID of that event are kept; for a repeating event the new `start`
+/// is its first occurrence. Refused when no event has that id. Pure.
+pub fn edit_event(params: &Json, events: &[CalendarEvent]) -> Result<Vec<CalendarEvent>, String> {
+    let id = target_id(params)?;
+    let at = events.iter().position(|e| e.id == id).ok_or("no event has that id")?;
+    let fresh = built_event(params, id)?;
+    let old = &events[at];
+    let kept = CalendarEvent { repeat: old.repeat, alert: old.alert, notes: old.notes.clone(), uid: old.uid.clone(), ..fresh };
+    let mut edited = events.to_vec();
+    edited[at] = kept;
+    Ok(edited)
+}
+
+/// The list without the event `params.id` names. Refused when no event has that id. Pure.
+pub fn remove_event(params: &Json, events: &[CalendarEvent]) -> Result<Vec<CalendarEvent>, String> {
+    let id = target_id(params)?;
+    if !events.iter().any(|e| e.id == id) {
+        return Err("no event has that id".into());
+    }
+    Ok(events.iter().filter(|e| e.id != id).cloned().collect())
+}
+
+/// Appends the event a `save_event` call names to the shared store and returns `{id}`.
+fn save_event(shell: &Shell, params: &Json) -> Result<Json, String> {
+    let path = store_path(&shell.data_dir);
+    let mut events = store::load(&path).map_err(|e| e.to_string())?;
+    let event = new_event(params, &events)?;
+    let id = event.id;
+    events.push(event);
+    store::save(&path, &events).map_err(|e| e.to_string())?;
+    Ok(Json::Obj(vec![("id".into(), Json::Num(id as f64))]))
+}
+
+/// Applies an `edit_event` or `remove_event` change to the shared store and writes it back.
+fn change_store(shell: &Shell, params: &Json, change: fn(&Json, &[CalendarEvent]) -> Result<Vec<CalendarEvent>, String>) -> Result<Json, String> {
+    let path = store_path(&shell.data_dir);
+    let events = store::load(&path).map_err(|e| e.to_string())?;
+    let next = change(params, &events)?;
+    store::save(&path, &next).map_err(|e| e.to_string())?;
+    Ok(Json::Obj(vec![("ok".into(), Json::Bool(true))]))
+}
+
 pub struct Calendar;
 
 impl SystemService for Calendar {
@@ -145,6 +251,19 @@ impl SystemService for Calendar {
 
     fn call(&mut self, shell: &mut Shell, app_id: &str, method: &str, params: &Json, _t: f64) -> Result<Json, String> {
         let permitted = super::app_has_permission(app_id, PERMISSION);
+        if method == "save_event" {
+            if !permitted {
+                return Err(format!("{app_id} has no {PERMISSION} permission"));
+            }
+            return save_event(shell, params);
+        }
+        if method == "update_event" || method == "delete_event" {
+            if !permitted {
+                return Err(format!("{app_id} has no {PERMISSION} permission"));
+            }
+            let change = if method == "update_event" { edit_event } else { remove_event };
+            return change_store(shell, params, change);
+        }
         let events = if method == "events" && permitted {
             store::load(&store_path(&shell.data_dir)).map_err(|e| e.to_string())?
         } else {
@@ -169,7 +288,7 @@ mod tests {
             location: "Hall".into(),
             notes: String::new(),
             repeat: 0,
-            alert: 0,
+            alert: 0, uid: String::new(),
         }
     }
 
@@ -323,5 +442,142 @@ mod tests {
     fn the_store_is_the_calendar_apps_events_file() {
         let path = store_path(Path::new("/root"));
         assert_eq!(path, PathBuf::from("/root/appdata/is.olibuijr.calendar.desktop/events.tsv"));
+    }
+
+    fn save_params(title: &str, start: &str, end: &str, all_day: bool) -> Json {
+        Json::Obj(vec![
+            ("title".into(), Json::Str(title.into())),
+            ("start".into(), Json::Str(start.into())),
+            ("end".into(), Json::Str(end.into())),
+            ("all_day".into(), Json::Bool(all_day)),
+            ("location".into(), Json::Str("Desk".into())),
+        ])
+    }
+
+    #[test]
+    fn a_timed_event_is_saved_with_the_next_id_and_its_civil_fields() {
+        let book = day_book();
+        let e = new_event(&save_params("Lunch", "2026-10-13T12:30", "2026-10-13T13:15", false), &book).unwrap();
+        assert_eq!(e.id, 5);
+        assert_eq!(e.date, Date { year: 2026, month: 10, day: 13 });
+        assert_eq!(e.minute, 12 * 60 + 30);
+        assert_eq!(e.duration, 45);
+        assert!(!e.all_day);
+        assert_eq!(e.title, "Lunch");
+        assert_eq!(e.location, "Desk");
+        assert_eq!((e.repeat, e.alert), (0, 0));
+    }
+
+    #[test]
+    fn a_saved_event_appears_in_the_events_call_for_its_day() {
+        let mut book = day_book();
+        let e = new_event(&save_params("Lunch", "2026-10-13T12:30", "2026-10-13T13:15", false), &book).unwrap();
+        book.push(e);
+        let reply = answer("is.example.cal", true, "events", &range("2026-10-13T00:00", "2026-10-14T00:00"), &book).unwrap();
+        // event 2 runs into the 13th from the 12th; then 4 at 08:00, 1 at 09:00 and the new event at 12:30
+        assert_eq!(ids(&reply), vec![2, 4, 1, 5]);
+    }
+
+    #[test]
+    fn an_all_day_event_takes_its_civil_day_and_cannot_run_past_it() {
+        let ok = new_event(&save_params("Holiday", "2026-10-13T00:00", "2026-10-14T00:00", true), &[]).unwrap();
+        assert!(ok.all_day);
+        assert_eq!((ok.minute, ok.duration), (0, 1440));
+        assert!(new_event(&save_params("Two days", "2026-10-13T00:00", "2026-10-15T00:00", true), &[]).is_err());
+    }
+
+    #[test]
+    fn a_timed_event_must_last_between_fifteen_minutes_and_a_day() {
+        assert!(new_event(&save_params("Blink", "2026-10-13T09:00", "2026-10-13T09:10", false), &[]).is_err());
+        assert!(new_event(&save_params("Long", "2026-10-13T09:00", "2026-10-14T10:00", false), &[]).is_err());
+    }
+
+    #[test]
+    fn a_save_without_a_title_or_with_a_control_character_is_refused() {
+        assert!(new_event(&save_params("", "2026-10-13T09:00", "2026-10-13T10:00", false), &[]).is_err());
+        assert!(new_event(&save_params("A\nB", "2026-10-13T09:00", "2026-10-13T10:00", false), &[]).is_err());
+    }
+
+    #[test]
+    fn a_full_calendar_refuses_a_new_event() {
+        let full: Vec<CalendarEvent> = (1..=store::MAX_EVENTS as u64).map(|id| event(id, (2026, 10, 13), 0, 60, false, "x")).collect();
+        assert!(new_event(&save_params("Extra", "2026-10-13T09:00", "2026-10-13T10:00", false), &full).is_err());
+    }
+
+    #[test]
+    fn a_saved_event_round_trips_through_the_store_file() {
+        let path = std::env::temp_dir().join(format!("bifrost-cal-save-{}.tsv", std::process::id()));
+        let e = new_event(&save_params("Lunch", "2026-10-13T12:30", "2026-10-13T13:15", false), &day_book()).unwrap();
+        let mut book = day_book();
+        book.push(e.clone());
+        store::save(&path, &book).unwrap();
+        let loaded = store::load(&path).unwrap();
+        let _ = std::fs::remove_file(&path);
+        assert!(loaded.contains(&e));
+    }
+
+    fn id_params(id: u64) -> Json {
+        Json::Obj(vec![("id".into(), Json::Num(id as f64))])
+    }
+
+    fn edit_params(id: u64, title: &str, start: &str, end: &str) -> Json {
+        Json::Obj(vec![
+            ("id".into(), Json::Num(id as f64)),
+            ("title".into(), Json::Str(title.into())),
+            ("start".into(), Json::Str(start.into())),
+            ("end".into(), Json::Str(end.into())),
+            ("all_day".into(), Json::Bool(false)),
+            ("location".into(), Json::Str("Desk".into())),
+        ])
+    }
+
+    #[test]
+    fn an_edit_replaces_the_fields_and_keeps_the_repeat_rule_and_id() {
+        let mut book = day_book();
+        book[0].repeat = 2;
+        book[0].notes = "Bring slides".into();
+        let edited = edit_event(&edit_params(1, "Retro", "2026-10-13T15:00", "2026-10-13T16:30"), &book).unwrap();
+        assert_eq!(edited.len(), book.len());
+        let e = edited.iter().find(|e| e.id == 1).unwrap();
+        assert_eq!(e.title, "Retro");
+        assert_eq!(e.minute, 15 * 60);
+        assert_eq!(e.duration, 90);
+        assert_eq!(e.repeat, 2);
+        assert_eq!(e.notes, "Bring slides");
+        assert_eq!(e.location, "Desk");
+        // the other events are untouched
+        for other in book.iter().filter(|e| e.id != 1) {
+            assert!(edited.contains(other));
+        }
+    }
+
+    #[test]
+    fn an_edit_of_an_unknown_id_or_with_bad_fields_is_refused() {
+        let book = day_book();
+        assert!(edit_event(&edit_params(99, "Ghost", "2026-10-13T15:00", "2026-10-13T16:00"), &book).is_err());
+        assert!(edit_event(&edit_params(1, "Blink", "2026-10-13T15:00", "2026-10-13T15:05"), &book).is_err());
+        assert!(edit_event(&Json::Null, &book).is_err());
+    }
+
+    #[test]
+    fn an_edit_is_allowed_on_a_full_calendar() {
+        let full: Vec<CalendarEvent> = (1..=store::MAX_EVENTS as u64).map(|id| event(id, (2026, 10, 13), 0, 60, false, "x")).collect();
+        assert!(edit_event(&edit_params(3, "Moved", "2026-10-13T09:00", "2026-10-13T10:00"), &full).is_ok());
+    }
+
+    #[test]
+    fn a_delete_removes_only_the_named_event() {
+        let book = day_book();
+        let left = remove_event(&id_params(4), &book).unwrap();
+        assert_eq!(left.iter().map(|e| e.id).collect::<Vec<_>>(), vec![1, 2, 3]);
+        assert!(remove_event(&id_params(99), &book).is_err());
+        assert!(remove_event(&Json::Null, &book).is_err());
+    }
+
+    #[test]
+    fn a_deleted_event_is_gone_from_the_events_call() {
+        let left = remove_event(&id_params(1), &day_book()).unwrap();
+        let reply = answer("is.example.cal", true, "events", &range("2026-10-13T00:00", "2026-10-14T00:00"), &left).unwrap();
+        assert_eq!(ids(&reply), vec![4]);
     }
 }

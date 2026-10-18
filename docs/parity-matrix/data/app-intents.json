@@ -4,7 +4,7 @@
   "macos_since": "13.0",
   "status": "partial",
   "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/spotindex.rs, springboard/sdk/src/quicksearch.rs",
-  "summary": "BifrOSt has a typed intent layer over the app control socket: declared intents with typed parameters, entity queries, IntentResult values with dialog text, and manifest-declared Spotlight shortcuts for parameterless intents. Apple's execution model (foreground/background modes, authentication policy, snippets, enum and common data types, donations, Focus filters, widgets and controls) is not covered; schema domains and presentations are modelled in springboard/sdk/src/intent_presentation.rs, and Siri and Apple Intelligence have no counterpart.",
+  "summary": "BifrOSt has a typed intent layer over the app control socket: declared intents with typed parameters, entity queries, IntentResult values with dialog text, and manifest-declared Spotlight shortcuts for parameterless intents. The SDK models execution modes, authentication policy, snippets, enum and common data types, donations, follow-on results and Focus filter declarations; widgets and controls are not wired; schema domains and presentations are modelled in springboard/sdk/src/intent_presentation.rs, and Siri and Apple Intelligence have no counterpart.",
   "rea_evidence": "ev_d0e83cf707606d76adf0707300c745b42e7847dacf037c0925b97338090514ee",
   "features": [
     {
@@ -19,7 +19,7 @@
       "apple": "IntentParameter, primitive and framework types (Integers, Doubles, Booleans, Strings, URLs, Dates, Files, Currencies, People, Placemarks, Measurements)",
       "bifrost": "springboard/sdk/src/intents.rs:22 (ParamType), Param::optional at springboard/sdk/src/intents.rs:113; wired: springboard/apps/shortcuts-desktop/src/automation.rs declared (shortcut parameter now optional)",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 32 tests. String, Int, Bool, Date (ISO 8601 text), Url and Entity(type) only; no Double, Files, Currencies, People, Placemarks or Measurements; parameters are validated by the SDK before perform Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "note": "verified on Midget 0.7.25 by 32 tests. String, Int, Bool, Date (ISO 8601 text), Url and Entity(type) only; no Double, Files, Currencies, People, Placemarks or Measurements; parameters are validated by the SDK before perform Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity. Built 2026-10-17: the assistant asks for a missing required parameter instead of refusing (Reply::Ask, assistant-client missing_question) and asks which app when an intent id is offered by several (disambiguation_question); tests assistant-client intents::tests and shell::assistant_panel::tests. Search still runs parameterless intents only."
     },
     {
       "feature": "Perform and IntentResult (value and dialog)",
@@ -75,14 +75,14 @@
       "apple": "Spotlight integration, App Shortcuts in Spotlight and Shortcuts app",
       "bifrost": "springboard/src/shell/intents.rs (ManifestIntent::runnable, request_line_with, parse_reply)",
       "status": "partial",
-      "note": "Parameterless shortcuts are listed, and their request lines and replies are tested headless in springboard/tests/parity_sdk-tests-01.rs. Gap: the 8 s launch retry, parameter prompts and disambiguation have no tests."
+      "note": "Parameterless shortcuts are listed, and their request lines and replies are tested headless in springboard/tests/parity_sdk-tests-01.rs. Gap: the 8 s launch retry, parameter prompts and disambiguation have no tests. Built 2026-10-17: Search lists the Settings intents (settings_intents.rs CATALOGUE) in its Shortcuts section and opens their panes through Settings::open_page_id; tests quicksearch::tests::settings_intents_are_found_as_shortcuts_and_open_their_pane."
     },
     {
       "feature": "Indexing entities for Spotlight",
       "apple": "IndexedEntity, attributeSet, hideInSpotlight, CSSearchableIndex",
       "bifrost": "springboard/src/shell/spotindex.rs, springboard/sdk/src/quicksearch.rs (CSSearchableIndex, CSSearchableItem), springboard/sdk/src/searchable_entity.rs (SearchableEntity, searchable_items); tests: springboard/sdk/tests/parity_sdk-complete-38.rs",
       "status": "partial",
-      "note": "An app value can implement SearchableEntity to build the searchable item the index stores, with its identifiers, attributes, expiry and validation tested headless. Gap: the entity protocol is not tied to App Intents entity queries, a hide-from-search flag is not modelled, and the shell does not index entities yet."
+      "note": "An app value can implement SearchableEntity to build the searchable item the index stores, with its identifiers, attributes, expiry and validation tested headless. Gap: the entity protocol is not tied to App Intents entity queries, a hide-from-search flag is not modelled, and the shell does not index entities yet. Built 2026-10-17: an app declares [[entity]] types; at launch the shell asks it for suggested entities (entity.query) and indexes them in the domain entity.<type> through spotindex (shell::entity_index); tests shell::entity_index::tests and shell::apphost::tests. Built 2026-10-17: IndexedEntity::to_json carries hidden, and the shell entity index skips entries marked hidden (sdk indexed_entity.rs, shell entity_index.rs; tests indexed_entity::tests and shell::entity_index::tests)."
     },
     {
       "feature": "Intent errors",
@@ -110,7 +110,7 @@
       "apple": "SetFocusFilterIntent, appContext, suggestedFocusFilters(for:)",
       "bifrost": "springboard/ui/src/focus_filter.rs; wired: springboard/ui/src/focus_filter.rs, springboard/src/shell/services/focus_filter.rs, springboard/sdk/src/focus_filter.rs",
       "status": "partial",
-      "note": "Wave 5 (w5-app-intents, parity/integration 93f283b0): pure model of per-Focus app contexts, the active context and change generations, tested headless in springboard/ui/tests/parity_sdk-tests-13.rs as well as in the module's unit tests. Not wired into apps or the shell, not yet tested on the VM or Midget. Focus is a notification switch; apps cannot declare filter intents Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+      "note": "Wave 5 (w5-app-intents, parity/integration 93f283b0): pure model of per-Focus app contexts, the active context and change generations, tested headless in springboard/ui/tests/parity_sdk-tests-13.rs as well as in the module's unit tests. Not wired into apps or the shell, not yet tested on the VM or Midget. Focus is a notification switch; apps cannot declare filter intents Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity. Round (focus-modes): the shell's Focus name is now the active Focus mode's name (Do Not Disturb, Work, Personal, Sleep or a custom one), so apps get the values stored for that mode through the existing changed event; manifest [[focus_filter]] tables (id, title, params) are parsed and checked by parse_declarations in springboard/src/shell/services/focus_filter.rs and tested headless. Not built: the Settings page that sets the values per mode from the declarations, and any app-side SDK declaration path. Not verified on Midget. Built 2026-10-17: a [[focus_filter]] table may name an intent; a Focus change calls it on each running app with the Focus name (\"\" when none); tests shell::services::focus_filter::tests."
     },
     {
       "feature": "Widgets, controls and Live Activities",
@@ -135,15 +135,14 @@
     }
   ],
   "gaps": [
-    "Foreground and background execution modes, and authentication policy on AppIntent",
-    "App enums (AppEnum) for predefined parameter values",
-    "Parameter types for Double, Files, Currencies, People, Placemarks and Measurements",
-    "Snippets and result views, and follow-on intents (OpensAppIntent)",
-    "Parameter prompts and disambiguation in Spotlight (needsValueError, requestDisambiguation, requestConfirmation)",
-    "IndexedEntity: indexing App Intents entities in Spotlight, and hideInSpotlight",
-    "Intent donations and relevance (IntentDonationManager, RelevantIntentManager)",
-    "Focus filters (SetFocusFilterIntent); the shell only has Do Not Disturb",
-    "Widgets, controls and Live Activities driven by intents",
-    "Shortcuts app does not list or run intents yet (docs/bifrost-ui.md, App Intents gaps)"
+    "Execution modes and authentication policy are pure models (IntentMode, Authentication); the shell runs every intent in the app process",
+    "Enum parameters exist (ParamType::Enum); the AppEnum declaration type is not built",
+    "Parameter type for People (Double, File, Currency, Placemark and Measurement exist)",
+    "Interactive result views: snippets exist as data (IntentResult::with_snippet), but the shell draws no interactive result view",
+    "Parameter prompts in Search (needsValueError, requestDisambiguation, requestConfirmation): Search runs parameterless intents only; the assistant asks for missing parameters",
+    "IndexedEntity::hide_in_spotlight is modelled in the SDK, but the shell's entity index (shell::entity_index) does not read it",
+    "Intent donation and relevance models exist in the SDK (donation.rs, donations.rs); no shell path uses them yet",
+    "Focus filters (SetFocusFilterIntent): manifest [[focus_filter]] declarations are read, but Settings does not yet set the values per Focus mode",
+    "Widgets, controls and Live Activities driven by intents"
   ]
 }

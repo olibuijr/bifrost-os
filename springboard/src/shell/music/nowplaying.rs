@@ -43,6 +43,12 @@ pub enum Target {
     Open,
     /// the artwork
     Artwork,
+    /// feedback toggles on the lock card: like, dislike, bookmark (slots 0, 1, 2)
+    Like,
+    Dislike,
+    Bookmark,
+    /// the rating track on the lock card
+    Rating,
 }
 
 pub const ART_MARGIN_PT: f32 = 40.0;
@@ -225,11 +231,17 @@ pub struct LockCard {
     pub prev: (f32, f32),
     pub play: (f32, f32),
     pub next: (f32, f32),
+    /// centres of the like, dislike and bookmark icons, in toggle slot order
+    pub toggles: [(f32, f32); 3],
+    /// the rating track at the end of the feedback row
+    pub rating: R,
     hit: f32,
 }
 
 pub const LOCK_CARD_W_PT: f32 = 400.0;
-pub const LOCK_CARD_H_PT: f32 = 176.0;
+pub const LOCK_CARD_H_PT: f32 = 200.0;
+/// the distance between the feedback icons, in pt; the icons are drawn at `FEEDBACK_ICON_PT` (`system.rs`)
+pub const FEEDBACK_SPACING_PT: f32 = 44.0;
 /// right under the lock screen's widget strip
 pub const LOCK_CARD_Y_PT: f32 = crate::shell::notify::LOCK_LIST_TOP_PT;
 pub const LOCK_ART_PT: f32 = 64.0;
@@ -243,7 +255,15 @@ impl LockCard {
         let scrub = R { x: card.x + pad, y: art.y + art.h + ui.pt(22.0), w: cw - 2.0 * pad, h: ui.pt(SCRUB_H_PT) };
         let cy = scrub.y + ui.pt(52.0);
         let (cx, gap) = (card.x + cw / 2.0, ui.pt(90.0));
-        LockCard { card, art, title_x: art.x + art.w + ui.pt(14.0), scrub, prev: (cx - gap, cy), play: (cx, cy), next: (cx + gap, cy), hit: ui.pt(HIT_PT) }
+        let row_y = cy + ui.pt(30.0);
+        let first = card.x + pad + ui.pt(10.0);
+        let step = ui.pt(FEEDBACK_SPACING_PT);
+        let toggles = [(first, row_y), (first + step, row_y), (first + 2.0 * step, row_y)];
+        let rating_x = first + 2.0 * step + ui.pt(40.0);
+        let rating_end = card.x + cw - pad;
+        let track_h = ui.pt(SCRUB_H_PT);
+        let rating = R { x: rating_x, y: row_y - track_h / 2.0, w: (rating_end - rating_x).max(0.0), h: track_h };
+        LockCard { card, art, title_x: art.x + art.w + ui.pt(14.0), scrub, prev: (cx - gap, cy), play: (cx, cy), next: (cx + gap, cy), toggles, rating, hit: ui.pt(HIT_PT) }
     }
 
     pub fn hit(&self, x: f32, y: f32) -> Option<Target> {
@@ -254,6 +274,14 @@ impl LockCard {
             if Layout::near(c, self.hit, x, y) {
                 return Some(t);
             }
+        }
+        for (c, t) in self.toggles.iter().zip([Target::Like, Target::Dislike, Target::Bookmark]) {
+            if Layout::near(*c, self.hit, x, y) {
+                return Some(t);
+            }
+        }
+        if self.rating.w > 0.0 && self.rating.inset(self.hit).contains(x, y) {
+            return Some(Target::Rating);
         }
         if self.scrub.inset(self.hit).contains(x, y) {
             return Some(Target::Scrubber);
@@ -338,5 +366,23 @@ mod tests {
         assert_eq!(c.hit(10.0, 10.0), None);
         let narrow = LockCard::new(&ui, 500);
         assert_eq!(narrow.card.w, 500.0 - ui.pt(32.0));
+    }
+
+    #[test]
+    fn lock_card_feedback_row_hits_and_stays_on_the_card() {
+        let ui = ui();
+        let c = LockCard::new(&ui, 1200);
+        let row_y = c.toggles[0].1;
+        assert!(row_y + ui.pt(10.0) <= c.card.y + c.card.h, "the row fits inside the card");
+        assert_eq!(c.hit(c.toggles[0].0, row_y), Some(Target::Like));
+        assert_eq!(c.hit(c.toggles[1].0, row_y), Some(Target::Dislike));
+        assert_eq!(c.hit(c.toggles[2].0, row_y), Some(Target::Bookmark));
+        assert_eq!(c.hit(c.rating.x + c.rating.w / 2.0, row_y), Some(Target::Rating));
+        assert!(c.rating.w > 0.0, "a rating track fits beside the toggles");
+        assert_eq!(c.hit(c.card.x + 4.0, c.card.y + 4.0), Some(Target::Open));
+        let narrow = LockCard::new(&ui, 200);
+        assert_eq!(narrow.rating.w, 0.0, "a narrow card has no room for the rating track");
+        // A point past the narrow card's edge is outside the card; a point on the card's own top corner opens it.
+        assert_eq!(narrow.hit(narrow.card.x + narrow.card.w - 4.0, narrow.card.y + 4.0), Some(Target::Open));
     }
 }

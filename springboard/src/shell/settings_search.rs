@@ -212,6 +212,7 @@ fn walked(id: PageId) -> bool {
         PageId::Wallpaper
             | PageId::Passwords
             | PageId::InternetAccounts
+            | PageId::Account
             | PageId::Diagnostics
             | PageId::Storage
             | PageId::Passcode
@@ -225,6 +226,7 @@ fn walked(id: PageId) -> bool {
             | PageId::GameControllers
             | PageId::FontPick(_)
             | PageId::Graphics
+            | PageId::StartupDisk
     )
 }
 

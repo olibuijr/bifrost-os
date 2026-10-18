@@ -29,6 +29,8 @@ pub enum AuthError {
     Locked,
     BadParams(String),
     Internal(String),
+    /// The call needs a fresh administrator authentication (`auth.elevate`) that is missing, spent or expired.
+    ElevationRequired,
 }
 impl AuthError {
     /// Protocol error code.
@@ -41,8 +43,14 @@ impl AuthError {
             Self::Locked => "locked",
             Self::BadParams(_) => "bad_params",
             Self::Internal(_) => "internal",
+            Self::ElevationRequired => "elevation_required",
         }
     }
+}
+
+/// Whether `scope` names something `auth.elevate` may grant.
+pub fn scope_is_known(scope: &str) -> bool {
+    scope == super::SCOPE_PACKAGE_INSTALL
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -104,7 +112,20 @@ pub struct Auth {
     until: i64,
     /// a password check is running outside the lock; a second one is refused so attempts cannot overlap
     verifying: bool,
+    /// the one outstanding elevation grant (`auth.elevate`): a fresh password check that a single install may spend
+    grant: Option<Grant>,
 }
+
+/// A fresh administrator authentication, spent by one privileged call of its scope.
+#[derive(Debug, Clone)]
+struct Grant {
+    scope: String,
+    id: String,
+    expires: i64,
+}
+
+/// Seconds an elevation grant stays valid after the password check.
+pub const GRANT_SECS: i64 = 60;
 
 /// The first half of a login: either done (bypass) or the user name whose password must now be verified.
 #[derive(Debug, PartialEq, Eq)]
@@ -122,6 +143,15 @@ pub enum PwPlan {
     Verify(String),
     /// the explicit bypass is on: no old password to check
     Skip(String),
+}
+
+/// What `auth.elevate` needs before it may issue a grant.
+#[derive(Debug, PartialEq, Eq)]
+pub enum ElevatePlan {
+    /// the explicit bypass is on and the password was empty: the grant is already issued
+    Done(String),
+    /// verify the password for this user, then call [`Auth::finish_elevate`]
+    Verify(String),
 }
 
 fn now() -> i64 {
@@ -156,7 +186,7 @@ impl Auth {
 
     pub fn with(cfg: Config, backend: Box<dyn Verifier>, account: Option<AccountFn>) -> Self {
         let (fails, until) = std::fs::read_to_string(&cfg.fails_file).map(|t| parse_fails(&t)).unwrap_or((0, 0));
-        Auth { cfg, backend: Arc::from(backend), account, session: Session::Locked, fails, until, verifying: false }
+        Auth { cfg, backend: Arc::from(backend), account, session: Session::Locked, fails, until, verifying: false, grant: None }
     }
 
     /// The verifier, so a caller can run `verify` without holding the lock around this `Auth`.
@@ -305,6 +335,7 @@ impl Auth {
     fn unlock(&mut self) -> Result<String, AuthError> {
         let token = new_token().map_err(|e| AuthError::Internal(format!("urandom: {e}")))?;
         self.session = Session::Unlocked { token: token.clone() };
+        self.grant = None;
         Ok(token)
     }
 
@@ -321,9 +352,80 @@ impl Auth {
         }
     }
 
-    /// `session.lock` / `session.logout`: invalidates the token.
+    /// `session.lock` / `session.logout`: invalidates the token and any unspent grant.
     pub fn lock(&mut self) {
         self.session = Session::Locked;
+        self.grant = None;
+    }
+
+    /// First half of `auth.elevate`, under the lock: the session must be Unlocked (token), the account must have a
+    /// password, and the lockout and overlap rules of a login apply. On `Verify` the caller checks the password with
+    /// [`Auth::verifier`] with the lock released and then calls [`Auth::finish_elevate`]. The session token is not
+    /// changed: an elevation proves the administrator is present, it does not log in again.
+    pub fn plan_elevate(&mut self, token: Option<&str>, scope: &str, password: &str, at: i64) -> Result<ElevatePlan, AuthError> {
+        self.require_unlocked(token)?;
+        if !scope_is_known(scope) {
+            return Err(AuthError::BadParams("unknown elevation scope".into()));
+        }
+        let a = self.account()?;
+        if self.bypass_active() {
+            if !password.is_empty() {
+                return Err(AuthError::BadParams("bypass accepts an empty password".into()));
+            }
+            return self.issue_grant(scope, at).map(ElevatePlan::Done);
+        }
+        match self.hash_class(&a.name) {
+            Hash::Set => {}
+            Hash::Locked | Hash::Empty => return Err(AuthError::NoPassword),
+            Hash::Missing => return Err(AuthError::Internal("no shadow entry".into())),
+        }
+        let left = self.left(at);
+        if left > 0 {
+            return Err(AuthError::LockedOut { retry_secs: left });
+        }
+        if self.verifying {
+            return Err(AuthError::LockedOut { retry_secs: 1 });
+        }
+        self.verifying = true;
+        Ok(ElevatePlan::Verify(a.name))
+    }
+
+    /// Second half of `auth.elevate`: a right password issues the grant, a wrong one counts toward the same lockout as
+    /// a wrong login, and a PAM error only fails the attempt.
+    pub fn finish_elevate(&mut self, r: Verify, scope: &str, at: i64) -> Result<String, AuthError> {
+        self.verifying = false;
+        match r {
+            Verify::Ok => {
+                self.fails = 0;
+                self.until = 0;
+                self.persist();
+                self.issue_grant(scope, at)
+            }
+            Verify::Wrong => Err(self.note_wrong(at)),
+            Verify::Internal(m) => {
+                eprintln!("privd: PAM error during elevation ({m}); nothing was granted");
+                Err(AuthError::Internal(m))
+            }
+        }
+    }
+
+    /// Replaces any older grant with a new random one for `scope`.
+    fn issue_grant(&mut self, scope: &str, at: i64) -> Result<String, AuthError> {
+        let id = new_token().map_err(|e| AuthError::Internal(format!("urandom: {e}")))?;
+        self.grant = Some(Grant { scope: scope.to_string(), id: id.clone(), expires: at + GRANT_SECS });
+        Ok(id)
+    }
+
+    /// Spends the grant for a privileged call of `scope`: the session must be Unlocked with `token`, and `grant` must be
+    /// the unspent, unexpired grant issued for this scope. Any attempt, right or wrong, empties the slot, so a grant is
+    /// good for exactly one call.
+    pub fn consume_grant(&mut self, token: Option<&str>, scope: &str, grant: Option<&str>, at: i64) -> Result<(), AuthError> {
+        self.require_unlocked(token)?;
+        let held = self.grant.take();
+        match (held, grant) {
+            (Some(g), Some(given)) if g.scope == scope && at <= g.expires && ct_eq(g.id.as_bytes(), given.as_bytes()) => Ok(()),
+            _ => Err(AuthError::ElevationRequired),
+        }
     }
 
     /// `account.set_password` in one call (tests); see [`Auth::plan_set_password`] for the rules.

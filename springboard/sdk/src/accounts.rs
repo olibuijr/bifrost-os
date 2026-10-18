@@ -10,10 +10,13 @@
 //! `docs/parity/accounts.md`). The framework is deprecated by its vendor, so this exists for apps that still read it.
 
 use crate::error::ErrorCode;
+use crate::keychain::{self, Reply};
+use crate::Ctx;
 use bifrost_core::fsutil;
+use bifrost_core::json::Json;
+use bifrost_ui::account_store::{self, AccountEntry, Contents, RefusalEntry, TypeEntry};
 use std::ffi::OsString;
 use std::fmt;
-use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -66,6 +69,15 @@ impl Credential {
     /// True once `now` has reached the OAuth 2 expiry date. An OAuth 1 credential never expires.
     pub fn is_expired(&self, now: SystemTime) -> bool {
         self.expiry_date().is_some_and(|expiry| now >= expiry)
+    }
+
+    /// Whether an OAuth 2 credential expires within `margin` of `now`, or has expired, so the app renews it before a
+    /// request fails. An OAuth 1 credential never needs renewal.
+    pub fn needs_renewal(&self, now: SystemTime, margin: Duration) -> bool {
+        match self.expiry_date() {
+            Some(expiry) => now.checked_add(margin).map_or(true, |horizon| horizon >= expiry),
+            None => false,
+        }
     }
 
     /// The credential as bytes for a keychain item: a tag, then each string as a u32 big-endian length and its bytes,
@@ -199,6 +211,16 @@ impl ErrorCode for AccountError {
     }
 }
 
+/// The account types the system defines: identifier and description. They match the kinds of the Internet Accounts
+/// page (mail, CalDAV calendars and reminders, CardDAV contacts, Exchange notes) and the BifrOSt account, so an app can name them.
+pub const BUILTIN_TYPES: [(&str, &str); 5] = [
+    ("bifrost.mail", "Mail"),
+    ("bifrost.caldav", "Calendars and Reminders"),
+    ("bifrost.carddav", "Contacts"),
+    ("bifrost.exchange", "Notes (Exchange)"),
+    ("bifrost.cloud", "BifrOSt Account"),
+];
+
 /// An account type (`ACAccountType`): all accounts of one kind, and whether the app may use them.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AccountType {
@@ -254,6 +276,8 @@ pub struct AccountStore {
 struct Data {
     types: Vec<AccountType>,
     accounts: Vec<Account>,
+    /// refusals as the file holds them: the SDK writes them back unchanged, the shell decides on them
+    refusals: Vec<RefusalEntry>,
     next_id: u64,
 }
 
@@ -335,6 +359,21 @@ impl AccountStore {
         })
     }
 
+    /// Registers the account types the system defines ([`BUILTIN_TYPES`]) that the store does not hold yet, and returns
+    /// how many it added. Existing types keep their description and grant, so calling it at every start is harmless.
+    pub fn register_builtin_types(&mut self) -> Result<usize, AccountError> {
+        self.mutate(|d| {
+            let mut added = 0;
+            for (identifier, description) in BUILTIN_TYPES {
+                if d.account_type(identifier).is_none() {
+                    d.types.push(AccountType { identifier: identifier.into(), description: description.into(), access_granted: false });
+                    added += 1;
+                }
+            }
+            Ok(added)
+        })
+    }
+
     /// Records the user's answer to the access request for a type (`accessGranted`). An unknown type is `AccountTypeInvalid`.
     pub fn set_access(&mut self, identifier: &str, granted: bool) -> Result<(), AccountError> {
         self.mutate(|d| d.set_access(identifier, granted))
@@ -392,6 +431,12 @@ impl AccountStore {
     pub fn credential(&self, identifier: &str) -> Result<&Credential, AccountError> {
         let account = self.account(identifier).ok_or(AccountError::NotFound)?;
         account.credential.as_ref().ok_or(AccountError::CredentialNotFound)
+    }
+
+    /// Whether a saved account's credential needs renewal within `margin` of `now` (see [`Credential::needs_renewal`]).
+    /// Checks the account (`NotFound`) and its credential (`CredentialNotFound`) first.
+    pub fn renewal_due(&self, identifier: &str, now: SystemTime, margin: Duration) -> Result<bool, AccountError> {
+        Ok(self.credential(identifier)?.needs_renewal(now, margin))
     }
 
     /// `renewCredentials(for:completion:)`: applies the service's answer to a saved account's credential. `Renewed`
@@ -467,8 +512,359 @@ impl fmt::Debug for AccountStore {
     }
 }
 
+/// Asks the person for access to accounts of one type (`requestAccessToAccounts`). The shell draws the Allow / Don't
+/// Allow sheet; the reply goes to [`access_answer`], and the app calls again while the sheet is up. The app's manifest
+/// must list the `accounts` permission (`permissions = ["accounts"]`), or the shell answers `permission_denied`.
+pub fn request_access(ctx: &Ctx, account_type: &str) -> u32 {
+    let params = Json::Obj(vec![("type".into(), Json::Str(account_type.into()))]);
+    crate::service::call(ctx, "accounts", "request_access", &params)
+}
+
+/// Reads a reply to [`request_access`]: `None` while the sheet is up (call again), `Some(Ok(granted))` once the person
+/// answered, and `Some(Err(AccountTypeInvalid))` for a type the store does not hold.
+pub fn access_answer(reply: &Json) -> Option<Result<bool, AccountError>> {
+    if matches!(reply.get("pending"), Some(Json::Bool(true))) {
+        return None;
+    }
+    if reply.get("error").and_then(Json::as_str) == Some("account_type_invalid") {
+        return Some(Err(AccountError::AccountTypeInvalid));
+    }
+    Some(Ok(matches!(reply.get("granted"), Some(Json::Bool(true)))))
+}
+
+/// The keychain service every saved account credential is stored under.
+pub const CREDENTIAL_SERVICE: &str = "bifrost.accounts";
+
+/// The keychain account name of one saved account's credential: `credential:<identifier>`.
+pub fn credential_account(identifier: &str) -> String {
+    format!("credential:{identifier}")
+}
+
+/// Replaces the keychain secret of an account's credential with `credential`. The reply is `ItemNotFound` when the
+/// account has no item yet; the app then calls [`save_credential_add`] with the same arguments.
+pub fn save_credential(ctx: &Ctx, identifier: &str, credential: &Credential) -> u32 {
+    keychain::update(ctx, CREDENTIAL_SERVICE, &credential_account(identifier), &credential.encode())
+}
+
+/// Adds the keychain item of an account's credential. The reply is `DuplicateItem` when the item exists.
+pub fn save_credential_add(ctx: &Ctx, identifier: &str, credential: &Credential) -> u32 {
+    keychain::add(ctx, CREDENTIAL_SERVICE, &credential_account(identifier), &credential.encode())
+}
+
+/// Reads an account's credential back from the keychain. Its reply goes through [`credential_from_reply`].
+pub fn read_credential(ctx: &Ctx, identifier: &str) -> u32 {
+    keychain::get(ctx, CREDENTIAL_SERVICE, &credential_account(identifier))
+}
+
+/// The credential a keychain reply to [`read_credential`] carries. A reply that is not a success, or whose secret is
+/// not a credential, is `CredentialNotFound`, so the app signs the user in again.
+pub fn credential_from_reply(reply: &Reply) -> Result<Credential, AccountError> {
+    match &reply.result {
+        Ok(bytes) => Credential::decode(bytes).map_err(|_| AccountError::CredentialNotFound),
+        Err(_) => Err(AccountError::CredentialNotFound),
+    }
+}
+
+/// The form body of an OAuth 2 refresh request (RFC 6749, section 6): `grant_type=refresh_token`, the refresh token
+/// and the client identifier, encoded as `application/x-www-form-urlencoded`. An app posts it to its token endpoint and
+/// passes the answer to [`renewal_from_token_response`].
+pub fn oauth2_refresh_body(refresh_token: &str, client_id: &str) -> String {
+    format!("grant_type=refresh_token&refresh_token={}&client_id={}", form_encode(refresh_token), form_encode(client_id))
+}
+
+/// The URL an app opens in the browser to start an OAuth 2 sign-in with the authorization code grant (RFC 6749,
+/// section 4.1.1). `scope` and `state` are optional; `code_challenge` is the PKCE challenge (RFC 7636) when the
+/// provider needs one. Every value is percent-encoded and the parameters keep this order. The app receives the
+/// `code` and `state` on `redirect_uri`, checks `state`, and passes the code to [`oauth2_code_body`].
+pub fn oauth2_authorize_url(
+    endpoint: &str,
+    client_id: &str,
+    redirect_uri: &str,
+    scope: Option<&str>,
+    state: &str,
+    code_challenge: Option<&str>,
+) -> String {
+    let mut query = format!(
+        "response_type=code&client_id={}&redirect_uri={}&state={}",
+        form_encode(client_id),
+        form_encode(redirect_uri),
+        form_encode(state)
+    );
+    if let Some(scope) = scope.filter(|s| !s.is_empty()) {
+        query.push_str(&format!("&scope={}", form_encode(scope)));
+    }
+    if let Some(challenge) = code_challenge.filter(|c| !c.is_empty()) {
+        query.push_str(&format!("&code_challenge={}&code_challenge_method=S256", form_encode(challenge)));
+    }
+    let separator = if endpoint.contains('?') { '&' } else { '?' };
+    format!("{endpoint}{separator}{query}")
+}
+
+/// The form body an app posts to the token endpoint to trade the authorization `code` for the first tokens (RFC 6749,
+/// section 4.1.3): `grant_type=authorization_code`, the code, the redirect URI and the client identifier, plus the PKCE
+/// `code_verifier` when the sign-in used a challenge. The answer is read like a refresh answer, with a
+/// [`renewal_from_token_response`]-style parse.
+pub fn oauth2_code_body(code: &str, redirect_uri: &str, client_id: &str, code_verifier: Option<&str>) -> String {
+    let mut body = format!(
+        "grant_type=authorization_code&code={}&redirect_uri={}&client_id={}",
+        form_encode(code),
+        form_encode(redirect_uri),
+        form_encode(client_id)
+    );
+    if let Some(verifier) = code_verifier.filter(|v| !v.is_empty()) {
+        body.push_str(&format!("&code_verifier={}", form_encode(verifier)));
+    }
+    body
+}
+
+/// Percent-encodes one form value: unreserved characters stay, every other byte becomes `%XX`.
+fn form_encode(value: &str) -> String {
+    let mut out = String::new();
+    for b in value.bytes() {
+        if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_' | b'~') {
+            out.push(b as char);
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    out
+}
+
+/// Reads a token endpoint's JSON answer to [`oauth2_refresh_body`] into a renewal outcome for `previous`, the saved
+/// OAuth 2 credential. A new `access_token` with `expires_in` seconds from `now` is `Renewed`. The refresh token is
+/// kept from `previous` when the answer omits it. An `invalid_grant` error means the service no longer accepts the
+/// refresh token, which is `Rejected`. Anything else (a non-JSON body, no access token, a `previous` that is not OAuth 2)
+/// is `Failed`. An answer without `expires_in` is due for renewal at once.
+pub fn renewal_from_token_response(body: &str, previous: &Credential, now: SystemTime) -> RenewOutcome {
+    let Ok(json) = bifrost_core::json::parse(body) else {
+        return RenewOutcome::Failed;
+    };
+    if json.get("error").and_then(Json::as_str) == Some("invalid_grant") {
+        return RenewOutcome::Rejected;
+    }
+    let Credential::OAuth2 { refresh_token: old_refresh, .. } = previous else {
+        return RenewOutcome::Failed;
+    };
+    let Some(token) = json.get("access_token").and_then(Json::as_str).filter(|t| !t.is_empty()) else {
+        return RenewOutcome::Failed;
+    };
+    let refresh_token = json.get("refresh_token").and_then(Json::as_str).filter(|t| !t.is_empty()).unwrap_or(old_refresh);
+    RenewOutcome::Renewed(Credential::oauth2(token, refresh_token, now + token_lifetime(&json)))
+}
+
+/// The `expires_in` seconds of a token answer as a lifetime; a missing or negative value is zero (due at once).
+fn token_lifetime(json: &Json) -> Duration {
+    match json.get("expires_in") {
+        Some(Json::Num(secs)) if *secs >= 0.0 => Duration::from_secs(*secs as u64),
+        _ => Duration::ZERO,
+    }
+}
+
+/// Reads a token endpoint's answer to [`oauth2_code_body`] into the first OAuth 2 credential of a sign-in. The
+/// `access_token` is required; a `refresh_token` the provider omits is stored empty, and `expires_in` counts from `now`.
+/// `None` when the body is not JSON or carries no access token.
+pub fn credential_from_token_response(body: &str, now: SystemTime) -> Option<Credential> {
+    let json = bifrost_core::json::parse(body).ok()?;
+    let token = json.get("access_token").and_then(Json::as_str).filter(|t| !t.is_empty())?;
+    let refresh_token = json.get("refresh_token").and_then(Json::as_str).unwrap_or("");
+    Some(Credential::oauth2(token, refresh_token, now + token_lifetime(&json)))
+}
+
+/// The outcome of the browser redirect that carries the authorization code back to the app.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RedirectOutcome {
+    /// The code to pass to [`oauth2_code_body`].
+    Code(String),
+    /// The provider refused the sign-in; the value is its `error` (for example `access_denied`).
+    Denied(String),
+    /// The `state` on the redirect is not the one the app sent, so the redirect is not for this sign-in.
+    StateMismatch,
+    /// The redirect has neither a code nor an error.
+    Missing,
+}
+
+/// Reads the redirect URL the browser returned to `redirect_uri` (RFC 6749, section 4.1.2). The `state` is checked
+/// before anything else is trusted, so a redirect from another sign-in never yields a code. Values are form-decoded.
+pub fn oauth2_redirect(url: &str, expected_state: &str) -> RedirectOutcome {
+    let query = url.split('#').next().unwrap_or("").split_once('?').map(|(_, q)| q).unwrap_or("");
+    let (mut code, mut state, mut error) = (None, None, None);
+    for pair in query.split('&') {
+        let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
+        let slot = match key {
+            "code" => &mut code,
+            "state" => &mut state,
+            "error" => &mut error,
+            _ => continue,
+        };
+        *slot = form_decode(value);
+    }
+    if state.as_deref() != Some(expected_state) {
+        return RedirectOutcome::StateMismatch;
+    }
+    if let Some(error) = error.filter(|e| !e.is_empty()) {
+        return RedirectOutcome::Denied(error);
+    }
+    match code.filter(|c| !c.is_empty()) {
+        Some(code) => RedirectOutcome::Code(code),
+        None => RedirectOutcome::Missing,
+    }
+}
+
+/// Decodes one form value: `+` is a space and `%XX` is a byte. `None` for a malformed escape or non-UTF-8 bytes.
+fn form_decode(value: &str) -> Option<String> {
+    let bytes = value.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'+' => out.push(b' '),
+            b'%' => {
+                let hex = std::str::from_utf8(bytes.get(i + 1..i + 3)?).ok()?;
+                out.push(u8::from_str_radix(hex, 16).ok()?);
+                i += 2;
+            }
+            b => out.push(b),
+        }
+        i += 1;
+    }
+    String::from_utf8(out).ok()
+}
+
+/// The PKCE code challenge for a code verifier (RFC 7636, section 4.2, method `S256`): the URL-safe base64 of the
+/// SHA-256 of the verifier, without padding.
+pub fn pkce_challenge(code_verifier: &str) -> String {
+    crate::passkey::base64url(&bifrost_core::sha256::digest(code_verifier.as_bytes()))
+}
+
+/// Path the loopback listener answers on.
+pub const LOOPBACK_PATH: &str = "/callback";
+
+/// The redirect URI of a loopback sign-in (RFC 8252, section 7.3): the IPv4 loopback address, the listener's port and
+/// [`LOOPBACK_PATH`].
+pub fn oauth2_loopback_uri(port: u16) -> String {
+    format!("http://127.0.0.1:{port}{LOOPBACK_PATH}")
+}
+
+/// The redirect URL a browser request carries, as an absolute URL for [`oauth2_redirect`]. `head` is the request line
+/// and headers. Only `GET` of [`LOOPBACK_PATH`] counts, and the `Host` header must name this listener (`127.0.0.1` or
+/// `localhost` with `port`), which keeps a page on another site from steering the listener by a rebinding trick. Any other
+/// request (a favicon, a wrong path or host) is `None`.
+pub fn redirect_from_request(head: &str, port: u16) -> Option<String> {
+    let mut lines = head.split("\r\n");
+    let mut parts = lines.next()?.split(' ');
+    let (method, target, version) = (parts.next()?, parts.next()?, parts.next()?);
+    if method != "GET" || !version.starts_with("HTTP/1.") || parts.next().is_some() {
+        return None;
+    }
+    let rest = target.strip_prefix(LOOPBACK_PATH)?;
+    if !(rest.is_empty() || rest.starts_with('?')) {
+        return None;
+    }
+    let host_ok = lines.any(|l| {
+        l.split_once(':').is_some_and(|(k, v)| {
+            k.eq_ignore_ascii_case("host") && [format!("127.0.0.1:{port}"), format!("localhost:{port}")].contains(&v.trim().to_string())
+        })
+    });
+    host_ok.then(|| format!("http://127.0.0.1:{port}{target}"))
+}
+
+/// What an app needs to run one OAuth 2 sign-in with the authorization code grant and a loopback redirect.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SignIn {
+    /// The URL to open in the browser.
+    pub url: String,
+    /// The redirect URI sent in `url`, and again with the code in [`oauth2_code_body`].
+    pub redirect_uri: String,
+    /// The random `state` the redirect must carry back.
+    pub state: String,
+    /// The PKCE verifier for the code exchange.
+    pub code_verifier: String,
+}
+
+/// A sign-in waiting for the browser: the listener on a free loopback port and the request that was sent.
+#[derive(Debug)]
+pub struct LoopbackSignIn {
+    listener: std::net::TcpListener,
+    pub request: SignIn,
+}
+
+/// The page the browser shows once the redirect has been received.
+const DONE_PAGE: &str = "<!doctype html><meta charset=utf-8><title>Signed in</title><p>You can close this tab and return to the app.";
+
+/// Starts a sign-in: binds the loopback listener on a free port, draws a random `state` and PKCE verifier from the kernel
+/// pool and builds the authorization URL. The caller opens `request.url` in the browser, then calls
+/// [`LoopbackSignIn::wait_for_redirect`]. Nothing leaves the machine except what the browser sends to `endpoint`.
+pub fn begin_oauth2_sign_in(endpoint: &str, client_id: &str, scope: Option<&str>) -> io::Result<LoopbackSignIn> {
+    let listener = std::net::TcpListener::bind(("127.0.0.1", 0))?;
+    listener.set_nonblocking(true)?;
+    let port = listener.local_addr()?.port();
+    let random = |n: usize| crate::entropy::bytes(n).map_err(|_| io::Error::new(io::ErrorKind::Other, "no random bytes"));
+    let state = crate::passkey::base64url(&random(16)?);
+    let code_verifier = crate::passkey::base64url(&random(32)?);
+    let redirect_uri = oauth2_loopback_uri(port);
+    let url = oauth2_authorize_url(endpoint, client_id, &redirect_uri, scope, &state, Some(&pkce_challenge(&code_verifier)));
+    Ok(LoopbackSignIn { listener, request: SignIn { url, redirect_uri, state, code_verifier } })
+}
+
+impl LoopbackSignIn {
+    /// The port the listener is bound to.
+    pub fn port(&self) -> u16 {
+        self.listener.local_addr().map(|a| a.port()).unwrap_or(0)
+    }
+
+    /// Waits up to `timeout` for the browser to come back to the redirect URI, answers it with a short page and returns
+    /// what the redirect says, checked against this sign-in's `state`. Requests that are not the redirect (a favicon, a
+    /// wrong host) get a 404 and are ignored. `TimedOut` when no redirect arrives in time.
+    pub fn wait_for_redirect(&self, timeout: Duration) -> io::Result<RedirectOutcome> {
+        let deadline = std::time::Instant::now() + timeout;
+        let port = self.port();
+        loop {
+            match self.listener.accept() {
+                Ok((mut stream, _)) => {
+                    use std::io::{Read, Write};
+                    stream.set_nonblocking(false)?;
+                    stream.set_read_timeout(Some(Duration::from_secs(2)))?;
+                    let mut head = Vec::new();
+                    let mut buf = [0u8; 1024];
+                    while head.len() < 8192 && !head.windows(4).any(|w| w == b"\r\n\r\n") {
+                        match stream.read(&mut buf) {
+                            Ok(0) | Err(_) => break,
+                            Ok(n) => head.extend_from_slice(&buf[..n]),
+                        }
+                    }
+                    let head = String::from_utf8_lossy(&head);
+                    let (status, body, found) = match redirect_from_request(&head, port) {
+                        Some(url) => ("200 OK", DONE_PAGE, Some(url)),
+                        None => ("404 Not Found", "", None),
+                    };
+                    let reply = format!(
+                        "HTTP/1.1 {status}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                        body.len()
+                    );
+                    let _ = stream.write_all(reply.as_bytes());
+                    if let Some(url) = found {
+                        return Ok(oauth2_redirect(&url, &self.request.state));
+                    }
+                }
+                Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
+                    if std::time::Instant::now() >= deadline {
+                        return Err(io::Error::new(io::ErrorKind::TimedOut, "no sign-in redirect arrived"));
+                    }
+                    std::thread::sleep(Duration::from_millis(20));
+                }
+                Err(e) => return Err(e),
+            }
+        }
+    }
+
+    /// The form body that trades `code` for tokens: [`oauth2_code_body`] with this sign-in's redirect URI and verifier.
+    pub fn code_body(&self, code: &str, client_id: &str) -> String {
+        oauth2_code_body(code, &self.request.redirect_uri, client_id, Some(&self.request.code_verifier))
+    }
+}
+
 /// The file name of the store the apps share, inside the `bifrost` directory of the user's data directory.
-pub const SHARED_FILE: &str = "accounts.ini";
+pub const SHARED_FILE: &str = account_store::FILE_NAME;
 
 /// The path of the store the apps share (`$XDG_DATA_HOME/bifrost/accounts.ini`, or under `$HOME/.local/share`).
 pub fn shared_path() -> Option<PathBuf> {
@@ -476,150 +872,60 @@ pub fn shared_path() -> Option<PathBuf> {
 }
 
 fn shared_path_from(xdg_data_home: Option<OsString>, home: Option<OsString>) -> Option<PathBuf> {
-    let base = xdg_data_home
-        .filter(|v| !v.is_empty())
-        .map(PathBuf::from)
-        .or_else(|| home.filter(|h| !h.is_empty()).map(|h| PathBuf::from(h).join(".local/share")))?;
-    Some(base.join("bifrost").join(SHARED_FILE))
+    account_store::path_from(xdg_data_home, home)
 }
 
 fn read_data(path: &Path) -> io::Result<Data> {
-    match fs::read_to_string(path) {
-        Ok(text) => decode(&text),
-        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(Data::default()),
-        Err(e) => Err(e),
-    }
+    account_store::read(path).map(from_contents)
 }
 
-const FILE_HEADER: &str = "# BifrOSt account store. Credentials are not written here; the app keeps them in its keychain.\n";
-
-/// Serialises the state. Sections are `[store]`, `[type]` and `[account]`, each followed by `key = value` lines.
-/// Values escape backslash, newline and carriage return, so every value fits on one line.
+/// The file's text for the state; the format lives in `bifrost_ui::account_store`.
 fn encode(data: &Data) -> String {
-    let mut out = String::from(FILE_HEADER);
-    out.push_str(&format!("\n[store]\nnext-id = {}\n", data.next_id));
-    for t in &data.types {
-        out.push_str("\n[type]\n");
-        write_field(&mut out, "identifier", &t.identifier);
-        write_field(&mut out, "description", &t.description);
-        write_field(&mut out, "access-granted", if t.access_granted { "true" } else { "false" });
-    }
-    for a in &data.accounts {
-        out.push_str("\n[account]\n");
-        write_field(&mut out, "id", &a.identifier);
-        write_field(&mut out, "type", &a.account_type);
-        write_field(&mut out, "username", &a.username);
-        write_field(&mut out, "full-name", &a.user_full_name);
-        write_field(&mut out, "description", &a.account_description);
-    }
-    out
+    account_store::encode(&to_contents(data))
 }
 
-fn write_field(out: &mut String, key: &str, value: &str) {
-    out.push_str(key);
-    out.push_str(" = ");
-    for c in value.chars() {
-        match c {
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            c => out.push(c),
-        }
+fn to_contents(data: &Data) -> Contents {
+    Contents {
+        refusals: data.refusals.clone(),
+        next_id: data.next_id,
+        types: data
+            .types
+            .iter()
+            .map(|t| TypeEntry { identifier: t.identifier.clone(), description: t.description.clone(), access_granted: t.access_granted })
+            .collect(),
+        // a credential never reaches the file
+        accounts: data
+            .accounts
+            .iter()
+            .map(|a| AccountEntry {
+                identifier: a.identifier.clone(),
+                account_type: a.account_type.clone(),
+                username: a.username.clone(),
+                user_full_name: a.user_full_name.clone(),
+                account_description: a.account_description.clone(),
+            })
+            .collect(),
     }
-    out.push('\n');
 }
 
-fn unescape(value: &str) -> String {
-    let mut out = String::with_capacity(value.len());
-    let mut chars = value.chars();
-    while let Some(c) = chars.next() {
-        if c != '\\' {
-            out.push(c);
-            continue;
-        }
-        match chars.next() {
-            Some('n') => out.push('\n'),
-            Some('r') => out.push('\r'),
-            Some('\\') => out.push('\\'),
-            Some(other) => {
-                out.push('\\');
-                out.push(other);
-            }
-            None => out.push('\\'),
-        }
+fn from_contents(c: Contents) -> Data {
+    Data {
+        types: c.types.into_iter().map(|t| AccountType { identifier: t.identifier, description: t.description, access_granted: t.access_granted }).collect(),
+        accounts: c
+            .accounts
+            .into_iter()
+            .map(|a| Account {
+                identifier: a.identifier,
+                account_type: a.account_type,
+                username: a.username,
+                user_full_name: a.user_full_name,
+                account_description: a.account_description,
+                credential: None,
+            })
+            .collect(),
+        refusals: c.refusals,
+        next_id: c.next_id,
     }
-    out
-}
-
-fn invalid_data() -> io::Error {
-    io::Error::new(io::ErrorKind::InvalidData, "account store file is malformed")
-}
-
-type Record = (String, Vec<(String, String)>);
-
-/// Splits the text into sections. Comments and blank lines are skipped; a field outside any section is malformed.
-fn records(text: &str) -> io::Result<Vec<Record>> {
-    let mut out: Vec<Record> = Vec::new();
-    for raw in text.lines() {
-        let line = raw.trim_start();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-        if let Some(name) = line.strip_prefix('[').and_then(|l| l.strip_suffix(']')) {
-            out.push((name.trim().to_string(), Vec::new()));
-            continue;
-        }
-        let (key, value) = line.split_once('=').ok_or_else(invalid_data)?;
-        let section = out.last_mut().ok_or_else(invalid_data)?;
-        let value = value.strip_prefix(' ').unwrap_or(value);
-        section.1.push((key.trim().to_string(), unescape(value)));
-    }
-    Ok(out)
-}
-
-fn field_of(fields: &[(String, String)], key: &str) -> String {
-    fields.iter().rev().find(|(k, _)| k.as_str() == key).map(|(_, v)| v.clone()).unwrap_or_default()
-}
-
-/// Reads a store file. Unknown sections and keys are skipped, so an older build reads a newer file.
-/// The next identifier is at least one above the highest `account-N` in the file, so a reopened store never reuses one.
-fn decode(text: &str) -> io::Result<Data> {
-    let mut data = Data::default();
-    let mut stored_next = 0u64;
-    let mut highest = 0u64;
-    for (name, fields) in records(text)? {
-        match name.as_str() {
-            "store" => stored_next = field_of(&fields, "next-id").parse().map_err(|_| invalid_data())?,
-            "type" => {
-                let identifier = field_of(&fields, "identifier");
-                if identifier.is_empty() {
-                    return Err(invalid_data());
-                }
-                let access_granted = field_of(&fields, "access-granted") == "true";
-                data.types.push(AccountType { identifier, description: field_of(&fields, "description"), access_granted });
-            }
-            "account" => {
-                let identifier = field_of(&fields, "id");
-                if identifier.is_empty() {
-                    return Err(invalid_data());
-                }
-                if let Some(n) = identifier.strip_prefix("account-").and_then(|n| n.parse::<u64>().ok()) {
-                    highest = highest.max(n);
-                }
-                data.accounts.push(Account {
-                    identifier,
-                    account_type: field_of(&fields, "type"),
-                    username: field_of(&fields, "username"),
-                    user_full_name: field_of(&fields, "full-name"),
-                    account_description: field_of(&fields, "description"),
-                    credential: None,
-                });
-            }
-            _ => {}
-        }
-    }
-    data.next_id = stored_next.max(highest);
-    Ok(data)
 }
 
 /// The answer to a credential renewal (`ACAccountCredentialRenewResult`).
@@ -645,6 +951,7 @@ pub enum RenewOutcome {
 mod tests {
     use super::*;
     use std::cell::Cell;
+    use std::fs;
     use std::rc::Rc;
 
     fn at(secs: u64) -> SystemTime {
@@ -655,6 +962,67 @@ mod tests {
         let mut store = AccountStore::new();
         store.register_type("mail.example", "Mail").unwrap();
         store
+    }
+
+    #[test]
+    fn a_keychain_reply_carries_the_credential_back() {
+        let c = Credential::oauth2("tok", "ref", at(1_000));
+        let ok = Reply { request: 1, result: Ok(c.encode()) };
+        assert_eq!(credential_from_reply(&ok), Ok(c));
+        let missing = Reply { request: 2, result: Err(keychain::Error::ItemNotFound) };
+        assert_eq!(credential_from_reply(&missing), Err(AccountError::CredentialNotFound));
+        let junk = Reply { request: 3, result: Ok(b"not a credential".to_vec()) };
+        assert_eq!(credential_from_reply(&junk), Err(AccountError::CredentialNotFound));
+    }
+
+    #[test]
+    fn an_access_reply_is_pending_granted_refused_or_invalid() {
+        let pending = Json::Obj(vec![("ok".into(), Json::Bool(false)), ("pending".into(), Json::Bool(true))]);
+        assert_eq!(access_answer(&pending), None);
+        let granted = Json::Obj(vec![("ok".into(), Json::Bool(true)), ("granted".into(), Json::Bool(true))]);
+        assert_eq!(access_answer(&granted), Some(Ok(true)));
+        let refused = Json::Obj(vec![("ok".into(), Json::Bool(true)), ("granted".into(), Json::Bool(false))]);
+        assert_eq!(access_answer(&refused), Some(Ok(false)));
+        let denied = Json::Obj(vec![("ok".into(), Json::Bool(false)), ("error".into(), Json::Str("permission_denied".into()))]);
+        assert_eq!(access_answer(&denied), Some(Ok(false)), "a denial reads as a refusal, never as access");
+        let invalid = Json::Obj(vec![("ok".into(), Json::Bool(false)), ("error".into(), Json::Str("account_type_invalid".into()))]);
+        assert_eq!(access_answer(&invalid), Some(Err(AccountError::AccountTypeInvalid)));
+    }
+
+    #[test]
+    fn every_internet_accounts_kind_is_a_builtin_type() {
+        for kind in bifrost_ui::internet_accounts::Kind::ALL {
+            assert!(BUILTIN_TYPES.iter().any(|(id, _)| *id == kind.account_type()), "{kind:?} has no builtin type");
+        }
+    }
+
+    #[test]
+    fn credential_items_are_named_per_account() {
+        assert_eq!(CREDENTIAL_SERVICE, "bifrost.accounts");
+        assert_eq!(credential_account("mail-1"), "credential:mail-1");
+        assert_ne!(credential_account("a"), credential_account("b"));
+    }
+
+    #[test]
+    fn builtin_types_are_registered_once_and_keep_their_grant() {
+        let mut store = AccountStore::new();
+        assert_eq!(store.register_builtin_types(), Ok(BUILTIN_TYPES.len()));
+        assert_eq!(store.register_builtin_types(), Ok(0), "a second start adds nothing");
+        assert_eq!(store.account_type("bifrost.mail").map(|t| t.description.as_str()), Some("Mail"));
+        assert!(store.account_type("bifrost.cloud").is_some_and(|t| !t.access_granted), "built-in types start ungranted");
+        store.set_access("bifrost.mail", true).unwrap();
+        store.register_builtin_types().unwrap();
+        assert!(store.account_type("bifrost.mail").is_some_and(|t| t.access_granted));
+    }
+
+    #[test]
+    fn builtin_types_survive_a_reopen() {
+        let path = scratch("builtin-types");
+        let mut store = AccountStore::open(&path).unwrap();
+        store.register_builtin_types().unwrap();
+        let reopened = AccountStore::open(&path).unwrap();
+        assert!(reopened.account_type("bifrost.carddav").is_some());
+        assert_eq!(AccountStore::open(&path).unwrap().register_builtin_types(), Ok(0));
     }
 
     /// A file path under the temp directory, unique per test name and process, with no file yet.
@@ -991,6 +1359,23 @@ mod tests {
     }
 
     #[test]
+    fn an_oauth2_credential_needs_renewal_inside_the_margin() {
+        let c = Credential::oauth2("t", "r", at(1_000));
+        assert!(c.needs_renewal(at(900), Duration::from_secs(100)));
+        assert!(!c.needs_renewal(at(899), Duration::from_secs(100)));
+        assert!(c.needs_renewal(at(1_500), Duration::ZERO), "an expired credential needs renewal");
+        assert!(!Credential::oauth("t", "s").needs_renewal(at(u64::MAX / 4), Duration::from_secs(1)), "OAuth 1 never expires");
+    }
+
+    #[test]
+    fn renewal_due_checks_the_saved_credential() {
+        let (store, id) = renewal_store();
+        assert_eq!(store.renewal_due(&id, at(950), Duration::from_secs(100)), Ok(true));
+        assert_eq!(store.renewal_due(&id, at(800), Duration::from_secs(100)), Ok(false));
+        assert_eq!(store.renewal_due("missing", at(0), Duration::ZERO), Err(AccountError::NotFound));
+    }
+
+    #[test]
     fn renewed_credentials_replace_the_saved_ones() {
         let (mut store, id) = renewal_store();
         let fresh = Credential::oauth2("new", "r2", at(9_000));
@@ -1005,6 +1390,67 @@ mod tests {
         assert_eq!(store.renew_credentials(&id, RenewOutcome::Rejected), Ok(RenewResult::Rejected));
         assert_eq!(store.account_type("mail.example").map(|t| t.access_granted), Some(false));
         assert_eq!(store.credential(&id).map(|c| c.oauth_token()), Ok("old"));
+    }
+
+    #[test]
+    fn the_refresh_body_is_a_form_with_the_grant_and_encoded_values() {
+        assert_eq!(
+            oauth2_refresh_body("r 1&x", "app.example"),
+            "grant_type=refresh_token&refresh_token=r%201%26x&client_id=app.example"
+        );
+    }
+
+    #[test]
+    fn the_authorize_url_carries_the_code_grant_parameters_in_order() {
+        assert_eq!(
+            oauth2_authorize_url("https://id.example/auth", "app.example", "https://app.example/cb", None, "s1", None),
+            "https://id.example/auth?response_type=code&client_id=app.example&redirect_uri=https%3A%2F%2Fapp.example%2Fcb&state=s1"
+        );
+    }
+
+    #[test]
+    fn the_authorize_url_adds_scope_and_pkce_and_keeps_an_existing_query() {
+        let url = oauth2_authorize_url("https://id.example/auth?tenant=a", "app", "cb", Some("mail read"), "s", Some("ch"));
+        assert_eq!(
+            url,
+            "https://id.example/auth?tenant=a&response_type=code&client_id=app&redirect_uri=cb&state=s&scope=mail%20read&code_challenge=ch&code_challenge_method=S256"
+        );
+        assert_eq!(
+            oauth2_authorize_url("https://id.example/auth", "app", "cb", Some(""), "s", Some("")),
+            "https://id.example/auth?response_type=code&client_id=app&redirect_uri=cb&state=s"
+        );
+    }
+
+    #[test]
+    fn the_code_body_is_a_form_with_the_grant_and_optional_verifier() {
+        assert_eq!(
+            oauth2_code_body("c/1", "https://app.example/cb", "app.example", None),
+            "grant_type=authorization_code&code=c%2F1&redirect_uri=https%3A%2F%2Fapp.example%2Fcb&client_id=app.example"
+        );
+        assert_eq!(
+            oauth2_code_body("c", "cb", "app", Some("v e")),
+            "grant_type=authorization_code&code=c&redirect_uri=cb&client_id=app&code_verifier=v%20e"
+        );
+    }
+
+    #[test]
+    fn a_token_answer_renews_the_credential_and_keeps_the_refresh_token_when_omitted() {
+        let old = Credential::oauth2("old", "r1", at(1_000));
+        let answer = r#"{"access_token":"new","expires_in":3600}"#;
+        assert_eq!(renewal_from_token_response(answer, &old, at(5_000)), RenewOutcome::Renewed(Credential::oauth2("new", "r1", at(8_600))));
+        let rotated = r#"{"access_token":"new","refresh_token":"r2","expires_in":60}"#;
+        assert_eq!(renewal_from_token_response(rotated, &old, at(0)), RenewOutcome::Renewed(Credential::oauth2("new", "r2", at(60))));
+    }
+
+    #[test]
+    fn an_invalid_grant_rejects_and_any_other_bad_answer_fails() {
+        let old = Credential::oauth2("old", "r1", at(1_000));
+        assert_eq!(renewal_from_token_response(r#"{"error":"invalid_grant"}"#, &old, at(0)), RenewOutcome::Rejected);
+        assert_eq!(renewal_from_token_response(r#"{"error":"server_error"}"#, &old, at(0)), RenewOutcome::Failed);
+        assert_eq!(renewal_from_token_response("<html>", &old, at(0)), RenewOutcome::Failed);
+        assert_eq!(renewal_from_token_response(r#"{"access_token":""}"#, &old, at(0)), RenewOutcome::Failed);
+        let oauth1 = Credential::oauth("t", "s");
+        assert_eq!(renewal_from_token_response(r#"{"access_token":"new"}"#, &oauth1, at(0)), RenewOutcome::Failed);
     }
 
     #[test]
@@ -1023,5 +1469,99 @@ mod tests {
         assert_eq!(store.renew_credentials(&bare, RenewOutcome::Failed), Err(AccountError::CredentialNotFound));
         store.set_access("mail.example", false).unwrap();
         assert_eq!(store.renew_credentials(&id, RenewOutcome::Failed), Err(AccountError::PermissionDenied));
+    }
+
+    #[test]
+    fn the_first_tokens_come_from_the_code_exchange_answer() {
+        let full = r#"{"access_token":"acc","refresh_token":"ref","expires_in":3600}"#;
+        assert_eq!(credential_from_token_response(full, at(1_000)), Some(Credential::oauth2("acc", "ref", at(4_600))));
+        let no_refresh = r#"{"access_token":"acc"}"#;
+        assert_eq!(credential_from_token_response(no_refresh, at(1_000)), Some(Credential::oauth2("acc", "", at(1_000))));
+        assert_eq!(credential_from_token_response(r#"{"error":"invalid_grant"}"#, at(0)), None);
+        assert_eq!(credential_from_token_response(r#"{"access_token":""}"#, at(0)), None);
+        assert_eq!(credential_from_token_response("<html>", at(0)), None);
+    }
+
+    #[test]
+    fn the_redirect_gives_the_code_only_for_the_state_that_was_sent() {
+        let ok = "https://app.example/cb?state=s1&code=a%2Bb+c";
+        assert_eq!(oauth2_redirect(ok, "s1"), RedirectOutcome::Code("a+b c".into()));
+        assert_eq!(oauth2_redirect(ok, "s2"), RedirectOutcome::StateMismatch);
+        let forged = "https://app.example/cb?code=x";
+        assert_eq!(oauth2_redirect(forged, "s1"), RedirectOutcome::StateMismatch);
+        let denied = "https://app.example/cb?state=s1&error=access_denied";
+        assert_eq!(oauth2_redirect(denied, "s1"), RedirectOutcome::Denied("access_denied".into()));
+        let empty = "https://app.example/cb?state=s1";
+        assert_eq!(oauth2_redirect(empty, "s1"), RedirectOutcome::Missing);
+        let bad_escape = "https://app.example/cb?state=s1&code=%zz";
+        assert_eq!(oauth2_redirect(bad_escape, "s1"), RedirectOutcome::Missing);
+    }
+
+    #[test]
+    fn the_pkce_challenge_matches_the_published_vector() {
+        assert_eq!(pkce_challenge("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"), "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM");
+    }
+
+    #[test]
+    fn only_a_get_of_the_callback_on_this_listener_is_the_redirect() {
+        let ok = "GET /callback?code=c1&state=s1 HTTP/1.1\r\nHost: 127.0.0.1:5000\r\nAccept: */*\r\n\r\n";
+        assert_eq!(redirect_from_request(ok, 5000).as_deref(), Some("http://127.0.0.1:5000/callback?code=c1&state=s1"));
+        let local = "GET /callback?code=c1 HTTP/1.1\r\nhost: localhost:5000\r\n\r\n";
+        assert!(redirect_from_request(local, 5000).is_some());
+        assert_eq!(redirect_from_request(ok, 5001), None, "another port");
+        assert_eq!(redirect_from_request("GET /callback?code=c1 HTTP/1.1\r\nHost: evil.example:5000\r\n\r\n", 5000), None);
+        assert_eq!(redirect_from_request("GET /callback?code=c1 HTTP/1.1\r\n\r\n", 5000), None, "no host");
+        assert_eq!(redirect_from_request("GET /favicon.ico HTTP/1.1\r\nHost: 127.0.0.1:5000\r\n\r\n", 5000), None);
+        assert_eq!(redirect_from_request("GET /callbackx?code=c HTTP/1.1\r\nHost: 127.0.0.1:5000\r\n\r\n", 5000), None);
+        assert_eq!(redirect_from_request("POST /callback HTTP/1.1\r\nHost: 127.0.0.1:5000\r\n\r\n", 5000), None);
+        assert_eq!(redirect_from_request("", 5000), None);
+        assert_eq!(oauth2_loopback_uri(5000), "http://127.0.0.1:5000/callback");
+    }
+
+    fn browser(port: u16, requests: &[String]) -> std::thread::JoinHandle<Vec<String>> {
+        use std::io::{Read, Write};
+        let requests = requests.to_vec();
+        std::thread::spawn(move || {
+            let mut replies = Vec::new();
+            for r in requests {
+                let mut s = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+                s.write_all(format!("GET {r} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n\r\n").as_bytes()).unwrap();
+                let mut text = String::new();
+                s.read_to_string(&mut text).unwrap();
+                replies.push(text);
+            }
+            replies
+        })
+    }
+
+    #[test]
+    fn a_loopback_sign_in_hands_the_code_back_for_its_own_state() {
+        let sign = begin_oauth2_sign_in("https://id.example/auth", "app.example", Some("mail")).unwrap();
+        let port = sign.port();
+        assert_eq!(sign.request.redirect_uri, oauth2_loopback_uri(port));
+        assert!(sign.request.url.contains(&format!("state={}", sign.request.state)));
+        assert!(sign.request.url.contains(&format!("code_challenge={}", pkce_challenge(&sign.request.code_verifier))));
+        assert!(sign.request.code_verifier.len() >= 43, "RFC 7636 asks for 43 characters or more");
+        let state = sign.request.state.clone();
+        let b = browser(port, &["/favicon.ico".to_string(), format!("/callback?code=the%20code&state={state}")]);
+        let outcome = sign.wait_for_redirect(Duration::from_secs(5)).unwrap();
+        assert_eq!(outcome, RedirectOutcome::Code("the code".into()));
+        let replies = b.join().unwrap();
+        assert!(replies[0].starts_with("HTTP/1.1 404"));
+        assert!(replies[1].starts_with("HTTP/1.1 200") && replies[1].contains("close this tab"));
+        let body = sign.code_body("the code", "app.example");
+        assert!(body.contains("code=the%20code") && body.contains(&format!("code_verifier={}", sign.request.code_verifier)));
+    }
+
+    #[test]
+    fn a_redirect_for_another_state_gives_no_code_and_a_silent_browser_times_out() {
+        let sign = begin_oauth2_sign_in("https://id.example/auth", "app", None).unwrap();
+        let b = browser(sign.port(), &["/callback?code=x&state=not-ours".to_string()]);
+        assert_eq!(sign.wait_for_redirect(Duration::from_secs(5)).unwrap(), RedirectOutcome::StateMismatch);
+        b.join().unwrap();
+        let quiet = begin_oauth2_sign_in("https://id.example/auth", "app", None).unwrap();
+        let err = quiet.wait_for_redirect(Duration::from_millis(50)).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::TimedOut);
+        assert_ne!(sign.request.state, quiet.request.state);
     }
 }

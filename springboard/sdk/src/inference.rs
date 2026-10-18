@@ -248,10 +248,48 @@ impl InferenceFunctionDescriptor {
     }
 }
 
+/// A processor a model may run on. The PC has a CPU and, when the machine has one, a GPU.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ComputeUnit {
+    Cpu,
+    Gpu,
+}
+
+/// The units a model is allowed to use (`MLComputeUnits`). The PC has no Neural Engine, so the options that name it
+/// resolve to the units this machine has (see [`ComputeUnits::usable`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ComputeUnits {
+    CpuOnly,
+    CpuAndGpu,
+    /// Every unit the machine has; with no Neural Engine here this is the CPU and the GPU.
+    All,
+}
+
+impl ComputeUnits {
+    /// The units that may run the model, CPU first, given whether a GPU is present. The CPU is always there, so a
+    /// machine without a GPU runs the model on the CPU whatever was asked for.
+    pub fn usable(self, gpu_available: bool) -> Vec<ComputeUnit> {
+        match self {
+            ComputeUnits::CpuOnly => vec![ComputeUnit::Cpu],
+            ComputeUnits::CpuAndGpu | ComputeUnits::All if gpu_available => vec![ComputeUnit::Cpu, ComputeUnit::Gpu],
+            ComputeUnits::CpuAndGpu | ComputeUnits::All => vec![ComputeUnit::Cpu],
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::ndarray::ScalarType;
+
+    #[test]
+    fn the_cpu_is_always_a_compute_unit_and_the_gpu_only_when_present() {
+        assert_eq!(ComputeUnits::CpuOnly.usable(true), vec![ComputeUnit::Cpu]);
+        assert_eq!(ComputeUnits::CpuAndGpu.usable(true), vec![ComputeUnit::Cpu, ComputeUnit::Gpu]);
+        assert_eq!(ComputeUnits::All.usable(true), vec![ComputeUnit::Cpu, ComputeUnit::Gpu]);
+        assert_eq!(ComputeUnits::CpuAndGpu.usable(false), vec![ComputeUnit::Cpu]);
+        assert_eq!(ComputeUnits::All.usable(false), vec![ComputeUnit::Cpu]);
+    }
 
     fn classifier() -> InferenceFunctionDescriptor {
         let mut f = InferenceFunctionDescriptor::new("classify");

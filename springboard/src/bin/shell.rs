@@ -7,6 +7,9 @@ fn main() {}
 #[cfg(target_os = "linux")]
 fn main() {
     bifrost_core::host::tune_allocator();
+    // the theme definition file (BIFROST_THEME, else /usr/share/bifrost/theme.toml): its colours replace the built-in
+    // pairs of render/src/ui.rs; with no file every colour keeps its built-in value
+    bifrost_render::theme::load_at_startup();
     if let Err(e) = run() {
         eprintln!("springboard: {e}");
         std::process::exit(1);
@@ -68,6 +71,25 @@ fn run() -> std::io::Result<()> {
         let installed=install::install_package(&root,&bytes,&hex(&h.finish()),install::shell_version()).map_err(std::io::Error::other)?;
         println!("Installed {} {} from a local package",installed.id,installed.version);return Ok(());
     }
+    if matches!(args.get(1).map(String::as_str), Some("--sign-package" | "--publisher-keygen")) {
+        // publisher tools: springboard --publisher-keygen DIR NAME (writes NAME.pub to pin and NAME.key to keep secret)
+        // and springboard --sign-package NAME.key PKG.aap (writes the detached ML-DSA-65 signature PKG.aap.sig)
+        use std::io::Read;
+        let mut seed = [0u8; 32];
+        std::fs::File::open("/dev/urandom")?.read_exact(&mut seed)?;
+        let arg = |i: usize, what: &str| args.get(i).cloned().ok_or_else(|| std::io::Error::other(format!("missing {what}")));
+        if args[1] == "--publisher-keygen" {
+            let (dir, name) = (arg(2, "DIR")?, arg(3, "NAME")?);
+            springboard::shell::store::install::write_publisher_key(std::path::Path::new(&dir), &name, &seed).map_err(std::io::Error::other)?;
+            println!("wrote {dir}/{name}.pub (pin it under {}) and {dir}/{name}.key (keep it secret)", springboard::shell::store::install::PINNED_PUBLISHER_KEYS);
+        } else {
+            let (key, pkg) = (arg(2, "KEY")?, arg(3, "PKG")?);
+            let sig = springboard::shell::store::install::sign_package(&std::fs::read(&key)?, &std::fs::read(&pkg)?, &seed).map_err(std::io::Error::other)?;
+            std::fs::write(format!("{pkg}.sig"), sig)?;
+            println!("wrote {pkg}.sig");
+        }
+        return Ok(());
+    }
     if args.get(1).map(String::as_str) == Some("--wpa") {
         // one-shot control command, like wpa_cli: springboard --wpa STATUS
         let iface = springboard::net::wifi::wireless_iface(std::path::Path::new("/sys/class/net")).unwrap_or_else(|| springboard::net::wifi::IFACE.to_string());
@@ -87,6 +109,24 @@ fn run() -> std::io::Result<()> {
         println!("{n} files");
         return Ok(());
     }
+    if args.get(1).map(String::as_str) == Some("--migrate") {
+        // offline migration: springboard --migrate DEST SOURCE [CATEGORY...]; with no category it lists them
+        use springboard::shell::{backup, migration};
+        let dest = std::path::Path::new(args.get(2).ok_or_else(|| std::io::Error::other("missing DEST"))?);
+        let source = std::path::Path::new(args.get(3).ok_or_else(|| std::io::Error::other("missing SOURCE"))?);
+        let key = || backup::backup_key(dest);
+        let entries = if source.is_dir() { migration::read_folder(source)? } else { migration::read_archive(source, &key)? };
+        let picked: Vec<&str> = args[4..].iter().map(String::as_str).collect();
+        if picked.is_empty() {
+            for c in migration::categories(&entries) {
+                println!("{}\t{} files\t{} bytes", c.key, c.files, c.bytes);
+            }
+        } else {
+            let n = migration::stage(dest, &entries, &picked, &key)?;
+            println!("{n} files staged; they are brought at the next start");
+        }
+        return Ok(());
+    }
     // `--boot DIR`: the data directory comes first, as for a plain start.
     let boot = args.get(1).is_some_and(|a| a == "--boot");
     let dir = args.get(1 + boot as usize).cloned().unwrap_or_else(|| {
@@ -95,11 +135,28 @@ fn run() -> std::io::Result<()> {
         springboard::bare::platform::data_dir(root, std::env::var("XDG_DATA_HOME").ok().as_deref(), std::env::var("HOME").ok().as_deref())
     });
     springboard::bare::crashlog::install(&dir);
+    // an erase asked for in Settings › Transfer or Reset runs before anything loads (and before a staged restore)
+    match bifrost_core::erase_content::apply_pending(std::path::Path::new(&dir)) {
+        Some(Ok(r)) => eprintln!("springboard: erased {} entries, kept {}, {} not removed", r.removed, r.kept, r.failed.len()),
+        Some(Err(e)) => eprintln!("springboard: erase failed: {e}"),
+        None => {}
+    }
     // a restore staged by `bifrost pc` restore or Settings › Backup applies before anything loads the data
     match springboard::shell::backup::apply_pending(std::path::Path::new(&dir)) {
         Some(Ok(n)) => eprintln!("springboard: restored {n} files from backup"),
         Some(Err(e)) => eprintln!("springboard: restore failed: {e}"),
         None => {}
+    }
+    // the BifrOSt Account session moves from its old plain file into the keychain group, once (`cloud_session`)
+    let (xdg, home) = (std::env::var("XDG_DATA_HOME").ok(), std::env::var("HOME").ok());
+    if let Some(file) = springboard::cloud_session::file_path(xdg.as_deref(), home.as_deref()) {
+        if let Err(e) = springboard::cloud_session::migrate_file(&springboard::cloud_session::GroupVault::new(std::path::Path::new(&dir)), &file) {
+            eprintln!("springboard: account session not moved to the keychain: {e:?}");
+        }
+    }
+    // the per-user support and private cache directories exist before any app runs (dirhelper's job)
+    if let Err(e) = bifrost_core::login_directories::ensure_for_env() {
+        eprintln!("springboard: login directories not created: {e}");
     }
     // the crash-loop rule applies on every start
     if !springboard::bare::takeover::begin(&dir) {
@@ -123,8 +180,9 @@ fn run() -> std::io::Result<()> {
     let font_data = bifrost_render::fontprefs::map_font(&dir, bifrost_render::fontprefs::FontRole::System)?;
     let mono = bifrost_render::fontprefs::map_font(&dir, bifrost_render::fontprefs::FontRole::Mono)?;
     let font = Font::parse(font_data).ok_or_else(|| std::io::Error::other("bad font"))?;
-    // characters the UI font lacks draw from the other fonts in the library instead of .notdef
-    bifrost_render::fontfallback::install_from_dir(&bifrost_render::fontprefs::library(&dir), "en");
+    // characters the UI font lacks draw from the other fonts in the library, then from the script fonts the
+    // packages install (Noto scripts, CJK, symbols), instead of .notdef
+    bifrost_render::fontfallback::install_with_system(&bifrost_render::fontprefs::library(&dir), "en");
     // the shell owns settings.ini from here on; the bin only reads start-up values
     let mut prefs = springboard::shell::prefs::Prefs::load(format!("{dir}/settings.ini"));
     // the volume is the default output device's volume control on the audio server (connected lazily), and key
@@ -225,7 +283,10 @@ fn run() -> std::io::Result<()> {
     let slow: std::cell::RefCell<(f64, (u64, u64), Vec<(String, String)>)> = std::cell::RefCell::new((f64::NEG_INFINITY, (0, 0), Vec::new()));
     let panel_mode = (w as u32, h as u32, disp.mode.vrefresh);
     let panel_rates = disp.rates.clone();
+    let panel_sizes = disp.sizes.clone();
     let brightness_supported = power::find_backlight(std::path::Path::new("/sys/class/backlight")).is_some();
+    let ambient_light_supported = springboard::bare::ambient_sensor::sensor_present();
+    let motion_sensor_supported = bifrost_core::inertial_sensors::Sensors::scan_default().accelerometer.is_some();
     let battery_present=power::find_battery(std::path::Path::new("/sys/class/power_supply")).is_some();
     // timedatectl spawns (NTP state, timezone) and the uptime read: at most every 15 s, not on every info tick
     let clock_info: std::cell::RefCell<(f64, String, i64)> = std::cell::RefCell::new((f64::NEG_INFINITY, String::new(), 0));
@@ -262,7 +323,10 @@ fn run() -> std::io::Result<()> {
         Info {
             display_mode: Some(panel_mode),
             display_rates: panel_rates.clone(),
+            display_sizes: panel_sizes.clone(),
             brightness_supported,
+            ambient_light_supported,
+            motion_sensor_supported,
             battery_present,
             desktop_network: None,
             wifi: wifi_text,
@@ -319,7 +383,25 @@ fn run() -> std::io::Result<()> {
     let wallpaper = springboard::first_frame_cache::wallpaper().map_or(wallpaper, |i| View { w: i.w, h: i.h, px: &i.px[..] });
     let mut shell = Shell::new(w as i32, h as i32, font, mono, wallpaper, icon, gather(level, &current_wallpaper, &history));
     shell.set_volume(vol.level());
+    {
+        // the keyboard backlight keys step the LED the machine has (none on most desktops)
+        let steps = power::keyboard_backlight_max();
+        shell.set_keyboard_backlight(if steps > 0 { power::keyboard_backlight() as f32 / steps as f32 } else { 0.0 }, steps.max(0) as u32);
+    }
+    // the stills of the dynamic wallpaper, in index order (the day is cut into one slice per still)
+    let dynamic_stills: Vec<String> = springboard::shell::prefs::Prefs::load(format!("{dir}/wallpapers/index.ini")).entries().map(|(id, _)| id.to_string()).collect();
+    // the day wallpapers installed apps provide: while one is on screen the clock picks its picture
+    let app_days: Vec<springboard::shell::wallpaper_types::Provided> = springboard::shell::wallpaper_types::installed(&springboard::shell::store::install::installed_apps());
+    // wallpaper changes the info tick asks for; they join the next turn's effects
+    let mut dynamic_fx: Vec<Effect> = Vec::new();
+    // the help index reads every installed help book; built on a worker so the first frame is not held up
+    std::thread::spawn(|| springboard::shell::helpbook::with_index(std::path::Path::new(springboard::shell::store::install::ROOT), |_| ()));
+    // read the executables of the apps most likely to open next so their first launch finds them in the page cache
+    std::thread::spawn(|| {
+        bifrost_core::launch_prefetch::warm_default();
+    });
     shell.set_route(router.route(), vol.level(), false, 0.0);
+    shell.set_headphones_present(jack.plugged());
     // the wallpaper catalogue reads the packed thumbnails and may crop Pictures stills on first use: a worker builds
     // it and the loop hands it to the shell on its next turn (Settings > Wallpaper is the only reader)
     let (wallpapers_tx, wallpapers_rx) = std::sync::mpsc::channel::<Vec<springboard::shell::wallpaper_page::Wallpaper>>();
@@ -330,6 +412,7 @@ fn run() -> std::io::Result<()> {
         });
     }
     shell.set_wallpaper_dim(prefs.get("wallpaper_dim") != Some("0"));
+    shell.set_live_look(springboard::shell::live_wallpaper::Look::parse(prefs.get(springboard::shell::live_wallpaper::LOOK_PREF).unwrap_or("")));
     let mut lock_mapped: Option<&'static [u8]> = None;
     set_lock_wallpaper(&mut shell, &dir, prefs.get("wallpaper_lock").unwrap_or(""), &mut lock_mapped);
     shell.set_rotation_lock(prefs.get("rotation_lock") == Some("1"), sys::now_ms());
@@ -341,6 +424,9 @@ fn run() -> std::io::Result<()> {
             rtc_wake(at);
         }
     }
+    // the repeating wake and power-on times of Settings > Battery > Schedule
+    let mut wake_due = schedule_next(&dir);
+    rtc_wake_schedule(wake_due);
     // the logical frame the shell draws (turned on its side in landscape)
     // and the panel-sized buffer it is turned into before presenting
     let mut frame = vec![0u32; w * h];
@@ -388,6 +474,12 @@ fn run() -> std::io::Result<()> {
     let mut cursor_dim = (w, h);
     let mut last_motion = f64::NEG_INFINITY;
     let mut last_pointer = ((0.0f32, 0.0f32), false);
+    // Dwell Control: a pointer that rests for the chosen delay is clicked where it rests (the delay comes from Settings)
+    let mut dwell = springboard::shell::accessibility::dwell::DwellClick::new(0, springboard::shell::accessibility::dwell::DEFAULT_RADIUS);
+    // Slow Keys: a key counts only after it has been held for the Settings delay
+    let mut slow_keys = springboard::shell::slow_keys::SlowKeys::default();
+    // Mouse Keys: the keypad moves the pointer and the 5 key clicks, so those keys never reach the key path
+    let mut mouse_keys = springboard::shell::mouse_keys::MouseKeys::default();
     // the display's own cursor plane shows the pointer when the panel has one: it follows the mouse the
     // moment input is read, whatever the shell is drawing, and the frames then carry no cursor at all
     let hw_cursor = disp.set_cursor(&springboard::gfx::cursor::sprite(), 1.0);
@@ -426,6 +518,12 @@ fn run() -> std::io::Result<()> {
     let mut profile_pref = shell.power_pref();
     let mut profile_low_power = low_power;
     let mut last_profile_check = f64::NEG_INFINITY;
+    // Game Mode is checked four times a second: entering must feel immediate (see `shell::gamemode`)
+    let mut last_game_check = f64::NEG_INFINITY;
+    // Automatically Adjust Brightness: the ambient light sensor is read every couple of seconds while the screen is on
+    let mut auto_light = springboard::bare::ambient_sensor::AutoLight::new();
+    let mut auto_light_was_on = false;
+    let mut profile_game = false;
     boost.set_profile(springboard::bare::cpuprofile::resolve(profile_pref, &mut profile_auto, power::battery().0, power::battery().1, low_power));
     let chord_key = |code: u16| match code {
         input::KEY_POWER => Some(springboard::shell::chord::Key::Power),
@@ -491,9 +589,9 @@ fn run() -> std::io::Result<()> {
         if let Some(ms) = disp.wayland_trim_wake_ms() { timeout = timeout.min(ms); }
         inputs.rescan_if_due(now);
         timeout = timeout.min(inputs.next_scan().map_or(i32::MAX, |at| (at - now).ceil().max(0.0) as i32));
-        // the pointer's wheel ease and right-click hold, key auto-repeat, and the cursor hiding
+        // the pointer's wheel ease and right-click hold, key auto-repeat, Slow Keys acceptance, and the cursor hiding
         let hide_cursor = (inputs.has_pointer() && (cursor.is_shown() || plane.is_shown())).then_some(last_motion + springboard::gfx::cursor::HIDE_MS).filter(|at| *at > now);
-        for due in inputs.deadline().into_iter().chain(key_repeat.deadline()).chain(hide_cursor).chain(sleeper.deadline()).chain(synthetic.front().map(|s| s.0)).chain(shell.next_wake(now)).chain(shell.recording_wake()).chain(chord.deadline()).chain(power_key.deadline()).chain(boost.deadline()).chain(system_gestures.next_deadline_ms()).chain(brightness_unsaved.map(|at| at + BRIGHTNESS_SAVE_MS)) {
+        for due in inputs.deadline().into_iter().chain(key_repeat.deadline()).chain(slow_keys.deadline()).chain(mouse_keys.deadline()).chain(hide_cursor).chain(sleeper.deadline()).chain(synthetic.front().map(|s| s.0)).chain(shell.next_wake(now)).chain(shell.recording_wake()).chain(chord.deadline()).chain(power_key.deadline()).chain(boost.deadline()).chain(system_gestures.next_deadline_ms()).chain(brightness_unsaved.map(|at| at + BRIGHTNESS_SAVE_MS)) {
             timeout = timeout.min((due - now).ceil().max(0.0) as i32);
         }
         // fixed slots first: touch, keys, display, control; then the shell's
@@ -566,6 +664,73 @@ fn run() -> std::io::Result<()> {
             last_pointer = pointer_now;
             last_motion = t;
         }
+        // Dwell Control: the delay follows Settings, and a pointer resting for it (no button held) clicks once in place
+        let dwell_ms = springboard::shell::accessibility::dwell_delay_ms();
+        if dwell.delay_ms() != dwell_ms {
+            dwell.set_delay_ms(dwell_ms);
+        }
+        // Mouse Keys: keypad keys move or click the pointer (and are swallowed) while the setting is on
+        let mouse_on = springboard::shell::accessibility::mouse_keys();
+        if mouse_keys.enabled() != mouse_on {
+            mouse_keys.set_enabled(mouse_on);
+        }
+        inputs.set_pointer_keys(mouse_keys.enabled());
+        if mouse_keys.enabled() {
+            let mut kept = Vec::with_capacity(events.len());
+            for e in events.drain(..) {
+                let (code, down) = match e {
+                    input::Event::Key { code, down } => (code, down),
+                    _ => {
+                        kept.push(e);
+                        continue;
+                    }
+                };
+                match mouse_keys.press(code, down, t) {
+                    springboard::shell::mouse_keys::Press::Pass => kept.push(e),
+                    springboard::shell::mouse_keys::Press::Consumed => {}
+                    springboard::shell::mouse_keys::Press::Click => {
+                        let (x, y) = inputs.pointer();
+                        kept.push(input::Event::Down { x, y, t });
+                        kept.push(input::Event::Up { x, y, t });
+                    }
+                }
+            }
+            events = kept;
+            let (dx, dy) = mouse_keys.step(t);
+            if dx != 0.0 || dy != 0.0 {
+                inputs.nudge(dx, dy);
+            }
+        }
+        // Slow Keys: presses wait for the delay and releases of unaccepted presses are dropped, before the key path sees them
+        let slow_ms = springboard::shell::accessibility::slow_delay_ms();
+        if slow_keys.delay_ms() != slow_ms {
+            slow_keys.set_delay_ms(slow_ms);
+        }
+        if slow_keys.enabled() {
+            let mut kept = Vec::with_capacity(events.len());
+            for e in events.drain(..) {
+                let keep = match e {
+                    input::Event::Key { code, down: true } => slow_keys.press(code, t) == springboard::shell::slow_keys::Verdict::Pass,
+                    input::Event::Key { code, down: false } => slow_keys.release(code) == springboard::shell::slow_keys::Verdict::Pass,
+                    _ => true,
+                };
+                if keep {
+                    kept.push(e);
+                }
+            }
+            events = kept;
+            for code in slow_keys.due(t) {
+                events.push(input::Event::Key { code, down: true });
+            }
+        }
+        if dwell.enabled() && inputs.has_pointer() && !inputs.is_down() {
+            let (px, py) = inputs.pointer();
+            let sample = springboard::shell::accessibility::dwell::Sample { t_ms: t.max(0.0) as u64, x: px, y: py };
+            if let Some((x, y)) = dwell.feed(sample) {
+                events.push(input::Event::Down { x, y, t });
+                events.push(input::Event::Up { x, y, t });
+            }
+        }
         if hw_cursor {
             // a rotated screen takes the pointer off the plane (its frames show no cursor, as before)
             let on_plane = shell.orientation().rotation() == Rotation::None;
@@ -598,6 +763,7 @@ fn run() -> std::io::Result<()> {
             eprintln!("springboard: input {events:?}");
         }
         let mut effects = chrome_fx;
+        effects.append(&mut dynamic_fx);
         #[cfg(feature = "desktop-wayland")]
         if wayland {
             let (active,resumed)=disp.wayland_activity();
@@ -702,6 +868,10 @@ fn run() -> std::io::Result<()> {
                         Ok(body) => body.into_bytes(),
                         Err(e) => format!("error: {e}\n").into_bytes(),
                     },
+                    Ok(Request::Notify(words)) => match springboard::shell::services::notify_bus::control(&mut shell, &words, t) {
+                        Ok(body) => format!("ok {body}\n").into_bytes(),
+                        Err(e) => format!("error: {e}\n").into_bytes(),
+                    },
                     Ok(Request::Perf) => jank.describe().into_bytes(),
                     Ok(Request::Trace(on)) => {
                         trace = on;
@@ -782,10 +952,19 @@ fn run() -> std::io::Result<()> {
                 }
                 input::Event::Key { code: input::KEY_WAKEUP, down: true } => Event::Wake,
                 input::Event::Key { code, down } => {
+                    // Switch Control: while it is on, the switch keys step the panel and are used up here; any other key goes on
+                    if let Some(fx) = shell.switch_control_key(code, down, t) {
+                        effects.extend(fx);
+                        continue;
+                    }
                     // session event taps see the key first and may drop or replace it
                     let Some(code) = shell.tap_key(code, down) else { continue };
                     // Settings > Keyboard: modifier keys remapped, the repeat timing, and the shortcuts switched off
                     let kp = springboard::shell::kb_input::get();
+                    // Settings > Accessibility > Sticky Keys: the key path follows the saved switch
+                    if hw_keys.sticky_keys() != springboard::shell::accessibility::sticky_keys() {
+                        hw_keys.set_sticky_keys(springboard::shell::accessibility::sticky_keys());
+                    }
                     let code = kp.remap.apply(code);
                     key_repeat.set_timing(f64::from(kp.repeat_delay_ms), kp.repeat_rate);
                     shell.keyboard_viewer_key(code, down);
@@ -808,6 +987,15 @@ fn run() -> std::io::Result<()> {
                     }
                     // an open menu-bar menu takes the arrows, Return and Esc; other keys are swallowed
                     if let Some(fx) = shell.hw_menu_key(code, down, t) {
+                        effects.extend(fx);
+                        continue;
+                    }
+                    // a media key goes to the owner of the Now Playing session when it enabled the command
+                    if shell.hw_media_key(code, down, t) {
+                        continue;
+                    }
+                    // the brightness keys step the panel or the keyboard backlight and show the HUD
+                    if let Some(fx) = shell.hw_brightness_key(code, down, t) {
                         effects.extend(fx);
                         continue;
                     }
@@ -879,8 +1067,23 @@ fn run() -> std::io::Result<()> {
             d.read(&mut jack_events);
             for ev in &jack_events {
                 let input::Event::Switch { code, on } = *ev else { continue };
-                let Some(change) = jack.feed(code, on).and_then(|plugged| router.jack(plugged)) else { continue };
+                let Some(plugged) = jack.feed(code, on) else { continue };
+                shell.set_headphones_present(plugged);
+                let Some(change) = router.jack(plugged) else { continue };
                 eprintln!("springboard: audio route -> {} ({}%)", change.route.label(), (change.volume.level() * 100.0).round());
+                if change.pause {
+                    shell.pause_music();
+                }
+                vol = change.volume;
+                let _ = audio_tx.send(AudioJob::Volume(vol));
+                shell.set_route(change.route, vol.level(), change.hud, t);
+                shell.save_prefs(&change.prefs);
+            }
+        }
+        // the output the user picked in the Sound module's menu holds against the jack (media::route::Router::choose)
+        if let Some(route) = shell.take_route_choice() {
+            if let Some(change) = router.choose(route) {
+                eprintln!("springboard: audio route chosen -> {}", change.route.label());
                 if change.pause {
                     shell.pause_music();
                 }
@@ -906,6 +1109,22 @@ fn run() -> std::io::Result<()> {
                     eprintln!("springboard: input method: {e}");
                 }
             }
+        }
+        // sounds that apps asked for (`ToShell::PlaySystemSound`) play on the sound-effects role, as alerts do
+        for name in springboard::shell::apphost::take_system_sounds() {
+            if let Some(index) = springboard::shell::options::ALERT_SOUNDS.iter().position(|label| *label == name) {
+                let _ = audio_tx.send(AudioJob::Sound(Sound::Alert(index)));
+            } else if let Some(index) = springboard::shell::ui_sounds::index_of(&name) {
+                let _ = audio_tx.send(AudioJob::Sound(Sound::Ui(index)));
+            }
+        }
+        // the screen reader's cues (its moves, wraps and mode changes) play on the sound-effects role
+        for c in shell.take_reader_earcons() {
+            let _ = audio_tx.send(AudioJob::Sound(Sound::Cue(c)));
+        }
+        // the shell's popup earcons (a menu or the power menu opening or closing) play while the reader is on
+        for index in shell.take_popup_earcons() {
+            let _ = audio_tx.send(AudioJob::Sound(Sound::Earcon(index)));
         }
         for fx in effects {
             match fx {
@@ -954,6 +1173,7 @@ fn run() -> std::io::Result<()> {
                     }
                     power::set_brightness(panel_level(level, low_power, max));
                 }
+                Effect::KeyboardBacklight(f) => power::set_keyboard_backlight((f * power::keyboard_backlight_max() as f32).round() as i64),
                 Effect::Volume(v) => {
                     vol = Volume::new(v);
                     let _ = audio_tx.send(AudioJob::Volume(vol));
@@ -985,6 +1205,7 @@ fn run() -> std::io::Result<()> {
                     None => eprintln!("springboard: alarm (muted)"),
                 },
                 Effect::WakeAt(at) => rtc_wake(at),
+                Effect::WakeSchedule(at) => rtc_wake_schedule(at),
                 // the shell applies the timeout itself; log it for the record
                 Effect::SystemSleepAfter(min) => sleeper.set_after(sleep::system_sleep_after(Some(&min.to_string())), t),
                 Effect::AutoLock(ms) => eprintln!("springboard: auto-lock {ms} ms"),
@@ -1032,6 +1253,13 @@ fn run() -> std::io::Result<()> {
                 },
                 Effect::LockWallpaper(id) => set_lock_wallpaper(&mut shell, &dir, &id, &mut lock_mapped),
                 Effect::WallpaperDim(on) => shell.set_wallpaper_dim(on),
+                Effect::LiveWallpaper(look) => shell.set_live_look(springboard::shell::live_wallpaper::Look::parse(&look)),
+                Effect::Location(pairs) => {
+                    let refs: Vec<(&str, &str)> = pairs.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+                    if let Err(e) = prefs.set_many(&refs) {
+                        eprintln!("springboard: settings.ini: {e}");
+                    }
+                }
             }
         }
         // Low Power Mode flipped (Settings, or the alert's button): re-cap the backlight now
@@ -1042,14 +1270,53 @@ fn run() -> std::io::Result<()> {
                 power::set_brightness(panel_level(level, low_power, max));
             }
         }
-        // every 10 s, and at once when Power Mode or Low Power Mode changed
-        if t - last_profile_check > 10_000.0 || shell.power_pref() != profile_pref || low_power != profile_low_power {
+        let auto_light_on = shell.screen_on() && shell.auto_brightness();
+        if auto_light_on != auto_light_was_on {
+            auto_light_was_on = auto_light_on;
+            // switched on (or the screen woke): the first reading is written at once
+            auto_light.restart();
+        }
+        if auto_light_on {
+            if let Some(b) = auto_light.poll_default(t) {
+                level = b.max(0.02);
+                brightness_unsaved = Some(t);
+                power::set_brightness(panel_level(level, low_power, max));
+            }
+        }
+        if t - last_game_check >= 250.0 {
+            last_game_check = t;
+            if let Some(change) = shell.game_mode_update(t as u64) {
+                eprintln!("springboard: game mode {}", if change == springboard::shell::gamemode::Change::Enter { "on" } else { "off" });
+                for effect in springboard::shell::gamemode::plan(change) {
+                    match effect {
+                        // the CPU profile is recomputed below at once
+                        springboard::shell::gamemode::Effect::CpuPerformance | springboard::shell::gamemode::Effect::CpuFollowPowerMode => {
+                            last_profile_check = f64::NEG_INFINITY;
+                        }
+                        springboard::shell::gamemode::Effect::RaisePriority => shell.game_mode_raise_priority(),
+                        springboard::shell::gamemode::Effect::RestorePriority => shell.game_mode_restore_priority(),
+                    }
+                }
+                if change == springboard::shell::gamemode::Change::Enter {
+                    shell.game_mode_notice();
+                }
+            }
+        }
+        // every 10 s, and at once when Power Mode, Low Power Mode or Game Mode changed
+        if t - last_profile_check > 10_000.0 || shell.power_pref() != profile_pref || low_power != profile_low_power || shell.game_mode_on() != profile_game {
+            profile_game = shell.game_mode_on();
             last_profile_check = t;
             profile_pref = shell.power_pref();
             profile_low_power = low_power;
             let (percent, charging) = power::battery();
             let before = boost.profile();
-            boost.set_profile(springboard::bare::cpuprofile::resolve(profile_pref, &mut profile_auto, percent, charging, low_power));
+            // Game Mode holds Performance over the Power Mode choice; Low Power Mode still wins
+            let profile = if shell.game_mode_on() && !low_power {
+                springboard::bare::cpuprofile::Profile::Performance
+            } else {
+                springboard::bare::cpuprofile::resolve(profile_pref, &mut profile_auto, percent, charging, low_power)
+            };
+            boost.set_profile(profile);
             if boost.profile() != before {
                 eprintln!("springboard: power profile {}", boost.profile().label());
             }
@@ -1086,6 +1353,11 @@ fn run() -> std::io::Result<()> {
         let network_changed=wayland && springboard::shell::desktop_network::take_changed();
         if t - last_info > 1000.0 || network_changed {
             last_info = t;
+            // a scheduled moment has passed: arm the clock for the one after it
+            if wake_due > 0 && sys::wall_time().0 >= wake_due {
+                wake_due = schedule_next(&dir);
+                rtc_wake_schedule(wake_due);
+            }
             snap_due = true;
             let mut info = gather(level, &current_wallpaper, &history);
             info.power_profile = boost.profile().label().into();
@@ -1135,6 +1407,23 @@ fn run() -> std::io::Result<()> {
             if m != night_mult {
                 night_mult = m;
                 shell.force_full_redraw();
+            }
+            // an app's day wallpaper on screen follows the clock through that app's pictures
+            if let Some(day) = springboard::shell::wallpaper_types::day_of(&app_days, &current_wallpaper) {
+                let minute = springboard::shell::notify::schedule::Schedule::minute_of_day(unix, offset) as u32;
+                let id = springboard::shell::wallpaper_types::current_id(day, minute);
+                if id != current_wallpaper && std::path::Path::new(&format!("{dir}/wallpapers/{id}.raw")).exists() {
+                    dynamic_fx.push(Effect::Wallpaper(id));
+                }
+            }
+            // dynamic wallpaper (`wallpaper_dynamic=1` in settings.ini): the packed stills change with the time of day
+            if prefs.get("wallpaper_dynamic") == Some("1") {
+                let minute = springboard::shell::notify::schedule::Schedule::minute_of_day(unix, offset) as u32;
+                if let Some(id) = springboard::shell::wallpaper_schedule::still_at(&dynamic_stills, minute) {
+                    if id != current_wallpaper {
+                        dynamic_fx.push(Effect::Wallpaper(id.to_string()));
+                    }
+                }
             }
         }
         {
@@ -1550,6 +1839,12 @@ enum AudioJob {
 enum Sound {
     Click(springboard::shell::kb_clicks::Click),
     Alert(usize),
+    /// a screen reader cue (its move, wrap, activation or mode change)
+    Cue(springboard::shell::accessibility::earcons::Earcon),
+    /// a shell earcon at this index into `shell::earcon::EARCONS` (a popup opening or closing)
+    Earcon(usize),
+    /// an interface cue at this index into `shell::ui_sounds::UI_SOUNDS` (an app's `PlaySystemSound` name)
+    Ui(usize),
 }
 
 /// The audio worker: one thread for every audio job of the shell. A level sets the volume and mute controls of the
@@ -1568,13 +1863,16 @@ fn spawn_audio_worker() -> std::sync::mpsc::Sender<AudioJob> {
         let mut at: Option<f32> = None;
         let mut player: Option<SoundPlayer> = None;
         while let Ok(first) = rx.recv() {
-            let (mut volume, mut alert, mut click) = (None, None, None);
+            let (mut volume, mut alert, mut click, mut cue, mut earcon, mut ui) = (None, None, None, None, None, None);
             let mut next = Some(first);
             while let Some(job) = next {
                 match job {
                     AudioJob::Volume(v) => volume = Some(v),
                     AudioJob::Sound(Sound::Alert(index)) => alert = Some(index),
                     AudioJob::Sound(Sound::Click(c)) => click = Some(c),
+                    AudioJob::Sound(Sound::Cue(c)) => cue = Some(c),
+                    AudioJob::Sound(Sound::Earcon(i)) => earcon = Some(i),
+                    AudioJob::Sound(Sound::Ui(i)) => ui = Some(i),
                 }
                 next = rx.try_recv().ok();
             }
@@ -1582,7 +1880,15 @@ fn spawn_audio_worker() -> std::sync::mpsc::Sender<AudioJob> {
             if let Some(v) = volume {
                 apply_volume(v, &mut dev, &mut at);
             }
-            let Some(sound) = alert.map(Sound::Alert).or(click.map(Sound::Click)) else { continue };
+            let Some(sound) = alert
+                .map(Sound::Alert)
+                .or(cue.map(Sound::Cue))
+                .or(earcon.map(Sound::Earcon))
+                .or(click.map(Sound::Click))
+                .or(ui.map(Sound::Ui))
+            else {
+                continue;
+            };
             if player.is_none() {
                 match SoundPlayer::on_sound_effects() {
                     Ok(p) => player = Some(p),
@@ -1596,6 +1902,9 @@ fn spawn_audio_worker() -> std::sync::mpsc::Sender<AudioJob> {
             let played = match sound {
                 Sound::Alert(index) => p.alert(index, 1.0),
                 Sound::Click(c) => p.click(c, 1.0),
+                Sound::Cue(c) => p.reader_cue(c, 1.0),
+                Sound::Earcon(index) => p.earcon(index, 1.0),
+                Sound::Ui(index) => p.ui_cue(index, 1.0),
             };
             if let Err(e) = played {
                 eprintln!("springboard: sound: {e}");
@@ -1658,12 +1967,42 @@ fn apply_volume(v: springboard::media::volume::Volume, dev: &mut Option<bifrost_
 /// alarm while one is set, so the old one is cleared first.
 #[cfg(target_os = "linux")]
 fn rtc_wake(at: i64) {
-    const WAKEALARM: &str = "/sys/class/rtc/rtc0/wakealarm";
-    let _ = std::fs::write(WAKEALARM, "0");
-    if at > 0 {
-        if let Err(e) = std::fs::write(WAKEALARM, at.to_string()) {
-            eprintln!("springboard: rtc wakealarm: {e}");
-        }
+    WAKE_CLOCK.store(at, std::sync::atomic::Ordering::Relaxed);
+    arm_rtc();
+}
+
+/// The next time of Settings > Battery > Schedule (Unix seconds, 0 = none), and the next alarm or timer of the Clock app.
+/// The hardware clock has one alarm, so it is armed for the earlier of the two that is still ahead.
+#[cfg(target_os = "linux")]
+static WAKE_SCHEDULE: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
+#[cfg(target_os = "linux")]
+static WAKE_CLOCK: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
+
+/// Records the next scheduled wake or power-on and re-arms the clock.
+#[cfg(target_os = "linux")]
+fn rtc_wake_schedule(at: i64) {
+    WAKE_SCHEDULE.store(at, std::sync::atomic::Ordering::Relaxed);
+    arm_rtc();
+}
+
+/// The next moment of the schedule kept in `dir`'s settings, from the file (the shell's own copy is the current one).
+#[cfg(target_os = "linux")]
+fn schedule_next(dir: &str) -> i64 {
+    let prefs = springboard::shell::prefs::Prefs::load(format!("{dir}/settings.ini"));
+    let (unix, offset) = springboard::bare::sys::wall_time();
+    springboard::shell::wake_page::next_at(&springboard::shell::wake_page::load(&prefs), unix, i64::from(offset))
+}
+
+/// Arms the clock through the privileged helper (`power.wake_alarm`) for the earliest of the recorded times that is
+/// still ahead, or disarms it when there is none.
+#[cfg(target_os = "linux")]
+fn arm_rtc() {
+    use std::sync::atomic::Ordering::Relaxed;
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64);
+    let at = [WAKE_CLOCK.load(Relaxed), WAKE_SCHEDULE.load(Relaxed)].into_iter().filter(|&t| t > now).min().unwrap_or(0);
+    let params = vec![("at", bifrost_core::json::Json::Num(at as f64))];
+    if let Err(e) = springboard::privd_client::connect().call("power.wake_alarm", params) {
+        eprintln!("springboard: rtc wakealarm: {}", e.message);
     }
 }
 
@@ -1832,6 +2171,67 @@ fn wallpapers(dir: &str) -> Vec<springboard::shell::wallpaper_page::Wallpaper> {
             Some(springboard::shell::wallpaper_page::Wallpaper { id: id.to_string(), name: name.to_string(), thumb })
         })
         .chain(photo_wallpapers(dir))
+        .chain(app_wallpapers(dir))
+        .chain(gradient_posters(dir))
+        .collect()
+}
+
+/// The gradient posters (`ui::procedural_texture`) at the screen's wallpaper size, so Settings lists them beside the
+/// stills. Nothing without a `wallpaper.raw` to take the size from.
+#[cfg(target_os = "linux")]
+fn gradient_posters(dir: &str) -> Vec<springboard::shell::wallpaper_page::Wallpaper> {
+    use springboard::gfx::Image;
+    let Some(base) = std::fs::read(format!("{dir}/wallpaper.raw")).ok().and_then(|b| Image::from_raw(&b)) else { return vec![] };
+    springboard::shell::wallpaper_page::gradient_wallpapers(dir, base.w, base.h)
+}
+
+/// Decodes the picture at `src` once, cover-fits it to the `tw` x `th` wallpaper size and caches it as
+/// `wallpapers/<id>.raw` with its 320 x 180 thumbnail as `wallpapers/<id>.thumb.raw`. Returns the thumbnail.
+#[cfg(target_os = "linux")]
+fn cache_still(dir: &str, id: &str, src: &std::path::Path, tw: usize, th: usize) -> Option<springboard::gfx::Image> {
+    use springboard::gfx::Image;
+    use std::fs;
+    let (raw, thumb_path) = (format!("{dir}/wallpapers/{id}.raw"), format!("{dir}/wallpapers/{id}.thumb.raw"));
+    if !std::path::Path::new(&raw).exists() || !std::path::Path::new(&thumb_path).exists() {
+        let img = springboard::cg::imageio::decode(&fs::read(src).ok()?)?;
+        let scale = (tw as f32 / img.w as f32).max(th as f32 / img.h as f32);
+        let (cw, ch) = (((tw as f32 / scale) as usize).clamp(1, img.w), ((th as f32 / scale) as usize).clamp(1, img.h));
+        let full = img.crop((img.w - cw) / 2, (img.h - ch) / 2, cw, ch).resized(tw, th);
+        fs::create_dir_all(format!("{dir}/wallpapers")).ok()?;
+        let rimg = |i: &Image| {
+            let mut b = b"RIMG".to_vec();
+            b.extend((i.w as u32).to_le_bytes());
+            b.extend((i.h as u32).to_le_bytes());
+            b.extend(i.px.iter().flat_map(|p| p.to_le_bytes()));
+            b
+        };
+        fs::write(&raw, rimg(&full)).ok()?;
+        fs::write(&thumb_path, rimg(&springboard::shell::wallpaper_page::cover_fit(&full, 320, 180))).ok()?;
+    }
+    Image::from_raw(&fs::read(&thumb_path).ok()?)
+}
+
+/// The wallpapers the installed apps provide (`shell::wallpaper_types`): every picture cached as a still like a
+/// photo (`wallpapers/app_<app id>.raw`, then `appday_<app id>_<n>.raw` for the rest of a day), and the first one
+/// listed in Settings beside the packed stills. A day wallpaper is stepped through by the clock in the main loop.
+#[cfg(target_os = "linux")]
+fn app_wallpapers(dir: &str) -> Vec<springboard::shell::wallpaper_page::Wallpaper> {
+    use springboard::gfx::Image;
+    use springboard::shell::{store::install::installed_apps, wallpaper_types};
+    let Some(base) = std::fs::read(format!("{dir}/wallpaper.raw")).ok().and_then(|b| Image::from_raw(&b)) else { return vec![] };
+    let apps = installed_apps();
+    wallpaper_types::installed(&apps)
+        .into_iter()
+        .filter_map(|p| {
+            let app = apps.iter().find(|a| a.id == p.app)?;
+            // every picture of a day is cached so the clock can step through them; Settings lists the first
+            for (k, image) in p.images.iter().enumerate().skip(1) {
+                let _ = cache_still(dir, &wallpaper_types::picture_id(&p.app, k), &app.dir.join(image), base.w, base.h);
+            }
+            let id = wallpaper_types::picture_id(&p.app, 0);
+            let thumb = cache_still(dir, &id, &app.dir.join(p.images.first()?), base.w, base.h)?;
+            Some(springboard::shell::wallpaper_page::Wallpaper { id, name: app.name.clone(), thumb })
+        })
         .collect()
 }
 
@@ -1850,24 +2250,7 @@ fn photo_wallpapers(dir: &str) -> Vec<springboard::shell::wallpaper_page::Wallpa
         .filter_map(|path| {
             let stem: String = path.file_stem()?.to_string_lossy().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect();
             let id = format!("photo_{stem}");
-            let (raw, thumb_path) = (format!("{dir}/wallpapers/{id}.raw"), format!("{dir}/wallpapers/{id}.thumb.raw"));
-            if !std::path::Path::new(&raw).exists() || !std::path::Path::new(&thumb_path).exists() {
-                let img = springboard::cg::imageio::decode(&fs::read(&path).ok()?)?;
-                let scale = (tw as f32 / img.w as f32).max(th as f32 / img.h as f32);
-                let (cw, ch) = (((tw as f32 / scale) as usize).clamp(1, img.w), ((th as f32 / scale) as usize).clamp(1, img.h));
-                let full = img.crop((img.w - cw) / 2, (img.h - ch) / 2, cw, ch).resized(tw, th);
-                fs::create_dir_all(format!("{dir}/wallpapers")).ok()?;
-                let rimg = |i: &Image| {
-                    let mut b = b"RIMG".to_vec();
-                    b.extend((i.w as u32).to_le_bytes());
-                    b.extend((i.h as u32).to_le_bytes());
-                    b.extend(i.px.iter().flat_map(|p| p.to_le_bytes()));
-                    b
-                };
-                fs::write(&raw, rimg(&full)).ok()?;
-                fs::write(&thumb_path, rimg(&springboard::shell::wallpaper_page::cover_fit(&full, 320, 180))).ok()?;
-            }
-            let thumb = Image::from_raw(&fs::read(&thumb_path).ok()?)?;
+            let thumb = cache_still(dir, &id, &path, tw, th)?;
             Some(springboard::shell::wallpaper_page::Wallpaper { id, name: path.file_stem()?.to_string_lossy().into_owned(), thumb })
         })
         .take(6)

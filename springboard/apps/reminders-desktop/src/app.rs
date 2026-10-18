@@ -12,9 +12,10 @@ mod chrome;
 
 use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_M, SPACE_S, SPACE_XL};
 use springboard::layout::in_rect as within;
+use crate::archive;
 use bifrost_app::kit::ui::{home_zone, Ui};
 use bifrost_app::kit::{Event, Image, TextCache};
-use crate::{attach, model, organize, quick, repeat, settings, store, zones};
+use crate::{attach, format, model, organize, quick, repeat, settings, store, zones};
 use springboard::deildu::scroll::Scroller;
 use springboard::shell::clock::{
     tz::{civil_from_days, days_from_civil},
@@ -75,6 +76,10 @@ enum Target {
     Search,
     Options,
     Smart(Smart),
+    /// Recently Deleted: opens the page of kept reminders.
+    Deleted,
+    /// Restores one kept reminder (by its id) from the Recently Deleted page.
+    Restore(u64),
     List(u64),
     ListInfo(u64),
     /// A tag in the sidebar's Tags section, by its `model::tag_key`.
@@ -311,6 +316,10 @@ pub struct Reminders {
     image_request: bool,
     wall: Wall,
     data: Data,
+    /// The Recently Deleted page: the kept reminders, while the page is open.
+    deleted: Option<Vec<Reminder>>,
+    /// How many reminders the recently deleted store holds (the sidebar count).
+    kept_count: usize,
     screen: Screen,
     view: View,
     opts: Options,
@@ -442,7 +451,10 @@ impl Reminders {
             ..Options::default()
         };
         let collapsed: HashSet<u64> = settings.collapsed.iter().copied().collect();
+        let kept_count = archive::kept(&archive::path_beside(&path)).map_or(0, |kept| kept.len());
         let mut app = Self {
+            kept_count,
+            deleted: None,
             w,
             x0: 0.0,
             full_w: w,
@@ -513,6 +525,11 @@ impl Reminders {
     }
 
     /// Every reminder, for the Today widget timeline (`system.rs`).
+    /// The lists in their sidebar order, for the scripting answers (`scripting`).
+    pub fn lists(&self) -> &[model::ListDef] {
+        &self.data.lists
+    }
+
     pub fn items(&self) -> &[model::Reminder] {
         &self.data.items
     }
@@ -530,6 +547,16 @@ impl Reminders {
     /// The arrow-selected reminder, if it still exists.
     pub fn selected_item(&self) -> Option<u64> {
         self.selected.filter(|id| self.data.items.iter().any(|r| r.id == *id))
+    }
+
+    /// Selects the reminder `id` on the items screen (a Core Search result opened it); false when there is no such one.
+    pub fn show_item(&mut self, id: u64) -> bool {
+        if !self.data.items.iter().any(|r| r.id == id) {
+            return false;
+        }
+        self.screen = Screen::Items;
+        self.selected = Some(id);
+        true
     }
 
     /// File > New Reminder (Cmd+N), File > New List (Cmd+Shift+N), Edit > Find (Cmd+F): the toolbar and chord paths.
@@ -717,6 +744,23 @@ impl Reminders {
     }
 
     /// Reminders > Mark All Overdue as Today: one undo step for every reminder moved.
+    /// Whether the notes field of the open form has the focus, which is where Format > Bold and the list commands go.
+    pub fn notes_focused(&self) -> bool {
+        self.has_draft() && self.focus == Some(Field::Notes)
+    }
+
+    /// Format > Bold, Bullet List and Numbered List: the mark goes into the notes of the open form (`format`). The
+    /// notes stay plain Markdown text, and the caret goes to the end of the text.
+    pub fn format_notes(&mut self, ui: &Ui, style: format::Style) -> bool {
+        if !self.notes_focused() {
+            return false;
+        }
+        let (text, _) = format::apply(self.notes.text(), self.notes.selection(), style);
+        self.notes.set_text(ui, &text);
+        self.dirty = true;
+        true
+    }
+
     pub fn mark_overdue_today(&mut self, ui: &Ui) -> bool {
         let mut next = self.data.clone();
         if organize::overdue_to_today(&mut next.items, self.today) == 0 {
@@ -1042,6 +1086,21 @@ impl Reminders {
     /// The `add-reminder` intent: a reminder in the default list, with an optional due day (`YYYY-MM-DD`, or
     /// `YYYY-MM-DDTHH:MM` for a time). Returns the new reminder's id.
     pub fn add_reminder(&mut self, ui: &Ui, title: &str, due: Option<&str>) -> Result<u64, String> {
+        self.add_reminder_in(ui, title, due, None)
+    }
+
+    /// The `create-list-item` intent: a reminder in the list called `list` (matched without case), with the same
+    /// optional due day as `add-reminder`. Returns the new reminder's id.
+    pub fn add_reminder_to_named(&mut self, ui: &Ui, title: &str, due: Option<&str>, list: &str) -> Result<u64, String> {
+        let wanted = list.trim();
+        let found = self.data.lists.iter().find(|l| l.name.eq_ignore_ascii_case(wanted)).map(|l| l.id);
+        let id = found.ok_or_else(|| format!("there is no list named \"{wanted}\""))?;
+        self.add_reminder_in(ui, title, due, Some(id))
+    }
+
+    /// Adds a reminder to `list`, or to the default list when `list` is `None`. The title and the due date are checked
+    /// first, so a bad one never picks a list.
+    fn add_reminder_in(&mut self, ui: &Ui, title: &str, due: Option<&str>, list: Option<u64>) -> Result<u64, String> {
         let title = clean(title);
         if title.is_empty() {
             return Err("the title is empty".into());
@@ -1054,7 +1113,10 @@ impl Reminders {
             None => (None, None),
         };
         let mut next = self.data.clone();
-        let list = self.opts.default_list.filter(|id| next.lists.iter().any(|l| l.id == *id)).or_else(|| next.lists.first().map(|l| l.id));
+        let list = match list {
+            Some(id) => Some(id),
+            None => self.opts.default_list.filter(|id| next.lists.iter().any(|l| l.id == *id)).or_else(|| next.lists.first().map(|l| l.id)),
+        };
         let Some(list) = list else { return Err("there is no list".into()) };
         let Some(id) = next.next_item_id() else { return Err("no reminder id is left".into()) };
         let mut r = Reminder::new(id, title);
@@ -1327,6 +1389,14 @@ impl Reminders {
                 if top_bar {
                     return None;
                 }
+                if let Some(kept) = &self.deleted {
+                    for (i, reminder) in kept.iter().enumerate() {
+                        if within(x, y, self.deleted_row_rect(ui, i)) {
+                            return Some(Target::Restore(reminder.id));
+                        }
+                    }
+                    return None;
+                }
                 let bar = self.bottom(ui);
                 if self.undo.is_some() && y >= bar && y < bar + ui.pt(52.0) {
                     return if x > wpx - ui.pt(UNDO_HIT_PT) { Some(Target::Undo) } else { None };
@@ -1503,8 +1573,52 @@ impl Reminders {
         self.title_hint = hint;
         self.title_max = max;
     }
+    /// Recently Deleted: shows the reminders kept in the archive store.
+    fn open_deleted(&mut self, ui: &Ui) {
+        self.deleted = Some(archive::kept(&archive::path_beside(&self.path)).unwrap_or_default());
+        self.screen = Screen::Items;
+        self.searching = false;
+        self.swipe = None;
+        self.scroll.jump_top();
+        self.rebuild(ui);
+    }
+
+    /// Puts a kept reminder back into the reminders, in the same list when that list still exists (else the default
+    /// list), and takes it out of the store only once the reminders file has been written.
+    fn restore_deleted(&mut self, ui: &Ui, id: u64) {
+        let path = archive::path_beside(&self.path);
+        let Some(mut reminder) = self.deleted.as_ref().and_then(|kept| kept.iter().find(|r| r.id == id).cloned()) else {
+            return;
+        };
+        let mut next = self.data.clone();
+        if !next.lists.iter().any(|l| l.id == reminder.list) {
+            reminder.list = model::DEFAULT_LIST;
+        }
+        if reminder.parent.is_some_and(|p| !next.items.iter().any(|r| r.id == p)) {
+            reminder.parent = None;
+        }
+        if next.items.iter().any(|r| r.id == reminder.id) {
+            let Some(fresh) = next.next_item_id() else { return };
+            reminder.id = fresh;
+        }
+        next.items.push(reminder);
+        if !self.commit_named(next, "Restore Reminder") {
+            return;
+        }
+        let _ = archive::take(&path, id);
+        self.deleted = Some(archive::kept(&path).unwrap_or_default());
+        self.kept_count = self.deleted.as_ref().map_or(0, |kept| kept.len());
+        self.rebuild(ui);
+    }
+
+    /// The rectangle of kept reminder `i` on the Recently Deleted page (the same geometry the page draws).
+    fn deleted_row_rect(&self, ui: &Ui, i: usize) -> (f32, f32, f32, f32) {
+        (ui.pt(SPACE_XL), self.top_px(ui) + ui.pt(ITEM_H) * i as f32, self.w as f32 - ui.pt(SPACE_HUGE), ui.pt(ITEM_H))
+    }
+
     fn open_view(&mut self, ui: &Ui, view: View) {
         self.view = view;
+        self.deleted = None;
         self.screen = Screen::Items;
         self.searching = false;
         self.swipe = None;
@@ -1700,6 +1814,11 @@ impl Reminders {
         if removed.is_empty() || !self.commit(next) {
             return false;
         }
+        // kept in the recently deleted store too, so the deletion survives a restart; a store that cannot be
+        // written does not undo the deletion
+        let kept_path = crate::archive::path_beside(&self.path);
+        let _ = crate::archive::keep(&kept_path, &removed.iter().map(|(_, r)| r.clone()).collect::<Vec<_>>());
+        self.kept_count = crate::archive::kept(&kept_path).map_or(0, |kept| kept.len());
         let label = format!("Deleted \"{}\"", title.unwrap_or_default());
         self.history.register(&label, restore_items(removed), move |d| {
             model::remove_with_children(&mut d.items, id);
@@ -2116,6 +2235,8 @@ impl Reminders {
                 self.save_settings();
             }
             Target::Smart(s) => self.open_view(ui, View::Smart(s)),
+            Target::Deleted => self.open_deleted(ui),
+            Target::Restore(id) => self.restore_deleted(ui, id),
             Target::List(id) => self.open_view(ui, View::List(id)),
             Target::Tag(key) => self.open_view(ui, View::Tag(key)),
             Target::Custom(id) => self.open_view(ui, View::Custom(id)),

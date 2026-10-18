@@ -126,7 +126,9 @@ pub struct Win {
     pub r: Rect,
     pub maximized: bool,
     pub minimized: bool,
-    /// the rectangle to go back to when un-maximized
+    /// full screen: the window is in its own space over the whole screen, with no menu bar, Dock or title bar
+    pub full: bool,
+    /// the rectangle to go back to when un-maximized or left full screen
     restore: Rect,
 }
 
@@ -154,7 +156,8 @@ const B: u8 = 8;
 
 #[derive(Clone, Copy, Debug)]
 enum Grab {
-    Move { dx: f32, dy: f32 },
+    /// a title bar drag; `app` is the window moved (the stack can put other windows after it)
+    Move { dx: f32, dy: f32, app: AppId },
     Resize { edges: u8, start: Rect, x: f32, y: f32 },
     /// a press on a traffic light that acts on release
     Light(usize, Light),
@@ -172,13 +175,20 @@ struct CachedWindow {
     focused:bool, maximized:bool, hover:bool, drawn:f64,
 }
 
-/// Two title-bar presses this close (ms) are a double-click, which zooms the window as Golden Gate does.
-const DOUBLE_CLICK_MS: f64 = 400.0;
+/// Two title-bar presses this close (ms) are a double-click, which zooms the window as Golden Gate does. The gap is
+/// the Settings > Mouse > Double-Click Speed choice (`pointer_prefs`).
+fn double_click_ms() -> f64 {
+    crate::bare::pointer_prefs::get().double_click_ms as f64
+}
 
 #[derive(Default)]
 pub struct Desk {
-    /// back to front
+    /// back to front; the floating windows (`floating`) are the last ones
     pub wins: Vec<Win>,
+    /// the apps whose windows float (their host asked for `ToShell::WindowLevel`), as of the last `sync_levels`
+    pub(super) floating: Vec<AppId>,
+    /// the extra windows collapsed to their title bars, with the height each had before it collapsed
+    pub(super) collapsed: std::collections::HashMap<AppId, i32>,
     pub(super) dock_preferences:super::desktop_dock::Preferences,
     pub(super) dock_visible:bool,
     /// the window whose traffic lights the pointer is over; its lights show their glyphs
@@ -200,7 +210,7 @@ pub struct Desk {
     pub(super) dock_bounce:Vec<(usize,f64)>,
     /// the outer size each app's window had when it was last closed (the window comes back at it when reopened)
     pub(super) closed_sizes:std::collections::HashMap<AppId,(i32,i32)>,
-    /// the last title-bar press (window, time in ms): a second press within DOUBLE_CLICK_MS zooms
+    /// the last title-bar press (window, time in ms): a second press within the Double-Click Speed gap zooms
     last_title: Option<(AppId, f64)>,
     pub(super) dock_hide_at:Option<f64>,
     /// the newest files of Downloads, fanned out by the Dock's stack, and when the folder was last listed (seconds)
@@ -295,6 +305,8 @@ pub fn full_size(app: AppId) -> bool {
     match app {
         AppId::Settings => true,
         AppId::External(slot) => apphost::installed().get(slot as usize).is_some_and(|a| a.manifest.full_size_content()),
+        // an extra window keeps its title bar: the app's full-size content is for its main window
+        AppId::ExternalWindow(..) => false,
         _ => false,
     }
 }
@@ -305,6 +317,11 @@ pub const UNIFIED_BAR_PT: f32 = 52.0;
 /// Where a press moves window `w` instead of reaching the app: above `drag_height` (window px), except in the
 /// rectangles returned (window px). A full-size app's empty toolbar band drags; its traffic lights and the controls
 /// it publishes (`App::controls`) do not, as the native toolkit lets the empty part of a unified toolbar move the window.
+/// A full-screen window covers the menu bar; the bar comes back only while the pointer is in its band at the top.
+pub fn bar_hidden(full: bool, pointer_y: Option<f32>, bar_h: f32) -> bool {
+    full && pointer_y.map_or(true, |y| y >= bar_h)
+}
+
 pub fn drag_zone(w: &Win, m: &Metrics, controls: &[bifrost_proto::Node]) -> (i32, Vec<[i32; 4]>) {
     zone_of(w, m, controls, full_size(w.app) && w.app != AppId::Settings)
 }
@@ -354,7 +371,8 @@ pub fn title_of(app: AppId, m: &Metrics) -> i32 {
 
 impl Win {
     pub fn body(&self, m: &Metrics) -> Rect {
-        let t = title_of(self.app, m);
+        // a full-screen window has no title bar: the app is the whole window
+        let t = if self.full { 0 } else { title_of(self.app, m) };
         Rect { x: self.r.x, y: self.r.y + t, w: self.r.w, h: (self.r.h - t).max(1) }
     }
 
@@ -433,6 +451,18 @@ impl Win {
 }
 
 impl Desk {
+    /// The ids of the native apps this desk started (they may still be running). Used by the low-space purge, which
+    /// never clears the cache of a running app.
+    #[cfg(feature = "desktop-wayland")]
+    pub(super) fn native_running_ids(&self) -> Vec<String> {
+        self.native_children.keys().cloned().collect()
+    }
+
+    #[cfg(not(feature = "desktop-wayland"))]
+    pub(super) fn native_running_ids(&self) -> Vec<String> {
+        Vec::new()
+    }
+
     pub(super) fn grab_idle(&self)->bool{self.grab.is_none()}
     pub fn new() -> Self {
         Desk {dock_visible:true,..Default::default()}
@@ -450,8 +480,30 @@ impl Desk {
     pub fn raise(&mut self, i: usize) -> usize {
         let mut w = self.wins.remove(i);
         w.minimized = false;
-        self.wins.push(w);
-        self.wins.len() - 1
+        let at = self.band_top(w.app);
+        self.wins.insert(at, w);
+        at
+    }
+
+    /// Whether the windows of `app` float.
+    pub(super) fn is_floating(&self, app: AppId) -> bool {
+        // a window floats with its app (the window level is per app, `ToShell::WindowLevel`)
+        self.floating.contains(&app.parent())
+    }
+
+    /// The index a window of `app` takes on the top of its band: after every window at its level or below, so a normal
+    /// window goes in front of the floating ones and a floating one stays above them.
+    pub(super) fn band_top(&self, app: AppId) -> usize {
+        let floating = self.is_floating(app);
+        self.wins.iter().position(|o| self.is_floating(o.app) && !floating).unwrap_or(self.wins.len())
+    }
+
+    /// Sets the apps whose windows float and moves their windows after the normal ones; each band keeps its order.
+    pub(super) fn sync_levels(&mut self, floating: Vec<AppId>) {
+        self.floating = floating;
+        let list = std::mem::take(&mut self.floating);
+        self.wins.sort_by_key(|w| list.contains(&w.app));
+        self.floating = list;
     }
 
     /// The frontmost visible window hit at (x, y).
@@ -477,8 +529,9 @@ impl Desk {
         let x = (a.x + (a.w - w) / 2 + (n - 3) * step).clamp(a.x, (a.x + a.w - w).max(a.x));
         let y = (a.y + (a.h - h) / 3 + n * step / 2).clamp(a.y, (a.y + a.h - h).max(a.y));
         let r = Rect { x, y, w, h };
-        self.wins.push(Win { app, r, maximized: false, minimized: false, restore: r });
-        self.wins.len() - 1
+        let at = self.band_top(app);
+        self.wins.insert(at, Win { app, r, maximized: false, minimized: false, full: false, restore: r });
+        at
     }
 
     /// Puts window `i` at `r` (a restored frame): the size is held inside the app's limits and the work area, the
@@ -496,10 +549,38 @@ impl Desk {
         win.maximized = false;
     }
 
+    /// The space a full-screen window takes: the whole screen, under the menu bar and over the Dock.
+    pub fn screen_rect(m: &Metrics) -> Rect {
+        Rect { x: 0, y: 0, w: m.w, h: m.h }
+    }
+
+    /// Enters (`on`) or leaves full screen for window `i`. The window keeps the size it had to go back to. A
+    /// fixed-size window does not go full screen; returns whether the window changed state.
+    pub fn set_full_screen(&mut self, m: &Metrics, i: usize, on: bool) -> bool {
+        let w = &mut self.wins[i];
+        if size_limits(w.app).fixed || w.full == on {
+            return false;
+        }
+        if on {
+            w.restore = w.r;
+            w.r = Self::screen_rect(m);
+            w.maximized = false;
+        } else {
+            w.r = w.restore;
+        }
+        w.full = on;
+        true
+    }
+
+    /// Whether the front window is full screen (Game Mode reads it).
+    pub fn front_full(&self) -> bool {
+        self.front().is_some_and(|w| w.full)
+    }
+
     pub fn toggle_zoom(&mut self, m: &Metrics, i: usize) {
         let a = Self::area(m);
         let w = &mut self.wins[i];
-        if size_limits(w.app).fixed {
+        if size_limits(w.app).fixed || w.full {
             return; // a fixed-size window does not zoom (its green button is disabled on Golden Gate)
         }
         if w.maximized {
@@ -540,7 +621,28 @@ impl Desk {
         let r = if w.maximized { w.restore } else { w.r };
         self.closed_sizes.insert(w.app, (r.w, r.h));
         self.release_app_buffers(w.app);
+        self.collapsed.remove(&w.app);
         w.app
+    }
+
+    /// Whether an extra window is collapsed to its title bar.
+    pub(super) fn is_collapsed(&self, app: AppId) -> bool {
+        self.collapsed.contains_key(&app)
+    }
+
+    /// Collapses window `i` to its title bar, or expands it to the height it had. The app's body is not resized here: the
+    /// caller relays the size (`desk_layout`).
+    pub(super) fn set_collapsed(&mut self, m: &Metrics, i: usize, on: bool) {
+        let app = self.wins[i].app;
+        if on {
+            if !self.is_collapsed(app) {
+                let title = title_of(app, m).max(1);
+                self.collapsed.insert(app, self.wins[i].r.h);
+                self.wins[i].r.h = title;
+            }
+        } else if let Some(h) = self.collapsed.remove(&app) {
+            self.wins[i].r.h = h;
+        }
     }
 
     /// Drops the per-window pixel caches and stale dock icon resizes; true when something was freed.
@@ -550,7 +652,7 @@ impl Desk {
         {
             freed |= self.body_cache.remove(&app).is_some();
             let before = self.window_cache.len();
-            self.window_cache.retain(|id, _| apps().get((*id as usize).wrapping_sub(1)).map_or(false, |a| a.id != app));
+            self.window_cache.retain(|id, _| frame_app(*id).is_some_and(|a| a != app));
             freed |= self.window_cache.len() != before;
         }
         let _ = app;
@@ -644,8 +746,29 @@ pub fn dock_rects_seps(m: &Metrics, icon: i32, pad: i32, gap: i32, n: usize, sep
 pub(super) enum FxCall { Open, Minimize, Restore, Zoom, Close }
 
 /// The id the frames and the presenter use for the window of `app` (its index in `apps()` plus one).
-fn win_id(app: AppId) -> Option<u32> {
-    apps().iter().position(|a| a.id == app).map(|i| i as u32 + 1)
+pub(super) fn win_id(app: AppId) -> Option<u32> {
+    match app {
+        AppId::ExternalWindow(slot, id) => Some(WINDOW_ID_FLAG | ((slot as u32) << 16) | id as u32),
+        _ => apps().iter().position(|a| a.id == app).map(|i| i as u32 + 1),
+    }
+}
+
+/// Set in the window-server id of an extra window: `WINDOW_ID_FLAG | slot << 16 | window id`. The catalogue ids (1 to
+/// `apps().len()`) never reach it.
+const WINDOW_ID_FLAG: u32 = 0x0100_0000;
+
+/// The desk window a window-server id names (the reverse of `win_id`).
+pub(super) fn frame_app(id: u32) -> Option<AppId> {
+    if id & WINDOW_ID_FLAG != 0 {
+        return Some(AppId::ExternalWindow(((id >> 16) & 0xff) as u8, (id & 0xffff) as u16));
+    }
+    apps().get((id as usize).checked_sub(1)?).map(|a| a.id)
+}
+
+/// The title a frame carries to the window server: the app's name (an extra window shows its parent's name here).
+fn frame_title(id: u32) -> &'static str {
+    let Some(app) = frame_app(id) else { return "" };
+    apps().iter().find(|a| a.id == app.parent()).map_or("", |a| a.name)
 }
 
 impl Shell {
@@ -658,9 +781,9 @@ impl Shell {
         if !desk.fx.is_empty() {return false;}
         let mut frames=Vec::new();
         for w in desk.wins.iter().filter(|w|!w.minimized) {
-            let Some(id)=apps().iter().position(|a|a.id==w.app).map(|i|i as u32+1) else{return false};
+            let Some(id)=win_id(w.app) else{return false};
             if !desk.window_cache.contains_key(&id) {return false;}
-            frames.push(crate::bare::wayland::WindowFrame {id,title:apps()[(id-1) as usize].name,x:w.r.x,y:w.r.y,width:w.r.w as usize,height:w.r.h as usize,pixels:None,damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize),maximized:w.maximized,title_height,drag_height:0,no_drag:Vec::new(),fx:bifrost_render::glass::Fx::IDENTITY,opaque:!matches!(w.app,AppId::External(_))});
+            frames.push(crate::bare::wayland::WindowFrame {id,title:frame_title(id),x:w.r.x,y:w.r.y,width:w.r.w as usize,height:w.r.h as usize,pixels:None,damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize),maximized:w.maximized,title_height,drag_height:0,no_drag:Vec::new(),floating:false,fx:bifrost_render::glass::Fx::IDENTITY,opaque:!matches!(w.app,AppId::External(_))});
             let controls=match w.app {AppId::External(slot)=>ext.get(slot as usize).and_then(Option::as_ref).map_or(&[][..],|h|&h.controls[..]),_=>&[][..]};
             let (dh,nd)=drag_zone(w,&m,controls);
             if let Some(f)=frames.last_mut(){f.drag_height=dh;f.no_drag=nd;}
@@ -733,8 +856,15 @@ impl Shell {
     }
     #[cfg(feature = "desktop-wayland")]
     pub fn take_wayland_windows(&mut self) -> Vec<crate::bare::wayland::WindowFrame> {
+        let floating = self.floating_apps();
         self.desk.as_mut().map(|d| {
-            let frames = std::mem::take(&mut d.frames);
+            d.sync_levels(floating);
+            let mut frames = std::mem::take(&mut d.frames);
+            // a floating window's frame goes last, so the window server stacks it above the normal ones
+            for f in frames.iter_mut() {
+                f.floating = frame_app(f.id).is_some_and(|a| d.is_floating(a));
+            }
+            frames.sort_by_key(|f| f.floating);
             // Lock/overlays destroy the backend's windows; rebuilding must send
             // complete pixels rather than a cached unchanged-window sentinel.
             if frames.is_empty() { d.window_cache.clear(); d.body_cache.clear(); }
@@ -912,7 +1042,7 @@ impl Shell {
         if !self.desk_active()||!(url.starts_with("http://")||url.starts_with("https://"))||url.chars().any(char::is_control){return Err(std::io::Error::other("Unsupported web URL"));}
         #[cfg(feature="desktop-wayland")]{let package=apphost::installed().iter().find(|p|p.manifest.id=="is.olibuijr.browser.desktop").cloned().ok_or_else(||std::io::Error::other("Install BifrOSt Browser from App Store"))?;
         // an SDK Browser (0.3+) opens the page in a tab of its window; only a native build takes the URL on its command line
-        if package.manifest.window!="native" {let slot=apphost::slot_of(&package.manifest.id).ok_or_else(||std::io::Error::other("Browser not installed"))?;self.desk_open(AppId::External(slot as u8),t);self.ext_send(slot,&bifrost_proto::ToApp::Open{url:url.into()});self.dirty=true;return Ok(());}let policy=crate::bare::app_policy::Policy::from_permissions(&package.manifest.id,&package.manifest.permissions)?;let mut cmd=crate::bare::app_policy::command(&package.manifest.id,&package.exec_path(),&apphost::root().join("appdata").join(&package.manifest.id),policy,true)?;cmd.arg(url);let child=cmd.spawn()?;if let Some(mut old)=self.desk.as_mut().unwrap().native_children.insert(package.manifest.id.clone(),child){if matches!(old.try_wait(),Ok(None)){crate::bare::sys::spawn_named("reap-child", move||{let _=old.wait();});}}self.dirty=true;return Ok(());}
+        if package.manifest.window!="native" {let slot=apphost::slot_of(&package.manifest.id).ok_or_else(||std::io::Error::other("Browser not installed"))?;self.desk_open(AppId::External(slot as u8),t);self.ext_send(slot,&bifrost_proto::ToApp::Open{url:url.into()});self.dirty=true;return Ok(());}crate::bare::account_policy::check_launch(&package.manifest.id)?;let policy=crate::bare::app_policy::Policy::from_permissions(&package.manifest.id,&package.manifest.permissions)?;let mut cmd=crate::bare::app_policy::command(&package.manifest.id,&package.exec_path(),&apphost::root().join("appdata").join(&package.manifest.id),policy,true)?;cmd.arg(url);let child=cmd.spawn()?;if let Some(mut old)=self.desk.as_mut().unwrap().native_children.insert(package.manifest.id.clone(),child){if matches!(old.try_wait(),Ok(None)){crate::bare::sys::spawn_named("reap-child", move||{let _=old.wait();});}}self.dirty=true;return Ok(());}
         #[cfg(not(feature="desktop-wayland"))]Err(std::io::Error::other("Desktop Wayland is unavailable"))
     }
     /// Index of the front desktop window, for the Window menu and keyboard tiling.
@@ -991,6 +1121,30 @@ impl Shell {
         self.desk_frame_changed(i);
     }
 
+    /// Whether the menu bar is hidden now: the front window is full screen and the pointer is not at the top.
+    pub(super) fn desk_bar_hidden(&self) -> bool {
+        let full = self.desk.as_ref().is_some_and(|d| d.front_full());
+        bar_hidden(full, self.pointer_y, self.desktop_bar_height() as f32)
+    }
+
+    /// Full screen for an app's window: the green button, or the app's own request (`ToShell::SetFullScreen`). The app
+    /// hears it as `ToApp::FullScreen`. Game Mode reads the front window's state (`Desk::front_full`).
+    pub(super) fn desk_set_full_screen(&mut self, app: AppId, on: bool) {
+        let m = self.desk_metrics();
+        let Some(d) = self.desk.as_mut() else { return };
+        let Some(i) = d.index_of(app) else { return };
+        if !d.set_full_screen(&m, i, on) {
+            return;
+        }
+        self.desk_layout(i);
+        if let AppId::External(slot) = app {
+            if let Some(Some(h)) = self.ext.get_mut(slot as usize) {
+                h.send(&bifrost_proto::ToApp::FullScreen { on });
+            }
+        }
+        self.dirty = true;
+    }
+
     pub(super) fn desk_zoom_window(&mut self,i:usize) {let m=self.desk_metrics();self.desk.as_mut().unwrap().toggle_zoom(&m,i);self.desk_layout(i);if let Some(app)=self.desk.as_ref().and_then(|d|d.wins.get(i)).map(|w|w.app){let t=self.last_input;self.desk_fx_start(app,FxCall::Zoom,t);}self.dirty=true;}
 
     /// Minimizes window `i` to its Dock tile, playing the minimize effect first when it is allowed.
@@ -1027,7 +1181,7 @@ impl Shell {
             FxCall::Zoom => window_fx::Effect::Zoom,
             FxCall::Close => window_fx::Effect::Close,
         };
-        let behavior = match app {
+        let behavior = match app.parent() {
             AppId::External(slot) => apphost::installed().get(slot as usize).map_or_else(Default::default, |a| a.manifest.animation_behavior()),
             _ => window_fx::AnimationBehavior::Default,
         };
@@ -1140,7 +1294,10 @@ impl Shell {
         let m = self.desk_metrics();
         let Some(w) = self.desk.as_ref().and_then(|d| d.wins.get(i).copied()) else { return };
         let b = w.body(&m);
-        self.resize_app(w.app, b.w, b.h);
+        // a collapsed window keeps the size its app had: the title bar alone is not a size to give the app
+        if !self.desk.as_ref().is_some_and(|d| d.is_collapsed(w.app)) {
+            self.resize_app(w.app, b.w, b.h);
+        }
         if w.app == AppId::Terminal {
             self.with_size(b.w, b.h, |sh| {
                 sh.resize_terminals();
@@ -1156,18 +1313,29 @@ impl Shell {
 
     /// Opens `app` in a window (or raises it) and makes it the focused app.
     pub(super) fn desk_open(&mut self, app: AppId, t: f64) {
+        // an extra window is raised (it is opened by its app, not by the shell)
+        if let AppId::ExternalWindow(slot, id) = app {
+            self.desk_focus_extra_window(slot, id);
+            return;
+        }
+
+        // a limit already reached covers the window this opens (see `st_launch_check`); a blocked app's own
+        // process (native route) is then never started
+        let blocked = self.st_launch_check(app, t);
         self.recent_note(app);
         if let Some(d)=self.desk.as_mut(){d.raise_front=true;}
         // the Dock tile bounces while the app launches, whichever way it was opened (a running app starts none)
         if let Some(k)=apps().iter().position(|a|a.id==app){self.dock_start_bounce(k,t);}
         #[cfg(feature = "desktop-wayland")]
-        if let AppId::External(slot)=app { if self.desk_direct_open(slot as usize) { return; } }
+        if let AppId::External(slot)=app { if !blocked && self.desk_direct_open(slot as usize) { return; } }
         #[cfg(feature = "desktop-wayland")]
-        if app == AppId::Browser {
+        if app == AppId::Browser && !blocked {
             if let Some(slot)=apphost::slot_of("is.olibuijr.browser.desktop") {self.desk_native_open(AppId::External(slot as u8));return;}
         }
         #[cfg(feature = "desktop-wayland")]
-        if self.desk_native_open(app) { return; }
+        if !blocked && self.desk_native_open(app) { return; }
+        #[cfg(not(feature = "desktop-wayland"))]
+        let _ = blocked;
         let app = if app == AppId::Files {
             apphost::slot_of("is.olibuijr.files.desktop").map(|i| AppId::External(i as u8)).unwrap_or(AppId::AppStore)
         } else { app };
@@ -1210,7 +1378,7 @@ impl Shell {
     /// Focus follows the frontmost visible window; with none, the desktop (Home) shows.
     pub(super) fn desk_refocus(&mut self) {
         self.screen = match self.desk.as_ref().and_then(|d| d.front()).map(|w| w.app) {
-            Some(app) => Screen::App(app),
+            Some(app) => Screen::App(app.parent()),
             None => Screen::Home,
         };
         self.dirty = true;
@@ -1221,10 +1389,12 @@ impl Shell {
     #[cfg(any(test, feature = "desktop-wayland"))]
     pub(super) fn desk_cycle_window(&mut self) {
         if let Some(d) = &mut self.desk {
+            // Cmd+` walks the windows of the front app, its extra windows included
+            let front = d.front().map(|w| w.app.parent());
             match &mut d.cmdtab {
                 Some((order, sel)) => *sel = (*sel + 1) % order.len(),
                 None => {
-                    let order: Vec<AppId> = d.wins.iter().rev().map(|w| w.app).collect();
+                    let order: Vec<AppId> = d.wins.iter().rev().map(|w| w.app).filter(|a| Some(a.parent()) == front).collect();
                     if order.len() >= 2 {
                         d.cmdtab = Some((order, 1));
                     }
@@ -1278,6 +1448,11 @@ impl Shell {
     }
 
     pub(super) fn desk_close_app(&mut self, app: AppId) {
+        // an extra window's traffic light closes that window through its app; the app keeps running
+        if let AppId::ExternalWindow(slot, id) = app {
+            self.desk_close_extra_window(slot, id);
+            return;
+        }
         #[cfg(feature = "desktop-wayland")]
         if let AppId::External(slot)=app { if self.ext.get(slot as usize).and_then(Option::as_ref).is_some_and(|h|h.route()==apphost::Route::Direct) { self.ext_close(slot as usize); return; } }
         // the close effect starts while the window is still listed; its last frame is kept for the effect
@@ -1292,6 +1467,171 @@ impl Shell {
             }
         }
         self.desk_refocus();
+    }
+
+    /// The desk windows that float: each app whose host asked for `ToShell::WindowLevel`, and each extra window its app
+    /// set to `ToShell::WindowLevelOf`.
+    pub(super) fn floating_apps(&self) -> Vec<AppId> {
+        let mut out = Vec::new();
+        for (slot, host) in self.ext.iter().enumerate() {
+            let Some(h) = host else { continue };
+            if h.window_level == bifrost_proto::WindowLevel::Floating {
+                out.push(AppId::External(slot as u8));
+            }
+            out.extend(h.windows.floating_ids(&h.id).into_iter().filter_map(|id| u16::try_from(id).ok()).map(|id| AppId::ExternalWindow(slot as u8, id)));
+        }
+        out
+    }
+
+    /// The extra windows follow each app host's table (`app_window_table::desk_changes`): a window the app opened gets a
+    /// desk window of its own, one the app closed (or the table dropped) leaves the desk. Runs from the app host tick.
+    pub(super) fn desk_sync_extra_windows(&mut self) {
+        let Some(d) = self.desk.as_ref() else { return };
+        let k = self.ui.pt(1.0) as f32;
+        let mut plan = Vec::new();
+        for (slot, host) in self.ext.iter().enumerate() {
+            let Some(h) = host else { continue };
+            let shown: Vec<u32> = d
+                .wins
+                .iter()
+                .filter_map(|w| match w.app {
+                    AppId::ExternalWindow(s, id) if s as usize == slot => Some(u32::from(id)),
+                    _ => None,
+                })
+                .collect();
+            let (open, close) = h.windows.desk_changes(&h.id, &shown);
+            if !open.is_empty() || !close.is_empty() {
+                let sizes: Vec<(u32, f32, f32)> = h.windows.of_app(&h.id).iter().map(|x| (x.id, x.w, x.h)).collect();
+                plan.push((slot as u8, open, close, sizes));
+            }
+        }
+        // a window that changed its level moves within the stack even when the table's windows did not change
+        let floating = self.floating_apps();
+        if let Some(d) = self.desk.as_mut() {
+            d.sync_levels(floating);
+        }
+        let m = self.desk_metrics();
+        for (slot, open, close, sizes) in plan {
+            for id in &close {
+                if let Ok(id) = u16::try_from(*id) {
+                    self.desk_drop_extra_window(slot, id);
+                }
+            }
+            for id in open {
+                let Ok(id16) = u16::try_from(id) else { continue };
+                // the table's size is in points; the desk window is outer px (body plus title bar)
+                let (w, h) = sizes.iter().find(|s| s.0 == id).map_or((480.0, 560.0), |s| (s.1, s.2));
+                let size = ((w * k) as i32, (h * k) as i32 + m.title);
+                if let Some(d) = self.desk.as_mut() {
+                    let i = d.open(&m, AppId::ExternalWindow(slot, id16), size);
+                    self.desk_layout(i);
+                }
+            }
+        }
+        // the placement and collapse the table asks for (`WindowMove`, `WindowCollapse`), on every window the desk shows
+        let mut asks = Vec::new();
+        for (slot, host) in self.ext.iter_mut().enumerate() {
+            let Some(h) = host else { continue };
+            let ids: Vec<u32> = h.windows.of_app(&h.id).iter().map(|w| w.id).collect();
+            for id in ids {
+                let pending = h.windows.take_pending_move(&h.id, id);
+                let collapsed = h.windows.of_app(&h.id).iter().any(|w| w.id == id && w.collapsed);
+                asks.push((slot as u8, id, pending, collapsed));
+            }
+        }
+        for (slot, id, pending, collapsed) in asks {
+            if let Ok(id16) = u16::try_from(id) {
+                self.ext_window_place(AppId::ExternalWindow(slot, id16), pending, collapsed);
+            }
+        }
+        self.desk_refocus();
+        self.dirty = true;
+    }
+
+    /// Applies the placement and collapse the table asks for to one extra window's desk window. A requested position is
+    /// clamped to the visible area (points, relative to the work area) and the window moves there.
+    pub(super) fn ext_window_place(&mut self, app: AppId, pending: Option<(f32, f32)>, collapsed: bool) {
+        let m = self.desk_metrics();
+        let k = self.ui.pt(1.0) as f32;
+        let a = Desk::area(&m);
+        let Some(d) = self.desk.as_mut() else { return };
+        let Some(i) = d.index_of(app) else { return };
+        if let Some((x, y)) = pending {
+            let win_w = d.wins[i].r.w as f32 / k;
+            if let Some((cx, cy)) = super::app_window_table::clamp_to_screen(x, y, a.w as f32 / k, a.h as f32 / k, win_w) {
+                d.move_to(&m, i, a.x + (cx * k).round() as i32, a.y + (cy * k).round() as i32);
+            }
+        }
+        if d.is_collapsed(app) != collapsed {
+            d.set_collapsed(&m, i, collapsed);
+            self.desk_layout(i);
+        }
+        self.dirty = true;
+    }
+
+    /// A drag of an extra window ended: its app is told where the window is now (`WindowMoved`), in points relative to the
+    /// visible desktop area.
+    pub(super) fn ext_window_dropped(&mut self, app: AppId) {
+        let m = self.desk_metrics();
+        let AppId::ExternalWindow(slot, id) = app else { return };
+        let Some(r) = self.desk.as_ref().and_then(|d| d.index_of(app).map(|i| d.wins[i].r)) else { return };
+        let k = self.ui.pt(1.0) as f32;
+        let a = Desk::area(&m);
+        let (x, y) = ((r.x - a.x) as f32 / k, (r.y - a.y) as f32 / k);
+        if let Some(Some(host)) = self.ext.get_mut(slot as usize) {
+            host.window_dragged(u32::from(id), x, y);
+        }
+    }
+
+    /// The title bar of extra window `id` was double-clicked: true when its app opted in and was told.
+    pub(super) fn ext_window_title_double_click(&mut self, slot: usize, id: u32) -> bool {
+        match self.ext.get_mut(slot) {
+            Some(Some(host)) => host.window_title_double_clicked(id),
+            _ => false,
+        }
+    }
+
+    /// Each app's key window follows the desk's front window: an extra window in front is key for its app, and every
+    /// other app's key window is its main window. Runs from the app host tick and before the input is routed.
+    pub(super) fn sync_key_windows(&mut self) {
+        let front = self.desk.as_ref().and_then(|d| d.front()).map(|w| w.app);
+        for (slot, host) in self.ext.iter_mut().enumerate() {
+            let Some(h) = host else { continue };
+            let key = match front {
+                Some(AppId::ExternalWindow(s, id)) if s as usize == slot => u32::from(id),
+                _ => 0,
+            };
+            h.set_key_window(key);
+        }
+    }
+
+    /// Removes an extra window's desk window without telling its app (the app's table already dropped it).
+    fn desk_drop_extra_window(&mut self, slot: u8, id: u16) {
+        if let Some(d) = self.desk.as_mut() {
+            if let Some(i) = d.index_of(AppId::ExternalWindow(slot, id)) {
+                d.close(i);
+            }
+        }
+    }
+
+    /// The traffic light (or the app switcher) closes an extra window: the app is told (`WindowClosed`) and keeps running.
+    pub(super) fn desk_close_extra_window(&mut self, slot: u8, id: u16) {
+        if let Some(Some(h)) = self.ext.get_mut(slot as usize) {
+            h.close_window_from_shell(u32::from(id));
+        }
+        self.desk_drop_extra_window(slot, id);
+        self.desk_refocus();
+        self.dirty = true;
+    }
+
+    /// Raises an extra window (Window menu, Dock app menu). False when the window is not on the desk.
+    pub(super) fn desk_focus_extra_window(&mut self, slot: u8, id: u16) -> bool {
+        let Some(d) = self.desk.as_mut() else { return false };
+        let Some(i) = d.index_of(AppId::ExternalWindow(slot, id)) else { return false };
+        d.raise(i);
+        self.desk_refocus();
+        self.dirty = true;
+        true
     }
 
     /// Touches over the desktop. `None` leaves the event to the normal path.
@@ -1320,12 +1660,16 @@ impl Shell {
                     d.raise(i)
                 };
                 let app = self.desk.as_ref()?.wins[i].app;
-                self.screen = Screen::App(app);
+                self.screen = Screen::App(app.parent());
                 self.fullscreen = false;
                 // the window now in front takes over the keyboard's lift
                 self.desk_keyboard_lift();
                 let w = self.desk.as_ref()?.wins[i];
                 let mut hit = hit;
+                // a collapsed window has no edges to resize: its title bar is all there is
+                if matches!(hit, Hit::Edge(_)) && self.desk.as_ref()?.is_collapsed(app) {
+                    hit = Hit::Title;
+                }
                 if hit == Hit::Title {
                     if let AppId::External(slot) = app {
                         let controls = self.ext.get(slot as usize).and_then(Option::as_ref).map_or(&[][..], |h| &h.controls[..]);
@@ -1337,19 +1681,26 @@ impl Shell {
                     }
                 }
                 if hit == Hit::Title {
-                    let d = self.desk.as_mut()?;
-                    if d.last_title.is_some_and(|(a, t0)| a == app && t - t0 <= DOUBLE_CLICK_MS) {
-                        d.last_title = None;
-                        d.toggle_zoom(&m, i);
-                        self.desk_layout(i);
+                    let double = self.desk.as_ref()?.last_title.is_some_and(|(a, t0)| a == app && t - t0 <= double_click_ms());
+                    if double {
+                        self.desk.as_mut()?.last_title = None;
+                        // an app that opted in gets the double-click itself; any other window zooms
+                        let told = match app {
+                            AppId::ExternalWindow(slot, id) => self.ext_window_title_double_click(slot as usize, u32::from(id)),
+                            _ => false,
+                        };
+                        if !told {
+                            self.desk.as_mut()?.toggle_zoom(&m, i);
+                            self.desk_layout(i);
+                        }
                         self.dirty = true;
                         return Some(vec![]);
                     }
-                    d.last_title = Some((app, t));
+                    self.desk.as_mut()?.last_title = Some((app, t));
                 }
                 let grab = match hit {
                     Hit::Light(l) => Grab::Light(i, l),
-                    Hit::Title => Grab::Move { dx: x - w.r.x as f32, dy: y - w.r.y as f32 },
+                    Hit::Title => Grab::Move { dx: x - w.r.x as f32, dy: y - w.r.y as f32, app },
                     Hit::Edge(edges) => Grab::Resize { edges, start: w.r, x, y },
                     Hit::Content => {
                         self.desk.as_mut()?.grab = Some(Grab::Content(i));
@@ -1366,8 +1717,8 @@ impl Shell {
                 // a press that landed on the empty desktop has no grab: swallow the drag like its Down and Up
                 let Some(grab) = self.desk.as_ref()?.grab else { return Some(vec![]) };
                 match grab {
-                    Grab::Move { dx, dy } => {
-                        let i = self.desk.as_ref()?.wins.len().checked_sub(1)?;
+                    Grab::Move { dx, dy, app } => {
+                        let i = self.desk.as_ref()?.index_of(app)?;
                         self.desk.as_mut()?.move_to(&m, i, (x - dx) as i32, (y - dy) as i32);
                         self.dirty = true;
                         Some(vec![])
@@ -1421,6 +1772,10 @@ impl Shell {
                                 Light::Minimize => {
                                     self.desk_minimize_window(i, t);
                                 }
+                                Light::Zoom if matches!(w.app, AppId::External(_)) => {
+                                    // the green button of an app window takes it full screen (its own space)
+                                    self.desk_set_full_screen(w.app, !w.full);
+                                }
                                 Light::Zoom => {
                                     self.desk.as_mut()?.toggle_zoom(&m, i);
                                     self.desk_layout(i);
@@ -1430,14 +1785,16 @@ impl Shell {
                         }
                         Some(vec![])
                     }
-                    Some(Grab::Move { .. }) => {
+                    Some(Grab::Move { app: moved, .. }) => {
                         // a title bar dropped on a screen edge or corner tiles the window there (snap_zone)
                         let band = self.ui.pt(8.).round() as i32;
-                        if let (Some(tile), Some(i)) = (snap_zone(Desk::area(&m), x as i32, y as i32, band), self.desk.as_ref()?.wins.len().checked_sub(1)) {
+                        if let (Some(tile), Some(i)) = (snap_zone(Desk::area(&m), x as i32, y as i32, band), self.desk.as_ref()?.index_of(moved)) {
                             if let Some(d) = self.desk.as_mut() { d.tile(&m, i, tile); }
                             self.desk_layout(i);
                             self.desk_frame_changed(i);
                         }
+                        // the person dropped a window: its app learns where it is now (`WindowMoved`, in points)
+                        self.ext_window_dropped(moved);
                         Some(vec![])
                     }
                     Some(Grab::DockDrag{from:k,x:x0,y:y0,..}) if (x-x0).abs()+(y-y0).abs()>self.ui.pt(8.) => {
@@ -1512,7 +1869,7 @@ impl Shell {
             desk.activate.push(windows[next].id); return true;
         }
         if desk.native_children.get_mut(&package.manifest.id).is_some_and(|c|matches!(c.try_wait(),Ok(None))) {return true;}
-        let launch=crate::bare::app_policy::Policy::from_permissions(&package.manifest.id,&package.manifest.permissions).and_then(|policy|crate::bare::app_policy::command(&package.manifest.id,&package.exec_path(),&apphost::root().join("appdata").join(&package.manifest.id),policy,true)).and_then(|mut cmd|cmd.spawn());
+        let launch=crate::bare::account_policy::check_launch(&package.manifest.id).and_then(|()|crate::bare::app_policy::Policy::from_permissions(&package.manifest.id,&package.manifest.permissions)).and_then(|policy|crate::bare::app_policy::command(&package.manifest.id,&package.exec_path(),&apphost::root().join("appdata").join(&package.manifest.id),policy,true)).and_then(|mut cmd|cmd.spawn());
         match launch {
             Ok(child) => {desk.native_children.insert(package.manifest.id.clone(),child);}
             Err(e) => eprintln!("BifrOSt native app {}: {e}",package.manifest.id),
@@ -1569,7 +1926,8 @@ impl Shell {
             return;
         }
         s.fill_rect(0, 0, s.w, s.h, BLACK);
-        let wp = self.home_still();
+        // the live frame while an animated or time-of-day look is chosen (cached: this only copies), else the still
+        let wp = self.wallpaper_frame();
         s.copy(wp, (self.w - wp.w as i32) / 2, 0);
     }
 
@@ -1587,12 +1945,51 @@ impl Shell {
         let reach = self.ui.pt(desk_occlusion::SHADOW_REACH_PT).ceil() as i32;
         d.wins.iter().map(|w| {
             let animating = win_id(w.app).is_some_and(|id| d.fx.keeps_visible(id, now_s));
-            if w.minimized || animating || matches!(w.app, AppId::External(_)) {
+            if w.minimized || animating || matches!(w.app.parent(), AppId::External(_)) {
                 return None;
             }
             let radius = if w.maximized { 0 } else { self.ui.pt(bifrost_ui::prefs_layout::m::WINDOW_RADIUS).ceil() as i32 };
             Some(Cover { shown: grown(w.r, reach), opaque: opaque_interior(w.r, radius) })
         }).collect()
+    }
+
+    /// The body rectangle of `app`'s window (below its title bar) that a Time Limit cover fills.
+    pub(super) fn desk_cover_rect(&self, app: AppId) -> Option<(i32, i32, i32, i32)> {
+        let d = self.desk.as_ref()?;
+        let w = d.wins.iter().find(|w| w.app == app && !w.minimized)?;
+        let top = title_of(app, &self.desk_metrics());
+        let h = w.r.h - top;
+        (h > 0 && w.r.w > 0).then_some((w.r.x, w.r.y + top, w.r.w, h))
+    }
+
+    /// Draws the Time Limit cover over its window's body. The frame, title bar and lights are drawn
+    /// before this, so the window can still be moved or closed. Clipped to the surface.
+    fn desk_cover(&mut self, s: &mut Surface, w: &Win, m: &Metrics, t: f64) {
+        let top = title_of(w.app, m);
+        let (cw, ch) = (w.r.w, w.r.h - top);
+        let Some(sh) = self.shield.as_mut() else { return };
+        if sh.app != w.app || cw <= 0 || ch <= 0 { return; }
+        sh.resize(cw, ch);
+        let (cx, cy) = (w.r.x, w.r.y + top);
+        let mut img = vec![0u32; cw as usize * ch as usize];
+        sh.draw(&mut Surface { w: cw as usize, h: ch as usize, stride: cw as usize, px: &mut img, y0: 0 }, &self.ui, t);
+        let (x_lo, x_hi) = (cx.max(0), (cx + cw).min(s.w as i32));
+        let (y_lo, y_hi) = (cy.max(s.y0 as i32), (cy + ch).min(s.h as i32));
+        for y in y_lo..y_hi {
+            for x in x_lo..x_hi {
+                let src = img[((y - cy) * cw + (x - cx)) as usize];
+                s.px[(y - s.y0 as i32) as usize * s.stride + x as usize] = src;
+            }
+        }
+    }
+
+    /// A Time Limit cover was raised or dropped: the desktop's window caches are stale.
+    pub(super) fn desk_cover_changed(&mut self) {
+        if let Some(d) = self.desk.as_mut() {
+            d.window_cache.clear();
+            d.body_cache.clear();
+        }
+        self.dirty = true;
     }
 
     /// The wallpaper, the windows back to front, the menu bar and the dock.
@@ -1621,7 +2018,7 @@ impl Shell {
             }
             #[cfg(feature = "desktop-wayland")]
             if std::env::var_os("SPRINGBOARD_WAYLAND").is_some() {
-                let id = apps().iter().position(|a| a.id == w.app).unwrap() as u32 + 1;
+                let id = win_id(w.app).unwrap_or(0);
                 let focused = Some(i) == front;
                 let hover = self.desk.as_ref().unwrap().lights_hover == Some(w.app);
                 let mut cached = self.desk.as_mut().unwrap().window_cache.remove(&id);
@@ -1636,6 +2033,8 @@ impl Shell {
                     self.desk.as_mut().unwrap().body_cache.remove(&w.app);
                 }
                 let quiet = match w.app {
+                    // an extra window always takes its app's newest frame (it is blitted each frame)
+                    AppId::ExternalWindow(..) => false,
                     AppId::External(slot) => self.ext.get(slot as usize).and_then(Option::as_ref)
                         .is_some_and(|h| h.running() && h.frame().is_some() && !h.has_pending()),
                     // A focused Settings window keeps its pixels until input, a reported change or an animation
@@ -1653,24 +2052,24 @@ impl Shell {
                 };
                 let corner=self.ui.pt(bifrost_ui::prefs_layout::m::WINDOW_RADIUS);
                 // shell-drawn content is opaque (no vibrancy, see `take_wayland_materials`); a client's may not be
-                let opaque=!matches!(w.app,AppId::External(_));
+                let opaque=!matches!(w.app.parent(),AppId::External(_));
                 if hidden[i] {
                     // a window in front covers it: its surface keeps the last pixels presented, and its cache is
                     // dropped so that it repaints in full once it is uncovered
                     self.desk.as_mut().unwrap().frames.push(crate::bare::wayland::WindowFrame {
-                        id, title: apps()[(id-1) as usize].name, x:w.r.x, y:w.r.y,
+                        id, title: frame_title(id), x:w.r.x, y:w.r.y,
                         width:w.r.w as usize, height:w.r.h as usize, pixels:None,
                         damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize), maximized:w.maximized, title_height:m.title,
-                        drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque,
+                        drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false,
                     });
                     continue;
                 }
                 if unchanged && quiet {
                     self.desk.as_mut().unwrap().frames.push(crate::bare::wayland::WindowFrame {
-                        id, title: apps()[(id-1) as usize].name, x:w.r.x, y:w.r.y,
+                        id, title: frame_title(id), x:w.r.x, y:w.r.y,
                         width:w.r.w as usize, height:w.r.h as usize, pixels:None,
                         damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize), maximized:w.maximized, title_height:m.title,
-                        drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque,
+                        drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false,
                     });
                     self.desk.as_mut().unwrap().window_cache.insert(id,cached.unwrap());
                     continue;
@@ -1722,7 +2121,7 @@ impl Shell {
                         let desk=self.desk.as_mut().unwrap();
                         desk.body_cache.remove(&w.app);
                         desk.window_cache.insert(id,retained);
-                        desk.frames.push(crate::bare::wayland::WindowFrame{id,title:apps()[(id-1) as usize].name,x:w.r.x,y:w.r.y,width,height,pixels:outgoing,damage,maximized:w.maximized,title_height:m.title,drag_height,no_drag,fx:bifrost_render::glass::Fx::IDENTITY,opaque});
+                        desk.frames.push(crate::bare::wayland::WindowFrame{id,title:frame_title(id),x:w.r.x,y:w.r.y,width,height,pixels:outgoing,damage,maximized:w.maximized,title_height:m.title,drag_height,no_drag,fx:bifrost_render::glass::Fx::IDENTITY,opaque,floating:false});
                         continue;
                     }
                 }
@@ -1739,7 +2138,11 @@ impl Shell {
                 px.clear(); px.resize(w.r.w as usize * w.r.h as usize, 0);
                 let mut image = Image { w: w.r.w as usize, h: w.r.h as usize, px };
                 let mut local = *w; local.r.x = 0; local.r.y = 0;
-                self.draw_window(&mut Surface { w:image.w,h:image.h,stride:image.w,px:&mut image.px,y0:0 }, &local, Some(i) == front, &m, t, false);
+                {
+                    let mut surf = Surface { w:image.w,h:image.h,stride:image.w,px:&mut image.px,y0:0 };
+                    self.draw_window(&mut surf, &local, Some(i) == front, &m, t, false);
+                    self.desk_cover(&mut surf, &local, &m, t);
+                }
                 if !w.maximized { clip_corners(&mut image,corner); }
                 let previous = cached.as_ref().filter(|c| c.width == image.w && c.height == image.h).map_or(&[][..], |c| c.pixels.as_ref());
                 let damage = crate::gfx::Damage::between(previous, &image.px, image.w, image.h);
@@ -1751,9 +2154,9 @@ impl Shell {
                 let desk = self.desk.as_mut().unwrap();
                 desk.window_buf = image.px;
                 desk.frames.push(crate::bare::wayland::WindowFrame {
-                    id, title: apps()[(id-1) as usize].name, x:w.r.x, y:w.r.y,
+                    id, title: frame_title(id), x:w.r.x, y:w.r.y,
                     width:w.r.w as usize, height:w.r.h as usize, pixels, damage, maximized:w.maximized, title_height:m.title,
-                    drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque,
+                    drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false,
                 });
                 continue;
             }
@@ -1762,6 +2165,7 @@ impl Shell {
                 continue;
             }
             self.draw_window(s, w, Some(i) == front, &m, t, true);
+            self.desk_cover(s, w, &m, t);
         }
         #[cfg(feature = "desktop-wayland")]
         if let Some(d) = self.desk.as_mut() {
@@ -1792,6 +2196,7 @@ impl Shell {
         }
         #[cfg(feature="desktop-wayland")]
         self.draw_desktop_popup(s);
+        self.quick_look_prepare(s.w as f32, s.h as f32);
         self.draw_quick_look(s);
         self.draw_cmdtab(s);
         // Developer > Performance HUD: the desktop branch never reached `draw_assistive`, so it never showed
@@ -1802,7 +2207,7 @@ impl Shell {
     fn draw_window(&mut self, s: &mut Surface, w: &Win, focused: bool, m: &Metrics, t: f64, shadow: bool) {
         let ui = &self.ui;
         let r = w.r;
-        let rad = if w.maximized { 0.0 } else { ui.pt(bifrost_ui::prefs_layout::m::WINDOW_RADIUS) };
+        let rad = if w.maximized || w.full { 0.0 } else { ui.pt(bifrost_ui::prefs_layout::m::WINDOW_RADIUS) };
         // shadow (CPU path; the GPU presenter draws its own): Golden Gate's key window casts a
         // large soft shadow (~40 pt blur, ~16 pt down, ~30% under the bottom edge), others a light one
         if !w.maximized && shadow {
@@ -1833,7 +2238,10 @@ impl Shell {
         {
             let mut sub = Surface { w: bw, h: bh, stride: bw, px: &mut buf, y0: 0 };
             let app = w.app;
-            if reuse && !fresh {
+            if let AppId::ExternalWindow(slot, id) = app {
+                // an extra window's body is its app's newest frame for that window
+                self.ext_window_blit(&mut sub, slot as usize, u32::from(id));
+            } else if reuse && !fresh {
                 // the body is the one drawn last time: nothing in it changed
             } else if persistent && !fresh && !self.keyboard.shown() && !self.keyboard.animating() {
                 if let AppId::External(slot) = app { self.ext_blit_damage(&mut sub,slot as usize,&mut crate::gfx::Damage::new(bw,bh)); }
@@ -1849,6 +2257,8 @@ impl Shell {
         #[cfg(not(feature = "desktop-wayland"))]
         { self.desk.as_mut().unwrap().buf = buf; }
         let ui = &self.ui;
+        // a full-screen window is the app alone: no rim, title or traffic lights
+        if w.full { return; }
         // hairline under the title bar and around the window
         if !w.maximized { window_rim(s, r.x as f32, r.y as f32, r.w as f32, r.h as f32, rad); }
         if !full_size(w.app) { s.fill_rect(r.x.max(0) as usize, (r.y + m.title - 1).max(0) as usize, r.w.max(0) as usize, 1, super::ui::SEPARATOR_C.now()); }
@@ -2232,7 +2642,7 @@ mod tests {
     fn a_full_size_app_drags_from_its_empty_toolbar_band_but_not_its_controls_or_lights() {
         let m = Metrics { pt: 1.5, ..metrics() };
         let r = Rect { x: 100, y: 50, w: 900, h: 600 };
-        let w = Win { app: AppId::External(3), r, maximized: false, minimized: false, restore: r };
+        let w = Win { app: AppId::External(3), r, maximized: false, minimized: false, full: false, restore: r };
         let node = |x: f32, y: f32| bifrost_proto::Node { id: 1, role: bifrost_proto::Role::Button, label: "Back".into(), value: String::new(), bounds: bifrost_ui::Rect { x, y, w: 64.0, h: 32.0 }, enabled: true };
         let (band, holes) = zone_of(&w, &m, &[node(220.0, 10.0), node(220.0, 300.0)], true);
         assert_eq!(band, (UNIFIED_BAR_PT * 1.5).round() as i32, "the unified bar is the drag band");
@@ -2258,6 +2668,36 @@ mod tests {
 
     fn metrics() -> Metrics {
         Metrics { w: 1920, h: 1080, title: 30, menubar: 28, min_w: 320, min_h: 220, edge: 6, light: 12, light_gap: 8, light_x: 12, dock_bottom: 100, pt: 1.0 }
+    }
+
+    #[test]
+    fn a_window_collapses_to_its_title_bar_and_expands_to_the_height_it_had() {
+        let m = metrics();
+        let app = AppId::ExternalWindow(0, 4);
+        let mut d = Desk::new();
+        let i = d.open(&m, app, (300, 400));
+        let h = d.wins[i].r.h;
+        d.set_collapsed(&m, i, true);
+        assert_eq!(d.wins[i].r.h, title_of(app, &m));
+        assert!(d.is_collapsed(app));
+        d.set_collapsed(&m, i, true);
+        assert_eq!(d.wins[i].r.h, title_of(app, &m), "collapsing twice keeps the height it had");
+        d.set_collapsed(&m, i, false);
+        assert_eq!(d.wins[i].r.h, h);
+        assert!(!d.is_collapsed(app));
+    }
+
+    #[test]
+    fn a_floating_extra_window_is_stacked_last_while_its_app_keeps_its_other_windows_normal() {
+        let m = metrics();
+        let (a, b) = (AppId::ExternalWindow(0, 1), AppId::ExternalWindow(0, 2));
+        let mut d = Desk::new();
+        d.open(&m, a, (200, 200));
+        d.open(&m, b, (200, 200));
+        d.sync_levels(vec![a]);
+        assert_eq!(d.wins.last().map(|w| w.app), Some(a), "the floating window is above the normal ones");
+        d.sync_levels(vec![]);
+        assert!(!d.is_floating(a), "dropping the level puts the window back in the normal band");
     }
 
     #[test]
@@ -2339,9 +2779,74 @@ mod tests {
     }
 
     #[test]
+    fn full_screen_takes_the_screen_and_goes_back_to_its_size() {
+        let m = metrics();
+        let mut d = Desk::new();
+        d.open(&m, AppId::External(0), (500, 400));
+        let before = d.wins[0].r;
+        assert!(d.set_full_screen(&m, 0, true));
+        assert!(d.wins[0].full && d.front_full());
+        assert_eq!(d.wins[0].r, Desk::screen_rect(&m), "the whole screen, under the menu bar");
+        assert!(!d.set_full_screen(&m, 0, true), "already full: no change");
+        d.toggle_zoom(&m, 0);
+        assert_eq!(d.wins[0].r, Desk::screen_rect(&m), "a full window does not zoom");
+        assert!(d.set_full_screen(&m, 0, false));
+        assert_eq!(d.wins[0].r, before);
+        assert!(!d.front_full());
+    }
+
+    #[test]
+    fn the_menu_bar_comes_back_only_at_the_top_edge() {
+        assert!(!bar_hidden(false, None, 24.0), "an ordinary window never hides it");
+        assert!(bar_hidden(true, None, 24.0), "no pointer seen yet: hidden");
+        assert!(bar_hidden(true, Some(400.0), 24.0));
+        assert!(!bar_hidden(true, Some(3.0), 24.0), "pointer at the top: shown");
+    }
+
+    #[test]
+    fn a_frame_id_names_the_app_whose_level_it_takes() {
+        // the wayland frame of an app is `win_id(app)`, and take_wayland_windows finds the app again from that id
+        for (i, a) in apps().iter().enumerate() {
+            assert_eq!(win_id(a.id), Some(i as u32 + 1));
+            assert_eq!(win_id(a.id).and_then(|id| apps().get(id as usize - 1)).map(|b| b.id), Some(a.id));
+        }
+    }
+
+    #[test]
+    fn a_floating_extra_window_stays_above_the_normal_windows_of_the_desk() {
+        let m = metrics();
+        let mut d = Desk::default();
+        d.open(&m, AppId::ExternalWindow(3, 2), (300, 200));
+        d.open(&m, AppId::Files, (400, 300));
+        d.sync_levels(vec![AppId::ExternalWindow(3, 2)]);
+        assert_eq!(d.wins.last().map(|w| w.app), Some(AppId::ExternalWindow(3, 2)), "the floating extra window is last");
+        d.sync_levels(Vec::new());
+        assert_eq!(d.wins.iter().map(|w| w.app).collect::<Vec<_>>(), vec![AppId::Files, AppId::ExternalWindow(3, 2)], "a window that stops floating keeps its place in the normal band");
+    }
+
+    #[test]
+    fn a_floating_window_stays_above_the_normal_ones_when_raised_or_opened() {
+        let m = metrics();
+        let mut d = Desk::default();
+        d.open(&m, AppId::External(3), (400, 300));
+        d.open(&m, AppId::Files, (400, 300));
+        d.sync_levels(vec![AppId::External(3)]);
+        assert_eq!(d.wins.iter().map(|w| w.app).collect::<Vec<_>>(), vec![AppId::Files, AppId::External(3)], "the floating window is last");
+        assert_eq!(d.raise(0), 0, "a normal window raised goes in front of the normal ones, under the floating one");
+        assert_eq!(d.wins.iter().map(|w| w.app).collect::<Vec<_>>(), vec![AppId::Files, AppId::External(3)]);
+        d.open(&m, AppId::Settings, (400, 300));
+        assert_eq!(d.wins.iter().map(|w| w.app).collect::<Vec<_>>(), vec![AppId::Files, AppId::Settings, AppId::External(3)], "a new normal window opens under the floating one");
+        let i = d.index_of(AppId::External(3)).unwrap();
+        d.raise(i);
+        assert_eq!(d.wins.last().map(|w| w.app), Some(AppId::External(3)), "raising the floating window keeps it on top");
+        d.sync_levels(Vec::new());
+        assert_eq!(d.wins.iter().map(|w| w.app).collect::<Vec<_>>(), vec![AppId::Files, AppId::Settings, AppId::External(3)], "dropping the level keeps the order");
+    }
+
+    #[test]
     fn hits_find_lights_title_content_and_edges() {
         let m = metrics();
-        let w = Win { app: AppId::Files, r: Rect { x: 100, y: 100, w: 600, h: 400 }, maximized: false, minimized: false, restore: Rect { x: 0, y: 0, w: 1, h: 1 } };
+        let w = Win { app: AppId::Files, r: Rect { x: 100, y: 100, w: 600, h: 400 }, maximized: false, minimized: false, full: false, restore: Rect { x: 0, y: 0, w: 1, h: 1 } };
         assert_eq!(w.hit(&m, 118.0, 115.0), Some(Hit::Light(Light::Close)));
         assert_eq!(w.hit(&m, 138.0, 115.0), Some(Hit::Light(Light::Minimize)));
         assert_eq!(w.hit(&m, 158.0, 115.0), Some(Hit::Light(Light::Zoom)));
@@ -2355,7 +2860,7 @@ mod tests {
     #[test]
     fn a_maximized_window_has_no_resize_edges() {
         let m = metrics();
-        let w = Win { app: AppId::Settings, r: Desk::area(&m), maximized: true, minimized: false, restore: Rect { x: 0, y: 0, w: 1, h: 1 } };
+        let w = Win { app: AppId::Settings, r: Desk::area(&m), maximized: true, minimized: false, full: false, restore: Rect { x: 0, y: 0, w: 1, h: 1 } };
         assert_eq!(w.hit(&m, 1.0, 600.0), Some(Hit::Content));
     }
 

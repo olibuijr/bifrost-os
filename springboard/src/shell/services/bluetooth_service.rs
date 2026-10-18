@@ -15,6 +15,7 @@ use std::sync::Mutex;
 
 use super::{Event, Shell, SystemService};
 use crate::bare::bluetooth::{Cmd, Device, State, Status};
+use bifrost_core::bt_pairing::PairingMethod;
 use bifrost_core::bt_address::BdAddr;
 use bifrost_core::bt_service_browser::{Service, ServiceBrowser};
 use bifrost_core::json::Json;
@@ -90,7 +91,20 @@ pub(crate) fn status_json(bt: &Status) -> Json {
         ("busy".to_string(), opt_str(bt.busy.as_deref())),
         ("error".to_string(), opt_str(bt.error.as_deref())),
         ("devices".to_string(), Json::Arr(bt.devices.iter().map(device_json).collect())),
+        ("prompt".to_string(), prompt_json(bt)),
     ])
+}
+
+/// The PIN or passkey the shell is asking the user for, as `{addr, kind}` (kind `pin` or `passkey`); null when
+/// no pairing is waiting for a code. An app can say so, but the user types the code in the shell.
+fn prompt_json(bt: &Status) -> Json {
+    match &bt.prompt {
+        None => Json::Null,
+        Some(p) => Json::Obj(vec![
+            ("addr".to_string(), Json::Str(p.addr.clone())),
+            ("kind".to_string(), Json::Str(if p.method == PairingMethod::Passkey { "passkey" } else { "pin" }.to_string())),
+        ]),
+    }
 }
 
 fn device_json(d: &Device) -> Json {
@@ -249,6 +263,18 @@ mod tests {
         assert_eq!(devices[0].get("name").and_then(Json::as_str), Some("Buds"));
         assert_eq!(devices[0].get("connected"), Some(&Json::Bool(true)));
         assert_eq!(devices[1].get("label").and_then(Json::as_str), Some("AA:BB:CC:DD:EE:02"));
+    }
+
+    #[test]
+    fn status_reports_a_pairing_that_waits_for_a_code() {
+        let mut bt = radio(State::On, vec![]);
+        let none = status_json(&bt);
+        assert_eq!(none.get("prompt"), Some(&Json::Null));
+        bt.prompt = Some(crate::bare::bluetooth::PairingPrompt { addr: "AA:BB:CC:DD:EE:FF".into(), method: PairingMethod::Passkey });
+        let j = status_json(&bt);
+        let p = j.get("prompt").expect("prompt field");
+        assert_eq!(p.get("addr").and_then(Json::as_str), Some("AA:BB:CC:DD:EE:FF"));
+        assert_eq!(p.get("kind").and_then(Json::as_str), Some("passkey"));
     }
 
     #[test]

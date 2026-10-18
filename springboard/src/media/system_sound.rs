@@ -4,8 +4,11 @@
 //! [`SoundPlayer::click`] for `Effect::KeyClick` and [`SoundPlayer::alert`] when a timer or alarm fires.
 
 use super::audio_out::AudioOut;
+use crate::shell::accessibility::earcons::Earcon;
 use crate::shell::alert_sound;
+use crate::shell::earcon;
 use crate::shell::kb_clicks::{self, Click};
+use crate::shell::ui_sounds;
 use crate::shell::options::ALERT_SOUNDS;
 use bifrost_audio_toolbox::system_sound::SystemSounds;
 use std::io;
@@ -27,6 +30,25 @@ fn alert_id(index: usize) -> u32 {
     10 + index as u32
 }
 
+/// Sound id of earcon `index` (alert ids run 10 up to 10 + the alert count, so earcons start at 40).
+fn earcon_id(index: usize) -> u32 {
+    40 + index as u32
+}
+
+/// Sound id of the audio graph being played (re-registered for each graph; the cues end below 200).
+const GRAPH_ID: u32 = 200;
+
+/// Sound id of interface cue `index` (an index into `shell::ui_sounds::UI_SOUNDS`). Ids 300 and up, clear of the
+/// graph id and the reader cues.
+fn ui_cue_id(index: usize) -> u32 {
+    300 + index as u32
+}
+
+/// Sound id of a screen reader cue (after the earcons, which end below 100).
+fn reader_cue_id(c: Earcon) -> u32 {
+    100 + Earcon::ALL.iter().position(|e| *e == c).unwrap_or(0) as u32
+}
+
 pub struct SoundPlayer {
     out: Box<dyn AudioOut>,
     sounds: SystemSounds,
@@ -44,6 +66,18 @@ impl SoundPlayer {
         for index in 0..ALERT_SOUNDS.len() {
             let mono: Vec<f32> = alert_sound::pcm(index, 1.0).iter().map(|&s| s as f32 / 32768.0).collect();
             sounds.register_samples(alert_id(index), kb_clicks::RATE, 1, &mono).map_err(other)?;
+        }
+        for index in 0..earcon::count() {
+            let mono: Vec<f32> = earcon::pcm(index, 1.0).iter().map(|&s| s as f32 / 32768.0).collect();
+            sounds.register_samples(earcon_id(index), kb_clicks::RATE, 1, &mono).map_err(other)?;
+        }
+        for c in Earcon::ALL {
+            let mono: Vec<f32> = c.pcm(1.0).iter().map(|&s| s as f32 / 32768.0).collect();
+            sounds.register_samples(reader_cue_id(c), kb_clicks::RATE, 1, &mono).map_err(other)?;
+        }
+        for (index, (name, _)) in ui_sounds::UI_SOUNDS.iter().enumerate() {
+            let mono: Vec<f32> = ui_sounds::pcm(name, 1.0).unwrap_or_default().iter().map(|&s| s as f32 / 32768.0).collect();
+            sounds.register_samples(ui_cue_id(index), kb_clicks::RATE, 1, &mono).map_err(other)?;
         }
         Ok(SoundPlayer { out, sounds })
     }
@@ -65,6 +99,38 @@ impl SoundPlayer {
             return Err(io::Error::other(format!("no alert sound {index}")));
         }
         self.play(alert_id(index), gain)
+    }
+
+    /// Plays earcon `index` (an index into `shell::earcon::EARCONS`) at `gain` (0 through 1).
+    pub fn earcon(&mut self, index: usize, gain: f32) -> io::Result<()> {
+        if index >= earcon::count() {
+            return Err(io::Error::other(format!("no earcon {index}")));
+        }
+        self.play(earcon_id(index), gain)
+    }
+
+    /// Plays a screen reader cue at `gain` (0 through 1).
+    pub fn reader_cue(&mut self, c: Earcon, gain: f32) -> io::Result<()> {
+        self.play(reader_cue_id(c), gain)
+    }
+
+    /// Plays interface cue `index` (an index into `shell::ui_sounds::UI_SOUNDS`) at `gain` (0 through 1).
+    pub fn ui_cue(&mut self, index: usize, gain: f32) -> io::Result<()> {
+        if index >= ui_sounds::UI_SOUNDS.len() {
+            return Err(io::Error::other(format!("no interface cue {index}")));
+        }
+        self.play(ui_cue_id(index), gain)
+    }
+
+    /// Plays an audio graph (`shell::audio_graph::pcm`, mono i16 at `RATE`) at `gain` (0 through 1). Each graph replaces
+    /// the last one registered under the graph sound id.
+    pub fn audio_graph(&mut self, mono: &[i16], gain: f32) -> io::Result<()> {
+        if mono.is_empty() {
+            return Ok(());
+        }
+        let samples: Vec<f32> = mono.iter().map(|&s| s as f32 / 32768.0).collect();
+        self.sounds.register_samples(GRAPH_ID, kb_clicks::RATE, 1, &samples).map_err(|e| io::Error::other(format!("system sounds: {e:?}")))?;
+        self.play(GRAPH_ID, gain)
     }
 
     /// Mixes sound `id` through the toolbox player and queues the result on the stream.
@@ -125,6 +191,49 @@ mod tests {
         // Chime is 900 ms: 43200 frames of stereo
         assert_eq!(pcm.len(), 43_200 * 2);
         assert!(pcm.iter().any(|&s| s != 0));
+    }
+
+    #[test]
+    fn an_earcon_plays_through_the_stream() {
+        let got = Arc::new(Mutex::new(Vec::new()));
+        let mut k = SoundPlayer::new(Box::new(Capture(got.clone()))).unwrap();
+        k.earcon(0, 1.0).unwrap();
+        assert!(got.lock().unwrap_or_else(|p| p.into_inner()).iter().any(|&s| s != 0));
+        assert!(k.earcon(earcon::count(), 1.0).is_err());
+    }
+
+    #[test]
+    fn every_reader_cue_plays_through_the_stream() {
+        for c in Earcon::ALL {
+            let got = Arc::new(Mutex::new(Vec::new()));
+            let mut k = SoundPlayer::new(Box::new(Capture(got.clone()))).unwrap();
+            k.reader_cue(c, 1.0).unwrap();
+            assert!(got.lock().unwrap_or_else(|p| p.into_inner()).iter().any(|&s| s != 0), "{c:?} is silent");
+        }
+    }
+
+    #[test]
+    fn every_interface_cue_plays_through_the_stream() {
+        for index in 0..ui_sounds::UI_SOUNDS.len() {
+            let got = Arc::new(Mutex::new(Vec::new()));
+            let mut k = SoundPlayer::new(Box::new(Capture(got.clone()))).unwrap();
+            k.ui_cue(index, 1.0).unwrap();
+            assert!(got.lock().unwrap_or_else(|p| p.into_inner()).iter().any(|&s| s != 0), "cue {index} is silent");
+        }
+        let got = Arc::new(Mutex::new(Vec::new()));
+        let mut k = SoundPlayer::new(Box::new(Capture(got.clone()))).unwrap();
+        assert!(k.ui_cue(ui_sounds::UI_SOUNDS.len(), 1.0).is_err());
+    }
+
+    #[test]
+    fn an_audio_graph_plays_through_the_stream_and_an_empty_one_writes_nothing() {
+        let got = Arc::new(Mutex::new(Vec::new()));
+        let mut k = SoundPlayer::new(Box::new(Capture(got.clone()))).unwrap();
+        k.audio_graph(&[], 1.0).unwrap();
+        assert!(got.lock().unwrap_or_else(|p| p.into_inner()).is_empty());
+        let tone = bifrost_ui::chart_ax::Tone { hz: 440.0, millis: 120, timbre: 0 };
+        k.audio_graph(&crate::shell::audio_graph::pcm(&[tone], 1.0), 1.0).unwrap();
+        assert!(got.lock().unwrap_or_else(|p| p.into_inner()).iter().any(|&s| s != 0));
     }
 
     #[test]

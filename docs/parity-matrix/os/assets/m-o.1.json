@@ -1,0 +1,3179 @@
+{
+ "category": "assets",
+ "shard": "m-o.1",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Library/Desktop Pictures/.thumbnails/Mac Blue.heic",
+   "category": "assets",
+   "name": "Mac Blue.heic",
+   "path": "/System/Library/Desktop Pictures/.thumbnails/Mac Blue.heic",
+   "kind": "wallpaper",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 16404
+   },
+   "description": "",
+   "role": "Thumbnail cache of a wallpaper picker",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/Desktop Pictures/.thumbnails/Mac Pink.heic",
+   "category": "assets",
+   "name": "Mac Pink.heic",
+   "path": "/System/Library/Desktop Pictures/.thumbnails/Mac Pink.heic",
+   "kind": "wallpaper",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 14882
+   },
+   "description": "",
+   "role": "Thumbnail cache of a wallpaper picker",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/Desktop Pictures/.thumbnails/Mac Purple.heic",
+   "category": "assets",
+   "name": "Mac Purple.heic",
+   "path": "/System/Library/Desktop Pictures/.thumbnails/Mac Purple.heic",
+   "kind": "wallpaper",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 15098
+   },
+   "description": "",
+   "role": "Thumbnail cache of a wallpaper picker",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/Desktop Pictures/.thumbnails/Mac Yellow.heic",
+   "category": "assets",
+   "name": "Mac Yellow.heic",
+   "path": "/System/Library/Desktop Pictures/.thumbnails/Mac Yellow.heic",
+   "kind": "wallpaper",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 14383
+   },
+   "description": "",
+   "role": "Thumbnail cache of a wallpaper picker",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/Desktop Pictures/.thumbnails/Monterey Graphic Dark.heic",
+   "category": "assets",
+   "name": "Monterey Graphic Dark.heic",
+   "path": "/System/Library/Desktop Pictures/.thumbnails/Monterey Graphic Dark.heic",
+   "kind": "wallpaper",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 25365
+   },
+   "description": "",
+   "role": "Thumbnail cache of a wallpaper picker",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/Desktop Pictures/.thumbnails/Monterey Graphic Light.heic",
+   "category": "assets",
+   "name": "Monterey Graphic Light.heic",
+   "path": "/System/Library/Desktop Pictures/.thumbnails/Monterey Graphic Light.heic",
+   "kind": "wallpaper",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 36456
+   },
+   "description": "",
+   "role": "Thumbnail cache of a wallpaper picker",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/Desktop Pictures/.thumbnails/Monterey Graphic.heic",
+   "category": "assets",
+   "name": "Monterey Graphic.heic",
+   "path": "/System/Library/Desktop Pictures/.thumbnails/Monterey Graphic.heic",
+   "kind": "wallpaper",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 13395
+   },
+   "description": "",
+   "role": "Thumbnail cache of a wallpaper picker",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/Desktop Pictures/.thumbnails/Motion Blue Dark.heic",
+   "category": "assets",
+   "name": "Motion Blue Dark.heic",
+   "path": "/System/Library/Desktop Pictures/.thumbnails/Motion Blue Dark.heic",
+   "kind": "wallpaper",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 49520
+   },
+   "description": "",
+   "role": "Thumbnail cache of a wallpaper picker",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/Desktop Pictures/.thumbnails/Motion Blue Light.heic",
+   "category": "assets",
+   "name": "Motion Blue Light.heic",
+   "path": "/System/Library/Desktop Pictures/.thumbnails/Motion Blue Light.heic",
+   "kind": "wallpaper",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 50957
+   },
+   "description": "",
+   "role": "Thumbnail cache of a wallpaper picker",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/Desktop Pictures/.thumbnails/Motion Blue.heic",
+   "category": "assets",
+   "name": "Motion Blue.heic",
+   "path": "/System/Library/Desktop Pictures/.thumbnails/Motion Blue.heic",
+   "kind": "wallpaper",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 24809
+   },
+   "description": "",
+   "role": "Thumbnail cache of a wallpaper picker",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/Desktop Pictures/.thumbnails/Motion Green Dark.heic",
+   "category": "assets",
+   "name": "Motion Green Dark.heic",
+   "path": "/System/Library/Desktop Pictures/.thumbnails/Motion Green Dark.heic",
+   "kind": "wallpaper",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 48590
+   },
+   "description": "",
+   "role": "Thumbnail cache of a wallpaper picker",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/Desktop Pictures/.thumbnails/Motion Green Light.heic",
+   "category": "assets",
+   "name": "Motion Green Light.heic",
+   "path": "/System/Library/Desktop Pictures/.thumbnails/Motion Green Light.heic",
+   "kind": "wallpaper",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 48955
+   },
+   "description": "",
+   "role": "Thumbnail cache of a wallpaper picker",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/Desktop Pictures/.thumbnails/Motion Green.heic",
+   "category": "assets",
+   "name": "Motion Green.heic",
+   "path": "/System/Library/Desktop Pictures/.thumbnails/Motion Green.heic",
+   "kind": "wallpaper",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 24541
+   },
+   "description": "",
+   "role": "Thumbnail cache of a wallpaper picker",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/Desktop Pictures/.thumbnails/Motion Purple Dark.heic",
+   "category": "assets",
+   "name": "Motion Purple Dark.heic",
+   "path": "/System/Library/Desktop Pictures/.thumbnails/Motion Purple Dark.heic",
+   "kind": "wallpaper",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 48548
+   },
+   "description": "",
+   "role": "Thumbnail cache of a wallpaper picker",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/Desktop Pictures/.thumbnails/Motion Purple Light.heic",
+   "category": "assets",
+   "name": "Motion Purple Light.heic",
+   "path": "/System/Library/Desktop Pictures/.thumbnails/Motion Purple Light.heic",
+   "kind": "wallpaper",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 49112
+   },
+   "description": "",
+   "role": "Thumbnail cache of a wallpaper picker",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/Desktop Pictures/.thumbnails/Motion Purple.heic",
+   "category": "assets",
+   "name": "Motion Purple.heic",
+   "path": "/System/Library/Desktop Pictures/.thumbnails/Motion Purple.heic",
+   "kind": "wallpaper",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 24247
+   },
+   "description": "",
+   "role": "Thumbnail cache of a wallpaper picker",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/Desktop Pictures/.thumbnails/Motion Yellow Dark.heic",
+   "category": "assets",
+   "name": "Motion Yellow Dark.heic",
+   "path": "/System/Library/Desktop Pictures/.thumbnails/Motion Yellow Dark.heic",
+   "kind": "wallpaper",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 50033
+   },
+   "description": "",
+   "role": "Thumbnail cache of a wallpaper picker",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/Desktop Pictures/.thumbnails/Motion Yellow Light.heic",
+   "category": "assets",
+   "name": "Motion Yellow Light.heic",
+   "path": "/System/Library/Desktop Pictures/.thumbnails/Motion Yellow Light.heic",
+   "kind": "wallpaper",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 52433
+   },
+   "description": "",
+   "role": "Thumbnail cache of a wallpaper picker",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/Desktop Pictures/.thumbnails/Motion Yellow.heic",
+   "category": "assets",
+   "name": "Motion Yellow.heic",
+   "path": "/System/Library/Desktop Pictures/.thumbnails/Motion Yellow.heic",
+   "kind": "wallpaper",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 24694
+   },
+   "description": "",
+   "role": "Thumbnail cache of a wallpaper picker",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/Desktop Pictures/Mac Blue.heic",
+   "category": "assets",
+   "name": "Mac Blue.heic",
+   "path": "/System/Library/Desktop Pictures/Mac Blue.heic",
+   "kind": "wallpaper",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 9282587
+   },
+   "description": "",
+   "role": "Desktop picture, content variant",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple desktop picture artwork. BifrOSt does not ship it and does not draw it; personal-use reference copies are not a shipped feature.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/Desktop Pictures/Mac Pink.heic",
+   "category": "assets",
+   "name": "Mac Pink.heic",
+   "path": "/System/Library/Desktop Pictures/Mac Pink.heic",
+   "kind": "wallpaper",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 9147389
+   },
+   "description": "",
+   "role": "Desktop picture, content variant",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple desktop picture artwork. BifrOSt does not ship it and does not draw it; personal-use reference copies are not a shipped feature.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/Desktop Pictures/Mac Purple.heic",
+   "category": "assets",
+   "name": "Mac Purple.heic",
+   "path": "/System/Library/Desktop Pictures/Mac Purple.heic",
+   "kind": "wallpaper",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 9287303
+   },
+   "description": "",
+   "role": "Desktop picture, content variant",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple desktop picture artwork. BifrOSt does not ship it and does not draw it; personal-use reference copies are not a shipped feature.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/Desktop Pictures/Mac Yellow.heic",
+   "category": "assets",
+   "name": "Mac Yellow.heic",
+   "path": "/System/Library/Desktop Pictures/Mac Yellow.heic",
+   "kind": "wallpaper",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 17326494
+   },
+   "description": "",
+   "role": "Desktop picture, content variant",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple desktop picture artwork. BifrOSt does not ship it and does not draw it; personal-use reference copies are not a shipped feature.",
+   "rea": [],
+   "method": "assessed"
+  },
+  {
+   "id": "path:/System/Library/Fonts/MarkerFelt.ttc",
+   "category": "assets",
+   "name": "MarkerFelt.ttc",
+   "path": "/System/Library/Fonts/MarkerFelt.ttc",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 619536
+   },
+   "description": "",
+   "role": "Latin text/display font: MarkerFelt",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Nunito (ttf-nunito), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/ttf-nunito/Nunito-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Nunito (ttf-nunito, OFL-1.1) for the same role (a casual marker hand (no packaged marker face; the friendly rounded sans is nearest)); design-similar."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Menlo.ttc",
+   "category": "assets",
+   "name": "Menlo.ttc",
+   "path": "/System/Library/Fonts/Menlo.ttc",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 2134132
+   },
+   "description": "",
+   "role": "Monospaced font: Menlo",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent DejaVu Sans Mono (ttf-dejavu), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Liberation Mono (ttf-liberation), monospace stand-in; its design differs from the reference, so the row is not ready.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/DejaVuSansMono.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute DejaVu Sans Mono (ttf-dejavu, Bitstream Vera-derived free licence) for the same role; design-similar."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Monaco.ttf",
+   "category": "assets",
+   "name": "Monaco.ttf",
+   "path": "/System/Library/Fonts/Monaco.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 529148
+   },
+   "description": "",
+   "role": "Monospaced font: Monaco",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent DejaVu Sans Mono (ttf-dejavu), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Liberation Mono (ttf-liberation), monospace stand-in; its design differs from the reference, so the row is not ready.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/DejaVuSansMono.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute DejaVu Sans Mono (ttf-dejavu, Bitstream Vera-derived free licence) for the same role; design-similar."
+  },
+  {
+   "id": "path:/System/Library/Fonts/MuktaMahee.ttc",
+   "category": "assets",
+   "name": "MuktaMahee.ttc",
+   "path": "/System/Library/Fonts/MuktaMahee.ttc",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 846728
+   },
+   "description": "",
+   "role": "Script/language coverage font: MuktaMahee",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansGurmukhi-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansGurmukhi-Regular (noto-fonts), Gurmukhi script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/NewYork.ttf",
+   "category": "assets",
+   "name": "NewYork.ttf",
+   "path": "/System/Library/Fonts/NewYork.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 721580
+   },
+   "description": "",
+   "role": "Latin text/display font: NewYork",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "NewYork resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/adobe-source-serif/SourceSerif4-Regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Source Serif 4 (adobe-source-serif-fonts, OFL) for the same role; design-similar."
+  },
+  {
+   "id": "path:/System/Library/Fonts/NewYorkItalic.ttf",
+   "category": "assets",
+   "name": "NewYorkItalic.ttf",
+   "path": "/System/Library/Fonts/NewYorkItalic.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 597572
+   },
+   "description": "",
+   "role": "Latin text/display font: NewYorkItalic",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "NewYorkItalic resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/adobe-source-serif/SourceSerif4Variable-Italic.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Source Serif 4 Italic (adobe-source-serif-fonts, OFL) for the same role; design-similar."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Noteworthy.ttc",
+   "category": "assets",
+   "name": "Noteworthy.ttc",
+   "path": "/System/Library/Fonts/Noteworthy.ttc",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 552564
+   },
+   "description": "",
+   "role": "Latin text/display font: Noteworthy",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Nunito (ttf-nunito), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/ttf-nunito/Nunito-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Nunito (ttf-nunito, OFL-1.1) for the same role (a casual marker hand (no packaged marker face; the friendly rounded sans is nearest)); design-similar."
+  },
+  {
+   "id": "path:/System/Library/Fonts/NotoNastaliq.ttc",
+   "category": "assets",
+   "name": "NotoNastaliq.ttc",
+   "path": "/System/Library/Fonts/NotoNastaliq.ttc",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 913612
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoNastaliq",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoNastaliqUrdu-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoNastaliqUrdu-Regular (noto-fonts), Urdu Nastaliq script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/NotoSansArmenian.ttc",
+   "category": "assets",
+   "name": "NotoSansArmenian.ttc",
+   "path": "/System/Library/Fonts/NotoSansArmenian.ttc",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 155048
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansArmenian",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansArmenian-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansArmenian-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/NotoSansKannada.ttc",
+   "category": "assets",
+   "name": "NotoSansKannada.ttc",
+   "path": "/System/Library/Fonts/NotoSansKannada.ttc",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1034352
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansKannada",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansKannada-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansKannada-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/NotoSansMyanmar.ttc",
+   "category": "assets",
+   "name": "NotoSansMyanmar.ttc",
+   "path": "/System/Library/Fonts/NotoSansMyanmar.ttc",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1693624
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansMyanmar",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansMyanmar-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansMyanmar-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/NotoSansOriya.ttc",
+   "category": "assets",
+   "name": "NotoSansOriya.ttc",
+   "path": "/System/Library/Fonts/NotoSansOriya.ttc",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 315292
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansOriya",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansOriya-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansOriya-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/NotoSerifMyanmar.ttc",
+   "category": "assets",
+   "name": "NotoSerifMyanmar.ttc",
+   "path": "/System/Library/Fonts/NotoSerifMyanmar.ttc",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1134164
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSerifMyanmar",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerifMyanmar-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSerifMyanmar-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Optima.ttc",
+   "category": "assets",
+   "name": "Optima.ttc",
+   "path": "/System/Library/Fonts/Optima.ttc",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 247824
+   },
+   "description": "",
+   "role": "Latin text/display font: Optima",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "Optima resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/libertinus/LibertinusSans-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Libertinus Sans (ttf-libertinus, OFL) for the same role; design-similar."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/Malayalam MN.ttc",
+   "category": "assets",
+   "name": "Malayalam MN.ttc",
+   "path": "/System/Library/Fonts/Supplemental/Malayalam MN.ttc",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 169844
+   },
+   "description": "",
+   "role": "Script/language coverage font: Malayalam MN",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansMalayalam-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansMalayalam-Regular (noto-fonts), Malayalam script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/Malayalam Sangam MN.ttc",
+   "category": "assets",
+   "name": "Malayalam Sangam MN.ttc",
+   "path": "/System/Library/Fonts/Supplemental/Malayalam Sangam MN.ttc",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 179992
+   },
+   "description": "",
+   "role": "Script/language coverage font: Malayalam Sangam MN",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansMalayalam-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansMalayalam-Regular (noto-fonts), Malayalam script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/Marion.ttc",
+   "category": "assets",
+   "name": "Marion.ttc",
+   "path": "/System/Library/Fonts/Supplemental/Marion.ttc",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 914976
+   },
+   "description": "",
+   "role": "Latin text/display font: Marion",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "Marion resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/libertinus/LibertinusSerif-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Libertinus Serif (ttf-libertinus, OFL) for the same role; design-similar."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/Microsoft Sans Serif.ttf",
+   "category": "assets",
+   "name": "Microsoft Sans Serif.ttf",
+   "path": "/System/Library/Fonts/Supplemental/Microsoft Sans Serif.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 652248
+   },
+   "description": "",
+   "role": "Web/office compatibility font: Microsoft Sans Serif",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Liberation Sans (ttf-liberation), Arial-metric stand-in; its design differs from the reference, so the row is not ready.",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/liberation/LiberationSans-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Liberation Sans (ttf-liberation, OFL) for the same role; design-similar."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/Mishafi Gold.ttf",
+   "category": "assets",
+   "name": "Mishafi Gold.ttf",
+   "path": "/System/Library/Fonts/Supplemental/Mishafi Gold.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 647648
+   },
+   "description": "",
+   "role": "Script/language coverage font: Mishafi Gold",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoNaskhArabic-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoNaskhArabic-Regular (noto-fonts), Arabic Naskh script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/Mishafi.ttf",
+   "category": "assets",
+   "name": "Mishafi.ttf",
+   "path": "/System/Library/Fonts/Supplemental/Mishafi.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1425176
+   },
+   "description": "",
+   "role": "Script/language coverage font: Mishafi",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoNaskhArabic-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoNaskhArabic-Regular (noto-fonts), Arabic Naskh script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/Mshtakan.ttc",
+   "category": "assets",
+   "name": "Mshtakan.ttc",
+   "path": "/System/Library/Fonts/Supplemental/Mshtakan.ttc",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 169068
+   },
+   "description": "",
+   "role": "Script/language coverage font: Mshtakan",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansArmenian-Regular.ttf"
+    }
+   ],
+   "ready_note": "Noto Sans Armenian (noto-fonts), Armenian script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/Muna.ttc",
+   "category": "assets",
+   "name": "Muna.ttc",
+   "path": "/System/Library/Fonts/Supplemental/Muna.ttc",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 196780
+   },
+   "description": "",
+   "role": "Script/language coverage font: Muna",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoNaskhArabic-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoNaskhArabic-Regular (noto-fonts), Arabic Naskh script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/Myanmar MN.ttc",
+   "category": "assets",
+   "name": "Myanmar MN.ttc",
+   "path": "/System/Library/Fonts/Supplemental/Myanmar MN.ttc",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 237220
+   },
+   "description": "",
+   "role": "Script/language coverage font: Myanmar MN",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansMyanmar-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansMyanmar-Regular (noto-fonts), Myanmar script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/Myanmar Sangam MN.ttc",
+   "category": "assets",
+   "name": "Myanmar Sangam MN.ttc",
+   "path": "/System/Library/Fonts/Supplemental/Myanmar Sangam MN.ttc",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 188768
+   },
+   "description": "",
+   "role": "Script/language coverage font: Myanmar Sangam MN",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansMyanmar-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansMyanmar-Regular (noto-fonts), Myanmar script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NISC18030.ttf",
+   "category": "assets",
+   "name": "NISC18030.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NISC18030.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 7108660
+   },
+   "description": "",
+   "role": "Script/language coverage font: NISC18030",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"
+    }
+   ],
+   "ready_note": "Noto Sans CJK (noto-fonts-cjk), Han coverage is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/Nadeem.ttc",
+   "category": "assets",
+   "name": "Nadeem.ttc",
+   "path": "/System/Library/Fonts/Supplemental/Nadeem.ttc",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 59092
+   },
+   "description": "",
+   "role": "Script/language coverage font: Nadeem",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoNaskhArabic-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoNaskhArabic-Regular (noto-fonts), Arabic Naskh script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NewPeninimMT.ttc",
+   "category": "assets",
+   "name": "NewPeninimMT.ttc",
+   "path": "/System/Library/Fonts/Supplemental/NewPeninimMT.ttc",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 150116
+   },
+   "description": "",
+   "role": "Script/language coverage font: NewPeninimMT",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Serif Hebrew (noto-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerifHebrew-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Serif Hebrew (noto-fonts, OFL-1.1) for the same role (a Hebrew-script text face); design-similar."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansAdlam-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansAdlam-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansAdlam-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 61236
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansAdlam-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansAdlam-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansAdlam-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansAvestan-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansAvestan-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansAvestan-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 12888
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansAvestan-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansAvestan-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansAvestan-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansBamum-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansBamum-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansBamum-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 148664
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansBamum-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansBamum-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansBamum-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansBassaVah-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansBassaVah-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansBassaVah-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 7740
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansBassaVah-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansBassaVah-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansBassaVah-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansBatak-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansBatak-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansBatak-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 22084
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansBatak-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansBatak-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansBatak-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansBhaiksuki-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansBhaiksuki-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansBhaiksuki-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 220044
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansBhaiksuki-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansBhaiksuki-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansBhaiksuki-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansBuginese-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansBuginese-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansBuginese-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 7236
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansBuginese-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansBuginese-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansBuginese-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansBuhid-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansBuhid-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansBuhid-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 5612
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansBuhid-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansBuhid-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansBuhid-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansCarian-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansCarian-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansCarian-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 6688
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansCarian-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansCarian-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansCarian-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansCaucasianAlbanian-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansCaucasianAlbanian-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansCaucasianAlbanian-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 26828
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansCaucasianAlbanian-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansCaucasianAlbanian-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansCaucasianAlbanian-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansChakma-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansChakma-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansChakma-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 41592
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansChakma-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansChakma-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansChakma-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansCham-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansCham-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansCham-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 30208
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansCham-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansCham-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansCham-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansCoptic-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansCoptic-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansCoptic-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 28084
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansCoptic-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansCoptic-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansCoptic-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansCuneiform-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansCuneiform-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansCuneiform-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 820316
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansCuneiform-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansCuneiform-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansCuneiform-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansCypriot-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansCypriot-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansCypriot-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 8332
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansCypriot-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansCypriot-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansCypriot-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansDuployan-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansDuployan-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansDuployan-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 18724
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansDuployan-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansDuployan-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansDuployan-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansEgyptianHieroglyphs-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansEgyptianHieroglyphs-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansEgyptianHieroglyphs-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 585444
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansEgyptianHieroglyphs-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansEgyptianHieroglyphs-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansEgyptianHieroglyphs-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansElbasan-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansElbasan-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansElbasan-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 11172
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansElbasan-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansElbasan-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansElbasan-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansGlagolitic-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansGlagolitic-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansGlagolitic-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 23264
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansGlagolitic-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansGlagolitic-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansGlagolitic-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansGothic-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansGothic-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansGothic-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 6152
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansGothic-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansGothic-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansGothic-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansGunjalaGondi-Regular.otf",
+   "category": "assets",
+   "name": "NotoSansGunjalaGondi-Regular.otf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansGunjalaGondi-Regular.otf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 32372
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansGunjalaGondi-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansGunjalaGondi-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansGunjalaGondi-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansHanifiRohingya-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansHanifiRohingya-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansHanifiRohingya-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 19400
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansHanifiRohingya-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansHanifiRohingya-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansHanifiRohingya-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansHanunoo-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansHanunoo-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansHanunoo-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 7896
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansHanunoo-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansHanunoo-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansHanunoo-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansHatran-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansHatran-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansHatran-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 5020
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansHatran-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansHatran-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansHatran-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansImperialAramaic-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansImperialAramaic-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansImperialAramaic-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 6500
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansImperialAramaic-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansImperialAramaic-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansImperialAramaic-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansInscriptionalPahlavi-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansInscriptionalPahlavi-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansInscriptionalPahlavi-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 6032
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansInscriptionalPahlavi-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansInscriptionalPahlavi-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansInscriptionalPahlavi-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansInscriptionalParthian-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansInscriptionalParthian-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansInscriptionalParthian-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 7792
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansInscriptionalParthian-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansInscriptionalParthian-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansInscriptionalParthian-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansJavanese-Regular.otf",
+   "category": "assets",
+   "name": "NotoSansJavanese-Regular.otf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansJavanese-Regular.otf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 86944
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansJavanese-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansJavanese-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansJavanese-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansKaithi-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansKaithi-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansKaithi-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 62716
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansKaithi-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansKaithi-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansKaithi-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansKayahLi-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansKayahLi-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansKayahLi-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 9464
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansKayahLi-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansKayahLi-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansKayahLi-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansKharoshthi-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansKharoshthi-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansKharoshthi-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 25388
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansKharoshthi-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansKharoshthi-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansKharoshthi-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansKhojki-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansKhojki-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansKhojki-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 42632
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansKhojki-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansKhojki-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansKhojki-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansKhudawadi-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansKhudawadi-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansKhudawadi-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 19032
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansKhudawadi-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansKhudawadi-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansKhudawadi-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansLepcha-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansLepcha-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansLepcha-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 24500
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansLepcha-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansLepcha-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansLepcha-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansLimbu-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansLimbu-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansLimbu-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 12912
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansLimbu-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansLimbu-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansLimbu-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansLinearA-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansLinearA-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansLinearA-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 58140
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansLinearA-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansLinearA-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansLinearA-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansLinearB-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansLinearB-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansLinearB-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 64828
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansLinearB-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansLinearB-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansLinearB-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansLisu-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansLisu-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansLisu-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 6516
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansLisu-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansLisu-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansLisu-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansLycian-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansLycian-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansLycian-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 4556
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansLycian-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansLycian-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansLycian-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansLydian-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansLydian-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansLydian-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 4592
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansLydian-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansLydian-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansLydian-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansMahajani-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansMahajani-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansMahajani-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 14144
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansMahajani-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansMahajani-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansMahajani-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansMandaic-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansMandaic-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansMandaic-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 18908
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansMandaic-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansMandaic-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansMandaic-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansManichaean-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansManichaean-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansManichaean-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 31448
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansManichaean-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansManichaean-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansManichaean-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansMarchen-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansMarchen-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansMarchen-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 125956
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansMarchen-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansMarchen-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansMarchen-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansMasaramGondi-Regular.otf",
+   "category": "assets",
+   "name": "NotoSansMasaramGondi-Regular.otf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansMasaramGondi-Regular.otf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 23052
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansMasaramGondi-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansMasaramGondi-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansMasaramGondi-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansMeeteiMayek-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansMeeteiMayek-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansMeeteiMayek-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 16044
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansMeeteiMayek-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansMeeteiMayek-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansMeeteiMayek-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansMendeKikakui-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansMendeKikakui-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansMendeKikakui-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 35360
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansMendeKikakui-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansMendeKikakui-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansMendeKikakui-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansMeroitic-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansMeroitic-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansMeroitic-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 33644
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansMeroitic-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansMeroitic-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansMeroitic-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansMiao-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansMiao-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansMiao-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 36236
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansMiao-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansMiao-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansMiao-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansModi-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansModi-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansModi-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 42688
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansModi-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansModi-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansModi-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansMongolian-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansMongolian-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansMongolian-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 253932
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansMongolian-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansMongolian-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansMongolian-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansMro-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansMro-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansMro-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 6904
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansMro-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansMro-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansMro-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansMultani-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansMultani-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansMultani-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 9856
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansMultani-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansMultani-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansMultani-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansNKo-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansNKo-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansNKo-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 24608
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansNKo-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansNKo-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansNKo-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansNabataean-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansNabataean-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansNabataean-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 8400
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansNabataean-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansNabataean-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansNabataean-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansNagMundari-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansNagMundari-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansNagMundari-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 17152
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansNagMundari-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansNagMundari-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansNagMundari-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansNewTaiLue-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansNewTaiLue-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansNewTaiLue-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 17000
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansNewTaiLue-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansNewTaiLue-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansNewTaiLue-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansNewa-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansNewa-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansNewa-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 149024
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansNewa-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansNewa-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansNewa-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansOlChiki-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansOlChiki-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansOlChiki-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 8860
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansOlChiki-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansOlChiki-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansOlChiki-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansOldHungarian-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansOldHungarian-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansOldHungarian-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 54020
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansOldHungarian-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansOldHungarian-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansOldHungarian-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansOldItalic-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansOldItalic-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansOldItalic-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 7524
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansOldItalic-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansOldItalic-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansOldItalic-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansOldNorthArabian-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansOldNorthArabian-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansOldNorthArabian-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 7284
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansOldNorthArabian-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansOldNorthArabian-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansOldNorthArabian-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansOldPermic-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansOldPermic-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansOldPermic-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 9984
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansOldPermic-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansOldPermic-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansOldPermic-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  },
+  {
+   "id": "path:/System/Library/Fonts/Supplemental/NotoSansOldPersian-Regular.ttf",
+   "category": "assets",
+   "name": "NotoSansOldPersian-Regular.ttf",
+   "path": "/System/Library/Fonts/Supplemental/NotoSansOldPersian-Regular.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 13180
+   },
+   "description": "",
+   "role": "Script/language coverage font: NotoSansOldPersian-Regular",
+   "doc": "",
+   "bifrost": "",
+   "status": "partial",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "rea": [],
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansOldPersian-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansOldPersian-Regular (noto-fonts), same family is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
+  }
+ ]
+}

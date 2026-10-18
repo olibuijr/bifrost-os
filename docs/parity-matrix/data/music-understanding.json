@@ -4,7 +4,7 @@
   "macos_since": "27.0",
   "status": "partial",
   "bifrost": "springboard/apps/daw/src/lab.rs (loudness only, app-private); springboard/src/media/symfile.rs and mp3.rs (file decode); springboard/audiod/src/main.rs (playback and capture service)",
-  "summary": "The framework is audio analysis: a session that runs rhythm, key, loudness, pace, structure and instrument-activity analyses over a file or a buffer stream. BifrOSt has no analysis API. Only integrated loudness and true peak exist, as private DAW lab code, and there is no SDK surface for any of the six analyses.",
+  "summary": "The framework is audio analysis: a session that runs rhythm, key, loudness, pace, structure and instrument-activity analyses over a file or a buffer stream. The SDK has an analysis entry point (sdk/src/music_understanding.rs, analyze_interleaved) that gives rhythm (beats, bars, tempo), key over time, structure boundaries and loudness, tested in music_understanding::tests and music::tests. Pace is a model the session does not run yet, and instrument activity and source separation are not built.",
   "rea_evidence": "ev_5ca98fba11b7d0d8290a0ab5f2bb01719eeda945e38cfc42f1cb97e6eccf7777",
   "features": [
     {
@@ -40,7 +40,7 @@
       "apple": "LoudnessResult, loudnessResults async sequence, AnalysisType.loudness",
       "bifrost": "springboard/apps/daw/src/lab.rs (integrated_lufs, max_momentary_lufs, max_short_term_lufs, measure: true peak, band energy)",
       "status": "partial",
-      "note": "Integrated LUFS with both gates, maximum momentary and maximum short-term LUFS, and true peak are ITU-R BS.1770 code for the DAW lab, tested in springboard/apps/daw/tests/parity_sdk-tests-08.rs. Gap: no live momentary or short-term meter, no streaming results, and no SDK API."
+      "note": "Integrated LUFS with both gates, maximum momentary and maximum short-term LUFS, and true peak are ITU-R BS.1770 code for the DAW lab, tested in springboard/apps/daw/tests/parity_sdk-tests-08.rs. Gap: no live momentary or short-term meter, no streaming results, and no SDK API. Built 2026-10-17: SDK loudness analysis in bifrost_ui::loudness (K-weighted integrated, momentary and short-term LUFS of a mono buffer), run by AnalysisType::Loudness into SessionResult.loudness; tests loudness::tests and music::tests; SDK test music_understanding::tests. True peak and the DAW's stereo measures stay in the DAW lab."
     },
     {
       "feature": "Pace",
@@ -79,12 +79,9 @@
     }
   ],
   "gaps": [
-    "No audio analysis API in the SDK: no session, no analyze call, no result types for any of the six analyses.",
-    "Beat, bar and BPM detection on audio (RhythmResult). Only the project's stored tempo exists.",
-    "Musical key detection on audio (KeyResult).",
-    "Structure segmentation (sections, segments, phrases) and pace analysis.",
+    "Pace and section labels: pace is a model in ui/src/music.rs (analyze_pace from a beat grid) that the session does not run yet; structure gives segment boundaries only, with no section labels or phrases.",
     "Instrument activity detection and source separation.",
-    "Loudness exists only as private DAW lab code: no momentary or short-term values, no streaming results, no SDK surface.",
-    "No buffer-stream input for analysis; decoders only return whole files to the DAW."
+    "Loudness: the session gives integrated and maximum momentary and short-term LUFS over whole buffers; there is no streaming meter, and true peak is still DAW-only.",
+    "No streaming input: analyze_interleaved (sdk/src/music_understanding.rs) takes a whole buffer, and the decoders return whole files."
   ]
 }

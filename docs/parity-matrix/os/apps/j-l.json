@@ -22,7 +22,16 @@
    "status": "partial",
    "note": "new app (Team H, 0.1.0); not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-journal",
+     "filter": "store::"
+    }
+   ],
+   "ready_note": "journal store and layout tests"
   },
   {
    "id": "path:/System/Library/CoreServices/Applications/Keychain Access.app",
@@ -39,11 +48,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/keychain.rs",
+   "bifrost": "springboard/apps/keychain-access-desktop",
    "status": "partial",
    "note": "keychain store, no keychain viewer app",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-keychain-access",
+     "filter": "model::tests"
+    }
+   ],
+   "ready_note": "Keychain Access app (springboard/apps/keychain-access-desktop): sidebar of the groups the app may read, item list with account and last-written time, two-press Delete; sort, title and date model tests. No secret is read."
   }
  ]
 }

@@ -12,5 +12,8 @@ pub mod hog;
 pub mod latency;
 pub mod quantum;
 pub mod aggregate;
+pub mod apps;
+pub mod dsp;
+pub mod level;
 pub mod tap;
 pub mod rt;

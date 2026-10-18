@@ -1,8 +1,11 @@
-//! Do Not Disturb silences notification delivery without changing alarm behavior.
-//! It is on by hand or by the schedule kept in the notification store (see
-//! `notify::Schedule`); a muted app is silenced the same way on its own.
+//! Focus silences notification delivery without changing alarm behavior.
+//! The Focus that is on is a mode of `notify::modes`: Do Not Disturb, Work,
+//! Personal, Sleep or one the person added. A mode is on by hand or by its
+//! schedule; Do Not Disturb's schedule and allowed apps stay in the
+//! notification store (see `notify::Schedule`). A muted app is silenced the
+//! same way on its own.
 
-use super::Shell;
+use super::{notify, Shell};
 
 impl Shell {
     /// Whether Do Not Disturb currently silences notification banners and wakes.
@@ -12,18 +15,36 @@ impl Shell {
 
     /// Changes Focus from Control Centre and keeps a retained Settings page in sync.
     pub fn set_dnd(&mut self, on: bool) {
-        if !on {
-            // switching Focus off inside the schedule's window holds until it ends
-            self.notify.end_scheduled();
+        self.set_focus_mode(on.then_some(notify::modes::DND_ID));
+    }
+
+    /// The Focus mode names, in list order, and the index of the mode that is on by hand: what Settings > Focus lists.
+    pub(super) fn focus_mode_view(&self) -> (Vec<String>, Option<usize>) {
+        let modes = &self.notify.modes;
+        let names = modes.list.iter().map(|m| m.name.clone()).collect();
+        let on = modes.manual.as_deref().and_then(|id| modes.list.iter().position(|m| m.id == id));
+        (names, on)
+    }
+
+    /// Switches the Focus mode `id` on by hand, or Focus off (None), and saves the choice. Returns false for a mode
+    /// that does not exist.
+    pub fn set_focus_mode(&mut self, id: Option<&str>) -> bool {
+        if !self.notify.set_mode(id) {
+            return false;
         }
+        // the Settings switch tracks Do Not Disturb only; another mode is saved in focus_modes.ini
+        let on = id == Some(notify::modes::DND_ID);
         let mut opts = self.options();
         opts.dnd = on;
         opts.save(&mut self.prefs);
+        let (names, mode_on) = self.focus_mode_view();
         if let Some(st) = &mut self.settings {
+            st.set_focus_modes(names, mode_on);
             st.set_dnd(&self.ui, on);
         }
-        self.notify.set_dnd(on);
+        self.notify.save_modes();
         self.dirty = true;
+        true
     }
 }
 
@@ -39,6 +60,19 @@ mod tests {
         let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/test-focus").join(std::process::id().to_string());
         std::fs::create_dir_all(&dir).unwrap();
         dir.join(name)
+    }
+
+    #[test]
+    fn settings_lists_the_modes_and_follows_the_one_on_by_hand() {
+        let mut sh = shell();
+        unlock(&mut sh);
+        let (names, on) = sh.focus_mode_view();
+        assert_eq!(names, ["Do Not Disturb", "Work", "Personal", "Sleep"]);
+        assert_eq!(on, None);
+        assert!(sh.set_focus_mode(Some("work")));
+        assert_eq!(sh.focus_mode_view().1, Some(1));
+        assert!(sh.set_focus_mode(None));
+        assert_eq!(sh.focus_mode_view().1, None);
     }
 
     #[test]
@@ -118,5 +152,30 @@ mod tests {
         assert!(sh.screen_on());
         assert!(sh.clock.alert().is_some());
         assert!(sh.notify.banner().is_none());
+    }
+
+    #[test]
+    fn a_mode_chosen_by_hand_survives_a_restart_and_the_settings_switch_follows_do_not_disturb_only() {
+        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/test-focus-restart").join(std::process::id().to_string());
+        let notes = dir.join("notifications.ini").to_string_lossy().into_owned();
+        let prefs_path = dir.join("settings.ini");
+        let _ = std::fs::remove_file(&prefs_path);
+        let _ = std::fs::remove_file(dir.join("focus_modes.ini"));
+        let mut sh = shell();
+        sh.notify.load_modes(&notes);
+        sh.prefs = Prefs::load(&prefs_path);
+        assert!(sh.set_focus_mode(Some("personal")));
+        assert!(sh.dnd(), "a mode on by hand is Focus on");
+        assert!(!sh.set_focus_mode(Some("nope")), "an unknown mode is refused");
+        let mut again = shell();
+        again.notify.load_modes(&notes);
+        again.prefs = Prefs::load(&prefs_path);
+        again.apply_options();
+        assert_eq!(again.notify.modes.manual.as_deref(), Some("personal"));
+        assert!(again.dnd());
+        again.set_dnd(true);
+        assert_eq!(again.notify.modes.manual.as_deref(), Some("do-not-disturb"), "Do Not Disturb replaces the other mode");
+        again.set_dnd(false);
+        assert!(!again.dnd());
     }
 }

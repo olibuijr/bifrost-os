@@ -120,6 +120,8 @@ const M_EP_UP: u32 = 58;
 const M_EP_DOWN: u32 = 59;
 const M_CLEAR_QUEUE: u32 = 60;
 const M_SHOW_PLAYED: u32 = 61;
+/// the New Episodes filters: M_NEW_FILTER + index into `library::NewFilter::ALL`
+const M_NEW_FILTER: u32 = 62;
 const POLL_MS: f64 = 250.0;
 const FEED_LIMIT: usize = 8 << 20;
 const EPISODE_LIMIT: usize = 160 << 20;
@@ -301,8 +303,12 @@ pub struct Podcasts {
     paused: bool,
     sheet: bool,
     scrubbing: Option<f64>,
-    /// the playback rate the speed control shows, one of `transport::RATES` (kept per session; the engine plays at 1x)
+    /// the playback rate, one of `transport::RATES`; sent to the audio service (`set_rate`) and kept for the session
     rate: f64,
+    /// which episodes the New Episodes list keeps (a smart filter from the View menu)
+    new_filter: library::NewFilter,
+    /// the audio service's connection count when the rate was last sent, so a restarted service gets it again
+    rate_sent_at: u32,
     /// the speed menu is open above the Speed button
     speed_menu: bool,
     sleep: usize,
@@ -415,6 +421,8 @@ impl Podcasts {
             sheet: false,
             scrubbing: None,
             rate: 1.0,
+            rate_sent_at: 0,
+            new_filter: library::NewFilter::default(),
             speed_menu: false,
             sleep: 0,
             sleep_at: None,
@@ -855,11 +863,21 @@ impl Podcasts {
         self.advance(was_sheet);
     }
 
+    /// Sets the playback rate and sends it to the audio service, which time-stretches the audio (the pitch stays).
+    fn set_rate(&mut self, rate: f64) {
+        self.rate = rate;
+        self.audio.set_rate(rate as f32);
+    }
+
     /// Follows the service: the episode's position and state, another app taking over, and an
     /// episode that is already playing when the app starts.
     fn sync_audio(&mut self, t: f64) {
         self.dirty |= self.audio.pump();
         self.dirty |= self.audio.tick(t);
+        if self.audio.connects() != self.rate_sent_at {
+            self.rate_sent_at = self.audio.connects();
+            self.audio.set_rate(self.rate as f32);
+        }
         let snap = self.audio.snapshot().clone();
         let theirs = snap.track.as_ref().map(|tr| tr.path.as_str());
         let Some(mine) = self.playing_path.clone() else {
@@ -1209,7 +1227,7 @@ impl Podcasts {
                 }
                 order.into_iter().map(|ei| Row::Ep(si, ei)).collect()
             }),
-            View::New => library::latest(&self.shows, &self.library, NEW_LIMIT).into_iter().map(|(s, e)| Row::Ep(s, e)).collect(),
+            View::New => library::latest_filtered(&self.shows, &self.library, self.new_filter, |u| self.store.downloaded(u), NEW_LIMIT).into_iter().map(|(s, e)| Row::Ep(s, e)).collect(),
             View::UpNext => self.library.queue().iter().filter_map(|u| self.find_episode(u)).map(|(s, e)| Row::Ep(s, e)).collect(),
             View::Downloaded => {
                 let mut all: Vec<(i64, usize, usize)> = Vec::new();
@@ -1530,6 +1548,9 @@ impl Podcasts {
                 AppMenuItem::new(M_SETTINGS, "Settings...").key("cmd+,"),
             ],
         };
+        // the New Episodes filters sit under New Episodes, one checked at a time
+        let mut view = view;
+        view.items.splice(4..4, library::NewFilter::ALL.iter().enumerate().map(|(i, f)| AppMenuItem::new(M_NEW_FILTER + i as u32, f.label()).checked(self.new_filter == *f).depth(1)));
         let mut controls = vec![
             AppMenuItem::new(M_PLAY_PAUSE, if self.paused { "Play" } else { "Pause" }).enabled(playing),
             AppMenuItem::new(M_STOP, "Stop").key("cmd+.").enabled(playing),
@@ -1607,6 +1628,10 @@ impl Podcasts {
             M_EXPORT => self.want_file = Some(FileJob::Export),
             M_REFRESH => self.activate(ui, Target::Refresh, t),
             M_VIEW_NEW => self.navigate(ui, SIDE_NEW),
+            _ if (M_NEW_FILTER..M_NEW_FILTER + library::NewFilter::ALL.len() as u32).contains(&id) => {
+                self.new_filter = library::NewFilter::ALL[(id - M_NEW_FILTER) as usize];
+                self.rebuild();
+            }
             M_VIEW_UP_NEXT => self.navigate(ui, SIDE_UP_NEXT),
             M_VIEW_DOWNLOADED => self.navigate(ui, SIDE_DOWNLOADED),
             M_VIEW_SHOWS => self.navigate(ui, SIDE_SHOWS),
@@ -1621,7 +1646,7 @@ impl Podcasts {
             M_SLOWER | M_FASTER => {
                 if let Some(i) = transport::rate_index(self.rate) {
                     let to = if id == M_SLOWER { i.saturating_sub(1) } else { (i + 1).min(transport::RATES.len() - 1) };
-                    self.rate = transport::RATES[to];
+                    self.set_rate(transport::RATES[to]);
                 }
             }
             M_CLEAR_QUEUE => {
@@ -1642,7 +1667,7 @@ impl Podcasts {
             M_SHOW_PLAYED => self.mark_show_played(),
             _ => {
                 if let Some(i) = id.checked_sub(M_RATE).map(|i| i as usize).filter(|&i| i < transport::RATES.len()) {
-                    self.rate = transport::RATES[i];
+                    self.set_rate(transport::RATES[i]);
                 } else if let Some(i) = id.checked_sub(M_SLEEP).map(|i| i as usize).filter(|&i| i < SLEEPS.len()) {
                     self.sleep = i;
                     self.sleep_at = (SLEEPS[i] > 0).then(|| t + SLEEPS[i] as f64 * 60_000.0);
@@ -2146,7 +2171,8 @@ impl Podcasts {
             }
             Target::Speed => self.speed_menu = !self.speed_menu,
             Target::Rate(i) => {
-                self.rate = transport::RATES.get(i).copied().unwrap_or(self.rate);
+                let rate = transport::RATES.get(i).copied().unwrap_or(self.rate);
+                self.set_rate(rate);
                 self.speed_menu = false;
             }
             Target::Sleep => {

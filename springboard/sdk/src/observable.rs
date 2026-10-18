@@ -17,6 +17,7 @@ use std::collections::VecDeque;
 use std::fmt;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 
 type Callback<T> = Box<dyn FnMut(&T)>;
 
@@ -478,6 +479,248 @@ impl<T: Clone + 'static> PassthroughSubject<T> {
         });
         (out, sub)
     }
+}
+
+impl<T: 'static> PassthroughSubject<T> {
+    /// `compactMap(_:)`: a derived subject that sends the value inside each `Some` that `f` returns and drops
+    /// the `None`s. The returned `Subscription` links it to this subject.
+    pub fn compact_map<U: 'static>(&self, f: impl Fn(&T) -> Option<U> + 'static) -> (PassthroughSubject<U>, Subscription) {
+        let out = PassthroughSubject::new();
+        let o = out.clone();
+        let sub = self.sink(move |v| {
+            if let Some(u) = f(v) {
+                o.send(u);
+            }
+        });
+        (out, sub)
+    }
+}
+
+impl<T: Clone + 'static> PassthroughSubject<T> {
+    /// `scan(_:_:)`: a derived subject that starts from `initial` and sends the running result of `f` on
+    /// each value. The initial value itself is not sent, as in Combine.
+    pub fn scan<U: Clone + 'static>(
+        &self,
+        initial: U,
+        f: impl Fn(&U, &T) -> U + 'static,
+    ) -> (PassthroughSubject<U>, Subscription) {
+        let out = PassthroughSubject::new();
+        let o = out.clone();
+        let acc = RefCell::new(initial);
+        let sub = self.sink(move |v| {
+            let next = f(&*acc.borrow(), v);
+            acc.replace(next.clone());
+            o.send(next);
+        });
+        (out, sub)
+    }
+
+    /// `zip(_:)`: a subject that sends `(a, b)` pairs by position: the first value of this subject with the
+    /// first of `other`, then the second with the second, and so on. Values that wait for a partner are
+    /// buffered in arrival order. The returned `Cancellables` keeps both links alive.
+    pub fn zip<B: Clone + 'static>(&self, other: &PassthroughSubject<B>) -> (PassthroughSubject<(T, B)>, Cancellables) {
+        let out: PassthroughSubject<(T, B)> = PassthroughSubject::new();
+        let state: Rc<RefCell<(VecDeque<T>, VecDeque<B>)>> = Rc::new(RefCell::new((VecDeque::new(), VecDeque::new())));
+        let mut links = Cancellables::new();
+
+        let (o1, s1) = (out.clone(), state.clone());
+        self.sink(move |a: &T| {
+            let pair = {
+                let mut q = s1.borrow_mut();
+                let waiting = q.1.pop_front();
+                match waiting {
+                    Some(b) => Some((a.clone(), b)),
+                    None => {
+                        q.0.push_back(a.clone());
+                        None
+                    }
+                }
+            };
+            if let Some(p) = pair {
+                o1.send(p);
+            }
+        })
+        .store(&mut links);
+
+        let (o2, s2) = (out.clone(), state);
+        other
+            .sink(move |b: &B| {
+                let pair = {
+                    let mut q = s2.borrow_mut();
+                    let waiting = q.0.pop_front();
+                    match waiting {
+                        Some(a) => Some((a, b.clone())),
+                        None => {
+                            q.1.push_back(b.clone());
+                            None
+                        }
+                    }
+                };
+                if let Some(p) = pair {
+                    o2.send(p);
+                }
+            })
+            .store(&mut links);
+
+        (out, links)
+    }
+}
+
+impl<T: Clone + 'static> PassthroughSubject<T> {
+    /// `merge(with:)`: a subject that sends every value sent on either this subject or `other`, in the order
+    /// they are sent. The returned `Cancellables` keeps both links alive; dropping it detaches the merge.
+    pub fn merge(&self, other: &PassthroughSubject<T>) -> (PassthroughSubject<T>, Cancellables) {
+        let out = PassthroughSubject::new();
+        let mut links = Cancellables::new();
+        let o1 = out.clone();
+        self.sink(move |v| o1.send(v.clone())).store(&mut links);
+        let o2 = out.clone();
+        other.sink(move |v| o2.send(v.clone())).store(&mut links);
+        (out, links)
+    }
+
+    /// `flatMap(_:)` for inner publishers that replay synchronously: each value is turned into a [`Finite`]
+    /// publisher and every value that publisher replays is sent on the result. The inner completion is not
+    /// forwarded, as Combine's `flatMap` does not end the outer stream when an inner one finishes.
+    pub fn flat_map<U, E>(&self, f: impl Fn(&T) -> Finite<U, E> + 'static) -> (PassthroughSubject<U>, Subscription)
+    where
+        U: Clone + 'static,
+        E: Clone,
+    {
+        let out = PassthroughSubject::new();
+        let o = out.clone();
+        let sub = self.sink(move |v| {
+            f(v).subscribe(|u| o.send(u.clone()), |_completion| {});
+        });
+        (out, sub)
+    }
+}
+
+impl<T: Clone + 'static> PassthroughSubject<T> {
+    /// `flatMap` for inner publishers that answer later: each value is turned into a [`Future`], and its success
+    /// value is sent when that future resolves. A failed future sends nothing. Results arrive in the order the
+    /// futures resolve, which need not be the order the values were sent.
+    pub fn flat_map_future<U, E>(
+        &self,
+        f: impl Fn(&T) -> Future<U, E> + 'static,
+    ) -> (PassthroughSubject<U>, Subscription)
+    where
+        U: Clone + 'static,
+        E: Clone + 'static,
+    {
+        let out = PassthroughSubject::new();
+        let o = out.clone();
+        let sub = self.sink(move |v| {
+            let o2 = o.clone();
+            f(v).subscribe(move |result| {
+                if let Ok(u) = result {
+                    o2.send(u.clone());
+                }
+            });
+        });
+        (out, sub)
+    }
+}
+
+impl<T: Clone + 'static> PassthroughSubject<T> {
+    /// `debounce(for:scheduler:)`: sends a value only once `interval` has passed with no newer value. Each value
+    /// restarts the wait, and the last one is the one sent. Timing comes from `run_loop`, which the app's tick
+    /// advances. The returned `Subscription` detaches this subject from `self`; a wait already running still ends
+    /// quietly, and sends nothing if a newer value has arrived.
+    pub fn debounce<S: crate::run_loop::LocalScheduler + Clone + 'static>(
+        &self,
+        interval: Duration,
+        run_loop: &S,
+    ) -> (PassthroughSubject<T>, Subscription) {
+        let out = PassthroughSubject::new();
+        // Generation of the newest value, and that value until it is sent.
+        let state: Rc<RefCell<(u64, Option<T>)>> = Rc::new(RefCell::new((0, None)));
+        let (o, s, rl) = (out.clone(), state.clone(), run_loop.clone());
+        let sub = self.sink(move |v| {
+            let generation = {
+                let mut st = s.borrow_mut();
+                st.0 += 1;
+                st.1 = Some(v.clone());
+                st.0
+            };
+            let (o2, s2) = (o.clone(), s.clone());
+            rl.schedule_local_after(interval, move || {
+                let value = {
+                    let mut st = s2.borrow_mut();
+                    if st.0 != generation {
+                        return;
+                    }
+                    st.1.take()
+                };
+                if let Some(v) = value {
+                    o2.send(v);
+                }
+            });
+        });
+        (out, sub)
+    }
+
+    /// `throttle(for:scheduler:latest:)`: sends the first value at once, then holds back the rest for `interval`.
+    /// With `latest` set, the newest value held back is sent when the interval ends, and a new interval starts with
+    /// it; without it, values that arrive during an interval are dropped. Timing comes from `run_loop`.
+    pub fn throttle<S: crate::run_loop::LocalScheduler + Clone + 'static>(
+        &self,
+        interval: Duration,
+        run_loop: &S,
+        latest: bool,
+    ) -> (PassthroughSubject<T>, Subscription) {
+        let out = PassthroughSubject::new();
+        let state: Rc<RefCell<ThrottleState<T>>> =
+            Rc::new(RefCell::new(ThrottleState { window_open: false, held: None }));
+        let (o, s, rl) = (out.clone(), state.clone(), run_loop.clone());
+        let sub = self.sink(move |v| {
+            let open = s.borrow().window_open;
+            if open {
+                if latest {
+                    s.borrow_mut().held = Some(v.clone());
+                }
+            } else {
+                throttle_open_window(s.clone(), o.clone(), rl.clone(), interval, latest);
+                o.send(v.clone());
+            }
+        });
+        (out, sub)
+    }
+}
+
+/// State of one [`PassthroughSubject::throttle`] subscription.
+struct ThrottleState<T> {
+    window_open: bool,
+    held: Option<T>,
+}
+
+/// Starts an interval: schedules its end, which sends the held value (if `latest`) and starts the next interval.
+fn throttle_open_window<T: Clone + 'static, S: crate::run_loop::LocalScheduler + Clone + 'static>(
+    state: Rc<RefCell<ThrottleState<T>>>,
+    out: PassthroughSubject<T>,
+    run_loop: S,
+    interval: Duration,
+    latest: bool,
+) {
+    state.borrow_mut().window_open = true;
+    let (s, o, rl) = (state.clone(), out.clone(), run_loop.clone());
+    run_loop.schedule_local_after(interval, move || {
+        let held = {
+            let mut st = s.borrow_mut();
+            if latest {
+                st.held.take()
+            } else {
+                None
+            }
+        };
+        match held {
+            Some(v) => {
+                o.send(v);
+                throttle_open_window(s, o, rl, interval, latest);
+            }
+            None => s.borrow_mut().window_open = false,
+        }
+    });
 }
 
 /// `Subscribers.Completion`: how a publisher stopped producing values.
@@ -1073,5 +1316,279 @@ mod tests {
     fn counter_u32() -> (Rc<RefCell<Vec<u32>>>, Rc<RefCell<Vec<u32>>>) {
         let l = Rc::new(RefCell::new(Vec::new()));
         (l.clone(), l)
+    }
+}
+
+#[cfg(test)]
+mod scan_compact_zip_tests {
+    use super::*;
+
+    fn log_of<T: Clone + 'static>(subject: &PassthroughSubject<T>) -> (Rc<RefCell<Vec<T>>>, Subscription) {
+        let log = Rc::new(RefCell::new(Vec::new()));
+        let l = log.clone();
+        let sub = subject.sink(move |v: &T| l.borrow_mut().push(v.clone()));
+        (log, sub)
+    }
+
+    #[test]
+    fn compact_map_sends_only_the_some_values() {
+        let src: PassthroughSubject<i32> = PassthroughSubject::new();
+        let (out, _sub) = src.compact_map(|n: &i32| if *n % 2 == 0 { Some(*n * 10) } else { None });
+        let (log, _log_sub) = log_of(&out);
+        for n in 1..=4 {
+            src.send(n);
+        }
+        assert_eq!(*log.borrow(), vec![20, 40]);
+    }
+
+    #[test]
+    fn scan_sends_the_running_total_and_not_the_initial_value() {
+        let src: PassthroughSubject<i32> = PassthroughSubject::new();
+        let (out, _sub) = src.scan(100, |acc: &i32, v: &i32| acc + v);
+        let (log, _log_sub) = log_of(&out);
+        src.send(1);
+        src.send(2);
+        src.send(3);
+        assert_eq!(*log.borrow(), vec![101, 103, 106]);
+    }
+
+    #[test]
+    fn scan_works_with_a_non_copy_accumulator() {
+        let src: PassthroughSubject<&'static str> = PassthroughSubject::new();
+        let (out, _sub) = src.scan(String::new(), |acc: &String, v: &&str| format!("{acc}{v}"));
+        let (log, _log_sub) = log_of(&out);
+        src.send("a");
+        src.send("b");
+        assert_eq!(*log.borrow(), vec!["a".to_string(), "ab".to_string()]);
+    }
+
+    #[test]
+    fn zip_pairs_values_by_position_and_buffers_the_faster_side() {
+        let left: PassthroughSubject<i32> = PassthroughSubject::new();
+        let right: PassthroughSubject<&'static str> = PassthroughSubject::new();
+        let (out, _links) = left.zip(&right);
+        let (log, _log_sub) = log_of(&out);
+        left.send(1);
+        left.send(2);
+        assert!(log.borrow().is_empty());
+        right.send("x");
+        assert_eq!(*log.borrow(), vec![(1, "x")]);
+        right.send("y");
+        right.send("z");
+        left.send(3);
+        assert_eq!(*log.borrow(), vec![(1, "x"), (2, "y"), (3, "z")]);
+    }
+
+    #[test]
+    fn dropping_zip_links_detaches_both_sides() {
+        let left: PassthroughSubject<i32> = PassthroughSubject::new();
+        let right: PassthroughSubject<i32> = PassthroughSubject::new();
+        let (out, links) = left.zip(&right);
+        let (log, _log_sub) = log_of(&out);
+        drop(links);
+        left.send(1);
+        right.send(2);
+        assert!(log.borrow().is_empty());
+        assert_eq!(left.subscriber_count(), 0);
+    }
+}
+
+#[cfg(test)]
+mod merge_flat_map_tests {
+    use super::*;
+
+    fn log_of<T: Clone + 'static>(subject: &PassthroughSubject<T>) -> (Rc<RefCell<Vec<T>>>, Subscription) {
+        let log = Rc::new(RefCell::new(Vec::new()));
+        let l = log.clone();
+        let sub = subject.sink(move |v: &T| l.borrow_mut().push(v.clone()));
+        (log, sub)
+    }
+
+    #[test]
+    fn merge_forwards_values_from_both_subjects_in_send_order() {
+        let a = PassthroughSubject::new();
+        let b = PassthroughSubject::new();
+        let (merged, _links) = a.merge(&b);
+        let (log, _sub) = log_of(&merged);
+        a.send(1);
+        b.send(2);
+        a.send(3);
+        b.send(4);
+        assert_eq!(*log.borrow(), vec![1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn merge_stops_forwarding_when_links_are_cleared() {
+        let a = PassthroughSubject::new();
+        let b = PassthroughSubject::new();
+        let (merged, mut links) = a.merge(&b);
+        let (log, _sub) = log_of(&merged);
+        a.send(1);
+        links.clear();
+        a.send(2);
+        b.send(3);
+        assert_eq!(*log.borrow(), vec![1]);
+    }
+
+    #[test]
+    fn merge_with_no_values_sends_nothing() {
+        let a: PassthroughSubject<i32> = PassthroughSubject::new();
+        let b: PassthroughSubject<i32> = PassthroughSubject::new();
+        let (merged, _links) = a.merge(&b);
+        let (log, _sub) = log_of(&merged);
+        assert!(log.borrow().is_empty());
+        assert_eq!(merged.subscriber_count(), 1);
+    }
+
+    #[test]
+    fn flat_map_sends_each_inner_value_in_order() {
+        let src: PassthroughSubject<i32> = PassthroughSubject::new();
+        let (out, _sub) = src.flat_map(|n: &i32| Finite::<i32, Never>::record(vec![*n, *n * 10], Completion::Finished));
+        let (log, _log_sub) = log_of(&out);
+        src.send(1);
+        src.send(2);
+        assert_eq!(*log.borrow(), vec![1, 10, 2, 20]);
+    }
+
+    #[test]
+    fn flat_map_empty_inner_sends_nothing_and_does_not_end_the_outer_stream() {
+        let src: PassthroughSubject<i32> = PassthroughSubject::new();
+        let (out, _sub) = src.flat_map(|n: &i32| {
+            if *n == 0 {
+                Finite::<i32, Never>::empty(true)
+            } else {
+                Finite::<i32, Never>::just(*n)
+            }
+        });
+        let (log, _log_sub) = log_of(&out);
+        src.send(0);
+        src.send(5);
+        assert_eq!(*log.borrow(), vec![5]);
+    }
+
+    #[test]
+    fn flat_map_cancelled_upstream_stops_inner_values() {
+        let src: PassthroughSubject<i32> = PassthroughSubject::new();
+        let (out, sub) = src.flat_map(|n: &i32| Finite::<i32, Never>::just(*n));
+        let (log, _log_sub) = log_of(&out);
+        src.send(1);
+        sub.cancel();
+        src.send(2);
+        assert_eq!(*log.borrow(), vec![1]);
+    }
+
+    #[test]
+    fn debounce_sends_the_last_value_once_the_interval_is_quiet() {
+        let src: PassthroughSubject<i32> = PassthroughSubject::new();
+        let rl = crate::run_loop::RunLoop::new();
+        let (out, _sub) = src.debounce(Duration::from_millis(100), &rl);
+        let (log, _log_sub) = log_of(&out);
+        src.send(1);
+        rl.advance(Duration::from_millis(50));
+        src.send(2);
+        rl.advance(Duration::from_millis(120));
+        assert!(log.borrow().is_empty());
+        rl.advance(Duration::from_millis(149));
+        assert!(log.borrow().is_empty());
+        rl.advance(Duration::from_millis(150));
+        assert_eq!(*log.borrow(), vec![2]);
+    }
+
+    #[test]
+    fn debounce_sends_each_value_that_stays_quiet() {
+        let src: PassthroughSubject<i32> = PassthroughSubject::new();
+        let rl = crate::run_loop::RunLoop::new();
+        let (out, _sub) = src.debounce(Duration::from_millis(100), &rl);
+        let (log, _log_sub) = log_of(&out);
+        src.send(7);
+        rl.advance(Duration::from_millis(100));
+        src.send(8);
+        rl.advance(Duration::from_millis(199));
+        assert_eq!(*log.borrow(), vec![7]);
+        rl.advance(Duration::from_millis(200));
+        assert_eq!(*log.borrow(), vec![7, 8]);
+    }
+
+    #[test]
+    fn throttle_with_latest_sends_the_first_value_then_the_newest_held_one_per_interval() {
+        let src: PassthroughSubject<i32> = PassthroughSubject::new();
+        let rl = crate::run_loop::RunLoop::new();
+        let (out, _sub) = src.throttle(Duration::from_millis(100), &rl, true);
+        let (log, _log_sub) = log_of(&out);
+        src.send(1);
+        assert_eq!(*log.borrow(), vec![1]);
+        rl.advance(Duration::from_millis(10));
+        src.send(2);
+        src.send(3);
+        rl.advance(Duration::from_millis(99));
+        assert_eq!(*log.borrow(), vec![1]);
+        rl.advance(Duration::from_millis(100));
+        assert_eq!(*log.borrow(), vec![1, 3]);
+        src.send(4);
+        rl.advance(Duration::from_millis(200));
+        assert_eq!(*log.borrow(), vec![1, 3, 4]);
+        rl.advance(Duration::from_millis(300));
+        src.send(5);
+        assert_eq!(*log.borrow(), vec![1, 3, 4, 5]);
+    }
+
+    #[test]
+    fn throttle_without_latest_drops_values_inside_the_interval() {
+        let src: PassthroughSubject<i32> = PassthroughSubject::new();
+        let rl = crate::run_loop::RunLoop::new();
+        let (out, _sub) = src.throttle(Duration::from_millis(100), &rl, false);
+        let (log, _log_sub) = log_of(&out);
+        src.send(1);
+        src.send(2);
+        src.send(3);
+        rl.advance(Duration::from_millis(100));
+        src.send(4);
+        assert_eq!(*log.borrow(), vec![1, 4]);
+    }
+}
+
+#[cfg(test)]
+mod flat_map_future_tests {
+    use super::*;
+
+    #[test]
+    fn each_value_is_sent_when_its_future_resolves_in_resolution_order() {
+        let src: PassthroughSubject<i32> = PassthroughSubject::new();
+        let promises: Rc<RefCell<Vec<Promise<i32, String>>>> = Rc::new(RefCell::new(Vec::new()));
+        let keep = promises.clone();
+        let (out, _sub) = src.flat_map_future(move |_n: &i32| {
+            let keep = keep.clone();
+            Future::new(move |p| keep.borrow_mut().push(p))
+        });
+        let log = Rc::new(RefCell::new(Vec::new()));
+        let l = log.clone();
+        let _log_sub = out.sink(move |v: &i32| l.borrow_mut().push(*v));
+        src.send(1);
+        src.send(2);
+        assert!(log.borrow().is_empty(), "nothing is sent before the futures resolve");
+        let second = promises.borrow_mut().remove(1);
+        second.resolve(Ok(20));
+        assert_eq!(*log.borrow(), vec![20]);
+        let first = promises.borrow_mut().remove(0);
+        first.resolve(Ok(10));
+        assert_eq!(*log.borrow(), vec![20, 10]);
+    }
+
+    #[test]
+    fn a_failed_future_sends_nothing() {
+        let src: PassthroughSubject<i32> = PassthroughSubject::new();
+        let promises: Rc<RefCell<Vec<Promise<i32, String>>>> = Rc::new(RefCell::new(Vec::new()));
+        let keep = promises.clone();
+        let (out, _sub) = src.flat_map_future(move |_n: &i32| {
+            let keep = keep.clone();
+            Future::new(move |p| keep.borrow_mut().push(p))
+        });
+        let log = Rc::new(RefCell::new(Vec::new()));
+        let l = log.clone();
+        let _log_sub = out.sink(move |v: &i32| l.borrow_mut().push(*v));
+        src.send(1);
+        let p = promises.borrow_mut().remove(0);
+        p.resolve(Err("offline".to_string()));
+        assert!(log.borrow().is_empty());
     }
 }

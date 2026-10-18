@@ -1,0 +1,50 @@
+{
+  "framework": "EventKit UI",
+  "doc": "https://developer.apple.com/documentation/eventkitui",
+  "macos_since": "",
+  "status": "partial",
+  "bifrost": "springboard/apps/calendar-desktop/src/main.rs, springboard/sdk/src/calendar.rs, springboard/src/shell/calendar/store.rs",
+  "summary": "The Calendar app has an event editor with cut, copy and paste, and the SDK reads events in a date range. Apps cannot open an event view, an edit sheet or a calendar chooser; the event UI is inside the Calendar app only. iPadOS 4.0 and later per the index.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run this round; owner rule); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Event viewer",
+      "apple": "EKEventViewController",
+      "bifrost": "springboard/apps/calendar-desktop/src/main.rs",
+      "status": "gap",
+      "note": "The Calendar app has its own event view; apps get no viewer controller."
+    },
+    {
+      "feature": "Event editor",
+      "apple": "EKEventEditViewController",
+      "bifrost": "springboard/apps/calendar-desktop/src/main.rs",
+      "status": "gap",
+      "note": "Editing is inside the Calendar app; no app-facing editor sheet."
+    },
+    {
+      "feature": "Calendar chooser",
+      "apple": "EKCalendarChooser",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No calendar selection UI for apps."
+    },
+    {
+      "feature": "Reading events for apps",
+      "apple": "EKEventStore events (for context)",
+      "bifrost": "springboard/sdk/src/calendar.rs",
+      "status": "partial",
+      "note": "Events are read for an app over a date range; the UI controllers are missing."
+    },
+    {
+      "feature": "Bundle resources",
+      "apple": "EventKitUIBundle()",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Apple's bundle resource accessor; BifrOSt apps ship their own resources."
+    }
+  ],
+  "gaps": [
+    "No event viewer, editor or calendar chooser that apps can present.",
+    "The Calendar app's editor is not a reusable SDK control."
+  ]
+}

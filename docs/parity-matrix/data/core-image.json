@@ -19,7 +19,7 @@
       "apple": "CIFilter, CIFilterGenerator, CIVector, CIColor",
       "bifrost": "springboard/render/src/effect_chain.rs; wired: springboard/render/src/effect_chain.rs (chain run by springboard/src/shell/photos/edit.rs Edit::apply); springboard/sdk/src/image_filter.rs (FilterChain, the app API for named filters)",
       "status": "partial",
-      "note": "Named filters and the chain are a pure model with host unit tests, and apps run a chain through the SDK FilterChain. Photos runs a fixed sequence (crop, straighten, filter, brightness, contrast). Gap: the chain has no lazy evaluation or render context, and the app chain is not verified on Midget."
+      "note": "Named filters and the chain are a pure model with host unit tests, and apps run a chain through the SDK FilterChain. Photos runs a fixed sequence (crop, straighten, filter, brightness, contrast). Gap: the chain has no lazy evaluation or render context, and the app chain is not verified on Midget. Wave (theme-01, image filters round): the SDK VideoFilter (bifrost_app::image_render) runs a FilterChain per video frame, with optional feedback."
     },
     {
       "feature": "Blur filters (gaussianBlur, boxBlur, motionBlur, zoomBlur, discBlur)",
@@ -33,7 +33,7 @@
       "apple": "CIColorControls, CIExposureAdjust, CIHueAdjust, CITemperatureAndTint, CIToneCurve, CIVibrance, CIGammaAdjust",
       "bifrost": "springboard/render/src/color_curve.rs (vibrance, five-point tone curve); springboard/render/src/colorfx.rs (exposure, saturation, contrast, hue, temperature and tint, gamma); springboard/render/src/effect_chain.rs (named colour filters); springboard/sdk/src/image_effects.rs (app API for vibrance and tone curve); springboard/sdk/src/image_filter.rs (app API for the named filters)",
       "status": "partial",
-      "note": "built on parity/team-j-core-image; not yet verified on Midget. Vibrance and the tone curve are new models with unit tests. Exposure, hue, temperature and tint are reachable by apps through the named filter chain. The temperature model is a gain approximation, not a white-point conversion. Photos still uses brightness and contrast only."
+      "note": "built on parity/team-j-core-image; not yet verified on Midget. Vibrance and the tone curve are new models with unit tests. Exposure, hue, temperature and tint are reachable by apps through the named filter chain. The temperature model is a gain approximation, not a white-point conversion. Photos still uses brightness and contrast only. Built 2026-10-17: CIWhitePointAdjust (colorfx::white_point) and the monochrome colour kernel (colorfx::monochrome); both have host tests."
     },
     {
       "feature": "Photo and colour effects (sepia, mono, noir, vignette, false colour, posterize)",
@@ -47,14 +47,14 @@
       "apple": "CIColorCube, CIColorMap, CIPalettize, CIConvertLab, CIConvertRGBtoLab, CIColorCubeWithColorSpace",
       "bifrost": "springboard/render/src/colorcube.rs, springboard/render/src/colormap.rs, springboard/render/src/colorlab.rs, springboard/render/src/colorfx.rs, springboard/render/src/gradient.rs",
       "status": "partial",
-      "note": "Colour cube lookup, colour maps, RGB and Lab palettes and the CIE L*a*b* conversion are tested headless in tests/parity_sdk-complete-01.rs. Gap: no SDK filter wraps them for apps, the conversions ignore ICC profiles and rendering intents, and nothing is verified on Midget."
+      "note": "Colour cube lookup, colour maps, RGB and Lab palettes and the CIE L*a*b* conversion are tested headless in tests/parity_sdk-complete-01.rs. Gap: no SDK filter wraps them for apps, the conversions ignore ICC profiles and rendering intents, and nothing is verified on Midget. Refreshed 2026-10-17: covered by springboard/render/src/colormap.rs (Palette snaps colours in RGB or CIE Lab); tests colormap::tests and tests/parity_sdk-complete-01.rs."
     },
     {
       "feature": "Geometry adjustment (affine transform, crop, rotate, scale)",
       "apple": "perspectiveTransform(), perspectiveCorrection(), lanczosScaleTransform(), bicubicScaleTransform(), straighten(), keystoneCorrectionCombined()",
-      "bifrost": "springboard/render/src/gfx/rotate.rs (rotated at :157, bilinear), springboard/render/src/affine.rs (Affine, transform, crop), springboard/src/shell/photos/edit.rs (Edit: turns, crop_zoom, straighten)",
+      "bifrost": "springboard/render/src/gfx/rotate.rs (rotated at :157, bilinear), springboard/render/src/affine.rs (Affine, transform, crop), springboard/src/shell/photos/edit.rs (Edit: turns, crop_zoom, straighten); springboard/render/src/perspective.rs (homography from four corners, perspective_correct with bilinear inverse mapping); springboard/sdk/src/image_render.rs (perspective_correct for apps)",
       "status": "partial",
-      "note": "Quarter-turn and bilinear rotation exist, Photos applies crop and straighten, and affine.rs adds a general affine transform and crop, tested headless in tests/parity_sdk-complete-01.rs. Gap: there is no perspective transform or perspective correction, no SDK API for these transforms yet, and nothing is verified on Midget."
+      "note": "Quarter-turn and bilinear rotation exist, Photos applies crop and straighten, and affine.rs adds a general affine transform and crop, tested headless in tests/parity_sdk-complete-01.rs. Wave (theme-01, image filters round): perspectiveCorrection is now a pure CPU model: a homography solved from four corners, with bilinear inverse mapping and transparent edges, tested headless by hand-computed cases (identity, 2x scale, sub-quad crop, degenerate quads). Gap: CIPerspectiveTransform (arbitrary quad to quad without a fixed output rectangle) is not exposed separately, lanczos and bicubic scale are not covered by this row, no SDK filter object wraps the transform, and nothing is verified on Midget."
     },
     {
       "feature": "Composite operations and blend modes",
@@ -87,16 +87,16 @@
     {
       "feature": "Generators and gradients (checkerboard, stripes, linear and radial gradient, QR and barcode generators)",
       "apple": "CILinearGradient, CIRadialGradient, CICheckerboardGenerator, CIStripesGenerator, CIQRCodeGenerator, CIRoundedQRCodeGenerator and the other generator filters",
-      "bifrost": "springboard/render/src/generators.rs (checkerboard, stripes, linear_gradient, radial_gradient); springboard/render/src/gradient.rs; springboard/sdk/src/image_filter.rs (linear_gradient for apps)",
+      "bifrost": "springboard/render/src/generators.rs (checkerboard, stripes, linear_gradient, radial_gradient); springboard/render/src/gradient.rs; springboard/sdk/src/image_filter.rs (linear_gradient for apps); springboard/render/src/generators.rs (random noise)",
       "status": "partial",
-      "note": "Checkerboard, stripes, and linear and radial gradient generators are pure models tested headless in tests/parity_sdk-complete-01.rs. Apps get the linear gradient through image_filter. Gap: there is no QR or barcode generator, no SDK API for the checkerboard, stripes or radial gradient, and nothing is verified on Midget."
+      "note": "Checkerboard, stripes, and linear and radial gradient generators are pure models tested headless in tests/parity_sdk-complete-01.rs. Apps get the linear gradient through image_filter. Gap: there is no QR or barcode generator, no SDK API for the checkerboard, stripes or radial gradient, and nothing is verified on Midget. Built 2026-10-17: CIRandomGenerator as generators::random, with a determinism test. Refreshed 2026-10-17: generators::tests covers the generator models."
     },
     {
       "feature": "Render destinations and video filtering (CIRenderDestination, CIImageAccumulator)",
       "apple": "CIRenderDestination, CIRenderTask, CIRenderInfo, CIImageAccumulator",
-      "bifrost": "springboard/src/gpu/mod.rs (presenter for shell frames); springboard/src/gpu/filter_kernels.rs (GLSL generation, backend choice)",
+      "bifrost": "springboard/src/gpu/mod.rs (presenter for shell frames); springboard/src/gpu/filter_kernels.rs (GLSL generation, backend choice); springboard/render/src/render_destination.rs (Destination in 8-bit premultiplied, 8-bit straight or float premultiplied formats, sRGB tag, render_into with clipping, Accumulator with retain factor); springboard/sdk/src/image_render.rs (app API: Destination, render_into, Accumulator, render_to_destination, VideoFilter)",
       "status": "partial",
-      "note": "GPU path for the colour filters: CIColorMatrix, CIGammaAdjust and CISourceOverCompositing generate GLSL ES 3.00 with packed uniforms, a CPU reference evaluator and a Backend choice (CIContext useSoftwareRenderer). Pure model with host unit tests (written, not run); the GL dispatch and CIContext.render(_:to:) are not wired yet; not tested on Midget. No app API for rendering filtered frames to a destination"
+      "note": "GPU path for the colour filters: CIColorMatrix, CIGammaAdjust and CISourceOverCompositing generate GLSL ES 3.00 with packed uniforms, a CPU reference evaluator and a Backend choice (CIContext useSoftwareRenderer). Pure model with host unit tests (written, not run); the GL dispatch and CIContext.render(_:to:) are not wired yet; not tested on Midget. Wave (theme-01, image filters round): the CPU destination (pixel format, alpha mode, colour space tag, clipped region copy) and the feedback accumulator (state kept across frames, source-over with a retain factor) are pure models with host unit tests, reachable from apps through bifrost_app::image_render. VideoFilter runs an app's FilterChain on each decoded frame, with optional feedback; an app feeds it the frames it gets from its own player. Gap: the shell's media player (springboard/src/media/player.rs take_frame) is not exposed to apps, Photo Booth and Photos video do not use VideoFilter yet, the GL dispatch is not wired, and nothing is verified on Midget."
     },
     {
       "feature": "Distortion effects (twirl, pinch, bump, vortex, glass distortion, displacement, circle splash, torus lens)",
@@ -129,16 +129,16 @@
     {
       "feature": "Tile effects (kaleidoscope, op tile, affine, perspective, triangle and parallelogram tiles)",
       "apple": "CIKaleidoscope, CIOpTile, CIAffineTile, CIPerspectiveTile, CITriangleTile, CIParallelogramTile, CIFourfoldReflectedTile, CISixfoldRotatedTile",
-      "bifrost": "springboard/render/src/halftone_tile_filters.rs (kaleidoscope, op_tile, affine_tile)",
+      "bifrost": "springboard/render/src/halftone_tile_filters.rs (kaleidoscope, op_tile, affine_tile); springboard/render/src/tile_shapes.rs (triangle, parallelogram, perspective tiles)",
       "status": "partial",
-      "note": "CPU kaleidoscope, op tile and affine tile are tested headless in springboard/render/tests/parity_sdk-tests-17.rs. Perspective, triangle and parallelogram tiles are still missing. Not yet tested on Midget."
+      "note": "Kaleidoscope, op tile and affine tile are tested headless in springboard/render/tests/parity_sdk-tests-17.rs. Built 2026-10-17: triangle, parallelogram and perspective tiles are CPU models in tile_shapes.rs with host tests; their cell shapes are this model's own, not the reference cells. Not yet wired into an app or verified on Midget. Refreshed 2026-10-17: covered by springboard/render/src/tile_shapes.rs (triangle_tile, parallelogram_tile, perspective_tile); tests tile_shapes::tests."
     },
     {
       "feature": "Transition filters (dissolve, swipe, bars swipe, copy machine, flash, mod, page curl, ripple, accordion fold)",
       "apple": "CIDissolveTransition, CISwipeTransition, CIBarsSwipeTransition, CICopyMachineTransition, CIFlashTransition, CIModTransition, CIPageCurlTransition, CIRippleTransition, CIAccordionFoldTransition, CIDisintegrateWithMaskTransition",
-      "bifrost": "springboard/ui/src/video_transition.rs (cross-dissolve timing model)",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 6 tests. Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
+      "bifrost": "springboard/ui/src/video_transition.rs (cross-dissolve timing model); springboard/render/src/transition_filters.rs (swipe, bars swipe, copy machine, flash, mod, page curl, ripple, accordion fold, disintegrate)",
+      "status": "partial",
+      "note": "Cross-dissolve is verified on Midget 0.7.25 by 6 tests. Built 2026-10-17: all ten reference transitions have CPU models in transition_filters.rs with host tests. The nine new ones are not yet wired into an app or verified on Midget. Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (docs/macos-os-inventory.md)."
     },
     {
       "feature": "Reduction filters (area average, histogram, min and max, row and column average, k-means)",
@@ -157,29 +157,30 @@
     {
       "feature": "Depth and portrait effects (depth blur, disparity, masked variable blur)",
       "apple": "CIDepthBlurEffect, CIDepthToDisparity, CIDisparityToDepth, CIMaskedVariableBlur",
-      "bifrost": "springboard/render/src/depth_blur.rs (depth blur from a depth map, disparity and depth conversion) over springboard/render/src/blur_filters.rs (masked variable blur); springboard/sdk/src/image_effects.rs (app API, depth blur)",
+      "bifrost": "springboard/render/src/depth_blur.rs (depth blur from a depth map, disparity and depth conversion) over springboard/render/src/blur_filters.rs (masked variable blur); springboard/sdk/src/image_effects.rs (app API, depth blur); springboard/render/src/portrait_lighting.rs (relight from a depth map)",
       "status": "partial",
-      "note": "Blur weights, falloff, disparity conversions and the masked variable blur are tested headless in springboard/render/tests/parity_sdk-tests-01.rs. Gap: the app API in image_effects is untested, depth is not estimated from a stereo pair or a single image, the blur has no lens shape, and nothing is verified on Midget yet."
+      "note": "Blur weights, falloff, disparity conversions and the masked variable blur are tested headless in springboard/render/tests/parity_sdk-tests-01.rs. Gap: the app API in image_effects is untested, depth is not estimated from a stereo pair or a single image, the blur has no lens shape, and nothing is verified on Midget yet. Built 2026-10-17: relighting from a depth map, a Lambert model with host tests; its curves are not the reference ones."
     },
     {
       "feature": "Built-in filter catalogue (every filter by name, category and input keys)",
       "apple": "CIFilter.filterNames(inCategory:), CIFilter.attributes, CIFilterBuiltins",
       "bifrost": "springboard/render/src/filter_catalogue.rs; springboard/render/src/filter_input.rs (check_input, resolve_inputs)",
       "status": "partial",
-      "note": "Registry of the 28 built filters by reference name with category and input keys, filter_names(category) and attributes. Input values are checked against the catalogue (known filter and key, finite, in range) and resolve_inputs fills defaults, tested headless in springboard/render/tests/parity_sdk-complete-33.rs. Covers only filters that exist; not wired to a CIFilter object, and the rest of the reference set and the detectors stay gaps, which need the other filter implementations. Headless tests in springboard/render/tests/parity_sdk-tests-07.rs: headless_catalogue_holds_the_28_built_filters_with_unique_reference_names, headless_detectors_and_render_destinations_are_not_catalogued, headless_category_listing_filters_by_category_in_catalogue_order, headless_attributes_use_the_reference_keys_and_defaults, headless_filter_info_carries_its_category_and_attribute_ranges, headless_filters_without_inputs_list_no_attributes, headless_every_default_lies_inside_its_range."
+      "note": "Registry of the 56 built filters by reference name with category and input keys, filter_names(category) and attributes. Added 2026-10-17: the colour adjustment (exposure, gamma, vibrance, white point), colour effect (sepia, monochrome, posterize, false colour, invert), stylize (edges, highlight and shadow), generator (random, checkerboard, stripes), gradient (linear, radial) and transition (swipe, bars swipe, copy machine) entries. Input values are checked against their ranges by tests in filter_catalogue.rs. Gap: the catalogue is metadata; apps reach the named filter chain only for the eleven effects in effect_chain.rs. Added 2026-10-17: tile entries (triangle, parallelogram, perspective) and six transitions (flash, mod, page curl, ripple, accordion fold, disintegrate)."
     }
   ],
   "gaps": [
     "No lazy image graph: no CIImage or CIContext equivalent that defers and fuses filters; filters run eagerly on CPU images (lazy_image.rs is a model not yet used by the SDK).",
-    "No render destination for apps: filtered frames are not rendered to a destination, and the generated GPU colour shaders are not dispatched.",
+    "No GPU render destination: the render destination and accumulator (springboard/render/src/render_destination.rs) are CPU models; the generated GPU colour shaders are not dispatched, and CIContext.render(_:to:) has no GPU counterpart.",
+    "No video filtering in apps' media pipeline: VideoFilter (sdk image_render) is an API for per-frame filtering, but the shell media player is not exposed to apps and Photo Booth and Photos video are not wired to it.",
     "No custom kernel or custom filter extension point for apps (Core Image Kernel Language or Metal).",
     "Colour: the temperature and tint model is a gain approximation, not a white-point conversion. Photos uses brightness and contrast only.",
     "Feature detection covers axis-aligned bright rectangles only. No perspective quadrilaterals, faces, text, barcodes, or barcode and QR generation.",
     "Depth blur needs an app-supplied depth map; there is no depth estimation from stereo or a single image, and no lens shape.",
-    "Missing filters: comic, spot light, depth of field, circle splash, torus lens, and the perspective, triangle and parallelogram tiles.",
+    "Tiles: the torus lens and circle splash profiles are approximate. Triangle, parallelogram and perspective tiles exist (tile_shapes.rs).",
     "Photo looks approximate the reference tone curves; they are not exact.",
-    "Colour lookup: palettize is missing; colour cube, colour map and Lab are models only.",
     "Image input limited to JPEG and PNG. No RAW (CIRAWFilter), no HEIF, no colour-managed decoding path for apps.",
-    "The built-in filter catalogue lists 28 filters by name; the full reference catalogue is not covered."
+    "The built-in filter catalogue lists 28 filters by name; the full reference catalogue is not covered.",
+    "Colour lookup: no SDK filter wraps the colour cube, colour map, Lab or palette models; apps cannot reach them."
   ]
 }

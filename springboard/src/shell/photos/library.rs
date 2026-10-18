@@ -52,6 +52,12 @@ impl Photo {
     }
 }
 
+/// The movie files Photos shows beside the pictures: MP4 containers, QuickTime included.
+pub fn is_video_name(name: &str) -> bool {
+    let name = name.to_ascii_lowercase();
+    name.ends_with(".mp4") || name.ends_with(".m4v") || name.ends_with(".mov")
+}
+
 /// How much of a JPEG is read to find its capture time.
 const EXIF_HEAD: u64 = 64 * 1024;
 
@@ -82,6 +88,28 @@ pub fn duplicate(path: &Path) -> std::io::Result<PathBuf> {
 }
 
 /// Every picture under `dirs` (hidden entries skipped), oldest first.
+/// How much of a movie is read to find its content identifier (a Live Photo clip is a few megabytes).
+const MOVIE_LIMIT: u64 = 64 * 1024 * 1024;
+
+/// The Live Photo content identifier of a file: the Apple maker note of a JPEG, or the metadata of a movie. None for
+/// any other file and for files without one.
+pub fn content_id(path: &Path) -> Option<String> {
+    use std::io::Read;
+    let name = path.file_name()?.to_string_lossy().to_ascii_lowercase();
+    if is_video_name(&name) {
+        let mut bytes = Vec::new();
+        std::fs::File::open(path).ok()?.take(MOVIE_LIMIT).read_to_end(&mut bytes).ok()?;
+        return bifrost_ui::photo_media::quicktime_content_id(&bytes);
+    }
+    if !(name.ends_with(".jpg") || name.ends_with(".jpeg")) {
+        return None;
+    }
+    let mut head = Vec::new();
+    std::fs::File::open(path).ok()?.take(EXIF_HEAD).read_to_end(&mut head).ok()?;
+    let note = super::exif::parse(&head)?.maker_note?;
+    bifrost_ui::photo_media::apple_content_id(&note)
+}
+
 pub fn scan(dirs: &[PathBuf]) -> Vec<Photo> {
     scan_at(dirs, 0)
 }
@@ -109,7 +137,7 @@ fn walk(dir: &Path, depth: usize, out: &mut Vec<Photo>, offset: i32) {
             if depth + 1 < MAX_DEPTH {
                 walk(&path, depth + 1, out, offset);
             }
-        } else if crate::cg::imageio::is_image_name(&name) {
+        } else if crate::cg::imageio::is_image_name(&name) || is_video_name(&name) {
             out.extend(Photo::from_path_at(path, offset));
         }
     }

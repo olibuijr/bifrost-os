@@ -13,10 +13,10 @@
  "summary": {
   "features": 46,
   "parity": 10,
-  "partial": 31,
-  "gap": 3,
+  "partial": 34,
+  "gap": 0,
   "n/a": 2,
-  "coverage_pct": 58.0
+  "coverage_pct": 61.4
  },
  "features": [
   {
@@ -68,10 +68,10 @@
    "feature": "RTFD (rich text with attachments/images)",
    "area": "document",
    "apple": "Info.plist: RTFD (Editor); Localizable: RTFD save notices",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Not done. RTFD is a folder package (TXT.rtf plus the attachment files), and the SDK document controller reads and writes one byte stream per document. Needs an SDK folder-package document type and an inline attachment cell in text.rs.",
-   "wire": "Add an SDK folder-package document type, then an RTFD reader and writer in rtfd.rs with an attachment cell kind in text.rs."
+   "status": "partial",
+   "bifrost": "springboard/apps/textedit-desktop/src/view.rs:draw_object (inline drawing, measure_in), springboard/apps/textedit-desktop/src/main.rs:picture_event, insert_picture, drag, picture_of, put_picture, springboard/apps/textedit-desktop/src/rtfd.rs:32 (read), :86 (write), springboard/apps/textedit-desktop/src/main.rs:2277 (Input::Open, shared text), springboard/apps/textedit-desktop/manifest.toml (package_types, handles public.rtfd:default), springboard/src/shell/docpanel.rs:213 (is_declared_package), :220 (row), :956 (doc_request packages), springboard/src/bare/docbroker.rs:184 (begin_save folder for a package name), :244 (commit_package), springboard/sdk/src/document.rs:606 (on_opened folder grant), :652 (open_package), :720 (save_to a folder), :760 (on_saved keeps the folder), springboard/sdk/src/document_package.rs:77 (write_package_contents), :46, :82, springboard/ui/src/uttype.rs:is_package_name",
+   "note": "Works in TextEdit: attachments are drawn inline, sized to the text width, selected and deleted as one character; Insert > Image and image drops insert PNG and JPEG files; copy, cut and paste of pictures go through the pasteboard; Make Plain Text asks before removing attachments; docx, odt and html leave pictures out; RTF keeps them as NeXTGraphic. Open: the open panel shows a folder of a package type the app declares as one file row, chosen whole and not navigated (docpanel.rs:213-225, :956); Files and the Dock hand a package over as a folder grant that the controller opens (document.rs:606, :652), and the shell routes it by the manifest handles. Save As and Rename to a package name: the broker hands the controller a temporary folder (docbroker.rs:184), the controller writes the package's files into it (document.rs:720), and commit moves the old package aside and puts the new folder in place (docbroker.rs:244); a later save writes the folder back (document.rs:760). Input::Open with shared text opens an untitled document (main.rs:2277); a file URL is refused because files arrive as grants. Partial, not parity: the code paths are read but nothing was built or run, so this needs the focused tests and a Midget check first. Known gaps: Rename leaves the old package in place, as it does for files (SaveOp::Rename, document.rs:124); the package is written through the path the app reads from /proc/self/fd, not through the grant; NeXTGraphic width and height units (written as twips) are unverified against real RTFD files.",
+   "wire": "(1) Build and run the focused tests: docpanel a_package_the_app_declares_is_one_file_row, docbroker a_package_is_saved_as_a_folder, sdk document save_as_to_a_package_name and a_package_folder_opens, document_package the_files_go_into_a_folder, textedit an_untitled_document. (2) On Midget: open a .rtfd from Files and from TextEdit's Open panel, Save As a new .rtfd over an existing one, and reopen it. (3) Make Rename remove the old package (decide with the file rename). (4) Attachment pictures decode once per layout rebuild (main.rs ensure_layout); a large document with many pictures re-decodes on every edit."
   },
   {
    "feature": "Word .docx / .doc / Word XML / ODT / web archive",
@@ -212,10 +212,10 @@
    "feature": "Speech",
    "area": "menu",
    "apple": "Edit.nib: Edit > Speech > Start/Stop Speaking",
-   "status": "gap",
-   "bifrost": "",
-   "note": "No speech output. The SDK speech module models utterances but has no audio engine behind it, and the device rules forbid sound that the user did not ask for.",
-   "wire": "Start/Stop Speaking items calling an audio speech service once one exists."
+   "status": "partial",
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs (Action::SpeakStart, Action::SpeakStop; Text > Speech); springboard/apps/textedit-desktop/src/text.rs (selected_text); springboard/sdk/src/speech.rs; springboard/src/shell/services/speech.rs",
+   "note": "Start Speaking speaks the selection, else the whole document, through the shell speech service (espeak-ng). Stop Speaking ends it. The items sit in Text > Speech because the shell's Edit menu takes no app items. Host unit tests cover the service and the engine arguments; the menu wiring has no test.",
+   "wire": "Verify on Midget with espeak-ng installed (speak, stop, the menu entries). Move the items under Edit once the shell lets an app add to Edit."
   },
   {
    "feature": "Bold / Italic / Underline",
@@ -419,10 +419,10 @@
    "feature": "Services: new window with selection / open selected file",
    "area": "integration",
    "apple": "Info.plist NSServices: New window containing selection; Open selected file",
-   "status": "gap",
-   "bifrost": "",
-   "note": "No services provider. The shell's Services list (springboard/ui/src/services_menu.rs) is fixed, and the document controller opens files only through the panel, so the two services need a shell change and a controller path that opens a named file.",
-   "wire": "Add the two services to the shell's Services list, routed to a text intent that creates a document with the text or opens the named path; needs the SDK controller path."
+   "status": "partial",
+   "bifrost": "springboard/apps/textedit-desktop/manifest.toml ([[service]] \"New Window Containing Selection\" and \"Open Selected File\"); springboard/apps/textedit-desktop/src/main.rs (rpc service.new_window_with_text, service.open_selected_file); springboard/ui/src/app_services.rs (bifrost.file-path-text type for a selected path); springboard/src/shell/services_route.rs",
+   "note": "Implemented from the code, not yet built or run on the host or Midget. Open Selected File reads the path directly with std::fs::read (main.rs:2110, a 16 MB cap), not through a file grant, so it works only where the app can read that path; it opens the file as an untitled document, so Save asks for a place to write it. New Window Containing Selection adds an untitled document to the editor's one window (main.rs:2086) rather than opening a separate window.",
+   "wire": "Build, run the focused tests, then select text and a text file path in another app and check both services on Midget; decide whether Open Selected File should open a real file grant."
   },
   {
    "feature": "Help",

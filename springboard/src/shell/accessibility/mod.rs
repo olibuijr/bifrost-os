@@ -14,14 +14,22 @@ use super::prefs::Prefs;
 pub mod actions;
 pub mod app_rotors;
 pub mod banner;
+pub mod braille_out;
 pub mod dwell;
 pub mod earcons;
 pub mod guided;
+pub mod motion_cues;
 pub mod reader;
 pub mod shortcut;
 pub mod shortcut_panel;
 pub mod speech;
+pub mod spoken;
+pub mod switch_control;
+pub mod switch_panels;
+pub mod switch_scan;
 pub mod tree;
+pub mod voice_control;
+pub mod voice_overlay;
 pub mod walk;
 pub mod zoom;
 
@@ -31,6 +39,16 @@ pub const ZOOMS: [(&str, f32); 2] = [("Standard", 1.0), ("Larger", 1.15)];
 pub const HOLD_MS: [(&str, u32); 5] = [("Off", 0), ("0.5 s", 500), ("1 s", 1000), ("1.5 s", 1500), ("2 s", 2000)];
 /// Reduce Motion: an open, close or switch becomes a cross-fade this long.
 pub const REDUCED_MS: f64 = 150.0;
+/// Switch Scanning: how long the highlight rests on an element before it moves to the next (ms).
+pub const SWITCH_SCAN_MS: f64 = 1500.0;
+/// Screen Reader speaking rate choices, in words per minute (the engine's `-s` option).
+pub const SPEECH_RATES: [(&str, u32); 3] = [("Slow", 140), ("Normal", 180), ("Fast", 240)];
+/// Screen Reader pitch choices (the engine's `-p` option, 0 to 99).
+pub const SPEECH_PITCHES: [(&str, u32); 3] = [("Low", 30), ("Normal", 50), ("High", 70)];
+/// Screen Reader punctuation choices: how much punctuation the voice names.
+pub const SPEECH_PUNCTUATION: [(&str, speech::Punctuation); 3] = [("None", speech::Punctuation::Off), ("Some", speech::Punctuation::Symbols), ("All", speech::Punctuation::All)];
+/// Screen Reader voice choices: the label and the engine voice name (empty is the engine's default voice).
+pub const SPEECH_VOICES: [(&str, &str); 4] = [("System Default", ""), ("English (US)", "en-us"), ("English (UK)", "en-gb"), ("Icelandic", "is")];
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct AccessibilitySettings {
@@ -48,16 +66,48 @@ pub struct AccessibilitySettings {
     pub guided_access: bool,
     /// Screen Reader: a keyboard cursor walks the visible Settings page and speaks each element (`reader`).
     pub screen_reader: bool,
+    /// Switch Scanning: the screen reader's cursor steps through the screen on a timer (`SWITCH_SCAN_MS`) and Ctrl+Alt+Space
+    /// presses the element it rests on, so one switch can drive the whole screen (`reader::Reader::scan_due`).
+    pub switch_scan: bool,
+    /// Voice Control: the shell listens (on device, with the dictation model) and runs spoken commands (`voice_control`). Stored
+    /// under the key the recognizer service reads (`services::recognizer::VOICE_CONTROL_PREF`).
+    pub voice_control: bool,
+    /// Sticky Keys: a modifier tapped once holds for the next key, tapped twice it locks (`sticky_keys`, read by `HwKeys`).
+    pub sticky_keys: bool,
+    /// Dwell Control: index into `dwell::DELAYS_MS` (0 is Off). The shell's input loop clicks a resting pointer (`dwell_delay_ms`).
+    pub dwell: usize,
+    /// Slow Keys: index into `slow_keys::DELAYS_MS` (0 is Off). A key counts only when held for the delay (`slow_delay_ms`).
+    pub slow: usize,
+    /// Mouse Keys: the number keypad moves the pointer and the 5 key clicks (`mouse_keys`, read by the input loop).
+    pub mouse_keys: bool,
+    /// Switch Control: the keyboard cursor of the screen reader steps through the screen and selects without speech (`reader`).
+    pub switch_control: bool,
+    /// Voice Control: spoken commands such as "press Save" run against the element map (`voice_control`).
+    pub voice_control: bool,
+    /// Vehicle Motion Cues: dots at the screen edge follow the motion of a moving vehicle (`motion_cues`). Off until chosen.
+    pub motion_cues: bool,
+    /// Live Captions: the sound the computer plays is turned into captions on screen (`live_captions`, off by default).
+    pub live_captions: bool,
+    /// Switch Control: the switch keys step through a panel of controls on screen and choose one (`switch_control`).
+    pub switch_control: bool,
     /// index into `HOLD_MS`
     pub hold: usize,
     /// Cursor Size, 0..1 from the Settings slider: the pointer draws at 1x up to 2x (`cursor_scale`)
     pub cursor_size: f32,
     /// the features Option+Cmd+F5 switches, chosen in the Accessibility Shortcut panel (`shortcut::PREF`), panel order
     pub shortcut: Vec<shortcut::Feature>,
+    /// Screen Reader speaking rate in words per minute, from `speech::MIN_RATE` to `speech::MAX_RATE` (`SPEECH_RATES` offers three)
+    pub speech_rate: u32,
+    /// Screen Reader pitch, 0 to `speech::MAX_PITCH` (`SPEECH_PITCHES` offers three)
+    pub speech_pitch: u32,
+    /// Screen Reader voice: an engine voice name from `SPEECH_VOICES`, or empty for the engine's default
+    pub speech_voice: String,
+    /// Screen Reader punctuation: an index into `SPEECH_PUNCTUATION` (0, None, keeps the engine's own behaviour)
+    pub speech_punctuation: usize,
 }
 
 impl AccessibilitySettings {
-    pub const DEFAULT: Self = AccessibilitySettings { text_scale: 1.0, bold_text: false, zoom: 0, reduce_motion: false, increase_contrast: false, reduce_transparency: false, button_shapes: false, dim_flashing_lights: false, guided_access: false, screen_reader: false, hold: 0, cursor_size: 0.0, shortcut: Vec::new() };
+    pub const DEFAULT: Self = AccessibilitySettings {text_scale: 1.0, bold_text: false, zoom: 0, reduce_motion: false, increase_contrast: false, reduce_transparency: false, button_shapes: false, dim_flashing_lights: false, guided_access: false, screen_reader: false, sticky_keys: false, dwell: 0, slow: 0, mouse_keys: false, switch_control: false, voice_control: false, motion_cues: false, hold: 0, cursor_size: 0.0, shortcut: Vec::new(), speech_rate: 180, speech_pitch: 50, speech_voice: String::new(), speech_punctuation: 0, live_captions: false, switch_scan: false};
 
     /// Reads every key, keeping the default for a missing or malformed one.
     pub fn load(p: &Prefs) -> Self {
@@ -75,9 +125,24 @@ impl AccessibilitySettings {
             dim_flashing_lights: flag("a11y_dim_flashing_lights", d.dim_flashing_lights),
             guided_access: flag("a11y_guided_access", d.guided_access),
             screen_reader: flag("a11y_screen_reader", d.screen_reader),
+            switch_scan: flag("a11y_switch_scan", d.switch_scan),
+            voice_control: flag(super::services::recognizer::VOICE_CONTROL_PREF, d.voice_control),
+            sticky_keys: flag("a11y_sticky_keys", d.sticky_keys),
+            dwell: index("a11y_dwell", dwell::DELAYS_MS.len()).unwrap_or(d.dwell),
+            slow: index("a11y_slow_keys", super::slow_keys::DELAYS_MS.len()).unwrap_or(d.slow),
+            mouse_keys: flag("a11y_mouse_keys", d.mouse_keys),
+            motion_cues: flag("a11y_motion_cues", d.motion_cues),
+            switch_control: flag("a11y_switch_control", d.switch_control),
+            voice_control: flag("a11y_voice_control", d.voice_control),
+            live_captions: flag("a11y_live_captions", d.live_captions),
+            switch_control: flag("a11y_switch_control", d.switch_control),
             hold: index("a11y_hold", HOLD_MS.len()).unwrap_or(d.hold),
             cursor_size: p.get_parsed::<f32>("a11y_cursor_size").map_or(d.cursor_size, |v| v.clamp(0.0, 1.0)),
             shortcut: shortcut::parse(p.get(shortcut::PREF).unwrap_or("")),
+            speech_rate: p.get_parsed::<u32>("a11y_speech_rate").map_or(d.speech_rate, |v| v.clamp(speech::MIN_RATE, speech::MAX_RATE)),
+            speech_pitch: p.get_parsed::<u32>("a11y_speech_pitch").map_or(d.speech_pitch, |v| v.min(speech::MAX_PITCH)),
+            speech_voice: p.get("a11y_speech_voice").filter(|v| v.is_empty() || bifrost_core::speech_engine::voice_name_ok(v)).unwrap_or("").to_string(),
+            speech_punctuation: index("a11y_speech_punctuation", SPEECH_PUNCTUATION.len()).unwrap_or(d.speech_punctuation),
         }
     }
 
@@ -93,9 +158,24 @@ impl AccessibilitySettings {
             ("a11y_dim_flashing_lights", flag(self.dim_flashing_lights)),
             ("a11y_guided_access", flag(self.guided_access)),
             ("a11y_screen_reader", flag(self.screen_reader)),
+            ("a11y_switch_scan", flag(self.switch_scan)),
+            (super::services::recognizer::VOICE_CONTROL_PREF, flag(self.voice_control)),
+            ("a11y_sticky_keys", flag(self.sticky_keys)),
+            ("a11y_dwell", &self.dwell.to_string()),
+            ("a11y_slow_keys", &self.slow.to_string()),
+            ("a11y_mouse_keys", flag(self.mouse_keys)),
+            ("a11y_motion_cues", flag(self.motion_cues)),
+            ("a11y_switch_control", flag(self.switch_control)),
+            ("a11y_voice_control", flag(self.voice_control)),
+            ("a11y_live_captions", flag(self.live_captions)),
+            ("a11y_switch_control", flag(self.switch_control)),
             ("a11y_hold", &self.hold.to_string()),
             ("a11y_cursor_size", &format!("{:.3}", self.cursor_size)),
             (shortcut::PREF, &shortcut::encode(&self.shortcut)),
+            ("a11y_speech_rate", &self.speech_rate.to_string()),
+            ("a11y_speech_pitch", &self.speech_pitch.to_string()),
+            ("a11y_speech_voice", &self.speech_voice),
+            ("a11y_speech_punctuation", &self.speech_punctuation.to_string()),
         ]);
         if let Err(e) = result {
             eprintln!("springboard: settings.ini: {e}");
@@ -106,8 +186,23 @@ impl AccessibilitySettings {
         ZOOMS[self.zoom.min(ZOOMS.len() - 1)].1
     }
 
+    /// The Slow Keys acceptance delay in milliseconds, 0 when Slow Keys is off.
+    pub fn slow_ms(&self) -> u64 {
+        super::slow_keys::delay_for_index(self.slow)
+    }
+
+    /// The dwell delay in milliseconds, 0 when Dwell Control is off.
+    pub fn dwell_ms(&self) -> u64 {
+        dwell::delay_for_index(self.dwell)
+    }
+
     pub fn hold_ms(&self) -> u32 {
         HOLD_MS[self.hold.min(HOLD_MS.len() - 1)].1
+    }
+
+    /// The voice the Screen Reader speaks with: rate, pitch and voice from Settings.
+    pub fn speech_config(&self) -> speech::Config {
+        speech::Config { rate: self.speech_rate, pitch: self.speech_pitch, voice: self.speech_voice.clone(), punctuation: SPEECH_PUNCTUATION[self.speech_punctuation.min(SPEECH_PUNCTUATION.len() - 1)].1 }
     }
 
     /// The pointer's scale: 1x at Normal, 2x at Large (the Cursor Size slider).
@@ -117,6 +212,10 @@ impl AccessibilitySettings {
 
     /// Makes these the values the hooks report.
     pub fn publish(&self) {
+        STICKY_KEYS.store(self.sticky_keys, std::sync::atomic::Ordering::Relaxed);
+        DWELL_MS.store(self.dwell_ms(), std::sync::atomic::Ordering::Relaxed);
+        SLOW_MS.store(self.slow_ms(), std::sync::atomic::Ordering::Relaxed);
+        MOUSE_KEYS.store(self.mouse_keys, std::sync::atomic::Ordering::Relaxed);
         bifrost_render::appearance::publish(bifrost_render::appearance::Appearance {
             text_scale: self.text_scale, zoom: self.zoom_factor(), hold_ms: self.hold_ms(),
             bold: self.bold_text, reduce_motion: self.reduce_motion,
@@ -134,6 +233,38 @@ impl Default for AccessibilitySettings {
     }
 }
 
+/// Sticky Keys as the last `publish` set it. The key loop keeps `HwKeys` in step with this.
+static STICKY_KEYS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Whether Settings > Accessibility > Sticky Keys is on.
+pub fn sticky_keys() -> bool {
+    STICKY_KEYS.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Dwell Control's delay in milliseconds as the last `publish` set it (0 is off). The input loop reads this.
+static DWELL_MS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// The Dwell Control delay in milliseconds, or 0 when Dwell Control is off.
+pub fn dwell_delay_ms() -> u64 {
+    DWELL_MS.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Mouse Keys as the last `publish` set it. The input loop keeps `mouse_keys::MouseKeys` in step with this.
+static MOUSE_KEYS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Whether Settings > Accessibility > Keyboard > Mouse Keys is on.
+pub fn mouse_keys() -> bool {
+    MOUSE_KEYS.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Slow Keys' acceptance delay in milliseconds as the last `publish` set it (0 is off). The input loop reads this.
+static SLOW_MS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// The Slow Keys acceptance delay in milliseconds, or 0 when Slow Keys is off.
+pub fn slow_delay_ms() -> u64 {
+    SLOW_MS.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 pub use bifrost_render::appearance::{text_scale, bold_text, display_zoom, reduce_motion, increase_contrast, reduce_transparency, button_shapes, touch_hold_ms, contrast, contrast_on, button_shape_radius, anim_ms, long_press_ms};
 
 #[cfg(test)]
@@ -148,6 +279,154 @@ mod tests {
         assert_eq!(AccessibilitySettings::load(&p), a);
         assert_eq!(a.hold_ms(), 1500);
         assert!((a.zoom_factor() - 1.15).abs() < 1e-6);
+    }
+
+    #[test]
+    fn sticky_keys_round_trips_and_is_off_by_default() {
+        let mut p = Prefs::memory();
+        assert!(!AccessibilitySettings::load(&p).sticky_keys);
+        let a = AccessibilitySettings { sticky_keys: true, ..Default::default() };
+        a.save(&mut p);
+        assert!(AccessibilitySettings::load(&p).sticky_keys);
+        // the global the key loop reads: set directly, because `publish` also writes the window server's display file
+        STICKY_KEYS.store(true, std::sync::atomic::Ordering::Relaxed);
+        assert!(sticky_keys());
+        STICKY_KEYS.store(false, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    #[test]
+    fn vehicle_motion_cues_round_trip_and_are_off_by_default() {
+        let mut p = Prefs::memory();
+        assert!(!AccessibilitySettings::load(&p).motion_cues);
+        let a = AccessibilitySettings { motion_cues: true, ..Default::default() };
+        a.save(&mut p);
+        assert!(AccessibilitySettings::load(&p).motion_cues);
+        assert_eq!(p.get("a11y_motion_cues"), Some("1"));
+    }
+
+    #[test]
+    fn switch_control_and_voice_control_round_trip_and_are_off_by_default() {
+        let mut p = Prefs::memory();
+        let d = AccessibilitySettings::load(&p);
+        assert!(!d.switch_control && !d.voice_control);
+        let a = AccessibilitySettings { switch_control: true, voice_control: true, ..Default::default() };
+        a.save(&mut p);
+        assert_eq!(AccessibilitySettings::load(&p), a);
+        assert_eq!((p.get("a11y_switch_control"), p.get("a11y_voice_control")), (Some("1"), Some("1")));
+        let only_voice = AccessibilitySettings { voice_control: true, ..Default::default() };
+        only_voice.save(&mut p);
+        let back = AccessibilitySettings::load(&p);
+        assert!(back.voice_control && !back.switch_control, "each switch has its own key");
+    }
+
+    #[test]
+    fn live_captions_round_trips_and_is_off_by_default() {
+        let mut p = Prefs::memory();
+        assert!(!AccessibilitySettings::load(&p).live_captions);
+        let a = AccessibilitySettings { live_captions: true, ..Default::default() };
+        a.save(&mut p);
+        assert!(AccessibilitySettings::load(&p).live_captions);
+        assert_eq!(p.get("a11y_live_captions"), Some("1"));
+    }
+
+    #[test]
+    fn switch_scanning_round_trips_and_is_off_by_default() {
+        let mut p = Prefs::memory();
+        assert!(!AccessibilitySettings::load(&p).switch_scan);
+        let a = AccessibilitySettings { switch_scan: true, ..Default::default() };
+        a.save(&mut p);
+        assert!(AccessibilitySettings::load(&p).switch_scan);
+        assert!(SWITCH_SCAN_MS > 0.0);
+    }
+
+    #[test]
+    fn mouse_keys_round_trips_and_is_off_by_default() {
+        let mut p = Prefs::memory();
+        assert!(!AccessibilitySettings::load(&p).mouse_keys);
+        let a = AccessibilitySettings { mouse_keys: true, ..Default::default() };
+        a.save(&mut p);
+        assert!(AccessibilitySettings::load(&p).mouse_keys);
+    }
+
+    #[test]
+    fn switch_control_round_trips_and_is_off_by_default() {
+        let mut p = Prefs::memory();
+        assert!(!AccessibilitySettings::load(&p).switch_control);
+        let a = AccessibilitySettings { switch_control: true, ..Default::default() };
+        a.save(&mut p);
+        assert!(AccessibilitySettings::load(&p).switch_control);
+    }
+
+    #[test]
+    fn slow_keys_round_trips_and_maps_to_a_delay() {
+        let mut p = Prefs::memory();
+        assert_eq!(AccessibilitySettings::load(&p).slow_ms(), 0);
+        let a = AccessibilitySettings { slow: 2, ..Default::default() };
+        a.save(&mut p);
+        let b = AccessibilitySettings::load(&p);
+        assert_eq!(b.slow, 2);
+        assert_eq!(b.slow_ms(), 500);
+        p.set("a11y_slow_keys", "99").unwrap();
+        assert_eq!(AccessibilitySettings::load(&p).slow, 0);
+    }
+
+    #[test]
+    fn dwell_round_trips_maps_to_a_delay_and_falls_back() {
+        let mut p = Prefs::memory();
+        assert_eq!(AccessibilitySettings::load(&p).dwell_ms(), 0);
+        let a = AccessibilitySettings { dwell: 2, ..Default::default() };
+        a.save(&mut p);
+        let b = AccessibilitySettings::load(&p);
+        assert_eq!(b.dwell, 2);
+        assert_eq!(b.dwell_ms(), 1000);
+        // an index past the last choice is ignored, so the default (Off) holds
+        p.set("a11y_dwell", "99").unwrap();
+        assert_eq!(AccessibilitySettings::load(&p).dwell, 0);
+    }
+
+    #[test]
+    fn speech_punctuation_round_trips_and_defaults_to_none() {
+        let mut p = Prefs::memory();
+        assert_eq!(AccessibilitySettings::load(&p).speech_config().punctuation, speech::Punctuation::Off);
+        let a = AccessibilitySettings { speech_punctuation: 2, ..Default::default() };
+        a.save(&mut p);
+        assert_eq!(AccessibilitySettings::load(&p).speech_config().punctuation, speech::Punctuation::All);
+        let some = AccessibilitySettings { speech_punctuation: 1, ..Default::default() };
+        assert_eq!(some.speech_config().punctuation, speech::Punctuation::Symbols);
+        p.set("a11y_speech_punctuation", "9").unwrap();
+        assert_eq!(AccessibilitySettings::load(&p).speech_punctuation, 0, "an index past the last choice keeps the default");
+    }
+
+    #[test]
+    fn speech_rate_pitch_and_voice_round_trip_and_fall_back() {
+        let mut p = Prefs::memory();
+        let a = AccessibilitySettings { speech_rate: 240, speech_pitch: 70, speech_voice: "is".into(), ..Default::default() };
+        a.save(&mut p);
+        let b = AccessibilitySettings::load(&p);
+        assert_eq!((b.speech_rate, b.speech_pitch, b.speech_voice.as_str()), (240, 70, "is"));
+        assert_eq!(b.speech_config(), speech::Config { rate: 240, pitch: 70, voice: "is".into(), punctuation: speech::Punctuation::Off });
+        // out-of-range rate and pitch are clamped, a voice that is not a plain word is dropped
+        p.set("a11y_speech_rate", "9000").unwrap();
+        p.set("a11y_speech_pitch", "500").unwrap();
+        p.set("a11y_speech_voice", "-bad voice").unwrap();
+        let c = AccessibilitySettings::load(&p);
+        assert_eq!((c.speech_rate, c.speech_pitch, c.speech_voice.as_str()), (speech::MAX_RATE, speech::MAX_PITCH, ""));
+        // a missing key keeps the default: 180 words a minute, pitch 50, the engine's own voice
+        let d = AccessibilitySettings::load(&Prefs::memory());
+        assert_eq!(d.speech_config(), speech::Config::default());
+    }
+
+    #[test]
+    fn every_speech_choice_is_inside_the_engine_range() {
+        for (_, r) in SPEECH_RATES {
+            assert!((speech::MIN_RATE..=speech::MAX_RATE).contains(&r));
+        }
+        for (_, p) in SPEECH_PITCHES {
+            assert!(p <= speech::MAX_PITCH);
+        }
+        for (_, v) in SPEECH_VOICES {
+            assert!(v.is_empty() || bifrost_core::speech_engine::voice_name_ok(v));
+        }
     }
 
     #[test]

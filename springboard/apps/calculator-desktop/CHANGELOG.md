@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.13.0 — 2026-10-17
+
+- Convert > Currency: ten currencies converted through the day's European Central Bank reference rates. The file is
+  downloaded at most once a day on a background thread, kept in the app's data folder, and its date is shown under
+  the units (`Updated <date>`). Offline, the last copy stays in use; with no copy, the result reads Unavailable.
+
+## 1.12.0 — 2026-10-17
+
+- Window > Always on Top: a checked item that keeps the calculator window above the other windows. The shell
+  keeps the level while the app runs (`bifrost_app::windows::set_level`).
+
 ## 1.11.3 — 2026-10-14
 
 - History uses the shared Golden Gate source-list rows; calculator geometry now names its display, menu and history

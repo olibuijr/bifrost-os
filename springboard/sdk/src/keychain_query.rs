@@ -111,7 +111,7 @@ impl Status {
         match e {
             Error::DuplicateItem => Status::DuplicateItem,
             Error::ItemNotFound => Status::ItemNotFound,
-            Error::NotPermitted => Status::NotAvailable,
+            Error::NotPermitted | Error::AuthFailed => Status::NotAvailable,
             Error::Param => Status::Param,
             Error::Io(_) => Status::Io,
         }

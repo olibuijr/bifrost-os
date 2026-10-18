@@ -2,12 +2,86 @@
 //! `APIC` (or `PIC`) frame, FLAC in a PICTURE metadata block, MP4 and M4A in the `covr` atom of the iTunes-style
 //! metadata list. A file with no cover gets its type icon.
 //!
-//! A video's first key frame is not drawn: the only video decoder in the system is the hardware one behind
-//! `media::VideoDecoder`, which needs a display device and cannot run in the thumbnail worker.
+//! A video with no embedded cover gets its poster frame: the first key frame of its H.264 or HEVC track, decoded by the
+//! system decoder (`media::hwdec`, libavcodec through `dlopen`: VA-API when the GPU has it, software otherwise). Files
+//! the decoder cannot open fall back to the waveform card.
 
 use super::images::decode_fitted;
-use bifrost_ui::thumb_service::{SourceFile, ThumbArt, ThumbProvider};
+use crate::media::mp4::{self, Codec as Mp4Codec, Demuxer, Kind as TrackKind};
+use crate::media::source::FileSource;
+use crate::media::Codec;
+use bifrost_ui::thumb_service::{Pixels, SourceFile, ThumbArt, ThumbProvider};
 use std::io::{Read, Seek, SeekFrom};
+use std::path::Path;
+
+/// Access units read while looking for a key frame and a decoded picture before giving up.
+const POSTER_SAMPLES: usize = 240;
+
+/// The poster frame of a video file: its first key frame, decoded and fitted into a square of `px` pixels. `None` for
+/// a file with no H.264 or HEVC track, or when the decoder cannot produce a picture.
+pub fn poster_frame(path: &Path, px: u32) -> Option<Pixels> {
+    let mut src = FileSource::open(path).ok()?;
+    let mut demux = Demuxer::open(&mut src).ok()?;
+    let (kind, config, hevc) = match &demux.video()?.codec {
+        Mp4Codec::H264 { avcc, .. } => (Codec::H264, avcc.clone(), false),
+        Mp4Codec::Hevc { hvcc, .. } => (Codec::Hevc, hvcc.clone(), true),
+        Mp4Codec::Aac { .. } => return None,
+    };
+    let (width, height) = match demux.video()?.codec {
+        Mp4Codec::H264 { width, height, .. } | Mp4Codec::Hevc { width, height, .. } => (width, height),
+        Mp4Codec::Aac { .. } => return None,
+    };
+    let mut decoder = crate::media::hwdec::open(kind).ok()?;
+    decoder.configure(kind, &config, width, height).ok()?;
+    let len_size = mp4::nal_length_size(&config, hevc);
+    let parameter_sets = if hevc { mp4::hvcc_parameter_sets(&config) } else { mp4::avcc_parameter_sets(&config) };
+    let side = px.max(1) as usize;
+    let mut started = false;
+    let mut sent_parameter_sets = false;
+    for _ in 0..POSTER_SAMPLES {
+        let sample = match demux.next(TrackKind::Video, &mut src) {
+            Ok(Some(sample)) => sample,
+            _ => break,
+        };
+        // the picture starts at the first key frame; the samples before it cannot be decoded
+        if !started && !sample.sync {
+            continue;
+        }
+        started = true;
+        let mut access_unit = Vec::new();
+        if !sent_parameter_sets {
+            access_unit.extend_from_slice(&parameter_sets);
+            sent_parameter_sets = true;
+        }
+        access_unit.extend(mp4::to_annex_b(&sample.data, len_size));
+        decoder.push(&access_unit, (sample.pts_ms * 1000.0) as i64).ok()?;
+        if let Ok(Some(frame)) = decoder.pull() {
+            let fitted = crate::imgdec::contain(&frame.to_rgba(), side, side);
+            return pixels_of_frame(&fitted);
+        }
+    }
+    None
+}
+
+fn pixels_of_frame(img: &bifrost_render::gfx::Image) -> Option<Pixels> {
+    Pixels::new(img.w, img.h, img.px.clone())
+}
+
+#[cfg(test)]
+mod poster_tests {
+    use super::*;
+
+    #[test]
+    fn a_missing_or_unreadable_file_has_no_poster_frame() {
+        assert!(poster_frame(Path::new("/nonexistent/bifrost-video.mp4"), 64).is_none());
+        let dir = std::env::temp_dir().join(format!("bifrost-poster-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("not-a-video.mp4");
+        std::fs::write(&file, b"this is not an mp4 container").unwrap();
+        assert!(poster_frame(&file, 64).is_none());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+}
 
 /// Largest tag or metadata block read.
 const TAG_MAX: usize = 16 << 20;
@@ -204,6 +278,9 @@ impl ThumbProvider for AudiovisualProvider {
     }
     fn render(&self, file: &SourceFile, px: u32) -> Option<ThumbArt> {
         if let Some(p) = cover_of(&file.path).and_then(|c| decode_fitted(&c, px)) {
+            return Some(ThumbArt::Pixels(p));
+        }
+        if let Some(p) = poster_frame(&file.path, px) {
             return Some(ThumbArt::Pixels(p));
         }
         crate::shell::services::thumb_providers::waveform_card(&file.name(), px)

@@ -215,8 +215,8 @@
    "apple": "Message > Remove Attachments",
    "status": "partial",
    "bifrost": "springboard/apps/mail-desktop/src/mime.rs (strip_attachments, removed_note); springboard/apps/mail-desktop/src/window.rs:1854 (remove_attachments)",
-   "note": "Message > Remove Attachments cuts the file parts out (mime.rs strip_attachments), appends the result under the same flags and deletes the original over IMAP (session.rs append and remove). Built on parity/team-d-mail; not yet verified on Midget.",
-   "wire": "Replace the file with a short note in the text, and check it against more servers"
+   "note": "Message > Remove Attachments cuts the file parts out (mime.rs strip_attachments), appends the result under the same flags and deletes the original over IMAP (session.rs append and remove). Built on parity/team-d-mail; not yet verified on Midget. The text keeps a line \"[Attachment removed: name]\" where each file was.",
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "Add sender to contacts",
@@ -232,9 +232,18 @@
    "area": "settings",
    "apple": "RulesPreferences; Message > Apply Rules",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/rules.rs; springboard/apps/mail-desktop/src/window.rs (apply_rules_to_arrivals, apply_rules_to_shown); springboard/apps/mail-desktop/src/prefs.rs (rules)",
-   "note": "Rules are saved in mail-prefs.json, made from Mailbox > New Rule, and run on new mail and by Mailbox > Apply Rules over the shown mailbox. The rule actions run over IMAP. There is no Rules settings pane yet to edit a rule, and the rules are not tested on Midget.",
-   "wire": "Add a Rules settings pane that lists, edits and reorders rules; check the actions on Midget"
+   "bifrost": "springboard/apps/mail-desktop/src/rules.rs (describe, outcome); springboard/apps/mail-desktop/src/draw.rs (Sheet::Rules rows, Hit::EditRule); springboard/apps/mail-desktop/src/window.rs (MENU_RULES_PANE, remove_rule, submit_edit_rule); springboard/apps/mail-desktop/src/state.rs (open_rules_pane, open_rule_editor, rule_from_form_at); springboard/apps/mail-desktop/src/prefs.rs (rules)",
+   "note": "Mailbox > Rules opens the Rules pane: one line for each rule, a name opens its editor, Add Rule opens a new one, and Remove deletes a rule. The rules are saved in mail-prefs.json. They run on each listing that brings new mail (apply_listing) and by Mailbox > Apply Rules over the shown mailbox. The rule actions run over IMAP. Each rule has a fixed set of conditions (From, To or Cc, Subject contains) and at most one action of each kind, not a list of condition and action rows. Not yet verified on Midget.",
+   "wire": "Give a rule a list of conditions and actions (today: one of each kind), and check the pane and the rule actions on Midget"
+  },
+  {
+   "feature": "Drafts and autosave",
+   "area": "menu",
+   "apple": "File > Save (drafts), Mail Drafts mailbox, Autosave",
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/window.rs (save_draft, discard_draft, draft_saved, save_question, cancel_sheet); springboard/apps/mail-desktop/src/compose_windows.rs (autosave, closed, changed); springboard/apps/mail-desktop/src/sync.rs (draft_job, DRAFTS); springboard/apps/mail-desktop/src/state.rs (Sheet::Question, draft_for_save); springboard/apps/mail-desktop/src/message.rs (draft_of); springboard/apps/mail-desktop/src/imap.rs (drafts_name, is_drafts)",
+   "note": "Closing a message with changes asks Save This Message, Don't Save, or Cancel. Save and the 30-second autosave keep the draft in the Drafts mailbox over IMAP (the server's mailbox flagged \\Drafts (RFC 6154) is used, else the fixed name; it is created when missing, and the older copy with the same Message-ID is replaced); without a signed-in account, or when the server refuses, the draft is kept as a file in the data directory. Message > Edit Draft in the Drafts mailbox reopens the saved copy in a compose sheet (addresses, subject, text, files, threading headers) under its Message-ID, so saving replaces it. The reopened text is plain: the HTML version of a draft is not kept. Sending removes the draft. Don't Save removes the saved copy. A window the shell closes is opened again with the question. Not yet verified on Midget.",
+   "wire": "Check Edit Draft and the special-use Drafts mailbox on Midget (against a server that flags \\Drafts), and keep the HTML version of a draft when reopening it"
   },
   {
    "feature": "Conversations (organize by thread, expand/collapse)",
@@ -386,8 +395,8 @@
    "apple": "SignaturePreferences",
    "status": "partial",
    "bifrost": "springboard/apps/mail-desktop/src/prefs.rs (signature, set_signature); springboard/apps/mail-desktop/src/state.rs:1546 (with_signature, used at send); springboard/apps/mail-desktop/src/state.rs (open_settings: Signature field); springboard/apps/mail-desktop/src/signature.rs",
-   "note": "Each account has a signature, set in Mail Settings and added after the -- delimiter when a message is sent (state.rs with_signature). The compose sheet shows it. signature.rs holds the delimiter helpers, tested headless in tests/parity_app-mail.rs. There is no separate Signatures pane, and replies keep the signature at the end rather than above the quote.",
-   "wire": "Add a Signatures pane with one signature per account and a choice of place for replies; move the send path onto signature::append once a message's own -- line no longer blocks the signature"
+   "note": "Each account has a signature, set in Mail Settings and added after the -- delimiter when a message is sent (state.rs with_signature). Mail Settings has Signature above the quoted text, which places a reply's signature before the quote (state.rs with_signature_above_quote). The compose sheet shows the signature field. There is no separate Signatures pane.",
+   "wire": "Add a Signatures pane with one signature per account; move the send path onto signature::append once a message's own -- line no longer blocks the signature"
   },
   {
    "feature": "Viewing settings (headers shown, remote content, bold unread, dark backgrounds)",
@@ -395,8 +404,8 @@
    "apple": "ViewerPreferences",
    "status": "partial",
    "bifrost": "springboard/apps/mail-desktop/src/prefs.rs (bold_unread, all_headers); springboard/apps/mail-desktop/src/draw.rs:712 (bold unread senders); springboard/apps/mail-desktop/src/draw.rs:908 (all headers)",
-   "note": "View > All Headers (prefs.all_headers) shows every header above the text. Mail Settings has Bold unread messages (prefs.bold_unread, drawn at draw.rs:712). Remote content and dark backgrounds have no settings yet, and messages are shown as text (no HTML rendering).",
-   "wire": "Add a Viewing settings pane for remote content and dark backgrounds, and wire html::sanitize into the view"
+   "note": "View > All Headers shows every header above the text. Mail Settings has Bold unread messages and Load remote content (off: remote content is blocked until Load Remote Content). Dark backgrounds have no setting yet, and messages are shown as text (no HTML rendering), so a loaded remote image has nothing to show yet.",
+   "wire": "Add dark backgrounds to the Viewing settings and render the sanitized HTML, with the remote images the person allowed"
   },
   {
    "feature": "Composing settings (format, quoting, undo send delay, spelling)",
@@ -422,7 +431,7 @@
    "apple": "MessageViewController",
    "status": "partial",
    "bifrost": "springboard/apps/mail-desktop/src/body.rs:12",
-   "note": "HTML is turned into plain text",
+   "note": "HTML is turned into plain text for the reader. html.rs sanitize_with_parts resolves cid: inline images to the message's own raster parts and keeps blocking remote images, with tests for scripts, forms, event handlers and cid resolution. The reader does not draw images or layout yet, so none of it is visible.",
    "wire": "Render the sanitized HTML (html.rs:37) through the SDK web or rich text view"
   },
   {
@@ -502,8 +511,8 @@
    "area": "settings",
    "apple": "MailTrackingProtection*",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/html.rs:37",
-   "note": "Remote images blocked; no proxy",
+   "bifrost": "springboard/apps/mail-desktop/src/html.rs:37; springboard/apps/mail-desktop/src/draw.rs (privacy note, Hit::LoadRemote); springboard/apps/mail-desktop/src/state.rs (remote_allowed, allow_remote); springboard/apps/mail-desktop/src/prefs.rs (remote_content)",
+   "note": "Remote content is blocked by default (html.rs sanitize counts and drops remote images). The reader shows a privacy note with Load Remote Content for the open message, and Mail Settings has a Load remote content switch (off by default). Load Remote Content does not fetch anything yet: remote images are not loaded through a loader, and the reader draws no images. Nothing is fetched through a proxy. Built on this branch; not yet verified on Midget.",
    "wire": "Route remote content through a privacy proxy and expose the switch in Viewing settings"
   },
   {
@@ -528,18 +537,27 @@
    "feature": "More than one viewer window or tab",
    "area": "menu",
    "apple": "File > New Viewer Window/Tab",
-   "status": "gap",
-   "bifrost": "",
-   "note": "The SDK has no call for a second window yet (nothing like it in sdk/src), so a second MailWindow cannot be opened from the app.",
-   "wire": "Open a second MailWindow through SDK multi-window support"
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/viewer.rs; springboard/apps/mail-desktop/src/compose_windows.rs; springboard/apps/mail-desktop/src/window.rs (MENU_NEW_VIEWER, double-tap in tap, take_viewers, viewer_snapshot); springboard/apps/mail-desktop/src/main.rs (open_viewers, window_event, draw_window, window_closed, sync)",
+   "note": "Double-click on a message row, or File > New Viewer Window, opens the message in its own SDK window (bifrost_app::app_windows); the viewer is read-only. Each new message (and each reply, forward or mailto link) opens in a compose window of its own, and several can be open at once. The window that is focused holds its compose in the sheet slot, and a sent or cancelled message closes its window. Built on this branch; not yet verified on Midget.",
+   "wire": "Keep a closed compose window's draft (today the shell's close control discards it), let a viewer load a body that is not fetched yet, and check the viewer and compose windows on Midget."
+  },
+  {
+   "feature": "Open mailto links (system compose)",
+   "area": "integration",
+   "apple": "mailto URL handling; Mail as the default mail app",
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/manifest.toml (schemes = [\"mailto\"]); springboard/apps/mail-desktop/src/main.rs (Input::Open, pending_url); springboard/apps/mail-desktop/src/window.rs (open_handoff; document: inbound grants attach); springboard/sdk/src/mail_compose.rs (compose); springboard/src/shell/services/mail_compose.rs (compose method); springboard/src/shell/sharing.rs (mail_compose_deliver)",
+   "note": "A mailto: link opened anywhere reaches Mail through the shell URL routing and opens a new message with its To, Cc, Bcc, Subject and Body filled in. bifrost_app::mail_compose::compose hands a draft to the default mail app with the files it names as read grants (the shell grants them to Mail, and Mail attaches them to the message). A file named by path is refused. Built on this branch; not yet verified on Midget.",
+   "wire": "Check a mailto link and a hand-off with attachments from another app on Midget."
   }
  ],
  "summary": {
-  "features": 58,
+  "features": 60,
   "parity": 13,
-  "partial": 40,
-  "gap": 1,
+  "partial": 43,
+  "gap": 0,
   "n/a": 4,
-  "coverage_pct": 61.1
+  "coverage_pct": 61.6
  }
 }

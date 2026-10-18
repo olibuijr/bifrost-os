@@ -43,7 +43,16 @@
    "status": "partial",
    "note": "Midget 0.7.25: sleep installed, not run headless (changes machine state)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sleep --version",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "coreutils sleep"
   },
   {
    "id": "path:/bin/stty",
@@ -85,7 +94,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: sync installed, not run headless (changes machine state)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/nc"
+    }
+   ],
+   "ready_note": "coreutils sync"
   },
   {
    "id": "path:/sbin/shutdown",
@@ -106,7 +123,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: shutdown installed, not run headless (changes machine state)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/shutdown"
+    }
+   ],
+   "ready_note": "systemd shutdown; not run (changes machine state); Arch package systemd ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/SafeEjectGPU",
@@ -209,9 +234,18 @@
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/say.rs",
    "status": "partial",
-   "note": "code: springboard/cmd/src/say.rs; runs espeak-ng, which is not in runtime-packages.txt yet; not yet verified on Midget",
+   "note": "say runs espeak-ng, which runtime-packages.txt does not list yet",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "say::tests"
+    }
+   ],
+   "ready_note": "covers: say over espeak-ng (the package is listed in runtime-packages.txt), with the voice, rate and file options the tests cover."
   },
   {
    "id": "path:/usr/bin/sc_usage",
@@ -274,7 +308,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: scp installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/scp"
+    }
+   ],
+   "ready_note": "openssh scp (BASE_PACKAGES)"
   },
   {
    "id": "path:/usr/bin/screen",
@@ -295,7 +337,15 @@
    "status": "partial",
    "note": "provided by Arch package screen; not yet verified on Midget; already in runtime-packages.txt",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/screen"
+    }
+   ],
+   "ready_note": "Arch package screen ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/script",
@@ -375,11 +425,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "/usr/bin/secret-tool",
+   "bifrost": "springboard/cmd/src/bin/security.rs, springboard/cmd/src/security.rs, springboard/src/keychain.rs",
    "status": "partial",
-   "note": "Midget 0.7.25: secret-tool installed, --version/--help probe failed",
+   "note": "secret-tool is libsecret, not the macOS keychain command; keychain subcommands are not mapped Built 2026-10-17 (wave 13): springboard/cmd/src/security.rs over springboard::keychain::Store::open_group (security::tests).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "security::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/security"
+    }
+   ],
+   "ready_note": "security add-, find- and delete-generic-password and dump-keychain work on the encrypted BifrOSt keychain (one access group, is.bifrost.security, in the shell data directory of the user who runs it); dump never prints a secret. Gap: certificates, identities, internet passwords and keychain-file management are refused."
   },
   {
    "id": "path:/usr/bin/sed",
@@ -526,7 +589,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: sftp installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/sftp"
+    }
+   ],
+   "ready_note": "openssh sftp (BASE_PACKAGES)"
   },
   {
    "id": "path:/usr/bin/shar",
@@ -547,7 +618,15 @@
    "status": "partial",
    "note": "provided by Arch package sharutils; not yet verified on Midget; already in runtime-packages.txt",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/shar"
+    }
+   ],
+   "ready_note": "Arch package sharutils ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/shasum",
@@ -627,11 +706,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/cmd/src/bin/shortcuts.rs",
+   "bifrost": "springboard/cmd/src/bin/shortcuts.rs, springboard/cmd/src/shortcuts.rs",
    "status": "partial",
-   "note": "code: springboard/cmd/src/shortcuts.rs; runs only the steps the command line reaches; not yet verified on Midget",
+   "note": "runs only the steps the command line reaches; the Shortcuts library is not complete",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "shortcuts::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/shortcuts"
+    }
+   ],
+   "ready_note": "shortcuts lists, views and runs the shortcuts the Shortcuts app saves, with the same runner. Gap: run performs the steps the command line can reach and stops at the first step that needs a shell service or an answer."
   },
   {
    "id": "path:/usr/bin/showmount",
@@ -652,7 +744,15 @@
    "status": "partial",
    "note": "provided by Arch package nfs-utils; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/showmount"
+    }
+   ],
+   "ready_note": "Arch package nfs-utils ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/sigdist.d",
@@ -690,11 +790,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/cmd/src/bin/sips.rs",
+   "bifrost": "springboard/cmd/src/bin/sips.rs, springboard/cmd/src/sips.rs",
    "status": "partial",
-   "note": "code: springboard/cmd/src/sips.rs; header-only query (-g pixelWidth, pixelHeight, format) for PNG, GIF and JPEG; resampling and conversion are refused; not yet verified on Midget",
+   "note": "header-only query (pixelWidth, pixelHeight, format); resampling and conversion are refused Built 2026-10-17: -Z, --resampleWidth and --resampleHeight decode with the shell's image decoders and write PNG (sips::tests); JPEG and GIF are written only through a .png --out. Built 2026-10-17: -s format png|jpeg writes PNG or JPEG with --out (sips::tests); GIF output and other -s properties are still refused. Built 2026-10-17: -s format gif writes a GIF89a with a fixed 3-3-2 palette and LZW (sips::tests); other -s properties are still refused. Built 2026-10-17: -s formatOptions default|0-100 sets the JPEG quality of a conversion (sips::tests). Still refused: the other -s properties (rotation, flips, DPI, colour profile).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "sips::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/sips"
+    }
+   ],
+   "ready_note": "sips queries image size and format, resamples (-Z, --resampleWidth/Height) and converts to PNG, JPEG and GIF with a JPEG quality option. Gap: rotation, flips, DPI and colour profile properties are refused."
   },
   {
    "id": "path:/usr/bin/smbutil",
@@ -711,11 +824,29 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "/usr/bin/smbclient",
+   "bifrost": "springboard/cmd/src/bin/smbutil.rs, springboard/cmd/src/smbutil.rs, /usr/bin/smbclient",
    "status": "partial",
-   "note": "provided by Arch package smbclient; not yet verified on Midget; smbclient is the Samba client for shares; smbutil's own options are not replicated",
+   "note": "smbclient covers shares; smbutil's own options are not replicated Built 2026-10-17 (wave 13): springboard/cmd/src/smbutil.rs maps view, lookup and status onto the Samba client programs (smbutil::tests).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "smbutil::tests"
+    },
+    {
+     "kind": "cmd",
+     "run": "smbclient --version",
+     "expect_exit": 0
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/smbutil"
+    }
+   ],
+   "ready_note": "smbutil view //[user@]host lists shares (smbclient -L), lookup resolves a NetBIOS name and status shows a host's names (nmblookup). Gap: statshares, identity, multichannel and dfs read the reference client's mount state and are refused."
   },
   {
    "id": "path:/usr/bin/snmp-bridge-mib",
@@ -757,7 +888,15 @@
    "status": "partial",
    "note": "provided by Arch package net-snmp; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/snmpbulkget"
+    }
+   ],
+   "ready_note": "Arch package net-snmp ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/snmpbulkwalk",
@@ -778,7 +917,15 @@
    "status": "partial",
    "note": "provided by Arch package net-snmp; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/snmpbulkwalk"
+    }
+   ],
+   "ready_note": "Arch package net-snmp ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/snmpconf",
@@ -799,7 +946,15 @@
    "status": "partial",
    "note": "provided by Arch package net-snmp; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/snmpconf"
+    }
+   ],
+   "ready_note": "Arch package net-snmp ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/snmpdelta",
@@ -820,7 +975,15 @@
    "status": "partial",
    "note": "provided by Arch package net-snmp; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/snmpdelta"
+    }
+   ],
+   "ready_note": "Arch package net-snmp ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/snmpdf",
@@ -841,7 +1004,15 @@
    "status": "partial",
    "note": "provided by Arch package net-snmp; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/snmpdf"
+    }
+   ],
+   "ready_note": "Arch package net-snmp ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/snmpget",
@@ -862,7 +1033,15 @@
    "status": "partial",
    "note": "provided by Arch package net-snmp; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/snmpget"
+    }
+   ],
+   "ready_note": "Arch package net-snmp ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/snmpgetnext",
@@ -883,7 +1062,15 @@
    "status": "partial",
    "note": "provided by Arch package net-snmp; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/snmpgetnext"
+    }
+   ],
+   "ready_note": "Arch package net-snmp ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/snmpnetstat",
@@ -904,7 +1091,15 @@
    "status": "partial",
    "note": "provided by Arch package net-snmp; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/snmpnetstat"
+    }
+   ],
+   "ready_note": "Arch package net-snmp ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/snmpset",
@@ -925,7 +1120,15 @@
    "status": "partial",
    "note": "provided by Arch package net-snmp; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/snmpset"
+    }
+   ],
+   "ready_note": "Arch package net-snmp ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/snmpstatus",
@@ -946,7 +1149,15 @@
    "status": "partial",
    "note": "provided by Arch package net-snmp; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/snmpstatus"
+    }
+   ],
+   "ready_note": "Arch package net-snmp ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/snmptable",
@@ -967,7 +1178,15 @@
    "status": "partial",
    "note": "provided by Arch package net-snmp; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/snmptable"
+    }
+   ],
+   "ready_note": "Arch package net-snmp ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/snmptest",
@@ -988,7 +1207,15 @@
    "status": "partial",
    "note": "provided by Arch package net-snmp; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/snmptest"
+    }
+   ],
+   "ready_note": "Arch package net-snmp ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/snmptranslate",
@@ -1009,7 +1236,15 @@
    "status": "partial",
    "note": "provided by Arch package net-snmp; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/snmptranslate"
+    }
+   ],
+   "ready_note": "Arch package net-snmp ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/snmptrap",
@@ -1030,7 +1265,15 @@
    "status": "partial",
    "note": "provided by Arch package net-snmp; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/snmptrap"
+    }
+   ],
+   "ready_note": "Arch package net-snmp ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/snmpusm",
@@ -1051,7 +1294,15 @@
    "status": "partial",
    "note": "provided by Arch package net-snmp; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/snmpusm"
+    }
+   ],
+   "ready_note": "Arch package net-snmp ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/snmpvacm",
@@ -1072,7 +1323,15 @@
    "status": "partial",
    "note": "provided by Arch package net-snmp; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/snmpvacm"
+    }
+   ],
+   "ready_note": "Arch package net-snmp ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/snmpwalk",
@@ -1093,7 +1352,15 @@
    "status": "partial",
    "note": "provided by Arch package net-snmp; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/snmpwalk"
+    }
+   ],
+   "ready_note": "Arch package net-snmp ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/sntp",
@@ -1114,7 +1381,15 @@
    "status": "partial",
    "note": "provided by Arch package ntp; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/sntp"
+    }
+   ],
+   "ready_note": "Arch package ntp ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/soelim",
@@ -1135,7 +1410,16 @@
    "status": "partial",
    "note": "provided by Arch package groff; not yet verified on Midget; already in runtime-packages.txt",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "soelim --help",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "Arch package groff ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/sort",
@@ -1282,7 +1566,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: ssh installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/ssh"
+    }
+   ],
+   "ready_note": "openssh (BASE_PACKAGES); -V prints the version"
   },
   {
    "id": "path:/usr/bin/ssh-add",
@@ -1303,7 +1595,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: ssh-add installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/ssh-add"
+    }
+   ],
+   "ready_note": "openssh (BASE_PACKAGES)"
   },
   {
    "id": "path:/usr/bin/ssh-agent",
@@ -1324,7 +1624,16 @@
    "status": "partial",
    "note": "Midget 0.7.25: ssh-agent installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "ssh-agent -V",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "openssh (BASE_PACKAGES); -V prints the version"
   },
   {
    "id": "path:/usr/bin/ssh-copy-id",
@@ -1345,7 +1654,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: ssh-copy-id installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/ssh-copy-id"
+    }
+   ],
+   "ready_note": "openssh (BASE_PACKAGES)"
   },
   {
    "id": "path:/usr/bin/ssh-keygen",
@@ -1366,7 +1683,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: ssh-keygen installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/ssh-keygen"
+    }
+   ],
+   "ready_note": "openssh (BASE_PACKAGES)"
   },
   {
    "id": "path:/usr/bin/ssh-keyscan",
@@ -1387,7 +1712,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: ssh-keyscan installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/ssh-keyscan"
+    }
+   ],
+   "ready_note": "openssh (BASE_PACKAGES)"
   },
   {
    "id": "path:/usr/bin/stdbuf",
@@ -1492,7 +1825,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: su installed, not run headless (changes machine state)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/su"
+    }
+   ],
+   "ready_note": "util-linux su; not run (starts a login)"
   },
   {
    "id": "path:/usr/bin/sudo",
@@ -1513,7 +1854,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: sudo installed, not run headless (changes machine state)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/sudo"
+    }
+   ],
+   "ready_note": "sudo (BASE_PACKAGES); --version does not elevate"
   },
   {
    "id": "path:/usr/bin/sw_vers",
@@ -1534,7 +1883,21 @@
    "status": "partial",
    "note": "code: springboard/cmd/src/sw_vers.rs (reads os-release); not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "sw_vers"
+    },
+    {
+     "kind": "cmd",
+     "run": "sw_vers -productVersion",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "BifrOSt sw_vers reads os-release (springboard/cmd/src/sw_vers.rs); unit tests in the bifrost-cmd crate"
   },
   {
    "id": "path:/usr/bin/swift-inspect",
@@ -2290,7 +2653,15 @@
    "status": "partial",
    "note": "provided by Arch package openldap; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/slapd"
+    }
+   ],
+   "ready_note": "Arch package openldap ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/libexec/smb-migrate-preferences",
@@ -2416,7 +2787,15 @@
    "status": "partial",
    "note": "provided by Arch package net-snmp; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/snmpd"
+    }
+   ],
+   "ready_note": "Arch package net-snmp ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/libexec/spatialpreviewd",
@@ -3126,11 +3505,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/cmd/src/bin/screencapture.rs",
+   "bifrost": "springboard/cmd/src/screencapture.rs, springboard/cmd/src/bin/screencapture.rs",
    "status": "partial",
-   "note": "code: springboard/cmd/src/screencapture.rs; selection modes and video are refused; not yet verified on Midget",
+   "note": "selection modes (-i, -w, -R) and video are refused",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "screencapture::tests"
+    }
+   ],
+   "ready_note": "covers: full-panel and -R captures to a file or the clipboard, -i and -w through the screenshot toolbar, and -v movies; the -R coordinates are panel pixels."
   },
   {
    "id": "path:/usr/sbin/scselect",
@@ -3168,11 +3556,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/cmd/src/bin/scutil.rs",
+   "bifrost": "springboard/cmd/src/bin/scutil.rs, springboard/cmd/src/scutil.rs",
    "status": "partial",
-   "note": "code: springboard/cmd/src/scutil.rs; not yet verified on Midget",
+   "note": "covers --get/--set for ComputerName, LocalHostName, HostName, plus --dns and --proxy; other SystemConfiguration keys are not read",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "scutil::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/scutil"
+    }
+   ],
+   "ready_note": "scutil gets and sets ComputerName, LocalHostName and HostName and reads the DNS and proxy configuration. Gap: other SystemConfiguration keys are not read."
   },
   {
    "id": "path:/usr/sbin/securityd",
@@ -3214,7 +3615,15 @@
    "status": "partial",
    "note": "provided by Arch package postfix; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/sendmail"
+    }
+   ],
+   "ready_note": "Arch package postfix ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/sbin/setkey",
@@ -3256,7 +3665,15 @@
    "status": "partial",
    "note": "provided by Arch package quota-tools; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/setquota"
+    }
+   ],
+   "ready_note": "Arch package quota-tools ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/sbin/sharing",
@@ -3340,7 +3757,15 @@
    "status": "partial",
    "note": "provided by Arch package samba; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/smbd"
+    }
+   ],
+   "ready_note": "Arch package samba ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/sbin/smbdiagnose",
@@ -3382,7 +3807,15 @@
    "status": "partial",
    "note": "provided by Arch package net-snmp; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/snmpd"
+    }
+   ],
+   "ready_note": "Arch package net-snmp ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/sbin/snmptrapd",
@@ -3403,7 +3836,15 @@
    "status": "partial",
    "note": "provided by Arch package net-snmp; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/snmptrapd"
+    }
+   ],
+   "ready_note": "Arch package net-snmp ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/sbin/sntpd",
@@ -3420,11 +3861,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "/usr/bin/chronyd",
+   "bifrost": "springboard/src/net/ntp.rs, /usr/bin/sntp",
    "status": "partial",
-   "note": "provided by Arch package chrony; not yet verified on Midget; already in runtime-packages.txt",
+   "note": "chronyd is an NTP daemon, not the SNTP server sntpd; approximation only",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "net::ntp::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/sntp"
+    }
+   ],
+   "ready_note": "sntpd keeps the system clock right over SNTP: BifrOSt's SNTP client (net::ntp, RFC 4330 packets, step only past 2 s, resync every 6 h) does that, with systemd-timesyncd as the packaged service and sntp (Arch package ntp) for a one-off query. It is a client, not a time server."
   },
   {
    "id": "path:/usr/sbin/softwareupdate",
@@ -3441,11 +3895,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/cmd/src/bin/softwareupdate.rs",
+   "bifrost": "springboard/cmd/src/bin/softwareupdate.rs, springboard/cmd/src/softwareupdate.rs",
    "status": "partial",
-   "note": "code: springboard/cmd/src/softwareupdate.rs; --schedule is refused; not yet verified on Midget",
+   "note": "--schedule on|off and the schedule query are built (softwareupdate::tests); updates install through bifrost pc midget update, not through a general software update service.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "softwareupdate::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/softwareupdate"
+    }
+   ],
+   "ready_note": "softwareupdate -l checks for and lists updates through the update agent, -i and -a download and stage the OS update, and --schedule shows or sets the background check. Gap: app updates have no install command on the agent's protocol yet."
   },
   {
    "id": "path:/usr/sbin/spctl",
@@ -3529,7 +3996,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: sshd installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/sshd"
+    }
+   ],
+   "ready_note": "openssh (BASE_PACKAGES)"
   },
   {
    "id": "path:/usr/sbin/sso_util",
@@ -3592,7 +4067,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: sysctl installed, not run headless (changes machine state)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/sysctl"
+    }
+   ],
+   "ready_note": "Arch package procps-ng ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/sbin/syslogd",
@@ -3630,11 +4113,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/cmd/src/bin/system_profiler.rs",
+   "bifrost": "springboard/cmd/src/bin/system_profiler.rs, springboard/cmd/src/profile.rs",
    "status": "partial",
-   "note": "code: springboard/cmd/src/bin/system_profiler.rs; not yet verified on Midget",
+   "note": "BifrOSt system_profiler is not verified and covers a subset of data types",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "profile::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/system_profiler"
+    }
+   ],
+   "ready_note": "system_profiler reports hardware, software, network, storage, displays, audio and USB as text or JSON at mini, basic or full detail, from the readers the System Information app uses. Gap: fewer data types than the reference."
   },
   {
    "id": "path:/usr/sbin/systemkeychain",

@@ -22,6 +22,17 @@ use bifrost_core::json::Json;
 /// The service name the shell registers.
 pub const SERVICE: &str = "quick-look";
 
+/// The control method an app answers to draw a preview of its own file type. The app declares the type in its manifest
+/// (`[[preview]]` with `generator = "preview.render"`, `types` and `timeout_ms`); the shell calls it with
+/// `{"file": "<absolute path>", "width": w, "height": h}` and draws the PNG named in the reply. A late, missing or
+/// error reply falls back to the built-in preview. Answer with [`picture_reply`].
+pub const PREVIEW_METHOD: &str = "preview.render";
+
+/// The reply to [`PREVIEW_METHOD`]: `{"picture": "<absolute path to a PNG>"}`.
+pub fn picture_reply(path: &str) -> Json {
+    Json::Obj(vec![("picture".into(), Json::Str(path.to_string()))])
+}
+
 /// `show` params: `{items: [{url, title}], index}`.
 pub fn show_body(items: &[PreviewItem], index: usize) -> Json {
     let list = items
@@ -50,6 +61,36 @@ pub fn state(ctx: &Ctx) -> u32 {
 /// Moves the index by `delta` without wrapping. Returns the request id.
 pub fn step(ctx: &Ctx, delta: i32) -> u32 {
     service::call(ctx, SERVICE, "step", &Json::Obj(vec![("delta".into(), Json::Num(delta as f64))]))
+}
+
+/// The panel items for local files: each absolute path becomes a `file://` item titled with its file name. Relative
+/// paths and paths with control characters are left out. `index` follows the kept items: it moves down past each
+/// dropped path before it, and is clamped to the list.
+pub fn file_items(paths: &[&str], index: usize) -> (Vec<PreviewItem>, usize) {
+    let mut items = Vec::new();
+    let mut kept_index = 0;
+    for (i, p) in paths.iter().enumerate() {
+        if !p.starts_with('/') || p.chars().any(|c| c.is_control()) {
+            continue;
+        }
+        if i < index {
+            kept_index += 1;
+        }
+        let title = p.rsplit('/').next().unwrap_or("").to_string();
+        items.push(PreviewItem::new(format!("file://{p}"), title));
+    }
+    let last = items.len().saturating_sub(1);
+    (items, kept_index.min(last))
+}
+
+/// Shows the panel for local files, starting at `index` (see [`file_items`]). Returns the request id, or None when no
+/// path is usable (the panel is not opened). The reply is the new [`State`].
+pub fn preview(ctx: &Ctx, paths: &[&str], index: usize) -> Option<u32> {
+    let (items, index) = file_items(paths, index);
+    if items.is_empty() {
+        return None;
+    }
+    Some(show(ctx, &items, index))
 }
 
 /// The panel state, as the shell answers it.
@@ -143,10 +184,48 @@ mod tests {
     }
 
     #[test]
+    fn file_paths_become_file_items_titled_by_name() {
+        let (items, index) = file_items(&["/home/u/a.txt", "/home/u/pics/b.png"], 1);
+        assert_eq!(items, vec![item("file:///home/u/a.txt", "a.txt"), item("file:///home/u/pics/b.png", "b.png")]);
+        assert_eq!(index, 1);
+    }
+
+    #[test]
+    fn relative_and_control_character_paths_are_dropped_and_the_index_follows() {
+        let (items, index) = file_items(&["rel.txt", "/x/keep.txt", "/x/bad\nname", "/x/last.txt"], 3);
+        assert_eq!(items.iter().map(|i| i.title.as_str()).collect::<Vec<_>>(), ["keep.txt", "last.txt"]);
+        assert_eq!(index, 1, "the index stays on last.txt, which is now the second kept item");
+        let (_, index) = file_items(&["rel", "/x/only"], 0);
+        assert_eq!(index, 0);
+    }
+
+    #[test]
+    fn an_index_past_the_end_is_clamped_to_the_last_item() {
+        let (items, index) = file_items(&["/x/a", "/x/b"], 9);
+        assert_eq!(items.len(), 2);
+        assert_eq!(index, 1);
+    }
+
+    #[test]
+    fn preview_sends_nothing_when_no_path_is_usable() {
+        let ctx = crate::runtime::test_ctx();
+        assert_eq!(preview(&ctx, &["relative"], 0), None);
+        assert!(ctx.take_sent().is_empty());
+        assert!(preview(&ctx, &["/x/a.png"], 0).is_some());
+        assert_eq!(ctx.take_sent().len(), 1);
+    }
+
+    #[test]
     fn state_reply_parses_and_rejects_other_shapes() {
         let reply = Json::Obj(vec![("visible".into(), Json::Bool(true)), ("index".into(), Json::Num(2.0)), ("count".into(), Json::Num(5.0))]);
         assert_eq!(parse_state(&reply), Some(State { visible: true, index: 2, count: 5 }));
         assert_eq!(parse_state(&Json::Null), None);
+    }
+
+    #[test]
+    fn a_picture_reply_names_the_png_and_the_method_is_the_declared_one() {
+        assert_eq!(picture_reply("/tmp/p.png").get("picture").and_then(Json::as_str), Some("/tmp/p.png"));
+        assert_eq!(PREVIEW_METHOD, "preview.render");
     }
 
     #[test]

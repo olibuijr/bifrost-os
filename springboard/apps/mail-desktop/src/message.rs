@@ -173,7 +173,7 @@ const DAYS: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS: [&str; 12] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /// Civil date (year, month, day) from days since 1970-01-01.
-fn civil_from_days(days: i64) -> (i64, u32, u32) {
+pub(crate) fn civil_from_days(days: i64) -> (i64, u32, u32) {
     let z = days + 719_468;
     let era = z.div_euclid(146_097);
     let doe = (z - era * 146_097) as u64;
@@ -496,6 +496,29 @@ pub fn forward_attachment_draft(original: &Summary, from: &str, raw: &str) -> Dr
     draft
 }
 
+/// The draft a saved message reopens as (Message > Edit Draft): its addresses, subject, text and files, with the
+/// threading headers, so a reply made from it still answers the message it answered. The text is the plain part, or
+/// the HTML part as text; the HTML version is not kept.
+pub fn draft_of(raw: &str) -> Draft {
+    let s = Summary::from_headers(raw);
+    let headers = parse_headers(raw);
+    let get = |name: &str| headers.iter().find(|(n, _)| n == name).map(|(_, v)| decode_words(v)).unwrap_or_default();
+    Draft {
+        from: s.from.clone(),
+        to: split_addresses(&s.to),
+        cc: split_addresses(&s.cc),
+        bcc: split_addresses(&get("bcc")),
+        reply_to: split_addresses(&s.reply_to),
+        priority: s.priority,
+        subject: s.subject.clone(),
+        body: crate::body::readable(raw),
+        in_reply_to: s.in_reply_to.first().cloned(),
+        references: s.references.clone(),
+        attachments: crate::body::attachments(raw),
+        html: None,
+    }
+}
+
 /// Redirect (Message > Redirect): the original message exactly as it is, with `Resent-` headers in front that name the
 /// person redirecting it (`from`) and the new recipients. The recipient sees the original sender and subject.
 pub fn redirect_message(raw: &str, from: &str, to: &[String], message_id: &str, unix: i64) -> String {
@@ -727,6 +750,21 @@ mod tests {
         let sent = Draft { to: vec!["bo@example.com".into()], ..draft }.render("<f@x>", 0).unwrap();
         assert!(sent.contains("Content-Type: message/rfc822; name=\"Plan.eml\"\r\n"));
         assert!(sent.contains("Content-Transfer-Encoding: 8bit\r\n\r\nSubject: Plan\r\nFrom: ana@example.com\r\n\r\nHello\r\n--"), "{sent}");
+    }
+
+    #[test]
+    fn a_saved_draft_reopens_with_its_fields_and_threading() {
+        let raw = "Message-ID: <d1@x>\r\nFrom: Ana <ana@example.com>\r\nTo: bo@example.com, cy@example.com\r\nCc: di@example.com\r\nBcc: ed@example.com\r\nSubject: Halló\r\nIn-Reply-To: <orig@x>\r\nReferences: <root@x> <orig@x>\r\nX-Priority: 1\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nHello there\r\n";
+        let d = draft_of(raw);
+        assert_eq!(d.to.len(), 2);
+        assert_eq!(d.cc.len(), 1);
+        assert_eq!(d.bcc.len(), 1);
+        assert_eq!(d.subject, "Halló");
+        assert!(d.body.contains("Hello there"));
+        assert_eq!(d.in_reply_to.as_deref(), Some("<orig@x>"));
+        assert_eq!(d.references, vec!["<root@x>".to_string(), "<orig@x>".to_string()]);
+        assert_eq!(d.priority, Priority::High);
+        assert!(d.attachments.is_empty());
     }
 
     #[test]

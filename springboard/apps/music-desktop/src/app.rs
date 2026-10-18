@@ -4,9 +4,13 @@
 use crate::music;
 use crate::music::chrome::{BAR_SEARCH, BAR_TITLE, SIDE_TAB};
 use crate::music::menus::{self, Command};
+use crate::music::miniplayer::{self, Layout, Part};
 use crate::music::system;
+use bifrost_app::app_windows::{is_close_window_key, WindowId, WindowSpec};
 use bifrost_app::audio::Client;
 use bifrost_app::audio_devices::{self, Change};
+use bifrost_app::control::{RpcError, INVALID_PARAMS};
+use bifrost_app::intents::{self, Intent, IntentResult};
 use bifrost_app::controls::nav::ToolbarLayout;
 use bifrost_app::controls::sidebar::SidebarItem;
 use bifrost_app::controls::{Node, Rect, Role, TextField};
@@ -16,7 +20,9 @@ use bifrost_app::kit::{Damage, Event, Surface};
 use bifrost_app::layout::{SIDEBAR_FRACTION, SIDEBAR_MAX_PT, SIDEBAR_MIN_PT, UNIFIED_BAR_PT};
 use bifrost_app::now_playing::{self, CommandState, PlaybackState, RemoteCommand};
 use bifrost_app::widgets;
+use bifrost_app::windows::{self, Level};
 use bifrost_app::{App, AppMenu, Ctx, DocumentEvent, Input, KeyInput, OpenOptions, TouchKind};
+use springboard::shell::music::nowplaying::Target as Transport;
 use bifrost_core::json::Json;
 use springboard::shell::music::radio::Http;
 use std::path::{Path, PathBuf};
@@ -68,6 +74,12 @@ pub struct MusicApp {
     import_request: Option<u32>,
     /// whether the Dock tile shows the library scan's progress
     dock_busy: bool,
+    /// the MiniPlayer window, while it is open
+    mini: Option<WindowId>,
+    /// Window > Keep MiniPlayer on Top: the MiniPlayer floats above the other windows
+    mini_on_top: bool,
+    /// the MiniPlayer part a touch went down on, until it lifts
+    mini_down: Option<Part>,
 }
 
 /// What the last Now Playing publish carried: the key without the position, the position, when it went out (app clock,
@@ -97,6 +109,9 @@ impl MusicApp {
             picker_request: None,
             import_request: None,
             dock_busy: false,
+            mini: None,
+            mini_on_top: false,
+            mini_down: None,
         }
     }
 
@@ -120,8 +135,8 @@ impl MusicApp {
 
     /// Publishes the session to Control Center when its content, state or commands changed, or when a seek moved the
     /// position. A stopped session (no song) is withdrawn. Nothing is sent while playback runs normally.
-    fn publish_step(published: &mut Option<Published>, ctx: &Ctx, session: Option<&now_playing::MediaSession>, now: f64) {
-        let body = session.and_then(now_playing::publish_body);
+    fn publish_step(published: &mut Option<Published>, ctx: &Ctx, session: Option<&now_playing::MediaSession>, queue: &[now_playing::QueueEntry], now: f64) {
+        let body = session.and_then(|s| now_playing::publish_queue_body(s, queue));
         let (Some(session), Some(body)) = (session, body) else {
             if published.take().is_some() {
                 now_playing::clear(ctx);
@@ -138,7 +153,7 @@ impl MusicApp {
             Some(p) => p.key != key || (seekable && system::seeked(p.position_ms, p.at, now, p.playing, position)),
         };
         if due {
-            let _ = now_playing::publish(ctx, session);
+            let _ = now_playing::publish_with_queue(ctx, session, queue);
             *published = Some(Published { key, position_ms: position, at: now, playing });
         }
     }
@@ -322,12 +337,83 @@ impl MusicApp {
         self.dock_step(ctx, busy);
         let now = self.clock();
         let session = self.app.as_ref().and_then(|m| m.session());
-        Self::publish_step(&mut self.published, ctx, session, now);
+        let queue = if session.is_some() { self.app.as_ref().map(|m| m.up_next_entries()).unwrap_or_default() } else { Vec::new() };
+        Self::publish_step(&mut self.published, ctx, session, &queue, now);
     }
 }
 
 fn shell_dir() -> PathBuf {
     PathBuf::from(std::env::var("BIFROST_SERVICE_ROOT").unwrap_or_else(|_| "/var/lib/springboard".into()))
+}
+
+impl MusicApp {
+    /// Window > MiniPlayer: opens the MiniPlayer window, or closes it when it is open.
+    fn toggle_mini(&mut self, ctx: &Ctx) {
+        if self.mini.is_some() {
+            self.close_mini(ctx);
+            return;
+        }
+        if let Ok(id) = ctx.open_window(WindowSpec::new("MiniPlayer", miniplayer::WIDTH_PT, miniplayer::HEIGHT_PT)) {
+            self.mini = Some(id);
+            self.apply_mini_level(ctx);
+        }
+    }
+
+    fn close_mini(&mut self, ctx: &Ctx) {
+        if let Some(id) = self.mini.take() {
+            let _ = ctx.close_window(id);
+        }
+        self.mini_down = None;
+    }
+
+    /// Floats the MiniPlayer above the other windows, or lets it sit in the normal stack, as the Window menu says.
+    fn apply_mini_level(&self, ctx: &Ctx) {
+        if let Some(id) = self.mini {
+            let level = if self.mini_on_top { Level::Floating } else { Level::Normal };
+            windows::set_window_level(ctx, id, level);
+        }
+    }
+
+    /// A touch in the MiniPlayer. The scrubber and the volume bar follow the finger; a transport button acts when the
+    /// finger lifts over the part it went down on.
+    fn mini_touch(&mut self, ctx: &Ctx, kind: TouchKind, x: f32, y: f32) -> bool {
+        let lay = miniplayer::layout(miniplayer::size_px(ctx.ui.s).0, ctx.ui.s);
+        if kind == TouchKind::Down {
+            self.mini_down = lay.hit(x, y);
+        }
+        let down = self.mini_down;
+        if matches!(kind, TouchKind::Up | TouchKind::Cancel) {
+            self.mini_down = None;
+        }
+        let Some(m) = &mut self.app else { return true };
+        match (kind, down) {
+            (TouchKind::Down | TouchKind::Move, Some(Part::Scrubber)) => m.seek_to_fraction(Layout::fraction(lay.scrub, x)),
+            (TouchKind::Down | TouchKind::Move, Some(Part::Volume)) => m.set_volume_fraction(Layout::fraction(lay.volume, x)),
+            (TouchKind::Up, Some(part)) if lay.hit(x, y) == Some(part) => match part {
+                Part::PlayPause => m.control(Transport::Play),
+                Part::Prev => m.control(Transport::Prev),
+                Part::Next => m.control(Transport::Next),
+                Part::Scrubber | Part::Volume => {}
+            },
+            _ => {}
+        }
+        true
+    }
+}
+
+/// App Intents that drive playback (the audio intents of the desktop's Shortcuts and Search).
+const AUDIO_PLAY_PAUSE: &str = "play-pause";
+const AUDIO_NEXT: &str = "next-track";
+const AUDIO_PREVIOUS: &str = "previous-track";
+
+/// The transport control an audio intent id runs, with the dialog it answers with. `None` for any other id.
+fn audio_transport(id: &str) -> Option<(Transport, &'static str)> {
+    match id {
+        AUDIO_PLAY_PAUSE => Some((Transport::Play, "Playback toggled")),
+        AUDIO_NEXT => Some((Transport::Next, "Skipped to the next track")),
+        AUDIO_PREVIOUS => Some((Transport::Prev, "Went back to the previous track")),
+        _ => None,
+    }
 }
 
 impl App for MusicApp {
@@ -378,7 +464,25 @@ impl App for MusicApp {
         true
     }
 
+    fn intents(&self) -> Vec<Intent> {
+        vec![
+            Intent::new(AUDIO_PLAY_PAUSE, "Play or Pause", "Starts or pauses playback in Music.").shortcut(),
+            Intent::new(AUDIO_NEXT, "Next Track", "Skips to the next track in the queue.").shortcut(),
+            Intent::new(AUDIO_PREVIOUS, "Previous Track", "Goes back to the previous track in the queue.").shortcut(),
+        ]
+    }
+
+    fn perform_intent(&mut self, _ctx: Option<&Ctx>, _data_dir: &Path, id: &str, _params: &Json) -> Result<IntentResult, RpcError> {
+        let Some((target, done)) = audio_transport(id) else { return Err(RpcError::new(INVALID_PARAMS, format!("no intent {id}"))) };
+        let Some(m) = self.app.as_mut() else { return Err(intents::failed("Music is not running yet")) };
+        m.control(target);
+        Ok(IntentResult::dialog(done))
+    }
+
     fn service_event(&mut self, _ctx: &Ctx, service: &str, event: &str, body: &Json) -> bool {
+        if let Some(index) = now_playing::queue_pick(service, event, body) {
+            return self.app.as_mut().is_some_and(|m| m.remote_queue_pick(index));
+        }
         if let Some(cmd) = now_playing::command_from_event(service, event, body) {
             return self.system_command(cmd);
         }
@@ -453,11 +557,69 @@ impl App for MusicApp {
     }
 
     fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
-        self.app.as_ref().map(|m| menus::build(&m.menu_state())).unwrap_or_default()
+        // With no window there is nothing to act on, so there are no menus at all.
+        let Some(m) = self.app.as_ref() else { return Vec::new() };
+        let mut menus = menus::build(&m.menu_state());
+        menus.push(menus::window_menu(self.mini.is_some(), self.mini_on_top));
+        menus
+    }
+
+    fn window_event(&mut self, ctx: &Ctx, window: WindowId, ev: Input) -> bool {
+        if window.is_main() {
+            return self.event(ctx, ev);
+        }
+        if self.mini != Some(window) {
+            return false;
+        }
+        match ev {
+            Input::Touch { kind, x, y, .. } => self.mini_touch(ctx, kind, x, y),
+            Input::Key(k) if is_close_window_key(&k) => {
+                self.close_mini(ctx);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn draw_window(&mut self, ctx: &Ctx, window: WindowId, s: &mut Surface, _t: f64) -> Damage {
+        let mut d = Damage::new(s.w, s.h);
+        if window.is_main() || self.mini != Some(window) {
+            return d;
+        }
+        let pressed = self.mini_down;
+        let lay = miniplayer::layout(s.w as f32, ctx.ui.s);
+        if let Some(m) = &mut self.app {
+            let info = m.mini_info();
+            let art = m.mini_art();
+            miniplayer::draw(s, &ctx.ui, &lay, &info, art.as_ref(), pressed);
+        }
+        d.all();
+        d
+    }
+
+    fn window_closed(&mut self, _ctx: &Ctx, window: WindowId) -> bool {
+        if self.mini == Some(window) {
+            self.mini = None;
+            self.mini_down = None;
+            return true;
+        }
+        false
     }
 
     fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
         let Some(cmd) = Command::from_id(id) else { return false };
+        match cmd {
+            Command::MiniPlayer => {
+                self.toggle_mini(ctx);
+                return true;
+            }
+            Command::KeepMiniOnTop => {
+                self.mini_on_top = !self.mini_on_top;
+                self.apply_mini_level(ctx);
+                return true;
+            }
+            _ => {}
+        }
         if cmd == Command::Import {
             // the panel answers through `document`
             let options = OpenOptions { title: "Import to Music".into(), filters: IMPORT_TYPES.iter().map(|t| t.to_string()).collect(), multiple: true, ..OpenOptions::default() };
@@ -509,7 +671,8 @@ impl App for MusicApp {
         }
         self.sync_keyboard(ctx);
         self.sync_system(ctx);
-        due
+        // the MiniPlayer shows the position, so its window is redrawn with the main one while it is open
+        due || self.mini.is_some()
     }
 
     fn controls(&self, _: &Ctx) -> Vec<Node> {
@@ -589,22 +752,22 @@ mod tests {
         let ctx = test_ctx();
         let mut published = None;
         let first = song_session(5_000);
-        MusicApp::publish_step(&mut published, &ctx, Some(&first), 0.0);
+        MusicApp::publish_step(&mut published, &ctx, Some(&first), &[], 0.0);
         // normal playback a second later: the position is where it should be, nothing is sent
-        MusicApp::publish_step(&mut published, &ctx, Some(&first), 1_000.0);
+        MusicApp::publish_step(&mut published, &ctx, Some(&first), &[], 1_000.0);
         let sent = calls(&ctx);
         assert_eq!(sent.len(), 1);
         assert_eq!((sent[0].0.as_str(), sent[0].1.as_str()), (now_playing::SERVICE, "publish"));
         assert!(sent[0].2.contains("\"title\":\"Song\""));
         // a scrub to 90 s
         let scrubbed = song_session(90_000);
-        MusicApp::publish_step(&mut published, &ctx, Some(&scrubbed), 1_000.0);
+        MusicApp::publish_step(&mut published, &ctx, Some(&scrubbed), &[], 1_000.0);
         let sent = calls(&ctx);
         assert_eq!(sent.len(), 1);
         assert!(sent[0].2.contains("90000"));
         // no song left: the session is withdrawn once
-        MusicApp::publish_step(&mut published, &ctx, None, 2_000.0);
-        MusicApp::publish_step(&mut published, &ctx, None, 3_000.0);
+        MusicApp::publish_step(&mut published, &ctx, None, &[], 2_000.0);
+        MusicApp::publish_step(&mut published, &ctx, None, &[], 3_000.0);
         assert_eq!(calls(&ctx), vec![(now_playing::SERVICE.to_string(), "clear".to_string(), "null".to_string())]);
     }
 
@@ -653,5 +816,13 @@ mod tests {
         assert!(!app.service_event(&ctx, now_playing::SERVICE, "command", &pause));
         assert!(!app.service_event(&ctx, "some-other-service", "command", &pause));
         assert!(calls(&ctx).is_empty());
+    }
+
+    #[test]
+    fn audio_intents_map_to_the_transport_controls() {
+        assert_eq!(audio_transport(AUDIO_PLAY_PAUSE), Some((Transport::Play, "Playback toggled")));
+        assert_eq!(audio_transport(AUDIO_NEXT), Some((Transport::Next, "Skipped to the next track")));
+        assert_eq!(audio_transport(AUDIO_PREVIOUS), Some((Transport::Prev, "Went back to the previous track")));
+        assert!(audio_transport("shuffle").is_none());
     }
 }

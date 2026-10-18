@@ -1,0 +1,36 @@
+{
+  "framework": "DeviceDiscoveryUI",
+  "doc": "https://developer.apple.com/documentation/devicediscoveryui",
+  "macos_since": "",
+  "status": "partial",
+  "bifrost": "springboard/sdk/src/nearby_service.rs, springboard/sdk/src/nearby_browsing.rs, springboard/sdk/src/peer_session.rs, springboard/sdk/src/peer_mesh.rs",
+  "summary": "Apps can name a nearby service, browse for it while in the foreground and open peer sessions. The pairing and device-picker sheets are not built.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run in this batch); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Advertise and browse a service",
+      "apple": "DevicePairingView, DDDevicePairingAccess",
+      "bifrost": "springboard/sdk/src/nearby_service.rs, springboard/sdk/src/nearby_browsing.rs",
+      "status": "partial",
+      "note": "service type checked before publishing; browsing stops when the app leaves the foreground; no pairing sheet"
+    },
+    {
+      "feature": "Peer connections",
+      "apple": "DevicePicker, DDDevicePickerViewController",
+      "bifrost": "springboard/sdk/src/peer_session.rs, springboard/sdk/src/peer_mesh.rs",
+      "status": "partial",
+      "note": "peer sessions and invitation-based meshes; the picker view is not built and the link encryption is not stated"
+    },
+    {
+      "feature": "Pairing sheet UI",
+      "apple": "DevicePairingView, DDDevicePairingViewController",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no pairing sheet for apps"
+    }
+  ],
+  "gaps": [
+    "No pairing or device-picker sheet for apps.",
+    "The encryption of peer links is not documented."
+  ]
+}

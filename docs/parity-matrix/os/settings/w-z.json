@@ -40,8 +40,17 @@
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_page.rs",
    "status": "partial",
-   "note": "Wallpaper page",
-   "rea": []
+   "note": "has: Wallpaper page (wallpaper_page.rs), bundled stills; pages.rs:866 is an empty placeholder arm; missing: wallpaper from the user's photos",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_page"
+    }
+   ],
+   "ready_note": "covers: Wallpaper page (wallpaper_page.rs), bundled stills; pages.rs:866 is an empty placeholder arm"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/WallpaperAerialsExtension.appex",
@@ -78,10 +87,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/wallpaper_schedule.rs",
+   "bifrost": "springboard/src/shell/wallpaper_schedule.rs, springboard/src/bin/shell.rs",
    "status": "partial",
-   "note": "Dynamic wallpaper: pure time-of-day schedule over the packed stills; shell timer wiring pending. built on os/team-m-06-settings; not yet verified on Midget",
-   "rea": []
+   "note": "has: time-of-day schedule over the packed stills (wallpaper_schedule.rs); missing: shell timer wiring",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_schedule::tests"
+    }
+   ],
+   "ready_note": "The time-of-day schedule (wallpaper_schedule) is tested. The shell binary evaluates it on every 1 s info tick (bin/shell.rs, wallpaper_dynamic=1), so the still changes at its boundary within a second; no separate timer is needed."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/WallpaperGradientExtension.appex",
@@ -100,8 +118,17 @@
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_page.rs",
    "status": "partial",
-   "note": "Wallpaper page, gradients",
-   "rea": []
+   "note": "has: Wallpaper page gradients (wallpaper_page.rs)",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_page"
+    }
+   ],
+   "ready_note": "covers: Wallpaper page gradients (wallpaper_page.rs)"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/WallpaperImageExtension.appex",
@@ -120,8 +147,17 @@
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_page.rs",
    "status": "partial",
-   "note": "Wallpaper page, image wallpapers",
-   "rea": []
+   "note": "has: Wallpaper page image wallpapers (wallpaper_page.rs); missing: user photos as wallpaper",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_page"
+    }
+   ],
+   "ready_note": "covers: Wallpaper page image wallpapers (wallpaper_page.rs)"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/WallpaperLegacyExtension.appex",
@@ -139,8 +175,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_page.rs",
-   "status": "partial",
-   "note": "Wallpaper page: BifrOSt's own bundled stills stand in for the Apple resource bundle. built on os/team-m-06-settings; not yet verified on Midget",
+   "status": "n/a",
+   "note": "Apple named wallpaper resource bundle; BifrOSt ships its own stills and gradients on the Wallpaper page, and the bundle is Apple data that is not copied",
    "rea": []
   },
   {
@@ -159,8 +195,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_page.rs",
-   "status": "partial",
-   "note": "Wallpaper page: BifrOSt's own bundled stills stand in for the Apple resource bundle. built on os/team-m-06-settings; not yet verified on Midget",
+   "status": "n/a",
+   "note": "Apple named wallpaper resource bundle; BifrOSt ships its own stills and gradients on the Wallpaper page, and the bundle is Apple data that is not copied",
    "rea": []
   },
   {
@@ -179,8 +215,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_page.rs",
-   "status": "partial",
-   "note": "Wallpaper page: BifrOSt's own bundled stills stand in for the Apple resource bundle. built on os/team-m-06-settings; not yet verified on Midget",
+   "status": "n/a",
+   "note": "Apple named wallpaper resource bundle; BifrOSt ships its own stills and gradients on the Wallpaper page, and the bundle is Apple data that is not copied",
    "rea": []
   },
   {
@@ -199,8 +235,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_page.rs",
-   "status": "partial",
-   "note": "Wallpaper page: BifrOSt's own bundled stills stand in for the Apple resource bundle. built on os/team-m-06-settings; not yet verified on Midget",
+   "status": "n/a",
+   "note": "Apple named wallpaper resource bundle; BifrOSt ships its own stills and gradients on the Wallpaper page, and the bundle is Apple data that is not copied",
    "rea": []
   },
   {
@@ -218,10 +254,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/settings_intents.rs",
+   "bifrost": "springboard/src/shell/settings_actions.rs, springboard/src/shell/quicksearch.rs",
    "status": "partial",
-   "note": "Shell intent wallpaper-set (catalogue, parse, effect); Search listing pending. built on os/team-m-06-settings; not yet verified on Midget",
-   "rea": []
+   "note": "has: wallpaper-set intent (catalogue, parse, effect); missing: Search listing",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::wifi_action_intents_are_found"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_actions::tests"
+    }
+   ],
+   "ready_note": "covers: the wallpaper-set intent, listed in Search as one Set Wallpaper to <name> row per picture in the catalogue."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/WallpaperSonomaExtension.appex",
@@ -239,8 +289,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_page.rs",
-   "status": "partial",
-   "note": "Wallpaper page: BifrOSt's own bundled stills stand in for the Apple resource bundle. built on os/team-m-06-settings; not yet verified on Midget",
+   "status": "n/a",
+   "note": "Apple named wallpaper resource bundle; BifrOSt ships its own stills and gradients on the Wallpaper page, and the bundle is Apple data that is not copied",
    "rea": []
   },
   {
@@ -259,8 +309,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_page.rs",
-   "status": "partial",
-   "note": "Wallpaper page: BifrOSt's own bundled stills stand in for the Apple resource bundle. built on os/team-m-06-settings; not yet verified on Midget",
+   "status": "n/a",
+   "note": "Apple named wallpaper resource bundle; BifrOSt ships its own stills and gradients on the Wallpaper page, and the bundle is Apple data that is not copied",
    "rea": []
   },
   {
@@ -278,10 +328,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/settings_intents.rs",
+   "bifrost": "springboard/src/shell/settings_intents.rs, springboard/src/shell/settings_actions.rs, springboard/src/shell/quicksearch.rs",
    "status": "partial",
-   "note": "Shell intents wifi-power and wifi-scan (catalogue, parse, effect); Search listing pending. built on os/team-m-06-settings; not yet verified on Midget",
-   "rea": []
+   "note": "has: wifi-power and wifi-scan intents (catalogue, parse, effect); missing: Search listing",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::wifi_action_intents_are_found"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_actions::tests"
+    }
+   ],
+   "ready_note": "covers: the Wi-Fi power and scan intents, listed in Search (Turn Wi-Fi On, Turn Wi-Fi Off, Scan for Wi-Fi Networks) and run through the same effect as the agent socket."
   },
   {
    "id": "path:/System/Library/PreferencePanes/Wallet.prefPane",

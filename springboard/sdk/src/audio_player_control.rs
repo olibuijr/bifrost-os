@@ -3,7 +3,7 @@
 //!
 //! Rules of this model:
 //! - Volume is 0 to 1 (NaN becomes 0, which is silence). Pan is -1 (left) to 1 (right) (NaN becomes centre).
-//!   Rate is 0.5 to 2.0 (NaN becomes 1.0).
+//!   Rate is 0.5 to 3.0 (NaN becomes 1.0).
 //! - A fade ramps linearly from the volume in effect when it starts to the target. Time is passed in as milliseconds
 //!   by the caller; a zero-length fade is immediate.
 //! - `set_volume` cancels a running fade.
@@ -13,7 +13,7 @@
 /// Lowest playback rate `AVAudioPlayer` accepts.
 pub const RATE_MIN: f32 = 0.5;
 /// Highest playback rate `AVAudioPlayer` accepts.
-pub const RATE_MAX: f32 = 2.0;
+pub const RATE_MAX: f32 = 3.0;
 
 /// Clamps a volume to 0 to 1. NaN becomes 0.
 pub fn clamp_volume(volume: f32) -> f32 {
@@ -33,7 +33,7 @@ pub fn clamp_pan(pan: f32) -> f32 {
     }
 }
 
-/// Clamps a playback rate to 0.5 to 2.0. NaN becomes normal speed (1.0).
+/// Clamps a playback rate to 0.5 to 3.0. NaN becomes normal speed (1.0).
 pub fn clamp_rate(rate: f32) -> f32 {
     if rate.is_nan() {
         1.0

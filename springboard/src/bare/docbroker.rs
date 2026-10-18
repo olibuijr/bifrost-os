@@ -179,17 +179,29 @@ impl Opener {
     }
 
     /// Creates a temporary file next to `name` in folder `dir` for a save. Nothing is replaced until `commit`.
+    /// A package name (`Notes.rtfd`) gets a temporary folder instead: the app writes the package's files into it, and
+    /// `commit` puts the folder in place of the package.
     pub fn begin_save(&self, dir: &Path, name: &str) -> Result<(PendingSave, File), DocErrorCode> {
         if !valid_name(name) {
             return Err(DocErrorCode::Denied);
         }
+        let package = bifrost_ui::uttype::is_package_name(name);
         let dir_fd = self.openat2(self.root.as_raw_fd(), &relative(dir)?, O_DIRECTORY, 0).map_err(|e| code_of(&e))?;
         let tmp = format!(".{}.bifrost-{}.tmp", name.chars().take(64).collect::<String>(), hex(&random::<4>()));
         let c = CString::new(tmp.as_bytes()).map_err(|_| DocErrorCode::Denied)?;
-        let fd = self.openat2(dir_fd.as_raw_fd(), &c, O_RDWR | O_CREAT | O_EXCL, 0o644).map_err(|e| code_of(&e))?;
+        let fd = if package {
+            // SAFETY: c is a NUL-terminated single component, dir_fd is a live folder descriptor.
+            let made = self.as_account(|| unsafe { mkdirat(dir_fd.as_raw_fd(), c.as_ptr(), 0o755) });
+            if made < 0 {
+                return Err(code_of(&io::Error::last_os_error()));
+            }
+            self.openat2(dir_fd.as_raw_fd(), &c, O_DIRECTORY, 0).map_err(|e| code_of(&e))?
+        } else {
+            self.openat2(dir_fd.as_raw_fd(), &c, O_RDWR | O_CREAT | O_EXCL, 0o644).map_err(|e| code_of(&e))?
+        };
         let file = File::from(fd);
         let keep = file.try_clone().map_err(|e| code_of(&e))?;
-        Ok((PendingSave { dir: dir_fd, dir_rel: dir.to_path_buf(), tmp, name: name.into(), file: keep }, file))
+        Ok((PendingSave { dir: dir_fd, dir_rel: dir.to_path_buf(), tmp, name: name.into(), file: keep, package }, file))
     }
 }
 
@@ -200,11 +212,16 @@ pub struct PendingSave {
     tmp: String,
     name: String,
     file: File,
+    /// the temporary is a folder for a package (see `begin_save`)
+    package: bool,
 }
 
 impl PendingSave {
     /// Puts the file in place: fsync, rename over the destination, fsync the folder. Returns its path in the home.
     pub fn commit(self, opener: &Opener) -> Result<(PathBuf, File), DocErrorCode> {
+        if self.package {
+            return self.commit_package(opener);
+        }
         self.file.sync_all().map_err(|e| code_of(&e))?;
         let (tmp, name) = (CString::new(self.tmp.as_bytes()).unwrap(), CString::new(self.name.as_bytes()).unwrap());
         let d = self.dir.as_raw_fd();
@@ -221,12 +238,58 @@ impl PendingSave {
         Ok((self.dir_rel.join(&self.name), self.file))
     }
 
-    /// Throws the temporary file away.
+    /// Puts the temporary folder in place of the package. A package already there is moved aside, the new folder is
+    /// renamed into its place, and the old one is removed; when the new folder cannot be put in place the old one is
+    /// moved back.
+    fn commit_package(self, opener: &Opener) -> Result<(PathBuf, File), DocErrorCode> {
+        let _ = self.file.sync_all();
+        let d = self.dir.as_raw_fd();
+        let rename = |from: &str, to: &str| -> io::Result<()> {
+            let (from, to) = (CString::new(from).unwrap(), CString::new(to).unwrap());
+            // SAFETY: both names are NUL-terminated single components inside the folder d.
+            opener.as_account(|| {
+                // SAFETY: as above; errno is read before the account's credentials are restored.
+                let r = unsafe { renameat(d, from.as_ptr(), d, to.as_ptr()) };
+                if r < 0 {
+                    Err(io::Error::last_os_error())
+                } else {
+                    Ok(())
+                }
+            })
+        };
+        if rename(&self.tmp, &self.name).is_err() {
+            // the package is there already (a folder cannot replace a non-empty one): move it aside first
+            let aside = format!(".{}.bifrost-old-{}", self.name.chars().take(64).collect::<String>(), hex(&random::<4>()));
+            if let Err(e) = rename(&self.name, &aside) {
+                self.discard(opener);
+                return Err(code_of(&e));
+            }
+            if let Err(e) = rename(&self.tmp, &self.name) {
+                let _ = rename(&aside, &self.name);
+                self.discard(opener);
+                return Err(code_of(&e));
+            }
+            let old = opener.home().join(&self.dir_rel).join(&aside);
+            let _ = opener.as_account(|| fs::remove_dir_all(&old).or_else(|_| fs::remove_file(&old)));
+        }
+        // fsync of the folder makes the rename durable; a failure here does not undo the save
+        if let Ok(dir) = File::from(self.dir).try_clone() {
+            let _ = dir.sync_all();
+        }
+        Ok((self.dir_rel.join(&self.name), self.file))
+    }
+
+    /// Throws the temporary file (or folder) away.
     pub fn abort(self, opener: &Opener) {
         self.discard(opener);
     }
 
     fn discard(&self, opener: &Opener) {
+        if self.package {
+            let tmp = opener.home().join(&self.dir_rel).join(&self.tmp);
+            let _ = opener.as_account(|| fs::remove_dir_all(&tmp));
+            return;
+        }
         let tmp = CString::new(self.tmp.as_bytes()).unwrap();
         // SAFETY: tmp is a NUL-terminated single component inside the folder fd.
         opener.as_account(|| unsafe { unlinkat(self.dir.as_raw_fd(), tmp.as_ptr(), 0) });
@@ -499,6 +562,44 @@ mod tests {
             assert_eq!(o.begin_save(Path::new("Documents"), bad).err(), Some(DocErrorCode::Denied), "{bad:?}");
         }
         assert_eq!(o.begin_save(Path::new(".."), "x").err(), Some(DocErrorCode::Denied));
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn a_package_is_saved_as_a_folder_that_replaces_the_old_one_only_on_commit() {
+        let d = scratch("pkgsave");
+        let docs = d.join("home/Documents");
+        fs::create_dir_all(docs.join("Notes.rtfd")).unwrap();
+        fs::write(docs.join("Notes.rtfd/TXT.rtf"), "old").unwrap();
+        let o = opener(&d);
+        let temp_of = |name: &str| {
+            let prefix = format!(".{name}.bifrost-");
+            fs::read_dir(&docs).unwrap().map(|e| e.unwrap().path()).find(|p| p.file_name().unwrap().to_string_lossy().starts_with(&prefix))
+        };
+
+        // a save hands over a folder, and the app writes the package's files into it
+        let (pending, f) = o.begin_save(Path::new("Documents"), "Notes.rtfd").unwrap();
+        assert!(f.metadata().unwrap().is_dir());
+        fs::write(temp_of("Notes.rtfd").unwrap().join("TXT.rtf"), "new").unwrap();
+        assert_eq!(fs::read_to_string(docs.join("Notes.rtfd/TXT.rtf")).unwrap(), "old", "nothing is replaced before commit");
+        let (path, _) = pending.commit(&o).unwrap();
+        assert_eq!(path, Path::new("Documents/Notes.rtfd"));
+        assert_eq!(fs::read_to_string(docs.join("Notes.rtfd/TXT.rtf")).unwrap(), "new");
+        let names: Vec<String> = fs::read_dir(&docs).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+        assert_eq!(names, ["Notes.rtfd"], "the old package and the temporary folder are gone");
+
+        // an abort removes the temporary folder and leaves the package alone
+        let (pending, _f) = o.begin_save(Path::new("Documents"), "Notes.rtfd").unwrap();
+        fs::write(temp_of("Notes.rtfd").unwrap().join("TXT.rtf"), "lost").unwrap();
+        pending.abort(&o);
+        assert!(temp_of("Notes.rtfd").is_none());
+        assert_eq!(fs::read_to_string(docs.join("Notes.rtfd/TXT.rtf")).unwrap(), "new");
+
+        // a new name needs no old package to move aside
+        let (pending, _f) = o.begin_save(Path::new("Documents"), "Copy.rtfd").unwrap();
+        fs::write(temp_of("Copy.rtfd").unwrap().join("TXT.rtf"), "copy").unwrap();
+        assert_eq!(pending.commit(&o).unwrap().0, Path::new("Documents/Copy.rtfd"));
+        assert_eq!(fs::read_to_string(docs.join("Copy.rtfd/TXT.rtf")).unwrap(), "copy");
         fs::remove_dir_all(&d).unwrap();
     }
 

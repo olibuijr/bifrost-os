@@ -18,11 +18,20 @@
    "description": "",
    "role": "Ink stroke rendering (pen, marker, watercolour textures)",
    "doc": "",
-   "bifrost": "springboard/render/src/blend.rs",
+   "bifrost": "springboard/render/src/blend.rs; springboard/render/src/kernel_ink_composite.rs",
    "status": "partial",
-   "note": "Blend modes and source-over compositing run on packed premultiplied pixels; the six-channel stroke composite of the reference is not implemented.",
+   "note": "A six-channel stroke composite (three colour plus three coverage channels, with a pigment operator) now exists in kernel_ink_composite.rs as an own definition of the model; the exact channel semantics of the reference kernel are unknown.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_ink_composite::tests"
+    }
+   ],
+   "ready_note": "Ready (own definition): six-channel ink composite in springboard/render/src/kernel_ink_composite.rs, three premultiplied colour channels with three independent coverage channels, per-channel source-over, a subtractive pigment operator for marker and wash strokes, and flatten onto paper, tests kernel_ink_composite::tests. The reference kernel was not documented well enough to copy its exact channel meaning, so this is BifrOSt own six-channel model that reduces to ordinary source-over when the three coverages are equal; single-coverage layer blending stays in blend.rs; no GLSL file was written."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/DesignLibrary.framework/SiriWaveArchive.metallib",
@@ -81,11 +90,20 @@
    "description": "",
    "role": "Window server compositing: blending, backdrop blur, shadows, colour management",
    "doc": "",
-   "bifrost": "springboard/gpu/shaders/compose.frag; springboard/gpu/shaders/shadow.frag; springboard/gpu/shaders/kawase_down.comp; springboard/gpu/shaders/kawase_up.comp; springboard/render/src/glass.rs",
+   "bifrost": "springboard/gpu/shaders/compose.frag; springboard/gpu/shaders/shadow.frag; springboard/gpu/shaders/kawase_down.comp; springboard/gpu/shaders/kawase_up.comp; springboard/render/src/glass.rs; springboard/render/src/kernel_layer_fx.rs; springboard/gpu/shaders/layer_mask_edr.comp",
    "status": "partial",
-   "note": "BifrOSt composites on the GPU with its own compose, shadow and Kawase blur shaders when a GPU presenter owns the backdrop; no layer effects such as masks, filters on layers or EDR tone mapping on the GPU. role inferred from the owning framework path; the metallib was not disassembled",
+   "note": "Layer masks, extended-range tone mapping and icon specular shading now exist as CPU reference kernels with a GLSL twin (kernel_layer_fx.rs, layer_mask_edr.comp); the glass lens, rim light, blur and compose paths were already in glass_lens.rs and the Kawase and compose shaders. The GLSL file is compiled by gpu/build.rs but no pipeline dispatches it yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_layer_fx::tests"
+    }
+   ],
+   "ready_note": "Ready: layer-effect kernels in springboard/render/src/kernel_layer_fx.rs (layer mask scaling of premultiplied pixels, luminance and alpha masks, extended-range tone mapping per pixel, height field to normals, Blinn-Phong icon specular, highlight limited to layer coverage), tests kernel_layer_fx::tests; GLSL twin of mask plus tone map in springboard/gpu/shaders/layer_mask_edr.comp (not wired to a pipeline). Lensing and rim light stay in glass_lens.rs; blur in the Kawase shaders. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   }
  ]
 }

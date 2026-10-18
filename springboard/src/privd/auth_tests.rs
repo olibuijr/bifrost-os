@@ -196,3 +196,52 @@ fn hint_parsing_drops_control_characters_blank_text_and_long_text() {
     let long = format!("password_hint={}\n", "h".repeat(HINT_MAX + 50));
     assert_eq!(parse_hint(&long).chars().count(), HINT_MAX);
 }
+
+fn elevate(a: &mut Auth, token: &str, pw: &str, at: i64) -> Result<String, AuthError> {
+    match a.plan_elevate(Some(token), crate::privd::SCOPE_PACKAGE_INSTALL, pw, at)? {
+        ElevatePlan::Done(g) => Ok(g),
+        ElevatePlan::Verify(user) => {
+            let r = a.verifier().verify(&user, pw);
+            a.finish_elevate(r, crate::privd::SCOPE_PACKAGE_INSTALL, at)
+        }
+    }
+}
+
+#[test]
+fn elevation_needs_the_session_the_password_and_is_single_use() {
+    let (mut a, _, _) = setup("elevate");
+    let scope = crate::privd::SCOPE_PACKAGE_INSTALL;
+    // locked session: no elevation
+    assert_eq!(a.plan_elevate(Some("x"), scope, "pw", 1), Err(AuthError::Locked));
+    let t = a.authenticate_at("pw", 100).unwrap();
+    // a wrong password counts as a failed attempt and grants nothing
+    assert!(matches!(elevate(&mut a, &t, "no", 101), Err(AuthError::WrongPassword { fails: 1, .. })));
+    assert_eq!(a.consume_grant(Some(&t), scope, Some("guess"), 101), Err(AuthError::ElevationRequired));
+    // the wrong token, an unknown scope
+    assert_eq!(a.plan_elevate(Some("bad"), scope, "pw", 102), Err(AuthError::Unauthorized));
+    assert!(matches!(a.plan_elevate(Some(&t), "disk.erase", "pw", 102), Err(AuthError::BadParams(_))));
+    // a right password issues a grant that works once, and the session token is unchanged
+    let g = elevate(&mut a, &t, "pw", 110).unwrap();
+    assert_eq!(a.require_unlocked(Some(&t)), Ok(()));
+    assert_eq!(a.consume_grant(Some(&t), scope, Some(&g), 111), Ok(()));
+    assert_eq!(a.consume_grant(Some(&t), scope, Some(&g), 112), Err(AuthError::ElevationRequired));
+    // a call that presents no grant burns the held one
+    let g = elevate(&mut a, &t, "pw", 120).unwrap();
+    assert_eq!(a.consume_grant(Some(&t), scope, None, 121), Err(AuthError::ElevationRequired));
+    assert_eq!(a.consume_grant(Some(&t), scope, Some(&g), 121), Err(AuthError::ElevationRequired));
+}
+
+#[test]
+fn a_grant_expires_is_scoped_and_dies_with_the_session() {
+    let (mut a, _, _) = setup("grant-expiry");
+    let scope = crate::privd::SCOPE_PACKAGE_INSTALL;
+    let t = a.authenticate_at("pw", 100).unwrap();
+    let g = elevate(&mut a, &t, "pw", 200).unwrap();
+    assert_eq!(a.consume_grant(Some(&t), scope, Some(&g), 200 + GRANT_SECS + 1), Err(AuthError::ElevationRequired));
+    let g = elevate(&mut a, &t, "pw", 300).unwrap();
+    assert_eq!(a.consume_grant(Some(&t), "other.scope", Some(&g), 301), Err(AuthError::ElevationRequired));
+    let g = elevate(&mut a, &t, "pw", 400).unwrap();
+    a.lock();
+    let t2 = a.authenticate_at("pw", 401).unwrap();
+    assert_eq!(a.consume_grant(Some(&t2), scope, Some(&g), 402), Err(AuthError::ElevationRequired), "lock revokes the grant");
+}

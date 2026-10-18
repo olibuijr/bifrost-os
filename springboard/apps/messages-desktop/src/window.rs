@@ -3,6 +3,9 @@
 //! are in [`crate::draw`].
 
 use crate::accounts::{self, Account};
+use crate::crypto;
+use crate::state_file;
+use bifrost_app::keychain;
 use crate::api::{Api, UPLOAD_LIMIT};
 use crate::draw::{inside, ChipHit, Hit, OverlayAction, Rect};
 use crate::model::{InfoKind, Messages, Outgoing, Overlay, Prompt, PromptKind, SignIn, REACTIONS};
@@ -66,11 +69,59 @@ enum Pending {
     Accounts,
     /// The password of a saved login, read to sign in.
     Password(Account),
-    /// A login saved after a typed sign-in: added, or replaced when an item already exists.
-    Save { account: Account, password: String },
-    Replace,
-    /// The saved login removed at sign-out; the answer is not needed.
+    /// A login saved after a typed sign-in, or moved to the server's full user id: added, or replaced when an item already
+    /// exists. `legacy` is the bare name the login was saved under before, removed once the full id is saved.
+    Save { account: Account, password: String, legacy: Option<String> },
+    Replace { legacy: Option<String> },
+    /// The saved login removed at sign-out, or a login under a bare name removed after it moved (its answer is not needed).
     Forget,
+    /// One of the crypto items read before a sign-in (see [`Lookup`]).
+    Lookup(Item),
+    /// A crypto item written after a change. `added` is true once the item was added after an update found none. `moving`
+    /// is true while the items are moved from a bare name to the full user id (see [`Migration`]).
+    Store { service: String, account: String, value: String, added: bool, moving: bool },
+    /// A keychain item removed after a move; the answer is not needed.
+    Discard,
+}
+
+/// A sign-in under a name other than the stored full user id, or one that found the sessions in the keychain. The crypto
+/// items under the typed name are copied to the stored name and then removed, and the sessions keychain item is removed
+/// once the sessions file holds them.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Migration {
+    /// The name the crypto items were read under at this sign-in.
+    typed: String,
+    /// True while the sessions keychain item of an earlier version is still to be removed.
+    sessions_item: bool,
+    /// True once the device and key items were copied to the stored name and removed under `typed`.
+    items_moved: bool,
+    /// The copies still to be confirmed (the device and the key) before `typed` is removed.
+    stores_left: u32,
+}
+
+/// The keychain items of the end-to-end encryption state.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Item {
+    Device,
+    Key,
+    Sessions,
+}
+
+/// The crypto items read for one sign-in: the device the account had, its pickle key and its sessions. They wait for
+/// the three keychain answers, then the sign-in starts with the device id as a hint, and `restore` holds them for the
+/// sign-in to install.
+#[derive(Clone, Debug, Default)]
+struct Lookup {
+    homeserver: String,
+    user: String,
+    password: String,
+    typed: bool,
+    waiting: u32,
+    device: Option<String>,
+    key: Option<String>,
+    sessions: Option<String>,
+    /// True when `sessions` came from the keychain item of an earlier version (see [`crypto::SESSIONS_ITEM`]).
+    sessions_legacy: bool,
 }
 
 /// What the open context menu is about.
@@ -121,6 +172,12 @@ pub struct MessagesWindow {
     wake_rx: Option<UnixStream>,
     wake_tx: Option<UnixStream>,
     pending: HashMap<u32, Pending>,
+    /// The crypto items being read for a sign-in that has not started yet.
+    lookup: Option<Lookup>,
+    /// The crypto items the sign-in in progress restores from.
+    restore: Option<Lookup>,
+    /// The move of a login under a bare name, or the removal of the sessions keychain item (see [`Migration`]).
+    migration: Option<Migration>,
     /// The file the user is choosing, with the room it is for.
     picking: Option<(u32, String)>,
     /// The file drag in progress, if any.
@@ -174,6 +231,9 @@ impl MessagesWindow {
             wake_rx,
             wake_tx,
             pending: HashMap::new(),
+            lookup: None,
+            restore: None,
+            migration: None,
             picking: None,
             file_drop: None,
             account: None,
@@ -245,6 +305,7 @@ impl MessagesWindow {
             },
             Event::Synced(Ok(_)) if self.api.is_none() => {}
             Event::Synced(Ok(sync)) => {
+                self.save_crypto(ctx);
                 let marks = self.model.prefs.unread_marks.clone();
                 let notices = self.model.apply_sync(&sync);
                 if self.model.prefs.unread_marks != marks {
@@ -306,22 +367,44 @@ impl MessagesWindow {
                 }
                 Err(e) => self.model.status = format!("Rename failed: {e}"),
             },
+            Event::Decrypted(patches) => {
+                self.model.apply_decrypted(&patches);
+                self.save_crypto(ctx);
+            }
             Event::LoggedOut { result: _ } => {}
         }
         self.dirty = true;
     }
 
-    fn signed_in(&mut self, ctx: &Ctx, api: Arc<Api>, homeserver: String, user: String, password: String, typed: bool) {
+    fn signed_in(&mut self, ctx: &Ctx, api: Arc<Api>, homeserver: String, typed_user: String, password: String, typed: bool) {
+        // The login is stored under the full user id the server returned, whatever was typed (see `accounts::stored_user`).
+        let user = accounts::stored_user(&typed_user, &api.user_id);
+        let moved = accounts::moved_from(&typed_user, &user);
         self.model.user_id = api.user_id.clone();
         self.model.homeserver = homeserver.clone();
         self.account = Some(Account { homeserver: homeserver.clone(), user: user.clone() });
         self.model.sign_in = None;
         self.model.status.clear();
+        let restore = self.restore.take().unwrap_or_default();
+        if moved.is_some() || restore.sessions_legacy {
+            self.migration = Some(Migration {
+                typed: restore.user.clone(),
+                sessions_item: restore.sessions_legacy,
+                items_moved: moved.is_none(),
+                stores_left: 0,
+            });
+        }
+        let key = restore.key.as_deref().and_then(crypto::parse_key_item);
+        let stored = restore.device.as_deref().and_then(crypto::parse_device_item);
+        if let Err(e) = api.install_crypto(key, stored, restore.sessions.as_deref()) {
+            self.model.status = format!("Encryption could not start: {e}");
+        }
         sync::run_sync(api.clone(), self.tx.clone(), self.wake());
         self.api = Some(api);
-        if typed {
+        // A login under a bare name is saved again under the full id, and the bare item is removed once that is stored.
+        if typed || moved.is_some() {
             let request = passwords::save(ctx, &accounts::service(&homeserver), &user, &password);
-            self.pending.insert(request, Pending::Save { account: Account { homeserver, user }, password });
+            self.pending.insert(request, Pending::Save { account: Account { homeserver, user }, password, legacy: moved });
         }
     }
 
@@ -343,7 +426,7 @@ impl MessagesWindow {
                 }
             },
             Pending::Password(account) => match passwords::decode_password(result) {
-                Ok(password) => self.start_sign_in(account.homeserver, account.user, password, false),
+                Ok(password) => self.start_sign_in(ctx, account.homeserver, account.user, password, false),
                 Err(e) => {
                     self.model.status = match e {
                         KeyError::ItemNotFound => "No password is saved for this account".into(),
@@ -352,39 +435,70 @@ impl MessagesWindow {
                     self.model.sign_in = Some(SignIn::prefilled(&account.homeserver, &account.user, ""));
                 }
             },
-            Pending::Save { account, password } => match passwords::decode_password(result) {
-                Ok(_) => {}
+            Pending::Save { account, password, legacy } => match passwords::decode_password(result) {
+                Ok(_) => self.forget_bare_login(ctx, &account.homeserver, legacy),
                 Err(KeyError::DuplicateItem) => {
                     let request = passwords::update(ctx, &accounts::service(&account.homeserver), &account.user, &password);
-                    self.pending.insert(request, Pending::Replace);
+                    self.pending.insert(request, Pending::Replace { legacy });
                 }
                 Err(e) => self.model.status = format!("The password could not be saved in Passwords: {e:?}"),
             },
-            Pending::Replace => {
-                if let Err(e) = passwords::decode_password(result) {
-                    self.model.status = format!("The password could not be saved in Passwords: {e:?}");
+            Pending::Replace { legacy } => match passwords::decode_password(result) {
+                Ok(_) => {
+                    let homeserver = self.model_homeserver();
+                    self.forget_bare_login(ctx, &homeserver, legacy);
                 }
+                Err(e) => self.model.status = format!("The password could not be saved in Passwords: {e:?}"),
+            },
+            Pending::Forget | Pending::Discard => {}
+            // keychain requests are answered through `keychain`, not here: keep them waiting
+            p @ (Pending::Lookup(_) | Pending::Store { .. }) => {
+                self.pending.insert(request, p);
+                return false;
             }
-            Pending::Forget => {}
         }
         self.dirty = true;
         true
     }
 
-    /// Signs in on a job thread. A typed password is saved on success (see `signed_in`).
-    fn start_sign_in(&mut self, homeserver: String, user: String, password: String, typed: bool) {
+    /// Starts a sign-in. First the account's crypto items are read from the keychain (the device, its pickle key and
+    /// its sessions); the sign-in job starts when the three answers are in (see [`MessagesWindow::keychain`]). A typed
+    /// password is saved on success (see `signed_in`).
+    fn start_sign_in(&mut self, ctx: &Ctx, homeserver: String, user: String, password: String, typed: bool) {
         if let Some(sign) = self.model.sign_in.as_mut() {
             sign.busy = true;
         }
         self.model.status = "Signing in...".into();
+        for (prefix, item) in [(crypto::DEVICE_ITEM, Item::Device), (crypto::KEY_ITEM, Item::Key), (crypto::SESSIONS_ITEM, Item::Sessions)] {
+            let request = keychain::get(ctx, &crypto::item_service(prefix, &homeserver), &user);
+            self.pending.insert(request, Pending::Lookup(item));
+        }
+        self.lookup = Some(Lookup { homeserver, user, password, typed, waiting: 3, ..Lookup::default() });
+    }
+
+    /// Starts the sign-in job once the crypto items are read. The stored device id is the hint the login asks for.
+    fn launch_sign_in(&mut self) {
+        let Some(mut lookup) = self.lookup.take() else { return };
+        // The sessions file wins over the keychain item of an earlier version, which is removed after the file is written.
+        if let Some(key) = lookup.key.as_deref().and_then(crypto::parse_key_item) {
+            match state_file::load(&self.data_dir, &lookup.homeserver, &lookup.user, &key) {
+                Ok(Some(blob)) => lookup.sessions = Some(blob),
+                Ok(None) => {}
+                Err(e) => self.model.status = format!("The saved sessions could not be read: {e}"),
+            }
+        }
+        let device_hint = lookup.device.as_deref().and_then(crypto::parse_device_item).map(|(device, _)| device.to_string());
+        let (homeserver, user, password, typed) =
+            (lookup.homeserver.clone(), lookup.user.clone(), lookup.password.clone(), lookup.typed);
+        self.restore = Some(lookup);
         let transport = self.transport.clone();
         let tx = self.tx.clone();
         let wake = self.wake();
-        sync::spawn(tx, wake, move || sync::sign_in(transport, homeserver, user, password, typed));
+        sync::spawn(tx, wake, move || sync::sign_in(transport, homeserver, user, password, typed, device_hint));
     }
 
     /// Checks the sign-in sheet and starts the sign-in when every field is right.
-    fn submit_sign_in(&mut self) {
+    fn submit_sign_in(&mut self, ctx: &Ctx) {
         let Some(sign) = self.model.sign_in.as_mut() else { return };
         if sign.busy {
             return;
@@ -392,10 +506,147 @@ impl MessagesWindow {
         match sign.checked() {
             Ok((homeserver, user, password)) => {
                 sign.error.clear();
-                self.start_sign_in(homeserver, user, password, true);
+                self.start_sign_in(ctx, homeserver, user, password, true);
             }
             Err(e) => sign.error = e,
         }
+    }
+
+    /// Writes the crypto state to the keychain when it changed (see [`crypto::Machine::snapshot`]). A write is an update;
+    /// an item that does not exist yet is added (see [`MessagesWindow::keychain`]).
+    fn save_crypto(&mut self, ctx: &Ctx) {
+        let Some(api) = self.api.clone() else { return };
+        let Some(snap) = api.take_snapshot() else { return };
+        let Some(account) = self.account.clone() else { return };
+        // The sessions are too large for an item: they go to the sessions file, sealed with the pickle key.
+        if let (Some(sessions), Some(key)) = (snap.sessions.as_deref(), crypto::parse_key_item(&snap.key)) {
+            match state_file::save(&self.data_dir, &account.homeserver, &account.user, &key, sessions) {
+                Ok(()) => self.retire_sessions_item(ctx),
+                Err(e) => self.model.status = format!("The encryption sessions could not be saved: {e}"),
+            }
+        }
+        let moving = match self.migration.as_mut() {
+            Some(m) if !m.items_moved && m.typed != account.user => {
+                m.stores_left = 2;
+                true
+            }
+            _ => false,
+        };
+        for (prefix, value) in [(crypto::KEY_ITEM, snap.key), (crypto::DEVICE_ITEM, snap.device)] {
+            let service = crypto::item_service(prefix, &account.homeserver);
+            let request = keychain::update(ctx, &service, &account.user, value.as_bytes());
+            self.pending.insert(request, Pending::Store { service, account: account.user.clone(), value, added: false, moving });
+        }
+    }
+
+    /// Removes the sessions keychain item of an earlier version, once the sessions file holds its sessions.
+    fn retire_sessions_item(&mut self, ctx: &Ctx) {
+        let Some(m) = self.migration.as_mut() else { return };
+        if !m.sessions_item {
+            return;
+        }
+        m.sessions_item = false;
+        let typed = m.typed.clone();
+        let homeserver = self.model_homeserver();
+        let request = keychain::delete(ctx, &crypto::item_service(crypto::SESSIONS_ITEM, &homeserver), &typed);
+        self.pending.insert(request, Pending::Discard);
+        self.finish_migration();
+    }
+
+    /// One copy of the device or the key item to the stored name is confirmed. After both, the items under the bare name
+    /// are removed.
+    fn copy_confirmed(&mut self, ctx: &Ctx) {
+        let Some(m) = self.migration.as_mut() else { return };
+        if m.items_moved {
+            return;
+        }
+        m.stores_left = m.stores_left.saturating_sub(1);
+        if m.stores_left > 0 {
+            return;
+        }
+        m.items_moved = true;
+        let typed = m.typed.clone();
+        let homeserver = self.model_homeserver();
+        for prefix in [crypto::DEVICE_ITEM, crypto::KEY_ITEM] {
+            let request = keychain::delete(ctx, &crypto::item_service(prefix, &homeserver), &typed);
+            self.pending.insert(request, Pending::Discard);
+        }
+        self.finish_migration();
+    }
+
+    /// Ends the migration once nothing under the bare name is left to remove.
+    fn finish_migration(&mut self) {
+        if self.migration.as_ref().is_some_and(|m| m.items_moved && !m.sessions_item) {
+            self.migration = None;
+        }
+    }
+
+    /// Removes the Passwords login under a bare name, once the full id holds the password.
+    fn forget_bare_login(&mut self, ctx: &Ctx, homeserver: &str, legacy: Option<String>) {
+        if let Some(bare) = legacy {
+            let request = passwords::remove(ctx, &accounts::service(homeserver), &bare);
+            self.pending.insert(request, Pending::Forget);
+        }
+    }
+
+    /// The homeserver of the signed-in login (empty before a sign-in).
+    fn model_homeserver(&self) -> String {
+        self.account.as_ref().map(|a| a.homeserver.clone()).unwrap_or_default()
+    }
+
+    /// The devices of the members of the selected room, as (user, device id), for the room info. All are unverified.
+    pub fn devices_for_room(&self) -> Vec<(String, String)> {
+        let Some(room) = self.model.selected_room() else { return Vec::new() };
+        let users: Vec<String> = room.members.iter().map(|m| m.user_id.clone()).collect();
+        self.api.as_ref().map(|api| api.device_list(&users)).unwrap_or_default()
+    }
+
+    /// The answer to one of the window's keychain requests: a crypto item read for a sign-in, or a crypto item written.
+    /// False when the request was not the window's.
+    pub fn keychain(&mut self, ctx: &Ctx, reply: keychain::Reply) -> bool {
+        let Some(pending) = self.pending.remove(&reply.request) else { return false };
+        match pending {
+            Pending::Lookup(item) => {
+                let value = reply.result.ok().and_then(|bytes| String::from_utf8(bytes).ok());
+                let ready = match self.lookup.as_mut() {
+                    Some(lookup) => {
+                        match item {
+                            Item::Device => lookup.device = value,
+                            Item::Key => lookup.key = value,
+                            Item::Sessions => {
+                                lookup.sessions_legacy = value.is_some();
+                                lookup.sessions = value;
+                            }
+                        }
+                        lookup.waiting = lookup.waiting.saturating_sub(1);
+                        lookup.waiting == 0
+                    }
+                    None => false,
+                };
+                if ready {
+                    self.launch_sign_in();
+                }
+            }
+            Pending::Store { service, account, value, added, moving } => match reply.result {
+                Ok(_) => {
+                    if moving {
+                        self.copy_confirmed(ctx);
+                    }
+                }
+                Err(keychain::Error::ItemNotFound) if !added => {
+                    let request = keychain::add(ctx, &service, &account, value.as_bytes());
+                    self.pending.insert(request, Pending::Store { service, account, value, added: true, moving });
+                }
+                Err(e) => self.model.status = format!("The encryption keys could not be saved in the keychain: {e:?}"),
+            },
+            Pending::Discard => {}
+            other => {
+                self.pending.insert(reply.request, other);
+                return false;
+            }
+        }
+        self.dirty = true;
+        true
     }
 
     /// Puts a room on screen and marks its newest message read.
@@ -1004,7 +1255,7 @@ impl MessagesWindow {
                     sign.focus = i;
                 }
             }
-            Hit::SignIn => self.submit_sign_in(),
+            Hit::SignIn => self.submit_sign_in(ctx),
             Hit::Nothing if had_overlay => {
                 // A tap outside a panel closes it, except a sheet that is busy.
                 let busy = matches!(&self.model.overlay, Overlay::Prompt(p) if p.busy);
@@ -1100,7 +1351,7 @@ impl MessagesWindow {
             }
             KeyInput::Code(KEY_RETURN) => {
                 if self.model.sign_in.is_some() {
-                    self.submit_sign_in();
+                    self.submit_sign_in(ctx);
                 } else if let Overlay::Prompt(p) = self.model.overlay.clone() {
                     self.submit_prompt(p);
                 } else if matches!(self.model.overlay, Overlay::Emoji(_)) {

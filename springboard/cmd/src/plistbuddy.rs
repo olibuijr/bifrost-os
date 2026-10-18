@@ -6,16 +6,19 @@
 //! names a dictionary key, or a whole number that indexes an array. `Set` keeps the type the entry already has. Types
 //! for `Add` are `string`, `integer`, `real`, `bool`, `date`, `data`, `array` and `dict`.
 //!
-//! Gaps: there is no interactive mode (a `-c` command is required), and `Copy`, `Merge`, `Import` and `Revert` are not
-//! supported yet. Changes are written when the run ends and `Save` only confirms them, so a failing command leaves the
-//! file as it was. Keys that contain a colon cannot be addressed. The file is written as XML, so a binary input is
+//! With `-c` commands, changes are written when the run ends and `Save` only confirms them, so a failing command leaves
+//! the file as it was. With no `-c`, `interactive` reads commands from standard input: `Save` writes the file at once,
+//! and a bad command prints its error and the session goes on.
+//!
+//! Gaps: `Copy`, `Merge`, `Import` and `Revert` are not supported yet. Keys that contain a colon cannot be addressed. The file is written as XML, so a binary input is
 //! converted on the first write.
 
 use crate::plutil;
 use bifrost_core::plist::{self, Plist};
+use std::io::{BufRead, Write};
 
 pub const USAGE: &str = "Usage: PlistBuddy [-x] [-l] [-c \"command\"]... file.plist\n\
-  -c  run a command (repeatable); at least one is needed, interactive mode is not supported\n\
+  -c  run a command (repeatable); with none, commands are read from standard input\n\
   -x  print values as XML\n\
   -l  print values in the ASCII form (the default)\n\
   -h  show this help";
@@ -305,38 +308,79 @@ fn delete(root: &mut Plist, path: &str) -> Result<(), String> {
     }
 }
 
+/// Runs one command on `root`, appending any printed text to `out`. Returns whether the value changed.
+fn apply(root: &mut Plist, command: Command, xml: bool, out: &mut String) -> Result<bool, String> {
+    match command {
+        Command::Print(path) => out.push_str(&print_value(root, &path, xml)?),
+        Command::Set { path, value } => {
+            set(root, &path, &value)?;
+            return Ok(true);
+        }
+        Command::Add { path, kind, value } => {
+            add(root, &path, &kind, value.as_deref())?;
+            return Ok(true);
+        }
+        Command::Delete(path) => {
+            delete(root, &path)?;
+            return Ok(true);
+        }
+        Command::Clear(kind) => {
+            *root = if kind.as_deref() == Some("array") { Plist::Array(Vec::new()) } else { Plist::Dict(Vec::new()) };
+            return Ok(true);
+        }
+        Command::Save | Command::Exit => {}
+        Command::Help => {
+            out.push_str(COMMANDS);
+            out.push('\n');
+        }
+    }
+    Ok(false)
+}
+
 /// Runs the commands in order on `root`. `Exit` stops the run. An error stops it at that command.
 pub fn run(root: &mut Plist, commands: &[String], xml: bool) -> Result<Run, String> {
     let mut output = String::new();
     let mut changed = false;
     for line in commands {
         match parse_command(line)? {
-            Command::Print(path) => output.push_str(&print_value(root, &path, xml)?),
-            Command::Set { path, value } => {
-                set(root, &path, &value)?;
-                changed = true;
-            }
-            Command::Add { path, kind, value } => {
-                add(root, &path, &kind, value.as_deref())?;
-                changed = true;
-            }
-            Command::Delete(path) => {
-                delete(root, &path)?;
-                changed = true;
-            }
-            Command::Clear(kind) => {
-                *root = if kind.as_deref() == Some("array") { Plist::Array(Vec::new()) } else { Plist::Dict(Vec::new()) };
-                changed = true;
-            }
-            Command::Save => {}
-            Command::Help => {
-                output.push_str(COMMANDS);
-                output.push('\n');
-            }
             Command::Exit => break,
+            command => changed |= apply(root, command, xml, &mut output)?,
         }
     }
     Ok(Run { output, changed })
+}
+
+/// Interactive mode, used when no `-c` is given: reads one command per line from `input` and writes the output to
+/// `out`. Unlike `run`, a bad command prints its error and the session goes on. `Save` calls `save` with the current
+/// value so the caller can write the file at once. `Exit` or the end of input ends the session; changes that were never
+/// saved are dropped.
+pub fn interactive<R: BufRead, W: Write>(
+    root: &mut Plist,
+    input: R,
+    out: &mut W,
+    xml: bool,
+    mut save: impl FnMut(&Plist) -> Result<(), String>,
+) -> Result<(), String> {
+    for line in input.lines() {
+        let line = line.map_err(|e| e.to_string())?;
+        if line.trim().is_empty() {
+            continue;
+        }
+        let result = match parse_command(&line) {
+            Ok(Command::Exit) => break,
+            Ok(Command::Save) => save(root).map(|()| String::new()),
+            Ok(command) => {
+                let mut text = String::new();
+                apply(root, command, xml, &mut text).map(|_| text)
+            }
+            Err(e) => Err(e),
+        };
+        match result {
+            Ok(text) => out.write_all(text.as_bytes()).map_err(|e| e.to_string())?,
+            Err(e) => writeln!(out, "Error: {e}").map_err(|e| e.to_string())?,
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -530,5 +574,39 @@ mod tests {
         let out = run(&mut root, &cmds(&["Help", "Save"]), false).unwrap();
         assert!(out.output.starts_with("Commands:"));
         assert!(!out.changed);
+    }
+
+    #[test]
+    fn interactive_reads_lines_and_saves_when_asked() {
+        let mut root = sample();
+        let script = "Print :Name\n\nSet :Name Grace\nBogus\nSave\nPrint :Name\nExit\nPrint :Count\n";
+        let mut out = Vec::new();
+        let mut saved = Vec::new();
+        interactive(&mut root, script.as_bytes(), &mut out, false, |v| {
+            saved.push(v.clone());
+            Ok(())
+        })
+        .unwrap();
+        let text = String::from_utf8(out).unwrap();
+        assert!(text.starts_with("Ada"), "{text}");
+        assert!(text.contains("Error: unrecognized command Bogus"), "{text}");
+        assert!(text.trim_end().ends_with("Grace"), "{text}");
+        assert!(!text.contains('2'), "Exit ends the session before Print :Count: {text}");
+        assert_eq!(saved.len(), 1);
+        assert_eq!(lookup(&saved[0], ":Name"), Ok(&Plist::Str("Grace".into())));
+    }
+
+    #[test]
+    fn interactive_drops_unsaved_changes_at_end_of_input() {
+        let mut root = sample();
+        let mut out = Vec::new();
+        let mut saves = 0;
+        interactive(&mut root, "Delete :Name\n".as_bytes(), &mut out, false, |_| {
+            saves += 1;
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(saves, 0, "without Save nothing is written");
+        assert!(out.is_empty());
     }
 }

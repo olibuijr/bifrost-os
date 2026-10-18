@@ -73,7 +73,6 @@
   ],
   "gaps": [
     "Signposts: no OSSignposter or os_signpost equivalent (docs/bifrost-ui.md:1041 names it as Phase 3)",
-    "OSAllocatedUnfairLock: no unfair-lock wrapper in the SDK",
     "Per-value privacy and format specifiers: privacy is per subsystem only",
     "Log reading: no persistent position tokens and the journal reader depends on journalctl",
     "docs/bifrost-ui.md:1096 says no DispatchSource, but springboard/sdk/src/dispatch.rs:744 has a memory-pressure source; the doc needs a fix"

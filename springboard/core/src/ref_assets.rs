@@ -90,6 +90,11 @@ impl Resolver {
         Self::with_roots(roots)
     }
 
+    /// The roots this resolver searches, in order.
+    pub fn roots(&self) -> &[PathBuf] {
+        &self.roots
+    }
+
     /// The path of the named asset, or `None` when no root has it (the caller then uses its built-in default).
     pub fn resolve(&self, kind: Kind, name: &str) -> Option<PathBuf> {
         let key = (kind, normalize(name));

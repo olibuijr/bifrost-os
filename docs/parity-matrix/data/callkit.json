@@ -54,14 +54,11 @@
    "apple": "Preparing your app to be the default calling app",
    "bifrost": "springboard/ui/src/call_apps.rs",
    "status": "partial",
-   "note": "Audit 2026-10-13: the row predated this code. The registered calling apps, the default, the route a call takes (the default app or the system) and the settings value that restores the default are tested headless in springboard/ui/tests/parity_sdk-complete-36.rs. Gap: there is no settings page for choosing the default, the model is not wired into the shell or the call controller, and it is not tested on Midget."
+   "note": "Audit 2026-10-13: the row predated this code. The registered calling apps, the default, the route a call takes (the default app or the system) and the settings value that restores the default are tested headless in springboard/ui/tests/parity_sdk-complete-36.rs. Gap: there is no settings page for choosing the default, the model is not wired into the shell or the call controller, and it is not tested on Midget. Refreshed 2026-10-17: ui call_apps.rs (CallingApps, default app) exposed as bifrost_sdk::calling_apps; tests call_apps::tests."
   }
  ],
  "gaps": [
-  "Call provider and call-state model in the SDK",
-  "Incoming and outgoing call UI in the shell",
-  "Active-call observation for apps",
-  "Caller ID/blocking directory",
-  "Default calling app setting"
+  "Shell does not draw call UI: ui call_ui.rs IncomingCard is a model with no shell caller.",
+  "Caller ID and blocking: ui call_directory.rs is a model; nothing loads a directory from the system."
  ]
 }

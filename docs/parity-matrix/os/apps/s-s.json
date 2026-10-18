@@ -22,7 +22,16 @@
    "status": "partial",
    "note": "Shortcuts app",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "automation::tests"
+    }
+   ],
+   "ready_note": "shortcut automation model and runner: automation::tests"
   },
   {
    "id": "path:/System/Applications/Siri AI.app",
@@ -43,7 +52,16 @@
    "status": "partial",
    "note": "assistant app",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-assistant",
+     "filter": "model::tests"
+    }
+   ],
+   "ready_note": "assistant model and session logic: model::tests; tool safety gate in safety.rs"
   },
   {
    "id": "path:/System/Applications/Stickies.app",
@@ -64,7 +82,26 @@
    "status": "partial",
    "note": "Sticky Notes app: coloured notes with text and persistence",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-stickies",
+     "filter": "store::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-stickies",
+     "filter": "rtf::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-stickies",
+     "filter": "layout::tests"
+    }
+   ],
+   "ready_note": "Stickies app: note store, rich text, layout and persistence covered by the crate's tests."
   },
   {
    "id": "path:/System/Applications/Stocks.app",
@@ -85,7 +122,31 @@
    "status": "partial",
    "note": "new app (Team H, 0.1.0); not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-stocks",
+     "filter": "model::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-stocks",
+     "filter": "data::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-stocks",
+     "filter": "feed::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-stocks",
+     "filter": "store::tests"
+    }
+   ],
+   "ready_note": "Stocks app: watchlist model, quote data, feed and store covered by the crate's tests; Midget check pending."
   },
   {
    "id": "path:/System/Applications/System Settings.app",
@@ -106,7 +167,16 @@
    "status": "partial",
    "note": "Settings app",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings::tests"
+    }
+   ],
+   "ready_note": "settings pages, actions and preference persistence: shell::settings::tests"
   },
   {
    "id": "path:/System/Applications/Utilities/Screen Sharing.app",
@@ -123,11 +193,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/apps/remote",
+   "bifrost": "springboard/apps/screen-sharing, springboard/rfb, springboard/apps/remote",
    "status": "partial",
-   "note": "remote desktop app",
+   "note": "remote desktop app Built 2026-10-17 (wave 13): VNC password authentication (springboard/rfb/src/des.rs, handshake::connect_with) and a Password box in the viewer (handshake::tests, des::tests, connection::tests).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-rfb",
+     "filter": "handshake::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-rfb",
+     "filter": "des::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-rfb",
+     "filter": "message::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-screen-sharing",
+     "filter": "connection::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-screen-sharing",
+     "filter": "view::tests"
+    }
+   ],
+   "ready_note": "Screen Sharing connects to a VNC (RFB) server, shows and controls its desktop (scale to fit, View Only, clipboard both ways) and answers VNC password authentication; the Remote app and Settings > Sharing are the server side. Gap: no TLS and no encodings beyond Raw and CopyRect."
   },
   {
    "id": "path:/System/Applications/Utilities/Screenshot.app",
@@ -144,11 +243,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/apps/screenshot-desktop",
+   "bifrost": "springboard/apps/screenshot-desktop; springboard/src/shell/screenshot.rs",
    "status": "partial",
    "note": "screenshot crate (naming, options) plus the shell capture tool in springboard/src/shell/screenshot.rs; no standalone app window",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-screenshot",
+     "filter": "naming::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-screenshot",
+     "filter": "options::tests"
+    }
+   ],
+   "ready_note": "Screenshot crate naming and options covered by tests; the shell capture tool is the app's capture path."
   },
   {
    "id": "path:/System/Applications/Utilities/Script Editor.app",
@@ -169,7 +282,26 @@
    "status": "partial",
    "note": "new app (Team H, 0.1.0); not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-script-editor",
+     "filter": "document::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-script-editor",
+     "filter": "runner::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-script-editor",
+     "filter": "buffer::tests"
+    }
+   ],
+   "ready_note": "Script Editor: documents, runner (result pane source) and buffer covered by the crate's tests; Midget check pending."
   },
   {
    "id": "path:/System/Applications/Utilities/System Information.app",
@@ -188,9 +320,18 @@
    "doc": "",
    "bifrost": "springboard/apps/sysinfo-desktop",
    "status": "partial",
-   "note": "category tree (hardware, network, software) with rows from bifrost_core::sysinfo; lacks Save report and per-bus detail panes",
+   "note": "category tree (hardware, network, software) with rows from bifrost_core::sysinfo; Save Report As Text, Rich Text and JSON exist (export.rs); lacks per-bus detail panes",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-sysinfo",
+     "filter": "model::tests"
+    }
+   ],
+   "ready_note": "category tree, rows, export and USB bus detail (each bus is a row with its own detail card): model::tests"
   }
  ]
 }

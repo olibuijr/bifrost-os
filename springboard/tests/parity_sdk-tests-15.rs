@@ -221,7 +221,9 @@ fn a_backup_of_the_data_directory_restores_the_sources_and_leaves_other_files_ou
     let archive = src.path().join("out.sbk");
     assert_eq!(backup::create(src.path(), &archive).expect("archive written"), 2);
     std::fs::create_dir_all(dst.path().join("Notes")).unwrap();
-    assert_eq!(backup::restore(dst.path(), &archive).expect("archive restored"), 2);
+    // The archive key is the source data directory's keychain key; a restore elsewhere is given that key.
+    let key = backup::backup_key(src.path()).unwrap();
+    assert_eq!(backup::restore_with(dst.path(), &archive, &|| Ok(key)).expect("archive restored"), 2);
     assert_eq!(std::fs::read(dst.path().join("Notes/a.txt")).unwrap(), b"first note");
     assert_eq!(std::fs::read(dst.path().join("settings.ini")).unwrap(), b"theme=dark\n");
     assert!(!dst.path().join("scratch.tmp").exists());
@@ -244,10 +246,11 @@ fn the_newest_backup_in_the_backups_folder_is_found_by_its_time() {
 #[test]
 fn a_staged_restore_is_applied_once_at_the_next_start_and_then_removed() {
     let src = tempfile::tempdir().expect("source data directory");
-    let dst = tempfile::tempdir().expect("data directory of the next start");
-    std::fs::write(src.path().join("reminders.tsv"), b"buy milk\n").unwrap();
-    let archive = src.path().join("out.sbk");
-    backup::create(src.path(), &archive).unwrap();
+    // The staged restore is applied at the next start of the same data directory, which holds the archive key.
+    let dst = src;
+    std::fs::write(dst.path().join("reminders.tsv"), b"buy milk\n").unwrap();
+    let archive = dst.path().join("out.sbk");
+    backup::create(dst.path(), &archive).unwrap();
     assert_eq!(backup::stage(dst.path(), &archive).expect("staged"), 1);
     assert!(dst.path().join(backup::PENDING).exists());
     assert!(matches!(backup::apply_pending(dst.path()), Some(Ok(1))));

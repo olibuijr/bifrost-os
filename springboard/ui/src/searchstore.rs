@@ -141,6 +141,21 @@ impl IndexStore {
         &self.client_state
     }
 
+    /// The stored items, oldest first (for saving the index).
+    pub fn items(&self) -> &[StoredItem] {
+        &self.items
+    }
+
+    /// Rebuilds a store from saved items and its protection class (for loading the index). Over [`MAX_ITEMS`] the
+    /// oldest items are dropped, as in [`IndexStore::index`].
+    pub fn from_items(mut items: Vec<StoredItem>, protection: Option<ProtectionClass>) -> Self {
+        if items.len() > MAX_ITEMS {
+            let extra = items.len() - MAX_ITEMS;
+            items.drain(..extra);
+        }
+        IndexStore { items, protection, ..Self::default() }
+    }
+
     /// The live items a requester may see: all of them for the owner, the public ones for anyone else.
     fn visible(&self, now: i64, owner: bool) -> Vec<&StoredItem> {
         self.items.iter().filter(|i| !i.expired(now) && (owner || i.public)).collect()
@@ -197,6 +212,28 @@ impl StoreSet {
         let mut names: Vec<&str> = self.stores.keys().filter_map(|(a, n)| if a.as_str() == app { n.as_deref() } else { None }).collect();
         names.sort_unstable();
         names
+    }
+
+    /// The store of `app` for `name` (`None` is the default index), when it exists.
+    pub fn get(&self, app: &str, name: Option<&str>) -> Option<&IndexStore> {
+        self.stores.get(&(app.to_string(), name.map(str::to_string)))
+    }
+
+    /// The store of `app` for `name` (`None` is the default index), for changing it, when it exists.
+    pub fn get_mut(&mut self, app: &str, name: Option<&str>) -> Option<&mut IndexStore> {
+        self.stores.get_mut(&(app.to_string(), name.map(str::to_string)))
+    }
+
+    /// Puts `store` in place of the store of `app` for `name` (used when loading a saved index).
+    pub fn put(&mut self, app: &str, name: Option<&str>, store: IndexStore) {
+        self.stores.insert((app.to_string(), name.map(str::to_string)), store);
+    }
+
+    /// Every (app, index name) pair held, sorted, with `None` for the default index.
+    pub fn keys(&self) -> Vec<(&str, Option<&str>)> {
+        let mut keys: Vec<(&str, Option<&str>)> = self.stores.keys().map(|(a, n)| (a.as_str(), n.as_deref())).collect();
+        keys.sort_unstable();
+        keys
     }
 
     /// Runs `query` as `requester` over the index `name` of `owner`. The owner sees every live item; another app
@@ -302,5 +339,27 @@ mod tests {
         s.end_batch(b"cursor-7").unwrap();
         s.delete_all();
         assert_eq!(s.client_state(), b"cursor-7");
+    }
+
+    #[test]
+    fn saved_items_rebuild_a_store_and_the_store_set_keeps_each_index_apart() {
+        let mut set = StoreSet::new();
+        set.default_index("notes").index(vec![item("a", "notes", "Milk")]);
+        let desc = IndexDescription::new("archive").unwrap().protection(ProtectionClass::Complete);
+        set.named_index("notes", &desc).unwrap().index(vec![item("b", "notes", "Tea")]);
+        assert_eq!(set.keys(), vec![("notes", None), ("notes", Some("archive"))]);
+        let archived = set.get("notes", Some("archive")).unwrap();
+        assert_eq!(archived.protection(), Some(ProtectionClass::Complete));
+        assert_eq!(archived.items()[0].unique_identifier, "b");
+        assert!(set.get("notes", Some("missing")).is_none());
+
+        let mut back = StoreSet::new();
+        back.put("notes", Some("archive"), IndexStore::from_items(archived.items().to_vec(), archived.protection()));
+        assert_eq!(back.get("notes", Some("archive")).unwrap().ids(), ["b"]);
+
+        let over: Vec<StoredItem> = (0..MAX_ITEMS + 2).map(|i| item(&format!("i{i}"), "notes", "x")).collect();
+        let capped = IndexStore::from_items(over, None);
+        assert_eq!(capped.len(), MAX_ITEMS);
+        assert_eq!(capped.ids()[0], "i2");
     }
 }

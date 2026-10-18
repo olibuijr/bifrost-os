@@ -26,6 +26,9 @@ pub struct CalendarEvent {
     pub repeat: u8,
     /// 0 none, 1 at time, 2 5 min, 3 15 min, 4 30 min, 5 1 hour, 6 1 day before.
     pub alert: u8,
+    /// The iCalendar UID of an event that came from a synced account, so its edits can be sent back to that
+    /// account. Empty for an event made here.
+    pub uid: String,
 }
 
 pub const REPEATS: [&str; 6] = [
@@ -61,6 +64,8 @@ impl CalendarEvent {
             && !self.notes.chars().any(char::is_control)
             && (self.repeat as usize) < REPEATS.len()
             && (self.alert as usize) < ALERTS.len()
+            && self.uid.chars().count() <= 320
+            && !self.uid.chars().any(char::is_control)
     }
 
     /// True when this event or one of its repeats falls on `d`.
@@ -119,7 +124,7 @@ pub fn load(path: &Path) -> io::Result<Vec<CalendarEvent>> {
     let mut ids = std::collections::HashSet::new();
     for line in lines {
         let parts: Vec<_> = line.split('\t').collect();
-        if parts.len() != 8 && parts.len() != 12 {
+        if parts.len() != 8 && parts.len() != 12 && parts.len() != 13 {
             continue;
         }
         let parse = || -> Option<CalendarEvent> {
@@ -142,6 +147,7 @@ pub fn load(path: &Path) -> io::Result<Vec<CalendarEvent>> {
                 alert: parts.get(9).map_or(Some(0), |p| p.parse().ok())?,
                 location: parts.get(10).map_or(Some(String::new()), |p| unhex(p))?,
                 notes: parts.get(11).map_or(Some(String::new()), |p| unhex(p))?,
+                uid: parts.get(12).map_or(Some(String::new()), |p| unhex(p))?,
             })
         };
         if let Some(e) = parse().filter(CalendarEvent::valid) {
@@ -189,7 +195,7 @@ pub fn save(path: &Path, events: &[CalendarEvent]) -> io::Result<()> {
     let mut text = format!("{HEADER}\n");
     for e in events {
         text.push_str(&format!(
-            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
+            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
             e.id,
             e.date.year,
             e.date.month,
@@ -201,8 +207,51 @@ pub fn save(path: &Path, events: &[CalendarEvent]) -> io::Result<()> {
             e.repeat,
             e.alert,
             hex(&e.location),
-            hex(&e.notes)
+            hex(&e.notes),
+            hex(&e.uid)
         ));
     }
     crate::shell::fsutil::write_atomic(path, text)
+}
+
+#[cfg(test)]
+mod uid_tests {
+    use super::*;
+
+    fn event(id: u64, uid: &str) -> CalendarEvent {
+        CalendarEvent {
+            id,
+            date: Date { year: 2026, month: 10, day: 17 },
+            minute: 540,
+            duration: 60,
+            all_day: false,
+            title: "Sync".into(),
+            location: String::new(),
+            notes: String::new(),
+            repeat: 0,
+            alert: 0,
+            uid: uid.into(),
+        }
+    }
+
+    #[test]
+    fn a_synced_event_keeps_its_uid_and_a_local_one_has_none() {
+        let path = std::env::temp_dir().join(format!("calendar-uid-{}.txt", std::process::id()));
+        let events = vec![event(1, "abc-1@example.com"), event(2, "")];
+        save(&path, &events).unwrap();
+        let back = load(&path).unwrap();
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(back.iter().find(|e| e.id == 1).unwrap().uid, "abc-1@example.com");
+        assert_eq!(back.iter().find(|e| e.id == 2).unwrap().uid, "");
+    }
+
+    #[test]
+    fn a_file_written_before_uids_loads_with_none() {
+        let path = std::env::temp_dir().join(format!("calendar-uid-old-{}.txt", std::process::id()));
+        std::fs::write(&path, format!("{HEADER}\n1\t2026\t10\t17\t540\t60\t0\t{}\t0\t0\t\t\n", hex("Old"))).unwrap();
+        let back = load(&path).unwrap();
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(back.len(), 1);
+        assert_eq!(back[0].uid, "");
+    }
 }

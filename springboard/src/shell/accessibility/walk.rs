@@ -11,6 +11,8 @@ use bifrost_ui::Rect;
 
 /// The handle of a Settings row: the reader presses it with a tap at its centre.
 pub const SETTINGS: &str = "settings";
+/// The handle of a row of the Settings sidebar (the split layout): the reader presses it with a tap at its centre.
+pub const SETTINGS_SIDEBAR: &str = "settings-sidebar";
 /// The handle of a menu bar title: pressing it opens the menu.
 pub const BAR: &str = "bar";
 /// The handle of a row of the open menu: pressing it runs the row's action.
@@ -33,6 +35,10 @@ pub fn spoken_kind(role: &str) -> &'static str {
         "app" => "app",
         "progress-indicator" => "progress indicator",
         "alert" => "alert",
+        "popup" => "pop-up button",
+        "sheet" => "sheet",
+        "panel" => "panel",
+        "dialog" => "dialog",
         _ => "",
     }
 }
@@ -59,7 +65,7 @@ pub fn speech(e: &Element) -> String {
 /// which the standard rotor roles do not name; a Settings button is a button, a choice row is a list row.
 pub fn rotor_role(role: &str) -> &str {
     match role {
-        "page" => "button",
+        "page" | "popup" => "button",
         "choice" => "row",
         "item" => "menu-item",
         "menu" => "menu-item",
@@ -102,6 +108,19 @@ pub fn menu_title(slug: &str, name: &str, bounds: Rect) -> Element {
         enabled: true,
         bounds: Some(bounds),
         handle: BAR.to_string(),
+    }
+}
+
+/// A window of an app as an element: the window's title and its bounds in screen pixels.
+pub fn window(id: u32, name: &str, bounds: Rect) -> Element {
+    Element {
+        address: format!("os/window/{id}"),
+        name: name.to_string(),
+        role: "window".to_string(),
+        value: String::new(),
+        enabled: true,
+        bounds: Some(bounds),
+        handle: String::new(),
     }
 }
 
@@ -157,6 +176,23 @@ mod tests {
         assert!(!in_rotor(&button, 5));
         assert!(!in_rotor(&el("choice", "Off", "", true), 4), "a choice row is a list row, not a menu item");
         assert!(in_rotor(&el("choice", "Off", "", true), 3), "a choice row is in Lists");
+    }
+
+    #[test]
+    fn sheets_panels_dialogs_and_pop_ups_have_their_own_words() {
+        assert_eq!(speech(&el("sheet", "Location Access", "", true)), "sheet, Location Access");
+        assert_eq!(speech(&el("panel", "Shortcuts", "", true)), "panel, Shortcuts");
+        assert_eq!(speech(&el("dialog", "Help", "", true)), "dialog, Help");
+        assert_eq!(speech(&el("popup", "Speech", "Icelandic", true)), "pop-up button, Speech, Icelandic");
+        assert!(in_rotor(&el("popup", "Speech", "", true), 1), "a pop-up button is in Controls");
+    }
+
+    #[test]
+    fn extra_windows_are_read_as_windows() {
+        let b = Rect { x: 0.0, y: 0.0, w: 300.0, h: 200.0 };
+        let w = window(0x0100_0001, "Notes: Draft", b);
+        assert_eq!((w.role.as_str(), w.address.as_str()), ("window", "os/window/16777217"));
+        assert_eq!(speech(&w), "window, Notes: Draft");
     }
 
     #[test]

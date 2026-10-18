@@ -2,6 +2,7 @@
 //! built-in apps, driven by plain touch/key events and drawn into a Surface.
 
 pub mod pasteboard;
+pub mod pasteboard_transfer;
 pub mod battery;
 pub mod browser;
 pub mod accessibility;
@@ -9,9 +10,17 @@ pub mod atspi;
 pub mod account;
 pub mod applib;
 pub mod apphost;
+pub mod app_window_table;
+pub mod helpbook;
 pub mod folder_actions;
+pub mod file_import;
 pub mod touch_frames;
 pub mod intents;
+pub mod preview_gen;
+pub mod app_controls;
+pub mod assistant;
+pub mod assistant_panel;
+pub mod assistant_page;
 pub mod media_intents;
 pub mod kinds;
 pub mod app_usage;
@@ -31,16 +40,23 @@ mod dock_stack;
 mod homeedit;
 mod jiggle;
 mod quick_actions;
+mod settings_panes;
 pub mod camera;
 pub mod magnifier;
 pub mod calendar;
 pub mod contactextras;
+pub mod contactchanges;
+pub mod contactdonations;
+pub mod contactpick;
+pub mod contactphotos;
+pub mod contactgroups;
 pub mod contactstore;
 pub mod books;
 pub mod cache;
 pub mod clipboard;
 mod services_route;
 mod look_up_popover;
+mod visual_search_panel;
 pub mod chord;
 pub mod clock;
 pub mod control_center;
@@ -61,8 +77,12 @@ pub mod kb_input;
 pub mod input_methods;
 pub mod kb_clicks;
 pub mod alert_sound;
+pub mod audio_graph;
+pub mod earcon;
+pub mod ui_sounds;
 pub mod hwkeys;
 pub mod backup;
+pub mod migration;
 pub mod backup_page;
 pub mod timemachine;
 pub mod md;
@@ -75,18 +95,22 @@ pub mod notify;
 pub mod usernotif;
 pub mod extras;
 pub mod desktop_gate;
+pub mod search_prefs;
 pub mod spotindex;
 pub mod sharing;
 pub mod forms;
 pub mod users_page;
 pub mod mouse_page;
 pub mod sharing_page;
+pub mod location_page;
 pub mod print_scan_page;
 pub mod workspace;
 pub mod services;
 pub mod chrome_host;
-pub mod dwell;
 pub mod sticky_keys;
+pub mod slow_keys;
+pub mod scripts_menu;
+pub mod mouse_keys;
 pub mod game_controllers_page;
 mod now_playing_menu;
 pub mod dnd;
@@ -94,12 +118,31 @@ pub mod photos;
 pub mod music;
 pub mod list;
 pub mod low_battery;
+pub mod thermal_alert;
 pub mod crash_alert;
 pub mod permission_sheet;
+pub mod guardian_sheet;
+pub mod malware_gate;
+pub mod trust_sheet;
+pub mod background;
+pub mod package_install_sheet;
+pub mod contact_pick_sheet;
+pub mod photo_pick;
+pub mod photo_pick_sheet;
+mod auth_sheet;
+mod volume_sheet;
+mod account_access_sheet;
+mod usb_sheet;
+mod network_auth_sheet;
+mod firewall_sheet;
+mod live_captions;
 pub mod options;
+pub mod gamemode;
+pub mod game_priority;
 pub mod pageedit;
 pub mod pages;
 mod login_items_page;
+pub mod extension_host;
 pub mod axmap;
 pub mod power_menu;
 #[cfg(feature = "desktop-wayland")]
@@ -108,6 +151,7 @@ mod recent_items;
 #[cfg(feature = "desktop-wayland")]
 mod print_sheet;
 mod character_viewer;
+mod help_viewer;
 mod keyboard_viewer;
 pub mod session;
 pub mod prefs;
@@ -126,14 +170,17 @@ pub mod settings_load;
 // the settings App Intents catalogue; Search does not list it yet, so unused items are expected for now
 #[allow(dead_code)]
 pub mod settings_intents;
+pub mod entity_index;
 // action intents (Wi-Fi, wallpaper); not wired to Search yet
 #[allow(dead_code)]
 pub mod settings_actions;
+pub mod spotlight_scope;
 pub mod settings_search;
 pub mod screensaver;
 pub mod storage;
 pub mod storage_page;
 pub mod gpu_page;
+pub mod startup_disk_page;
 pub mod quicksearch;
 pub mod quicksearch_math;
 pub mod switcher;
@@ -150,6 +197,9 @@ pub mod stage_strip;
 mod desk;
 mod desk_occlusion;
 pub mod window_fx;
+/// Picture in Picture placement and the automatic start gated by the Settings toggle.
+pub mod pip;
+pub mod pickers;
 pub mod wake;
 pub mod desktop_network;
 pub mod disk_image;
@@ -170,11 +220,20 @@ pub mod diag;
 pub mod diagnostics_page;
 pub mod passwords_page;
 pub mod internet_accounts_page;
+pub mod java_launch;
+pub mod js_automation;
+pub mod account_page;
 pub mod timeset_page;
 pub mod night_shift;
+pub mod wake_page;
+pub mod net_diagnose_page;
+pub mod launch_gate;
+pub mod launch_alert;
 pub mod notify_page;
+pub mod live_wallpaper;
 pub mod wallpaper_page;
 pub mod wallpaper_schedule;
+pub mod wallpaper_types;
 pub mod widgets;
 pub mod widgetgallery;
 pub mod wifi_page;
@@ -220,7 +279,13 @@ pub struct Info {
     pub display_mode: Option<(u32, u32, u32)>,
     /// the refresh rates the panel offers at its current size, fastest first (Settings > Displays > Refresh Rate)
     pub display_rates: Vec<f32>,
+    /// the sizes the panel offers, largest first (Settings > Displays > Resolution)
+    pub display_sizes: Vec<(u32, u32)>,
     pub brightness_supported: bool,
+    /// the machine has an ambient light sensor, so Displays can offer Automatically Adjust Brightness
+    pub ambient_light_supported: bool,
+    /// the machine has an accelerometer, so Accessibility can offer Vehicle Motion Cues
+    pub motion_sensor_supported: bool,
     pub battery_present: bool,
     pub desktop_network: Option<desktop_network::Snapshot>,
     pub hour: i32,
@@ -343,10 +408,14 @@ pub enum Effect {
     BluetoothOutput,
     /// media volume 0..=1 from the Control Center slider
     Volume(f32),
+    /// keyboard backlight level 0..=1 from the keyboard backlight keys; the binary writes it to the LED
+    KeyboardBacklight(f32),
     /// a timer or alarm went off: sound it
     Alarm,
     /// arm the RTC to wake the device at this Unix time (0 = disarm)
     WakeAt(i64),
+    /// Battery > Schedule: the next scheduled wake or power-on (Unix seconds, 0 = none); the binary arms the clock
+    WakeSchedule(i64),
     /// the user picked a wallpaper: map `wallpapers/<id>.raw` ("" = the
     /// default wallpaper.raw) and `set_wallpaper`; the shell persists the id
     Wallpaper(String),
@@ -355,6 +424,10 @@ pub enum Effect {
     LockWallpaper(String),
     /// Dark Appearance Dims Wallpaper changed
     WallpaperDim(bool),
+    /// the desktop wallpaper look changed (`live_wallpaper::Look::pref` value): the shell calls `set_live_look`
+    LiveWallpaper(String),
+    /// Location Services changed a pref: the shell saves these (key, value) pairs to `settings.ini`
+    Location(Vec<(String, String)>),
     /// the idle timeout changed (ms, 0 = never); the shell already applies it
     AutoLock(u32),
     /// Energy: minutes of display-off before the system sleeps (0 = never); the binary applies it live
@@ -398,6 +471,8 @@ pub use bifrost_ui::Event;
 /// A tap on the dark screen wakes it: down and up within this time and distance.
 const TAP_WAKE_MS: f64 = 300.0;
 const TAP_WAKE_PX: f32 = 40.0;
+/// Radius of a Vehicle Motion Cues dot, in points.
+const MOTION_DOT_PT: f32 = 7.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Screen {
@@ -438,6 +513,8 @@ enum Drawn {
 pub struct Shell {
     pub w: i32,
     pub h: i32,
+    /// effects a spoken Voice Control command produced; the next tick returns them to the main loop
+    voice_fx: Vec<Effect>,
     ui: Ui,
     layout: Layout,
     /// the caller's mapping of the home still (stays mapped; never owned here)
@@ -457,12 +534,20 @@ pub struct Shell {
     wallpapers: Rc<Vec<Wallpaper>>,
     /// lock wallpaper and dimmed copies
     wpx: wallpaper_page::Extra,
+    /// the animated or time-of-day desktop wallpaper (`wallpaper_look`) and its cached frame
+    live: live_wallpaper::Live,
     dock_bg: Option<Image>,
     dock: Vec<Tile>,
     grid: Vec<Tile>,
     /// every app's masked icon at the standard size (apps() order), the source
     /// the tiles are resampled from under Display Zoom
     base_icons: Vec<Image>,
+    /// the icon style generation the icons were drawn in (`icon_doc::style_generation`)
+    icon_gen: u64,
+    /// counts the icon rebuilds; the Dock client drops its cached icons when it changes
+    icon_rebuilds: u32,
+    /// the `installed.json` stamp the icons were drawn against (`helpbook::installed_stamp`)
+    installed_stamp: Option<std::time::SystemTime>,
     zoom: f32,
     pager: Pager,
     /// persisted home-screen edits (widgets, page order, hidden pages)
@@ -508,6 +593,8 @@ pub struct Shell {
     /// Screen Time: today's usage, the Time Limit cover, and per-second gates
     screentime: screentime::usage::Tracker,
     shield: Option<screentime::shield::Shield>,
+    /// (local day, app) pairs already warned about five minutes before a limit
+    st_warned: Vec<(i64, AppId)>,
     st_checked: i64,
     st_blocked_at: i64,
     /// the parsed screentime.ini, reloaded only when the file changes on disk
@@ -536,9 +623,14 @@ pub struct Shell {
     /// the volume-key HUD; `hud_drawn` says the last frame had it
     hud: VolumeHud,
     hud_drawn: bool,
+    /// the keyboard backlight: its level 0..=1 and how many steps the hardware has; None without one
+    kbd_backlight: Option<(f32, u32)>,
     /// the input source HUD; `input_hud_drawn` says the last frame had it
     input_hud: SourceHud,
     input_hud_drawn: bool,
+    /// Live Captions: the plate and the pipeline behind it (see `live_captions.rs`); `captions_drawn` says the last frame had it
+    captions: live_captions::Captions,
+    captions_drawn: bool,
     /// the source each app keeps (Settings > Keyboard > Keyboards, "Remember Input Source for Each App")
     input_memory: input_memory::InputMemory,
     /// Developer › Performance HUD; `perf_drawn` says the last frame had it
@@ -547,6 +639,8 @@ pub struct Shell {
     switcher: Switcher,
     /// the search card pulled down over the home screen
     quicksearch: QuickSearch,
+    /// the assistant panel (Cmd+Shift+A), drawn over the desktop like Search
+    assistant: assistant_panel::Panel,
     /// the built-in compose method over the Search field and its candidate window
     compose_ime: compose_window::ComposeWindow,
     notify: notify::Notify,
@@ -564,14 +658,30 @@ pub struct Shell {
     /// the drag and drop session between app windows, and the types each window registered (`dnd`)
     dnd: dnd::State,
     assistive_touch: assistive_touch::AssistiveTouch,
+    /// Voice Control's recognition in the `speech_recognizer` service (`accessibility::voice_control`)
+    voice: accessibility::voice_control::Session,
+    /// Vehicle Motion Cues: the accelerometer feed and the dots, created when the setting is first switched on
+    motion_cues: Option<accessibility::motion_cues::MotionCuesFeed>,
     /// an app hiding the status bar and home indicator
     fullscreen: bool,
+    /// Game Mode state with its leave hysteresis (`gamemode`)
+    game: gamemode::Model,
+    /// where the pointer was last, for the menu bar that a full-screen window hides (`desk::bar_hidden`)
+    pointer_y: Option<f32>,
+    /// the game pid Game Mode raised, put back when it leaves the front
+    game_pid: Option<u32>,
     /// persisted Settings (`settings.ini`), owned here so one writer exists
     prefs: Prefs,
     /// Screen Zoom (Option+Cmd+8, =, -): the final-frame magnifier the GPU presenter draws (`accessibility::zoom`)
     screen_zoom: accessibility::zoom::ScreenZoom,
     /// the background update checker; set once the data directory is loaded
     ota: Option<ota::Ota>,
+    /// Folder Actions: the attachments saved under the data dir, rescanned from the tick (see `folder_actions`).
+    folder_actions: folder_actions::Watcher,
+    /// the file importer: Documents, Desktop and Downloads kept in the Core Search index on a background thread (see `file_import`)
+    file_import: file_import::Importer,
+    /// the shared weather summary: refreshed hourly and on wake, with no app window open
+    weather_refresh: weather::Refresher,
     /// last time (ms) the apps registry was stat'ed for outside changes
     disk_check_ms: f64,
     /// Display & Brightness › Auto-Lock, ms; 0 never sleeps
@@ -625,6 +735,8 @@ pub struct Shell {
     shot_tap: bool,
     /// The screenshot toolbar's capture session, open while it is on screen.
     capture: Option<capture::Session>,
+    /// The pictures saved since the screenshot service last looked, in order (`services/screenshot.rs`).
+    pub(crate) shot_saved: Vec<PathBuf>,
     /// the screen recording in progress (the toolbar's Record buttons, `rec start`, `screencapture -v`)
     rec: Option<screenrec::Session>,
     /// the Options menu's choices, kept across capture sessions
@@ -685,8 +797,13 @@ pub struct Shell {
     print_sheet: Option<print_sheet::PrintSheet>,
     /// Edit > Emoji & Symbols: the character viewer panel (see `character_viewer.rs`)
     char_viewer: Option<character_viewer::CharacterViewer>,
+    /// How often each app's Home Screen quick actions were picked this session (see `quick_actions.rs`)
+    quick_action_uses: quick_actions::Usage,
+    help_viewer: Option<help_viewer::HelpViewer>,
     /// Option+Cmd+F5: the Accessibility Shortcut panel with a checkbox per chosen feature (see `accessibility::shortcut_panel`)
     a11y_panel: Option<accessibility::shortcut_panel::ShortcutPanel>,
+    /// Switch Control: the switch keys step through this panel of controls (see `accessibility::switch_control`)
+    switch_control: Option<accessibility::switch_control::SwitchControl>,
     /// Input Sources > Show Keyboard Viewer: the keyboard board panel (see `keyboard_viewer.rs`)
     keyboard_viewer: Option<keyboard_viewer::KeyboardViewer>,
     /// the share sheet, the nearby service and the incoming-file prompt
@@ -694,14 +811,52 @@ pub struct Shell {
     share_svc: Option<crate::net::share::Service>,
     share_prompt: Option<share::prompt::Prompt>,
     look_up: Option<look_up_popover::Popover>,
+    /// the Look Up in Visual Search panel and the search it waits for (`visual_search_panel`)
+    visual_search: Option<visual_search_panel::Session>,
+    /// a photo being decoded for the panel, with the search to run on it (`visual_search_panel`)
+    visual_search_load: Option<visual_search_panel::Load>,
     /// transfer rows the progress card showed at the last poll
     share_rows: usize,
     /// the "Low Battery" alert on screen
     low_alert: Option<low_battery::Alert>,
     /// the Allow / Don't Allow sheet for an app's privacy request (see `permission_sheet.rs`)
     permission_sheet: Option<permission_sheet::Sheet>,
+    /// the guardian's sheet for an app's PermissionKit question (`guardian_sheet.rs`), and the shell's last tick time
+    /// in seconds, which the answer and the expiry use
+    guardian_sheet: Option<guardian_sheet::GuardianSheet>,
+    guardian_now: u64,
+    /// the malware gate's card for a file about to open (`malware_gate.rs`), and the open it holds back
+    malware_alert: Option<malware_gate::MalwareAlert>,
+    /// the sheet for a site whose TLS certificate the system refused in the Browser (`trust_sheet.rs`)
+    trust_sheet: Option<trust_sheet::TrustSheet>,
+    /// background suspension of the external apps (`background.rs`), while Suspend Background Apps is on
+    suspender: background::Suspender,
+    /// the contact picker sheet for an app's open contact pick (see `contact_pick_sheet.rs`)
+    pick_sheet: Option<contact_pick_sheet::PickSheet>,
+    /// the photo picker sheet for an app's open photo pick (see `photo_pick_sheet.rs`)
+    photo_pick_sheet: Option<photo_pick_sheet::PhotoPickSheet>,
+    /// the password sheet an app's local authentication asks for (see `auth_sheet.rs`)
+    auth_sheet: Option<auth_sheet::AuthSheet>,
+    volume_sheet: Option<volume_sheet::VolumeSheet>,
+    /// the shell clock as of the last frame, for the sheet's lockout timing
+    auth_clock: f64,
+    /// the Allow / Don't Allow sheet for an app's request for an account type (see `account_access_sheet.rs`)
+    access_sheet: Option<account_access_sheet::AccessSheet>,
+    /// the USB accessory approval: the bus watcher with its saved answers, and the sheet that asks (see `usb_sheet.rs`)
+    usb_watch: usb_sheet::Watch,
+    usb_sheet: Option<usb_sheet::UsbSheet>,
+    /// the login sheet for a share or an 802.1X network an app asked the `network_auth` service about (see `network_auth_sheet.rs`)
+    net_auth_sheet: Option<network_auth_sheet::NetAuthSheet>,
+    /// the package install sheet and the install it runs (see `package_install_sheet.rs`)
+    package_session: Option<package_install_sheet::Session>,
+    /// the app firewall's Allow / Deny question and the apps asked (see `firewall_sheet.rs`)
+    fw: firewall_sheet::Firewall,
     /// the "quit unexpectedly" alert for an app that failed (see `crash_alert.rs`)
     crash_alert: Option<crash_alert::Alert>,
+    /// the "cannot be opened" / "open it?" alert for a downloaded program opened from Files (see `launch_alert.rs`)
+    launch_alert: Option<launch_alert::Alert>,
+    /// how the shell reads a program's quarantine record and starts it (tests replace these)
+    launch_hooks: launch_gate::Hooks,
     low_monitor: low_battery::Monitor,
     /// the announcement banner: the text apps post with `announce`, shown at the top of the screen for a few seconds
     announce: accessibility::banner::Banner,
@@ -711,6 +866,12 @@ pub struct Shell {
     speech: accessibility::speech::Speaker,
     /// the screen reader's cursor over the front Settings page (`accessibility::reader`)
     reader: accessibility::reader::Reader,
+    /// the Voice Control label or grid overlay (`accessibility::voice_overlay`)
+    voice_overlay: accessibility::voice_overlay::VoiceOverlay,
+    /// the line for a Braille display: what the screen reader last spoke, translated (`accessibility::braille_out`)
+    braille: accessibility::braille_out::BrailleLine,
+    /// the popup earcons (a desktop menu or the power menu opening or closing), queued while the reader is on (`earcon`)
+    popup_cues: earcon::PopupCues,
     battery_checked: f64,
     dirty: bool,
     perf_only: bool,
@@ -724,9 +885,14 @@ pub struct Shell {
     desktop_menu_row:Option<(desktop_bar::Menu,usize)>,
     /// Recent Items: the apps opened last, listed in the leading system menu (`recent_items`).
     recent_list:bifrost_ui::shared_list::SharedList,
+    /// The settings directory the recents are written to; None until `set_data_dir` names one.
+    recent_dir:Option<PathBuf>,
     /// Type-to-select state of the open bar menu (`NativeMenu` type-ahead): the kit model keeps the typed prefix.
     #[cfg(feature = "desktop-wayland")]
     desktop_menu_typed:Option<bifrost_ui::menu::Menu>,
+    /// The Help menu's search field: the query typed while the Help menu is open, and the pointer marker.
+    #[cfg(feature = "desktop-wayland")]
+    help_search:desktop_bar::HelpSearch,
     /// Width of the open bar menu, keyed by a hash of its rows and the scale (measuring every title on each pointer move was half the hover cost).
     #[cfg(feature = "desktop-wayland")]
     desktop_menu_width:std::cell::Cell<Option<(u64,usize)>>,
@@ -754,6 +920,10 @@ pub struct Shell {
     doc_broker:Option<Option<docpanel::Broker>>,
     /// the floating preview panel (`preview_panel`), shown by an app's `ToShell::Preview` or the `quick-look` service
     quick_look:preview_panel::Panel,
+    /// the Picture in Picture window (`pip`): drawn over the screen while it is starting or active
+    pip:pip::Floating,
+    /// the thermal warning (`thermal_alert`): when the kernel's thermal zones last read and which warning was given
+    thermal:thermal_alert::Monitor,
     desktop_metrics: desktop_metrics::Snapshot,
     desktop_metrics_at:f64,
     metrics_sampler: desktop_metrics::Sampler,
@@ -802,8 +972,16 @@ impl Shell {
         let tile = |a: &AppDef, decoded: Option<Image>| {
             // the Terminal's own artwork outranks a stale packaged `icons/*.raw`
             let own = (a.id == AppId::Terminal).then(|| a.icon_image.map(|f| f(size))).flatten();
-            let mut img = decoded.or(own).or_else(|| icon(a.icon, size)).or_else(|| a.icon_image.map(|f| f(size))).unwrap_or_else(|| scene::placeholder_icon(size));
-            img.apply_mask(&mask);
+            // an icon from `app_icon` is already the squircle body; a flat one (the cached raw icon, a software
+            // icon or the placeholder) is masked into it
+            let img = match decoded.or(own) {
+                Some(rendered) => rendered,
+                None => {
+                    let mut flat = icon(a.icon, size).or_else(|| a.icon_image.map(|f| f(size))).unwrap_or_else(|| scene::placeholder_icon(size));
+                    flat.apply_mask(&mask);
+                    flat
+                }
+            };
             Tile { icon: img, label: ui.styled(&ui.fit(a.name, 12.0, layout.label_w as f32), 12.0, Weight::Regular, WHITE, true) }
         };
         let mut decoded = decoded.into_iter();
@@ -816,6 +994,7 @@ impl Shell {
         let keyboard = Keyboard::new(w as f32, layout.s, true);
         let clock = clock::Clock::new(&ui, w, h);
         let quicksearch = QuickSearch::new(&ui, w as f32, layout.s);
+        let assistant = assistant_panel::Panel::new(&ui);
         let mut today = Today::new(&ui, w, h, mono);
         today.set_wallpaper(wallpaper);
         let mut pager = pager;
@@ -824,6 +1003,8 @@ impl Shell {
         lock_pager.set_leading(true);
         let mut sh = Shell {
             assistive_touch: assistive_touch::AssistiveTouch::new(&ui, w, h),
+            motion_cues: None,
+            voice: Default::default(),
             w,
             h,
             dock_bg: dock_background(wallpaper, &layout),
@@ -837,9 +1018,13 @@ impl Shell {
             heap_trim_due: false,
             wallpapers: Rc::new(Vec::new()),
             wpx: Default::default(),
+            live: Default::default(),
             dock,
             grid,
             base_icons,
+            icon_gen: bifrost_render::icon_doc::style_generation(),
+            icon_rebuilds: 0,
+            installed_stamp: helpbook::installed_stamp(&apphost::root()),
             zoom: 1.0,
             pager,
             conf: HomeConf::default(),
@@ -872,6 +1057,7 @@ impl Shell {
             session_token: None,
             screentime: screentime::usage::Tracker::new(deildu::data_dir().parent().map(|p| p.join("screentime")).unwrap_or_default()),
             shield: None,
+            st_warned: Vec::new(),
             st_checked: 0,
             st_blocked_at: 0,
             st_cfg: None,
@@ -888,13 +1074,17 @@ impl Shell {
             cc: ControlCenter::default(),
             hud: VolumeHud::default(),
             hud_drawn: false,
+            kbd_backlight: None,
             input_hud: SourceHud::default(),
             input_hud_drawn: false,
+            captions: live_captions::Captions::default(),
+            captions_drawn: false,
             input_memory: input_memory::InputMemory::default(),
             perf: diag::PerfHud::default(),
             perf_drawn: false,
             switcher: Switcher::default(),
             quicksearch,
+            assistant,
             compose_ime: compose_window::ComposeWindow::default(),
             notify: notify::Notify::default(),
             usernotif: usernotif::Registry::default(),
@@ -905,9 +1095,17 @@ impl Shell {
             input_taps: Default::default(),
             dnd: dnd::State::default(),
             fullscreen: false,
+            game: Default::default(),
+            pointer_y: None,
+            game_pid: None,
             prefs: Prefs::memory(),
             screen_zoom: Default::default(),
             ota: None,
+            folder_actions: folder_actions::Watcher::new(folder_actions::Registry::from_text(
+                &std::fs::read_to_string(folder_actions::file_path(&apphost::root())).unwrap_or_default(),
+            )),
+            file_import: Default::default(),
+            weather_refresh: weather::Refresher::default(),
             disk_check_ms: 0.0,
             idle_off_ms: Options::default().auto_lock_ms as f64,
             grace_from: None,
@@ -946,6 +1144,7 @@ impl Shell {
             markup_load: None,
             shot_tap: false,
             capture: None,
+            shot_saved: Vec::new(),
             rec: None,
             capture_prefs: capture::Prefs::default(),
             rec_display: (screenrec::FPS, false),
@@ -979,30 +1178,59 @@ impl Shell {
             #[cfg(feature = "desktop-wayland")]
             print_sheet: None,
             char_viewer: None,
+            quick_action_uses: quick_actions::Usage::default(),
+            help_viewer: None,
             a11y_panel: None,
+            switch_control: None,
             keyboard_viewer: None,
             share: None,
             share_svc: None,
             share_prompt: None,
             look_up: None,
+            visual_search: None,
+            visual_search_load: None,
             share_rows: 0,
             low_alert: None,
             permission_sheet: None,
+            guardian_sheet: None,
+            guardian_now: 0,
+            malware_alert: None,
+            trust_sheet: None,
+            suspender: Default::default(),
+            pick_sheet: None,
+            photo_pick_sheet: None,
+            auth_sheet: None,
+            volume_sheet: None,
+            auth_clock: 0.0,
+            access_sheet: None,
+            usb_watch: usb_sheet::Watch::default(),
+            usb_sheet: None,
+            net_auth_sheet: None,
+            package_session: None,
+            fw: firewall_sheet::Firewall::default(),
             crash_alert: None,
+            launch_alert: None,
+            launch_hooks: launch_gate::Hooks::default(),
             low_monitor: low_battery::Monitor::default(),
             announce: Default::default(),
             guided: Default::default(),
             speech: accessibility::speech::Speaker::detect(),
             reader: Default::default(),
+            voice_overlay: Default::default(),
+            braille: Default::default(),
+            popup_cues: Default::default(),
             battery_checked: f64::NEG_INFINITY,
+            voice_fx: Vec::new(),
             dirty: true,
             perf_only: false,
             overview:Default::default(),
-            desktop_menu:None,defaults:None,recent_list:recent_items::new(),desktop_context:None,
+            desktop_menu:None,defaults:None,recent_list:recent_items::new(),recent_dir:None,desktop_context:None,
             #[cfg(feature = "desktop-wayland")]
             desktop_menu_row:None,
             #[cfg(feature = "desktop-wayland")]
             desktop_menu_typed:None,
+            #[cfg(feature = "desktop-wayland")]
+            help_search:desktop_bar::HelpSearch::default(),
             #[cfg(feature = "desktop-wayland")]
             desktop_menu_width:std::cell::Cell::new(None),
             #[cfg(feature = "desktop-wayland")]
@@ -1010,6 +1238,8 @@ impl Shell {
             #[cfg(feature = "desktop-wayland")]
             doc_broker:None,
             quick_look:Default::default(),
+            pip:Default::default(),
+            thermal:Default::default(),
             bar_backdrop:std::cell::RefCell::new(None),chrome_text:std::cell::RefCell::new(bifrost_render::cache::TextCache::for_screen(w.max(0) as usize, h.max(0) as usize)),bar_shadows:Default::default(),desk_regions:None,desk_clear:None,desk_drawn:false,desk_t:0.0,
             desktop_metrics:Default::default(),desktop_metrics_at:0.,metrics_sampler:Default::default(),metrics_running:false,
             desk: Some(desk::Desk::new()),
@@ -1068,7 +1298,7 @@ impl Shell {
             || self.notify.animating()
             || self.quicksearch.active()
             || self.desktop_menu.is_some()
-            || self.assistive_visible()
+            || self.overlay_visible()
             || self.quick_look.is_visible()
             || self.overview_active()
             || self.keyboard.shown()
@@ -1128,6 +1358,9 @@ impl Shell {
         self.today_stale = true;
         clipboard::attach(format!("{dir}/{}", clipboard::FILE));
         self.data_dir = PathBuf::from(dir);
+        self.usb_watch.attach(Path::new(dir).join(usb_sheet::APPROVALS_FILE));
+        self.recent_list = recent_items::load(Path::new(dir));
+        self.recent_dir = Some(PathBuf::from(dir));
         self.st_load();
         self.prefs = Prefs::load(format!("{dir}/settings.ini"));
         // the Setup Assistant's choices reach settings.ini once, before the look is read below
@@ -1140,6 +1373,8 @@ impl Shell {
             let mode = bifrost_render::appearance::Mode::parse(self.prefs.get(settings::APPEARANCE_PREF).unwrap_or("dark"));
             bifrost_render::appearance::publish_mode(mode);
             bifrost_render::appearance::set_accent(bifrost_render::appearance::Accent::parse(self.prefs.get(settings::ACCENT_PREF).unwrap_or("blue")));
+            // after the accent, which the Tinted icons take as their tint
+            settings::apply_icon_style(bifrost_render::icon_doc::Variant::parse(self.prefs.get(settings::ICON_STYLE_PREF).unwrap_or("default")));
             let (unix, offset) = self.wall_now(0.0);
             bifrost_render::appearance::jump_to(mode.is_light(((unix + offset as i64).rem_euclid(86_400) / 3600) as u32));
         }
@@ -1199,6 +1434,76 @@ impl Shell {
     /// the frame rate while it is on.
     pub fn low_power(&self) -> bool {
         self.options().low_power
+    }
+
+    /// Displays > Automatically Adjust Brightness: the ambient light sensor sets the panel brightness.
+    pub fn auto_brightness(&self) -> bool {
+        self.options().auto_brightness
+    }
+
+    /// Game Mode's wish: Settings allows it (Automatic) and an installed game is in front, full screen.
+    pub fn game_mode_wanted(&self) -> bool {
+        if self.options().game_mode != gamemode::GamePref::Automatic {
+            return false;
+        }
+        // a video's full-screen flag, or the front window taken full screen by the green button or the app
+        let full = self.fullscreen || self.desk.as_ref().is_some_and(|d| d.front_full());
+        if !full {
+            return false;
+        }
+        let Screen::App(AppId::External(n)) = self.screen else { return false };
+        apphost::installed().get(n as usize).is_some_and(|a| gamemode::is_game(&a.manifest.category, a.manifest.game))
+    }
+
+    /// Advances Game Mode with the current wish; returns the change, if the state flipped.
+    pub fn game_mode_update(&mut self, now_ms: u64) -> Option<gamemode::Change> {
+        let wanted = self.game_mode_wanted();
+        self.game.update(wanted, now_ms)
+    }
+
+    /// The menu bar's "Turn Off Game Mode": off for the game in front until it leaves. True if it was on.
+    pub fn game_mode_turn_off(&mut self) -> bool {
+        let was_on = self.game.turn_off();
+        if was_on {
+            self.game_mode_restore_priority();
+        }
+        was_on
+    }
+
+    /// Raises the game in front through bifrostd and remembers its pid for the restore.
+    pub fn game_mode_raise_priority(&mut self) {
+        let pid = match self.screen {
+            Screen::App(AppId::External(n)) => self.ext.get(n as usize).and_then(|h| h.as_ref()).and_then(|h| h.pid()),
+            _ => None,
+        };
+        if let Some(pid) = pid {
+            self.game_pid = Some(pid);
+            crate::bare::sys::spawn_named("gamepriority", move || game_priority::raise(pid));
+        }
+    }
+
+    /// Puts the raised game's nice and uclamp back, if one was raised.
+    pub fn game_mode_restore_priority(&mut self) {
+        if let Some(pid) = self.game_pid.take() {
+            crate::bare::sys::spawn_named("gamepriority", move || game_priority::restore(pid));
+        }
+    }
+
+    /// Whether Game Mode is on now (the CPU profile is Performance while it is).
+    pub fn game_mode_on(&self) -> bool {
+        self.game.is_on()
+    }
+
+    /// The one-time Game Mode notice: posted the first time Game Mode turns on, then remembered in settings.ini.
+    pub fn game_mode_notice(&mut self) {
+        let mut o = Options::load(&self.prefs);
+        if o.game_notice_shown {
+            return;
+        }
+        o.game_notice_shown = true;
+        o.save(&mut self.prefs);
+        let body = "Game Mode gives the full-screen game in front the processor while it plays. Turn it off from the menu bar, or in Settings > General.";
+        self.notify(notify::store::Notification::new(AppId::Settings, "Game Mode is on", body, crate::bare::sys::wall_time().0));
     }
 
     /// Battery › Power Mode as the user left it; the binary maps it to the CPU profile.
@@ -1279,11 +1584,65 @@ impl Shell {
 
     /// Shows the next app privacy request as an Allow / Don't Allow sheet when none is on screen.
     fn permission_tick(&mut self, t: f64) {
+        services::privacy_permissions::persist_grants(&self.data_dir);
+        self.pick_tick();
+        self.photo_pick_tick();
+        // PermissionKit: drop the questions no guardian answered in time, and show the next one when no sheet is up
+        self.guardian_now = t.max(0.0) as u64;
+        if services::permission_kit::expire(self.guardian_now) > 0 {
+            self.dirty = true;
+        }
+        if self.guardian_sheet.as_ref().is_some_and(|g| !services::permission_kit::is_pending(g.question_id())) {
+            self.guardian_sheet = None;
+            self.dirty = true;
+            self.drawn = Drawn::Nothing;
+        }
+        if self.guardian_sheet.is_none() {
+            if let Some(next) = services::permission_kit::pending().into_iter().next() {
+                self.guardian_sheet = guardian_sheet::GuardianSheet::new(&self.ui, &next);
+                self.dirty = true;
+                self.drawn = Drawn::Nothing;
+            }
+        }
+        // an Allow Once grant ends when its app quits, so the next request asks again
+        let _ = services::privacy_permissions::expire_once(|app| self.ext.iter().flatten().any(|h| h.id == app && h.running()));
         if self.permission_sheet.is_some() {
             return;
         }
         let Some(prompt) = services::privacy_permissions::take_prompt() else { return };
         self.permission_sheet = permission_sheet::Sheet::new(&self.ui, prompt, t.max(0.0) as u64);
+        self.dirty = true;
+        self.drawn = Drawn::Nothing;
+    }
+
+    /// Shows the contact picker sheet for an app's open pick when none is on screen.
+    fn pick_tick(&mut self) {
+        if self.pick_sheet.is_some() {
+            return;
+        }
+        let Some((app, name)) = contactpick::open_app() else { return };
+        self.pick_sheet = contact_pick_sheet::PickSheet::new(&self.ui, &app, &name);
+        self.dirty = true;
+        self.drawn = Drawn::Nothing;
+    }
+
+    /// Shows the photo picker sheet for an app's open photo pick when none is on screen, and feeds the sheet on screen its
+    /// thumbnails.
+    fn photo_pick_tick(&mut self) {
+        // the picture the person chose for the Today View's Photos widget
+        if let Some(keys) = photo_pick::take_widget_result() {
+            self.today.pin_photo(keys.first().map(String::as_str));
+            self.today_stale = true;
+            self.dirty = true;
+        }
+        if let Some(sheet) = self.photo_pick_sheet.as_mut() {
+            if sheet.prepare(&self.ui, self.w, self.h) {
+                self.dirty = true;
+            }
+            return;
+        }
+        let Some(pick) = photo_pick::take_waiting() else { return };
+        self.photo_pick_sheet = Some(photo_pick_sheet::PhotoPickSheet::new(pick, self.data_dir.join(photos::THUMB_DIR)));
         self.dirty = true;
         self.drawn = Drawn::Nothing;
     }
@@ -1314,6 +1673,43 @@ impl Shell {
             Event::Down(x, y) | Event::Move(x, y) | Event::Up(x, y) => (x, y),
             _ => return None,
         };
+        // the app's password sheet is the top-most modal: it takes every touch until it is answered
+        if self.auth_showing() {
+            self.auth_touch(x, y, matches!(ev, Event::Up(..)));
+            return Some(vec![]);
+        }
+        // the unlock sheet for a locked encrypted volume takes every touch while it is up
+        if self.volume_showing() {
+            self.volume_touch(x, y, matches!(ev, Event::Up(..)));
+            return Some(vec![]);
+        }
+        if self.access_showing() {
+            let t = self.auth_clock;
+            self.access_touch(x, y, matches!(ev, Event::Up(..)), t);
+            return Some(vec![]);
+        }
+        // the package install sheet takes every touch while it is up
+        if self.package_showing() {
+            let t = self.auth_clock;
+            self.package_touch(x, y, matches!(ev, Event::Up(..)), t);
+            return Some(vec![]);
+        }
+        // the network login sheet takes every touch while it is up
+        if self.net_auth_showing() {
+            let t = self.auth_clock;
+            self.net_auth_touch(x, y, matches!(ev, Event::Up(..)), t);
+            return Some(vec![]);
+        }
+        // the USB accessory sheet takes every touch while it is up
+        if self.usb_showing() {
+            self.usb_touch(x, y, matches!(ev, Event::Up(..)));
+            return Some(vec![]);
+        }
+        if self.fw_showing() {
+            let t = self.auth_clock;
+            self.fw_touch(x, y, matches!(ev, Event::Up(..)), t);
+            return Some(vec![]);
+        }
         if let Some(fx) = self.share_modal(ev) {
             return Some(fx);
         }
@@ -1351,6 +1747,10 @@ impl Shell {
         if let Some(fx) = self.keyboard_viewer_touch(ev) {
             return Some(fx);
         }
+        if self.help_viewer.is_some() {
+            // the Help viewer takes every touch until Done
+            return Some(self.help_viewer_event(ev));
+        }
         if self.char_viewer.is_some() {
             // the character viewer takes every touch until Done
             return Some(self.char_viewer_event(ev));
@@ -1371,6 +1771,92 @@ impl Shell {
             // the crash alert takes every touch until one of its buttons answers it
             if matches!(ev, Event::Up(..)) {
                 self.crash_alert_touch(x, y);
+            }
+            self.drawn = Drawn::Nothing;
+            self.dirty = true;
+            return Some(vec![]);
+        }
+        if self.launch_alert.is_some() {
+            // the launch alert takes every touch until one of its buttons answers it
+            if matches!(ev, Event::Up(..)) {
+                self.launch_alert_touch(x, y);
+            }
+            self.drawn = Drawn::Nothing;
+            self.dirty = true;
+            return Some(vec![]);
+        }
+        if self.pick_sheet.is_some() {
+            // the picker sheet takes every touch until the person picks or cancels
+            if matches!(ev, Event::Up(..)) {
+                let hit = self.pick_sheet.as_ref().and_then(|s| s.hit(&self.ui, self.w, self.h, x, y));
+                if let Some(tap) = hit {
+                    if let Some(sheet) = self.pick_sheet.take() {
+                        self.pick_sheet = sheet.tapped(&self.ui, tap);
+                    }
+                }
+            }
+            self.drawn = Drawn::Nothing;
+            self.dirty = true;
+            return Some(vec![]);
+        }
+        if self.malware_alert.is_some() {
+            // the malware card takes every touch until the person answers it
+            if matches!(ev, Event::Up(..)) {
+                if let Some(held) = self.malware_alert_touch(x, y) {
+                    let t = self.last_input;
+                    self.resume_open(held, t);
+                }
+            }
+            self.drawn = Drawn::Nothing;
+            self.dirty = true;
+            return Some(vec![]);
+        }
+        if self.photo_pick_sheet.is_some() {
+            // the photo picker takes every touch until the person adds the pictures or cancels
+            let outcome = match self.photo_pick_sheet.as_mut() {
+                Some(sheet) => sheet.event(&self.ui, self.w, self.h, ev),
+                None => photo_pick_sheet::Outcome::Idle,
+            };
+            match outcome {
+                photo_pick_sheet::Outcome::Add => {
+                    if let Some(sheet) = self.photo_pick_sheet.take() {
+                        sheet.finish();
+                    }
+                }
+                photo_pick_sheet::Outcome::Cancel => {
+                    if let Some(sheet) = self.photo_pick_sheet.take() {
+                        sheet.cancel();
+                    }
+                }
+                photo_pick_sheet::Outcome::Idle | photo_pick_sheet::Outcome::Redraw => {}
+            }
+            self.drawn = Drawn::Nothing;
+            self.dirty = true;
+            return Some(vec![]);
+        }
+        if self.trust_sheet.is_some() {
+            // the trust sheet takes every touch until it is dismissed
+            if matches!(ev, Event::Up(..)) {
+                let hit = self.trust_sheet.as_ref().and_then(|s| s.hit(&self.ui, self.w, self.h, x, y));
+                if let Some(hit) = hit {
+                    if self.trust_sheet.as_mut().is_some_and(|s| s.press(hit)) {
+                        self.trust_sheet = None;
+                    }
+                }
+            }
+            self.drawn = Drawn::Nothing;
+            self.dirty = true;
+            return Some(vec![]);
+        }
+        if self.guardian_sheet.is_some() {
+            // the guardian's sheet takes every touch until the guardian answers it
+            if matches!(ev, Event::Up(..)) {
+                let hit = self.guardian_sheet.as_ref().and_then(|s| s.hit(&self.ui, self.w, self.h, x, y));
+                if let Some(choice) = hit {
+                    if let Some(sheet) = self.guardian_sheet.take() {
+                        sheet.finish(&choice, self.guardian_now);
+                    }
+                }
             }
             self.drawn = Drawn::Nothing;
             self.dirty = true;
@@ -1431,7 +1917,10 @@ impl Shell {
         }
         self.rebuild_dock(false);
         let o = self.options();
-        self.notify.set_dnd(o.dnd);
+        // Focus on in the previous session stays on; another mode saved by hand is kept as it is
+        if o.dnd || self.notify.modes.manual.as_deref() == Some(notify::modes::DND_ID) {
+            self.notify.set_dnd(o.dnd);
+        }
         self.sync_status_flags(&o);
         if self.assistive_touch.set_enabled(o.assistive_touch) {
             self.dirty = true;
@@ -1447,6 +1936,7 @@ impl Shell {
         }
         let a = self.settings.as_ref().map_or_else(|| accessibility::AccessibilitySettings::load(&self.prefs), |st| st.accessibility().clone());
         a.publish();
+        self.sync_motion_cues(a.motion_cues);
         let zoom = accessibility::display_zoom();
         // desktop: Settings > Display changed the interface scale, so the home layout follows
         if crate::layout::adaptive() && (crate::layout::base_scale(self.w, self.h) - self.layout.s).abs() > f32::EPSILON {
@@ -1474,9 +1964,70 @@ impl Shell {
         }
     }
 
+    /// Draws every app's icon again through the icon renderer (`apps::decode_icons`, in the current style) and
+    /// refreshes what holds them: the Dock and grid tiles, the App Library, Spotlight and the Overview. Runs when the
+    /// icon style changes and when an app is installed or updated.
+    pub(super) fn rebuild_app_icons(&mut self) {
+        self.icon_rebuilds = self.icon_rebuilds.wrapping_add(1);
+        let size = self.layout.icon as usize;
+        let mask = squircle_mask(size);
+        let all = apps();
+        let decoded = apps::decode_icons(all, size);
+        for (i, (d, a)) in decoded.into_iter().zip(all.iter()).enumerate().take(self.base_icons.len()) {
+            // `app_icon` output is shaped; a built-in's software icon is masked; an app with neither keeps its icon
+            let fresh = match d {
+                Some(rendered) => rendered,
+                None => match a.icon_image.map(|f| f(size)) {
+                    Some(mut flat) => {
+                        flat.apply_mask(&mask);
+                        flat
+                    }
+                    None => self.base_icons[i].clone(),
+                },
+            };
+            self.base_icons[i] = fresh.clone();
+            let tile = if i < IN_DOCK { self.dock.get_mut(i) } else { self.grid.get_mut(i - IN_DOCK) };
+            if let Some(t) = tile {
+                t.icon = fresh;
+            }
+        }
+        self.quicksearch.clear_icons();
+        self.overview.clear_icons();
+        self.rebuild_library();
+        self.rebuild_home();
+        self.drawn = Drawn::Nothing;
+        self.dirty = true;
+    }
+
+    /// Re-draws the icons when the icon style changed in Settings (the style publishes a new generation).
+    pub(super) fn refresh_icon_style(&mut self) {
+        let gen = bifrost_render::icon_doc::style_generation();
+        if gen != self.icon_gen {
+            self.icon_gen = gen;
+            self.rebuild_app_icons();
+        }
+    }
+
     /// Adds home-screen tiles for apps installed since start-up (`apphost::refresh`); they join
     /// the end of the grid and the App Library like any app.
     pub(super) fn installed_changed(&mut self) {
+        // an uninstalled app's indexed items leave Search with it; an empty list is a registry not read yet, so it keeps all
+        let ids: Vec<String> = apphost::installed().iter().map(|a| a.manifest.id.clone()).collect();
+        if !ids.is_empty() {
+            let refs: Vec<&str> = ids.iter().map(String::as_str).collect();
+            if spotindex::forget_missing(&refs) > 0 {
+                spotindex::flush();
+            }
+        }
+        // an install or an update rewrote installed.json: the icons of every app are drawn again
+        let stamp = helpbook::installed_stamp(&apphost::root());
+        if stamp != self.installed_stamp {
+            self.installed_stamp = stamp;
+            for a in apps().iter() {
+                bifrost_render::icon_doc::invalidate_app(a.icon);
+            }
+            self.rebuild_app_icons();
+        }
         let size = self.layout.icon as usize;
         let mask = squircle_mask(size);
         let all = apps();
@@ -1484,8 +2035,14 @@ impl Shell {
             return;
         }
         for a in &all[self.base_icons.len()..] {
-            let mut icon = apphost::icon_image(a.icon, size).unwrap_or_else(|| scene::placeholder_icon(size));
-            icon.apply_mask(&mask);
+            let icon = match apphost::icon_image(a.icon, size) {
+                Some(rendered) => rendered,
+                None => {
+                    let mut flat = a.icon_image.map(|f| f(size)).unwrap_or_else(|| scene::placeholder_icon(size));
+                    flat.apply_mask(&mask);
+                    flat
+                }
+            };
             let label = self.ui.styled(&self.ui.fit(a.name, 12.0, self.layout.label_w as f32), 12.0, Weight::Regular, WHITE, true);
             self.base_icons.push(icon.clone());
             self.grid.push(Tile { icon, label });
@@ -1570,6 +2127,7 @@ impl Shell {
         if bifrost_render::appearance::fading() { due.add(Some(t)); }
         if let Some(when)=self.desk.as_ref().and_then(|d|d.dock_hide_at){due.add(Some(when));}
         if self.dock_animating(t) || self.fx_animating(t) { due.add(Some(t)); }
+        if self.live.look() != live_wallpaper::Look::Still && self.desk_active() && self.screen_on { due.add(live_wallpaper::next_due(self.live.look(), t, self.live_still_only())); }
         if self.metrics_active() {
             // the CPU/RAM read joins a wake-up that is already planned inside its tolerance window
             let menu = self.metrics_menu_open();
@@ -1596,12 +2154,21 @@ impl Shell {
         if let Some(w) = self.cc.next_wake().filter(|_| self.screen_on) {
             due.add(Some(w));
         }
+        if self.screen_on && !self.is_locked() && self.motion_cues.as_ref().is_some_and(|m| m.enabled() && m.available()) {
+            // the accelerometer is read on every wake, so the dots follow the vehicle
+            due.add(Some(t + accessibility::motion_cues::POLL_MS));
+        }
         if self.markup_load.is_some() {
+        if self.markup_load.is_some() || self.visual_search_pending() {
             due.add(Some(t + 50.0));
         }
         if self.screen_on {
             if let Some(w) = self.quicksearch.next_wake(t) {
                 due.add(Some(w));
+            }
+            // the assistant polls its worker threads while a request is out
+            if self.assistant.waiting() {
+                due.add(Some(t + 50.0));
             }
         }
         if self.screen_on && self.screen == Screen::App(AppId::Settings) {
@@ -1619,6 +2186,9 @@ impl Shell {
             due.add(Some(w));
         }
         if let Some(w) = self.input_hud.next_wake(t).filter(|_| self.screen_on) {
+            due.add(Some(w));
+        }
+        if let Some(w) = self.captions.next_wake(t).filter(|_| self.screen_on) {
             due.add(Some(w));
         }
         let app_wake = if self.screen_on {
@@ -1754,6 +2324,10 @@ impl Shell {
         }
         if self.hud.visible(t) || self.hud_drawn {
             let (x, y, w, h) = VolumeHud::damage_rect(&self.ui, self.w);
+            damage.add(x.floor() as i32, y.floor() as i32, w.ceil() as i32 + 1, h.ceil() as i32 + 1);
+        }
+        if self.captions.visible(t) || self.captions_drawn {
+            let (x, y, w, h) = self.captions.rect(&self.ui, self.w, self.h);
             damage.add(x.floor() as i32, y.floor() as i32, w.ceil() as i32 + 1, h.ceil() as i32 + 1);
         }
         if self.input_hud.visible(t) || self.input_hud_drawn {
@@ -1934,10 +2508,64 @@ impl Shell {
         rotate::still(self.home_src, &self.fit_home)
     }
 
+    /// What the desktop shows under the windows: the cached live frame while an animated or time-of-day look is
+    /// chosen, else the home still.
+    pub(super) fn wallpaper_frame(&self) -> View<'_> {
+        self.live.view().unwrap_or_else(|| self.home_still())
+    }
+
+    /// The wallpaper look in force.
+    pub fn live_look(&self) -> live_wallpaper::Look {
+        self.live.look()
+    }
+
+    /// Chooses the desktop wallpaper look (the `wallpaper_look` pref); `Still` goes back to the home still.
+    pub fn set_live_look(&mut self, look: live_wallpaper::Look) {
+        if self.live.set_look(look) {
+            self.live_changed();
+        }
+    }
+
+    /// Animated and time-of-day looks pause on one frame under Reduce Motion and Low Power Mode.
+    fn live_still_only(&self) -> bool {
+        bifrost_render::appearance::reduce_motion() || self.low_power()
+    }
+
+    /// Local minute of the day at monotonic `t` ms.
+    fn live_minute(&self, t: f64) -> u16 {
+        let (unix, offset) = self.wall_now(t);
+        notify::schedule::Schedule::minute_of_day(unix, offset)
+    }
+
+    /// Brings the live wallpaper to the frame due at `t`. True when the picture changed (the desktop is then
+    /// redrawn and the presenter re-uploads it).
+    pub fn live_wallpaper_tick(&mut self, t: f64) -> bool {
+        if self.live.look() == live_wallpaper::Look::Still || !self.desk_active() || !self.screen_on {
+            return false;
+        }
+        let (still, minute) = (self.live_still_only(), self.live_minute(t));
+        let changed = self.live.update(t, minute, still, self.w as usize, self.h as usize);
+        if changed {
+            self.live_changed();
+        }
+        changed
+    }
+
+    /// The live frame (or the look) changed: redraw, re-upload, and refresh what is sampled from the wallpaper.
+    fn live_changed(&mut self) {
+        self.wallpaper_uploaded = false;
+        // the presenter keys its texture on the pixel address, which a new frame may reuse
+        #[cfg(target_os = "linux")]
+        crate::gpu::wl::bump_wallpaper_generation();
+        *self.bar_backdrop.borrow_mut() = None;
+        self.bar_on_light = desktop_bar::wallpaper_is_light(self.wallpaper_frame(), self.desktop_bar_height());
+        self.dirty = true;
+    }
+
     /// The wallpaper and where it sits on screen, for the GPU presenter; None once uploaded.
     pub fn desktop_wallpaper_once(&self) -> Option<(View<'_>, i32)> {
         (!self.wallpaper_uploaded).then(|| {
-            let wp = self.home_still();
+            let wp = self.wallpaper_frame();
             (wp, (self.w - wp.w as i32) / 2)
         })
     }
@@ -1986,11 +2614,24 @@ impl Shell {
             }
             Action::OpenDeildu(_) if self.screen == Screen::Lock => {}
             Action::OpenDeildu(p) => self.open_deildu(&p, t),
+            Action::ChoosePhoto if self.screen == Screen::Lock => {}
+            Action::ChoosePhoto => self.choose_widget_photo(),
         }
+    }
+
+    /// Opens the photo picker for the Today View's Photos widget: one picture from the library. The person's choice is
+    /// taken by `photo_pick_tick` and pins the widget to it.
+    fn choose_widget_photo(&mut self) {
+        let library = photos::library::scan(&self.photo_dirs);
+        let entries = services::photos::pick_entries(&library);
+        let pick = photo_pick::Pick::new(photo_pick::WIDGET_APP, "Photos Widget", vec![photo_pick::Filter::Images], 1, entries);
+        // a sheet already up for the widget keeps its place
+        let _ = photo_pick::start(pick);
     }
 
     /// The wallpaper catalogue shown by Settings › Wallpaper.
     pub fn set_wallpapers(&mut self, wallpapers: Vec<Wallpaper>) {
+        quicksearch::set_wallpaper_catalogue(wallpapers.iter().map(|w| (w.id.clone(), w.name.clone())).collect());
         self.wallpapers = Rc::new(wallpapers);
     }
 
@@ -2119,6 +2760,7 @@ impl Shell {
         self.fullscreen = false;
         self.end_multi();
         self.init_app(app, t);
+        self.st_launch_check(app, t);
         self.transition = Some(self.render_app_frame(app));
         self.anim = Some((Anim::Open { app, rect: self.icon_rect(app) }, t));
         if let Some(i) = apps().iter().position(|a| a.id == app) {
@@ -2178,7 +2820,9 @@ impl Shell {
             let app_notifs: Vec<(AppId, notify_page::AppNotif)> = apps().iter().filter_map(|a| self.prefs.get(&notify_page::pref_key(a.id)).map(|v| (a.id, notify_page::AppNotif::decode(v)))).collect();
             let focus_allowed = apps().iter().map(|a| a.id).filter(|&a| self.notify.store().is_focus_allowed(a)).collect();
             let schedule = self.notify.store().schedule();
+            let (mode_names, mode_on) = self.focus_mode_view();
             if let Some(st) = &mut self.settings {
+                st.set_focus_modes(mode_names, mode_on);
                 st.set_notify(&self.ui, schedule, muted, app_notifs, focus_allowed);
             }
         }
@@ -2405,6 +3049,7 @@ impl Shell {
 
     /// The display came on: inside the grace the screen returns as it was, after it the screen is locked.
     fn screen_woke(&mut self, t: f64) {
+        self.weather_refresh.wake();
         let Some((off, before)) = self.grace_from.take() else { return };
         let grace_s = self.options().lock_grace_s;
         self.screen = if options::grace_lapsed(off, t, grace_s) { Screen::Lock } else { before };
@@ -2422,8 +3067,19 @@ impl Shell {
     }
 
     pub fn event(&mut self, ev: Event, t: f64) -> Vec<Effect> {
+        // usage is recorded before and after the event, so a switch it makes is credited from its own time
+        self.st_mark(t);
+        let fx = self.event_inner(ev, t);
+        self.st_mark(t);
+        fx
+    }
+
+    fn event_inner(&mut self, ev: Event, t: f64) -> Vec<Effect> {
         // session event taps see the pointer first and may drop or move it (`services::event_services`)
         let Some(ev) = self.tap_pointer_event(ev) else { return vec![] };
+        if let Event::Down(_, y) | Event::Move(_, y) = ev {
+            self.pointer_y = Some(y);
+        }
         self.last_input = t;
         self.dirty = true;
         // a touch or key ends a screen saver and is not passed on (the display power key still sleeps)
@@ -2466,6 +3122,9 @@ impl Shell {
         if let Some(fx) = self.look_up_event(ev, t) {
             return fx;
         }
+        if let Some(fx) = self.visual_search_event(ev, t) {
+            return fx;
+        }
         if let Some(fx) = self.modal_event(ev) {
             return fx;
         }
@@ -2501,7 +3160,13 @@ impl Shell {
         // the preview card takes its pointer in every build, not only with the desktop bar; a locked screen does not
         let quick_look_took = !self.is_locked() && match ev {
             Event::Down(x, y) => self.quick_look_pointer(x, y, false),
-            Event::Up(x, y) => self.quick_look_pointer(x, y, true),
+            Event::Move(x, y) => self.quick_look_drag(x, y),
+            Event::Up(x, y) => {
+                // a release always ends a resize, even one that lands outside the card
+                let took = self.quick_look_pointer(x, y, true);
+                self.quick_look_end_drag();
+                took
+            }
             _ => false,
         };
         if quick_look_took {
@@ -2519,6 +3184,9 @@ impl Shell {
             return fx;
         }
         if let Some(fx) = self.overlay_event(ev, t) {
+            return fx;
+        }
+        if let Some(fx) = self.assistant_event(ev) {
             return fx;
         }
         if let Some(fx) = self.quicksearch_event(ev, t) {
@@ -2665,7 +3333,33 @@ impl Shell {
         }
     }
 
+    /// A touch on an extra window's body, in the window's own points (the app's `WindowTouch`).
+    fn ext_window_touch(&mut self, slot: usize, id: u32, ev: Event, t: f64) {
+        let k = self.ui.pt(1.0) as f32;
+        let (kind, x, y) = match ev {
+            Event::Down(x, y) => (bifrost_proto::TouchKind::Down, x, y),
+            Event::Move(x, y) => (bifrost_proto::TouchKind::Move, x, y),
+            Event::Up(x, y) => (bifrost_proto::TouchKind::Up, x, y),
+            _ => return,
+        };
+        if let Some(Some(host)) = self.ext.get_mut(slot) {
+            host.touch_window(id, 1, kind, x / k, y / k, t as u32);
+        }
+    }
+
+    /// The desk resized an extra window's body (px): the app is told its size in points (`WindowConfigure`).
+    pub(super) fn ext_window_resize(&mut self, slot: usize, id: u32, w: i32, h: i32) {
+        let k = self.ui.pt(1.0) as f32;
+        if let Some(Some(host)) = self.ext.get_mut(slot) {
+            host.configure_window(id, w as f32 / k, h as f32 / k);
+        }
+    }
+
     fn app_touch_single(&mut self, app: AppId, ev: Event, t: f64) -> Vec<Effect> {
+        if let AppId::ExternalWindow(slot, id) = app {
+            self.ext_window_touch(slot as usize, u32::from(id), ev, t);
+            return Vec::new();
+        }
         // the home swipe works in frame coordinates; the apps laid out for the portrait panel
         // see touches mapped into their letterbox
         let frame_ev = ev;
@@ -2679,12 +3373,15 @@ impl Shell {
                 }
             }
             _ if app == AppId::Photos => {
-                let (shared, camera) = self.photos.as_mut().map_or((None, false), |p| {
+                let (shared, camera, lookup) = self.photos.as_mut().map_or((None, false, None), |p| {
                     p.touch(&self.ui, ev, t);
-                    (p.take_share(), p.take_camera_request())
+                    (p.take_share(), p.take_camera_request(), p.take_visual_search())
                 });
                 if camera {
                     self.open(AppId::Camera, t);
+                }
+                if let Some(path) = lookup {
+                    self.visual_search_photo(path);
                 }
                 if let Some(path) = shared {
                     let anchor = (self.w as f32 / 2.0, self.h as f32 / 3.0);
@@ -2707,6 +3404,7 @@ impl Shell {
                             }
                         }
                         files::Request::OpenBook(path) => self.open_book(&path, t),
+                        files::Request::Launch(e) => self.launch_program(&e, t),
                         files::Request::Markup(path) => self.markup_file(&path),
                         files::Request::PlayAudio(e) => {
                             if !self.play_in_music(&e.path, t) {
@@ -2769,9 +3467,13 @@ impl Shell {
                 self.ensure_defaults();
                 let logins = self.login_item_views();
                 let pending = self.login_pending_views();
-                let ext = self.login_ext_cache.get();
+                let firewall = self.fw_views(t);
+                let mut ext = self.login_ext_cache.get();
+                ext.refresh_off = services::background::off_from_pref(self.prefs.get(services::background::PREF_OFF));
                 let background_off = login_items_page::background_off_from_pref(self.prefs.get(login_items_page::BACKGROUND_OFF_KEY));
+                ext.extensions_off = login_items_page::background_off_from_pref(self.prefs.get(login_items_page::EXTENSIONS_OFF_KEY));
                 let Some(st) = &mut self.settings else { return vec![] };
+                st.set_firewall(firewall);
                 st.set_login_items(logins, pending);
                 st.set_login_extensions(ext, background_off);
                 if let Some(dock) = self.desk.as_ref().map(|d| d.dock_preferences.clone()) {
@@ -2790,12 +3492,17 @@ impl Shell {
                 let login_removed = st.take_login_removed();
                 let login_moved = st.take_login_moved();
                 let login_approved = st.take_login_approved();
+                let firewall_edits = st.take_firewall_edits();
                 let preview = st.take_screensaver_preview();
                 for change in changes {
                     match change {
                         notify_page::NotifyChange::Schedule(s) => self.set_dnd_schedule(s),
                         notify_page::NotifyChange::ToggleMute(a) => self.toggle_mute(a),
                         notify_page::NotifyChange::FocusAllowed(a, on) => self.set_focus_allowed(a, on),
+                        notify_page::NotifyChange::Mode(i) => {
+                            let id = i.and_then(|i| self.notify.modes.list.get(i)).map(|m| m.id.clone());
+                            self.set_focus_mode(id.as_deref());
+                        }
                         notify_page::NotifyChange::App(a, n) => {
                             let _ = self.prefs.set(&notify_page::pref_key(a), &n.encode());
                             self.store_changed();
@@ -2811,6 +3518,7 @@ impl Shell {
                 self.apply_default_changes(default_changes);
                 self.login_items_remove(login_removed);
                 self.login_items_approve(login_approved);
+                self.fw_edits(firewall_edits, t);
                 self.login_items_move(login_moved);
                 if self.desk.is_some() {
                     for change in dock_changes {
@@ -2891,31 +3599,104 @@ impl Shell {
     }
 
     pub fn tick(&mut self, t: f64) -> Vec<Effect> {
+        self.st_mark(t);
+        let fx = self.tick_pumped(t);
+        self.st_mark(t);
+        fx
+    }
+
+    /// The per-frame chores around `tick_inner`: input pump, appearance, Dock, effects and key clicks.
+    fn tick_pumped(&mut self, t: f64) -> Vec<Effect> {
         keyboard::pump();
         self.appearance_tick(t);
+        self.sensor_tick(t);
         self.terminal_follow_scheme();
         self.dock_tick(t);
         self.fx_tick(t);
         self.metrics_tick(t);
+        self.live_wallpaper_tick(t);
         let mut fx = self.tick_inner(t);
+        fx.append(&mut self.voice_fx);
+        fx.extend(self.voice_click_tick(t));
         fx.extend(self.gated_clicks().into_iter().map(Effect::KeyClick));
         fx
     }
 
+    /// Stops the external apps nothing shows, and resumes them, while Suspend Background Apps is on. Turning the switch
+    /// off resumes every app this stopped.
+    fn background_tick(&mut self, t: f64) {
+        if !self.options().suspend_background {
+            let signals = self.suspender.resume_all();
+            self.send_app_signals(&signals);
+            return;
+        }
+        let facts: Vec<(u8, background::Facts)> = self
+            .ext
+            .iter()
+            .enumerate()
+            .filter_map(|(n, host)| {
+                if !host.as_ref()?.running() {
+                    return None;
+                }
+                let app = AppId::External(n as u8);
+                let focused = matches!(self.screen, Screen::App(a) if a == app);
+                let on_screen = focused || self.desk.as_ref().is_some_and(|d| d.wins.iter().any(|w| w.app == app && !w.minimized));
+                let covered = self.app_covered(app);
+                Some((n as u8, background::Facts { focused, on_screen, covered }))
+            })
+            .collect();
+        let signals = self.suspender.update(&facts, (t.max(0.0) * 1000.0) as u64);
+        self.send_app_signals(&signals);
+    }
+
+    /// Whether every shown window of `app` is covered by windows of other apps stacked over it. The desktop lists its
+    /// windows back to front, so the windows over window `i` are `wins[i + 1..]`. Minimized windows show nothing and
+    /// cover nothing.
+    fn app_covered(&self, app: AppId) -> bool {
+        let Some(desk) = self.desk.as_ref() else { return false };
+        let rect = |w: &desk::Win| [w.r.x as i64, w.r.y as i64, w.r.w as i64, w.r.h as i64];
+        desk.wins.iter().enumerate().filter(|(_, w)| w.app == app && !w.minimized).all(|(i, w)| {
+            let above: Vec<[i64; 4]> = desk.wins[i + 1..].iter().filter(|o| o.app != app && !o.minimized).map(rect).collect();
+            bifrost_core::occlusion::is_covered(rect(w), &above)
+        })
+    }
+
+    /// Sends each signal to the process of its external app slot, when the app is still running.
+    fn send_app_signals(&self, signals: &[background::Signal]) {
+        for &(slot, sig) in signals {
+            if let Some(pid) = self.ext.get(slot as usize).and_then(|h| h.as_ref()).and_then(|h| h.pid()) {
+                // SAFETY: kill(2) takes plain integers; a gone pid only returns ESRCH
+                unsafe { crate::bare::sys::kill(pid as i32, sig) };
+            }
+        }
+    }
+
     fn tick_inner(&mut self, t: f64) -> Vec<Effect> {
+        let reader_on = self.screen_reader_on();
+        self.reader.note_mode(reader_on);
+        self.switch_scan_tick(t);
+        self.popup_cues.observe(self.desktop_menu.is_some() || self.power_menu.is_some());
         if self.chrome.rot_lock != self.rotation_locked() {
             self.chrome.rot_lock = self.rotation_locked();
             self.chrome_gen += 1;
             self.dirty = true;
         }
         self.input_memory_tick();
+        self.background_tick(t);
         self.guided_tick();
         self.split_tick();
         self.markup_tick();
+        self.visual_search_tick();
         self.ota_tick(t);
+        self.folder_actions_tick();
+        self.file_import_tick();
+        if self.weather_refresh.due(t) {
+            self.weather_refresh.start(weather::data_path().into());
+        }
         if self.screen_on && !self.is_locked() {
             self.dirty |= self.assistive_touch.tick(t);
         }
+        self.dirty |= self.motion_cues_tick(t);
         self.saver_tick(t);
         if self.screen_on && self.idle_off_ms > 0.0 && t - self.last_input > self.idle_off_ms && self.last_input > 0.0 {
             return self.display_off(t);
@@ -2956,6 +3737,7 @@ impl Shell {
             self.dirty = true;
         }
         self.dirty |= self.quicksearch_tick(t);
+        self.dirty |= self.assistant_tick();
         if let Some((a, start)) = self.anim {
             self.dirty = true;
             if t - start >= accessibility::anim_ms(gestures::SPRING_MS) {
@@ -2990,6 +3772,7 @@ impl Shell {
             }
         }
         let mut effects = cc_fx;
+        effects.extend(self.voice_control_tick(t));
         let typing_on_hardware = self.desk_active();
         if let Some(p) = &mut self.photos {
             if self.screen == Screen::App(AppId::Photos) {
@@ -3061,8 +3844,17 @@ impl Shell {
         self.tick_camera(t);
         self.tick_magnifier(t);
         if self.screen == Screen::App(AppId::Browser) {
+            let (unix, _) = self.wall_now(t);
             if let Some(b) = &mut self.browser {
                 self.dirty |= b.tick(&self.ui, t);
+                // a site whose certificate the system refused: say so, and show the chain on request
+                if self.trust_sheet.is_none() {
+                    if let Some(refused) = b.take_trust_prompt() {
+                        self.trust_sheet = Some(trust_sheet::TrustSheet::new(&self.ui, &refused, unix));
+                        self.dirty = true;
+                        self.drawn = Drawn::Nothing;
+                    }
+                }
             }
         }
         if self.screen == Screen::App(AppId::Settings) {
@@ -3102,11 +3894,24 @@ impl Shell {
         }
         effects.extend(self.notify_tick(t));
         effects.extend(self.low_battery_tick(t));
+        self.thermal_tick(t);
         self.announce_tick(t);
         self.permission_tick(t);
+        self.auth_tick(t);
+        self.volume_tick(t);
+        self.access_tick();
+        self.usb_tick(t);
+        self.net_auth_tick(t);
+        self.package_tick(t);
+        self.fw_tick(t);
+        self.captions_tick(t);
         self.usernotif_ask_tick(t);
         // app requests for the Bluetooth radio (services/bluetooth_service.rs)
         effects.extend(services::bluetooth_service::take_commands().into_iter().map(Effect::Bluetooth));
+        // a first-party app asked to lock the screen (services/system_intents.rs)
+        if services::system_intents::take_lock() {
+            effects.extend(self.lock_screen());
+        }
         self.perf_only = perf_changed && !self.dirty;
         self.dirty |= perf_changed;
         effects
@@ -3116,11 +3921,40 @@ impl Shell {
         self.anim.map_or(1.0, |(_, s)| (((t - s) / accessibility::anim_ms(gestures::SPRING_MS)).clamp(0.0, 1.0)) as f32)
     }
 
+    /// Shows the Picture in Picture window (the delegate events are for the app, which the caller delivers).
+    pub(super) fn pip_start(&mut self) -> Vec<bifrost_ui::pip_window::Event> {
+        self.dirty = true;
+        self.pip.start()
+    }
+
+    /// A player says whether it can show the Picture in Picture window. Turning that off takes a showing window down.
+    pub(super) fn pip_possible(&mut self, on: bool) -> Vec<bifrost_ui::pip_window::Event> {
+        self.dirty = true;
+        self.pip.controller.set_possible(on).into_iter().collect()
+    }
+
+    /// The player's latest video frame for the Picture in Picture window. True when the window is showing it.
+    pub(super) fn pip_frame(&mut self, frame: crate::gfx::Image) -> bool {
+        if !self.pip.showing() {
+            return false;
+        }
+        self.pip.set_frame(frame);
+        self.dirty = true;
+        true
+    }
+
+    /// Takes the Picture in Picture window down.
+    pub(super) fn pip_stop(&mut self) -> Vec<bifrost_ui::pip_window::Event> {
+        self.dirty = true;
+        self.pip.stop()
+    }
+
     /// Draws what changed since the last frame into `s` and returns it as
     /// damage for the presenter; a frame with nothing new draws nothing.
     /// The home and lock screens compare against `drawn` and paint only the
     /// touched rows, spread over worker threads; apps repaint in full.
     pub fn draw(&mut self, s: &mut Surface, t: f64) -> &Damage {
+        self.refresh_icon_style();
         // the audio service connects only once the desktop has been drawn (lazy; socket activation starts it then)
         self.audio.arm();
         self.desk_t = t;
@@ -3143,7 +3977,7 @@ impl Shell {
         #[cfg(feature = "desktop-wayland")]
         if std::mem::take(&mut self.perf_only) && std::env::var_os("SPRINGBOARD_WAYLAND").is_some()
             && self.desk_active() && !self.is_locked() && self.anim.is_none()
-            && self.desktop_menu.is_none() && !self.cc_active() && !self.center_active() && !self.assistive_visible() && !self.quick_look.is_visible()
+            && self.desktop_menu.is_none() && !self.cc_active() && !self.center_active() && !self.overlay_visible() && !self.quick_look.is_visible()
             && self.desk_drawn && self.retain_wayland_windows() {
             let (_,y,_,h)=self.perf_rect();
             let top=y.floor().max(0.) as usize;
@@ -3163,14 +3997,15 @@ impl Shell {
             self.rows = rows;
             return &self.damage;
         }
-        if self.assistive_visible() {
+        if self.overlay_visible() {
             // Repaint beneath the movable translucent control, including
-            // its old position, so dragging and closing cannot leave trails.
+            // its old position, so dragging and closing cannot leave trails. The motion cue dots move too.
             self.drawn = Drawn::Nothing;
             damage.all();
         }
         self.notify_prepare();
-        if let Some(sh) = self.shield.as_ref().filter(|_| !self.st_suspended()) {
+        // on the desktop the cover is drawn inside its window (`desk_cover`), not over the screen
+        if let Some(sh) = self.shield.as_ref().filter(|_| !self.st_suspended() && !self.desk_active()) {
             damage.all();
             sh.draw(s, &self.ui, t);
             self.drawn = Drawn::App;
@@ -3216,7 +4051,7 @@ impl Shell {
         if self.notify_damage_all() {
             damage.all();
         }
-        if self.announce_damage() || self.reader_damage() {
+        if self.announce_damage() || self.reader_damage() || self.voice_overlay_damage() {
             damage.all();
         }
         // the preview panel is drawn over the whole desktop: a change repaints the frame
@@ -3310,6 +4145,10 @@ impl Shell {
                     if self.quicksearch.animating() {
                         damage.all();
                     }
+                }
+                if self.assistant.is_shown() {
+                    self.draw_assistant(s, t);
+                    damage.all();
                 }
                 // the compose candidate window floats above the windows
                 self.draw_compose(s, &self.ui, self.w, self.h);
@@ -3439,8 +4278,17 @@ impl Shell {
         if self.clock.alert().is_none() {
             self.draw_banner(s, t);
         }
+        // Picture in Picture floats above the windows, inside the screen between the menu bar and the dock
+        if self.pip.showing() {
+            damage.all();
+            let m = self.desk_metrics();
+            let usable = bifrost_ui::Rect { x: 0.0, y: m.menubar as f32, w: self.w as f32, h: (self.h - m.menubar - m.dock_bottom).max(0) as f32 };
+            pip::draw_window(s, &self.ui, self.pip.rect(usable), self.pip.frame.as_ref());
+        }
         self.draw_announce(s);
+        self.draw_paste_progress(s, t);
         self.draw_reader(s);
+        self.draw_voice_overlay(s);
         if self.dnd.session.is_some() {
             damage.all();
             self.dnd_draw(s);
@@ -3458,6 +4306,10 @@ impl Shell {
         if self.input_hud_drawn {
             self.input_hud.draw(s, &self.ui, self.w, t);
         }
+        self.captions_drawn = self.captions.visible(t);
+        if self.captions_drawn {
+            self.captions.draw(s, &self.ui, self.w, self.h, t);
+        }
         if let Some(o) = &self.shot {
             damage.all();
             o.draw(s, t);
@@ -3472,11 +4324,11 @@ impl Shell {
             self.drawn = Drawn::Nothing;
             m.draw(s, &self.ui);
         }
-        if self.share.is_some() || self.share_prompt.is_some() || self.look_up.is_some() {
+        if self.share.is_some() || self.share_prompt.is_some() || self.look_up.is_some() || self.visual_search.is_some() {
             damage.all();
             self.drawn = Drawn::Nothing;
         }
-        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.crash_alert.is_some() || self.notify.ask.is_some() || self.compose_showing() || self.print_showing() || self.char_viewer.is_some() || self.keyboard_viewer.is_some() || self.a11y_panel.is_some() {
+        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.pick_sheet.is_some() || self.crash_alert.is_some() || self.notify.ask.is_some() || self.compose_showing() || self.print_showing() || self.char_viewer.is_some() || self.help_viewer.is_some() || self.keyboard_viewer.is_some() || self.auth_showing() || self.volume_showing() || self.access_showing() || self.guardian_sheet.is_some() || self.malware_alert.is_some() || self.usb_showing() || self.net_auth_showing() || self.package_showing() || self.photo_pick_sheet.is_some() || self.trust_sheet.is_some() || self.fw_showing() || self.launch_alert.is_some() || self.a11y_panel.is_some() || self.switch_panel_shown() { || self.a11y_panel.is_some() {
             // modal: repaint everything under it every frame, and again once it is gone
             damage.all();
             self.drawn = Drawn::Nothing;
@@ -3489,7 +4341,46 @@ impl Shell {
             if let Some(p) = &self.permission_sheet {
                 p.draw(s, &self.ui, self.w, self.h);
             }
+            if let Some(g) = &self.guardian_sheet {
+                g.draw(s, &self.ui, self.w, self.h);
+            }
+            if let Some(m) = &self.malware_alert {
+                m.draw(s, &self.ui, self.w, self.h);
+            }
+            if let Some(t) = &self.trust_sheet {
+                t.draw(s, &self.ui, self.w, self.h);
+            }
+            if let Some(p) = &self.pick_sheet {
+                p.draw(s, &self.ui, self.w, self.h);
+            }
+            if let Some(p) = &self.photo_pick_sheet {
+                p.draw(s, &self.ui, self.w, self.h);
+            }
+            if self.auth_showing() {
+                self.auth_draw(s, t);
+            }
+            if self.volume_showing() {
+                self.volume_draw(s, t);
+            }
+            if self.access_showing() {
+                self.access_draw(s);
+            }
+            if self.usb_showing() {
+                self.usb_draw(s);
+            }
+            if self.net_auth_showing() {
+                self.net_auth_draw(s, t);
+            }
+            if self.package_showing() {
+                self.package_draw(s, t);
+            }
+            if self.fw_showing() {
+                self.fw_draw(s);
+            }
             if let Some(a) = &self.crash_alert {
+                a.draw(s, &self.ui, self.w, self.h);
+            }
+            if let Some(a) = &self.launch_alert {
                 a.draw(s, &self.ui, self.w, self.h);
             }
             if let Some(a) = &self.notify.ask {
@@ -3506,15 +4397,22 @@ impl Shell {
             if let Some(v) = &self.char_viewer {
                 v.draw(s, &self.ui, self.w, self.h);
             }
+            if let Some(v) = &self.help_viewer {
+                v.draw(s, &self.ui, self.w, self.h);
+            }
             if let Some(v) = &self.keyboard_viewer {
                 v.draw(s, &self.ui, self.w, self.h, self.keyboard_viewer_layout());
             }
             if let Some(p) = &self.a11y_panel {
                 p.draw(s, &self.ui, self.w, self.h);
             }
+            if let Some(p) = self.switch_panel().filter(|_| self.switch_panel_shown()) {
+                p.draw(s, &self.ui, self.w, self.h);
+            }
         }
         self.draw_share(s);
         self.draw_look_up(s);
+        self.draw_visual_search(s);
         self.draw_assistive(s, t);
         self.damage = damage;
         self.rows = rows;
@@ -3529,9 +4427,9 @@ impl Shell {
         let term = self.term.as_ref()?;
         let quiet = self.multi.is_none() && self.home_gesture.is_none() && self.transition.is_none() && !self.letterboxed(AppId::Terminal)
             && !self.keyboard.animating() && !self.kb_touch && self.term_touch.menu().is_none() && term.plain()
-            && !self.hud.visible(t) && !self.input_hud.visible(t) && !self.perf.enabled && !self.assistive_visible() && self.drawn != Drawn::Nothing
+            && !self.hud.visible(t) && !self.input_hud.visible(t) && !self.perf.enabled && !self.overlay_visible() && self.drawn != Drawn::Nothing && !self.captions.visible(t) && !self.captions_drawn
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none() && self.look_up.is_none()
-            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage();
+            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.volume_showing() && !self.access_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage() && self.guardian_sheet.is_none() && !self.usb_showing() && !self.net_auth_showing() && !self.package_showing() && self.trust_sheet.is_none(); && !self.fw_showing() && !self.voice_overlay_damage() && self.visual_search.is_none() && self.launch_alert.is_none() && !self.switch_panel_shown() && self.malware_alert.is_none();
         if !quiet {
             return None;
         }
@@ -3550,9 +4448,9 @@ impl Shell {
     fn settings_key(&self, t: f64) -> Option<(u64, i32)> {
         let quiet = self.multi.is_none() && self.home_gesture.is_none() && self.transition.is_none() && !self.letterboxed(AppId::Settings)
             && !self.kb_touch && !self.fullscreen
-            && !self.hud.visible(t) && !self.hud_drawn && !self.input_hud.visible(t) && !self.input_hud_drawn && !self.perf.enabled && !self.perf_drawn && !self.assistive_visible() && self.drawn != Drawn::Nothing
+            && !self.hud.visible(t) && !self.hud_drawn && !self.input_hud.visible(t) && !self.input_hud_drawn && !self.perf.enabled && !self.perf_drawn && !self.overlay_visible() && self.drawn != Drawn::Nothing && !self.captions.visible(t) && !self.captions_drawn
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none() && self.look_up.is_none()
-            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage();
+            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.volume_showing() && !self.access_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage() && self.guardian_sheet.is_none() && !self.usb_showing() && !self.net_auth_showing() && !self.package_showing() && self.trust_sheet.is_none(); && !self.fw_showing() && !self.voice_overlay_damage() && self.visual_search.is_none() && self.launch_alert.is_none() && !self.switch_panel_shown() && self.malware_alert.is_none();
         if !quiet {
             return None;
         }
@@ -3637,6 +4535,61 @@ impl Shell {
         self.draw_perf(s);
         if self.assistive_visible() {
             self.assistive_touch.draw(s, &self.ui, self.w, self.h, t);
+        }
+        self.draw_motion_cues(s);
+    }
+
+    /// Something floats over the screen that moves by itself, so the frame under it is repainted whole: the AssistiveTouch
+    /// control or the Vehicle Motion Cues dots.
+    fn overlay_visible(&self) -> bool {
+        self.assistive_visible() || self.motion_cues_visible()
+    }
+
+    /// Whether the Vehicle Motion Cues dots are on the screen: the setting is on, the accelerometer moved them, and nothing
+    /// (the lock screen, a sleeping display) covers the picture.
+    fn motion_cues_visible(&self) -> bool {
+        self.screen_on && !self.is_locked() && self.motion_cues.as_ref().is_some_and(|m| m.visible())
+    }
+
+    /// Switches the Vehicle Motion Cues with the setting. The accelerometer is looked for the first time they are switched on.
+    fn sync_motion_cues(&mut self, on: bool) {
+        if self.motion_cues.is_none() && on {
+            let mut feed = accessibility::motion_cues::MotionCuesFeed::scan();
+            feed.set_enabled(true);
+            self.motion_cues = Some(feed);
+            self.dirty = true;
+            return;
+        }
+        if let Some(feed) = &mut self.motion_cues {
+            if feed.enabled() != on {
+                feed.set_enabled(on);
+                self.dirty = true;
+                self.drawn = Drawn::Nothing;
+            }
+        }
+    }
+
+    /// Reads the accelerometer for the dots; true when they need drawing again.
+    fn motion_cues_tick(&mut self, t: f64) -> bool {
+        if !self.screen_on || self.is_locked() {
+            return false;
+        }
+        self.motion_cues.as_mut().is_some_and(|m| m.tick(t))
+    }
+
+    /// The dots on the ring: white discs over a faint dark ring, so they read on light and dark pictures alike.
+    fn draw_motion_cues(&self, s: &mut Surface) {
+        if !self.motion_cues_visible() {
+            return;
+        }
+        let Some(feed) = &self.motion_cues else { return };
+        let r = self.ui.pt(MOTION_DOT_PT);
+        for dot in feed.dots() {
+            let cx = (dot.x * 0.5 + 0.5) * self.w as f32;
+            let cy = (dot.y * 0.5 + 0.5) * self.h as f32;
+            let alpha = (dot.opacity.clamp(0.0, 1.0) * 255.0) as u8;
+            s.fill_rrect(cx - r - 2.0, cy - r - 2.0, 2.0 * r + 4.0, 2.0 * r + 4.0, r + 2.0, crate::gfx::rgba(0, 0, 0, alpha / 3));
+            s.fill_rrect(cx - r, cy - r, 2.0 * r, 2.0 * r, r, crate::gfx::rgba(255, 255, 255, (alpha as u32 * 4 / 5) as u8));
         }
     }
 
@@ -3739,7 +4692,7 @@ impl Shell {
     /// The overlays that paint over the app or home frame on the CPU, which the GPU
     /// compositors (zoom, switcher) cannot reproduce.
     pub(super) fn overlay_blocker(&self) -> Option<&'static str> {
-        let checks: [(&'static str, bool); 18] = [
+        let checks: [(&'static str, bool); 21] = [
             ("markup", self.markup.is_some()),
             ("shield", self.shield.is_some()),
             ("control-center", self.cc_active()),
@@ -3753,7 +4706,10 @@ impl Shell {
             ("share-prompt", self.share_prompt.is_some()),
             ("low-alert", self.low_alert.is_some()),
             ("permission-sheet", self.permission_sheet.is_some()),
+            ("trust-sheet", self.trust_sheet.is_some()),
             ("crash-alert", self.crash_alert.is_some()),
+            ("malware-alert", self.malware_alert.is_some()),
+            ("launch-alert", self.launch_alert.is_some()),
             ("compose-sheet", self.compose_showing()),
             ("power-menu", self.power_menu.is_some()),
             ("screenshot", self.shot.is_some()),
@@ -3995,7 +4951,7 @@ impl Shell {
                 }
                 None => s.fill_rrect(0.0, 0.0, self.w as f32, self.h as f32, 0.0, BLACK),
             },
-            AppId::External(n) => self.ext_draw(s, n as usize, t),
+            AppId::External(n) | AppId::ExternalWindow(n, _) => self.ext_draw(s, n as usize, t),
             AppId::AppStore => match &mut self.store {
                 Some(c) => c.draw(s, &self.ui, t),
                 None => s.fill_rrect(0.0, 0.0, self.w as f32, self.h as f32, 0.0, BLACK),
@@ -4173,6 +5129,7 @@ impl Shell {
                 term.appearance(self.terminal_ui.settings.theme, size);
                 term.set_cursor(Some(self.terminal_ui.cursor.shape()), self.terminal_ui.blink);
                 term.set_mouse_reporting(self.terminal_ui.mouse_reporting);
+                term.set_look(self.terminal_ui.look);
                 if let Some(dir) = dir { term.write(format!("cd '{}'\r", dir.replace('\'', "'\\''")).as_bytes()); }
                 self.term.push(term);
                 self.term_touch = termtouch::TermTouch::default();
@@ -4198,6 +5155,29 @@ impl Shell {
     /// method sends them (`bare::kms`).
     pub fn take_input_method_out(&mut self) -> Vec<textinput::ImOut> {
         std::mem::take(&mut self.im_out)
+    }
+
+    /// The screen reader's cues asked for since the last call (its moves, wraps, activations and mode changes); the
+    /// audio worker plays them on the sound-effects role.
+    pub fn take_reader_earcons(&mut self) -> Vec<accessibility::earcons::Earcon> {
+        self.reader.take_earcons()
+    }
+
+    /// The Braille display's cells as Unicode Braille characters: the line the screen reader last spoke (`braille_out`).
+    /// No display driver is attached yet, so nothing is written to a device.
+    pub fn braille_line(&self) -> String {
+        self.braille.window_text()
+    }
+
+    /// The shell's popup earcons (`earcon::POPUP_APPEARED`, `POPUP_CLOSED`) asked for since the last call, as indices into
+    /// `earcon::EARCONS`. They play only while the screen reader is on, so a sighted user hears no beeps for menus.
+    pub fn take_popup_earcons(&mut self) -> Vec<usize> {
+        let queued = self.popup_cues.take();
+        if self.screen_reader_on() {
+            queued
+        } else {
+            Vec::new()
+        }
     }
 
     /// Whether the on-screen keyboard may be raised now: the form factor, the UI in front and any attached
@@ -4289,6 +5269,11 @@ impl Shell {
     }
 
     fn type_out(&mut self, out: Out, t: f64) {
+        // the Help viewer's search field takes the typing while the viewer is up
+        if self.help_viewer.is_some() && out != Out::Hide {
+            self.help_viewer_key(out);
+            return;
+        }
         // a Wayland client's text field has focus: the keyboard types into it through the window server's input method
         if self.im.active {
             if out == Out::Hide {
@@ -4389,6 +5374,8 @@ impl Shell {
 
     /// Creates the Photos app on first use, or rescans its folders.
     fn ensure_photos(&mut self) {
+        // Image > Edit With lists the apps from the registry, which the menus read without building it
+        self.ensure_defaults();
         match &mut self.photos {
             Some(p) => p.rescan(),
             None => {
@@ -4455,6 +5442,7 @@ impl Shell {
         let dir = self.photo_dirs.first().cloned().unwrap_or_else(|| self.data_dir.join("Pictures"));
         let bytes = screenshot::encode(&img);
         let path = dir.join(&name);
+        self.shot_saved.push(path.clone());
         let photo = photos::library::Photo { path: path.clone(), mtime: unix, size: bytes.len() as u64 };
         crate::bare::sys::spawn_named("photo-save", move || {
             crate::gfx::affinity::background_thread();
@@ -4660,6 +5648,13 @@ impl Shell {
                 }
             }
             Some(markup::Outcome::Cancel) => self.markup = None,
+            // Look Up in Visual Search: the picture as it is marked now goes to the apps that answer; the editor stays open
+            Some(markup::Outcome::LookUp) => {
+                let picture = self.markup.as_ref().map(|m| m.image().clone());
+                if let Some(img) = picture {
+                    self.visual_search_start(&img, bifrost_ui::visual_search::SceneKind::Screenshot);
+                }
+            }
             None => {}
         }
         true

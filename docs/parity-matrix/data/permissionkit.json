@@ -4,7 +4,7 @@
   "macos_since": "26.0",
   "status": "os",
   "bifrost": "springboard/src/shell/screentime/ (per-app limits, Downtime, allowed apps, Time Limit shield); springboard/src/shell/settings.rs (Screen Time pages). No app-facing SDK module.",
-  "summary": "PermissionKit lets an app ask a child's parent or guardian for a communication or app-update exception through a system UI. BifrOSt has no app-facing equivalent: the system layer enforces Screen Time limits and Downtime, and no SDK module lets an app send a permission question to a parent or receive the answer.",
+  "summary": "PermissionKit lets an app ask a child's parent or guardian for a communication or app-update exception through a system UI. BifrOSt has a partial app-facing equivalent: the system layer enforces Screen Time limits and Downtime, and the SDK permission_kit module sends a significant-app-update question and reads the answer back, which the shell's guardian sheet shows. Communication questions are not carried.",
   "rea_evidence": "ev_cd9fa96eaa8c651fdce9299018cdf03ab50f910d59b0e3e092d23a839bec79fe",
   "features": [
     {
@@ -12,7 +12,7 @@
       "apple": "AskCenter, PermissionQuestion, AskPermissionAction, AskError",
       "bifrost": "springboard/ui/src/permission_question.rs (PermissionQuestion, AskCenter::ask, AskError, PermissionButton); wired: springboard/src/shell/permission_sheet.rs (Sheet::new), springboard/sdk/src/permission_kit.rs",
       "status": "partial",
-      "note": "Question construction, the ask queue, expiry, the refusal of choices the question does not offer and the permission button are tested headless in springboard/ui/tests/parity_sdk-tests-12.rs; the SDK re-exports the model, but no channel carries a question to a guardian, so an app cannot ask one yet, and AskPermissionAction has no counterpart in the model."
+      "note": "Question construction, the ask queue, expiry, the refusal of choices the question does not offer and the permission button are tested headless in springboard/ui/tests/parity_sdk-tests-12.rs; the SDK re-exports the model, a channel carries significant-app-update questions only (services/permission_kit.rs), and AskPermissionAction has no counterpart in the model."
     },
     {
       "feature": "Permission responses stream (responses(for:), PermissionResponse, PermissionChoice)",
@@ -26,7 +26,7 @@
       "apple": "SignificantAppUpdateTopic",
       "bifrost": "springboard/core/src/permission_request.rs, springboard/sdk/src/permission_kit.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 8 tests. Wave 4 (w4-permissionkit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The shell can allow or block an app and grant a time-limit ignore for 15 minutes or the rest of the day. Parent approval of app updates is not implemented, and apps cannot request it."
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 4 (w4-permissionkit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The shell can allow or block an app and grant a time-limit ignore for 15 minutes or the rest of the day. Parent approval of app updates is answered by the guardian sheet (src/shell/guardian_sheet.rs), and apps can request it through permission_kit."
     },
     {
       "feature": "Communication topic and handle (CommunicationTopic, CommunicationHandle)",
@@ -47,7 +47,7 @@
       "apple": "PermissionButton",
       "bifrost": "springboard/ui/src/permission_question.rs, springboard/sdk/src/permission_kit.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 16 tests. Wave 6 (b01, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. The shield offers Ignore Limit, guarded by the Screen Time passcode, but it is a shell-only cover. No SDK button presents a parent request."
+      "note": "verified on Midget 0.7.25 by 16 tests. Wave 6 (b01, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. The shield offers Ignore Limit, guarded by the Screen Time passcode, but it is a shell-only cover. The SDK exports PermissionButton, which no SDK view draws yet."
     },
     {
       "feature": "Question topic protocol (QuestionTopic)",
@@ -58,10 +58,9 @@
     }
   ],
   "gaps": [
-    "No SDK API lets an app ask a parent or guardian for permission (AskCenter, PermissionQuestion, AskPermissionAction).",
-    "No asynchronous stream of parent responses (responses(for:), PermissionResponse) for apps.",
-    "No app-facing button or sheet that presents a parent-approval flow (PermissionButton).",
-    "Screen Time limits and Downtime are enforced by the shell but cannot be queried or requested by apps.",
-    "Parent approval of significant app updates (SignificantAppUpdateTopic) is not implemented."
+    "Apps ask a guardian through the SDK permission_kit module, but the shell accepts only the significant-app-update topic (services/permission_kit.rs); AskPermissionAction is not modelled.",
+    "Parent responses are polled, not streamed: Center::responses_for and the responses service method return and remove the answers.",
+    "PermissionButton is exported as a model; no SDK view draws it. The shell draws the guardian sheet (src/shell/guardian_sheet.rs).",
+    "Screen Time limits and Downtime are enforced by the shell but cannot be queried or requested by apps."
   ]
 }

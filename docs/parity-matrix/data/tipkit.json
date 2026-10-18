@@ -4,7 +4,7 @@
   "macos_since": "14.0",
   "status": "partial",
   "bifrost": "springboard/sdk/src/widgets.rs (popover, ToolTip material), springboard/sdk/src/defaults.rs, springboard/sdk/src/testing.rs",
-  "summary": "TipKit is a contextual-tip framework: tip content, display rules, a persistent datastore, inline and popover views, and test hooks. BifrOSt has no tip concept, no tip datastore and no display rules. It has the building blocks a popover tip would need (a transient popover placed next to an anchor, a per-app persistent defaults store, a headless test window), but none of them is tied to tips.",
+  "summary": "TipKit is a contextual-tip framework: tip content, display rules, a persistent datastore, inline and popover views, and test hooks. BifrOSt has a tip model (ui tip.rs and tips.rs: tips, rules, a datastore with display frequency, groups and inline views), but no shell tip content and no popover anchor modifier. It has the building blocks a popover tip would need (a transient popover placed next to an anchor, a per-app persistent defaults store, a headless test window), but none of them is tied to tips.",
   "rea_evidence": "ev_52620761eddabd85426b33bad7acd41d59b34a5052b8f491536005ef60cc81ba",
   "features": [
     {
@@ -12,42 +12,42 @@
       "apple": "Tip (protocol), Tips.Action, Tips.Option",
       "bifrost": "springboard/ui/src/tips.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 14 tests. Wave 2 (tipkit, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No tip type, and no code or docs mention tips. The Help menu exists at springboard/src/shell/desktop_bar.rs:119 but holds no tip content."
+      "note": "verified on Midget 0.7.25 by 14 tests. Wave 2 (tipkit, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The Tip type is in springboard/ui/src/tip.rs. The Help menu exists at springboard/src/shell/desktop_bar.rs:119 but holds no tip content."
     },
     {
       "feature": "Display rules and events",
       "apple": "Tips.Rule, Tips.Parameter, Tips.Event",
       "bifrost": "springboard/ui/src/tips.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 14 tests. Wave 2 (tipkit, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No rule engine that counts events or parameter changes to decide when a hint is eligible."
+      "note": "verified on Midget 0.7.25 by 14 tests. Wave 2 (tipkit, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Rules and eligibility are modelled (springboard/ui/src/tips.rs: donate, set_parameter and is_eligible)."
     },
     {
       "feature": "Inline tip view and style",
       "apple": "TipView, tipViewStyle(_:), TipViewStyle, MiniTipViewStyle",
       "bifrost": "springboard/ui/src/tips.rs (TipView, TipViewStyle); wired: springboard/ui/src/tips.rs (TipView, TipViewStyle::Mini) via springboard/apps/freeform-desktop/src/freeform.rs; wired: springboard/apps/reminders-desktop/src/app.rs (AlertHint, TipView, TipViewStyle::Mini); view.rs (draw_tip); main.rs (tip_store)",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 14 tests. Wave 6 (b07, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No inline tip container or style hook. Grouped cards exist in widgets.rs but nothing is a tip. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+      "note": "verified on Midget 0.7.25 by 14 tests. Wave 6 (b07, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. TipView and TipViewStyle (ui tips.rs) produce the inline tip sections used by Reminders and Freeform. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Popover tip",
       "apple": "View.popoverTip(_:arrowEdge:action:), TipNSPopover",
       "bifrost": "springboard/ui/src/split.rs (place_popover); springboard/ui/src/tip.rs (Tip, TipStore, Rules); springboard/sdk/src/widgets.rs (popover); springboard/render/src/ui.rs (MATERIAL_POPOVER); springboard/ui/tests/parity_sdk-tests-01d.rs; springboard/ui/tests/parity_sdk-complete-28.rs",
       "status": "partial",
-      "note": "Popover placement is tested headless (a_popover_goes_below_its_anchor_when_there_is_room, a_popover_flips_to_the_opposite_edge_when_the_preferred_side_has_no_room, a_popover_on_the_right_edge_opens_to_the_left, a_popover_stays_on_screen), and tip content, display limits, required events, invalidation and one-tip-at-a-time presentation are tested headless in tip.rs. Gap: no anchor modifier on SDK views and no action callback reaches the app yet, so an app wires the popover to its anchor by hand; the on-screen check needs Midget."
+      "note": "Popover placement is tested headless (a_popover_goes_below_its_anchor_when_there_is_room, a_popover_flips_to_the_opposite_edge_when_the_preferred_side_has_no_room, a_popover_on_the_right_edge_opens_to_the_left, a_popover_stays_on_screen), and tip content, display limits, required events, invalidation and one-tip-at-a-time presentation are tested headless in tip.rs. Gap: no anchor modifier on SDK views and no action callback reaches the app yet, so an app wires the popover to its anchor by hand; the on-screen check needs Midget. Built 2026-10-17: springboard/sdk/src/tips.rs re-exports the TipKit model, present_first (picks the first eligible tip and records the display) and tip_popover_frame (placement next to the anchor); tests tips::tests."
     },
     {
       "feature": "Tip groups",
       "apple": "TipGroup",
       "bifrost": "springboard/ui/src/tips.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 14 tests. Wave 2 (tipkit, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No ordered or first-eligible presentation of several hints."
+      "note": "verified on Midget 0.7.25 by 14 tests. Wave 2 (tipkit, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. TipGroup (ui tips.rs) gives the first eligible tip of an ordered group."
     },
     {
       "feature": "Configuration and datastore",
       "apple": "Tips.configure(_:), Tips.datastoreLocation(_:), Tips.displayFrequency(_:)",
       "bifrost": "springboard/sdk/src/defaults.rs (per-app typed preferences written to <app data>/defaults.txt)",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 13 tests. Per-app persistent typed key-value storage exists, so tip state could be stored there. There is no configure call, no display frequency limit and no tip-specific store."
+      "note": "verified on Midget 0.7.25 by 13 tests. Per-app persistent typed key-value storage exists, so tip state could be stored there. configure and DisplayFrequency exist in ui tips.rs (Datastore)."
     },
     {
       "feature": "CloudKit sync of tip state",
@@ -61,7 +61,7 @@
       "apple": "No TipKit symbol. Tooltips are an AppKit behaviour (NSView.toolTip), not part of TipKit.",
       "bifrost": "springboard/sdk/src/widgets.rs (Material::ToolTip, model_kind, blur_pt); springboard/render/src/glass.rs; springboard/ui/src/tooltip.rs (Tooltips, Timing); springboard/sdk/tests/parity_sdk-tests-01d.rs; springboard/ui/tests/parity_sdk-complete-28.rs",
       "status": "partial",
-      "note": "The ToolTip material has its window-model kind and six-point blur, and hover timing (show after the delay, cancel on leave, hand-off to a neighbour, grace period after a close) is a tested state machine in tooltip.rs. Gap: no control draws a tooltip on hover and menu items have no tooltips yet; the pointer wiring and the drawn tooltip need Midget."
+      "note": "The ToolTip material has its window-model kind and six-point blur, and hover timing (show after the delay, cancel on leave, hand-off to a neighbour, grace period after a close) is a tested state machine in tooltip.rs. Gap: no control draws a tooltip on hover and menu items have no tooltips yet; the pointer wiring and the drawn tooltip need Midget. Built 2026-10-17: springboard/sdk/src/tooltips.rs re-exports the Tooltips timing state machine for apps; tests tooltips::tests. Drawing on hover is still missing. Built 2026-10-17: TooltipHost (hover over registered control rectangles) and draw (ToolTip material, text above the control or below when there is no room) in springboard/sdk/src/tooltips.rs; tests tooltips::tests. Hover is not delivered to apps by the shell yet, so the drawn tooltip waits for that wiring."
     },
     {
       "feature": "UIKit and AppKit tip views",
@@ -75,16 +75,12 @@
       "apple": "Tips.showAllTipsForTesting(), showTipsForTesting(_:), hideAllTipsForTesting(), hideTipsForTesting(_:), resetDatastore()",
       "bifrost": "springboard/ui/src/tips.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 14 tests. Wave 2 (tipkit, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The headless test window can drive any view, but there is no tip registry to force-show or reset."
+      "note": "verified on Midget 0.7.25 by 14 tests. Wave 2 (tipkit, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The headless test window can drive any view, and Datastore has show_for_testing, hide_for_testing and reset_datastore (ui tips.rs)."
     }
   ],
   "gaps": [
-    "No tip type, no tip content and no display rules (Tip, Rule, Parameter, Event).",
-    "No persistent tip datastore with display frequency limits, and no configure call.",
-    "No inline tip view or tip view style.",
+    "No tip content ships with the shell; the Tip, Rule and Parameter model is in springboard/ui/src/tips.rs.",
     "No anchor modifier that presents a tip popover from an SDK view; the popover exists only as a low-level helper.",
-    "No tip groups.",
-    "No testing hooks to show, hide or reset tips.",
-    "No tooltips on hover in controls or menus (docs/bifrost-ui.md:362)."
+    "Hover tooltips have a timing model and a host (sdk tooltips.rs), but no shell control or menu draws them yet."
   ]
 }

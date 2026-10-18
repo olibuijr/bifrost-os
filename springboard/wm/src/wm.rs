@@ -25,7 +25,12 @@ pub const KEEP_VISIBLE: i32 = 48;
 pub const MIN_W: i32 = 240;
 pub const MIN_H: i32 = 160;
 
-struct Window { id: WindowId, rect: Rect, restore: Option<Rect>, tiled: Option<Layout>, minimized: bool }
+/// The stacking band of a window. A floating window stays above every normal window (its app asked for it: the
+/// Calculator's Always on Top); menus, panels and the menu bar are drawn above both and are not modelled here.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, PartialOrd, Ord)]
+pub enum Level { #[default] Normal, Floating }
+
+struct Window { id: WindowId, rect: Rect, restore: Option<Rect>, tiled: Option<Layout>, minimized: bool, level: Level }
 
 /// An interactive move or resize in progress; `Wm::motion` applies the pointer to it.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -34,11 +39,23 @@ pub enum Grab {
     Resize { id: WindowId, edges: Edges, x: i32, y: i32, start: Rect },
 }
 
-/// The window stack of one output, bottom first.
-pub struct Wm { area: Rect, windows: Vec<Window> }
+/// The window stack of one output, bottom first. The stack is kept sorted by level: every normal window is below
+/// every floating window, and a window raised or set to a level goes to the top of its own band.
+pub struct Wm {
+    area: Rect,
+    windows: Vec<Window>,
+    /// the window the person last raised or made key
+    key: Option<WindowId>,
+}
 
 impl Wm {
-    pub fn new(area: Rect) -> Self { Wm { area, windows: Vec::new() } }
+    pub fn new(area: Rect) -> Self { Wm { area, windows: Vec::new(), key: None } }
+
+    /// Puts `w` at the top of its level band: after every window of its level or below.
+    fn insert_top(&mut self, w: Window) {
+        let at = self.windows.iter().position(|o| o.level > w.level).unwrap_or(self.windows.len());
+        self.windows.insert(at, w);
+    }
 
     /// Places a new `w` x `h` window: centred, cascaded by the windows already shown, fitted inside the area. It is
     /// raised and focused.
@@ -49,12 +66,17 @@ impl Wm {
         let x = (a.x + (a.w - w) / 2 + step).min(a.x + a.w - w);
         let y = (a.y + (a.h - h) / 2 + step).min(a.y + a.h - h);
         let rect = Rect::new(x, y, w, h);
+        let level = self.level(id).unwrap_or_default();
         self.windows.retain(|w| w.id != id);
-        self.windows.push(Window { id, rect, restore: None, tiled: None, minimized: false });
+        self.insert_top(Window { id, rect, restore: None, tiled: None, minimized: false, level });
+        self.key = Some(id);
         rect
     }
 
-    pub fn unmap(&mut self, id: WindowId) { self.windows.retain(|w| w.id != id); }
+    pub fn unmap(&mut self, id: WindowId) {
+        self.windows.retain(|w| w.id != id);
+        if self.key == Some(id) { self.key = None; }
+    }
 
     /// Ids bottom first, minimized windows included.
     pub fn stack(&self) -> Vec<WindowId> { self.windows.iter().map(|w| w.id).collect() }
@@ -63,23 +85,40 @@ impl Wm {
 
     pub fn visible(&self, id: WindowId) -> bool { self.get(id).is_some_and(|w| !w.minimized) }
 
-    /// The topmost shown window: it has keyboard focus.
-    pub fn focused(&self) -> Option<WindowId> { self.windows.iter().rev().find(|w| !w.minimized).map(|w| w.id) }
+    /// The window with keyboard focus: the one last raised, while it is shown; otherwise the topmost shown window.
+    pub fn focused(&self) -> Option<WindowId> {
+        self.key.filter(|&k| self.visible(k)).or_else(|| self.windows.iter().rev().find(|w| !w.minimized).map(|w| w.id))
+    }
+
+    /// The stacking level of a window.
+    pub fn level(&self, id: WindowId) -> Option<Level> { self.get(id).map(|w| w.level) }
+
+    /// Moves a window to `level`, to the top of that band. The keyboard focus does not change.
+    pub fn set_level(&mut self, id: WindowId, level: Level) {
+        if let Some(i) = self.windows.iter().position(|w| w.id == id) {
+            let mut w = self.windows.remove(i);
+            w.level = level;
+            self.insert_top(w);
+        }
+    }
 
     /// The topmost shown window under the point.
     pub fn at(&self, x: i32, y: i32) -> Option<WindowId> {
         self.windows.iter().rev().find(|w| !w.minimized && w.rect.contains(x, y)).map(|w| w.id)
     }
 
+    /// Raises a window to the top of its level band and makes it the key window.
     pub fn raise(&mut self, id: WindowId) {
         if let Some(i) = self.windows.iter().position(|w| w.id == id) {
             let w = self.windows.remove(i);
-            self.windows.push(w);
+            self.insert_top(w);
+            self.key = Some(id);
         }
     }
 
     pub fn minimize(&mut self, id: WindowId) {
         if let Some(w) = self.get_mut(id) { w.minimized = true; }
+        if self.key == Some(id) { self.key = None; }
     }
 
     /// Shows a minimized window again, raised and focused.
@@ -252,6 +291,51 @@ mod tests {
         assert_eq!(wm.at(x, y), Some(1));
         assert_eq!(wm.focused(), Some(1));
         assert_eq!(wm.stack(), vec![2, 1], "bottom first");
+    }
+
+    #[test]
+    fn a_floating_window_stays_above_the_normal_windows() {
+        let mut wm = Wm::new(AREA);
+        wm.map(1, 800, 600);
+        wm.map(2, 800, 600);
+        wm.set_level(1, Level::Floating);
+        assert_eq!(wm.stack(), vec![2, 1], "the floating window is on top though it was mapped first");
+        assert_eq!(wm.level(1), Some(Level::Floating));
+        wm.raise(2);
+        assert_eq!(wm.stack(), vec![2, 1], "raising a normal window does not pass a floating one");
+        assert_eq!(wm.at(960, 600), Some(1), "hit testing sees the floating window first");
+        assert_eq!(wm.focused(), Some(2), "the raised normal window has the keyboard");
+    }
+
+    #[test]
+    fn floating_windows_keep_their_order_among_themselves_and_drop_back_to_normal() {
+        let mut wm = Wm::new(AREA);
+        wm.map(1, 400, 300);
+        wm.map(2, 400, 300);
+        wm.map(3, 400, 300);
+        wm.set_level(1, Level::Floating);
+        wm.set_level(2, Level::Floating);
+        assert_eq!(wm.stack(), vec![3, 1, 2], "floating windows are in the order they were set");
+        wm.raise(1);
+        assert_eq!(wm.stack(), vec![3, 2, 1], "a raised floating window is the top of its band");
+        wm.set_level(1, Level::Normal);
+        assert_eq!(wm.stack(), vec![3, 1, 2], "back on the normal level, it goes on top of the normal windows");
+        assert_eq!(wm.level(1), Some(Level::Normal));
+    }
+
+    #[test]
+    fn a_minimized_or_closed_key_window_hands_focus_to_the_topmost_shown_window() {
+        let mut wm = Wm::new(AREA);
+        wm.map(1, 400, 300);
+        wm.map(2, 400, 300);
+        wm.set_level(2, Level::Floating);
+        assert_eq!(wm.focused(), Some(2), "the mapped window is key");
+        wm.minimize(2);
+        assert_eq!(wm.focused(), Some(1));
+        wm.restore(2);
+        assert_eq!(wm.focused(), Some(2));
+        wm.unmap(2);
+        assert_eq!(wm.focused(), Some(1));
     }
 
     #[test]

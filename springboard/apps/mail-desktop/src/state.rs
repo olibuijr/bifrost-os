@@ -15,6 +15,12 @@ use crate::search::{Doc, Query};
 use crate::session::Listed;
 use crate::threads::{self, Node};
 use bifrost_app::controls::internet_accounts::{self as shared, Account, Kind, Security, Server};
+use bifrost_app::controls::contact_book::Contact;
+use bifrost_app::controls::found_in::{self, Action, Dismissed, Found, Pager};
+use bifrost_app::controls::recipient_autocomplete::{Key as RecipientKey, RecipientField, Suggestion};
+use bifrost_app::controls::proofread::Options as ProofreadOptions;
+use bifrost_app::controls::proofread_panel::{self, Panel};
+use bifrost_app::controls::recipient_recents::RecipientRecents;
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 
@@ -35,6 +41,9 @@ pub struct Line {
 
 /// Most lines the activity list keeps.
 pub const MAX_ACTIVITY: usize = 80;
+
+/// How many recent recipients Mail keeps for suggestions (the same cap as the recents menu).
+pub const MAX_RECIPIENT_RECENTS: usize = 50;
 
 /// The mailbox names Archive and Trash are looked up under, in order (providers name them differently).
 pub const ARCHIVE_NAMES: [&str; 4] = ["Archive", "Archives", "All Mail", "[Gmail]/All Mail"];
@@ -151,6 +160,31 @@ pub fn is_yes(value: &str) -> bool {
 
 /// Most matches Open Quickly lists under its field.
 pub const MAX_CHOICES: usize = 8;
+/// Most suggestions the compose sheet lists under a To, Cc or Bcc field.
+pub const MAX_SUGGESTIONS: usize = 5;
+
+/// True for the compose fields that hold a list of recipients and offer suggestions.
+pub fn is_recipient_field(label: &str) -> bool {
+    matches!(label, "To" | "Cc" | "Bcc")
+}
+
+/// Splits the value of a recipient field where the address being typed starts: the part before it (the finished
+/// recipients and their separator) and the typed text. A comma or semicolon inside quotes or angle brackets does not
+/// separate recipients.
+pub fn split_last_recipient(value: &str) -> (&str, &str) {
+    let (mut quoted, mut angle) = (false, false);
+    let mut cut = 0;
+    for (i, c) in value.char_indices() {
+        match c {
+            '"' => quoted = !quoted,
+            '<' if !quoted => angle = true,
+            '>' if !quoted => angle = false,
+            ',' | ';' if !quoted && !angle => cut = i + c.len_utf8(),
+            _ => {}
+        }
+    }
+    value.split_at(cut)
+}
 
 /// The fields of a sheet and the one that takes typed text.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -212,6 +246,10 @@ pub struct Compose {
     /// The misspelled words the last spelling check found, as ranges of characters of the message, and the one in view.
     pub misspelled: Vec<Range<usize>>,
     pub misspelled_at: usize,
+    /// Writing > Proofread: the suggestions of the writing assistant for the message, while they are being gone through.
+    pub proofread: Option<Panel>,
+    /// The Message-ID of this message's draft in Drafts; empty until the first save.
+    pub draft_id: String,
 }
 
 impl Compose {
@@ -228,6 +266,8 @@ impl Compose {
             typing: Style::default(),
             misspelled: Vec::new(),
             misspelled_at: 0,
+            proofread: None,
+            draft_id: String::new(),
         };
         compose.styles = vec![Style::default(); compose.message().chars().count()];
         compose
@@ -258,10 +298,19 @@ impl Compose {
             self.styles.truncate(after);
         }
         self.misspelled.clear();
+        self.proofread = None;
     }
 
-    /// Replaces the characters `start..end` of the message with `with`, in `style`. The styles of the rest stay.
+    /// Replaces the characters `start..end` of the message with `with`, in `style`. The styles of the rest stay. The
+    /// spelling marks and the proofreading suggestions no longer fit the text and are dropped.
     fn splice_message(&mut self, start: usize, end: usize, with: &str, style: Style) {
+        self.splice_raw(start, end, with, style);
+        self.misspelled.clear();
+        self.proofread = None;
+    }
+
+    /// `splice_message` without dropping the marks, for edits the caller keeps the marks in step with.
+    fn splice_raw(&mut self, start: usize, end: usize, with: &str, style: Style) {
         let chars: Vec<char> = self.message().chars().collect();
         let start = start.min(chars.len());
         let end = end.clamp(start, chars.len());
@@ -274,7 +323,6 @@ impl Compose {
         self.styles.resize(chars.len(), Style::default());
         let added = vec![style; with.chars().count()];
         drop(self.styles.splice(start..end, added));
-        self.misspelled.clear();
     }
 
     /// Format > Bold, Italic and Underline: turn the style of the text typed next on or off.
@@ -359,6 +407,61 @@ impl Compose {
         true
     }
 
+    /// Writing > Proofread: the writing assistant reads the whole message and keeps what it would change. Returns how many
+    /// suggestions there are (0 when the message reads fine or is empty).
+    pub fn start_proofread(&mut self) -> usize {
+        let text = self.message().to_string();
+        let options = ProofreadOptions { english: proofread_panel::english_by_letters(&text) };
+        self.proofread = Panel::open(&text, 0..0, options).ok().filter(|panel| !panel.is_empty());
+        self.proofread.as_ref().map_or(0, Panel::len)
+    }
+
+    /// The suggestions as ranges of characters of the message, and the index of the one in view.
+    pub fn proofread_marks(&self) -> (Vec<Range<usize>>, usize) {
+        let Some(panel) = &self.proofread else { return (Vec::new(), 0) };
+        let text = self.message();
+        let chars = |bytes: usize| text.get(..bytes).map_or(0, |head| head.chars().count());
+        (panel.suggestions().iter().map(|s| chars(s.range.start)..chars(s.range.end)).collect(), panel.at())
+    }
+
+    /// The line for the status bar: which suggestion is in view and what it would change.
+    pub fn proofread_line(&self) -> Option<String> {
+        let panel = self.proofread.as_ref()?;
+        let what = panel.describe(self.message(), panel.at())?;
+        Some(format!("Suggestion {} of {}. {what}", panel.at() + 1, panel.len()))
+    }
+
+    /// Writing > Accept Suggestion (or Accept All Suggestions): the change is made in the message, keeping the style of
+    /// the text it replaces, and the suggestions that are left move with it. Returns how many changes were made.
+    pub fn accept_suggestion(&mut self, all: bool) -> usize {
+        let Some(mut panel) = self.proofread.take() else { return 0 };
+        let mut text = self.message().to_string();
+        let steps = if all { panel.accept_all(&text) } else { panel.accept(&text).map(|(step, _)| vec![step]) };
+        let Ok(steps) = steps else { return 0 };
+        let made = steps.len();
+        for step in steps {
+            let (start, end) = (text[..step.range.start].chars().count(), text[..step.range.end].chars().count());
+            let style = self.styles.get(start).copied().unwrap_or_default();
+            self.splice_raw(start, end, &step.replacement, style);
+            text = self.message().to_string();
+        }
+        self.misspelled.clear();
+        if !panel.is_empty() {
+            self.proofread = Some(panel);
+        }
+        made
+    }
+
+    /// Writing > Skip Suggestion: the one in view is left as it is and the next comes into view.
+    pub fn skip_suggestion(&mut self) {
+        if let Some(panel) = self.proofread.as_mut() {
+            let _ = panel.skip();
+            if panel.is_empty() {
+                self.proofread = None;
+            }
+        }
+    }
+
     /// Adds a file to send with the message. Refused past [`MAX_ATTACHMENTS`] files or [`MAX_ATTACHMENT_BYTES`] bytes.
     pub fn attach(&mut self, file: Attachment) -> Result<(), String> {
         if self.attachments.len() >= MAX_ATTACHMENTS {
@@ -435,6 +538,8 @@ pub enum PromptKind {
     SmartMailbox,
     /// New Rule.
     Rule,
+    /// Edit Rule: the rule at this place in the list.
+    EditRule(usize),
     /// Signature, other addresses and undo-send delay of the shown account.
     Settings,
     /// Account Settings: the setup form of the account with this id.
@@ -464,6 +569,10 @@ pub enum Sheet {
     /// Open Quickly: one field; Return opens the first mailbox whose name contains the text.
     Quickly(Form),
     Prompt(Prompt),
+    /// Closing a message that has text: Save This Message, Don't Save, or Cancel (back to the message).
+    Question(Compose),
+    /// Mailbox > Rules: the form is empty; the names are the rules' lines, in order (see `rules::describe`).
+    Rules(Form, Vec<String>),
 }
 
 impl Sheet {
@@ -471,18 +580,20 @@ impl Sheet {
     pub fn form(&self) -> &Form {
         match self {
             Sheet::Setup(form) | Sheet::Search(form) | Sheet::Quickly(form) => form,
-            Sheet::Compose(compose) => &compose.form,
+            Sheet::Compose(compose) | Sheet::Question(compose) => &compose.form,
             Sheet::Mailbox(sheet) => &sheet.form,
             Sheet::Prompt(prompt) => &prompt.form,
+            Sheet::Rules(form, _) => form,
         }
     }
 
     pub fn form_mut(&mut self) -> &mut Form {
         match self {
             Sheet::Setup(form) | Sheet::Search(form) | Sheet::Quickly(form) => form,
-            Sheet::Compose(compose) => &mut compose.form,
+            Sheet::Compose(compose) | Sheet::Question(compose) => &mut compose.form,
             Sheet::Mailbox(sheet) => &mut sheet.form,
             Sheet::Prompt(prompt) => &mut prompt.form,
+            Sheet::Rules(form, _) => form,
         }
     }
 
@@ -494,6 +605,8 @@ impl Sheet {
             Sheet::Setup(_) => "Add Account",
             Sheet::Compose(compose) if compose.in_reply_to.is_some() => "Reply",
             Sheet::Compose(_) => "New Message",
+            Sheet::Question(_) => "Save This Message?",
+            Sheet::Rules(..) => "Rules",
             Sheet::Mailbox(sheet) if sheet.rename_from.is_some() => "Rename Mailbox",
             Sheet::Mailbox(_) => "New Mailbox",
             Sheet::Prompt(prompt) => match prompt.kind {
@@ -501,6 +614,7 @@ impl Sheet {
                 PromptKind::Redirect => "Redirect",
                 PromptKind::SmartMailbox => "New Smart Mailbox",
                 PromptKind::Rule => "New Rule",
+                PromptKind::EditRule(_) => "Edit Rule",
                 PromptKind::Settings => "Mail Settings",
                 PromptKind::EditAccount(_) => "Account Settings",
                 PromptKind::RemoveAccount(_) => "Remove Account",
@@ -516,13 +630,15 @@ impl Sheet {
             Sheet::Quickly(_) => "Go",
             Sheet::Setup(_) => "Add Account",
             Sheet::Compose(_) => "Send",
+            Sheet::Question(_) => "Save",
+            Sheet::Rules(..) => "Done",
             Sheet::Mailbox(sheet) if sheet.rename_from.is_some() => "Rename",
             Sheet::Mailbox(_) => "Create",
             Sheet::Prompt(prompt) => match prompt.kind {
                 PromptKind::Remind => "Remind Me",
                 PromptKind::Redirect => "Redirect",
                 PromptKind::SmartMailbox | PromptKind::Rule => "Add",
-                PromptKind::Settings | PromptKind::EditAccount(_) => "Save",
+                PromptKind::Settings | PromptKind::EditAccount(_) | PromptKind::EditRule(_) => "Save",
                 PromptKind::RemoveAccount(_) => "Remove",
                 PromptKind::Activity => "Done",
             },
@@ -566,6 +682,8 @@ pub struct Mail {
     pub account: usize,
     pub mailboxes: Vec<String>,
     pub mailbox: String,
+    /// The server's Drafts mailbox by special use, from the last listing; `None` until one is read or when none is flagged.
+    pub drafts_mailbox: Option<String>,
     /// The messages of the shown mailbox, newest first.
     pub rows: Vec<Row>,
     /// The UID of the message open in the reader.
@@ -577,6 +695,13 @@ pub struct Mail {
     /// The highest inbox UID seen per account id. Absent until the first inbox listing of the account.
     pub baseline: HashMap<String, u32>,
     pub sheet: Option<Sheet>,
+    /// Set when a compose was made into the sheet slot (open_draft, a failed send, Undo Send). The app moves it into a
+    /// compose window of its own (see `compose_windows`).
+    pub fresh_compose: bool,
+    /// Messages whose remote content the person allowed with Load Remote Content, by UID. Not kept between runs.
+    pub remote_loaded: HashSet<u32>,
+    /// The sheet slot was closed on purpose (sent, saved or discarded), so its compose window closes without a question.
+    pub sheet_done: bool,
     pub status: String,
     /// The search text as applied. Empty shows every message.
     pub search: String,
@@ -620,6 +745,21 @@ pub struct Mail {
     pub arrived: Vec<(String, Row)>,
     /// What Mail did lately, oldest first: each line starts with the time (Mailbox > Show Activity).
     pub activity: Vec<String>,
+    /// The addresses Mail sent to, most recent first, offered again as suggestions when a recipient is typed. Kept for
+    /// this run only.
+    pub recipients: RecipientRecents,
+    /// The people of the address book, as far as recipient suggestions need them (names and email addresses). Filled
+    /// from the Contacts service once a compose sheet is open; empty when the person has not let Mail read Contacts.
+    pub address_book: Vec<Contact>,
+    /// The suggestions the focused To, Cc or Bcc field offers, with the one highlighted by the arrow keys.
+    pub recipient_field: RecipientField,
+    /// The messages whose people were donated to Contacts already (account, mailbox, UID): a message is donated once.
+    pub donated: HashSet<(String, String, u32)>,
+    /// The suggestions found in the open message (events, flights, contacts, addresses), paged one at a time, and the
+    /// message they belong to. Filled once the message text is here.
+    pub found_pager: Option<(u32, Pager)>,
+    /// The suggestions the person turned down or took, for this run: they are not offered again from the same message.
+    pub found_dismissed: Dismissed,
 }
 
 impl Mail {
@@ -629,12 +769,16 @@ impl Mail {
             account: 0,
             mailboxes: vec![INBOX.to_string()],
             mailbox: INBOX.to_string(),
+            drafts_mailbox: None,
             rows: Vec::new(),
             open: None,
             bodies: HashMap::new(),
             passwords: HashMap::new(),
             baseline: HashMap::new(),
             sheet: None,
+            fresh_compose: false,
+            remote_loaded: HashSet::new(),
+            sheet_done: false,
             status: String::new(),
             search: String::new(),
             threaded: false,
@@ -658,6 +802,12 @@ impl Mail {
             find: None,
             arrived: Vec::new(),
             activity: Vec::new(),
+            recipients: RecipientRecents::new(MAX_RECIPIENT_RECENTS),
+            address_book: Vec::new(),
+            recipient_field: RecipientField::new(),
+            donated: HashSet::new(),
+            found_pager: None,
+            found_dismissed: Dismissed::default(),
         }
     }
 
@@ -1026,6 +1176,149 @@ impl Mail {
         form.focus_on(if draft.to.is_empty() { to_at } else { last });
         let signature = self.prefs.signature(&account_id).to_string();
         self.sheet = Some(Sheet::Compose(Compose::new(form, draft.in_reply_to, draft.references, draft.priority, draft.attachments, signature)));
+        self.fresh_compose = true;
+        self.sync_recipient_field();
+    }
+
+    /// Replaces the address book the recipient suggestions draw on.
+    pub fn set_address_book(&mut self, book: Vec<Contact>) {
+        self.address_book = book;
+        self.sync_recipient_field();
+    }
+
+    /// Rebuilds the suggestions for the focused field: nothing unless it is a To, Cc or Bcc field of a compose sheet.
+    /// The text after the last separator is what is being typed; the recipients before it are not offered again. An
+    /// untouched field offers the addresses used last; once a recipient is in, an empty tail offers nothing.
+    pub fn sync_recipient_field(&mut self) {
+        let field = match &self.sheet {
+            Some(Sheet::Compose(compose)) => compose.form.fields.get(compose.form.focus).filter(|f| is_recipient_field(f.label)).map(|f| {
+                let (head, typed) = split_last_recipient(&f.value);
+                let mut field = RecipientField::new();
+                field.recipients = message::split_addresses(head).iter().map(|a| message::address_of(a).to_lowercase()).collect();
+                field.set_text(typed.trim(), &self.address_book, &self.recipients, MAX_SUGGESTIONS);
+                if typed.trim().is_empty() && !f.value.trim().is_empty() {
+                    field.press(RecipientKey::Escape);
+                }
+                field
+            }),
+            _ => None,
+        };
+        self.recipient_field = field.unwrap_or_default();
+    }
+
+    /// The suggestions listed under the focused recipient field.
+    pub fn recipient_suggestions(&self) -> &[Suggestion] {
+        self.recipient_field.suggestions()
+    }
+
+    /// The arrow keys: moves the highlight in the suggestion list. False when no list is showing (the key is not ours).
+    pub fn move_recipient_highlight(&mut self, down: bool) -> bool {
+        if self.recipient_field.suggestions().is_empty() {
+            return false;
+        }
+        self.recipient_field.press(if down { RecipientKey::Down } else { RecipientKey::Up });
+        true
+    }
+
+    /// Escape: closes the suggestion list. False when no list is showing (Escape belongs to the sheet).
+    pub fn close_recipient_list(&mut self) -> bool {
+        if self.recipient_field.suggestions().is_empty() {
+            return false;
+        }
+        self.recipient_field.press(RecipientKey::Escape);
+        true
+    }
+
+    /// Return and Tab take the highlighted suggestion; a tap takes the one at `index`. The typed text is replaced by
+    /// `Name <address>` and a separator, ready for the next recipient. False when there is nothing to take.
+    pub fn accept_recipient(&mut self, index: Option<usize>) -> bool {
+        let Some(at) = index.or(self.recipient_field.highlighted()) else { return false };
+        let Some(suggestion) = self.recipient_field.suggestions().get(at).cloned() else { return false };
+        // a name with list punctuation would split the recipient: the bare address is safe
+        let token = if suggestion.name.contains([',', ';', '"', '<', '>']) { suggestion.address.clone() } else { suggestion.token() };
+        let Some(Sheet::Compose(compose)) = self.sheet.as_mut() else { return false };
+        let focus = compose.form.focus;
+        let Some(field) = compose.form.fields.get_mut(focus).filter(|f| is_recipient_field(f.label)) else { return false };
+        let (head, _) = split_last_recipient(&field.value);
+        let head = head.trim_end();
+        field.value = if head.is_empty() { format!("{token}, ") } else { format!("{head} {token}, ") };
+        self.sync_recipient_field();
+        true
+    }
+
+    /// The people of the open message to donate to Contacts, once per message and only when its text is here: the
+    /// sender and the other recipients (see [`crate::people::seen_in`]). Nobody when Mail Settings turned donating off.
+    pub fn people_to_donate(&mut self) -> Vec<crate::people::Seen> {
+        if !self.prefs.donate_people {
+            return Vec::new();
+        }
+        let Some(uid) = self.open.filter(|uid| self.bodies.contains_key(uid)) else { return Vec::new() };
+        let Some(account) = self.current().map(|a| a.id.clone()) else { return Vec::new() };
+        if !self.donated.insert((account, self.mailbox.clone(), uid)) {
+            return Vec::new();
+        }
+        let Some(summary) = self.row(uid).map(|r| r.summary.clone()) else { return Vec::new() };
+        crate::people::seen_in(&summary.from, &summary.to, &summary.cc, crate::people::is_bulk(&summary), &self.from_choices())
+    }
+
+    /// Reads the open message for things to offer (an event, a flight, an email address or phone number, a street
+    /// address) once its text is here, minus the ones turned down. `region` is the region code whose phone rules turn a
+    /// number into international form. Another message, or none, clears the banner.
+    pub fn refresh_found_in(&mut self, region: &str) {
+        let Some(uid) = self.open else {
+            self.found_pager = None;
+            return;
+        };
+        if self.found_pager.as_ref().is_some_and(|(shown, _)| *shown == uid) {
+            return;
+        }
+        self.found_pager = None;
+        let Some(raw) = self.bodies.get(&uid) else { return };
+        let title = self.row(uid).map(|r| r.summary.subject.clone()).unwrap_or_default();
+        let source = found_in::Source { app: "Mail".into(), title };
+        let items = self.found_dismissed.filter(found_in::extract(&source, &crate::body::readable(raw), region));
+        self.found_pager = Some((uid, Pager::new(items)));
+    }
+
+    /// The suggestion the banner shows, when the open message has any left.
+    pub fn found_current(&self) -> Option<&Found> {
+        let (uid, pager) = self.found_pager.as_ref()?;
+        if Some(*uid) != self.open {
+            return None;
+        }
+        pager.current()
+    }
+
+    /// "1 of 3" when the banner has more than one suggestion.
+    pub fn found_label(&self) -> Option<String> {
+        self.found_current()?;
+        self.found_pager.as_ref()?.1.label()
+    }
+
+    /// Next and previous page of the banner. False at either end.
+    pub fn found_step(&mut self, forward: bool) -> bool {
+        match self.found_pager.as_mut() {
+            Some((_, pager)) if forward => pager.next_page(),
+            Some((_, pager)) => pager.previous_page(),
+            None => false,
+        }
+    }
+
+    /// Dismiss: the suggestion on show is turned down and not offered again from this message.
+    pub fn found_dismiss(&mut self) -> bool {
+        let Some(found) = self.found_pager.as_mut().and_then(|(_, pager)| pager.dismiss()) else { return false };
+        self.found_dismissed.add(&found);
+        true
+    }
+
+    /// Add: the suggestion on show leaves the banner (and is not offered again) and its action is returned for the
+    /// window to run.
+    pub fn found_accept(&mut self) -> Option<Action> {
+        let (_, pager) = self.found_pager.as_mut()?;
+        let found = pager.current().cloned()?;
+        let action = pager.accept()?;
+        self.found_dismissed.add(&found);
+        Some(action)
     }
 
     /// The addresses the shown account sends from: its own first, then its other addresses.
@@ -1205,6 +1498,36 @@ impl Mail {
     }
 
     /// True when a new sheet may replace what is on screen: not while a message is being written.
+    /// True when remote content may load for message `uid`: Mail Settings allows it, or the person loaded it for this message.
+    pub fn remote_allowed(&self, uid: u32) -> bool {
+        self.prefs.remote_content || self.remote_loaded.contains(&uid)
+    }
+
+    /// True when the shown mailbox is the account's Drafts (its special-use mailbox, or the fixed name).
+    pub fn is_drafts(&self) -> bool {
+        self.mailbox == self.drafts_mailbox.as_deref().unwrap_or(crate::sync::DRAFTS)
+    }
+
+    /// Message > Edit Draft: the saved message `raw` opens as a compose sheet. Its Message-ID is kept, so saving the
+    /// sheet again replaces that copy in Drafts instead of adding one.
+    pub fn open_draft_copy(&mut self, raw: &str) {
+        let id = Summary::from_headers(raw).message_id;
+        self.open_draft(message::draft_of(raw));
+        if let Some(Sheet::Compose(compose)) = self.sheet.as_mut() {
+            compose.draft_id = id.unwrap_or_default();
+        }
+    }
+
+    /// Load Remote Content: the remote content of message `uid` may load.
+    pub fn allow_remote(&mut self, uid: u32) {
+        self.remote_loaded.insert(uid);
+    }
+
+    /// True when the sheet slot can take a compose: it is empty, or it holds a compose (which keeps its own window).
+    pub fn sheet_is_free_for_compose(&self) -> bool {
+        matches!(self.sheet, None | Some(Sheet::Compose(_)))
+    }
+
     pub fn sheet_is_free(&self) -> bool {
         !matches!(self.sheet, Some(Sheet::Compose(_)))
     }
@@ -1277,6 +1600,10 @@ impl Mail {
                 Field::yes_no("Quote the original in replies", self.prefs.quote_replies),
                 Field::yes_no("Plain text messages only", self.prefs.plain_text),
                 Field::yes_no("Bold unread messages", self.prefs.bold_unread),
+                Field::yes_no("Load remote content", self.prefs.remote_content),
+                Field::yes_no("Signature above the quoted text", self.prefs.signature_above_quote),
+                Field::yes_no("Show in Search", self.prefs.show_in_search),
+                Field::yes_no("Suggest people to Contacts", self.prefs.donate_people),
             ],
         );
         Ok(())
@@ -1311,7 +1638,44 @@ impl Mail {
     }
 
     /// The rule a New Rule form describes. The mailbox to move to must exist in the shown account.
+    /// Mailbox > Rules: the rules as a list, each with Remove; a name opens its editor.
+    pub fn open_rules_pane(&mut self) {
+        let names = self.prefs.rules.iter().map(rules::describe).collect();
+        self.sheet = Some(Sheet::Rules(Form::new(Vec::new()), names));
+    }
+
+    /// Edit Rule: the editor of the rule at `index`, filled in from the rule.
+    pub fn open_rule_editor(&mut self, index: usize) {
+        let Some(rule) = self.prefs.rules.get(index).cloned() else { return };
+        let move_to = rule.actions.iter().find_map(|a| match a {
+            rules::Action::MoveTo(name) => Some(name.clone()),
+            _ => None,
+        });
+        let flag = rule.actions.iter().find_map(|a| match a {
+            rules::Action::Flag(color) => Some(color.label().to_string()),
+            _ => None,
+        });
+        let mark = if rule.actions.contains(&rules::Action::MarkRead) { "yes" } else { "no" };
+        self.open_prompt(
+            PromptKind::EditRule(index),
+            vec![
+                Field::new("Name", "Receipts", &rule.name),
+                Field::new("From contains", "shop.example", &rule.from),
+                Field::new("To contains", "", &rule.to),
+                Field::new("Subject contains", "receipt", &rule.subject),
+                Field::new("Move to mailbox", "Receipts", &move_to.unwrap_or_default()),
+                Field::new("Mark as read", "yes", mark),
+                Field::new("Flag colour", "red, orange, yellow, green, blue, purple, gray", &flag.unwrap_or_default()),
+            ],
+        );
+    }
+
     pub fn rule_from_form(&self, form: &Form) -> Result<Rule, String> {
+        self.rule_from_form_at(form, None)
+    }
+
+    /// The rule a form describes. `except` is the place of the rule being edited, which may keep its own name.
+    pub fn rule_from_form_at(&self, form: &Form, except: Option<usize>) -> Result<Rule, String> {
         let name = form.value("Name").trim().to_string();
         if name.is_empty() {
             return Err("Name the rule".into());
@@ -1328,7 +1692,7 @@ impl Mail {
             self.mailboxes.iter().find(|m| m.eq_ignore_ascii_case(target)).cloned().ok_or_else(|| format!("There is no mailbox named {target}"))?
         };
         let actions = rules::actions_from(&target, form.value("Mark as read"), form.value("Flag colour"))?;
-        if self.prefs.rules.iter().any(|r| r.name.eq_ignore_ascii_case(&name)) {
+        if self.prefs.rules.iter().enumerate().any(|(i, r)| Some(i) != except && r.name.eq_ignore_ascii_case(&name)) {
             return Err(format!("There is already a rule named {name}"));
         }
         Ok(Rule { name, from, to, subject, actions })
@@ -1385,6 +1749,16 @@ impl Mail {
         }
         if form.fields.iter().any(|f| f.label == "Bold unread messages") {
             self.prefs.bold_unread = is_yes(form.value("Bold unread messages"));
+        }
+        if form.fields.iter().any(|f| f.label == "Load remote content") {
+            self.prefs.remote_content = is_yes(form.value("Load remote content"));
+        }
+        if form.fields.iter().any(|f| f.label == "Signature above the quoted text") {
+            self.prefs.signature_above_quote = is_yes(form.value("Signature above the quoted text"));
+        }
+        if form.fields.iter().any(|f| f.label == "Show in Search") {
+            self.prefs.show_in_search = is_yes(form.value("Show in Search"));
+            self.prefs.donate_people = is_yes(form.value("Suggest people to Contacts"));
         }
         Ok(())
     }
@@ -1463,7 +1837,18 @@ impl Mail {
         if to.is_empty() {
             return Err("Add at least one recipient".into());
         }
-        Ok(Draft {
+        Ok(self.draft_fields(compose, from, to))
+    }
+
+    /// The draft of `compose` as it is kept in Drafts: the recipients may be empty.
+    pub fn draft_for_save(&self, compose: &Compose) -> Draft {
+        let from = self.current().map(|a| a.email.clone()).unwrap_or_default();
+        let to = message::split_addresses(compose.form.value("To"));
+        self.draft_fields(compose, from, to)
+    }
+
+    fn draft_fields(&self, compose: &Compose, from: String, to: Vec<String>) -> Draft {
+        Draft {
             from,
             to,
             cc: message::split_addresses(compose.form.value("Cc")),
@@ -1471,12 +1856,16 @@ impl Mail {
             reply_to: message::split_addresses(compose.form.value("Reply-To")),
             priority: compose.priority,
             subject: compose.form.value("Subject").to_string(),
-            body: with_signature(compose.form.value("Message"), &compose.signature),
+            body: if self.prefs.signature_above_quote {
+                with_signature_above_quote(compose.form.value("Message"), &compose.signature)
+            } else {
+                with_signature(compose.form.value("Message"), &compose.signature)
+            },
             in_reply_to: compose.in_reply_to.clone(),
             references: compose.references.clone(),
             attachments: compose.attachments.clone(),
             html: if self.prefs.plain_text { None } else { richtext::html_body(compose.message(), &compose.styles, &compose.signature) },
-        })
+        }
     }
 
     /// Adds an account the user set up, once it is in the shared list and its password is saved. It becomes the shown
@@ -1556,6 +1945,28 @@ pub fn with_signature(body: &str, signature: &str) -> String {
     }
 }
 
+/// The signature placed above the quoted text of a reply: it goes before the attribution line ("On ..., X wrote:"). A
+/// message without one gets the signature at the end, as `with_signature` gives it.
+pub fn with_signature_above_quote(body: &str, signature: &str) -> String {
+    let signature = signature.trim_end();
+    if signature.trim().is_empty() {
+        return body.to_string();
+    }
+    let lines: Vec<&str> = body.split('\n').collect();
+    let Some(at) = lines.iter().position(|line| line.starts_with("On ") && line.trim_end().ends_with("wrote:")) else {
+        return with_signature(body, signature);
+    };
+    let above = lines[..at].join("\n");
+    let top = above.trim_end();
+    let below = lines[at..].join("\n");
+    let block = format!("-- \n{signature}");
+    if top.is_empty() {
+        format!("{block}\n\n{below}")
+    } else {
+        format!("{top}\n\n{block}\n\n{below}")
+    }
+}
+
 /// A server as the setup form shows it: its host and its port.
 fn accounts_server(server: &Option<Server>) -> (String, String) {
     server.as_ref().map_or_else(|| (String::new(), String::new()), |s| (s.host.clone(), s.port.to_string()))
@@ -1613,6 +2024,18 @@ mod tests {
         a.imap = Some(Server { host: "imap.example.com".into(), port: 993, security: Security::Tls });
         a.smtp = Some(Server { host: "smtp.example.com".into(), port: 587, security: Security::StartTls });
         a
+    }
+
+    #[test]
+    fn sent_addresses_are_suggested_most_recent_first() {
+        let mut mail = Mail::new(vec![account("work")]);
+        assert!(mail.recipients.is_empty());
+        mail.recipients.record("Ana@Example.com", "");
+        mail.recipients.record("bo@example.com", "");
+        mail.recipients.record("ana@example.com", "");
+        let got: Vec<String> = mail.recipients.suggest("", 10).into_iter().map(|r| r.address).collect();
+        assert_eq!(got, vec!["ana@example.com", "bo@example.com"]);
+        assert_eq!(mail.recipients.suggest("bo", 10).len(), 1);
     }
 
     fn listed(uid: u32, subject: &str) -> Listed {
@@ -1906,6 +2329,140 @@ mod tests {
         assert!(mail.draft_from(&Compose::new(empty, None, vec![], Priority::Normal, vec![], String::new())).is_err());
     }
 
+    fn person(given: &str, family: &str, address: &str) -> Contact {
+        use bifrost_app::controls::contact_book::LabeledValue;
+        Contact { given_name: given.into(), family_name: family.into(), email_addresses: vec![LabeledValue::new(None, address.to_string())], ..Contact::default() }
+    }
+
+    fn type_in_focus(mail: &mut Mail, text: &str) {
+        mail.sheet.as_mut().unwrap().form_mut().type_text(text);
+        mail.sync_recipient_field();
+    }
+
+    #[test]
+    fn the_recipient_tail_is_what_is_being_typed() {
+        assert_eq!(split_last_recipient(""), ("", ""));
+        assert_eq!(split_last_recipient("an"), ("", "an"));
+        assert_eq!(split_last_recipient("ana@example.com, bo"), ("ana@example.com,", " bo"));
+        assert_eq!(split_last_recipient("Ana <ana@example.com>, "), ("Ana <ana@example.com>,", " "));
+        assert_eq!(split_last_recipient("\"Smith, Ana\" <a@x.is>"), ("", "\"Smith, Ana\" <a@x.is>"), "a comma in quotes does not separate");
+    }
+
+    #[test]
+    fn typing_in_to_suggests_contacts_and_recents_and_a_choice_fills_the_field() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.recipients.record("bob@example.com", "Bob Recent");
+        mail.set_address_book(vec![person("Ana", "Lovelace", "ana@example.com"), person("Anders", "Holm", "anders@example.com")]);
+        mail.open_compose(None);
+        // an untouched To field offers the addresses used last
+        assert_eq!(mail.recipient_suggestions().iter().map(|s| s.address.as_str()).collect::<Vec<_>>(), ["bob@example.com"]);
+        type_in_focus(&mut mail, "an");
+        let got: Vec<String> = mail.recipient_suggestions().iter().map(|s| s.address.clone()).collect();
+        assert_eq!(got, ["anders@example.com", "ana@example.com"], "both contacts match at a word start, in name order");
+        assert!(mail.move_recipient_highlight(true) && mail.move_recipient_highlight(true));
+        assert_eq!(mail.recipient_field.highlighted(), Some(1));
+        assert!(mail.accept_recipient(None));
+        assert_eq!(compose_of(&mail).form.value("To"), "Ana Lovelace <ana@example.com>, ");
+        assert!(mail.recipient_suggestions().is_empty(), "nothing is offered after a finished recipient");
+        // the recipient is split off for the draft as an address with its name
+        assert_eq!(message::split_addresses(compose_of(&mail).form.value("To")), ["Ana Lovelace <ana@example.com>"]);
+        // the next recipient does not offer the one already in the field
+        type_in_focus(&mut mail, "ana");
+        assert!(mail.recipient_suggestions().is_empty());
+        type_in_focus(&mut mail, "ders");
+        assert_eq!(mail.recipient_suggestions().len(), 1);
+        assert!(mail.accept_recipient(Some(0)));
+        assert_eq!(compose_of(&mail).form.value("To"), "Ana Lovelace <ana@example.com>, Anders Holm <anders@example.com>, ");
+    }
+
+    #[test]
+    fn the_message_field_and_a_closed_list_offer_nothing() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.set_address_book(vec![person("Ana", "Lovelace", "ana@example.com")]);
+        mail.open_compose(None);
+        type_in_focus(&mut mail, "ana");
+        assert_eq!(mail.recipient_suggestions().len(), 1);
+        assert!(mail.close_recipient_list(), "Escape closes the list first");
+        assert!(mail.recipient_suggestions().is_empty());
+        assert!(!mail.close_recipient_list(), "with no list showing Escape belongs to the sheet");
+        assert!(!mail.accept_recipient(None), "nothing is highlighted");
+        let sheet = mail.sheet.as_mut().unwrap().form_mut();
+        sheet.focus_on(sheet.fields.len() - 1);
+        mail.sync_recipient_field();
+        assert!(mail.recipient_suggestions().is_empty(), "the message body has no suggestions");
+    }
+
+    #[test]
+    fn a_name_with_a_comma_is_kept_out_of_the_token() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.set_address_book(vec![person("Lovelace, Dr", "Ada", "ada@example.com")]);
+        mail.open_compose(None);
+        type_in_focus(&mut mail, "ada");
+        assert!(mail.move_recipient_highlight(true) && mail.accept_recipient(None));
+        assert_eq!(compose_of(&mail).form.value("To"), "ada@example.com, ", "the bare address, so the list still splits cleanly");
+    }
+
+    fn read_message(mail: &mut Mail, uid: u32, from: &str, to: &str, body: &str) {
+        let summary = Summary { subject: "Plans".into(), from: from.into(), to: to.into(), ..Summary::default() };
+        mail.rows.push(Row { uid, flags: Flags::default(), summary });
+        mail.open = Some(uid);
+        mail.bodies.insert(uid, format!("From: {from}\r\nSubject: Plans\r\n\r\n{body}\r\n"));
+    }
+
+    #[test]
+    fn a_read_message_donates_its_people_once_unless_the_setting_is_off() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.rows.push(Row { uid: 4, flags: Flags::default(), summary: Summary { from: "Bo <bo@example.com>".into(), to: "olibuijr@example.com, Cy <cy@example.com>".into(), ..Summary::default() } });
+        mail.open = Some(4);
+        assert!(mail.people_to_donate().is_empty(), "the text has not arrived");
+        mail.bodies.insert(4, "Subject: x\r\n\r\nHi\r\n".into());
+        let seen = mail.people_to_donate();
+        let got: Vec<(&str, &str)> = seen.iter().map(|s| (s.name.as_str(), s.address.as_str())).collect();
+        assert_eq!(got, [("Bo", "bo@example.com"), ("Cy", "cy@example.com")], "the person's own address is left out");
+        assert!(mail.people_to_donate().is_empty(), "a message is donated once");
+        mail.prefs.donate_people = false;
+        mail.rows.push(Row { uid: 5, flags: Flags::default(), summary: Summary { from: "Di <di@example.com>".into(), ..Summary::default() } });
+        mail.open = Some(5);
+        mail.bodies.insert(5, "Subject: y\r\n\r\nHi\r\n".into());
+        assert!(mail.people_to_donate().is_empty(), "donating is off");
+    }
+
+    #[test]
+    fn the_open_message_offers_what_it_mentions_and_a_turned_down_one_stays_down() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.rows.push(Row { uid: 9, flags: Flags::default(), summary: Summary { subject: "Plans".into(), ..Summary::default() } });
+        mail.open = Some(9);
+        mail.refresh_found_in("IS");
+        assert!(mail.found_current().is_none(), "no text, no banner");
+        mail.bodies.insert(9, "Subject: Plans\r\n\r\nLunch tomorrow at 1pm\r\nWrite to ana@example.com\r\n".into());
+        mail.refresh_found_in("IS");
+        assert_eq!(mail.found_current().map(|f| f.kind), Some(found_in::SuggestionKind::Event));
+        assert_eq!(mail.found_current().map(|f| f.found_in()).as_deref(), Some("Found in Mail"));
+        assert_eq!(mail.found_label().as_deref(), Some("1 of 2"));
+        assert!(mail.found_step(true) && !mail.found_step(true), "the second page is the last");
+        assert_eq!(mail.found_current().map(|f| f.title.as_str()), Some("ana@example.com"));
+        assert!(mail.found_step(false));
+        assert!(mail.found_dismiss(), "the event is turned down");
+        assert_eq!(mail.found_label(), None, "one left needs no pager");
+        match mail.found_accept() {
+            Some(Action::AddContact { email, phone }) => assert_eq!((email.as_deref(), phone), (Some("ana@example.com"), None)),
+            other => panic!("{other:?}"),
+        }
+        assert!(mail.found_current().is_none());
+        // the same message again: nothing that was answered comes back
+        mail.open = None;
+        mail.refresh_found_in("IS");
+        mail.open = Some(9);
+        mail.refresh_found_in("IS");
+        assert!(mail.found_current().is_none());
+        // another message clears the banner of the first
+        read_message(&mut mail, 10, "a@example.com", "", "Call me on ana@example.org");
+        mail.refresh_found_in("IS");
+        assert_eq!(mail.found_current().map(|f| f.title.as_str()), Some("ana@example.org"));
+        mail.open = Some(9);
+        assert!(mail.found_current().is_none(), "a banner belongs to its message");
+    }
+
     fn compose_of(mail: &Mail) -> &Compose {
         match &mail.sheet {
             Some(Sheet::Compose(c)) => c,
@@ -2138,6 +2695,8 @@ mod tests {
         assert_eq!(with_signature("Hello\n\n", "Ana\n"), "Hello\n\n-- \nAna");
         assert_eq!(with_signature("", "Ana"), "\n\n-- \nAna");
         assert_eq!(with_signature("Hello", "  \n"), "Hello");
+        assert_eq!(with_signature_above_quote("Thanks\n\nOn Mon, Ana wrote:\n> hi", "Ana"), "Thanks\n\n-- \nAna\n\nOn Mon, Ana wrote:\n> hi");
+        assert_eq!(with_signature_above_quote("Hello", "Ana"), "Hello\n\n-- \nAna", "no quote: the end");
         let mut mail = Mail::new(vec![account("work")]);
         mail.prefs.set_signature("work", "Ana");
         mail.open_compose(None);
@@ -2558,6 +3117,35 @@ mod tests {
         compose.set_misspelled(vec![16..19]);
         compose.edit(|form| form.type_text("!"));
         assert!(compose.misspelled.is_empty(), "typing clears the marks");
+    }
+
+    #[test]
+    fn proofreading_marks_the_slips_and_accepting_edits_the_message_in_its_style() {
+        let mut compose = message_compose("");
+        compose.toggle_bold();
+        compose.edit(|form| form.type_text("Say it it again, red,green"));
+        assert_eq!(compose.start_proofread(), 2);
+        let (marks, at) = compose.proofread_marks();
+        assert_eq!((marks.len(), at), (2, 0));
+        assert!(compose.proofread_line().unwrap().starts_with("Suggestion 1 of 2."), "{:?}", compose.proofread_line());
+        assert_eq!(compose.accept_suggestion(false), 1);
+        assert_eq!(compose.message(), "Say it again, red,green");
+        assert_eq!(compose.styles.len(), compose.message().chars().count());
+        assert!(compose.styles.iter().all(|s| s.bold));
+        assert_eq!(compose.proofread.as_ref().map(Panel::len), Some(1), "the other suggestion moved with the edit");
+        compose.skip_suggestion();
+        assert!(compose.proofread.is_none() && compose.proofread_line().is_none());
+        // all at once, and typing drops the suggestions
+        let mut again = message_compose("the the  cat red,green");
+        assert_eq!(again.start_proofread(), 3);
+        assert_eq!(again.accept_suggestion(true), 3);
+        assert_eq!(again.message(), "the cat red, green");
+        assert!(again.proofread.is_none());
+        let mut typed = message_compose("so so");
+        assert_eq!(typed.start_proofread(), 1);
+        typed.edit(|form| form.type_text("!"));
+        assert!(typed.proofread.is_none(), "the suggestions no longer fit the text");
+        assert_eq!(message_compose("").start_proofread(), 0);
     }
 
     #[test]

@@ -22,7 +22,16 @@
    "status": "partial",
    "note": "provided by Arch package dash; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "dash -c 'exit 0'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "dash shell runs a command"
   },
   {
    "id": "path:/bin/date",
@@ -64,7 +73,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: dd installed, not run headless (changes machine state)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/dd"
+    }
+   ],
+   "ready_note": "coreutils dd; --version only"
   },
   {
    "id": "path:/bin/df",
@@ -127,7 +144,15 @@
    "status": "partial",
    "note": "provided by Arch package ed; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/ed"
+    }
+   ],
+   "ready_note": "ed package"
   },
   {
    "id": "path:/bin/expr",
@@ -253,7 +278,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: fsck installed, not run headless (changes machine state)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/fsck"
+    }
+   ],
+   "ready_note": "util-linux fsck"
   },
   {
    "id": "path:/sbin/fsck_cs",
@@ -484,7 +517,15 @@
    "status": "partial",
    "note": "provided by Arch package db; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/db_archive"
+    }
+   ],
+   "ready_note": "db package"
   },
   {
    "id": "path:/usr/bin/db_checkpoint",
@@ -505,7 +546,15 @@
    "status": "partial",
    "note": "provided by Arch package db; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/db_checkpoint"
+    }
+   ],
+   "ready_note": "db package"
   },
   {
    "id": "path:/usr/bin/db_codegen",
@@ -526,7 +575,15 @@
    "status": "partial",
    "note": "provided by Arch package db; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/db_codegen"
+    }
+   ],
+   "ready_note": "db package"
   },
   {
    "id": "path:/usr/bin/db_deadlock",
@@ -547,7 +604,15 @@
    "status": "partial",
    "note": "provided by Arch package db; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/db_deadlock"
+    }
+   ],
+   "ready_note": "db package"
   },
   {
    "id": "path:/usr/bin/db_dump",
@@ -568,7 +633,15 @@
    "status": "partial",
    "note": "provided by Arch package db; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/db_dump"
+    }
+   ],
+   "ready_note": "db package"
   },
   {
    "id": "path:/usr/bin/db_hotbackup",
@@ -589,7 +662,15 @@
    "status": "partial",
    "note": "provided by Arch package db; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/db_hotbackup"
+    }
+   ],
+   "ready_note": "db package"
   },
   {
    "id": "path:/usr/bin/db_load",
@@ -610,7 +691,15 @@
    "status": "partial",
    "note": "provided by Arch package db; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/db_load"
+    }
+   ],
+   "ready_note": "db package"
   },
   {
    "id": "path:/usr/bin/db_printlog",
@@ -631,7 +720,15 @@
    "status": "partial",
    "note": "provided by Arch package db; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/db_printlog"
+    }
+   ],
+   "ready_note": "db package"
   },
   {
    "id": "path:/usr/bin/db_recover",
@@ -652,7 +749,15 @@
    "status": "partial",
    "note": "provided by Arch package db; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/db_recover"
+    }
+   ],
+   "ready_note": "db package"
   },
   {
    "id": "path:/usr/bin/db_stat",
@@ -673,7 +778,15 @@
    "status": "partial",
    "note": "provided by Arch package db; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/db_stat"
+    }
+   ],
+   "ready_note": "db package"
   },
   {
    "id": "path:/usr/bin/db_upgrade",
@@ -694,7 +807,15 @@
    "status": "partial",
    "note": "provided by Arch package db; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/db_upgrade"
+    }
+   ],
+   "ready_note": "db package"
   },
   {
    "id": "path:/usr/bin/db_verify",
@@ -715,7 +836,15 @@
    "status": "partial",
    "note": "provided by Arch package db; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/db_verify"
+    }
+   ],
+   "ready_note": "db package"
   },
   {
    "id": "path:/usr/bin/dbicadmin",
@@ -862,7 +991,21 @@
    "status": "partial",
    "note": "bifrost-cmd defaults tool; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "defaults --help",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "defaults::tests"
+    }
+   ],
+   "ready_note": "bifrost-cmd defaults: preference store; help and parser/store tests"
   },
   {
    "id": "path:/usr/bin/delv",
@@ -883,7 +1026,15 @@
    "status": "partial",
    "note": "provided by Arch package bind; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/delv"
+    }
+   ],
+   "ready_note": "bind package delv"
   },
   {
    "id": "path:/usr/bin/demandoc",
@@ -904,7 +1055,15 @@
    "status": "partial",
    "note": "provided by Arch package mandoc; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/demandoc"
+    }
+   ],
+   "ready_note": "mandoc package"
   },
   {
    "id": "path:/usr/bin/derq",
@@ -1030,7 +1189,15 @@
    "status": "partial",
    "note": "provided by Arch package diffstat; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/diffstat"
+    }
+   ],
+   "ready_note": "diffstat package"
   },
   {
    "id": "path:/usr/bin/dig",
@@ -1051,7 +1218,16 @@
    "status": "partial",
    "note": "provided by Arch package bind; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "dig -v",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "bind package dig"
   },
   {
    "id": "path:/usr/bin/dirname",
@@ -1135,7 +1311,21 @@
    "status": "partial",
    "note": "bifrost-cmd ditto tool (tree copy; zip archives through the zip and unzip packages); not yet built or verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "ditto --help",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "ditto::tests"
+    }
+   ],
+   "ready_note": "bifrost-cmd ditto: tree copy and zip; help and tests"
   },
   {
    "id": "path:/usr/bin/dmc",
@@ -1345,7 +1535,20 @@
    "status": "partial",
    "note": "strace is the Linux system-call tracer, not a dtruss-compatible DTrace script; provided by Arch package strace; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "strace -V",
+     "expect_exit": 0
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/strace"
+    }
+   ],
+   "ready_note": "dtruss traces a program's system calls; strace (Arch package strace, in runtime-packages.txt) does that job on Linux. The output format and DTrace scripting differ."
   },
   {
    "id": "path:/usr/bin/du",
@@ -1408,7 +1611,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: enc2xs installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/core_perl/enc2xs"
+    }
+   ],
+   "ready_note": "perl package enc2xs"
   },
   {
    "id": "path:/usr/bin/encguess",
@@ -1492,7 +1703,15 @@
    "status": "partial",
    "note": "provided by Arch package ruby; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/erb"
+    }
+   ],
+   "ready_note": "ruby package erb"
   },
   {
    "id": "path:/usr/bin/errinfo",
@@ -1597,7 +1816,15 @@
    "status": "partial",
    "note": "provided by Arch package expect; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/expect"
+    }
+   ],
+   "ready_note": "expect package"
   },
   {
    "id": "path:/usr/bin/eyapp",
@@ -1639,7 +1866,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: false installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/false"
+    }
+   ],
+   "ready_note": "coreutils false"
   },
   {
    "id": "path:/usr/bin/fddist",
@@ -1954,7 +2189,15 @@
    "status": "partial",
    "note": "provided by Arch package fping; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/fping"
+    }
+   ],
+   "ready_note": "fping package"
   },
   {
    "id": "path:/usr/bin/fs_usage",
@@ -1996,7 +2239,15 @@
    "status": "partial",
    "note": "provided by Arch package unzip; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/funzip"
+    }
+   ],
+   "ready_note": "unzip package funzip"
   },
   {
    "id": "path:/usr/bin/fuser",
@@ -2962,7 +3213,15 @@
    "status": "partial",
    "note": "provided by Arch package bind; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/ddns-confgen"
+    }
+   ],
+   "ready_note": "bind package ddns-confgen"
   },
   {
    "id": "path:/usr/sbin/dev_mkdb",
@@ -3004,7 +3263,21 @@
    "status": "partial",
    "note": "bifrost-cmd diskutil tool (list, info, mount, unmount, eject); not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "diskutil --help",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "diskutil::tests"
+    }
+   ],
+   "ready_note": "bifrost-cmd diskutil: list, info, mount, unmount, eject; help and plan tests"
   },
   {
    "id": "path:/usr/sbin/distnoted",
@@ -3193,7 +3466,15 @@
    "status": "partial",
    "note": "provided by Arch package quota-tools; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/edquota"
+    }
+   ],
+   "ready_note": "quota-tools edquota"
   },
   {
    "id": "path:/usr/sbin/envvars",
@@ -3256,7 +3537,16 @@
    "status": "partial",
    "note": "Midget 0.7.25: fdisk installed, not run headless (changes machine state)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "fdisk --version",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "util-linux fdisk; --version only"
   },
   {
    "id": "path:/usr/sbin/filecoordinationd",

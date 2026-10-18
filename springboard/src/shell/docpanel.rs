@@ -128,6 +128,9 @@ pub struct Panel {
     /// every chosen row (`selected` is the one with focus); one row unless the panel allows several
     pub marked: BTreeSet<usize>,
     pub opts: Options,
+    /// the package extensions the requesting app declared (`package_types`, without the dot): a folder with one
+    /// of them is a file row, chosen whole and never opened
+    packages: Vec<String>,
     pub places: Vec<Place>,
     /// Recents is shown instead of a folder
     pub in_recents: bool,
@@ -161,6 +164,7 @@ impl Panel {
             selected: None,
             marked: BTreeSet::new(),
             opts: Options::default(),
+            packages: Vec::new(),
             places: Vec::new(),
             in_recents: false,
             recents: Vec::new(),
@@ -195,6 +199,28 @@ impl Panel {
         self.opts = opts;
         self.load(opener);
         self
+    }
+
+    /// The package types the requesting app declared (`package_types`, extensions without the dot). A folder of one of
+    /// those types is a file row: it can be chosen (or replaced by a save) but not navigated.
+    pub fn with_packages(mut self, types: Vec<String>, opener: &Opener) -> Self {
+        self.packages = types;
+        self.load(opener);
+        self
+    }
+
+    /// Whether `name` is a folder of a package type the app declared.
+    fn is_declared_package(&self, name: &str) -> bool {
+        let Some((_, ext)) = name.rsplit_once('.') else { return false };
+        self.packages.iter().any(|p| p.eq_ignore_ascii_case(ext)) && bifrost_ui::uttype::is_package_name(name)
+    }
+
+    /// One row of the listing. A declared package is a file (dimmed only when the panel chooses no files); any other
+    /// folder stays a folder.
+    fn row(&self, name: String, dir: bool, path: Option<PathBuf>) -> Entry {
+        let package = dir && self.is_declared_package(&name);
+        let enabled = if package { self.opts.files } else { dir || (self.opts.files && self.wanted(&name)) };
+        Entry { name, dir: dir && !package, enabled, path }
     }
 
     /// The app's recent documents (paths in the home, newest first) for the Recents place.
@@ -253,7 +279,7 @@ impl Panel {
                     let f = opener.open_any(path, DocMode::Read).ok()?;
                     let dir = f.metadata().ok()?.is_dir();
                     let name = path.file_name()?.to_string_lossy().into_owned();
-                    Some(Entry { enabled: dir || (self.opts.files && self.wanted(&name)), name, dir, path: Some(path.clone()) })
+                    Some(self.row(name, dir, Some(path.clone())))
                 })
                 .collect()
         } else {
@@ -262,7 +288,7 @@ impl Panel {
                 .unwrap_or_default()
                 .into_iter()
                 .filter(|(n, _)| !n.starts_with('.'))
-                .map(|(name, dir)| Entry { enabled: dir || (self.opts.files && self.wanted(&name)), name, dir, path: None })
+                .map(|(name, dir)| self.row(name, dir, None))
                 .collect();
             v.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()).then_with(|| a.name.cmp(&b.name)));
             v
@@ -927,8 +953,9 @@ impl super::Shell {
         if self.doc_panel.is_some() {
             return refuse(self, DocErrorCode::Cancelled);
         }
+        let packages = super::apphost::installed().get(slot as usize).map(|a| a.manifest.package_types.clone()).unwrap_or_default();
         let b = self.doc_broker().unwrap();
-        let mut panel = Panel::new(slot, request, kind, &title, filters, &suggested, &b.opener).with_options(opts, &b.opener).with_recents(b.recents(&app_id), &b.opener);
+        let mut panel = Panel::new(slot, request, kind, &title, filters, &suggested, &b.opener).with_options(opts, &b.opener).with_packages(packages, &b.opener).with_recents(b.recents(&app_id), &b.opener);
         if let Some(last) = b.last_dir.get(&app_id).cloned() {
             panel.go_to(&last, &b.opener);
         }
@@ -1431,6 +1458,36 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn a_package_the_app_declares_is_one_file_row_that_is_chosen_not_opened() {
+        let (d, o) = scratch("pkg");
+        fs::create_dir_all(d.join("home/Documents/Notes.rtfd")).unwrap();
+        fs::write(d.join("home/Documents/Notes.rtfd/TXT.rtf"), "{\\rtf1}").unwrap();
+        let mut p = Panel::new(0, 1, Kind::Open(DocMode::Read), "", vec![], "", &o).with_packages(vec!["rtfd".into()], &o);
+        let i = p.entries.iter().position(|e| e.name == "Notes.rtfd").unwrap();
+        assert!(!p.entries[i].dir && p.entries[i].enabled, "a package is a file to the panel");
+        assert!(p.entries.iter().find(|e| e.name == "Drafts").unwrap().dir, "other folders stay folders");
+        p.select(i);
+        assert!(p.can_confirm());
+        assert_eq!(p.confirm(&o), Some(Outcome::Open("Documents/Notes.rtfd".into())));
+        // a double click chooses it too, instead of going in
+        let l = p.layout();
+        let at = |i: usize| (l.list.x + 10.0, l.list.y + l.row_h * (i as f32 + 0.5));
+        p.click(at(i).0, at(i).1, 0.0, &o);
+        assert_eq!(p.click(at(i).0, at(i).1, 100.0, &o), Some(Outcome::Open("Documents/Notes.rtfd".into())));
+        assert_eq!(p.dir, Path::new("Documents"), "never navigated into");
+        // an app that declares no package types navigates the folder as before
+        let mut plain = Panel::new(0, 1, Kind::Open(DocMode::Read), "", vec![], "", &o);
+        assert!(plain.entries[i].dir);
+        plain.select(i);
+        assert_eq!(plain.confirm(&o), None);
+        assert_eq!(plain.dir, Path::new("Documents/Notes.rtfd"));
+        // a folder-only panel cannot choose a package, which stays dimmed
+        let dirs = Panel::new(0, 1, Kind::Open(DocMode::Read), "", vec![], "", &o).with_options(Options { files: false, dirs: true, ..Options::default() }, &o).with_packages(vec!["rtfd".into()], &o);
+        assert!(!dirs.entries.iter().find(|e| e.name == "Notes.rtfd").unwrap().enabled);
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
     fn new_folder_takes_a_name_and_selects_the_folder() {
         let (d, o) = scratch("newdir");
         let plain = open_panel(&o, Options::default(), vec![]);
@@ -1503,5 +1560,35 @@ pub(crate) mod tests {
         assert!(matches!(single[..], [(ToApp::DocGranted { request: 8, .. }, Some(_))]));
         assert_eq!(b.recents("app.a")[0], Path::new("Documents/b.txt"));
         fs::remove_dir_all(&d).unwrap();
+    }
+}
+
+impl super::Shell {
+    /// Image > Edit With: opens the photo at `path` in the app `key` with a write grant, so the app saves the original
+    /// file in place. Photos picks the change up on its next scan. False when the app or the file cannot be opened.
+    #[cfg(feature = "desktop-wayland")]
+    pub(super) fn photo_edit_with(&mut self, key: &str, path: &Path, t: f64) -> bool {
+        use super::apps::{apps, AppId};
+        let Some(def) = apps().iter().find(|a| a.icon == key).map(|a| a.id) else { return false };
+        let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+        let Some(broker) = self.doc_broker() else { return false };
+        // grants name files relative to the account's home
+        let Ok(rel) = path.strip_prefix(broker.opener.home()).map(Path::to_path_buf) else { return false };
+        let Ok(file) = broker.opener.open_any(&rel, DocMode::Write) else { return false };
+        let size = file.metadata().map_or(0, |m| m.len());
+        let Ok(grant) = broker.grants.add(key, &rel, DocMode::Write, &file) else { return false };
+        self.desk_open_or_start(def, t);
+        if let AppId::External(slot) = def {
+            let request = self.app_share.next_inbound();
+            self.doc_send(slot, ToApp::DocGranted { request, grant, mode: DocMode::Write, name, size }, Some(file));
+        }
+        true
+    }
+
+    /// Image > Edit With for the photo open in the viewer.
+    #[cfg(feature = "desktop-wayland")]
+    pub(super) fn photo_edit_with_viewed(&mut self, key: &str, t: f64) {
+        let Some(path) = self.photos.as_ref().and_then(|p| p.viewing()).map(|p| p.path.clone()) else { return };
+        self.photo_edit_with(key, &path, t);
     }
 }

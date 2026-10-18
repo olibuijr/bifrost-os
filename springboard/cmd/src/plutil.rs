@@ -1,19 +1,21 @@
 //! `plutil`: checks, prints, converts and edits property lists. Logic lives here; the binary reads the files and writes
 //! the results (see `bifrost_core::plist` for the value model and the text forms).
 //!
-//! Supported: `-lint` (the default), `-p`, `-convert xml1|json`, `-insert`, `-replace`, `-remove`, `-extract` (to `xml1`,
-//! `json` or `raw`), `-type`, `-create xml1|json`, with `-s`, `-r`, `-n`, `-o path`, `-e ext`, `-expect type`, `-append`,
-//! `--`, and `-` for standard input. Edits and conversions write XML text; `binary1` input and output, and the `swift`
-//! and `objc` forms, are refused with a message rather than written wrong.
+//! Supported: `-lint` (the default), `-p`, `-convert xml1|binary1|json`, `-insert`, `-replace`, `-remove`, `-extract` (to
+//! `xml1`, `binary1`, `json` or `raw`), `-type`, `-create xml1|binary1|json`, with `-s`, `-r`, `-n`, `-o path`, `-e ext`, `-expect type`, `-append`,
+//! `--`, and `-` for standard input. Edits write XML text; `-convert binary1` and `-create binary1` write `bplist00`
+//! (see `bifrost_core::plist_binary::write`). The `swift` and `objc` forms are refused with a message rather than
+//! written wrong.
 
 use bifrost_core::plist::{self, Plist};
+use bifrost_core::plist_binary;
 use std::fmt::Write as _;
 
 pub const USAGE: &str = "usage: plutil [command_option] [other_options] file ...\n\
   commands: -help | -lint | -p | -convert fmt | -insert keypath -type [value] [-append] | -replace keypath -type value\n\
             -remove keypath | -extract keypath fmt [-expect type] | -type keypath [-expect type] | -create fmt\n\
   options:  -s (silent on success) -r (readable JSON) -n (raw without newline) -o path -e extension -- (end of options)\n\
-  formats:  xml1 binary1 json raw swift objc      types: -bool -integer -float -string -date -data -xml -json -array -dictionary";
+  formats:  xml1 binary1 json raw (swift and objc are refused)      types: -bool -integer -float -string -date -data -xml -json -array -dictionary";
 
 /// The output formats the tool names.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -261,7 +263,7 @@ fn render(p: &Plist, format: Format, pretty: bool) -> Result<Vec<u8>, String> {
     match format {
         Format::Xml1 => Ok(plist::to_xml(p).into_bytes()),
         Format::Json => Ok(plist::to_json(p, pretty)?.into_bytes()),
-        Format::Binary1 => Err("the binary1 format is not written yet".into()),
+        Format::Binary1 => plist_binary::write(p).map_err(|e| format!("binary1: {e}")),
         Format::Raw => Err("the raw format is only for -extract".into()),
         Format::Swift | Format::Objc => Err("the swift and objc formats are not supported yet".into()),
     }
@@ -429,7 +431,10 @@ mod tests {
         assert!(t.contains("AppName => Notes;"), "{t}");
         let Ok(Produced::Bytes(json)) = process(&opts(Command::Convert(Format::Json)), &input) else { panic!("json") };
         assert!(String::from_utf8(json).unwrap().starts_with("{\"AppName\":\"Notes\""));
-        assert!(process(&opts(Command::Convert(Format::Binary1)), &input).is_err());
+        // binary1 is written as bplist00 and reads back to the same value
+        let Ok(Produced::Bytes(bin)) = process(&opts(Command::Convert(Format::Binary1)), &input) else { panic!("binary1") };
+        assert!(bin.starts_with(b"bplist00"));
+        assert_eq!(plist::parse_bytes(&bin), plist::parse_bytes(&input));
         assert!(process(&opts(Command::Convert(Format::Swift)), &input).is_err());
     }
 

@@ -158,6 +158,31 @@ impl Shell {
         };
     }
 
+    /// A tap that ends on a lock-card control: transport, a feedback toggle (sent to the owner, which decides), or the
+    /// rating at `x` on the rating track.
+    fn svc_lock_action(&mut self, target: nowplaying::Target, card: &LockCard, x: f32) {
+        use crate::shell::services::now_playing;
+        let feedback = now_playing::feedback();
+        match target {
+            nowplaying::Target::Like | nowplaying::Target::Dislike | nowplaying::Target::Bookmark => {
+                let slot: usize = match target {
+                    nowplaying::Target::Like => 0,
+                    nowplaying::Target::Dislike => 1,
+                    _ => 2,
+                };
+                let active = feedback.is_some_and(|f| f.toggles[slot]);
+                now_playing::set_toggle(slot, !active);
+            }
+            nowplaying::Target::Rating => {
+                if let Some(scale) = feedback.and_then(|f| f.rating) {
+                    let value = scale.min + f64::from(Layout::fraction(card.rating, x)) * (scale.max - scale.min);
+                    now_playing::set_rating(value);
+                }
+            }
+            other => self.svc_transport(other),
+        }
+    }
+
     /// A touch on the lock-screen card showing the service's track.
     pub(super) fn svc_lock_touch(&mut self, ev: Event) -> Option<Vec<Effect>> {
         let card = LockCard::new(&self.ui, self.w);
@@ -190,7 +215,7 @@ impl Shell {
                 } else {
                     let pressed = self.svc_touch.pressed.take()?;
                     if card.hit(x, y) == Some(pressed) {
-                        self.svc_transport(pressed);
+                        self.svc_lock_action(pressed, &card, x);
                     }
                 }
                 vec![]

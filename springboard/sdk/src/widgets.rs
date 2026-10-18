@@ -457,6 +457,8 @@ pub fn toolbar_layout(ui: &Ui, bounds: Rect, bar: &Toolbar) -> ToolbarLayout {
 /// their own capsule. `Custom` slots are only laid out; the app draws them at the returned rectangles. Buttons that
 /// do not fit move behind a `»` button. The band behind the bar is `toolbar_band`. `pressed` is the id being pressed.
 pub fn toolbar(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, bar: &Toolbar, pressed: Option<u32>) -> ToolbarLayout {
+    // the buttons are the bar's children in the accessibility tree (`ax::begin_group`)
+    bifrost_ui::ax::begin_group(bifrost_ui::Role::List, "Toolbar", bounds);
     let placed = toolbar_layout(ui, bounds, bar);
     for (_, r) in &placed.groups {
         capsule(s, ui, *r);
@@ -501,6 +503,7 @@ pub fn toolbar(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, bar: &Toolbar, pressed
         let img = ui.text("\u{bb}", MAC_BODY_PT, Weight::Regular, LABEL.now());
         blit(s, &img, (ui.pt(r.x + r.w / 2.0) as i32) - img.w as i32 / 2, (ui.pt(r.y + r.h / 2.0) as i32) - img.h as i32 / 2);
     }
+    bifrost_ui::ax::end_group();
     placed
 }
 
@@ -1060,6 +1063,57 @@ pub fn popover(s: &mut dyn Canvas, ui: &Ui, anchor: Rect, size: (f32, f32), boun
     r
 }
 
+/// Inner padding of the translation popover's content, in points.
+const TRANSLATION_PAD_PT: f32 = 12.0;
+
+/// The system translation popover (`translationPresentation`): the panel of a [`crate::translation_popover::TranslationPresenter`]
+/// next to `anchor` inside `bounds`. The panel shows the language pair in footnote size, then the translation, or
+/// "Translating" while the engine runs, or the reason a translation could not run. A long translation wraps and ends in
+/// an ellipsis when the panel is full. Returns the panel's content rectangle, or `None` when the popover is hidden.
+/// The app writes the translation into its document itself (`TranslationPresenter::replacement`) and dismisses the
+/// popover on a click outside the returned rectangle.
+pub fn translation_popover(s: &mut dyn Canvas, ui: &Ui, presenter: &crate::translation_popover::TranslationPresenter, anchor: Rect, bounds: Rect) -> Option<Rect> {
+    use crate::translation_popover::{Phase, TRANSLATION_POPOVER_SIZE_PT};
+    let pop = presenter.popover();
+    if !pop.is_presented() {
+        return None;
+    }
+    let r = popover(s, ui, anchor, TRANSLATION_POPOVER_SIZE_PT, bounds, presenter.preferred_edge());
+    let pad = TRANSLATION_PAD_PT;
+    let x = ui.pt(r.x + pad) as i32;
+    let mut y = r.y + pad;
+    if let Some((source, target)) = pop.languages() {
+        let head = format!("{} to {}", source, target);
+        let img = ui.text(&head, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now());
+        blit(s, &img, x, ui.pt(y) as i32);
+        y += MAC_FOOTNOTE_PT * 1.6;
+    }
+    let (body, color) = match pop.phase() {
+        Phase::Hidden => return Some(r),
+        Phase::Translating => ("Translating".to_string(), LABEL_2.now()),
+        Phase::Shown(text) => (text.clone(), LABEL.now()),
+        Phase::Failed(e) => (e.error_description().to_string(), LABEL_2.now()),
+    };
+    let line_h = MAC_BODY_PT * 1.3;
+    let room = (r.bottom() - pad - y).max(line_h);
+    let max_lines = ((room / line_h).floor() as usize).max(1);
+    let width_px = ui.pt(r.w - 2.0 * pad);
+    let mut lines = ui.wrap(&body, MAC_BODY_PT, Weight::Regular, width_px);
+    if lines.len() > max_lines {
+        lines.truncate(max_lines);
+        if let Some(last) = lines.last_mut() {
+            let with_dots = format!("{}\u{2026}", last.trim_end());
+            *last = ui.fit(&with_dots, MAC_BODY_PT, width_px);
+        }
+    }
+    for line in &lines {
+        let img = ui.text(line, MAC_BODY_PT, Weight::Regular, color);
+        blit(s, &img, x, ui.pt(y) as i32);
+        y += line_h;
+    }
+    Some(r)
+}
+
 /// Draws the keyboard focus ring around a control of `bounds` and corner `radius` (points): 3 pt of accent at
 /// 45% strength outside the control (`bifrost_ui::sheet::focus_ring_rect`).
 pub fn focus_ring(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, radius: f32) {
@@ -1091,7 +1145,8 @@ fn sheet_button(s: &mut dyn Canvas, ui: &Ui, r: Rect, b: &bifrost_ui::sheet::She
 pub fn sheet(s: &mut dyn Canvas, ui: &Ui, parent: Rect, titlebar_h: f32, sheet: &bifrost_ui::sheet::Sheet, progress: f32, pressed: Option<u32>) -> Rect {
     use bifrost_ui::sheet::SHEET_PAD_PT;
     let l = sheet.layout(parent, titlebar_h, progress);
-    bifrost_ui::ax::record(bifrost_ui::Role::Window, &sheet.title, "sheet", l.panel, true);
+    // the sheet is a window whose buttons are its children in the accessibility tree (closed on every return below)
+    bifrost_ui::ax::begin_group(bifrost_ui::Role::Window, &sheet.title, l.panel);
     let dim = (0.28 * progress.clamp(0.0, 1.0) * 255.0) as u8;
     s.fill_rrect(RectF::new(ui.pt(parent.x), ui.pt(parent.y), ui.pt(parent.w), ui.pt(parent.h)), ui.pt(m::WINDOW_RADIUS), crate::kit::pack(0, 0, 0, dim));
     // the top edge is square against the title bar: extend the rounded panel upward and keep it inside the parent
@@ -1099,6 +1154,7 @@ pub fn sheet(s: &mut dyn Canvas, ui: &Ui, parent: Rect, titlebar_h: f32, sheet: 
     let top = (l.panel.y - r).max(parent.y);
     let body = Rect { x: l.panel.x, y: top, w: l.panel.w, h: l.panel.bottom() - top };
     if body.h <= r {
+        bifrost_ui::ax::end_group();
         return l.panel;
     }
     material(s, ui, body, r, Material::Popover);
@@ -1122,6 +1178,7 @@ pub fn sheet(s: &mut dyn Canvas, ui: &Ui, parent: Rect, titlebar_h: f32, sheet: 
         sheet_button(s, ui, *rect, b, pressed == Some(*id));
     }
     let btn_top = l.buttons.first().map(|(_, r)| r.y).unwrap_or(l.panel.bottom() - SHEET_PAD_PT);
+    bifrost_ui::ax::end_group();
     Rect { x: l.panel.x + SHEET_PAD_PT, y, w: l.panel.w - SHEET_PAD_PT * 2.0, h: (btn_top - 12.0 - y).max(0.0) }
 }
 
@@ -1567,6 +1624,37 @@ mod tests {
         assert!(r.y > anchor.bottom(), "no room above, so it opens below: {r:?}");
         assert_eq!((r.w, r.h), (200.0, 120.0));
         assert!(px[(r.y as usize - 4) * w + 200] != 0, "the arrow points up at the anchor");
+    }
+
+    #[test]
+    fn the_translation_popover_draws_nothing_when_hidden_and_a_panel_with_text_once_presented() {
+        use crate::translation::{TranslationError, Translator};
+        use crate::translation_popover::{TranslationPresenter, TRANSLATION_POPOVER_SIZE_PT};
+        use bifrost_ui::translation::LanguageAvailability;
+        struct Shout;
+        impl Translator for Shout {
+            fn translate(&self, _: &str, _: &str, text: &str) -> Result<String, TranslationError> {
+                Ok(text.to_uppercase())
+            }
+        }
+        let ui = test_ui();
+        let (w, h) = (400usize, 300usize);
+        let bounds = Rect { x: 0.0, y: 0.0, w: 400.0, h: 300.0 };
+        let anchor = Rect { x: 180.0, y: 10.0, w: 40.0, h: 20.0 };
+        let mut presenter = TranslationPresenter::new();
+        let mut hidden = vec![0u32; w * h];
+        assert_eq!(translation_popover(&mut Surface { w, h, stride: w, px: &mut hidden, y0: 0 }, &ui, &presenter, anchor, bounds), None);
+        assert!(hidden.iter().all(|&p| p == 0));
+
+        let mut availability = LanguageAvailability::new(&["en", "is"]);
+        availability.install("en", "is");
+        presenter.present("good morning", "en", "is", bifrost_ui::translation_popover::ArrowEdge::Bottom, &availability, &Shout).unwrap();
+        let mut shown = vec![0u32; w * h];
+        let r = translation_popover(&mut Surface { w, h, stride: w, px: &mut shown, y0: 0 }, &ui, &presenter, anchor, bounds).unwrap();
+        assert_eq!((r.w, r.h), TRANSLATION_POPOVER_SIZE_PT);
+        assert!(r.y > anchor.bottom(), "no room above, so it opens below: {r:?}");
+        let inside = |p: &[u32]| (r.y as usize..(r.y + r.h) as usize).any(|row| (r.x as usize..(r.x + r.w) as usize).any(|col| p[row * w + col] != 0));
+        assert!(inside(&shown), "the panel and its text are drawn");
     }
 
     #[test]

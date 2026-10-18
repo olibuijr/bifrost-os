@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased
+
+- Controls > Crossfade Songs: one song fades into the next over 2 to 12 seconds (off by default). The choice is kept in
+  `playback.txt` of the library store and sent to the audio service when the store opens.
+
+## 1.13.0 — 2026-10-17
+
+- Window > MiniPlayer (Option+Cmd+M) opens a small extra window with the artwork, title and artist, the transport, a
+  scrubber and the volume. Closing it returns to the main window. Window > Keep MiniPlayer on Top floats it. The window
+  is `music/miniplayer.rs`, drawn and routed from `app.rs` through the SDK's extra windows.
+- The ReplayGain track tag is read from ID3 `TXXX` and MP4 `----` freeform items (`media/id3.rs`, `media/ilst.rs`) and
+  maps to a Sound Check loudness. The engine does not use it yet.
+- Crossfade and Sound Check are still not heard: no Settings page sets them and the audio service has one decoder and no
+  gain stage per track.
+
+## 1.12.0 — 2026-10-17
+
+- Get Info writes an edited title, artist or album into the song's file through the shared tag writer (MP3 and ADTS
+  ID3v2.4, M4A `ilst`), with the atomic temp-and-rename write. The other tags are kept. Files with chapters, and
+  formats the writer does not take (FLAC, WAV), keep the edit in the sidecar only. Blank values clear the tag.
+  An MP3 rewrite writes the fields the tag model holds (title, artist, album, album artist, track, year, lyrics,
+  cover) and keeps every other ID3 frame unchanged; a tag that cannot be copied safely (ID3v2.2, compressed frames) is not
+  rewritten.
+
+## 1.11.0 — 2026-10-17
+
+- Lyrics fall back to the lyrics tagged in the file (ID3 USLT) when there is no `.lrc` file beside the song. The tag is read by
+  `springboard/src/media/id3.rs`, and `Lyrics::load` in `music/lyrics.rs` tries the sidecar first, then the tag.
+- Lyrics tests cover plain and timed embedded text, and the USLT frame tests cover the language and descriptor skip in
+  ID3 v2.3 and v2.4.
+
 ## 1.10.1 — 2026-10-14
 
 - Use the shared spacing token for the artwork badge inset.

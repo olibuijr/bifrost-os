@@ -82,6 +82,22 @@ pub struct Tags {
     pub year: Option<u32>,
     /// the cover picture, still encoded (JPEG or PNG)
     pub cover: Option<Vec<u8>>,
+    /// the unsynchronised lyrics text as tagged (ID3 USLT), when the file carries it
+    pub lyrics: Option<String>,
+    /// the chapters in play order (ID3 CHAP frames, an MP4 chapter list or chapter track); empty when there are none
+    pub chapters: Vec<super::chapters::Chapter>,
+    /// the track gain of the file's ReplayGain tag (`REPLAYGAIN_TRACK_GAIN`), in dB
+    pub replaygain_db: Option<f32>,
+}
+
+/// The gain a ReplayGain tag states, in dB: `-6.54 dB` or `-6.54`. `None` when the text is not a finite number.
+pub fn parse_replaygain_db(text: &str) -> Option<f32> {
+    let t = text.trim();
+    let t = match t.len().checked_sub(2).and_then(|i| t.get(i..)) {
+        Some(end) if end.eq_ignore_ascii_case("db") => &t[..t.len() - 2],
+        _ => t,
+    };
+    t.trim().parse::<f32>().ok().filter(|v| v.is_finite())
 }
 
 /// A decoded audio stream: interleaved S16 at its own rate and channel
@@ -141,6 +157,47 @@ pub fn read_tags(path: &Path) -> Result<Tags, Error> {
         Format::M4a => ilst::read(&mut FileSource::open(path)?),
         kind @ (Format::Flac | Format::Ogg | Format::Wav) => symfile::read_tags(kind, path),
     }
+}
+
+/// Writes `tags` into the file at `path`: an ID3v2.4 tag for MP3 and ADTS, the `ilst` for M4A. The audio bytes are kept.
+/// The file is replaced atomically: the new bytes go to a temporary file beside it, which is renamed over the original,
+/// so a crash leaves either the old file or the new one. Other formats are refused.
+pub fn write_tags(path: &Path, tags: &Tags) -> Result<(), Error> {
+    let bytes = std::fs::read(path)?;
+    let out = match detect(path)? {
+        Format::Mp3 | Format::Adts => id3::replace_tag(&bytes, tags)
+            .ok_or(Error::Invalid("the file's tag cannot be rewritten without losing frames (ID3v2.2 or compressed frames)"))?,
+        Format::M4a => ilst::rewrite(&bytes, tags)?,
+        _ => return Err(Error::Invalid("tags are written to MP3 and M4A files only")),
+    };
+    replace_file(path, &out)
+}
+
+/// Replaces the file at `path` with `bytes` through a temporary file in the same directory.
+fn replace_file(path: &Path, bytes: &[u8]) -> Result<(), Error> {
+    use std::io::Write;
+    let dir = match path.parent() {
+        Some(p) if !p.as_os_str().is_empty() => p,
+        _ => Path::new("."),
+    };
+    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let tmp = dir.join(format!(".{name}.tags-tmp"));
+    let perms = std::fs::metadata(path)?.permissions();
+    let written = (|| -> std::io::Result<()> {
+        let mut f = std::fs::File::create(&tmp)?;
+        f.write_all(bytes)?;
+        f.sync_all()?;
+        std::fs::set_permissions(&tmp, perms)?;
+        std::fs::rename(&tmp, path)
+    })();
+    if let Err(e) = written {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e.into());
+    }
+    if let Ok(d) = std::fs::File::open(dir) {
+        let _ = d.sync_all();
+    }
+    Ok(())
 }
 
 /// The first `n` bytes of the file (fewer at a short file).
@@ -348,6 +405,36 @@ pub(crate) mod tests {
         assert_eq!((d.rate(), d.channels()), (44100, 2));
         assert!(d.duration_ms().is_some());
         assert!(drain(&mut *d).len() / 2 > 44100);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn write_tags_keeps_the_audio_and_reads_back() {
+        let dir = std::env::temp_dir().join(format!("bifrost-tags-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        for name in ["tone_id3v24.mp3", "tone.m4a"] {
+            let path = dir.join(name);
+            std::fs::copy(fixture(name), &path).unwrap();
+            let before = {
+                let mut d = open(&path).unwrap();
+                let mut first = Vec::new();
+                assert!(d.next(&mut first).unwrap());
+                first
+            };
+            let mut tags = read_tags(&path).unwrap();
+            tags.title = Some("A much longer title written by the tag writer".into());
+            tags.track = Some(9);
+            write_tags(&path, &tags).unwrap();
+            let back = read_tags(&path).unwrap();
+            assert_eq!(back.title, tags.title, "{name}");
+            assert_eq!(back.track, Some(9), "{name}");
+            assert!(!dir.join(format!(".{name}.tags-tmp")).exists(), "the temporary file is renamed away");
+            // the first decoded packet is unchanged, so the audio and (for M4A) the chunk offsets still line up
+            let mut d = open(&path).unwrap();
+            let mut after = Vec::new();
+            assert!(d.next(&mut after).unwrap());
+            assert_eq!(after, before, "{name}");
+        }
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

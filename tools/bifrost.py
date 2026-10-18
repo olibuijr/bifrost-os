@@ -6,9 +6,11 @@
   bifrost pc audio-bench [host|midget|compare] [--append]        audio latency benches (docs/audio-latency.md)
   bifrost pc names | browser-smoke                                name guard; Browser smoke on Midget via the MCP
   bifrost pc smoke|adoption|gallery                              host app previews and Golden Gate SDK adoption (docs/golden-gate-sdk-adoption.md)
-  bifrost pc parity status|coverage|show|gaps|check|build|...     reference SDK vs BifrOSt parity matrix (docs/parity-matrix/)
+  bifrost pc parity status|coverage|show|gaps|check|build|apps|search|...   reference SDK vs BifrOSt parity matrix (docs/parity-matrix/)
+      subcommands: os-status, import, db-export, refresh-index, related, themes, apply, verify os-cli|plan|run|closures
       --platform macos|ipados  (status, coverage, show, gaps, check, refresh-index; default macos; ipados is the tablet
       platform, docs/parity-matrix/ipados/, e.g. `bifrost pc parity check --platform ipados`)
+  bifrost pc parity os-verify plan|run|promote                    run the OS rows' checks (ready rows), promote the passing ones (tools/parity/os_verify.py)
   bifrost pc os-inventory [--index TSV]                           OS layer of the matrix from the reference OS 27 file index (parity os-status)
   bifrost pc ref extract REGEX... [--out DIR] | ref index         stream files out of the LZRAVEN reference OS 27 reference (clean-room reading)
   bifrost pc shot|tap|rtap|swipe|key|type|wait-change            computer use on the headed x86 VM
@@ -138,7 +140,8 @@ def cmd_pc(a):
         # host preview of real app binaries: smoke APP... [--light] [--sizes WxH,...] [--scale PX_PER_PT] [--out DIR]
         sys.exit(subprocess.run([sys.executable, os.path.join(here, "pc-app-smoke.py")] + rest).returncode)
     if op == "parity":
-        # reference SDK vs BifrOSt parity matrix: status|coverage|show|gaps|check|build|import|db-export|refresh-index
+        # reference SDK vs BifrOSt parity matrix: status|os-status|coverage|show|gaps|check|build|apps|import|db-export|refresh-index
+        #   |search|related|themes|apply|verify|os-verify (the full list is in the docstring of tools/parity/parity.py)
         # --platform macos|ipados selects the reference platform for status, coverage, show, gaps, check and refresh-index
         sys.exit(subprocess.run([sys.executable, os.path.join(here, "parity", "parity.py")] + rest).returncode)
     if op == "os-inventory":
@@ -207,7 +210,7 @@ def cmd_pc(a):
         sys.exit(subprocess.run([os.path.join(here, "vm-install.sh"), op] + rest).returncode)
     if op in ("shot", "tap", "rtap", "swipe", "key", "type", "wait-change"):
         sys.exit(subprocess.run(qmp + [op] + rest).returncode)
-    sys.exit("usage: bifrost pc log show|stream|config|subsystems [ARGS] | control list|info APP|methods APP|call APP METHOD [JSON]  (running PC apps over their control sockets) | app build|publish|info APP [--skip-build] | browser-engine VERSION | acceptance [--quick] [--midget] [--bless] | smoke APP... [--light] [--sizes WxH,...] [--scale N] | adoption [--json] | gallery [OUT_DIR] | parity status|coverage|show|gaps|check|build [--platform macos|ipados] | publish [--skip-build] | upstream [--dry-run] [--app NAME] | cycle [--loop N] [--headless] | midget status|state|ota|bios|kbench LABEL|kab|amt-info|amt-activate|power state|on|off|cycle|reset|wake|reboot [--netboot|--disk]|poweroff|bootnext|efi|hw|screen|logs|amt|ssh|appearance light|dark|auto|wallpaper ID|open-app ID|lock|tap-window APP X Y | install | boot | ssh CMD | shot OUT.png | tap X Y | rtap X Y | swipe X0 Y0 X1 Y1 [MS] | key K | type TEXT | wait-change [MS]  (guest pixels, 1280x720)")
+    sys.exit("usage: bifrost pc log show|stream|config|subsystems [ARGS] | control list|info APP|methods APP|call APP METHOD [JSON]  (running PC apps over their control sockets) | app build|publish|info APP [--skip-build] | browser-engine VERSION | acceptance [--quick] [--midget] [--bless] | smoke APP... [--light] [--sizes WxH,...] [--scale N] | adoption [--json] | gallery [OUT_DIR] | parity status|coverage|show|gaps|check|build|apps|os-verify|... [--platform macos|ipados] | publish [--skip-build] | upstream [--dry-run] [--app NAME] | cycle [--loop N] [--headless] | midget status|state|ota|bios|kbench LABEL|kab|amt-info|amt-activate|power state|on|off|cycle|reset|wake|reboot [--netboot|--disk]|poweroff|bootnext|efi|hw|screen|logs|amt|ssh|appearance light|dark|auto|wallpaper ID|open-app ID|lock|tap-window APP X Y | install | boot | ssh CMD | shot OUT.png | tap X Y | rtap X Y | swipe X0 Y0 X1 Y1 [MS] | key K | type TEXT | wait-change [MS]  (guest pixels, 1280x720)")
 
 
 def main():

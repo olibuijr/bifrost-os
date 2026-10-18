@@ -119,6 +119,73 @@ impl UsageDescriptions {
     }
 }
 
+/// Grid of the approximate location, in degrees of latitude (0.027 is about 3 km). An app without the Precise
+/// Location switch gets its coordinates moved to the centre of this grid cell.
+pub const APPROXIMATE_GRID_DEG: f64 = 0.027;
+/// The accuracy an approximate fix reports, in metres: about half a grid cell, never finer than the grid.
+pub const APPROXIMATE_ACCURACY: f64 = 3_000.0;
+
+/// Rounds a coordinate pair to the centre of its approximate grid cell. Latitude stays within -90...90 and longitude
+/// within -180...180, so a point near the edge keeps a valid position.
+pub fn approximate(latitude: f64, longitude: f64) -> (f64, f64) {
+    let snap = |v: f64| (v / APPROXIMATE_GRID_DEG).round() * APPROXIMATE_GRID_DEG;
+    (snap(latitude).clamp(-90.0, 90.0), snap(longitude).clamp(-180.0, 180.0))
+}
+
+/// The accuracy an app gets for a fix: Precise Location keeps the fix; approximate uses the grid.
+pub fn accuracy_for(precise: bool) -> AccuracyAuthorization {
+    if precise {
+        AccuracyAuthorization::FullAccuracy
+    } else {
+        AccuracyAuthorization::ReducedAccuracy
+    }
+}
+
+/// The purpose text a request must show: the app's own text for the level, or `Missing`. A request with no purpose
+/// string is refused, so the person is never asked without a reason.
+pub fn request_purpose(texts: &UsageDescriptions, level: Level) -> Result<&str, UsageError> {
+    texts.for_level(level)
+}
+
+#[cfg(test)]
+mod privacy_rule_tests {
+    use super::*;
+
+    #[test]
+    fn approximate_moves_a_point_at_most_half_a_cell_and_about_3_km() {
+        let (lat, lon) = (65.68, -18.10);
+        let (a, b) = approximate(lat, lon);
+        assert!((a - lat).abs() <= APPROXIMATE_GRID_DEG / 2.0 + 1e-9);
+        assert!((b - lon).abs() <= APPROXIMATE_GRID_DEG / 2.0 + 1e-9);
+        let km = ((a - lat).powi(2) + (b - lon).powi(2)).sqrt() * 111.0;
+        assert!(km <= 3.0, "{km}");
+    }
+
+    #[test]
+    fn approximate_is_idempotent_and_stays_in_range() {
+        let once = approximate(64.14, -21.94);
+        assert_eq!(approximate(once.0, once.1), once);
+        assert!(approximate(90.0, 180.0).0 <= 90.0);
+        let (lat, lon) = approximate(89.999, -179.999);
+        assert!((-90.0..=90.0).contains(&lat) && (-180.0..=180.0).contains(&lon));
+    }
+
+    #[test]
+    fn approximate_access_is_the_default_and_precise_is_the_switch() {
+        assert_eq!(accuracy_for(false), AccuracyAuthorization::ReducedAccuracy);
+        assert_eq!(accuracy_for(true), AccuracyAuthorization::FullAccuracy);
+        assert!(APPROXIMATE_ACCURACY >= APPROXIMATE_GRID_DEG * 111_000.0 / 2.0);
+    }
+
+    #[test]
+    fn a_request_without_a_purpose_string_is_refused() {
+        let blank = UsageDescriptions::new("   ", "");
+        assert_eq!(request_purpose(&blank, Level::WhenInUse), Err(UsageError::Missing(Level::WhenInUse)));
+        let text = UsageDescriptions::new(" Finna næstu stöð ", "");
+        assert_eq!(request_purpose(&text, Level::WhenInUse), Ok("Finna næstu stöð"));
+    }
+}
+
 /// The error cases of the location service, in the order the official reference lists them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum LocationError {

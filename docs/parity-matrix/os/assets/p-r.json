@@ -19,8 +19,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -40,8 +40,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -61,8 +61,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -82,8 +82,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -103,8 +103,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -124,8 +124,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -145,8 +145,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -166,8 +166,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -187,8 +187,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -211,7 +211,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/springboard/assets/wallpapers/index.ini"
+    }
+   ],
+   "ready_note": "BifrOSt ships its own desktop picture set (wallpapers/index.ini and wallpaper.raw). This picture is not one of them."
   },
   {
    "id": "path:/System/Library/Fonts/Palatino.ttc",
@@ -232,7 +240,20 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/gsfonts/P052-Roman.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute P052 (gsfonts, AGPL-3.0 with font exception) for the same role; metric-compatible."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/PTMono.ttc",
@@ -253,7 +274,20 @@
    "status": "partial",
    "note": "open equivalent DejaVu Sans Mono (ttf-dejavu), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/DejaVuSansMono.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute DejaVu Sans Mono (ttf-dejavu, Bitstream Vera and public domain) for the same role; closest packaged mono; glyph design differs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/PTSans.ttc",
@@ -272,9 +306,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "PTSans resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSans-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Sans (noto-fonts, OFL-1.1) for the same role; closest packaged face; glyph design differs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/PTSerif.ttc",
@@ -293,9 +340,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "PTSerif resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerif-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Serif (noto-fonts, OFL-1.1) for the same role; closest packaged face; glyph design differs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/PTSerifCaption.ttc",
@@ -314,9 +374,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "PTSerifCaption resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerif-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Serif (noto-fonts, OFL-1.1) for the same role; closest packaged face; glyph design differs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Papyrus.ttc",
@@ -335,9 +408,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Papyrus resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSans-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Sans (noto-fonts, OFL-1.1) for the same role; closest packaged face; glyph design differs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/PartyLET-plain.ttf",
@@ -356,9 +442,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "PartyLET-plain resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSans-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Sans (noto-fonts, OFL-1.1) for the same role; closest packaged face; glyph design differs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Phosphate.ttc",
@@ -377,9 +476,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Phosphate resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSans-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Sans (noto-fonts, OFL-1.1) for the same role; closest packaged face; glyph design differs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/PlantagenetCherokee.ttf",
@@ -396,11 +508,19 @@
    "description": "",
    "role": "Script/language coverage font: PlantagenetCherokee",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansCherokee-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansCherokee-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Raanana.ttc",
@@ -417,11 +537,19 @@
    "description": "",
    "role": "Script/language coverage font: Raanana",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansHebrew-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansHebrew-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Rockwell.ttc",
@@ -440,9 +568,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Rockwell resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerif-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Serif (noto-fonts, OFL-1.1) for the same role; closest packaged face; glyph design differs."
   },
   {
    "id": "path:/System/Library/Frameworks/MapKit.framework/Versions/A/Resources/pcf.otf",
@@ -461,9 +602,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Noto Sans Symbols 2 (noto-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansSymbols2-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Sans Symbols 2 (noto-fonts, OFL-1.1) for the same role (a private icon and symbol face); design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeDown-bottom.pdf",
@@ -484,7 +638,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeDown), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art"
+    }
+   ],
+   "ready_note": "Code-drawn ResizeDown shape with both layers in bifrost-ui cursor_art. Not the original PDF art."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeDown-top.pdf",
@@ -505,7 +668,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeDown), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art"
+    }
+   ],
+   "ready_note": "Code-drawn ResizeDown shape with both layers in bifrost-ui cursor_art. Not the original PDF art."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeEast-bottom.pdf",
@@ -526,7 +698,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeRight), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeRight is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeEast-top.pdf",
@@ -547,7 +728,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeRight), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeRight is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeEastWest-bottom.pdf",
@@ -568,7 +758,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeLeftRight), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeLeftRight is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeEastWest-top.pdf",
@@ -589,7 +788,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeLeftRight), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeLeftRight is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeLeft-bottom.pdf",
@@ -610,7 +818,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeLeft), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art"
+    }
+   ],
+   "ready_note": "Code-drawn ResizeLeft shape with both layers in bifrost-ui cursor_art. Not the original PDF art."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeLeft-top.pdf",
@@ -631,7 +848,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeLeft), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art"
+    }
+   ],
+   "ready_note": "Code-drawn ResizeLeft shape with both layers in bifrost-ui cursor_art. Not the original PDF art."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeLeftRight-bottom.pdf",
@@ -652,7 +878,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeLeftRight), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art"
+    }
+   ],
+   "ready_note": "Code-drawn ResizeLeftRight shape with both layers in bifrost-ui cursor_art. Not the original PDF art."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeLeftRight-top.pdf",
@@ -673,7 +908,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeLeftRight), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art"
+    }
+   ],
+   "ready_note": "Code-drawn ResizeLeftRight shape with both layers in bifrost-ui cursor_art. Not the original PDF art."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeNorth-bottom.pdf",
@@ -694,7 +938,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeUp), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeUp is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeNorth-top.pdf",
@@ -715,7 +968,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeUp), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeUp is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeNorthEast-bottom.pdf",
@@ -736,7 +998,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeNorthEastSouthWest), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeNorthEastSouthWest is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeNorthEast-top.pdf",
@@ -757,7 +1028,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeNorthEastSouthWest), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeNorthEastSouthWest is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeNorthEastSouthWest-bottom.pdf",
@@ -778,7 +1058,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeNorthEastSouthWest), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art"
+    }
+   ],
+   "ready_note": "Code-drawn ResizeNorthEastSouthWest shape with both layers in bifrost-ui cursor_art. Not the original PDF art."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeNorthEastSouthWest-top.pdf",
@@ -799,7 +1088,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeNorthEastSouthWest), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art"
+    }
+   ],
+   "ready_note": "Code-drawn ResizeNorthEastSouthWest shape with both layers in bifrost-ui cursor_art. Not the original PDF art."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeNorthSouth-bottom.pdf",
@@ -820,7 +1118,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeUpDown), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeUpDown is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeNorthSouth-top.pdf",
@@ -841,7 +1148,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeUpDown), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeUpDown is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeNorthWest-bottom.pdf",
@@ -862,7 +1178,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeNorthWestSouthEast), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeNorthWestSouthEast is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeNorthWest-top.pdf",
@@ -883,7 +1208,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeNorthWestSouthEast), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeNorthWestSouthEast is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeNorthWestSouthEast-bottom.pdf",
@@ -904,7 +1238,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeNorthWestSouthEast), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art"
+    }
+   ],
+   "ready_note": "Code-drawn ResizeNorthWestSouthEast shape with both layers in bifrost-ui cursor_art. Not the original PDF art."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeNorthWestSouthEast-top.pdf",
@@ -925,7 +1268,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeNorthWestSouthEast), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art"
+    }
+   ],
+   "ready_note": "Code-drawn ResizeNorthWestSouthEast shape with both layers in bifrost-ui cursor_art. Not the original PDF art."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeRight-bottom.pdf",
@@ -946,7 +1298,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeRight), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art"
+    }
+   ],
+   "ready_note": "Code-drawn ResizeRight shape with both layers in bifrost-ui cursor_art. Not the original PDF art."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeRight-top.pdf",
@@ -967,7 +1328,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeRight), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art"
+    }
+   ],
+   "ready_note": "Code-drawn ResizeRight shape with both layers in bifrost-ui cursor_art. Not the original PDF art."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeSouth-bottom.pdf",
@@ -988,7 +1358,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeDown), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeDown is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeSouth-top.pdf",
@@ -1009,7 +1388,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeDown), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeDown is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeSouthEast-bottom.pdf",
@@ -1030,7 +1418,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeNorthWestSouthEast), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeNorthWestSouthEast is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeSouthEast-top.pdf",
@@ -1051,7 +1448,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeNorthWestSouthEast), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeNorthWestSouthEast is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeSouthWest-bottom.pdf",
@@ -1072,7 +1478,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeNorthEastSouthWest), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeNorthEastSouthWest is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeSouthWest-top.pdf",
@@ -1093,7 +1508,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeNorthEastSouthWest), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeNorthEastSouthWest is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeUp-bottom.pdf",
@@ -1114,7 +1538,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeUp), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art"
+    }
+   ],
+   "ready_note": "Code-drawn ResizeUp shape with both layers in bifrost-ui cursor_art. Not the original PDF art."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeUp-top.pdf",
@@ -1135,7 +1568,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeUp), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art"
+    }
+   ],
+   "ready_note": "Code-drawn ResizeUp shape with both layers in bifrost-ui cursor_art. Not the original PDF art."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeUpDown-bottom.pdf",
@@ -1156,7 +1598,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeUpDown), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art"
+    }
+   ],
+   "ready_note": "Code-drawn ResizeUpDown shape with both layers in bifrost-ui cursor_art. Not the original PDF art."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeUpDown-top.pdf",
@@ -1177,7 +1628,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeUpDown), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art"
+    }
+   ],
+   "ready_note": "Code-drawn ResizeUpDown shape with both layers in bifrost-ui cursor_art. Not the original PDF art."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeWest-bottom.pdf",
@@ -1198,7 +1658,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeLeft), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeLeft is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeWest-top.pdf",
@@ -1219,7 +1688,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeLeft), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeLeft is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/rotateNorthEast-bottom.pdf",
@@ -1240,7 +1718,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Per-corner rotate art is drawn by bifrost_ui::cursor_art::rotate_art (rotate_variant names this shape's grips); tests cursor_art::tests. The compositor still sends the single rotate shape, so the per-corner shape is not on screen yet; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/rotateNorthEast-top.pdf",
@@ -1261,7 +1748,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Per-corner rotate art is drawn by bifrost_ui::cursor_art::rotate_art (rotate_variant names this shape's grips); tests cursor_art::tests. The compositor still sends the single rotate shape, so the per-corner shape is not on screen yet; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/rotateNorthEastNorthWest-bottom.pdf",
@@ -1282,7 +1778,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Per-corner rotate art is drawn by bifrost_ui::cursor_art::rotate_art (rotate_variant names this shape's grips); tests cursor_art::tests. The compositor still sends the single rotate shape, so the per-corner shape is not on screen yet; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/rotateNorthEastNorthWest-top.pdf",
@@ -1303,7 +1808,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Per-corner rotate art is drawn by bifrost_ui::cursor_art::rotate_art (rotate_variant names this shape's grips); tests cursor_art::tests. The compositor still sends the single rotate shape, so the per-corner shape is not on screen yet; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/rotateNorthEastSouthEast-bottom.pdf",
@@ -1324,7 +1838,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Per-corner rotate art is drawn by bifrost_ui::cursor_art::rotate_art (rotate_variant names this shape's grips); tests cursor_art::tests. The compositor still sends the single rotate shape, so the per-corner shape is not on screen yet; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/rotateNorthEastSouthEast-top.pdf",
@@ -1345,7 +1868,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Per-corner rotate art is drawn by bifrost_ui::cursor_art::rotate_art (rotate_variant names this shape's grips); tests cursor_art::tests. The compositor still sends the single rotate shape, so the per-corner shape is not on screen yet; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/rotateNorthWest-bottom.pdf",
@@ -1366,7 +1898,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Per-corner rotate art is drawn by bifrost_ui::cursor_art::rotate_art (rotate_variant names this shape's grips); tests cursor_art::tests. The compositor still sends the single rotate shape, so the per-corner shape is not on screen yet; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/rotateNorthWest-top.pdf",
@@ -1387,7 +1928,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Per-corner rotate art is drawn by bifrost_ui::cursor_art::rotate_art (rotate_variant names this shape's grips); tests cursor_art::tests. The compositor still sends the single rotate shape, so the per-corner shape is not on screen yet; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/rotateNorthWestSouthWest-bottom.pdf",
@@ -1408,7 +1958,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Per-corner rotate art is drawn by bifrost_ui::cursor_art::rotate_art (rotate_variant names this shape's grips); tests cursor_art::tests. The compositor still sends the single rotate shape, so the per-corner shape is not on screen yet; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/rotateNorthWestSouthWest-top.pdf",
@@ -1429,7 +1988,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Per-corner rotate art is drawn by bifrost_ui::cursor_art::rotate_art (rotate_variant names this shape's grips); tests cursor_art::tests. The compositor still sends the single rotate shape, so the per-corner shape is not on screen yet; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/rotateSouthEast-bottom.pdf",
@@ -1450,7 +2018,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Per-corner rotate art is drawn by bifrost_ui::cursor_art::rotate_art (rotate_variant names this shape's grips); tests cursor_art::tests. The compositor still sends the single rotate shape, so the per-corner shape is not on screen yet; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/rotateSouthEast-top.pdf",
@@ -1471,7 +2048,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Per-corner rotate art is drawn by bifrost_ui::cursor_art::rotate_art (rotate_variant names this shape's grips); tests cursor_art::tests. The compositor still sends the single rotate shape, so the per-corner shape is not on screen yet; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/rotateSouthEastSouthWest-bottom.pdf",
@@ -1492,7 +2078,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Per-corner rotate art is drawn by bifrost_ui::cursor_art::rotate_art (rotate_variant names this shape's grips); tests cursor_art::tests. The compositor still sends the single rotate shape, so the per-corner shape is not on screen yet; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/rotateSouthEastSouthWest-top.pdf",
@@ -1513,7 +2108,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Per-corner rotate art is drawn by bifrost_ui::cursor_art::rotate_art (rotate_variant names this shape's grips); tests cursor_art::tests. The compositor still sends the single rotate shape, so the per-corner shape is not on screen yet; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/rotateSouthWest-bottom.pdf",
@@ -1534,7 +2138,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Per-corner rotate art is drawn by bifrost_ui::cursor_art::rotate_art (rotate_variant names this shape's grips); tests cursor_art::tests. The compositor still sends the single rotate shape, so the per-corner shape is not on screen yet; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/rotateSouthWest-top.pdf",
@@ -1555,7 +2168,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Per-corner rotate art is drawn by bifrost_ui::cursor_art::rotate_art (rotate_variant names this shape's grips); tests cursor_art::tests. The compositor still sends the single rotate shape, so the per-corner shape is not on screen yet; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/PortagoITC TT.ttf",
@@ -1574,9 +2196,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "PortagoITC TT resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Noto Serif Display (noto-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerifDisplay-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Serif Display (noto-fonts, OFL-1.1) for the same role (a display roman); design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Princetown LET Fonts.ttf",
@@ -1595,9 +2230,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Princetown LET Fonts resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Noto Serif Display (noto-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerifDisplay-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Serif Display (noto-fonts, OFL-1.1) for the same role (a display roman); design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Raya.ttc",
@@ -1616,9 +2264,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Raya resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Lato (ttf-lato), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/Lato-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Lato (ttf-lato, OFL-1.1) for the same role (a sans text face); design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/PCmyoungjo.ttf",
@@ -1637,9 +2298,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "PCmyoungjo resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSerifCJK-Regular.ttc"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Serif CJK (noto-fonts-cjk, OFL-1.1) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/PadyakkeExpandedOne.otf",
@@ -1658,9 +2332,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Noto Sans Kannada (noto-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansKannada-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Sans Kannada (noto-fonts, OFL-1.1) for the same role (a Kannada-script display face); design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Pilgiche.ttf",
@@ -1679,9 +2366,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Pilgiche resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/tex-gyre/texgyrechorus-mediumitalic.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute TeX Gyre Chorus (tex-gyre-fonts, GUST Font License) for the same role (a cursive hand); design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Produkt.ttc",
@@ -1700,9 +2400,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Produkt resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/inter/InterVariable.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Inter (inter-font, OFL-1.1) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/ProximaNova.ttc",
@@ -1721,9 +2434,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "ProximaNova resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/inter/InterVariable.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Inter (inter-font, OFL-1.1) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/PublicoHeadline.ttc",
@@ -1742,9 +2468,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "PublicoHeadline resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerif-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Serif (noto-fonts, OFL-1.1-no-RFN) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/PublicoText.ttc",
@@ -1763,9 +2502,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "PublicoText resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerif-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Serif (noto-fonts, OFL-1.1-no-RFN) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/QuotesCaps-Regular.otf",
@@ -1784,9 +2536,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "QuotesCaps-Regular resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Libertinus Serif Initials (otf-libertinus), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/libertinus/LibertinusSerifInitials-Regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Libertinus Serif Initials (otf-libertinus, OFL-1.1) for the same role (a decorative initial-capitals face); design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/QuotesScript-Regular.otf",
@@ -1805,9 +2570,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "QuotesScript-Regular resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/tex-gyre/texgyrechorus-mediumitalic.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute TeX Gyre Chorus (tex-gyre-fonts, GUST Font License) for the same role (a connected script); design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Reserved/PingFangUI.ttc",
@@ -1828,7 +2606,15 @@
    "status": "partial",
    "note": "CJK glyph coverage comes from the noto-fonts-cjk package through the font fallback chain; not the Apple family or its weight set, and no per-language style selection; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"
+    }
+   ],
+   "ready_note": "Noto Sans CJK (noto-fonts-cjk) supplies the CJK sans UI glyphs through the fallback chain. Not the Apple family, and no per-language style selection."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/PopupAppeared.aiff",
@@ -1849,7 +2635,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'popup-appeared' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/Reorder.aiff",
@@ -1870,7 +2665,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'reorder' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/Ring.aiff",
@@ -1891,7 +2695,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'ring' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/RotorLeft.aiff",
@@ -1912,7 +2725,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'rotor-left' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/RotorRight.aiff",
@@ -1933,7 +2755,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'rotor-right' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Slideshows.framework/Versions/A/Resources/Content/Fonts/Proxima Nova Bold.ttf",
@@ -1952,9 +2783,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Proxima Nova Bold resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/inter/InterVariable.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Inter (inter-font, OFL-1.1) (variable, bold by wght) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Sounds/Ping.aiff",
@@ -1975,7 +2819,16 @@
    "status": "partial",
    "note": "BifrOSt has its own synthesised alert set (Bell, Chime, Pulse, Tick); its Bell tone covers this alert's role. The Apple tone itself is not reproduced; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::alert_sound"
+    }
+   ],
+   "ready_note": "BifrOSt synthesises every alert tone in shell::alert_sound from notes, not recordings. The Apple tone itself is not reproduced."
   },
   {
    "id": "path:/System/Library/Sounds/Pop.aiff",
@@ -1996,7 +2849,16 @@
    "status": "partial",
    "note": "BifrOSt has its own synthesised alert set (Bell, Chime, Pulse, Tick); its Tick tone covers this alert's role. The Apple tone itself is not reproduced; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::alert_sound"
+    }
+   ],
+   "ready_note": "BifrOSt synthesises every alert tone in shell::alert_sound from notes, not recordings. The Apple tone itself is not reproduced."
   },
   {
    "id": "path:/System/Library/Sounds/Purr.aiff",
@@ -2017,7 +2879,16 @@
    "status": "partial",
    "note": "synthesised equivalent, not the original recording; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::alert_sound"
+    }
+   ],
+   "ready_note": "BifrOSt synthesises every alert tone in shell::alert_sound from notes, not recordings. The Apple tone itself is not reproduced."
   }
  ]
 }

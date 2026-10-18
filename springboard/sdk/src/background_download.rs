@@ -118,3 +118,87 @@ pub fn stage(dir: &Path, spec: &DownloadSpec, data: &[u8]) -> Result<PathBuf, Do
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // SHA-256 of "abc" (FIPS 180-2 test vector).
+    const ABC_SHA256: &str = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+
+    fn scratch_dir(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("bifrost-dl-{tag}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn spec_rejects_bad_names_and_digests() {
+        assert!(matches!(DownloadSpec::new("", 3, ABC_SHA256), Err(DownloadError::InvalidName(_))));
+        assert!(matches!(DownloadSpec::new("..", 3, ABC_SHA256), Err(DownloadError::InvalidName(_))));
+        assert!(matches!(DownloadSpec::new("a/b", 3, ABC_SHA256), Err(DownloadError::InvalidName(_))));
+        assert_eq!(DownloadSpec::new("a.bin", 3, "short"), Err(DownloadError::InvalidDigest));
+        assert_eq!(DownloadSpec::new("a.bin", 3, &"z".repeat(64)), Err(DownloadError::InvalidDigest));
+    }
+
+    #[test]
+    fn spec_stores_digest_in_lower_case() {
+        let spec = DownloadSpec::new("a.bin", 3, &ABC_SHA256.to_ascii_uppercase()).unwrap();
+        assert_eq!(spec.sha256(), ABC_SHA256);
+        assert_eq!(spec.name(), "a.bin");
+        assert_eq!(spec.expected_size(), 3);
+        assert_eq!(spec.partial_name(), "a.bin.part");
+    }
+
+    #[test]
+    fn verify_accepts_matching_payload() {
+        let spec = DownloadSpec::new("a.bin", 3, ABC_SHA256).unwrap();
+        assert_eq!(spec.verify(b"abc"), Ok(()));
+    }
+
+    #[test]
+    fn verify_reports_size_and_digest_mismatch() {
+        let spec = DownloadSpec::new("a.bin", 3, ABC_SHA256).unwrap();
+        assert_eq!(spec.verify(b"abcd"), Err(DownloadError::SizeMismatch { expected: 3, actual: 4 }));
+        match spec.verify(b"xyz") {
+            Err(DownloadError::DigestMismatch { expected, actual }) => {
+                assert_eq!(expected, ABC_SHA256);
+                assert_ne!(actual, ABC_SHA256);
+                assert_eq!(actual.len(), 64);
+            }
+            other => panic!("expected a digest mismatch, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn fraction_is_clamped_and_complete_for_empty_payload() {
+        let spec = DownloadSpec::new("a.bin", 4, ABC_SHA256).unwrap();
+        assert_eq!(spec.fraction(0), 0.0);
+        assert_eq!(spec.fraction(2), 0.5);
+        assert_eq!(spec.fraction(99), 1.0);
+        let empty = DownloadSpec::new("e.bin", 0, ABC_SHA256).unwrap();
+        assert_eq!(empty.fraction(0), 1.0);
+    }
+
+    #[test]
+    fn stage_writes_verified_payload_under_final_name() {
+        let dir = scratch_dir("ok");
+        let spec = DownloadSpec::new("a.bin", 3, ABC_SHA256).unwrap();
+        let path = stage(&dir, &spec, b"abc").unwrap();
+        assert_eq!(path, dir.join("a.bin"));
+        assert_eq!(fs::read(&path).unwrap(), b"abc");
+        assert!(!dir.join("a.bin.part").exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn stage_never_writes_a_payload_that_fails_the_check() {
+        let dir = scratch_dir("bad");
+        let spec = DownloadSpec::new("a.bin", 3, ABC_SHA256).unwrap();
+        assert!(stage(&dir, &spec, b"nope").is_err());
+        assert!(!dir.join("a.bin").exists());
+        assert!(!dir.join("a.bin.part").exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+}

@@ -4,7 +4,8 @@
 
 use crate::layout::{self, Layout, Line, Marker};
 use crate::properties::{ListLayout, PanelLayout};
-use crate::text::{Align, Cell, ListKind, Style, Transform, COLORS, FAMILIES, SPACINGS};
+use crate::text::{Align, Attachment, Cell, ListKind, Style, Transform, COLORS, FAMILIES, OBJECT, SPACINGS};
+use bifrost_app::graphics_imageio;
 use bifrost_app::controls::Rect;
 use bifrost_app::document::item;
 use bifrost_app::kit::canvas::{Canvas, ImageRef, RectF};
@@ -84,6 +85,9 @@ pub enum Action {
     UseSelection,
     JumpToSelection,
     SelectLine,
+    /// Edit > Speech: start speaking the selection (else the whole text), and stop speaking
+    SpeakStart,
+    SpeakStop,
     Transform(Transform),
     /// Format > Font: strikethrough, baseline shift, highlight colour (index into `COLORS`), Copy and Paste Style
     Strike,
@@ -112,6 +116,11 @@ pub enum Action {
     InsertPage,
     InsertLine,
     InsertParagraph,
+    /// Insert > Image...: an open panel for a PNG or JPEG file, which becomes an attachment
+    InsertImage,
+    /// The Make Plain Text confirmation sheet (when the document has attachments): remove them, or cancel
+    PlainDone,
+    PlainCancel,
     /// Edit > Add Link, Open Link, Remove Link, and the link panel's buttons
     AddLink,
     OpenLink,
@@ -217,6 +226,11 @@ impl Action {
             Action::UseSelection => MENU_BASE + 0x75,
             Action::JumpToSelection => MENU_BASE + 0x76,
             Action::SelectLine => MENU_BASE + 0x77,
+            Action::SpeakStart => MENU_BASE + 0xe9,
+            Action::SpeakStop => MENU_BASE + 0xea,
+            Action::InsertImage => MENU_BASE + 0xeb,
+            Action::PlainDone => MENU_BASE + 0xec,
+            Action::PlainCancel => MENU_BASE + 0xed,
             Action::Transform(Transform::Upper) => MENU_BASE + 0x78,
             Action::Transform(Transform::Lower) => MENU_BASE + 0x79,
             Action::Transform(Transform::Capitalize) => MENU_BASE + 0x7a,
@@ -328,6 +342,11 @@ impl Action {
             0x75 => Action::UseSelection,
             0x76 => Action::JumpToSelection,
             0x77 => Action::SelectLine,
+            0xe9 => Action::SpeakStart,
+            0xea => Action::SpeakStop,
+            0xeb => Action::InsertImage,
+            0xec => Action::PlainDone,
+            0xed => Action::PlainCancel,
             0x78 => Action::Transform(Transform::Upper),
             0x79 => Action::Transform(Transform::Lower),
             0x7a => Action::Transform(Transform::Capitalize),
@@ -497,6 +516,42 @@ pub fn geometry_with(width: f32, height: f32, find_open: bool, ruler: bool, wrap
         find_field: Rect { x: x0, y: row_y, w: FIELD_W, h: BUTTON_H },
         replace_field: Rect { x: x0 + FIELD_W + ITEM_GAP, y: row_y, w: FIELD_W, h: BUTTON_H },
     }
+}
+
+/// The pictures of a document's attachments: each one's aspect ratio (width over height) and its decoded pixels, `None`
+/// where the file is not an image we can read. Indexed like the attachments (`Style::attachment` less one).
+pub struct Art {
+    pub aspects: Vec<f32>,
+    pub images: Vec<Option<Image>>,
+}
+
+/// The aspect ratio of each attachment, the cheap part of `art` the layout needs.
+pub fn aspects(attachments: &[Attachment]) -> Vec<f32> {
+    attachments.iter().map(|a| if a.width > 0.0 && a.height > 0.0 { a.width / a.height } else { 1.0 }).collect()
+}
+
+/// The pictures of the attachments, decoded. Decoding is the costly part, so the window does it when the layout is
+/// rebuilt, not on every draw.
+pub fn art(attachments: &[Attachment]) -> Art {
+    Art { aspects: aspects(attachments), images: attachments.iter().map(|a| graphics_imageio::decode(&a.data)).collect() }
+}
+
+/// The box an attachment is drawn in: as tall as its line, as wide as its aspect ratio, and narrowed (keeping the
+/// shape) to `fit` when it would be wider than the text.
+pub fn object_box(aspects: &[f32], style: &Style, fit: f32) -> (f32, f32) {
+    let h = style.size * layout::LINE_FACTOR;
+    let aspect = (style.attachment as usize).checked_sub(1).and_then(|i| aspects.get(i)).copied().unwrap_or(1.0);
+    let w = h * aspect;
+    if fit > 0.0 && w > fit {
+        (fit, fit / aspect)
+    } else {
+        (w, h)
+    }
+}
+
+/// The width of a character for layout: an attachment is its box's width, anything else its glyph's.
+pub fn measure_in<'a>(ui: &'a Ui, aspects: &'a [f32], fit: f32) -> impl Fn(char, &Style) -> f32 + 'a {
+    move |ch: char, style: &Style| if ch == OBJECT { object_box(aspects, style, fit).0 } else { char_width(ui, ch, style) }
 }
 
 /// The width of one character in a style, in points.
@@ -724,6 +779,15 @@ fn blit(c: &mut dyn Canvas, img: &Image, x: f32, y: f32) {
     c.image(ImageRef { id: image_id(img), image: img }, RectF::new(x.floor(), y.floor(), img.w as f32, img.h as f32), 1.0);
 }
 
+/// Draws an attachment in its box at `(x, y)` points: its picture, or a grey plate where the file is not an image.
+fn draw_object(c: &mut dyn Canvas, ui: &Ui, art: &Art, style: &Style, x: f32, y: f32, w: f32, h: f32) {
+    let rect = RectF::new(ui.pt(x).floor(), ui.pt(y).floor(), ui.pt(w).ceil(), ui.pt(h).ceil());
+    match (style.attachment as usize).checked_sub(1).and_then(|i| art.images.get(i)).and_then(|i| i.as_ref()) {
+        Some(img) => c.image(ImageRef { id: image_id(img), image: img }, rect, 1.0),
+        None => c.fill_rect(rect, LABEL_3.now()),
+    }
+}
+
 /// Draws a text run with its top-left at `(x, y)` points.
 fn text_at(c: &mut dyn Canvas, ui: &Ui, text: &str, pt: f32, weight: Weight, color: u32, x: f32, y: f32) -> f32 {
     let img = ui.text(text, pt, weight, color);
@@ -824,6 +888,17 @@ pub fn spacing_buttons(ui: &Ui, l: &PanelLayout) -> Vec<Button> {
 }
 
 /// The Select Line panel's buttons.
+/// The buttons of the Make Plain Text confirmation: Remove Attachments is the default.
+pub fn plain_buttons(ui: &Ui, l: &PanelLayout) -> Vec<Button> {
+    sheet_buttons(ui, l, &[("Cancel", Action::PlainCancel, false), ("Remove Attachments", Action::PlainDone, true)])
+}
+
+/// The confirmation sheet: its title, a one-line message in the first row, and its buttons.
+pub fn draw_confirm(c: &mut dyn Canvas, ui: &Ui, l: &PanelLayout, title: &str, message: &str, buttons: &[Button]) {
+    draw_sheet(c, ui, l, title, &[], 0, buttons);
+    text_at(c, ui, message, MAC_BODY_PT, Weight::Regular, LABEL.now(), l.labels_x, l.fields[0].y);
+}
+
 pub fn line_buttons(ui: &Ui, l: &PanelLayout) -> Vec<Button> {
     sheet_buttons(ui, l, &[("Cancel", Action::LineCancel, false), ("Select", Action::LineDone, true)])
 }
@@ -933,10 +1008,11 @@ pub fn page_clip(c: &mut dyn Canvas, ui: &Ui, geom: &Geometry, dark: bool) -> Re
 /// Draws the selection, the text and the caret at `head`. `scroll` is how far the body is scrolled, in points. `dark`
 /// is the dark page: text with no colour of its own is white.
 #[allow(clippy::too_many_arguments)]
-pub fn draw_text(c: &mut dyn Canvas, ui: &Ui, geom: &Geometry, lines: &Layout, cells: &[Cell], sel: std::ops::Range<usize>, head: usize, scroll: f32, caret: bool, misspelled: &[std::ops::Range<usize>], dark: bool) {
+#[allow(clippy::too_many_arguments)]
+pub fn draw_text(c: &mut dyn Canvas, ui: &Ui, geom: &Geometry, lines: &Layout, cells: &[Cell], art: &Art, sel: std::ops::Range<usize>, head: usize, scroll: f32, caret: bool, misspelled: &[std::ops::Range<usize>], dark: bool) {
     let origin_x = geom.text_x;
     let origin_y = geom.body_top - scroll;
-    let measure = |ch: char, style: &Style| char_width(ui, ch, style);
+    let measure = measure_in(ui, &art.aspects, lines.width);
     // selection: one plate per line the selection crosses; a newline inside it shows as the line's end
     if !sel.is_empty() {
         for line in &lines.lines {
@@ -957,7 +1033,7 @@ pub fn draw_text(c: &mut dyn Canvas, ui: &Ui, geom: &Geometry, lines: &Layout, c
     }
     // text: runs of one style per line
     for line in &lines.lines {
-        draw_line(c, ui, lines, line, cells, origin_x, origin_y, dark);
+        draw_line(c, ui, lines, line, cells, art, origin_x, origin_y, dark);
         for word in misspelled.iter().filter(|w| w.start < line.end && w.end > line.start) {
             let x0 = lines.x_in_line(cells, line, word.start.max(line.start), &measure);
             let x1 = lines.x_in_line(cells, line, word.end.min(line.end), &measure);
@@ -985,8 +1061,8 @@ fn squiggle(c: &mut dyn Canvas, ui: &Ui, x0: f32, x1: f32, y: f32) {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn draw_line(c: &mut dyn Canvas, ui: &Ui, lines: &Layout, line: &Line, cells: &[Cell], origin_x: f32, origin_y: f32, dark: bool) {
-    let measure = |ch: char, style: &Style| char_width(ui, ch, style);
+fn draw_line(c: &mut dyn Canvas, ui: &Ui, lines: &Layout, line: &Line, cells: &[Cell], art: &Art, origin_x: f32, origin_y: f32, dark: bool) {
+    let measure = measure_in(ui, &art.aspects, lines.width);
     let y = origin_y + line.top;
     // the list marker hangs left of the text
     let marker = match line.marker {
@@ -1006,6 +1082,17 @@ fn draw_line(c: &mut dyn Canvas, ui: &Ui, lines: &Layout, line: &Line, cells: &[
     let mut run_x = 0.0;
     for cell in &cells[line.start..line.end] {
         let step = layout::advance(rel, cell, lines.tab, &measure);
+        if cell.ch == OBJECT {
+            // an attachment is drawn on its own, between the runs of text either side of it
+            if let Some(s) = run_style.take() {
+                flush_run(c, ui, &run, &s, base + run_x, y, line.height, dark);
+            }
+            run.clear();
+            let (w, h) = object_box(&art.aspects, &cell.style, lines.width);
+            draw_object(c, ui, art, &cell.style, base + rel, y, w, h);
+            rel += step;
+            continue;
+        }
         let breaks = cell.ch == '\t' || run_style.is_some_and(|s| !s.same_run(&cell.style));
         if breaks {
             if let Some(s) = run_style.take() {
@@ -1184,6 +1271,8 @@ mod tests {
             Action::UseSelection,
             Action::JumpToSelection,
             Action::SelectLine,
+            Action::SpeakStart,
+            Action::SpeakStop,
             Action::Transform(Transform::Upper),
             Action::Transform(Transform::Lower),
             Action::Transform(Transform::Capitalize),
@@ -1293,5 +1382,15 @@ mod tests {
         assert_eq!(spacing_label(0), "1.0");
         assert_eq!(spacing_label(1), "1.15");
         assert_eq!(spacing_label(4), "2.5");
+    }
+
+    #[test]
+    fn an_attachment_is_as_tall_as_its_line_and_narrows_to_fit_the_text() {
+        let style = Style { attachment: 1, size: 40.0, ..Style::default() };
+        // a 2:1 picture on a 50 point line is 100 wide, but a 60 point text width narrows it to 60 by 30
+        assert_eq!(object_box(&[2.0], &style, 0.0), (100.0, 50.0));
+        assert_eq!(object_box(&[2.0], &style, 60.0), (60.0, 30.0));
+        // a character is its own box, not an attachment's
+        assert_eq!(object_box(&[], &Style::default(), 0.0).1, Style::default().size * layout::LINE_FACTOR);
     }
 }

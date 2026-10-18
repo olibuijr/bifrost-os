@@ -12,12 +12,31 @@
 //! The service reads the file as the shell, so the path must be absolute with no `..` part and the file must be
 //! one the shell user can read. At most [`WORKERS`] thumbnails are drawn at a time; the rest wait in order.
 use super::{Event, SystemService};
+use crate::shell::preview_gen::{Exchanger, Generator as AppGenerator, Generators, Requests, Sockets};
 use crate::shell::Shell;
 use crate::thumbs::{Answer, Generator};
 use bifrost_core::json::Json;
-use bifrost_ui::thumb_service::{ThumbKind, ThumbRequest};
+use bifrost_ui::preview_manifest::Outcome;
+use bifrost_ui::thumb_service::{SourceFile, ThumbArt, ThumbKind, ThumbRequest};
 use std::collections::{HashMap, VecDeque};
+use std::path::Path;
 use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::Arc;
+
+/// Runs one thumbnail job so that a hostile or broken file cannot take the worker down with it. A decoder that panics
+/// on a damaged file would otherwise end the worker thread before it reports back, and the slot it held in
+/// [`WORKERS`] would never be given up. The panic becomes the job's error, the app hears `failed`, and the file is
+/// not drawn again as a thumbnail (the type icon is shown instead).
+pub fn contained<T>(work: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(work)) {
+        Ok(result) => result,
+        Err(_) => Err("this file could not be read safely, so no thumbnail was made".to_string()),
+    }
+}
+
+/// The preview panel asks through this service too; its own generator path (the `quick-look` service) answers it, so
+/// the app generators are not asked a second time for the panel's files.
+const PANEL_ASKER: &str = "shell.quick-look";
 
 /// Thumbnails drawn at the same time.
 pub const WORKERS: usize = 3;
@@ -47,12 +66,27 @@ pub struct Thumbnails {
     queue: VecDeque<Job>,
     running: usize,
     memo: HashMap<String, Answer>,
+    /// The `[[preview]]` generators of the installed apps: a file type no built-in provider draws goes to its app.
+    apps: Generators,
+    /// App generator calls in flight, and the key and size each file's call answers.
+    requests: Requests,
+    app_jobs: HashMap<String, (String, u32)>,
+    exchanger: Arc<dyn Exchanger>,
+    /// The shell's clock in milliseconds, from the last call or tick (the app calls' deadlines).
+    now_ms: u64,
 }
 
 impl Default for Thumbnails {
     fn default() -> Self {
-        Thumbnails::with_generator(Generator::standard())
+        let mut s = Thumbnails::with_generator(Generator::standard());
+        s.apps = Generators::installed();
+        s
     }
+}
+
+/// The file name of a request's path, for the app generators' type lookup.
+fn name_of(path: &str) -> &str {
+    Path::new(path).file_name().and_then(|n| n.to_str()).unwrap_or("")
 }
 
 fn obj(pairs: Vec<(&str, Json)>) -> Json {
@@ -97,12 +131,50 @@ pub fn parse_request(params: &Json) -> Result<ThumbRequest, String> {
 impl Thumbnails {
     pub fn with_generator(generator: Generator) -> Self {
         let (tx, rx) = channel();
-        Thumbnails { generator, tx, rx, waiting: HashMap::new(), queue: VecDeque::new(), running: 0, memo: HashMap::new() }
+        Thumbnails {
+            generator,
+            tx,
+            rx,
+            waiting: HashMap::new(),
+            queue: VecDeque::new(),
+            running: 0,
+            memo: HashMap::new(),
+            apps: Generators::default(),
+            requests: Requests::default(),
+            app_jobs: HashMap::new(),
+            exchanger: Arc::new(Sockets),
+            now_ms: 0,
+        }
+    }
+
+    /// Asks the installed app that declared the file's type for its picture. The call waits like a worker's job and is
+    /// answered by [`Thumbnails::poll`].
+    fn ask_app(&mut self, app_id: &str, key: &str, app: &AppGenerator, req: &ThumbRequest) -> Json {
+        let px = req.px();
+        let first = !self.waiting.contains_key(key);
+        if first {
+            self.app_jobs.insert(req.path.clone(), (key.to_string(), px));
+            self.requests.start(self.exchanger.clone(), app, &req.path, px, px, self.now_ms);
+        }
+        let waiting = self.waiting.entry(key.to_string()).or_default();
+        if !waiting.iter().any(|a| a == app_id) {
+            waiting.push(app_id.to_string());
+        }
+        pending_json(key, &req.path, px)
     }
 
     /// Answers a request now when it can, else queues it for `app_id`.
     pub fn request(&mut self, app_id: &str, req: ThumbRequest) -> Result<Json, String> {
         let (key, quick) = self.generator.quick(&req)?;
+        // a file no built-in provider draws goes to the app that declared its type (folders and icons never do)
+        let app_drawn = req.kind == ThumbKind::Thumbnail && app_id != PANEL_ASKER && !self.memo.contains_key(&key);
+        if let (true, Some(Answer::Icon { type_id, .. })) = (app_drawn, &quick) {
+            if type_id != "public.folder" {
+                if let Some(app) = self.apps.for_file(name_of(&req.path)).cloned() {
+                    return Ok(self.ask_app(app_id, &key, &app, &req));
+                }
+            }
+        }
         if let Some(a) = quick.or_else(|| self.memo.get(&key).cloned()) {
             return Ok(answer_json(&key, &req.path, req.px(), &a));
         }
@@ -117,8 +189,8 @@ impl Thumbnails {
                 if self.queue.len() >= MAX_QUEUE {
                     return Err("too many thumbnails waiting".into());
                 }
-                self.waiting.insert(key.clone(), vec![app_id.to_string()]);
-                self.queue.push_back(Job { key: key.clone(), req });
+                self.waiting.insert(key.to_string(), vec![app_id.to_string()]);
+                self.queue.push_back(Job { key: key.to_string(), req });
             }
         }
         Ok(pending_json(&key, &file, px))
@@ -134,40 +206,71 @@ impl Thumbnails {
             std::thread::spawn(move || {
                 // providers are not Send: each worker builds its own generator over the shared cache directory
                 let g = Generator::new(cache);
-                let result = g.generate(&job.req);
+                let result = contained(|| g.generate(&job.req));
                 let _ = tx.send(Done { key: job.key, file: job.req.path.clone(), px: job.req.px(), result });
             });
         }
     }
 
-    /// Collects finished jobs and returns the events for the apps that waited.
+    /// The events for the apps that waited for `key`: `ready` with the answer, or `failed` with the error.
+    fn finish(&mut self, key: String, file: String, px: u32, result: Result<Answer, String>) -> Vec<Event> {
+        let apps = self.waiting.remove(&key).unwrap_or_default();
+        let (name, body) = match &result {
+            Ok(a) => {
+                if matches!(a, Answer::Icon { .. }) {
+                    if self.memo.len() >= MAX_MEMO {
+                        self.memo.clear();
+                    }
+                    self.memo.insert(key.clone(), a.clone());
+                }
+                ("ready", answer_json(&key, &file, px, a))
+            }
+            Err(e) => {
+                let mut b = pending_json(&key, &file, px);
+                if let Json::Obj(p) = &mut b {
+                    p[0].1 = Json::Str("failed".into());
+                    p.push(("error".into(), Json::Str(e.clone())));
+                }
+                ("failed", b)
+            }
+        };
+        apps.into_iter().map(|app| Event { app: Some(app), event: name.to_string(), body: body.clone() }).collect()
+    }
+
+    /// An app's picture as a cached thumbnail, fitted into the request's square.
+    fn picture_answer(&self, key: &str, px: u32, picture: &str) -> Result<Answer, String> {
+        let bytes = std::fs::read(Path::new(picture)).map_err(|e| format!("picture: {e}"))?;
+        let img = crate::cg::imageio::decode(&bytes).ok_or("the app's picture is not a PNG or JPEG")?;
+        let side = px.max(1) as usize;
+        let fitted = crate::imgdec::contain(&img, side, side);
+        self.generator.cache().write(key, &fitted);
+        Ok(Answer::Pixels { key: key.to_string(), path: self.generator.cache().path(key), w: fitted.w, h: fitted.h })
+    }
+
+    /// The type icon of a file: the answer when an app gave no usable picture.
+    fn icon_answer(file: &str) -> Result<Answer, String> {
+        let (stamp, _) = crate::thumbs::stamp_of(Path::new(file))?;
+        match bifrost_ui::thumb_service::icon_for(&SourceFile::new(file.into(), stamp)) {
+            ThumbArt::Icon { type_id, badge } => Ok(Answer::Icon { type_id, badge }),
+            ThumbArt::Pixels(_) => Err("no icon for the file".into()),
+        }
+    }
+
+    /// Collects finished jobs and the app generators' answers (and the calls whose deadline passed), and returns the
+    /// events for the apps that waited.
     pub fn poll(&mut self) -> Vec<Event> {
         let mut events = Vec::new();
         while let Ok(done) = self.rx.try_recv() {
             self.running = self.running.saturating_sub(1);
-            let apps = self.waiting.remove(&done.key).unwrap_or_default();
-            let (name, body) = match &done.result {
-                Ok(a) => {
-                    if matches!(a, Answer::Icon { .. }) {
-                        if self.memo.len() >= MAX_MEMO {
-                            self.memo.clear();
-                        }
-                        self.memo.insert(done.key.clone(), a.clone());
-                    }
-                    ("ready", answer_json(&done.key, &done.file, done.px, a))
-                }
-                Err(e) => {
-                    let mut b = pending_json(&done.key, &done.file, done.px);
-                    if let Json::Obj(p) = &mut b {
-                        p[0].1 = Json::Str("failed".into());
-                        p.push(("error".into(), Json::Str(e.clone())));
-                    }
-                    ("failed", b)
-                }
+            events.extend(self.finish(done.key, done.file, done.px, done.result));
+        }
+        for (file, outcome) in self.requests.poll(self.now_ms) {
+            let Some((key, px)) = self.app_jobs.remove(&file) else { continue };
+            let result = match outcome {
+                Outcome::Generated(picture) => self.picture_answer(&key, px, &picture).or_else(|_| Self::icon_answer(&file)),
+                Outcome::Generic => Self::icon_answer(&file),
             };
-            for app in apps {
-                events.push(Event { app: Some(app), event: name.to_string(), body: body.clone() });
-            }
+            events.extend(self.finish(key, file, px, result));
         }
         self.start_jobs();
         events
@@ -179,7 +282,8 @@ impl SystemService for Thumbnails {
         "thumbnails"
     }
 
-    fn call(&mut self, _shell: &mut Shell, app_id: &str, method: &str, params: &Json, _t: f64) -> Result<Json, String> {
+    fn call(&mut self, _shell: &mut Shell, app_id: &str, method: &str, params: &Json, t: f64) -> Result<Json, String> {
+        self.now_ms = (t.max(0.0) * 1000.0) as u64;
         match method {
             "request" => {
                 let r = self.request(app_id, parse_request(params)?);
@@ -190,7 +294,8 @@ impl SystemService for Thumbnails {
         }
     }
 
-    fn tick(&mut self, _shell: &mut Shell, _t: f64) -> Vec<Event> {
+    fn tick(&mut self, _shell: &mut Shell, t: f64) -> Vec<Event> {
+        self.now_ms = (t.max(0.0) * 1000.0) as u64;
         self.poll()
     }
 }
@@ -201,6 +306,14 @@ mod tests {
     use crate::shell::photos::thumbs::DiskCache;
     use std::path::PathBuf;
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn a_job_that_panics_becomes_an_error_and_a_job_that_returns_is_untouched() {
+        let hostile: Result<u32, String> = contained(|| panic!("decoder fell over"));
+        assert_eq!(hostile, Err("this file could not be read safely, so no thumbnail was made".to_string()));
+        assert_eq!(contained(|| Ok::<u32, String>(7)), Ok(7));
+        assert_eq!(contained(|| Err::<u32, String>("unreadable".into())), Err("unreadable".to_string()));
+    }
 
     fn scratch(name: &str) -> PathBuf {
         let d = std::env::temp_dir().join(format!("bifrost-thumbsvc-{name}-{}", std::process::id()));
@@ -309,6 +422,63 @@ mod tests {
         let mut s = service(&dir);
         let r = ThumbRequest::new(dir.join("gone.png").to_str().unwrap(), 32, 1.0, ThumbKind::Thumbnail).unwrap();
         assert!(s.request("app", r).is_err());
+    }
+
+    /// An app that answers every generator call with the same reply.
+    struct AppReply(String);
+
+    impl Exchanger for AppReply {
+        fn exchange(&self, _app_id: &str, _line: &str, _wait: Duration) -> Result<String, String> {
+            Ok(self.0.clone())
+        }
+    }
+
+    fn app_for(types: &[&str]) -> Generators {
+        use crate::shell::preview_gen::Generator as AppGenerator;
+        use bifrost_ui::preview_manifest::PreviewDecl;
+        Generators::new(vec![AppGenerator {
+            app_id: "app.model".into(),
+            decl: PreviewDecl {
+                id: "model".into(),
+                types: types.iter().map(|t| t.to_string()).collect(),
+                generator: "preview.render".into(),
+                timeout_ms: 2000,
+            },
+        }])
+    }
+
+    #[test]
+    fn a_file_type_no_provider_draws_goes_to_the_app_that_declared_it() {
+        let dir = scratch("app-draws");
+        let picture = png_file(&dir, "drawn.png");
+        let file = dir.join("model.textclipping");
+        std::fs::write(&file, b"opaque bytes").unwrap();
+        let path = file.to_str().unwrap().to_string();
+        let mut s = service(&dir);
+        s.apps = app_for(&["public.data"]);
+        s.exchanger = Arc::new(AppReply(format!("{{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{{\"picture\":\"{picture}\"}}}}")));
+        let req = ThumbRequest::new(&path, 64, 1.0, ThumbKind::Thumbnail).unwrap();
+        assert_eq!(s.request("app", req).unwrap().get("state").and_then(Json::as_str), Some("pending"));
+        let events = wait_events(&mut s, 1);
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].event, "ready");
+        assert_eq!(events[0].body.get("art").and_then(Json::as_str), Some("pixels"), "the app's picture is the thumbnail");
+    }
+
+    #[test]
+    fn an_app_that_gives_no_picture_leaves_the_icon() {
+        let dir = scratch("app-refuses");
+        let file = dir.join("refused.textclipping");
+        std::fs::write(&file, b"opaque bytes").unwrap();
+        let path = file.to_str().unwrap().to_string();
+        let mut s = service(&dir);
+        s.apps = app_for(&["public.data"]);
+        s.exchanger = Arc::new(AppReply("{\"jsonrpc\":\"2.0\",\"id\":1,\"error\":{\"code\":1,\"message\":\"no\"}}".into()));
+        let req = ThumbRequest::new(&path, 64, 1.0, ThumbKind::Thumbnail).unwrap();
+        s.request("app", req).unwrap();
+        let events = wait_events(&mut s, 1);
+        assert_eq!(events[0].event, "ready");
+        assert_eq!(events[0].body.get("art").and_then(Json::as_str), Some("icon"));
     }
 
     #[test]

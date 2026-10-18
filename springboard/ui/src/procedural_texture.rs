@@ -77,6 +77,34 @@ pub fn gradient(width: usize, height: usize, a: Texel, b: Texel) -> Option<Textu
     Some(Texture { width, height, texels })
 }
 
+/// A named gradient for a gradient wallpaper: the colours at the left and right edges.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GradientPreset {
+    pub name: &'static str,
+    pub from: Texel,
+    pub to: Texel,
+}
+
+/// The gradient wallpapers the shell offers, in picker order.
+pub const GRADIENT_PRESETS: [GradientPreset; 5] = [
+    GradientPreset { name: "Sunrise", from: [255, 183, 77, 255], to: [236, 98, 129, 255] },
+    GradientPreset { name: "Ocean", from: [79, 172, 254, 255], to: [0, 82, 212, 255] },
+    GradientPreset { name: "Meadow", from: [168, 230, 163, 255], to: [46, 139, 87, 255] },
+    GradientPreset { name: "Dusk", from: [142, 84, 233, 255], to: [40, 30, 90, 255] },
+    GradientPreset { name: "Graphite", from: [120, 124, 130, 255], to: [28, 29, 33, 255] },
+];
+
+/// The preset with this name (case-sensitive, as the picker lists it), if there is one.
+pub fn gradient_preset(name: &str) -> Option<&'static GradientPreset> {
+    GRADIENT_PRESETS.iter().find(|p| p.name == name)
+}
+
+/// The wallpaper texture for a preset at `width` by `height`. Returns `None` for an empty size or an unknown name.
+pub fn gradient_poster(name: &str, width: usize, height: usize) -> Option<Texture> {
+    let preset = gradient_preset(name)?;
+    gradient(width, height, preset.from, preset.to)
+}
+
 /// Maps a coordinate into the sampling range. Repeat takes the fractional part, so 1.25 becomes 0.25; clamp limits it
 /// to 0..1. A NaN coordinate stays NaN and samples the first texel.
 fn address(coord: f32, wrap: Wrap) -> f32 {
@@ -198,5 +226,23 @@ mod tests {
         let t = Texture { width: 1, height: 2, texels: vec![[0, 0, 0, 255], [100, 0, 0, 255]] };
         assert_eq!(sample(&t, 0.5, 0.5, Wrap::Clamp, Filter::Linear)[0], 50);
         assert_eq!(sample(&t, 0.5, 0.25, Wrap::Clamp, Filter::Nearest), [0, 0, 0, 255]);
+    }
+
+    #[test]
+    fn presets_have_unique_names_and_build_a_poster() {
+        for (i, p) in GRADIENT_PRESETS.iter().enumerate() {
+            assert!(GRADIENT_PRESETS[..i].iter().all(|q| q.name != p.name), "{}", p.name);
+            let poster = gradient_poster(p.name, 8, 4).unwrap();
+            assert_eq!(poster.texel(0, 0), p.from, "{}", p.name);
+            assert_eq!(poster.texel(7, 3), p.to, "{}", p.name);
+        }
+    }
+
+    #[test]
+    fn a_preset_is_found_by_its_exact_name() {
+        assert_eq!(gradient_preset("Ocean").map(|p| p.name), Some("Ocean"));
+        assert!(gradient_preset("ocean").is_none(), "names are case-sensitive");
+        assert!(gradient_poster("Nope", 8, 4).is_none());
+        assert!(gradient_poster("Dusk", 0, 4).is_none(), "an empty size has no poster");
     }
 }

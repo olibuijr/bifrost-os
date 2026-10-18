@@ -10,7 +10,10 @@ use bifrost_app::image_filter::{Filter, FilterChain};
 use bifrost_app::image_source::ImageSource;
 use bifrost_app::kit::Image;
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use crate::forms::{FormWidget, Kind};
+use bifrost_app::controls::acroform::FieldSet;
+use springboard::cg::pdf::writer::{FieldEdit, FieldValue};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
@@ -50,6 +53,12 @@ pub struct Document {
     pub info: Vec<(&'static str, String)>,
     /// Whether the PDF is encrypted (it opened with its password).
     pub encrypted: bool,
+    /// The fillable fields of the form, with their values. Empty for a picture or a file with no form.
+    pub form: FieldSet,
+    /// Each widget of those fields, in the order the file has them.
+    pub widgets: Vec<FormWidget>,
+    /// Whether a field value was changed this session, so the next save writes the form values.
+    pub form_changed: bool,
     source: Source,
     /// A picture as it was opened, for Revert to Original after pixel edits. None for a PDF.
     original: Option<Rc<Image>>,
@@ -81,12 +90,70 @@ impl Document {
             bookmarks: load_bookmarks(data_dir, path),
             info: Vec::new(),
             encrypted: false,
+            form: FieldSet::new(),
+            widgets: Vec::new(),
+            form_changed: false,
             source,
             original,
             revision: 0,
             drawn: RefCell::new(HashMap::new()),
             asked: RefCell::new(HashSet::new()),
         }
+    }
+
+    /// The widget under the point `a` (normalised, unrotated page coordinates) of source page `src`, if there is one.
+    pub fn widget_at(&self, src: usize, a: (f32, f32)) -> Option<usize> {
+        self.widgets.iter().position(|w| w.page == src && a.0 >= w.rect.x && a.0 <= w.rect.x + w.rect.w && a.1 >= w.rect.y && a.1 <= w.rect.y + w.rect.h)
+    }
+
+    /// The text of the field that widget `widget` belongs to.
+    pub fn field_text(&self, widget: usize) -> Option<&str> {
+        let w = self.widgets.get(widget)?;
+        self.form.get(&w.name).map(|f| f.value())
+    }
+
+    /// Sets the text of the field that widget `widget` belongs to. False when the field refuses the text.
+    pub fn set_field_text(&mut self, widget: usize, text: &str) -> bool {
+        let Some(w) = self.widgets.get(widget) else { return false };
+        let ok = self.form.set_value(&w.name, text).is_ok();
+        self.form_changed |= ok;
+        ok
+    }
+
+    /// Turns the check box that widget `widget` belongs to on or off. False when the field refuses it.
+    pub fn toggle_field(&mut self, widget: usize) -> bool {
+        let Some(w) = self.widgets.get(widget) else { return false };
+        let on = self.form.get(&w.name).is_some_and(|f| f.is_on());
+        let ok = self.form.set_state(&w.name, !on).is_ok();
+        self.form_changed |= ok;
+        ok
+    }
+
+    /// The form values to save: each filled field's value, and the state of each check box widget. Nothing when no
+    /// field was changed this session, so an untouched form is saved as it was.
+    pub fn field_edits(&self) -> Vec<FieldEdit> {
+        if !self.form_changed {
+            return Vec::new();
+        }
+        let mut by_node: BTreeMap<u32, FieldEdit> = BTreeMap::new();
+        for w in &self.widgets {
+            let Some(field) = self.form.get(&w.name) else { continue };
+            if w.node == 0 {
+                continue;
+            }
+            let (value, state) = match w.kind {
+                Kind::Text => (FieldValue::Text(field.value().to_string()), None),
+                Kind::Check => {
+                    let state = if field.is_on() { w.on_name.clone() } else { "Off".to_string() };
+                    (FieldValue::State(state.clone()), Some(state))
+                }
+            };
+            let edit = by_node.entry(w.node).or_insert_with(|| FieldEdit { node: w.node, value, widgets: Vec::new() });
+            if let (Some(state), true) = (state, w.obj != 0) {
+                edit.widgets.push((w.obj, state));
+            }
+        }
+        by_node.into_values().collect()
     }
 
     /// The number of pages shown.
@@ -292,6 +359,8 @@ pub fn from_pdf(path: &Path, data_dir: &Path, opened: Opened, jobs: Jobs, inbox:
     let mut doc = Document::new(path, data_dir, opened.sizes, Source::Pdf { jobs, inbox }, opened.outline, true);
     doc.info = opened.info;
     doc.encrypted = opened.encrypted;
+    doc.form = opened.form.fields;
+    doc.widgets = opened.form.widgets;
     doc
 }
 
@@ -506,6 +575,31 @@ mod tests {
         assert_eq!(clipboard_file_name(&[0xff, 0xd8, 0xff], 5), "Clipboard 5.jpg");
         assert_eq!(clipboard_file_name(b"\x89PNG", 5), "Clipboard 5.png");
         assert!(decode_picture(b"not a picture").is_err());
+    }
+
+    #[test]
+    fn form_values_are_saved_only_once_one_has_changed() {
+        use bifrost_app::controls::acroform::Field;
+        let mut doc = picture_doc(4, 4);
+        doc.form.add(Field::text("name", 0)).unwrap();
+        doc.form.add(Field::button("agree", 0)).unwrap();
+        doc.widgets = vec![
+            FormWidget { page: 0, rect: crate::model::Norm { x: 0.0, y: 0.0, w: 0.5, h: 0.5 }, name: "name".into(), kind: Kind::Text, obj: 4, node: 4, on_name: String::new() },
+            FormWidget { page: 0, rect: crate::model::Norm { x: 0.5, y: 0.5, w: 0.5, h: 0.5 }, name: "agree".into(), kind: Kind::Check, obj: 5, node: 5, on_name: "Yes".into() },
+        ];
+        assert!(doc.field_edits().is_empty(), "an untouched form saves nothing");
+        assert_eq!(doc.widget_at(0, (0.25, 0.25)), Some(0));
+        assert_eq!(doc.widget_at(0, (0.75, 0.75)), Some(1));
+        assert_eq!(doc.widget_at(1, (0.25, 0.25)), None);
+        assert!(doc.set_field_text(0, "Ada"));
+        assert_eq!(doc.field_text(0), Some("Ada"));
+        assert!(doc.toggle_field(1));
+        let edits = doc.field_edits();
+        assert_eq!(edits.len(), 2);
+        assert_eq!(edits[0].value, FieldValue::Text("Ada".into()));
+        assert_eq!(edits[1].value, FieldValue::State("Yes".into()));
+        assert_eq!(edits[1].widgets, vec![(5, "Yes".to_string())]);
+        assert!(!doc.toggle_field(9), "no such widget");
     }
 
     #[test]

@@ -1,8 +1,11 @@
 //! Dynamic-Huffman DEFLATE encoder (RFC 1951) behind the SDK compression API.
 //!
-//! The encoder finds matches with hash chains over a 32 KiB window (greedy parsing), then writes each
-//! block with its own literal/length and distance Huffman tables (block type 2). The chain depth is
-//! the compression level. Inputs of at least two split sizes can be encoded on several threads: each
+//! The encoder finds matches with hash chains over a 32 KiB window, then writes each block with its own
+//! literal/length and distance Huffman tables (block type 2). The chain depth is the compression level.
+//! Fast parses greedily; Default and Best use lazy matching (a match is dropped when a longer one starts
+//! one byte later). A block is stored (block type 0) when the Huffman form would be larger. `Encoder`
+//! is the incremental form: it emits a block every `STREAM_BLOCK` bytes of input, and its output does
+//! not depend on how the input was split into writes. Inputs of at least two split sizes can be encoded on several threads: each
 //! piece becomes its own block and the blocks are joined bit by bit, so the result is one DEFLATE
 //! stream. Matches do not cross the piece boundaries, which costs little on large inputs.
 //!
@@ -57,7 +60,10 @@ enum Token {
 
 /// Raw DEFLATE of `data` on one thread.
 pub fn encode(data: &[u8], level: Level) -> Vec<u8> {
-    encode_block(data, level, true).0
+    let mut encoder = Encoder::new(level);
+    let mut out = encoder.write(data);
+    out.extend(encoder.finish());
+    out
 }
 
 /// Raw DEFLATE of `data`, using up to `threads` threads for inputs of at least two split sizes.
@@ -101,57 +107,199 @@ fn common_len(data: &[u8], a: usize, b: usize, max: usize) -> usize {
     n
 }
 
-fn tokenize(data: &[u8], chain_limit: usize) -> Vec<Token> {
-    let n = data.len();
-    let mut tokens = Vec::with_capacity(n / 2 + 1);
-    let mut head = vec![usize::MAX; 1 << HASH_BITS];
-    let mut prev = vec![usize::MAX; n];
-    let mut i = 0;
-    while i < n {
-        let mut best_len = 0;
-        let mut best_dist = 0;
-        let max_len = MAX_MATCH.min(n - i);
-        if i + MIN_MATCH <= n {
-            let h = hash3(data, i);
-            let mut cand = head[h];
-            let mut chain = 0;
-            while cand != usize::MAX && chain < chain_limit {
-                let dist = i - cand;
-                if dist > WINDOW {
-                    break;
-                }
-                if best_len < max_len && data[cand + best_len] == data[i + best_len] {
-                    let len = common_len(data, cand, i, max_len);
-                    if len > best_len {
-                        best_len = len;
-                        best_dist = dist;
-                        if len == max_len {
-                            break;
-                        }
-                    }
-                }
-                cand = prev[cand];
-                chain += 1;
-            }
-            prev[i] = head[h];
-            head[h] = i;
-        }
-        if best_len >= MIN_MATCH {
-            tokens.push(Token::Match { len: best_len as u16, dist: best_dist as u16 });
-            for p in i + 1..i + best_len {
-                if p + MIN_MATCH <= n {
-                    let h = hash3(data, p);
-                    prev[p] = head[h];
-                    head[h] = p;
-                }
-            }
-            i += best_len;
-        } else {
-            tokens.push(Token::Literal(data[i]));
-            i += 1;
+/// Largest stored block (RFC 1951 section 3.2.4).
+const STORED_MAX: usize = 65_535;
+
+/// Input bytes per block in the streaming encoder. Equal to the largest stored block, so a block
+/// that is stored is always one stored block, and the 5-byte stored header is paid once per block.
+pub const STREAM_BLOCK: usize = STORED_MAX;
+
+/// Hash chains over the input, with the search depth of a level. Positions are indexes into the
+/// slice the caller passes in, so the streaming encoder keeps history across blocks.
+#[derive(Debug)]
+struct Matcher {
+    head: Vec<usize>,
+    prev: Vec<usize>,
+    chain: usize,
+    /// Lazy matching (Default and Best): a match is dropped for a literal when a longer match starts
+    /// one byte later.
+    lazy: bool,
+}
+
+impl Matcher {
+    fn new(level: Level) -> Matcher {
+        Matcher {
+            head: vec![usize::MAX; 1 << HASH_BITS],
+            prev: Vec::new(),
+            chain: level.chain_limit(),
+            lazy: level != Level::Fast,
         }
     }
-    tokens
+
+    /// Longest match at `i` among the earlier positions in the chain, as (length, distance).
+    fn find(&self, data: &[u8], i: usize) -> (usize, usize) {
+        let n = data.len();
+        if i + MIN_MATCH > n {
+            return (0, 0);
+        }
+        let max_len = MAX_MATCH.min(n - i);
+        let (mut best_len, mut best_dist) = (0, 0);
+        let mut cand = self.head[hash3(data, i)];
+        let mut chain = 0;
+        while cand != usize::MAX && chain < self.chain {
+            let dist = i - cand;
+            if dist > WINDOW {
+                break;
+            }
+            if best_len < max_len && data[cand + best_len] == data[i + best_len] {
+                let len = common_len(data, cand, i, max_len);
+                if len > best_len {
+                    best_len = len;
+                    best_dist = dist;
+                    if len == max_len {
+                        break;
+                    }
+                }
+            }
+            cand = self.prev[cand];
+            chain += 1;
+        }
+        (best_len, best_dist)
+    }
+
+    fn insert(&mut self, data: &[u8], p: usize) {
+        if p + MIN_MATCH <= data.len() {
+            let h = hash3(data, p);
+            self.prev[p] = self.head[h];
+            self.head[h] = p;
+        }
+    }
+
+    /// Tokens for `data[start..]`. Matches may reach back into `data[..start]` (the window).
+    fn tokenize(&mut self, data: &[u8], start: usize) -> Vec<Token> {
+        let n = data.len();
+        self.prev.resize(n, usize::MAX);
+        let mut tokens = Vec::with_capacity(n - start);
+        let mut i = start;
+        let mut cur = self.find(data, i);
+        while i < n {
+            let (len, dist) = cur;
+            if self.lazy && len >= MIN_MATCH && i + 1 < n {
+                let next = self.find(data, i + 1);
+                if next.0 > len {
+                    tokens.push(Token::Literal(data[i]));
+                    self.insert(data, i);
+                    i += 1;
+                    cur = next;
+                    continue;
+                }
+            }
+            if len >= MIN_MATCH {
+                tokens.push(Token::Match { len: len as u16, dist: dist as u16 });
+                for p in i..i + len {
+                    self.insert(data, p);
+                }
+                i += len;
+            } else {
+                tokens.push(Token::Literal(data[i]));
+                self.insert(data, i);
+                i += 1;
+            }
+            if i < n {
+                cur = self.find(data, i);
+            }
+        }
+        tokens
+    }
+}
+
+/// Incremental raw DEFLATE (RFC 1951) encoder. `write` returns the bytes of each block as soon as
+/// `STREAM_BLOCK` bytes of input are in, and `finish` closes the stream with a final block. Matches
+/// reach back 32 KiB into earlier blocks, so the output does not depend on how the input was split
+/// into writes.
+#[derive(Debug)]
+pub struct Encoder {
+    matcher: Matcher,
+    /// The window history followed by the block being collected.
+    buf: Vec<u8>,
+    /// Index in `buf` where the block being collected starts.
+    start: usize,
+    w: BitWriter,
+}
+
+impl Encoder {
+    pub fn new(level: Level) -> Encoder {
+        Encoder { matcher: Matcher::new(level), buf: Vec::new(), start: 0, w: BitWriter::new() }
+    }
+
+    /// Adds `data` and returns the bytes of every block that it completed.
+    pub fn write(&mut self, mut data: &[u8]) -> Vec<u8> {
+        let mut out = Vec::new();
+        while !data.is_empty() {
+            let room = STREAM_BLOCK - (self.buf.len() - self.start);
+            let take = room.min(data.len());
+            self.buf.extend_from_slice(&data[..take]);
+            data = &data[take..];
+            if self.buf.len() - self.start == STREAM_BLOCK {
+                self.emit(false);
+                out.append(&mut self.w.out);
+            }
+        }
+        out
+    }
+
+    /// Closes the stream with a final block and returns the remaining bytes.
+    pub fn finish(mut self) -> Vec<u8> {
+        self.emit(true);
+        self.w.finish().0
+    }
+
+    fn emit(&mut self, last: bool) {
+        let tokens = self.matcher.tokenize(&self.buf, self.start);
+        write_block(&mut self.w, &tokens, &self.buf[self.start..], last);
+        self.slide();
+    }
+
+    /// Makes the end of the buffer the next block start, and drops history older than the window.
+    fn slide(&mut self) {
+        self.start = self.buf.len();
+        let drop = self.buf.len().saturating_sub(WINDOW);
+        if drop == 0 {
+            return;
+        }
+        self.buf.drain(..drop);
+        self.matcher.prev.drain(..drop);
+        self.start -= drop;
+        for p in self.matcher.prev.iter_mut().chain(self.matcher.head.iter_mut()) {
+            *p = if *p != usize::MAX && *p >= drop { *p - drop } else { usize::MAX };
+        }
+    }
+}
+
+/// Writes one block of `data` (covered by `tokens`): dynamic Huffman, or stored when that is smaller.
+/// The stored size ignores the up to 7 bits of byte padding it may need.
+fn write_block(w: &mut BitWriter, tokens: &[Token], data: &[u8], last: bool) {
+    let (bytes, bits) = write_dynamic(tokens, last);
+    let stored_bits = 8 * (data.len() + 5 * data.len().div_ceil(STORED_MAX));
+    if !data.is_empty() && bits > stored_bits {
+        write_stored(w, data, last);
+    } else {
+        w.append(&bytes, bits);
+    }
+}
+
+/// Writes `data` as stored blocks of at most 65535 bytes, flagging only the last one when `last` is set.
+fn write_stored(w: &mut BitWriter, data: &[u8], last: bool) {
+    let count = data.len().div_ceil(STORED_MAX);
+    for (i, chunk) in data.chunks(STORED_MAX).enumerate() {
+        w.put((last && i + 1 == count) as u32, 1);
+        w.put(0, 2);
+        w.align();
+        let n = chunk.len() as u16;
+        w.out.extend_from_slice(&n.to_le_bytes());
+        w.out.extend_from_slice(&(!n).to_le_bytes());
+        w.out.extend_from_slice(chunk);
+    }
 }
 
 /// Length symbol index (0 to 28), extra value and extra bit count for a match length of 3 to 258.
@@ -301,6 +449,7 @@ fn run_length_codes(lens: &[u8]) -> Vec<(usize, u32, u32)> {
     out
 }
 
+#[derive(Debug)]
 struct BitWriter {
     out: Vec<u8>,
     acc: u64,
@@ -342,6 +491,15 @@ impl BitWriter {
         }
     }
 
+    /// Pads the current byte with zero bits, so the next write starts on a byte boundary.
+    fn align(&mut self) {
+        if self.n > 0 {
+            self.out.push(self.acc as u8);
+            self.acc = 0;
+            self.n = 0;
+        }
+    }
+
     /// The written bytes (the last one zero-padded) and the exact bit count.
     fn finish(mut self) -> (Vec<u8>, usize) {
         let bits = self.out.len() * 8 + self.n as usize;
@@ -352,13 +510,11 @@ impl BitWriter {
     }
 }
 
-/// Writes one dynamic-Huffman block for `data`. Returns the bytes and the exact bit count.
-fn encode_block(data: &[u8], level: Level, last: bool) -> (Vec<u8>, usize) {
-    let tokens = tokenize(data, level.chain_limit());
-
+/// Writes one dynamic-Huffman block for `tokens`. Returns the bytes and the exact bit count.
+fn write_dynamic(tokens: &[Token], last: bool) -> (Vec<u8>, usize) {
     let mut lit_freq = vec![0u32; LIT_CODES];
     let mut dist_freq = vec![0u32; DIST_CODES];
-    for t in &tokens {
+    for t in tokens {
         match *t {
             Token::Literal(b) => lit_freq[b as usize] += 1,
             Token::Match { len, dist } => {
@@ -404,7 +560,7 @@ fn encode_block(data: &[u8], level: Level, last: bool) -> (Vec<u8>, usize) {
             w.put(extra, extra_bits);
         }
     }
-    for t in &tokens {
+    for t in tokens {
         match *t {
             Token::Literal(b) => w.put_code(lit_codes[b as usize], lit_lens[b as usize]),
             Token::Match { len, dist } => {
@@ -418,6 +574,16 @@ fn encode_block(data: &[u8], level: Level, last: bool) -> (Vec<u8>, usize) {
         }
     }
     w.put_code(lit_codes[256], lit_lens[256]);
+    w.finish()
+}
+
+/// Writes `data` as one block (dynamic or stored, see `write_block`) on its own writer. Returns the
+/// bytes and the exact bit count, for joining the pieces of a threaded encode.
+fn encode_block(data: &[u8], level: Level, last: bool) -> (Vec<u8>, usize) {
+    let mut matcher = Matcher::new(level);
+    let tokens = matcher.tokenize(data, 0);
+    let mut w = BitWriter::new();
+    write_block(&mut w, &tokens, data, last);
     w.finish()
 }
 
@@ -526,6 +692,49 @@ mod tests {
         }
         let enc = encode_threaded(&data, Level::Fast, 3);
         assert_eq!(inflate::inflate(&enc).unwrap(), data);
+    }
+
+    #[test]
+    fn lazy_levels_round_trip_and_are_deterministic() {
+        let mut corpus: Vec<Vec<u8>> = vec![b"abcabcabcabcxabcabcabcy".to_vec(), vec![0u8; 3000], pseudo_random(5000, 4)];
+        let mut text = Vec::new();
+        for i in 0..400u32 {
+            text.extend_from_slice(format!("line {} gamma kappa beta {}\n", i, i * i % 37).as_bytes());
+        }
+        corpus.push(text);
+        for data in &corpus {
+            for level in [Level::Default, Level::Best, Level::Fast] {
+                let enc = encode(data, level);
+                assert_eq!(inflate::inflate(&enc).unwrap(), *data);
+                assert_eq!(encode(data, level), enc);
+            }
+        }
+    }
+
+    #[test]
+    fn incompressible_input_is_stored_within_five_bytes_per_block() {
+        let data = pseudo_random(200_000, 21);
+        let enc = encode(&data, Level::Default);
+        let blocks = data.len().div_ceil(STREAM_BLOCK);
+        assert!(enc.len() <= data.len() + 5 * blocks, "{} bytes for {} input", enc.len(), data.len());
+        assert_eq!(inflate::inflate(&enc).unwrap(), data);
+    }
+
+    #[test]
+    fn streamed_output_does_not_depend_on_the_write_sizes() {
+        let mut data = pseudo_random(STREAM_BLOCK + 500, 3);
+        data.extend_from_slice(&b"repeat me ".repeat(12000));
+        let whole = encode(&data, Level::Default);
+        for piece in [1usize, 300, 65_536] {
+            let mut encoder = Encoder::new(Level::Default);
+            let mut out = Vec::new();
+            for chunk in data.chunks(piece) {
+                out.extend(encoder.write(chunk));
+            }
+            out.extend(encoder.finish());
+            assert_eq!(out, whole, "piece size {}", piece);
+        }
+        assert_eq!(inflate::inflate(&whole).unwrap(), data);
     }
 
     #[test]

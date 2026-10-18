@@ -15,6 +15,9 @@ pub enum SettingsIntent {
     WifiScan,
     /// the home screen wallpaper becomes the packed still with this id
     SetWallpaper(String),
+    /// lock the screen now, as Lock Screen does. The lock state is changed by `Shell::lock_screen`, which Search
+    /// calls for this intent; `into_effect` gives the display-off effect that call ends with.
+    LockScreen,
 }
 
 /// A catalogue entry: the id a caller sends, a title for Search, and the parameter names.
@@ -26,10 +29,11 @@ pub struct Info {
     pub params: &'static [&'static str],
 }
 
-static CATALOGUE: [Info; 3] = [
+static CATALOGUE: [Info; 4] = [
     Info { id: "wifi-power", title: "Set Wi-Fi Power", params: &["on"] },
     Info { id: "wifi-scan", title: "Scan for Wi-Fi Networks", params: &[] },
     Info { id: "wallpaper-set", title: "Set Wallpaper", params: &["id"] },
+    Info { id: "lock-screen", title: "Lock Screen", params: &[] },
 ];
 
 /// Longest wallpaper id accepted (ids name `wallpapers/<id>.raw`).
@@ -57,6 +61,7 @@ pub fn parse(id: &str, params: &[(&str, &str)]) -> Result<SettingsIntent, String
     match id {
         "wifi-power" => Ok(SettingsIntent::WifiPower(parse_bool(&need(id, params, "on")?)?)),
         "wifi-scan" => Ok(SettingsIntent::WifiScan),
+        "lock-screen" => Ok(SettingsIntent::LockScreen),
         "wallpaper-set" => {
             let wid = need(id, params, "id")?;
             if valid_wallpaper_id(&wid) {
@@ -81,6 +86,7 @@ impl SettingsIntent {
             SettingsIntent::WifiPower(on) => Effect::Wifi(WifiAction::Enable(on)),
             SettingsIntent::WifiScan => Effect::Wifi(WifiAction::Scan),
             SettingsIntent::SetWallpaper(id) => Effect::Wallpaper(id),
+            SettingsIntent::LockScreen => Effect::ScreenOff,
         }
     }
 }
@@ -105,9 +111,16 @@ mod tests {
     #[test]
     fn catalogue_lists_three_intents_with_unique_ids() {
         let ids: Vec<&str> = catalogue().iter().map(|i| i.id).collect();
-        assert_eq!(ids, ["wifi-power", "wifi-scan", "wallpaper-set"]);
+        assert_eq!(ids, ["wifi-power", "wifi-scan", "wallpaper-set", "lock-screen"]);
         assert_eq!(find("wifi-scan").map(|i| i.title), Some("Scan for Wi-Fi Networks"));
         assert!(find("wifi-off").is_none());
+    }
+
+    #[test]
+    fn lock_screen_takes_no_parameters() {
+        assert_eq!(find("lock-screen").map(|i| i.title), Some("Lock Screen"));
+        assert_eq!(parse("lock-screen", &[]), Ok(SettingsIntent::LockScreen));
+        assert!(parse("lock-screen", &[("now", "1")]).is_err());
     }
 
     #[test]

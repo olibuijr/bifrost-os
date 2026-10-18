@@ -82,7 +82,7 @@
    "apple": "https://developer.apple.com/documentation/swiftui/layout-fundamentals",
    "bifrost": "springboard/ui/src/stack.rs (stack, distribute, grid, adaptive_columns, overlay, first_fitting); springboard/ui/src/lazy_stack.rs (visible_rows, visible_items, content_height: the lazy list and grid windows)",
    "status": "partial",
-   "note": "Stack and grid layout as pure functions: HStack/VStack spacing and flexible items, the four fixed distributions, adaptive columns, grid, a ZStack-style overlay and a ViewThatFits-style first_fitting. The SDK Stack view arranges its children with stack and distribute. Lazy list and grid windows (the rows or items under a viewport, with overscan) are tested headless in ui/tests/parity_sdk-complete-33.rs. Gap: no SDK view yet builds only the visible rows of a lazy stack or grid, so the windowing is not wired into the Stack view. Tests: spare_space_is_shared_by_flexible_items_in_proportion_to_their_weight, equal_centering_keeps_the_centres_equally_far_apart, adaptive_columns_fit_as_many_minimum_cells_as_the_width_allows, a_grid_fills_rows_left_to_right, an_overlay_aligns_each_layer_to_the_anchor, view_that_fits_picks_the_first_candidate_that_fits_the_constrained_axes (springboard/ui/tests/parity_sdk-tests-10.rs)"
+   "note": "Stack and grid layout as pure functions: HStack/VStack spacing and flexible items, the four fixed distributions, adaptive columns, grid, a ZStack-style overlay and a ViewThatFits-style first_fitting. The SDK Stack view arranges its children with stack and distribute. Lazy list and grid windows (the rows or items under a viewport, with overscan) are tested headless in ui/tests/parity_sdk-complete-33.rs. Gap: no SDK view yet builds only the visible rows of a lazy stack or grid, so the windowing is not wired into the Stack view. Tests: spare_space_is_shared_by_flexible_items_in_proportion_to_their_weight, equal_centering_keeps_the_centres_equally_far_apart, adaptive_columns_fit_as_many_minimum_cells_as_the_width_allows, a_grid_fills_rows_left_to_right, an_overlay_aligns_each_layer_to_the_anchor, view_that_fits_picks_the_first_candidate_that_fits_the_constrained_axes (springboard/ui/tests/parity_sdk-tests-10.rs) Refreshed 2026-10-17: covered by springboard/sdk/src/view/overlay.rs (ZStack, Grid, Columns and ViewThatFits views, re-exported from view/mod.rs); tests in springboard/sdk/src/view/tests_overlay.rs (zstack_fills_or_aligns_each_layer_in_the_same_area, view_that_fits_shows_the_first_candidate_that_fits_and_hides_the_rest). Lazy windows are ui lazy_stack.rs."
   },
   {
    "feature": "Layout adjustments (alignment, spacing, padding, safe area)",
@@ -117,14 +117,14 @@
    "apple": "https://developer.apple.com/documentation/swiftui/view-groupings",
    "bifrost": "springboard/sdk/src/view/forms.rs (Form, Section), springboard/ui/src/split.rs",
    "status": "partial",
-   "note": "forms with sections, split view; no TabView, GroupBox, ControlGroup views"
+   "note": "forms with sections, split view; no TabView, GroupBox, ControlGroup views Built 2026-10-17: TabView selection model (ui tab_selection::TabSelection: select, remove with successor selection, duplicate ids dropped); tests tab_selection::tests in springboard/ui/src/tab_selection.rs. Not yet a TabView view, not wired into the shell or apps."
   },
   {
    "feature": "Scroll views",
    "apple": "https://developer.apple.com/documentation/swiftui/scroll-views",
    "bifrost": "springboard/ui/src/scroll.rs (Scroller), springboard/sdk/src/view/scroll.rs",
    "status": "partial",
-   "note": "scrolling with model; scroll targets work headless: offset_for_rect places a row at the leading, centre or trailing edge of the viewport, clamped to the scrollable range, and ScrollView::reveal applies it (ui/tests/parity_sdk-complete-05.rs). Still missing: a scroll position binding to app state and per-item scroll identity, and the reveal path has not run on Midget. Headless tests: ui/tests/parity_sdk-tests-01a.rs (a_short_drag_does_not_scroll_and_a_tap_is_reported_as_a_tap, a_drag_follows_the_finger_past_the_slop, pulling_past_the_end_rubber_bands_beyond_the_maximum, jumps_and_range_changes_clamp_the_offset, a_released_bounce_springs_back_to_the_edge, a_fling_decelerates_and_stops_below_the_threshold)."
+   "note": "scrolling with model; scroll targets work headless: offset_for_rect places a row at the leading, centre or trailing edge of the viewport, clamped to the scrollable range, and ScrollView::reveal applies it (ui/tests/parity_sdk-complete-05.rs). Still missing: a scroll position binding to app state and per-item scroll identity, and the reveal path has not run on Midget. Headless tests: ui/tests/parity_sdk-tests-01a.rs (a_short_drag_does_not_scroll_and_a_tap_is_reported_as_a_tap, a_drag_follows_the_finger_past_the_slop, pulling_past_the_end_rubber_bands_beyond_the_maximum, jumps_and_range_changes_clamp_the_offset, a_released_bounce_springs_back_to_the_edge, a_fling_decelerates_and_stops_below_the_threshold). Refreshed 2026-10-17: reveal to a row is covered by ScrollView::reveal (springboard/sdk/src/view/scroll.rs) over ui scroll::offset_for_rect; tests in ui scroll::tests."
   },
   {
    "feature": "Shader effects (Shader, ShaderLibrary, colorEffect, distortionEffect, layerEffect, visualEffect)",
@@ -151,9 +151,9 @@
  "gaps": [
   "Declarative View protocol with body, modifiers and state/binding updates",
   "Style protocols",
-  "Layout protocol and ZStack, lazy grids, ViewThatFits",
-  "Shape, Path and Canvas drawing API for apps",
-  "Generic List with swipe actions, TabView, GroupBox, ControlGroup",
-  "ScrollViewReader and scroll position APIs"
+  "Layout protocol (custom Layout types). Lazy grid views (LazyVGrid) have no SDK view: the window model is in ui lazy_stack only",
+  "Declarative Shape and Canvas views: the drawing API exists imperatively (sdk graphics_context Path and GraphicsContext, ShapeView, ui shape), but no Shape protocol or Canvas view builder in the view tree",
+  "Generic List with swipe actions, GroupBox, ControlGroup and a TabView view (the selection model is built in ui tab_selection)",
+  "Scroll position binding to app state and per-item scroll identity (scroll-to-row reveal exists: ScrollView::reveal, ui scroll::offset_for_rect)"
  ]
 }

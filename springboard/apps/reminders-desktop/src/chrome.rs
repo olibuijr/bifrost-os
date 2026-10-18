@@ -66,6 +66,8 @@ fn band(x: f32, w: f32) -> Rect {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Tile {
     Smart(Smart),
+    /// Recently Deleted: the reminders kept in the archive store (`archive.rs`).
+    Deleted,
     List(u64),
 }
 
@@ -99,6 +101,7 @@ impl Reminders {
             .copied()
             .filter(|s| self.opts.smart_shown(*s))
             .map(Tile::Smart)
+            .chain(std::iter::once(Tile::Deleted))
             .chain(self.data.lists.iter().filter(|l| l.pinned).map(|l| Tile::List(l.id)))
             .collect()
     }
@@ -107,6 +110,7 @@ impl Reminders {
     fn tile_info(&self, tile: Tile) -> (String, usize, u32) {
         match tile {
             Tile::Smart(s) => (s.label().to_string(), s.count(&self.data.items, self.today), smart_colour(s)),
+            Tile::Deleted => ("Recently Deleted".to_string(), self.kept_count, GRAY_DIM),
             Tile::List(id) => match self.data.lists.iter().find(|l| l.id == id) {
                 Some(l) => (l.name.clone(), model::list_count(&self.data.items, id), view::COLORS[l.color as usize % view::COLORS.len()]),
                 None => (String::new(), 0, GRAY_DIM),
@@ -117,17 +121,17 @@ impl Reminders {
     fn tile_target(tile: Tile) -> Target {
         match tile {
             Tile::Smart(s) => Target::Smart(s),
+            Tile::Deleted => Target::Deleted,
             Tile::List(id) => Target::List(id),
         }
     }
 
     fn tile_selected(&self, tile: Tile) -> bool {
-        !self.searching
-            && self.view
-                == match tile {
-                    Tile::Smart(s) => View::Smart(s),
-                    Tile::List(id) => View::List(id),
-                }
+        match tile {
+            Tile::Deleted => self.deleted.is_some(),
+            Tile::Smart(s) => self.deleted.is_none() && !self.searching && self.view == View::Smart(s),
+            Tile::List(id) => self.deleted.is_none() && !self.searching && self.view == View::List(id),
+        }
     }
 
     fn list_view(&self) -> bool {
@@ -384,6 +388,7 @@ impl Reminders {
             let glyph_at = (x + ui.pt(SPACE_L + 2.0), y + ui.pt(SPACE_L + 2.0));
             match tile {
                 Tile::Smart(smart) => self.smart_glyph(s, ui, smart, glyph_at, colour, today),
+                Tile::Deleted => self.smart_glyph(s, ui, Smart::Completed, glyph_at, colour, today),
                 Tile::List(id) => self.list_glyph(s, ui, id, glyph_at, colour),
             }
             self.right(s, ui, &count.to_string(), MAC_TITLE2_PT, Weight::Bold, WHITE, x + w - ui.pt(SPACE_M), y + ui.pt(SPACE_S));

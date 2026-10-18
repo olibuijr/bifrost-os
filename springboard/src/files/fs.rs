@@ -46,6 +46,11 @@ fn type_of(name: &str) -> Option<&'static str> {
 
 /// The kind a name's type implies, by `UTType.conforms(to:)`. Only PNG and JPEG count as Image: they are the formats
 /// the viewer can decode (a GIF or WebP is still shown as "GIF image" in the info sheet, but opens as a document).
+/// Whether a folder name is a package of a known type (`bifrost_ui::uttype::is_package_name`): Files shows it as one file.
+pub fn is_package_name(name: &str) -> bool {
+    bifrost_ui::uttype::is_package_name(name)
+}
+
 pub fn kind_of(name: &str, is_dir: bool) -> Kind {
     use bifrost_ui::uttype::conforms;
     if is_dir {
@@ -253,7 +258,11 @@ fn read_plain(dir: &Path, emit: &mut impl FnMut(&[Entry])) -> io::Result<Vec<Ent
         // follow symlinks for the kind, but a dangling link is still listed
         let md = std::fs::metadata(&path).or_else(|_| e.metadata());
         let (is_dir, size, mtime) = match md {
-            Ok(md) => (md.is_dir(), if md.is_dir() { 0 } else { md.len() }, mtime_of(&md)),
+            Ok(md) => {
+                // a folder package is one document: it lists and opens like a file
+                let dir = md.is_dir() && !is_package_name(&e.file_name().to_string_lossy());
+                (dir, if dir { 0 } else { md.len() }, mtime_of(&md))
+            }
             Err(_) => (false, 0, 0),
         };
         out.push(Entry { kind: kind_of(&name, is_dir), name, path, is_dir, size, mtime, items: None });
@@ -316,6 +325,15 @@ pub fn unique_name(dir: &Path, name: &str) -> PathBuf {
         None => (name.to_string(), String::new()),
     };
     (2..u32::MAX).map(|n| dir.join(format!("{stem} {n}{ext}"))).find(|p| p.symlink_metadata().is_err()).unwrap_or(first)
+}
+
+/// Make Alias: a symbolic link to `path` beside it, named "name alias" (numbered when taken). Returns the link's path.
+pub fn make_alias(path: &Path) -> io::Result<PathBuf> {
+    let name = path.file_name().ok_or_else(invalid)?.to_string_lossy().into_owned();
+    let dir = path.parent().ok_or_else(invalid)?;
+    let link = unique_name(dir, &format!("{name} alias"));
+    std::os::unix::fs::symlink(path, &link)?;
+    Ok(link)
 }
 
 /// Copies `src` into `dir`, numbering the name when it is taken.
@@ -799,6 +817,21 @@ pub(crate) mod tests {
         delete(&dir.join("c.txt")).unwrap();
         assert!(delete(&dir.join("c.txt")).is_err());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn make_alias_links_beside_the_item_and_numbers_taken_names() {
+        let dir = temp("make-alias");
+        let file = dir.join("notes.txt");
+        std::fs::write(&file, b"hi").unwrap();
+        let first = make_alias(&file).unwrap();
+        assert_eq!(first, dir.join("notes.txt alias"));
+        assert!(std::fs::symlink_metadata(&first).unwrap().file_type().is_symlink());
+        assert_eq!(std::fs::read_link(&first).unwrap(), file);
+        let second = make_alias(&file).unwrap();
+        assert_ne!(second, first, "a taken name is numbered, not reused");
+        assert_eq!(std::fs::read_link(&second).unwrap(), file);
+        assert!(make_alias(Path::new("/")).is_err(), "the root has no name to alias");
     }
 
     #[test]

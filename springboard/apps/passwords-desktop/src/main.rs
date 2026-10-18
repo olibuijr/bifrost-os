@@ -174,6 +174,11 @@ impl PasswordsApp {
     }
 }
 
+/// Seconds since the Unix epoch, for one-time codes (0 if the clock is before the epoch).
+fn unix_now() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
+}
+
 fn skipped_text(n: usize) -> String {
     if n == 0 {
         String::new()
@@ -507,13 +512,23 @@ impl App for PasswordsApp {
                 let user = ui.text(&ui.fit(sub, ui::MAC_BODY_PT, ui.pt(width)), ui::MAC_BODY_PT, Weight::Regular, ui::LABEL_2.now());
                 s.blit_colored(&user, pi(px), pi(HEADER_PT + 36.0), ui::LABEL_2.now(), 255);
                 // a note or certificate can be several lines: the detail shows its first line
-                let shown_secret = match &self.revealed {
-                    Some(v) if kind == Kind::Login => v.clone(),
-                    Some(v) => v.lines().next().unwrap_or("").to_string(),
-                    None => "••••••••••••".to_string(),
+                // a login whose secret is an otpauth URI shows its current one-time code and the seconds it has left
+                let code = match &self.revealed {
+                    Some(v) if kind == Kind::Login => model::verification_code(v, unix_now()),
+                    _ => None,
+                };
+                let shown_secret = match (&code, &self.revealed) {
+                    (Some((digits, _)), _) => digits.clone(),
+                    (None, Some(v)) if kind == Kind::Login => v.clone(),
+                    (None, Some(v)) => v.lines().next().unwrap_or("").to_string(),
+                    (None, None) => "••••••••••••".to_string(),
                 };
                 let pw = ui.text(&ui.fit(&shown_secret, ui::MAC_BODY_PT, ui.pt(width)), ui::MAC_BODY_PT, Weight::Regular, ui::LABEL.now());
                 s.blit_colored(&pw, pi(px), pi(HEADER_PT + 72.0), ui::LABEL.now(), 255);
+                if let Some((_, left)) = &code {
+                    let note = ui.text(&format!("Verification code, changes in {left} s"), ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::LABEL_2.now());
+                    s.blit_colored(&note, pi(px), pi(HEADER_PT + 100.0), ui::LABEL_2.now(), 255);
+                }
             }
             None => {
                 let hint = ui.text("Select an item to see it", ui::MAC_BODY_PT, Weight::Regular, ui::LABEL_2.now());

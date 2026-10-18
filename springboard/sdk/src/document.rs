@@ -21,6 +21,8 @@
 use crate::proto::{AppMenu, AppMenuItem, DocErrorCode, DocMode, GrantId};
 use crate::{DocumentEvent, OpenOptions};
 use bifrost_ui::nav::{Alert, AlertStyle};
+use crate::document_package;
+use crate::revisions::RevisionStore;
 use bifrost_ui::undo::ChangeCount;
 use std::collections::HashMap;
 use std::io::{Read, Write};
@@ -46,8 +48,23 @@ pub trait Document: Sized {
     fn untitled() -> Self;
     /// `readableTypes`: the open panel's filters.
     fn readable_types() -> &'static [&'static str];
+    /// `writableTypes`: the types the save panel offers. Defaults to the readable types, since a document that reads a
+    /// type is taken to write it back; an app that reads more than it writes overrides it.
+    fn writable_types() -> &'static [&'static str] {
+        Self::readable_types()
+    }
     /// The type of a new document and the one Save As offers.
     fn default_type() -> &'static str;
+    /// Reads a folder package of `uttype` from its files (name and bytes, as `document_package::read_package_dir` gives
+    /// them). Only the package types override it; the default refuses.
+    fn read_package(_files: &[(String, Vec<u8>)], _uttype: &str) -> Result<Self, DocumentError> {
+        Err(DocumentError::new("This document is not a package"))
+    }
+    /// The files of a folder package of `uttype` (`TXT.rtf` and the rest), which a save writes with
+    /// `document_package::write_package_dir`. Only the package types override it; the default refuses.
+    fn package_files(&self, _uttype: &str) -> Result<Vec<(String, Vec<u8>)>, DocumentError> {
+        Err(DocumentError::new("This document is not a package"))
+    }
 }
 
 /// Identifies an open document for the life of the controller.
@@ -197,6 +214,8 @@ struct Entry<D> {
     edit_since: Option<f64>,
     /// the state an autosave last tried, so a failing one is not retried until the next change
     tried: Option<Stamp>,
+    /// the folder a package document was read from, which a save writes back to (None for a file)
+    package: Option<PathBuf>,
 }
 
 impl<D> Entry<D> {
@@ -237,12 +256,13 @@ pub struct DocumentController<D: Document> {
     active: Option<DocId>,
     next_id: u32,
     recents: Vec<RecentDocument>,
-    recents_loaded: bool,
     pending: HashMap<u32, Pending>,
     alert: Option<CloseAlert>,
     sent: Option<(String, bool, String)>,
     /// autosave delay in ms; `AUTOSAVE_DELAY_MS` unless changed
     pub autosave_delay: f64,
+    /// the saved versions of every open document, kept under `document-<id>`; each save adds one (see `on_saved`)
+    pub revisions: RevisionStore,
     now: f64,
 }
 
@@ -254,7 +274,7 @@ impl<D: Document> Default for DocumentController<D> {
 
 impl<D: Document> DocumentController<D> {
     pub fn new() -> Self {
-        DocumentController { docs: Vec::new(), active: None, next_id: 0, recents: Vec::new(), recents_loaded: false, pending: HashMap::new(), alert: None, sent: None, autosave_delay: AUTOSAVE_DELAY_MS, now: 0.0 }
+        DocumentController { docs: Vec::new(), active: None, next_id: 0, recents: Vec::new(), pending: HashMap::new(), alert: None, sent: None, autosave_delay: AUTOSAVE_DELAY_MS, revisions: RevisionStore::default(), now: 0.0 }
     }
 
     // ---- the document list ----
@@ -319,7 +339,7 @@ impl<D: Document> DocumentController<D> {
     fn add(&mut self, doc: D, untitled: Option<u32>, name: String, grant: Option<GrantId>, uttype: &str) -> DocId {
         self.next_id += 1;
         let id = DocId(self.next_id);
-        self.docs.push(Entry { id, doc, untitled, name, grant, uttype: uttype.into(), now: Stamp::default(), saved: Stamp::default(), edit_since: None, tried: None });
+        self.docs.push(Entry { id, doc, untitled, name, grant, uttype: uttype.into(), now: Stamp::default(), saved: Stamp::default(), edit_since: None, tried: None, package: None });
         self.active = Some(id);
         id
     }
@@ -394,12 +414,10 @@ impl<D: Document> DocumentController<D> {
         self.store_recents(host);
     }
 
+    /// Re-reads the shared store on every use, so a list another process wrote since the last
+    /// read (the Recents store is shared by every app that opens documents) is seen here too.
     fn load_recents(&mut self, host: &dyn DocumentHost) {
-        if self.recents_loaded {
-            return;
-        }
-        self.recents_loaded = true;
-        self.recents = host.pref(RECENTS_KEY).map(|t| parse_recents(&t)).unwrap_or_default();
+        self.recents =  host.pref(RECENTS_KEY).map(|t| parse_recents(&t)).unwrap_or_default();
     }
 
     fn store_recents(&self, host: &dyn DocumentHost) {
@@ -490,7 +508,10 @@ impl<D: Document> DocumentController<D> {
         let ext = bifrost_ui::uttype::preferred_extension(&e.uttype).map(|x| format!(".{x}")).unwrap_or_default();
         let suggested = if e.untitled.is_some() || e.name.is_empty() { format!("{}{ext}", e.title()) } else { e.name.clone() };
         let uttype = e.uttype.clone();
-        let request = host.save_panel(&suggested, &[uttype.as_str()]);
+        // the document's own type leads the filters, then every other writable type once
+        let mut filters: Vec<&str> = vec![uttype.as_str()];
+        filters.extend(D::writable_types().iter().copied().filter(|t| *t != uttype));
+        let request = host.save_panel(&suggested, &filters);
         self.pending.insert(request, Pending::Save { doc: id, op, after, stamp });
     }
 
@@ -589,6 +610,11 @@ impl<D: Document> DocumentController<D> {
         let pending = self.pending.remove(&request)?;
         let mut out = Vec::new();
         for file in files {
+            // a folder grant is a package (the panels hand over folders only for package types)
+            if file.file.metadata().is_ok_and(|m| m.is_dir()) {
+                out.push(self.open_package(host, file));
+                continue;
+            }
             let mut bytes = Vec::new();
             if let Err(e) = (&file.file).read_to_end(&mut bytes) {
                 out.push(failed(None, None, &format!("cannot read {}: {e}", file.name)));
@@ -630,10 +656,67 @@ impl<D: Document> DocumentController<D> {
         Some(out)
     }
 
+    /// Opens a package folder: its files are read, and the document keeps the folder so a save writes it back.
+    fn open_package(&mut self, host: &dyn DocumentHost, file: crate::Document) -> Notice {
+        let name = file.name.clone();
+        let uttype = bifrost_ui::uttype::type_for_extension(&name).unwrap_or(D::default_type()).to_string();
+        let read = package_path(&file.file)
+            .ok_or_else(|| "the package cannot be reached".to_string())
+            .and_then(|path| {
+                let files = document_package::read_package_dir(&path).map_err(|e| e.to_string())?;
+                let doc = D::read_package(&files, &uttype).map_err(|DocumentError(m)| m)?;
+                Ok((doc, path))
+            });
+        match read {
+            Ok((doc, path)) => {
+                let id = self.add(doc, None, name.clone(), Some(file.grant), &uttype);
+                if let Some(e) = self.entry_mut(id) {
+                    e.package = Some(path);
+                }
+                self.note_recent(host, file.grant, &name);
+                Notice::Opened(id)
+            }
+            Err(m) => {
+                host.release(file.grant);
+                failed(None, None, &format!("{name}: {m}"))
+            }
+        }
+    }
+
+    /// A save of a package document: the package folder is written in place, atomically, and the temporary file the
+    /// shell made for the save is discarded.
+    fn save_package(&mut self, host: &dyn DocumentHost, request: u32, doc: DocId, op: SaveOp, stamp: Stamp, path: &Path) -> Vec<Notice> {
+        self.pending.remove(&request);
+        let written = match self.entry(doc) {
+            Some(e) => e.doc.package_files(&e.uttype).map_err(|DocumentError(m)| m).and_then(|files| {
+                let refs: Vec<(&str, &[u8])> = files.iter().map(|(n, b)| (n.as_str(), b.as_slice())).collect();
+                document_package::write_package_dir(path, &refs).map_err(|err| err.to_string())
+            }),
+            None => Err("no such document".to_string()),
+        };
+        host.abort(request);
+        match written {
+            Ok(()) => {
+                if let Some(e) = self.entry_mut(doc) {
+                    e.saved = stamp;
+                    e.edit_since = None;
+                }
+                vec![Notice::Saved(doc, op)]
+            }
+            Err(m) => vec![failed(Some(doc), None, &m)],
+        }
+    }
+
     fn on_save_to(&mut self, host: &dyn DocumentHost, file: crate::Document) -> Option<Vec<Notice>> {
         let request = file.request;
-        let Some(Pending::Save { doc, .. }) = self.pending.get(&request) else { return None };
-        let doc = *doc;
+        let Some(Pending::Save { doc, op, stamp, .. }) = self.pending.get(&request) else { return None };
+        let (doc, op, stamp) = (*doc, *op, *stamp);
+        // a save in place of a package writes the folder, not the file the shell made
+        if op == SaveOp::Save {
+            if let Some(path) = self.entry(doc).filter(|e| bifrost_ui::uttype::is_package(&e.uttype)).and_then(|e| e.package.clone()) {
+                return Some(self.save_package(host, request, doc, op, stamp, &path));
+            }
+        }
         // the type follows the chosen name when it has a known extension
         let named = bifrost_ui::uttype::type_for_extension(&file.name);
         let Some(e) = self.entry(doc) else {
@@ -642,10 +725,19 @@ impl<D: Document> DocumentController<D> {
             return Some(Vec::new());
         };
         let uttype = named.map(str::to_string).unwrap_or_else(|| e.uttype.clone());
-        let result = e.doc.write(&uttype).map_err(|DocumentError(m)| m).and_then(|bytes| {
-            let mut f = &file.file;
-            f.set_len(0).and_then(|_| f.write_all(&bytes)).and_then(|_| f.sync_all()).map_err(|err| err.to_string())
-        });
+        let result = if file.file.metadata().is_ok_and(|m| m.is_dir()) {
+            // a package name: the shell made a folder for the save; the package's files go into it and commit puts it in place
+            package_path(&file.file).ok_or_else(|| "the package cannot be reached".to_string()).and_then(|path| {
+                let files = e.doc.package_files(&uttype).map_err(|DocumentError(m)| m)?;
+                let refs: Vec<(&str, &[u8])> = files.iter().map(|(n, b)| (n.as_str(), b.as_slice())).collect();
+                document_package::write_package_contents(&path, &refs).map_err(|err| err.to_string())
+            })
+        } else {
+            e.doc.write(&uttype).map_err(|DocumentError(m)| m).and_then(|bytes| {
+                let mut f = &file.file;
+                f.set_len(0).and_then(|_| f.write_all(&bytes)).and_then(|_| f.sync_all()).map_err(|err| err.to_string())
+            })
+        };
         match result {
             Ok(()) => {
                 host.commit(request);
@@ -671,6 +763,16 @@ impl<D: Document> DocumentController<D> {
         e.name = file.name.clone();
         if let Some(t) = bifrost_ui::uttype::type_for_extension(&file.name) {
             e.uttype = t.to_string();
+        }
+        // a package keeps its folder, which a later save writes back to; a saved file has none
+        e.package = if file.file.metadata().is_ok_and(|m| m.is_dir()) { package_path(&file.file) } else { None };
+        // every save is a version of the document; a folder package has no single byte stream, so it keeps none
+        if !file.file.metadata().is_ok_and(|m| m.is_dir()) {
+            let mut bytes = Vec::new();
+            let mut reader = &file.file;
+            if std::io::Seek::seek(&mut reader, std::io::SeekFrom::Start(0)).is_ok() && reader.read_to_end(&mut bytes).is_ok() {
+                self.revisions.record(&format!("document-{}", doc.0), unix_now(), &bytes);
+            }
         }
         if let Some(n) = untitled {
             let _ = std::fs::remove_file(autosave_path(&host.data_dir(), n));
@@ -898,8 +1000,19 @@ fn failed(doc: Option<DocId>, code: Option<DocErrorCode>, message: &str) -> Noti
 
 const AUTOSAVE_DIR: &str = "autosave";
 
+/// The path a granted descriptor was opened from (Linux keeps it in `/proc/self/fd`); `None` when it has none.
+fn package_path(file: &std::fs::File) -> Option<PathBuf> {
+    use std::os::unix::io::AsRawFd;
+    std::fs::read_link(format!("/proc/self/fd/{}", file.as_raw_fd())).ok()
+}
+
 fn autosave_path(data_dir: &Path, n: u32) -> PathBuf {
     data_dir.join(AUTOSAVE_DIR).join(format!("untitled-{n}.autosave"))
+}
+
+/// Seconds since the epoch, for the revision store's `saved_at`. Zero when the clock is before the epoch.
+fn unix_now() -> i64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0)
 }
 
 /// First line the type, then the content; written to a temporary name and renamed, so a crash leaves the old copy.
@@ -963,12 +1076,38 @@ mod tests {
         }
     }
 
+    /// Reads plain text and rich text but writes only rich text.
+    #[derive(Debug, PartialEq)]
+    struct RichOnly(String);
+
+    impl Document for RichOnly {
+        fn read(bytes: &[u8], _t: &str) -> Result<Self, DocumentError> {
+            String::from_utf8(bytes.to_vec()).map(RichOnly).map_err(|_| DocumentError::new("not UTF-8"))
+        }
+        fn write(&self, _t: &str) -> Result<Vec<u8>, DocumentError> {
+            Ok(self.0.clone().into_bytes())
+        }
+        fn untitled() -> Self {
+            RichOnly(String::new())
+        }
+        fn readable_types() -> &'static [&'static str] {
+            &["public.plain-text", "public.rtf"]
+        }
+        fn writable_types() -> &'static [&'static str] {
+            &["public.rtf"]
+        }
+        fn default_type() -> &'static str {
+            "public.rtf"
+        }
+    }
+
     struct Mock {
         next: Cell<u32>,
         calls: RefCell<Vec<String>>,
         prefs: RefCell<HashMap<String, String>>,
         dir: PathBuf,
         state: RefCell<Option<(String, bool, String)>>,
+        filters: RefCell<Vec<Vec<String>>>,
     }
 
     impl Mock {
@@ -976,7 +1115,7 @@ mod tests {
             let dir = std::env::temp_dir().join(format!("bifrost-doc-test-{tag}-{}", std::process::id()));
             let _ = std::fs::remove_dir_all(&dir);
             std::fs::create_dir_all(&dir).unwrap();
-            Mock { next: Cell::new(0), calls: RefCell::new(Vec::new()), prefs: RefCell::new(HashMap::new()), dir, state: RefCell::new(None) }
+            Mock { next: Cell::new(0), calls: RefCell::new(Vec::new()), prefs: RefCell::new(HashMap::new()), dir, state: RefCell::new(None), filters: RefCell::new(Vec::new()) }
         }
         fn req(&self, what: &str) -> u32 {
             self.next.set(self.next.get() + 1);
@@ -999,7 +1138,8 @@ mod tests {
         fn open_panel(&self, _o: &OpenOptions) -> u32 {
             self.req("open")
         }
-        fn save_panel(&self, name: &str, _f: &[&str]) -> u32 {
+        fn save_panel(&self, name: &str, f: &[&str]) -> u32 {
+            self.filters.borrow_mut().push(f.iter().map(|t| t.to_string()).collect());
             self.req(&format!("panel:{name}"))
         }
         fn save_in_place(&self, g: GrantId) -> u32 {
@@ -1043,6 +1183,78 @@ mod tests {
         let notices = c.handle(m, DocumentEvent::OpenedMany { request: req, docs: vec![file] }).unwrap();
         let Notice::Opened(id) = notices[0] else { panic!("{notices:?}") };
         id
+    }
+
+    /// A document with a package form: its main file is `TXT.rtf`, its text is that file's contents.
+    #[derive(Debug, PartialEq)]
+    struct Pkg(String);
+
+    impl Document for Pkg {
+        fn read(bytes: &[u8], _t: &str) -> Result<Self, DocumentError> {
+            String::from_utf8(bytes.to_vec()).map(Pkg).map_err(|_| DocumentError::new("not UTF-8"))
+        }
+        fn write(&self, _t: &str) -> Result<Vec<u8>, DocumentError> {
+            Ok(self.0.clone().into_bytes())
+        }
+        fn untitled() -> Self {
+            Pkg(String::new())
+        }
+        fn readable_types() -> &'static [&'static str] {
+            &["public.rtfd"]
+        }
+        fn default_type() -> &'static str {
+            "public.rtfd"
+        }
+        fn read_package(files: &[(String, Vec<u8>)], _t: &str) -> Result<Self, DocumentError> {
+            let (_, main) = files.iter().find(|(n, _)| n == "TXT.rtf").ok_or_else(|| DocumentError::new("no TXT.rtf"))?;
+            Self::read(main, "public.rtfd")
+        }
+        fn package_files(&self, _t: &str) -> Result<Vec<(String, Vec<u8>)>, DocumentError> {
+            Ok(vec![("TXT.rtf".into(), self.0.clone().into_bytes())])
+        }
+    }
+
+    #[test]
+    fn a_package_folder_opens_as_one_document_and_keeps_its_folder() {
+        let m = Mock::new("pkgopen");
+        let pkg = m.dir.join("Notes.rtfd");
+        std::fs::create_dir_all(&pkg).unwrap();
+        std::fs::write(pkg.join("TXT.rtf"), "hello").unwrap();
+        let mut c = DocumentController::<Pkg>::new();
+        c.open_panel(&m);
+        let req = m.next.get();
+        // the grant of a folder is a read-only descriptor of the folder itself
+        let file = crate::Document { request: req, grant: [9; 16], name: "Notes.rtfd".into(), size: 0, mode: DocMode::Read, file: std::fs::File::open(&pkg).unwrap() };
+        let notices = c.handle(&m, DocumentEvent::OpenedMany { request: req, docs: vec![file] }).unwrap();
+        let Notice::Opened(id) = notices[0] else { panic!("{notices:?}") };
+        assert_eq!(c.get(id), Some(&Pkg("hello".into())));
+        assert_eq!(c.uttype(id), Some("public.rtfd"));
+        assert_eq!(c.file_name(id), Some("Notes.rtfd"));
+        assert_eq!(c.entry(id).and_then(|e| e.package.as_ref()).and_then(|p| p.file_name()).map(|n| n.to_owned()), Some("Notes.rtfd".into()), "a save writes back to this folder");
+    }
+
+    #[test]
+    fn save_as_to_a_package_name_writes_into_the_folder_the_shell_made_and_commits_it() {
+        let m = Mock::new("pkgsave");
+        let mut c = DocumentController::<Pkg>::new();
+        let id = c.new_document();
+        *c.get_mut(id).unwrap() = Pkg("draft".into());
+        c.save_as(&m, id);
+        let req = m.next.get();
+        // the shell answers the panel with the temporary folder it made for "Notes.rtfd"
+        let staging = m.dir.join("staging-Notes.rtfd");
+        std::fs::create_dir_all(&staging).unwrap();
+        let folder = crate::Document { request: req, grant: [4; 16], name: "Notes.rtfd".into(), size: 0, mode: DocMode::Write, file: std::fs::File::open(&staging).unwrap() };
+        assert_eq!(c.handle(&m, DocumentEvent::SaveTo(folder)).unwrap(), Vec::new());
+        assert_eq!(std::fs::read(staging.join("TXT.rtf")).unwrap(), b"draft", "the package's files are in the folder");
+        assert!(m.log().contains(&format!("commit#{req}")), "{:?}", m.log());
+        // the shell has put the folder in place and answers with it
+        let done = crate::Document { request: req, grant: [5; 16], name: "Notes.rtfd".into(), size: 0, mode: DocMode::Write, file: std::fs::File::open(&staging).unwrap() };
+        assert_eq!(c.handle(&m, DocumentEvent::Saved(done)).unwrap(), vec![Notice::Saved(id, SaveOp::SaveAs)]);
+        assert_eq!(c.file_name(id), Some("Notes.rtfd"));
+        assert_eq!(c.uttype(id), Some("public.rtfd"));
+        assert!(c.entry(id).is_some_and(|e| e.package.is_some()), "the next save writes the folder");
+        assert!(!c.is_edited(id));
     }
 
     #[test]
@@ -1171,6 +1383,21 @@ mod tests {
     }
 
     #[test]
+    fn the_save_panel_offers_only_the_writable_types() {
+        let m = Mock::new("writable");
+        let mut c = DocumentController::<RichOnly>::new();
+        let id = c.new_document();
+        c.save_as(&m, id);
+        assert_eq!(m.filters.borrow()[0], vec!["public.rtf".to_string()]);
+    }
+
+    #[test]
+    fn writable_types_default_to_the_readable_types() {
+        assert_eq!(Text::writable_types(), Text::readable_types());
+        assert_eq!(RichOnly::writable_types(), &["public.rtf"]);
+    }
+
+    #[test]
     fn a_cancelled_save_panel_keeps_the_document_edited() {
         let m = Mock::new("cancel");
         let mut c = DocumentController::<Text>::new();
@@ -1294,6 +1521,23 @@ mod tests {
     }
 
     #[test]
+    fn every_save_keeps_a_revision_of_the_bytes_written() {
+        let m = Mock::new("revisions");
+        let mut c = DocumentController::<Text>::new();
+        let id = open(&mut c, &m, "a.txt", 6, "a");
+        let key = format!("document-{}", id.0);
+        assert!(c.revisions.list(&key).is_empty(), "opening is not a save");
+        c.save(&m, id);
+        let req = m.next.get();
+        c.handle(&m, DocumentEvent::SaveTo(m.file(req, "a.txt", 6, ""))).unwrap();
+        c.handle(&m, DocumentEvent::Saved(m.file(req, "a.txt", 6, "a"))).unwrap();
+        let revisions = c.revisions.list(&key);
+        assert_eq!(revisions.len(), 1);
+        assert_eq!(revisions[0].bytes, b"a".to_vec());
+        assert_eq!(c.revisions.get(&key, revisions[0].seq).map(|r| r.bytes.clone()), Some(b"a".to_vec()));
+    }
+
+    #[test]
     fn a_failed_autosave_is_not_retried_until_the_next_change() {
         let m = Mock::new("autofail");
         let mut c = DocumentController::<Text>::new();
@@ -1396,5 +1640,17 @@ mod tests {
         assert!(m.log().contains(&"release:1".to_string()), "a grant that left the list is released");
         assert_eq!(parse_recents(&format_recents(&r)), r);
         assert_eq!(parse_recents("zz\tbad\n"), vec![]);
+    }
+
+    #[test]
+    fn recents_written_by_another_controller_are_seen_on_the_next_read() {
+        let m = Mock::new("shared-recents");
+        let mut first = DocumentController::<Text>::new();
+        let mut second = DocumentController::<Text>::new();
+        assert!(second.recents(&m).is_empty());
+        let id = open(&mut first, &m, "shared.txt", 9, "x");
+        first.close(&m, id);
+        let seen = second.recents(&m).to_vec();
+        assert_eq!(seen, vec![RecentDocument { grant: [9; 16], name: "shared.txt".into() }]);
     }
 }

@@ -18,10 +18,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/datetime_page.rs",
    "status": "partial",
-   "note": "Date & Time page (datetime_page.rs)",
-   "rea": []
+   "note": "has: Date & Time page (pages.rs:1075, datetime_page.rs): set automatically, 24-hour, menu bar date and day, time zone; missing: time server choice",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::datetime_page"
+    }
+   ],
+   "ready_note": "covers: Date & Time page (pages.rs:1075, datetime_page.rs): set automatically, 24-hour, menu bar date and day, time zone"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/DateTimeIntentsExtension.appex",
@@ -40,8 +49,22 @@
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
    "status": "partial",
-   "note": "settings App Intents catalogue (open-pane intents) in springboard/src/shell/settings_intents.rs; not yet listed in Search or served on the agent socket; built on os/team-m-02-settings; not yet verified on Midget",
-   "rea": []
+   "note": "has: open-date-time intent; missing: App Intents runtime serving it",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found"
+    }
+   ],
+   "ready_note": "covers: the open-date-time intent in the settings catalogue (settings_intents.rs); Search lists it and it opens its pane."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/DesktopSettings.appex",
@@ -58,10 +81,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/pages.rs:1439",
    "status": "partial",
-   "note": "Desktop & Dock page",
-   "rea": []
+   "note": "has: desktop_dock_page (pages.rs:1439): size, magnification, position, autohide; missing: Stage Manager and minimise-effect choices",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: desktop_dock_page (pages.rs:1439): size, magnification, position, autohide"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/DesktopSettingsIntents.appex",
@@ -80,8 +112,17 @@
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
    "status": "partial",
-   "note": "settings App Intents catalogue (open-pane intents) in springboard/src/shell/settings_intents.rs; not yet listed in Search or served on the agent socket; built on os/team-m-02-settings; not yet verified on Midget",
-   "rea": []
+   "note": "Built 2026-10-17: the desktop panes have App Intents that open them from Search: open-wallpaper, open-dock (Home Screen & Dock), open-menu-bar, open-screen-saver, open-lock-screen, open-spotlight and open-hot-corners.",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    }
+   ],
+   "ready_note": "the Wallpaper, Dock, Menu Bar, Screen Saver, Lock Screen, Spotlight and Hot Corners panes each have an App Intent; the checks run the catalogue"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/DisplaysExt.appex",
@@ -98,10 +139,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/pages.rs:1663",
    "status": "partial",
-   "note": "Displays page",
-   "rea": []
+   "note": "has: desktop_display (pages.rs:1663): Resolution picker (added: Native or each size the panel offers, sent to the window server, resolution_page pages.rs:1056), Refresh Rate (pages.rs:1055), Appearance, Interface Scale, Brightness, Night Shift, Liquid Glass, text size, auto-lock; missing: arrangement and mirroring of several displays (one output only; set_rotation and mirror fail in services/display_services.rs), colour profile; Resolution is not re-applied at boot",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: desktop_display (pages.rs:1663): Resolution picker (added: Native or each size the panel offers, sent to the window server, resolution_page pages.rs:1056), Refresh Rate (pages.rs:1055), Appearance, Interface Scale, Brightness, Night Shift, Liquid Glass, text size, auto-lock"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/DisplaysSettingsIntentsExtension.appex",
@@ -120,8 +170,22 @@
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
    "status": "partial",
-   "note": "settings App Intents catalogue (open-pane intents) in springboard/src/shell/settings_intents.rs; not yet listed in Search or served on the agent socket; built on os/team-m-02-settings; not yet verified on Midget",
-   "rea": []
+   "note": "has: open-displays pane intent; missing: App Intents runtime serving it",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found"
+    }
+   ],
+   "ready_note": "covers: the open-displays intent in the settings catalogue (settings_intents.rs); Search lists it and it opens its pane."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/FaceTimeNotificationExtension.appex",
@@ -180,8 +244,17 @@
    "doc": "",
    "bifrost": "springboard/src/shell/focus.rs",
    "status": "partial",
-   "note": "Focus modes",
-   "rea": []
+   "note": "has: Focus page (pages.rs:895): Do Not Disturb switch; focus.rs holds the mode model; missing: per-mode allowed apps, people and schedule UI",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::focus"
+    }
+   ],
+   "ready_note": "covers: Focus page (pages.rs:895): Do Not Disturb switch; focus.rs holds the mode model"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/FollowUpSettingsExtension.appex",
@@ -218,10 +291,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/pages.rs:1075",
    "status": "partial",
-   "note": "Date & Time page (datetime_page.rs)",
-   "rea": []
+   "note": "has: Date & Time (pages.rs:1075): Set Automatically, 24-Hour Time, Show Date in Menu Bar, Show Day of the Week, Time Zone, manual Time; missing: time server choice",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::datetime_page"
+    }
+   ],
+   "ready_note": "covers: Date & Time (pages.rs:1075): Set Automatically, 24-Hour Time, Show Date in Menu Bar, Show Day of the Week, Time Zone, manual Time"
   },
   {
    "id": "path:/System/Library/PreferencePanes/DesktopScreenEffectsPref.prefPane",
@@ -240,8 +322,17 @@
    "doc": "",
    "bifrost": "springboard/src/shell/screensaver.rs",
    "status": "partial",
-   "note": "screen saver and desktop effects",
-   "rea": []
+   "note": "has: Screen Saver page (pages.rs:867, screensaver.rs) with the saver, Preview and Start After; missing: desktop screen effects beyond the saver",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::screensaver"
+    }
+   ],
+   "ready_note": "covers: Screen Saver page (pages.rs:867, screensaver.rs) with the saver, Preview and Start After"
   },
   {
    "id": "path:/System/Library/PreferencePanes/DigiHubDiscs.prefPane",
@@ -278,10 +369,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/pages.rs:1663",
    "status": "partial",
-   "note": "Displays page",
-   "rea": []
+   "note": "has: desktop_display (pages.rs:1663) with Resolution picker (added, pages.rs:1056), Refresh Rate (pages.rs:1055), Night Shift (night_shift.rs), brightness; missing: arrangement and mirroring of several displays, colour profile",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: desktop_display (pages.rs:1663) with Resolution picker (added, pages.rs:1056), Refresh Rate (pages.rs:1055), Night Shift (night_shift.rs), brightness"
   },
   {
    "id": "path:/System/Library/PreferencePanes/Dock.prefPane",
@@ -298,10 +398,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/pages.rs:1247",
    "status": "partial",
-   "note": "Desktop & Dock page",
-   "rea": []
+   "note": "has: Home Screen & Dock page (pages.rs:1247): Show Suggested and Recent Apps in Dock; desktop_dock_page (pages.rs:1439) has size, magnification, position; missing: minimise effect and tile badge switches",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::desktop_dock"
+    }
+   ],
+   "ready_note": "covers: Home Screen & Dock page (pages.rs:1247): Show Suggested and Recent Apps in Dock; desktop_dock_page (pages.rs:1439) has size, magnification, position"
   },
   {
    "id": "path:/System/Library/PreferencePanes/EnergySaver.prefPane",
@@ -318,10 +427,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/pages.rs:1240",
    "status": "partial",
-   "note": "Energy page",
-   "rea": []
+   "note": "has: Energy page (pages.rs:1240): put the computer to sleep when the display is off; missing: sleep schedule and power adapter versus battery split",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: Energy page (pages.rs:1240): put the computer to sleep when the display is off"
   },
   {
    "id": "path:/System/Library/PreferencePanes/EnergySaverPref.prefPane",
@@ -338,10 +456,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/pages.rs:1240",
    "status": "partial",
-   "note": "Energy page",
-   "rea": []
+   "note": "has: Energy page (pages.rs:1240): display-off sleep; missing: the battery and adapter split",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: Energy page (pages.rs:1240): display-off sleep"
   },
   {
    "id": "path:/System/Library/PreferencePanes/Expose.prefPane",
@@ -360,8 +487,17 @@
    "doc": "",
    "bifrost": "springboard/src/shell/overview.rs",
    "status": "partial",
-   "note": "Overview and hot corners",
-   "rea": []
+   "note": "has: Overview page (pages.rs:1329) and hot corners (pages.rs:1327) backed by overview.rs; missing: Mission Control shortcut listing",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::overview"
+    }
+   ],
+   "ready_note": "covers: Overview page (pages.rs:1329) and hot corners (pages.rs:1327) backed by overview.rs"
   },
   {
    "id": "path:/System/Library/PreferencePanes/Extensions.prefPane",
@@ -380,8 +516,17 @@
    "doc": "",
    "bifrost": "springboard/src/shell/login_items_page.rs",
    "status": "partial",
-   "note": "EXTENSIONS group (extension_groups) lists the share, preview, file provider and widget extensions of installed manifests; no separate extension manager; built on os/team-m-02-settings; not yet verified on Midget",
-   "rea": []
+   "note": "has: EXTENSIONS group (extension_groups) listing share, preview, file provider and widget extensions of installed manifests; missing: a separate extension manager (enable and disable)",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::login_items_page::tests::a_turned_off_extension"
+    }
+   ],
+   "ready_note": "covers: the EXTENSIONS group in Login Items & Extensions, with a switch per extension (login.extensions.off)."
   },
   {
    "id": "path:/System/Library/PreferencePanes/FamilySharingPrefPane.prefPane",

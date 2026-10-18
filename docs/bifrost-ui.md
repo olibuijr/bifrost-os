@@ -236,6 +236,35 @@ empty page, rotor change, press and unavailable press (`cue`, `take_earcons`; `s
 Status: partial. The cues are synthesised stand-ins, not the original sounds, and the sound player does not drain
 `take_earcons` yet (it lives in `bin/shell.rs`). The parity matrix holds no earcon rows to flip.
 
+### Screen reader speech, reader roles and Spoken Content
+
+Accessibility round, partial. What is built:
+
+- **Speech settings.** Settings > Accessibility > Vision > Speech opens a page with three pop-up choices: Speaking Rate
+  (Slow 140, Normal 180, Fast 240 words a minute), Pitch (Low 30, Normal 50, High 70) and Voice (System Default,
+  English (US) `en-us`, English (UK) `en-gb`, Icelandic `is`). They are saved as `a11y_speech_rate`,
+  `a11y_speech_pitch` and `a11y_speech_voice` (`accessibility::SPEECH_RATES`, `SPEECH_PITCHES`, `SPEECH_VOICES`). Loading
+  clamps the rate to 80 to 450 and the pitch to 0 to 99, and drops a voice name that is not a plain word.
+- **Speaking.** `accessibility/speech.rs` `args(text, &Config)` builds the espeak-ng arguments `-s rate -p pitch [-v voice]
+  -- text`. `Shell::speech_config` reads the open Settings window's values, else the saved ones, and the banner's announcement
+  path passes them to `Speaker::configure` before each utterance. The reader and the announcements share this speaker, so
+  the speech service (`services/speech.rs`, for apps) keeps its own rate and voice.
+- **Reader roles.** A Settings pop-up row (`Accessory::Popup`) is a `popup` element: spoken "pop-up button, Speech, Icelandic",
+  in the Controls rotor. `walk::spoken_kind` has `sheet`, `panel` and `dialog` words. Extra windows of the front app are
+  `window` elements already (`walk::window`). The AT-SPI role map (`axmap::item_role`) is unchanged, so Orca still sees the
+  pop-up row as a choice.
+- **Not built.** Help viewer, assistant panel and permission sheets are not walked for their content (only their windows).
+  Speak Selection (Option+Esc) and Speak Items Under the Pointer need a selection source and a pointer-hover option; neither
+  exists. Speech on the Midget is not verified.
+- **Display options.** Reduce Motion, Reduce Transparency and Increase Contrast are already read by the shell's motion
+  (`anim_ms`, desk, switcher, jiggle), material (`vibrancy.rs`, `glass.rs`, Control Centre, menu bar, Spotlight) and colour
+  (`ui.rs` separators and material borders, `appearance.rs` contrast) code. Nothing new was wired.
+- **Zoom.** Full Screen and Picture in Picture (`accessibility/zoom.rs`) are a presenter transform (`bare/wayland.rs`
+  `set_zoom`); the rows in `docs/parity-matrix/data/accessibility.json` were corrected to say so.
+- Tests: `accessibility/speech.rs` (args, clamp, configure), `accessibility/mod.rs` (speech prefs round trip and fallback,
+  choices inside the engine range), `accessibility/walk.rs` (pop-up, sheet, panel, dialog and window words),
+  `accessibility/reader.rs` (a pop-up row through `page_elements`), `shell/pages.rs` (speech voice row).
+
 ### Accessibility actions, rotors and display options
 
 `bifrost_ui::ax::AccessibilityElement` has the rest of the action set: `accessibility_perform_show_menu`, `_cancel`,
@@ -373,12 +402,12 @@ swatches, letterbox, blur bases, plus the legacy gaps below).
 | gridColor | `GRID` | new |
 | selectedContentBackgroundColor | `SELECTED_CONTENT_BACKGROUND` | `SELECTION` |
 | unemphasizedSelectedContentBackgroundColor | `UNEMPHASIZED_SELECTED_CONTENT_BACKGROUND` | `SIDEBAR_PLATE` |
-| controlAccentColor, linkColor | `CONTROL_ACCENT`, `LINK` | new (Dark 10,132,255; Light 0,122,255) |
+| controlAccentColor | `CONTROL_ACCENT` | new (Dark 10,132,255; Light 0,122,255); follows Settings > Appearance > Accent colour (`Pair::following_accent`) |
+| linkColor, systemBlue | `LINK`, `SYSTEM_BLUE` | Dark 10,132,255; Light 0,122,255; fixed, the accent does not change links |
 | systemRed ... systemGray (13 colours incl. mint, cyan, indigo, brown) | `SYSTEM_RED` ... `SYSTEM_GRAY` | Apple's Light and Dark values |
 | windowFrameColor, findHighlightColor, shadowColor | `WINDOW_FRAME`, `FIND_HIGHLIGHT`, `SHADOW` | new (findHighlight is a design approximation, confirm on Midget) |
 
 Gaps (Apple parity rule):
-- The user-chosen accent does not yet feed `CONTROL_ACCENT`; it is fixed systemBlue (the accent is published to the portal separately).
 - `windowBackgroundColor` and `controlBackgroundColor` share `DETAIL_BG` (Dark pure black, per the Golden Gate reference); Apple's Dark values differ slightly.
 - Other `NSColor` names are not provided.
 - The old `u32` constants (`SYSTEM_RED` ...) remain for fixed-colour uses; migrating callers is ongoing.
@@ -624,6 +653,24 @@ The item model lives in the shell's `credentials` module, shared with the SDK.
 Gaps: the Passwords app shows a password without the passcode that Settings asks for (the shell has no app-side passcode prompt).
 Creating a secure note from an app needs a text editor and is still missing. Midget check: save, fill and remove one login from a test app.
 
+## notifyutil (command line for the notify bus, OS-layer row `notifyutil`)
+
+Apple's `notifyutil` posts, watches and sets the state of named notifications. BifrOSt has no Darwin notify daemon: the
+bus is the shell's `notify_bus` service (`springboard/src/shell/services/notify_bus.rs`, 0.5.41), which the command line
+reaches over the control socket as `notify <verb> <args>`. Verbs: `post NAME`, `set NAME VALUE`, `get NAME`,
+`register NAME` (a poll token owned by `control`, which the shell does not prune), `check TOKEN`, `cancel TOKEN`.
+The client is `springboard/cmd/src/notifyutil.rs` (`bifrost_cmd::notifyutil`) and `springboard/cmd/src/bin/notifyutil.rs`:
+`-p name`, `-w [count] name`, `-1 name`, `-g name`, `-s name value`, `-v`, `-z msec`.
+
+- **Gap**: names are BifrOSt names, not the Darwin system names (only the shell's `system.*` names are posted by the shell).
+- **Gap**: `-w` and `-1` poll the token every 50 ms; a post is seen up to that late. The bus pushes only to apps.
+- **Gap**: names cannot hold white space; state is a whole number up to 2^53 (the JSON number limit on the bus).
+- **Gap**: a killed `-w` leaves its token behind (cap 64 for the control owner).
+- Row status: `partial`. Not built or run on Midget yet (uncompiled in this round); host tests are in
+  `springboard/src/bare/control.rs` (`notify_requests_keep_their_words`), `springboard/src/shell/services/notify_bus.rs`
+  (`a_command_line_poll_token_survives_prune_and_sees_one_post`, `set_and_get_keep_a_whole_number_state_per_name`) and
+  `springboard/cmd/src/notifyutil.rs`.
+
 ## User notifications (`UNUserNotificationCenter`, roadmap item 5a)
 
 `bifrost_app::usernotif` (SDK) over `ToShell::Notify*` (tags 0x140 to 0x143) and `ToApp::Notification*` (tags 50 to 52); types in
@@ -666,7 +713,62 @@ Gaps (not matched yet): action buttons, the destructive colour and the reply fie
 `NOTIF_DISMISS_ACTION` is defined but never sent (`customDismissAction`); a tap answers for the app's newest notification, not the one
 tapped (the banner and center rows do not carry the request id); delivered requests and categories are not persisted across a shell
 restart; no `UNNotificationSound`, attachments, `userInfo`, interruption levels, location triggers, the `usernotif` (`after_ms`) path's repeating triggers (use `notification_schedule`),
-`willPresent` (foreground presentation options) or authorization prompt (`requestAuthorization`: the manifest permission is the grant).
+(`willPresent` and `requestAuthorization` are wired now; see "Notifications: authorization and presentation (update)" under the SDK modules of 2026-10-17.)
+
+### Notification stacks, persistence and Show Previews (parity round)
+
+- **Stacks by thread**: a request's `thread` is kept on the notification (`thread=` in `notifications.ini`). The store
+  groups by (app, thread), newest stack first (`springboard/src/shell/notify/store.rs`, `Store::groups`). Each stack has its own
+  Clear (`Store::clear_thread`, `Shell::clear_group`), the desk column's close control and a whole-stack swipe on the lock
+  screen; Mute, Show Less and the expand tap still act on the app. Tests: `store.rs` (`notifications_stack_per_app_and_thread`,
+  `clear_thread_removes_only_that_stack`), `notify/mod.rs` (`clearing_a_stack_removes_only_its_thread_of_the_app`).
+  Gap: the lock-screen expansion is per app, so two stacks of one app expand together. Clear All and the 50-entry limit are unchanged.
+- **Pending requests across a restart**: `notification-schedule` saves interval and calendar requests to
+  `pending-notifications.ini` beside `notifications.ini` (`services/notification_schedule.rs`, `encode`/`decode`, `restore`,
+  `persist`). Each saved trigger is a Unix time in milliseconds; on the first tick after the data directory is set, a
+  request is put back at the same moment on the new shell clock, so one that passed while the shell was off fires at once.
+  Tests use two shells with a fake wall clock: `pending_requests_survive_a_restart_and_keep_their_trigger_times`,
+  `a_request_whose_time_passed_while_the_shell_was_off_fires_on_the_first_tick`, `a_cleared_request_is_not_saved_again`.
+  Gap: sound, `userInfo` and interruption level are not saved, and delivered requests still are not persisted.
+- **Show Previews** (`Settings > Notifications > <app> > Show Previews`): Always (the default; the passcode still hides text
+  on the lock screen), When Unlocked (hidden on the lock screen, shown once unlocked) and Never (hidden everywhere). A
+  banner's text follows the same rule, since banners only show when unlocked (`Shell::previews_hidden`, `start_banner`).
+  Test: `show_previews_decides_what_banners_and_lists_reveal`, `previews_hidden_per_app_hide_only_that_app_text` (`list.rs`).
+- **Calendar triggers** still carry only hour, minute and weekday over the wire.
+- **Not verified on Midget**: the stacks, the restart, the Show Previews settings and the Focus modes are host-tested only.
+
+### Focus modes (Focus round)
+
+- **Modes** (`springboard/src/shell/notify/modes.rs`): Do Not Disturb, Work, Personal and Sleep, plus custom modes (up to
+  12, named with a unique slug id). Each mode has allowed apps (app keys), allowed people (matched by exact name), a
+  time-sensitive allowance and an optional schedule. A schedule is a set of weekdays and a window in local minutes; a
+  window that crosses midnight belongs to the weekday it starts on (Friday 22:00 to 07:00 covers Friday night and early
+  Saturday). One mode is on by hand (`Modes::manual`, a manual choice wins) or by its schedule.
+- **Delivery**: `modes::decide` returns `Show` or `Quiet`. With no mode on everything shows. A notification shows when its
+  app is allowed, or its sender is allowed, or it is time-sensitive and the mode allows that. `Notify::delivers` uses it;
+  a `Quiet` notification is stored and badged, with no banner or wake (Notification Center only).
+- **Do Not Disturb** keeps its allowed apps and schedule in `notifications.ini` (`Store::focus_allowed`, `Store::schedule`),
+  so existing data keeps working. `Notify::as_stored` reads them into the mode. Other modes live in `focus_modes.ini`,
+  saved next to the notification store when the shell loads its data directory (`Notify::load_modes`, `save_modes`).
+- **API**: `Shell::set_focus_mode(Option<&str>)` (saves; the Settings Do Not Disturb switch follows only Do Not Disturb),
+  `Shell::set_dnd` (a wrapper for Do Not Disturb), `Notify::set_mode`, `Notify::active_mode`, `Notify::dnd` (any mode is on).
+  Turning a mode off inside its schedule's window holds until the window ends, as Do Not Disturb always did.
+- **Focus filters**: `services/focus_filter.rs` names the Focus by the active mode, so apps read and get the `changed`
+  event for the values they stored under that mode's name. Apps declare filter fields as `[[focus_filter]]` tables in
+  `manifest.toml` (`id`, `title`, `params = ["folder", "room"]`); `parse_declarations` checks them and drops bad tables.
+- **Shortcuts**: `When Focus Turns On` and `When Focus Turns Off` (`springboard/src/shortcuts.rs`, `Automation::FocusOn`,
+  `Automation::FocusOff`, `Event::FocusChanged`). Nothing calls `shortcuts::due` in the shell yet, so they do not run.
+- **Control Centre**: the Focus tile still toggles Do Not Disturb; its subtitle names the mode on.
+- **Tests**: `notify/modes.rs` (schedule across midnight and weekdays, weekdays from the Unix epoch, manual over schedule,
+  delivery decisions, custom modes, the file format, junk, persistence, and the `Notify` clock tests), `shell/focus.rs`
+  (`a_mode_chosen_by_hand_survives_a_restart_and_the_settings_switch_follows_do_not_disturb_only`),
+  `services/focus_filter.rs` (`a_work_focus_hands_the_apps_its_work_values_and_the_change_is_pushed`,
+  `filter_declarations_come_from_the_manifest_and_bad_tables_are_dropped`), `tests/parity_app-shortcuts.rs` (Focus
+  automations). Not run: the lead runs them.
+- **Not built**: the menu bar Focus glyph; the Control Centre list of modes; a Settings page for the modes, their people
+  and the per-mode filter values; the sender on a notification (so allowed people never match on device); the
+  time-sensitive level from the app protocol; the Shortcuts dispatcher that raises `FocusChanged`.
+- **Not verified on Midget**: all of the above.
 
 ### User notifications model (sprint 9)
 
@@ -683,8 +785,8 @@ restart; no `UNNotificationSound`, attachments, `userInfo`, interruption levels,
 - **Sound and attachments**: `Sound::{Default, DefaultCritical, DefaultCriticalVolume, Named}` (critical needs the critical-alert grant);
   `Attachment::new(id, file name, size)` accepts image, audio and video types within 10, 5 and 50 MB.
 
-Gaps: none of this is on the wire yet (`NotifRequest` has no sound, attachments or calendar fields, and there is no delegate round trip
-or authorization prompt UI); remote push and service extensions are not built. Midget check pending.
+Gaps: none of this is on the wire yet (`NotifRequest` has no sound, attachments or calendar fields); the delegate round trip and the
+authorization prompt are wired since 2026-10-17. Remote push and service extensions are not built. Midget check pending.
 
 ## Share sheet (`NSSharingServicePicker`, roadmap item 5b)
 
@@ -832,10 +934,31 @@ each edit the app calls `note_change`. `handle` answers with `Notice` values (`C
 
 Gaps (not matched yet): no versions browser (`Revert To > Browse All Versions`, no version history at all), no iCloud documents,
 no `NSFileCoordinator` or file-presenter watching (an external change to an open file is noticed only as `Stale` on the next
-save), no document packages, no multiple windows per document, no `NSDocument` subclass hooks for printing or sharing. Rename
+save), document packages only in part (see "Folder packages" below), no multiple windows per document, no `NSDocument` subclass hooks for printing or sharing. Rename
 and Move To copy to the new name and leave the old file in place, because the broker has no rename or delete request yet;
 Open requests write access, so a read-only file does not open. Untitled documents are autosaved as private copies, not into a
 Documents folder as autosave-in-place does on macOS. First user: none yet.
+
+## Folder packages (`bifrost_app::document_package`, TextEdit RTFD)
+
+A folder package is a document whose on-disk form is a directory that the file panels and Files treat as one file (Apple's
+package document type, here `public.rtfd` for RTFD). Code: `springboard/sdk/src/document_package.rs`.
+
+| Piece | Bifrost |
+|---|---|
+| package types | `PACKAGE_TYPES`: extension to uniform type identifier (`rtfd` to `public.rtfd`); `package_type_for_name` and `is_package_name` decide by the extension alone |
+| manifest | `package_types = ["rtfd"]` in `manifest.toml` (shell `apphost::Manifest::package_types`); declares the packages an app reads and writes |
+| read | `read_package_dir(dir)`: regular files at the top level, sorted by name; subfolders and links skipped; refused past `MAX_PACKAGE_BYTES` (64 MiB) |
+| write | `write_package_dir(dir, files)`: files written into a temporary sibling folder, then the package is renamed into place; the old package is moved aside and removed only after the new one is in place, and restored if that rename fails. Names with a separator or `..` are refused before anything is written |
+
+The document controller opens a package folder that a grant hands over: `Document::read_package(files, uttype)` reads
+the files, and the entry remembers the folder (read from `/proc/self/fd`). A save in place of such a document writes the
+package folder with `document_package::write_package_dir` (`Document::package_files` gives the files) and discards the
+temporary file the shell made for the save. Save As and Rename of a package, and a package chosen in the open panel, are
+not wired: the panel offers files only (`OpenOptions::directories` is not set for packages).
+
+Gaps: no package-aware icon, no open-panel folder choice for packages, no Save As to a package folder, no package in Recents
+until a package is opened, and an app that opens a package from a path (Files) has no controller entry for it yet.
 
 ## On-screen keyboard API (`UIKeyInput`, `UIReturnKeyType`, 0.4.77)
 The keyboard becomes a system app (`docs/keyboard-system-app.md`). The SDK API exists first: `App::keyboard_config`,
@@ -876,6 +999,11 @@ Model (`springboard/ui/src/text.rs`, `bifrost_ui::text`, no dependencies):
   `perform(EditCommand, extend)` and `handle_key(KeyCombo)` use `text::binding`: the emacs set every Cocoa field has
   (ctrl-A / E line start / end, F / B / N / P, D, H, K, Y, T, O), option-arrows by word, cmd-arrows by line / document,
   option-backspace, cmd-backspace, cmd-A / Z / shift-Z.
+- Terminals send keys, they do not edit: `terminal_keys` (`springboard/ui/src/terminal_keys.rs`, `bifrost_ui::terminal_keys`,
+  no dependencies) maps chords to the bytes the pty expects, so the hardware keyboard, the on-screen Ctrl key and
+  `term send_keys` agree. `control_byte` (Ctrl+A 1 through Ctrl+Z 26, Space/@ NUL, brackets, `^`, `_`), `alt_bytes`
+  (ESC plus the key), `alt_word_bytes` (Alt+Left/Right word jumps), `ctrl_bytes` / `alt_combo_bytes` / `alt_arrows`
+  (the same over `KeyCombo`, leaving shell shortcuts out), and `CONTROL_BINDINGS` (every byte with its readline action).
 - A view feeds the shell: after each change `ctx.text_state(...)` from `TextBuffer::surrounding(4000)`, and
   `ctx.caret_rect(...)` from its own layout (the model has no geometry).
 
@@ -1031,6 +1159,43 @@ the windows behind the window. Ours, end to end:
   and `glass` (Liquid Glass) on the wire, and vibrant fills (`vibrancy-fill` levels) as separate API; the
   within-window `widgets::material` blurs on the CPU (apps draw on the CPU; the presenter never sees the pixels
   under a within-window material).
+
+## Window level (`NSWindow.level`, floating windows; `bifrost_app::windows::set_level`)
+
+Apple parity: an app can ask for its window to float above the normal windows (Calculator's Always on Top, Stickies'
+Float on Top, the floating CPU window of Activity Monitor). Ours, end to end:
+
+- Protocol: `ToShell::WindowLevel(WindowLevel)`, tag 0x165, one byte (`Normal` = 0, `Floating` = 1); an unknown byte is
+  a bad value. `springboard/proto/src/lib.rs`.
+- SDK: `windows::set_level(ctx, Level::Floating)` (`Level` is `proto::WindowLevel`). It sends the message on every call;
+  the app keeps its own checked state. There is no standard Window menu in the SDK yet, so an app builds its own
+  item with `AppMenuItem::new(..).checked(on)` (Calculator and Stickies do).
+- Shell: `AppHost.window_level` keeps the level the app asked for while the app runs (`Normal` until it asks). The app
+  host's window is the desk window `AppId::External(slot)`, drawn as the wayland toplevel whose frame id is
+  `win_id(app)` (`apps()` position plus one). `Desk.floating` lists the floating apps, refreshed by
+  `take_wayland_windows` (`sync_levels`); `Desk::band_top` puts a raised or opened window at the top of its band, and
+  the frames of floating windows go last.
+- Shell to window server: the private protocol `bifrost_window_level_v1` (`wm/protocol/bifrost-window-level-v1.xml`,
+  client `springboard/src/bare/window_level_client.rs`, server `springboard/wm/src/window_level.rs`). `set_level(surface,
+  level)` stores the level on the surface; the window server applies it at once to a mapped toplevel and at its map.
+- Window model: `springboard/wm/src/wm.rs` `Level` (`Normal`, `Floating`). The stack is sorted by level: a floating
+  window is above every normal window, a raised or re-levelled window goes to the top of its own band, and raising a
+  normal window does not pass a floating one. Hit testing uses the same order. The key window is the one last raised
+  (or the topmost shown window when it is minimized or closed). Menus, panels and the menu bar are above both bands
+  and are not modelled here.
+- Each window has its own level. The main `WindowLevel` lifts only the main window, and a floating extra window does not
+  lift the main window or its siblings. Stacking follows the window's own level in `Desk::floating_apps`.
+- Focus and stacking: the window server's focus raises through the model and then restores the space order from
+  the model, so a floating window stays above the normal ones.
+- Extra windows (`app_windows`): `windows::set_level` levels only the main window. An extra window floats with
+  `windows::set_window_level(ctx, id, Level::Floating)` (it takes the extra window's `WindowId`), which
+  sends `ToShell::WindowLevelOf { id, level }` (tag 0x24c, id then one byte). The shell keeps the flag in the window table
+  (`app_window_table.rs` `set_floating`, `floating_ids`; id 0 is refused) and `Desk::floating_apps` lists the floating
+  extra windows with the floating apps, so they stack last. Activity Monitor's CPU windows use it (activity-desktop 0.8.0).
+  Built and reviewed by reading only; no Midget run yet.
+- Not matched yet: built and reviewed by reading only (no build, no tests, no Midget run). Notes still share one
+  window (Stickies' Float on Top applies to the board window). Apple's `NSWindow.Level` names (`.floating`, `.normal`,
+  `.statusBar`, `.modalPanel`) beyond these two are not exposed; the menu bar and panels keep their own layer.
 
 ## Web view (`WKWebView`, `WKProcessPool`, `WKNavigationDelegate`; Browser 0.3.0)
 
@@ -1190,6 +1355,31 @@ starts on it does not pan. No tracking areas or hover, no `nextKeyView` override
 drag and drop, no `NSTextView`-style first responder for text (use `text_field` inside a custom view), and the
 accessibility `Node` is flat, so nesting is reported only by `ax_tree()`.
 
+### Framework views: security panels, `SceneView`, `SpriteView` (wiring wave 14)
+
+Three groups of retained views host models that existed before only as tested logic. All are in `bifrost_app::view`; each
+sends action strings through the responder chain and reads back through `Window::view`.
+
+- **Security panels** (`view/security_views.rs`, over `framework_kits::security_interface`): `CertificatePanelView` shows the
+  chain leaf first with a validity dot and word on each row, a Details disclosure and the selected certificate's subject,
+  issuer, serial number and status; `TrustEditorView` shows one Default, Always or Never control for each certificate, the
+  verdict of the chain and Reset to Defaults; `IdentityChooserView` lists the identities that passed the policy with Choose
+  and Cancel. The shell does not use these views (it cannot depend on the SDK); it draws its own copy of the certificate
+  panel in `shell/trust_sheet.rs` when the Browser's TLS client refuses a certificate. `deildu::http::Tls` wraps the webpki
+  verifier, keeps the chain it refused (`take_rejection`), and the Browser takes it when the page fails. The sheet offers
+  Cancel and Show Certificate and never loads the page anyway: there is no per-site trust exception yet, so the
+  trust editor is an app view only.
+- **`SceneWidget`** (`view/scene_widget.rs`, `SceneView`): renders a `scene3d::Scene` through its camera with the CPU
+  rasteriser (`raster3d`), at most 640 by 480 pixels, only when the scene, light, camera or size changed. A
+  `SceneDrawable` ties a node to `primitives3d` geometry and a material. Drag orbits (never past the poles), `+`, `-` and
+  `scroll()` zoom, arrow keys orbit, and a click picks the nearest bounding sphere (`ACTION_PICK`). Gaps: no wheel event
+  reaches views (see above), triangles that cross the near plane are dropped, picking is per sphere, no textures.
+- **`SpriteWidget`** (`view/sprite_widget.rs`, `SpriteView`): hosts a `sk_node::NodeTree` with `Scene2d` scaling and a
+  `SceneLoop`. `NodeTree::draw_quads` gives each node's rotated box; rectangles and images draw rotated, circles as discs,
+  labels upright. `on_step` receives every frame phase, node actions advance in the loop and their reports come from
+  `take_reports()`, and a click picks the topmost node by its own shape (`ACTION_TOUCH`). Gaps: shader nodes, rotated
+  labels, the physics world (the app steps `physics` in `on_step`), and per-node colour lives in the view, not the model.
+
 ## Animation (Core Animation parity)
 
 Code: `springboard/sdk/src/view/animation.rs`, curves and springs from `springboard/ui/src/anim.rs`.
@@ -1304,7 +1494,7 @@ Gaps (Apple behaviour not matched yet):
 - Present in the SDK but not wired to the shell: `Intent::foreground` and `Intent::authentication` (checked by
   `Intent::may_run` and `check_result`; the shell does not gate runs on the session), `IntentResult::with_snippet` (the
   shell does not draw the snippet), `donation` and `donations` (stores; Search does not read them), `focus_filter`
-  (client of the shell's Do Not Disturb service only; there is no `SetFocusFilterIntent` model).
+  (client of the shell's Focus service; the Focus name is the active Focus mode's name; there is no `SetFocusFilterIntent` model).
 - Parameter prompts: `IntentForm` is only a typed data model; `controls::intent_resolve` plans ask, choose, confirm and
   block (`Plan`), but the control socket replies with a plain error and the shell does not draw a form or prompt for a value.
 - Not started: intents driving widgets, controls and Live Activities.
@@ -1316,6 +1506,44 @@ Gaps (Apple behaviour not matched yet):
   `Doubles`, `[Placemark]`) are not modelled; `Placemark`, `Measurement` and `File` take one object each.
 drag and drop, no multi-line text view, and the
 accessibility `Node` is flat, so nesting is reported by `ax_tree()` and sent as `NodeExt` parents.
+
+## App services (Services menu, `NSServices`, `bifrost_ui::app_services`)
+
+Apps add entries to the App menu's Services submenu. Each entry is a `[[service]]` table in `manifest.toml`:
+
+```toml
+[[service]]
+title = "Open Images in Viewer"
+send_types = ["public.image", "public.pdf"]
+return_types = []
+method = "open_images"
+```
+
+- `title` is the menu row; `send_types` are the types of the selection the service takes (any one matches);
+  `return_types` is non-empty when the service answers with a text value; `method` names the control call
+  `service.<method>` (`[a-z0-9_-]`).
+- The selection's types come from the pasteboard (`bifrost_ui::app_services::selection_types`): every file selection
+  carries `public.file-url`, plus `public.image` and `public.pdf` when a file has that extension; text carries
+  `public.utf8-plain-text`, plus `bifrost.file-path-text` (the shell's own type, not an Apple UTI) when the text is one
+  absolute path to a file. The App menu lists the built-in services, then every installed app's matching service in
+  install order (`services_route::app_services_for`).
+- Choosing a row opens the provider (or activates it) and sends `service.<method>` over its control socket:
+  `{"type": <uti>, "text": ...}` for text, `{"type": <uti>, "paths": [...]}` for files and path text. The app answers
+  with `ServiceCall::from_params` (SDK `bifrost_app::services`); a `return_types` service answers
+  `{"value": text}` (`value_result`), and the shell puts that text on the pasteboard and the clipboard.
+- Apps implement `rpc_methods` and `rpc` as for any control method. Viewer opens the first picture or PDF of the
+  selection (`service.open_images`). TextEdit adds New Window Containing Selection (`service.new_window_with_text`) and
+  Open Selected File (`service.open_selected_file`); the latter opens a named file as an untitled document, since the
+  document controller only opens files through a panel grant.
+- Decisions and gaps:
+  - The shell reads the selection from the pasteboard, which apps fill on copy and selection. It does not ask the
+    frontmost app for its selection types over the control socket: that call would block the menu on the UI thread.
+  - The frontmost app's own services are listed too (the reference model lists every provider).
+  - The returned text is put on the pasteboard; the shell does not type it into the frontmost app.
+  - A service whose app is not running gets the call after the app opens (retried for 8 seconds).
+  - Not verified on Midget yet: the rows, the open, and the return path.
+- Tests: `app_services` (manifest keys, matching, payloads, the request line, reply parsing) and
+  `apphost::service_manifest_tests`.
 
 ## Assistant (`springboard/apps/assistant-desktop`)
 
@@ -1444,6 +1672,52 @@ cannot change. An entry from a store app (`/var/lib/springboard/apps/<id>/…`) 
 or under `is.olibuijr.springboard`, keeps its message, loses the subsystem and category, and is marked
 `[claimed subsystem …]`. System binaries may use any subsystem. `bifrost_core::log::may_log_as` is the rule.
 Gap: apps still write the datagram themselves, so the check is on read; Console reads the registry once at launch.
+
+## Background App Refresh (`BGTaskScheduler` parity)
+
+Apps run deferred work while no window is open. Status: wired end to end on the host, not yet verified on Midget
+(`docs/parity-matrix/ipados/data/background-tasks.json`, status `partial`).
+
+- Manifest: `[background] tasks = ["com.x.app.refresh"]` (`springboard/src/shell/apphost.rs`, `Manifest.background_tasks`;
+  parsed by `shell::services::background::parse_tasks`). Identifiers are ASCII letters, digits, `.`, `-`, `_`, at most 128
+  bytes, at most 16 per manifest. Requests for any other identifier are refused.
+- SDK (`bifrost_app::background_tasks`, `springboard/sdk/src/background_tasks.rs`): `submit(ctx, &Request)` with
+  `Request::refresh(id)` or `Request::processing(id)`, `.earliest(epoch_secs)`, `.network()`, `.external_power()`;
+  `cancel`; `completed(ctx, id)` when the task is done; `task_event(service, event, body)` reads the shell's events.
+  All of it goes over the `background` system service (`ToShell::ServiceCall`, `ServiceEvent`), so no new wire tags.
+- Model (`bifrost_core::background_tasks`, moved from the SDK so the shell can use it): `Request`, `Scheduler` (pending
+  queue, due rule for time, network and external power) and the JSON codec.
+- Shell (`springboard/src/shell/services/background.rs`): the queue is saved to `background-tasks.txt` under the shell root.
+  A run starts when a request is due and `may_start` passes: system switch (`bg_refresh`) on, the app not switched off
+  (pref `background.refresh.off`), not in Low Power Mode, no task running for the app, runs left in the budget.
+  Limits: refresh 30 s, processing 600 s, warning `taskExpiring` 5 s before the limit. The budget is 8 runs per app per
+  UTC day. Power: a machine with no battery counts as on external power, otherwise a mains or USB supply must be
+  `online`. Network: any interface other than `lo` with `operstate` up.
+- Launch: an app not running is spawned without a window (`AppHost::spawn_with`, no session restore) and gets
+  `taskStarted` `{identifier, limit}`; a running app gets the same event. When the task completes or its limit passes,
+  the shell ends the app it launched (an app the user had open is left running).
+- Settings: General > Background App Refresh has the system switch and an APPS group with a switch per app that declares
+  tasks (`login_items_page::refresh_group`, `Action::RefreshToggle`).
+- Gaps: the repeating `ActivitySchedule` is not connected; a hidden launch skips the notification and extension hooks;
+  an app the user opens during a task is ended when the task completes; the Settings per-app switch state comes from
+  the page's model, which is refreshed on touch (not verified); continued processing, background GPU access and the
+  development hook are missing.
+- Tests (run by the lead): `bifrost-core` `background_tasks` (queue, codec), `shell::services::background` (manifest
+  parsing, power and network rules, the gate order, budget and day reset, phase timing with a fake clock, one task per app,
+  low power and switches, persistence to disk and broken store lines), `bifrost_app::background_tasks` (event parsing).
+
+## Process assertions (RunningBoard) and the SMB client
+
+`bifrost_app::running_board` (`springboard/sdk/src/running_board.rs`): `take(ctx, reason, limit_secs)` asks the shell to keep the app
+running while nothing shows it; `release(ctx, id)`, `held(ctx)`. The model is `bifrost_core::process_assertion` (reason of 1 to 64
+characters, 60 s default and 1 h at most, 8 per app, lapses by itself) and the service is `runningboard`
+(`springboard/src/shell/services/running_board.rs`); `shell::background::Suspender` reads it on every tick, so an app that holds one is not
+stopped (`Event::Assertion`) and a quit app loses them. Gaps: assertion domains and memory or CPU limits per process.
+
+`bifrost_app::smb` (`springboard/sdk/src/smb.rs`, SMBClient parity): `SmbUrl::parse("smb://[domain;][user@]host[:port][/share/...]")` refuses a
+password in the address; `list_shares`, `list_dir` and `get` run Samba's `smbclient` with the password in `PASSWD`, the session held to SMB 2.02
+or newer with encryption when offered, names checked against `;`, quotes, wildcards and `..`, and `NT_STATUS_*` mapped to `Error`. Gaps: the
+Files Connect to Server sheet still lists `ftp://` only (no password prompt there yet) and shares are not mounted into the file tree.
 
 ## File system events (`FSEventStream`, `NSFilePresenter` gap)
 
@@ -1893,11 +2167,29 @@ copies stay inside BifrOSt until multi-MIME sources land; file representations t
   (`representation(using:properties:)`); `compression_factor` applies to JPEG.
 - Not done: the shell-drawn print and page layout sheets, text styles other than Helvetica, clip and transform calls on `DrawOps`.
 
+**Print settings, ranges and presets** (this round, host tests only, not yet checked on Midget):
+- `PrintInfo` has `sides` (`Sides`: one-sided, two-sided long or short edge) and `color` (`ColorMode`). Non-default values go
+  into the job template as `sides` and `print-color-mode`; the defaults send nothing extra.
+- `PaperSize::from_media(name)` reads a paper back from its saved name (`PaperSize::ALL` is the sheet's list).
+- `render_pages` draws only the pages of `PrintInfo::pages`, so a view job's PDF holds the range (one page per number,
+  none past the last page). `print_operation` then drops the range from the operation's info so CUPS does not cut it again.
+- `print_ranges::parse_page_ranges(text, total)`: "1-3, 5, 7-", "-4", "all" or empty. Sorted, merged, last page cut to the
+  document, first page past the end refused. `PageSelection::apply_to` writes one range to `PrintInfo::pages` and several
+  to `PrintInfo::page_list`; the job sends one `page-ranges` attribute with a value per range (`cups::merge_attributes`).
+  Not yet checked on CUPS or Midget.
+- `print_presets::PresetStore`: named `Preset`s (paper, orientation, margins, copies, scale, sides, colour). The page range,
+  printer and save path stay with the job. `to_text`/`from_text` is the storage form; reading skips bad names and repeated
+  sections, ignores unknown keys and keeps defaults for values that do not parse. An app keeps the text in its defaults.
+- Not done in this round: the shell print sheet does not yet show the two-sided, colour, presets, PDF popup (Save as PDF,
+  Open in Preview, Mail PDF) or Page Setup sheet rows, and TextEdit, Notes and Preview still use their own print calls.
+  Mail PDF needs `mail_compose` with the PDF as a grant. These are the next steps before the rows can move.
+
 Decisions and gaps:
 - No `run_modal(window)` print sheet yet: the kit print sheet needs a shell-drawn sheet (proto tags 0x1a0-0x1af stay reserved for
   it). Apps choose printer and options with their own controls and call `run`.
 - Print Center's Add Printer reads the clipboard, because the SDK has no text prompt sheet yet.
-- The `PrintInfo` page range is not used by the shell sheet, which prints only the previewed page when Pages is set.
+- The `PrintInfo` page range is not used by the shell sheet, which prints only the previewed page when Pages is set. The range
+  parser (`print_ranges`) is ready for the sheet's Pages field.
 - View printing is limited to Helvetica text, fills, paths and pictures (see below). Pages are drawn when the operation is made.
 - Without a scheduler, `available()` is false and `run` returns `PrintError::NoCups`. Whether the Midget image ships CUPS is unchecked.
 - Books: File > Print (cmd+P) prints the open PDF to the default printer; EPUB has no print rendering. wordcraft and pdfcraft are
@@ -2014,6 +2306,21 @@ Apple's CoreSpotlight lets an app index its own content so system search finds i
   may arrive before the first `configure`; the runtime holds it until the app has a context.
 - Adopted in Notes 1.8.6: every note outside Recently Deleted is indexed (title, first lines, folder as keyword) and
   `continue_activity` opens it with `Notes::show_note`.
+- Adopted in Reminders 1.17.0: each titled reminder is indexed by its title and the first note lines (`search.rs`, the
+  item id is the reminder id). Edits re-index, deletes and cleared titles leave the index; `continue_activity` selects the
+  reminder (`App::show_item`). Checked every 3 s against the store generation.
+- Adopted in Mail 0.14.0: the newest 200 messages of the mailbox on screen are indexed by subject and sender (`index.rs`,
+  id `account/mailbox/uid`, never bodies). Mail Settings "Show in Search" (default on) turns it off and removes the items.
+  `continue_activity` shows the account and mailbox and opens the message.
+- Contacts already indexes its contacts (`services::SearchIndex`); Notes, Reminders, Mail and Contacts are the adopters.
+- Shell per-app grouping: the Search panel shows indexed results in one ranked pass and sections them by the owning app's
+  name (`quicksearch::indexed_groups`, `app_section_title`). Items of an uninstalled app are dropped when the installed
+  list changes (`spotindex::forget_missing`, called from `installed_changed`); an empty list (registry not read yet) keeps
+  every item.
+- Settings > Search store: `<data>/search-prefs.txt` (`shell/search_prefs.rs`) holds the sources the panel does not query
+  (`off <section>`, e.g. `off Files`), the apps whose indexed items are hidden (`app <id>`) and the folders file search
+  leaves out (`exclude <folder>`, Privacy). The panel applies them (`sources_of`, `indexed_groups`, file walk). The
+  Settings page that edits the store is NOT built yet: until it is, the file is edited by hand.
 
 Tests: `bifrost_proto::quicksearch` (wire round trip, packet bound), `bifrost_app::quicksearch` (`Ctx::testing` + `take_sent`),
 `springboard::shell::spotindex` (ranking, replace, delete, bounds, disk round trip).
@@ -2030,7 +2337,7 @@ found_items, completion)` (batches of 8, `cancel()` / `CancelHandle`, `found_ite
 `sourceOptions` has no effect, the search-tool bridge is a gap; not tested on Midget.
 
 Gaps, recorded: the panel does not draw the stored thumbnail yet, and items of an app are searched only while it is installed
-(they are not removed on uninstall). Search of an app's own index is available as `quicksearch::search_items` over the pure
+(their stored items are dropped once the installed list no longer has the app). Search of an app's own index is available as `quicksearch::search_items` over the pure
 query model; `CSSearchableIndexDelegate` re-index requests are `reindex_all_with` / `reindex_identifiers_with`.
 
 ### Completion, errors, batches and extended attributes
@@ -2064,6 +2371,35 @@ matches them. The wire format is unchanged. Gap: the shell does not use `ranking
 - Gaps: the stores are in memory and not yet wired to the shell service or the on-disk files; the attribute query grammar,
   streamed found-items replies and metadata queries over app containers are not built; the assistant search tool stays a gap.
 
+### System search ranking (`bifrost_ui::search_rank`; OS rows HybridDatabaseTokenizer, HybridSearchAdapter, HybridSearchResultRanker, HybridSearchRuntime)
+
+Decision (2026-10-17): the Search panel ranks by one hybrid ranker instead of per-string fuzzy scores, and the runtime
+is written as plain threads with a deadline so a slow source never holds up the panel. Pure data, no I/O.
+
+- Tokenizer: `tokenize` splits words close to UAX #29 (letters and digits; an apostrophe between letters joins), folds
+  case and diacritics (`Café` is `cafe`, `Straße` is `strasse`), and cuts CJK runs into overlapping pairs (a lone
+  character stays itself). `index_terms` adds the single characters of CJK pairs and the prefixes of each Latin word from
+  two characters up, so `mai` finds `mail` while typing; queries use `tokenize` only.
+- Ranker: `Bm25` (k1 1.2, b 0.75) over weighted fields (title 3, keywords and description 1) with a coverage factor (a
+  document holding every query word beats one holding a single word). `rank` adds, with fixed weights: title match
+  (exact 1, prefix 0.6, word start 0.3), kind prior for one- or two-word queries (app 1, settings 0.8, contact 0.6,
+  document 0.5, file 0.4, other 0.2), recency of indexing (e^(-age/14 days)), local open count on a log scale, and the
+  semantic score. `order` puts every item in ranked order, keeping unmatched items after the ranked ones.
+- Semantic hook: `SemanticHook` returns an optional 0..=1 similarity. The shell passes `NoSemantic`: `bifrost_ui::embedding`
+  is a caller-fed vocabulary and no local text model is bundled, so nothing is called remotely and the term adds zero.
+- Usage: `Usage` counts opens per item (`app/unique id`), stored locally as `search-usage.txt` beside `quicksearch.ini`.
+  It is never sent anywhere.
+- Runtime: `run(query, sources, deadline, per_section, usage, now, semantic)` queries each `Source` on its own thread and
+  waits at most the deadline. Items from the sources that answered are ranked together; the result has the top hit, the
+  sections in source order (each capped), and the names of sources that were late or failed (`missing`).
+- Shell: the Documents section (`springboard/src/shell/quicksearch.rs`, `indexed_groups`) keeps the index's matching
+  and re-orders the top candidates with `order`; an open of a Documents result bumps its count.
+- Panel: the sources (apps, Settings pages, clock, Deildu titles, contacts, shortcuts, files and calendar events) are
+  `Table` sources built per query (`build_tables`); `Query` runs them on threads with a 300 ms deadline and a 12 ms grace
+  before the first frame. Late sections stream in, the top hit freezes once shown, and groups already on screen keep their
+  order. Opens of apps and Settings pages count alongside indexed results.
+- Gaps: notes is not a source (no shell-side store); the semantic hook has no model.
+
 ## Table columns and shared panels (NSTableView, NSFontPanel, NSColorPanel parity)
 
 Code: `springboard/ui/src/table.rs`, `springboard/ui/src/panels.rs` (SDK: `bifrost_app::controls::table`, `controls::panels`). Pure models with unit tests.
@@ -2079,7 +2415,11 @@ Code: `springboard/sdk/src/quick_look.rs` (`bifrost_app::quick_look`), wire type
 
 - **Panel.** `PreviewPanel`: `set_items` (`dataSource`, at most 16 items per message, URL cut to 256 bytes, title to 96), `current_preview_item_index` (always clamped), `step` (arrows, no wrap), `reload_data`, `make_key_and_order_front`, `close`, `toggle` (Space). `PreviewItem` is `previewItemURL` + `previewItemTitle`.
 - **Thumbnails.** `thumbnail_path(url, size, scale)` names a PNG under `$XDG_CACHE_HOME/bifrost-quicklook`; `ThumbnailCache::best_representation` returns the cached path or asks the caller to render it, and caches it (`cache::Cache`).
-- **Gaps.** The shell does not draw the floating panel yet (the message is decoded and ignored), and no app is adopted yet (Files, PDFCraft and PhotoCraft are next). No built-in renderers: the app renders thumbnails itself (`QLThumbnailGenerator` generates from any file type). No `QLPreviewView`, `previewItemDisplayState`, transition source frames or full-screen mode, and no `QLThumbnailGenerator` update handlers (single result only).
+- **Shell panel.** The shell draws the floating panel (`springboard/src/shell/preview_panel.rs`, `Panel`, `Kind`): images, text, PDF and audio (through the thumbnails service and the registry's providers), and as of this round video (`public.movie`, info line), fonts (`public.font`, info line) and folders (`folder_summary`: item count and file bytes, at most 10000 entries, then "More than"). Keys: Left and Right step without wrapping, Esc and Space close. PDFs are rendered page by page with the render crate's PDF renderer (`cg::pdf::draw::render_page_fit`, pages fitted to the body width and kept only while visible) and scrolled with Up, Down, Page Up and Page Down (`PdfView`, `Scroll`: a pure layout and offset model, clamped at both ends; the strip under the body shows "Page n of N"). A font item sets three sample lines in its own face (`Font::parse` on the file's bytes, read once per path and leaked for the run; a file that does not parse is an info line). Audio and movies play on the shell's media player (`media::player::Player`, paused on open) behind a transport strip: play or pause in `LINK`, a seek track that jumps on a click, and `m:ss / m:ss` time (`Transport`, pure, tested). The card resizes: drag its right or bottom edge (or the corner) and it follows the pointer at twice its distance from the screen centre, held between 240 x 200 points and the screen less a margin (`size_for_drag`, `grip_at`); the size is kept for the next item and opening. The full-screen button (top right) fills the screen; a full-screen card has no edges to drag.
+- **Entry from apps.** `bifrost_app::quick_look::preview(ctx, &[path], index)` turns absolute paths into `file://` items titled by file name (`file_items`: relative and control-character paths are dropped and the index follows the kept items); it sends nothing when no path is usable. Files' Space key and the context menu's Preview call the panel.
+- **App preview extensions (model).** `ui::preview_manifest` parses `[[preview]]` blocks from the app manifest: `id`, `types` (type identifiers for `Registry::register`), `generator` (the control method the shell calls with `{"file", "width", "height"}`; the app answers `{"picture": "<absolute PNG path>"}`), and `timeout_ms` (default 3000, clamped to 1..10000). `Wait` decides once: an answer in time is used, while a late, missing, error or relative-path answer falls back to the generic preview. Wired: when the panel shows a file of a declared type (`Generators::for_file`, through the preview registry, so the most specific type wins), the shell starts a worker thread that calls the app's generator over its control socket (`intents::exchange`, behind the `Exchanger` trait so tests use a fake) and waits with `Wait` for the declared timeout (`preview_gen.rs`, `Requests::poll`). The PNG the app names is drawn in the panel; a late, missing, error or unreadable answer falls back to the built-in preview of the file (the thumbnails service for pictures, the kind's own body otherwise). The declarations are read from each installed app's `manifest.toml` on every opening. **First provider:** Notes declares `[[preview]]` for Markdown (`net.daringfireball.markdown`, `generator = "preview.render"`) and answers with a PNG of the note's first lines in its own face (`apps/notes-desktop/src/notes/preview.rs`, written under the app's data directory and named by a content key).
+- **File menu.** Files declares an app menu titled File with a Quick Look item (`main_menu`, `menu_action` in `springboard/apps/files/src/main.rs`); the shell merges an app menu with a shell menu's title into that menu. The item needs a selection and opens the same panel as the context menu's Preview.
+- **Gaps.** Still open: the panel has no Markup button (Files keeps its own) and no `QLPreviewView`. Only a PNG path comes back from an app's generator: a `QLPreviewProvider` reply with HTML, a PDF or a file does not reach the shell yet. Only Notes declares a generator. Nothing of this is checked on Midget yet (drag, full screen, key delivery, the PDF and transport in a real session). No app is adopted yet (Files, PDFCraft and PhotoCraft are next). No built-in renderers: the app renders thumbnails itself (`QLThumbnailGenerator` generates from any file type). No `QLPreviewView`, `previewItemDisplayState`, transition source frames or full-screen mode, and no `QLThumbnailGenerator` update handlers (single result only).
 
 ## Speech recognition requests and tasks (`SFSpeechRecognizer`, `SFSpeechRecognitionRequest`, `SFSpeechRecognitionTask`)
 
@@ -2411,11 +2751,34 @@ render code; the SDK re-exports it, so there is one API.
 Decisions: composite filters take premultiplied pixels (as `blend::composite` does); colour filters take straight RGBA
 (as `colorfx` does, and as Core Image's colour kernels unpremultiply first). Output keeps the input size. Blend math is
 the W3C separable set in `render/src/blend.rs`; the `Normal` blend is `sourceOver`.
-Gaps, stated rather than skipped: no lazy `CIImage` graph (each call runs eagerly on CPU pixels); no `CIContext` or render
-destination; `CIColorMatrix` has no per-channel bias beyond the five-vector form; no `CIColorMap` or `CIColorCube`; no
+Gaps, stated rather than skipped: no lazy `CIImage` graph (each call runs eagerly on CPU pixels); no `CIContext`, and the
+render destination below is CPU only; `CIColorMatrix` has no per-channel bias beyond the five-vector form; no `CIColorMap` or `CIColorCube`; no
 `CIRadialGradient`, checkerboard or stripes generators; the filters are CPU only, with no GPU path. Not built or run on
 Midget in this round (unit tests written, not run). The parity matrix row for "Composite operations and blend modes" and
 "Colour adjustment" can move to partial; parity needs a Midget test.
+
+#### Render destinations, accumulator, perspective and video filtering
+
+Code: `springboard/render/src/render_destination.rs`, `springboard/render/src/perspective.rs` (pure CPU models); app API
+`bifrost_app::image_render` (`springboard/sdk/src/image_render.rs`).
+
+| Apple | BifrOSt |
+|---|---|
+| `CIRenderDestination` (format, colour space, alpha mode, region) | `Destination::new(w, h, PixelFormat)` with `Rgba8Premultiplied`, `Rgba8Straight` or `RgbaF32Premultiplied`, the `ColorSpace::Srgb` tag, and `render_into(src, Region, &mut dest, origin)`, which clips both rectangles and returns the pixels written; `render_to_destination(img, format)` for a whole image |
+| `CIImageAccumulator` (state across frames, `setImage`, `setImage(_:dirtyRect:)`) | `Accumulator::new(w, h)`, `feed(&frame, retain)` (source-over of the frame over the retained state, `retain` clamped to 0..1), `snapshot()`, `clear()`; a size mismatch is refused |
+| `CIPerspectiveCorrection` | `perspective_correct(img, quad, out_w, out_h)`: a homography from the four corners (`homography`, `map_point`) with bilinear inverse mapping and transparent edges |
+| Running a `CIFilter` chain on each frame of a video | `VideoFilter::new(FilterChain).with_feedback(retain)` and `process(&frame)`, which runs the chain and then the optional accumulator; `reset()` starts a new trail. The app passes the frames it gets from its own player |
+
+Decisions: destinations are tightly packed rows; the 8-bit straight conversion rounds `c * 255 / a`, and a zero alpha gives
+black. Pixel input is the software rasteriser's premultiplied u32 (R in the low byte). Tests (written, not run) hold these
+to hand-computed images: clipping at negative origins and past the edges, straight-alpha unpremultiply (128 over 128 gives
+255), accumulator fades (retain 0.5 gives 128, then 64), homography identity and 2x scale, a sub-quad crop, and degenerate
+quads.
+
+Gaps: no GPU destination (`CIContext.render(_:to:)` has no GPU counterpart; the GL dispatch is not wired); only sRGB is
+produced, with no colour-managed conversion; `VideoFilter` is not wired to the shell media player (`take_frame` in
+`springboard/src/media/player.rs` is not exposed to apps) and Photo Booth and Photos video do not use it yet; no
+`CIPerspectiveTransform` (free quad-to-quad) and no perspective tile. Nothing here is verified on Midget.
 
 #### Core Image GPU path (colour kernels)
 
@@ -2531,9 +2894,19 @@ Apple reference: `AVAudioPlayer` (volume, `setVolume(_:fadeDuration:)`, `pan`, `
 - `audio/engine` (`bifrost-audio-engine`, `Engine`) is the node graph: players, mixer, units, connections, detach and
   taps (`attach_tap`), offline and device rendering. The SDK now re-exports it as `bifrost_app::audio_engine`. The older
   pure model in `ui/src/audio_engine.rs` is superseded by it; the shell may use either until it is removed.
-- Not done here: the player is not yet connected to the audio service (`audiod`), so pan, rate and fade do not reach the
-  speaker; apps still play through `bifrost_app::audio` (queue, volume, mute). Session categories, interruptions and
-  speech stay gaps. Verify the audio path on Midget before any row is `parity`.
+- Playback rate reaches the audio service (protocol change, Voice Memos 1.10.0). `Cmd::SetRate(f32)` (wire tag 18,
+  0.5 to 2.0, clamped, NaN is 1) is in `springboard/proto/src/svc.rs`; `audiod` applies it to its one player
+  (`springboard/src/media/audioplayer.rs`, `set_rate`). The rate is time-stretched, not resampled: `springboard/src/media/timestretch.rs`
+  is a WSOLA stretcher (1024-frame Hann windows, 512-frame hop, a search of 256 frames), so the pitch stays put and
+  the output is `input / rate` long. The stretcher holds back about 27 ms and drops that tail on a song change and a seek.
+  The rate stays set across songs. The `State` event gained a trailing `rate: f32` (both ends ship together). The SDK
+  sends it through `bifrost_app::audio::Command::rate` (`springboard/sdk/src/system_audio.rs`) and the shell client
+  `springboard/src/svc.rs` `Client::set_rate`. Voice Memos stores the speed per recording (`.<stem>.rate` sidecar) and
+  shows a Slower/Faster stepper at 0.5, 1, 1.5 and 2. Tested headless (encode/decode, length, dominant frequency by a
+  small DFT); not verified on Midget.
+- Not done here: the player is not yet connected to the audio service (`audiod`) for pan and fade, so they do not reach
+  the speaker (rate does, see above); apps still play through `bifrost_app::audio` (queue, volume, mute). Session
+  categories, interruptions and speech stay gaps. Verify the audio path on Midget before any row is `parity`.
 
 Tests: unit tests in `ui/src/audio_player.rs` (not run in this round).
 
@@ -2767,6 +3140,38 @@ where Apple keeps one per device. Audit of the other panes (Trackpad, Print & Sc
 pages exist (`pages.rs`, `print_scan_page.rs`, `sharing_page.rs`, `internet_accounts_page.rs`, `users_page.rs`); their parity rows are
 `partial` with the missing parts listed, none `parity` until checked on Midget.
 
+## System Settings: shared list rows (`springboard/src/shell/list.rs`)
+
+Every Settings list page draws through `list::Item`. Two accessories were added for the per-app lists. Existing rows
+are unchanged unless they ask for them.
+
+- **Leading app icon.** `Item::app_icon(app_id)` draws the installed app's icon at the detail row's icon token
+  (`ROW_ICON`, 23 pt, at `ROW_ICON_X`), through `apphost::icon_image`, which calls `bifrost_render::icon_doc::app_icon`
+  (see "Layered app icons"). The label moves to `ROW_LABEL_X`, as for a row with a symbol tile. A built-in app has no
+  package, so its slot is blank and the label still moves in. Sidebar rows do not take the app icon.
+- **Trailing pop-up button.** `Item::popup(choices, selected, action)` sets `Accessory::Popup`. The button shows the
+  chosen label in the label colour, then up and down chevrons at the row's right edge (`popup_layout`). Tapping the
+  row opens a menu (`ListPage::open_popup`) built on the kit's menu model (`bifrost_ui::menu::Menu::popup`) and placed
+  by `popup_origin`: the selected item sits over the button and the menu stays below the bar. The menu is a translucent
+  card (`MATERIAL_MENU`, 14 pt radius) with a checkmark on the chosen item and the touched item filled with
+  `MENU_HIGHLIGHT`. Its metrics are the desktop menus' (24 pt rows, 11 pt separators, 5 pt padding).
+- **Choosing.** A touch on a menu row is `Hit::Choice(k)`; a touch elsewhere is `Hit::Dismiss` and closes the menu. A
+  touch on the menu's padding or separators does nothing. `Settings::activate` closes the menu and sends
+  `pages::chosen(&row.action, k)`, the row's action with the choice in its place. Only the location access edit maps a
+  choice today (`Edit::Access`, index into `LocationAccess::ALL`); other actions map to None and the touch does nothing.
+  A restricted app's access popup is dimmed (`Tint::Dim`) and does not open.
+- **Per-app lists.** Location Services (`location_page.rs`): each app's row is its icon and an access popup (Never,
+  Ask Next Time, While Using the App), replacing the pushed checkmark page (`PageId::LocationAccess` is gone). The
+  Precise Location switch and "Used in the last 24 hours" rows stay. App Permissions (Camera, Microphone, Screen
+  Recording, Location) and Background App Refresh show each app's icon on its switch row. They keep switches: the store
+  records only allowed or not allowed for them, with no Ask state, so a two-item popup would be a switch in disguise.
+  Screen Time's allowed-apps list is not converted.
+
+Gaps: icons come from the installed package only (no fallback glyph for a built-in app), and the popup has no keyboard
+path (arrow keys and type-to-select of the kit menu are not wired to the list). Host-tested only: the layout and hit
+tests are in `list.rs`, the choice mapping in `pages.rs` and `location_page.rs`. Parity rows stay `partial` until
+checked on Midget.
+
 ## Launch agents and daemons (OS daemons, role map)
 
 No new API. The shell performs the roles of the reference launchd agents (Dock, Finder desktop, controlcenter,
@@ -2774,8 +3179,9 @@ notificationcenterui, usernotificationsd, WindowManager, WindowServer, Spotlight
 wallpaper, loginwindow, TextInputSwitcher, battery menu extra, login item registration, shared file list) inside one
 process, so these rows in `docs/parity-matrix/os/daemons/` are `partial` with the filling module in `bifrost` and the
 missing parts in the note. The table is in the `services/mod.rs` doc comment; `springboard/tests/daemon_map.rs`
-checks that every partial row cites an existing path and has a note. Siri, family controls, iCloud, search-party,
-Screen Time and slot-notification agents have no counterpart and stay `gap`. Parity needs a Midget check.
+checks that every partial row cites an existing path and has a note. Siri, family controls, iCloud, search-party
+and slot-notification agents have no counterpart and stay `gap`. The Screen Time agent (`com.apple.FamilyControlsAgent`)
+is `partial`: the shell fills its on-device role (see "Screen Time" below). Parity needs a Midget check.
 
 ## AppKit: named alert sounds (`bifrost_sdk::system_sound`, `shell::alert_sound`)
 
@@ -2789,10 +3195,48 @@ Screen Time and slot-notification agents have no counterpart and stay `gap`. Par
 `Location` mirrors `CLLocation` (coordinate, horizontal accuracy, timestamp, `distance_from`); `reverse_geocode` returns a
 city-level `Placemark`. Authorization is the privacy grant (Settings > Privacy > App Permissions > Location); errors are
 `bifrost_ui::location_auth::LocationError`. The shell side is `springboard/src/shell/services/location.rs`.
-Honest limits: no GPS hardware and no Wi-Fi positioning. A fix is a manual location from the shell prefs
-(`location.manual.*`, 100 m) or an IP lookup that is off by default (`location.ip.enabled`, `location.ip.endpoint`, about
-25 km); altitude is always absent; reverse geocoding knows only those places within 50 km, not a worldwide gazetteer;
-no heading, regions or background updates. Host-tested only; the rows stay partial until checked on Midget.
+
+Privacy model (owner decision, follows the reference platform):
+- **Global switch**: `location.services.enabled` (default `1`); `0` denies every app whatever its grant
+  (`services::location::effective_status`).
+- **Precise Location per app**: `location.precise.<app id>` (default off = approximate). An approximate app gets its
+  coordinates moved to the centre of a 0.027 degree grid (about 3 km, `location_auth::approximate`) and an accuracy of
+  3 km (`location_auth::APPROXIMATE_ACCURACY`). Precise apps get the fixed fix unchanged.
+- **Purpose string**: the app's manifest `[privacy] location = "..."` (`Manifest.location_purpose`). A `location_request`
+  without it is refused by `privacy_permissions::location_purpose_gate` (built on `location_auth::request_purpose`), so no
+  prompt shows without a reason. The request sheet does not show the text yet.
+- **Retention**: the last fix lives in memory only. The service records when each app last got a fix
+  (`services::location::record_use` / `last_use_of`, a thread-local map), in memory, never on disk and never a location
+  history. It drives "Used in the last 24 hours" on the Location Services page.
+- **No third-party lookup**: the IP-address estimate (`location.ip.*`) was removed. bifrost-cloud has no geo endpoint
+  (checked `~/Projects/bifrost-cloud`: `device_locations` is encrypted sharing data, not IP geolocation), so there is no
+  IP source. GeoClue2 is not built (no D-Bus client for it is in use; `zbus` exists only for AT-SPI and Wayland).
+
+- **Menu bar indicator state**: `Location::in_use(t, ACTIVE_WINDOW)` lists the apps with a live watch or a fix in the
+  last 5 s, sorted. The menu bar arrow (springboard/src/shell/desktop_bar.rs) shows while that list is not empty; its
+  menu lists those apps and ends with "Location Services Settings…", which opens the page below.
+- **Settings > Privacy & Security > Location Services** (`springboard/src/shell/location_page.rs`): the global switch
+  (footer: turned off, every app is denied, and a watching app gets `didFailWithError` on the next tick); System
+  location (Set Location… asks for latitude then longitude in two one-field sheets, validated to -90..90 and
+  -180..180, a decimal comma is accepted; Clear removes it; no network geocoding, so the place has no city or
+  country); and one row group per app that has an answer in the privacy store (`privacy_permissions::location_asked`):
+  an access pop-up on the row with Never, Ask Next Time or While Using the App (Ask Next Time forgets the answer so the
+  next request shows the sheet again; see "System Settings: shared list rows"), a Precise Location switch
+  (`location.precise.<id>`), and "Used in the last 24 hours" (a check while the last fix is within 24 h). Pref writes
+  go through `Effect::Location`, which the shell saves to `settings.ini`. Apps that have only been asked, and not
+  answered, are not listed: the store keeps no entry for them. Gaps: the access popup has no Allow Once choice, and the
+  page is host-tested only until checked on Midget.
+
+Sources: one, the fixed location from the shell prefs (`location.manual.*`, 100 m), set in Settings > Privacy & Security
+> Location Services. Gaps still open: the city and country of the fixed place (no geocoding, so they stay empty), the
+Allow Once choice on the request sheet (the sheet is two buttons: Don't Allow and Allow; Allow Once needs a third
+button and a session-only grant; the Location Services popup has no Allow Once either), the purpose text on the sheet,
+and the Weather "My Location" wiring (its LOCATION constant is still `NotDetermined`, because the weather app does not
+run with an SDK `Ctx`).
+
+Altitude is always absent; reverse geocoding knows only the fixed place within 50 km, not a worldwide gazetteer;
+no heading, regions or background updates. Host-tested only (not run in this round); the rows stay partial until
+checked on Midget.
 
 ## Core Image: distortion, stylize, halftone, tile and the filter catalogue (`bifrost_render`)
 
@@ -2842,6 +3286,18 @@ All four are host-tested only; rows stay `partial` until checked on Midget.
 - Multi-pass: `FrameSilo` (`add_sample`, `for_each_sample`), `MultiPassStorage` (`set`, `get`, `close`, `to_bytes` / `from_bytes`), and `set_multi_pass`, `begin_pass`, `end_pass` (true when another pass is wanted).
 - Frame processing: `FrameProcessor` trait, `FrameProcessorSession` (start, process, end) and `SuperResolutionScaler` (integer upscale); `set_frame_processor` runs it before encoding.
 
+## Compression: algorithm selection (`bifrost_app::compression`, `bifrost_app::compression::lz4`, `bifrost_app::compression::lzma`)
+
+- `Algorithm::Lzma` works in `encode_buffer` / `decode_buffer` / `decode_buffer_limited`, `Stream` and the input and output filters. Like LZ4 it has no incremental codec here: the stream or filter buffers its input and runs the one-shot codec when it ends. The buffer form is a whole xz stream (`compression/lzma.rs`): the stream header and footer, one block whose filter is LZMA2 (dictionary property 22, the 8 MiB of preset 6) with a CRC64 check, and the index. The level and the thread count are ignored.
+- The LZMA decoder takes streams with a CRC32, CRC64, SHA-256 or no check, and any number of blocks. It accepts every LZMA2 chunk kind: uncompressed chunks with or without a dictionary reset, and LZMA chunks with no reset, a state reset, new properties or a dictionary reset. It checks the stream flags, the block headers, the block checks, the index records and CRC, and the footer, and it refuses output past the limit with `Error::TooBig`. Its dictionary is the output so far, so a distance is checked against the bytes produced. `lzma::crc32` (IEEE, reflected) and `lzma::crc64` (ECMA-182, reflected, the xz check) are public; SHA-256 comes from `digest::sha256`.
+- The LZMA encoder is a greedy matcher with hash chains over 3-byte prefixes and a range encoder, at lc=3, lp=0, pb=2. It writes literals and simple matches only (no rep matches). Chunks are 64 KiB; a chunk that does not shrink is written as an uncompressed LZMA2 chunk, and the model starts again after it. Correctness is the goal, not ratio.
+- LZMA gap: no xz stream made by an external tool (xz-utils) is in the repository, so there is no external test vector and nothing here is checked against another xz implementation. The tests (`springboard/sdk/tests/compression_lzma.rs`, inline tests in `lzma.rs`) cover round trips (empty, small, repetitive, pseudo-random, past 1 MiB), the CRC32 and CRC64 check values, refusals (bad magic, bad CRC, bad footer, every truncation) and the output limit. Do not treat the bytes as xz-compatible until an external tool reads them.
+- `Algorithm::Lz4` works in `encode_buffer` / `decode_buffer` / `decode_buffer_limited`, `Stream` and the input and output filters, the same way Zlib and Deflate do. The buffer form is the `bv41` (compressed, with decoded and encoded sizes), `bv4-` (stored) and `bv4$` (end marker) framing, in 64 KiB chunks.
+- `compression::lz4::encode_frame` / `decode_frame` are the LZ4 frame format (magic, FLG and BD, xxHash32 header checksum, block and content checksums). `xxh32` is exposed too.
+- The encoder is a greedy hash-table matcher with a 64 KiB window, minimum match 4, the last 5 bytes as literals, and the last match starting at least 12 bytes before the end. The decoder is bounds-checked and rejects zero or out-of-range offsets, truncation, and output over the limit with `Error::TooBig`.
+- Still `Unsupported`: LZFSE, LZBITMAP, Brotli. `Algorithm::is_supported` is the source of truth.
+- Status: host unit tests and `springboard/sdk/tests/compression_lz4.rs` written, and `springboard/sdk/tests/compression_lzma.rs` with the LZMA unit tests, not yet run (the build round is pending). Not yet exercised on Midget. The parity row stays `partial`.
+
 ## Core Audio: aggregate devices, process objects, process taps (`bifrost_app::audio_aggregate`, `bifrost_app::audio_process`)
 
 Apple reference: `AudioHardwareCreateAggregateDevice` and the `kAudioAggregateDevice*Key` dictionary,
@@ -2870,6 +3326,49 @@ through `append` and `end_audio`; the caller drives the task with `pump`, which 
 `SFTranscriptionSegment`s. `cancel` reports `Canceled` once. Gaps: no recognition engine ships, so a `RecognitionBackend`
 must be supplied; no alternatives beyond the best transcription; no dictation entry point on the keyboard. Rows stay
 partial until a Midget check.
+
+## Speech service (`bifrost_app::speech`, the `speech` service)
+
+Text to speech for apps, the BifrOSt counterpart of the reference speech synthesizer. The shell owns the engine:
+`espeak-ng`, else `espeak`, a system package. The shell runs it as a child process and feeds it the text on standard
+input, written from a thread so the shell never blocks on a long text.
+
+- Calls: `speak {text, voice?, rate?}` replies `{id}`; `stop` replies `{stopped}`; `pause` and `continue` (SIGSTOP and
+  SIGCONT to the engine) reply `{paused}`; `is_speaking` replies `{speaking, paused}`; `voices` replies
+  `{voices: [{name, language}], loading}`. The voice listing is read once in a thread on the first call, so apps ask
+  again while `loading` is true.
+- One utterance per app. A new `speak` replaces the current one, `stop` ends it, and the shell ends it when the app
+  quits. An engine that has exited stops counting as speaking.
+- Limits: text is at most 16 KiB, the rate is a whole number from 80 to 450 words per minute, and a voice name may not
+  start with a dash or contain spaces. No engine installed fails `speak` and `voices` with "no speech engine is
+  installed (install espeak-ng)".
+- Gaps against the reference synthesizer: no word or sentence events, no pitch or volume, no delegate callbacks, no
+  per-utterance language (the voice carries it), and no pause of an engine the shell did not start.
+- Code: `springboard/src/shell/services/speech.rs` (service: the state machine behind a `Spawner` trait, so tests run
+  with a fake engine), `springboard/core/src/speech_engine.rs` (engine programs, `engine_args`, `parse_voices`, shared
+  with the `say` tool in `springboard/cmd/src/say.rs`), `springboard/sdk/src/speech.rs` (client).
+- Parity: `docs/parity-matrix/data/avfaudio.json` (speech synthesis row, partial). Notes and TextEdit have Speech menus
+  (Note > Speech, Text > Speech) rather than Edit > Speech, because the shell's Edit menu takes no app items.
+- Not verified on Midget: the menus and the engine path need espeak-ng installed on the device.
+- Viewer (Preview) has Preview > Speech > Start Speaking, which speaks the PDF selection or else the page text
+  (`apps/preview-desktop/src/find.rs` `speech_text`).
+
+## Screenshot service (`bifrost_app::screenshot`, the `screenshot` service)
+
+Pictures of the screen for apps with the Screen permission. The shell takes the picture the way the screenshot toolbar
+does and saves it to Photos. Methods: `selection()` (drag a rectangle), `window()` (the window pick, with its shadow),
+`screen()` (the whole screen now). Each replies `{started: true}`, or an error for a locked screen, a missing permission
+or a capture already on screen. When the file has landed, the shell sends the event `captured` with body `{path}`; an app
+opens the path itself. A cancelled selection or window sends nothing; a file that does not land within 10 s is dropped.
+One request at a time.
+
+- Gaps: the file is in the Photos folder, not the app's data folder; no delay timer, no pointer option, no recording
+  (the toolbar keeps those); the event arrives on the shell tick after the file exists, not at the save.
+- Code: `springboard/src/shell/services/screenshot.rs` (`Shots` is the pure state machine; the service calls
+  `Shell::capture_request` and `take_screenshot`, and reads `Shell::shot_saved`), `springboard/sdk/src/screenshot.rs`
+  (client: `take`, `started_from_reply`, `captured_path`).
+- Parity: Viewer's File > Take Screenshot items (`apps/preview-desktop/src/main.rs`), row "Take Screenshot
+  (selection/window/screen)" in `docs/parity-matrix/apps/preview.json`, partial. Not verified on Midget.
 
 ## Local Authentication (`bifrost_app::local_auth`, the `local_auth` service)
 
@@ -3001,6 +3500,70 @@ arithmetic is shared with `x25519`; the hash is `bifrost_core::sha512`.
 
 Still missing: P256, P384, P521. Status is partial until checked on Midget.
 
+## Post-quantum KEM and signatures (`MLKEM768`, `MLKEM1024`, `MLDSA65`, `MLDSA87`)
+
+ML-KEM (FIPS 203) for ML-KEM-768 and ML-KEM-1024, pure Rust in `bifrost_core::mlkem`; the hash for the matrix is the
+SHAKE128 and SHAKE256 XOF added to `bifrost_core::sha3` (`Shake`). The SDK module `bifrost_app::kem` wraps it:
+
+- `DecapsulationKey::generate(variant)` (seeds `d` and `z` from the kernel pool), `from_seeds`, `from_bytes`,
+  `bytes`, `encapsulation_key`, `decapsulate(ciphertext)`.
+- `EncapsulationKey::from_bytes` (length and the FIPS 203 modulus check), `bytes`, `encapsulate()` (fresh `m` from the
+  pool) returning `Encapsulation { shared_secret, ciphertext }`.
+- `Variant` is `Params`: `MlKem768` (ek 1184, dk 2400, ct 1088) and `MlKem1024` (ek 1568, dk 3168, ct 1568).
+- `KemError`: `IncorrectKeySize`, `IncorrectCiphertextSize`, `InvalidEncapsulationKey`, `InvalidDecapsulationKey`,
+  `Unavailable`. A tampered ciphertext is not an error: decapsulation returns the implicit-rejection secret.
+
+Decisions: the seeds are the caller's or the pool's, so the core draws no randomness; `DecapsulationKey` `Debug`
+shows the variant only. Known gap: the official FIPS 203 known-answer vectors are not in the repo, so the tests check
+lengths, the NTT round trip, NTT multiplication against a schoolbook product, byte and compress codecs, round trips
+and implicit rejection, and not interoperability. Out of scope: the `KEM`/`KEMPublicKey` type shapes. Parity:
+`Post-quantum KEM and signatures` row in `docs/parity-matrix/data/apple-cryptokit.json` (partial until the vectors pass
+and it runs on Midget).
+
+### X-Wing (`XWingMLKEM768X25519`, `bifrost_app::kem::xwing`)
+
+The hybrid KEM of ML-KEM-768 and X25519, from the IETF draft `draft-connolly-cfrg-xwing-kem` (clean-room from the
+public draft). The arithmetic is in `bifrost_ui::xwing`, which can reach both `bifrost_core::mlkem` and
+`bifrost_ui::x25519`; the SDK module draws the entropy and keeps the object shape of `kem`:
+
+- `DecapsulationKey` is a 32-byte seed. SHAKE256 of the seed gives 96 bytes: `d` and `z` for ML-KEM-768 key generation,
+  then the X25519 secret. `from_seed`, `generate` (seed from the pool), `from_bytes` (32 bytes), `bytes`,
+  `encapsulation_key`, `decapsulate(ciphertext)`.
+- `EncapsulationKey` is `pk_M || pk_X`, 1216 bytes. `from_bytes` checks the length and the ML-KEM modulus, `bytes`,
+  `encapsulate()` (64 bytes of randomness from the pool: `m`, then the X25519 ephemeral scalar) returning
+  `Encapsulation { shared_secret, ciphertext }`, where the ciphertext is `ct_M || ct_X`, 1120 bytes.
+- The shared secret is SHA3-256 of `ss_M || ss_X || ct_X || pk_X || label`, with the six-byte label `\./` + `/^\`.
+- `KemError::LowOrderPoint` is new: an all-zero X25519 agreement (a small-order peer key) is refused. The draft's
+  handling of that case is not checked here; this is a choice to confirm against the draft.
+
+Known gap: the X-Wing draft test vectors are not in the repo, so the tests check sizes, deterministic round trips from
+fixed seeds, that tampering `ct_M` or `ct_X` changes the secret, the label bytes and the combiner input order. Nothing
+is checked against another X-Wing implementation. Still missing: the Apple-named `XWingMLKEM768X25519` type and the
+`KEM`/`KEMPublicKey` shapes.
+
+### ML-DSA signatures (`MLDSA65`, `MLDSA87`, `bifrost_app::signature_pq`)
+
+ML-DSA (FIPS 204) for ML-DSA-65 and ML-DSA-87, pure Rust in `bifrost_core::mldsa`, on the same `Shake` XOF and the
+NTT over Z_q with q = 8380417 (zeta 1753). The SDK module `bifrost_app::signature_pq` wraps it:
+
+- `PrivateKey::generate(variant)` (the seed `xi` from the kernel pool), `from_seed`, `from_bytes` (recomputes the public
+  half from the secret bytes), `bytes`, `public_key()`, `sign(message, context)` (hedged: fresh signing randomness),
+  `sign_deterministic(message, context)` (zero randomness, reproducible).
+- `PublicKey::from_bytes` (length check), `bytes`, `is_valid_signature(signature, message, context) -> bool`. A bad
+  signature, a wrong message or context, and a context over 255 bytes all give `false`.
+- `Variant` is `Params`: `MlDsa65` (pk 1952, sk 4032, sig 3309) and `MlDsa87` (pk 2592, sk 4896, sig 4627).
+- `SignatureError`: `IncorrectKeySize`, `ContextTooLong`, `Unavailable`.
+
+Core: `keygen`, `sign`, `verify` (the pure interface with the context prefix `0 || |ctx| || ctx || M`),
+`public_key_from_secret_key`, and the internal algorithms with the rejection loop checks (`||z||inf`, `||r0||inf`,
+`||ct0||inf` and the hint count). The FIPS 204 bit packings and HintBitPack are in the same module.
+
+Decisions: the signing randomness is the caller's, so the core stays deterministic for a given input; the SDK fills it
+from the pool for `sign`. `PrivateKey` `Debug` shows the variant only. Known gap: the official FIPS 204 known-answer
+vectors are not in the repo, so the tests check sizes, the NTT round trip and multiplication, the sampling and
+packing round trips, sign and verify for both sets, the failure cases and reproducible deterministic signing; they do
+not check interoperability. Not done: ML-DSA-44 and the X-Wing hybrid KEM.
+
 ## Preference panes: pane links (`bifrost_ui::pane_link`, `NSPreferencePane` deep links)
 
 A System Settings pane is opened by an `x-apple.systempreferences:` link: the pane identifier, and an optional anchor
@@ -3093,7 +3656,7 @@ New pure models in `springboard/ui/src/` (host unit tests only; not wired into t
   selectedRange, markedRange, attributes(forCharacterIndex:lineHeightRectangle:)) with `update_composition` and
   `apply(outcome, client)` so a text view only implements the trait; a mock client drives the controller tests.
 
-Gaps: no pinyin (no syllable-to-hanzi data is shipped), no Tamil, Ainu, Transliteration or Dictation methods, the sources
+Gaps: no pinyin (no syllable-to-hanzi data is shipped), no Transliteration or Dictation methods, the sources
 are not read from the shell yet (`shell/kb_layouts.rs` still has three layouts), no Wayland text-input provider.
 
 ## Text view and TextKit 2 layout (AppKit Text, `bifrost-ui`)
@@ -3268,6 +3831,90 @@ smooths lux readings and maps light to a brightness fraction, but no sensor read
 `bifrost_ui::route_prediction::suggest` ranks known audio destinations by use count and recency; the picker has no
 persisted history or integration yet. These remain partial; see `docs/parity/os-gaps-03.md`.
 
+## Game Mode (GamePolicy, GamePolicyFoundation, GamePolicyServices, GamePolicyAgent)
+
+`springboard/src/shell/gamemode.rs` is the shell's Game Mode: a pure state machine (`Model`) with a 3 s leave
+hysteresis, `plan` for the effects of a change, and `GamePref` (Settings > General > Game Mode: Automatic or Off,
+stored as `game_mode` in settings.ini). A game is an installed app in the Games category or with `game = true` in its
+manifest (`apphost::Manifest::game`). It counts while it is the app in front and full screen: a video's full-screen
+flag, or the front window taken full screen. The shell checks four times a second (`bin/shell.rs`); entering takes
+effect at once.
+
+**Full screen for app windows.** The green light of an external window toggles full screen (`Desk::set_full_screen`):
+the window takes the whole screen (its own space), has no title bar, and the menu bar is hidden until the pointer
+reaches the top edge (`desk::bar_hidden`). An app asks for it with `ToShell::SetFullScreen { on }` (SDK:
+`Ctx::set_full_screen`, tag 0x24d); the shell answers with `ToApp::FullScreen { on }` (tag 0x24c), which the SDK
+accepts and ignores for now. Fixed-size windows do not go full screen.
+
+**What Game Mode does while on:**
+- CPU profile Performance (`bare::boost::set_profile` writes the governor and clock window), except under Low Power Mode.
+- The game's nice and uclamp minimum are raised through bifrostd (`game_priority.rs` on the shell side,
+  `bifrostd/src/priority.rs` on the daemon side). The line protocol on `/var/lib/springboard/run/priority.sock` is
+  `priority <pid> <nice> <util_min>`, nice -5..0, util_min 0..1024, replied `ok` or `err <reason>`. bifrostd accepts
+  only a child of the caller, of the same user, whose executable is under `apps/`, and applies to every thread. Leaving
+  (or Turn Off Game Mode) sends nice 0 and util_min 0 for the pid the shell remembered.
+- The background task scheduler starts no new tasks (`Settings::paused` in `services/background.rs`); a running task
+  still ends on time.
+- Menu bar: a "Game Mode" extra shows while it is on; its one row, "Turn Off Game Mode", holds it off for the game in
+  front until that game leaves the front (`Model::turn_off`).
+- Notice: "Game Mode is on" is posted the first time it turns on, and `game_mode_notice_shown` in settings.ini keeps it
+  from repeating.
+
+**Not built:** the file indexing pause (no indexer runs in the shell, so nothing is reachable to pause), and the
+Bluetooth sniff interval change for controllers and headsets (the shell's mgmt socket has no connection parameter
+update). Both are named in `gamemode::SKIPPED`. No framework API exists for apps to read the Game Mode state. The
+priority request reaches only installed apps under the system data root; a user-installed app is refused.
+
+Tests cover the transitions with a fake clock, the turn-off hold, the effect plan, the category and flag rule, the
+preference round trip, the background pause, the desk full-screen state, the menu-bar reveal rule, the SDK message, the
+proto codec, and the bifrostd line parser, child and install checks. **None of it was compiled or run** in the session
+that wrote it; the lead runs the tests. The GamePolicy rows are `partial`.
+
+## Unary file system module (FSKit `FSUnaryFileSystem`, `bifrost_app::fs_module`, `bifrost_app::fuse`)
+
+FSKit lets an app extension ship a file system module that runs in user space and is mounted by the system. Linux has
+FUSE in the kernel, so the module side can be built without a C dependency: `bifrost_app::fuse` speaks the kernel
+protocol (`include/uapi/linux/fuse.h`, 7.31 and later) over `/dev/fuse` as pure encode and decode, and
+`bifrost_app::fuse_mount` mounts the session through the `fusermount3` helper (the helper opens `/dev/fuse` and passes
+it back over a socket pair with `SCM_RIGHTS`, as libfuse does), then serves it on the calling thread.
+
+Decisions:
+- The app implements `fs_module::UnaryFileSystem` for one volume: `lookup`, `attributes`, `read_directory`, `read`,
+  `parent`, optional `statistics`. Item identifiers are the FUSE node ids (the root is `ROOT_ITEM` = 1). This is the
+  FSVolume and FSItem model, named in BifrOSt style.
+- `fs_module::Dispatcher` answers the kernel's requests for that volume: `handle(bytes) -> Option<reply bytes>`, with
+  no reply for FORGET and INTERRUPT. It adds "." and ".." to READDIR and resumes a listing by entry position.
+- Read only. Opens for writing get EROFS; unknown opcodes get ENOSYS. Attribute and lookup answers are cached for one
+  second by the kernel.
+- The wire structs are `#[repr(C)]` with the uapi layout; `const` asserts pin their sizes (88-byte attributes,
+  128-byte entries, 40-byte READ arguments, and so on).
+
+Gaps, stated rather than skipped:
+- Read only. No write, create, rename, or attribute change operations (WRITE, SETATTR, MKDIR, UNLINK and the rest).
+- No shell mount service and no grant check: nothing mounts an app's module on the user's behalf, and the grant broker
+  (`docbroker.rs`) does not yet cover a module's resource. Mounted volumes do not appear in the file panel sidebar.
+- No `mount(2)` path (needs `CAP_SYS_ADMIN`); no optional FUSE features are negotiated, so no splice, writeback cache
+  or async reads.
+- No probe-then-mount step and no resource kinds beyond the path the app hands over (no block device, no generic URL).
+- Written without building or running (owner rule). The protocol module has host tests from byte buffers
+  (`fuse::tests`, `fs_module::tests`); `fuse_mount` has no test because it needs a mount. Parity needs a Midget check
+  with a real mount before the row can be `parity`.
+
+## Assistant system service (`springboard/src/shell/assistant.rs`, OS daemon `com.apple.Siri.agent`)
+
+Status: partial (`com.apple.Siri.agent` is `partial`). Built and wired, but not compiled or run on Midget yet: the pure logic is in `assistant.rs`, the HTTPS client in `springboard/assistant-client`, the panel in `assistant_panel.rs`, and the Settings page in `assistant_page.rs`.
+
+- Settings (`assistant.*` prefs): `enabled` (off), `shortcut` (`meta-shift-a`, Cmd+Shift+A; Cmd+Space is Search, Ctrl+Space the input source, Ctrl+Option+Space reader activation, so none is reused), `backend` (`off`; the only other choice is `anthropic`, the API `assistant-desktop` already speaks), `history` (off: earlier turns are neither kept nor sent), and `assistant.app.<id>` per-app access to intents (off for every app).
+- Catalogue: `assistant::build` takes the installed apps' `[[intent]]` tables and keeps only allowed apps. Ids must be safe (letters, digits, `-`, `_`), a title is required, parameter specs must be `name:type` (`?` optional), descriptions are cut at 300 characters. Only these entries are sent.
+- Protocol: the request carries the catalogue in the system prompt and asks for one JSON object: `{"answer":...}` or `{"app","intent","params","summary"}`. `parse_reply` returns `Reply::Answer` (plain text is an answer too) or `Reply::Intent`, and refuses unknown apps, intents or parameter names, and missing required parameters.
+- Gate: an intent is only proposed as a card ("Create note 'Groceries' in Notes?", `card_text`). `Gate::confirm` hands the call out once; `execute` runs it through `intents::run_with`, the same path as Search's Shortcuts. Nothing runs on proposal.
+- Speech: `speech_engine` looks for `whisper-cli` or `vosk-transcriber` on `PATH`. Without one the mic button is hidden. No engine is installed on the image yet, so the mic is hidden.
+
+- Shortcut: `Shortcut::Assistant` (Cmd+Shift+A) in `hwkeys.rs`, switchable as `BINDINGS[11]` in `kb_input.rs`. With the assistant off it opens Settings > Assistant instead; with the chord set to Off it does nothing.
+- Panel (`assistant_panel.rs`): a field, a wrapped answer area that scrolls with the arrows, and a card with Run and Cancel for one intent call. It draws with Search's material (`quicksearch::mac_glass`) and, on the desktop, as overlay surface id 6 with exclusive keyboard focus (like Search's id 3). Requests run on a worker thread through `assistant::ask` with the key from the keychain item `is.olibuijr.assistant` / `anthropic-api-key`; replies come back on a channel that `tick` polls. Nothing is sent while the backend is Off, the assistant is off, or the field is empty. Run goes through `Gate::confirm` and `assistant::execute` on another worker. History is kept only when it is on.
+- Settings > Assistant (`assistant_page.rs`): the switch, the shortcut (value only; switched in Keyboard Shortcuts), the backend (Off or Anthropic API), history (off), and an access switch per installed app that declares intents. Each row saves on tap.
+- Not built: speech input (no engine on the image), the assistant service registration, and the panel on non-desktop screens (the overlay exists only in the desktop path). Not yet compiled or run on Midget.
+
 ## Module index: modules without their own section
 
 Every module below exists in the crate named and had no mention in this document. Each line is the first sentence of the
@@ -3295,6 +3942,7 @@ wiring.
 - `bluetooth_service`: The shell's `bluetooth` service as an app uses it
 - `call_stack_tree`: Call stacks captured with a diagnostic report, as a pure model.
 - `central`: Central role for apps
+- `core_ai`: Core AI for apps: load a model once, keep its specialized plan in the cache, and call it as a typed inference function (`InferenceSession`, `InferenceModel`); CPU dense, relu and softmax chains only, no GPU or Neural Engine (Apple parity: Core AI inference functions; not matched yet: other model formats and GPU kernels)
 - `crash_report`: Crash reporter extension (the crash-report hook and the crashed-process view)
 - `csv_writer`: Tabular data CSV writing (`CSVWritingError` and the writer that reports it)
 - `daily_metric_report`: Daily metric reports as a pure model.
@@ -3359,7 +4007,7 @@ wiring.
 - `notify_bus`: Named notifications between apps, over the shell's `notify_bus` service (`springboard/src/shell/services/notify_bus.rs`).
 - `now_playing`: Now Playing for apps
 - `object_graph`: Object graph and persistent store
-- `observable_object`: `ObservableObject` parity (Combine)
+- `observable_object`: `ObservableObject` parity (Combine) `derived_state` adds the computed-property rule the macro lacks: a `DerivedState` mirrors the `Observable`s it reads (the fields of an `observable_model!` among them) as inputs of `bifrost_ui::attribute_graph::Graph`, and a `Derived` value recomputes only when something it read changed, so a field write costs one recompute of what depends on it. Not built: the macro does not declare derived fields itself (build them with `DerivedState::derive`); the shell's view bodies are not computed through the graph.
 - `passkey`: Passkey request inputs
 - `passkey_client_data`: Client data for a passkey ceremony
 - `password_gen`: Password generation rules (a generate-password request for a sign-up form)
@@ -3892,3 +4540,972 @@ Apps can take full touch events instead of the single-pointer `Input::Touch` str
   `Suspend`.
 - Parity: touch objects and the touches-began / moved / ended / cancelled model of the reference toolkit. Not yet: coalesced and
   predicted touches, estimated (pencil) properties, azimuth and altitude, hover.
+
+## Several windows per app (`bifrost_app::app_windows`)
+
+An app can hold more than one window. `AppWindows` is the app's registry: the main window (`WindowId::MAIN`, always open,
+cannot be closed) and the windows the app opens, front to back, the first one focused.
+
+- `AppWindows::open(WindowSpec::new(title, width, height))` opens a window in front and returns its `WindowId`. Ids count up
+  from 1 and are never reused. `DEFAULT_LIMIT` (8) counts the main window too.
+- `focus(id)`, `close(id)` (returns the window; the main window gives `WindowError::MainWindow`), `set_frame(id, title,
+  width, height)`, `get(id)`, `list()`, `focused()`.
+- `route(id)` gives the window an event or a frame belongs to, or `None` once the window is closed. A late event for a closed
+  window is dropped, never sent to the main window.
+- `App` trait defaults (existing apps compile unchanged): `window_event(ctx, window, Input)` sends the main window to `event`
+  and other windows to nothing; `draw_window(ctx, window, surface, t)` sends the main window to `draw` and others to an empty
+  damage; `window_closed(ctx, window)` is a no-op. Override them to serve the app's extra windows.
+
+Wire protocol (`springboard/proto`, tags 0x240 to 0x24e; 0x1c0 to 0x1cf belongs to Search): the app sends `WindowOpen {id, title, w, h, position, flags}`, `WindowClose {id}`,
+`WindowTitle {id, title}`, `WindowResize {id, w, h}`, and for the pixels `WindowBuffers {id, w, h, generation}` and `WindowFrame {id, buf, damage}`.
+The shell sends `WindowClosed {id}` (its own close control), `WindowConfigure {id, w, h}`, `WindowTouch {id, touch, kind, x, y,
+t_ms}` and `WindowRelease {id, buf, generation}`. Titles are cut to 512 bytes; non-finite or negative sizes are refused.
+
+Placement, collapse and title double-click (tags 0x246, 0x247, 0x24d, 0x24e). `WindowOpen` carries an optional `position`
+(points, relative to the visible desktop area) and a `flags` word (`window_flags::TITLE_DOUBLE_CLICK`). The app sends
+`WindowMove {window, x, y}` to place a window and `WindowCollapse {window, collapsed}` to fold it to its title bar. The shell
+sends `WindowMoved {window, x, y}` when the person drags a window (the position is in points and clamped to the screen), and
+`WindowTitleDoubleClick {window}` on a title bar double-click, only for windows opened with the flag. Other windows still
+zoom. The table (`app_window_table.rs`) keeps the position, a pending app move (applied once), the collapsed flag and the
+opt-in; `clamp_to_screen` keeps a grab strip of the title bar on screen. A collapsed desk window is its title bar only: its
+app keeps its size, and edge grabs are ignored. Tests: proto `window_placement_*`, `app_window_table`
+`placement_tests`, `desk` `a_window_collapses_*`, `app_windows` `a_window_moves_collapses_*`.
+
+SDK (`Ctx`): `open_window`, `close_window`, `set_window_title`, `resize_window`, `move_window`, `set_window_collapsed` change the app's
+registry and send the message; `WindowSpec::at(x, y)` and `WindowSpec::with_title_double_click()` ask for placement and the opt-in.
+The hooks `App::window_moved` and `App::window_title_double_click` default to no-ops;
+`windows()` reads it. The run loop routes `WindowClosed`, `WindowConfigure` and `WindowTouch` through
+`app_windows::deliver_window`: a closed window gets no touch, a closed window's close is applied once, and the app's
+`window_event` and `window_closed` run with no registry borrow held.
+
+Shell (`springboard/src/shell/app_window_table.rs`): `WindowTable` keeps each app's extra windows front to back (open, close, retitle,
+resize, focus, close_app, `of_app` for the Window menu and the Dock list), with per-app limit 7 and unique ids per app.
+
+Each extra window has its own shared-memory slot pair (`springboard/sdk/src/runtime.rs`, `alloc_pair`, `draw_windows`): the SDK
+sends `WindowBuffers {id, w, h, generation}` with the two descriptors, draws the window with `App::draw_window` into a free slot
+(`pick_free`, the same rule as the main window), and sends `WindowFrame {id, buf, damage}`. The window size in pixels is its
+point size times the scale (`window_px`, capped at 8192). A window is drawn when a frame is due for the app or when it is dirty
+(a new buffer set, an event). `WindowRelease {id, buf, generation}` frees a slot only when the generation matches (a stale
+release is ignored). A window the app closes loses its pixels at the next draw.
+
+Shell (`springboard/src/shell/apphost.rs`): each `AppHost` holds its app's `WindowTable` (`pub windows`) and maps each extra
+window's buffers (`window_buffers`, the main window's size and seal checks). `window_frame(id)` gives the newest frame, and
+`window_blitted(id)` gives the replaced buffer back to the app. `close_window_from_shell`, `configure_window` and `touch_window`
+send `WindowClosed`, `WindowConfigure` and `WindowTouch`. The table drops a window the app's exit closes. Tests:
+`window_table_tests` in `apphost.rs`, `window_pixel_tests` in `runtime.rs`.
+
+Desk (`springboard/src/shell/desk.rs`): an extra window is `AppId::ExternalWindow(slot, id)`, a window of its own in the desk's
+`Win` list (its parent app is `AppId::parent()`). `desk_sync_extra_windows` runs from the app host tick and opens or closes
+desk windows with `WindowTable::desk_changes`. The window blits its mapped frame (`ext_window_blit`, `AppHost::blit_window`,
+which gives the frame back through `window_blitted`). Its traffic light closes it through the app host (`WindowClosed`) and the
+app keeps running. A resize sends `WindowConfigure` in points (`ext_window_resize`); a touch on its body sends `WindowTouch` in
+points (`ext_window_touch`). The Window menu and the Dock's app menu list the windows (`window_menu_name`, `menu_items`) and
+focus one with `desk_focus_extra_window`. Tests: `app_window_table` (`desk_changes`, `menu_items`), `apps` (`AppId` helpers).
+
+Window server: an extra window has its own frame id, `WINDOW_ID_FLAG | slot << 16 | window id` (`win_id`, `frame_app` is the
+inverse), so it takes the same `SPRINGBOARD_WAYLAND` path as an app's window. A window floats with its app (`is_floating` checks
+the parent), so the window-level path (`take_wayland_windows`) keeps working. Cmd+` (`desk_cycle_window`) walks the front app's
+windows, its extra windows included; Cmd+Tab still lists apps. The Window menu lists only the front app's windows. The screen
+reader lists each window of the front app as a window element (`walk::window`). Not done: the parent app's drop targets and the
+window's own controls are not in the reader tree; the direct Wayland path has no second toplevel (`LAYER_CONTEXT_WIRED` is false).
+Tests of the desk lifecycle itself are not written yet (the table diff is tested).
+
+Contacts (`springboard/apps/contacts-desktop`, 1.13.0): Card > Open in Separate Window and a double-click on a list row open the
+contact's card in a window (`card_windows.rs`, `main.rs` `open_card_window`). The window draws the card at its own size
+(`Contacts::draw_card`, `draw_window`) and takes touches (`window_event`, `Contacts::touch_card`): the card scrolls on its own
+scroller, a tap on a value copies it as the main card does (the main card has no call or compose action), and Edit shows the
+contact in the main window and opens its editor (`edit_from_card`). The SDK has no focus call, so the main window is not raised.
+Its close unbinds the card (`window_closed`). The row is partial in `docs/parity-matrix/apps/contacts.json`.
+Dictionary, Mail, Calendar and Maps stay gap and name this API in their `wire`.
+
+Key window (keys, text, menus, commands). One window of an app has key focus: the desk's front window when it is one of
+the app's extra windows, otherwise the main window (`WindowId::MAIN`). Wire (`springboard/proto`): the shell sends
+`WindowFocus {window, focused}` (0x24f) when key focus moves (the old window `focused: false`, the new one `true`; the main
+window is 0), and `WindowInput {window, input}` (0x250) carrying a `WindowInput`: `Key`, `Command`, `MenuAction`,
+`SetMarkedText`, `UnmarkText` or `DeleteSurrounding`. Window 0 is sent as the messages every app already handles (`Key`,
+`Command`, `MenuAction`, `SetMarkedText`, ...), so an app without extra windows is unchanged. Shell
+(`springboard/src/shell/apphost.rs`, `desk.rs`): `sync_key_windows` makes each host's `key_window` follow the desk's front
+window before input and on each tick; `AppHost::input` tags keys, commands, menu items and composition with it;
+`set_key_window` sends the focus pair. The keyboard's composition goes through `textinput::to_input`. SDK
+(`springboard/sdk`): `Ctx::key_window()` (falls back to the main window once the key window is closed); `App::window_input(ctx,
+window, input)`, whose default (`app_windows::default_window_input`) sends keys and commands to `window_event` as `Input::Key`
+and `Input::Command`, and sends a menu item and a text edit to the main window's `menu_action` and `text_input` only;
+`App::menus_for(ctx, window)`, whose default is `main_menu`, is what the runtime sends as the app's menus. Clipboard calls
+are not window-scoped and did not change. Cmd+W (`app_windows::is_close_window_key`) closes the window it is typed in: the
+desk's own Close action already does that for an extra window (it sends `WindowClosed`), and an app that handles the key
+closes its window with `ctx.close_window`.
+
+Adopting it (Maps and Mail, not done here): override `window_input` for the extra windows, forward the keys and commands
+of the key window to that window's own state (as Dictionary's `extra_event` does), and call
+`app_windows::default_window_input(self, ctx, window, input)` for the main window and anything else; override `menus_for` when
+an extra window has its own enabled or checked items. Shared state (Maps' store, Mail's compose window) should be read back
+before a change, as Dictionary's `change_prefs` does, so one window's save does not overwrite another's.
+
+Tests: proto (`key_window_messages_round_trip_through_the_codec`, `window_input_has_the_documented_layout`,
+`a_bad_window_focus_or_window_input_is_refused`); SDK (`app_windows` tests drive the messages through their wire bytes: key
+routing, focus and the late lost focus, closed windows, menu items and text edits, `menus_for`, Cmd+W); shell
+(`apphost` `the_key_window_gets_the_input_and_the_app_hears_each_focus_change`). Not verified: no build or test run was done
+for this change; the desk's `sync_key_windows` has no test of its own. Apps: Contacts 1.14.0 (Cmd+W), Dictionary 0.6.0 (own
+keys and Copy per window, Cmd+W, prefs read back before each change), Activity Monitor 0.9.0 (Cmd+W in CPU windows).
+`min_shell` is not raised: an older shell sends none of these messages.
+
+Apple parity: the reference toolkit gives each window a scene and a per-window delegate. Ours is one registry per app with the scene
+lifecycle left to `scene_session`, and no tabs yet (the Dictionary row asks for tabs too).
+
+## Compression streams and filters (`bifrost_app::compression`)
+
+- Encoder: `springboard/sdk/src/compression/dynamic.rs`. Lazy LZ77 at `Default` and `Best` (one byte of lookahead), greedy at `Fast`, over a 32 KiB window. Each block is dynamic Huffman, or stored when that is smaller. `Encoder` is the incremental form: it emits a block every 65535 bytes of input, and its output does not depend on how the input was split into writes. Still missing: no optimal parsing and no per-block tables shared across blocks.
+- Decoder: `springboard/sdk/src/compression/inflate_stream.rs`, a resumable state machine. It returns output as each symbol completes and rolls back a unit that needs more input. The Books engine keeps the whole-buffer `bifrost_render::cg::pdf::inflate`, which is unchanged.
+- `Stream::process` returns output before `finalize`. `InputFilter` asks its source for capacity-sized pieces only as far as the reader needs. `OutputFilter` sends output as each write completes it.
+- Errors: decode failures are reported by the call that sees them. The encode side fails only with `Unsupported` at init; writes after finalize report `Finished` or `InvalidState`.
+- LZ4 and LZMA have no incremental codec here: their streams and filters buffer the input and run the one-shot codec (`lz4`, `lzma`) when they end.
+- Parity: the four `compression` rows (multiple-step streams, input and output filters, DEFLATE encoding, error reporting) stay `partial` until the tests run on Midget. Not yet: a flush call, and dynamic-table reuse across blocks.
+- Tests: `springboard/sdk/tests/parity_sdk-tests-20.rs` (compression section), plus inline tests in `compression.rs`, `compression/dynamic.rs` and `compression/inflate_stream.rs`. Not yet compiled or run in this round.
+
+## BifrOSt Account session (`springboard/src/cloud_session.rs`, `bifrost_app::cloud_account::session`)
+
+The signed-in BifrOSt Account of this device is one keychain item, shared through the `is.bifrost.account` access group.
+
+- **Item**: group `is.bifrost.account`, service `bc_session`, account `session`. The value is JSON
+  `{"v":1,"token","account","server","expires"}`: the device bearer token, the account id (empty for a migrated file),
+  the `https` cloud API address, and the expiry as Unix seconds (`null` when the sign-in answer gave no lifetime; read it
+  from the cookie's `Max-Age` with `cloud_account::cookie_expiry`). The token is letters and digits only.
+- **Lifecycle** (`cloud_session::{store, load, sign_out}` over a `Vault`): sign-in stores the session, a refresh stores the
+  new one over it (one item), sign-out deletes the item. `GroupVault` is the real group store
+  (`keychain::Store::open_group`); tests use a fake vault. The server side of sign-out is `cloud_account::sign_out_request`.
+- **Migration**: `cloud_session::migrate_file` moves the old plain file (`$XDG_DATA_HOME/bifrost/cloud_session`, a
+  `token=` line; `file_path` gives the path) into the group once and deletes it. An item that already exists wins over
+  the file. A failed keychain write keeps the file for the next start. The shell runs it at start (`src/bin/shell.rs`).
+- **Who may read it**: `shell::services::keychain_groups::groups_of` grants `is.bifrost.account` only to first-party
+  system apps (`first_party`: id under `is.olibuijr.` and `kind = "system-app"`), and only with the `keychain` permission.
+  Other apps that list the group are refused with `NotPermitted`. Locate (`is.olibuijr.locate.desktop`) is the one reader.
+- **App side**: `cloud_account::session(ctx)` asks the group (reply through `service_reply`), and `decode_session` gives a
+  `Session` (`token`, `account_id`, `server`, `expires`), `SessionError::SignedOut` when there is no item (or it does not
+  decode), or `SessionError::Keychain(e)` for a refusal. The token is never printed; `Session`'s `Debug` redacts it.
+- **Settings page** (`springboard/src/shell/account_page.rs`, the top row of Settings, "BifrOSt Account"): signed out, Sign
+  In opens an email sheet, then a password sheet. The password goes to `POST /api/cloud/v1/signin` on a worker thread and
+  is kept nowhere; the answer's `bc_session` cookie is stored with `store` and its `Max-Age` as the expiry. A refusal
+  reopens the password sheet with the cloud's reason in its message line (the sheet's footer is its message line; the
+  one-field sheets have no footer). Signed in: name and email (`GET /me`), the account's devices (`GET /devices`), and Sign
+  Out, which deletes the item and then calls `POST /signout`; a cloud that does not confirm is reported on the page. A
+  session the cloud refuses with 401 is removed, and the page says to sign in again. There is no sign-up: accounts are
+  made with an invitation (`/signup` takes an invite).
+- **Protocol**: `springboard/src/cloud_account.rs` holds the pure parts (sign-in body, answers, cookie, endpoints); the
+  SDK's `bifrost_app::cloud_account` re-exports them and builds the app requests. The shell sends through the deildu HTTP
+  client (`deildu::http::Client`, TLS, no cookie jar).
+- **Bug reports**: `bug_report::session_request(ctx)` and `session_from_reply` read the session through the keychain
+  service reply, so the bug-report client takes its token from the group, not from the migrated file.
+- **Gaps**: the sign-in and sign-out requests are not run on Midget or on the host; the Settings page is not yet
+  screenshot-checked against the reference. The device list is the account's `/devices`, not the Find My routes.
+
+## Locate: device locator, end-to-end location (`bifrost-locate`, `bifrost_app::cloud_findmy`)
+
+Locate (`springboard/apps/locate-desktop`, id `is.olibuijr.locate.desktop`) is the BifrOSt answer to Find My. It shows
+the account's devices, can play a sound on one or locate it, and shares location with a contact's account. The cloud
+side is `bifrost-cloud` under `/api/cloud/v1/findmy`.
+
+**Built (round 2):** the window (People, Devices, Items, Me), the device list from the model, the first-run sheet, the
+control methods `locate.locate`, `locate.play_sound`, `locate.share`; the SDK client `bifrost_app::cloud_findmy` (device
+list, device report, command request, device poll with ack, share-free event feed); the cloud routes for devices, battery,
+commands, acks, shares and the event feed (branch `feat/findmy-devices`, see the report for its sha).
+
+**Round 3 (models and routes, not wired):** the SDK client has the key, pending-device, sealed-location and share routes
+(`bifrost_app::cloud_findmy`: `put_account_key_request`, `get_account_key_request`, `create_pending_request`,
+`pending_list_request`, `approve_pending_request`, `sealed_key_request`, `delete_pending_request`,
+`put_self_location_request`, `delete_self_location_request`, `put_share_location_request`, `shared_with_me_request`, each
+with its parser; `CloudDevice::sealed_location` reads `location_sealed`, `location_enc`, `location_updated`). The locate
+app has three pure models, each tested headless:
+
+- `sealing` (`springboard/apps/locate-desktop/src/sealing.rs`): HPKE seal and open of a report to the account key (info =
+  device id), of a share copy (info = share id), and of the account private key to an enrolling device (info = pending
+  id). The payload is JSON `lat`, `lon`, `timestamp`, `accuracy`, `battery`. Coordinates are range-checked on read.
+- `pairing` (`pairing.rs`): `Enrollment` (Idle, Waiting, Enrolled, Denied) for a device that asks to join, and
+  `Approvals`, the owner's pending list behind the confirmation sheet. Syncing the list approves nothing; only
+  `confirm` returns a request for sealing and `deny` removes one.
+- `reporting` (`reporting.rs`): `Reporter::step` gives Report (at most every 15 minutes, and at once on a locate while
+  sharing is on), Clear (once, on the first step with sharing off, which also clears a previous run's data) or Nothing;
+  `copy_targets` gives the share ids of live grants only, so a revoked or expired share gets no copy.
+
+**Round 4 (wired, not yet end to end in production):** the cloud worker thread (`bifrost_locate::cloud`, the Link the
+window owns; events come back through a pipe that wakes `tick`), registration at start, the command long poll with
+acks, the device list with opened positions, pending devices, shared positions and the account feed as notifications.
+The account key is read from and written to the keychain (`bifrost_locate::keys`, asynchronous replies in
+`App::keychain`). Reports seal a `core_location` fix with the account key; the battery comes from
+`power_sources::battery`. The Me page draws the Share My Location switch and the join button; the approval sheet
+(Approve and Deny) and the People list are drawn in `surfaces.rs`, with the same rectangles used for hit-testing.
+Play sound uses the new shell message `ToShell::PlaySystemSound`: the SDK call `system_sound::play_named` sends it, the
+shell queues up to four sounds per frame and the audio worker plays them on the sound-effects role.
+
+**Not built, or blocked:**
+- The session: Settings > BifrOSt Account signs in and stores the session in the `is.bifrost.account` group (see "BifrOSt
+  Account session"). Locate reads it at start, so the worker runs once the user has signed in there. Without a session
+  the cloud is off, and the join button says so.
+- Contact copies: no contact share is created by the app, so a report goes only to the owner's own devices.
+- The join key pair is held in memory until approval. A restart during a wait begins the join again.
+- A sound's ack is sent when the worker takes the command, not when the tone has played.
+
+### Location design (owner decision; models and routes built in round 3, wiring not built)
+
+Location is end to end encrypted. The cloud never sees plaintext coordinates, and the columns it keeps are opaque blobs.
+
+- **Account key.** Each BifrOSt Account has a Find My key pair (X25519, HPKE via `bifrost_ui::hpke::{seal_base, open_base}`
+  and `bifrost_ui::x25519`). The private key lives only on the owner's devices, in the BifrOSt keychain. The cloud keeps
+  the public key only: `PUT /findmy/keys` (the owner sets it), `GET /findmy/keys/{account}`.
+- **First device.** The first device that enables Locate generates the account key pair.
+- **Later devices.** A new device makes its own device key pair and posts the public key as a pending device,
+  `POST /findmy/devices/pending`. Existing devices list the pending ones (`GET /findmy/devices/pending`) and show "Approve
+  this Mac on another of your devices" with the device name in a confirmation sheet. Nothing is approved automatically.
+  On approval the approving device seals the account private key to the new device's public key and uploads that blob,
+  `POST /findmy/devices/{id}/key`. The new device fetches it, opens it with its device private key, and deletes it from
+  the cloud.
+- **Device reports.** A device seals `{lat, lon, accuracy, timestamp, battery}` with HPKE base mode to the account public
+  key, with the device id as `info`, and uploads one `location_sealed` blob (a new column in the next migration). Owner
+  devices open it locally. Reports go out at most every 15 minutes, and also when a locate request arrives.
+- **Sharing.** While a share grant is active, the owner's device also seals a separate copy of each report to the
+  contact's account public key. Revoking the share stops new copies and deletes the stored ones.
+- **Consent and clearing.** Location reporting is off until the person turns it on in the Me tab. The onboarding sheet
+  says exactly what is uploaded and that it is encrypted end to end. Turning reporting off, or clearing it, deletes this
+  device's cloud rows.
+- **Tests required before this ships:** seal and open round trip; the approval state machine; a revoked share stops
+  sealing; the cloud handlers store and return opaque blobs only.
+
+Until the session exists, no position leaves this device.
+Routes assumed where the contract left the answer shape open: `GET findmy/devices/pending` answers
+`{"pending": [{id, name, device_public_key}]}`; `GET findmy/devices/pending/{id}/key` answers `200` with the sealed key,
+`202` while waiting, and `404` once the request is denied or deleted; `GET findmy/shared-with-me` answers a bare array.
+
+## Universal Clipboard (Continuity, `springboard::universal_clipboard`, `bifrost_app::cloud_clipboard`)
+
+Settings > Sharing > AirPlay & Handoff has "Share Clipboard Between Your Devices" (`Options::universal_clipboard`, off by
+default). When it is on, a local copy of text, a link or a PNG or JPEG image of at most 4 MiB goes to the account's other
+devices. The copy is sealed on this device with the account key (HPKE, AAD `bifrost.clipboard.v1`, `info` `clipboard`),
+and the cloud keeps only the sealed blob, for two minutes at most. A copy carrying a concealed or transient marker
+(`org.nspasteboard.*`, or a password manager's type) is never shared, and neither is a file copy.
+
+- **Shared key code.** The account key pair helpers and the HPKE seal and open live in `springboard/src/cloud_keys.rs`
+  (re-exported as `bifrost_app::cloud_keys`). Locate's `sealing` module now calls them with its own AAD; its API did not change.
+- **Policy.** `springboard/src/universal_clipboard.rs`: `shareable` (the filter), `encode`/`decode` and `seal`/`open` of the
+  payload, `live` (the cloud's expiry) and `offer` (a remote copy is offered on paste when it is at most 120 s old and newer
+  than the last local copy).
+- **Cloud.** `PUT /api/cloud/v1/clipboard` (`{sealed, enc}`, base64, at most 8 MiB) and
+  `GET /api/cloud/v1/clipboard?after=N&wait=S` (long-poll, at most 25 s; `{"item": null}` or the copy with `seq`,
+  `device_id`, `sealed`, `enc`, `expires_at`). The store is `clipboard_items`, one row per account (`payload_enc` holds
+  `enc.sealed`); see bifrost-cloud `CHANGELOG.md` "Unreleased". The table is excluded from the generated data API.
+- **Gap (not built).** The shell's watch of local copies, the upload and long-poll worker, and the paste offer are not
+  wired yet. The SDK request builders and the policy are tested; the worker runs on a background thread and needs the
+  Locate account key in a keychain group the shell can read (today it sits under `is.olibuijr.locate.desktop`, not
+  `is.bifrost.account`). Until that lands the toggle has no effect beyond storing the setting.
+
+## Screen Time (`shell::screentime`, shell only, no SDK API)
+
+Owner decision (privacy first): usage data stays on the device and is never uploaded. Apps get no read access to it.
+The feature lives in `springboard/src/shell/screentime/`; the parity rows are `com.apple.FamilyControlsAgent` and
+`LockoutUI` (both `partial`), and `screen-time.json` is unchanged.
+
+- Usage (`usage.rs`): one `key=value` file per local day under the shell data directory (`screentime/<day>.txt`):
+  foreground seconds per app and per hour, pickups (screen comes on), and notifications per app. Files older than
+  28 days are deleted on the day roll. A tick credits at most 15 s, so a stalled loop invents nothing, and the gap
+  across midnight is credited to neither day. The shell records usage before and after every input event and tick,
+  so the seconds before a switch go to the app that was in front during them (the switch's own time, not the next
+  tick).
+- Settings (`page.rs`, `chart.rs`, the Screen Time page in `pages.rs`): day and week bars, most used apps, pickups,
+  notifications, Downtime, App Limits (cycled 15 min to 4 h), Always Allowed, and a Content & Privacy Restrictions
+  row marked "Not Available" (not enforced yet). Changing limits or Downtime needs the Screen Time passcode.
+- Policy (`config.rs`): `Config::block` is the one decision. Downtime (may cross midnight, `Schedule`) blocks apps not
+  in Always Allowed (Settings always allowed, Clock allowed by default). A daily limit blocks at its minute count.
+  `Config::warn_due` says when a limit is five minutes from running out, and the shell posts one notification per app
+  per day. Settings is never blocked, so limits can always be changed.
+- Time Limit cover (`shield.rs`): OK (go Home), "Ignore Limit for 1 More Minute" (60 s), "Ignore Limit for 15 min",
+  and "Ignore Limit For Today". Each grant is stored as `ignore.until.<app>` or `ignore.day.<app>` in
+  `screentime.ini`. The passcode prompt comes first when a Screen Time passcode is set.
+- Launching (`mod.rs`, `st_launch_check`): opening a blocked app puts the cover up before its zoom starts, and the
+  cover stays up while that open animation runs. On the desktop, `desk_open` runs the same check and skips the
+  native-route launches for a blocked app, so its own process does not start.
+- Desktop (`desk.rs`, `desk_cover`): the cover is drawn inside the window body below its title bar, so the window
+  can still be moved, and closed from its lights. Touches outside the body pass through; OK closes the window. Only
+  built-in and software-drawn windows are covered; native toplevels of other processes are not yet.
+- Passcode: kept in the shell keychain (`springboard/src/keychain.rs`) as item `bifrost.screentime` / `passcode`,
+  with the same salted, stretched SHA-256 record and failure count (`shell/passcode.rs`, `Store::load_keychain`).
+  The old `screentime_passcode.ini` is migrated once and removed; clearing the passcode removes the item.
+- Not built: category charts (the bars are per app), SDK access for apps (out of scope), family controls and
+  remote approval, and cover over native toplevels. Not verified on Midget.
+
+Tests: `usage.rs` (midnight gap, app switches, rollover, pruning), `config.rs` (limits, warning window, one-minute,
+15-minute and today grants, Downtime over midnight, Settings exempt), `shield.rs` (button order, passcode gate),
+`page.rs` (rows, placeholder). Run `cargo test -p springboard screentime` (lead runs them; not run by this round).
+
+## Help books and the help index (`shell::helpbook`, the `helpd` counterpart)
+
+Reference: `com.apple.helpd` (daemons, `a-c.json`), status `partial`. Apple's help viewer reads help books an app
+ships in its bundle; BifrOSt has the same shape as a package.
+
+- **Format.** An app ships a `help/` directory and names it in `manifest.toml` (`help = "help"`). `aap.py pack`
+  packs that tree and refuses a missing directory or a path that is absolute or contains `..`. Each page is Markdown
+  with flat front matter (`title`, `keywords` as a comma list or `[a, b]`) between `---` lines. A heading may end in
+  `{#id}`; without it the anchor is the slugified heading. The page title is the front matter's `title`, else the
+  first heading. A page larger than 256 KiB, or a page with broken front matter, fails its whole book.
+- **Index.** `HelpIndex::rebuild(apps_dir)` reads the built-in books (Settings, from `springboard/help/settings/`,
+  `include_str!`) and every `apps/<id>/current/manifest.toml` with a `help` key. Broken books are returned as
+  problems and the others still index. `set_book` / `remove_book` replace one app's book on an update or removal.
+- **Search.** `search(query, limit)` splits on non-alphanumerics (any script), lowercases, and requires every query
+  word to match somewhere on a page; a prefix counts. Weights: title word 30 (prefix 15), keyword 20 (prefix 10),
+  heading 8, body word 1 to 4. Ties sort by app id, then page slug. Each hit names the first matching heading as its
+  anchor.
+- **Links.** `resolve("help://app/...")`: `help://app` is the first page; `help://app/<page>` a page; `<page>#<id>`
+  a page at an anchor (an unknown anchor drops to the page); `help://app/<id>` the page declaring that anchor.
+- **Menu search.** `search_menu(items, query)` takes the frontmost app's menu items (`MenuItem { menu, title,
+  enabled }`) and returns indices, best first: whole-word title 20, title prefix 10, menu name prefix 3, enabled +5.
+  Disabled items stay listed, dimmed.
+- **Books shipped.** Files (`springboard/apps/files/help`: basics, organize, info and archives), TextEdit
+  (`springboard/apps/textedit-desktop/help`: writing, formatting, find and print) and Settings (overview, appearance,
+  desktop and dock). Each describes menu items that the app's source defines.
+- **Index build (done).** `with_index(root, f)` shares one index. It rebuilds when `apps/installed.json` changes (every
+  install, update and removal rewrites it, in the shell or in privd), and `shell.rs` warms it on a worker thread at start.
+- **Help viewer (built, host tests not yet run).** `springboard/src/shell/help_viewer.rs`: a floating window in the
+  character viewer's overlay pattern. Sidebar: a search field (typing goes to it through `type_out`, ranked `search`
+  hits) over the book's table of contents (`toc`: pages, then the open page's headings). Toolbar: Back and Forward over
+  a history stack (`Nav`), a book popup over `HelpIndex::books`, and Done. Pages render through `md::classify`, with
+  link markup stripped and the first link on a line followed (`help://` inside the viewer, `http(s)` through
+  `desktop_open_url`). `Shell::open_help(app_id, anchor)` opens it; the Help menu's "<App> Help" row calls it for the
+  settings book or the installed app in front. Gaps: inline bold and italics are not styled, a tap follows only the
+  first link of a line, and SDK apps reached through `External(slot)` get no Help row yet.
+- **Not built yet (gap; `com.apple.helpd` stays `gap`).** The Help menu's search field, which would call `search_menu`
+  for the frontmost app's menus and `search` for topics, is not drawn yet. Help stays off the parity rows until it is.
+- **Tests.** `springboard/src/shell/helpbook.rs` (front matter, anchors, ranking, AND matching, link resolution,
+  menu search, built-in book, reading a book from disk). Run by the lead: `cargo test -p springboard helpbook`.
+
+
+## Memory pressure and purgeable storage (bifrostd)
+
+The `dynamic_pager` and `deleted_helper` daemon rows (`docs/parity-matrix/os/daemons/a-c.json`) are `partial`.
+
+- **Swap.** `springboard/bifrostd/src/pager.rs`. At boot `bifrost-zram.service` runs `bifrostd zram-setup`: a zram swap of
+  half the RAM (at most 8 GiB, priority 100). While bifrostd runs, PSI (`/proc/pressure/memory`, `avg10`) and
+  `/proc/meminfo` decide: under warning or critical pressure with less than 25 % of swap free, one 1 GiB file
+  `/var/lib/bifrost/swap/swapN` is added (priority -2). After 10 minutes of normal pressure the newest file that holds
+  no pages is removed. Decisions are pure (`decide`), tested with fixed inputs.
+- **Level.** `/run/bifrost/memory-pressure` holds `normal`, `warn` or `critical`. Apps read it with
+  `bifrost_app::memory_pressure::published()`, or subscribe with `DispatchSource::memory_pressure`, which uses the
+  in-process PSI watcher and needs no daemon.
+- **Purge.** `springboard/bifrostd/src/purge.rs`. Below 10 GiB or 5 % free on `/` or `/home`, it deletes, in order: app
+  caches under `~/.cache/<app>` (real directories only, never symlinks), the shell thumbnail cache (`/var/lib/springboard/cache`),
+  Recently Deleted items older than 30 days (only when `empty_trash_after_30_days = true` in `/etc/bifrost/storage.conf`),
+  and pacman packages beyond the newest two per name (mtime order). It stops at 20 GiB free or 10 % of the disk.
+  Documents are never listed.
+- **Storage page (not done).** The shell's "Free Up Space" writes `/run/bifrost/purge-request`; bifrostd runs the full
+  purge and writes the bytes to `/run/bifrost/purge-result` and the Purgeable figure to `/run/bifrost/purgeable`.
+  The Settings > General > Storage UI and the policy file writer are still to be built. Open decision: `/run/bifrost` is
+  root-owned, so a user-side request needs a writable request directory or a privd call.
+
+
+## Layered app icons (IconFoundation, IconRendering: `bifrost_render::icon_doc`)
+
+One icon model and renderer for every app icon. Code: `springboard/render/src/icon_doc.rs`. Built-in icons:
+`springboard/res/icons/{terminal,camera,magnifier}`.
+
+- **Package.** An app ships `icon.json` beside its layer PNGs. The document has a `background` (`{"solid": "#rrggbb"}`
+  or `{"gradient": [top, bottom]}`, `#rrggbbaa` allowed) and up to four `layers`, each with `image` (a relative path,
+  no `..`), `x`, `y` (centre as fractions of the body, default 0.5), `scale` (width as a fraction of the body, default 1),
+  `blend` (`normal`, `multiply`, `screen`) and `opacity`. Unknown keys are ignored.
+- **Legacy.** A flat `icon.png` is a document with one full-body layer on a neutral plate (`PLATE_RGB`), so it is masked
+  the same way.
+- **Render.** `render(doc, layers, px, variant, tint)` composites the background and layers, masks them to the body (a
+  superellipse with exponent 5, `body_coverage`, 4x4 supersampled), draws a specular edge one px inside the body (brighter
+  at the top) and a drop shadow (the body moved down 2.5 percent of the canvas, box-blurred, 35 percent black). The body
+  is 80 percent of the canvas, centred, so the shadow has room. Output is premultiplied RGBA.
+- **Variants.** `Default` draws the layers as authored. `Dark` maps the background to a near-black plate (85 percent
+  toward `#1c1c1e`) and lightens the foreground 25 percent toward white. `Tinted` maps the background to a neutral grey
+  plate and the foreground's luma onto the tint (white takes the tint, black stays black). `set_style(variant, tint)`
+  publishes the choice; a change empties the cache. The style set in Settings > Appearance > Icon & widget style is not
+  wired yet (the shell's default is `Default` and the tint `DEFAULT_TINT`, systemBlue).
+- **One entry point.** `app_icon(app, path, size_pt, scale, variant)` loads the package (its `icon.json`, or the flat
+  image at `path`) and returns the icon at `size_pt x scale` device pixels from a process cache keyed by `IconKey`
+  (app, size in tenths of a point, scale in thousandths, variant). The Dock (`chrome/src/dock.rs`, `load_icon`) and the
+  home screen and launcher (`apphost::icon_image`) call it. Built-in icons use `render_builtin`, from bytes compiled in.
+- **Gaps (IconFoundation and IconRendering rows stay `partial`).** Not done: the Settings row for the style; the
+  Launchpad, app switcher and Files drawing through `app_icon` (the switcher draws window thumbnails, not app icons);
+  thumbnail service lookup; SVG layers (the render crate has no SVG rasteriser, so layers are PNG); the body and shadow
+  proportions are not yet compared with the reference icon grid on Midget. The cache is not invalidated when an app is
+  reinstalled with a new icon until the shell restarts.
+- **Tests.** Superellipse area at 32 to 256 px (within 0.01 of 0.9502), corner and centre coverage, Porter-Duff and
+  blend formulas, variant colour mapping, cache keys and eviction, legacy fallback on the plate and under the mask, the
+  shadow below and not above the body, JSON and hex parsing, and the built-in Terminal icon.
+
+
+## Math typesetting (`bifrost_render::math`, OS layer MathTypesetting)
+
+Source: `springboard/render/src/math/`. Status in the parity matrix: `partial` (`docs/parity-matrix/os/frameworks/m-o.json`).
+
+* `parse::parse_tex(src)` reads a LaTeX subset: `\frac \dfrac \tfrac`, `\sqrt[n]{x}`, `^` and `_`, `\sum \prod \int`
+  with `\limits` and `\nolimits`, Greek letters, operators and relations, `\left ... \right` (with `.` for an invisible
+  side), `matrix pmatrix bmatrix vmatrix Vmatrix Bmatrix` environments, `\text{}` and `\mathrm{}`, spacing commands
+  `\, \; \: \! \quad \qquad`, and function names (`\sin`, `\lim`, ...). `parse::parse_linear(src)` reads `a/b`, `x^2`,
+  `sqrt(x)`, parentheses and Greek words (`pi`). Both return `parse::ParseError` with an index.
+* `metrics::FontMetrics` gives per-glyph advance, ascent and descent in em, optional stretchy variants, and optional
+  `MathConstants`. `MathConstants::from_math_table(bytes, upem)` reads the OpenType `MATH` table. Without it,
+  `MathConstants::DEFAULT` (TeX defaults) is used. `metrics::stretch` picks the variant that covers a target height, or
+  scales the largest one. `EstimatedMetrics` is a rough font-free fallback.
+* `layout::typeset_tex(src, Options, metrics)` and `layout::typeset_linear(...)` return `Layout`: width, ascent, depth,
+  glyphs (`ch`, `x`, `y` on the baseline with y down, `size` in px) and rules (fraction bars, radical overlines). The
+  output is in pixels, so a caller maps it onto its own text drawing.
+* Layout follows TeX: styles D, T, S, SS with cramped variants, the 8x8 inter-atom spacing table (thin, medium and
+  thick spaces suppressed in script styles, bin operators demoted where TeX demotes them), fraction shifts and
+  clearances, script shifts with the sub/superscript gap, radical clearance, big operators with limits in display style,
+  and delimiters stretched to 0.901 of the contents' height and centred on the axis.
+
+Decisions and gaps:
+
+* The math font is Noto Sans Math (SIL OFL), which the `noto-fonts-extra` package in
+  `packaging/arch/runtime-packages.txt` installs at `/usr/share/fonts/noto/NotoSansMath-Regular.ttf`. `math::system`
+  loads it once, registers it as a face and reads its MATH table (`MathConstants::from_math_table`). Without the file,
+  layout uses estimated metrics and the TeX defaults, and the text area paints from the UI font.
+* Painting: `math::paint::paint(layout, canvas, origin, face, color)` draws glyphs as one-character text runs (baseline
+  placed with the run's pad and ascent) and rules as rectangles. Inline objects in the typesetter
+  (`ui::typeset::InlineObject`, `TextPainter::draw_inline`, `Typesetter::with_inline_objects`) reserve width and
+  height for attachments and math.
+* Notes (the markdown text area, `shell/textarea.rs`): `$x^2$` is typeset inline and takes its width in place of its
+  source; a `$$...$$` paragraph is a centred display line. The source stays in the note file. Multi-line `$$` blocks
+  are not supported, and an inline formula that wraps across lines is drawn on its first line only.
+* Ordinary letters are upright. TeX sets them italic; without an italic correction table the output is upright.
+* `\dfrac` and `\tfrac` are plain `\frac`; the style is not forced.
+* Linear input takes one atom as a denominator (`a/bc` is `(a/b)c`); write `a/(bc)` for more.
+* Not wired yet: the Calculator display (its text is pre-rendered images from an app cache, with no face access). The
+  row stays `partial` until the Calculator, and a device check of Notes, are done.
+* Tests: parser trees, errors, fake-font fraction and script metrics, spacing between classes, delimiter sizing, matrix
+  and radical geometry, and the `MATH` table reader on a synthetic table. Not run in the session that wrote them; run
+  `cargo test -p <render crate> math::` before relying on them.
+
+
+## Scripting (`bifrost_core::script`, `osascript`, `osacompile`, the `scripting` service)
+
+Apps declare what a script can ask them to do in `manifest.toml`, and a small scripting language sends those
+requests as typed AppEvents with replies (`bifrost_app::app_events`, over the app control socket).
+
+**Dictionaries.** `[[script.command]]` and `[[script.class]]` tables are parsed by `bifrost_core::script::dictionary`:
+
+```toml
+[[script.command]]
+name = "make new note"        # lowercase words; a script says this phrase
+event = "notes.make"          # sent as the AppEvent ae.notes.make
+params = ["title", "body"]    # labels a script may pass; a direct argument goes to the first one
+result = "note"
+
+[[script.class]]
+name = "note"
+properties = ["name", "id", "folder", "modified"]
+elements = []
+```
+
+A table with a missing name or event is dropped, the rest of the manifest is unaffected, and the other manifest tables
+(`[privacy]`, `[[service]]`, `[[intent]]`) are read as before. The shell's `scripting` service answers `list {}` (the
+installed apps with a dictionary) and `dictionary {app}` (its `commands` and `classes`).
+
+**Language.** `springboard/core/src/script/` has a lexer, a recursive-descent parser (`parser.rs`, `ast.rs`) and a
+tree-walking interpreter (`interp.rs`). Supported: `set`, `get`, `make new X with properties {...}`, `delete`,
+`tell app "Name" [to statement | ... end tell]`, `if ... then ... else if ... else ... end if` and the one-line form,
+`repeat` (forever, `n times`, `with i from a to b`, `with x in list`, `exit repeat`), `on name(args) ... end`,
+`on run argv`, `return`, `try ... on error e ... end try`, `display dialog` and `display notification` (with `with title`),
+`do shell script`, `delay`, `&`, comparisons (`=`, `≠`, `is`, `is not`, `<`, `<=`, `>`, `>=`), `and`, `or`, `not`,
+`+ - * /`, `mod`, lists `{a, b}`, records `{name:value}`, `item n of list`, `length of` and `count of` for lists and
+text, and `prop of object`. Names and keywords are case-insensitive; `--` starts a comment; a `¬` at a line end
+continues it.
+
+Commands in a `tell` block resolve through the target app's dictionary: an unknown phrase is error -1708 ("doesn't
+understand the message"), an undeclared label is an error before anything is sent, and the parameter record is built by
+`dictionary::command_params` (the direct argument goes to the first declared parameter). `get`, `set`, `make` and
+`delete` of objects send the core events `getd`, `setd`, `crel` and `delt`, whose `object` is the specifier record
+`{class, index | name | all | whose: {property, value}, property?}`. A `make new X` that the dictionary declares as a
+command uses that command instead. A class or property the dictionary does not declare is error -1728. An error reply
+keeps its number and message, and `on error` sees them as `number` and `message`.
+
+The host (`interp::Host`) owns every side effect, so the same script runs against a fake host in the tests. The tool's
+host (`cmd/src/osascript.rs`) finds the app in the installed manifests, sends the event to the app's socket with
+`app_events::send_message` (120 s timeout) and runs `/bin/sh -c` for `do shell script`.
+
+**Tools.** `osascript [-s s|o] [-e statement]... [file [argument ...]]` runs `-e` lines, a file or standard input; the
+arguments are `argv` for `on run argv`. A file holding an `osacompile` output runs from its canonical source.
+`osacompile [-o output] (-e statement... | file)` checks the syntax and writes a JSON document,
+`{"format": "bifrost-osa", "version": 1, "source": <canonical source>, "ast": <syntax tree>}`. The canonical source has LF
+line ends, no trailing blanks and one final newline. Each AST node is an object with a `node` field naming its kind
+(`set`, `tell`, `command`, `repeat`, `specifier`, and so on; `script::ast::program_json` is the reference).
+
+**Apps.** Notes declares `make new note` (answered through the Create Note intent; the title becomes the first line)
+and the `note` class, whose `name`, `id`, `folder` and `modified` properties are read from the note list, so
+`get name of every note` works. Calendar declares `make new event`, answered through the Create Event intent.
+
+**Gaps (recorded decisions).** The tools do not launch an app that is not running (error -600). `display dialog` and
+`display notification` print on standard error, because the shell has no request path for a command-line tool yet.
+Descriptors travel as JSON, not Apple event descriptors; there is no sdef file and no generated proxy. The reference
+JavaScript (`JavaScriptOSA`, `JavaScriptAppleEvents`) is not built, and `osascript -l JavaScript` is refused. Setting
+properties and deleting notes or events from a script are refused by the apps for now. The language has no
+`repeat while`, no `considering`, and no object references beyond specifiers.
+
+## App controls in Control Center (`shell::app_controls`, `ui::control_widget`)
+
+Apps add buttons and toggles to Control Center by declaring `[[control]]` tables in `manifest.toml`:
+`kind = "toggle"` or `"button"`, `title`, an optional `symbol`, and `intent`, the id of one of the app's `[[intent]]`
+tables. The shell reads them with the manifest (`apphost::Manifest::controls`), drops any table with an unknown
+kind, a blank title or an unsafe intent id, and registers the rest in a `ControlRegistry` under `<app id>.<intent>`.
+A button press sends `intent.<id>` with no parameters. A toggle sends `intent.<id>` with the string parameter
+`on` set to `"true"` or `"false"`, the new state. Both travel over the app's control socket (`shell::intents`).
+
+Status: the model, parsing, registration and request mapping are in place with host tests
+(`shell/app_controls.rs`). The toggle parameter is `ui::control_widget::TOGGLE_PARAM` (`"on"`), read by apps with
+`toggle_param` (`bifrost_app::controls::toggle_param`). `AppControls` is the panel state: add, remove, press, with
+toggle values kept by the shell. Its keys persist in the `control_center_modules` pref as `app:<identifier>` items
+(`join_pref`, `pref_app_keys`). Menu bar items per module persist in `control_center_menu_bar`
+(`parse_menu_bar_items`, `set_menu_bar_item`), and `battery_show_percent` gates the battery percentage.
+Done on the mobile Control Center sheet (`shell/control_center.rs`): app-control tiles sit in a four-across grid under
+the built-in modules (`app_tile_rect`, `app_hit`); a tap uses the control through `AppControls::press` and sends its
+request on a worker thread (`intents::exchange`). An Edit Controls button under the tiles opens a list of every module
+and every app control the running apps declare (`cc_gallery_*`). Each module row has a panel switch and a Menu Bar
+switch; each app row adds or removes its tile. Every change saves through `join_pref` and `MENU_BAR_PREF`, and an app
+control named in the saved list comes back once its app runs. The battery item draws its percentage beside the glyph
+when `battery_show_percent` is `1` (`battery_bar_label`). Tests: tile hit-testing, list add/remove persistence, menu
+bar switch, battery label (`shell/control_center.rs` tests).
+Not done: the Settings switch for `battery_show_percent` (no page yet); the menu bar does not yet draw one status
+item per module from `control_center_menu_bar` (it needs a `Menu` variant and a dispatch that opens the panel on that
+module); the desktop Control Center (`draw_desktop_cc`) does not draw app-control tiles or the Edit Controls button;
+the Edit Controls list does not scroll, and it lists only apps that are running. Not verified on device or host: the
+commits were written without a build, so the lead's `cargo test` run is the first check. Per-app
+energy is not built: `activity-desktop/src/sample.rs` has the `/proc` CPU-time sampler, but it lives in the app and
+is not shared with the shell. Apple parity gap: ControlWidgetButton, ControlWidgetToggle and ControlValueProvider
+on screen.
+
+## Colour management (ColorSync: `bifrost_render::icc`, `icc_lut`, `icc_transform`, `icc_builtin`, `edid`)
+
+Clean-room from the public ICC.1:2022 specification. Code: `render/src/icc.rs` (header, tag table, `desc`/`mluc`
+text, matrix-shaper curves `curv`/`para`, `wtpt`, `vcgt`), `render/src/icc_lut.rs` (lookup tables: `mft1`, `mft2`,
+`mAB `, `mBA `, stages of curves, CLUT and matrix, Lab and XYZ connection-space encodings), `render/src/icc_transform.rs`
+(profile-to-profile conversion, intents, black point compensation, baked 3D tables), `render/src/icc_builtin.rs`
+(built-in profiles), `render/src/edid.rs` (display chromaticities). Named working spaces stay in `colorspace.rs`.
+
+| Piece | Apple | What BifrOSt does |
+|---|---|---|
+| Profile reader | `ColorSyncProfileCreateWithURL`, `ColorSyncProfileCopyTag` | `icc::Profile::parse` checks the header magic and the tag table and refuses a tag that runs past the profile. `Profile::lut` reads the `A2B0`..`B2A2` tags in all three lookup-table types. |
+| Lookup tables | `ColorSyncTransformCreate` with `mft`/`mAB` profiles | `icc_lut::Lut` runs the stages in the order the tag type defines (A, CLUT, M, matrix, B for device-to-PCS; the reverse for PCS-to-device). Lab 8-bit and 16-bit (v2 scaling) and v4 encodings are decoded; XYZ PCS uses the 1 + 32767/32768 scale. |
+| Matrix-shaper profiles | ColorSync's matrix/TRC path | `MatrixShaper` from `rXYZ`/`gXYZ`/`bXYZ` and `rTRC`/`gTRC`/`bTRC`; the inverse uses the Bradford-adapted colorant inverse and a closed-form or bisected tone curve. |
+| Built-in profiles | `kColorSyncSRGBProfile`, `kColorSyncDisplayP3Profile`, `kColorSyncAdobeRGB1998Profile` | `Builtin::{Srgb, DisplayP3, AdobeRgb1998, Rec2020, Gray22}` generate real ICC bytes at run time from the chromaticities in `colorspace` and a 1024-sample tone table; the same parser reads them. No profile files are shipped. |
+| Transform | `ColorSyncTransformConvert`, `ColorSyncProfileCreateLink`, intents | `Conversion::new(src, dst, intent, black_point_compensation)` goes device to PCS (D50) to device. Perceptual and saturation use their own tables and fall back to relative colorimetric; a matrix profile has one transform, so every intent uses it. Absolute colorimetric scales by the media white on the way out and back in. Black point compensation is the ICC v4 formula on the PCS black (zero for matrix profiles, so a no-op there). |
+| 3D table | ColorSync's cached link | `Lut3d::build` bakes a 33-point grid per (source profile, display, intent) and samples it trilinearly; eight tables are kept. |
+| Display profile | `ColorSyncProfileCreateWithDisplayID` | `icc_transform::display_target` builds the display profile from the first connected connector's EDID under `/sys/class/drm` (chromaticities as ten-bit values, gamma from byte 23 or the sRGB curve); with no readable EDID the built-in sRGB profile is used. |
+| Image decode | `CGImageSource` with `ColorSync` conversion to the display | `cg::imageio::ImageSource::all` converts every decoded frame with an embedded profile (PNG `iCCP`, JPEG `APP2`, TIFF and WebP `ICCP`) to the display profile once per decode. A picture already in the display profile is not tagged with its source profile again. Preview, Photos and any other app that decodes through `ImageSource` get this. sRGB-tagged pictures on an sRGB display are not converted. |
+
+Decisions and limits:
+- The conversion is the matrix or table path only. Perceptual gamut mapping is not done for matrix profiles; out-of-gamut
+  colours clip at the end. A profile's own perceptual table, when it has one, is used as is.
+- CMYK and other non-RGB device spaces are not converted: the engine feeds three device channels, so a profile with
+  four or more does not convert. A grey profile's pixels take their red channel.
+- Not done: profile creation and embedding (`ColorSyncMutableProfile`), `mluc` text in other scripts than the first
+  record, `vcgt` loading into the hardware (`kms.rs` still applies no ramp), the HDR Headroom Adaptive Gain Curve, the
+  PDF `ICCBased` path (`cg/pdf/image.rs` still takes the component count only), and the `ColorSync` SDK call (no app
+  calls `icc_transform` yet; the `bifrost_app::colorsync` surface still exposes only the named-space converter).
+- Verified on the host only by unit tests (`cargo test -p bifrost-render icc`, `colorspace`, `edid`). Not verified on Midget.
+
+## SDK modules added 2026-10-17 (parity waves 1 to 8)
+
+The modules below were added to `springboard/sdk/src` and `springboard/ui/src` in the parity waves of 2026-10-17. Each
+entry says what the module does, its main items, and what is not wired. "No caller found" means a search of
+`springboard/src`, `springboard/apps` and `springboard/core` by module name found no use outside the module and `lib.rs`:
+the model is host-tested, but no shell or app drives it yet. Every row stays partial until a Midget check.
+
+### Cryptography and credentials
+
+- **CryptoKit (`bifrost_app::crypto_kit`, `springboard/sdk/src/crypto_kit.rs`)**: digests `sha256`, `sha384`, `sha512`;
+  `hkdf_sha256` (RFC 5869); `AesGcmKey` (`generate`, `from_bytes`, `seal`, `open`; a sealed box is nonce, ciphertext, tag);
+  `KeyAgreementKey` (X25519: `generate`, `public_key`, `agree`); `SigningKey` and `verify_signature` (Ed25519). Random keys
+  and nonces come from the shell's entropy pool. ChaCha20-Poly1305 is in `chacha_poly`. Caller: `springboard/src/shell/services/trust_eval.rs`.
+  Parity row: `docs/parity-matrix/data/apple-cryptokit.json`.
+- **OAuth 2 tokens (`bifrost_app::social_oauth2`)**: `OAuth2Token::from_response` reads a token endpoint's JSON answer
+  (RFC 6749 5.1) against the caller's clock; `needs_refresh` uses a 60 second margin (`REFRESH_MARGIN_SECS`);
+  `refresh_request` builds the renewal; `sign` sets `Authorization: Bearer`. The network is the caller's. No caller found.
+  Parity row: `social.json`.
+- **OAuth credential (`bifrost_app::oauth_credential`)**: `OAuthCredential` holds access token, refresh token, expiry and scope
+  (the OAuth form of `ACAccountCredential`). `encode` and `decode` store it as one opaque keychain secret (header
+  `bifrost-oauth-v1`), so the keychain never sees the fields. `is_expired`, `needs_renewal`, `can_renew`, `renewed`. No caller found.
+- **Credential binding (`bifrost_ui::credential_acl`)**: `Binding::new(owner, service, account, presence)`; `grant(by, app)`
+  lets another app read the item; `presence` can require a passcode or biometry. Wired (2026-10-17): `springboard::keychain::Store` keeps the encoded binding next to the item under a reserved service name that apps cannot name or list; `bind`, `grant`, `revoke` (owner only), `get_as` (granted apps) and `get_with_presence`; a plain `get` of a presence-bound item answers `Error::AuthFailed` (-25293, wire status NotPermitted).
+- **Recovery key (`bifrost_ui::recovery_key`)**: `from_entropy` makes a 16-character key from a 32-character alphabet without
+  look-alikes, shown in four groups; `normalise` cleans typed input; `Record::enrol` stores only a salted hash and `matches`
+  checks a typed key. No caller found: forgotten-password reset is not wired.
+
+### Kerberos, LDAP and directories
+
+- **kpasswd framing (`bifrost_app::kpasswd`)**: RFC 3244 request and reply frames for the Kerberos password service
+  (`encode_request`, `decode_request`, `encode_reply`, `decode_reply`; versions `0x0001` change and `0xff80` set).
+  Framing only: the AP-REQ and KRB-PRIV come from the caller. No caller found.
+- **Kerberos client (`bifrost_app::krb5_client`)**: runs the MIT tools `kinit` and `klist` (the `krb5` package) with
+  `std::process::Command`, never a shell. A password goes to `kinit` on standard input. `klist`, `kinit`, `copy_ccache`
+  and `parse_klist`; the cache is the `CacheName` of `gss_krb5`. No caller found.
+- **LDAP (`bifrost_app::ldap_directory`)**: `Server::new(uri, base)` and `with_bind(dn, password)`; `search` runs `ldapsearch`
+  (the `openldap` package) and parses LDIF into `DirRecord`s; `load` fills a `Session` node for the directory query model.
+  The bind password goes through a private file, not the command line. No caller found.
+- **Local directory (`bifrost_ui::directory_local`)**: `parse_passwd` and `parse_group` turn `/etc/passwd` and `/etc/group`
+  into `users` and `groups` records with POSIX attribute names; `fill_node` loads a node. Caller: `springboard/src/shell/services/directory.rs`.
+
+### Network
+
+- **Multicast group (`bifrost_app::network_group`)**: `ConnectionGroup::new(port)` binds a UDP socket; `join` and `leave`
+  change membership (rules from `bifrost_ui::multicast`); `send`, `receive`, `set_time_to_live`, `set_loopback`. IPv4 only.
+  No caller found. Parity row: `network.json`.
+- **TLS options (`bifrost_app::tls_client`)**: `client_config(TlsOptions)` builds the rustls client configuration; `connect`
+  wraps a `TcpStream`. No caller found.
+- **Link conditioner (`bifrost_app::link_conditioner`)**: four built-in `PROFILES` (`profile(name)`), `Profile::validate`,
+  `netem_options`, `tc_args(iface)` and `clear_args(iface)`. Only egress is shaped. The caller runs `tc`. No caller found.
+- **Proxy settings (`bifrost_app::proxy_settings`)**: `ProxySettings::from_env` reads `http_proxy`, `https_proxy`, `no_proxy`
+  (and upper-case forms); `proxy_for(scheme, host)` and `bypasses(host)`. No caller found. Parity row: `cfnetwork.json`.
+- **Bonjour advertising (`springboard/sdk/src/avahi_publish.rs`)**: `Publication::start(service, port)` runs
+  `avahi-publish-service`; dropping the value withdraws the record. `publish_args` is pure. No caller found.
+- **Wi-Fi (`bifrost_app::wlan_service`)**: request functions for the `wifi` service (`request_interfaces`, `request_networks`,
+  `request_power`, `request_scan`, `request_join`, `request_forget`, `request_host`); `decode_*` read the replies. The shell
+  serves them in `springboard/src/shell/services/wifi.rs`. Parity row: `core-wlan.json`.
+
+### Cloud records and accounts
+
+- **Cloud record zone (`bifrost_app::cloud_records`)**: `CloudZone` implements `record_sync::Remote` over the cloud's `records`
+  table. A zone opens only with `Consent::given(true)`, and field values travel only sealed through a `Sealer`.
+  Not wired: no app has an account key to seal with, so no app can sync yet.
+- **Account suggestions (`bifrost_ui::account_suggestions`)**: `for_address` picks the account type and mail servers for an
+  address from a built-in provider table or the address's domain. Nothing goes over the network. Caller: `springboard/src/shell/forms.rs`.
+- **Account store (`bifrost_ui::account_store`)**: the shared `accounts.ini` reader and writer, used by the Internet Accounts page,
+  the access sheet and Settings. The SDK side is described in "Accounts" above.
+
+### Speech, language and search
+
+- **Live recognition (`bifrost_app::speech_whisper`)**: `start`, `poll`, `stop`, `model`, `set_consent`, `download` over the
+  `speech_recognizer` service; `poll_from_reply` decodes the transcripts; `WhisperBackend` plugs them into `SFSpeechRecognizer`.
+  Audio stays on the machine. Gaps (from the module): no per-word timing or confidence, English only, no file recognition, and
+  the element's reply format is checked on the lab machine only. Callers: `springboard/src/shell/services/recognizer.rs` and the keyboard app.
+- **On-device language model (`bifrost_app::language_model`)**: re-exports the session, tool, schema and budget models;
+  `run_turn(session, provider)` runs one turn. The SDK ships no provider. `on_device_availability()` always returns
+  `Unavailable(NoOnDeviceModel)`, because BifrOSt has no on-device model yet. Caller: the assistant app's `connect.rs`.
+- **Core ML (`bifrost_app::core_ml`)**: `model_device(policy)` returns CPU only (`MODEL_DEVICES` is `[Cpu]`), and `top_index`
+  reads the best label of a tensor. Models come from `bifrost_ui::ml_model`; the work runs on the CPU evaluator. Parity row: `core-ml.json`.
+  No caller found.
+- **Embeddings (`bifrost_app::embedding`)**: `embed(text)` is a hashed bag-of-words vector of `DIMENSIONS` (256) buckets, unit
+  length; `cosine`; `EmbeddingIndex` with `insert`, `remove` and `nearest`. This is not a neural model. No caller found.
+- **Search kit (`bifrost_app::search_kit`)**: `SearchIndex` over an app's own text: `add_document`, `remove_document`,
+  `find_matches` (type-ahead words, every query word needed), `summary`, `to_text` and `from_text`. In memory. No caller found.
+  Parity row: `core-spotlight.json`.
+- **Search cards (`bifrost_app::search_card_provider`)**: `CardProviders::set_cards(app, cards)` replaces one app's cards;
+  `results(query, limit)` ranks title matches above subtitle matches; `remove_app`. No caller found.
+- **Document links (`bifrost_app::document_links`)**: `index_wiki_links` reads `[[Target]]` links into a
+  `bifrost_core::link_index::LinkIndex`; `backlinks_of` lists the documents that link to a target. No caller found.
+- **Link metadata (`bifrost_app::link_metadata`)**: `checked_url` (http and https only), `resolve`, `parse` (title, Open Graph and
+  Twitter card image, icon links) and `LinkFetch::start` with a timeout between 1 and 60 seconds. No caller found.
+  Parity row: `link-presentation.json`.
+- **Link card view (`bifrost_ui::link_card`)**: `draw` paints the card (icon or initial tile, title, site name). Callers: the news
+  app's `news.rs` and `wire.rs`.
+- **Tab selection (`bifrost_ui::tab_selection`)**: `TabSelection` holds the ordered tab identifiers and the selected one; removing
+  the selected tab selects its neighbour. No caller found.
+
+### Screen, capture and images
+
+- **Screen stream (`bifrost_app::screen_stream`)**: `start` (size, minimum frame interval, filter, optional record path), `stop`,
+  `frame_from_event` (`Fresh` or `Repeated` frames). The shell side is `springboard/src/shell/services/mod.rs`, with pacing in
+  `bifrost_ui::capture_stream` (`ScreenStream::start` refuses without screen capture access). Parity row: `screencapturekit.json`.
+- **Capture session (`bifrost_app::av_capture_session`)**: `CaptureSession::new(w, h)`, `set_input(VideoDevice)`, and `start`
+  returns a `StreamPlan` naming the V4L2 node. It opens no device itself. No caller found.
+- **Document scan (`bifrost_app::document_scan`)**: `DocumentScan` keeps the pages; `flatten(frame, w, h, page)` warps RGBA pixels
+  onto a flat page by nearest-pixel inverse mapping. Finding the page corners is the camera's job and is not done here. No caller found.
+- **Pixel transfer (`bifrost_app::pixel_transfer`)**: `PixelTransfer::new(w, h)` converts NV12 to RGBA (BT.709 at 720 lines and up,
+  BT.601 below, or a colorimetry set with `with_colorimetry`); `rotated` and `rotated_by` turn pictures. No caller found.
+- **Image render (`bifrost_app::image_render`)**: `perspective_correct`, `render_to_destination` and `VideoFilter` (`process`,
+  `with_feedback`, `reset`) for per-frame filter chains. No caller found.
+- **Screen usage (`bifrost_app::screen_usage`)**: `own_seconds(dir, day, app_key)` reads only the app's own foreground seconds from
+  the per-day file under `screentime/`. No other app's data is visible. No caller found. Parity row: `screen-time.json`.
+- **Web usage and history (`bifrost_app::web_usage`, `bifrost_app::web_history`)**: `WebUsage` records seconds per host (video and
+  picture-in-picture counted apart) and a block list that matches subdomains; `WebHistory` holds visits filtered by bundle, profile
+  and time range. History is used by `springboard/apps/browser/src/store.rs`; web usage has no caller found. Parity rows:
+  `safari-services.json` (history) and `screen-time.json` (usage).
+
+### Photos, media and maps
+
+- **Photo editing (`bifrost_app::photo_editing`)**: `PHContentEditingSession::begin`, `input_adjustment`, `finish` with a
+  `PHContentEditingOutput`, and `revert`. Adjustments are stored as records (`bifrost_ui::photo_adjustment`), so the original is
+  never rewritten. Not wired: there is no extension host, so no third-party editor loads.
+- **Photo picker (`bifrost_app::photo_picker`)**: `PHPickerConfiguration` (filters, selection limit, `to_params`), `PHPickerResult`,
+  `PHPickerViewController::present`, `is_pending`, `decode_reply`, `decode_event` and `check_limit`. Wired (2026-10-17): the `picker`
+  call opens the shell's photo picker sheet (`springboard/src/shell/photo_pick_sheet.rs`, model `photo_pick.rs`): a grid of the
+  library's thumbnails with the app's filters (All, Photos, Videos tabs when more than one kind is allowed) and selection limit
+  (0: none, default 1, which replaces the choice). The call answers `{status: "pending"}` at once; the person's choice arrives as
+  the `picker_did_finish` event (`{results: [{id}], cancelled}`, ids in pick order) and the app can then read exactly those
+  assets with `image {id}`, with no photos permission and no view of the rest of the library. Gaps: no keyboard control in the
+  sheet, Live Photos and movies show a still or the first frame and do not play, and a pick does not survive a shell restart.
+- **Media format (`bifrost_app::media_format`)**: `FormatDescription::video(codec, w, h)` and `sound(codec, SoundFormat)`. The codec is
+  a four-character code (space-padded when short); sides are at most `MAX_SIDE` (16384). Pure data, no decoder. No caller found.
+  Parity row: `core-media.json`.
+- **Media library and picker (`bifrost_app::media_library`, `bifrost_app::media_picker_view`)**: `media_library::run(library, query)`
+  returns positions and sections over the app's own index; `media_picker_view` shapes the picker rows (`rows`, `footer`, `tap`).
+  Caller: `springboard/src/shell/pickers.rs`.
+- **CoreMedia time (`bifrost_app::core_media_time`)**: `MediaTime` (a rational value over a timescale, with invalid, indefinite and
+  infinite states) and `CMTimeRange`, the type the media pipeline also uses. No caller found. Parity row: `core-media.json`.
+- **Picture in Picture (`bifrost_app::picture_in_picture`)**: `Pip::new(aspect)` wraps `bifrost_ui::pip_window::Controller` and gives
+  the window rectangle and corner. `set_possible`, `start` and `stop` send to the shell's service, answered in
+  `springboard/src/shell/services/mod.rs`. Nothing is drawn here. Parity row: `avkit.json`.
+- **Route picker (`bifrost_app::route_picker`)**: `sections` splits local outputs and nearby receivers; `tap` activates a route
+  (`bifrost_ui::route_auth` decides). The shell makes the connection. Callers: `springboard/src/shell/control_center.rs`,
+  `pickers.rs` and `services/audio_devices.rs`. Parity row: `avrouting.json`.
+- **Positional audio (`bifrost_app::positional_audio`)**: `Listener` and `Source`, with OpenAL-style inverse-distance gain clamped to
+  the reference and maximum distance, and an equal-power pan. The model returns gains; the audio service applies them. No caller
+  found. Parity row: `avfaudio.json`.
+- **Maps (`bifrost_app::maps`)**: makes the MapKit models in `bifrost_ui` reachable from the SDK (coordinates, regions, camera,
+  controls, user location, places). `Snapshotter::render` draws a tile picture, `fix_from_location` and `feed_user_location` take a
+  Core Location fix, and `search_places` runs the geocoder over a `Net` trait. Parity row: `mapkit.json`.
+
+### Now Playing, remote commands and feedback
+
+- **Up Next queue (`bifrost_app::now_playing`: `QueueEntry`, `publish_with_queue`, `queue_pick`)**: `publish_with_queue` sends the
+  app's `QueueEntry` list (`title`, optional `artist`, `playable`). When the person picks an entry in Control Center, the shell sends
+  a `queue_select` event with the index, and `queue_pick` decodes it. A non-playable entry is listed but cannot be picked. The shell
+  side is `springboard/src/shell/services/now_playing.rs`. Parity row: `now-playing.json`.
+- **Feedback (`bifrost_app::now_playing_feedback`)**: `feedback_body` publishes the like, dislike and bookmark toggles and an optional
+  rating scale; `feedback_from_event` and `rate_from_event` decode the person's choice. The app applies the change to its own state
+  before it republishes, so a refused command is not shown as done. The shell reads the `feedback` field of the publish body.
+- **Artwork**: `Artwork`, `Artwork::choose`, `aspect_fit` and `request_pixels` are modelled. Not wired: artwork does not reach the shell yet.
+- **Remote routing (`bifrost_app::remote_routing`)**: `action_for(command)` maps a shell command to a `RemoteAction` (skips map to none,
+  since they use `SkipIntervalCommand`), `media_key(name)` maps hardware media keys, and `route(center, command)` passes the command to
+  the app's `CommandCenter`. A switched-off or unhandled action is refused. No caller found.
+
+### Notifications: authorization and presentation (update)
+
+The gap sentence at the end of "User notifications" is out of date. The shell now answers both calls:
+
+- `request_authorization` (`ToShell::NotifyAuthorize`) returns the stored answer, or holds the request and shows the first-time
+  alert, then answers with `Event::Authorization`. A provisional request is granted without a prompt
+  (`springboard/src/shell/usernotif.rs`, `usernotif_authorize`).
+- `set_presentation_delegate` and `will_present` (`NotifyPresentDelegate`, `NotifyPresentReply`) are wired: an app that opted in is
+  asked about each notification that arrives while it is in front, and the answer is cut to the grant.
+
+Still missing from that list: `UNNotificationSound`, attachments, `userInfo`, interruption levels and location triggers.
+
+### Runtime, scheduling and diagnostics
+
+- **Run loop (`bifrost_app::run_loop`)**: `RunLoop::schedule_after(delay, work)` and `advance(now)` run due work on the thread that
+  owns the publishers (the `Rc`-based observables). It has no thread of its own. No caller found.
+- **Operation queue (`bifrost_app::operation_queue`)**: `OperationQueue` runs closures on background threads, at most
+  `max_concurrent_operation_count` at a time (0 means one per CPU core), with `set_suspended`, `cancel_all_operations` and
+  `wait_until_all_operations_are_finished`. Dependencies and quality-of-service classes are not modelled; use `dispatch` for those.
+  No caller found. Parity row: `dispatch.json`.
+- **Performance counters (`bifrost_app::perf_counters`)**: `measure(events, program, args)` runs `perf stat` and parses its CSV. A
+  counter the machine does not offer is `None`, not zero. No caller found.
+- **Session assertions (`bifrost_app::session_assertion`)**: `PowerAssertion::new(hold, reason, who)` builds the
+  `systemd-inhibit --what=... --mode=block` arguments; the caller runs the command, and ending that process ends the hold.
+  The shell's `springboard/src/bare/sleep.rs` uses the same mechanism.
+- **Watchdog (`bifrost_app::watchdog`)**: `interval()` reads `WATCHDOG_USEC` and gives half of it; `ping()` sends `WATCHDOG=1` to
+  `NOTIFY_SOCKET`. Callers: `springboard/src/shell/diag.rs`, `springboard/src/bare/crashlog.rs`.
+- **Container migration (`bifrost_app::container_migration`)**: a `.container-version` file in the app's data directory and ordered
+  `Step`s; `migrate(dir, steps, target)` runs them in order and writes the version after each one, so a failed step resumes next time.
+  A container newer than the target is refused. No caller found.
+- **System configuration store (`bifrost_app::system_config_store`)**: a keyed `State:/...` and `Setup:/...` table (the
+  `SCDynamicStore` shape) with `set`, `get`, `remove`, `keys(prefix)` and a `revision` counter. No caller found.
+  Parity row: `system-configuration.json`.
+- **Settings panes (`bifrost_app::settings_panes`)**: `[[settings_pane]]` entries in `manifest.toml`. The shell sends
+  `ae.settings.openPane` with the pane id, and `install_open_handler` answers it. Callers: `springboard/src/shell/apphost.rs`,
+  `pages.rs` and `mod.rs`.
+- **Tips and tooltips (`bifrost_app::tips`, `bifrost_app::tooltips`)**: `tips::present_first` picks the first tip whose rules allow it
+  and records the display; `tip_popover_frame` places the 260 by 96 point popover with a 9 point gap. `TooltipHost` tracks the
+  controls' regions and delays, and `draw` paints the ToolTip material. Not wired: the shell does not pass hover positions to apps,
+  so a real mouse shows no tooltip in an app yet; touch moves are the only pointer input the app sees.
+- **Translation popover (`bifrost_app::translation_popover`)**: `TranslationPresenter::present` runs the translation through the app's
+  `Translator` and places a 280 by 120 point popover; `replacement` returns the text, and the app writes it into its document.
+  No caller found. Parity row: `translation.json`.
+- **Accessibility audit (`bifrost_app::accessibility_audit`)**: `Audit::new(window).run(&elements)` returns findings for unnamed
+  controls, empty or clipped elements, small targets, duplicate names and low text contrast. The model is `bifrost_ui::ax_audit`.
+  No caller found.
+- **Workflow (`bifrost_app::workflow`)**: `WorkflowRun` runs an ordered list of closure steps that pass output along, with `Variables`,
+  one step at a time, and pause, stop and reset. It models the Automator workflow engine. Callers: `springboard/apps/automator-desktop`
+  and `springboard/apps/shortcuts-desktop`.
+- **Mail compose (`bifrost_app::mail_compose`)**: `compose(ctx, draft, files)` opens a new message in the `mailto:` handler with
+  recipients, subject, body and attached grants. Callers: `springboard/src/shell/sharing.rs` and the contacts app.
+
+### Input, geometry and game models
+
+- **GameplayKit (`bifrost_app::gameplay_kit`)**: re-exports the game-logic models (entities and components, state machines, grid
+  pathfinding, agents, noise, decision trees, rule systems, strategist, quadtree). Deterministic; random values come from
+  `crate::random`, seeded by `testing::seed()`. Parity row: `gameplaykit.json`.
+- **Linear algebra (`bifrost_app::linear_algebra`)**: re-exports `bifrost_ui::linalg` (GLKit vector, matrix and quaternion types).
+  No GPU upload; that is a separate API. Parity row: `glkit.json`.
+- **FFT (`bifrost_app::fft`)**: in-place radix-2 complex FFT and inverse over `Complex` (`fft`, `ifft`); lengths must be a power of
+  two. Caller: the DAW app's `springboard/apps/daw/src/conv.rs`. Parity row: `accelerate.json`.
+- **HID reports (`bifrost_app::hid_reports`)**: finds `/dev/hidrawN` nodes (`devices_in`), reads one report per call (`read_report`),
+  and keeps a bounded `ReportQueue` that counts dropped reports (`take_dropped`). It does not decode reports. No caller found.
+  Parity row: `core-hid.json`.
+- **Icon images (`bifrost_app::icon_images`)**: `IconImages` maps content type identifiers to bitmap sets (the nearest registered
+  ancestor wins) and a folder icon (`FOLDER`). No caller found.
+- **Raster 3D (`bifrost_ui::raster3d`)**: a CPU triangle rasteriser with a depth buffer; each triangle is lit once at its centroid.
+  A triangle with a vertex at or behind the eye is skipped, not clipped. A stand-in for a GPU rasteriser. No caller found.
+
+### Contacts and phone numbers
+
+- **Phone numbers (`bifrost_ui::phone_number`, `bifrost_ui::phone_rules`)**: `parse(input, region)` normalises to E.164 and formats
+  nationally or internationally. `phone_rules` holds lengths and trunk prefixes for 20 common regions. This is not the full numbering
+  plan: a number of an unusual length is refused. Callers: the calendar and contacts apps (`phone_number`).
+- **Recipient recents (`bifrost_ui::recipient_recents`)**: the most recent addresses, favourites first and capped; an address is
+  compared without case. No caller found.
+
+### Storage, managed objects and previews
+
+- **Managed context (`bifrost_ui::managed_context`)**: `ManagedContext<R>` keeps inserted, edited and deleted objects in a working
+  copy; `save` makes the working copy the saved state and `rollback` discards it. Caller: the reminders app's `archive.rs`.
+- **Persistent store (`bifrost_ui::persistent_store`)**: one file for a `ManagedContext`, with a `Codec` for each record. Only the saved
+  state is written. Callers: the reminders app's `archive.rs` and `store.rs`.
+- **Preview view (`bifrost_ui::preview_view`)**: `view_frame` lays out an embedded preview's title row, body and counter. The shell's
+  `springboard/src/shell/preview_panel.rs` uses the same helpers, so both show the same words in the same places.
+- **Local authentication view (`bifrost_app::view::local_auth_view`)**: `LocalAuthenticationView` shows the biometric state as a disc and
+  sends its action when tapped; the state changes only through `send`. No caller found. Parity row: `local-authentication-embedded-ui.json`.
+
+### Private framework settle wave (slice p04, 2026-10-17)
+
+- **Word model and CJK splitter (`bifrost_ui::word_model`)**: `WordModel` counts words and word pairs of text the user types
+  and predicts completions and the next word; it saves as text and nothing leaves the device. `Lexicon` with `segment` and
+  `split_words` splits Chinese, Japanese and Korean text by the lowest-cost path through a word list. No word list is shipped yet, so
+  unknown characters stand alone (kana and Hangul runs stay whole). Thai, Lao, Khmer and Myanmar are not split. No caller yet. Parity
+  row: CVNLP (OS frameworks).
+- **Text chunks (`bifrost_ui::text_chunks`)**: `chunk_ranges` and `chunks` cut a document into passages of at most N characters on
+  sentence boundaries with an optional overlap. No caller yet. Parity row: ChunkingLibrary.
+- **Cloth (`bifrost_ui::cloth`)**: `Cloth` is a CPU Verlet cloth sheet with pins, gravity, wind, a ground plane and mesh triangles.
+  No GPU path. No caller yet. Parity row: ClothPhysics.
+
+
+### Private framework wave 12 (2026-10-17)
+
+- **File-manager sync extensions (`bifrost_app::file_manager_sync`)**: `SyncExtension` (observe begin and end, badge request, menus,
+  toolbar button), `SyncController` (observed folders, registered badges, per-item badges limited to the observed folders, the host's
+  selection) and `SyncHost` (what the Files app asks). Parity row: `FinderSyncPriv`. Wired in wave 14: an extension app declares
+  `file_manager_folders = ["~/Cloud"]` in its manifest (`~/` is home; `/`, home itself, relative paths and `..` are refused) and answers
+  `ae.filemanager.*` calls with `file_manager_sync::serve` (describe, observe, badges, menu, perform). Since the extension-host
+  unification (Files 1.32.0) the declaration also makes the app an extension of the system point `is.bifrost.file-manager-sync`
+  (`extension_manifest::FILE_MANAGER_POINT`; `parse` adds the `[[extension]]` itself, `file_manager_folders` stays the folder list),
+  and the app runs `bifrost_app::extension_service::serve(&mut SyncService::new(controller, extension))` when it is started in
+  extension mode (see "App extension host and file providers" below). `RemoteExtension` is the host side: badges are asked for on a worker thread in batches and cached (asked again after 5 s), menu
+  items are asked for with a 200 ms timeout and an app that does not answer is skipped for 30 s, and only paths inside the declared
+  folders are ever sent. Files (`apps/files/src/extensions.rs`) discovers the apps at start, tells them which folder is shown, draws
+  their badges on icon, list and column items, adds their rows to the item and folder shortcut menus and sends the choice back.
+  Launch on demand: Files reaches each extension through the shared `extension_host::Host` (`extensions::host_transport`, the same host
+  and reaper thread as file providers), so showing one of the extension's folders starts the app in extension mode and the host stops
+  it after 30 s idle; `RemoteExtension::connect_lazy` sends nothing until the first request needs the app, and a failed describe is
+  retried after 30 s. The 200 ms menu request is made on the UI thread and never waits for a launch: when the extension is not
+  running (`Host::is_ready`) the transport starts it on a thread and answers `ERR_STARTING` (no mute), so the rows appear on the next
+  menu. Gaps: no enable screen in Settings (declaring the folders is the enabling; Login Items does not list the kind), the toolbar button
+  an extension describes is not drawn, the app list is read at start, the extension runs with the host's rights (no sandbox, as for
+  every extension), and badge images are symbol names. Host tests only, not run on Midget.
+- **Exchange notes (`bifrost_app::exchange_notes`, wave 14)**: Settings > Internet Accounts offers Notes (Exchange) (`Kind::Exchange`,
+  account type `bifrost.exchange`, service `Notes`; the server address must be `https://`, the password goes to Passwords). The Notes
+  app (1.23.0) mirrors the Notes folder of the first Exchange account with Notes switched on into a Notes folder named after the account
+  (`notes/exchange.rs`): a round runs at start, every five minutes and from Note > Sync Exchange Notes; local edits, new notes and
+  deletions go to the server first (a delete moves the item to Deleted Items), then the server's changes come in. A note edited on both
+  sides keeps the local text as a second note; the open note is not replaced until it is closed; a deleted account folder never deletes
+  on the server. Gaps: plain text only (formatting is flattened), no autodiscover or OAuth, one account, no sync progress or error shown
+  in the window (errors go to the app log).
+- **Local language model (`bifrost_app::local_model`)**: `LocalModelProvider` is a `ModelProvider` for the local inference engine over
+  a loopback port (chat-completions JSON over HTTP). `LocalEndpoint::parse` refuses any non-loopback host, so a conversation never leaves
+  the machine. Tool calls come back either as the engine's `tool_calls` field or as the prompted `{"tool_calls": [...]}` JSON.
+  `on_device_availability()` still says Unavailable because the system ships no engine; an app asks `LocalModelProvider::availability`.
+  Gap: no token streaming. Parity row: `GenerativeModels`.
+- **On-demand resources (`bifrost_app::on_demand_resources`)**: `Catalog` of tagged payloads, `ResourceStore` (fetch through a caller
+  closure, verify, install, pin, purge under a budget by preservation priority then least recently used) and `ResourceRequest`
+  (begin, conditionally begin, end accessing, progress). Gap: no PC App Store fetch yet. Parity row: `FoundationODR`.
+- **Graph runtime (`bifrost_ui::graph_run`)**: `run(graph, executable, feeds)` executes a compiled `graph::Graph` on the CPU for every
+  operator and element type; `Graph::constant_data` keeps constant payloads. Integer results saturate and an integer divide by zero is an
+  error. Gap: no GPU path. Parity rows: `GraphCompute`, `GraphComputeRT`.
+- **Mesh compression (`bifrost_ui::mesh_compress`)**: lossy compact format for `PrimitiveMesh` (quantized positions, octahedral normals,
+  16-bit texture coordinates, delta-coded indices, FNV-1a checksum). Parity row: `GeometryCompression`.
+- **Focus modes in Settings (`shell::notify_page::modes_group`)**: the Focus page lists every mode and switches the one on by hand.
+  Gap: a mode's people, apps and schedule are not editable from Settings yet. Parity row: `FocusSettingsUI`.
+
+
+## DER, X.509, revocation filters, Automix and dictation commands (private frameworks wave 12)
+
+Four small engines that private reference frameworks stand for, built clean-room and tested on the host:
+
+- `bifrost_core::der`: strict ASN.1 DER reader and writer (shortest lengths, minimal integers, bounded nesting, UTC and
+  generalized time). `bifrost_core::x509`: parses a certificate (names in RFC 4514 form, validity, basic constraints, key
+  usage, subject alternative names, the signed body) and assembles one around a caller-made signature.
+  `bifrost_app::trust::Certificate::from_x509` feeds parsed chains to the existing chain rules. Signature checking stays
+  with rustls; apple parity gap kept: no OCSP, no certificate policy trees.
+- `bifrost_core::crlite`: offline revocation from a Bloom-filter cascade (exact for every certificate the publisher
+  listed, one signal for others). No online lookup, so no site is revealed to a responder. The wire format is ours
+  (`BFCR` v1); the reference system's published filter format is not read.
+- `bifrost_ui::automix`: plans a beat-matched transition between two songs from their `RhythmResult` grids (whole bars,
+  bar-aligned, equal-power gains, bass swap, tempo ramp). The audio service has no crossfade command yet, so nothing
+  plays it; the plan is the contract for that command.
+- `bifrost_ui::dictation_commands`: spoken punctuation, line breaks, case and "scratch that" for dictation, English and
+  Icelandic tables, as an edit (backspaces plus insert). The on-screen keyboard types dictation through it;
+  `Dictation::with_commands` offers it to controls. Not verified on Midget.
+
+
+### OS rows settle wave 13 (slice o00, 2026-10-17)
+
+- **Folder actions (`bifrost_app::folder_actions`)**: a client of the `folder-actions` shell service
+  (`springboard/src/shell/services/folder_actions_service.rs`) for the Folder Actions Setup app: `list` answers the attachments and the
+  intents installed apps offer for a folder (an intent that takes `file`, or none, with every other parameter optional), `attach`,
+  `detach` and `detach_folder` edit them. Only `is.olibuijr.folderactions.desktop` may call the service, because an attached action
+  starts an app's intent for every file that lands in the folder. The shell saves each change (`Watcher::save`,
+  `folder-actions.tsv`). Apple's folder-picking panel has no counterpart in the SDK yet, so the app takes the folder as a typed path.
+- **VNC authentication (`bifrost_rfb::des`, `handshake::connect_with`)**: the Screen Sharing viewer answers the RFB DES challenge when a
+  password is typed. The scheme is weak by design (8 characters, 56-bit key); it is offered only when a password is given, and the
+  password is cleared once connected. TLS and the Tight, ZRLE and Hextile encodings are still missing.
+- **Command-line tools**: `ifconfig` lists IPv4 addresses, `ipconfig`, `leaks`, `smbutil`, `tiffutil`, `security` and `automator` are new
+  (`springboard/cmd`), `pmset` gains `-g batt` and `lowpowermode`, `mdutil -i` hides a volume from Search, and `textutil` reads and writes
+  docx and odt.
+
+
+### App extension host and file providers (2026-10-17)
+
+An installed app can provide an extension and another can use it. Wired path, first user: file providers in Files.
+
+- **Declare.** A package's `manifest.toml` carries `[[extension_point]]` (a point its app hosts, under the app's own id) and
+  `[[extension]] point = "..."` (an extension it provides; `bundle_id` defaults to the app id and must sit under it). The system
+  declares `is.bifrost.file-provider` (`bifrost_ui::extension_manifest::FILE_PROVIDER_POINT`). `extension_manifest::scan`
+  builds the `extension::Registry` from every installed manifest; Settings > Login Items & Extensions lists a provider
+  under FILE PROVIDER and its switch (`login.extensions.off`) hides it from the host. The system also declares
+  `is.bifrost.file-manager-sync` (`FILE_MANAGER_POINT`) for file-manager sync extensions; an app with a `file_manager_folders` key is an
+  extension of it without writing the table.
+- **Host.** `springboard::shell::extension_host::Host` (shell crate, used by the shell process and by Files) launches the package's
+  own binary on the first call with `--extension <point>`, `BIFROST_EXTENSION_POINT` and `BIFROST_CONTROL=<socket>`, waits for
+  `extension.ping`, calls it with one JSON-RPC request per connection, and `reap` stops it after 30 s with no call in
+  flight (`extension.shutdown`, then kill). `bifrost_core::extension_process::ProcessTable` tracks the process and the calls in flight.
+- **Extension side.** In `main`, `if bifrost_app::extension_service::requested().is_some() { serve(&mut service) } else { run(app) }`.
+  `FileProviderService(provider)` answers `provider.enumerate` and `provider.fetch` for a `Provider` (`bifrost_ui::file_provider_wire`
+  has the wire format).
+- **Files (sync extensions).** `apps/files/src/extensions.rs` talks to file-manager sync extensions through the same host
+  (`provider::shared_host()`, one process-wide host with one reaper); see "Private framework wave 12" above.
+- **Files.** Each enabled provider is a row under Locations (`apps/files/src/provider.rs`). Its items live at stand-in paths
+  `/.provider/<domain>/<names>`; a listing calls `provider.enumerate`, opening a file calls `provider.fetch` into
+  `~/.cache/bifrost/providers/...` (placeholders are downloaded on open) and then opens the local copy.
+- **Gaps.** No sandbox for the extension process (the sandbox does not bind the socket directory); no scene presentation
+  (`remote_view` and `ExtensionKit` host views); provider folders are read-only in Files and do not refresh on
+  `signalEnumerator`; no cloud mark on placeholders; the domain list is read once per Files launch; no provider app ships yet;
+  FileProviderUI actions are not hosted. Host tests only, not run on Midget.
+
+
+### Public framework settle wave (slice o06, wave 13, 2026-10-17)
+
+- **USB host transport (`bifrost_core::usb_host`, `bifrost_app::usb_device::UsbHostDevice`)**: opens a `/dev/bus/usb` node, reads the
+  cached descriptors, claims interfaces, selects configuration and alternate setting, and moves control, bulk and interrupt
+  transfers; `list_nodes` lists devices from sysfs. Isochronous transfers need an URB queue and are not in it. A sandboxed app
+  reaches only the nodes its sandbox binds, and none is bound for apps yet (owner decision open). Parity row: IOUSBHost.
+- **PTP cameras (`bifrost_core::ptp`, `bifrost_app::image_capture`)**: the Picture Transfer Protocol (container codec, DeviceInfo and
+  ObjectInfo datasets, a session with list, download, thumbnail, delete, capture, battery, clock), a USB transport, and
+  `MemoryCamera` for tests. `ImageCapture` fills the `camera_device` model from it. Scanners stay the `scan_job` model (SANE
+  transport not wired). Parity row: ImageCaptureCore.
+- **Network connection (`bifrost_app::network_stream`, `avahi_browse`)**: `NetworkStream` opens the socket behind a `Connection` (TCP
+  with no-delay, keepalive and connect timeout, TLS through `tls_client`, UDP, a local path). `avahi_browse::browse` fills a
+  `network_browser::Browser` from the local Avahi daemon. QUIC and custom framers are not built. Parity row: Network.
+- **Packet tunnel host (`bifrost_core::tun_device`, `bifrost_app::packet_tunnel`)**: a Linux tun interface that moves IP packets, the `ip`
+  commands that address it, and the full-tunnel and split-tunnel route plan (the server and excluded networks stay on the
+  uplink). IKEv2 and IPsec negotiation are not in tree. Parity row: NetworkExtension.
+- **Audio scene (`bifrost_app::audio_scene`)**: the OpenAL-shaped context (buffers, sources, listener, mixer to stereo) over
+  `positional_audio`. Doppler and multichannel buffers are not built. Parity row: OpenAL.
+- **Link metadata fetch (`bifrost_app::link_fetch`)**: the request behind `LPMetadataProvider`. Parity row: LinkPresentation.
+- **Map snapshots (`bifrost_app::map_snapshotter`)**: tiles from a `TileSource` (`TileDirectory` reads the Maps app's tile cache layout),
+  routes and pins composed into an image. Parity row: MapKit.
+- **PC/SC (`bifrost_app::pcsc`)**: a client over `libpcsclite` (context, readers, reader states mapped to the slot manager, connect,
+  transmit); `pcscd.socket` is now enabled by the installer. Parity row: PCSC.
+- **Video analyzer (`bifrost_ui::video_analyzer`)**: measures decoded frames (luma histogram, motion) and answers highlight segments
+  and the key frame with no model. Face detection still needs an open model. Parity row: MediaIntelligence.
+- **GPU and core re-exports**: `bifrost_app::gpu` is `bifrost_gpu`, and the core models the system frameworks hand to apps (RFCOMM,
+  SDP, OBEX, Matter, GeoJSON, code requirements, surface registry, serial lines and others) are re-exported from `bifrost_app`.
+- **Left open this wave**: Matter (the secure channel and commissioning transports are a whole engine) and MediaIntelligence (no
+  open face model). MatterSupport is n/a (an ecosystem app extension point).

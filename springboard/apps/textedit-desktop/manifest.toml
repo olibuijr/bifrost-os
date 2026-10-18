@@ -1,6 +1,6 @@
 id = "is.olibuijr.textedit.desktop"
 name = "Text Editor"
-version = "1.6.2"
+version = "1.11.0"
 exec = "bifrost-textedit"
 icon = "icon.png"
 min_shell = "0.4.84"
@@ -9,4 +9,19 @@ category = "Productivity"
 kind = "system-app"
 architecture = "x86_64-linux"
 permissions = ["documents"]
+package_types = ["rtfd"]
+handles = ["public.rtfd:default"]
 window = "full-size"
+help = "help"
+
+[[service]]
+title = "New Window Containing Selection"
+send_types = ["public.utf8-plain-text"]
+return_types = []
+method = "new_window_with_text"
+
+[[service]]
+title = "Open Selected File"
+send_types = ["bifrost.file-path-text"]
+return_types = []
+method = "open_selected_file"

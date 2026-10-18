@@ -7,7 +7,10 @@
 //! `bifrost_render::rendering_intent`.
 
 pub use bifrost_render::colorspace::{Space, Transform};
+pub use bifrost_render::cg::color::RenderingIntent;
 pub use bifrost_render::icc::{IccError, MatrixShaper, Profile, Vcgt};
+pub use bifrost_render::icc_builtin::Builtin;
+use bifrost_render::icc_transform::{Conversion, Model};
 
 /// Why a profile could not be used.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -18,6 +21,40 @@ pub enum ColorError {
     NotMatrixShaper,
     /// The profile has no video card gamma table.
     NoGammaTable,
+    /// The profile's conversion model could not be read (a colour space other than RGB or grey, or no tables).
+    Model(String),
+}
+
+/// Converts colours from one ICC profile into another under a rendering intent: the profile-to-profile transform
+/// (`ColorSyncTransform`). Matrix-shaper and lookup-table RGB profiles, and grey profiles, are accepted on both sides.
+#[derive(Clone, Debug)]
+pub struct ProfileToProfile {
+    conversion: Conversion,
+}
+
+impl ProfileToProfile {
+    /// Prepares the conversion from the `src` profile bytes to the `dst` profile bytes.
+    pub fn open(
+        src: &[u8],
+        dst: &[u8],
+        intent: RenderingIntent,
+        black_point_compensation: bool,
+    ) -> Result<Self, ColorError> {
+        let src = Model::from_icc(src).map_err(ColorError::Model)?;
+        let dst = Model::from_icc(dst).map_err(ColorError::Model)?;
+        Ok(ProfileToProfile { conversion: Conversion::new(src, dst, intent, black_point_compensation) })
+    }
+
+    /// Converts one encoded colour (nominally 0..=1). `None` when a profile cannot take the colour.
+    pub fn apply(&self, rgb: [f64; 3]) -> Option<[f64; 3]> {
+        self.conversion.apply(rgb)
+    }
+
+    /// Converts one 8-bit colour. `None` when a profile cannot take the colour.
+    pub fn apply_u8(&self, rgb: [u8; 3]) -> Option<[u8; 3]> {
+        let out = self.apply(rgb.map(|c| c as f64 / 255.0))?;
+        Some(out.map(|c| (c.clamp(0.0, 1.0) * 255.0).round() as u8))
+    }
 }
 
 /// Converts colours from an RGB profile into a working space.
@@ -77,5 +114,40 @@ mod tests {
         data[36..40].copy_from_slice(b"acsp");
         // Header and an empty tag table: the table count at 128 is zero, so there is no vcgt tag.
         assert_eq!(gamma_ramps(&data, 4), Err(ColorError::NoGammaTable));
+    }
+
+    #[test]
+    fn srgb_to_srgb_is_the_identity_within_rounding() {
+        let srgb = Builtin::Srgb.bytes();
+        let t = ProfileToProfile::open(&srgb, &srgb, RenderingIntent::RelativeColorimetric, false).unwrap();
+        let out = t.apply([0.2, 0.5, 0.8]).unwrap();
+        for (a, b) in out.iter().zip([0.2, 0.5, 0.8]) {
+            assert!((a - b).abs() < 0.005, "{out:?}");
+        }
+        assert_eq!(t.apply_u8([128, 64, 200]), Some([128, 64, 200]));
+    }
+
+    #[test]
+    fn a_grey_source_converts_to_neutral_rgb() {
+        let grey = Builtin::Gray22.bytes();
+        let srgb = Builtin::Srgb.bytes();
+        let t = ProfileToProfile::open(&grey, &srgb, RenderingIntent::Perceptual, true).unwrap();
+        let out = t.apply([0.5, 0.5, 0.5]).unwrap();
+        assert!((out[0] - out[1]).abs() < 0.01 && (out[1] - out[2]).abs() < 0.01, "{out:?}");
+    }
+
+    #[test]
+    fn a_profile_that_cannot_be_read_is_refused_on_either_side() {
+        let srgb = Builtin::Srgb.bytes();
+        let mut bad = vec![0u8; 200];
+        bad[0..4].copy_from_slice(&200u32.to_be_bytes());
+        assert!(matches!(
+            ProfileToProfile::open(&bad, &srgb, RenderingIntent::Default, false),
+            Err(ColorError::Model(_))
+        ));
+        assert!(matches!(
+            ProfileToProfile::open(&srgb, &bad, RenderingIntent::Default, false),
+            Err(ColorError::Model(_))
+        ));
     }
 }

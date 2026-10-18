@@ -8,13 +8,23 @@
 //! * `expire {id, at}` sets the Unix time (seconds) after which the item is dropped; `at: null` clears it. Answers
 //!   true when the app has an item with that identifier.
 //! * `language {text}` answers the BCP 47 code of the text's dominant language, or null when none is recognisable.
+//! * `index {items}` indexes items into the default index, `items` as `{id, domain, title, desc, keywords, thumb, url,
+//!   expires}`; answers `{stored: n}`. The SDK waits for this answer to acknowledge a batch.
+//! * `index_named {index, protection, items}` indexes items into the named index `index` of the app (its protection
+//!   class is `protection`, or null); answers the count sent. `items` are `{id, domain, title, desc, keywords, public,
+//!   expires}`.
+//! * `delete_named {index, kind, values}` deletes by `kind` "ids", "domains" or "all"; `delete_named_index {index}`
+//!   removes the whole index. Answers true.
+//! * `search_named {index, query, limit}` answers `[{id, domain}]` for the app's own named index.
 //!
 //! Expired items are dropped on the shell tick (at most once a second) and before every search, so an expired item
 //! never shows in the Search panel.
 use super::{Event, Shell, SystemService};
 use crate::shell::spotindex;
 use bifrost_core::json::Json;
+use bifrost_proto::quicksearch::{DELETE_ALL, DELETE_DOMAINS, DELETE_IDS};
 use bifrost_ui::language::dominant_language;
+use bifrost_ui::searchindex::{IndexDescription, ProtectionClass};
 
 /// The most results one `search` call returns.
 pub const MAX_LIMIT: u64 = 50;
@@ -58,6 +68,50 @@ impl SystemService for SearchRanking {
             "language" => {
                 let text = params.get("text").and_then(Json::as_str).ok_or("language needs a text string")?;
                 Ok(dominant_language(text).map_or(Json::Null, |l| Json::Str(l.code().into())))
+            }
+            "index" => {
+                // the acknowledged form of indexSearchableItems: the reply is the count stored, or an error the SDK
+                // reports as remoteConnectionError
+                let list = params.get("items").and_then(Json::as_array).ok_or("index needs an items list")?;
+                let items = spotindex::parse_items(list);
+                let stored = items.len();
+                spotindex::index_items(app_id, items);
+                Ok(Json::Obj(vec![("stored".into(), Json::Num(stored as f64))]))
+            }
+            "index_named" => {
+                let index = params.get("index").and_then(Json::as_str).ok_or("index_named needs an index name")?;
+                let protection = params.get("protection").and_then(Json::as_str).and_then(ProtectionClass::from_raw);
+                let list = params.get("items").and_then(Json::as_array).ok_or("index_named needs an items list")?;
+                let desc = IndexDescription { name: index.to_string(), protection_class: protection };
+                let items = spotindex::parse_named_items(list);
+                let count = items.len();
+                spotindex::index_named(app_id, &desc, items).map_err(|e| format!("bad index name: {e:?}"))?;
+                Ok(Json::Num(count as f64))
+            }
+            "delete_named" => {
+                let index = params.get("index").and_then(Json::as_str).ok_or("delete_named needs an index name")?;
+                let kind = match params.get("kind").and_then(Json::as_str) {
+                    Some("ids") => DELETE_IDS,
+                    Some("domains") => DELETE_DOMAINS,
+                    Some("all") => DELETE_ALL,
+                    _ => return Err("delete_named needs kind ids, domains or all".into()),
+                };
+                let values: Vec<&str> = params.get("values").and_then(Json::as_array).map(|a| a.iter().filter_map(Json::as_str).collect()).unwrap_or_default();
+                spotindex::delete_named(app_id, index, kind, &values);
+                Ok(Json::Bool(true))
+            }
+            "delete_named_index" => {
+                let index = params.get("index").and_then(Json::as_str).ok_or("delete_named_index needs an index name")?;
+                Ok(Json::Bool(spotindex::delete_named_index(app_id, index)))
+            }
+            "search_named" => {
+                let index = params.get("index").and_then(Json::as_str).ok_or("search_named needs an index name")?;
+                let query = params.get("query").and_then(Json::as_str).ok_or("search_named needs a query string")?;
+                let limit = params.get("limit").and_then(Json::as_u64).unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT) as usize;
+                let hits = spotindex::search_named(app_id, index, query, limit).map_err(|e| format!("query refused: {e:?}"))?;
+                Ok(Json::Arr(
+                    hits.into_iter().map(|h| Json::Obj(vec![("id".into(), Json::Str(h.unique_identifier)), ("domain".into(), Json::Str(h.domain_identifier))])).collect(),
+                ))
             }
             _ => Err(format!("search-index has no method {method}")),
         }

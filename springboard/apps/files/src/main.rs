@@ -8,6 +8,7 @@ use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::controls::{Controls, Node, Role, Rect, TextField};
 use bifrost_app::proto::{CHORD_ALT, CHORD_CTRL, CHORD_META, CHORD_SHIFT};
 use bifrost_app::{Command, Commands, App, Ctx, Input, ContextItem, KeyInput, TouchKind};
+use bifrost_app::app_windows::WindowId;
 use bifrost_app::kit::pack;
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::pathbar::Segment;
@@ -55,6 +56,7 @@ mod ops;
 mod pathbar;
 mod perf;
 mod peek;
+mod provider;
 mod search;
 mod smart;
 mod server;
@@ -62,11 +64,14 @@ mod sidebar;
 mod statusbar;
 mod tabs;
 mod empty_trash;
+mod extensions;
 mod system;
 mod toolbar;
 mod undo;
 mod views;
 mod window;
+mod windows;
+use extensions::*;
 use go::*;
 use info::*;
 use openwith::*;
@@ -180,6 +185,11 @@ struct Files {
     dnd: dragout::DragOut,
     /// Service calls (preview panel, pasteboard, search index, Dock progress) and the replies they wait for.
     sys: SystemState,
+    /// The windows opened with New Window (⌘N), in the order they were opened. The main window is `self`.
+    windows: Vec<windows::ExtraWindow>,
+    /// File-manager sync extensions: apps that badge items and add menu items for the folders they declare. A cell,
+    /// because drawing asks for the badges.
+    ext: std::cell::RefCell<Extensions>,
 }
 fn home() -> PathBuf {
     let account = std::fs::read_to_string("/var/lib/springboard/account").unwrap_or_default();
@@ -211,6 +221,7 @@ impl Files {
         }
         let tag_index = TagIndex::load(&sidecar_path(&home));
         let smart = smart::load(&home);
+        let ext = std::cell::RefCell::new(Extensions::discover(&springboard::shell::apphost::root(), &home, &provider::shared_host(), "is.olibuijr.files.desktop"));
         let mut f = Self {
             path: home.clone(),
             tabs: tabs::TabStrip::new(tabs::TabState { path: home.clone(), history: vec![], at: 0 }),
@@ -269,6 +280,8 @@ impl Files {
             labels: new_labels(),
             row_text: Default::default(),
             sys: SystemState::default(),
+            windows: Vec::new(),
+            ext,
         };
         // a folder given on the command line opens there (Show in Files)
         let start = std::env::args().nth(1).map(PathBuf::from).filter(|p| p.is_dir()).unwrap_or_else(|| f.home.clone());
@@ -279,6 +292,19 @@ impl Files {
 impl App for Files {
     fn id(&self) -> &str {
         "is.olibuijr.files.desktop"
+    }
+    fn main_menu(&self, _ctx: &Ctx) -> Vec<bifrost_app::AppMenu> {
+        // File > Quick Look (the same panel as the context menu's Preview): the shell merges an app menu titled File
+        // into its own File menu, and the item needs a selection
+        let quick_look = bifrost_app::AppMenuItem::new(MENU_QUICK_LOOK, "Quick Look").enabled(!self.selected_paths().is_empty());
+        vec![bifrost_app::AppMenu { title: "File".into(), items: vec![quick_look] }]
+    }
+    fn menu_action(&mut self, _ctx: &Ctx, id: u32) -> bool {
+        if id != MENU_QUICK_LOOK {
+            return false;
+        }
+        self.quick_look();
+        true
     }
     fn configure(&mut self, ctx: &Ctx) {
         self.painted_state.clear();
@@ -347,10 +373,36 @@ impl App for Files {
     fn document(&mut self, ctx: &Ctx, ev: bifrost_app::DocumentEvent) -> bool {
         self.drag_out_document(ctx, ev)
     }
+    fn window_event(&mut self, ctx: &Ctx, window: WindowId, ev: Input) -> bool {
+        if window.is_main() {
+            return self.event(ctx, ev);
+        }
+        // the keyboard, the menus and the clipboard belong to the main window; a New Window takes its touches
+        let Some(e) = self.windows.iter_mut().find(|e| e.id == window) else { return false };
+        match ev {
+            Input::Touch { .. } => e.files.event(ctx, ev),
+            _ => false,
+        }
+    }
+    fn draw_window(&mut self, ctx: &Ctx, window: WindowId, s: &mut Surface, t: f64) -> Damage {
+        if window.is_main() {
+            return self.draw(ctx, s, t);
+        }
+        match self.windows.iter_mut().find(|e| e.id == window) {
+            Some(e) => e.files.draw(ctx, s, t),
+            None => Damage::new(s.w, s.h),
+        }
+    }
+    fn window_closed(&mut self, _ctx: &Ctx, window: WindowId) -> bool {
+        self.close_extra(window)
+    }
     fn tick(&mut self, ctx: &Ctx, _: f64) -> bool {
         self.request_thumbnails(ctx);
         let mut changed = self.poll_search();
         if self.poll_server() {
+            changed = true;
+        }
+        if self.take_eject_notice() {
             changed = true;
         }
         if self.spring_tick() {
@@ -364,6 +416,10 @@ impl App for Files {
         }
         if let Some(folder) = handoff::take_request(&ctx.data_dir) {
             self.navigate(folder, true);
+            changed = true;
+        }
+        // a provider thread left a footer message (a download failed, or the file is on its way to its app)
+        if self.take_provider_notice() {
             changed = true;
         }
         // a folder's batches land as the worker reads them; the final listing replaces them and ends the load
@@ -431,6 +487,10 @@ impl App for Files {
             changed = true;
         }
         self.ctl_tick();
+        // a badge an extension answered with is drawn on this frame
+        if self.poll_extensions() {
+            changed = true;
+        }
         self.flush_services(ctx);
         if changed {
             self.revision += 1;
@@ -471,6 +531,8 @@ impl Files {
         }
         match input {
             Input::Context{x,y}=>self.context_menu_at(ctx,x,y),
+            // New Window (⌘N) and the empty-area menu's New Window need the ctx to open the window
+            Input::ContextAction(menus::MENU_NEW_WINDOW) => return self.new_window(ctx),
             Input::ContextAction(id) => {
                 if !self.context_action(id) {
                     return false;
@@ -624,6 +686,9 @@ impl Files {
                     self.fx.copy_drag = true; // Option during a drag: drop copies
                     self.revision += 1;
                 }
+                if key == 49 && mods & CHORD_META != 0 && mods & (CHORD_SHIFT | CHORD_ALT) == 0 && self.naming.is_none() && !self.searching {
+                    return self.new_window(ctx); // ⌘N: File > New Window
+                }
                 if !self.chord(key, mods) {
                     return false;
                 }
@@ -723,14 +788,14 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn fixture(rows: Vec<Entry>) -> Files {
+    pub(crate) fn fixture(rows: Vec<Entry>) -> Files {
         Files {
-            dnd: Default::default(), home:"/fixture".into(), path:"/fixture".into(), history:vec![], at:0,
+            dnd: Default::default(), windows: Vec::new(), home:"/fixture".into(), path:"/fixture".into(), history:vec![], at:0,
             tabs: tabs::TabStrip::new(tabs::TabState { path: "/fixture".into(), history: vec![], at: 0 }),
             listing: rows.clone(), rows, hits: None, search: None, selection:vec![], select_mode:false, sidebar_hidden:false, status_bar:false, title_w:120., path_segs:vec![], loading:false, error:None, job:None,grid:true,sort:Sort::Name,
             query:TextField::new(),controls:Controls::default(),searching:false,scroll:0.,down:None,last_click:None,preview:None,
             w:960.,h:630.,painted_state:String::new(),painted_selection:vec![],revision:0,
-            show_hidden:false,clip:None,naming:None,work:None,notice:None,info:None,tag_index:TagIndex::default(),tag_panel:false,smart:vec![],open_with:None,dragging:false,drop_target:None,undo:vec![],columns:false,ancestors:vec![],watch:None,journal:bifrost_app::fswatch::EventJournal::new(JOURNAL_CAP),journal_seen:0,fx:FileManagerState::default(),vo:ViewOpts::default(),data_dir:None,labels:new_labels(),row_text:Default::default(),sys:SystemState::default(),
+            show_hidden:false,clip:None,naming:None,work:None,notice:None,info:None,tag_index:TagIndex::default(),tag_panel:false,smart:vec![],open_with:None,dragging:false,drop_target:None,undo:vec![],columns:false,ancestors:vec![],watch:None,journal:bifrost_app::fswatch::EventJournal::new(JOURNAL_CAP),journal_seen:0,fx:FileManagerState::default(),vo:ViewOpts::default(),data_dir:None,labels:new_labels(),row_text:Default::default(),sys:SystemState::default(),ext:Default::default(),
         }
     }
     fn folder(name: &str) -> Entry {
@@ -744,7 +809,7 @@ mod tests {
     }
     #[test]
     fn partial_selection_matches_full_repaint_in_both_views() {
-        let font = springboard::font::Font::parse(include_bytes!("../../../../bifrost-ref/fonts/SFUI.ttf")).unwrap();
+        let font = springboard::font::Font::parse(Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice())).unwrap();
         let ui = Ui::new(font,1.25);
         let mut files = fixture((0..12).map(|i| folder(&format!("Folder {i}"))).collect());
         let (w,h)=(1200,788);

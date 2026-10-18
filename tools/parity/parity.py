@@ -31,6 +31,8 @@ frameworks have their own files.
   themes [--k N]                 cluster Gap rows across frameworks into work themes -> themes.json
   verify os-cli plan|run|closures
                                  assess the os/cli rows and verify each tool on Midget (tools/parity/os_cli.py)
+  os-verify plan|run|promote     run the checks of the OS rows marked ready (file, cmd, unit, test) and promote the
+                                 passing rows to parity (tools/parity/os_verify.py); `check` rejects malformed ready/checks
   apps [--gaps APP] [--json]     per-app feature inventories (docs/parity-matrix/apps/<slug>.json): one line per app sorted by
                                  coverage ascending (app, BifrOSt app, features, parity/partial/gap/n/a counts, coverage %);
                                  --gaps APP lists that app's gap and partial rows with their wire text (what to implement
@@ -57,7 +59,10 @@ import shutil
 import sys
 import urllib.request
 
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import os_verify  # noqa: E402  (schema of the OS rows' ready and checks fields; also the os-verify subcommand)
+
+ROOT =os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 BASE = os.path.join(ROOT, "docs", "parity-matrix")
 DATA = os.path.join(BASE, "data")
 INDEX = os.path.join(BASE, "index.json")
@@ -338,6 +343,7 @@ def os_check():
         for e in sh["entries"]:
             if e.get("status") not in OS_STATUSES:
                 problems.append(f"os/{sh['category']}/{sh['shard']}: {e['id']}: bad status {e.get('status')!r}")
+            problems += [f"os/{sh['category']}/{sh['shard']}: {p}" for p in os_verify.validate_entry(e)]
             for part in re.split(r"[;,]\s*", e.get("bifrost", "") or ""):
                 m = re.match(r"(springboard/\S+|tools/\S+|packaging/\S+|docs/\S+)", part.strip())
                 if m and not os.path.exists(os.path.join(root, m.group(1).split(":")[0].rstrip(")."))):
@@ -972,6 +978,8 @@ def main(argv=None):
     if argv[:1] == ["verify"]:
         import verify
         return verify.main(argv[1:])
+    if argv[:1] == ["os-verify"]:
+        sys.exit(os_verify.main(argv[1:]))  # exit status matters: a failing check run must fail the caller
     p = argparse.ArgumentParser(prog="bifrost pc parity", description=(__doc__ or "").split("\n\n")[0])
     sub = p.add_subparsers(dest="cmd", required=True)
     def platform_arg(sp):

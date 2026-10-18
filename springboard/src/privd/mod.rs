@@ -15,11 +15,13 @@ use std::io::{self, Read, Write};
 pub mod accounts;
 pub mod auth;
 pub mod disk;
+pub mod endpoint_security;
 pub mod gate;
 pub mod loopdev;
 pub mod methods;
 pub mod pam;
 pub mod proto;
+pub mod screen_sharing;
 pub mod server;
 
 pub const SOCK: &str = "/run/bifrost/privd.sock";
@@ -29,7 +31,17 @@ pub const PROTO: u32 = 1;
 /// Root-owned state (account file, apps/, boot_attempts).
 pub const STATE_DIR: &str = "/var/lib/springboard";
 
-/// A failed call: one of unauthorized, locked, bad_params, wrong_password, locked_out, no_password, internal.
+/// The elevation scope of software installs: `package.install_file` and `package.install_repo` each spend one grant of
+/// this scope (see `auth.elevate`).
+pub const SCOPE_PACKAGE_INSTALL: &str = "package.install";
+
+/// The elevation scope a method needs a fresh grant of, if any. A grant comes from `auth.elevate`, which re-checks the
+/// administrator's password, and is spent by exactly one call.
+pub fn elevation_scope(method: &str) -> Option<&'static str> {
+    matches!(method, "package.install_file" | "package.install_repo").then_some(SCOPE_PACKAGE_INSTALL)
+}
+
+/// A failed call: one of unauthorized, locked, bad_params, wrong_password, locked_out, no_password, elevation_required, internal.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PErr {
     pub code: &'static str,
@@ -72,6 +84,12 @@ pub trait Gate: Send + Sync {
     /// token but only from the console shell; a set password needs the token and the old password; a locked
     /// hash is never changed from here.
     fn set_password(&self, token: Option<&str>, peer: Peer, old: &str, new: &str) -> Result<(), PErr>;
+    /// `auth.elevate`: re-checks the administrator's password for a session that is already Unlocked (`token`) and
+    /// returns a single-use grant for `scope`. The session token does not change.
+    fn elevate(&self, token: &str, scope: &str, password: &str) -> Result<String, PErr>;
+    /// Spends the grant a call of `scope` presented (`None` when it presented none). `elevation_required` when it is
+    /// missing, spent, expired or for another scope.
+    fn consume_grant(&self, token: &str, scope: &str, grant: Option<&str>) -> Result<(), PErr>;
 }
 
 /// The gate used when no login backend is installed: nothing authenticates.
@@ -90,6 +108,12 @@ impl Gate for ClosedGate {
     fn lock(&self) {}
     fn set_password(&self, _: Option<&str>, _: Peer, _: &str, _: &str) -> Result<(), PErr> {
         Err(PErr::internal("no login backend"))
+    }
+    fn elevate(&self, _: &str, _: &str, _: &str) -> Result<String, PErr> {
+        Err(PErr::new("locked", "session is locked"))
+    }
+    fn consume_grant(&self, _: &str, _: &str, _: Option<&str>) -> Result<(), PErr> {
+        Err(PErr::new("locked", "session is locked"))
     }
 }
 

@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.7.1
+
+- Upstream wordcraft v0.7.0.
+  ## What's Changed
+  * Font list previews no longer keep every family in memory (#848) by @dkhlapov in https://github.com/storytold/wordcraft/pull/874
+  * Layout: blank pages put sections on the right side, and paragraph spacing is the larger of after and before (#733, rebased) by @echelon in https://github.com/storytold/wordcraft/pull/964
+  * Insert › Picture takes WMF and EMF metafiles (#802) by @dkhlapov in https://github.com/storytold/wordcraft/pull/869
+  * Wingdings, Webdings and Symbol text draws as Unicode symbols (#776) by @dkhlapov in https://github.com/storytold/wordcraft/pull/876
+
 ## 0.7.0
 
 - Upstream wordcraft v0.7.0.

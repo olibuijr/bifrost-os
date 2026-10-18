@@ -12,7 +12,7 @@
       "apple": "SBApplication init(bundleIdentifier:), init(processIdentifier:), init(url:); isRunning",
       "bifrost": "springboard/sdk/src/workspace.rs (running_applications, frontmost_application, url_for_application), springboard/sdk/src/control.rs (per-app socket), springboard/sdk/src/script_target.rs (attach, socket_path)",
       "status": "partial",
-      "note": "attach resolves a bundle id, process id or bundle URL against a running-app list (first match wins, trailing slashes ignored) and socket_path gives the per-app control socket; both are tested headless in springboard/sdk/tests/parity_sdk-complete-29.rs. Gap: the shell's running list carries only app ids, so attaching by process id or URL needs the shell to report those, and there is no handle object that sends calls to the attached app; the live check needs the lab machine."
+      "note": "attach resolves a bundle id, process id or bundle URL against a running-app list (first match wins, trailing slashes ignored) and socket_path gives the per-app control socket; both are tested headless in springboard/sdk/tests/parity_sdk-complete-29.rs. Gap: the shell's running list carries only app ids, so attaching by process id or URL needs the shell to report those, and there is no handle object that sends calls to the attached app; the live check needs the lab machine. Refreshed 2026-10-17: the property and element model and the last error with an error handler are in bifrost_ui::scripting (springboard/ui/src/scripting.rs: get, set, elements, last_error, on_error; tests), re-exported by the SDK as sdk scripting."
     },
     {
       "feature": "Launch and activate a target app",
@@ -33,7 +33,7 @@
       "apple": "SBObject property(withCode:), property(with:code:), elementArray(withCode:), setTo(_:), get()",
       "bifrost": "springboard/sdk/src/control.rs (method dispatch via handle(method, params)); springboard/apps/notes-desktop/CHANGELOG.md (notes.list, notes.get)",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 8 tests. Apps expose named read methods, such as notes.list and notes.get. Nothing here sets properties. No generic object graph exists, and no property code is addressed through a shared model."
+      "note": "verified on Midget 0.7.25 by 8 tests. Apps expose named read methods, such as notes.list and notes.get. Nothing here sets properties. No generic object graph exists, and no property code is addressed through a shared model. Built 2026-10-17: the scripting model (Target: get and set by path, element lookup) is re-exported to apps as scripting in springboard/sdk/src/lib.rs; tests in bifrost_ui scripting::tests. Not yet used by a running app."
     },
     {
       "feature": "Element arrays with lookup by name, id or index, and per-element filtering",
@@ -47,7 +47,7 @@
       "apple": "SBObject lastError(); SBApplicationDelegate eventDidFail(_:withError:)",
       "bifrost": "springboard/sdk/src/control.rs (RpcError::new, with_reason, JSON-RPC error reply in handle_line)",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 8 tests. Callers get a typed error code, message and reason for each call. The last-error state and the failure callback are not offered, so a caller cannot ask an object for its last error."
+      "note": "verified on Midget 0.7.25 by 8 tests. Callers get a typed error code, message and reason for each call. The last-error state and the failure callback are not offered, so a caller cannot ask an object for its last error. Built 2026-10-17: Target keeps last_error and an on_error delegate, exposed through the same re-export; tests in bifrost_ui scripting::tests."
     },
     {
       "feature": "Reply timeout and asynchronous replies",
@@ -65,9 +65,7 @@
     }
   ],
   "gaps": [
-    "No generic scripting dictionary (sdef equivalent) and no generated client proxies; callers depend on each app's method list at runtime.",
-    "No generic property and element model: apps cannot set properties through a shared API, and element lookup is limited to typed entity queries.",
-    "No per-object or per-application last-error state and no failure delegate for callers.",
+    "Scripting dictionaries are declared in manifest.toml ([[script.command]], [[script.class]]), not as sdef files, and there are no generated client proxies; the tell-block language resolves commands through them (springboard/core/src/script/dictionary.rs).",
     "The control socket accepts only the owning user (SO_PEERCRED), so one app cannot script another app that runs under a different account.",
     "No explicit activate or launch-flag options when a caller starts an app; open_with only starts an installed app by id."
   ]

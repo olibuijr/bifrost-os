@@ -53,6 +53,16 @@ pub struct Prefs {
     pub all_headers: bool,
     /// Unread messages show their sender in bold, and read ones in regular type (Mail Settings).
     pub bold_unread: bool,
+    /// Remote content (images, tracking pixels included) may load in every message. Off: it loads only in the messages the
+    /// person allows with Load Remote Content.
+    pub remote_content: bool,
+    /// A reply's signature goes above the quoted text (before the "On ..., wrote:" line) instead of at the end.
+    pub signature_above_quote: bool,
+    /// The newest messages' subjects and senders are indexed for Core Search (never the bodies). Off removes them.
+    pub show_in_search: bool,
+    /// The people in the messages that are read (sender and other recipients, never the person's own addresses) are
+    /// donated to Contacts, which offers the ones not in the book as suggested contacts. Off donates nobody.
+    pub donate_people: bool,
 }
 
 impl Default for Prefs {
@@ -72,6 +82,10 @@ impl Default for Prefs {
             plain_text: false,
             all_headers: false,
             bold_unread: true,
+            remote_content: false,
+            signature_above_quote: false,
+            show_in_search: true,
+            donate_people: true,
         }
     }
 }
@@ -173,6 +187,10 @@ impl Prefs {
             ("plain_text".into(), Json::Bool(self.plain_text)),
             ("all_headers".into(), Json::Bool(self.all_headers)),
             ("bold_unread".into(), Json::Bool(self.bold_unread)),
+            ("remote_content".into(), Json::Bool(self.remote_content)),
+            ("signature_above_quote".into(), Json::Bool(self.signature_above_quote)),
+            ("show_in_search".into(), Json::Bool(self.show_in_search)),
+            ("donate_people".into(), Json::Bool(self.donate_people)),
         ])
     }
 
@@ -189,6 +207,10 @@ impl Prefs {
             plain_text: flag_of(json, "plain_text", defaults.plain_text),
             all_headers: flag_of(json, "all_headers", defaults.all_headers),
             bold_unread: flag_of(json, "bold_unread", defaults.bold_unread),
+            remote_content: flag_of(json, "remote_content", defaults.remote_content),
+            signature_above_quote: flag_of(json, "signature_above_quote", defaults.signature_above_quote),
+            show_in_search: flag_of(json, "show_in_search", defaults.show_in_search),
+            donate_people: flag_of(json, "donate_people", defaults.donate_people),
             ..defaults
         };
         if let Some(Json::Obj(fields)) = json.get("signatures") {
@@ -323,6 +345,8 @@ mod tests {
         assert!(Prefs::from_json(&json::parse("{}").unwrap()).bold_unread, "a file from before the setting keeps bold");
         let off = Prefs::from_json(&json::parse(r#"{"bold_unread":false}"#).unwrap());
         assert!(!off.bold_unread);
+        assert!(!Prefs::default().remote_content, "remote content stays blocked by default");
+        assert!(!Prefs::default().signature_above_quote, "the signature goes at the end by default");
         assert_eq!(Prefs::from_json(&off.to_json()), off);
     }
 

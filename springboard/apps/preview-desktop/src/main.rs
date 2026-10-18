@@ -13,6 +13,7 @@ mod document;
 mod export;
 mod export_panel;
 mod find;
+mod forms;
 mod inspector;
 mod model;
 mod password;
@@ -27,9 +28,13 @@ mod signature;
 
 use bifrost_app::controls::{Node, Role};
 use bifrost_app::kit::{Damage, Surface, Ui};
+use bifrost_app::control::{RpcError, INTERNAL_ERROR, INVALID_PARAMS, METHOD_NOT_FOUND};
 use bifrost_app::proto::DocMode;
+use bifrost_app::services::{is_viewable_path, ServiceCall};
 use bifrost_app::pasteboard::{NativePasteboard, PNG};
 use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, DocumentEvent, Input, KeyInput, OpenOptions, TouchKind};
+use bifrost_app::{screenshot, speech};
+use bifrost_core::json::Json;
 use canvas::{Action, Layout, Mode, PictureCache, Scene, Side, Tool};
 use document::Document;
 use export::Raster;
@@ -49,8 +54,17 @@ use std::time::{SystemTime, UNIX_EPOCH};
 const MENU_OPEN: u32 = 0x5001;
 const MENU_CLEAR_RECENTS: u32 = 0x5002;
 const MENU_RECENT: u32 = 0x5010;
+/// Pages > Insert: a page from another PDF, and a blank page, both placed after the shown page.
+const MENU_INSERT_FILE: u32 = 0x5003;
+const MENU_INSERT_BLANK: u32 = 0x5004;
 /// Tools > Insert Signature: one item per saved signature, from this id on.
 const MENU_SIGNATURE: u32 = 0x5100;
+/// Edit > Speech (speaks the selection, else the page) and File > Take Screenshot (selection, window, whole screen).
+const MENU_SPEAK_START: u32 = 0x5005;
+const MENU_SPEAK_STOP: u32 = 0x5006;
+const MENU_SHOT_SELECTION: u32 = 0x5007;
+const MENU_SHOT_WINDOW: u32 = 0x5008;
+const MENU_SHOT_SCREEN: u32 = 0x5009;
 /// The size a text box is dragged out to, as a share of the page, when a click places it.
 const TEXT_BOX: (f32, f32) = (0.3, 0.06);
 /// The width an inserted signature takes, as a share of the page.
@@ -153,11 +167,19 @@ struct Viewer {
     export_shown: bool,
     /// Whether the signature picker is shown on the right.
     signatures_shown: bool,
+    /// The screenshot request the shell has not answered yet.
+    shot_request: Option<u32>,
     export_format: export_panel::Format,
     /// A PDF that needs a password, and the password being typed for it.
     asking: Option<Ask>,
     /// The password a PDF was opened with this session, so it is not asked for again (Revert to Saved, Open Recent).
     password: Option<(PathBuf, Vec<u8>)>,
+    /// The display place a PDF goes at, while the open panel chooses the file to insert there.
+    insert_at: Option<usize>,
+    /// The file an insert writes, opened when the worker has written it.
+    inserted: Option<PathBuf>,
+    /// The form widget that the keyboard is typing into.
+    form_focus: Option<usize>,
 }
 
 impl Viewer {
@@ -203,9 +225,13 @@ impl Viewer {
             color_panel: false,
             export_shown: false,
             signatures_shown: false,
+            shot_request: None,
             export_format: export_panel::Format::Png,
             asking: None,
             password: None,
+            insert_at: None,
+            inserted: None,
+            form_focus: None,
         }
     }
 
@@ -371,7 +397,7 @@ impl Viewer {
         let path = doc.path.clone();
         if doc.is_pdf {
             let temp = self.saving_file(&path, "pdf");
-            let job = pdfmarks::save_job(path.clone(), temp, doc.order.clone(), doc.turns.clone(), doc.marks.clone(), self.author());
+            let job = pdfmarks::save_job(path.clone(), temp, doc.order.clone(), doc.turns.clone(), doc.marks.clone(), self.author(), pdfmarks::Insertion::None, doc.field_edits());
             if doc.send(job) {
                 self.pending_save = Some(path);
                 self.status = "Saving".into();
@@ -454,6 +480,43 @@ impl Viewer {
             }
             None => self.status = "The picture could not be copied.".into(),
         }
+    }
+
+    /// Edit > Speech > Start Speaking: the selected PDF text, else the shown page's text. The PDF worker reads both and
+    /// `finish_speak` starts the speech when they arrive. A picture has no text to speak.
+    fn speak(&mut self) -> bool {
+        let Some(doc) = &self.doc else { return false };
+        let Some(src) = doc.source_of(self.view.page) else { return false };
+        if !doc.is_pdf {
+            self.status = "There is no text to speak here.".into();
+            return true;
+        }
+        let band = self.selection_on_page().map(|sel| (sel.y, sel.y + sel.h));
+        let sent = doc.send(find::speech_job(src, band));
+        self.status = if sent { "Reading the text".into() } else { "The document is not open.".into() };
+        true
+    }
+
+    /// Speaks the text the worker read for `speak`: the selection when it has text, else the page.
+    fn finish_speak(&mut self, ctx: &Ctx, selected: &str, page: &str) {
+        match find::speech_text(selected, page) {
+            Some((text, what)) => {
+                speech::speak(ctx, &speech::Utterance::new(text));
+                self.status = format!("Speaking {what}");
+            }
+            None => self.status = "There is no text to speak here.".into(),
+        }
+    }
+
+    /// File > Take Screenshot: asks the shell's screenshot service. The shell answers the request, then sends the
+    /// picture's path as a `captured` event, and `service_event` opens it.
+    fn take_shot(&mut self, ctx: &Ctx, pick: screenshot::Pick) -> bool {
+        self.shot_request = Some(screenshot::take(ctx, pick));
+        self.status = match pick {
+            screenshot::Pick::Screen => "Taking a screenshot of the screen".into(),
+            _ => "Choose what to capture".into(),
+        };
+        true
     }
 
     /// Puts the text the worker copied on the clipboard.
@@ -581,7 +644,15 @@ impl Viewer {
 
     /// File > Open, Open Recent and Clear Menu. False when `id` is not one of those.
     fn open_menu(&mut self, ctx: &Ctx, id: u32) -> bool {
+        if id != MENU_INSERT_FILE {
+            self.insert_at = None;
+        }
         match id {
+            MENU_INSERT_FILE => {
+                self.insert_at = Some(self.view.page + 1);
+                self.show_insert_panel(ctx);
+            }
+            MENU_INSERT_BLANK => self.insert_blank(),
             MENU_OPEN => self.show_open_panel(ctx),
             MENU_CLEAR_RECENTS => {
                 self.recents.clear();
@@ -596,6 +667,115 @@ impl Viewer {
                     self.status = format!("{} is no longer there.", name_of(&path));
                 }
             }
+            _ => return false,
+        }
+        true
+    }
+
+    /// The file an insert writes: a copy of the document under the app's data folder, which is opened when it is done.
+    fn inserting_file(&self, path: &Path) -> PathBuf {
+        let dir = self.data_dir.join("insert");
+        let _ = std::fs::create_dir_all(&dir);
+        let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("document");
+        dir.join(format!("{stem}.pdf"))
+    }
+
+    /// Writes the document with `insertion` added to its pages, to the insert folder. The worker writes it, and the
+    /// new file is opened once it is written.
+    fn insert_pages(&mut self, insertion: pdfmarks::Insertion) {
+        self.stop_editing();
+        let Some(doc) = &self.doc else { return };
+        if !doc.is_pdf {
+            self.status = "Pages can only be inserted into a PDF.".into();
+            return;
+        }
+        let target = self.inserting_file(&doc.path);
+        let job = pdfmarks::save_job(
+            doc.path.clone(),
+            target.clone(),
+            doc.order.clone(),
+            doc.turns.clone(),
+            doc.marks.clone(),
+            self.author(),
+            insertion,
+            doc.field_edits(),
+        );
+        if doc.send(job) {
+            self.inserted = Some(target);
+            self.status = "Inserting".into();
+        } else {
+            self.status = "The document is not open.".into();
+        }
+    }
+
+    /// Pages > Insert > Blank Page: a blank page the size of the shown page, after it.
+    fn insert_blank(&mut self) {
+        let Some(src) = self.src() else { return };
+        let at = self.view.page + 1;
+        self.insert_pages(pdfmarks::Insertion::Blank { at, src });
+    }
+
+    /// The worker wrote the document with pages inserted: the new file is opened in place of the old one.
+    fn finish_insert(&mut self, result: Result<PathBuf, String>) {
+        self.inserted = None;
+        match result {
+            Ok(path) => {
+                self.after_open = Some(format!("Inserted pages into {}", name_of(&path)));
+                self.open_path(&path);
+            }
+            Err(e) => self.status = format!("Insert failed: {e}"),
+        }
+    }
+
+    /// Pages > Insert > Page from File: the open panel, offering PDFs.
+    fn show_insert_panel(&self, ctx: &Ctx) {
+        let options = OpenOptions { mode: DocMode::Read, title: "Insert".into(), filters: vec!["pdf".into()], ..Default::default() };
+        ctx.open_panel(&options);
+    }
+
+    /// The form widget under the canvas point (x, y) of the shown page, if there is one.
+    fn form_widget_at(&self, lay: &Layout, x: f32, y: f32) -> Option<usize> {
+        let doc = self.doc.as_ref()?;
+        let p = self.placed(lay)?;
+        let src = self.src()?;
+        let inside = x >= p.x as f32 && y >= p.y as f32 && x <= (p.x + p.w as i32) as f32 && y <= (p.y + p.h as i32) as f32;
+        if !inside {
+            return None;
+        }
+        doc.widget_at(src, canvas::to_source(&p, self.view.quarters, x, y))
+    }
+
+    /// A click on a form widget: a check box toggles, and a text field takes the keyboard.
+    fn click_widget(&mut self, widget: usize) {
+        let Some(doc) = &mut self.doc else { return };
+        let kind = match doc.widgets.get(widget) {
+            Some(w) => w.kind,
+            None => return,
+        };
+        match kind {
+            forms::Kind::Check => {
+                doc.toggle_field(widget);
+                self.form_focus = None;
+            }
+            forms::Kind::Text => self.form_focus = Some(widget),
+        }
+    }
+
+    /// The keyboard while a form text field has focus: typing adds to its text, Backspace removes, and Return or Escape
+    /// leaves the field. False for keys the field does not take.
+    fn key_form(&mut self, widget: usize, key: &KeyInput) -> bool {
+        let Some(doc) = &mut self.doc else { return false };
+        match key {
+            KeyInput::Text(text) => {
+                let next = format!("{}{}", doc.field_text(widget).unwrap_or(""), text);
+                doc.set_field_text(widget, &next);
+            }
+            KeyInput::Code(8) => {
+                let mut next = doc.field_text(widget).unwrap_or("").to_string();
+                next.pop();
+                doc.set_field_text(widget, &next);
+            }
+            KeyInput::Code(13) | KeyInput::Code(27) => self.form_focus = None,
             _ => return false,
         }
         true
@@ -636,13 +816,16 @@ impl Viewer {
         }
         let mut results = None;
         let mut saved = None;
+        let mut inserted = None;
         let mut copied = None;
+        let mut spoken = None;
         if let Some(doc) = &self.doc {
             let (arrived, replies) = doc.take_replies();
             changed |= arrived;
             for reply in replies {
                 match reply {
                     // the copy File > Save made is the one that replaces the document's file
+                    Reply::Written(result) if self.inserted.is_some() => inserted = Some(result),
                     Reply::Written(result) if self.pending_save.is_some() => saved = Some(result),
                     Reply::Written(result) => {
                         self.status = match result {
@@ -654,15 +837,22 @@ impl Viewer {
                     Reply::Printed(status) => self.status = status,
                     Reply::Found(query, hits) => results = Some((query, hits)),
                     Reply::Copied(text) => copied = Some(text),
+                    Reply::Spoken(selected, page) => spoken = Some((selected, page)),
                     _ => {}
                 }
             }
+        }
+        if let Some(result) = inserted {
+            self.finish_insert(result);
         }
         if let (Some(result), Some(original)) = (saved, self.pending_save.take()) {
             self.finish_save(original, result);
         }
         if let Some(text) = copied {
             self.finish_copy(ctx, text);
+        }
+        if let Some((selected, page)) = spoken {
+            self.finish_speak(ctx, &selected, &page);
         }
         if let Some((query, hits)) = results {
             self.show_results(query, hits);
@@ -1351,6 +1541,24 @@ impl Viewer {
         }
     }
 
+    /// Tools > Lift Subject: the picture becomes the subject of its plain backdrop, cropped and transparent outside it.
+    fn lift_subject(&mut self) {
+        self.stop_editing();
+        let Some(doc) = &mut self.doc else { return };
+        let Some(picture) = doc.picture_rc() else {
+            self.status = "Lift Subject works on pictures, not PDFs.".into();
+            return;
+        };
+        match pixels::lift_subject(&picture, pixels::TOLERANCE) {
+            Some(subject) => {
+                doc.replace_picture(Rc::new(subject));
+                self.selection = None;
+                self.status = "Subject lifted. Export as PNG to keep the transparency.".into();
+            }
+            None => self.status = "No subject stands out from the background.".into(),
+        }
+    }
+
     /// The Instant Alpha tool: the region of one colour around the point clicked becomes transparent.
     fn instant_alpha(&mut self, lay: &Layout, x: f32, y: f32) {
         let Some(placed) = self.placed(lay) else { return };
@@ -1416,6 +1624,7 @@ impl Viewer {
             Action::FlipHorizontal => self.flip(true),
             Action::FlipVertical => self.flip(false),
             Action::RemoveBackground => self.remove_background(),
+            Action::LiftSubject => self.lift_subject(),
             Action::MovePageUp | Action::MovePageDown => {
                 let delta = if action == Action::MovePageUp { -1 } else { 1 };
                 if let Some(doc) = &mut self.doc {
@@ -1527,7 +1736,7 @@ impl Viewer {
         let Some(doc) = &self.doc else { return };
         if doc.is_pdf {
             let target = printjob::scratch_file(&self.data_dir, &doc.path, "pdf");
-            let job = printjob::pdf_job(doc.path.clone(), target, doc.order.clone(), doc.turns.clone(), doc.marks.clone(), self.author());
+            let job = printjob::pdf_job(doc.path.clone(), target, doc.order.clone(), doc.turns.clone(), doc.marks.clone(), self.author(), doc.field_edits());
             self.status = if doc.send(job) { "Printing".into() } else { "The document is not open.".into() };
             return;
         }
@@ -1574,7 +1783,7 @@ impl Viewer {
             return;
         }
         let target = export::target(&doc.path, "pdf");
-        let job = pdfmarks::save_job(doc.path.clone(), target, doc.order.clone(), doc.turns.clone(), doc.marks.clone(), self.author());
+        let job = pdfmarks::save_job(doc.path.clone(), target, doc.order.clone(), doc.turns.clone(), doc.marks.clone(), self.author(), pdfmarks::Insertion::None, doc.field_edits());
         self.status = if doc.send(job) { "Saving the PDF".into() } else { "The document is not open.".into() };
     }
 
@@ -1675,6 +1884,14 @@ impl Viewer {
             return false;
         }
         self.stop_editing();
+        // a click on a form field fills it, unless a markup tool is chosen
+        if self.tool == Tool::Pan && self.mode != Mode::Contact {
+            if let Some(widget) = self.form_widget_at(lay, x, y) {
+                self.click_widget(widget);
+                return true;
+            }
+        }
+        self.form_focus = None;
         if self.mode == Mode::Contact {
             self.gesture = Some(Gesture::Sheet { last: y, start: (x, y) });
             return true;
@@ -1922,6 +2139,11 @@ impl Viewer {
             self.mode = Mode::Page;
             return true;
         }
+        if let Some(widget) = self.form_focus {
+            if self.key_form(widget, &key) {
+                return true;
+            }
+        }
         match &key {
             KeyInput::Text(text) => {
                 let Some(i) = self.editing else { return false };
@@ -2040,6 +2262,30 @@ fn item_labelled(action: Action, label: &str, enabled: bool, checked: bool) -> A
 }
 
 impl App for Viewer {
+    fn rpc_methods(&self) -> Vec<&'static str> {
+        vec!["service.open_images"]
+    }
+
+    /// Services menu: "Open Images in Viewer" on a picture or PDF selection. The first picture or PDF of the paths
+    /// opens, since the Viewer shows one document at a time.
+    fn rpc(&mut self, ctx: Option<&Ctx>, _data_dir: &Path, method: &str, params: &Json) -> Result<Json, RpcError> {
+        if method != "service.open_images" {
+            return Err(RpcError::new(METHOD_NOT_FOUND, format!("no method {method}")));
+        }
+        if ctx.is_none() {
+            return Err(RpcError::new(INTERNAL_ERROR, "Viewer is not running yet"));
+        }
+        let call = ServiceCall::from_params(params).ok_or_else(|| RpcError::new(INVALID_PARAMS, "the service call has no paths"))?;
+        let path = call
+            .paths
+            .iter()
+            .find(|p| is_viewable_path(p.as_str()) && Path::new(p.as_str()).is_file())
+            .map(PathBuf::from)
+            .ok_or_else(|| RpcError::new(INVALID_PARAMS, "no picture or PDF in the selection"))?;
+        self.open_path(&path);
+        Ok(Json::Obj(Vec::new()))
+    }
+
     fn id(&self) -> &str {
         "is.olibuijr.preview.desktop"
     }
@@ -2096,6 +2342,7 @@ impl App for Viewer {
             item(Action::FlipVertical, is_picture, false),
             item(Action::AdjustSize, is_picture, false),
             item(Action::RemoveBackground, is_picture, false),
+            item(Action::LiftSubject, is_picture, false),
             AppMenuItem::separator(),
             item(Action::SaveSignature, open, false),
             AppMenuItem::submenu("Insert Signature").enabled(open && !self.signatures.is_empty()),
@@ -2147,6 +2394,11 @@ impl App for Viewer {
         file_items.push(item(Action::Save, open, false));
         file_items.push(item(Action::RevertToSaved, open, false));
         file_items.push(item(Action::RevertToOriginal, open, false));
+        file_items.push(AppMenuItem::separator());
+        file_items.push(AppMenuItem::submenu("Take Screenshot"));
+        file_items.push(AppMenuItem::new(MENU_SHOT_SELECTION, "From Selection\u{2026}").depth(1));
+        file_items.push(AppMenuItem::new(MENU_SHOT_WINDOW, "From Window\u{2026}").depth(1));
+        file_items.push(AppMenuItem::new(MENU_SHOT_SCREEN, "From Entire Screen").depth(1));
         let sidebar_label = if self.sidebar { "Hide Sidebar" } else { "Show Sidebar" };
         vec![
             AppMenu { title: "File".into(), items: file_items },
@@ -2162,6 +2414,10 @@ impl App for Viewer {
                     AppMenuItem::separator(),
                     item(Action::CopyText, open, false),
                     item(Action::SelectAll, open, false),
+                    AppMenuItem::separator(),
+                    AppMenuItem::submenu("Speech"),
+                    AppMenuItem::new(MENU_SPEAK_START, "Start Speaking").enabled(open).depth(1),
+                    AppMenuItem::new(MENU_SPEAK_STOP, "Stop Speaking").depth(1),
                 ],
             },
             AppMenu {
@@ -2209,6 +2465,10 @@ impl App for Viewer {
             AppMenu {
                 title: "Pages".into(),
                 items: vec![
+                    AppMenuItem::submenu("Insert").enabled(pdf),
+                    AppMenuItem::new(MENU_INSERT_FILE, "Page from File\u{2026}").enabled(pdf).depth(1),
+                    AppMenuItem::new(MENU_INSERT_BLANK, "Blank Page").enabled(pdf).depth(1),
+                    AppMenuItem::separator(),
                     item(Action::MovePageUp, pdf && self.view.page > 0, false),
                     item(Action::MovePageDown, pdf && self.view.page + 1 < count, false),
                     item(Action::DeletePage, pdf && count > 1, false),
@@ -2249,6 +2509,17 @@ impl App for Viewer {
     fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
         if self.open_menu(ctx, id) {
             return true;
+        }
+        match id {
+            MENU_SPEAK_START => return self.speak(),
+            MENU_SPEAK_STOP => {
+                speech::stop(ctx);
+                return false;
+            }
+            MENU_SHOT_SELECTION => return self.take_shot(ctx, screenshot::Pick::Selection),
+            MENU_SHOT_WINDOW => return self.take_shot(ctx, screenshot::Pick::Window),
+            MENU_SHOT_SCREEN => return self.take_shot(ctx, screenshot::Pick::Screen),
+            _ => {}
         }
         if (MENU_SIGNATURE..MENU_SIGNATURE + signature::MAX_SIGNATURES as u32).contains(&id) {
             let index = (id - MENU_SIGNATURE) as usize;
@@ -2319,11 +2590,40 @@ impl App for Viewer {
             self.status = format!("Could not read {}: {e}", doc.name);
             return true;
         }
+        // a file chosen by Pages > Insert > Page from File is merged into the document instead of opened
+        if let Some(at) = self.insert_at.take() {
+            match recents::keep_copy(&self.data_dir, &doc.name, &bytes) {
+                Ok(path) => self.insert_pages(pdfmarks::Insertion::File { path, at }),
+                Err(e) => self.status = format!("Could not insert {}: {e}", doc.name),
+            }
+            return true;
+        }
         match recents::keep_copy(&self.data_dir, &doc.name, &bytes) {
             Ok(path) => self.open_path(&path),
             Err(e) => self.status = format!("Could not open {}: {e}", doc.name),
         }
         true
+    }
+
+    fn service_reply(&mut self, _ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
+        if self.shot_request != Some(request) {
+            return false;
+        }
+        self.shot_request = None;
+        if let Err(e) = screenshot::started_from_reply(result) {
+            self.status = format!("Could not take a screenshot: {e}");
+        }
+        true
+    }
+
+    fn service_event(&mut self, _ctx: &Ctx, service: &str, event: &str, body: &Json) -> bool {
+        match screenshot::captured_path(service, event, body) {
+            Some(path) => {
+                self.open_path(&path);
+                true
+            }
+            None => false,
+        }
     }
 
     fn tick(&mut self, ctx: &Ctx, _t: f64) -> bool {
@@ -2352,6 +2652,7 @@ impl App for Viewer {
             side: self.side,
             draft,
             editing: self.editing,
+            form_focus: self.form_focus,
             status: &self.status,
             mode: self.mode,
             selection: self.selection_now(&lay),

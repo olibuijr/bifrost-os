@@ -64,6 +64,7 @@ const BAR_PENCIL: u32 = 15;
 const BAR_TEXT: u32 = 16;
 const BAR_NOTE: u32 = 17;
 const BAR_CONNECT: u32 = 18;
+const BAR_SHAPES: u32 = 19;
 
 const UNDO_DEPTH: usize = 12;
 
@@ -240,6 +241,8 @@ struct HandleDrag {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Target {
     Tool(Tool),
+    /// Opens or closes the Shapes popover (Line, Arrow, Rectangle, Oval, Triangle, Star).
+    Shapes,
     Color(usize),
     Undo,
     Clear,
@@ -279,6 +282,8 @@ pub struct Freeform {
     cache: TextCache,
     /// The toolbar as last drawn (points), for hit tests and the published controls.
     placed: Option<ToolbarLayout>,
+    /// The Shapes popover under its toolbar button, while it is open.
+    shapes_open: bool,
     /// Points per pixel inverse (`ui.s`), kept for `controls`.
     scale: f32,
     /// Every stroke on the board, in canvas pixels, in drawing order.
@@ -385,6 +390,7 @@ fn id_target(id: u32) -> Option<Target> {
         BAR_LASSO => Target::Tool(Tool::Lasso),
         BAR_RECT => Target::Tool(Tool::Rectangle),
         BAR_OVAL => Target::Tool(Tool::Oval),
+        BAR_SHAPES => Target::Shapes,
         BAR_TEXT => Target::Tool(Tool::Text),
         BAR_NOTE => Target::Tool(Tool::Sticky),
         BAR_CONNECT => Target::Tool(Tool::Connect),
@@ -409,6 +415,7 @@ fn target_id(t: Target) -> Option<u32> {
         Target::Tool(Tool::Lasso) => BAR_LASSO,
         Target::Tool(Tool::Rectangle) => BAR_RECT,
         Target::Tool(Tool::Oval) => BAR_OVAL,
+        Target::Shapes => BAR_SHAPES,
         Target::Tool(Tool::Text) => BAR_TEXT,
         Target::Tool(Tool::Sticky) => BAR_NOTE,
         Target::Tool(Tool::Connect) => BAR_CONNECT,
@@ -444,6 +451,7 @@ impl Freeform {
             dirty: true,
             cache: TextCache::default(),
             placed: None,
+            shapes_open: false,
             scale: 1.0,
             model: Drawing::new(),
             selection: None,
@@ -1309,6 +1317,7 @@ impl Freeform {
             ToolbarItem::button(BAR_LASSO, "Lasso").in_group(1).selected(self.tool == Tool::Lasso),
             ToolbarItem::button(BAR_RECT, "Rectangle").in_group(1).selected(self.tool == Tool::Rectangle),
             ToolbarItem::button(BAR_OVAL, "Oval").in_group(1).selected(self.tool == Tool::Oval),
+            ToolbarItem::button(BAR_SHAPES, "Shapes").in_group(1).selected(self.shapes_open || self.tool.shape_kind().is_some()),
             ToolbarItem::button(BAR_TEXT, "Text").in_group(1).selected(self.tool == Tool::Text),
             ToolbarItem::button(BAR_NOTE, "Note").in_group(1).selected(self.tool == Tool::Sticky),
             ToolbarItem::button(BAR_CONNECT, "Connect").in_group(1).selected(self.tool == Tool::Connect),
@@ -1775,6 +1784,7 @@ impl Freeform {
                 self.selection = None;
             }
             Target::Inspector => self.inspector = !self.inspector,
+            Target::Shapes => self.shapes_open = !self.shapes_open,
             Target::Edit(e) => self.edit(ui, e),
             Target::Delete => self.delete_selection(ui),
             Target::Copy => self.copy_selection(),
@@ -1787,7 +1797,7 @@ impl Freeform {
                 self.toast = Some((msg, self.now + 2500.0));
             }
         }
-        if !matches!(t, Target::Inspector | Target::Copy | Target::Save | Target::Tool(_) | Target::Color(_)) {
+        if !matches!(t, Target::Inspector | Target::Shapes | Target::Copy | Target::Save | Target::Tool(_) | Target::Color(_)) {
             self.mark_changed();
         }
         self.dirty = true;
@@ -1879,6 +1889,13 @@ impl Freeform {
             }
             self.dirty = true;
             return;
+        }
+        // the Shapes popover takes a press on one of its rows; a press elsewhere closes it and goes on as usual
+        if let Event::Down(x, y) = event {
+            if self.shapes_press(ui, x, y) {
+                self.dirty = true;
+                return;
+            }
         }
         let top = self.canvas_top(ui) as f32;
         match event {
@@ -2060,6 +2077,7 @@ impl Freeform {
         }
         self.placed = Some(placed);
         self.draw_search(s, ui);
+        self.draw_shapes(s, ui);
         let now = now_seconds();
         let sections = self.tip_sections(now);
         if !sections.is_empty() && !self.tip_marked {
@@ -2440,6 +2458,9 @@ mod model_tests {
         assert_eq!(ink.kind, InkKind::Pencil, "the pencil draws with the pencil ink of the drawing model");
         assert_eq!(ink.width, SPACE_XS, "half the pen's width (the pen is 2 x SPACE_XS)");
         assert_eq!(id_target(BAR_PENCIL), Some(Target::Tool(Tool::Pencil)));
+        assert_eq!(id_target(BAR_SHAPES), Some(Target::Shapes));
+        assert_eq!(target_id(Target::Shapes), Some(BAR_SHAPES));
+        assert_eq!(Tool::of_shape(ShapeKind::Star), Tool::Star, "the popover's Star row picks the star tool");
         assert_eq!(target_id(Target::Tool(Tool::Pencil)), Some(BAR_PENCIL));
         assert_eq!(app.pointer_for(&ui, 10.0, app.canvas_top(&ui) as f32 + 10.0), Kind::Crosshair);
     }

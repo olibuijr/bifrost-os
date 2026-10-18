@@ -3,11 +3,17 @@
 //! The model is `bifrost_ui::extension` (points, identities, the registry that discovers enabled extensions) and the
 //! process table is `bifrost_core::extension_process` (one process per extension, one in-memory connection per host).
 //! Both are re-exported here. A package writes the text from [`manifest`] into its `manifest.toml`, so the shell can
-//! list the extensions before any of them runs. See docs/parity/extensionfoundation.md.
+//! list the extensions before any of them runs. The shell's `extension_host` reads those tables, starts an extension's
+//! app binary in extension mode and calls it; the extension side is `bifrost_app::extension_service`. See
+//! docs/parity/extensionfoundation.md.
 
 pub use bifrost_core::extension_process::{ConnectionId, Key, ProcessId, ProcessTable, State as ProcessState};
 pub use bifrost_ui::actionrequest::{ActionRequest, Outcome, RequestError};
 pub use bifrost_ui::extension::{valid_bundle_id, Error, Identity, Point, Registry, Scope};
+/// Reading the extension tables of installed manifests: `scan_manifests` builds the registry from `(app id, manifest
+/// text)` pairs, `FILE_PROVIDER_POINT` is the system point of file providers and `FILE_MANAGER_POINT` the one of file-manager sync
+/// extensions (`file_manager_sync`).
+pub use bifrost_ui::extension_manifest::{parse as parse_manifest, scan as scan_manifests, Declared, Owned, Scan, FILE_MANAGER_POINT, FILE_PROVIDER_POINT};
 
 /// The `[[extension_point]]` and `[[extension]]` tables for a manifest: every point, then every identity, in order.
 pub fn manifest(points: &[Point], identities: &[Identity]) -> String {

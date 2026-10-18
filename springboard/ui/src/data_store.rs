@@ -122,6 +122,13 @@ impl DataStore for MemoryDataStore {
     }
 }
 
+impl MemoryDataStore {
+    /// Every record of every entity, in id order (the shell's file backend writes these).
+    pub fn all(&self) -> Vec<Record> {
+        self.records.values().cloned().collect()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

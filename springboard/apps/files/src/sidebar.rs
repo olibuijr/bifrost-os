@@ -1,5 +1,15 @@
 //! The source list: Favorites, Locations and Tags sections (Files's sidebar).
 use crate::*;
+use std::sync::Mutex;
+
+/// Why the last eject failed, until the app loop shows it (a worker thread leaves it here).
+static EJECT_NOTICE: Mutex<Option<String>> = Mutex::new(None);
+
+fn post_eject_notice(notice: String) {
+    if let Ok(mut slot) = EJECT_NOTICE.lock() {
+        *slot = Some(notice);
+    }
+}
 
 /// The sidebar column's width, its rows' start below the traffic lights, and the header band's height (points).
 pub(crate) const SIDEBAR_W: f32 = 160.;
@@ -26,7 +36,12 @@ pub(crate) struct Place {
     pub(crate) symbol: &'static str,
     pub(crate) dot: Option<u32>,
     pub(crate) path: PathBuf,
+    /// The partition a removable volume row ejects (`/dev/sdb1`); None for every other row.
+    pub(crate) eject: Option<String>,
 }
+
+/// Width of the row's right end where the Eject text is (points): a click there ejects the volume, not opens it.
+const EJECT_W: f32 = 56.;
 
 impl Files {
     pub(crate) fn sidebar_bounds(&self) -> Rect {
@@ -38,7 +53,7 @@ impl Files {
     }
     /// The sidebar's sections in Files's order: Recents without a header, Favorites, Locations, Tags.
     pub(crate) fn sections(&self) -> Vec<(Option<&'static str>, Vec<Place>)> {
-        let place = |label: &str, symbol: &'static str, path: PathBuf| Place { label: label.into(), symbol, dot: None, path };
+        let place = |label: &str, symbol: &'static str, path: PathBuf| Place { label: label.into(), symbol, dot: None, path, eject: None };
         let mut favorites = vec![];
         if let Some(apps) = [self.home.join("Applications"), PathBuf::from("/Applications")].into_iter().find(|p| p.is_dir()) {
             favorites.push(place("Applications", "square.grid.2x2", apps));
@@ -51,7 +66,12 @@ impl Files {
             place("Computer", "desktopcomputer", PathBuf::from("/")),
             place("Trash", "trash", self.bin()),
         ];
-        let tags = Tag::ALL.into_iter().map(|t| Place { label: t.label().into(), symbol: "tag", dot: Some(tag_colour(t)), path: tag_path(t) }).collect();
+        // removable volumes mounted now follow Trash, each with an Eject text
+        let volumes = springboard::files::volumes::mounted().into_iter().map(|v| Place { label: v.name, symbol: "externaldrive", dot: None, path: v.mount, eject: Some(v.device) });
+        // file provider domains (installed apps that serve one) follow the volumes
+        let providers = provider::shared().rows().into_iter().map(|(label, path)| Place { label, symbol: "externaldrive", dot: None, path, eject: None });
+        let locations: Vec<Place> = locations.into_iter().chain(volumes).chain(providers).collect();
+        let tags = Tag::ALL.into_iter().map(|t| Place { label: t.label().into(), symbol: "tag", dot: Some(tag_colour(t)), path: tag_path(t), eject: None }).collect();
         vec![
             (None, vec![place("Recents", "clock", PathBuf::from(fs::RECENTS))]),
             (Some("Favorites"), favorites),
@@ -67,7 +87,7 @@ impl Files {
         if self.smart.is_empty() {
             return vec![];
         }
-        let rows = self.smart.iter().enumerate().map(|(i, f)| Place { label: f.name.clone(), symbol: "magnifyingglass", dot: None, path: smart::smart_path(i) }).collect();
+        let rows = self.smart.iter().enumerate().map(|(i, f)| Place { label: f.name.clone(), symbol: "magnifyingglass", dot: None, path: smart::smart_path(i), eject: None }).collect();
         vec![(Some("Smart Folders"), rows)]
     }
     /// Every sidebar row in order; row `i` has id `100 + i`.
@@ -84,6 +104,7 @@ impl Files {
             }
             for p in rows {
                 let row = SidebarItem::row(id, &p.label);
+                let row = if p.eject.is_some() { row.with_trailing("Eject") } else { row };
                 items.push(if let Some(c) = p.dot { row.with_dot(c) } else { row.with_symbol(p.symbol) });
                 id += 1;
             }
@@ -91,6 +112,40 @@ impl Files {
         let mut list = SourceList::new(items, 32., 30.);
         list.set_selected(self.sidebar_id(&self.path));
         list
+    }
+    /// A click in the sidebar: a row opens its place, and the Eject text of a removable volume ejects it.
+    pub(crate) fn sidebar_click(&mut self, x: f32, y: f32) {
+        let Some(id) = self.sidebar().hit(self.sidebar_bounds(), SIDEBAR_SCROLL, x, y) else { return };
+        let Some(place) = self.places().into_iter().nth(id.saturating_sub(100) as usize) else { return };
+        match place.eject {
+            Some(device) if x > self.side() - EJECT_W => self.eject_volume(&place.label, &device, &place.path),
+            _ => self.navigate(place.path, true),
+        }
+    }
+    /// Ejects a removable volume in the background (unmount, then power off). A folder open inside it moves home first.
+    /// A failure is logged and shown in the status bar, naming the programs that still hold the volume open
+    /// (`volumes::eject_with_notice`); the row goes away on the next sidebar build once the volume is gone.
+    fn eject_volume(&mut self, name: &str, device: &str, mount: &Path) {
+        if self.path.starts_with(mount) {
+            let home = self.home.clone();
+            self.navigate(home, true);
+        }
+        let (name, device, mount) = (name.to_string(), device.to_string(), mount.to_path_buf());
+        DispatchQueue::global(Qos::Utility).async_(move || {
+            if let Some(notice) = springboard::files::volumes::eject_with_notice(&name, &device, &mount) {
+                eprintln!("eject {device}: {notice}");
+                post_eject_notice(notice);
+                // wake the app loop so `tick` shows it
+                DispatchQueue::main().async_(|| {});
+            }
+        });
+        self.revision += 1;
+    }
+    /// The notice a failed eject left, once: the status bar shows it.
+    pub(crate) fn take_eject_notice(&mut self) -> bool {
+        let Some(notice) = EJECT_NOTICE.lock().ok().and_then(|mut n| n.take()) else { return false };
+        self.notice = Some(notice);
+        true
     }
     pub(crate) fn sidebar_id(&self, path: &Path) -> Option<u32> {
         self.places().iter().position(|p| p.path == path).map(|i| 100 + i as u32)

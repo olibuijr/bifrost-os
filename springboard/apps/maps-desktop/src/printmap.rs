@@ -3,6 +3,7 @@
 
 use bifrost_app::kit::Image;
 use bifrost_app::print::{text_pages, PageImage, PdfPage, PrintInfo, TEXT_SIZE};
+use springboard::maptiles::compose;
 
 /// Pixels per point of the printed picture. Two keeps the tile edges sharp on paper.
 pub const PRINT_SCALE: f64 = 2.0;
@@ -11,43 +12,9 @@ pub const PRINT_SCALE: f64 = 2.0;
 /// `side` points square, its top left corner at `(x, y)` from the top left of the map. The tiles are premultiplied
 /// pixels; they are laid over white, which is what a tile that has not loaded leaves behind.
 pub fn draw_tiles(tiles: &[(f64, f64, &Image)], side: f64, width: f64, height: f64) -> PageImage {
-    let k = PRINT_SCALE;
-    let w = (width * k).ceil().max(1.0) as usize;
-    let h = (height * k).ceil().max(1.0) as usize;
-    let mut rgb = vec![255u8; w * h * 3];
-    let side_px = (side * k).round() as i64;
-    if side_px <= 0 {
-        return PageImage { width: w, height: h, rgb };
-    }
-    for &(x, y, img) in tiles {
-        if img.w == 0 || img.h == 0 || img.px.len() < img.w * img.h {
-            continue;
-        }
-        let (x0, y0) = ((x * k).round() as i64, (y * k).round() as i64);
-        for dy in 0..side_px {
-            let oy = y0 + dy;
-            if oy < 0 || oy >= h as i64 {
-                continue;
-            }
-            let sy = (dy as usize * img.h / side_px as usize).min(img.h - 1);
-            for dx in 0..side_px {
-                let ox = x0 + dx;
-                if ox < 0 || ox >= w as i64 {
-                    continue;
-                }
-                let sx = (dx as usize * img.w / side_px as usize).min(img.w - 1);
-                let p = img.px[sy * img.w + sx];
-                let (r, g, b, a) = (p & 0xff, (p >> 8) & 0xff, (p >> 16) & 0xff, p >> 24);
-                // premultiplied colour over white: the white shows through by the part that is transparent
-                let clear = 255 - a.min(255);
-                let i = (oy as usize * w + ox as usize) * 3;
-                rgb[i] = (r + clear).min(255) as u8;
-                rgb[i + 1] = (g + clear).min(255) as u8;
-                rgb[i + 2] = (b + clear).min(255) as u8;
-            }
-        }
-    }
-    PageImage { width: w, height: h, rgb }
+    // the compositor is shared with the SDK's map snapshots, see `springboard::maptiles::compose`
+    let picture = compose::draw_tiles(tiles, side, width, height, PRINT_SCALE);
+    PageImage { width: picture.width, height: picture.height, rgb: picture.rgb }
 }
 
 /// Draws a line `width` points thick through `points` (in points from the top left of the picture) in `rgb`. The line

@@ -87,7 +87,7 @@
   ],
   "gaps": [
     "No GSS-API (RFC 2743/2744) implementation: no security contexts, credentials, names, tokens or message protection.",
-    "No Kerberos (krb5) client or ticket cache, so enterprise Kerberos sign-in and SPNEGO/Negotiate HTTP auth are unavailable to apps.",
+    "The Kerberos client runs the MIT tools (sdk krb5_client.rs: kinit and klist), but SPNEGO/Negotiate HTTP auth is unavailable to apps.",
     "No SDK API for app-level GSS credentials; the keychain (springboard/sdk/src/keychain.rs) stores generic passwords only.",
     "No mechanism or name registry (gss_indicate_mechs, GSSCreateName), so apps cannot select or compare authentication mechanisms.",
     "Wi-Fi Enterprise (EAP) credentials in springboard/src/net/wifi_config.rs are a separate 802.1X path and are not a GSS counterpart."

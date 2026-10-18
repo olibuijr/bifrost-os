@@ -79,7 +79,7 @@
     }
   ],
   "gaps": [
-    "No app-facing API for raw HID reports, elements or usage tables",
+    "No app-facing API for HID elements or usage tables; raw reports are read through hidraw nodes (sdk hid_reports.rs)",
     "Stylus and pen data (pressure, tilt, eraser) is not decoded",
     "Touch decoding tracks only the first contact (slot 0)",
     "No app-facing device matching or hotplug notification by HID usage",

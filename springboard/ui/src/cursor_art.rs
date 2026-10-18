@@ -219,9 +219,81 @@ impl Default for PointerColors {
 
 /// The art of `kind` at `scale` (1 or 2; anything else is clamped into that range).
 pub fn art(kind: Kind, scale: u32) -> CursorArt {
+    let (ops, hotspot) = design(kind);
+    render(&ops, hotspot, scale)
+}
+
+/// A corner a rotation cursor grips. Each grip shows one curved arrow around that corner.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Corner {
+    NorthWest,
+    NorthEast,
+    SouthEast,
+    SouthWest,
+}
+
+impl Corner {
+    /// The corner's angle on the screen plane, in degrees (0 = right, 90 = down).
+    fn degrees(self) -> f32 {
+        match self {
+            Corner::NorthEast => -45.0,
+            Corner::SouthEast => 45.0,
+            Corner::SouthWest => 135.0,
+            Corner::NorthWest => -135.0,
+        }
+    }
+}
+
+/// The corners gripped by each rotation shape of the reference set (the layer suffix is not part of the name).
+pub fn rotate_variant(name: &str) -> Option<&'static [Corner]> {
+    use Corner::*;
+    let corners: &'static [Corner] = match name {
+        "rotateNorthEast" => &[NorthEast][..],
+        "rotateNorthWest" => &[NorthWest][..],
+        "rotateSouthEast" => &[SouthEast][..],
+        "rotateSouthWest" => &[SouthWest][..],
+        "rotateNorthEastNorthWest" => &[NorthEast, NorthWest][..],
+        "rotateNorthEastSouthEast" => &[NorthEast, SouthEast][..],
+        "rotateNorthWestSouthWest" => &[NorthWest, SouthWest][..],
+        "rotateSouthEastSouthWest" => &[SouthEast, SouthWest][..],
+        _ => return None,
+    };
+    Some(corners)
+}
+
+/// The rotation cursor gripping `grips` at `scale`: a curved arrow (70 degrees of ring, head at the leading end) per
+/// corner. The hotspot is the centre of the ring.
+pub fn rotate_art(grips: &[Corner], scale: u32) -> CursorArt {
+    let mut ops = Vec::new();
+    for g in grips {
+        ops.extend(curved_arrow(g.degrees(), 70.0));
+    }
+    render(&ops, (12.0, 12.0), scale)
+}
+
+/// A ring segment of radius 8.5 centred on `centre` degrees and spanning `sweep` degrees, with an arrow head at its
+/// clockwise end.
+fn curved_arrow(centre: f32, sweep: f32) -> Vec<Op> {
+    let (c, r, w, steps) = ((12.0_f32, 12.0_f32), 8.5_f32, 1.2_f32, 12);
+    let start = centre - sweep / 2.0;
+    let point = |deg: f32, radius: f32| {
+        let a = deg.to_radians();
+        (c.0 + radius * a.cos(), c.1 + radius * a.sin())
+    };
+    let angle = |i: i32| start + sweep * i as f32 / steps as f32;
+    let mut poly: Vec<P> = (0..=steps).map(|i| point(angle(i), r + w)).collect();
+    poly.extend((0..=steps).rev().map(|i| point(angle(i), r - w)));
+    let end = centre + sweep / 2.0;
+    let a = end.to_radians();
+    let tangent = (-a.sin(), a.cos());
+    let tip = at(point(end, r), tangent, 2.0);
+    vec![Op::Add(poly), Op::Add(head(tip, tangent, 4.5, 3.5))]
+}
+
+/// Rasterises `ops` (supersampled) into the fill mask, derives the outline and scales the hotspot.
+fn render(ops: &[Op], (hx, hy): P, scale: u32) -> CursorArt {
     let scale = scale.clamp(1, 2);
     let size = SIZE * scale;
-    let (ops, (hx, hy)) = design(kind);
     let n = size as usize;
     let mut fill = vec![0u8; n * n];
     let sub = SUPERSAMPLE;
@@ -378,5 +450,77 @@ mod tests {
         let a = art(Kind::OperationNotAllowed, 1);
         let n = a.size as usize;
         assert_eq!(a.fill[(n / 2 - 3) * n + n / 2 + 3], 0);
+    }
+
+    const ROTATE_NAMES: [&str; 8] = [
+        "rotateNorthEast",
+        "rotateNorthWest",
+        "rotateSouthEast",
+        "rotateSouthWest",
+        "rotateNorthEastNorthWest",
+        "rotateNorthEastSouthEast",
+        "rotateNorthWestSouthWest",
+        "rotateSouthEastSouthWest",
+    ];
+
+    /// The largest fill value within 1.5 pixels of the point (x, y), in points.
+    fn fill_near(a: &CursorArt, x: f32, y: f32) -> u8 {
+        let n = a.size as i32;
+        let s = a.scale as f32;
+        let (cx, cy) = ((x * s) as i32, (y * s) as i32);
+        let mut best = 0;
+        for dy in -2..=2 {
+            for dx in -2..=2 {
+                let (px, py) = (cx + dx, cy + dy);
+                if px >= 0 && py >= 0 && px < n && py < n {
+                    best = best.max(a.fill[(py * n + px) as usize]);
+                }
+            }
+        }
+        best
+    }
+
+    #[test]
+    fn every_rotate_shape_name_maps_to_its_corners() {
+        for name in ROTATE_NAMES {
+            assert!(rotate_variant(name).is_some_and(|c| !c.is_empty()), "{name} has no corners");
+        }
+        assert_eq!(rotate_variant("rotateNorthEast"), Some(&[Corner::NorthEast][..]));
+        assert_eq!(rotate_variant("rotateSouthEastSouthWest"), Some(&[Corner::SouthEast, Corner::SouthWest][..]));
+        assert_eq!(rotate_variant("rotateNorth"), None);
+        assert_eq!(rotate_variant("arrow"), None);
+    }
+
+    #[test]
+    fn rotate_shapes_are_centred_non_empty_and_distinct_from_each_other_and_the_rotate_kind() {
+        let mut seen = std::collections::HashSet::new();
+        for name in ROTATE_NAMES {
+            let a = rotate_art(rotate_variant(name).unwrap(), 1);
+            assert_eq!(a.hotspot, (12, 12), "{name} hotspot");
+            assert!(a.fill.iter().any(|&v| v > 0), "{name} fill is empty");
+            assert!(a.outline.iter().any(|&v| v > 0), "{name} outline is empty");
+            assert!(seen.insert(a.fill), "{name} repeats another rotate shape");
+        }
+        assert!(!seen.contains(&art(Kind::Rotate, 1).fill), "the single rotate shape is not a rotate variant");
+    }
+
+    #[test]
+    fn a_single_corner_arrow_covers_its_corner_and_not_the_opposite_one() {
+        let ne = rotate_art(&[Corner::NorthEast], 1);
+        let sw = rotate_art(&[Corner::SouthWest], 1);
+        let point = |deg: f32| (12.0 + 8.5 * deg.to_radians().cos(), 12.0 + 8.5 * deg.to_radians().sin());
+        let (x, y) = point(-45.0);
+        assert!(fill_near(&ne, x, y) > 200, "the north-east grip is drawn at the north-east corner");
+        let (x, y) = point(135.0);
+        assert_eq!(fill_near(&ne, x, y), 0, "the north-east grip leaves the south-west corner alone");
+        let (x, y) = point(135.0);
+        assert!(fill_near(&sw, x, y) > 200, "the south-west grip is drawn at the south-west corner");
+    }
+
+    #[test]
+    fn two_x_rotate_art_doubles_the_size_and_the_hotspot() {
+        let a = rotate_art(&[Corner::NorthWest], 1);
+        let b = rotate_art(&[Corner::NorthWest], 2);
+        assert_eq!((b.size, b.hotspot), (a.size * 2, (a.hotspot.0 * 2, a.hotspot.1 * 2)));
     }
 }

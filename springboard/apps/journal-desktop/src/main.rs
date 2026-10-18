@@ -12,7 +12,7 @@ use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
 use bifrost_app::kit::canvas::{Canvas, RectF};
 use bifrost_app::kit::ui::{
     Ui, Weight, FIELD_BG, LABEL, LABEL_2, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT,
-    MENU_HIGHLIGHT_TEXT, SEPARATOR_C, SYSTEM_BLUE, SYSTEM_ORANGE, SYSTEM_RED,
+    MENU_HIGHLIGHT_TEXT, SEPARATOR_C, SYSTEM_ORANGE, SYSTEM_RED,
 };
 use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::widgets::{self, Material};

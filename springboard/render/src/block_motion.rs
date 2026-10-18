@@ -106,6 +106,43 @@ impl MotionEstimation {
     }
 }
 
+/// Dense optical flow at one pixel by the Lucas-Kanade method. Returns the displacement (dx, dy) such that
+/// `reference(p + d)` best matches `current(p)` over the (2r+1) x (2r+1) window centred on (x, y). Gradients come from
+/// the reference plane (central differences) and the 2x2 normal equations are solved in closed form. None when the
+/// planes differ in size, when the window plus one pixel of gradient margin does not fit, or when the window has too
+/// little texture for a unique solution.
+pub fn lucas_kanade_at(current: &Plane, reference: &Plane, x: usize, y: usize, radius: usize) -> Option<(f32, f32)> {
+    if current.width != reference.width || current.height != reference.height {
+        return None;
+    }
+    let (w, h) = (reference.width, reference.height);
+    if radius == 0 || x < radius + 1 || y < radius + 1 || x + radius + 1 >= w || y + radius + 1 >= h {
+        return None;
+    }
+    let r = |px: usize, py: usize| reference.pixels.get(py * w + px).copied().unwrap_or(0) as f64;
+    let c = |px: usize, py: usize| current.pixels.get(py * w + px).copied().unwrap_or(0) as f64;
+    let (mut gxx, mut gxy, mut gyy, mut bx, mut by) = (0.0f64, 0.0f64, 0.0f64, 0.0f64, 0.0f64);
+    for py in y - radius..=y + radius {
+        for px in x - radius..=x + radius {
+            let ix = (r(px + 1, py) - r(px - 1, py)) * 0.5;
+            let iy = (r(px, py + 1) - r(px, py - 1)) * 0.5;
+            let it = c(px, py) - r(px, py);
+            gxx += ix * ix;
+            gxy += ix * iy;
+            gyy += iy * iy;
+            bx += ix * it;
+            by += iy * it;
+        }
+    }
+    let det = gxx * gyy - gxy * gxy;
+    if !(det > 1e-9) {
+        return None;
+    }
+    let u = (gyy * bx - gxy * by) / det;
+    let v = (gxx * by - gxy * bx) / det;
+    Some((u as f32, v as f32))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -173,5 +210,46 @@ mod tests {
         assert!(MotionEstimation::new(4, 4, 0, 1).is_none());
         let est = MotionEstimation::new(4, 4, 2, 1).unwrap();
         assert!(est.estimate(&plane(2, 2, vec![0; 4]), &plane(4, 4, vec![0; 16])).is_none());
+    }
+}
+
+#[cfg(test)]
+mod flow_tests {
+    use super::*;
+
+    fn textured(w: usize, h: usize) -> Plane {
+        let mut pixels = Vec::with_capacity(w * h);
+        for y in 0..h {
+            for x in 0..w {
+                pixels.push(((x * 37 + y * 91 + x * y * 13) % 251) as u8);
+            }
+        }
+        Plane { width: w, height: h, pixels }
+    }
+
+    #[test]
+    fn identical_frames_have_zero_flow() {
+        let p = textured(16, 16);
+        assert_eq!(lucas_kanade_at(&p, &p, 8, 8, 2), Some((0.0, 0.0)));
+    }
+
+    #[test]
+    fn flat_window_has_no_unique_flow() {
+        let flat = Plane { width: 16, height: 16, pixels: vec![100; 256] };
+        assert_eq!(lucas_kanade_at(&flat, &flat, 8, 8, 2), None);
+    }
+
+    #[test]
+    fn window_must_fit_with_a_gradient_margin() {
+        let p = textured(16, 16);
+        assert_eq!(lucas_kanade_at(&p, &p, 1, 8, 2), None);
+        assert_eq!(lucas_kanade_at(&p, &p, 8, 8, 0), None);
+    }
+
+    #[test]
+    fn mismatched_planes_are_refused() {
+        let a = textured(16, 16);
+        let b = textured(8, 16);
+        assert_eq!(lucas_kanade_at(&a, &b, 4, 4, 1), None);
     }
 }

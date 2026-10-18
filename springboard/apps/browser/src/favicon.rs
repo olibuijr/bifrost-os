@@ -5,7 +5,7 @@
 //! candidates with curl, then `/favicon.ico`, decodes PNG or ICO (PNG or BMP frames), reduces to 32x32 and
 //! caches it as `<profile>/favicons/<host>.png` (+ `<host>.url`). Icons are keyed by host, so a host seen
 //! earlier draws before its page has loaded. Private windows keep icons in memory only.
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
@@ -24,6 +24,8 @@ pub const ICON_PT: f32 = 16.0;
 pub const GAP_PT: f32 = 6.0;
 const MAX_AGE_SECS: u64 = 7 * 86_400;
 const MAX_CANDIDATES: usize = 4;
+/// Maximum number of in-memory icons kept across sites to bound resident memory.
+const MAX_MEMORY_ICONS: usize = 256;
 
 struct Icon {
     img: Image,
@@ -37,6 +39,7 @@ type Fetched = (String, Option<(Vec<u8>, String)>);
 pub struct Favicons {
     dir: Option<PathBuf>,
     cache: HashMap<String, Option<Icon>>,
+    order: VecDeque<String>,
     views: HashMap<WebViewId, String>,
     pending: HashSet<String>,
     /// Fetches finished on the global queue, taken by `tick`.
@@ -73,7 +76,7 @@ fn file_stem(host: &str) -> String {
 
 impl Favicons {
     pub fn new(dir: Option<PathBuf>) -> Favicons {
-        Favicons { dir, cache: HashMap::new(), views: HashMap::new(), pending: HashSet::new(), inbox: Arc::new(Mutex::new(Vec::new())) }
+        Favicons { dir, cache: HashMap::new(), order: VecDeque::new(), views: HashMap::new(), pending: HashSet::new(), inbox: Arc::new(Mutex::new(Vec::new())) }
     }
 
     /// A private window keeps its icons in memory only.
@@ -81,6 +84,18 @@ impl Favicons {
         if private {
             self.dir = None;
         }
+    }
+
+    fn insert_cache(&mut self, host: String, icon: Option<Icon>) {
+        if !self.cache.contains_key(&host) {
+            self.order.push_back(host.clone());
+            if self.order.len() > MAX_MEMORY_ICONS {
+                if let Some(old) = self.order.pop_front() {
+                    self.cache.remove(&old);
+                }
+            }
+        }
+        self.cache.insert(host, icon);
     }
 
     fn load_disk(&self, host: &str) -> Option<(Icon, bool)> {
@@ -99,7 +114,7 @@ impl Favicons {
     pub fn get(&mut self, host: &str, px: usize) -> Option<&Image> {
         if !self.cache.contains_key(host) {
             let loaded = self.load_disk(host).map(|(i, _)| i);
-            self.cache.insert(host.to_string(), loaded);
+            self.insert_cache(host.to_string(), loaded);
         }
         let icon = self.cache.get_mut(host)?.as_mut()?;
         if px == icon.img.w && px == icon.img.h {
@@ -171,12 +186,14 @@ impl Favicons {
             self.pending.remove(&host);
             match found {
                 Some((px, url)) => {
-                    self.cache.insert(host, Some(Icon { img: to_image(STORE_PX, STORE_PX, &px), url, scaled: None }));
+                    self.insert_cache(host, Some(Icon { img: to_image(STORE_PX, STORE_PX, &px), url, scaled: None }));
                     changed = true;
                 }
                 None => {
                     // keep a stale disk icon; remember the miss otherwise (no retry this session)
-                    self.cache.entry(host).or_insert(None);
+                    if !self.cache.contains_key(&host) {
+                        self.insert_cache(host, None);
+                    }
                 }
             }
         }

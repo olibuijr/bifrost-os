@@ -18,11 +18,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/input_methods/gojuon.rs",
+   "bifrost": "springboard/src/shell/input_methods/gojuon.rs, springboard/src/shell/character_viewer.rs",
    "status": "partial",
-   "note": "built on os/team-l-09-input-methods; not yet verified on Midget; 50-on grid model only, the palette view is not wired",
+   "note": "Built 2026-10-17: the 50-on chart is the Kana tab of Edit > Emoji & Symbols (character_viewer.rs). The tab draws gojuon::layout, a point hits the kana under it with gojuon::cell_at, and a pick types the kana into the Search field or copies it; typing a romaji word in the panel finds its kana.",
    "rea": [],
-   "method": "manual"
+   "method": "manual",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::input_methods::gojuon::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::character_viewer::tests"
+    }
+   ],
+   "ready_note": "the palette view is the Kana tab of the Emoji & Symbols panel, drawn with gojuon::layout and hit with gojuon::cell_at; the checks run the chart model and the panel (geometry, hits, search)"
   }
  ]
 }

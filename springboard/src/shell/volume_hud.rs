@@ -4,11 +4,12 @@
 //! headphones the glyph is a headset; plugging or unplugging shows the
 //! route's name in a row above the bar.
 
-use super::control_center::draw_speaker_waves;
+use super::control_center::{draw_speaker_waves, draw_sun};
 use super::ui::{Ui, Weight, WHITE};
 use crate::gfx::{over, rgba, scale, Surface};
 use crate::media::route::Route;
 use crate::scene::STATUS_PT;
+use bifrost_ui::osd::Level;
 
 const W_PT: f32 = 150.0;
 const H_PT: f32 = 36.0;
@@ -36,14 +37,27 @@ pub struct VolumeHud {
     route: Route,
     /// the route name row is on (a jack event, not a key press)
     announce: bool,
+    /// what the bar shows: the volume, the screen brightness or the keyboard backlight
+    kind: Level,
 }
 
 impl VolumeHud {
     /// Shows (or restarts) the HUD at `level`.
     pub fn show(&mut self, level: f32, t: f64) {
-        self.level = level.clamp(0.0, 1.0);
+        self.show_level(Level::Volume, level, t);
+    }
+
+    /// Shows (or restarts) the HUD for `kind` at `level`: the same panel, with that level's glyph.
+    pub fn show_level(&mut self, kind: Level, level: f32, t: f64) {
+        self.kind = kind;
+        self.level = if level.is_nan() { 0.0 } else { level.clamp(0.0, 1.0) };
         self.shown = Some(t);
         self.announce = false;
+    }
+
+    /// What the bar shows now.
+    pub fn kind(&self) -> Level {
+        self.kind
     }
 
     /// Shows the HUD for a route change: the route's name above the bar.
@@ -138,9 +152,12 @@ impl VolumeHud {
             l if l < 0.67 => 2,
             _ => 3,
         };
-        match self.route {
-            Route::Speaker => draw_speaker_waves(s, x + ui.pt(21.0), y + hh / 2.0, ui.s * 0.55, a(WHITE), waves),
-            Route::Headphones => draw_headphones(s, x + ui.pt(21.0), y + hh / 2.0, ui.s * 0.55, a(WHITE)),
+        let (gx, gy) = (x + ui.pt(21.0), y + hh / 2.0);
+        match (self.kind, self.route) {
+            (Level::Brightness, _) => draw_sun(s, gx, gy, ui.s * 0.5, a(WHITE)),
+            (Level::KeyboardBrightness, _) => draw_keyboard(s, gx, gy, ui.s * 0.55, a(WHITE)),
+            (Level::Volume, Route::Speaker) => draw_speaker_waves(s, gx, gy, ui.s * 0.55, a(WHITE), waves),
+            (Level::Volume, Route::Headphones) => draw_headphones(s, gx, gy, ui.s * 0.55, a(WHITE)),
         }
         let (bx, bw, bh) = (x + ui.pt(BAR_LEFT_PT), hw - ui.pt(BAR_LEFT_PT + BAR_RIGHT_PT), ui.pt(BAR_H_PT));
         let by = y + (hh - bh) / 2.0;
@@ -149,6 +166,20 @@ impl VolumeHud {
             s.fill_rrect(bx, by, (bw * self.level).max(bh), bh, ui.pt(2.0), a(WHITE));
         }
     }
+}
+
+/// A keyboard: a plate with two rows of keys cut out and a space bar; `pt` is px per point.
+pub(super) fn draw_keyboard(s: &mut Surface, cx: f32, cy: f32, pt: f32, color: u32) {
+    let (w, h) = (24.0 * pt, 14.0 * pt);
+    s.fill_rrect(cx - w / 2.0, cy - h / 2.0, w, h, 3.0 * pt, color);
+    let hole = rgba(28, 28, 30, 235);
+    let key = 3.0 * pt;
+    for row in 0..2 {
+        for col in 0..4 {
+            s.fill_rrect(cx - w / 2.0 + 3.0 * pt + col as f32 * 5.0 * pt, cy - h / 2.0 + 2.5 * pt + row as f32 * 4.5 * pt, key, key, 0.8 * pt, hole);
+        }
+    }
+    s.fill_rrect(cx - 7.0 * pt, cy + h / 2.0 - 4.5 * pt, 14.0 * pt, 2.2 * pt, 0.8 * pt, hole);
 }
 
 /// A headset: a band over two ear cups; `pt` is px per point, as for the speaker.
@@ -213,6 +244,27 @@ mod tests {
         let (_, _, _, rh) = VolumeHud::rect(&ui, 1200);
         let (_, _, _, dh) = VolumeHud::damage_rect(&ui, 1200);
         assert!(dh > rh);
+    }
+
+    #[test]
+    fn brightness_levels_draw_their_own_glyphs() {
+        let ui = ui();
+        let paint = |kind| {
+            let mut buf = vec![0u32; 1200 * 300];
+            let mut s = Surface { w: 1200, h: 300, stride: 1200, px: &mut buf, y0: 0 };
+            let mut h = VolumeHud::default();
+            h.show_level(kind, 0.5, 0.0);
+            assert_eq!(h.kind(), kind);
+            h.draw(&mut s, &ui, 1200, 0.0);
+            buf
+        };
+        let (v, b, k) = (paint(Level::Volume), paint(Level::Brightness), paint(Level::KeyboardBrightness));
+        assert!(v != b && b != k && v != k);
+        let mut h = VolumeHud::default();
+        h.show_level(Level::Brightness, f32::NAN, 0.0);
+        assert_eq!(h.level(), 0.0);
+        h.show(0.5, 1.0);
+        assert_eq!(h.kind(), Level::Volume, "a volume key brings the speaker back");
     }
 
     #[test]

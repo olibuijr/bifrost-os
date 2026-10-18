@@ -35,7 +35,6 @@ pub(crate) fn folder_index(path: &Path) -> Option<usize> {
     path.strip_prefix(SMART).ok()?.to_str()?.parse().ok()
 }
 
-#[cfg_attr(not(test), allow(dead_code))] // saving waits for the New Smart Folder sheet; the tests round-trip it
 fn field(s: &str) -> String {
     s.replace(['\t', '\n', '\r'], " ")
 }
@@ -45,7 +44,6 @@ fn dash_or(s: &str) -> Option<&str> {
 }
 
 impl SmartFolder {
-    #[cfg_attr(not(test), allow(dead_code))] // saving waits for the New Smart Folder sheet; the tests round-trip it
     pub(crate) fn serialize(&self) -> String {
         let days = self.within_days.map_or("-".to_string(), |d| d.to_string());
         let tag = self.tag.map_or("-", |t| t.label());
@@ -97,7 +95,7 @@ impl SmartFolder {
                 let path = e.path();
                 let Ok(link) = std::fs::symlink_metadata(&path) else { continue };
                 let md = if link.file_type().is_symlink() { std::fs::metadata(&path).unwrap_or(link.clone()) } else { link.clone() };
-                let is_dir = md.is_dir();
+                let is_dir = md.is_dir() && !fs::is_package_name(&name);
                 if is_dir && !link.file_type().is_symlink() && depth < MAX_DEPTH {
                     pending.push((path.clone(), depth + 1));
                 }
@@ -119,9 +117,24 @@ pub(crate) fn parse(text: &str) -> Vec<SmartFolder> {
     text.lines().filter_map(SmartFolder::parse_line).collect()
 }
 
-#[cfg_attr(not(test), allow(dead_code))] // saving waits for the New Smart Folder sheet; the tests round-trip it
 pub(crate) fn serialize(folders: &[SmartFolder]) -> String {
     folders.iter().map(|f| f.serialize() + "\n").collect()
+}
+
+impl Files {
+    /// Save Search as Smart Folder (the empty-area menu): the search words become a saved search of the open folder.
+    /// It joins the sidebar's Smart Folders section and is written to `.smart-folders` at home.
+    pub(crate) fn save_search(&mut self) {
+        let words = self.query.trim().to_string();
+        if words.is_empty() {
+            return;
+        }
+        self.smart.push(SmartFolder { name: words.clone(), words, kind: TypeFilter::All, tag: None, within_days: None, scope: self.path.clone() });
+        if let Err(e) = std::fs::write(self.home.join(STORE), serialize(&self.smart)) {
+            self.notice = Some(format!("Could not save the smart folder: {e}"));
+        }
+        self.revision += 1;
+    }
 }
 
 /// The saved searches at home (none when the file is missing).
@@ -132,6 +145,12 @@ pub(crate) fn load(home: &Path) -> Vec<SmartFolder> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_saved_search_reads_back_as_a_smart_folder() {
+        let saved = SmartFolder { name: "invoice".into(), words: "invoice".into(), kind: TypeFilter::All, tag: None, within_days: None, scope: PathBuf::from("/home/u") };
+        assert_eq!(parse(&serialize(std::slice::from_ref(&saved))), vec![saved]);
+    }
 
     fn entry(name: &str, kind: Kind, mtime: i64) -> Entry {
         Entry { name: name.into(), path: PathBuf::from("/x").join(name), is_dir: kind == Kind::Folder, size: 1, mtime, kind, items: None }

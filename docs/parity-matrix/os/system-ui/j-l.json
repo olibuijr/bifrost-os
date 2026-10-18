@@ -41,7 +41,16 @@
    "bifrost": "springboard/src/shell/keyboard.rs",
    "status": "partial",
    "note": "keyboard access",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::keyboard"
+    }
+   ],
+   "ready_note": "covers: keyboard access"
   },
   {
    "id": "path:/System/Library/CoreServices/KeyboardSetupAssistant.app",
@@ -61,7 +70,16 @@
    "bifrost": "springboard/src/shell/kb_layouts.rs",
    "status": "partial",
    "note": "keyboard layouts",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::kb_layouts"
+    }
+   ],
+   "ready_note": "covers: keyboard layouts"
   },
   {
    "id": "path:/System/Library/CoreServices/Keychain Circle Notification.app",
@@ -98,10 +116,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/setup.rs (Step::Language)",
+   "bifrost": "springboard/src/installer/app.rs, springboard/src/shell/pages.rs, springboard/src/setup.rs",
    "status": "partial",
-   "note": "Setup language step only; no language chooser outside installer setup; built on os/team-l-04-system-ui; not yet verified on Midget",
-   "rea": []
+   "note": "Setup language step, plus Settings > Language & Region reachable by Search (settings_intents open-language-region, 2026-10-17). Still missing: a standalone Language Chooser app (the picker outside Settings); built on os/team-l-04-system-ui; not yet verified on Midget",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "installer::app::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages::tests::language"
+    }
+   ],
+   "ready_note": "The language picker: the native installer's Language page (LANGUAGES, with the keyboard layout that language starts with), the first-run Setup Language step, and Settings > Language & Region (also reachable from Search)."
   },
   {
    "id": "path:/System/Library/CoreServices/liquiddetectiond.app",
@@ -141,7 +173,16 @@
    "bifrost": "springboard/src/shell/login.rs",
    "status": "partial",
    "note": "login and lock",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::login"
+    }
+   ],
+   "ready_note": "covers: login and lock"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/LegacyPluginEnablement.appex",
@@ -181,7 +222,16 @@
    "bifrost": "springboard/src/shell/pages.rs",
    "status": "partial",
    "note": "Language & Region page",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: Language & Region page"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/LockScreen.appex",
@@ -201,7 +251,16 @@
    "bifrost": "springboard/src/shell/login.rs",
    "status": "partial",
    "note": "lock screen",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::login"
+    }
+   ],
+   "ready_note": "covers: lock screen"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/LockScreenIntentsExtension.appex",
@@ -218,10 +277,29 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/login.rs",
+   "bifrost": "springboard/sdk/src/system_intents.rs, springboard/src/shell/services/system_intents.rs, springboard/src/shell/settings_actions.rs, springboard/src/shell/mod.rs",
    "status": "partial",
-   "note": "Lock state and lock message exist; no App Intent exposes locking to Search or Shortcuts; built on os/team-l-04-system-ui; not yet verified on Midget",
-   "rea": []
+   "note": "Lock Screen is a Search action (settings_actions lock-screen, runs Shell::lock_screen); not yet exposed as an App Intent to Shortcuts; built on os/team-l-04-system-ui; not yet verified on Midget. Built 2026-10-17: Search row and lock hit.",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "system_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::system_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_actions::tests"
+    }
+   ],
+   "ready_note": "The lock_screen App Intent (sdk lock_intents) is served by the system_intents service: a first-party app, Search or Shortcuts calls run {intent: lock_screen} and the shell's tick locks the screen as the menu's Lock Screen does. Search lists the same action (settings_actions lock-screen)."
   }
  ]
 }

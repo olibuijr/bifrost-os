@@ -188,6 +188,18 @@ impl ServiceAdvertiser {
         &self.instance
     }
 
+    /// The instance label alone, such as `Den`.
+    pub fn label(&self) -> &str {
+        self.instance.strip_suffix(&format!(".{}", self.service)).unwrap_or(&self.instance)
+    }
+
+    /// The same publication under another instance label, for a conflict rename. Everything else is kept.
+    pub fn with_label(&self, label: &str) -> ServiceAdvertiser {
+        let mut renamed = self.clone();
+        renamed.instance = format!("{label}.{}", self.service);
+        renamed
+    }
+
     /// Sets the time to live of the published records, in seconds.
     pub fn set_ttl(&mut self, ttl: u32) {
         self.ttl = ttl;
@@ -350,4 +362,88 @@ mod tests {
         assert!(ServiceAdvertiser::new("Den", "http", "", "den.local", 80, TxtRecord::new(), vec![]).is_none());
         assert!(ServiceBrowser::new("_http", "").is_none());
     }
+
+    #[test]
+    fn registry_renames_a_conflicting_label() {
+        let mut registry = ServiceRegistry::new();
+        let first = ServiceAdvertiser::new("Den", "_http._tcp", "", "den.local", 80, TxtRecord::new(), vec![]).unwrap();
+        assert_eq!(registry.register("app.one", first.clone()), "Den._http._tcp.local");
+        assert_eq!(registry.register("app.two", first.clone()), "Den (2)._http._tcp.local");
+        assert_eq!(registry.register("app.two", first), "Den (3)._http._tcp.local");
+        assert_eq!(registry.entries().len(), 3);
+    }
+
+    #[test]
+    fn registry_removes_one_owner_and_keeps_the_rest() {
+        let mut registry = ServiceRegistry::new();
+        let a = ServiceAdvertiser::new("Printer", "_ipp._tcp", "", "p.local", 631, TxtRecord::new(), vec![]).unwrap();
+        let b = ServiceAdvertiser::new("Share", "_smb._tcp", "", "p.local", 445, TxtRecord::new(), vec![]).unwrap();
+        registry.register("app.one", a);
+        registry.register("app.two", b);
+        assert_eq!(registry.for_owner("app.one").len(), 1);
+        assert_eq!(registry.unregister_owner("app.one"), 1);
+        assert!(registry.for_owner("app.one").is_empty());
+        assert_eq!(registry.entries().len(), 1);
+        assert_eq!(registry.entries()[0].1.label(), "Share");
+    }
+
+    #[test]
+    fn with_label_keeps_the_service_type() {
+        let a = ServiceAdvertiser::new("Den", "_http._tcp", "", "den.local", 80, TxtRecord::new(), vec![]).unwrap();
+        let renamed = a.with_label("Den (2)");
+        assert_eq!(renamed.label(), "Den (2)");
+        assert_eq!(renamed.instance_name(), "Den (2)._http._tcp.local");
+    }
 }
+
+/// Every service the shell publishes for the apps on this machine, one registry for the whole session. Each entry
+/// records the app that owns it, so an app's services leave with that app. A label that another entry already holds
+/// is renamed with a number, as RFC 6762 section 9 asks ("Den (2)"), so two publications never share a name.
+#[derive(Clone, Debug, Default)]
+pub struct ServiceRegistry {
+    entries: Vec<(String, ServiceAdvertiser)>,
+}
+
+impl ServiceRegistry {
+    /// An empty registry.
+    pub fn new() -> ServiceRegistry {
+        ServiceRegistry::default()
+    }
+
+    /// Publishes `advertiser` for `owner`. Returns the instance name it was published under, which may carry a number.
+    pub fn register(&mut self, owner: &str, advertiser: ServiceAdvertiser) -> String {
+        let base = advertiser.label().to_string();
+        let mut published = advertiser.clone();
+        let mut n = 1;
+        while self.entries.iter().any(|(_, a)| a.instance_name() == published.instance_name()) {
+            n += 1;
+            published = advertiser.with_label(&format!("{base} ({n})"));
+        }
+        let name = published.instance_name().to_string();
+        self.entries.push((owner.to_string(), published));
+        name
+    }
+
+    /// Removes every service `owner` published. Returns how many were removed.
+    pub fn unregister_owner(&mut self, owner: &str) -> usize {
+        let before = self.entries.len();
+        self.entries.retain(|(o, _)| o != owner);
+        before - self.entries.len()
+    }
+
+    /// All published entries with their owners, in registration order.
+    pub fn entries(&self) -> &[(String, ServiceAdvertiser)] {
+        &self.entries
+    }
+
+    /// The publications one owner holds, in registration order.
+    pub fn for_owner(&self, owner: &str) -> Vec<&ServiceAdvertiser> {
+        self.entries.iter().filter(|(o, _)| o == owner).map(|(_, a)| a).collect()
+    }
+
+    /// The publications that answer a query message, for the caller to send their replies.
+    pub fn answers(&self, query: &Message) -> Vec<&ServiceAdvertiser> {
+        self.entries.iter().map(|(_, a)| a).filter(|a| a.matches_query(query)).collect()
+    }
+}
+

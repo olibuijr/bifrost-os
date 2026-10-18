@@ -285,7 +285,7 @@ mod tests {
         Date { year: 2026, month, day }
     }
     fn ev(id: u64, date: Date, title: &str) -> CalendarEvent {
-        CalendarEvent { id, date, minute: 600, duration: 45, all_day: false, title: title.into(), location: String::new(), notes: String::new(), repeat: 0, alert: 0 }
+        CalendarEvent { id, date, minute: 600, duration: 45, all_day: false, title: title.into(), location: String::new(), notes: String::new(), repeat: 0, alert: 0, uid: String::new() }
     }
     const STAMP: &str = "20261004T120000Z";
 

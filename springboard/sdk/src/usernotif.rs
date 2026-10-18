@@ -6,7 +6,7 @@
 //! app was not running (the shell starts it and delivers the response once it is up). Needs the `notifications`
 //! permission in the manifest; without it every `add` answers `NotifStatus::NotPermitted`.
 
-pub use crate::proto::{NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, TextInput, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION};
+pub use crate::proto::{NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, TextInput, NOTIF_AUTH_MASK, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION, NOTIF_PRESENT_MASK, NotifTrigger, MAX_NOTIF_ATTACHMENTS, MAX_NOTIF_ATTACHMENT_PATH, NOTIF_CATEGORY_CUSTOM_DISMISS, NOTIF_CATEGORY_HIDDEN_SHOW_SUBTITLE, NOTIF_CATEGORY_HIDDEN_SHOW_TITLE};
 use crate::proto::ToShell;
 use crate::Ctx;
 
@@ -32,6 +32,8 @@ pub struct Response {
     pub text: String,
     pub thread: String,
     pub category: String,
+    /// the request's `userInfo` (`UNNotificationContent.userInfo`), as the app set it
+    pub user_info: Vec<(String, String)>,
 }
 
 /// What `App::notification` is called with.
@@ -39,12 +41,18 @@ pub struct Response {
 pub enum Event {
     /// the user acted on a notification (`userNotificationCenter(_:didReceive:)`)
     Response(Response),
+    /// a notification of this app arrives while the app is in front, and the app opted in with
+    /// [`set_presentation_delegate`]. Answer with [`will_present`] using this `token`; without an answer in time the
+    /// notification is not shown.
+    WillPresent { token: u32, id: String, thread: String, category: String, title: String, body: String },
     /// the result of an [`add`]
     Status { request: u32, status: NotifStatus },
     /// the answer to [`delivered`] or [`pending`]
     List { request: u32, delivered: bool, ids: Vec<String> },
     /// the answer to [`settings`]
     Settings { request: u32, settings: NotifSettings },
+    /// the answer to [`request_authorization`]: `granted` is whether the app may post notifications
+    Authorization { request: u32, granted: bool },
 }
 
 /// A request under construction (`UNMutableNotificationContent` plus a trigger).
@@ -121,6 +129,22 @@ impl Request {
         self
     }
     /// `content.relevanceScore`, clamped to 0...1.
+    /// `UNNotificationAttachment`: a PNG at an absolute `path` inside the app's data directory. The first attachment
+    /// shows on the card as a thumbnail. Up to `MAX_NOTIF_ATTACHMENTS` paths; anything else is refused here.
+    pub fn attachment(mut self, path: &str) -> Result<Self, String> {
+        if self.0.attachments.len() >= MAX_NOTIF_ATTACHMENTS {
+            return Err(format!("at most {MAX_NOTIF_ATTACHMENTS} attachments"));
+        }
+        if !path.starts_with('/') || path.len() > MAX_NOTIF_ATTACHMENT_PATH {
+            return Err("an attachment needs an absolute path".into());
+        }
+        if !path.to_ascii_lowercase().ends_with(".png") {
+            return Err("only PNG attachments are shown".into());
+        }
+        self.0.attachments.push(path.to_string());
+        Ok(self)
+    }
+
     pub fn relevance_score(mut self, score: f32) -> Self {
         self.0.relevance_milli = (score.clamp(0.0, 1.0) * 1000.0).round() as u16;
         self
@@ -128,8 +152,8 @@ impl Request {
 }
 
 impl Event {
-    pub(crate) fn response(id: String, action: String, text: String, thread: String, category: String) -> Event {
-        Event::Response(Response { id, action, text, thread, category })
+    pub(crate) fn response(id: String, action: String, text: String, thread: String, category: String, user_info: Vec<(String, String)>) -> Event {
+        Event::Response(Response { id, action, text, thread, category, user_info })
     }
 }
 
@@ -178,6 +202,39 @@ pub fn settings(ctx: &Ctx) -> u32 {
     request
 }
 
+/// `requestAuthorization(options:)`: asks the person to allow notifications for the app. An app asked before gets its
+/// stored answer without a prompt; otherwise the shell shows the first-time alert and answers after it. The answer
+/// arrives as [`Event::Authorization`]. `options` is the [`AuthorizationOptions`] bit set; a bit outside the
+/// [`NOTIF_AUTH_MASK`] is refused by the shell, so only the known bits are passed on.
+pub fn request_authorization(ctx: &Ctx, options: AuthorizationOptions) -> u32 {
+    let request = ctx.next_request();
+    ctx.send_to_shell(ToShell::NotifyAuthorize { request, options: options.0 & NOTIF_AUTH_MASK });
+    request
+}
+
+/// `UNUserNotificationCenterDelegate.userNotificationCenter(_:willPresent:)`: opts the app in (`true`) or out. Only
+/// an app that opted in is asked, and only for notifications that arrive while it is in front.
+pub fn set_presentation_delegate(ctx: &Ctx, enabled: bool) {
+    ctx.send_to_shell(ToShell::NotifyPresentDelegate { enabled });
+}
+
+/// The completion handler of `willPresent`: `options` says how the notification shows while the app is in front.
+/// [`PresentationOptions::NONE`] hides it. Bits the shell does not know are dropped.
+pub fn will_present(ctx: &Ctx, token: u32, options: PresentationOptions) {
+    ctx.send_to_shell(ToShell::NotifyPresentReply { token, options: options.0 & NOTIF_PRESENT_MASK });
+}
+
+/// `add(_:)` with a calendar or time-interval trigger (`UNCalendarNotificationTrigger`, `UNTimeIntervalNotificationTrigger`).
+/// The request's own delay and repeat fields are not used; `trigger` sets the time. The answer is [`Event::Status`] with
+/// the returned request id. A request with an identifier already pending or delivered replaces it, and the pending
+/// requests of both kinds are listed by [`pending`] and removed by [`remove_pending`]. The shell keeps them across a
+/// restart and fires them on time.
+pub fn schedule(ctx: &Ctx, request: Request, trigger: NotifTrigger) -> u32 {
+    let id = ctx.next_request();
+    ctx.send_to_shell(ToShell::NotifySchedule { request: id, req: request.0, trigger });
+    id
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -218,6 +275,19 @@ mod tests {
         assert_eq!(Request::new("a", "T").relevance_score(2.0).0.relevance_milli, 1000);
         assert_eq!(Request::new("a", "T").relevance_score(-1.0).0.relevance_milli, 0);
         assert_eq!(Request::new("a", "T").relevance_score(0.25).0.relevance_milli, 250);
+    }
+
+    #[test]
+    fn attachments_are_absolute_png_paths_and_bounded() {
+        let r = Request::new("a", "T").attachment("/data/pic.PNG").unwrap();
+        assert_eq!(r.0.attachments, vec!["/data/pic.PNG".to_string()]);
+        assert!(Request::new("a", "T").attachment("pic.png").is_err(), "relative");
+        assert!(Request::new("a", "T").attachment("/data/pic.jpg").is_err(), "not PNG");
+        let mut many = Request::new("a", "T");
+        for _ in 0..MAX_NOTIF_ATTACHMENTS {
+            many = many.attachment("/p.png").unwrap();
+        }
+        assert!(many.attachment("/p.png").is_err(), "too many");
     }
 
     #[test]
@@ -268,10 +338,11 @@ mod tests {
 
     #[test]
     fn response_event_carries_every_field() {
-        let e = Event::response("id".into(), NOTIF_DEFAULT_ACTION.into(), "typed".into(), "th".into(), "cat".into());
+        let info = vec![("room".to_string(), "7".to_string())];
+        let e = Event::response("id".into(), NOTIF_DEFAULT_ACTION.into(), "typed".into(), "th".into(), "cat".into(), info.clone());
         assert_eq!(
             e,
-            Event::Response(Response { id: "id".into(), action: NOTIF_DEFAULT_ACTION.into(), text: "typed".into(), thread: "th".into(), category: "cat".into() })
+            Event::Response(Response { id: "id".into(), action: NOTIF_DEFAULT_ACTION.into(), text: "typed".into(), thread: "th".into(), category: "cat".into(), user_info: info })
         );
         assert_ne!(NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION);
     }

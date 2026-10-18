@@ -1,0 +1,51 @@
+{
+  "framework": "Touch Controller",
+  "doc": "https://developer.apple.com/documentation/touchcontroller",
+  "macos_since": "",
+  "status": "partial",
+  "bifrost": "springboard/ui/src/virtual_controller.rs, springboard/ui/src/gamepad.rs, springboard/sdk/src/gamepad_input.rs",
+  "summary": "The shell has a virtual on-screen controller with buttons, sticks and a direction pad, and a gamepad model that apps read. There is no Metal-facing touch control API, and no touchpad control.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run in this batch); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "On-screen buttons and direction pad",
+      "apple": "TCButton, TCDirectionPad",
+      "bifrost": "springboard/ui/src/virtual_controller.rs",
+      "status": "partial",
+      "note": "controls placed in unit-square coordinates over the touch surface; apps cannot create them"
+    },
+    {
+      "feature": "Thumbstick and throttle",
+      "apple": "TCThumbstick, TCThrottle",
+      "bifrost": "springboard/ui/src/virtual_controller.rs",
+      "status": "partial",
+      "note": "a stick control exists; a throttle does not"
+    },
+    {
+      "feature": "Controller input for apps",
+      "apple": "TCTouchController output to the game",
+      "bifrost": "springboard/sdk/src/gamepad_input.rs, springboard/ui/src/gamepad.rs",
+      "status": "partial",
+      "note": "physical controller state reaches apps; virtual control state is not routed to the game"
+    },
+    {
+      "feature": "Rendering touch controls with Metal",
+      "apple": "TCControlContents, TCControlImage, TCControlLayout",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no control artwork or render path for an app"
+    },
+    {
+      "feature": "Touchpad control",
+      "apple": "TCTouchpad",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no absolute or delta touchpad control"
+    }
+  ],
+  "gaps": [
+    "No Metal-facing touch controls for apps.",
+    "Virtual controller output is not exposed to the game API.",
+    "No throttle or touchpad control."
+  ]
+}

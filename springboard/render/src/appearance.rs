@@ -318,11 +318,18 @@ pub fn mix(dark: u32, light: u32, p: f32) -> u32 {
 pub struct Pair {
     pub dark: u32,
     pub light: u32,
+    /// The control accent: `now` returns the user's Settings > Appearance > Accent colour instead of the stored pair.
+    /// Only `CONTROL_ACCENT` sets it; `LINK` and `SYSTEM_BLUE` stay systemBlue.
+    pub follows_accent: bool,
 }
 
 impl Pair {
     pub const fn new(dark: u32, light: u32) -> Self {
-        Pair { dark, light }
+        Pair { dark, light, follows_accent: false }
+    }
+    /// A pair that follows the chosen accent colour (`controlAccentColor`).
+    pub const fn following_accent(dark: u32, light: u32) -> Self {
+        Pair { dark, light, follows_accent: true }
     }
     /// An opaque tinted fill from an accent colour (packed `r | g<<8 | b<<16 | a<<24`, opaque): the accent at 18%
     /// over white in Light and 32% over a dark grey in Dark, as Calendar event blocks and list colour plates
@@ -339,13 +346,23 @@ impl Pair {
             };
             ch(0) | ch(8) | ch(16) | 0xff00_0000
         };
-        Pair { dark: over(30, dark_share), light: over(255, light_share) }
+        Pair::new(over(30, dark_share), over(255, light_share))
     }
     /// The colour at the current scheme position.
     pub fn now(self) -> u32 {
-        // CONTROL_ACCENT (and so LINK and SYSTEM_BLUE) follow Settings > Appearance > Accent colour
-        if self.dark == ACCENT_DARK && self.light == ACCENT_LIGHT {
+        self.resolve(crate::theme::swapped(self.dark, self.light))
+    }
+    /// As `now`, with the colours of `theme` instead of the one read at startup.
+    pub fn now_in(self, theme: &crate::theme::Theme) -> u32 {
+        self.resolve(theme.swap(self.dark, self.light))
+    }
+    fn resolve(self, swapped: Option<(u32, u32)>) -> u32 {
+        if self.follows_accent {
             return accent_now();
+        }
+        // a theme file (`theme.rs`) may give this pair other colours; they win over the accent rule below
+        if let Some((dark, light)) = swapped {
+            return mix(dark, light, scheme());
         }
         // SELECTION is the accent a step deeper in Dark
         if self.dark == SELECTION_DARK && self.light == SELECTION_LIGHT && !matches!(accent(), Accent::Blue | Accent::Multicolour) {
@@ -482,9 +499,7 @@ impl Accent {
     }
 }
 
-/// The values of `ui::CONTROL_ACCENT` and `ui::SELECTION`, which `Pair::now` swaps for the chosen accent.
-const ACCENT_DARK: u32 = crate::gfx::pack(10, 132, 255, 255);
-const ACCENT_LIGHT: u32 = crate::gfx::pack(0, 122, 255, 255);
+/// The values of `ui::SELECTION`, which `Pair::now` swaps for the chosen accent (a step deeper in Dark).
 const SELECTION_DARK: u32 = crate::gfx::pack(14, 100, 196, 255);
 const SELECTION_LIGHT: u32 = crate::gfx::pack(0, 112, 245, 255);
 
@@ -550,8 +565,11 @@ mod scheme_tests {
         set_accent(Accent::Green);
         jump_to(false);
         assert_eq!(crate::ui::system::CONTROL_ACCENT.now(), Accent::Green.colours().0);
+        // links are systemBlue whatever the accent: LINK, SYSTEM_BLUE and the fixed system colours do not follow it
+        assert_ne!(crate::ui::system::LINK.now(), crate::ui::system::CONTROL_ACCENT.now());
+        assert_eq!(crate::ui::system::SYSTEM_BLUE.now(), crate::ui::system::LINK.now());
         set_accent(Accent::Multicolour);
-        assert_eq!(crate::ui::system::LINK.now(), Accent::Blue.colours().0);
+        assert_eq!(crate::ui::system::CONTROL_ACCENT.now(), Accent::Blue.colours().0);
         set_accent(keep);
     }
 
@@ -632,7 +650,7 @@ mod tinted_tests {
         assert_eq!(p.light & 255, 255, "red stays full over white");
         assert_eq!((p.light >> 8) & 255, (255.0f32 * 0.82).round() as u32, "green is pulled toward the accent");
         assert_eq!(p.dark & 255, (30.0 + 225.0f32 * 0.32).round() as u32);
-        assert_eq!(Pair::tinted_by(red, 0.0, 0.0), Pair { dark: 0xff1e_1e1e, light: 0xffff_ffff });
+        assert_eq!(Pair::tinted_by(red, 0.0, 0.0), Pair::new(0xff1e_1e1e, 0xffff_ffff));
     }
 }
 

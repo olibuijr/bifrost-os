@@ -46,9 +46,18 @@
    "area": "panel",
    "apple": "actions sidebar",
    "status": "partial",
-   "bifrost": "springboard/src/shortcuts.rs:94",
-   "note": "Adds Text, Ask for Input, Get Contents of URL, Save File, Show Result, Set Variable and the scripting actions, grouped in the Add Action list. Text, input, variable, file and scripting steps run in the app (evaluate); Save File writes to the app's Saved folder. Get Contents of URL is recorded but the app has no network access, so it reports that it is not available. System actions still cannot run on this device. Not yet checked on the lab machine.",
-   "wire": "Ask for Input and Get Contents of URL are stored and planned but not run: the app has no prompt and no network step yet"
+   "bifrost": "springboard/src/shortcuts.rs (Action::Script); springboard/apps/shortcuts-desktop/src/runner.rs (ScriptHost, script_source)",
+   "note": "Adds Text, Ask for Input, Get Contents of URL, Save File, Show Result, Set Variable, Run Shell Script and Run Script, grouped in the Add Action list. Text, input, variable, file and scripting steps run in the app (evaluate); Save File writes to the app's Saved folder. Run Script runs a line of the BifrOSt script language (springboard/core/src/script) with the previous output as the first item of argv (on run argv ... end; a backslash-n in the text is a line break). Its display notification shows a notification; tell app, display dialog, do shell script and delays are refused or skipped in the app. Get Contents of URL is recorded but the app has no network access, so it reports that it is not available. System actions still cannot run on this device. Not yet checked on the lab machine.",
+   "wire": "Ask for Input and Get Contents of URL are stored and planned but not run: the app has no prompt and no network step yet; Run Shell Script needs the person's confirmation before it can run here"
+  },
+  {
+   "feature": "Run Script (BifrOSt script language)",
+   "area": "integration",
+   "apple": "Run AppleScript / Run JavaScript actions",
+   "status": "partial",
+   "bifrost": "springboard/src/shortcuts.rs (Action::Script, DEFAULT_SCRIPT); springboard/apps/shortcuts-desktop/src/runner.rs (ScriptHost and its tests)",
+   "note": "A step that runs a script in springboard/core/src/script with the shortcut's previous output as argv item 1; the script's result becomes the output of the step. The script can show notifications; tell app, dialogs and shell commands are refused with a reason, which stops the shortcut. Covered by unit tests only.",
+   "wire": "Verify on Midget: add a Run Script step, run it from the editor and check the notification and result panel; a shell or dialog step should stop with its reason. Scripts cannot yet tell other apps or ask for input."
   },
   {
    "feature": "App intents as actions",
@@ -109,9 +118,18 @@
    "area": "view",
    "apple": "Automation",
    "status": "partial",
-   "bifrost": "springboard/src/shortcuts.rs:624 (Automation, due, battery_fell_below); springboard/src/shortcuts.rs:822 (next_automation); springboard/apps/shortcuts-desktop/src/widget.rs:1295 (Target::Automation, the editor's Automation row); springboard/tests/parity_app-shortcuts.rs",
-   "note": "The editor's Automation row steps through none, each app opening and the charge falling below 10, 20, 30 or 50 percent, saved in the list file; due returns the shortcuts that an app opening or a battery change starts, tested headless. Gap: the app feeds no app-open or battery events to due, so an automation does not run on its own yet.",
-   "wire": "The shell's battery reading and app-open events passed to shortcuts::due, so the stored automation runs while the app is open"
+   "bifrost": "springboard/src/shortcuts.rs (Automation, Event, starts, due, dispatch, Run); springboard/apps/shortcuts-desktop/src/widget.rs (Target::Automation, Target::AskBeforeRunning)",
+   "note": "The editor's Automation row steps through: at login; when a Focus turns on or off; a daily or weekday time of day (from the Daily Reminder times); each app opening and each app closing; and the charge falling below 10, 20, 30 or 50 percent. Each automation has Ask Before Running (on by default), a row under Automation that switches it off. The choice is saved in the list file (automation, ask and confirmation columns). Dispatch is tested headless (`dispatch` gives each started shortcut its ask flag). Gap: the shell sends no app-open, app-close, login, Focus or time events to the app, and no notification has Run and Don't Run actions, so nothing runs by itself on the device yet.",
+   "wire": "The shell delivers app-open, app-close, battery, login, Focus and time events to the app, and runs the shortcut on each; a notification with Run and Don't Run actions for an asking automation (the notification category needs action support in the shell)."
+  },
+  {
+   "feature": "Menu bar Shortcuts status item",
+   "area": "menu",
+   "apple": "menu bar status item listing shortcuts",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Not built. The status item would list the pinned shortcuts and run one on choice; the shell has no per-app menu bar item yet.",
+   "wire": "A shell menu bar item hosted for the Shortcuts app, listing pinned shortcuts and running the chosen one."
   },
   {
    "feature": "Open at login",
@@ -194,5 +212,13 @@
    "note": "Vendor cloud",
    "wire": ""
   }
- ]
+ ],
+ "summary": {
+  "features": 23,
+  "parity": 7,
+  "partial": 14,
+  "gap": 1,
+  "n/a": 1,
+  "coverage_pct": 63.6
+ }
 }

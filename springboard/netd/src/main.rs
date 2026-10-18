@@ -127,6 +127,8 @@ fn main() -> std::io::Result<()> {
     let sock = std::env::var("BIFROST_SERVICE_SOCK").unwrap_or_else(|_| format!("/var/lib/springboard/run/{ID}.sock"));
     let dir = std::env::var("BIFROST_SHELL_DIR").unwrap_or_else(|_| "/var/lib/springboard".into());
     let core = Arc::new(Mutex::new(Core { wifi: Wifi::start(&dir), subscribers: Vec::new(), next_sub: 0 }));
+    // the wireless regulatory domain follows the Language & Region setting: applied now and on each change
+    springboard::net::regdomain::follow_region(std::path::PathBuf::from(format!("{dir}/settings.ini")));
     // socket activation: bifrostd binds the socket and starts this process on the first connection
     let listener = svc::listen(std::path::Path::new(&sock))?;
     eprintln!("netd {VERSION} listening on {sock}");

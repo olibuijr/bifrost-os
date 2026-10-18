@@ -20,6 +20,7 @@ pub mod banner;
 pub mod center;
 pub mod list;
 pub mod lockwidgets;
+pub mod modes;
 pub mod permission;
 pub mod schedule;
 pub mod store;
@@ -131,10 +132,12 @@ pub struct Notify {
     pub(in crate::shell) extra: Vec<(AppId, usize)>,
     /// set after the first `set_info`, so the boot state posts nothing
     booted: bool,
-    /// Do Not Disturb as the user set it
-    dnd: bool,
-    /// the schedule's window covers now
-    sched_on: bool,
+    /// the Focus modes (`modes`) and the one on by hand; Do Not Disturb's apps and schedule are read from the store
+    pub(in crate::shell) modes: modes::Modes,
+    /// where `modes` is saved (`focus_modes.ini`); None for a shell that never loaded its data directory
+    modes_path: Option<std::path::PathBuf>,
+    /// the scheduled mode whose window covers now
+    sched_mode: Option<String>,
     /// Focus was switched off inside the window: it stays off until the window ends
     sched_skip: bool,
     /// first-time permission alerts waiting for their turn: the app and the name the alert shows
@@ -166,8 +169,9 @@ impl Default for Notify {
             badges: Vec::new(),
             extra: Vec::new(),
             booted: false,
-            dnd: false,
-            sched_on: false,
+            modes: modes::Modes::builtin(),
+            modes_path: None,
+            sched_mode: None,
             sched_skip: false,
             ask_queue: Vec::new(),
             ask: None,
@@ -176,36 +180,93 @@ impl Default for Notify {
 }
 
 impl Notify {
-    /// Focus affects delivery only; notification history and badges are kept.
+    /// Focus affects delivery only; notification history and badges are kept. Do Not Disturb on or off.
     pub fn set_dnd(&mut self, on: bool) {
-        if on == self.dnd {
-            return;
+        self.set_mode(on.then_some(modes::DND_ID));
+    }
+
+    /// Switches the Focus mode `id` on by hand, or Focus off (None). Returns false for a mode that does not exist.
+    pub fn set_mode(&mut self, id: Option<&str>) -> bool {
+        if id.is_none() {
+            // switching Focus off inside a schedule's window holds until the window ends
+            self.end_scheduled();
         }
-        self.dnd = on;
-        if on {
+        if self.modes.manual.as_deref() == id {
+            return true;
+        }
+        if !self.modes.set_manual(id) {
+            return false;
+        }
+        if id.is_some() {
             self.sched_skip = false;
             self.silence();
         }
+        true
     }
 
-    /// Focus is on: switched on by hand, or the schedule's window is open
-    /// and nobody switched it off since it opened.
+    /// Focus is on: a mode switched on by hand, or a schedule's window is open
+    /// and nobody switched Focus off since it opened.
     pub fn dnd(&self) -> bool {
-        self.dnd || (self.sched_on && !self.sched_skip)
+        self.active_mode().is_some()
     }
 
-    /// The user turned Focus off while the schedule had it on: it stays off
+    /// The Focus mode on now, if any. A manual choice wins over the schedule.
+    pub fn active_mode(&self) -> Option<modes::FocusMode> {
+        if let Some(mode) = self.modes.manual_mode() {
+            return Some(self.as_stored(mode));
+        }
+        if self.sched_skip {
+            return None;
+        }
+        let id = self.sched_mode.as_deref()?;
+        self.modes.get(id).map(|mode| self.as_stored(mode))
+    }
+
+    /// A mode as it applies now. Do Not Disturb's allowed apps and schedule live in the notification store
+    /// (`notifications.ini`); every other mode keeps its own in `focus_modes.ini`.
+    fn as_stored(&self, mode: &modes::FocusMode) -> modes::FocusMode {
+        let mut m = mode.clone();
+        if m.id == modes::DND_ID {
+            m.apps = apps().iter().filter(|a| self.store.is_focus_allowed(a.id)).map(|a| store::app_key(a.id).to_string()).collect();
+            let s = self.store.schedule();
+            m.schedule = s.enabled.then_some(modes::ModeSchedule { days: modes::ALL_DAYS, start: s.start, end: s.end });
+        }
+        m
+    }
+
+    /// The user turned Focus off while a schedule had it on: it stays off
     /// until the window ends.
     pub fn end_scheduled(&mut self) {
-        if self.sched_on {
+        if self.sched_mode.is_some() {
             self.sched_skip = true;
         }
     }
 
-    /// Whether a notification of `app` may show a banner or wake the screen: not muted, and either Focus is off or
-    /// the app is allowed through Focus.
+    /// Whether a notification of `app` may show a banner or wake the screen: not muted, and the Focus mode on now
+    /// lets it through.
     pub fn delivers(&self, app: AppId) -> bool {
-        !self.store.is_muted(app) && (!self.dnd() || self.store.is_focus_allowed(app))
+        !self.store.is_muted(app) && self.shows(self.active_mode().as_ref(), app)
+    }
+
+    /// Whether a notification of `app` shows under `mode` (no mode shows everything).
+    fn shows(&self, mode: Option<&modes::FocusMode>, app: AppId) -> bool {
+        modes::decide(mode, store::app_key(app), "", false) == modes::Delivery::Show
+    }
+
+    /// Saves the Focus modes to their file, when the shell has a data directory.
+    pub fn save_modes(&self) {
+        if let Some(path) = &self.modes_path {
+            if let Err(e) = self.modes.save(path) {
+                eprintln!("springboard: focus_modes.ini: {e}");
+            }
+        }
+    }
+
+    /// Reads the Focus modes saved next to the notification store.
+    pub(in crate::shell) fn load_modes(&mut self, notifications: &str) {
+        let path = std::path::Path::new(notifications).with_file_name("focus_modes.ini");
+        self.modes = modes::Modes::load(&path);
+        self.modes_path = Some(path);
     }
 
     /// The person answered the first-time alert for `app`: the answer is stored (the app is not asked again) and the
@@ -217,7 +278,8 @@ impl Notify {
 
     /// Drops what Focus silences: the banner and a pending wake. A banner of an app allowed through Focus stays.
     fn silence(&mut self) {
-        if self.banner_card.as_ref().is_some_and(|c| self.store.is_focus_allowed(c.app)) {
+        let mode = self.active_mode();
+        if self.banner_card.as_ref().is_some_and(|c| self.shows(mode.as_ref(), c.app)) {
             return;
         }
         self.banner = None;
@@ -227,13 +289,14 @@ impl Notify {
 
     /// Re-reads the schedule against the clock; true when the window opened or closed.
     fn refresh_schedule(&mut self) -> bool {
-        let minute = Schedule::minute_of_day(self.now(), self.wall.offset);
-        let on = self.store.schedule().active(minute);
-        if on == self.sched_on {
+        let (unix, offset) = (self.now(), self.wall.offset);
+        let (day, minute) = (modes::weekday_of(unix, offset), Schedule::minute_of_day(unix, offset));
+        let on = self.modes.list.iter().map(|m| self.as_stored(m)).find(|m| m.schedule.as_ref().is_some_and(|s| s.covers(day, minute))).map(|m| m.id);
+        if on == self.sched_mode {
             return false;
         }
-        self.sched_on = on;
-        if !on {
+        self.sched_mode = on;
+        if self.sched_mode.is_none() {
             self.sched_skip = false;
         } else if self.dnd() {
             self.silence();
@@ -365,14 +428,26 @@ impl Shell {
 
     /// `notify`, returning the id the store gave the notification.
     pub fn notify_id(&mut self, n: Notification) -> u64 {
+        self.notify_id_banner(n, true)
+    }
+
+    /// Like `notify_id`; with `banner` false the notification is only stored and listed (an app whose alert option
+    /// was not granted), so no banner or wake is shown for it.
+    pub fn notify_id_banner(&mut self, n: Notification, banner: bool) -> u64 {
         let app = n.app;
         let id = self.notify.store.push(n);
+        // the app and the outcome only: the title and body stay out of the log
+        bifrost_core::log::shell_logger("notify").info(format!("notification {id} from app {app:?} stored, banner {banner}"));
         self.screentime.note_notification(app);
         self.store_changed();
         self.notify.refresh_schedule();
+        if !banner {
+            return id;
+        }
         // the delivery model decides: Stored (Alert Style None, muted, or Focus) is listed and badged only
         let decision = presentation_of(&self.app_notif(app), self.notify.delivers(app));
         if decision.presentation == bifrost_ui::notifdelivery::Presentation::Stored {
+            bifrost_core::log::shell_logger("notify").debug(format!("notification {id} listed only, no banner"));
             return id;
         }
         if !self.screen_on {
@@ -397,12 +472,27 @@ impl Shell {
         self.notify.store.get(id).is_some()
     }
 
+    /// Gives the banner for notification `id` its category's action buttons (none when it is not showing).
+    pub(in crate::shell) fn usernotif_banner_actions(&mut self, id: u64, actions: &[bifrost_proto::NotifAction]) {
+        if let Some(card) = self.notify.banner_card.as_mut().filter(|c| c.id == id) {
+            card.set_actions(&self.ui, actions, &|name| crate::first_frame_cache::cached_icon(name, 16));
+        }
+    }
+
+    /// The identifier of the banner's action button under (x, y), if one is there.
+    fn banner_action_at(&self, x: f32, y: f32, t: f64) -> Option<String> {
+        let (bx, by, _, _) = self.banner_rect(t)?;
+        self.notify.banner_card.as_ref()?.action_at(&self.ui, bx, by, x, y).map(str::to_string)
+    }
+
     fn start_banner(&mut self, id: u64, app: AppId) {
         let now = self.notify.now();
         let Some(n) = self.notify.store.get(id).cloned() else { return };
         let icon = self.notification_icon(app);
-        let alerts = self.app_notif(app).persistent;
-        self.notify.banner_card = Some(Card::new(&self.ui, &n, &icon, now, false));
+        let page = self.app_notif(app);
+        // a banner shows once unlocked, so only Never hides its text
+        self.notify.banner_card = Some(Card::new(&self.ui, &n, &icon, now, page.previews == 2));
+        let alerts = page.persistent;
         self.notify.banner = Some(Banner::new(id, self.notify.t).persistent(alerts));
     }
 
@@ -436,8 +526,37 @@ impl Shell {
         }
     }
 
+    /// The thread of lock-screen group `group` (empty when there is none).
+    fn lock_thread(&self, group: usize) -> String {
+        self.notify.lock.as_ref().and_then(|l| l.groups.get(group)).map(|g| g.thread.clone()).unwrap_or_default()
+    }
+
+    /// Clears one stack of an app: the notifications of `app` in `thread` (the Clear button of a group).
+    pub(super) fn clear_group(&mut self, app: AppId, thread: &str) {
+        self.usernotif_prune();
+        self.clear_group_entries(app, thread);
+        self.usernotif_dismiss_gone();
+    }
+
+    fn clear_group_entries(&mut self, app: AppId, thread: &str) {
+        if self.notify.store.clear_thread(app, thread) {
+            self.store_changed();
+        }
+        if self.notify.banner_card.as_ref().is_some_and(|c| c.app == app) {
+            if let Some(b) = &mut self.notify.banner {
+                b.dismiss(self.notify.t);
+            }
+        }
+    }
+
     /// Drops one notification (a swipe on a card of an expanded stack).
     fn clear_notification(&mut self, id: u64) {
+        self.usernotif_prune();
+        self.clear_notification_entry(id);
+        self.usernotif_dismiss_gone();
+    }
+
+    fn clear_notification_entry(&mut self, id: u64) {
         let banner = self.notify.banner.as_ref().is_some_and(|b| b.id == id);
         if self.notify.store.remove(id) {
             self.store_changed();
@@ -451,6 +570,12 @@ impl Shell {
 
     /// Drops every notification (Clear All).
     pub(super) fn clear_all_notifications(&mut self) {
+        self.usernotif_prune();
+        self.clear_all_entries();
+        self.usernotif_dismiss_gone();
+    }
+
+    fn clear_all_entries(&mut self) {
         self.notify.store.clear();
         self.store_changed();
         if let Some(b) = &mut self.notify.banner {
@@ -533,6 +658,16 @@ impl Shell {
     }
 
     /// Whether the lock screen hides what notifications and events say: a passcode is set.
+    /// Whether the app's Show Previews setting hides its text in a list of `mode`: Never hides it everywhere,
+    /// When Unlocked hides it on the lock screen and shows it once unlocked (`notify_page::PREVIEWS`).
+    fn previews_hidden(&self, app: AppId, mode: Mode) -> bool {
+        match self.app_notif(app).previews {
+            2 => true,
+            1 => mode == Mode::Lock,
+            _ => false,
+        }
+    }
+
     fn lock_private(&self) -> bool {
         self.screen == Screen::Lock && super::passcode::Lock::required(&self.passcode_path())
     }
@@ -551,8 +686,21 @@ impl Shell {
         let icons = &self.notify.icons;
         let icon = |app: AppId| icons.iter().find(|(a, _)| *a == app).map(|(_, i)| i.clone()).unwrap_or_else(|| Image::new(1, 1));
         let muted: Vec<AppId> = apps().iter().map(|a| a.id).filter(|&a| self.notify.store.is_muted(a)).collect();
-        let opts = Opts { expanded: &self.notify.expanded, muted: &muted, private };
-        ListView::new(&self.ui, mode, &groups, &icon, self.notify.now(), opts)
+        let hidden: Vec<AppId> = apps().iter().map(|a| a.id).filter(|&a| self.previews_hidden(a, mode)).collect();
+        let opts = Opts { expanded: &self.notify.expanded, muted: &muted, hidden: &hidden, private };
+        let mut list = ListView::new(&self.ui, mode, &groups, &icon, self.notify.now(), opts);
+        let usernotif = &self.usernotif;
+        list.set_actions(&self.ui, &|id| usernotif.actions(id), &|name| crate::first_frame_cache::cached_icon(name, 16));
+        list
+    }
+
+    /// The user chose button `slot` of notification `id` in a list: the app hears the action and the notification is
+    /// cleared, as a banner's button does.
+    fn list_action(&mut self, id: u64, slot: usize, t: f64) {
+        let Some(action) = self.usernotif.actions(id).get(slot).map(|a| a.id.clone()) else { return };
+        self.usernotif_respond(id, &action, "", t);
+        self.clear_notification(id);
+        self.dirty = true;
     }
 
     /// Where the lock screen's list starts, in px: under the widget strip,
@@ -563,9 +711,17 @@ impl Shell {
         self.ui.pt(pt)
     }
 
+    /// Where the pending requests of `notification-schedule` are saved: beside the notification store, once the
+    /// data directory is set (None before that, so a test shell writes nothing).
+    pub(in crate::shell) fn pending_path(&self) -> Option<std::path::PathBuf> {
+        self.notify.store.path().and_then(|p| p.parent()).map(|dir| dir.join("pending-notifications.ini"))
+    }
+
     /// Loads the persisted notifications from `path` and saves there from now on.
     pub(super) fn notify_load(&mut self, path: &str) {
         self.notify.store = Store::load(path);
+        self.notify.load_modes(path);
+        self.usernotif.load_granted(std::path::Path::new(path).with_file_name("authorization.ini"));
         self.store_changed();
     }
 
@@ -738,7 +894,8 @@ impl Shell {
     fn banner_rect(&self, t: f64) -> Option<(f32, f32, f32, f32)> {
         let b = self.notify.banner.as_ref()?;
         let ui = &self.ui;
-        let (w, h) = (ui.pt(CARD_W_PT), ui.pt(CARD_H_PT));
+        let w = ui.pt(CARD_W_PT);
+        let h = self.notify.banner_card.as_ref().map_or(ui.pt(CARD_H_PT), |c| c.height(ui));
         let rest = ui.pt(BANNER_TOP_PT);
         let y = rest - (1.0 - b.shown(t)) * (rest + h) - b.pull();
         Some((((self.w as f32 - w) / 2.0).round(), y, w, h))
@@ -756,6 +913,14 @@ impl Shell {
         let pulling = self.notify.banner.as_ref().is_some_and(Banner::pulling);
         match ev {
             Event::Down(x, y) if !pulling => {
+                // a button on the banner answers its notification and clears the banner; the rest of the card is a tap
+                if let Some(action) = self.banner_action_at(x, y, t) {
+                    let id = self.notify.banner.as_ref()?.id;
+                    self.notify.banner.as_mut()?.dismiss(t);
+                    self.usernotif_respond(id, &action, "", t);
+                    self.dirty = true;
+                    return Some(vec![]);
+                }
                 let (bx, by, bw, bh) = self.banner_rect(t)?;
                 let b = self.notify.banner.as_mut()?;
                 if b.animating() || x < bx || x >= bx + bw || y < by || y >= by + bh {
@@ -863,10 +1028,11 @@ impl Shell {
                 match (tc.horizontal, tc.aim) {
                     (None, Aim::Card { .. }) if tc.base < 0.0 => self.notify.revealed = None,
                     (None, aim) => self.lock_tap(aim, t),
-                    (Some(_), Aim::Card { id, app, whole, .. }) => {
+                    (Some(_), Aim::Card { id, app, whole, group, .. }) => {
                         if -total > cw * CLEAR_FRACTION {
                             if whole {
-                                self.clear_notifications(app);
+                                let thread = self.lock_thread(group);
+                                self.clear_group(app, &thread);
                             } else {
                                 self.clear_notification(id);
                             }
@@ -890,6 +1056,7 @@ impl Shell {
     /// A tap that stayed put on `aim`.
     fn lock_tap(&mut self, aim: Aim, t: f64) {
         let group_app = |sh: &Self, i: usize| sh.notify.lock.as_ref().and_then(|l| l.groups.get(i)).map(|g| g.app);
+        let group_stack = |sh: &Self, i: usize| sh.notify.lock.as_ref().and_then(|l| l.groups.get(i)).map(|g| (g.app, g.thread.clone()));
         match aim {
             Aim::Card { group, app, .. } => {
                 let stacked = self.notify.lock.as_ref().and_then(|l| l.groups.get(group)).is_some_and(|g| g.stacked());
@@ -901,8 +1068,8 @@ impl Shell {
                 }
             }
             Aim::Button(Hit::Clear(i)) => {
-                if let Some(app) = group_app(self, i) {
-                    self.clear_notifications(app);
+                if let Some((app, thread)) = group_stack(self, i) {
+                    self.clear_group(app, &thread);
                 }
             }
             Aim::Button(Hit::Mute(i)) => {
@@ -917,14 +1084,18 @@ impl Shell {
                 }
             }
             Aim::Button(Hit::ClearAll) => self.clear_all_notifications(),
+            Aim::Button(Hit::Action { id, slot, .. }) => self.list_action(id, slot, t),
             Aim::Button(Hit::Card { .. }) => {}
             Aim::Revealed(slot) => {
-                if let Some(Aim::Card { id, app, whole, .. }) = self.notify.revealed.take() {
+                if let Some(Aim::Card { id, app, whole, group, .. }) = self.notify.revealed.take() {
                     self.dirty = true;
                     match slot {
                         0 => self.toggle_mute(app),
                         1 => self.open_from_notification(app, t),
-                        _ if whole => self.clear_notifications(app),
+                        _ if whole => {
+                            let thread = self.lock_thread(group);
+                            self.clear_group(app, &thread);
+                        }
                         _ => self.clear_notification(id),
                     }
                 }
@@ -1508,6 +1679,48 @@ mod tests {
             tap(&mut sh, tx, ty, 5000.0);
         }
         assert!(!sh.app_muted(AppId::Settings), "a second tap unmutes");
+    }
+
+    #[test]
+    fn show_previews_decides_what_banners_and_lists_reveal() {
+        let mut sh = shell();
+        unlock(&mut sh);
+        sh.tick(1000.0);
+        let set = |sh: &mut Shell, previews: u8| {
+            let page = AppNotif { previews, ..AppNotif::default() };
+            let _ = sh.prefs.set(&pref_key(AppId::Files), &page.encode());
+        };
+        set(&mut sh, 0);
+        sh.notify(note(AppId::Files, "Always"));
+        assert!(!sh.notify.banner_card.as_ref().unwrap().private && !sh.previews_hidden(AppId::Files, Mode::Lock));
+        set(&mut sh, 1);
+        assert!(sh.previews_hidden(AppId::Files, Mode::Lock), "When Unlocked hides the text on the lock screen");
+        assert!(!sh.previews_hidden(AppId::Files, Mode::Center), "and shows it once unlocked");
+        sh.notify(note(AppId::Files, "When unlocked"));
+        assert!(!sh.notify.banner_card.as_ref().unwrap().private);
+        set(&mut sh, 2);
+        assert!(sh.previews_hidden(AppId::Files, Mode::Center));
+        sh.notify.banner = None;
+        sh.notify(note(AppId::Files, "Never"));
+        assert!(sh.notify.banner_card.as_ref().unwrap().private, "Never hides the banner text too");
+    }
+
+    #[test]
+    fn clearing_a_stack_removes_only_its_thread_of_the_app() {
+        let mut sh = shell();
+        unlock(&mut sh);
+        sh.tick(1000.0);
+        let threaded = |thread: &str, title: &str| Notification { image: None, thread: thread.into(), ..note(AppId::Files, title) };
+        sh.notify(threaded("chat:1", "hi"));
+        sh.notify(threaded("chat:2", "yo"));
+        sh.notify(threaded("chat:1", "again"));
+        let groups = sh.visible_groups(Mode::Center);
+        assert_eq!(groups.len(), 2, "one stack per thread");
+        assert_eq!(groups[0].thread, "chat:1", "the newest stack first");
+        sh.clear_group(AppId::Files, "chat:1");
+        let groups = sh.notify.store.groups();
+        let left: Vec<&str> = groups.iter().flat_map(|g| g.items.iter().map(|n| n.title.as_str())).collect();
+        assert_eq!(left, vec!["yo"]);
     }
 
     #[test]

@@ -4,7 +4,7 @@
   "macos_since": "12.0",
   "status": "partial",
   "bifrost": "springboard/src/shell/diag.rs, springboard/src/shell/diagnostics_page.rs, springboard/src/bare/crashlog.rs, springboard/src/bare/heartbeat.rs, springboard/src/bare/jank.rs, springboard/core/src/host.rs, springboard/sdk/src/process_info.rs, springboard/core/src/log.rs, springboard/sdk/src/log.rs",
-  "summary": "BifrOSt records crashes, UI stalls and slow frames at system level and shows them to the user in Settings and Console, and it can share them with the developer. No app receives a metric report or a diagnostic report through an SDK API, so MetricKit's app-facing reporting (MXMetricManager, MetricReport, DiagnosticReport delivery) has no counterpart; the system-side capture is partly there.",
+  "summary": "BifrOSt records crashes, UI stalls and slow frames at system level and shows them to the user in Settings and Console, and it can share them with the developer. No app receives a metric report or a diagnostic report through an SDK API, so MetricKit's app-facing reporting (MXMetricManager, MetricReport, DiagnosticReport delivery) has no counterpart; the system-side capture is partly there. Refreshed 2026-10-17: Signposts are built: springboard/sdk/src/signpost.rs (Signposter, tests signpost::tests) and springboard/core/src/signpost.rs, and the Console app has a signposts view (springboard/apps/console-desktop/src/signposts.rs), so that gap is closed.",
   "rea_evidence": "ev_565127097c42ceb11f645dadcd0a33856ce72356eef3a38fdd4e03d1aa71b927",
   "features": [
     {
@@ -12,7 +12,7 @@
       "apple": "MXMetricManager, MetricReport (async sequences, once per day, previous 24 h)",
       "bifrost": "springboard/sdk/src/daily_metric_report.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (w4-metrickit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SDK type delivers a daily report to an app. Host counters are read by the shell for its own menu extras and by ProcessInfo; no report is produced."
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (w4-metrickit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SDK type delivers a daily report to an app. Host counters are read by the shell for its own menu extras and by ProcessInfo; no report is produced. Built 2026-10-17: Built 2026-10-17: the shell feeds per-app totals (launch, foreground, close, normal ending) and runs the daily schedule for subscribed apps, which get a didReceiveDailyReport event and can read their archive (springboard/src/shell/services/metric_reports.rs, service metrics; the model moved to core/src/daily_metric_report.rs with payload_json and payload_from_json); tests metric_reports::tests and daily_metric_report tests. Gaps: background time is not tracked, first draw is not hooked, and the SDK does not yet wrap the metrics service. Not run: lead runs the tests."
     },
     {
       "feature": "Immediate diagnostic reports (DiagnosticReport)",
@@ -33,7 +33,7 @@
       "apple": "HangDiagnostic, HangTimeMetric",
       "bifrost": "springboard/sdk/src/diagnostic_report.rs (DiagnosticKind::Stall, longest_stall); springboard/src/bare/heartbeat.rs (STALL_MS 20 s, exit status 5); wired: springboard/apps/console-desktop/src/diagnostics.rs (HangSource, hang_rows)",
       "status": "partial",
-      "note": "The shell's frozen-UI watcher appends a stall line to crash.log and exits after 20 s without a beat. Each stall record carries the whole seconds logged, and longest_stall gives the longest one; both are tested headless in springboard/sdk/tests/parity_sdk-os-05.rs. Gap: the watcher covers the shell loop only, there is no hang duration histogram, and no callback reaches an app. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "The shell's frozen-UI watcher appends a stall line to crash.log and exits after 20 s without a beat. Each stall record carries the whole seconds logged, and longest_stall gives the longest one; both are tested headless in springboard/sdk/tests/parity_sdk-os-05.rs. Gap: the watcher covers the shell loop only, there is no hang duration histogram, and no callback reaches an app. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity. Built 2026-10-17: stall_histogram in sdk diagnostic_report (buckets 0-5, 5-10, 10-30, 30-60 and 60 s or more); tests diagnostic_report::tests. No callback reaches an app yet."
     },
     {
       "feature": "Animation hitch and slow-frame measurement (HitchTimeMetric, HitchTimeRatio)",
@@ -96,7 +96,7 @@
       "apple": "GPUTimeMetric, MetalFrameRateMetric, PixelLuminanceMetric, AveragePixelLuminance",
       "bifrost": "springboard/core/src/frame_metrics.rs",
       "status": "partial",
-      "note": "Recorder keeps the last N presented frames of an app with GPU time per frame, mean and max GPU time, frame rate and dropped frames against the refresh period (frame_metrics::Recorder, Summary). The caller supplies the GPU time and presentation time; the presenter does not feed it yet, and no app reaches it, so per-layer measurement and pixel luminance remain missing. Built on parity/team-a-04; not yet verified on Midget."
+      "note": "Recorder keeps the last N presented frames of an app with GPU time per frame, mean and max GPU time, frame rate and dropped frames against the refresh period (frame_metrics::Recorder, Summary). The caller supplies the GPU time and presentation time; the presenter does not feed it yet, and no app reaches it, so per-layer measurement and pixel luminance remain missing. Built on parity/team-a-04; not yet verified on Midget. Built 2026-10-17: Built 2026-10-17: the presenter feeds every drawn surface's frame figures (springboard/src/gpu/wl.rs: the pass time, measured as the wait for the GPU in draw, and the finish instant on the presenter clock, recorded with frame_metrics::Recorder over 120 frames at 60 Hz until the shell sets the refresh); Presenter::frame_summary reads them. Tests frame_feed_tests::presented_passes_feed_the_surface_summary_and_a_backwards_frame_is_dropped. Gaps: no app reaches the summary yet, the refresh period is fixed, and per-layer and luminance metrics are missing. Not run: lead runs the tests."
     },
     {
       "feature": "Custom signpost intervals (SignpostIntervalMetric, mxSignpost)",
@@ -123,9 +123,8 @@
   "gaps": [
     "No app-facing report API: no MXMetricManager equivalent delivers daily metric reports or diagnostic reports to an app.",
     "No per-app metric collection beyond ProcessInfo counters: time-in-use, launch and resume timing, network, disk and GPU totals are not kept per app (frame_metrics has no caller yet).",
-    "Crash and hang records are one-line log entries with no structured call-stack tree (CallStackTree, CallStackThread, CallStackFrame) available to apps.",
+    "Crash and hang records are one-line log entries; the call-stack tree type exists (springboard/sdk/src/call_stack_tree.rs, tests call_stack_tree::tests) but no crash or hang record fills it.",
     "No exception diagnostics for memory or CPU limit kills, and no termination counts by category.",
-    "No signposter (mxSignpost, SignpostIntervalMetric): signposts and spin reports remain planned in docs/milestone-unified-logging.md.",
     "No per-process energy impact or pixel luminance metric."
   ]
 }
