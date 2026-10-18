@@ -790,6 +790,9 @@ pub struct Shell {
     /// a finger held still on the tablet desktop: (x, y, when it landed, fired). Held `DESK_HOLD_MS` it is a secondary
     /// click (`desktop_pointer` with context, as a right button), and the lift that ends it does nothing else
     desk_hold: Option<(f32, f32, f64, bool)>,
+    /// A desktop overlay (Overview, Control Center, Notification Center, Search, the assistant) was up at the last tick:
+    /// the frame after it goes is painted whole, so no part of its veil or panel is left in a drawable
+    desk_overlay_was: bool,
     /// a system gesture (`tablet_gestures`) took the touch in progress: its moves and its lift are not the app's
     touch_taken: bool,
     /// the scale of the tablet desktop's pinch so far, for the step of each new one (`desk_pinch`)
@@ -1185,6 +1188,7 @@ impl Shell {
             desk_kb_lift: None,
             desk_text_focus_last: None,
             desk_hold: None,
+            desk_overlay_was: false,
             touch_taken: false,
             pinch_last: None,
             term_touch: termtouch::TermTouch::default(),
@@ -3686,6 +3690,11 @@ impl Shell {
             }
         }
         self.desk_text_focus_last = now;
+        let overlay = self.desk_active() && (self.overview_active() || self.cc_active() || self.center_active() || self.quicksearch.is_shown() || self.assistant.is_shown());
+        if self.desk_overlay_was && !overlay {
+            self.force_full_redraw();
+        }
+        self.desk_overlay_was = overlay;
         if let Some((x, y, t0, false)) = self.desk_hold {
             if t - t0 >= DESK_HOLD_MS {
                 self.desk_hold = Some((x, y, t0, true));
