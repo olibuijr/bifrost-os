@@ -30,6 +30,11 @@ use springboard::shell::kb_capslock::KbPrefs;
 use springboard::shell::kb_clicks::Click;
 use springboard::shell::kb_layouts;
 
+/// The start time of a slide that is already over: the shell animates the slide, this process draws the keyboard at
+/// rest. A start of 0.0 is not enough: the frame clock counts from the process start, so the first frames landed
+/// mid-slide, drawn low in the buffer, and stayed there until the next touch.
+const AT_REST: f64 = -1.0e12;
+
 struct KeyboardApp {
     kb: Option<Keyboard>,
     config: KeyboardConfig,
@@ -151,7 +156,7 @@ impl KeyboardApp {
         kb.set_auto_caps(c.flags & kbflags::AUTO_CAPS != 0);
         kb.set_kb_prefs(KbPrefs { enable_caps_lock: c.flags & kbflags::CAPS_LOCK != 0, period_shortcut: c.flags & kbflags::PERIOD_SHORTCUT != 0 });
         // a keyboard that is hidden resets its typing state when it is shown again
-        kb.set_shown(c.shown(), 0.0);
+        kb.set_shown(c.shown(), AT_REST);
     }
 }
 
@@ -170,7 +175,7 @@ impl App for KeyboardApp {
             }
             None => {
                 let mut kb = Keyboard::new(w, s, self.config.flags & kbflags::ACCESSORY != 0);
-                kb.set_shown(true, 0.0);
+                kb.set_shown(true, AT_REST);
                 self.kb = Some(kb);
             }
         }
@@ -185,7 +190,10 @@ impl App for KeyboardApp {
             // the terminal row changes the key set: rebuild at the current size
             if let Some(kb) = self.kb.take() {
                 let (w, s) = (kb.w, ctx.cfg.scale);
-                self.kb = Some(Keyboard::new(w, s, config.flags & kbflags::ACCESSORY != 0));
+                let mut kb = Keyboard::new(w, s, config.flags & kbflags::ACCESSORY != 0);
+                // a new keyboard starts hidden; this one draws at rest, as `configure` sets up the first one
+                kb.set_shown(true, AT_REST);
+                self.kb = Some(kb);
             }
         }
         self.apply();
