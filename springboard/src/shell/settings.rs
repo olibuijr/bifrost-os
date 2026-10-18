@@ -3253,6 +3253,7 @@ impl Settings {
             Toggle::StickyKeys => flip(&mut self.a11y.sticky_keys),
             Toggle::MouseKeys => flip(&mut self.a11y.mouse_keys),
             Toggle::MotionCues => flip(&mut self.a11y.motion_cues),
+            Toggle::SwitchControl => flip(&mut self.a11y.switch_control),
             Toggle::LiveCaptions => flip(&mut self.a11y.live_captions),
             Toggle::AutoTime => {
                 let on = flip(&mut self.info.time_manual);
