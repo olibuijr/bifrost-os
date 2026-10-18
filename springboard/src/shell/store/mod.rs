@@ -1969,7 +1969,7 @@ mod tests {
             assert!(!ids.iter().any(|i| i == "is.o.update" || i == "is.o.audio"), "{tab:?} lists a service");
         }
         assert_eq!(s.update_count(), 0);
-        let plan = api::system_plan(&s.catalog, &[], "9.9.9");
+        let plan = api::system_plan(&s.catalog, &[], "9.9.9", &[]);
         assert!(plan.iter().any(|a| a.id == "is.o.update") && plan.iter().any(|a| a.id == "is.o.audio"));
         assert!(api::updates(&s.catalog, &s.installed).is_empty());
     }

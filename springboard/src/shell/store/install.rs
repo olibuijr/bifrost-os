@@ -699,8 +699,27 @@ pub fn install_download_local(root: &Path, url: &str, size: u64, sha256: &str, s
         let mut file = std::fs::File::open(&part).map_err(|e| e.to_string())?;
         install_archive(root, &mut file, shell)
     });
+    if result.as_ref().is_err_and(|e| e.contains("built for another CPU")) {
+        note_refused(root, sha256);
+    }
     if result.is_ok() || result.as_ref().is_err_and(|e| e.contains("checksum mismatch") || e.contains("signature check failed") || e.contains("built for another CPU")) {let _ = std::fs::remove_file(&part);}
     result
+}
+
+/// The sha256 (lowercase) of every package refused for another CPU, so the background check does not fetch it again.
+pub fn refused(root: &Path) -> Vec<String> {
+    std::fs::read_to_string(apps_dir(root).join(".refused")).unwrap_or_default().lines().map(|l| l.trim().to_ascii_lowercase()).filter(|l| !l.is_empty()).collect()
+}
+
+fn note_refused(root: &Path, sha256: &str) {
+    let sha = sha256.to_ascii_lowercase();
+    if refused(root).contains(&sha) {
+        return;
+    }
+    let _ = std::fs::create_dir_all(apps_dir(root));
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(apps_dir(root).join(".refused")) {
+        let _ = writeln!(f, "{sha}");
+    }
 }
 
 /// privd's `store.install` (the only form it takes: an app id): fetch the PC App Store
@@ -1114,6 +1133,17 @@ pub mod tests {
         h.extend_from_slice(&machine.to_le_bytes());
         h.resize(64, 0);
         h
+    }
+
+    #[test]
+    fn refused_packages_are_remembered_once_by_sha256() {
+        let root = scratch("refused-set");
+        assert!(refused(&root).is_empty());
+        note_refused(&root, "ABCDEF");
+        note_refused(&root, "abcdef");
+        note_refused(&root, "123456");
+        assert_eq!(refused(&root), ["abcdef", "123456"]);
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]
