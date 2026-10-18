@@ -203,7 +203,7 @@ pub(super) struct Overview {
     closing: Option<f64>,
     chosen: Option<AppId>,
     /// every window's minimized flag from before Overview hid them
-    saved: Vec<(AppId, bool)>,
+    pub(super) saved: Vec<(AppId, bool)>,
     tiles: Vec<Tile>,
     hover: Option<Target>,
     selected: Option<usize>,
@@ -251,6 +251,9 @@ impl Overview {
     /// Whether the user minimized this window, as opposed to Overview or another desktop hiding it: only those
     /// windows get a dock slot.
     pub(super) fn user_minimized(&self, w: &super::desk::Win) -> bool {
+        if !self.grid.saved.is_empty() {
+            return self.grid.saved.iter().find(|(a, _)| *a == w.app).map_or(w.minimized, |(_, m)| *m);
+        }
         if self.open {
             return self.saved.iter().find(|(a, _)| *a == w.app).map_or(w.minimized, |(_, m)| *m);
         }
@@ -818,6 +821,10 @@ impl Shell {
         let mut ov = std::mem::take(&mut self.overview);
         if ov.open {
             ov.close(self, None, t);
+            if !ov.grid.visible() {
+                // the windows stay hidden under the grid; closing the grid restores what Overview saved
+                ov.grid.saved = std::mem::take(&mut ov.saved);
+            }
         }
         if ov.grid.visible() {
             ov.grid.close(self, t);
