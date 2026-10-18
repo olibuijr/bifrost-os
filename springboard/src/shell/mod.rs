@@ -3670,6 +3670,7 @@ impl Shell {
         if let Some((x, y, t0, false)) = self.desk_hold {
             if t - t0 >= DESK_HOLD_MS {
                 self.desk_hold = Some((x, y, t0, true));
+                self.desk_cancel_press();
                 self.desktop_pointer(x, y, true, t);
                 self.dirty = true;
             }

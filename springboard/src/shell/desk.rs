@@ -1017,6 +1017,18 @@ impl Shell {
         Some(vec![])
     }
 
+    /// Ends the press in progress without its lift (a long press became a secondary click): a Dock icon held down is
+    /// not left dragging, where the next tap would drop it off the Dock.
+    pub(super) fn desk_cancel_press(&mut self) {
+        if let Some(d) = self.desk.as_mut() {
+            if d.grab.take().is_some() {
+                d.dock_drop = None;
+                d.dock_slide.borrow_mut().clear();
+                self.dirty = true;
+            }
+        }
+    }
+
     /// What the tablet desktop's on-screen keyboard should do for the text field in focus: `Some(true)` when typing
     /// reaches a field, `Some(false)` when it reaches none, and `None` to leave the keyboard alone (no desktop, a
     /// locked screen, a Wayland client's field that the input method serves, or a terminal, which raises and lowers
