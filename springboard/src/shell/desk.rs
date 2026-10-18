@@ -3248,14 +3248,14 @@ impl Shell {
 #[cfg(feature = "desktop-wayland")]
 fn expand_material((x, y, rw, rh, r, kind, active): (f32, f32, f32, f32, f32, bifrost_render::glass::Kind, Option<bool>), (ww, wh): (f32, f32), maximized: bool, corner: f32) -> bifrost_render::glass::Rect {
     if maximized {
-        return bifrost_render::glass::Rect { x, y, w: rw, h: rh, r, kind, active, detail: None };
+        return bifrost_render::glass::Rect { x, y, w: rw, h: rh, r, kind, active, detail: None, tint: [0.0; 4] };
     }
     let e = 0.5;
     let x0 = if x <= e { 0.0 } else { (x - corner).max(0.0) };
     let y0 = if y <= e { 0.0 } else { (y - corner).max(0.0) };
     let x1 = if x + rw >= ww - e { ww } else { (x + rw + corner).min(ww) };
     let y1 = if y + rh >= wh - e { wh } else { (y + rh + corner).min(wh) };
-    bifrost_render::glass::Rect { x: x0, y: y0, w: x1 - x0, h: y1 - y0, r: corner.max(r), kind, active, detail: None }
+    bifrost_render::glass::Rect { x: x0, y: y0, w: x1 - x0, h: y1 - y0, r: corner.max(r), kind, active, detail: None, tint: [0.0; 4] }
 }
 
 #[cfg(all(test, feature = "desktop-wayland"))]

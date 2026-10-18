@@ -717,6 +717,16 @@ impl Presenter {
                         let mix = if full_wp { 0.5 + 0.5 * bifrost_render::glass::clarity() } else { 1.0 };
                         self.quad_uv(b.tex, r, uv, mix, Some((r, g.r)));
                         gl!(gl, uniform1f(self.prog.glass, 0.0));
+                        if g.tint[3] > 0.0 {
+                            // the shape's tint (the GPU veil) over the blur: the same plate as the opaque one
+                            let t = g.tint;
+                            gl!(gl, uniform1i(self.prog.mode, 4));
+                            gl!(gl, uniform4f(self.prog.color, t[0], t[1], t[2], t[3]));
+                            gl!(gl, uniform4f(self.prog.rrect, r[0], r[1], r[2], r[3]));
+                            gl!(gl, uniform1f(self.prog.radius, g.r.min(r[2] / 2.0).min(r[3] / 2.0)));
+                            self.quad_raw(r);
+                            gl!(gl, uniform1i(self.prog.mode, 0));
+                        }
                     }
                 }
             }

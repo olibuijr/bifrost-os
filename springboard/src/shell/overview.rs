@@ -9,7 +9,7 @@
 //! shell's `t` in milliseconds, the durations are seconds (0 with Reduce Motion, so everything then snaps).
 
 use super::appgrid::AppGrid;
-use super::control_center::desk_glass;
+use super::control_center::{desk_glass, desk_veil};
 use bifrost_ui::material_request::ShellSurface;
 use super::desk::Metrics;
 use super::ui::{Weight, CARD_BG, FIELD_BG, LABEL, LABEL_2, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, SELECTION, TINT, WHITE};
@@ -329,6 +329,11 @@ impl Overview {
         self.open || self.slide.is_some() || self.grid.visible()
     }
 
+    /// True while the veil fades: opening, or closing until the overview is gone.
+    fn veil_animating(&self, t: f64) -> bool {
+        self.open && (self.closing.is_some() || progress(Kind::OverviewEnter, Curve::EaseOut, self.start, t) < 1.0)
+    }
+
     fn prog(&self, t: f64) -> f32 {
         match self.closing {
             Some(c) => 1.0 - progress(Kind::OverviewEnter, Curve::EaseInOut, c, t),
@@ -602,8 +607,7 @@ impl Overview {
         let m = sh.desk_metrics();
         // the veil: the presenter's blur under a tint, below the menu bar and above the dock
         let veil_h = g.h - m.menubar as f32 - if sh.dock_is_visible() { m.dock_bottom as f32 } else { 0.0 };
-        desk_glass(s, ShellSurface::OverviewVeil, (0.0, m.menubar as f32, g.w, veil_h.max(1.0)), 0.0, (215.0 * p) as u32);
-        s.fill_rrect(0.0, m.menubar as f32, g.w, veil_h.max(1.0), 0.0, rgba(0, 0, 0, (60.0 * p) as u8));
+        desk_veil(s, ShellSurface::OverviewVeil, (0.0, m.menubar as f32, g.w, veil_h.max(1.0)), (215.0 * p) as u32, (60.0 * p) as u8);
         // the desktops strip slides down from the menu bar
         let slide_y = -(1.0 - p) * (g.strip_h + 10.0 * g.pt);
         let alpha = (255.0 * p) as u32;
@@ -745,6 +749,11 @@ impl Shell {
     /// True while Overview, the Apps grid or a desktop switch is on screen.
     pub(super) fn overview_active(&self) -> bool {
         self.desk_active() && self.overview.visible()
+    }
+
+    /// True while Overview or the Apps grid fades its veil in or out: the desktop repaints in full until it settles.
+    pub(super) fn veil_animating(&self, t: f64) -> bool {
+        self.overview.veil_animating(t) || self.overview.grid.veil_animating(t)
     }
 
     /// The content-layer regions of a GPU desktop frame: the whole screen while Overview or the Apps grid shows.

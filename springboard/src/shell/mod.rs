@@ -4236,7 +4236,14 @@ impl Shell {
                 let now: Option<Vec<(i32, i32, i32, i32)>> = None;
                 let now = self.overview_regions(now);
                 if let (Some(prev), Some(cur)) = (&prev_regions, &now) {
-                    self.desk_clear = Some(prev.iter().chain(cur).copied().collect());
+                    let mut v: Vec<(i32, i32, i32, i32)> = prev.iter().chain(cur).copied().collect();
+                    // the full-screen veil repeats every frame: one whole-screen rect instead of a snapshot per copy
+                    v.sort_unstable();
+                    v.dedup();
+                    if v.contains(&(0, 0, self.w, self.h)) {
+                        v = vec![(0, 0, self.w, self.h)];
+                    }
+                    self.desk_clear = Some(v);
                 }
                 // what the regions held before this draw: pixels that come out the same are not damage
                 // taken out of self: the draws below borrow self mutably
@@ -4245,6 +4252,8 @@ impl Shell {
                     Some(r) => { Damage::snapshot_rects_into(s.px, s.stride, s.w, s.h, r, &mut snap); true }
                     None => false,
                 };
+                // the veil's tint is on the GPU: while it fades, repaint everything so the presenter redraws it
+                let veil = self.veil_animating(t);
                 self.draw_desk(s, t);
                 self.draw_overview(s, t);
                 // Control Center and Notification Center float over the live desktop, at the menus' layer
@@ -4275,7 +4284,7 @@ impl Shell {
                 }
                 self.desk_snap = snap;
                 // the panels fade and slide in: repaint everything until they settle
-                if self.cc.animating() || self.notify.animating() {
+                if self.cc.animating() || self.notify.animating() || veil {
                     damage.all();
                 }
                 self.desk_regions = now;

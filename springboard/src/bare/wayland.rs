@@ -1456,7 +1456,7 @@ mod material_tests {
     use bifrost_render::glass::Kind;
     #[test]
     fn blur_rects_are_offset_by_the_shadow_margin() {
-        let g = Glass { x: 0.0, y: 30.5, w: 200.2, h: 400.0, r: 0.0, kind: Kind::Sidebar, active: None, detail: None };
+        let g = Glass { x: 0.0, y: 30.5, w: 200.2, h: 400.0, r: 0.0, kind: Kind::Sidebar, active: None, detail: None, tint: [0.0; 4] };
         assert_eq!(blur_rects(&[g], 40), vec![[40, 70, 201, 400]]);
         assert!(blur_rects(&[], 40).is_empty());
     }

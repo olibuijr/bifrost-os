@@ -76,14 +76,14 @@ mod tests {
     #[test]
     fn a_detailed_rect_sends_its_full_request() {
         let d = Detail { kind: MaterialKind::HudWindow.window_server_wire(), within_window: true, emphasized: true, radii: [1.2, 2.0, 3.6, 0.0] };
-        let g = Glass { x: 0.0, y: 0.0, w: 10.0, h: 10.0, r: 3.6, kind: Kind::Menu, active: Some(false), detail: Some(d) };
+        let g = Glass { x: 0.0, y: 0.0, w: 10.0, h: 10.0, r: 3.6, kind: Kind::Menu, active: Some(false), detail: Some(d), tint: [0.0; 4] };
         assert_eq!(args(&g), Args { kind: 7, state: 2, blending: 1, emphasized: 1, radii: [1, 2, 4, 0] });
     }
 
     #[test]
     fn a_plain_rect_derives_its_kind_from_the_presenter_kind() {
         for (k, want) in [(Kind::Sidebar, MaterialKind::Sidebar), (Kind::Titlebar, MaterialKind::Titlebar), (Kind::Content, MaterialKind::WindowBackground), (Kind::Chrome, MaterialKind::Menu), (Kind::Menu, MaterialKind::Menu)] {
-            let g = Glass { x: 0.0, y: 0.0, w: 1.0, h: 1.0, r: 5.0, kind: k, active: None, detail: None };
+            let g = Glass { x: 0.0, y: 0.0, w: 1.0, h: 1.0, r: 5.0, kind: k, active: None, detail: None, tint: [0.0; 4] };
             let a = args(&g);
             assert_eq!((a.kind, a.state, a.radii), (want.window_server_wire(), 0, [5; 4]), "{k:?}");
         }
