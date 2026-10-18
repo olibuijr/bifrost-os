@@ -193,6 +193,11 @@ impl Wl {
         self.st.outputs.first().map(|o| (o.w, o.h)).unwrap_or((0, 0))
     }
 
+    /// Whether the compositor offers a virtual pointer; without one, pointer input goes through the uinput touchscreen.
+    pub fn has_pointer(&self) -> bool {
+        self.st.vp_mgr.is_some()
+    }
+
     pub fn windows(&mut self) -> Vec<Window> {
         let _ = self.refresh();
         self.st.toplevels.iter().filter(|t| !t.closed).map(|t| t.info.clone()).collect()

@@ -11,6 +11,7 @@ mod dev;
 mod files;
 mod keys;
 mod lifecycle;
+mod touch;
 mod serve;
 mod sys;
 mod tools;

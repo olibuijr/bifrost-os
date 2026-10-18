@@ -1,7 +1,7 @@
 //! Tool definitions and dispatch. Every tool answers in one round trip with compact text; images are
 //! PNG, downscaled to `max_size` so they stay cheap in a model's context.
 
-use crate::{keys, sys, wl};
+use crate::{keys, sys, touch, wl};
 use serde_json::{json, Value};
 use std::time::{Duration, Instant};
 
@@ -14,6 +14,7 @@ send several steps in one call. `exec` runs bash as root on the machine.";
 pub struct Ctx {
     wl: Option<wl::Wl>,
     kb: Option<keys::Keyboard>,
+    touch: Option<touch::Touch>,
     /// Where each window's image sits on screen (window image px + offset = screen px), by window query.
     offsets: std::collections::HashMap<String, (i32, i32)>,
     dev: crate::dev::Dev,
@@ -42,7 +43,7 @@ impl Ctx {
                 std::env::set_var(k, v);
             }
         }
-        Ctx { wl: None, kb: None, offsets: Default::default(), dev: Default::default() }
+        Ctx { wl: None, kb: None, touch: None, offsets: Default::default(), dev: Default::default() }
     }
 
     /// The compositor connection, reconnecting after a shell or compositor restart.
@@ -70,6 +71,15 @@ impl Ctx {
         Ok(self.kb.as_mut().unwrap())
     }
 
+    /// The uinput touchscreen, created on first use at the current screen size.
+    fn touch(&mut self) -> Result<&mut touch::Touch, String> {
+        if self.touch.is_none() {
+            let (sw, sh) = self.wl()?.screen_size();
+            self.touch = Some(touch::Touch::open((sw.max(0) as u32, sh.max(0) as u32))?);
+        }
+        Ok(self.touch.as_mut().unwrap())
+    }
+
     pub fn call(&mut self, name: &str, a: &Value) -> Value {
         let a = if a.is_null() { &json!({}) } else { a };
         match self.dispatch(name, a) {
@@ -86,6 +96,7 @@ impl Ctx {
             "observe" => self.observe(a),
             "screenshot" => self.screenshot(a),
             "click" => self.click(a),
+            "touch" => self.touch_tool(a),
             "pointer" => self.pointer(a),
             "scroll" => self.scroll(a),
             "key" => self.key(a),
@@ -260,6 +271,28 @@ impl Ctx {
         };
         let count = f(a, "count").unwrap_or(1.0).clamp(1.0, 3.0) as u32;
         let mods = s(a, "modifiers").map(keys::parse).transpose()?;
+        if !self.wl()?.has_pointer() {
+            if mods.is_some() {
+                return Err("modifiers need a pointer; a touch screen has none".into());
+            }
+            let t = self.touch()?;
+            return match button {
+                0x110 => {
+                    for i in 0..count {
+                        t.tap(x, y, 60);
+                        if i + 1 < count {
+                            std::thread::sleep(Duration::from_millis(120));
+                        }
+                    }
+                    Ok(text(format!("tapped at ({x:.0},{y:.0}){}", if count > 1 { format!(" x{count}") } else { String::new() })))
+                }
+                0x111 => {
+                    t.tap(x, y, 700);
+                    Ok(text(format!("long-pressed at ({x:.0},{y:.0})")))
+                }
+                _ => Err("no middle button on a touch screen".into()),
+            };
+        }
         if mods.is_some() {
             self.kb()?;
         }
@@ -279,6 +312,34 @@ impl Ctx {
         Ok(text(format!("clicked {} at ({x:.0},{y:.0}){}", s(a, "button").unwrap_or("left"), if count > 1 { format!(" x{count}") } else { String::new() })))
     }
 
+    /// `touch`: a finger on the uinput touchscreen. Same coordinates as click and pointer.
+    fn touch_tool(&mut self, a: &Value) -> Result<Value, String> {
+        let (x, y) = self.point(a)?;
+        let k = f(a, "image_scale").unwrap_or(1.0);
+        let (ox, oy) = (x - f(a, "x").unwrap_or(0.0) * k, y - f(a, "y").unwrap_or(0.0) * k);
+        match s(a, "action").unwrap_or("tap") {
+            "tap" => {
+                self.touch()?.tap(x, y, 60);
+                Ok(text(format!("tapped at ({x:.0},{y:.0})")))
+            }
+            "hold" => {
+                let ms = f(a, "ms").unwrap_or(700.0).clamp(0.0, 10_000.0);
+                self.touch()?.tap(x, y, ms as u64);
+                Ok(text(format!("long-pressed at ({x:.0},{y:.0}) for {ms:.0} ms")))
+            }
+            "swipe" => {
+                let (Some(tx), Some(ty)) = (f(a, "to_x"), f(a, "to_y")) else {
+                    return Err("swipe needs to_x and to_y".into());
+                };
+                let (tx, ty) = (tx * k + ox, ty * k + oy);
+                let ms = f(a, "ms").unwrap_or(300.0).clamp(0.0, 10_000.0);
+                self.touch()?.swipe(x, y, tx, ty, ms);
+                Ok(text(format!("swiped ({x:.0},{y:.0}) -> ({tx:.0},{ty:.0}) in {ms:.0} ms")))
+            }
+            other => Err(format!("unknown touch action {other:?} (tap, hold, swipe)")),
+        }
+    }
+
     fn pointer(&mut self, a: &Value) -> Result<Value, String> {
         let (x, y) = self.point(a)?;
         let k = f(a, "image_scale").unwrap_or(1.0);
@@ -288,6 +349,13 @@ impl Ctx {
             _ => None,
         };
         let ms = f(a, "ms").unwrap_or(300.0).clamp(0.0, 10_000.0);
+        if !self.wl()?.has_pointer() {
+            let Some((tx, ty)) = to else {
+                return Err("a touch screen has no hover; use click or touch".into());
+            };
+            self.touch()?.swipe(x, y, tx, ty, ms);
+            return Ok(text(format!("dragged ({x:.0},{y:.0}) -> ({tx:.0},{ty:.0}) in {ms:.0} ms")));
+        }
         let w = self.wl()?;
         w.motion(x, y)?;
         let Some((tx, ty)) = to else {
@@ -310,6 +378,16 @@ impl Ctx {
         let dy = f(a, "dy").unwrap_or(0.0);
         let dx = f(a, "dx").unwrap_or(0.0);
         let at = if a.get("x").is_some() { Some(self.point(a)?) } else { None };
+        if !self.wl()?.has_pointer() {
+            // a finger drag: dy>0 scrolls down, so the finger moves up; 80 px per wheel click
+            let (sw, sh) = self.wl()?.screen_size();
+            let (sw, sh) = (sw as f64, sh as f64);
+            let (x, y) = at.unwrap_or((sw / 2.0, sh / 2.0));
+            let (x, y) = (x.clamp(0.0, sw - 1.0), y.clamp(0.0, sh - 1.0));
+            let (tx, ty) = ((x - dx * 80.0).clamp(0.0, sw - 1.0), (y - dy * 80.0).clamp(0.0, sh - 1.0));
+            self.touch()?.swipe(x, y, tx, ty, 250.0);
+            return Ok(text(format!("scrolled dx={dx} dy={dy}")));
+        }
         let w = self.wl()?;
         if let Some((x, y)) = at {
             w.motion(x, y)?;
@@ -816,6 +894,8 @@ pub fn list() -> Value {
          "inputSchema":o(json!({"window":{"type":"string","description":"window title or app id (substring ok); omit for the screen"},"app":{"type":"string","description":"app id (e.g. browser): window of that app, brought forward if covered"},"region":{"type":"array","items":{"type":"number"},"description":"[x,y,w,h] screen pixels"},"max_size":{"type":"number","description":"longest side in pixels, default 1280"},"cursor":{"type":"boolean"},"diff":{"type":"boolean","description":"report the changed bounding box vs the previous capture of this target"}}),&[])},
         {"name":"click","description":"Move the pointer to (x,y) and click. Screen pixels by default; with window=NAME, pixels of that window's screenshot; with image_scale (from a downscaled screenshot), image pixels.",
          "inputSchema":o(json!({"x":{"type":"number"},"y":{"type":"number"},"window":{"type":"string","description":"coordinates are relative to this window's screenshot"},"image_scale":{"type":"number"},"button":{"type":"string","enum":["left","right","middle"]},"count":{"type":"integer","description":"2 = double click"}}),&["x","y"])},
+        {"name":"touch","description":"Touch the screen like a finger: action tap (default), hold (long press, ms default 700) or swipe to (to_x,to_y) over ms (default 300). Same coordinates as click: screen pixels, or window=NAME / image_scale.",
+         "inputSchema":o(json!({"action":{"type":"string","enum":["tap","hold","swipe"]},"x":{"type":"number"},"y":{"type":"number"},"to_x":{"type":"number"},"to_y":{"type":"number"},"ms":{"type":"number"},"window":{"type":"string"},"image_scale":{"type":"number"}}),&["x","y"])},
         {"name":"pointer","description":"Move the pointer (hover) to (x,y), or drag with the left button from (x,y) to (to_x,to_y) over ms milliseconds.",
          "inputSchema":o(json!({"x":{"type":"number"},"y":{"type":"number"},"to_x":{"type":"number"},"to_y":{"type":"number"},"ms":{"type":"number"},"image_scale":{"type":"number"},"window":{"type":"string"}}),&["x","y"])},
         {"name":"scroll","description":"Scroll with the wheel, optionally at (x,y) first. dy>0 scrolls down, in wheel clicks.",
