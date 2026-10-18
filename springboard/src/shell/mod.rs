@@ -204,6 +204,7 @@ pub mod wake;
 pub mod desktop_network;
 pub mod disk_image;
 mod desktop_bar;
+mod tablet_gestures;
 #[cfg(feature = "desktop-wayland")]
 pub mod docpanel;
 pub mod preview_panel;
@@ -789,6 +790,10 @@ pub struct Shell {
     /// a finger held still on the tablet desktop: (x, y, when it landed, fired). Held `DESK_HOLD_MS` it is a secondary
     /// click (`desktop_pointer` with context, as a right button), and the lift that ends it does nothing else
     desk_hold: Option<(f32, f32, f64, bool)>,
+    /// a system gesture (`tablet_gestures`) took the touch in progress: its moves and its lift are not the app's
+    touch_taken: bool,
+    /// the scale of the tablet desktop's pinch so far, for the step of each new one (`desk_pinch`)
+    pinch_last: Option<f32>,
     /// touch on the terminal grid: scroll, tap, long-press selection, menu
     term_touch: termtouch::TermTouch,
     last_input: f64,
@@ -1180,6 +1185,8 @@ impl Shell {
             desk_kb_lift: None,
             desk_text_focus_last: None,
             desk_hold: None,
+            touch_taken: false,
+            pinch_last: None,
             term_touch: termtouch::TermTouch::default(),
             last_input: 0.0,
             settings_changed: 0.0,
@@ -3106,6 +3113,18 @@ impl Shell {
     }
 
     pub fn event(&mut self, ev: Event, t: f64) -> Vec<Effect> {
+        // the touch a system gesture took belongs to that gesture: its first finger's moves and lift do nothing here
+        if self.touch_taken {
+            match ev {
+                Event::Down(..) => self.touch_taken = false,
+                Event::Move(..) => return vec![],
+                Event::Up(..) => {
+                    self.touch_taken = false;
+                    return vec![];
+                }
+                _ => {}
+            }
+        }
         // usage is recorded before and after the event, so a switch it makes is credited from its own time
         self.st_mark(t);
         if self.desk_hold_event(ev, t) {

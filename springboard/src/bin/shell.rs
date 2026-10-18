@@ -934,7 +934,11 @@ fn run() -> std::io::Result<()> {
                     let (x, y) = map(x, y);
                     let (lw, lh) = shell.size();
                     let frame = springboard::shell::touch_gestures::Frame { size_px: (lw as f32, lh as f32), points_px: shell.points_px() };
-                    let states = system_gestures.feed(phase, id, (x, y), at, frame);
+                    // the setting is read as a finger lands, not on every contact sample
+                    if phase == input::TouchPhase::Down {
+                        system_gestures.four_finger_enabled = shell.four_finger_swipes();
+                    }
+                    let (states, desk) = system_gestures.feed_desk(phase, id, (x, y), at, frame);
                     // a touch the system took away ends the home swipe without its action; nothing else follows a cancel
                     if phase == input::TouchPhase::Cancel {
                         system_gestures.cancel_all();
@@ -943,11 +947,15 @@ fn run() -> std::io::Result<()> {
                         shell.cancel_home_gesture(t);
                     }
                     // a system gesture that is active holds the finger: the foreground app loses the touches it had
-                    let taken = states.iter().any(|s| s.is_active());
+                    // (a tablet desktop decision that began one takes the finger too)
+                    let taken = states.iter().any(|s| s.is_active()) || desk.contains(&springboard::shell::touch_gestures::DeskGesture::Taken);
                     if taken {
                         shell.ext_cancel_touches(at);
                     }
                     shell.ext_contact(id, phase, x, y, at, !taken);
+                    for g in desk {
+                        effects.extend(shell.desk_gesture(g, t));
+                    }
                     continue;
                 }
                 input::Event::Key { code: input::KEY_WAKEUP, down: true } => Event::Wake,
