@@ -239,6 +239,8 @@ fn run() -> std::io::Result<()> {
     // grabbed only as the root OS shell (a session under a compositor shares them)
     let mut inputs = match emulated {
         None if !wayland => input::InputSet::desktop(w as f32, h as f32, unsafe { geteuid() } == 0),
+        // under the compositor: the power and volume buttons are read here too, so they work whatever has focus
+        None => input::InputSet::buttons(),
         _ => input::InputSet::none(),
     };
 
@@ -646,6 +648,10 @@ fn run() -> std::io::Result<()> {
         #[cfg(feature = "desktop-wayland")]
         {
             disp.wayland_inputs(&mut events);
+            // the buttons come from evdev (`InputSet::buttons`); the compositor's copy of them would count twice
+            if inputs.has_buttons() {
+                events.retain(|e| !matches!(e, input::Event::Key { code, .. } if matches!(*code, input::KEY_POWER | input::KEY_VOLUMEUP | input::KEY_VOLUMEDOWN)));
+            }
             for batch in disp.wayland_input_method_batches() { shell.input_method_batch(batch, t); }
             if let Some(windows)=disp.wayland_foreign_windows() { shell.wayland_foreign_windows(windows); }
             for ev in disp.wayland_window_events() { shell.wayland_window_event(ev); }

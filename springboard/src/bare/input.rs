@@ -607,6 +607,8 @@ pub struct InputSet {
     pointer_keys: bool,
     /// the hardware keyboard state last handed out by `keyboard_change`; None before the first report
     reported_keyboard: Option<bool>,
+    /// only power buttons and lids (`buttons`): the shell under a compositor reads its hardware keys itself
+    buttons_only: bool,
 }
 
 fn ioctl_bits(fd: c_int, ev: u16, bytes: usize) -> Vec<u8> {
@@ -641,7 +643,22 @@ impl InputSet {
 
     /// A desktop set for a panel of `w` x `h`; `exclusive` grabs keyboards, pointers and touchscreens.
     pub fn desktop(w: f32, h: f32, exclusive: bool) -> Self {
-        InputSet { panel: (w, h), exclusive, slots: vec![], ignored: vec![], next_scan: 0.0, watch: -1, pointer: Pointer::new(w, h), shift: 0, pointer_keys: false, reported_keyboard: None }
+        InputSet { panel: (w, h), exclusive, slots: vec![], ignored: vec![], next_scan: 0.0, watch: -1, pointer: Pointer::new(w, h), shift: 0, pointer_keys: false, reported_keyboard: None, buttons_only: false }
+    }
+
+    /// The hardware buttons only (power, volume and lid devices, such as gpio-keys), never grabbed. Under a compositor
+    /// the shell gets keys through the focused surface; with the screen off nothing of the shell may have focus, and
+    /// the power key that should wake it went nowhere. Reading the buttons here makes them work whatever has focus.
+    pub fn buttons() -> Self {
+        // the panel size only gates scanning: no touch or pointer device is taken in this mode
+        let mut set = Self::desktop(1.0, 1.0, false);
+        set.buttons_only = true;
+        set
+    }
+
+    /// `buttons` found a button device: its keys come from here, not from the compositor.
+    pub fn has_buttons(&self) -> bool {
+        self.buttons_only && !self.slots.is_empty()
     }
 
     /// A hardware keyboard is attached (any device passing `Caps::is_hardware_keyboard`).
@@ -774,6 +791,10 @@ impl InputSet {
         let fd = open_dev(path, O_RDONLY | O_NONBLOCK).ok()?;
         let caps = read_caps(fd);
         let roles = caps.roles();
+        if self.buttons_only && !(roles.power || roles.lid) {
+            unsafe { close(fd) };
+            return None;
+        }
         let map = read_map(fd, &caps, self.panel);
         let keyboard = caps.is_hardware_keyboard();
         let source = match (roles, map) {
