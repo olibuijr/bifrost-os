@@ -149,6 +149,19 @@
     }
 
     #[test]
+    fn a_still_tablet_desktop_with_the_keyboard_up_stops_asking_for_frames() {
+        let mut sh = tablet_desk_with_window_under_keyboard();
+        sh.set_keyboard(true, 1000.);
+        let mut buf = vec![0u32; 1200 * 1920];
+        // past the dock's launch bounce for the window (at most 10 s)
+        for t in [20000., 20016.] {
+            sh.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, t);
+        }
+        assert!(sh.keyboard.shown() && !sh.keyboard.animating());
+        assert!(!sh.needs_frame(), "nothing moves: {}", sh.frame_reason());
+    }
+
+    #[test]
     fn a_window_the_user_moved_while_lifted_stays_where_the_user_put_it() {
         let mut sh = tablet_desk_with_window_under_keyboard();
         sh.set_keyboard(true, 1000.);

@@ -743,6 +743,8 @@ pub struct Shell {
     desk_clear:Option<Vec<(i32,i32,i32,i32)>>,
     /// A full desktop frame has been drawn since the last frame of any other screen (the HUD-only fast path needs it).
     desk_drawn:bool,
+    /// The time of the last `draw`: `needs_frame` (which gets no time) checks the timed desktop effects against it.
+    desk_t:f64,
     desktop_context:Option<desktop_bar::ContextMenu>,
     /// the open or save panel an app asked for (`docpanel`), shown as `desktop_menu = Document`
     #[cfg(feature = "desktop-wayland")]
@@ -1008,7 +1010,7 @@ impl Shell {
             #[cfg(feature = "desktop-wayland")]
             doc_broker:None,
             quick_look:Default::default(),
-            bar_backdrop:std::cell::RefCell::new(None),chrome_text:std::cell::RefCell::new(bifrost_render::cache::TextCache::for_screen(w.max(0) as usize, h.max(0) as usize)),bar_shadows:Default::default(),desk_regions:None,desk_clear:None,desk_drawn:false,
+            bar_backdrop:std::cell::RefCell::new(None),chrome_text:std::cell::RefCell::new(bifrost_render::cache::TextCache::for_screen(w.max(0) as usize, h.max(0) as usize)),bar_shadows:Default::default(),desk_regions:None,desk_clear:None,desk_drawn:false,desk_t:0.0,
             desktop_metrics:Default::default(),desktop_metrics_at:0.,metrics_sampler:Default::default(),metrics_running:false,
             desk: Some(desk::Desk::new()),
             desktop_gate: Default::default(),
@@ -1076,16 +1078,24 @@ impl Shell {
             || self.desk.as_ref().is_some_and(|d| d.dock_slide.borrow().active(t / 1000.0))
     }
 
+    /// Desktop motion that needs frames by itself: window effects and the dock's bounce, show/hide and slide.
+    /// Overlays that are only visible (Control Center, the keyboard, Spotlight...) redraw through `dirty` when they
+    /// change; counting them here redrew a static lock screen at the full frame rate.
+    fn desk_moving(&self) -> bool {
+        let t = self.desk_t;
+        self.fx_animating(t) || self.dock_animating(t) || self.desk.as_ref().is_some_and(|d| d.dock_slide.borrow().active(t / 1000.0))
+    }
+
     pub fn needs_frame(&self) -> bool {
         let files = self.screen == Screen::App(AppId::Files) && self.files.as_ref().is_some_and(Files::animating);
-        let desk_anim = self.desk_active() && self.desk_animating(0.0);
+        let desk_anim = self.desk_active() && self.desk_moving();
         self.screen_on && (self.dirty || bifrost_render::appearance::fading() || self.anim.is_some() || self.turning() || self.pager.animating() || self.cc.animating() || self.switcher.animating() || self.keyboard.animating() || self.quicksearch.animating() || self.notify.animating() || self.lock_pager.animating() || self.today.animating() || self.home_animating() || files || desk_anim)
     }
 
     /// Why `needs_frame` holds, for the frame trace: the first condition that does ("-" when none).
     pub fn frame_reason(&self) -> String {
         let files = self.screen == Screen::App(AppId::Files) && self.files.as_ref().is_some_and(Files::animating);
-        let desk_anim = self.desk_active() && self.desk_animating(0.0);
+        let desk_anim = self.desk_active() && self.desk_moving();
         let reasons = [
             (!self.screen_on, "screen-off"),
             (self.dirty, "dirty"),
@@ -3113,6 +3123,7 @@ impl Shell {
     pub fn draw(&mut self, s: &mut Surface, t: f64) -> &Damage {
         // the audio service connects only once the desktop has been drawn (lazy; socket activation starts it then)
         self.audio.arm();
+        self.desk_t = t;
         let was_dirty = std::mem::replace(&mut self.dirty, false);
         let mut damage = std::mem::take(&mut self.damage);
         let mut rows = std::mem::take(&mut self.rows);
