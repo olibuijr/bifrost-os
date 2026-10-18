@@ -473,6 +473,9 @@ impl Shell {
         for r in [self.cc_desk_rect(),self.center_desk_rect()].into_iter().flatten() {let (x,y,w,h)=r;v.push(((x-g).max(0.) as i32,(y-g).max(0.) as i32,(w+2.*g) as i32,(h+2.*g) as i32));}
         if let Some(((x,y,w,h),_))=self.quicksearch.desk_overlay(&self.ui,self.w){v.push((x as i32,y as i32,w as i32,h as i32));}
         if let Some(((x,y,w,h),_))=self.assistant.desk_overlay(&self.ui,self.w){v.push((x as i32,y as i32,w as i32,h as i32));}
+        // a tablet's on-screen keyboard, from its resting top to the bottom edge: drawn here while it slides, and its
+        // rows cleared again on the frame after it is gone
+        if self.desk_keyboard_visible(){let top=self.kb_top().max(0.) as i32;v.push((0,top,self.w,self.h-top));}
         if self.perf.enabled||self.perf_drawn{let (x,y,w,h)=self.perf_rect();let g=self.ui.pt(2.) as i32;v.push((x as i32-g,y as i32-g,w as i32+2*g,h as i32+2*g));}
         Some(v)
     }
