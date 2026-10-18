@@ -729,7 +729,6 @@ impl Shell {
             return vec![];
         }
         // the account access sheet takes touches only: typing waits for the answer
-        if self.access_showing() || self.usb_showing() {
         // the account access sheet and the firewall question take touches only: typing waits for the answer
         if self.access_showing() || self.fw_showing() {
             return vec![];
@@ -968,9 +967,9 @@ impl Shell {
                 self.cmdtab_release(t);
                 vec![]
             }
-            Shortcut::ReaderStep(forward) if self.reader_active() => self.reader_step(forward, t, forward) if self.screen_reader_on() || self.switch_scan_on() => self.reader_step(forward),
+            Shortcut::ReaderStep(forward) if self.reader_active() => self.reader_step(forward, t),
             Shortcut::ReaderRotor(forward) if self.screen_reader_on() => self.reader_rotor(forward, t),
-            Shortcut::ReaderActivate if self.reader_active() => self.reader_activate(t, ) || self.switch_scan_on() => self.reader_activate(t),
+            Shortcut::ReaderActivate if self.reader_active() => self.reader_activate(t),
             Shortcut::SpeakSelection => {
                 self.speak_selection();
                 vec![]
