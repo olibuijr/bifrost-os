@@ -597,6 +597,13 @@ fn place_chrome(l:&surface::ZwlrLayerSurfaceV1,frame:&ChromeFrame,screen:(u32,u3
         }
         self.render_chrome()?;transient(self.conn.flush())
     }
+    /// Draws chrome that `chrome` left pending because the compositor still held both of its buffers (a keyboard
+    /// sliding in changes its surface every frame): called on every pass of the main loop, which a buffer release
+    /// wakes, so the last image of a change is not left out.
+    pub fn chrome_flush(&mut self)->io::Result<()> {
+        if self.state.chrome.values().any(|w|!w.pending.is_empty()) {self.render_chrome()?;transient(self.conn.flush())?;}
+        Ok(())
+    }
     fn render_chrome(&mut self)->io::Result<()> {
         let qh=self.queue.handle();
         if let Some(g)=&mut self.gpu {

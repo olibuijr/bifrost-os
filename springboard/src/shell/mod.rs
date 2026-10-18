@@ -3608,12 +3608,23 @@ impl Shell {
 
     pub fn tick(&mut self, t: f64) -> Vec<Effect> {
         self.st_mark(t);
-        // the keyboard follows a change of text focus on the tablet desktop, edge-triggered so a dismissal sticks
+        // the keyboard follows text focus on the tablet desktop: raised when a field gains it (edge-triggered, so a
+        // dismissal sticks while the field keeps it), lowered whenever the front window has no field
         let now = self.desk_text_focus();
         if now == Some(true) && self.desk_text_focus_last != Some(true) {
             self.set_keyboard(true, t);
-        } else if now == Some(false) && self.desk_text_focus_last == Some(true) {
+        } else if now == Some(false) && self.keyboard.shown() {
+            // a front window without a text field never keeps it up, also when something else raised it (a terminal
+            // window restored behind it, an app that was in front)
             self.set_keyboard(false, t);
+        }
+        if now != self.desk_text_focus_last && self.keyboard.shown() {
+            // the terminal's accessory row follows the front window while the keyboard stays up
+            let h = self.keyboard.h();
+            self.keyboard.set_accessory(self.screen == Screen::App(AppId::Terminal));
+            if self.keyboard.h() != h {
+                self.resize_terminals();
+            }
         }
         self.desk_text_focus_last = now;
         let fx = self.tick_pumped(t);
@@ -3828,6 +3839,9 @@ impl Shell {
             // on the lock screen the login window owns the keys
             if self.login_owns_keyboard() {
                 effects.extend(self.login_key(&out, t));
+            } else if self.desk_active() && out != Out::Hide {
+                // on the desktop the keys go where a hardware keyboard's would: every built-in window, sheet and panel
+                effects.extend(self.hw_type(out, t));
             } else {
                 self.type_out(out, t);
             }

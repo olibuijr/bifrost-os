@@ -424,7 +424,10 @@ impl Keyboard {
             (self.predictive, kbflags::PREDICTIVE),
             (self.auto_caps, kbflags::AUTO_CAPS),
             (self.accessory, kbflags::ACCESSORY),
-            (self.shown, kbflags::SHOWN),
+            // always "shown": the shell slides the keyboard, the process draws it at rest. A process told it was hidden
+            // drew itself one keyboard height down and kept that picture after it was shown again (a tablet raising
+            // the keyboard right after it went down showed nothing)
+            (true, kbflags::SHOWN),
             (self.kbp.enable_caps_lock, kbflags::CAPS_LOCK),
             (self.kbp.period_shortcut, kbflags::PERIOD_SHORTCUT),
         ] {

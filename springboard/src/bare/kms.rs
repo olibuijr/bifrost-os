@@ -861,6 +861,9 @@ impl Display {
     }
     #[cfg(feature = "desktop-wayland")]
     pub fn wayland_chrome(&mut self,frames:Vec<super::wayland::ChromeFrame>)->io::Result<()> {if let Some(w)=&mut self.wayland {w.chrome(frames)?;}Ok(())}
+    /// Pending chrome the compositor's buffers held back (`Wayland::chrome_flush`).
+    #[cfg(feature = "desktop-wayland")]
+    pub fn wayland_chrome_flush(&mut self)->io::Result<()> {if let Some(w)=&mut self.wayland {w.chrome_flush()?;}Ok(())}
     /// The CPU draw time of the frame just presented, for the GPU presenter's averages.
     #[cfg(feature = "desktop-wayland")]
     pub fn wayland_note_draw(&mut self, ms: f64) {if let Some(w)=&mut self.wayland {w.note_draw(ms);}}

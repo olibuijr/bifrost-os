@@ -1782,6 +1782,10 @@ fn run() -> std::io::Result<()> {
             disp.wayland_windows(shell.take_wayland_windows())?;
             disp.wayland_chrome(shell.desktop_chrome_frames(&frame,fw,fh))?;
         }
+        #[cfg(feature = "desktop-wayland")]
+        if wayland {
+            disp.wayland_chrome_flush()?;
+        }
         if let Some((wakeups, frames)) = idle_stats.note(sys::now_ms(), last_present != present_at_start) {
             bifrost_core::log::shell_logger("presenter").debug(format!("idle: {wakeups} wakeups, {frames} frames"));
         }
