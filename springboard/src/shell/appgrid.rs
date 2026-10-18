@@ -9,7 +9,7 @@ use super::control_center::desk_veil;
 use bifrost_ui::material_request::ShellSurface;
 use super::overview::{KeyMods, KEY_BACKSPACE, KEY_DOWN, KEY_ENTER, KEY_ESC, KEY_LEFT, KEY_RIGHT, KEY_UP};
 use super::ui::{Weight, FIELD_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_SUBHEAD_PT, SIDEBAR_PLATE, WHITE};
-use super::{apps, Effect, Event, Shell};
+use super::{apps, AppId, Effect, Event, Shell};
 use crate::gfx::{scale, Image, Surface};
 use bifrost_render::motion::{self, Curve, Kind};
 use std::collections::HashMap;
