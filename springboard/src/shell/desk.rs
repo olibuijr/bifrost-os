@@ -1004,12 +1004,47 @@ impl Shell {
             Event::Up(x, y) if self.kb_touch => {
                 self.kb_touch = false;
                 if let Some(out) = self.keyboard.up(x, y - top, t) {
-                    self.type_out(out, t);
+                    // the keys go where a hardware keyboard's would (`hw_type`); Hide lowers the keyboard
+                    if out == super::keyboard::Out::Hide {
+                        self.set_keyboard(false, t);
+                        return Some(vec![]);
+                    }
+                    return Some(self.hw_type(out, t));
                 }
             }
             _ => return None,
         }
         Some(vec![])
+    }
+
+    /// What the tablet desktop's on-screen keyboard should do for the text field in focus: `Some(true)` when typing
+    /// reaches a field, `Some(false)` when it reaches none, and `None` to leave the keyboard alone (no desktop, a
+    /// locked screen, a Wayland client's field that the input method serves, or a terminal, which raises and lowers
+    /// its own keyboard). The order follows `hw_type`.
+    pub(super) fn desk_text_focus(&self) -> Option<bool> {
+        if !self.desk_active() || self.is_locked() || self.im.active {
+            return None;
+        }
+        if self.auth_showing() || self.volume_showing() || self.package_showing() || self.net_auth_showing() {
+            return Some(true);
+        }
+        if self.quicksearch.is_shown() || self.assistant.is_shown() || self.char_viewer.is_some() {
+            return Some(true);
+        }
+        #[cfg(feature = "desktop-wayland")]
+        if self.doc_panel.is_some() || self.compose.is_some() {
+            return Some(true);
+        }
+        match self.screen {
+            Screen::App(AppId::Terminal | AppId::External(_)) => None,
+            Screen::App(AppId::AppStore) => Some(self.store.as_ref().is_some_and(|c| c.text_focused())),
+            Screen::App(AppId::Settings) => Some(self.settings.as_ref().is_some_and(|s| s.text_focused())),
+            Screen::App(AppId::Browser) => Some(self.browser.as_ref().is_some_and(|b| b.text_focused())),
+            Screen::App(AppId::Files) => Some(self.files.as_ref().is_some_and(|f| f.text_focused())),
+            Screen::App(AppId::Photos) => Some(self.photos.as_ref().is_some_and(|p| p.text_focused())),
+            Screen::App(AppId::Deildu) => Some(self.deildu.as_ref().is_some_and(|d| d.text_focused())),
+            _ => Some(false),
+        }
     }
 
     /// Settings > Appearance without a restart: the pref is saved and `appearance_tick` fades to it.

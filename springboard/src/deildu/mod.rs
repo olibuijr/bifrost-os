@@ -1062,6 +1062,11 @@ impl Deildu {
         self.load_page(ui);
     }
 
+    /// Whether typing reaches a field: the sign-in sheet or the library search.
+    pub fn text_focused(&self) -> bool {
+        self.login.is_some() || self.library.searching
+    }
+
     /// A hardware keyboard's key, taken only while the search field or the sign-in sheet has focus.
     pub fn hw_text(&mut self, ui: &Ui, out: Out) -> bool {
         let focused = self.login.is_some() || self.library.searching;

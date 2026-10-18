@@ -136,6 +136,17 @@
     }
 
     #[test]
+    fn the_tablet_desktop_keyboard_follows_the_app_store_search_field() {
+        let mut sh = tablet_desk_with_window_under_keyboard();
+        sh.desk_open(AppId::AppStore, 0.);
+        assert_eq!(sh.desk_text_focus(), Some(false), "the Today tab has no field");
+        sh.store.as_mut().unwrap().tab = super::store::Tab::Search;
+        assert_eq!(sh.desk_text_focus(), Some(true), "the Search tab's query field takes the typing");
+        sh.store.as_mut().unwrap().tab = super::store::Tab::Today;
+        assert_eq!(sh.desk_text_focus(), Some(false));
+    }
+
+    #[test]
     fn a_tablet_keyboard_lifts_the_front_window_clear_of_it_and_lets_it_back_down() {
         let mut sh = tablet_desk_with_window_under_keyboard();
         sh.set_keyboard(true, 1000.);

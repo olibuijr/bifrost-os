@@ -19,6 +19,11 @@ impl Photos {
 
     /// Typed text or a shortcut from a keyboard: it goes to the text card while one is open. Otherwise Undo and Redo
     /// step through the changes, Select All selects the grid and 0 to 5 rate the photo in the viewer.
+    /// Whether typing reaches a text field: the entry card is modal and its field takes every key (see `key`).
+    pub fn text_focused(&self) -> bool {
+        self.entry.is_some()
+    }
+
     pub fn key(&mut self, ui: &Ui, out: Out, t: f64) {
         self.now = t;
         self.dirty = true;

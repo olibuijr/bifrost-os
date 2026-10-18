@@ -779,6 +779,8 @@ pub struct Shell {
     kb_touch: bool,
     /// the desktop window the on-screen keyboard lifted: (app, y before the lift, y after it)
     desk_kb_lift: Option<(AppId, i32, i32)>,
+    /// the focus `desk_text_focus` reported at the last tick, so the keyboard follows a change of focus once
+    desk_text_focus_last: Option<bool>,
     /// touch on the terminal grid: scroll, tap, long-press selection, menu
     term_touch: termtouch::TermTouch,
     last_input: f64,
@@ -1168,6 +1170,7 @@ impl Shell {
             haptics: false,
             kb_touch: false,
             desk_kb_lift: None,
+            desk_text_focus_last: None,
             term_touch: termtouch::TermTouch::default(),
             last_input: 0.0,
             settings_changed: 0.0,
@@ -3068,7 +3071,13 @@ impl Shell {
     pub fn event(&mut self, ev: Event, t: f64) -> Vec<Effect> {
         // usage is recorded before and after the event, so a switch it makes is credited from its own time
         self.st_mark(t);
+        // a touch that is a key of the on-screen keyboard does not raise it again (a Hide lowers it)
+        let on_keyboard = self.kb_touch;
         let fx = self.event_inner(ev, t);
+        // a tap that leaves a text field in focus on the tablet desktop raises the keyboard for it
+        if matches!(ev, Event::Up(..)) && !on_keyboard && self.desk_active() && !self.keyboard.shown() && self.desk_text_focus() == Some(true) {
+            self.set_keyboard(true, t);
+        }
         self.st_mark(t);
         fx
     }
@@ -3599,6 +3608,14 @@ impl Shell {
 
     pub fn tick(&mut self, t: f64) -> Vec<Effect> {
         self.st_mark(t);
+        // the keyboard follows a change of text focus on the tablet desktop, edge-triggered so a dismissal sticks
+        let now = self.desk_text_focus();
+        if now == Some(true) && self.desk_text_focus_last != Some(true) {
+            self.set_keyboard(true, t);
+        } else if now == Some(false) && self.desk_text_focus_last == Some(true) {
+            self.set_keyboard(false, t);
+        }
+        self.desk_text_focus_last = now;
         let fx = self.tick_pumped(t);
         self.st_mark(t);
         fx
@@ -5214,6 +5231,15 @@ impl Shell {
         // caller, matters: bringing an app with a focused text field to the front used to raise it, and its top row
         // showed as grey boxes along the bottom of the window.
         let shown = shown && self.keyboard_allowed();
+        // the terminal's accessory row (paste, ctrl, esc, tab, arrows) is for the terminal's keyboard only
+        if shown {
+            let h = self.keyboard.h();
+            self.keyboard.set_accessory(self.screen == Screen::App(AppId::Terminal));
+            // a row that came or went under a keyboard that is already up changes the terminal's room
+            if self.keyboard.h() != h {
+                self.resize_terminals();
+            }
+        }
         if self.keyboard.shown() != shown {
             self.keyboard.set_shown(shown, t);
             self.resize_terminals();

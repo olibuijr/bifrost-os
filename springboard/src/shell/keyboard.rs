@@ -440,6 +440,16 @@ impl Keyboard {
         (self.w.max(1.0) as u32, (self.w * BUFFER_ASPECT).max(1.0) as u32)
     }
 
+    /// Shows or hides the terminal's accessory row. A change reaches the keyboard process only when this view owns it,
+    /// and a hidden keyboard never starts the process (`claim`).
+    pub fn set_accessory(&mut self, on: bool) {
+        if self.accessory == on {
+            return;
+        }
+        self.accessory = on;
+        self.claim(false);
+    }
+
     /// Makes this client the keyboard's owner and tells the process what it should look like.
     fn claim(&mut self, take_over: bool) {
         if app_mode() {
