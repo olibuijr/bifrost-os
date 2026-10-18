@@ -4327,7 +4327,7 @@ impl Shell {
             damage.all();
             self.drawn = Drawn::Nothing;
         }
-        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.pick_sheet.is_some() || self.crash_alert.is_some() || self.notify.ask.is_some() || self.compose_showing() || self.print_showing() || self.char_viewer.is_some() || self.help_viewer.is_some() || self.keyboard_viewer.is_some() || self.auth_showing() || self.volume_showing() || self.access_showing() || self.guardian_sheet.is_some() || self.malware_alert.is_some() || self.usb_showing() || self.net_auth_showing() || self.package_showing() || self.photo_pick_sheet.is_some() || self.trust_sheet.is_some() || self.fw_showing() || self.launch_alert.is_some() || self.a11y_panel.is_some() || self.switch_panel_shown() { || self.a11y_panel.is_some() {
+        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.pick_sheet.is_some() || self.crash_alert.is_some() || self.notify.ask.is_some() || self.compose_showing() || self.print_showing() || self.char_viewer.is_some() || self.help_viewer.is_some() || self.keyboard_viewer.is_some() || self.auth_showing() || self.volume_showing() || self.access_showing() || self.guardian_sheet.is_some() || self.malware_alert.is_some() || self.usb_showing() || self.net_auth_showing() || self.package_showing() || self.photo_pick_sheet.is_some() || self.trust_sheet.is_some() || self.fw_showing() || self.launch_alert.is_some() || self.a11y_panel.is_some() || self.switch_panel_shown() {
             // modal: repaint everything under it every frame, and again once it is gone
             damage.all();
             self.drawn = Drawn::Nothing;
