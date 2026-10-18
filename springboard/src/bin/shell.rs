@@ -554,8 +554,12 @@ fn run() -> std::io::Result<()> {
         if wayland { disp.wayland_output_modes()?; }
         #[cfg(feature = "desktop-wayland")]
         if wayland {
-            if let Some((wp, x)) = shell.desktop_wallpaper_once() { disp.wayland_wallpaper(wp, x); }
-            if disp.wayland_gpu_active() { shell.note_wallpaper_uploaded(); }
+            // the wallpaper stays pending until the presenter reports the blur landed (a failed rebuild is retried)
+            let uploaded = match shell.desktop_wallpaper_once() {
+                Some((wp, x)) => disp.wayland_wallpaper(wp, x),
+                None => disp.wayland_gpu_active(),
+            };
+            if uploaded { shell.note_wallpaper_uploaded(); }
             // the GPU presenter gave up: the SHM path has no frame of its own yet, so the next one is drawn whole
             if disp.wayland_take_gpu_fallback() { shell.force_full_redraw(); }
         }

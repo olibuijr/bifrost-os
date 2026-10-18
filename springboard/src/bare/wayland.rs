@@ -668,8 +668,9 @@ fn place_chrome(l:&surface::ZwlrLayerSurfaceV1,frame:&ChromeFrame,screen:(u32,u3
         out.append(&mut self.state.inputs);
     }
     /// The wallpaper the GPU draws under the desktop (uploaded and blurred once per change).
-    pub fn wallpaper(&mut self, wp: crate::gfx::View, x: i32) {
-        if let Some(g) = &mut self.gpu { g.p.set_wallpaper(wp, x, 0); }
+    /// Returns false when there is no GPU presenter or the blur did not land (the shell asks again).
+    pub fn wallpaper(&mut self, wp: crate::gfx::View, x: i32) -> bool {
+        if let Some(g) = &mut self.gpu { g.p.set_wallpaper(wp, x, 0) } else { false }
     }
     /// Frees the spare background drawable once the shell has drawn nothing for `GPU_POOL_IDLE_SECS`.
     pub fn trim_idle(&mut self) {
@@ -700,6 +701,8 @@ fn place_chrome(l:&surface::ZwlrLayerSurfaceV1,frame:&ChromeFrame,screen:(u32,u3
         for (_, slots) in self.state.gpu_slots.drain() {
             for s in slots { s.buffer.destroy(); }
         }
+        // glass is drawn by the GPU presenter only: with it gone, nothing is pushed to a presenter that no longer exists
+        bifrost_render::glass::enable(false);
         self.gpu = None;
         for slot in &mut self.state.slots { slot.damage.all(); }
         self.fell_back = true;
