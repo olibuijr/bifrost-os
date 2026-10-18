@@ -157,14 +157,6 @@ impl SwitchControl {
 }
 
 impl Shell {
-    /// Whether Settings > Accessibility > Switch Control is on (the open Settings copy when there is one, else the saved pref).
-    fn switch_control_on(&self) -> bool {
-        match &self.settings {
-            Some(st) => st.accessibility().switch_control,
-            None => self.prefs.get_bool("a11y_switch_control", false),
-        }
-    }
-
     /// Whether the switch panel is on screen.
     pub(in crate::shell) fn switch_panel_shown(&self) -> bool {
         self.switch_control.as_ref().is_some_and(SwitchControl::shown) && self.switch_control_on()

@@ -17,6 +17,7 @@
 
 use crate::gfx::Surface;
 use super::walk::{BAR, BAR_ROW};
+#[cfg(test)]
 use crate::shell::services::recognizer::VOICE_CONTROL_PREF;
 use crate::shell::ui::{Weight, LINK, MAC_CALLOUT_PT, MAC_FOOTNOTE_PT, WHITE};
 use crate::shell::{Effect, Event, Shell};
@@ -173,11 +174,6 @@ impl VoiceOverlay {
 }
 
 impl Shell {
-    /// Whether Voice Control is switched on (Settings > Accessibility > Voice Control).
-    pub(in crate::shell) fn voice_control_on(&self) -> bool {
-        self.prefs.get(VOICE_CONTROL_PREF) == Some("1")
-    }
-
     /// The front window in screen pixels.
     fn voice_window(&self) -> Option<Rect> {
         let w = self.desk.as_ref()?.front()?;

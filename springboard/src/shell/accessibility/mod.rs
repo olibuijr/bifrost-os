@@ -82,14 +82,10 @@ pub struct AccessibilitySettings {
     pub mouse_keys: bool,
     /// Switch Control: the keyboard cursor of the screen reader steps through the screen and selects without speech (`reader`).
     pub switch_control: bool,
-    /// Voice Control: spoken commands such as "press Save" run against the element map (`voice_control`).
-    pub voice_control: bool,
     /// Vehicle Motion Cues: dots at the screen edge follow the motion of a moving vehicle (`motion_cues`). Off until chosen.
     pub motion_cues: bool,
     /// Live Captions: the sound the computer plays is turned into captions on screen (`live_captions`, off by default).
     pub live_captions: bool,
-    /// Switch Control: the switch keys step through a panel of controls on screen and choose one (`switch_control`).
-    pub switch_control: bool,
     /// index into `HOLD_MS`
     pub hold: usize,
     /// Cursor Size, 0..1 from the Settings slider: the pointer draws at 1x up to 2x (`cursor_scale`)
@@ -133,9 +129,7 @@ impl AccessibilitySettings {
             mouse_keys: flag("a11y_mouse_keys", d.mouse_keys),
             motion_cues: flag("a11y_motion_cues", d.motion_cues),
             switch_control: flag("a11y_switch_control", d.switch_control),
-            voice_control: flag("a11y_voice_control", d.voice_control),
             live_captions: flag("a11y_live_captions", d.live_captions),
-            switch_control: flag("a11y_switch_control", d.switch_control),
             hold: index("a11y_hold", HOLD_MS.len()).unwrap_or(d.hold),
             cursor_size: p.get_parsed::<f32>("a11y_cursor_size").map_or(d.cursor_size, |v| v.clamp(0.0, 1.0)),
             shortcut: shortcut::parse(p.get(shortcut::PREF).unwrap_or("")),
@@ -166,9 +160,7 @@ impl AccessibilitySettings {
             ("a11y_mouse_keys", flag(self.mouse_keys)),
             ("a11y_motion_cues", flag(self.motion_cues)),
             ("a11y_switch_control", flag(self.switch_control)),
-            ("a11y_voice_control", flag(self.voice_control)),
             ("a11y_live_captions", flag(self.live_captions)),
-            ("a11y_switch_control", flag(self.switch_control)),
             ("a11y_hold", &self.hold.to_string()),
             ("a11y_cursor_size", &format!("{:.3}", self.cursor_size)),
             (shortcut::PREF, &shortcut::encode(&self.shortcut)),
@@ -312,7 +304,7 @@ mod tests {
         let a = AccessibilitySettings { switch_control: true, voice_control: true, ..Default::default() };
         a.save(&mut p);
         assert_eq!(AccessibilitySettings::load(&p), a);
-        assert_eq!((p.get("a11y_switch_control"), p.get("a11y_voice_control")), (Some("1"), Some("1")));
+        assert_eq!((p.get("a11y_switch_control"), p.get(super::services::recognizer::VOICE_CONTROL_PREF)), (Some("1"), Some("1")));
         let only_voice = AccessibilitySettings { voice_control: true, ..Default::default() };
         only_voice.save(&mut p);
         let back = AccessibilitySettings::load(&p);

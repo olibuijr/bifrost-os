@@ -1885,7 +1885,7 @@
         let (mut sh, calls) = voice_rig(false);
         assert!(sh.voice_control_tick(1000.0).is_empty());
         assert!(calls.lock().unwrap().is_empty(), "off: the recognizer is not touched");
-        sh.prefs.set("a11y_voice_control", "1").unwrap();
+        sh.prefs.set(crate::shell::services::recognizer::VOICE_CONTROL_PREF, "1").unwrap();
         sh.voice_control_tick(1000.0);
         assert_eq!(*calls.lock().unwrap(), ["shell:voice-control start"], "switched on: a recognition starts");
         sh.voice_control_tick(1100.0);
@@ -1899,9 +1899,9 @@
     #[test]
     fn switching_voice_control_off_ends_the_recognition() {
         let (mut sh, calls) = voice_rig(false);
-        sh.prefs.set("a11y_voice_control", "1").unwrap();
+        sh.prefs.set(crate::shell::services::recognizer::VOICE_CONTROL_PREF, "1").unwrap();
         sh.voice_control_tick(1000.0);
-        sh.prefs.set("a11y_voice_control", "0").unwrap();
+        sh.prefs.set(crate::shell::services::recognizer::VOICE_CONTROL_PREF, "0").unwrap();
         sh.voice_control_tick(1100.0);
         assert_eq!(*calls.lock().unwrap(), ["shell:voice-control start", "shell:voice-control stop"]);
         sh.voice_control_tick(2000.0);
@@ -1911,7 +1911,7 @@
     #[test]
     fn a_refused_recognition_is_announced_once_and_tried_again_later() {
         let (mut sh, calls) = voice_rig(true);
-        sh.prefs.set("a11y_voice_control", "1").unwrap();
+        sh.prefs.set(crate::shell::services::recognizer::VOICE_CONTROL_PREF, "1").unwrap();
         sh.voice_control_tick(1000.0);
         assert!(sh.announce.tick(1000.0));
         assert!(sh.announce.shown().is_some_and(|text| text.contains("Voice Control cannot listen")), "{:?}", sh.announce.shown());
