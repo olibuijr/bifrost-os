@@ -925,6 +925,8 @@ pub struct Shell {
     desk_regions:Option<Vec<(i32,i32,i32,i32)>>,
     /// set while a partial GPU desktop frame draws: the only rectangles the wallpaper layer clears
     desk_clear:Option<Vec<(i32,i32,i32,i32)>>,
+    /// pixels under `desk_clear` before the partial desktop draw, reused between frames
+    desk_snap:Vec<Vec<u32>>,
     /// A full desktop frame has been drawn since the last frame of any other screen (the HUD-only fast path needs it).
     desk_drawn:bool,
     /// The time of the last `draw`: `needs_frame` (which gets no time) checks the timed desktop effects against it.
@@ -1263,7 +1265,7 @@ impl Shell {
             quick_look:Default::default(),
             pip:Default::default(),
             thermal:Default::default(),
-            bar_backdrop:std::cell::RefCell::new(None),chrome_text:std::cell::RefCell::new(bifrost_render::cache::TextCache::for_screen(w.max(0) as usize, h.max(0) as usize)),bar_shadows:Default::default(),desk_regions:None,desk_clear:None,desk_drawn:false,desk_t:0.0,
+            bar_backdrop:std::cell::RefCell::new(None),chrome_text:std::cell::RefCell::new(bifrost_render::cache::TextCache::for_screen(w.max(0) as usize, h.max(0) as usize)),bar_shadows:Default::default(),desk_regions:None,desk_clear:None,desk_snap:Vec::new(),desk_drawn:false,desk_t:0.0,
             desktop_metrics:Default::default(),desktop_metrics_at:0.,metrics_sampler:Default::default(),metrics_running:false,
             desk: Some(desk::Desk::new()),
             desktop_gate: Default::default(),
@@ -4237,7 +4239,12 @@ impl Shell {
                     self.desk_clear = Some(prev.iter().chain(cur).copied().collect());
                 }
                 // what the regions held before this draw: pixels that come out the same are not damage
-                let before = self.desk_clear.as_ref().filter(|_| s.y0 == 0).map(|r| Damage::snapshot_rects(s.px, s.stride, s.w, s.h, r));
+                // taken out of self: the draws below borrow self mutably
+                let mut snap = std::mem::take(&mut self.desk_snap);
+                let have_before = match self.desk_clear.as_ref().filter(|_| s.y0 == 0) {
+                    Some(r) => { Damage::snapshot_rects_into(s.px, s.stride, s.w, s.h, r, &mut snap); true }
+                    None => false,
+                };
                 self.draw_desk(s, t);
                 self.draw_overview(s, t);
                 // Control Center and Notification Center float over the live desktop, at the menus' layer
@@ -4259,12 +4266,14 @@ impl Shell {
                 // the compose candidate window floats above the windows
                 self.draw_compose(s, &self.ui, self.w, self.h);
                 match self.desk_clear.take() {
-                    Some(rects) => match before {
-                        Some(b) => damage.union(&Damage::changed_in(&rects, &b, s.px, s.stride, s.w, s.h)),
-                        None => for (x, y, w, h) in rects { damage.add(x, y, w, h); },
+                    Some(rects) => if have_before {
+                        damage.union(&Damage::changed_in(&rects, &snap, s.px, s.stride, s.w, s.h));
+                    } else {
+                        for (x, y, w, h) in rects { damage.add(x, y, w, h); }
                     },
                     None => damage.all(),
                 }
+                self.desk_snap = snap;
                 // the panels fade and slide in: repaint everything until they settle
                 if self.cc.animating() || self.notify.animating() {
                     damage.all();
