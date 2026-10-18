@@ -570,6 +570,38 @@ fn enforce_signature_policy(keys_dir: &Path, part: &Path, url: &str) -> Result<(
     check_package_policy(&pinned, &bytes, signature.as_deref())
 }
 
+const EM_X86_64: u16 = 62;
+const EM_AARCH64: u16 = 183;
+
+/// The ELF `e_machine` (little-endian, offset 18) of a file whose first bytes are `bytes`; None when it is not ELF.
+fn elf_machine(bytes: &[u8]) -> Option<u16> {
+    if bytes.len() < 20 || &bytes[..4] != b"\x7fELF" {
+        return None;
+    }
+    Some(u16::from_le_bytes([bytes[18], bytes[19]]))
+}
+
+/// The `e_machine` this shell's CPU runs; None for an architecture not listed here (nothing is checked).
+fn host_elf_machine() -> Option<u16> {
+    if cfg!(target_arch = "x86_64") {
+        Some(EM_X86_64)
+    } else if cfg!(target_arch = "aarch64") {
+        Some(EM_AARCH64)
+    } else {
+        None
+    }
+}
+
+/// Whether the file at `path` can run on this CPU: false for an unreadable file or an ELF built for another machine.
+pub fn runs_here(path: &Path) -> bool {
+    let mut head = [0u8; 20];
+    let Ok(mut file) = std::fs::File::open(path) else { return false };
+    if file.read_exact(&mut head).is_err() {
+        return false;
+    }
+    !matches!((elf_machine(&head), host_elf_machine()), (Some(m), Some(h)) if m != h)
+}
+
 /// Installs the (already verified) package `r` holds: the archive is indexed and
 /// unpacked straight from where it is, never loaded whole.
 fn install_archive<R: Read + Seek>(root: &Path, r: &mut R, shell: &str) -> Result<InstalledApp, String> {
@@ -582,6 +614,16 @@ fn install_archive<R: Read + Seek>(root: &Path, r: &mut R, shell: &str) -> Resul
     r.seek(SeekFrom::Start(mf.offset)).and_then(|_| r.read_exact(&mut text)).map_err(|e| e.to_string())?;
     let m = parse_manifest(&String::from_utf8_lossy(&text))?;
     validate(&m, &files, shell)?;
+    // refused before anything is unpacked, so no version directory is left behind
+    if let Some(host) = host_elf_machine() {
+        for f in files.iter().filter(|f| !f.is_dir && f.size >= 20) {
+            let mut head = [0u8; 20];
+            r.seek(SeekFrom::Start(f.offset)).and_then(|_| r.read_exact(&mut head)).map_err(|e| e.to_string())?;
+            if let Some(machine) = elf_machine(&head).filter(|&e| e != host) {
+                return Err(format!("{} is built for another CPU (ELF machine {machine})", f.path.display()));
+            }
+        }
+    }
 
     let app_dir = apps_dir(root).join(&m.id);
     let stage = app_dir.join(format!(".{}.part", m.version));
@@ -657,7 +699,7 @@ pub fn install_download_local(root: &Path, url: &str, size: u64, sha256: &str, s
         let mut file = std::fs::File::open(&part).map_err(|e| e.to_string())?;
         install_archive(root, &mut file, shell)
     });
-    if result.is_ok() || result.as_ref().is_err_and(|e| e.contains("checksum mismatch") || e.contains("signature check failed")) {let _ = std::fs::remove_file(&part);}
+    if result.is_ok() || result.as_ref().is_err_and(|e| e.contains("checksum mismatch") || e.contains("signature check failed") || e.contains("built for another CPU")) {let _ = std::fs::remove_file(&part);}
     result
 }
 
@@ -1064,6 +1106,44 @@ pub mod tests {
         let b = pkg(&MANIFEST.replace("0.1.0", "9.0.0"));
         assert!(install_package(&root, &b, &sum(&b), "0.1.0").unwrap_err().contains("needs shell"));
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    fn elf_header(machine: u16) -> Vec<u8> {
+        let mut h = b"\x7fELF".to_vec();
+        h.resize(18, 0);
+        h.extend_from_slice(&machine.to_le_bytes());
+        h.resize(64, 0);
+        h
+    }
+
+    #[test]
+    fn a_package_built_for_another_cpu_is_refused_before_it_is_unpacked() {
+        assert_eq!(elf_machine(&elf_header(EM_AARCH64)), Some(EM_AARCH64));
+        assert_eq!(elf_machine(b"ELF"), None, "too short to be a header");
+        assert_eq!(elf_machine(&[0u8; 64]), None, "not ELF");
+        let Some(host) = host_elf_machine() else { return };
+        let other = if host == EM_X86_64 { EM_AARCH64 } else { EM_X86_64 };
+        let manifest = SYSTEM.replace("version = \"1.0.0\"", "version = \"1.1.0\"\nexec = \"bifrost-keyboard\"");
+        let root = scratch("foreign-cpu");
+        let bytes = tar(&[("manifest.toml", manifest.as_bytes(), 0o644), ("icon.png", b"PNG", 0o644), ("bifrost-keyboard", &elf_header(other)[..], 0o755)]);
+        let err = install_package(&root, &bytes, &sum(&bytes), "0.1.0").unwrap_err();
+        assert!(err.contains("bifrost-keyboard is built for another CPU"), "{err}");
+        assert!(!apps_dir(&root).join("is.olibuijr.keyboard").join("1.1.0").exists(), "nothing unpacked");
+        assert!(installed_in(&root).is_empty());
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn runs_here_refuses_an_elf_built_for_another_cpu() {
+        let Some(host) = host_elf_machine() else { return };
+        let other = if host == EM_X86_64 { EM_AARCH64 } else { EM_X86_64 };
+        let dir = scratch("runs-here");
+        std::fs::write(dir.join("foreign"), elf_header(other)).unwrap();
+        std::fs::write(dir.join("native"), elf_header(host)).unwrap();
+        assert!(!runs_here(&dir.join("foreign")));
+        assert!(runs_here(&dir.join("native")));
+        assert!(!runs_here(&dir.join("missing")), "a file that cannot be read does not run");
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     const SYSTEM: &str = "id = \"is.olibuijr.keyboard\"\nname = \"Keyboard\"\nversion = \"1.0.0\"\nkind = \"system\"\nprovides = [\"keyboard\"]\nicon = \"icon.png\"\nsummary = \"x\"\ncategory = \"System\"\n";

@@ -136,6 +136,10 @@ pub fn parse_catalog(text: &str) -> Result<Vec<StoreApp>, String> {
         if parse_semver(&version).is_none() || sha256.len() != 64 || !sha256.bytes().all(|b| b.is_ascii_hexdigit()) {
             continue;
         }
+        // a package built for another CPU (`arch = "x86_64"` or `"aarch64"`) is not offered to this one
+        if a.str_field("arch").is_some_and(|arch| arch != std::env::consts::ARCH) {
+            continue;
+        }
         let summary = a.str_field("summary").unwrap_or_default();
         out.push(StoreApp {
             id,
@@ -259,6 +263,17 @@ mod tests {
         assert_eq!((apps[0].name.as_str(), apps[0].size, apps[0].min_shell.as_str()), ("Calc", 1234, "0.1.0"));
         assert_eq!(apps[0].description, "Adds");
         assert!(parse_catalog("{}").is_err() && parse_catalog("nope").is_err());
+    }
+
+    #[test]
+    fn a_package_for_another_cpu_is_not_listed() {
+        let arch = std::env::consts::ARCH;
+        let other = if arch == "x86_64" { "aarch64" } else { "x86_64" };
+        let text = format!(
+            r#"{{"apps":[{{"id":"a","name":"A","version":"1.0.0","sha256":"{SUM}","package":"/p","arch":"{other}"}},{{"id":"a","name":"A","version":"1.0.0","sha256":"{SUM}","package":"/q","arch":"{arch}"}},{{"id":"b","name":"B","version":"1.0.0","sha256":"{SUM}","package":"/r"}}]}}"#
+        );
+        let apps = parse_catalog(&text).unwrap();
+        assert_eq!(apps.iter().map(|a| a.package.as_str()).collect::<Vec<_>>(), ["/q", "/r"]);
     }
 
     #[test]

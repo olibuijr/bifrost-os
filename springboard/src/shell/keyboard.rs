@@ -148,7 +148,7 @@ thread_local! {
 fn find_provider() -> Option<(String, std::path::PathBuf)> {
     super::store::install::installed_in(&apphost::root())
         .into_iter()
-        .find(|a| a.provides.iter().any(|p| p == "keyboard") && a.exec_path.is_file())
+        .find(|a| a.provides.iter().any(|p| p == "keyboard") && a.exec_path.is_file() && super::store::install::runs_here(&a.exec_path))
         .map(|a| (a.id, a.exec_path))
 }
 
