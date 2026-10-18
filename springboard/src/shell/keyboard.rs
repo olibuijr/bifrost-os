@@ -367,6 +367,15 @@ impl Keyboard {
     /// `w` is the screen width in px, `s` px per point; `accessory` adds the terminal row. Starts shown, without
     /// animation.
     pub fn new(w: f32, s: f32, accessory: bool) -> Self {
+        Self::make(w, s, accessory, true)
+    }
+
+    /// The shell's keyboard: the accessory row, starting off screen until a text field raises it (`set_shown`).
+    pub fn new_hidden_with_accessory(w: f32, s: f32) -> Self {
+        Self::make(w, s, true, false)
+    }
+
+    fn make(w: f32, s: f32, accessory: bool, shown: bool) -> Self {
         let id = NEXT_ID.with(|n| {
             let id = n.get();
             n.set(id + 1);
@@ -382,7 +391,7 @@ impl Keyboard {
             kbp: KbPrefs::default(),
             mode: Mode::Docked,
             return_key: ReturnKey::Return,
-            shown: true,
+            shown,
             slide: None,
             touching: false,
         };
@@ -393,9 +402,7 @@ impl Keyboard {
     /// A keyboard without the accessory row that starts off screen, to be slid in with `set_shown` when a field is
     /// tapped.
     pub fn new_hidden(w: f32, s: f32) -> Self {
-        let mut k = Keyboard::new(w, s, false);
-        k.shown = false;
-        k
+        Self::make(w, s, false, false)
     }
 
     /// Like `new_hidden`, for free text: smart typing follows the default set by `set_predictive_default`.

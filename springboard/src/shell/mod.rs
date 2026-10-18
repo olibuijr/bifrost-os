@@ -991,7 +991,7 @@ impl Shell {
         let base_icons: Vec<Image> = dock.iter().chain(&grid).map(|t| t.icon.clone()).collect();
         let library = AppLibrary::new(&ui, &layout, &base_icons);
         let pager = Pager::new(Layout::pages(grid.len()) + 1, w as f32);
-        let keyboard = Keyboard::new(w as f32, layout.s, true);
+        let keyboard = Keyboard::new_hidden_with_accessory(w as f32, layout.s);
         let clock = clock::Clock::new(&ui, w, h);
         let quicksearch = QuickSearch::new(&ui, w as f32, layout.s);
         let assistant = assistant_panel::Panel::new(&ui);
@@ -5102,7 +5102,8 @@ impl Shell {
     /// Terminal px rect: below the status bar, above the keyboard or the home zone.
     fn term_area(&self) -> (i32, i32, i32, i32) {
         let top = self.ui.pt(scene::STATUS_PT + terminal::HEADER_PT + self.terminal_ui.search_height()).round() as i32;
-        let bottom = if self.keyboard.shown() { self.kb_top() } else { self.h as f32 - home_zone(&self.ui) } as i32;
+        // in a desktop window the keyboard sits over the desktop (the window is lifted clear of it), not inside the window
+        let bottom = if self.keyboard.shown() && !self.desk_active() { self.kb_top() } else { self.h as f32 - home_zone(&self.ui) } as i32;
         (0, top, self.w, bottom - top)
     }
 
@@ -5329,7 +5330,7 @@ impl Shell {
         }
         s.fill_rect(0, bottom, w, self.h as usize, bg);
         self.draw_terminal_chrome(s, t);
-        if self.keyboard.shown() || self.keyboard.animating() {
+        if (self.keyboard.shown() || self.keyboard.animating()) && !self.desk_active() {
             let kb_top = self.kb_top();
             self.keyboard.draw(s, &self.ui, kb_top, t);
             let below = (kb_top + self.keyboard.h() + self.keyboard.offset(t)) as usize;

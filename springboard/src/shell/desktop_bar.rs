@@ -790,6 +790,16 @@ impl Shell {
                 frames.push(crate::bare::wayland::ChromeFrame{id:6,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px});
             }
         }
+        // a tablet's on-screen keyboard: id 7, an overlay surface above every window from its top to the bottom edge
+        // (drawn only into the desktop frame, the windows covered it). The slide stays in the desktop frame, so the
+        // surface keeps one size and is not made again on every frame of it.
+        if self.desk_keyboard_visible()&&self.keyboard.shown()&&!self.keyboard.animating() {
+            let top=(self.kb_top().max(0.0) as usize).min(height);
+            if top<height&&width>0 {
+                let data=pixels[top*width..height*width].to_vec();
+                frames.push(crate::bare::wayland::ChromeFrame{id:7,x:0,y:top as i32,width,height:height-top,pixels:data});
+            }
+        }
         frames
     }
 }
