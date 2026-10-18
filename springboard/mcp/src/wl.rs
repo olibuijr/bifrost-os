@@ -70,6 +70,8 @@ struct Output {
     w: i32,
     h: i32,
     name: String,
+    /// The output is turned a quarter (transform 90 or 270): its mode is the panel's size, the screen is the other way
+    quarter: bool,
 }
 
 #[derive(Default)]
@@ -190,7 +192,8 @@ impl Wl {
 
     /// The first output's size in compositor (buffer) pixels.
     pub fn screen_size(&self) -> (i32, i32) {
-        self.st.outputs.first().map(|o| (o.w, o.h)).unwrap_or((0, 0))
+        // what screenshots show and coordinates mean: a quarter-turned output (a portrait panel shown landscape) swaps
+        self.st.outputs.first().map(|o| if o.quarter { (o.h, o.w) } else { (o.w, o.h) }).unwrap_or((0, 0))
     }
 
     /// Whether the compositor offers a virtual pointer; without one, pointer input goes through the uinput touchscreen.
@@ -490,6 +493,10 @@ impl Dispatch<wl_output::WlOutput, usize> for State {
                 o.h = height;
             }
             wl_output::Event::Name { name } => o.name = name,
+            wl_output::Event::Geometry { transform: WEnum::Value(t), .. } => {
+                use wl_output::Transform as T;
+                o.quarter = matches!(t, T::_90 | T::_270 | T::Flipped90 | T::Flipped270);
+            }
             _ => {}
         }
     }
