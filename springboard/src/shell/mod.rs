@@ -2158,7 +2158,6 @@ impl Shell {
             // the accelerometer is read on every wake, so the dots follow the vehicle
             due.add(Some(t + accessibility::motion_cues::POLL_MS));
         }
-        if self.markup_load.is_some() {
         if self.markup_load.is_some() || self.visual_search_pending() {
             due.add(Some(t + 50.0));
         }
