@@ -99,6 +99,9 @@ impl LockTouch {
     }
 }
 
+/// How long Wi-Fi must stay down before its "Disconnected" notice posts (ms, the tick clock).
+const WIFI_DROP_MS: f64 = 8000.0;
+
 /// Everything the shell keeps about notifications.
 pub struct Notify {
     store: Store,
@@ -132,6 +135,12 @@ pub struct Notify {
     pub(in crate::shell) extra: Vec<(AppId, usize)>,
     /// set after the first `set_info`, so the boot state posts nothing
     booted: bool,
+    /// Wi-Fi went down at this tick time (ms); a drop shorter than `WIFI_DROP_MS` posts nothing
+    offline_since: Option<f64>,
+    /// the network that dropped, for its "Disconnected" notice
+    offline_ssid: Option<String>,
+    /// the "Disconnected" notice was posted for this outage, so the return posts "Joined"
+    offline_posted: bool,
     /// the Focus modes (`modes`) and the one on by hand; Do Not Disturb's apps and schedule are read from the store
     pub(in crate::shell) modes: modes::Modes,
     /// where `modes` is saved (`focus_modes.ini`); None for a shell that never loaded its data directory
@@ -169,6 +178,9 @@ impl Default for Notify {
             badges: Vec::new(),
             extra: Vec::new(),
             booted: false,
+            offline_since: None,
+            offline_ssid: None,
+            offline_posted: false,
             modes: modes::Modes::builtin(),
             modes_path: None,
             sched_mode: None,
@@ -825,8 +837,18 @@ impl Shell {
         }
         if next.online != prev.online {
             let ssid = |i: &Info| i.current_ssid.clone().unwrap_or_else(|| i.wifi.clone());
-            let body = if next.online { format!("Joined {}", ssid(next)) } else { format!("Disconnected from {}", ssid(prev)) };
-            posts.push(Notification::new(AppId::Settings, "Wi-Fi", body, now));
+            if next.online {
+                // the "Disconnected" notice comes from `notify_tick`, once the drop has lasted `WIFI_DROP_MS`
+                if std::mem::take(&mut self.notify.offline_posted) {
+                    posts.push(Notification::new(AppId::Settings, "Wi-Fi", format!("Joined {}", ssid(next)), now));
+                }
+                self.notify.offline_since = None;
+                self.notify.offline_ssid = None;
+            } else {
+                self.notify.offline_since = Some(self.notify.t);
+                self.notify.offline_ssid = Some(ssid(prev));
+                self.notify.offline_posted = false;
+            }
         }
         for n in posts {
             self.notify(n);
@@ -879,6 +901,15 @@ impl Shell {
             if b.gone() {
                 self.notify.banner = None;
                 self.notify.banner_card = None;
+            }
+        }
+        // a Wi-Fi drop that has lasted `WIFI_DROP_MS` posts its "Disconnected" notice (`notify_info` only runs on change)
+        if let Some(since) = self.notify.offline_since {
+            if !self.info.online && !self.notify.offline_posted && t - since >= WIFI_DROP_MS {
+                self.notify.offline_posted = true;
+                let ssid = self.notify.offline_ssid.clone().unwrap_or_default();
+                let now = self.notify.now();
+                self.notify(Notification::new(AppId::Settings, "Wi-Fi", format!("Disconnected from {ssid}"), now));
             }
         }
         self.center_tick(t);
@@ -1507,17 +1538,47 @@ mod tests {
         next.current_ssid = Some("Home".into());
         next.networks = vec![Network { ssid: "Home".into(), bars: 3, secure: true, saved: true }];
         sh.set_info(next.clone());
-        assert_eq!(sh.notify.store().groups()[0].latest().body, "Joined Home");
+        assert_eq!(sh.notify.store().len(), 3, "a join with no drop before it posts nothing");
         next.online = false;
         next.current_ssid = None;
         sh.set_info(next.clone());
+        assert_eq!(sh.notify.store().len(), 3, "the drop posts only once it has lasted 8 s");
+        sh.tick(1000.0 + WIFI_DROP_MS);
         assert_eq!(sh.notify.store().groups()[0].latest().body, "Disconnected from Home");
+        next.online = true;
+        next.current_ssid = Some("Home".into());
+        sh.set_info(next.clone());
+        assert_eq!(sh.notify.store().groups()[0].latest().body, "Joined Home");
         assert!(sh.notify.store().groups().iter().all(|g| g.app == AppId::Settings));
         assert_eq!(sh.notify.store().len(), 5);
         // a cable coming up is not a Wi-Fi join
         next.wired = true;
         sh.set_info(next.clone());
         assert_eq!(sh.notify.store().len(), 5, "wired links post no Wi-Fi notice");
+    }
+
+    #[test]
+    fn a_wifi_blip_shorter_than_the_debounce_posts_nothing() {
+        let mut sh = shell();
+        unlock(&mut sh);
+        sh.tick(1000.0);
+        let mut next = Info { online: true, current_ssid: Some("Home".into()), ..sh.info.clone() };
+        sh.set_info(next.clone());
+        next.online = false;
+        next.current_ssid = None;
+        sh.set_info(next.clone());
+        sh.tick(1000.0 + WIFI_DROP_MS - 1.0);
+        next.online = true;
+        next.current_ssid = Some("Home".into());
+        sh.set_info(next.clone());
+        sh.tick(1000.0 + 2.0 * WIFI_DROP_MS);
+        assert_eq!(sh.notify.store().len(), 0, "a drop that heals inside the debounce posts nothing");
+        // a later drop starts its own debounce
+        next.online = false;
+        next.current_ssid = None;
+        sh.set_info(next.clone());
+        sh.tick(1000.0 + 3.0 * WIFI_DROP_MS);
+        assert_eq!(sh.notify.store().groups()[0].latest().body, "Disconnected from Home");
     }
 
     #[test]

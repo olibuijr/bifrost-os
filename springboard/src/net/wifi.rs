@@ -410,7 +410,9 @@ impl Manager {
             let ip = iface_ipv4(&self.iface);
             let router = default_gateway(&std::fs::read_to_string("/proc/net/route").unwrap_or_default()).filter(|(i, _)| *i == self.iface).map(|(_, g)| g);
             self.set(|s| {
-                s.state = if ip.is_some() { State::Connected } else { State::Connecting };
+                // a momentarily unreadable address on the same network is not a drop: keep Connected
+                let same = s.state == State::Connected && s.ssid == ssid;
+                s.state = if ip.is_some() || same { State::Connected } else { State::Connecting };
                 s.ssid = ssid.clone();
                 s.ip = ip;
                 s.router = router;
