@@ -3116,7 +3116,8 @@ impl Settings {
             Action::Bluetooth(c) => vec![Effect::Bluetooth(c)],
             // the network service runs nmcli on its own thread; the page shows the new state on its next read
             Action::Vpn { name, up } => {
-                super::desktop_network::send(super::desktop_network::Request::Vpn { name, up });
+                let action = if up { super::desktop_network::VpnAction::Up(name) } else { super::desktop_network::VpnAction::Down(Some(name)) };
+                super::desktop_network::send(super::desktop_network::Request::Vpn(action));
                 vec![]
             }
             Action::AudioOutput => vec![Effect::BluetoothOutput],
@@ -3252,10 +3253,7 @@ impl Settings {
             Toggle::StickyKeys => flip(&mut self.a11y.sticky_keys),
             Toggle::MouseKeys => flip(&mut self.a11y.mouse_keys),
             Toggle::MotionCues => flip(&mut self.a11y.motion_cues),
-            Toggle::SwitchControl => flip(&mut self.a11y.switch_control),
-            Toggle::VoiceControl => flip(&mut self.a11y.voice_control),
             Toggle::LiveCaptions => flip(&mut self.a11y.live_captions),
-            Toggle::SwitchControl => flip(&mut self.a11y.switch_control),
             Toggle::AutoTime => {
                 let on = flip(&mut self.info.time_manual);
                 // the switch shows "automatic", the flag stores "manual"

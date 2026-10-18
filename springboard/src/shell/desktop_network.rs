@@ -151,8 +151,6 @@ pub enum Request {
     Offer(Offer),
     /// Takes down the network offered by [`Request::Offer`].
     StopOffer,
-    /// Brings the VPN connection `name` up (`up`) or down.
-    Vpn { name: String, up: bool },
 }
 
 /// A VPN request. The system network service (NetworkManager, with its VPN and WireGuard plug-ins) keeps the
@@ -557,11 +555,6 @@ fn apply(request: Request) -> Result<(), String> {
         Request::Offer(offer) => start_offer(&offer),
         Request::StopOffer => stop_offer(),
         Request::Vpn(action) => apply_vpn(action),
-        Request::Vpn { name, up } => {
-            let args = vpn_args(&name, up)?;
-            let args: Vec<&str> = args.iter().map(String::as_str).collect();
-            output("nmcli", &args)
-        }
         Request::Wifi(action) => match action {
             WifiAction::Scan => output("nmcli", &["--wait", "5", "device", "wifi", "rescan"]),
             WifiAction::Enable(on) => {
