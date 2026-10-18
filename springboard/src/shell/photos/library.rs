@@ -5,8 +5,8 @@ use std::path::{Path, PathBuf};
 
 /// Directories scanned for pictures, in order.
 pub fn dirs() -> Vec<PathBuf> {
-    let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
-    vec![home.join("Pictures")]
+    // the account's Pictures: the shell runs as root without $HOME, which read a relative "Pictures"
+    vec![crate::shell::dock_stack::home_dir().join("Pictures")]
 }
 /// Deleted photos wait here (inside the Pictures directory) until purged.
 pub const TRASH: &str = ".trash";
