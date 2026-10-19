@@ -126,7 +126,7 @@ Every command opens a temporary `/dev/uinput` device on Midget over the existing
 | `drag X0 Y0 X1 Y1 [MS]` | press, interpolated moves (default 400 ms), release |
 | `scroll X Y DY [DX]` | wheel notches at the pixel: DY > 0 scrolls down, DX > 0 right (REL_WHEEL / REL_HWHEEL) |
 | `type [--raw] [--delay MS] TEXT` | US layout: letters, digits, punctuation with Shift, space; `\n` is Enter and `\t` Tab (unless `--raw`); about 15 ms per key; characters with no US key are listed and skipped |
-| `key SPEC...` | `enter`, chords `cmd+shift+4`, repeats `down*3`, several in a row: `key cmd+l tab*2 enter` (also `f1`..`f12`, `home`, `end`, `pageup`, `pagedown`, `delete`) |
+| `key SPEC...` | `enter`, chords `cmd+shift+4`, repeats `down*3`, several in a row: `key cmd+l tab*2 enter` (also `f1`..`f12`, `home`, `end`, `pageup`, `pagedown`, `delete`). US punctuation keys by name (`minus`, `equal`, `bracketleft`, `bracketright`, `semicolon`, `apostrophe`, `grave`, `backslash`, `comma`, `period`, `slash`) or as the character itself in a chord: `key cmd+[ cmd+] cmd+,` (quote `[` `]` and a backslash for the shell). Shifted characters are `shift+` the key (`cmd+shift+.`) |
 | `seq FILE` | runs one command per line (`click`, `type`, `key`, `move`, `drag`, `scroll`, `shot`, `screen`, `tap-window`, `tap`, `state`, `unlock`, `sleep S`, `# comments`); stops at the first failure, `--keep-going` goes on; `-` reads stdin |
 
 Coordinates are compositor pixels, the same space as `screen`/`shot`: the pointer's range is 0..w-1 by 0..h-1 with the output size
