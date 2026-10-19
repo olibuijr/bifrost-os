@@ -1023,7 +1023,8 @@ Gaps, decided:
   (`src/bare/wayland.rs`), raises the keyboard on activate, and types into the focused client's field with
   `commit_string` / `set_preedit_string` / `delete_surrounding_text` and `commit`, named keys through the virtual keyboard.
   The mapping is in `src/shell/textinput.rs`. The keyboard does not yet use the content kind of the field. The keyboard app (`apps/keyboard`) does not yet send `Preedit`, draw the other return
-  keys, or use secure/content traits; nothing draws a candidate popup yet (only the placement helper exists).
+  keys, or use secure/content traits. An installed input method draws its own candidate list (see "InputMethodKit: the input
+  method host"); the keyboard app and Wayland clients do not get one.
   `AccessoryItem`s are stored in the host (`AppHost::accessory`) but not drawn; `AccessoryAction` is not sent.
 - Only `view::TextField` is a text input client; other SDK text widgets (`widgets::text_field` over
   `bifrost_ui::TextField`, apps with their own fields) do not use `TextBuffer`, and the field does not mask secure
@@ -3635,9 +3636,62 @@ and the graph has no Quartz Composer file format, editor, renderer or plug-in ho
   `cancel`; callbacks logged in order Entered, Updated, Exited, Perform, Conclude; one operation chosen from the source mask
   and the destination answer (copy, then link, then move); `DraggingItem` carries pasteboard types and an
   `NSFilePromiseProvider`-style `PromisedFile` written on drop.
-- Gaps, recorded: the shell does not yet forward wheel, hover or magnify/rotate events to apps, and the retained view kit is
-  not yet wired to `drag_session`. Magnify and rotate models exist in `ui::gesture`; `ui::trackpad_gesture::TwoFinger` runs both on one two-finger touch and
+- Magnify and rotate models exist in `ui::gesture`; `ui::trackpad_gesture::TwoFinger` runs both on one two-finger touch and
   returns Began, Changed and Ended events (`lift` ends them). Needs a Midget check before parity.
+- Update 2026-10-19: wheel, hover and the two-finger events now reach apps, and the view kit has drag and drop; see the next
+  two sections. What is still open: trackpad scroll phases and momentum, trackpad magnify and rotate from the compositor, and a
+  Midget check of all of it.
+
+### Pointer events: wheel, hover, magnify, rotate (`ToApp::Pointer`)
+
+Apple parity: `scrollWheel(with:)`, `mouseMoved`/`mouseExited` through tracking areas, `magnify(with:)` and `rotate(with:)`.
+An app that does not ask keeps the touch stream it had (the wheel as a drag, no hover, no gestures).
+
+- **Model** (`bifrost_ui::pointer_event`, SDK `bifrost_app::pointer_events`): `PointerEvent` is `Wheel { x, y, dx, dy, precise,
+  phase, momentum }` (`dx`/`dy` are how far the content moves in pixels, positive `dy` moves it down, `precise` is
+  `hasPreciseScrollingDeltas`), `Hover { x, y }`, `HoverExit`, `Magnify { x, y, magnification, phase }` and `Rotate { x, y,
+  radians, phase }`. `to_points(scale)` converts pixels to points. `PointerRouter` keeps the app's tracking areas
+  (`set_areas`, `set_key_window`) and `route(&event)` returns `Delivered`: tracking Entered, Exited, Moved from the hover,
+  `Scroll` with a `wheel::ScrollEvent`, `Magnify`, `Rotate`. `from_gesture` turns a `trackpad_gesture::Event` into a
+  `PointerEvent` at the midpoint of the fingers.
+- **Opt in**: `App::pointer_interest()` returns `pointer_events::WHEEL | HOVER | GESTURES` bits (default 0) and
+  `App::pointer(ctx, &event)` handles the events (positions in surface pixels, like touches). The runtime sends
+  `ToShell::PointerInterest { mask }` when the mask changes; the shell sends only the kinds an app asked for
+  (`AppHost::pointer`).
+- **Wire** (`proto/src/pointer.rs`): `ToApp::Pointer` and `ToShell::PointerInterest`, both tag `0x1f1` in their own tag spaces;
+  a non-finite number, an unknown kind or phase byte is refused on decode, unknown interest bits are dropped.
+- **Shell** (`src/shell/pointer_events.rs`): the Wayland pointer now also pushes `input::Event::Wheel` ahead of the drag it
+  emulates for an axis event (the drag is unchanged for apps that did not ask). `Shell::pointer_wheel` finds the external app
+  window content under the pointer as a click does (`Desk::pick`, content hits only), sends the wheel at the position in its
+  window and then drops the next three plain touches for that app (`AppHost::swallow_wheel_drag`, 250 ms), so the app does not
+  scroll twice. `Shell::pointer_hover` (called from `desktop_pointer`) sends `Hover` over the content of an app that asked
+  and `HoverExit` when the pointer leaves it or moves to another app. `Shell::pinch_contact` feeds the first two touchscreen
+  contacts of the app in front to `TwoFinger` and sends `Magnify` and `Rotate`.
+- **Not built, said plainly**: the Wayland layer reads only the vertical axis of a notched wheel (no `axis_source`, no phases,
+  no momentum, no horizontal scroll), binds no pointer-gestures protocol (a touchpad pinch does not arrive; only touchscreen
+  fingers do), and no shipped app or view takes the events yet. Apple's trackpad momentum and phase behaviour cannot be
+  matched until the compositor forwards `axis_source`/`axis_stop`.
+- Midget check: give an SDK app `fn pointer_interest(&self) -> u32 { pointer_events::WHEEL | pointer_events::HOVER }` and an
+  `App::pointer` that logs, install it, scroll the wheel and move the pointer over its window, and read `bifrost pc log`.
+
+### Drag and drop in the view kit (`View::dnd_source`, `dnd_types`)
+
+Apple parity: `NSDraggingSource`, `NSDraggingDestination`, `registerForDraggedTypes`. Code: `sdk/src/view/drag.rs`.
+
+- A view is a **source** when `dnd_source()` returns a `DragSpec` (items, allowed operations as `dragop` bits, a drag image).
+  The window records the press (`Window::event`); a move past `DRAG_SLOP` (4 pt) cancels the control that held the press
+  (so a button does not fire), and `ViewApp::event` starts the session (`dnd::begin`) from `Window::take_drag_request`.
+  `dnd_ended(op)` tells the source how it ended (0 when nobody took it).
+- A view is a **destination** when `dnd_types()` lists types. A type takes every type that conforms to it
+  (`uttype::conforms`: `public.image` takes `public.png`); every item of the drag must be taken. `ViewApp` registers the union
+  with the shell (`sync_drop_types`, on configure and after every event), and `ViewApp::drag` (call it from `App::drag`) finds
+  the deepest accepting view under the pointer (or its nearest accepting ancestor) and calls `dnd_over(entered, x, y, items,
+  allowed)`, `dnd_exited()` and `dnd_perform(items)`. The window answers with one operation both sides allow
+  (`pick_operation`: copy, then link, then move). A drop ends the highlight with `dnd_exited`.
+- Items are the shell's `DragItem`s (text, links, granted files); the view reads a file through the grant, bytes do not travel.
+- Not built: no shipped view is a source or a destination yet (Files and Notes still use their own glue), no drag image
+  from a view's pixels, no spring-loading and no `draggingFormation`.
+- Midget check: see the `Drag and Drop` row of `docs/parity-matrix/data/appkit-user-interactions.json`.
 
 ## InputMethodKit: language methods, input sources, client protocol (sprint 9)
 
@@ -3656,8 +3710,53 @@ New pure models in `springboard/ui/src/` (host unit tests only; not wired into t
   selectedRange, markedRange, attributes(forCharacterIndex:lineHeightRectangle:)) with `update_composition` and
   `apply(outcome, client)` so a text view only implements the trait; a mock client drives the controller tests.
 
-Gaps: no pinyin (no syllable-to-hanzi data is shipped), no Transliteration or Dictation methods, the sources
-are not read from the shell yet (`shell/kb_layouts.rs` still has three layouts), no Wayland text-input provider.
+Gaps: no pinyin (no syllable-to-hanzi data is shipped), no Transliteration or Dictation methods, no Wayland text-input
+provider. (The sources and the other models above are now used by the input method host below.)
+
+## InputMethodKit: the input method host (`bifrost_ui::imk_host`, `shell/input_providers.rs`)
+
+Added 2026-10-19. Joins the models above into one flow the shell runs; it is in one process, with no provider socket.
+
+- **Registering**: `Host::register(bundle, &info, languages, engine)` parses an Info dictionary (`imk_info`), starts a
+  `Server` for it and installs one input source per mode, id `<bundle>.<mode>` (`input_source`). `Host::install_layout`
+  adds keyboard layouts to the same source list; install them first, because the first selectable source installed is
+  the selected one. The shell scans `<springboard root>/input-methods/*/Info.plist` at start
+  (`Providers::load_dir`). The two BifrOSt keys are `BifrostEngine` (`kana` or `hangul`) and `BifrostLanguage`; a bundle
+  without an engine starts no composition, so every key passes through to the client.
+- **Sessions**: `Host::connect(client)` gives a client one `InputController` in every method; the Search field is client 0
+  and an external app in slot `n` is client `n + 1`. `disconnect` returns the composition still held.
+- **Switching**: `select_source(id)` makes a method's mode the active one (all sessions change mode, the previous method's
+  compositions are committed) or, for a layout, no method. It returns `PendingCommit`s that the shell inserts
+  (`Shell::apply_provider_commits`). The menu bar input menu lists the enabled modes under the layouts
+  (`Action::InputMethod`), the bar label is the first character of the mode name, and choosing a layout or pressing
+  Ctrl+Space ends the method (`Shell::input_layout_selected`).
+- **Events**: `Host::key(client, text, combo, &mut dyn TextInputClient)` returns `KeyResult`: `Consumed`, `PassThrough`, or
+  `CommittedThenPass` (the composition is in the client; the client now types the key). Text keys go through the `Engine`
+  with the whole keystroke string (`Engine::convert(mode, keystrokes) -> Option<Conversion>`, so Backspace is a replay of the
+  shorter string; `None` ends the composition); Space and Return pick the candidate (the selected one, Space takes the first
+  when none is selected), digits 1 to 9 pick by number, Up and Down move the selection, Left and Right the composition caret,
+  Escape restores the typed keystrokes, a shortcut or any key without text commits and goes on. `Host::command` and
+  `command_by_name` carry editing commands (`move_left`, `delete_backward`, `select_all`, ...); `Host::mouse` handles a click
+  during a composition (inside the marked text it moves the caret, outside it commits).
+- **Queries and the window**: `composed_string`, `original_string`, `candidates`, `composition_caret`, `candidate_view`
+  (items, selected, location hint, opacity, panel type) and `candidate_origin` (`candidates::place`). The shell draws the
+  window in `compose_window::draw_compose`: a numbered single-column list with the selected row in `MENU_HIGHLIGHT`, over the
+  Search card, or beside the caret of an external app (`Shell::provider_candidates`: the caret rectangle in window points
+  plus the window body origin, through `textinput::popup_origin`).
+- **Clients**: `TextInputClient` is implemented by `bifrost_ui::text::TextEditor` (one undo step per composition),
+  by the shell's Search field (`FieldClient`, characters to bytes) and by an external app's field (`AppClient`: marked text and
+  commits as `SetMarkedText`/`UnmarkText`, the caret and marked range from the app's last `TextState`). Keys reach the
+  host before the field in `Shell::compose_search_key` and `ext_type_out`, so the on-screen keyboard's keys are composed too.
+- **Engines**: `KanaEngine` (romaji to hiragana, candidates hiragana and katakana) and `HangulEngine` (two-set). The older
+  composers in `shell/input_methods` (Telex, VNI, pinyin tables and others) are a separate trait and are not hosted yet.
+- **Not built, said plainly**: no provider process (a method is a folder plus a built-in engine; nothing speaks the window
+  server's input method protocol to a third party), no dictionary conversion, no mouse forwarding (a click on the candidate
+  window or into marked text is not delivered to `Host::mouse`/`pick_candidate`), editing commands from the menu do not go
+  through `Host::command`, the selected mode is not saved across a restart, `attributes_for_character_index` returns
+  `None` everywhere, and the keyboard app still emits no `Preedit` and does not draw the candidates.
+- Midget check: the recipe in the `Input method server and connections` row of
+  `docs/parity-matrix/data/inputmethodkit.json` (a Kana bundle under `/var/lib/springboard/input-methods`, choose Romaji in the
+  input menu, type `ka` in Search).
 
 ## Text view and TextKit 2 layout (AppKit Text, `bifrost-ui`)
 

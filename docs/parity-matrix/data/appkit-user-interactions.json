@@ -3,16 +3,16 @@
  "doc": "https://developer.apple.com/documentation/appkit",
  "macos_since": "10.0",
  "status": "partial",
- "bifrost": "bifrost_ui::{responder,keys,menu,gesture,focus,ax,wheel,tracking,drag_session,trackpad_gesture,cursor}, bifrost_app::{dnd,dock_tile,cursor_service}, springboard/src/shell/atspi/",
- "summary": "Responder chain, key equivalents, menus, cursor shapes, gesture recognizers, scroll wheel and tracking-area models, typed drag and drop, dock badge, progress and menu, and an AT-SPI accessibility bridge exist. Wheel, hover and two-finger magnify and rotate events do not reach apps yet, the view kit has no drag and drop, and Touch Bar is Apple-only.",
+ "bifrost": "bifrost_ui::{responder,keys,menu,gesture,focus,ax,wheel,tracking,drag_session,trackpad_gesture,cursor}, bifrost_app::{dnd,dock_tile,cursor_service}, springboard/src/shell/atspi/, bifrost_ui::pointer_event, bifrost_app::{pointer_events,view::drag}",
+ "summary": "Responder chain, key equivalents, menus, cursor shapes, gesture recognizers, scroll wheel and tracking-area models, typed drag and drop, dock badge, progress and menu, and an AT-SPI accessibility bridge exist. Since 2026-10-19 apps can ask for scroll wheel, pointer hover and two-finger magnify and rotate events (ToApp::Pointer), and the retained view kit has drag sources and drop destinations. Trackpad gesture events from the compositor, the cursor art in the compositor and Touch Bar (Apple-only) are missing.",
  "rea_evidence": "ev_c117807174d13fdfac5be6ad1bb26c6614adc9e640b17cb09120c645e24de789",
  "features": [
   {
    "feature": "Mouse, Keyboard, and Trackpad",
    "apple": "NSEvent, NSResponder, key events, tracking areas, trackpad touches",
-   "bifrost": "springboard/ui/src/responder.rs, springboard/ui/src/keys.rs, springboard/ui/src/focus.rs",
+   "bifrost": "springboard/ui/src/responder.rs, springboard/ui/src/keys.rs, springboard/ui/src/focus.rs, springboard/ui/src/pointer_event.rs, springboard/ui/src/tracking.rs, springboard/ui/src/wheel.rs, springboard/proto/src/pointer.rs, springboard/src/shell/pointer_events.rs",
    "status": "parity",
-   "note": "verified on Midget 0.7.25 by 17 tests. responder chain, key combos and focus loop exist; app input is only Down/Move/Up/Cancel, no wheel, hover, tracking areas or nextKeyView (docs/bifrost-ui.md ~line 870)"
+   "note": "Updated 2026-10-19: wheel and hover now reach apps. An app returns the kinds it wants from App::pointer_interest (WHEEL, HOVER, GESTURES) and gets App::pointer calls; the runtime tells the shell (ToShell::PointerInterest), the shell sends the wheel at the position in the window and drops the emulated drag for that app, and sends Hover while the pointer is over the window content and HoverExit when it leaves. bifrost_ui::pointer_event::PointerRouter turns hover into the enter, exit and move events of tracking areas. Notched wheels only (no phases or momentum yet: the Wayland axis source is not read), vertical axis only, no nextKeyView. The row stays parity from the earlier Midget run; these additions are host-tested only. Midget check: add `fn pointer_interest(&self) -> u32 { pointer_events::WHEEL | pointer_events::HOVER }` and an `App::pointer` that logs through ctx.log to any SDK app (none ships one yet), build and install it with tools/pc-app.py, scroll the wheel and move the pointer over its window on Midget and read `bifrost pc log`."
   },
   {
    "feature": "Menus, Cursors, and the Dock",
@@ -24,9 +24,9 @@
   {
    "feature": "Gestures",
    "apple": "NSGestureRecognizer and subclasses (click, pan, magnification, rotation, press)",
-   "bifrost": "springboard/ui/src/gesture.rs, springboard/ui/src/trackpad_gesture.rs, springboard/src/shell/gestures.rs",
+   "bifrost": "springboard/ui/src/gesture.rs, springboard/ui/src/trackpad_gesture.rs, springboard/src/shell/gestures.rs, springboard/ui/src/pointer_event.rs (from_gesture), springboard/src/shell/pointer_events.rs (pinch_contact)",
    "status": "partial",
-   "note": "Recognizer state machines (tap, pan, long press, magnify, rotate) are tested headless in springboard/ui/tests/parity_sdk-tests-07-w7.rs, as are the two-finger events of ui::trackpad_gesture, which runs the pinch and the rotation together and returns Began, Changed and Ended events in order. The compositor does not yet send two-finger touches to apps. built on parity/team-k-appkit-user-interactions; not yet verified on Midget."
+   "note": "Built 2026-10-19: the two-finger events reach apps: the shell feeds the first two touchscreen contacts of the app in front to ui::trackpad_gesture::TwoFinger and sends Magnify (magnification) and Rotate (radians) with Began, Changed and Ended phases at the midpoint of the fingers to an app that asked for GESTURES. Touchpad pinch and rotate from the compositor are not delivered (the shell binds no pointer-gestures protocol), and no shipped app takes them. Midget check: needs a touchscreen, which Midget may not have; if it does, run an app with pointer_interest GESTURES (see the Mouse row) and pinch on its window; otherwise only the host tests apply (`cargo test -p bifrost-ui pointer_event` and `cargo test -p bifrost-proto pointer`)."
   },
   {
    "feature": "Touch Bar",
@@ -38,16 +38,16 @@
   {
    "feature": "Drag and Drop",
    "apple": "NSDraggingSource, NSDraggingDestination, NSDraggingSession, NSPasteboard drag",
-   "bifrost": "springboard/sdk/src/dnd.rs, springboard/src/shell/dnd.rs, springboard/ui/src/drag_session.rs, springboard/sdk/src/transfer_drag.rs",
+   "bifrost": "springboard/sdk/src/dnd.rs, springboard/src/shell/dnd.rs, springboard/ui/src/drag_session.rs, springboard/sdk/src/transfer_drag.rs, springboard/sdk/src/view/drag.rs, springboard/sdk/src/view/app.rs (ViewApp::drag, sync_drop_types)",
    "status": "partial",
-   "note": "typed drag and drop between apps (docs/bifrost-ui.md section 508). The drag session state machine (ui::drag_session: Entered, Updated, Exited, Perform, Conclude, one operation from the source mask) is used by the SDK transfer path; the view kit itself has no drag and drop, so views need app glue. built on parity/team-k-appkit-user-interactions; not yet verified on Midget."
+   "note": "Built 2026-10-19: the retained view kit has drag and drop. A view returns a DragSpec from View::dnd_source; a press on it that moves past DRAG_SLOP cancels the control that held the press and ViewApp::event starts the session with dnd::begin. A view lists the types it takes in View::dnd_types (conformance matched, public.image takes a PNG), ViewApp registers their union, and ViewApp::drag (called from App::drag) finds the deepest accepting view and calls dnd_over, dnd_exited and dnd_perform and answers with one operation the source allows (copy, then link, then move). dnd_ended tells the source. No shipped view implements them yet, and files are not read from a drop by the view (the items carry grants). Midget check: make a view of an SDK app return a DragSpec with a text item from dnd_source and give another view dnd_types public.plain-text, forward App::drag to ViewApp::drag, install the app on Midget and drag from one view to the other with `bifrost pc midget swipe` over the two window-local points; the second view's dnd_perform runs."
   },
   {
    "feature": "Accessibility for AppKit",
    "apple": "NSAccessibility protocols, roles, labels, announcements",
-   "bifrost": "springboard/ui/src/ax.rs, springboard/src/shell/atspi/mod.rs, springboard/src/shell/axmap.rs",
+   "bifrost": "springboard/ui/src/ax.rs, springboard/src/shell/atspi/mod.rs, springboard/src/shell/axmap.rs, springboard/sdk/src/runtime.rs (merge_tree)",
    "status": "partial",
-   "note": "AT-SPI2 bridge with label/title/help, caret and selection, announcements. ui::ax records parent links per frame (AxLink, children_of, parent_of, index_in_parent, accessibilityChildren-style), but the AT-SPI bridge does not read them yet, so nodes are reported flat. built on parity/team-k-appkit-user-interactions; not yet verified on Midget."
+   "note": "Checked 2026-10-19: the nesting is wired, the earlier note was out of date. The SDK runtime merges the parent links that ui::ax recorded while drawing into ToShell::ControlsTree (runtime.rs merge_tree, entries the app sent win), the shell keeps them in AppHost::controls_tree, atspi::model::build_ax turns them into parents (bad parents and cycles are cut) and atspi::bridge exposes parent, children and index in parent. Only the kit's sidebar list (widgets source_list) records groups so far, so other immediate-mode screens stay a flat list under the window, and GetRelationSet answers empty. Host tests cover the model; the D-Bus side has not been checked against a screen reader. Midget check: open Files on Midget, run `bifrost pc midget ax app/` and read the parent column: the sidebar's rows have the group as their parent, not the window."
   },
   {
    "feature": "NSPasteboard",
@@ -72,10 +72,10 @@
   }
  ],
  "gaps": [
-  "Scroll wheel, hover (tracking-area) and two-finger magnify and rotate events are not delivered to apps: the app input path carries only Down, Move, Up and Cancel, so a ToApp variant is needed",
+  "Touchpad scroll phases and momentum, and trackpad magnify and rotate from the compositor: the Wayland layer sends a notched vertical wheel only and binds no pointer-gestures protocol",
   "Cursor art (cursor_art.rs) is not yet drawn by the compositor; the SDK cursor service pushes shapes that the shell does not show with the outline and fill colour setting yet",
   "Dock tile content beyond the progress bar (a custom contentView)",
-  "Drag and drop inside the retained view kit (ui::drag_session is used by the SDK transfer path only)",
-  "Nested accessibility tree nodes in the AT-SPI bridge (ui::ax already keeps the parent links)"
+  "No shipped view or app takes the new pointer events or the view-kit drag and drop yet; files dropped on a view arrive as grants, not bytes",
+  "AT-SPI GetRelationSet, and nested nodes for apps that do not record groups (ui::ax::begin_group)"
  ]
 }
