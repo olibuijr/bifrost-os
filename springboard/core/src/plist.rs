@@ -63,7 +63,7 @@ pub fn parse_any(text: &str) -> Result<Plist, String> {
 /// Reads one XML value. A `plist` wrapper is accepted and its single value returned, so a whole file or a bare
 /// fragment such as `<integer>3</integer>` both work.
 pub fn parse_xml(text: &str) -> Result<Plist, String> {
-    let mut p = Xml { s: text.as_bytes(), pos: 0 };
+    let mut p = Xml { s: text.as_bytes(), pos: 0, depth: 0 };
     p.skip_misc()?;
     let v = p.value()?;
     p.skip_misc()?;
@@ -73,9 +73,13 @@ pub fn parse_xml(text: &str) -> Result<Plist, String> {
     Ok(v)
 }
 
+/// The deepest nesting of dictionaries and arrays the text readers accept, so a hostile file cannot overflow the stack.
+const MAX_TEXT_DEPTH: usize = 128;
+
 struct Xml<'a> {
     s: &'a [u8],
     pos: usize,
+    depth: usize,
 }
 
 impl Xml<'_> {
@@ -171,6 +175,16 @@ impl Xml<'_> {
     }
 
     fn value(&mut self) -> Result<Plist, String> {
+        if self.depth >= MAX_TEXT_DEPTH {
+            return self.err("nesting is too deep");
+        }
+        self.depth += 1;
+        let result = self.value_inner();
+        self.depth -= 1;
+        result
+    }
+
+    fn value_inner(&mut self) -> Result<Plist, String> {
         self.skip_misc()?;
         let (name, empty) = self.start()?;
         if name == "plist" {
@@ -338,7 +352,7 @@ fn write_xml(v: &Plist, depth: usize, out: &mut String) {
 /// Reads the ASCII form: `{ key = value; }` dictionaries, `( a, b )` arrays, `<hex>` data, and quoted or bare strings.
 /// A bare word is always a string, so `1` is the text "1".
 pub fn parse_ascii(text: &str) -> Result<Plist, String> {
-    let mut p = Ascii { s: text.as_bytes(), pos: 0 };
+    let mut p = Ascii { s: text.as_bytes(), pos: 0, depth: 0 };
     p.skip_ws();
     let v = p.value()?;
     p.skip_ws();
@@ -351,6 +365,7 @@ pub fn parse_ascii(text: &str) -> Result<Plist, String> {
 struct Ascii<'a> {
     s: &'a [u8],
     pos: usize,
+    depth: usize,
 }
 
 impl Ascii<'_> {
@@ -387,6 +402,16 @@ impl Ascii<'_> {
     }
 
     fn value(&mut self) -> Result<Plist, String> {
+        if self.depth >= MAX_TEXT_DEPTH {
+            return self.err("nesting is too deep");
+        }
+        self.depth += 1;
+        let result = self.value_inner();
+        self.depth -= 1;
+        result
+    }
+
+    fn value_inner(&mut self) -> Result<Plist, String> {
         self.skip_ws();
         match self.peek() {
             Some(b'{') => {
@@ -983,5 +1008,15 @@ mod tests {
         assert_eq!(Plist::Real(0.0).type_name(), "float");
         assert_eq!(Plist::Dict(vec![]).type_name(), "dictionary");
         assert_eq!(Plist::Bool(true).type_name(), "bool");
+    }
+
+    #[test]
+    fn deeply_nested_text_forms_are_refused_instead_of_overflowing_the_stack() {
+        let xml = format!("{}{}", "<array>".repeat(10_000), "</array>".repeat(10_000));
+        assert!(parse_xml(&xml).unwrap_err().contains("too deep"));
+        let ascii = format!("{}{}", "(".repeat(10_000), ")".repeat(10_000));
+        assert!(parse_ascii(&ascii).unwrap_err().contains("too deep"));
+        let fine = format!("{}{}", "<array>".repeat(100), "</array>".repeat(100));
+        assert!(parse_xml(&fine).is_ok());
     }
 }
