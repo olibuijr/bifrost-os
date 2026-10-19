@@ -20,6 +20,7 @@ pub mod axtext;
 pub mod axrotor;
 pub mod guided;
 pub mod touch;
+pub mod pointer;
 pub use bifrost_ui::touch::{Raw as RawTouch, Sample as TouchSample, Touch as TouchPoint, TouchEvent, TouchPhase, TouchTracker, TouchType};
 pub use bifrost_ui::ax::{AxCustomRotor, AxMeta, AxText, Priority as AnnouncePriority};
 pub use guided::GuidedRestriction;
@@ -429,6 +430,9 @@ pub enum ToApp {
     /// Every touch of one frame, with phases, previous locations, tap counts and optional force and radius (see the
     /// `touch` module). The shell sends it ahead of the matching `Touch`. Tag 0x1f0.
     Touches(TouchEvent),
+    /// The scroll wheel, the pointer over the window and the two-finger gestures (see `pointer`), sent only to an app
+    /// that announced it wants them (`ToShell::PointerInterest`). Tag 0x1f1.
+    Pointer(bifrost_ui::pointer_event::PointerEvent),
     Key(KeyInput),
     /// The shell is done with buffer `buf` of the `Buffers` set numbered `generation`; an app ignores it when
     /// that is not its current set (a late release must not free a slot of the new set).
@@ -725,6 +729,10 @@ pub enum ToShell {
     /// Several windows: the newest frame of window `id` is in buffer `buf`, like `Frame`.
     WindowFrame { id: u32, buf: u32, damage: Vec<Rect> },
     WantsKeyboard { on: bool },
+    /// Which pointer events the app takes (`bifrost_ui::pointer_event::{WHEEL, HOVER, GESTURES}`); sent once the app has
+    /// its first window size. An app that never sends it gets the plain touch stream only (the wheel as a drag, no
+    /// hover). Tag 0x1f1.
+    PointerInterest { mask: u32 },
     Haptic,
     OpenUrl { url: String },
     /// Plays the built-in alert sound `name` (one of the shell's alert tones) once, on the sound-effects role. An
@@ -1471,6 +1479,7 @@ impl ToApp {
             m @ (ToApp::ContinueActivity { .. } | ToApp::ReindexAll | ToApp::ReindexIdentifiers { .. }) => quicksearch::encode_app(m, &mut b),
             m @ (ToApp::GuidedAccessState { .. } | ToApp::GuidedRestriction { .. }) => guided::encode_app(m, &mut b),
             m @ ToApp::Touches(_) => touch::encode_app(m, &mut b),
+            m @ ToApp::Pointer(_) => pointer::encode_app(m, &mut b),
             m @ (ToApp::WorkspaceReply { .. } | ToApp::WorkspaceEvent { .. }) => workspace::encode_app(m, &mut b),
             m @ (ToApp::NotificationAction { .. } | ToApp::NotificationStatus { .. } | ToApp::NotificationList { .. } | ToApp::NotificationSettings { .. } | ToApp::NotificationAuthorized { .. } | ToApp::NotificationWillPresent { .. } | ToApp::ShareDone { .. } | ToApp::DistNotify { .. } | ToApp::ServiceReply { .. } | ToApp::ServiceEvent { .. } | ToApp::DragDest { .. } | ToApp::DragEnded { .. }) => rich::encode_app(m, &mut b),
         }
@@ -1645,6 +1654,7 @@ impl ToApp {
             t @ 0x1b0..=0x1bf => extras::decode_app(t, &mut r)?,
             t @ 0x1c0..=0x1cf => quicksearch::decode_app(t, &mut r)?,
             t @ 0x171..=0x172 => guided::decode_app(t, &mut r)?,
+            t @ 0x1f1 => pointer::decode_app(t, &mut r)?,
             t @ 0x1f0..=0x1ff => touch::decode_app(t, &mut r)?,
             t @ 100..=109 => workspace::decode_app(t, &mut r)?,
             t => return Err(DecodeError::UnknownTag(t)),
@@ -1833,6 +1843,7 @@ impl ToShell {
             m @ (ToShell::AxText(_) | ToShell::AxMeta(_) | ToShell::Announce { .. } | ToShell::AxNotify(_)) => axtext::encode_shell(m, &mut b),
             m @ ToShell::AxRotors(_) => axrotor::encode_shell(m, &mut b),
             m @ ToShell::GuidedAccessRequest { .. } => guided::encode_shell(m, &mut b),
+            m @ ToShell::PointerInterest { .. } => pointer::encode_shell(m, &mut b),
             m @ (ToShell::NotifyCategories(_) | ToShell::NotifyRequest { .. } | ToShell::NotifyRemove { .. } | ToShell::NotifyQuery { .. } | ToShell::NotifySettings { .. } | ToShell::NotifyAuthorize { .. } | ToShell::NotifyPresentDelegate { .. } | ToShell::NotifyPresentReply { .. } | ToShell::NotifySchedule { .. } | ToShell::Share { .. } | ToShell::DistPost { .. } | ToShell::ServiceCall { .. } | ToShell::DragBegin { .. } | ToShell::DragRegister { .. } | ToShell::DragReply { .. } | ToShell::DragPerformed { .. } | ToShell::DragCancel { .. }) => rich::encode_shell(m, &mut b),
             ToShell::ControlsTree(list) => {
                 u32_(&mut b, tag::CONTROLS_TREE);
@@ -2344,6 +2355,7 @@ impl ToShell {
             t @ 0x1e0..=0x1ef => peek::decode_shell(t, &mut r)?,
             t @ 0x213 => axrotor::decode_shell(t, &mut r)?,
             t @ 0x170 => guided::decode_shell(t, &mut r)?,
+            t @ 0x1f1 => pointer::decode_shell(t, &mut r)?,
             t @ 0x210..=0x21f => axtext::decode_shell(t, &mut r)?,
             t => return Err(DecodeError::UnknownTag(t)),
         })

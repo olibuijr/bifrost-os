@@ -73,6 +73,8 @@ pub mod row_glyphs;
 pub mod keyboard;
 pub mod textinput;
 pub mod compose_window;
+pub mod input_providers;
+pub mod pointer_events;
 pub mod kb_layouts;
 pub mod kb_capslock;
 pub mod kb_input;
@@ -648,6 +650,13 @@ pub struct Shell {
     assistant: assistant_panel::Panel,
     /// the built-in compose method over the Search field and its candidate window
     compose_ime: compose_window::ComposeWindow,
+    /// installed input methods (`input_providers`): the host that runs them and the Search field's session
+    input_providers: input_providers::Providers,
+    /// the external app whose window content the pointer is over and that takes hover events (`pointer_events`)
+    pointer_over: Option<u8>,
+    /// the two touchscreen fingers of the app in front and the pinch and rotation recognizers they run (`pointer_events`)
+    pinch_fingers: Vec<(i32, (f32, f32))>,
+    pinch: bifrost_ui::trackpad_gesture::TwoFinger,
     notify: notify::Notify,
     /// `UNUserNotificationCenter` state of the external apps (categories, pending and delivered requests)
     usernotif: usernotif::Registry,
@@ -1090,6 +1099,14 @@ impl Shell {
             quicksearch,
             assistant,
             compose_ime: compose_window::ComposeWindow::default(),
+            pointer_over: None,
+            pinch_fingers: Vec::new(),
+            pinch: Default::default(),
+            input_providers: {
+                let mut providers = input_providers::Providers::default();
+                providers.load_dir(&input_providers::dir());
+                providers
+            },
             notify: notify::Notify::default(),
             usernotif: usernotif::Registry::default(),
             extras: extras::Registry::default(),

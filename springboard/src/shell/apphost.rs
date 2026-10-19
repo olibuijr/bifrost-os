@@ -473,6 +473,9 @@ const MAX_PUMP: usize = 256;
 /// How long (ms) an app may leave its socket full before it is killed.
 const STALL_MS: f64 = 5000.0;
 
+/// How long after a wheel event the drag emulated for it can still arrive, in ms.
+const WHEEL_DRAG_MS: f64 = 250.0;
+
 pub struct AppHost {
     pub id: String,
     /// The binary this process was started from (empty for a host on a test channel).
@@ -555,6 +558,10 @@ pub struct AppHost {
     pub caret_rect: Option<(f32, f32, f32, f32)>,
     pub input_traits: bifrost_proto::InputTraits,
     pub accessory: Vec<bifrost_proto::AccessoryItem>,
+    /// The pointer events the app takes (`ToShell::PointerInterest`, `bifrost_ui::pointer_event::{WHEEL, HOVER, GESTURES}`).
+    pub pointer_interest: u32,
+    /// Plain touches still to drop after a wheel event went to the app: the drag emulated for the wheel, and until when.
+    wheel_swallow: (u8, f64),
     /// How the shell shows this app (`launch_route` at spawn; a `Buffers` message from a direct app demotes it).
     route: Route,
     /// The touch frames the app gets (`ToApp::Touches`): one tracker per surface, at the app's scale.
@@ -674,6 +681,8 @@ impl AppHost {
             caret_rect: None,
             input_traits: bifrost_proto::InputTraits::default(),
             accessory: Vec::new(),
+            pointer_interest: 0,
+            wheel_swallow: (0, 0.0),
             route: Route::Shm,
             frames: bifrost_ui::touch::TouchTracker::with_scale(cfg.scale),
             frame_scale: cfg.scale,
@@ -857,6 +866,30 @@ impl AppHost {
             self.frame_scale = cfg.scale;
         }
         self.send(&ToApp::Configure(cfg));
+    }
+
+    /// Sends a pointer event (wheel, hover, gesture) when the app asked for that kind. True when it was sent.
+    pub fn pointer(&mut self, ev: bifrost_ui::pointer_event::PointerEvent) -> bool {
+        if self.pointer_interest & ev.interest() == 0 {
+            return false;
+        }
+        self.send(&ToApp::Pointer(ev));
+        true
+    }
+
+    /// A wheel event went to the app at `t` ms: the drag emulated for it (a down, a move and an up) is dropped.
+    pub(super) fn swallow_wheel_drag(&mut self, t: f64) {
+        self.wheel_swallow = (3, t + WHEEL_DRAG_MS);
+    }
+
+    /// True for each plain touch of the drag emulated for a wheel event the app took already.
+    pub(super) fn swallows_touch(&mut self, t: f64) -> bool {
+        if self.wheel_swallow.0 == 0 || t > self.wheel_swallow.1 {
+            self.wheel_swallow = (0, 0.0);
+            return false;
+        }
+        self.wheel_swallow.0 -= 1;
+        true
     }
 
     pub fn touch(&mut self, kind: TouchKind, id: u32, x: f32, y: f32, t_ms: u32) {
@@ -1136,6 +1169,7 @@ impl AppHost {
             ToShell::Commands(commands) => {if self.commands!=commands {self.commands=commands;out.frame=true;}},
             ToShell::UndoTitles { undo, redo } => {if self.undo_titles!=(undo.clone(),redo.clone()) {self.undo_titles=(undo,redo);out.frame=true;}},
             ToShell::Log { text } => bifrost_core::log::shell_logger("apphost").info(format!("app {}: {text}", self.id)),
+            ToShell::PointerInterest { mask } => self.pointer_interest = mask,
             other => out.requests.push(other),
         }
     }
@@ -1734,6 +1768,12 @@ impl Shell {
     }
 
     pub(super) fn ext_touch(&mut self, slot: usize, ev: Event, t: f64) {
+        // the drag emulated for a wheel event the app took (`pointer`) is not a touch
+        if let Some(Some(h)) = self.ext.get_mut(slot) {
+            if h.swallows_touch(t) {
+                return;
+            }
+        }
         let top = self.kb_top();
         match ev {
             Event::Down(x, y) if self.keyboard.shown() && y >= top => {
@@ -1797,6 +1837,8 @@ impl Shell {
         }
         let Some(Some(h)) = self.ext.get_mut(n as usize) else { return };
         h.feed_touch(super::touch_frames::raw_of_phase(phase), super::touch_frames::contact_sample(id, x, y), t);
+        // two fingers also make the pinch and rotation events of an app that asked for them
+        self.pinch_contact(n, id, phase, x, y);
     }
 
     /// The foreground app lost the touches (focus moved, the window closed, a system gesture took them): every touch it
@@ -1831,6 +1873,17 @@ impl Shell {
         if out == Out::Hide {
             self.ext_set_keyboard(false, t);
             return;
+        }
+        // an installed input method that is the selected source takes the key before the field does
+        if self.ext_text_focused() {
+            if let Some(slot) = self.ext_fg {
+                if let Some(Some(app)) = self.ext.get_mut(slot as usize) {
+                    if self.input_providers.app_key(slot, &out, app) == bifrost_ui::imk_host::KeyResult::Consumed {
+                        self.dirty = true;
+                        return;
+                    }
+                }
+            }
         }
         let key = match out {
             Out::Text(s) => KeyInput::Text(s),

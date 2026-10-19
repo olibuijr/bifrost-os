@@ -103,6 +103,8 @@ pub struct ViewApp<S: Responder + 'static> {
     menus: Vec<(String, Vec<MenuEntry>)>,
     /// what the shell was last told about the text field in focus (`None`: nothing, or not told yet)
     published: Option<TextInputInfo>,
+    /// the dragged types registered with the shell (`registerForDraggedTypes`); empty until a view takes drops
+    drop_types_sent: Vec<String>,
 }
 
 /// One main-menu item (`NativeMenuItem` with a nil-targeted action). Its enabled state is not stored: `ViewApp::main_menu`
@@ -152,7 +154,7 @@ impl MenuEntry {
 
 impl<S: Responder + 'static> ViewApp<S> {
     pub fn new(root: impl View, state: S) -> Self {
-        ViewApp { window: Window::new(root, 100), state, menus: Vec::new(), published: None }
+        ViewApp { window: Window::new(root, 100), state, menus: Vec::new(), published: None, drop_types_sent: Vec::new() }
     }
     /// Sets the app's menus (`NativeApp.mainMenu`); item ids are assigned in order from 1.
     pub fn set_menus(&mut self, menus: Vec<(String, Vec<MenuEntry>)>) {
@@ -162,6 +164,7 @@ impl<S: Responder + 'static> ViewApp<S> {
     pub fn configure(&mut self, ctx: &Ctx) {
         let s = ctx.ui.s;
         self.window.layout(&ctx.ui, Rect { x: 0.0, y: 0.0, w: ctx.cfg.w as f32 / s, h: ctx.cfg.h as f32 / s });
+        self.sync_drop_types(ctx);
     }
     /// `App::event`: touches and keys go to the window, `Input::Command` down the responder chain. True when a frame is needed.
     pub fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
@@ -173,7 +176,43 @@ impl<S: Responder + 'static> ViewApp<S> {
         let scale = ctx.ui.s;
         let need = ViewEvent::from_input(&ev, scale).is_some_and(|e| self.window.event(&e, &mut self.state));
         self.sync_text_input(ctx);
+        // a press on a drag source that moved past the slop begins a session with the shell
+        if let Some((view, spec)) = self.window.take_drag_request() {
+            let session = crate::dnd::begin(ctx, spec.allowed, spec.items, spec.preview);
+            self.window.drag_began(view, session);
+        }
+        self.sync_drop_types(ctx);
         need
+    }
+    /// Registers the types the views take as drops with the shell (`registerForDraggedTypes`) when they changed since the
+    /// last call. `event` and `drag` call it; call it after building or changing the tree outside them.
+    pub fn sync_drop_types(&mut self, ctx: &Ctx) {
+        let types = self.window.drop_types();
+        if types != self.drop_types_sent {
+            let refs: Vec<&str> = types.iter().map(|t| t.as_str()).collect();
+            crate::dnd::register_types(ctx, &refs);
+            self.drop_types_sent = types;
+        }
+    }
+    /// `App::drag`: a session over this window finds the view under the pointer that takes its items, and answers the
+    /// shell with the operation (`Entered`, `Updated`) or the result of the drop (`Perform`); an `Ended` event reaches the
+    /// source view that began the session. True when a frame is needed.
+    pub fn drag(&mut self, ctx: &Ctx, ev: crate::dnd::Event) -> bool {
+        match ev {
+            crate::dnd::Event::Dest { session, phase, x, y, allowed, items } => {
+                let scale = ctx.ui.s;
+                let (op, accepted) = self.window.drag_dest(phase, x / scale, y / scale, allowed, &items);
+                match phase {
+                    crate::proto::DragPhase::Entered | crate::proto::DragPhase::Updated => crate::dnd::reply(ctx, session, op),
+                    crate::proto::DragPhase::Perform => crate::dnd::performed(ctx, session, accepted),
+                    crate::proto::DragPhase::Exited => {}
+                }
+            }
+            crate::dnd::Event::Ended { session, op } => {
+                self.window.drag_ended(session, op);
+            }
+        }
+        self.window.needs_display()
     }
     /// `App::text_input`: IME and keyboard composition go to the first responder (a [`super::TextField`] maps them onto
     /// its `TextEditor`). `AccessoryAction` is not handled here: it belongs to the app. True when a frame is needed.

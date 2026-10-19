@@ -775,6 +775,8 @@ pub mod hangul_method;
 pub mod telex_method;
 pub mod input_source;
 pub mod imk_client;
+pub mod imk_host;
+pub mod pointer_event;
 pub mod vertical_text;
 pub mod ruby;
 pub mod services_menu;

@@ -995,6 +995,7 @@ impl Dispatch<wl_pointer::WlPointer, ()> for State {
             },
             wl_pointer::Event::Leave {..} if s.pressed => { s.pressed = false; s.inputs.push(Event::Up { x:s.xy.0+offset.0,y:s.xy.1+offset.1,t }); },
             wl_pointer::Event::Axis { axis:WEnum::Value(wl_pointer::Axis::VerticalScroll),value,.. } => {
+                s.inputs.push(Event::Wheel { x:s.xy.0+offset.0,y:s.xy.1+offset.1,dx:0.0,dy:-value as f32*3.0,t });
                 s.inputs.extend([Event::Down { x:s.xy.0+offset.0,y:s.xy.1+offset.1,t },Event::Move { x:s.xy.0+offset.0,y:s.xy.1+offset.1-value as f32*3.0,t:t+16.0 },Event::Up { x:s.xy.0+offset.0,y:s.xy.1+offset.1-value as f32*3.0,t:t+32.0 }]);
             },
             _ => {}
