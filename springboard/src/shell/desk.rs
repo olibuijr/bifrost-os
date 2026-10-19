@@ -1494,6 +1494,17 @@ impl Shell {
         self.desk_refocus();
     }
 
+    /// Quits the installed SDK app in `slot`: its desk windows go and the app is sent `Quit`, so it saves its state and exits
+    /// (`AppHost::begin_quit` kills it after the grace period). The Dock's Quit and Cmd+Q use it. A direct app's window is the
+    /// window server's, so `desk_close_app` already quits it; an app on the shared-memory route only loses its desk window there
+    /// and its process is quit here. Cmd+W and the traffic light close the window and leave the app running.
+    pub(super) fn desk_quit_app(&mut self, slot: u8) {
+        self.desk_close_app(AppId::External(slot));
+        if self.ext.get(slot as usize).and_then(Option::as_ref).is_some() {
+            self.ext_close(slot as usize);
+        }
+    }
+
     /// The desk windows that float: each app whose host asked for `ToShell::WindowLevel`, and each extra window its app
     /// set to `ToShell::WindowLevelOf`.
     pub(super) fn floating_apps(&self) -> Vec<AppId> {

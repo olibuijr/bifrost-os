@@ -183,6 +183,9 @@ pub enum Shortcut {
     Close,
     /// Ctrl+M: minimize the front desktop window
     Minimize,
+    /// Cmd+Q: quit the front app. An installed SDK app is sent `Quit` (it saves its state and exits), a window-server app
+    /// closes every window, and a built-in window closes (`Shell::desk_quit_front`).
+    Quit,
     /// Cmd+, : the app's Settings (the App menu's Settings… key equivalent)
     Settings,
     /// Ctrl+Cmd+F: full screen (zoom) for the front desktop window
@@ -231,7 +234,7 @@ impl Shortcut {
             Shortcut::SelectAll => "SelectAll",
             Shortcut::Undo => "Undo",
             Shortcut::Redo => "Redo",
-            Shortcut::Term(_) | Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Back | Shortcut::Home | Shortcut::Close | Shortcut::Minimize | Shortcut::Settings | Shortcut::FullScreen | Shortcut::Tile(_) | Shortcut::CycleWindow | Shortcut::InputSource | Shortcut::ReaderStep(_) | Shortcut::ReaderRotor(_) | Shortcut::ReaderActivate | Shortcut::SpeakSelection | Shortcut::AccessibilityShortcut | Shortcut::Capture | Shortcut::ZoomToggle | Shortcut::ZoomStep(_) | Shortcut::LookUp | Shortcut::Photo(_) | Shortcut::HelpSearch | Shortcut::Lock | Shortcut::Assistant => return None,
+            Shortcut::Term(_) | Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Back | Shortcut::Home | Shortcut::Close | Shortcut::Quit | Shortcut::Minimize | Shortcut::Settings | Shortcut::FullScreen | Shortcut::Tile(_) | Shortcut::CycleWindow | Shortcut::InputSource | Shortcut::ReaderStep(_) | Shortcut::ReaderRotor(_) | Shortcut::ReaderActivate | Shortcut::SpeakSelection | Shortcut::AccessibilityShortcut | Shortcut::Capture | Shortcut::ZoomToggle | Shortcut::ZoomStep(_) | Shortcut::LookUp | Shortcut::Photo(_) | Shortcut::HelpSearch | Shortcut::Lock | Shortcut::Assistant => return None,
         }))
     }
 }
@@ -440,10 +443,11 @@ impl HwKeys {
             // not bound: they reach terminals as readline kill-word and Enter. Cmd/Super+W and
             // Cmd/Super+M close and minimize the front desktop window; terminals never see them,
             // and where no desktop window is open `shell` lets the key fall through unchanged.
-            // Cmd+Q quits the app and Cmd+H hides it; a window is one app here, so they close and minimise it
-            // Ctrl+Cmd+Q locks the screen; the plain Cmd+Q below quits the front window
+            // Cmd+H hides the app; a window is one app here, so it minimises the window
+            // Ctrl+Cmd+Q locks the screen; the plain Cmd+Q below quits the front app (Cmd+W only closes its window)
             KEY_Q if meta && ctrl && !alt && self.shift == 0 => Some(Shortcut::Lock),
-            KEY_W | KEY_Q if meta && !ctrl && !alt && self.shift == 0 => Some(Shortcut::Close),
+            KEY_Q if meta && !ctrl && !alt && self.shift == 0 => Some(Shortcut::Quit),
+            KEY_W if meta && !ctrl && !alt && self.shift == 0 => Some(Shortcut::Close),
             // Shift+Cmd+W closes the window of an app that keeps plain Cmd+W for its own Close Tab (`Shell::app_owns_close`)
             KEY_W if meta && !ctrl && !alt && self.shift > 0 => Some(Shortcut::Close),
             KEY_M | KEY_H if meta && !ctrl && !alt && self.shift == 0 => Some(Shortcut::Minimize),
@@ -910,11 +914,17 @@ impl Shell {
         }
     }
     pub fn hw_window_shortcut(&self, sc: Shortcut) -> bool {
-        cfg!(feature = "desktop-wayland") && matches!(sc, Shortcut::Close | Shortcut::Minimize) && self.desk_active() && !self.is_locked()
+        cfg!(feature = "desktop-wayland") && matches!(sc, Shortcut::Close | Shortcut::Minimize | Shortcut::Quit) && self.desk_active() && !self.is_locked()
+    }
+    /// Whether the shell runs `sc` itself. Cmd+W, Cmd+M and Cmd+Q act on the desktop window, so they run only with a desktop
+    /// window to act on and when the app in front did not take the chord (`app_chord`, from `app_owns_chord`) through an
+    /// enabled menu item of its own; every other shortcut is the shell's always.
+    pub fn shortcut_is_shells(&self, sc: Shortcut, app_chord: bool) -> bool {
+        !matches!(sc, Shortcut::Close | Shortcut::Minimize | Shortcut::Quit) || (self.hw_window_shortcut(sc) && !app_chord)
     }
     /// True when the SDK app in front published an enabled menu item with the key equivalent `code` + `mods` (`CHORD_*`). Key
-    /// equivalents go to the focused app first: the binary leaves Cmd+W and Cmd+M to `hw_chord` (which sends the app its menu
-    /// action) when this is true, and closes or minimizes the window itself only when the app does not take the chord.
+    /// equivalents go to the focused app first: the binary leaves Cmd+W, Cmd+M and Cmd+Q to `hw_chord` (which sends the app its
+    /// menu action) when this is true, and closes, minimizes or quits itself only when the app does not take the chord.
     pub fn app_owns_chord(&self, code: u16, mods: u32) -> bool {
         matches!(self.screen, Screen::App(AppId::External(_)))
             && self.ext_fg.and_then(|n| self.ext.get(n as usize)).and_then(Option::as_ref).is_some_and(|h| super::desktop_bar::chord_in_menus(&h.app_menus, code, mods))
@@ -976,6 +986,8 @@ impl Shell {
             }
             #[cfg(feature = "desktop-wayland")]
             Shortcut::Close | Shortcut::Minimize if self.hw_window_shortcut(sc) => self.desk_window_close_or_minimize(sc == Shortcut::Minimize),
+            #[cfg(feature = "desktop-wayland")]
+            Shortcut::Quit if self.hw_window_shortcut(sc) => self.desk_quit_front(),
             #[cfg(feature = "desktop-wayland")]
             Shortcut::Settings if self.desk_active() => {
                 self.desk_open(AppId::Settings, t);
@@ -1331,7 +1343,7 @@ mod tests {
         assert_eq!(chord(&mut k, &[KEY_RIGHTMETA], KEY_COMMA), Some(Shortcut::Settings), "Cmd+, opens Settings");
         assert_eq!(chord(&mut k, &[KEY_LEFTCTRL], KEY_COMMA), None, "Ctrl+, is the terminal's");
         // Ctrl+W / Ctrl+M stay plain keys: terminals use them (kill-word, Enter)
-        assert_eq!(chord(&mut k, &[KEY_LEFTMETA], KEY_Q), Some(Shortcut::Close));
+        assert_eq!(chord(&mut k, &[KEY_LEFTMETA], KEY_Q), Some(Shortcut::Quit), "Cmd+Q quits the app, it is not Close");
         assert_eq!(chord(&mut k, &[KEY_LEFTMETA], KEY_H), Some(Shortcut::Minimize));
         assert_eq!(chord(&mut k, &[KEY_LEFTCTRL], KEY_W), None);
         assert_eq!(chord(&mut k, &[KEY_LEFTCTRL], KEY_M), None);

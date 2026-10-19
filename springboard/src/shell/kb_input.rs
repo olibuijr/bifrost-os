@@ -100,7 +100,8 @@ pub fn binding_of(sc: Shortcut) -> Option<usize> {
     Some(match sc {
         Shortcut::QuickSearch => 0,
         Shortcut::AppSwitch => 1,
-        Shortcut::Close => 2,
+        // Cmd+Q was Close Window's chord before it quit the app, so it keeps that switch
+        Shortcut::Close | Shortcut::Quit => 2,
         Shortcut::Minimize => 3,
         Shortcut::FullScreen => 4,
         Shortcut::Tile(_) => 5,
@@ -256,6 +257,13 @@ mod tests {
         let left = Shortcut::Tile(super::super::desk::Tile::Left);
         assert!(enabled(left, 1 << 4), "full screen's bit does not switch tiling off");
         assert!(!enabled(left, 1 << 5), "tiling has its own bit");
+    }
+
+    #[test]
+    fn quit_shares_the_close_window_switch() {
+        assert_eq!(binding_of(Shortcut::Quit), binding_of(Shortcut::Close));
+        assert!(!enabled(Shortcut::Quit, 1 << 2), "Close Window off also turns Cmd+Q off, as before the split");
+        assert!(enabled(Shortcut::Quit, 1 << 3), "Minimize Window's bit does not");
     }
 
     #[test]

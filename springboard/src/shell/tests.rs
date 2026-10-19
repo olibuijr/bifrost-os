@@ -561,7 +561,8 @@
         const CTRL:u16=29;const META:u16=125;const Q:u16=16;
         assert_eq!(chord(&[CTRL,META],Q,false),Some(hwkeys::Shortcut::Lock));
         assert_eq!(chord(&[CTRL,META],Q,true),Some(hwkeys::Shortcut::Lock),"also with the Terminal in front");
-        assert_eq!(chord(&[META],Q,false),Some(hwkeys::Shortcut::Close),"Cmd+Q alone still quits the window");
+        assert_eq!(chord(&[META],Q,false),Some(hwkeys::Shortcut::Quit),"Cmd+Q alone quits the app");
+        assert_eq!(chord(&[META],17,false),Some(hwkeys::Shortcut::Close),"Cmd+W still only closes the window");
         let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
         sh.desk_open(AppId::Settings,0.);
         let fx=sh.hw_shortcut(hwkeys::Shortcut::Lock,5.);
@@ -2434,6 +2435,87 @@
         assert!(!sh.app_owns_close(),"a disabled Close Tab does not keep the chord");
         sh.screen=Screen::Home;
         assert!(!sh.app_owns_chord(W,CHORD_META),"only the app in front owns chords");
+    }
+
+    /// Cmd+Q quits the front app and Cmd+W only closes its window. The decision (`desktop_bar::quit_step`) is pure: a window server
+    /// toplevel of a running SDK app quits the app, a native or Linux app closes all its windows (as the Dock's Quit does), and a
+    /// window of the shell's own desk quits its app or, for a built-in window, closes as before.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn cmd_q_decides_what_to_quit_from_what_is_in_front() {
+        use desktop_bar::{quit_step,QuitStep};
+        let sdk=|id:&str|(id=="files").then_some(3u8);
+        // the toplevel of a direct SDK app is in front: the app is quit, whatever else the window server lists
+        assert_eq!(quit_step(&[(10,"files",true),(11,"other",false)],sdk,Some(AppId::Settings)),QuitStep::App(3));
+        // a native or Linux app: every window of that app closes and no other app's
+        assert_eq!(quit_step(&[(20,"org.example.edit",false),(21,"org.example.edit",true),(22,"files",false)],sdk,None),QuitStep::Windows(vec![20,21]));
+        // no toplevel in front: the shell's own front window decides
+        assert_eq!(quit_step(&[(10,"files",false)],sdk,Some(AppId::Settings)),QuitStep::Window(AppId::Settings));
+        assert_eq!(quit_step(&[],sdk,Some(AppId::Terminal)),QuitStep::Window(AppId::Terminal));
+        assert_eq!(quit_step(&[],sdk,Some(AppId::External(2))),QuitStep::App(2),"a shell-drawn SDK app window quits its app");
+        assert_eq!(quit_step(&[],sdk,Some(AppId::ExternalWindow(2,7))),QuitStep::App(2),"an extra window quits its app, not just itself");
+        assert_eq!(quit_step(&[],sdk,None),QuitStep::Nothing);
+    }
+
+    /// Cmd+Q is the app's when its menus publish an enabled item on it (the app saves and exits itself, `app_owns_chord`);
+    /// otherwise it is the shell's and quits the app. Cmd+W is not affected by an app that defines only Cmd+Q, and the
+    /// shortcuts that are not window keys are always the shell's.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn cmd_q_goes_to_an_app_that_defines_it_and_quits_the_app_otherwise() {
+        use bifrost_proto::{AppMenu,AppMenuItem,CHORD_META,CHORD_SHIFT};
+        const Q:u16=16;const W:u16=17;
+        let menus=|enabled:bool|vec![AppMenu{title:"File".into(),items:vec![AppMenuItem::new(9,"Quit Notes").key("cmd+q").enabled(enabled)]}];
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        assert!(sh.shortcut_is_shells(hwkeys::Shortcut::Quit,false),"no app takes Cmd+Q: the shell quits the app");
+        assert!(!sh.shortcut_is_shells(hwkeys::Shortcut::Quit,true),"an app that took the chord keeps it");
+        let (mine,_theirs)=bifrost_proto::sys::socketpair_pair().unwrap();
+        let mut host=apphost::AppHost::with_channel("fixture",mine,None,bifrost_proto::Configure{w:100,h:100,scale:1.,safe_top:0.,safe_bottom:0.,dark:true,text_scale:1.,reduce_motion:false});
+        host.app_menus=menus(true);sh.ext.push(Some(host));sh.ext_fg=Some(0);sh.screen=Screen::App(AppId::External(0));
+        assert!(sh.app_owns_chord(Q,CHORD_META),"the front app defines Cmd+Q");
+        assert!(!sh.shortcut_is_shells(hwkeys::Shortcut::Quit,sh.app_owns_chord(Q,CHORD_META)),"the app's Quit runs, not the shell's");
+        assert!(!sh.app_owns_chord(Q,CHORD_META|CHORD_SHIFT),"Shift+Cmd+Q is not Cmd+Q");
+        assert!(!sh.app_owns_chord(W,CHORD_META),"the app defines only Cmd+Q");
+        assert!(sh.shortcut_is_shells(hwkeys::Shortcut::Close,sh.app_owns_chord(W,CHORD_META)),"Cmd+W still closes the window");
+        assert!(sh.shortcut_is_shells(hwkeys::Shortcut::QuickSearch,true),"only window keys wait for the app");
+        // the app disables its Quit: Cmd+Q is the shell's again
+        sh.ext[0].as_mut().unwrap().app_menus=menus(false);
+        assert!(sh.shortcut_is_shells(hwkeys::Shortcut::Quit,sh.app_owns_chord(Q,CHORD_META)));
+    }
+
+    /// Quitting an SDK app sends it `Quit` (it can save its state) and takes it off the app list; closing its window (Cmd+W,
+    /// the traffic light) leaves the app running and sends nothing.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn quitting_an_sdk_app_sends_it_quit_and_closing_its_window_does_not() {
+        use bifrost_proto::{sys::Recv,ToApp};
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        let (mine,theirs)=bifrost_proto::sys::socketpair_pair().unwrap();
+        let host=apphost::AppHost::with_channel("fixture",mine,None,bifrost_proto::Configure{w:100,h:100,scale:1.,safe_top:0.,safe_bottom:0.,dark:true,text_scale:1.,reduce_motion:false});
+        sh.ext.push(Some(host));
+        let sent=||{let mut v=Vec::new();while let Ok(Recv::Packet(p,_))=theirs.recv(false){v.push(ToApp::decode(&p).unwrap());}v};
+        sh.desk_close_app(AppId::External(0));
+        assert!(sh.ext[0].is_some(),"closing the window leaves the app running");
+        assert!(!sent().contains(&ToApp::Quit),"and does not ask it to quit");
+        sh.desk_quit_app(0);
+        assert!(sh.ext[0].is_none(),"the quit app left the list");
+        assert!(sent().contains(&ToApp::Quit),"the app is asked to quit, so it can save its state");
+    }
+
+    /// Cmd+Q and the App menu's Quit close a built-in window as before: only an SDK app has a process to quit.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn quit_closes_a_built_in_window_as_before() {
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        sh.desk_open(AppId::Terminal,0.);sh.desk_open(AppId::Settings,0.);
+        let quit=sh.menu_rows(desktop_bar::Menu::App).into_iter().find(|r|r.text.starts_with("Quit ")).expect("the App menu has a Quit row");
+        assert!(matches!(quit.action,Some(desktop_bar::Action::Quit)),"the Quit row quits, it does not only close the window");
+        sh.hw_shortcut(hwkeys::Shortcut::Quit,1.);
+        let d=sh.desk.as_ref().unwrap();
+        assert!(d.index_of(AppId::Settings).is_none(),"Cmd+Q closed the front built-in window");
+        assert!(d.index_of(AppId::Terminal).is_some(),"and only that one");
+        sh.run_menu_action(desktop_bar::Action::Quit,2.);
+        assert!(sh.desk.as_ref().unwrap().index_of(AppId::Terminal).is_none(),"the menu's Quit closes the next one");
     }
 
     #[test]
