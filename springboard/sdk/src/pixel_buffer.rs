@@ -318,6 +318,21 @@ impl PixelBuffer {
         Ok(buf)
     }
 
+    /// A buffer that takes ownership of already-decoded `planes` (one tightly packed byte vector per plane, the sizes
+    /// `PixelFormat::plane_size` gives) and their colour `attachments`: the way a decoder or a media app hands a
+    /// frame over. Fails with `UnknownFormat` or `InvalidSize` like [`PixelBuffer::new`], and with `InvalidSize` when
+    /// the plane count or any plane length is not what the format needs for this size.
+    pub fn from_planes(code: FourCc, width: usize, height: usize, planes: Vec<Vec<u8>>, attachments: Attachments) -> Result<Self, PixelBufferError> {
+        let mut buf = Self::new(code, width, height)?;
+        let sizes_match = planes.len() == buf.planes.len() && planes.iter().zip(&buf.planes).all(|(given, own)| given.len() == own.len());
+        if !sizes_match {
+            return Err(PixelBufferError::InvalidSize);
+        }
+        buf.planes = planes;
+        buf.attachments = attachments;
+        Ok(buf)
+    }
+
     /// The pixels as an image, for the image filters. Like any read of the bytes it needs a lock: `None` while the
     /// buffer is unlocked or when the format has no conversion. The YCbCr matrix is the one in the attachments,
     /// BT.709 when unset. The image is opaque for the formats without alpha.
@@ -574,6 +589,26 @@ mod tests {
         assert_eq!(buf.to_image().unwrap(), white);
         buf.unlock(false).unwrap();
         assert_eq!(buf.revision(), 1);
+    }
+
+    #[test]
+    fn decoded_planes_become_a_buffer_with_their_attachments() {
+        let attachments = Attachments { matrix: Some(YcbcrMatrix::Bt601), ..Attachments::default() };
+        let planes = vec![vec![126u8; 6], vec![128u8; 4]];
+        let mut buf = PixelBuffer::from_planes(code("NV12"), 3, 2, planes.clone(), attachments).unwrap();
+        assert_eq!(buf.attachments().matrix, Some(YcbcrMatrix::Bt601));
+        buf.lock(true);
+        assert_eq!(buf.base_address(0).unwrap(), &planes[0][..]);
+        let grey = buf.to_image().unwrap();
+        assert!((grey.px[0] & 0xff).abs_diff(128) <= 3);
+        assert_eq!(
+            PixelBuffer::from_planes(code("NV12"), 3, 2, vec![vec![0u8; 6]], Attachments::default()),
+            Err(PixelBufferError::InvalidSize)
+        );
+        assert_eq!(
+            PixelBuffer::from_planes(code("NV12"), 3, 2, vec![vec![0u8; 6], vec![0u8; 5]], Attachments::default()),
+            Err(PixelBufferError::InvalidSize)
+        );
     }
 
     #[test]

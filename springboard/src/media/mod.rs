@@ -211,6 +211,41 @@ impl DmaPicture {
         (end <= self.buf.len()).then_some(((y0, y_len), (uv0, uv_len)))
     }
 
+    /// The colour metadata of the picture. The decoders do not report the stream's colour description, so this uses
+    /// the convention of `convert::matrix_for`: HD (720 rows or more) is BT.709 primaries and matrix, SD is SMPTE 170M
+    /// primaries and the BT.601 matrix, with the BT.709 transfer curve for both. The clean aperture is left unset,
+    /// because `to_tight_nv12` already crops the picture.
+    pub fn colour_attachments(&self) -> bifrost_render::buffer_attach::Attachments {
+        use bifrost_render::buffer_attach::{Attachments, Primaries, Transfer, YcbcrMatrix};
+        let hd = self.height >= 720;
+        Attachments {
+            primaries: Some(if hd { Primaries::Bt709 } else { Primaries::Smpte170m }),
+            transfer: Some(Transfer::Bt709),
+            matrix: Some(if hd { YcbcrMatrix::Bt709 } else { YcbcrMatrix::Bt601 }),
+            clean: None,
+        }
+    }
+
+    /// The cropped picture as two tightly packed planes, the layout of the NV12 entry in
+    /// `bifrost_render::pixel_format`: `width` bytes per luma row, `(width + 1) & !1` bytes per chroma row, no
+    /// padding. This is what a pixel buffer holds (`PixelBuffer::from_planes`). None when the description does
+    /// not fit the buffer.
+    pub fn to_tight_nv12(&self) -> Option<(Vec<u8>, Vec<u8>)> {
+        let (w, h) = (self.width as usize, self.height as usize);
+        self.with_nv12(|y, uv, stride| {
+            let mut luma = Vec::with_capacity(w * h);
+            for r in 0..h {
+                luma.extend_from_slice(&y[r * stride..r * stride + w]);
+            }
+            let cols = (w + 1) & !1;
+            let mut chroma = Vec::with_capacity(cols * h.div_ceil(2));
+            for r in 0..h.div_ceil(2) {
+                chroma.extend_from_slice(&uv[r * stride..r * stride + cols]);
+            }
+            (luma, chroma)
+        })
+    }
+
     /// Runs `f` on the cropped planes (luma, chroma, stride) read through the CPU mapping;
     /// None when the description does not fit the buffer.
     pub fn with_nv12<R>(&self, f: impl FnOnce(&[u8], &[u8], usize) -> R) -> Option<R> {
@@ -322,5 +357,40 @@ mod dma_tests {
         assert_eq!(stride, 16);
         assert_eq!(y as usize, (2 * 16 + 2) % 251);
         assert_eq!(uv as usize, (16 * 8 + 16 + 2) % 251);
+    }
+
+    #[test]
+    fn to_tight_nv12_packs_the_cropped_rows_without_padding() {
+        // 16 byte stride, 8 allocated rows, cropped to 6 x 4 at (2, 2): luma row r starts at (2 + r) * 16 + 2.
+        let p = pic(16, 8, (2, 2, 6, 4));
+        let (luma, chroma) = p.to_tight_nv12().unwrap();
+        assert_eq!(luma.len(), 6 * 4);
+        assert_eq!(chroma.len(), 6 * 2);
+        for r in 0..4usize {
+            for x in 0..6usize {
+                assert_eq!(luma[r * 6 + x] as usize, ((2 + r) * 16 + 2 + x) % 251);
+            }
+        }
+        // chroma row r starts at uv_offset + (1 + r) * 16 + 2
+        assert_eq!(chroma[0] as usize, (16 * 8 + 16 + 2) % 251);
+        assert_eq!(chroma[6] as usize, (16 * 8 + 32 + 2) % 251);
+    }
+
+    #[test]
+    fn to_tight_nv12_rounds_an_odd_width_up_for_chroma_and_refuses_a_bad_description() {
+        let p = pic(16, 8, (0, 0, 5, 3));
+        let (luma, chroma) = p.to_tight_nv12().unwrap();
+        assert_eq!((luma.len(), chroma.len()), (15, 6 * 2));
+        assert!(pic(64, 32, (0, 0, 64, 40)).to_tight_nv12().is_none());
+    }
+
+    #[test]
+    fn colour_attachments_follow_the_height_convention() {
+        use bifrost_render::buffer_attach::{Primaries, YcbcrMatrix};
+        let hd = pic(1280, 736, (0, 0, 1280, 720)).colour_attachments();
+        assert_eq!((hd.primaries, hd.matrix), (Some(Primaries::Bt709), Some(YcbcrMatrix::Bt709)));
+        let sd = pic(64, 32, (0, 0, 64, 32)).colour_attachments();
+        assert_eq!((sd.primaries, sd.matrix), (Some(Primaries::Smpte170m), Some(YcbcrMatrix::Bt601)));
+        assert_eq!(hd.clean, None);
     }
 }
