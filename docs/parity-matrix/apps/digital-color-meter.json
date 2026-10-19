@@ -48,8 +48,8 @@
    "apple": "View > Display in sRGB, Display in Adobe RGB, Display native values",
    "status": "partial",
    "bifrost": "springboard/apps/colormeter-desktop/src/color.rs:23 (Space); springboard/apps/colormeter-desktop/src/color.rs:102 (convert); springboard/apps/colormeter-desktop/src/menu.rs:79 (perform_menu)",
-   "note": "View > Display In chooses Native, sRGB, Display P3, Adobe RGB or Generic RGB, and color.rs converts the reading with tested reference values. Gaps: Native is the delivered sRGB codes unconverted, and Generic RGB is a 1.8 gamma approximation on sRGB primaries. Not checked on Midget.",
-   "wire": "Check on Midget: View > Display In moves the readout between the five spaces. Native equals sRGB until the shell exposes the panel profile."
+   "note": "View > Display In chooses Native, sRGB, Display P3, Adobe RGB or Generic RGB, and color.rs converts the reading with tested reference values. Native now reads the pixel through the display's own ICC profile (color.rs DisplayProfile, profile_paths, load_display_profile; ColorMeter::convert_pixel, space_title) when a profile file exists: BIFROST_DISPLAY_PROFILE, else ~/.local/share/color/icc/display.icc, else /usr/share/color/icc/display.icc; the menu and the Colour space row then read \"Native (<profile name>)\". Without a file Native stays the delivered codes. Tested in color.rs (profile_tests) and window.rs. Gap: the shell does not publish which profile Settings > Displays assigned, so the file convention stands in for it; Generic RGB is a 1.8 gamma on sRGB primaries. (2026-10-19) Midget check: copy a Display P3 profile to ~/.local/share/color/icc/display.icc on Midget, restart the app, choose View > Display In > Native and confirm the readout of a saturated sRGB pixel differs from the sRGB row and the menu names the profile; remove the file and confirm Native equals sRGB again.",
+   "wire": "Publish the display's assigned profile from the shell (display service) so Native needs no file."
   },
   {
    "feature": "Display Values format (hex, decimal, 16-bit, percent)",

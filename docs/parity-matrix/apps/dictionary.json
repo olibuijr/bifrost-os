@@ -24,9 +24,9 @@
    "area": "integration",
    "apple": "Info.plist NSServices",
    "status": "partial",
-   "bifrost": "springboard/ui/src/services_menu.rs:95 (Service::LookUp route); springboard/apps/dictionary-desktop/src/main.rs:826 (look-up intent)",
-   "note": "The shell's Services menu lists Look Up in Dictionary for a text selection and shows the answer in the look-up popover; the look-up intent serves other callers. The entry does not open this app's window yet.",
-   "wire": "Register a services-menu entry that opens the app with the selected word"
+   "bifrost": "springboard/ui/src/services_menu.rs:95 (Service::LookUp route); springboard/apps/dictionary-desktop/manifest.toml ([[service]] look_up); springboard/apps/dictionary-desktop/src/main.rs (rpc, show_from_intent, perform_intent); springboard/apps/dictionary-desktop/src/model.rs (service_word)",
+   "note": "The shell's Services menu lists Look Up (the popover) and, from the app manifest, Look Up in Dictionary. The app service opens Dictionary and shows the selected word in its window (history, scope bar, find); the popover's Open in Dictionary row and the look-up intent land in the window too, through show_from_intent. service_word cleans the selection (first line, punctuation and control characters cut, 80 characters) and is tested in model.rs; show_from_intent is tested in main.rs (2026-10-19). Midget check: select a word in Notes, open the app menu Services > Look Up in Dictionary, and confirm the Dictionary window opens on that word with Back available; then tap Open in Dictionary in the Look Up popover (ctrl+cmd+D) and confirm the same.",
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "dict: / x-dictionary URL schemes",
