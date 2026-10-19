@@ -191,8 +191,9 @@ impl View for MapWidget {
             }
             ViewEvent::Pointer(Event::Move(x, y)) => match self.drag_from {
                 Some((px, py)) => {
-                    // Dragging the map right moves the camera left.
-                    if self.map.drag(-(*x - px) as f64, -(*y - py) as f64) {
+                    // The offset is the content's movement: dragging the map right shows more of the west, so the
+                    // centre moves west (`pan_pixels` takes the content's offset).
+                    if self.map.drag((*x - px) as f64, (*y - py) as f64) {
                         self.base.dirty = true;
                     }
                     self.drag_from = Some((*x, *y));
