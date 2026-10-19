@@ -36,6 +36,31 @@ const MAX_REPLY: usize = 16 * 1024 * 1024;
 thread_local! {
     static COLLECTOR: RefCell<Option<String>> = const { RefCell::new(None) };
     static MANAGER: RefCell<Option<Rc<UserContentManager>>> = const { RefCell::new(None) };
+    /// App scripts by slot name (`userscript NAME JS`), so a slot can be replaced or removed.
+    static SLOTS: RefCell<std::collections::HashMap<String, Rc<UserScript>>> = RefCell::new(std::collections::HashMap::new());
+}
+
+/// Most script slots the app may hold.
+const MAX_SLOTS: usize = 8;
+
+/// `userscript NAME JS`: keeps JS (escaped like `dev` text) as the document-start script `NAME` in every web view.
+/// An existing slot is replaced; empty JS removes it.
+pub(super) fn set_user_script(servo: &Servo, rest: &str) {
+    let (name, js) = rest.split_once(' ').unwrap_or((rest, ""));
+    if name.is_empty() || name.len() > 32 {
+        return;
+    }
+    let Some(mgr) = manager(servo) else { return };
+    if let Some(old) = SLOTS.with(|s| s.borrow_mut().remove(name)) {
+        mgr.remove_script(old);
+    }
+    let js = unesc(js);
+    if js.trim().is_empty() || SLOTS.with(|s| s.borrow().len() >= MAX_SLOTS) {
+        return;
+    }
+    let script = Rc::new(UserScript::new(js, None));
+    mgr.add_script(script.clone());
+    SLOTS.with(|s| s.borrow_mut().insert(name.to_string(), script));
 }
 
 /// Escapes `\n`, `\r` and `\\`, with no length cap.

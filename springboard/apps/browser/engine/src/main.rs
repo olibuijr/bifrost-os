@@ -28,6 +28,12 @@
 //!   dialog-reply ID TOKEN ok|cancel [TEXT]   answer an alert/confirm/prompt (TEXT escaped; prompt value)
 //!   menu-reply ID TOKEN INDEX...   choose item(s) of a context menu / <select> (no INDEX = dismissed)
 //!   ack                     the app copied the last frame; the next one may be written
+//!   userscript NAME JS      keep JS (escaped like console text) as the document-start script NAME in every view; empty JS removes it
+//!   rules-reset | rules-add TEXT | rules-commit   content blocker rules (`blocker.rs`), TEXT escaped like console text
+//!   navpolicy on|off        ask the app before each navigation (`navreq`)
+//!   nav-reply ID TOKEN allow|cancel|download   answer a `navreq`
+//!   cookies ID TOKEN        the cookies of the page URL of view ID, answered by `cookies`
+//!   clear-cookies           delete every cookie
 //!
 //! engine -> app on stdout
 //!   frame W H ID               a frame of the visible view is in the shared memory
@@ -45,6 +51,10 @@
 //!                           device pixels inside the page; answer with menu-reply
 //!   control-hide ID TOKEN   the page withdrew a dialog / menu: close it without answering
 //!   evalresult ID TEXT      the result of `eval` (escaped like console TEXT)
+//!   scriptmsg ID FLAG NAME BODY   a page posted BODY to the message handler NAME (FLAG 1 main frame; BODY escaped, up to 60 KB)
+//!   navreq ID TOKEN URL     a navigation waits for `nav-reply`
+//!   cookies ID TOKEN RECORDS   see `blocker::cookie_record`
+//!   download ID URL         the app answered a `navreq` with `download`: the navigation was cancelled
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -64,6 +74,11 @@ use servo::{
 use url::Url;
 
 mod compat;
+mod blocker;
+// the same source the SDK compiles, so the app and the engine agree on what a content rule matches
+#[allow(dead_code)]
+#[path = "../../../../sdk/src/rule_match.rs"]
+mod rule_match;
 
 /// Default user agent: current Browser on Golden Gate (what most sites sniff for).
 const DEFAULT_UA: &str = "Mozilla/5.0 (Macintosh; Intel Golden Gate 10_15_7) WebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Browser/605.1.15";
@@ -102,6 +117,10 @@ enum Note {
     Console(WebView, &'static str, String),
     Eval(u32, String),
     Control(WebView, EmbedderControl),
+    /// A navigation the app is asked about (`navpolicy on`).
+    Nav(WebView, servo::NavigationRequest),
+    /// A navigation the content rules turned into another URL.
+    Redirect(WebView, Url),
 }
 
 #[derive(Default)]
@@ -176,6 +195,21 @@ impl WebViewDelegate for Delegate {
     }
     fn notify_crashed(&self, w: WebView, reason: String, _: Option<String>) {
         self.push(Note::Crashed(w, reason));
+    }
+    fn request_navigation(&self, w: WebView, request: servo::NavigationRequest) {
+        match blocker::judge_navigation(&request.url) {
+            blocker::Verdict::Block => request.deny(),
+            blocker::Verdict::Https(url) => {
+                request.deny();
+                self.push(Note::Redirect(w, url));
+            }
+            blocker::Verdict::Pass if blocker::ask_app() => self.push(Note::Nav(w, request)),
+            blocker::Verdict::Pass => request.allow(),
+        }
+    }
+    fn load_web_resource(&self, w: WebView, load: servo::WebResourceLoad) {
+        let top = if load.request().is_for_main_frame { None } else { w.url().map(|u| u.to_string()) };
+        blocker::filter_load(load, top);
     }
 }
 
@@ -498,6 +532,40 @@ impl Engine {
                 }
             }
             "devtools" => self.devtools = rest == "on",
+            "userscript" => devtools::set_user_script(&self.servo, rest),
+            "rules-reset" => blocker::rules_reset(),
+            "rules-add" => blocker::rules_add(&unescape_line(rest)),
+            "rules-commit" => {
+                blocker::rules_commit();
+            }
+            "navpolicy" => {
+                blocker::set_ask_app(rest == "on");
+                if rest != "on" {
+                    blocker::release_all();
+                }
+            }
+            "nav-reply" => {
+                if let Some(url) = blocker::answer(arg(1).parse().unwrap_or(0), arg(2)) {
+                    say(&format!("download {id} {url}"));
+                }
+            }
+            "cookies" => {
+                if let Some(url) = self.views.get(&id).and_then(|v| v.url()) {
+                    let host = url.host_str().unwrap_or("").to_string();
+                    let jar = self.servo.site_data_manager().cookies_for_url(url, servo::CookieSource::HTTP);
+                    let records: Vec<String> = jar
+                        .iter()
+                        .filter_map(|c| {
+                            let (name, value) = c.name_value();
+                            let domain = c.domain().map(|d| d.to_string()).unwrap_or_else(|| host.clone());
+                            let expires = c.expires_datetime().map(|t| t.unix_timestamp());
+                            blocker::cookie_record(name, value, &domain, c.path().unwrap_or("/"), expires, c.secure().unwrap_or(false), c.http_only().unwrap_or(false))
+                        })
+                        .collect();
+                    say(&blocker::cookies_line(id, arg(1), &records));
+                }
+            }
+            "clear-cookies" => self.servo.site_data_manager().clear_cookies(None),
             // The downloads cookie probe (app downloads.rs COOKIE_JS) is answered from the cookie jar instead of
             // `document.cookie`, so HttpOnly cookies reach the download fetch. SiteDataManager::cookies_for_url with
             // CookieSource::HTTP (servo 0.7.0 components/servo/site_data_manager.rs) returns every cookie that matches the URL.
@@ -604,9 +672,28 @@ impl Engine {
                     }
                 }
                 Note::Console(w, level, text) => {
-                    if let (true, Some(id)) = (self.devtools, self.id_of(&w)) {
-                        say(&format!("console {id} {level} - 0 {}", escape_line(&text)));
+                    if let Some(id) = self.id_of(&w) {
+                        if let Some(rest) = text.strip_prefix(blocker::MESSAGE_PREFIX) {
+                            // a page message for an app handler: never console output, and sent whatever `devtools` says
+                            if let Some(line) = blocker::script_message_line(id, rest) {
+                                say(&line);
+                            }
+                        } else if self.devtools {
+                            say(&format!("console {id} {level} - 0 {}", escape_line(&text)));
+                        }
                     }
+                }
+                Note::Nav(w, request) => {
+                    let Some(id) = self.id_of(&w) else { continue };
+                    let token = self.next_token;
+                    self.next_token = self.next_token.wrapping_add(1).max(1);
+                    let url = request.url.to_string();
+                    blocker::hold(token, request);
+                    say(&format!("navreq {id} {token} {url}"));
+                }
+                Note::Redirect(w, url) => {
+                    w.load(url);
+                    self.dirty = true;
                 }
                 Note::Control(w, control) => {
                     let Some(view) = self.id_of(&w) else { continue };
