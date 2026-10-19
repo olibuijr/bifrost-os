@@ -469,6 +469,14 @@ mod tests {
         sh
     }
 
+    /// Hands the open Settings page the accessibility settings the preferences now hold.
+    fn sync_open_settings(sh: &mut Shell) {
+        let a = crate::shell::accessibility::AccessibilitySettings::load(&sh.prefs);
+        if let Some(st) = sh.settings.as_mut() {
+            st.set_accessibility(a);
+        }
+    }
+
     /// Lets the page slide of Settings end, as the frames would: a touch is ignored while it runs.
     fn settle_settings(sh: &mut Shell) {
         let ui = &sh.ui;
@@ -593,10 +601,13 @@ mod tests {
         let mut sh = voice_shell();
         say(&mut sh, "show numbers", 2.0).unwrap().unwrap();
         assert!(painted(&mut sh) > 0);
+        // the switch writes the preference and the open Settings page takes the new value (as the Settings switch does)
         sh.prefs.set(VOICE_CONTROL_PREF, "0").unwrap();
+        sync_open_settings(&mut sh);
         assert_eq!(sh.voice_overlay_shown(), None, "off means no overlay even before the next frame");
         assert_eq!(painted(&mut sh), 0);
         sh.prefs.set(VOICE_CONTROL_PREF, "1").unwrap();
+        sync_open_settings(&mut sh);
         assert_eq!(sh.voice_overlay_shown(), None, "and it does not come back by itself");
     }
 }
