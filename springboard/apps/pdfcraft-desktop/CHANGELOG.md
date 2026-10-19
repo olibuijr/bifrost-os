@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.9.0
+
+- Upstream pdfcraft v0.9.0.
+  ## What's Changed
+  * Make a missing external oracle loud instead of a silent pass by @tanish2k09 in https://github.com/storytold/pdfcraft/pull/2266
+  * One way to write a synthetic PDF fixture by @tanish2k09 in https://github.com/storytold/pdfcraft/pull/2275
+  * Measure rendering against Poppler, and turn the pixel test on by @tanish2k09 in https://github.com/storytold/pdfcraft/pull/2286
+  * Say what the render-oracle score does and does not mean by @tanish2k09 in https://github.com/storytold/pdfcraft/pull/2290
+
 ## 0.8.1
 
 - Upstream pdfcraft v0.8.0.
