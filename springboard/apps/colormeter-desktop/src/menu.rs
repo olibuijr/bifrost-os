@@ -45,7 +45,7 @@ impl ColorMeter {
         let mut view = vec![AppMenuItem::new(M_CONTINUOUS, "Update Continuously").checked(self.continuous), AppMenuItem::separator()];
         view.push(AppMenuItem::submenu("Display In"));
         for (i, space) in Space::ALL.iter().enumerate() {
-            view.push(AppMenuItem::new(M_SPACE + i as u32, space.name()).checked(self.space == *space).depth(1));
+            view.push(AppMenuItem::new(M_SPACE + i as u32, &self.space_title(*space)).checked(self.space == *space).depth(1));
         }
         view.push(AppMenuItem::submenu("Display Values"));
         for (i, format) in CopyFormat::ALL.iter().enumerate() {

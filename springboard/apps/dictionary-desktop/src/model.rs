@@ -128,6 +128,20 @@ pub fn word_from_url(url: &str) -> Option<String> {
     (!word.is_empty()).then(|| word.to_string())
 }
 
+/// The most characters of a selection the Services menu looks up.
+pub const SERVICE_WORD_MAX: usize = 80;
+
+/// The term to look up for a selection handed over by the Services menu: its first non-blank line, without the
+/// punctuation or quotes around it and without control characters, cut to `SERVICE_WORD_MAX` characters. None when
+/// nothing that is a letter or a digit is left.
+pub fn service_word(text: &str) -> Option<String> {
+    let line = text.lines().map(str::trim).find(|l| !l.is_empty())?;
+    let core = line.trim_matches(|c: char| !c.is_alphanumeric());
+    let word: String = core.chars().filter(|c| !c.is_control()).take(SERVICE_WORD_MAX).collect();
+    let word = word.trim();
+    (!word.is_empty()).then(|| word.to_string())
+}
+
 /// One installed dictionary's stored choices.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DictPref {
@@ -452,6 +466,19 @@ mod tests {
 
     fn hit(d: &str, t: &str) -> Hit {
         Hit { dictionary: d.into(), text: t.into() }
+    }
+
+    #[test]
+    fn a_selection_from_the_services_menu_becomes_a_clean_term() {
+        assert_eq!(service_word("  \u{201c}serendipity,\u{201d}  ").as_deref(), Some("serendipity"));
+        assert_eq!(service_word("\n\nfirst line\nsecond").as_deref(), Some("first line"));
+        assert_eq!(service_word("caf\u{e9}.").as_deref(), Some("caf\u{e9}"));
+        assert_eq!(service_word("a\u{0}b").as_deref(), Some("ab"));
+        assert_eq!(service_word("... !!"), None);
+        assert_eq!(service_word("   "), None);
+        assert_eq!(service_word(""), None);
+        let long = "x".repeat(500);
+        assert_eq!(service_word(&long).map(|w| w.chars().count()), Some(SERVICE_WORD_MAX));
     }
 
     #[test]

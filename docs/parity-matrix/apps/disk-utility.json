@@ -64,7 +64,7 @@
    "apple": "SUEraseSheetController.nib",
    "status": "partial",
    "bifrost": "springboard/apps/diskutil-desktop/src/forms.rs:90",
-   "note": "Erase opens a form sheet with a Name text field, a Format choice (ext4, exFAT, FAT32, NTFS, btrfs) and, for a whole disk, a Scheme choice (GUID Partition Map or Master Boot Record), then the confirmation; EraseDisk carries the scheme (core disk_format::erase_disk, parted for a DOS table). built on parity/team-d-disk-utility; not yet verified on Midget.",
+   "note": "Erase opens a form sheet with a Name text field, a Format choice (ext4, exFAT, FAT32, NTFS, btrfs) and, for a whole disk, a Scheme choice (GUID Partition Map or Master Boot Record), then the confirmation; EraseDisk carries the scheme (core disk_format::erase_disk, parted for a DOS table). Erasing a whole disk now asks for the disk name to be typed (forms.rs FormKind::Typed, replaces_a_whole_disk) before the request is sent; a volume keeps the confirmation sheet. A mounted disk, which includes the system disk, is refused by the plan before any sheet opens. Tested in forms.rs (2026-10-19). Midget check: select the Midget scratch disk image, Disk > Erase, press Erase and confirm a second sheet asks for the disk name; pressing Erase with a wrong or empty name stays in the sheet with \"Type <name> to confirm.\"; the system disk shows the mounted refusal in the footer and no sheet. Verify the DOS-table erase and the NTFS and btrfs formats on a scratch disk.",
    "wire": "Verify the DOS-table erase and the NTFS and btrfs formats on a scratch disk on the lab machine."
   },
   {
@@ -81,9 +81,9 @@
    "area": "panel",
    "apple": "SUPartitionSheetController.nib, Disk > Partition",
    "status": "partial",
-   "bifrost": "springboard/apps/diskutil-desktop/src/window.rs:Ask::Partition",
-   "note": "Disk > Partition into 2 to 4 Equal Parts sends DiskRequest::PartitionDisk. No bar editor for custom sizes or resize yet.",
-   "wire": "Add a Partition sheet with a bar of partitions, add/remove/resize, then a privd DiskRequest::Partition (sgdisk) in bifrost-core and a toolbar button in window.rs:326."
+   "bifrost": "springboard/apps/diskutil-desktop/src/partition.rs (specs, segments); springboard/apps/diskutil-desktop/src/forms.rs (open_partition_form, FormKind::Partition); springboard/apps/diskutil-desktop/src/draw.rs (paint_layout_bar); springboard/apps/diskutil-desktop/src/window.rs:Ask::Partition",
+   "note": "Disk > Partition (cmd+shift+P) opens a sheet with a layout bar, Sizes (such as 512m, 4g, rest; only the last may be rest), optional Names and a Format; the bar and a caption line follow what is typed (partition.rs, tested on the host in partition.rs and forms.rs). OK checks the layout against the disk and the helper's rules, then asks for the disk name to be typed (FormKind::Typed) before DiskRequest::PartitionDisk goes to privd. The Partition into 2 to 4 Equal Parts items open the same sheet prefilled (2026-10-19). Gap: no drag-resize of the bar, no per-partition format, no resize or move of existing partitions. Midget check: attach a scratch image (File > Open Disk Image for Writing), select its disk, Disk > Partition, type \"1g, rest\" with names \"A, B\", press Partition, type the disk name in the next sheet and confirm the two volumes appear in the sidebar; the Partition button stays refused while a volume of the disk is mounted.",
+   "wire": "Add drag handles on the layout bar, a format per partition, and non-destructive resize through privd."
   },
   {
    "feature": "Restore (copy a volume onto another)",
@@ -109,8 +109,8 @@
    "apple": "File > New Image",
    "status": "partial",
    "bifrost": "springboard/apps/diskutil-desktop/src/forms.rs:180 (open_new_blank_form); springboard/apps/diskutil-desktop/src/images.rs (write_blank, write_folder_image); springboard/core/src/disk_image.rs",
-   "note": "File > New Image makes a blank image (a sparse raw file of a chosen size, with an optional file system and label, saved through a save panel) and an image from a folder (an ISO through the image tool). Tested in forms.rs and images.rs. Gap: there is no image from a device, which would copy a whole disk into a file.",
-   "wire": "Add File > New Image > Image from Device: a raw copy of a disk into a file chosen in the save panel, through the disk helper."
+   "note": "File > New Image makes a blank image (a sparse raw file of a chosen size, with an optional file system and label, saved through a save panel) and an image from a folder (an ISO through the image tool). Tested in forms.rs and images.rs. Gap: there is no image from a device. A raw copy of a disk into a file has to run as root, and a path in a privd request would let any caller make root overwrite a file of its choice, so it waits for privd to receive an open file descriptor from the app (peer credentials checked) instead of a path; skipped in wave 15 for that reason (2026-10-19). Midget check: File > New Image > Blank Image, size 100m, FAT32, save under /tmp, then File > Open Disk Image and confirm the volume appears in the sidebar.",
+   "wire": "Add File > New Image > Image from Device once privd accepts a file descriptor passed over its socket for the output file."
   },
   {
    "feature": "Open / attach disk image",

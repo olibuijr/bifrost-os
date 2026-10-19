@@ -12,6 +12,7 @@ mod form;
 mod forms;
 mod images;
 mod model;
+mod partition;
 mod probe;
 mod sysfs;
 mod window;
@@ -38,6 +39,7 @@ const MENU_SHOW_IN_FILES: u32 = 10;
 const MENU_RENAME: u32 = 11;
 const MENU_RESTORE: u32 = 12;
 const MENU_RAID: u32 = 13;
+const MENU_PARTITION: u32 = 14;
 const MENU_FS_EXT4: u32 = 20;
 const MENU_FS_EXFAT: u32 = 21;
 const MENU_FS_FAT32: u32 = 22;
@@ -84,6 +86,7 @@ impl App for DiskUtility {
             AppMenuItem::new(MENU_FS_BTRFS, "Format as btrfs").checked(fs == Personality::Btrfs),
             AppMenuItem::separator(),
         ];
+        disk.push(AppMenuItem::new(MENU_PARTITION, "Partition\u{2026}").key("cmd+shift+p").enabled(whole_disk));
         for n in 2..=4u32 {
             disk.push(AppMenuItem::new(MENU_PARTITION_BASE + n, &format!("Partition into {n} Equal Parts\u{2026}")).enabled(whole_disk));
         }
@@ -213,6 +216,7 @@ impl DiskUtility {
             MENU_RENAME => self.open_rename_form(),
             MENU_RESTORE => self.open_restore_form(),
             MENU_RAID => self.open_raid_form(),
+            MENU_PARTITION => self.ask_menu(Ask::Partition(2)),
             MENU_NEW_BLANK => self.open_new_blank_form(),
             MENU_NEW_FOLDER => self.new_image_from_folder(),
             MENU_OPEN_IMAGE => self.open_image(),

@@ -17,7 +17,7 @@ use bifrost_app::kit::{TextCache, Ui};
 use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::widgets;
 use bifrost_core::disk_commands::Command;
-use bifrost_core::disk_format::{PartitionSpec, Personality};
+use bifrost_core::disk_format::Personality;
 use bifrost_core::disk_request::DiskRequest;
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -86,7 +86,7 @@ pub enum Ask {
     FirstAid,
     /// Get Info: every fact about the row in a sheet.
     Info,
-    /// Partition the selected disk into this many equal parts.
+    /// Partition the selected disk: the Partition sheet opens with this many equal parts filled in.
     Partition(usize),
 }
 
@@ -306,17 +306,8 @@ impl DiskUtility {
                 self.sheet = Some(Pending { sheet: info_sheet(&format!("Info for {name}"), &model::info_lines(&node, &extra)), requests: Vec::new() });
                 return true;
             }
-            Ask::Partition(count) => {
-                let sizes = model::equal_parts_mib(node.size, count);
-                if node.kind != Kind::Disk || sizes.is_empty() {
-                    self.error = Some(format!("{name} cannot be split into {count} partitions."));
-                    return true;
-                }
-                let partitions = sizes.into_iter().map(|size_mib| PartitionSpec { size_mib, fs: self.erase_fs, label: String::new() }).collect();
-                let request = DiskRequest::PartitionDisk { device: name.clone(), partitions };
-                let buttons = vec![SheetButton::new(SHEET_CANCEL, "Cancel", ButtonRole::Cancel), SheetButton::new(SHEET_CONFIRM, "Partition", ButtonRole::Destructive)];
-                (format!("Partition {name}?"), request.confirm_text(), buttons, vec![(SHEET_CONFIRM, request)])
-            }
+            // the sizes and names are asked for in a form sheet, which then asks for the disk's name
+            Ask::Partition(count) => return self.open_partition_form(count),
             Ask::FirstAid => {
                 let buttons = vec![
                     SheetButton::new(SHEET_CANCEL, "Cancel", ButtonRole::Cancel),
@@ -360,7 +351,7 @@ impl DiskUtility {
     }
 
     /// Starts a privileged request on its own thread, with its progress word in the footer.
-    fn start_request(&mut self, request: DiskRequest) {
+    pub(crate) fn start_request(&mut self, request: DiskRequest) {
         if self.job.is_some() {
             return;
         }
@@ -771,18 +762,16 @@ mod tests {
     }
 
     #[test]
-    fn partition_splits_a_disk_equally_and_refuses_a_volume() {
+    fn partition_opens_a_sheet_with_equal_parts_and_refuses_a_volume() {
         let mut w = one_stick();
         w.selected = Some("sdb".into());
         assert!(w.ask_menu(Ask::Partition(2)));
-        let (_, request) = &w.sheet.as_ref().expect("sheet").requests[0];
-        match request {
-            DiskRequest::PartitionDisk { partitions, .. } => assert_eq!(partitions.len(), 2),
-            other => panic!("{other:?}"),
-        }
-        w.sheet = None;
+        let open = w.form.as_ref().expect("the partition sheet");
+        assert!(w.sheet.is_none(), "nothing is confirmed before the sizes are accepted");
+        assert!(open.form.value(1).ends_with(", rest") && open.form.value(1).matches(',').count() == 1);
+        w.form = None;
         w.selected = Some("sdb1".into());
         assert!(w.ask_menu(Ask::Partition(2)));
-        assert!(w.sheet.is_none() && w.error.is_some());
+        assert!(w.form.is_none() && w.error.is_some());
     }
 }

@@ -6,6 +6,7 @@
 
 use bifrost_app::controls::sheet::{self, ButtonRole, Hit, Sheet, SheetButton, SHEET_PAD_PT};
 use bifrost_app::controls::{Rect, TextField};
+use crate::partition::Segment;
 
 /// The form sheet's buttons.
 pub const FORM_CANCEL: u32 = 1;
@@ -35,6 +36,8 @@ pub enum Control {
     Choice { options: Vec<String>, selected: usize },
     /// Rows that are on or off. With `single` a pick turns the others off.
     List { rows: Vec<String>, on: Vec<bool>, single: bool },
+    /// A bar of proportional segments, such as a partition layout. It only shows; a press on it does nothing.
+    Bar { segments: Vec<Segment> },
 }
 
 /// A label and its control.
@@ -118,6 +121,23 @@ impl Form {
         self
     }
 
+    /// Adds a bar of proportional segments.
+    pub fn bar(mut self, label: &str, segments: Vec<Segment>) -> Form {
+        self.rows.push(Row { label: label.to_string(), control: Control::Bar { segments } });
+        self
+    }
+
+    /// Replaces the segments of the bar in `row`. True when the row is a bar.
+    pub fn set_bar(&mut self, row: usize, segments: Vec<Segment>) -> bool {
+        match self.rows.get_mut(row).map(|r| &mut r.control) {
+            Some(Control::Bar { segments: shown }) => {
+                *shown = segments;
+                true
+            }
+            _ => false,
+        }
+    }
+
     pub fn note(mut self, line: &str) -> Form {
         self.notes.push(line.to_string());
         self
@@ -180,6 +200,7 @@ impl Form {
             return match &row.control {
                 Control::Text { .. } => FormHit::Text(i),
                 Control::Choice { options, .. } => sheet::segment_hit(g.control, options.len(), x, y).map_or(FormHit::Nothing, |k| FormHit::Pick(i, k)),
+                Control::Bar { .. } => FormHit::Nothing,
                 Control::List { rows, .. } => {
                     let k = ((y - g.control.y) / LIST_ROW_PT) as usize;
                     if k < rows.len() {
@@ -433,6 +454,23 @@ mod tests {
         let geo = f.geometry(window(), bar());
         let (x, y) = centre(geo.rows[0].label);
         assert_eq!(f.hit(window(), bar(), x, y), FormHit::Nothing);
+    }
+
+    #[test]
+    fn a_bar_row_shows_segments_and_takes_no_press() {
+        let seg = |f: f32| Segment { fraction: f, caption: String::new(), free: false };
+        let mut f = Form::new("t", "OK", false).bar("Layout", vec![seg(0.5)]).text("Sizes", "", "", 8);
+        assert_eq!(f.focus, Some(1), "the bar is not a text field");
+        assert!(f.set_bar(0, vec![seg(0.25), seg(0.25)]));
+        assert!(!f.set_bar(1, Vec::new()), "a text row is not a bar");
+        match &f.rows[0].control {
+            Control::Bar { segments } => assert_eq!(segments.len(), 2),
+            other => panic!("{other:?}"),
+        }
+        let geo = f.geometry(window(), bar());
+        let (x, y) = centre(geo.rows[0].control);
+        assert_eq!(f.hit(window(), bar(), x, y), FormHit::Nothing);
+        assert!(!f.pick(0, 0));
     }
 
     #[test]
