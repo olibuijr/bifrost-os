@@ -1,5 +1,5 @@
 //! System-style drawing adapters for renderer-independent BifrOSt controls.
-use crate::kit::ui::{Weight, CONTROL_PRESSED, CAPSULE_BG, CAPSULE_EDGE, CAPSULE_SHADOW, DETAIL_BG, FIELD_BG, HAIRLINE_C, LABEL, LABEL_2, LABEL_3, MATERIAL_HUD, MATERIAL_HUD_SOLID, MATERIAL_MENU, MATERIAL_SHEET, MATERIAL_TOOLTIP, MATERIAL_HEADER, MATERIAL_CONTENT, MATERIAL_UNDER_WINDOW, MATERIAL_UNDER_PAGE, MATERIAL_FULLSCREEN, MATERIAL_SELECTION_EMPHASIZED, MATERIAL_SELECTION_INACTIVE, MATERIAL_POPOVER, MATERIAL_SIDEBAR, MATERIAL_SIDEBAR_SOLID, MATERIAL_TITLEBAR, MATERIAL_TITLEBAR_SOLID, ROW_PRESSED, SEGMENT_ON, SELECTION, SEPARATOR_C, SIDEBAR_BG, SIDEBAR_PLATE, TINT, WHITE};
+use crate::kit::ui::{Weight, FOLDER_EMBLEM, FOLDER_EMBLEM_HILITE, CONTROL_PRESSED, CAPSULE_BG, CAPSULE_EDGE, CAPSULE_SHADOW, DETAIL_BG, FIELD_BG, HAIRLINE_C, LABEL, LABEL_2, LABEL_3, MATERIAL_HUD, MATERIAL_HUD_SOLID, MATERIAL_MENU, MATERIAL_SHEET, MATERIAL_TOOLTIP, MATERIAL_HEADER, MATERIAL_CONTENT, MATERIAL_UNDER_WINDOW, MATERIAL_UNDER_PAGE, MATERIAL_FULLSCREEN, MATERIAL_SELECTION_EMPHASIZED, MATERIAL_SELECTION_INACTIVE, MATERIAL_POPOVER, MATERIAL_SIDEBAR, MATERIAL_SIDEBAR_SOLID, MATERIAL_TITLEBAR, MATERIAL_TITLEBAR_SOLID, ROW_PRESSED, SEGMENT_ON, SELECTION, SEPARATOR_C, SIDEBAR_BG, SIDEBAR_PLATE, TINT, WHITE};
 use crate::kit::{Surface, Ui};
 use crate::kit::rgba;
 use bifrost_render::canvas::{Canvas, ImageRef, MaterialStyle, RectF};
@@ -549,7 +549,7 @@ pub fn source_list(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, list: &SourceList,
                 glyph(s, ui, name, Rect { x: r.right() - inset - SPACE_S - c, y: r.y + r.h - SPACE_XS - c - 2.0, w: c, h: c }, LABEL_2.now());
             }
             SidebarItem::Row { .. } if r.h <= 0.0 => {}
-            SidebarItem::Row { id, label, count, enabled, symbol, dot, subtitle, trailing, avatar } => {
+            SidebarItem::Row { id, label, count, enabled, symbol, dot, subtitle, trailing, avatar, neutral } => {
                 let selected = list.selected() == Some(*id);
                 bifrost_ui::ax::record(bifrost_ui::Role::Row, label, if selected { "selected" } else { "" }, r, *enabled);
                 let plate = Rect { x: r.x + inset, y: r.y + 1.0, w: r.w - 2.0 * inset, h: r.h - 2.0 };
@@ -578,7 +578,9 @@ pub fn source_list(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, list: &SourceList,
                     text_x += g + SPACE_S;
                 } else if let Some(name) = symbol {
                     let g = SIDEBAR_GLYPH_PT;
-                    glyph(s, ui, name, Rect { x: text_x, y: plate.y + (plate.h - g) / 2.0, w: g, h: g }, if *enabled { TINT } else { LABEL_3.now() });
+                    // accent glyph, or the secondary grey for a neutral row (Files's Locations)
+                    let tint = if *neutral { LABEL_2.now() } else { TINT };
+                    glyph(s, ui, name, Rect { x: text_x, y: plate.y + (plate.h - g) / 2.0, w: g, h: g }, if *enabled { tint } else { LABEL_3.now() });
                     text_x += g + SPACE_S;
                 }
                 let mid = ui.pt(plate.y + plate.h / 2.0) as i32;
@@ -706,8 +708,11 @@ pub fn folder_icon(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, emblem: Option<&st
         s.fill_rect(RectF::new((ui.pt(fx) as usize) as f32, (inner_top as usize + k) as f32, (ui.pt(w).ceil() as usize) as f32, (1) as f32), mix(top, bottom, t));
     }
     if let Some(name) = emblem {
+        // embossed: a light line a hair below the darker glyph, so it reads on the body in Light and Dark alike
         let g = body_h * 0.4;
-        glyph(s, ui, name, Rect { x: fx + (w - g) / 2.0, y: body_y + (body_h - g) / 2.0, w: g, h: g }, rgba(72, 159, 198, 255));
+        let at = Rect { x: fx + (w - g) / 2.0, y: body_y + (body_h - g) / 2.0, w: g, h: g };
+        glyph(s, ui, name, Rect { y: at.y + side * 0.012, ..at }, FOLDER_EMBLEM_HILITE);
+        glyph(s, ui, name, at, FOLDER_EMBLEM);
     }
 }
 
@@ -1506,6 +1511,35 @@ mod tests {
         assert_eq!(px[(10 + 22 + 6) * w + 150], SIDEBAR_BG.now(), "the unselected row stays in the column colour");
         assert!((10 + 22..10 + 50).any(|y| (36..52).any(|x| px[y * w + x] != SIDEBAR_BG.now())), "the row glyph is drawn");
         assert_eq!(px[50 * w + 250], 0, "right of the column nothing is drawn");
+    }
+
+    #[test]
+    fn a_neutral_sidebar_row_draws_its_glyph_in_the_secondary_grey_not_the_accent() {
+        let ui = test_ui();
+        let (w, h) = (400usize, 300usize);
+        let col = Rect { x: 20.0, y: 10.0, w: 180.0, h: 250.0 };
+        let draw = |row: SidebarItem| {
+            let list = SourceList::new(vec![SidebarItem::header("Locations"), row], 28.0, 22.0);
+            let mut px = vec![0u32; w * h];
+            source_list(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, &ui, col, &list, 0.0, None);
+            px
+        };
+        // packed 0xAABBGGRR: a pixel is blue when its blue byte is well above its red byte (a grey has them near equal)
+        let bluish = |px: &[u32]| (10 + 22..10 + 50).any(|y| (30..70).any(|x| (px[y * w + x] >> 16) & 255 > (px[y * w + x] & 255) + 60));
+        assert!(bluish(&draw(SidebarItem::row(1, "Desktop").with_symbol("house"))), "an accent glyph is blue");
+        assert!(!bluish(&draw(SidebarItem::row(1, "Home").with_symbol("house").neutral())), "a neutral glyph is grey");
+    }
+
+    #[test]
+    fn the_folder_emblem_is_clearly_darker_than_the_folder_body() {
+        // the body gradient runs from (88, 170, 207) to (74, 178, 227); luminance on the 0..255 scale
+        let luma = |r: f32, g: f32, b: f32| 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        let emblem = luma((FOLDER_EMBLEM & 255) as f32, ((FOLDER_EMBLEM >> 8) & 255) as f32, ((FOLDER_EMBLEM >> 16) & 255) as f32);
+        for body in [luma(88.0, 170.0, 207.0), luma(74.0, 178.0, 227.0)] {
+            assert!(body - emblem >= 36.0, "the glyph reads on the body: body {body:.0}, glyph {emblem:.0}");
+        }
+        let hilite = luma((FOLDER_EMBLEM_HILITE & 255) as f32, ((FOLDER_EMBLEM_HILITE >> 8) & 255) as f32, ((FOLDER_EMBLEM_HILITE >> 16) & 255) as f32);
+        assert!(hilite > emblem, "the emboss line under the glyph is the light one");
     }
 
     #[test]

@@ -157,6 +157,10 @@ pub const FILL_TERTIARY: u32 = pack(44, 44, 46, 255); // tertiarySystemBackgroun
 /// open folder panel (premultiplied white-ish over the blurred home) and the folder icon plate
 pub const FOLDER_FILL: u32 = pack(52, 52, 55, 110);
 pub const FOLDER_ICON_FILL: u32 = pack(60, 60, 62, 90);
+/// the embossed glyph of a special folder (`widgets::folder_icon`): a darker blue than the body gradient (luminance about 45
+/// below it, the reference's contrast), and the light line under it
+pub const FOLDER_EMBLEM: u32 = pack(45, 125, 172, 255);
+pub const FOLDER_EMBLEM_HILITE: u32 = pack(150, 214, 245, 255);
 /// backdrop of the App Library icon in the dock (bifrost-ref/screens/home.png)
 pub const DOCK_LIBRARY_FILL: u32 = pack(22, 24, 34, 255);
 pub const GRAY_DIM: u32 = pack(99, 99, 102, 255); // systemGray2, disabled glyphs

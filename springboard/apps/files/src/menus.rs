@@ -254,7 +254,8 @@ impl Files {
                 self.sort_rows();
                 self.revision += 1;
             }
-            _ => return self.extension_action(id),
+            // the toolbar menus' own choices (barmenu.rs), then the rows extensions add
+            _ => return self.bar_menu_action(id) || self.extension_action(id),
         }
         true
     }

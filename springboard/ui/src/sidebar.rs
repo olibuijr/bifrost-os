@@ -20,6 +20,8 @@ pub enum SidebarItem {
         trailing: Option<String>,
         /// A round monogram avatar leading the row (Contacts, Messages): initials on a filled circle, packed colour.
         avatar: Option<(String, u32)>,
+        /// The glyph is drawn in the secondary grey, not the accent (Files's Locations rows: home, computer, trash).
+        neutral: bool,
     },
     /// A collapsible section header (`NativeOutlineView` group row with a disclosure button). `collapsed` is the app's
     /// state: rows under a collapsed section are hidden until the next header or section.
@@ -31,7 +33,7 @@ impl SidebarItem {
         SidebarItem::Header(label.into())
     }
     pub fn row(id: u32, label: &str) -> Self {
-        SidebarItem::Row { id, label: label.into(), count: None, enabled: true, symbol: None, dot: None, subtitle: None, trailing: None, avatar: None }
+        SidebarItem::Row { id, label: label.into(), count: None, enabled: true, symbol: None, dot: None, subtitle: None, trailing: None, avatar: None, neutral: false }
     }
     fn map_row(mut self, f: impl FnOnce(&mut Option<String>, &mut Option<u32>, &mut Option<u32>, &mut bool, &mut Option<String>, &mut Option<String>, &mut Option<(String, u32)>)) -> Self {
         if let SidebarItem::Row { symbol, dot, count, enabled, subtitle, trailing, avatar, .. } = &mut self {
@@ -64,6 +66,13 @@ impl SidebarItem {
     /// A monogram avatar (`initials` on a `color` disc) leading the row, in place of a glyph or dot.
     pub fn with_avatar(self, initials: &str, color: u32) -> Self {
         self.map_row(|_, _, _, _, _, _, a| *a = Some((initials.into(), color)))
+    }
+    /// Draws the row's glyph in the secondary grey instead of the accent. Files tints Favorites and keeps Locations grey.
+    pub fn neutral(mut self) -> Self {
+        if let SidebarItem::Row { neutral, .. } = &mut self {
+            *neutral = true;
+        }
+        self
     }
     /// A collapsible section header with disclosure (`NativeOutlineView`); the app owns `collapsed`.
     pub fn section(id: u32, label: &str, collapsed: bool) -> Self {
@@ -304,6 +313,15 @@ mod tests {
         assert!(matches!(&l.items[0], SidebarItem::Row { subtitle: Some(s), trailing: Some(t), .. } if s == "Cloudy" && t == "12°"));
         assert!(matches!(&l.items[1], SidebarItem::Row { avatar: Some((a, _)), .. } if a == "AB"));
         assert_eq!(SidebarItem::header("H").with_subtitle("x"), SidebarItem::header("H"), "headers ignore row builders");
+    }
+
+    #[test]
+    fn a_neutral_row_keeps_its_glyph_grey_and_headers_ignore_it() {
+        let accent = SidebarItem::row(1, "Desktop").with_symbol("doc");
+        let grey = SidebarItem::row(2, "Trash").with_symbol("trash").neutral();
+        assert!(matches!(&accent, SidebarItem::Row { neutral: false, .. }), "a row is accent-tinted unless asked");
+        assert!(matches!(&grey, SidebarItem::Row { neutral: true, symbol: Some(s), .. } if s == "trash"));
+        assert_eq!(SidebarItem::header("H").neutral(), SidebarItem::header("H"), "headers ignore row builders");
     }
 
     #[test]

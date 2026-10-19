@@ -101,6 +101,21 @@ Golden Gate parity round 1 (`docs/golden-gate-parity-audit.md`, Files 1.14.0): t
 | `widgets::folder_icon(s, ui, rect, emblem)` | Finder's folder icon (`NSWorkspace.icon(forFile:)`) | Drawn at any size: back tab, paper edge, gradient body, embossed symbol (`Some("doc")`). Same art in Light and Dark. Apple uses bitmap icon sets; ours is procedural and has no custom folder icons yet. |
 | `widgets::search_button(s, ui, origin, pressed)` | Golden Gate toolbar search item (collapsed `NSSearchToolbarItem`) | Round 36 pt glass capsule with a magnifier; the app swaps it for `search_field` when clicked and back on Esc or empty blur. |
 
+Files look pass (E2E 2026-10-19, finding F7; `docs/e2e/2026-10-19-finder-browser.md`):
+
+| API | Apple counterpart | Notes |
+|---|---|---|
+| `SidebarItem::row(..).with_symbol(..).neutral()` | Finder sidebar Locations rows (secondary-colour symbols) | The glyph is drawn in `LABEL_2` instead of the accent `TINT`; a disabled row stays `LABEL_3`. Files uses it for the whole Locations section (home, computer, trash, volumes); Favorites and Recents keep the accent. Default off, so no other app changes. |
+| `widgets::folder_icon` emblem | Finder's embossed folder glyphs | The special-folder glyph is `FOLDER_EMBLEM` (a darker blue, about 45 below the body in luminance, as in the reference) over a `FOLDER_EMBLEM_HILITE` line a hair lower: an emboss that reads on the body in both schemes. Both tokens are in `render/src/ui.rs`. Folders without an emblem are unchanged. |
+| Toolbar without `toolbar_band` | A full-size content window whose toolbar shares the content background | `toolbar_band` is the unified titlebar material with a hairline. An app whose toolbar floats over its content (Files, as in the Home reference) skips it: fill the window with `CONTENT_BG`, then call `widgets::toolbar` alone, and the groups draw as glass capsules over the content colour. Other apps keep their band. |
+| `ToolbarItem::menu(id, label, Some("symbol"))` with `ToolbarLayout::menu_anchor(id, gap)` | `NSMenuToolbarItem` | Files's Group and Sort pop-up and its action menu ("...") open their menu under the button through `Ctx::context_menu` (window pixels, so points times `ui.s`); the choice returns as `Input::ContextAction(id)`. An app that lays the bar out itself must give a menu item `CAPSULE_PT + TOOLBAR_MENU_CHEVRON_PT` of width, as `widgets::toolbar_layout` does. Share is `share::show_picker` with `Payload::Url("file://...")` under the Share button; it takes the anchor in window pixels, like the context menu. |
+
+Files icon view: the default icon is 128 pt (`GRID_ICON`), the reference's folder width of 3.7 sidebar rows (about 118 pt
+drawn); the cell is the icon plus 40 x 60 pt and the name sits 10 pt under it. View Options > Icon size still steps by
+16 pt, from 32 to 160. Not matched yet: Network in the sidebar (Files has no network browsing view, only Go > Connect
+to Server), and the reference's group pop-up glyph (a dotted grid with a chevron; the glyph set has only
+`arrow.up.arrow.down`).
+
 Apple parity gaps recorded in batch 1:
 
 - **App menu items:** an app cannot add items to the menu bar yet, so View > Show/Hide Sidebar is the ⌃⌘S chord and
@@ -109,8 +124,8 @@ Apple parity gaps recorded in batch 1:
   an unknown name draws nothing.
 - **Search field:** no recent-searches menu and no search tokens (`NSSearchField.recentSearches`, `NSSearchToken`).
 - **Path bar:** segments open their folder; there is no per-segment context menu or drag.
-- **Sort:** the Finder group/sort pull-down is a glyph button that cycles the order; a pull-down menu from a toolbar
-  button needs the same app-menu message.
+- **Sort:** the Finder group/sort pull-down was a glyph button that cycled the order; Files now opens a pull-down
+  menu from its toolbar button (see "Files look pass" above); other apps keep their buttons.
 
 Kit gaps round 2 (found by the app agents moving apps to the kit; additive, existing calls unchanged):
 

@@ -51,11 +51,16 @@ impl Files {
     pub(crate) fn home_name(&self) -> String {
         self.home.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or("Home".into())
     }
+    /// The folder the Applications row opens: the user's or the system's Applications folder when there is one, else
+    /// where BifrOSt keeps the installed store apps (`<shell data>/apps/<id>/`).
+    pub(crate) fn applications_dir(&self) -> Option<PathBuf> {
+        [self.home.join("Applications"), PathBuf::from("/Applications"), springboard::shell::apphost::root().join("apps")].into_iter().find(|p| p.is_dir())
+    }
     /// The sidebar's sections in Files's order: Recents without a header, Favorites, Locations, Tags.
     pub(crate) fn sections(&self) -> Vec<(Option<&'static str>, Vec<Place>)> {
         let place = |label: &str, symbol: &'static str, path: PathBuf| Place { label: label.into(), symbol, dot: None, path, eject: None };
         let mut favorites = vec![];
-        if let Some(apps) = [self.home.join("Applications"), PathBuf::from("/Applications")].into_iter().find(|p| p.is_dir()) {
+        if let Some(apps) = self.applications_dir() {
             favorites.push(place("Applications", "square.grid.2x2", apps));
         }
         favorites.push(place("Desktop", "menubar.dock.rectangle", self.home.join("Desktop")));
@@ -105,7 +110,12 @@ impl Files {
             for p in rows {
                 let row = SidebarItem::row(id, &p.label);
                 let row = if p.eject.is_some() { row.with_trailing("Eject") } else { row };
-                items.push(if let Some(c) = p.dot { row.with_dot(c) } else { row.with_symbol(p.symbol) });
+                items.push(match p.dot {
+                    Some(c) => row.with_dot(c),
+                    // Favorites and the top rows take the accent; Locations (home, computer, trash, volumes) the secondary grey
+                    None if header == Some("Locations") => row.with_symbol(p.symbol).neutral(),
+                    None => row.with_symbol(p.symbol),
+                });
                 id += 1;
             }
         }
@@ -152,5 +162,43 @@ impl Files {
     }
     pub(crate) fn sidebar_path(&self, id: u32) -> Option<PathBuf> {
         self.places().into_iter().nth(id.checked_sub(100)? as usize).map(|p| p.path)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tests::fixture;
+
+    #[test]
+    fn locations_glyphs_are_grey_while_favorites_recents_and_tags_keep_their_look() {
+        let files = fixture(vec![]);
+        let list = files.sidebar();
+        let neutral_of = |label: &str| {
+            list.items.iter().find_map(|i| match i {
+                SidebarItem::Row { label: l, neutral, .. } if l == label => Some(*neutral),
+                _ => None,
+            })
+        };
+        assert_eq!(neutral_of("Recents"), Some(false));
+        assert_eq!(neutral_of("Desktop"), Some(false));
+        assert_eq!(neutral_of("fixture"), Some(true), "the home row is named after the folder");
+        assert_eq!(neutral_of("Computer"), Some(true));
+        assert_eq!(neutral_of("Trash"), Some(true));
+        assert_eq!(neutral_of("Red"), Some(false), "a tag keeps its colour dot");
+    }
+
+    #[test]
+    fn the_applications_row_opens_the_applications_folder_when_the_home_has_one() {
+        let dir = std::env::temp_dir().join(format!("files-apps-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("Applications")).unwrap();
+        let mut files = fixture(vec![]);
+        files.home = dir.clone();
+        assert_eq!(files.applications_dir(), Some(dir.join("Applications")));
+        let favorites = files.sections().into_iter().find(|(header, _)| *header == Some("Favorites")).map(|(_, rows)| rows).unwrap();
+        assert_eq!(favorites[0].label, "Applications");
+        assert_eq!(favorites[0].path, dir.join("Applications"));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
