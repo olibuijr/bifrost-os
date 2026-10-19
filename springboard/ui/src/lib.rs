@@ -212,6 +212,23 @@ impl TextField {
     pub fn selected_text(&self) -> &str {
         &self.text[self.selection()]
     }
+    /// Selects `range` (byte offsets), the caret ending after it: the selected-range setter of the reference text
+    /// view, as an inline rename uses it to select a file's base name. Offsets past the end are clamped to the text
+    /// and an offset inside a character moves back to its start. A programmatic move, not an edit: it ends a typing
+    /// group and records no undo step.
+    pub fn select(&mut self, range: Range<usize>) {
+        fn boundary(text: &str, at: usize) -> usize {
+            let mut at = at.min(text.len());
+            while !text.is_char_boundary(at) {
+                at -= 1;
+            }
+            at
+        }
+        let (a, b) = (boundary(&self.text, range.start), boundary(&self.text, range.end));
+        self.anchor = a.min(b);
+        self.caret = a.max(b);
+        self.last = Edit::None;
+    }
     /// Empties the field and forgets its history (a programmatic reset, not something to undo).
     pub fn clear(&mut self) {
         self.text.clear();
@@ -410,6 +427,29 @@ mod tests {
         f.delete();
         assert_eq!(&*f, "ewtext");
     }
+    #[test]
+    fn select_sets_a_clamped_character_aligned_range_and_typing_replaces_it() {
+        let mut f = TextField::new();
+        f.push_str("café.txt");
+        let steps = f.past.len();
+        f.select(0..4);
+        assert_eq!(f.selected_text(), "caf", "offset 4 is inside the 2-byte é and moves back to its start");
+        assert_eq!(f.caret(), 3);
+        f.select(0..5);
+        assert_eq!(f.selected_text(), "café");
+        f.select(3..99);
+        assert_eq!(f.selected_text(), "é.txt", "an end past the text is clamped");
+        f.select(5..3);
+        assert_eq!(f.selection(), 3..5, "a reversed range selects the same text");
+        f.select(2..2);
+        assert!(f.selection().is_empty());
+        assert_eq!(f.caret(), 2);
+        assert_eq!(f.past.len(), steps, "selecting is not an edit");
+        f.select(0..3);
+        f.push_str("X");
+        assert_eq!(&*f, "Xé.txt", "typing replaces the selection");
+    }
+
     #[test]
     fn focus_skips_disabled_and_pointer_release_outside_does_not_activate() {
         let mut c = Controls::default();
