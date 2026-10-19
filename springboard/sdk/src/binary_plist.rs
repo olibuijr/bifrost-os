@@ -16,8 +16,8 @@ use crate::coding::Value;
 
 const MAGIC: &[u8] = b"bplist00";
 const TRAILER: usize = 32;
-/// Deepest nesting the reader follows.
-pub const MAX_DEPTH: usize = 512;
+/// Deepest nesting the reader follows (a cycle recurses this deep before it is refused, which must fit a 2 MiB thread stack in a debug build).
+pub const MAX_DEPTH: usize = 128;
 /// Seconds from the Unix epoch to 2001-01-01T00:00:00Z, the date origin of the format.
 pub const REFERENCE_DATE_OFFSET: f64 = 978_307_200.0;
 
