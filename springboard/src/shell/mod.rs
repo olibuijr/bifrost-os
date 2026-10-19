@@ -216,6 +216,7 @@ pub mod preview_panel;
 pub mod preview_info;
 mod desktop_metrics;
 mod desktop_dock;
+mod dock_tiles;
 pub mod defaultapps;
 pub mod volume_hud;
 pub mod input_source_hud;
