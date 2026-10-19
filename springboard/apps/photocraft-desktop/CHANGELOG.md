@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.10.0
+
+- Upstream photocraft v0.10.0.
+  ## Scorecard since v0.9.0
+  From [`docs/scorecard.md`](https://github.com/storytold/photocraft/blob/v0.10.0/docs/scorecard.md) (done / partial / missing):
+  - **Tools:** 29 / 13 / 1 → **33 / 11 / 0**. Done: per-control pressure curves, image files as brush tips, Pen Shift 45° constraints, arrow-key nudges bundled into one History state.
+  - **File compatibility:** 7 / 13 / 7 → **7 / 14 / 6**; PDF save went from missing to partial (one flattened page with ICC).
+  - **Corpus floors raised:** Photoshop oracles 145 → **188** / 256, psd-tools 236 → **249** / 309, io corpus 146 → **148** / 170 (round-trip floors unchanged).
+
 ## 0.9.1
 
 - Upstream photocraft v0.9.0.
