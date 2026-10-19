@@ -4,6 +4,24 @@
 
 # Changelog
 
+## 0.8.1
+
+- Upstream cadcraft v0.8.0.
+  ## What's Changed
+  * RECTANG: the other corner ignores ortho, so the rectangle keeps its area by @marcoarnulfo in https://github.com/storytold/cadcraft/pull/1117
+  * ci: add shared FreeBSD, Windows ARM64, and nix checks by @dylanmtaylor in https://github.com/storytold/cadcraft/pull/1382
+  * Bound control-port input, and follow stored paths only on this computer or the drawing's share by @skylartaylor in https://github.com/storytold/cadcraft/pull/1518
+  **Full Changelog**: https://github.com/storytold/cadcraft/compare/v0.7.0...v0.8.0
+
+## 0.8.0
+
+- Upstream cadcraft v0.8.0.
+  ## What's Changed
+  * RECTANG: the other corner ignores ortho, so the rectangle keeps its area by @marcoarnulfo in https://github.com/storytold/cadcraft/pull/1117
+  * ci: add shared FreeBSD, Windows ARM64, and nix checks by @dylanmtaylor in https://github.com/storytold/cadcraft/pull/1382
+  * Bound control-port input, and follow stored paths only on this computer or the drawing's share by @skylartaylor in https://github.com/storytold/cadcraft/pull/1518
+  **Full Changelog**: https://github.com/storytold/cadcraft/compare/v0.7.0...v0.8.0
+
 ## 0.7.1
 
 - Upstream cadcraft v0.7.0.
