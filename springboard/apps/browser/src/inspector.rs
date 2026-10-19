@@ -430,6 +430,8 @@ impl Inspector {
             }
             // scroll probe of a tab about to be discarded (tabdiscard.rs): not console output
             WebViewEvent::EvalResult(_, text) if text.trim().trim_matches('"').starts_with(crate::tabdiscard::SCROLL_PREFIX) => false,
+            // the page colour read for the toolbar tint (themecolor.rs) is not console output either
+            WebViewEvent::EvalResult(_, text) if text.contains(crate::themecolor::PREFIX) => false,
             WebViewEvent::EvalResult(id, text) => {
                 self.record(*id, "result", text.clone(), String::new(), 0);
                 self.open

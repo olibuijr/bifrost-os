@@ -56,7 +56,8 @@ impl MainMenu {
         let total = self.menu.as_ref().map_or(0.0, |menu| menu.rows(MENU_ROW_PT, MENU_SEPARATOR_PT, MENU_PAD_PT).1);
         let width = WIDTH.min((w - EDGE * 2.0).max(0.0));
         let y = (anchor.y + anchor.h + EDGE).min((h - EDGE).max(0.0));
-        Rect { x: (anchor.x + anchor.w - width).clamp(EDGE.min(w), (w - width - EDGE).max(EDGE.min(w))), y, w: width, h: total.min((h - y - EDGE).max(0.0)) }
+        // the menu's leading edge is under the anchor's, kept inside the window
+        Rect { x: anchor.x.clamp(EDGE.min(w), (w - width - EDGE).max(EDGE.min(w))), y, w: width, h: total.min((h - y - EDGE).max(0.0)) }
     }
 
     fn limit(&self, bounds: Rect) -> f32 {

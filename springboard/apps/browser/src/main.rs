@@ -64,7 +64,13 @@ const ADDRESS: u32 = 3;
 const RELOAD: u32 = 4;
 const NEW_TAB: u32 = 5;
 const DOWNLOADS: u32 = 6;
+/// The page menu: the icon at the address field's leading edge opens what the toolbar's "..." menu used to hold.
 const MAIN_MENU: u32 = 7;
+/// Stop, in the address field in place of reload while a page loads.
+const STOP: u32 = 8;
+/// Share and Show All Tabs: with New Tab (`NEW_TAB`) they are the one glass capsule at the toolbar's trailing edge.
+const SHARE: u32 = 9;
+const OVERVIEW: u32 = 10;
 /// Accessibility ids of tabs start here (`TAB0 + index`).
 const TAB0: u64 = 100;
 
@@ -123,6 +129,7 @@ mod tokens;
 mod session;
 mod autofill;
 mod overview;
+mod themecolor;
 
 const KEY_F: u32 = 33;
 const KEY_BACKSLASH: u32 = 43;
@@ -144,9 +151,6 @@ enum Press {
     Web,
     BannerClose,
     BannerReload,
-    Reader,
-    /// The star at the address field's trailing edge: toggles the bookmark of the open page.
-    Bookmark,
 }
 
 struct Browser {
@@ -214,11 +218,8 @@ struct Browser {
     autofill: autofill::AutoFill,
     /// Tab overview grid (overview.rs).
     overview: overview::Overview,
-}
-
-/// The bookmark star at the trailing edge of the address field (a square the height of the field).
-fn star_rect(field: Rect) -> Rect {
-    Rect { x: field.x + field.w - field.h, y: field.y, w: field.h, h: field.h }
+    /// Each tab's page colour, which tints the toolbar (themecolor.rs).
+    themes: themecolor::ThemeColors,
 }
 
 fn home() -> PathBuf {

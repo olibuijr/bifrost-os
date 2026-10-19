@@ -84,7 +84,7 @@ Background tabs are discarded (`src/tabdiscard.rs`): idle 15 min, or least recen
 
 Hard reload clears the whole HTTP cache (Servo has no per-origin or bypass-reload API). Servo 0.7.0 `show_console_message` passes level and text only, so console source file:line comes from the page-side collector (see Console below) and can be missing for messages the stack cannot place.
 
-Servo 0.7.0 has no public stop-loading API; the toolbar exposes Reload rather than an ineffective Stop action.
+Servo 0.7.0 has no public stop-loading API. The address field shows Stop in place of reload while a page loads (the reference does), but the engine's stop command is a no-op, so pressing it does not end the load yet; reload is the field's button otherwise.
 Desktop input uses native mouse events for selection and hover, and native wheel events for wheel/trackpad input,
 including page wheel handlers and `preventDefault`. Developer pointer commands use the same native mouse path.
 Tablet input remains touch input. Script dialogs, context menus and select popups use native embedder controls.
@@ -247,9 +247,14 @@ See [the Servo review](docs/servo-review.md) for source contracts, remaining gap
 
 Browser Settings > Rendering defaults to **GPU**. Select **CPU fallback** for software rendering; changing the selection reloads open pages. The saved choice applies on subsequent launches. GPU mode reports an initialization error if hardware rendering is unavailable. `browser.engine_preferences` includes `_bifrost_renderer` with the active mode and GL driver. Frames currently use CPU readback and shared memory for presentation.
 
-## Main menu
+## Toolbar and page menu
 
-The top-right ellipsis opens common tab actions, bookmarks, history, downloads, Find in Page, page actions,
+The toolbar follows the reference: Back and Forward in one capsule, the address field centred (the page menu icon at its
+leading edge, reload, or Stop while a page loads, at its trailing edge), and Share, New Tab and Show All Tabs in one glass
+capsule at the trailing edge. The toolbar takes the page's colour (`themecolor.rs`: `<meta name="theme-color">`, else the
+background at the top of the page) under the glass groups. There is no sidebar yet, so no sidebar button.
+
+The page menu (the field's icon) opens common tab actions, bookmarks, history, downloads, Find in Page, page actions,
 developer tools, and Settings. Page Actions includes zoom and Reader. Use Alt+F or F10 to open the menu,
 arrow keys/type selection to choose a row, Enter to activate, and Escape to dismiss. Settings includes
 homepage, search engine, session restore, GPU/CPU renderer selection and website-data controls.

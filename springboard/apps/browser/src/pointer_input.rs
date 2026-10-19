@@ -150,9 +150,9 @@ impl Browser {
             if (x - x0).abs() > slop || (y - y0).abs() > slop {
                 return true;
             }
-            let strip_before = self.strip_shown();
+            let layout_before = (self.strip_shown(), self.find.open);
             match press {
-                Press::Bar(id) => self.activate(id),
+                Press::Bar(id) => self.activate_in(ctx, id),
                 Press::Tab(i) => self.select(i),
                 Press::TabClose(i) => self.close_tab(i),
                 Press::Sugg(i) => {
@@ -161,11 +161,10 @@ impl Browser {
                 }
                 Press::BannerClose => self.banner_activate(crashbanner::BannerHit::Close),
                 Press::BannerReload => self.banner_activate(crashbanner::BannerHit::Reload),
-                Press::Reader => self.toggle_reader(),
-                Press::Bookmark => self.toggle_bookmark(),
                 Press::Web => {}
             }
-            if strip_before != self.strip_shown() {
+            // the tab strip or the find bar came or went: the page moves
+            if layout_before != (self.strip_shown(), self.find.open) {
                 self.place_web(ctx);
             }
         } else if kind == TouchKind::Cancel {

@@ -35,11 +35,17 @@ impl Browser {
                     }
                 }
                 WebViewEvent::EvalResult(v, text) if self.autofill.on_eval(v, &text) => {}
+                // the page's theme colour for the toolbar tint (themecolor.rs)
+                WebViewEvent::EvalResult(v, text) if text.contains(themecolor::PREFIX) => {
+                    let url = self.pool.as_ref().and_then(|p| p.state(v)).map(|s| s.url.clone()).unwrap_or_default();
+                    self.themes.on_reply(v, &url, &text);
+                }
                 WebViewEvent::LoadFinished(v) => {
                     // cookies for the next download probe from this page (downloads.rs); password field (autofill.rs)
                     if let Some(p) = self.pool.as_mut() {
                         p.request_cookies(v, 0);
                         p.eval(v, autofill::FORM_JS);
+                        p.eval(v, themecolor::THEME_JS);
                     }
                     let loaded = self.pool.as_ref().and_then(|p| p.state(v)).map(|s| s.url.clone());
                     if let (Some(u), Some(p)) = (loaded, self.pool.as_mut()) {
@@ -64,6 +70,7 @@ impl Browser {
                     self.reader.forget(v);
                     self.favicons.forget(v);
                     self.autofill.forget(v);
+                    self.themes.forget(v);
                     if self.pool.as_ref().is_none_or(|p| p.state(v).is_none()) && !self.tabs.iter().any(|t| t.view == v) {
                         continue;
                     }
@@ -75,6 +82,7 @@ impl Browser {
                     let startup_error = self.pool.as_ref().and_then(|p| p.startup_error()).map(str::to_owned);
                     self.session.dirty = true;
                     self.inspector.clear_all();
+                    self.themes.clear();
                     let urls: Vec<String> = self
                         .tabs
                         .iter()
@@ -104,7 +112,7 @@ impl Browser {
                         self.start();
                     } else {
                         self.crash_log.push(session::recover::crash_line(&last, "restart storm: engine not restarted", self.storm.restarts_in_window()));
-                        self.error = Some("The web engine stopped. Choose Reload or New Tab to restart it.".into());
+                        self.error = Some("The web engine stopped. Choose New Tab to restart it.".into());
                     }
                 }
                 WebViewEvent::ContentProcessTerminated(v, _) => {

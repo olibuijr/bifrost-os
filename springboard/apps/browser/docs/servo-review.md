@@ -73,7 +73,7 @@ removal fails, and reports that failure; a stopped engine cannot make the clear 
 
 ## Remaining gaps
 
-- Servo 0.7.0 has no public Stop-load API. The toolbar presents Reload; the compatibility protocol Stop command
+- Servo 0.7.0 has no public Stop-load API. The address field shows Stop while a page loads; the compatibility protocol Stop command
   remains a documented no-op.
 - Public storage APIs do not cover IndexedDB, CacheStorage or the authentication cache. Full removal uses
   an offline profile reset, preserving browser content rules.
