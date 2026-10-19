@@ -89,7 +89,13 @@ impl Browser {
                     self.restore = urls;
                     self.restore_sel = self.current;
                     self.current = 0;
-                    if let Some(reason) = startup_error {
+                    let retry = lifecycle::startup_retry(self.prefs.renderer, startup_error.is_some(), self.renderer_fallback);
+                    if let (Some(reason), Some(_)) = (&startup_error, retry) {
+                        self.crash_log.push(format!("Engine initialization failed ({reason}); falling back to software rendering"));
+                        self.renderer_fallback = true;
+                        self.sheet.fallback = true;
+                        self.start();
+                    } else if let Some(reason) = startup_error {
                         self.crash_log.push(format!("Engine initialization failed: {reason}"));
                         self.error = Some(format!("{reason}. Open Browser Settings to select CPU fallback."));
                     } else if self.storm.allow_restart(now_s) {

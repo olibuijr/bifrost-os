@@ -38,7 +38,8 @@ impl Browser {
     }
 
     fn open_pool(&mut self) -> io::Result<()> {
-        let mut pool = WebProcessPool::spawn_with_renderer(&engine()?, &self.profile(), self.prefs.renderer)?;
+        let renderer = if self.renderer_fallback { WebRenderer::Cpu } else { self.prefs.renderer };
+        let mut pool = WebProcessPool::spawn_with_renderer(&engine()?, &self.profile(), renderer)?;
         pool.dev_collector(&format!("{};{}", network::COLLECTOR_JS, pagetools::CONSOLE_JS));
         let profile = self.profile();
         self.ctl.bridge.attach(&mut pool, &profile);
@@ -51,6 +52,9 @@ impl Browser {
     /// Renderer changes are an explicit restart. Preserve tab order and the current tab, keep dormant tabs
     /// dormant, and leave the settings sheet available if the selected backend cannot start.
     pub(super) fn restart_renderer(&mut self) {
+        // an explicit choice in Settings starts over: the GPU is tried again, with one fallback if it fails
+        self.renderer_fallback = false;
+        self.sheet.fallback = false;
         let mut pages: Vec<(String, String, bool)> = self.tabs.iter().filter_map(|tab| {
             let pool = self.pool.as_ref()?;
             let state = pool.state(tab.view)?;
@@ -267,6 +271,38 @@ impl Browser {
             p.set_focused(true);
             p.set_suspended(false);
         }
+    }
+}
+
+/// The renderer to retry with after the engine exited during startup. The GPU engine can fail where the app
+/// sandbox hides the device, and the prebuilt engine does not fall back by itself, so one startup failure with
+/// the GPU requested is retried with software rendering. Never twice per session, never for a CPU failure.
+pub(super) fn startup_retry(requested: WebRenderer, startup_error: bool, fell_back: bool) -> Option<WebRenderer> {
+    (startup_error && !fell_back && requested == WebRenderer::Gpu).then_some(WebRenderer::Cpu)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn gpu_startup_error_retries_with_cpu() {
+        assert_eq!(startup_retry(WebRenderer::Gpu, true, false), Some(WebRenderer::Cpu));
+    }
+
+    #[test]
+    fn cpu_startup_error_shows_the_error() {
+        assert_eq!(startup_retry(WebRenderer::Cpu, true, false), None);
+    }
+
+    #[test]
+    fn second_failure_does_not_retry() {
+        assert_eq!(startup_retry(WebRenderer::Gpu, true, true), None);
+    }
+
+    #[test]
+    fn exit_without_startup_error_is_not_a_fallback() {
+        assert_eq!(startup_retry(WebRenderer::Gpu, false, false), None);
     }
 }
 

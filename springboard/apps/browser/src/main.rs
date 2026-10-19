@@ -41,7 +41,7 @@ use bifrost_app::kit::ui::{Weight, CARD_BG, CONTENT_BG, LABEL, LABEL_2, MAC_BODY
 use bifrost_app::kit::{Damage, Surface, Ui};
 use bifrost_app::layout::{traffic_lights_trailing, UNIFIED_BAR_PT};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
-use bifrost_app::webview::{FindDirection, WebProcessPool, WebViewEvent, WebViewId};
+use bifrost_app::webview::{FindDirection, WebProcessPool, WebRenderer, WebViewEvent, WebViewId};
 use bifrost_core::json::Json;
 use bifrost_app::control::RpcError;
 mod inspector;
@@ -172,6 +172,8 @@ struct Browser {
     crash_log: Vec<String>,
     restore: Vec<String>,
     restore_sel: usize,
+    /// Session only, never saved: the GPU engine could not start, so the engine runs with software rendering.
+    renderer_fallback: bool,
     store: store::Store,
     sugg: Vec<suggest::Suggestion>,
     sel: Option<usize>,
