@@ -83,11 +83,23 @@
         sh.note_wallpaper_uploaded();
         sh.tick(1000.);
         assert!(sh.desktop_wallpaper_once().is_none(), "the presenter holds the wallpaper before the lock");
-        sh.lock_screen();
+        sh.login_backend = Some(std::sync::Arc::new(FixedLogin(login::Reply::Ok("tok".into()))));
+        let fx = sh.lock_screen();
+        assert_eq!(fx, vec![Effect::ScreenOn], "a desktop lock keeps the display on");
         sh.tick(1100.);
-        assert!(sh.is_locked());
-        sh.anim = Some((Anim::Unlock { from: 0.0, to: 1.0 }, 1200.));
-        sh.tick(1200. + 60_000.);
+        assert!(sh.is_locked() && sh.login_open(), "the login window is up");
+        // the password goes through the login window; the unlock slide then runs to its end
+        sh.hw_type(keyboard::Out::Text("pw".into()), 1200.);
+        sh.hw_type(keyboard::Out::Enter, 1210.);
+        let mut t = 1220.;
+        for _ in 0..400 {
+            t += 20.;
+            sh.tick(t);
+            if !sh.is_locked() { break; }
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        assert!(!sh.is_locked(), "the right password unlocked the desktop");
+        sh.tick(t + 60_000.);
         assert_eq!(sh.screen, Screen::Home, "the unlock finished");
         let (wp, x) = sh.desktop_wallpaper_once().expect("the unlocked desktop owes its wallpaper to the presenter");
         assert_eq!((wp.w, wp.h, x), (sh.w as usize, sh.h as usize, 0), "a full fitted still");
@@ -99,7 +111,7 @@
         // once uploaded it is not sent again, frame after frame
         sh.note_wallpaper_uploaded();
         for k in 0..5 {
-            sh.tick(70_000. + k as f64 * 16.);
+            sh.tick(t + 70_000. + k as f64 * 16.);
             assert!(sh.desktop_wallpaper_once().is_none(), "frame {k}");
         }
     }

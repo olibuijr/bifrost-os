@@ -96,7 +96,7 @@ struct State {
     compositor: Option<wl_compositor::WlCompositor>, shm: Option<wl_shm::WlShm>,
     layer: Option<layer::ZwlrLayerShellV1>, surface: Option<wl_surface::WlSurface>,
     chrome:HashMap<u32,ChromeWindow>, chrome_target:Option<u32>, chrome_configured:bool,
-    slots: Vec<Slot>, size: (u32,u32), configured: bool, closed: bool, main: MainMap, starved: Starved,
+    slots: Vec<Slot>, size: (u32,u32), configured: bool, closed: bool, starved: Starved,
     pending: bool, desktop_flip: Option<f64>, inputs: Vec<Event>, xy: (f32,f32), pressed: bool,
     dmabuf: Option<dmabuf::ZwpLinuxDmabufV1>, dmabuf_formats: Vec<(u32,u64)>, gpu_slots: HashMap<u32,Vec<GpuSlot>>,
     /// the input method (the keyboard types into the focused client's field) and the virtual keyboard (named keys);
@@ -254,15 +254,14 @@ impl Display {
             let surface = self.state.compositor.as_ref().unwrap().create_surface(&qh,());
             let output = self.state.output.as_ref().ok_or_else(||err("Wayland output unavailable"))?;
             let role = obj.get_lock_surface(&surface,output,&qh,());
-            self.state.main.lock();
-            self.state.surface.as_ref().unwrap().attach(None,0,0); self.state.surface.as_ref().unwrap().commit();
+            // The desktop surface stays mapped under the lock: bifrost-wm draws only the lock surface while locked, and a
+            // null-buffer commit would unmap the layer surface for good (smithay sends no new configure for the fresh
+            // initial commit a remap needs, so the desktop never came back: flat compositor clear colour after unlock).
             self.state.lock = Some(Lock {obj,surface,role,configured:false,locked:false});
         } else if let Some(lock) = self.state.lock.take() {
             if !lock.locked { return Err(err("unlock attempted before compositor confirmed lock")); }
             lock.obj.unlock_and_destroy(); lock.role.destroy(); lock.surface.destroy();
             for slot in &mut self.state.slots { slot.damage.all(); }
-            // the lock unmapped the desktop surface: map it again through a fresh initial commit and configure
-            if self.state.main.unlock() { self.state.surface.as_ref().unwrap().commit(); }
         }
         if let Some(g) = &mut self.gpu { g.p.invalidate(GPU_BG); }
         self.state.pending=false; self.state.redraw=true;
@@ -706,8 +705,6 @@ fn place_chrome(l:&surface::ZwlrLayerSurfaceV1,frame:&ChromeFrame,screen:(u32,u3
     }
     pub fn present(&mut self, pixels: &[u32], damage: &Damage) -> io::Result<()> {
         if self.state.lock_wanted && !self.state.lock.as_ref().is_some_and(|l|l.configured) { return Ok(()); }
-        // after an unlock the desktop surface takes no buffer until its new configure (the configure asks for a full redraw)
-        if !self.state.lock_wanted && !self.state.main.may_attach() { return Ok(()); }
         if let Some(g) = &mut self.gpu {
             let (w,h) = (self.state.size.0 as usize, self.state.size.1 as usize);
             // a magnified frame changes every pixel, and the frame after zoom turns off still holds magnified pixels:
@@ -765,7 +762,6 @@ fn place_chrome(l:&surface::ZwlrLayerSurfaceV1,frame:&ChromeFrame,screen:(u32,u3
             for r in &areas { s.damage_buffer(r.x0 as i32,r.y0 as i32,(r.x1-r.x0) as i32,(r.y1-r.y0) as i32); }
             b.busy = true;
             s.frame(&self.queue.handle(), true); self.state.pending = true; s.commit();
-            if !self.state.lock_wanted { self.state.main.attached(); }
             mark_first_frame();
             return transient(self.conn.flush());
         }
@@ -780,7 +776,6 @@ fn place_chrome(l:&surface::ZwlrLayerSurfaceV1,frame:&ChromeFrame,screen:(u32,u3
         for r in slot.damage.areas() { s.damage_buffer(r.x0 as i32,r.y0 as i32,(r.x1-r.x0) as i32,(r.y1-r.y0) as i32); }
         slot.damage.clear(); slot.busy = true;
         s.frame(&self.queue.handle(), true); self.state.pending = true; s.commit();
-        if !self.state.lock_wanted { self.state.main.attached(); }
         mark_first_frame();
         transient(self.conn.flush())
     }
@@ -839,7 +834,6 @@ impl Dispatch<surface::ZwlrLayerSurfaceV1, ()> for State {
                 obj.ack_configure(serial);
                 if s.configured && s.size != (width,height) { s.closed = true; }
                 s.size = (width,height); s.configured = true;
-                if !s.main.may_attach() { s.main.configured(); s.redraw = true; }
             },
             surface::Event::Closed => s.closed = true,
             _ => {}
@@ -1133,32 +1127,6 @@ fn copy_damage(src:&[u32],dst:&mut [u8],width:usize,damage:&Damage) {
         }
     }
 }
-/// The desktop layer surface's mapping across the session lock. Committing a null buffer unmaps a layer surface;
-/// before it may show a buffer again the client must make a fresh initial commit and wait for a new configure
-/// (wlr-layer-shell). Attaching earlier is a protocol error: the compositor disconnects the shell (0.5.27).
-#[derive(Debug, Default, PartialEq, Clone, Copy)]
-struct MainMap { mapped: bool, remap_due: bool, awaiting_configure: bool }
-impl MainMap {
-    /// A buffer was attached and committed.
-    fn attached(&mut self) { self.mapped = true; }
-    /// Locking: true when the surface is mapped and the null-buffer commit will unmap it.
-    fn lock(&mut self) -> bool {
-        let unmaps = self.mapped;
-        if unmaps { self.mapped = false; self.remap_due = true; }
-        unmaps
-    }
-    /// Unlocking: true when the client must make the initial commit again and wait for a configure.
-    fn unlock(&mut self) -> bool {
-        let remap = std::mem::take(&mut self.remap_due);
-        if remap { self.awaiting_configure = true; }
-        remap
-    }
-    /// A configure arrived for the desktop surface (one that comes while locked does not count for the remap).
-    fn configured(&mut self) { self.awaiting_configure = false; }
-    /// Whether a frame may attach a buffer to the desktop surface now.
-    fn may_attach(&self) -> bool { !self.awaiting_configure }
-}
-
 /// A desktop frame dropped because the compositor still held every buffer. Right after an unlock it holds the lock
 /// surface's last frame and the one queued behind it (the pool had shrunk to one while the login window idled), and
 /// nothing else redraws an idle shell: the desktop surface stayed without a buffer, black behind the bar and dock,
@@ -1217,39 +1185,6 @@ mod tests {
         let broken: Result<(), WaylandError> = Err(WaylandError::Io(std::io::Error::from(std::io::ErrorKind::BrokenPipe)));
         assert!(super::transient(broken).is_err());
         assert!(super::transient::<usize>(Ok(3)).is_ok());
-    }
-
-    #[test]
-    fn relocking_a_shown_desktop_waits_for_a_new_configure_before_attaching() {
-        let mut m = MainMap::default();
-        assert!(m.may_attach(), "the first frames attach once the initial configure arrived");
-        m.attached();
-        assert!(m.lock(), "the null-buffer commit unmaps a mapped surface");
-        assert!(m.unlock(), "unlocking makes the initial commit again");
-        assert!(!m.may_attach(), "attaching before the new configure is a protocol error");
-        m.configured();
-        assert!(m.may_attach());
-        m.attached();
-        assert!(m.lock() && m.unlock(), "every lock of a shown desktop needs the remap");
-    }
-
-    #[test]
-    fn a_desktop_never_shown_before_the_lock_needs_no_remap() {
-        // boot opens on the lock screen: the surface only had its initial commit, the compositor keeps it configured
-        let mut m = MainMap::default();
-        assert!(!m.lock());
-        assert!(!m.unlock());
-        assert!(m.may_attach());
-    }
-
-    #[test]
-    fn a_configure_while_locked_does_not_skip_the_remap() {
-        let mut m = MainMap::default();
-        m.attached();
-        assert!(m.lock());
-        m.configured();
-        assert!(m.unlock());
-        assert!(!m.may_attach());
     }
 
     use super::*;
