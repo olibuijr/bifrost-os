@@ -4,6 +4,24 @@
 
 # Changelog
 
+## 0.13.1
+
+- Upstream vectorcraft v0.13.1.
+  ## What's Changed
+  * Fix #866: macOS save sheets have a Format menu again by @dotCooCoo in https://github.com/storytold/vectorcraft/pull/2379
+  * i18n: add Dutch, Danish, Hindi and Indonesian interfaces by @pechnikov2026-star in https://github.com/storytold/vectorcraft/pull/2393
+  * Cursors: 36 more tool states get cursors of their own, listed in cursors.toml by @bobtherobot in https://github.com/storytold/vectorcraft/pull/2334
+  * Part of #394: Highlight Alternate Glyphs paints pink behind OpenType substitutions by @Messhias in https://github.com/storytold/vectorcraft/pull/1365
+
+## 0.12.0
+
+- Upstream vectorcraft v0.12.0.
+  ## What's Changed
+  * ci: add comfortable runtime limits to unbounded jobs by @skylartaylor in https://github.com/storytold/vectorcraft/pull/2077
+  * Use shared PDF writing and reading with guarded import by @skylartaylor in https://github.com/storytold/vectorcraft/pull/1894
+  * Use the shared PDF writer for export and print composition by @skylartaylor in https://github.com/storytold/vectorcraft/pull/1893
+  * Importers: a PDF dictionary value the reader can't parse no longer crashes the nesting check by @dotCooCoo in https://github.com/storytold/vectorcraft/pull/2133
+
 ## 0.11.1
 
 - Upstream vectorcraft v0.11.0.
