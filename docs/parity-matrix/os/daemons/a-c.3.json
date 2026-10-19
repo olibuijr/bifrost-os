@@ -142,6 +142,7 @@
    "bifrost": "springboard/ui/src/ax.rs, springboard/ui/src/braille.rs, springboard/ui/src/captions.rs, springboard/src/shell/services/braille_text.rs, springboard/src/shell/services/accessibility_display.rs",
    "ready_note": "The accessibility models (ax, captions, braille cell translation) run in the shell, and the braille service answers translation requests. The only part not built is a Braille display driver, which needs hardware.",
    "status": "partial",
+   "note": "rule: accessibility models; the `braille` service translates text to Braille cells (no display driver yet)",
    "ready": true,
    "checks": [
     {
@@ -170,7 +171,6 @@
      "filter": "shell::services::accessibility_display::tests"
     }
    ],
-   "note": "rule: accessibility models; the `braille` service translates text to Braille cells (no display driver yet)",
    "rea": [],
    "method": "rule"
   },
@@ -257,6 +257,7 @@
    "bifrost": "springboard/ui/src/directory_node.rs, springboard/core/src/console_user.rs, springboard/src/shell/services/directory.rs, springboard/src/shell/services/console_seat.rs, springboard/src/shell/users_page.rs, springboard/src/shell/forms.rs, springboard/src/privd/accounts.rs",
    "ready_note": "Accounts are created and their passwords changed through privd (privd/accounts.rs runs useradd and chpasswd as fixed argv). The sheets in shell/forms.rs ask for the name, the full name and the password, and a new or changed password is typed twice before privd receives it (shell/users_page.rs). The directory and console services answer the account list read-only.",
    "status": "partial",
+   "note": "rule: directory and session models; the local account directory is served read-only by the `directory` service and the console user by `console`; creating users and changing passwords go through privd (shell/users_page.rs, passwords typed twice in shell/forms.rs)",
    "ready": true,
    "checks": [
     {
@@ -285,7 +286,6 @@
      "filter": "shell::services::console_seat::tests"
     }
    ],
-   "note": "rule: directory and session models; the local account directory is served read-only by the `directory` service and the console user by `console`; creating users and changing passwords go through privd (shell/users_page.rs, passwords typed twice in shell/forms.rs)",
    "rea": [],
    "method": "rule"
   },
@@ -347,6 +347,7 @@
    "bifrost": "springboard/src/shell/usernotif.rs, springboard/src/shell/notify/store.rs, springboard/src/shell/notify/schedule.rs",
    "ready_note": "Delivery, storage and scheduling of notifications run in the shell (usernotif.rs, notify/store.rs, notify/schedule.rs). Push delivery through the reference push service is an Apple service BifrOSt does not have, so it is not part of this row.",
    "status": "partial",
+   "note": "role filled by usernotif.rs, notify/store.rs and notify/schedule.rs; no separate process; no per-app delivery daemon or push",
    "ready": true,
    "checks": [
     {
@@ -365,7 +366,6 @@
      "filter": "shell::notify::schedule::tests"
     }
    ],
-   "note": "role filled by usernotif.rs, notify/store.rs and notify/schedule.rs; no separate process; no per-app delivery daemon or push",
    "rea": [],
    "method": "audit"
   },
@@ -1051,6 +1051,7 @@
    "bifrost": "springboard/sdk/src/bluetooth_service.rs, springboard/core/src/bt_service_browser.rs, springboard/core/src/obex_packet.rs, springboard/src/shell/services/obex_codec.rs, springboard/src/bare/rfcomm.rs",
    "ready_note": "OBEX requests and replies cross an RFCOMM channel that the shell opens itself (bare/rfcomm.rs, obex service exchange method, first-party apps only), with packets framed by obex_packet::packet_len. The BlueZ obexd daemon is not used. Tests: obex_codec, rfcomm and obex_packet modules.",
    "status": "partial",
+   "note": "rule: Bluetooth service, browser and OBEX models over the Linux stack. OBEX packets are encoded and decoded by the `obex` service; the link is an RFCOMM channel the shell opens (built 2026-10-17), not the obexd daemon",
    "ready": true,
    "checks": [
     {
@@ -1074,7 +1075,6 @@
      "filter": "obex_packet::tests"
     }
    ],
-   "note": "rule: Bluetooth service, browser and OBEX models over the Linux stack. OBEX packets are encoded and decoded by the `obex` service; the link is an RFCOMM channel the shell opens (built 2026-10-17), not the obexd daemon",
    "rea": [],
    "method": "rule"
   },
@@ -2418,6 +2418,7 @@
    "bifrost": "springboard/sdk/src/keychain.rs, springboard/sdk/src/trust.rs, springboard/sdk/src/local_auth.rs, springboard/src/shell/services/trust_eval.rs",
    "ready_note": "The trust service evaluates chains with the model in bifrost_ui::trust and checks each link with Ed25519 (bifrost_ui::ed25519, the primitive crypto_kit uses), tests shell::services::trust_eval::tests. A chain is trusted only when every link verifies, so unsigned or forged chains fail. Network TLS is verified by rustls.",
    "status": "partial",
+   "note": "rule: keychain, trust and local authentication models; the `trust` service evaluates chains and checks each link with Ed25519 (built 2026-10-17), so a chain is trusted only when every link verifies; network TLS is verified by rustls",
    "ready": true,
    "checks": [
     {
@@ -2436,7 +2437,6 @@
      "filter": "ed25519::tests"
     }
    ],
-   "note": "rule: keychain, trust and local authentication models; the `trust` service evaluates chains and checks each link with Ed25519 (built 2026-10-17), so a chain is trusted only when every link verifies; network TLS is verified by rustls",
    "rea": [],
    "method": "rule"
   },
@@ -2537,6 +2537,7 @@
    "bifrost": "springboard/src/shell/notify/permission.rs, springboard/src/shell/permission_sheet.rs",
    "ready_note": "Notification permission requests are answered by the shell (notify/permission.rs) and shown as shell sheets (permission_sheet.rs). There is no separate process, which is a design choice, not a missing job.",
    "status": "partial",
+   "note": "role filled by notify/permission.rs and permission_sheet.rs; no separate process; alerts are shell sheets",
    "ready": true,
    "checks": [
     {
@@ -2550,7 +2551,6 @@
      "filter": "shell::permission_sheet::tests"
     }
    ],
-   "note": "role filled by notify/permission.rs and permission_sheet.rs; no separate process; alerts are shell sheets",
    "rea": [],
    "method": "audit"
   },
@@ -3956,6 +3956,7 @@
    "bifrost": "springboard/sdk/src/bluetooth_service.rs, springboard/core/src/bt_service_browser.rs, springboard/core/src/obex_packet.rs, springboard/src/shell/services/obex_codec.rs, springboard/src/bare/rfcomm.rs",
    "ready_note": "OBEX requests and replies cross an RFCOMM channel that the shell opens itself (bare/rfcomm.rs, obex service exchange method, first-party apps only), with packets framed by obex_packet::packet_len. The BlueZ obexd daemon is not used. Tests: obex_codec, rfcomm and obex_packet modules.",
    "status": "partial",
+   "note": "rule: Bluetooth service, browser and OBEX models over the Linux stack. OBEX packets are encoded and decoded by the `obex` service; the link is an RFCOMM channel the shell opens (built 2026-10-17), not the obexd daemon",
    "ready": true,
    "checks": [
     {
@@ -3979,7 +3980,6 @@
      "filter": "obex_packet::tests"
     }
    ],
-   "note": "rule: Bluetooth service, browser and OBEX models over the Linux stack. OBEX packets are encoded and decoded by the `obex` service; the link is an RFCOMM channel the shell opens (built 2026-10-17), not the obexd daemon",
    "rea": [],
    "method": "rule"
   },
@@ -4248,6 +4248,7 @@
    "bifrost": "springboard/sdk/src/defaults.rs, springboard/core/src/pref_domains.rs, springboard/src/shell/services/domains.rs",
    "ready_note": "The domains service shares text, flag, number and hex data values per app and per first-party suite, synchronised on write (shell::services::domains::tests). Property lists are served as JSON through bifrost_core::plist; the model is bifrost_core::pref_domains.",
    "status": "partial",
+   "note": "rule: defaults and preference domain models; the `domains` service shares text, flag and number values per app and per first-party suite, synchronised on write (built 2026-10-17, tests shell::services::domains::tests); data values are served as hex and property lists as JSON (built 2026-10-17)",
    "ready": true,
    "checks": [
     {
@@ -4266,7 +4267,6 @@
      "filter": "defaults::tests"
     }
    ],
-   "note": "rule: defaults and preference domain models; the `domains` service shares text, flag and number values per app and per first-party suite, synchronised on write (built 2026-10-17, tests shell::services::domains::tests); data values are served as hex and property lists as JSON (built 2026-10-17)",
    "rea": [],
    "method": "rule"
   },

@@ -268,8 +268,11 @@ pub fn combine(a: &Path, b: &Path, op: BooleanOp, rule_a: FillRule, rule_b: Fill
         let len = dx.hypot(dy);
         let (nx, ny) = (-dy / len, dx / len);
         let mid = ((e.a.0 + e.b.0) as f64 / 2.0, (e.a.1 + e.b.1) as f64 / 2.0);
+        // the probes measure against the cut pieces, not the original edges: a cut point is rounded to the grid, so a
+        // piece can leave its original edge by half a grid unit, far more than the probe distance, and the probes
+        // would then both land on one side of the piece
         let keeps = |pt: (f64, f64)| {
-            op.keeps(inside(winding(&edges, 0, pt), rule_a), inside(winding(&edges, 1, pt), rule_b))
+            op.keeps(inside(winding(&atoms, 0, pt), rule_a), inside(winding(&atoms, 1, pt), rule_b))
         };
         let left = keeps((mid.0 + nx * PROBE, mid.1 + ny * PROBE));
         let right = keeps((mid.0 - nx * PROBE, mid.1 - ny * PROBE));
@@ -299,7 +302,7 @@ pub fn clip_lines(lines: &Path, region: &Path, rule: FillRule, keep_inside: bool
     let mut pen: Option<G> = None;
     for e in atoms.iter().filter(|e| e.src == 0 && e.a != e.b) {
         let mid = ((e.a.0 + e.b.0) as f64 / 2.0, (e.a.1 + e.b.1) as f64 / 2.0);
-        if inside(winding(&edges, 1, mid), rule) == keep_inside {
+        if inside(winding(&atoms, 1, mid), rule) == keep_inside {
             if pen != Some(e.a) {
                 out.move_to(unsnap(e.a));
             }

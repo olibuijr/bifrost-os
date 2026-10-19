@@ -480,7 +480,12 @@ mod tests {
     }
 
     fn cell_centre(sh: &PhotoPickSheet, ui: &Ui, slot: usize) -> (f32, f32) {
-        let g = sh.geo(ui, W, H);
+        cell_centre_on(sh, ui, W, H, slot)
+    }
+
+    /// The same on a screen of another size (the harness shell is 1200x1920).
+    fn cell_centre_on(sh: &PhotoPickSheet, ui: &Ui, w: i32, h: i32, slot: usize) -> (f32, f32) {
+        let g = sh.geo(ui, w, h);
         let (x, y) = sh.cell_origin(&g, slot);
         (x + g.cell / 2.0, y + g.cell / 2.0)
     }
@@ -619,7 +624,7 @@ mod tests {
         let (cell, add) = {
             let sheet = sh.photo_pick_sheet.as_ref().unwrap();
             let g = sheet.geo(&sh.ui, sh.w, sh.h);
-            (cell_centre(sheet, &sh.ui, 0), centre(sheet.add_rect(&sh.ui, &g)))
+            (cell_centre_on(sheet, &sh.ui, sh.w, sh.h, 0), centre(sheet.add_rect(&sh.ui, &g)))
         };
         for (x, y) in [cell, add] {
             assert!(sh.modal_event(Event::Down(x, y)).is_some());
@@ -653,7 +658,7 @@ mod tests {
         assert_eq!((sheet.app_id(), sheet.pick().limit, sheet.pick().allowed.clone()), (photo_pick::WIDGET_APP, 1, vec![Filter::Images]));
         let (cell, add) = {
             let g = sheet.geo(&sh.ui, sh.w, sh.h);
-            (cell_centre(sheet, &sh.ui, 0), centre(sheet.add_rect(&sh.ui, &g)))
+            (cell_centre_on(sheet, &sh.ui, sh.w, sh.h, 0), centre(sheet.add_rect(&sh.ui, &g)))
         };
         for (x, y) in [cell, add] {
             sh.modal_event(Event::Down(x, y));

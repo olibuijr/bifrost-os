@@ -4199,7 +4199,7 @@ mod tests {
         assert_eq!(st.list().unwrap().spec().groups.len(), 1, "no networks while off");
         let fx = tap_row(&mut st, &ui, &mut prefs, "Wi-Fi");
         assert_eq!(fx, vec![Effect::Wifi(WifiAction::Enable(true)), Effect::Wifi(WifiAction::Scan)]);
-        assert_eq!(st.list().unwrap().spec().groups.len(), 2);
+        assert_eq!(st.list().unwrap().spec().groups.len(), 3, "the switch, the networks and Country or Region are back");
     }
 
     #[test]
