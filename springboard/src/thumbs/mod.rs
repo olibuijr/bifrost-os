@@ -15,7 +15,7 @@
 //! | [`cards::PackageProvider`] | `public.archive` | the type icon with a format badge |
 //! | [`cards::ContactProvider`] | `public.vcard` | a contact card |
 //! | [`cards::CalendarProvider`] | `public.calendar-event` | a calendar page |
-//! | [`media::AudiovisualProvider`] | `public.audiovisual-content` | the cover picture the file embeds, else a video's first key frame or an audio waveform card |
+//! | [`media::AudiovisualProvider`] | `public.audiovisual-content` | the cover picture the file embeds, else a video's first key frame or an audio waveform card; each with the running time badge ([`duration`]) |
 //! | [`pdf::PdfProvider`] | `com.adobe.pdf` | the first page, drawn by the PDF renderer |
 //! | [`text::ClippingsProvider`] | text clippings and web locations | the clipped text on a tabbed page |
 //!
@@ -23,6 +23,7 @@
 
 pub mod canvas;
 pub mod cards;
+pub mod duration;
 pub mod images;
 pub mod media;
 pub mod pdf;

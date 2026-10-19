@@ -4,7 +4,8 @@
 //!
 //! A video with no embedded cover gets its poster frame: the first key frame of its H.264 or HEVC track, decoded by the
 //! system decoder (`media::hwdec`, libavcodec through `dlopen`: VA-API when the GPU has it, software otherwise). Files
-//! the decoder cannot open fall back to the waveform card.
+//! the decoder cannot open fall back to the waveform card. Whichever picture results carries the file's running time as
+//! a badge in the bottom right corner (`super::duration`), when its header declares one.
 
 use super::images::decode_fitted;
 use crate::media::mp4::{self, Codec as Mp4Codec, Demuxer, Kind as TrackKind};
@@ -277,13 +278,22 @@ impl ThumbProvider for AudiovisualProvider {
         &["public.audiovisual-content"]
     }
     fn render(&self, file: &SourceFile, px: u32) -> Option<ThumbArt> {
-        if let Some(p) = cover_of(&file.path).and_then(|c| decode_fitted(&c, px)) {
-            return Some(ThumbArt::Pixels(p));
-        }
-        if let Some(p) = poster_frame(&file.path, px) {
-            return Some(ThumbArt::Pixels(p));
-        }
-        crate::shell::services::thumb_providers::waveform_card(&file.name(), px)
+        let picture = match cover_of(&file.path).and_then(|c| decode_fitted(&c, px)).or_else(|| poster_frame(&file.path, px)) {
+            Some(p) => ThumbArt::Pixels(p),
+            None => crate::shell::services::thumb_providers::waveform_card(&file.name(), px)?,
+        };
+        Some(with_duration(picture, &file.path))
+    }
+}
+
+/// The picture with the file's running time badge over it, when the header declares one.
+fn with_duration(art: ThumbArt, path: &Path) -> ThumbArt {
+    match art {
+        ThumbArt::Pixels(p) => match super::duration::duration_secs(path) {
+            Some(secs) => ThumbArt::Pixels(super::duration::badge(p, secs)),
+            None => ThumbArt::Pixels(p),
+        },
+        icon => icon,
     }
 }
 
