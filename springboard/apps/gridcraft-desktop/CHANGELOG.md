@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.8.0
+
+- Upstream gridcraft v0.8.0.
+  ## What's Changed
+  * ci: add comfortable runtime limits to unbounded jobs by @skylartaylor in https://github.com/storytold/gridcraft/pull/1418
+  * fix(edit): recalculate all changed cells after large-range clears by @harrisonoconnorhover in https://github.com/storytold/gridcraft/pull/1128
+  * Formula parser: Excel's 8,192-character limit and postfix nesting (never crash) by @nihilist-narwhal in https://github.com/storytold/gridcraft/pull/1330
+  * AutoFilter: Enter in the filter menu applies the filter and closes it by @marcoarnulfo in https://github.com/storytold/gridcraft/pull/1588
+
 ## 0.7.1
 
 - Upstream gridcraft v0.7.0.
