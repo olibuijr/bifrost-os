@@ -682,7 +682,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-folder-actions"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -769,7 +769,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-keychain-access"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -789,7 +789,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-locate"
-version = "0.4.3"
+version = "0.4.4"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -4430,7 +4430,7 @@ dependencies = [
 
 [[package]]
 name = "springboard"
-version = "0.10.4"
+version = "0.10.5"
 dependencies = [
  "bifrost-assistant-client",
  "bifrost-audio-hal",

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.10.5 — 2026-10-19
+
+- Window server: dma-buf feedback v4 names the GPU's render node, so GPU clients (the Browser's engine) get a hardware
+  context instead of failing with "failed to get driver name for fd -1".
+- New `gpu` app permission: the GPU device, the sysfs paths Mesa needs, udev and the Wayland socket for SDK apps that
+  render offscreen (the Browser declares it; it falls back to software rendering once per session if the GPU fails).
+- Find My, Keychain Access and Folder Actions have their own icons.
+
 ## 0.10.4 — 2026-10-19
 
 - The wallpaper and window glass come back after lock and unlock (the desktop surface stays mapped under the lock).
