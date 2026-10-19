@@ -580,8 +580,11 @@ mod tests {
         assert_eq!(&packed[..4], b"bv41");
         let mut dec = Stream::init(FilterOperation::Decompress, Algorithm::Lz4).unwrap();
         let tail = packed.split_off(packed.len() / 2);
-        assert!(dec.process(&packed, false).unwrap().is_empty());
-        assert_eq!(dec.process(&tail, true).unwrap(), data);
+        // a decoder holds nothing back: the whole blocks in the first half are out at once, in order
+        let head = dec.process(&packed, false).unwrap();
+        assert!(!head.is_empty() && data.starts_with(&head));
+        let rest = dec.process(&tail, true).unwrap();
+        assert_eq!([head, rest].concat(), data);
     }
 
     #[test]
