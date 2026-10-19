@@ -99,6 +99,8 @@ pub mod gaussian_filter;
 pub mod laplacian_pyramid;
 pub mod lanczos;
 pub mod generators;
+pub mod qr_generate;
+pub mod colour_stats;
 pub mod transition_filters;
 pub mod tile_shapes;
 pub mod portrait_lighting;
