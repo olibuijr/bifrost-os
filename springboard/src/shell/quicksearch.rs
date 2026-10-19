@@ -872,6 +872,8 @@ pub struct QuickSearch {
     search_imgs: Vec<Image>,
     /// decoded thumbnails of indexed results: (app/path key, icon size in pixels, image; None when unreadable)
     thumbs: Vec<(String, usize, Option<Image>)>,
+    /// pictures of the files in the file rows, drawn by the system thumbnail providers on worker threads
+    file_thumbs: super::search_thumbs::FileThumbs,
     searches_header: Image,
     /// (app, 60 pt icon, 29 pt icon, label)
     icons: Vec<(AppId, Image, Image, Image)>,
@@ -964,6 +966,7 @@ impl QuickSearch {
             sections: vec![],
             selected: None,
             thumbs: vec![],
+            file_thumbs: super::search_thumbs::FileThumbs::default(),
             deildu_titles: vec![],
             deildu_folded: vec![],
             contacts: vec![],
@@ -1288,6 +1291,10 @@ impl QuickSearch {
             self.search(ui, h);
             dirty = true;
         }
+        // a file row's picture finished drawing: the card redraws with it
+        if self.file_thumbs.poll() && self.active() {
+            dirty = true;
+        }
         if let State::Settling { to, start, .. } = self.state {
             dirty = true;
             if progress(start, t, SPRING_MS) >= 1.0 {
@@ -1318,7 +1325,7 @@ impl QuickSearch {
         if self.keyboard.animating() {
             return Some(t);
         }
-        if self.files_rx.is_some() || self.sources_rx.is_some() || self.run.as_ref().is_some_and(|r| r.pending()) {
+        if self.files_rx.is_some() || self.sources_rx.is_some() || self.run.as_ref().is_some_and(|r| r.pending()) || self.file_thumbs.pending() {
             return Some(t + 50.0);
         }
         self.is_shown().then(|| self.field.next_blink(t)).flatten()
@@ -1402,6 +1409,10 @@ impl QuickSearch {
                         let img = super::spotindex::load_thumbnail(app_id, thumb, isz);
                         self.thumbs.push((key, isz, img));
                     }
+                }
+                // a file row shows a picture of the file: asked once here, drawn on a worker, shown by `draw`
+                if let Hit::File { path, .. } = &hit {
+                    self.file_thumbs.want(path, isz);
                 }
                 let label = match &hit {
                     Hit::App(app) => apps().iter().find(|a| a.id == *app).map_or(String::new(), |a| a.name.to_string()),
@@ -1791,6 +1802,7 @@ impl QuickSearch {
                             let key = format!("{app_id}/{thumb}");
                             self.thumbs.iter().find(|(k, s, _)| *k == key && *s == isz.round() as usize).and_then(|(_, _, img)| img.as_ref())
                         }
+                        Hit::File { path, .. } => self.file_thumbs.ready(path, isz.round() as usize),
                         _ => None,
                     };
                     if let Some(img) = thumb_img {
