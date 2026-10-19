@@ -2,6 +2,10 @@
 
 - `browser.content_rules` compiles, stores and applies web content blocker lists (block, make-https, css-display-none) to every tab; `browser.messages` reads what pages post to the `control` message handler; `browser.screenshot` takes `format: "pdf"` and prints the page as a paginated PDF.
 
+## 0.16.1
+
+- BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.
+
 ## 0.16.0
 
 - Connect Servo's native file inputs to the system file chooser, with multiple selection, accepted file types, asynchronous preparation and cleanup when the document closes.
