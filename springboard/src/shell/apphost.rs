@@ -2258,8 +2258,16 @@ impl Shell {
 
     pub(super) fn describe_ext(&self) -> String {
         let run: Vec<&str> = self.ext.iter().flatten().filter(|h| h.running()).map(|h| h.id.as_str()).collect();
-        format!("apps_running={}\napp_controls={}", run.join(","),self.ext.iter().flatten().map(|h|format!("{}:{}:{:x}",h.id,h.controls.len(),h.commands.0)).collect::<Vec<_>>().join(","))
+        let controls: Vec<(&str, usize, u32)> = self.ext.iter().flatten().map(|h| (h.id.as_str(), h.controls.len(), h.commands.0)).collect();
+        ext_state_text(&run, &controls)
     }
+}
+
+/// The `apps_running` and `app_controls` lines of the shell state text (`controls` is app id, control count, command
+/// bits). Both lines end with a newline, so the section that follows (the `window=` lines) starts its own line.
+fn ext_state_text(running: &[&str], controls: &[(&str, usize, u32)]) -> String {
+    let controls: Vec<String> = controls.iter().map(|(id, n, commands)| format!("{id}:{n}:{commands:x}")).collect();
+    format!("apps_running={}\napp_controls={}\n", running.join(","), controls.join(","))
 }
 
 /// The child's exit status once its socket closed: a process that exits (or crashes) closes the socket a moment before
@@ -2684,6 +2692,26 @@ mod window_table_tests {
                 ToApp::WindowClosed { id: 3 },
             ]
         );
+    }
+}
+
+#[cfg(test)]
+mod ext_state_tests {
+    use super::ext_state_text;
+
+    #[test]
+    fn state_text_ends_every_line_so_the_next_section_starts_its_own() {
+        let text = ext_state_text(&["is.a.calendar"], &[("is.a.calendar", 62, 0), ("is.a.browser", 15, 0xf)]);
+        assert_eq!(text, "apps_running=is.a.calendar\napp_controls=is.a.calendar:62:0,is.a.browser:15:f\n");
+        // the shell appends the window lines straight after: each is a line of its own
+        let joined = format!("{text}window=Settings,965,306,909,846\n");
+        assert!(joined.lines().any(|l| l.starts_with("window=Settings")));
+        assert!(joined.lines().all(|l| l.matches('=').count() >= 1));
+    }
+
+    #[test]
+    fn state_text_with_no_apps_is_still_two_whole_lines() {
+        assert_eq!(ext_state_text(&[], &[]), "apps_running=\napp_controls=\n");
     }
 }
 

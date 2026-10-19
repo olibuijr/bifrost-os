@@ -18,6 +18,23 @@ class Keys(unittest.TestCase):
         for bad in (["down*0"], ["down*x"], ["nope"], ["down*999"], []):
             self.assertIsNone(m.key_steps(bad))
 
+    def test_punctuation_keys_by_name_and_as_the_character(self):
+        names = {"minus": 12, "equal": 13, "bracketleft": 26, "bracketright": 27, "semicolon": 39, "apostrophe": 40,
+                 "grave": 41, "backslash": 43, "comma": 51, "period": 52, "slash": 53}
+        chars = {"-": 12, "=": 13, "[": 26, "]": 27, ";": 39, "'": 40, "`": 41, "\\": 43, ",": 51, ".": 52, "/": 53}
+        for name, code in names.items():
+            self.assertEqual(m.key_codes(name), [code], name)
+            self.assertEqual(m.key_codes("cmd+" + name), [125, code], name)
+        for ch, code in chars.items():
+            self.assertEqual(m.key_codes(ch), [code], ch)
+            self.assertEqual(m.key_codes("cmd+" + ch), [125, code], ch)
+        # the chords the browser and Files shortcuts need
+        self.assertEqual(m.key_codes("cmd+["), [125, 26])
+        self.assertEqual(m.key_codes("cmd+]"), [125, 27])
+        self.assertEqual(m.key_codes("cmd+,"), [125, 51])
+        self.assertEqual(m.key_steps(["cmd+[", "cmd+]*2", "cmd+shift+."]), [[125, 26], [125, 27], [125, 27], [125, 42, 52]])
+        self.assertIsNone(m.key_codes("cmd+bracket"))
+
     def test_text_uses_us_layout_with_shift(self):
         self.assertEqual(m.type_events("aB-_9")[0], [(False, 30), (True, 48), (False, 12), (True, 12), (False, 10)])
         self.assertEqual(m.type_events("!@#")[0], [(True, 2), (True, 3), (True, 4)])

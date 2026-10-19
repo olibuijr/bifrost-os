@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Machine-level control of "midget" (Lenovo ThinkCentre M900 on titan's eno2, 10.99.0.0/24) from titan.
 
-usage: tools/midget.py idle LABEL [--seconds N] | kbench LABEL [--seconds N] | kab [--seconds N] | amt-info | amt-activate | power state|on|off|cycle|reset | mem | apps | recovery | unlock | login-bypass on|off | status | bios [list|get N|set N V|find WORD|dump] | me | labboot on|off | wake | reboot [--netboot|--disk] | poweroff | bootnext pxe|disk|NNNN | efi | hw | screen OUT.png | state | ota | wait NAME --value V | ax [PREFIX] | press NAME | key enter|cmd+o|cmd+shift+4|down*3 | type TEXT | click X Y [--right] [--double] [--mods cmd+shift] | move X Y | drag X0 Y0 X1 Y1 [MS] | scroll X Y DY [DX] | shot [OUT.png] [--max W] | seq FILE | tap-window APP X Y | tap X Y | context X Y | hover X Y | open-url URL | open-app ID | open-folder ID PATH | show-in-files PATH | swipe X0 Y0 X1 Y1 [MS] | trace on|off | update [--restart] | appearance light|dark|auto | wallpaper ID | logs [N] | amt | ssh CMD... | qa-install [--disk DEV] [--shots DIR] [--timeout S] | reinstall --confirm \"REINSTALL midget\" [--timeout S] [--shots S] [--loop N] | follow [--timeout S] [--shots S] | wipe --disk DEV --confirm "WIPE 10.99.0.200 DEV" [--dry-run]
+usage: tools/midget.py idle LABEL [--seconds N] | kbench LABEL [--seconds N] | kab [--seconds N] | amt-info | amt-activate | power state|on|off|cycle|reset | mem | apps | recovery | unlock | login-bypass on|off | status | bios [list|get N|set N V|find WORD|dump] | me | labboot on|off | wake | reboot [--netboot|--disk] | poweroff | bootnext pxe|disk|NNNN | efi | hw | screen OUT.png | state | ota | wait NAME --value V | ax [PREFIX] | press NAME | key enter|cmd+o|cmd+shift+4|cmd+[|cmd+comma|down*3 | type TEXT | click X Y [--right] [--double] [--mods cmd+shift] | move X Y | drag X0 Y0 X1 Y1 [MS] | scroll X Y DY [DX] | shot [OUT.png] [--max W] | seq FILE | tap-window APP X Y | tap X Y | context X Y | hover X Y | open-url URL | open-app ID | open-folder ID PATH | show-in-files PATH | swipe X0 Y0 X1 Y1 [MS] | trace on|off | update [--restart] | appearance light|dark|auto | wallpaper ID | logs [N] | amt | ssh CMD... | qa-install [--disk DEV] [--shots DIR] [--timeout S] | reinstall --confirm \"REINSTALL midget\" [--timeout S] [--shots S] [--loop N] | follow [--timeout S] [--shots S] | wipe --disk DEV --confirm "WIPE 10.99.0.200 DEV" [--dry-run]
 Computer use (real uinput keyboard and absolute pointer; coordinates are `screen`/`shot` pixels, `--scale F` takes small-image
 pixels; docs/bifrost-pc-workflow.md "Computer use"): `shot` then `click`/`type`/`drag`/`scroll`, or a `seq` script.
 Coordinates: `screen` writes compositor pixels. `tap`/`swipe`/`context`/`hover` take the shell's own geometry (what
@@ -301,6 +301,10 @@ KEY_CODES = {"enter": 28, "esc": 1, "tab": 15, "space": 57, "backspace": 14,
 _SHIFTED = {"!": "1", "@": "2", "#": "3", "$": "4", "%": "5", "^": "6", "&": "7", "*": "8", "(": "9", ")": "0"}
 _PUNCT = {"-": 12, "=": 13, "[": 26, "]": 27, ";": 39, "'": 40, "`": 41, "\\": 43, ",": 51, ".": 52, "/": 53}
 _PUNCT_SHIFT = {"_": "-", "+": "=", "{": "[", "}": "]", ":": ";", '"': "'", "~": "`", "|": "\\", "<": ",", ">": ".", "?": "/"}
+# the US punctuation keys by name for `key` (`cmd+bracketleft`); the literal character works in a chord too (`cmd+[`)
+PUNCT_NAMES = {"minus": "-", "equal": "=", "bracketleft": "[", "bracketright": "]", "semicolon": ";", "apostrophe": "'",
+               "grave": "`", "backslash": "\\", "comma": ",", "period": ".", "slash": "/"}
+KEY_CODES.update({name: _PUNCT[ch] for name, ch in PUNCT_NAMES.items()})
 
 
 def text_keys(text):
@@ -485,9 +489,10 @@ SETTLE = float(os.environ.get("MIDGET_UINPUT_SETTLE", "0.5"))  # seconds the she
 
 
 def key_codes(spec):
-    """`enter`, `o` or a combination `cmd+shift+s` -> evdev codes in press order; None when a part is unknown."""
+    """`enter`, `o`, `bracketleft` or a combination `cmd+shift+s`, `cmd+[` -> evdev codes in press order; None when a part is
+    unknown. A punctuation key is its name (`PUNCT_NAMES`) or its unshifted US character."""
     parts = spec.lower().split("+")
-    codes = [KEY_CODES.get(p) or _PUNCT.get({"minus": "-", "equal": "=", "comma": ",", "period": ".", "slash": "/"}.get(p, p)) for p in parts]
+    codes = [KEY_CODES.get(p) or _PUNCT.get(p) for p in parts]
     return None if not spec or None in codes else codes
 
 
@@ -658,7 +663,8 @@ def cmd_key(args):
     """Inject real compositor keys through a temporary uinput keyboard: `key cmd+shift+4`, `key down*3`, `key tab tab enter`."""
     steps = key_steps(args)
     if not steps:
-        print("usage: key SPEC... where SPEC is NAME, MOD+KEY (cmd+shift+4) or either with *N (down*3); names: " + " ".join(sorted(KEY_CODES)))
+        print("usage: key SPEC... where SPEC is NAME, MOD+KEY (cmd+shift+4, cmd+[) or either with *N (down*3); names: " + " ".join(sorted(KEY_CODES))
+              + "; punctuation keys also as the character itself: " + " ".join(sorted(_PUNCT)))
         return 2
     plan = []
     for codes in steps:
