@@ -344,9 +344,11 @@ fn results_with_contacts(query: &str, deildu: &[String], contacts: &[super::cont
     results_folded(query, deildu, &folded, contacts, &contacts_folded)
 }
 
-/// The name, phone and email of a contact, folded for matching (kept by the caller between keystrokes).
+/// The name, phone and email-and-company of a contact, folded for matching (kept by the caller between keystrokes). The
+/// company sits with the email so a person is found by where they work; notes and the address stay out of Search.
 fn folded_fields(contact: &super::contactstore::Contact) -> [String; 3] {
-    [&contact.name, &contact.phone, &contact.email].map(|field| fuzzy::fold(field))
+    let mail_and_company = format!("{} {}", contact.email, contact.company);
+    [contact.name.as_str(), contact.phone.as_str(), mail_and_company.as_str()].map(fuzzy::fold)
 }
 
 /// Candidates of the sources that never change while the shell runs, folded once.
@@ -2542,6 +2544,23 @@ mod tests {
         }
         assert!(results_with_contacts("", &[], &people).is_empty());
         assert!(!results_with_contacts("private-only-value", &[], &people).iter().flat_map(|g| &g.hits).any(|hit| matches!(hit, Hit::Contact { .. })));
+    }
+
+    #[test]
+    fn a_contact_is_found_by_company_but_not_by_address_or_notes() {
+        use super::super::contactstore::Contact;
+        let people = vec![Contact {
+            id: 9,
+            name: "Ada King".into(),
+            company: "Analytical Engines".into(),
+            address: "12 Bryn Road".into(),
+            notes: "private-only-value".into(),
+            ..Contact::default()
+        }];
+        let found = |q: &str| results_with_contacts(q, &[], &people).iter().flat_map(|g| &g.hits).any(|hit| matches!(hit, Hit::Contact { id: 9, .. }));
+        assert!(found("analytical"));
+        assert!(!found("bryn road"));
+        assert!(!found("private-only-value"));
     }
 
     #[test]
