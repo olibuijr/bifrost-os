@@ -2518,6 +2518,33 @@
         assert!(sh.desk.as_ref().unwrap().index_of(AppId::Terminal).is_none(),"the menu's Quit closes the next one");
     }
 
+    /// The Dock's hover label shows the app's name: the text is tinted with the label colour over the menu material, so it
+    /// contrasts with the plate in Dark and in Light (it was blitted white, which left an empty pill on Light's pale plate).
+    #[test]
+    fn the_dock_hover_label_draws_its_name_in_both_schemes() {
+        use super::ui::{LABEL,MENU_TINT};
+        let sh=desktop_shell();
+        let lum=|c:u32|((c&255)+((c>>8)&255)+((c>>16)&255))/3;
+        let (w,h)=(400usize,400usize);
+        let backdrop=rgba(90,120,150,255);
+        // each scheme's own colours from the pairs, so the process-wide scheme is not touched
+        for (scheme,plate,ink) in [("Dark",MENU_TINT.dark,LABEL.dark),("Light",MENU_TINT.light,LABEL.light)] {
+            let mut px=vec![backdrop;w*h];
+            {
+                let mut s=Surface{w,h,stride:w,px:&mut px,y0:0};
+                sh.draw_dock_label(&mut s,"Files",desk::Rect{x:176,y:300,w:48,h:48},desktop_dock::Position::Bottom,1.0,plate,ink);
+            }
+            let drawn:Vec<usize>=(0..w*h).filter(|&i|px[i]!=backdrop).collect();
+            assert!(!drawn.is_empty(),"{scheme}: the label plate is drawn");
+            let (x0,x1)=(drawn.iter().map(|i|i%w).min().unwrap(),drawn.iter().map(|i|i%w).max().unwrap());
+            let (y0,y1)=(drawn.iter().map(|i|i/w).min().unwrap(),drawn.iter().map(|i|i/w).max().unwrap());
+            // the plate's own colour, left of the text at mid height; the name's pixels are the ones that stand out from it
+            let plate_px=px[((y0+y1)/2)*w+x0+3];
+            let text=(y0..=y1).flat_map(|y|(x0..=x1).map(move|x|(x,y))).filter(|&(x,y)|lum(px[y*w+x]).abs_diff(lum(plate_px))>80).count();
+            assert!(text>20,"{scheme}: the name shows in the label colour on the plate ({text} text pixels)");
+        }
+    }
+
     #[test]
     fn work_area_starts_under_the_drawn_menu_bar() {
         let sh = desktop_shell();
