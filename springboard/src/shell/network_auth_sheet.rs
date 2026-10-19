@@ -226,6 +226,8 @@ mod tests {
         std::fs::create_dir_all(&d).unwrap();
         let mut sh = crate::shell::tests::shell();
         sh.data_dir = d;
+        // the test shell starts on the lock screen, where no login sheet is shown
+        crate::shell::tests::unlock(&mut sh);
         sh
     }
 
