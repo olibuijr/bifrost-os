@@ -19,6 +19,7 @@ pub mod dwell;
 pub mod earcons;
 pub mod guided;
 pub mod motion_cues;
+pub mod onscreen_keyboard;
 pub mod reader;
 pub mod shortcut;
 pub mod shortcut_panel;
@@ -33,6 +34,8 @@ pub mod voice_overlay;
 pub mod walk;
 pub mod zoom;
 
+/// The preference (`1` or `0`) behind Settings > Accessibility > Keyboard > Accessibility Keyboard.
+pub const ACCESSIBILITY_KEYBOARD_PREF: &str = "a11y_accessibility_keyboard";
 /// Display Zoom: geometry factor for "Standard" and "Larger".
 pub const ZOOMS: [(&str, f32); 2] = [("Standard", 1.0), ("Larger", 1.15)];
 /// Touch Accommodations: how long a press must last to count as a hold (ms).
@@ -88,6 +91,9 @@ pub struct AccessibilitySettings {
     pub motion_cues: bool,
     /// Live Captions: the sound the computer plays is turned into captions on screen (`live_captions`, off by default).
     pub live_captions: bool,
+    /// Accessibility Keyboard: the on-screen keyboard is open on purpose (`onscreen_keyboard`). It follows `Shell::keyboard_open_explicit`
+    /// and `keyboard_close_explicit`, so closing the keyboard with its hide key or the Input menu switches it off. Off by default.
+    pub accessibility_keyboard: bool,
     /// index into `HOLD_MS`
     pub hold: usize,
     /// Cursor Size, 0..1 from the Settings slider: the pointer draws at 1x up to 2x (`cursor_scale`)
@@ -105,7 +111,7 @@ pub struct AccessibilitySettings {
 }
 
 impl AccessibilitySettings {
-    pub const DEFAULT: Self = AccessibilitySettings {text_scale: 1.0, bold_text: false, zoom: 0, reduce_motion: false, increase_contrast: false, reduce_transparency: false, button_shapes: false, dim_flashing_lights: false, guided_access: false, screen_reader: false, sticky_keys: false, dwell: 0, slow: 0, mouse_keys: false, switch_control: false, voice_control: false, motion_cues: false, hold: 0, cursor_size: 0.0, shortcut: Vec::new(), speech_rate: 180, speech_pitch: 50, speech_voice: String::new(), speech_punctuation: 0, live_captions: false, switch_scan: false};
+    pub const DEFAULT: Self = AccessibilitySettings {text_scale: 1.0, bold_text: false, zoom: 0, reduce_motion: false, increase_contrast: false, reduce_transparency: false, button_shapes: false, dim_flashing_lights: false, guided_access: false, screen_reader: false, sticky_keys: false, dwell: 0, slow: 0, mouse_keys: false, switch_control: false, voice_control: false, motion_cues: false, hold: 0, cursor_size: 0.0, shortcut: Vec::new(), speech_rate: 180, speech_pitch: 50, speech_voice: String::new(), speech_punctuation: 0, live_captions: false, switch_scan: false, accessibility_keyboard: false};
 
     /// Reads every key, keeping the default for a missing or malformed one.
     pub fn load(p: &Prefs) -> Self {
@@ -132,6 +138,7 @@ impl AccessibilitySettings {
             switch_control: flag("a11y_switch_control", d.switch_control),
             voice_control: flag(super::services::recognizer::VOICE_CONTROL_PREF, d.voice_control),
             live_captions: flag("a11y_live_captions", d.live_captions),
+            accessibility_keyboard: flag(ACCESSIBILITY_KEYBOARD_PREF, d.accessibility_keyboard),
             hold: index("a11y_hold", HOLD_MS.len()).unwrap_or(d.hold),
             cursor_size: p.get_parsed::<f32>("a11y_cursor_size").map_or(d.cursor_size, |v| v.clamp(0.0, 1.0)),
             shortcut: shortcut::parse(p.get(shortcut::PREF).unwrap_or("")),
@@ -163,6 +170,7 @@ impl AccessibilitySettings {
             ("a11y_switch_control", flag(self.switch_control)),
             (super::services::recognizer::VOICE_CONTROL_PREF, flag(self.voice_control)),
             ("a11y_live_captions", flag(self.live_captions)),
+            (ACCESSIBILITY_KEYBOARD_PREF, flag(self.accessibility_keyboard)),
             ("a11y_hold", &self.hold.to_string()),
             ("a11y_cursor_size", &format!("{:.3}", self.cursor_size)),
             (shortcut::PREF, &shortcut::encode(&self.shortcut)),
@@ -321,6 +329,18 @@ mod tests {
         a.save(&mut p);
         assert!(AccessibilitySettings::load(&p).live_captions);
         assert_eq!(p.get("a11y_live_captions"), Some("1"));
+    }
+
+    #[test]
+    fn the_accessibility_keyboard_round_trips_under_its_own_key_and_is_off_by_default() {
+        let mut p = Prefs::memory();
+        assert!(!AccessibilitySettings::load(&p).accessibility_keyboard);
+        AccessibilitySettings { accessibility_keyboard: true, ..Default::default() }.save(&mut p);
+        assert_eq!(p.get("a11y_accessibility_keyboard"), Some("1"));
+        let back = AccessibilitySettings::load(&p);
+        assert!(back.accessibility_keyboard && !back.live_captions && !back.sticky_keys, "no other switch moves with it");
+        AccessibilitySettings::default().save(&mut p);
+        assert_eq!(p.get("a11y_accessibility_keyboard"), Some("0"));
     }
 
     #[test]

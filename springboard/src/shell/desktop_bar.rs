@@ -194,10 +194,11 @@ impl Shell {
         self.foreign_active().and_then(|id|self.desk.as_ref().and_then(|d|d.native_windows.iter().find(|w|w.id==id))).and_then(|w|super::apphost::installed().iter().find(|a|a.manifest.wayland_app_id==w.app_id).map(|a|a.manifest.name.clone())).unwrap_or_else(||match self.screen {Screen::App(app)=>super::apps().iter().find(|a|a.id==app).map(|a|a.name).unwrap_or("BifrOSt").into(),_=>"BifrOSt".into()})
     }
     /// Settings › Menu Bar: whether a menu extra is turned on (the clock always shows).
-    fn menu_extra_shown(&self,menu:Menu)->bool {
+    pub(super) fn menu_extra_shown(&self,menu:Menu)->bool {
         use super::options::MenuExtra as E;
-        // the input menu shows only when there is a choice of keyboards, as the reference input menu does
-        if menu==Menu::Input {return super::kb_layouts::enabled().len()>1||self.keyboard_opened_explicitly();}
+        // the input menu shows when there is a choice of keyboards, while the on-screen keyboard is open, or when the user
+        // turned on Settings > Keyboard > Input Sources > Show Input menu in menu bar (so its rows are reachable with one source)
+        if menu==Menu::Input {return input_menu_visible(super::kb_layouts::enabled().len(),self.keyboard_opened_explicitly(),self.options().input_menu);}
         if menu==Menu::Scripts {return super::scripts_menu::folder().is_some_and(|d|!super::scripts_menu::list(&d).is_empty());}
         let e=match menu {Menu::Cpu=>E::Cpu,Menu::Memory=>E::Memory,Menu::Power=>E::Battery,Menu::Network=>E::Network,Menu::ControlCenter=>E::ControlCenter,_=>return true};
         self.options().menu_extras&e.bit()!=0
@@ -1042,6 +1043,10 @@ pub(super) fn step_index(selectable: &[bool], current: Option<usize>, dir: i32) 
     let start = current.map_or(if dir > 0 { -1 } else { n }, |i| i as i32);
     (1..=n).map(|k| (start + dir * k).rem_euclid(n) as usize).find(|&i| selectable[i])
 }
+
+/// Whether the menu bar shows the Input menu: several enabled input sources, the on-screen keyboard open on purpose, or the
+/// user's Show Input menu in menu bar switch.
+pub(super) fn input_menu_visible(sources:usize,keyboard_open:bool,setting:bool)->bool {sources>1||keyboard_open||setting}
 
 #[cfg(test)]
 mod help_search_tests {

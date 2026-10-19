@@ -23,7 +23,7 @@
 //! Refusals are errors: no consent, no model, a non-English locale, or no pipeline program installed.
 //!
 //! Voice Control: while the `voice_control` preference is `1` the shell holds a recognition of its own (the app id
-//! [`SYSTEM_APP`]) when no app has one, runs every final transcript through `Shell::voice_press` ("press Save") and
+//! [`SYSTEM_APP`]) when no app has one, hands every final transcript to `Shell::voice_consume` ("press Save") and
 //! hands the resulting effects to the next shell tick. It needs the same consent and model as dictation, never takes
 //! the microphone from an app, and retries a refused start only every [`VOICE_RETRY_S`] seconds.
 use super::{Event, Shell, SystemService};
@@ -506,16 +506,10 @@ impl SystemService for Recognizer {
             self.stop_session();
         }
         let wanted = shell.prefs.get(VOICE_CONTROL_PREF) == Some("1");
-        for heard in self.voice_step(wanted, t) {
-            match shell.voice_press(&heard, t) {
-                Some(Ok((_, fx))) => shell.voice_fx.extend(fx),
-                // a command that could not run says why on the announcement banner
-                Some(Err(why)) => {
-                    shell.announce.post(&why, bifrost_proto::AnnouncePriority::High);
-                    shell.dirty = true;
-                }
-                None => {}
-            }
+        let heard = self.voice_step(wanted, t);
+        if !heard.is_empty() {
+            let fx = shell.voice_consume(&heard, t);
+            shell.voice_fx.extend(fx);
         }
         Vec::new()
     }

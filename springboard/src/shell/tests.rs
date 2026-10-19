@@ -142,6 +142,36 @@
     }
 
     #[test]
+    fn the_input_menu_rule_is_several_sources_an_open_keyboard_or_the_setting() {
+        assert!(!desktop_bar::input_menu_visible(1, false, false), "one source and nothing else: no menu");
+        assert!(desktop_bar::input_menu_visible(2, false, false), "a choice of sources");
+        assert!(desktop_bar::input_menu_visible(1, true, false), "the keyboard is open, so its row must be reachable");
+        assert!(desktop_bar::input_menu_visible(1, false, true), "the user turned the menu on");
+    }
+
+    #[test]
+    fn show_input_menu_in_menu_bar_makes_the_menu_and_its_keyboard_rows_reachable_with_one_source() {
+        use desktop_bar::Menu;
+        keyboard::fake_process(500.0);
+        let mut sh = desktop_shell();
+        // the enabled sources are process-wide and other tests change them: the menu follows them while the switch is off
+        let several = super::kb_layouts::enabled().len() > 1;
+        assert_eq!(sh.menu_extra_shown(Menu::Input), several, "off by default: only a choice of sources shows it");
+        sh.prefs.set("show_input_menu", "1").unwrap();
+        assert!(sh.menu_extra_shown(Menu::Input), "the switch shows it with any number of sources");
+        let rows = sh.menu_row_texts(Menu::Input);
+        assert!(rows.iter().any(|r| r == "Show Keyboard Viewer"), "{rows:?}");
+        assert!(rows.iter().any(|r| r == "Show On-Screen Keyboard"), "{rows:?}");
+        sh.keyboard_open_explicit(1000.);
+        let open = sh.menu_row_texts(Menu::Input);
+        assert!(open.iter().any(|r| r == "Hide On-Screen Keyboard"), "the same row closes it: {open:?}");
+        sh.prefs.set("show_input_menu", "0").unwrap();
+        assert!(sh.menu_extra_shown(Menu::Input), "an open keyboard keeps the menu up so it can be closed");
+        sh.keyboard_close_explicit(1100.);
+        assert_eq!(sh.menu_extra_shown(Menu::Input), several, "switch off and keyboard closed: back to the sources rule");
+    }
+
+    #[test]
     fn the_keyboards_hide_key_closes_the_keyboard_a_desktop_user_opened() {
         keyboard::fake_process(500.0);
         let mut sh=desktop_shell();
@@ -1939,44 +1969,41 @@
     }
 
     #[test]
-    fn voice_control_listens_while_it_is_on_and_runs_each_final_command() {
-        let (mut sh, calls) = voice_rig(false);
-        assert!(sh.voice_control_tick(1000.0).is_empty());
-        assert!(calls.lock().unwrap().is_empty(), "off: the recognizer is not touched");
-        sh.prefs.set("a11y_voice_control", "1").unwrap();
-        sh.voice_control_tick(1000.0);
-        assert_eq!(*calls.lock().unwrap(), ["shell:voice-control start"], "switched on: a recognition starts");
-        sh.voice_control_tick(1100.0);
-        assert_eq!(calls.lock().unwrap().len(), 1, "no poll before the interval");
-        sh.voice_control_tick(1000.0 + accessibility::voice_control::POLL_MS);
-        assert_eq!(*calls.lock().unwrap(), ["shell:voice-control start", "shell:voice-control poll"]);
-        // the final transcript pressed the Software Update row, the hypothesis did nothing
-        assert_eq!(sh.settings.as_ref().expect("Settings opened").page(), super::pages::PageId::SoftwareUpdate);
-    }
-
-    #[test]
-    fn switching_voice_control_off_ends_the_recognition() {
+    fn the_shell_tick_runs_no_recognition_of_its_own_while_voice_control_is_on() {
+        // the recognizer service holds the one recognition (`services::recognizer`); the shell never starts, polls or stops one
         let (mut sh, calls) = voice_rig(false);
         sh.prefs.set("a11y_voice_control", "1").unwrap();
-        sh.voice_control_tick(1000.0);
+        for i in 0..8 {
+            sh.tick(1000.0 + i as f64 * 400.0);
+        }
+        assert!(calls.lock().unwrap().is_empty(), "no start, poll or stop from the shell: {:?}", calls.lock().unwrap());
         sh.prefs.set("a11y_voice_control", "0").unwrap();
-        sh.voice_control_tick(1100.0);
-        assert_eq!(*calls.lock().unwrap(), ["shell:voice-control start", "shell:voice-control stop"]);
-        sh.voice_control_tick(2000.0);
-        assert_eq!(calls.lock().unwrap().len(), 2, "off stays off");
+        sh.tick(5000.0);
+        assert!(calls.lock().unwrap().is_empty(), "switching it off stops nothing from the shell either");
     }
 
     #[test]
-    fn a_refused_recognition_is_announced_once_and_tried_again_later() {
-        let (mut sh, calls) = voice_rig(true);
-        sh.prefs.set("a11y_voice_control", "1").unwrap();
-        sh.voice_control_tick(1000.0);
-        assert!(sh.announce.tick(1000.0));
-        assert!(sh.announce.shown().is_some_and(|text| text.contains("Voice Control cannot listen")), "{:?}", sh.announce.shown());
-        sh.voice_control_tick(1500.0);
-        assert_eq!(calls.lock().unwrap().len(), 1, "no new attempt inside the pause");
-        sh.voice_control_tick(1000.0 + accessibility::voice_control::RETRY_MS);
-        assert_eq!(calls.lock().unwrap().len(), 2, "tried again after the pause");
+    fn the_shell_consumes_final_transcripts_the_recognizer_heard() {
+        use bifrost_ui::whisper::Transcript;
+        let mut sh = desktop_shell();
+        let heard = [
+            Transcript { text: "good morning".into(), is_final: true },
+            Transcript { text: "press os/settings/general/software-update.".into(), is_final: true },
+        ];
+        sh.voice_consume(&heard, 1000.0);
+        assert_eq!(sh.settings.as_ref().expect("Settings opened").page(), super::pages::PageId::SoftwareUpdate, "the command ran, the chatter did not");
+    }
+
+    #[test]
+    fn a_transcript_that_cannot_run_is_announced_and_a_non_command_is_silent() {
+        use bifrost_ui::whisper::Transcript;
+        let mut sh = desktop_shell();
+        let fx = sh.voice_consume(&[Transcript { text: "good morning".into(), is_final: true }], 1.0);
+        assert!(fx.is_empty());
+        assert!(!sh.announce.tick(1.0), "a sentence with no press verb says nothing");
+        sh.voice_consume(&[Transcript { text: "press os/no/such/element".into(), is_final: true }], 2.0);
+        assert!(sh.announce.tick(2.0));
+        assert!(sh.announce.shown().is_some_and(|t| t.contains("such")), "{:?}", sh.announce.shown());
     }
 
     #[test]

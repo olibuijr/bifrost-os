@@ -963,6 +963,13 @@ impl Settings {
         self.a11y = a;
     }
 
+    /// Replaces the accessibility settings and redraws the pages, for a change the shell made on its own (the
+    /// on-screen keyboard was closed, so the Accessibility Keyboard switch must show it).
+    pub(in crate::shell) fn refresh_accessibility(&mut self, ui: &Ui, a: AccessibilitySettings) {
+        self.a11y = a;
+        self.rebuild_visible(ui);
+    }
+
     /// Synchronizes a Control Centre Focus change while retaining the open page.
     pub(super) fn set_dnd(&mut self, ui: &Ui, on: bool) {
         self.opts.dnd = on;
@@ -3269,6 +3276,8 @@ impl Settings {
             Toggle::SwitchScan => flip(&mut self.a11y.switch_scan),
             Toggle::StickyKeys => flip(&mut self.a11y.sticky_keys),
             Toggle::MouseKeys => flip(&mut self.a11y.mouse_keys),
+            Toggle::AccessibilityKeyboard => flip(&mut self.a11y.accessibility_keyboard),
+            Toggle::InputMenu => flip(&mut self.opts.input_menu),
             Toggle::MotionCues => flip(&mut self.a11y.motion_cues),
             Toggle::SwitchControl => flip(&mut self.a11y.switch_control),
             Toggle::VoiceControl => flip(&mut self.a11y.voice_control),

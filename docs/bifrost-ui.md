@@ -5676,3 +5676,16 @@ Remaining gaps: the lazy graph and every filter are CPU only and no shell window
 there are no barcode generators, face or text detectors; the colour conversions ignore ICC profiles; RAW and HEIF input are not decoded;
 decoders do not parse the stream's own colour description (the attachments follow the height convention); the compositor has no selectable
 blend operator; Metal and IOSurface have no counterpart.
+||||||| e3beb52f0
+
+### Accessibility Keyboard and the Input menu (2026-10-19)
+
+- Settings > Accessibility > Keyboard > Accessibility Keyboard (`a11y_accessibility_keyboard`, off by default) opens the on-screen
+  keyboard on purpose: `Shell::accessibility_keyboard_tick` calls `keyboard_open_explicit` / `keyboard_close_explicit` when the
+  switch and the keyboard disagree (`shell/accessibility/onscreen_keyboard.rs`). The two stay in step: opening the keyboard from the
+  Input menu turns the switch on, and closing it (hide key, menu row) turns it off. A tablet that never uses the switch is untouched.
+- Settings > Keyboard > Input Sources > Show Input menu in menu bar (`show_input_menu`, `Options::input_menu`, off by default): the
+  menu bar's Input menu shows with several sources, while the on-screen keyboard is open, or with this switch
+  (`desktop_bar::input_menu_visible`), so Show Keyboard Viewer and Show On-Screen Keyboard are reachable with one source.
+- Voice Control: one recognition runs, in the `speech_recognizer` service's voice step; the shell only consumes its final transcripts
+  (`Shell::voice_consume`). `Shell::voice_control_tick` is gone.
