@@ -4,15 +4,15 @@
   "macos_since": "10.0",
   "status": "partial",
   "bifrost": "springboard/apps/daw/src/devices/ (built-in instruments and effects), springboard/audiod/src/main.rs (audio service)",
-  "summary": "Apple's Audio Unit framework hosts third-party AU v2 and v3 plug-ins and provides the AUAudioUnit subclassing API for plug-in extensions. BifrOSt has a pure plug-in host model and an extension point model (manifests, a registry and render-resource allocation), but it loads no third-party plug-in binary and starts no separate extension process. The DAW ships its own built-in instruments and effects as JavaScript plug-in directories, which are not Audio Units. The Apple page itself marks the framework as deprecated in favour of Audio Toolbox.",
+  "summary": "Apple's Audio Unit framework hosts third-party AU v2 and v3 plug-ins and provides the AUAudioUnit subclassing API for plug-in extensions. BifrOSt has a plug-in host model and an extension point model (manifests, a registry and render-resource allocation), and since 2026-10-19 an in-process loader for third-party units over its own C ABI (springboard/audio/units/src/plugin.rs), a sample-accurate sequencer unit and a General MIDI synth, but no AU binary compatibility and no separate extension process. The DAW ships its own built-in instruments and effects as JavaScript plug-in directories, which are not Audio Units. The Apple page itself marks the framework as deprecated in favour of Audio Toolbox.",
   "rea_evidence": "ev_3bf9c005e0da939facd73989466bcbdab9f09176783e42e4aeed3b6e830276e4",
   "features": [
     {
       "feature": "Hosting third-party AU v2 and v3 plug-ins",
       "apple": "AUAudioUnit, AudioUnit instantiation (Audio Unit framework landing page)",
-      "bifrost": "springboard/ui/src/plugin_host.rs (Instance, Instance::new, PluginVersion); springboard/ui/tests/parity_sdk-complete-43.rs",
+      "bifrost": "springboard/ui/src/plugin_host.rs (Instance, Instance::new, PluginVersion); springboard/ui/tests/parity_sdk-complete-43.rs; springboard/audio/units/src/plugin.rs (PluginLibrary::open, PluginUnit, scan_directory); springboard/audio/units/examples/gain_plugin.c; springboard/cmd/src/unitctl.rs (bifrost-unit scan)",
       "status": "partial",
-      "note": "A plug-in instance ties a render unit to its parameters, presets and buses, and both AUv2 and AUv3 versions are modelled; its parameters, presets and buses are tested headless in parity_sdk-complete-43.rs, and Instance itself is covered by the host unit tests. Gap: no code loads an external plug-in binary or starts an extension process, because this system has no plug-in loader, so the row needs that loader before it can go further."
+      "note": "Built 2026-10-19 (written without a build, tests unrun): an in-process plug-in loader. A shared library exports bifrost_unit_entry, which returns a C ABI table (UnitVTable, version 1); PluginLibrary::open dlopens it, reads the component description and parameters, and instantiate() gives a PluginUnit that is an ordinary AudioUnit (it goes in a UnitHost, an engine node or the out-of-process Worker). The host owns the parameter ramps (the plug-in gets param_start and param_end each block), MIDI arrives at frame offsets, render allocates nothing, and non-finite output is silenced. register_into adds the plug-in to the ComponentRegistry and scan_directory loads /usr/lib/bifrost/units and ~/.local/share/bifrost/units. Unit tests use in-process tables and a real dlopen of libm. The ABI is ours (no AU v2 or v3 binary compatibility) and no separate extension process is started; the DAW rack does not load plug-ins yet. Midget check: build the C example on Titan (same x86_64): `cc -shared -fPIC -O2 -o cgain.so springboard/audio/units/examples/gain_plugin.c`, copy cgain.so to Midget, run `bifrost-unit scan .` (expect `C Gain  effect  aufx/cgan/test  up to 2 channels  1 parameter` and a line for parameter 0 Main/Gain), then `bifrost-unit render ./cgain.so /tmp/g.wav` (peak 0.500) and `bifrost-unit render ./cgain.so --set 0=2 /tmp/g2.wav` (peak 1.000)."
     },
     {
       "feature": "Implementing AU v3 plug-in extensions",
@@ -31,43 +31,43 @@
     {
       "feature": "Built-in instruments",
       "apple": "Apple's built-in instrument Audio Units",
-      "bifrost": "springboard/apps/daw/src/devices/inst/, springboard/apps/daw/assets/plugins/celesta/index.js (sampled instruments via host.multisample)",
+      "bifrost": "springboard/apps/daw/src/devices/inst/, springboard/apps/daw/assets/plugins/celesta/index.js (sampled instruments via host.multisample); springboard/audio/units/src/synth.rs (GmSynth); springboard/audio/units/src/sequencer.rs (SequencerUnit)",
       "status": "partial",
-      "note": "instrument set is fixed; sample-based instruments load from plugin.json and zones.json folders"
+      "note": "Built 2026-10-19 (tests unrun): GmSynth, a 32-voice polyphonic General MIDI instrument that needs no sound bank (additive tone by program, drums on channel 10, volume, pan, expression, sustain pedal, pitch bend, all notes off), registered as aumu/gmsy/bfst, and SequencerUnit, which plays timed messages through any instrument sample-accurately. The DAW keeps its JavaScript instruments and the sampled ones (host.multisample); GmSynth is additive, not sampled. Midget check: `bifrost-unit render gm --note 69 /tmp/gm.wav` prints `2 channels, 96000 frames at 48000 Hz`, and `aplay /tmp/gm.wav` plays a 440 Hz tone that releases before the end; `bifrost-unit midi song.mid /tmp/song.wav` then `aplay /tmp/song.wav` plays a MIDI file."
     },
     {
       "feature": "Parameters and presets",
       "apple": "AudioUnitParameter, AUParameterTree, presets",
-      "bifrost": "springboard/apps/daw/src/devices/mod.rs, springboard/apps/daw/src/store.rs (plugin ids and params); wired: springboard/apps/daw/src/rack.rs, springboard/apps/daw/src/params.rs (tree_from_extra, write_back), springboard/apps/daw/src/main.rs (draw_rack, rack_slide, rack_save_preset, rack_load_preset); tests: springboard/apps/daw/tests/parity_wire.rs",
+      "bifrost": "springboard/apps/daw/src/devices/mod.rs, springboard/apps/daw/src/store.rs (plugin ids and params); wired: springboard/apps/daw/src/rack.rs, springboard/apps/daw/src/params.rs (tree_from_extra, write_back), springboard/apps/daw/src/main.rs (draw_rack, rack_slide, rack_save_preset, rack_load_preset); tests: springboard/apps/daw/tests/parity_wire.rs; springboard/audio/units/src/plugin.rs; springboard/audio/units/src/preset.rs (export_user, import_user); springboard/sdk/src/audio_unit_view.rs (UnitView)",
       "status": "partial",
-      "note": "Built-in devices expose a parameter tree with write-back, and presets are saved, applied and written to JSON, tested headless in daw tests parity_wire. Gap: external processors, with their parameter trees and presets, are not hosted, and the rack controls are checked only on the lab machine."
+      "note": "Built 2026-10-19 (tests unrun): a loaded plug-in declares its parameters in its table and they live in the host ParameterTree, so ramps, clamping, read-only flags and presets behave as for built-in units; PresetStore::export_user and import_user keep user presets in a text file; UnitView turns a ParamHandle into rows (log-taper slider, switch, pop-up, read-out) with value text, groups, drag, nudge, reset and preset selection. The DAW rack still uses its own parameter tree and hosts no external processors. Midget check: `bifrost-unit render gain /tmp/a.wav` prints peak 0.500 and `bifrost-unit render gain --set 0=2 /tmp/b.wav` prints peak 1.000 (the parameter set on the command line reaches the unit through its handle); `bifrost-unit scan <dir>` lists a plug-in's parameters with ranges and defaults."
     },
     {
       "feature": "Audio rendering and offline render",
       "apple": "AudioUnit render callbacks, offline render",
-      "bifrost": "springboard/apps/daw/src/playback.rs (Player renders to a cache), springboard/apps/daw/src/conv.rs (convolver)",
+      "bifrost": "springboard/apps/daw/src/playback.rs (Player renders to a cache), springboard/apps/daw/src/conv.rs (convolver); springboard/sdk/src/midi_player.rs (MidiPlayer::render, render_to_wav); springboard/audio/engine/src/engine.rs (Engine::render_offline); springboard/cmd/src/unitctl.rs (bifrost-unit render)",
       "status": "partial",
-      "note": "rendering is internal to the DAW and is not an app-facing render API"
+      "note": "Built 2026-10-19 (tests unrun): the audio engine renders any graph offline and deterministically, and the SDK exposes it with the unit model (bifrost_app::audio_engine and its units module); MidiPlayer::render and render_to_wav render sequenced MIDI with a WAV writer, and bifrost-unit renders a unit or a MIDI file from a shell. The DAW still renders inside the app (playback.rs, conv.rs). Midget check: `bifrost-unit render sine /tmp/s.wav` prints `/tmp/s.wav: 2 channels, 96000 frames at 48000 Hz, peak ...` and the file plays with `aplay /tmp/s.wav`."
     },
     {
       "feature": "System audio service",
       "apple": "Audio Unit host and Core Audio I/O (not a separate Apple feature row)",
-      "bifrost": "springboard/sdk/src/system_audio.rs (Command, AudioClient); springboard/audiod/src/main.rs (audio service owns speaker and microphone), springboard/src/media/speaker.rs (ALSA output through dl.rs)",
+      "bifrost": "springboard/sdk/src/system_audio.rs (Command, AudioClient); springboard/audiod/src/main.rs (audio service owns speaker and microphone), springboard/src/media/speaker.rs (ALSA output through dl.rs); springboard/proto/src/svc.rs (Cmd::SetPan, Cmd::FadeVolume, Cmd::SetRoute, Evt::Route); springboard/src/media/player_fx.rs; springboard/cmd/src/audioctl.rs (bifrost-audio)",
       "status": "partial",
-      "note": "The SDK client checks each command before it is sent (volume, seek, queue sources, recording path) and frames it in the service's wire format; tested over a socket pair in springboard/sdk/tests/parity_sdk-rest-16.rs. Gap: no app uses the client yet, and the round trip against audiod has not run on Midget."
+      "note": "Built 2026-10-19 (tests unrun): audiod applies stereo pan and timed volume fades (new commands SetPan and FadeVolume; Command::pan and Command::fade_volume in the SDK; the gain is ramped across each block and the state volume follows the fade) and reports the output route (the shell sends Cmd::SetRoute, subscribers get Evt::Route). bifrost-audio is a command-line client of the service. The earlier SDK client checks (volume, seek, queue, recording path) are unchanged. No app uses system_audio.rs yet and the round trip has not run on Midget. Midget check: with a song playing in Music run `bifrost-audio status`, `bifrost-audio pan -1` (sound only from the left speaker), `bifrost-audio pan 0`, `bifrost-audio fade 0 3000` (the volume falls to 0 over 3 s; `bifrost-audio status` shows it falling) and `bifrost-audio volume 0.6`."
     },
     {
       "feature": "MIDI input and note data",
       "apple": "MIDI events delivered to instrument units",
-      "bifrost": "springboard/ui/src/midi_events.rs; springboard/sdk/src/midi.rs (hub, events, ump); wired: springboard/apps/daw/src/midi_file.rs, springboard/apps/daw/src/midi.rs; tests: springboard/ui/tests/parity_sdk-complete-17.rs, springboard/sdk/tests/parity_sdk-complete-17.rs",
+      "bifrost": "springboard/ui/src/midi_events.rs; springboard/sdk/src/midi.rs (hub, events, ump); wired: springboard/apps/daw/src/midi_file.rs, springboard/apps/daw/src/midi.rs; tests: springboard/ui/tests/parity_sdk-complete-17.rs, springboard/sdk/tests/parity_sdk-complete-17.rs; springboard/sdk/src/midi_client.rs (MidiClient); springboard/audio/midid/src/server.rs; springboard/audio/midi/src/broker.rs; springboard/audio/midi/src/wire.rs; springboard/cmd/src/midictl.rs (bifrost-midi)",
       "status": "partial",
-      "note": "The MIDI 1.0 parser, encoder and sustain pedal tracker, the shared routing hub and UMP conversion are tested headless, and the DAW records and schedules notes through them. Gap: no device is opened in this repository, so a real keyboard is checked only on the lab machine."
+      "note": "Built 2026-10-19 (tests unrun): devices are reachable from apps. bifrost-midid serves a unix socket (bifrost_midi::wire frames over bifrost_midi::broker) with rawmidi input, new rawmidi output and hotplug notifications; MidiClient lists devices, sources and destinations, connects sources, receives timestamped UMP packets in order, sends packets or MIDI 1.0 bytes, and SysexCollector joins system exclusive. The DAW still uses its own midi.rs and midi_file.rs; the MIDI 1.0 parser, encoder and sustain tracker stay as before. Midget check: attach a USB MIDI keyboard, `systemctl status bifrost-midid` (active), `bifrost-midi list` (the keyboard with a source id), `bifrost-midi monitor 20` and press keys: lines `NS name 2090XXYY` with growing stamps, note-off 2080...."
     }
   ],
   "gaps": [
-    "No plug-in host for AU v2 or v3, and no way to load third-party audio processors into the DAW or any app.",
-    "No app-facing audio unit or render API; the DAW's rendering and devices are internal.",
-    "No MIDI input or MIDI event API.",
-    "The audio service (springboard/audiod) has an SDK client (springboard/sdk/src/system_audio.rs), but no app uses it yet."
+    "Plug-ins load in-process through our own C ABI (springboard/audio/units/src/plugin.rs); there is no AU v2 or v3 binary compatibility and no extension process, and the DAW rack does not load them yet.",
+    "The unit and render API is bifrost_app::audio_engine (Engine and its units module); the DAW still renders and runs its devices internally.",
+    "MIDI input for apps is bifrost_app::midi_client; the DAW still uses its own MIDI path.",
+    "The audio service (springboard/audiod) has an SDK client (springboard/sdk/src/system_audio.rs) and a command-line client (bifrost-audio), but no app uses the SDK client yet."
   ]
 }

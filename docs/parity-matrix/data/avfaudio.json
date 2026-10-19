@@ -10,9 +10,9 @@
     {
       "feature": "Audio session (AVAudioSession)",
       "apple": "AVAudioSession: setCategory, setMode, setActive, activate/deactivate",
-      "bifrost": "springboard/sdk/src/audio_session.rs (bifrost_app::audio_session::SessionHub, pure model)",
+      "bifrost": "springboard/sdk/src/audio_session.rs (bifrost_app::audio_session::SessionHub, pure model); springboard/sdk/src/audio_session.rs (SessionHub::apply_service_route, apply_service_routes)",
       "status": "partial",
-      "note": "category, mode, options (mixWithOthers, duckOthers), setActive and interruption began/ended with shouldResume modelled; not wired to audiod yet, needs a Midget check"
+      "note": "Built 2026-10-19 (tests unrun): the route the shell reports now reaches the session hub (Cmd::SetRoute to audiod, Evt::Route to subscribers, audio::Client::take_route_changes, SessionHub::apply_service_route). Category, mode, options, activation and interruptions are still the local pure model, not arbitrated in audiod. Midget check: run `bifrost-audio watch 30` and plug and unplug headphones: it prints `route headphones (a device appeared)` and `route speaker (a device went away)`."
     },
     {
       "feature": "Audio application and recording permission",
@@ -31,9 +31,9 @@
     {
       "feature": "Route changes",
       "apple": "AVAudioSession route-change notifications, routing to specific devices",
-      "bifrost": "springboard/sdk/src/audio_session.rs (SessionHub::set_route, RouteChange events); springboard/src/media/route.rs (jack, Route::Speaker and Route::Headphones); springboard/src/shell/mod.rs:1318; springboard/src/shell/volume_hud.rs",
+      "bifrost": "springboard/sdk/src/audio_session.rs (SessionHub::set_route, RouteChange events); springboard/src/media/route.rs (jack, Route::Speaker and Route::Headphones); springboard/src/shell/mod.rs:1318; springboard/src/shell/volume_hud.rs; springboard/proto/src/svc.rs (Cmd::SetRoute, Evt::Route); springboard/src/shell/mod.rs (Shell::set_route); springboard/audiod/src/main.rs; springboard/src/svc.rs (Client::take_route_changes); springboard/cmd/src/audioctl.rs",
       "status": "partial",
-      "note": "Route change events with the previous route, the override rules and currentRoute are tested in audio_session's unit tests. Gap: the shell does not post these events from its card switches yet, so apps see no real route change, and the model has no device choice beyond the preferred input."
+      "note": "Built 2026-10-19 (tests unrun): wired end to end. Shell::set_route sends Cmd::SetRoute { headphones, reason } to audiod (also after every service reconnect), audiod keeps the route and pushes Evt::Route to its subscribers and to each new subscriber, and an app feeds it to its SessionHub with audio_session::apply_service_routes, getting RouteChange with the reason (1 a device appeared, 2 it went away). The model still has no device choice beyond the preferred input, and the shell reports only jack and route-picker changes, not Bluetooth sinks. Midget check: `bifrost-audio watch 30`, then plug the headset into the jack (or pick Headphones in Control Center) and unplug it: each change prints a `route ...` line."
     },
     {
       "feature": "AirPods automatic switching (AVAudioRoutingArbiter)",
@@ -45,9 +45,9 @@
     {
       "feature": "Basic playback (AVAudioPlayer)",
       "apple": "AVAudioPlayer: play, pause, stop, volume, pan, rate, loops, currentTime, duration",
-      "bifrost": "springboard/audiod/src/main.rs; springboard/src/media/audioplayer.rs (Track::file, Track::live); springboard/sdk/src/lib.rs:88; springboard/proto/src/svc.rs (Cmd::PlayQueue, Play, Pause, SeekMs, SetVolume); wired: springboard/apps/voicememos-desktop/src/voicememos.rs (volume_at, draw_volume); rate and pan not wired; springboard/sdk/src/audio_player_control.rs (bifrost_app::audio_player_control::PlayerControl, pure model); springboard/sdk/tests/parity_sdk-complete-29.rs",
+      "bifrost": "springboard/audiod/src/main.rs; springboard/src/media/audioplayer.rs (Track::file, Track::live); springboard/sdk/src/lib.rs:88; springboard/proto/src/svc.rs (Cmd::PlayQueue, Play, Pause, SeekMs, SetVolume); wired: springboard/apps/voicememos-desktop/src/voicememos.rs (volume_at, draw_volume); rate and pan not wired; springboard/sdk/src/audio_player_control.rs (bifrost_app::audio_player_control::PlayerControl, pure model); springboard/sdk/tests/parity_sdk-complete-29.rs; springboard/src/media/player_fx.rs (pan, Fade, ramp); springboard/src/media/audioplayer.rs (set_pan, fade_volume); springboard/proto/src/svc.rs (Cmd::SetPan, Cmd::FadeVolume); springboard/sdk/src/system_audio.rs (Command::pan, Command::fade_volume)",
       "status": "partial",
-      "note": "queue, transport, seek, volume and mute reach apps; the player model clamps pan (-1 to 1) and rate (0.5 to 2.0), runs linear volume fades and cancels them on a direct volume set, and is tested headless. Gap: audiod does not apply pan, rate or fades yet, and the UI wires only volume, so the playback check needs the lab machine."
+      "note": "Built 2026-10-19 (tests unrun): pan and volume fades reach the speaker. audiod applies Cmd::SetPan (a balance: the far channel falls to silence) and Cmd::FadeVolume (the gain is ramped across each block, the state volume follows, SetVolume cancels) in media/audioplayer.rs through media/player_fx.rs; Client::set_pan and fade_volume and Command::pan and fade_volume expose them; the rate was already time-stretched. The player is one shared player and the UI wires only volume. Midget check: play a song in Music, then `bifrost-audio pan -1` (left speaker only), `bifrost-audio pan 0`, `bifrost-audio fade 0 3000` (fades out over 3 s) and `bifrost-audio status` (the volume follows the fade)."
     },
     {
       "feature": "Basic recording (AVAudioRecorder)",
@@ -59,16 +59,16 @@
     {
       "feature": "MIDI playback (AVMIDIPlayer)",
       "apple": "AVMIDIPlayer with a sound bank",
-      "bifrost": "springboard/core/src/smf.rs; wired: springboard/apps/daw/src/midi_file.rs (import_notes), springboard/core/src/smf.rs; wired: springboard/apps/music-desktop/src/music/library.rs (scan_midi, Song::is_midi) reading springboard/core/src/smf.rs; listed and timed, not played (no sound bank); wired: springboard/core/src/midi_synth.rs (Renderer, render); springboard/src/media/audiofile.rs (Midi, is_midi, dispatch in open); springboard/apps/music-desktop/src/music.rs (play_songs no longer filters MIDI)",
+      "bifrost": "springboard/core/src/smf.rs; wired: springboard/apps/daw/src/midi_file.rs (import_notes), springboard/core/src/smf.rs; wired: springboard/apps/music-desktop/src/music/library.rs (scan_midi, Song::is_midi) reading springboard/core/src/smf.rs; listed and timed, not played (no sound bank); wired: springboard/core/src/midi_synth.rs (Renderer, render); springboard/src/media/audiofile.rs (Midi, is_midi, dispatch in open); springboard/apps/music-desktop/src/music.rs (play_songs no longer filters MIDI); springboard/sdk/src/midi_player.rs (MidiPlayer); springboard/audio/units/src/sequencer.rs (SequencerUnit); springboard/audio/units/src/synth.rs (GmSynth); springboard/cmd/src/unitctl.rs (bifrost-unit midi)",
       "status": "partial",
-      "note": "Wave 6 (b11, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no MIDI sequencing or soundbank playback in the SDK or audiod Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+      "note": "Built 2026-10-19 (tests unrun): MidiPlayer plays a Standard MIDI File through the General MIDI synth (no sound bank) or any instrument unit in an Engine, sequenced sample-accurately inside the render callback (SequencerUnit: play, pause, stop, seek, loop region, rate 0.25 to 4, position, held notes released on pause, seek and loop wrap); render_to_wav renders the file offline. The Music app still lists .mid files and plays them through the older media/audiofile path, and the synth is additive, not sampled. Midget check: `bifrost-unit midi song.mid /tmp/song.wav` then `aplay /tmp/song.wav` plays the file."
     },
     {
       "feature": "Audio engine graph (AVAudioEngine)",
       "apple": "AVAudioEngine: attach nodes, connect, mixer, input and output nodes, real-time render",
-      "bifrost": "springboard/ui/src/audio_engine.rs (AudioEngine, attach_low_pass); springboard/ui/tests/parity_sdk-complete-45.rs",
+      "bifrost": "springboard/ui/src/audio_engine.rs (AudioEngine, attach_low_pass); springboard/ui/tests/parity_sdk-complete-45.rs; springboard/audio/engine/src/lib.rs (units re-export); springboard/audio/units/src/sequencer.rs; springboard/audio/units/src/plugin.rs",
       "status": "partial",
-      "note": "Wave 4 (theme-06, parity/integration 0925691e): pure model with host unit tests, now including a one-pole low-pass node that filters each channel, tested headless in parity_sdk-complete-45.rs. Not wired into apps or the shell, not yet tested on the VM or Midget. The DAW renders offline inside the app and no node graph API is exposed; speaker.rs writes through libasound's default PCM Refreshed 2026-10-17: node graph in ui audio_engine.rs (attach, connect, detach); tests audio_engine::tests. Real-time output on Midget is not verified."
+      "note": "Built 2026-10-19 (tests unrun): the graph itself (audio/engine: player, mixer, unit nodes, taps, offline and device rendering, re-exported as bifrost_app::audio_engine) was already real; it now hosts loaded plug-ins and sequenced instruments as nodes, and the engine re-exports the unit model (bifrost_app::audio_engine::units). The old ui/src/audio_engine.rs model is superseded. Real-time output on a device through the HAL is not verified. Midget check: `bifrost-unit render gm --note 60 /tmp/n.wav` (an instrument node) and `bifrost-unit render gain /tmp/g.wav` (a player node into an effect node) each build and render an engine graph offline and print the channel count, frames and peak."
     },
     {
       "feature": "Speech synthesis (AVSpeechSynthesizer)",
@@ -101,11 +101,11 @@
   ],
   "gaps": [
     "No app-facing audio session category, mode or activation API (AVAudioSession): modelled in audio_session.rs, not wired to audiod",
-    "No interruption or route-change notifications reaching apps: modelled in audio_session.rs, not wired to the shell or audiod",
+    "Route changes reach apps (shell, audiod, audio::Client, SessionHub::apply_service_route); interruptions are modelled in audio_session.rs and not arbitrated in audiod.",
     "AVAudioApplication permission and input mute: modelled in audio_application.rs, not wired to the shell or the recording path",
     "The node graph (ui audio_engine.rs: player, gain, mixer and low-pass nodes, exposed as bifrost_sdk::audio_engine) has no verified real-time output path on Midget.",
-    "No MIDI playback (AVMIDIPlayer) or sound bank support in the SDK or audiod",
+    "MIDI playback is bifrost_app::midi_player through the additive General MIDI synth; there is no sound bank or sampled instrument.",
     "Speech synthesis has no word or sentence events, pitch or volume control, and no delegate callbacks; the shell speech service (espeak-ng) is the only engine",
-    "AVAudioPlayer pan, playback rate and volume fade: modelled in audio_player_control.rs, not applied by audiod"
+    "AVAudioPlayer pan and volume fade are applied by audiod (the UI wires only volume); rate was already applied."
   ]
 }
