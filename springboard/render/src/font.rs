@@ -1408,7 +1408,8 @@ mod run_cache_tests {
         let plain = Font::parse(&data).unwrap();
         let gid = plain.glyph('A');
         assert!(gid != 0);
-        let doc = r##"<svg xmlns="http://www.w3.org/2000/svg"><rect x="0" y="-500" width="400" height="500" fill="#ff0000"/></svg>"##;
+        // the document is in font units: cover the glyph's ascent box (SFUI: 2048 per em, 1984 ascent)
+        let doc = r##"<svg xmlns="http://www.w3.org/2000/svg"><rect x="0" y="-1984" width="2048" height="1984" fill="#ff0000"/></svg>"##;
         let coloured_data = with_svg_table(&data, &svg_table_for(gid, doc));
         let coloured = Font::parse(&coloured_data).unwrap();
         assert!(coloured.svg.is_some(), "the table is read");
