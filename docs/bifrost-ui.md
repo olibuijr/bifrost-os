@@ -5596,3 +5596,17 @@ An installed app can provide an extension and another can use it. Wired path, fi
   SDP, OBEX, Matter, GeoJSON, code requirements, surface registry, serial lines and others) are re-exported from `bifrost_app`.
 - **Left open this wave**: Matter (the secure channel and commissioning transports are a whole engine) and MediaIntelligence (no
   open face model). MatterSupport is n/a (an ecosystem app extension point).
+
+## Files app: permissions, date and scope search terms (parity wave 15, 2026-10-19)
+
+App-level work in `springboard/apps/files` (parity rows in `docs/parity-matrix/apps/finder.json`).
+
+- **Edit permissions in Get Info (Finder "Sharing & Permissions")**: `perms.rs`. Get Info shows a 3 by 3 grid (Owner, Group,
+  Everyone else by Read, Write, Execute) under the rows; a click flips that mode bit with `chmod` (`set_mode`, `toggled`), only
+  when the person owns the item or is root (`can_edit`). One Cmd+Z puts the old mode back (`Undo::Mode`, label Permissions).
+  Gap left open: changing owner and group needs a privilege prompt and Files has no polkit client, so those rows stay read-only;
+  access control lists are not offered.
+- **Search terms `date:` and `in:`**: `search.rs` `parse_terms` takes `date:today|yesterday|week|month|year` (hits are kept when
+  their change date falls in the span, counted in whole days, `DateTerm::matches`) and `in:folder|home|disk` (where the search
+  starts, `Scope::root`). They combine with `kind:` and `tag:`; an unknown value stays one of the name words. Gap: the terms are
+  typed, there are no token chips, date picker or scope bar in the search field yet.
