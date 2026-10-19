@@ -914,6 +914,7 @@ pub mod graphics_stroke;
 pub mod graphics_gradient;
 pub mod graphics_color;
 pub mod graphics_pdf;
+pub mod graphics_quartz_filter;
 pub mod graphics_pattern;
 pub mod graphics_layer;
 pub mod graphics_imageio;
