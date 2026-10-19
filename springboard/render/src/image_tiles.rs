@@ -167,9 +167,132 @@ impl<P> TileCache<P> {
     }
 }
 
+/// The pixels of `tile` cut out of `image`. None when the tile reaches outside the picture.
+pub fn crop_tile(image: &crate::gfx::Image, tile: Tile) -> Option<crate::gfx::Image> {
+    if tile.w == 0 || tile.h == 0 || tile.x.checked_add(tile.w)? > image.w || tile.y.checked_add(tile.h)? > image.h {
+        return None;
+    }
+    let mut out = crate::gfx::Image::new(tile.w, tile.h);
+    for row in 0..tile.h {
+        let from = (tile.y + row) * image.w + tile.x;
+        out.px[row * tile.w..(row + 1) * tile.w].copy_from_slice(&image.px[from..from + tile.w]);
+    }
+    Some(out)
+}
+
+/// A decoded picture served in tiles: the pixel source behind a [`TileCache`]. A viewer asks for the region on screen
+/// with [`TiledPicture::region`]; tiles it has not asked for before are cut from the picture, tiles it asked for
+/// recently come from the cache, and the cache holds at most `capacity` tiles. The picture is decoded once up front
+/// (the codecs decode a whole picture), so the cache bounds what a viewer holds in drawable form, not the decode.
+pub struct TiledPicture {
+    image: crate::gfx::Image,
+    grid: TileGrid,
+    cache: TileCache<crate::gfx::Image>,
+    loads: usize,
+}
+
+impl TiledPicture {
+    /// Cuts `image` into tiles of `tile_edge` pixels, keeping `capacity` of them. None for an empty picture, a zero
+    /// edge or a zero capacity.
+    pub fn new(image: crate::gfx::Image, tile_edge: usize, capacity: usize) -> Option<TiledPicture> {
+        let grid = TileGrid::new(image.w, image.h, tile_edge, tile_edge)?;
+        Some(TiledPicture { image, grid, cache: TileCache::new(capacity)?, loads: 0 })
+    }
+
+    /// Decodes picture file bytes (any format the codecs read) and tiles the result.
+    pub fn from_bytes(bytes: &[u8], tile_edge: usize, capacity: usize) -> Option<TiledPicture> {
+        TiledPicture::new(crate::cg::imageio::decode(bytes)?, tile_edge, capacity)
+    }
+
+    pub fn grid(&self) -> &TileGrid {
+        &self.grid
+    }
+
+    /// How many tiles were cut from the picture so far (a tile served from the cache does not count).
+    pub fn loads(&self) -> usize {
+        self.loads
+    }
+
+    /// The tile at `col`, `row`, from the cache or cut from the picture. None outside the grid.
+    pub fn tile(&mut self, col: usize, row: usize) -> Option<&crate::gfx::Image> {
+        let t = self.grid.tile(col, row)?;
+        let (image, loads) = (&self.image, &mut self.loads);
+        self.cache.get_or_load(t, |t| {
+            *loads += 1;
+            crop_tile(image, t)
+        })
+    }
+
+    /// The tiles that cover the region `x`, `y`, `w`, `h` of the picture, each with its pixels, row by row.
+    pub fn region(&mut self, x: usize, y: usize, w: usize, h: usize) -> Vec<(Tile, crate::gfx::Image)> {
+        let wanted = self.grid.covering(x, y, w, h);
+        wanted.into_iter().filter_map(|t| self.tile(t.col, t.row).cloned().map(|img| (t, img))).collect()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn numbered(w: usize, h: usize) -> crate::gfx::Image {
+        let mut im = crate::gfx::Image::new(w, h);
+        for (i, p) in im.px.iter_mut().enumerate() {
+            *p = i as u32;
+        }
+        im
+    }
+
+    #[test]
+    fn a_tile_is_the_picture_cut_at_its_place_and_nothing_outside_the_picture() {
+        let im = numbered(10, 6);
+        let t = Tile { col: 1, row: 0, x: 4, y: 1, w: 3, h: 2 };
+        let c = crop_tile(&im, t).unwrap();
+        assert_eq!((c.w, c.h), (3, 2));
+        assert_eq!(c.px, vec![14, 15, 16, 24, 25, 26]);
+        assert!(crop_tile(&im, Tile { col: 0, row: 0, x: 8, y: 0, w: 3, h: 1 }).is_none(), "past the right edge");
+        assert!(crop_tile(&im, Tile { col: 0, row: 0, x: 0, y: 0, w: 0, h: 1 }).is_none());
+    }
+
+    #[test]
+    fn a_tiled_picture_serves_the_region_and_remembers_the_tiles() {
+        let mut p = TiledPicture::new(numbered(300, 200), 128, 4).unwrap();
+        assert_eq!(p.grid().count(), 6);
+        let hit = p.region(120, 0, 20, 1);
+        assert_eq!(hit.iter().map(|(t, _)| t.col).collect::<Vec<_>>(), vec![0, 1]);
+        assert_eq!(p.loads(), 2);
+        // the pixel at picture (130, 0) is the first one of tile column 1 plus two
+        assert_eq!(hit[1].1.px[2], 130);
+        let again = p.region(120, 0, 20, 1);
+        assert_eq!(again.len(), 2);
+        assert_eq!(p.loads(), 2, "tiles that were held are not cut again");
+    }
+
+    #[test]
+    fn the_cache_bounds_the_tiles_held_and_evicts_the_oldest() {
+        let mut p = TiledPicture::new(numbered(300, 200), 128, 2).unwrap();
+        for col in 0..3 {
+            assert!(p.tile(col, 0).is_some());
+        }
+        assert_eq!(p.loads(), 3);
+        assert!(p.tile(2, 0).is_some() && p.tile(1, 0).is_some());
+        assert_eq!(p.loads(), 3, "the two newest are still held");
+        assert!(p.tile(0, 0).is_some());
+        assert_eq!(p.loads(), 4, "the oldest had gone and is cut again");
+        assert!(p.tile(3, 0).is_none() && p.tile(0, 2).is_none(), "outside the grid");
+    }
+
+    #[test]
+    fn a_picture_file_is_decoded_and_tiled_and_bad_input_is_refused() {
+        let bytes = crate::cg::imageio::tests::png_bytes(9, 5, [10, 20, 30, 255]);
+        let mut p = TiledPicture::from_bytes(&bytes, 4, 8).unwrap();
+        assert_eq!((p.grid().columns(), p.grid().rows()), (3, 2));
+        let (t, im) = p.region(8, 4, 1, 1).remove(0);
+        assert_eq!((t.w, t.h, im.w, im.h), (1, 1, 1, 1), "the corner tile is cut short");
+        assert_eq!(im.px[0], crate::gfx::rgba(10, 20, 30, 255));
+        assert!(TiledPicture::from_bytes(b"not a picture", 4, 8).is_none());
+        assert!(TiledPicture::new(numbered(4, 4), 0, 8).is_none());
+        assert!(TiledPicture::new(numbered(4, 4), 4, 0).is_none());
+    }
 
     #[test]
     fn grid_counts_round_up_at_the_edges() {
