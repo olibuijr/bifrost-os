@@ -6033,3 +6033,20 @@ Gaps: Dictionary find does not match a phrase wrapped over two lines, and there 
 Meter's Generic RGB is still a 1.8 gamma on sRGB primaries. Disk Utility has no Image from Device (a root copy into a user-chosen
 file needs the privileged daemon to receive an open file descriptor, not a path), no Change Password for encrypted images, no Scan
 Image for Restore, no restore progress bar, and Get Info is still a sheet. Code only: not built or run, not verified on Midget.
+
+## Calendar: pointer drags, the view time zone, typed dates, colours, invitees, Birthdays and the printed grid (`calendar-desktop`, wave 15 part two)
+
+| Ours | Apple | Notes |
+|---|---|---|
+| `App::wants_touch_events` + `touches` in `main.rs`, `Calendar::set_pointer`, `drag.rs` | `NSEvent` mouse drag against a touch on a view | A finger holds 250 ms before it drags in the hour grid; a mouse or trackpad (`TouchType::Indirect`) drags once it has moved 4 points. The shell makes the wheel as a press and a burst of moves (Wayland axis: press, move +16 ms, lift +32 ms), and an app cannot tell that from a hand, so a move within 30 ms of its press scrolls. Gap: the shell should mark the touch a wheel notch makes (a distinct touch type) so this heuristic can go. |
+| `drag::Kind::AllDay` | dragging an all-day event between days | An all-day event in the band above the hours moves to the day under the pointer and is saved (the whole series for a repeating event). |
+| `viewzone.rs`, `Calendar::set_view_zone`, toolbar Time Zone button, View > Time Zone | the event's time zone popup and the toolbar's time zone override | Timed events are shown on the chosen zone's clock (`zones::convert_clock`) in the Day, Week and month views, the agenda and the print; all-day events keep their day; a moved or resized block is saved on the event's own clock. The choice is kept in `calendar-prefs.txt` (`view_zone`). |
+| Settings > Day Ends at, Show Days per Week, `Prefs::week_view_start`, `Prefs::off_hour` | Calendar Settings > General: day starts and ends, days per week | The Week view shows 1 to 7 days (a five day week starting on Sunday is Monday to Friday); the hours outside the working day are shaded. |
+| `goto::read_date` and the Date row of Go to Date | `NSDatePicker` text field style | `2026-12-24`, `24.12.2026`, `24 Dec`, `December 24 2027`, `tomorrow`, `next Friday`; what is typed moves the steppers. Gap: no month-grid picker. |
+| File > Calendar Colour, `colours.rs`, `overlay::PALETTE` | calendar colour in Get Info | Nine named system colours (no red: that is the today marker and the destructive colour); a check mark on the pick; kept in `calendar-extras.txt`. |
+| The Add Invitees row, `inviting.rs`, `birthdays::book` and `suggest` | `CNContactPicker` autocomplete in the invitee field, iTIP invitations | Matches come from the address book Contacts keeps (name or address, three at most); the event keeps up to 20 invitees; Save writes a `METHOD:REQUEST` (organiser: the account's address) to `itip-requests/` and opens it in Mail. Gap: no CalDAV scheduling PUT. |
+| `birthdays.rs`, the Birthdays row, Settings > Default Birthday Alert | the Birthdays calendar | Read-only all-day items from the cards' birthdays (`details.txt`); alerts at 09:00 planned through the alert service; never written to `calendar.ics`. Gap: the files are read, not a Contacts service query. |
+| `printgrid.rs`, `Calendar::print_pages` | `NSPrintOperation` on the calendar view | The month table, the week and day columns on an hourly grid, and the year as twelve small months, drawn as PDF content for a landscape page with Helvetica and Helvetica-Bold (WinAnsi). Gap: one page per range, no paper sheet. |
+
+Code only: not built or run, not verified on Midget. The toolbar gains a Time Zone button and the calendar list a Birthdays row, so the
+compliance snapshots of the calendar need a re-bless on Midget.

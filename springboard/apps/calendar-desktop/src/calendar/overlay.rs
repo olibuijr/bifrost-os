@@ -1,6 +1,7 @@
 //! Read-only calendars shown beside the saved events: the bundled holidays (slot 0) and the subscribed calendars
 //! (slots 1 and up, in the order they were added). Their events are worked out for the years around the shown one, get
 //! ids that cannot collide with a saved event's, and are never written to the event store.
+use super::birthdays;
 use super::exchange::occurrences;
 use super::extras;
 use super::holidays;
@@ -12,6 +13,7 @@ use super::rsvp;
 use super::store::CalendarEvent;
 use super::{chrome, Calendar, Date};
 use bifrost_app::kit::colors;
+use std::borrow::Cow;
 
 /// The calendar list's rows: the saved events, the holidays, and the subscriptions from `LAYER_SUBS` up. The calendars
 /// the user made take `LAYER_CAL` plus their id (`extras::MAX_CALENDARS` is the highest).
@@ -21,6 +23,8 @@ pub const LAYER_SUBS: u32 = 10;
 pub const LAYER_CAL: u32 = 40;
 /// View > Show Reminders (a switch of the same kind as the calendar list rows).
 pub const LAYER_REMINDERS: u32 = 3;
+/// The Birthdays row of the calendar list (the birthdays of the cards in Contacts, `birthdays.rs`).
+pub const LAYER_BIRTHDAYS: u32 = 4;
 /// The calendar slot of the Reminders items: far above the holidays (0) and the subscriptions.
 pub const REMINDER_SLOT: usize = 1 << 19;
 
@@ -45,16 +49,40 @@ pub fn slot_of(id: u64) -> usize {
     (id.saturating_sub(BASE_ID) / SLOT) as usize
 }
 
-/// The colour of the calendar in `slot`: its dot in the calendar list and its events.
+/// The colours a calendar can be given (File > Calendar Colour), by name. The first six are the ones the holidays and the
+/// subscribed calendars cycle through, so a calendar's saved colour number keeps its meaning; blue is the accent the
+/// built-in calendar has, then brown and grey. There is no red: it belongs to the today marker and to destructive actions.
+pub const PALETTE: [&str; 9] = ["Green", "Orange", "Purple", "Pink", "Teal", "Indigo", "Blue", "Brown", "Gray"];
+
+/// The number of `PALETTE` entry that is blue.
+pub const BLUE: u8 = 6;
+
+/// The name of palette colour `i` (the first one for a number past the end).
+pub fn palette_name(i: u8) -> &'static str {
+    PALETTE.get(i as usize).copied().unwrap_or(PALETTE[0])
+}
+
+/// Palette colour `i` for the current appearance (the first one for a number past the end).
+pub fn palette_colour(i: u8) -> u32 {
+    match i {
+        1 => colors::SYSTEM_ORANGE.now(),
+        2 => colors::SYSTEM_PURPLE.now(),
+        3 => colors::SYSTEM_PINK.now(),
+        4 => colors::SYSTEM_TEAL.now(),
+        5 => colors::SYSTEM_INDIGO.now(),
+        6 => colors::SYSTEM_BLUE.now(),
+        7 => colors::SYSTEM_BROWN.now(),
+        8 => colors::SYSTEM_GRAY.now(),
+        _ => colors::SYSTEM_GREEN.now(),
+    }
+}
+
+/// The colour of the calendar in `slot`: its dot in the calendar list and its events. The birthdays are pink.
 pub fn colour(slot: usize) -> u32 {
-    [
-        colors::SYSTEM_GREEN.now(),
-        colors::SYSTEM_ORANGE.now(),
-        colors::SYSTEM_PURPLE.now(),
-        colors::SYSTEM_PINK.now(),
-        colors::SYSTEM_TEAL.now(),
-        colors::SYSTEM_INDIGO.now(),
-    ][slot % 6]
+    if slot == super::birthdays::BIRTHDAY_SLOT {
+        return palette_colour(3);
+    }
+    palette_colour((slot % 6) as u8)
 }
 
 /// The holidays of the years `first..=last` as all-day events.
@@ -101,9 +129,14 @@ pub fn ics_events(text: &str, slot: usize, from: Date, to: Date) -> Vec<Calendar
 
 impl Calendar {
     /// The events the grids show: the saved ones (unless the Calendar row of the calendar list is off), then the
-    /// read-only ones of the calendars that are on.
-    pub(super) fn shown_events(&self) -> impl Iterator<Item = &CalendarEvent> + '_ {
-        self.events.iter().filter(move |e| self.local_shown(e.id) && (self.prefs.show_declined || !self.declined.contains(&e.id))).chain(self.overlay.iter())
+    /// read-only ones of the calendars that are on. With a view time zone (`viewzone.rs`) each timed event is moved to
+    /// that zone's clock; the others are the stored events themselves.
+    pub(super) fn shown_events(&self) -> impl Iterator<Item = Cow<'_, CalendarEvent>> + '_ {
+        self.events
+            .iter()
+            .filter(move |e| self.local_shown(e.id) && (self.prefs.show_declined || !self.declined.contains(&e.id)))
+            .chain(self.overlay.iter())
+            .map(move |e| self.in_view(e))
     }
 
     /// Works out which saved events the account declined, once per change of the saved events (their count is the key;
@@ -136,12 +169,13 @@ impl Calendar {
         }
     }
 
-    /// The colour of a saved calendar: the accent for the built-in one, else the calendar's palette colour.
+    /// The colour of a saved calendar: its palette colour (File > Calendar Colour), or the accent for the built-in
+    /// calendar until it is given one.
     pub(super) fn calendar_colour(&self, cal: u32) -> u32 {
         if cal == extras::DEFAULT_CALENDAR {
-            return chrome::cal_colour();
+            return self.extras.builtin_colour.map_or_else(chrome::cal_colour, palette_colour);
         }
-        self.extras.calendars.iter().find(|c| c.id == cal).map_or_else(chrome::cal_colour, |c| colour(c.colour as usize))
+        self.extras.calendars.iter().find(|c| c.id == cal).map_or_else(chrome::cal_colour, |c| palette_colour(c.colour))
     }
 
     /// Whether event `e` falls on `d`. A custom repeat rule is worked out here; the presets are `CalendarEvent::occurs_on`.
@@ -171,6 +205,9 @@ impl Calendar {
                 events.extend(reminders::overlay_events(&reminders::load(&path), first, last, REMINDER_SLOT));
             }
         }
+        if self.prefs.show_birthdays {
+            events.extend(birthdays::overlay_events(&birthdays::load_people(&self.path), first, last, birthdays::BIRTHDAY_SLOT));
+        }
         for (i, s) in self.subs.iter().enumerate().filter(|(_, s)| s.shown) {
             events.extend(ics_events(&s.text, i + 1, from, to));
         }
@@ -194,6 +231,7 @@ impl Calendar {
         let calendar = match slot {
             0 => "Holidays".to_string(),
             REMINDER_SLOT => "Reminders".to_string(),
+            birthdays::BIRTHDAY_SLOT => "Birthdays".to_string(),
             _ => self.subs.get(slot - 1).map_or_else(String::new, |s| s.name.clone()),
         };
         self.notice = Some(format!("{title} ({calendar})"));
@@ -212,6 +250,10 @@ impl Calendar {
             }
             LAYER_REMINDERS => {
                 self.prefs.show_reminders = !self.prefs.show_reminders;
+                self.save_prefs();
+            }
+            LAYER_BIRTHDAYS => {
+                self.prefs.show_birthdays = !self.prefs.show_birthdays;
                 self.save_prefs();
             }
             n if (LAYER_CAL..=LAYER_CAL + extras::MAX_CALENDARS).contains(&n) => {

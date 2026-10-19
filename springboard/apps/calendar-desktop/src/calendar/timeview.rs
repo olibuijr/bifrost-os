@@ -66,13 +66,15 @@ impl Calendar {
         matches!(self.view, View::Day | View::Week)
     }
 
-    /// Days shown as columns: the selected day, or its week (Sunday first, or Monday with the setting).
+    /// Days shown as columns: the selected day, or the days of its week that the Week view shows (Settings > Days per
+    /// Week: all seven starting on the first weekday, or fewer; a five day week starting on Sunday runs Monday to Friday).
     pub(super) fn view_days(&self) -> Vec<Date> {
         if self.view == View::Day {
             return vec![self.selected];
         }
-        let start = self.week_start();
-        (0..7).map(|i| start.shift_days(i)).collect()
+        let shift = (self.prefs.week_view_start() + 7 - self.prefs.weekday_at(0)) % 7;
+        let first = self.week_start().shift_days(shift as i32);
+        (0..i32::from(self.prefs.days_per_week)).map(|i| first.shift_days(i)).collect()
     }
 
     /// The first day of the week the selected day is in.
@@ -120,7 +122,7 @@ impl Calendar {
     }
 
     pub(super) fn col_geometry(&self, ui: &Ui) -> (f32, f32) {
-        let n = if self.view == View::Day { 1.0 } else { 7.0 };
+        let n = if self.view == View::Day { 1.0 } else { f32::from(self.prefs.days_per_week) };
         let gut = ui.pt(GUTTER);
         (gut, (self.w as f32 - gut - ui.pt(SPACE_S)) / n)
     }
@@ -178,12 +180,13 @@ impl Calendar {
             return None;
         }
         if (134.0..GRID0).contains(&yp) {
-            let col = if self.view == View::Week {
+            if self.view == View::Week {
                 let (gut, col_w) = self.col_geometry(ui);
-                (((x - gut) / col_w).floor() as i32).clamp(0, 6)
-            } else {
-                ((x / (self.w as f32 / 7.0)) as i32).clamp(0, 6)
-            };
+                let days = self.view_days();
+                let col = (((x - gut) / col_w).floor() as i32).clamp(0, days.len() as i32 - 1);
+                return days.get(col as usize).map(|d| Target::Pick(*d));
+            }
+            let col = ((x / (self.w as f32 / 7.0)) as i32).clamp(0, 6);
             return Some(Target::Pick(self.week_start().shift_days(col)));
         }
         if yp >= GRID0 {
@@ -214,8 +217,8 @@ impl Calendar {
                 self.selected.day
             ),
             View::Week => {
-                let a = self.week_start();
-                let b = a.shift_days(6);
+                let shown = self.view_days();
+                let (a, b) = (shown[0], shown[shown.len() - 1]);
                 let m = |d: Date| &MONTHS[(d.month - 1) as usize][..3];
                 if a.month == b.month {
                     format!("{} {} - {}, {}", m(a), a.day, b.day, b.year)
@@ -243,6 +246,12 @@ impl Calendar {
         {
             let mut g = s.rows(ui.pt(GRID0) as usize, bottom as usize);
             g.fill_rrect(0.0, ui.pt(GRID0), w, bottom - ui.pt(GRID0), 0.0, CONTENT_BG.now());
+            // the hours outside the working day (Settings > Day Starts at, Day Ends at) are shaded
+            for h in 0..24u32 {
+                if self.prefs.off_hour(h) {
+                    g.fill_rrect(gut, hours_top + hh * h as f32, w - gut, hh, 0.0, CARD_BG.now());
+                }
+            }
             for h in 0..=24u32 {
                 let y = hours_top + hh * h as f32;
                 g.fill_rrect(gut, y, w - gut, ui.pt(0.5), 0.0, SEPARATOR_C.now());
@@ -270,7 +279,7 @@ impl Calendar {
                 .collect();
             // the event being moved is drawn at the pointer instead
             let lifted = self.drag.and_then(|d| match d.kind {
-                super::drag::Kind::Move { id, .. } | super::drag::Kind::Resize { id, .. } => Some(id),
+                super::drag::Kind::Move { id, .. } | super::drag::Kind::Resize { id, .. } | super::drag::Kind::AllDay { id } => Some(id),
                 super::drag::Kind::Create { .. } => None,
             });
             for (id, x, y, rw, rh) in rects {
@@ -309,15 +318,16 @@ impl Calendar {
         }
         s.fill_rrect(0.0, ui.pt(top_inset()), w, ui.pt(GRID0 - top_inset()), 0.0, CONTENT_BG.now());
         self.draw_header(s, ui);
+        // the Week view's chips are its columns; the Day view's are the seven days of the week around the selected day
         let start = self.week_start();
-        for i in 0..7 {
-            let d = start.shift_days(i);
+        let chips: Vec<Date> = if self.view == View::Week { days.clone() } else { (0..7).map(|i| start.shift_days(i)).collect() };
+        for (i, d) in chips.iter().copied().enumerate() {
             let cx = if self.view == View::Week {
                 gut + col_w * (i as f32 + 0.5)
             } else {
                 w / 7.0 * (i as f32 + 0.5)
             };
-            let name = &WEEKDAYS[self.prefs.weekday_at(i as usize)][..3].to_uppercase();
+            let name = &WEEKDAYS[d.weekday()][..3].to_uppercase();
             self.centre(s, ui, name, MAC_SUBHEAD_PT, Weight::Medium, LABEL_2.now(), cx, ui.pt(WEEKDAY_Y_PT));
             let sel = d == self.selected;
             let today = d == self.today;

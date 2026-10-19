@@ -98,7 +98,13 @@ impl Calendar {
     /// Alerts that came due since the last call; the app posts each as a notification.
     pub fn take_alerts(&mut self, t: f64) -> Vec<Alert> {
         let (events, path, extras) = (&self.events, &self.path, &self.extras);
-        let load = || alert_calendar_with(events, &exchange::load_rich(&exchange::rich_path(path)), extras);
+        let (alert, year) = (self.prefs.alert_birthday, self.today.year);
+        let load = || {
+            let mut rich = exchange::load_rich(&exchange::rich_path(path));
+            // the birthdays of Contacts alert like events (`birthdays.rs`)
+            rich.events.extend(super::birthdays::alert_events_at(path, alert, year));
+            alert_calendar_with(events, &rich, extras)
+        };
         step(&mut self.alerts, self.wall.now(t), self.changes.generation(), self.wall.offset, load)
     }
 

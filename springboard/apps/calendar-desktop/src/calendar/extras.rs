@@ -36,9 +36,42 @@ pub const TRAVEL: [u16; 5] = [0, 15, 30, 45, 60];
 pub const ALARM_STEP: u32 = 5;
 pub const ALARM_MAX: u32 = 7 * 24 * 60;
 
+/// How many colours a calendar can be given (`overlay::PALETTE`).
+pub const PALETTE_LEN: u8 = 9;
+/// Most invitees one event keeps.
+pub const MAX_INVITEES: usize = 20;
+/// Longest address kept for an invitee, in characters.
+pub const ADDRESS_MAX: usize = 254;
+
+/// A person invited to an event from the editor: the email address an invitation goes to and the name shown for it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Invitee {
+    pub address: String,
+    pub name: String,
+}
+
+/// An invitee's address, cleaned: spaces and control characters dropped, a leading `mailto:` removed. None when what is
+/// left is not an address (it needs one `@` with text on both sides and a dot after it).
+pub fn clean_address(text: &str) -> Option<String> {
+    let t = text.trim();
+    let t = match t.get(..7) {
+        Some(head) if head.eq_ignore_ascii_case("mailto:") => &t[7..],
+        _ => t,
+    };
+    let address: String = t.chars().filter(|c| !c.is_control() && !c.is_whitespace()).collect();
+    if address.chars().count() > ADDRESS_MAX || address.contains(['<', '>', ',', ';', '"']) {
+        return None;
+    }
+    let (local, domain) = address.split_once('@')?;
+    let ok = !local.is_empty() && !domain.is_empty() && !domain.contains('@') && domain.contains('.') && !domain.starts_with('.') && !domain.ends_with('.');
+    ok.then_some(address)
+}
+
 /// The extras of one event. A field left at its default is the same as no entry.
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct Extra {
+    /// The people invited from the editor, in the order they were added (`MAX_INVITEES` at most).
+    pub invitees: Vec<Invitee>,
     /// The RRULE of a custom repeat. None when the event repeats with one of the presets, or does not repeat.
     pub rrule: Option<String>,
     /// Minutes before the start of each alarm. None when the alarm is the event's preset.
@@ -53,7 +86,7 @@ pub struct Extra {
 
 impl Extra {
     pub fn is_empty(&self) -> bool {
-        self.rrule.is_none() && self.alarms.is_none() && self.calendar == 0 && self.tzid.is_none() && self.travel == 0
+        self.rrule.is_none() && self.alarms.is_none() && self.calendar == 0 && self.tzid.is_none() && self.travel == 0 && self.invitees.is_empty()
     }
 }
 
@@ -73,6 +106,8 @@ pub struct Extras {
     pub calendars: Vec<LocalCal>,
     /// The calendar new events go to (Settings > Default Calendar). 0 or a missing calendar means the built-in one.
     pub default_calendar: u32,
+    /// The colour of the built-in calendar (an index into `overlay::PALETTE`); None keeps the accent.
+    pub builtin_colour: Option<u8>,
 }
 
 /// The settings file beside the events.
@@ -231,6 +266,33 @@ impl Extras {
         self.calendars.len() != before
     }
 
+    /// The palette colour (an index into `overlay::PALETTE`) of calendar `cal`: its own, or the built-in calendar's choice,
+    /// which is blue until it is changed.
+    pub fn colour_index(&self, cal: u32) -> u8 {
+        if cal == DEFAULT_CALENDAR {
+            return self.builtin_colour.unwrap_or(super::overlay::BLUE);
+        }
+        self.calendars.iter().find(|c| c.id == cal).map_or(super::overlay::BLUE, |c| c.colour)
+    }
+
+    /// Gives calendar `cal` palette colour `colour`. False for a colour past the palette or a calendar that does not exist.
+    pub fn set_colour(&mut self, cal: u32, colour: u8) -> bool {
+        if colour >= PALETTE_LEN {
+            return false;
+        }
+        if cal == DEFAULT_CALENDAR {
+            self.builtin_colour = Some(colour);
+            return true;
+        }
+        match self.calendars.iter_mut().find(|c| c.id == cal) {
+            Some(c) => {
+                c.colour = colour;
+                true
+            }
+            None => false,
+        }
+    }
+
     /// Drops the entries of events that are gone, so a later event that reuses an id starts clean.
     pub fn retain_events(&mut self, live: &[u64]) {
         let live: BTreeSet<u64> = live.iter().copied().collect();
@@ -255,6 +317,9 @@ impl Extras {
     pub fn to_text(&self) -> String {
         let mut out = String::from("springboard-calendar-extras-v1\n");
         out.push_str(&format!("default\t{}\n", self.default_calendar));
+        if let Some(colour) = self.builtin_colour {
+            out.push_str(&format!("colour\t{colour}\n"));
+        }
         for c in &self.calendars {
             out.push_str(&format!("calendar\t{}\t{}\t{}\t{}\n", c.id, c.colour, u8::from(c.shown), c.name));
         }
@@ -267,6 +332,9 @@ impl Extras {
             };
             let tz = x.tzid.clone().unwrap_or_else(|| "-".into());
             out.push_str(&format!("event\t{id}\t{}\t{rrule}\t{alarms}\t{tz}\t{}\n", x.calendar, x.travel));
+            for p in &x.invitees {
+                out.push_str(&format!("invitee\t{id}\t{}\t{}\n", p.address, clean_name(&p.name)));
+            }
         }
         out
     }
@@ -282,12 +350,22 @@ impl Extras {
                         out.default_calendar = id;
                     }
                 }
+                Some("colour") if f.len() == 2 => {
+                    out.builtin_colour = f[1].parse::<u8>().ok().filter(|c| *c < PALETTE_LEN);
+                }
                 Some("calendar") if f.len() == 5 => {
                     let (Ok(id), Ok(colour), Some(name)) = (f[1].parse::<u32>(), f[2].parse::<u8>(), Some(clean_name(f[4]))) else {
                         continue;
                     };
                     if (DEFAULT_CALENDAR + 1..=MAX_CALENDARS).contains(&id) && !name.is_empty() && !out.calendars.iter().any(|c| c.id == id) {
-                        out.calendars.push(LocalCal { id, name, colour: colour % 6, shown: f[3] != "0" });
+                        out.calendars.push(LocalCal { id, name, colour: colour % PALETTE_LEN, shown: f[3] != "0" });
+                    }
+                }
+                Some("invitee") if f.len() == 4 => {
+                    let (Ok(id), Some(address)) = (f[1].parse::<u64>(), clean_address(f[2])) else { continue };
+                    let entry = out.events.entry(id).or_default();
+                    if entry.invitees.len() < MAX_INVITEES && !entry.invitees.iter().any(|p| p.address.eq_ignore_ascii_case(&address)) {
+                        entry.invitees.push(Invitee { address, name: clean_name(f[3]) });
                     }
                 }
                 Some("event") if f.len() == 7 => {
@@ -301,7 +379,9 @@ impl Extras {
                     };
                     let tzid = (f[5] != "-").then(|| f[5].to_string()).filter(|z| zone_minutes(z).is_some());
                     let travel = f[6].parse::<u16>().ok().filter(|t| TRAVEL.contains(t)).unwrap_or(0);
-                    out.events.insert(id, Extra { rrule, alarms, calendar, tzid, travel });
+                    // invitee lines may come first in a damaged file: keep what they gave
+                    let invitees = out.events.get(&id).map(|x| x.invitees.clone()).unwrap_or_default();
+                    out.events.insert(id, Extra { invitees, rrule, alarms, calendar, tzid, travel });
                 }
                 _ => {}
             }
@@ -409,11 +489,91 @@ mod tests {
         let work = x.new_calendar("Work, Ltd").unwrap();
         x.calendars[0].shown = false;
         x.default_calendar = work;
-        x.put(7, Extra { rrule: Some("FREQ=WEEKLY;BYDAY=MO,WE".into()), alarms: Some(vec![5, 1440]), calendar: work, tzid: Some("UTC".into()), travel: 30 });
+        x.builtin_colour = Some(8);
+        x.put(
+            7,
+            Extra {
+                rrule: Some("FREQ=WEEKLY;BYDAY=MO,WE".into()),
+                alarms: Some(vec![5, 1440]),
+                calendar: work,
+                tzid: Some("UTC".into()),
+                travel: 30,
+                invitees: vec![
+                    Invitee { address: "ana@example.is".into(), name: "Ana Lind".into() },
+                    Invitee { address: "bo@example.is".into(), name: String::new() },
+                ],
+            },
+        );
         x.put(8, Extra { alarms: Some(vec![]), ..Extra::default() });
+        x.put(9, Extra { invitees: vec![Invitee { address: "cy@example.is".into(), name: "Cy".into() }], ..Extra::default() });
         let text = x.to_text();
         assert_eq!(Extras::parse(&text), x);
         assert_eq!(Extras::parse(&text).to_text(), text, "writing twice gives the same bytes");
+    }
+
+    #[test]
+    fn addresses_are_cleaned_and_must_look_like_addresses() {
+        assert_eq!(clean_address(" ana@example.is "), Some("ana@example.is".into()));
+        assert_eq!(clean_address("mailto:ana@example.is"), Some("ana@example.is".into()));
+        assert_eq!(clean_address("MAILTO:ana@example.is"), Some("ana@example.is".into()));
+        assert_eq!(clean_address("ana @example.is"), Some("ana@example.is".into()), "spaces are dropped");
+        for bad in ["", "ana", "ana@", "@example.is", "ana@example", "ana@@example.is", "ana@.is", "ana@example.", "a<b>@x.is", "a,b@x.is"] {
+            assert_eq!(clean_address(bad), None, "{bad:?}");
+        }
+        assert_eq!(clean_address(&format!("{}@x.is", "a".repeat(300))), None, "too long");
+    }
+
+    #[test]
+    fn invitees_keep_their_order_and_stop_at_the_limit_and_at_repeats() {
+        let mut text = String::from("springboard-calendar-extras-v1\n");
+        for n in 0..30 {
+            text.push_str(&format!("invitee\t5\tp{n}@example.is\tP{n}\n"));
+        }
+        text.push_str("invitee\t5\tP0@EXAMPLE.is\tAgain\ninvitee\t5\tnot-an-address\tNo\ninvitee\tx\ta@b.is\tBad id\n");
+        let x = Extras::parse(&text);
+        let kept = &x.events.get(&5).unwrap().invitees;
+        assert_eq!(kept.len(), MAX_INVITEES);
+        assert_eq!(kept[0], Invitee { address: "p0@example.is".into(), name: "P0".into() });
+        assert_eq!(kept[19].address, "p19@example.is");
+        assert!(!x.events.contains_key(&0));
+        let dup = Extras::parse("springboard-calendar-extras-v1\ninvitee\t1\ta@b.is\tA\ninvitee\t1\tA@B.IS\tAgain\n");
+        assert_eq!(dup.events.get(&1).unwrap().invitees.len(), 1, "an address is invited once");
+    }
+
+    #[test]
+    fn an_event_line_after_its_invitee_lines_keeps_them() {
+        let x = Extras::parse("springboard-calendar-extras-v1\ninvitee\t4\ta@b.is\tA\nevent\t4\t0\t-\t-\t-\t15\n");
+        let e = x.events.get(&4).unwrap();
+        assert_eq!((e.travel, e.invitees.len()), (15, 1));
+    }
+
+    #[test]
+    fn an_event_with_only_invitees_is_kept() {
+        let mut x = Extras::default();
+        x.put(3, Extra { invitees: vec![Invitee { address: "a@b.is".into(), name: String::new() }], ..Extra::default() });
+        assert!(x.events.contains_key(&3));
+        x.put(3, Extra::default());
+        assert!(x.events.is_empty());
+    }
+
+    #[test]
+    fn calendars_take_a_palette_colour_and_the_built_in_one_starts_blue() {
+        let mut x = Extras::default();
+        let work = x.new_calendar("Work").unwrap();
+        assert_eq!(x.colour_index(DEFAULT_CALENDAR), super::super::overlay::BLUE);
+        assert!(x.set_colour(work, 7));
+        assert_eq!(x.colour_index(work), 7);
+        assert!(x.set_colour(DEFAULT_CALENDAR, 2));
+        assert_eq!(x.colour_index(DEFAULT_CALENDAR), 2);
+        assert!(!x.set_colour(work, PALETTE_LEN), "past the palette");
+        assert!(!x.set_colour(9, 1), "a calendar that does not exist");
+        // the choices are kept in the file, and a colour past the palette is not read
+        let back = Extras::parse(&x.to_text());
+        assert_eq!((back.colour_index(work), back.colour_index(DEFAULT_CALENDAR)), (7, 2));
+        let odd = Extras::parse("springboard-calendar-extras-v1\ncolour\t99\ncalendar\t2\t40\t1\tOdd\n");
+        assert_eq!(odd.builtin_colour, None);
+        assert_eq!(odd.calendars[0].colour, 40 % PALETTE_LEN);
+        assert_eq!(PALETTE_LEN as usize, super::super::overlay::PALETTE.len());
     }
 
     #[test]

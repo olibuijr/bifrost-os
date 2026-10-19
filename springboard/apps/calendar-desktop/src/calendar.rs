@@ -2,12 +2,15 @@
 //! each day's events in its cell, Day/Week/Year views and an event form. Colours follow Light and Dark.
 pub mod alerts;
 pub mod archive;
+pub mod birthdays;
 mod chrome;
 pub mod clip;
+mod colours;
 pub mod connect;
 mod drag;
 pub mod exchange;
 pub mod extras;
+mod inviting;
 mod linesheet;
 mod lookup;
 mod goto;
@@ -22,6 +25,7 @@ pub mod notes;
 pub mod overlay;
 pub mod places;
 pub mod prefs;
+pub mod printgrid;
 pub mod printing;
 pub mod quick;
 pub mod recur;
@@ -31,6 +35,7 @@ pub mod search;
 pub use springboard::shell::calendar::{store, Date};
 pub mod subscribe;
 pub mod timeview;
+mod viewzone;
 pub mod window;
 pub mod zones;
 
@@ -53,6 +58,7 @@ use springboard::shell::Event;
 use bifrost_app::controls::calendar_store_changes::StoreChangeHub;
 use springboard::deildu::scroll::Scroller;
 use springboard::gfx::Surface;
+use std::borrow::Cow;
 use std::path::PathBuf;
 use store::CalendarEvent;
 use timeview::View;
@@ -193,6 +199,18 @@ enum Target {
     Travel,
     /// The line sheet's Done button (`linesheet.rs`).
     LineDone,
+    /// The toolbar's Time Zone button: the next zone of the view time zone (`viewzone.rs`).
+    ViewZone,
+    /// The Go to Date sheet's typed date row (`goto.rs`).
+    GoField,
+    /// The colour sheet (`colours.rs`): a row of the palette, and Done.
+    ColourPick(u8),
+    ColourDone,
+    /// The invitee rows of the event form (`inviting.rs`): the Add Invitees row with its line, a match of the address
+    /// book to invite, and the Remove row of each invitee.
+    AddInvitee,
+    InviteeSuggest(usize),
+    InviteeDrop(usize),
 }
 
 /// Which of the Starts / Ends rows has its picker expanded.
@@ -217,8 +235,10 @@ struct Draft {
     alarms: Vec<u32>,
     /// The custom alarm the Alert picker's stepper is on, in minutes.
     custom_alarm: u32,
-    /// What the saved event keeps beside the store: its calendar, zone and travel time (`extras.rs`).
+    /// What the saved event keeps beside the store: its calendar, zone, travel time and invitees (`extras.rs`).
     extra: extras::Extra,
+    /// The line of the Add Invitees row while it is open (`inviting.rs`).
+    invitee_line: Option<bifrost_app::controls::TextField>,
 }
 
 pub struct Calendar {
@@ -241,6 +261,15 @@ pub struct Calendar {
     editor: Option<Draft>,
     /// Go to Date: the date the sheet shows while it is open (`goto.rs`).
     goto: Option<Date>,
+    /// Go to Date: the date typed in the sheet's first row (`goto.rs`).
+    goto_line: bifrost_app::controls::TextField,
+    /// The colour sheet while it is open (`colours.rs`).
+    colour_sheet: Option<colours::ColourSheet>,
+    /// The people of the address book with an email address, read when the invitee line first opens (`inviting.rs`).
+    book: Option<Vec<birthdays::Entry>>,
+    /// The last press came from a mouse or trackpad, not a finger: a drag in the hour grid starts at once, and the grid
+    /// is scrolled with the wheel (`drag.rs`). The app sets it from the type of the touch (`set_pointer`).
+    pointer: bool,
     /// Quick Event: the line typed in the sheet while it is open (`quickentry.rs`).
     quick_line: Option<bifrost_app::controls::TextField>,
     /// A press in the Day or Week grid that becomes a drag if it is held, and the drag itself (`drag.rs`).
@@ -372,6 +401,10 @@ impl Calendar {
             text_style: (ui.text_scale, ui.bold),
             editor: None,
             goto: None,
+            goto_line: bifrost_app::controls::TextField::new(),
+            colour_sheet: None,
+            book: None,
+            pointer: false,
             quick_line: None,
             press: None,
             drag: None,
@@ -434,6 +467,13 @@ impl Calendar {
     pub fn rich_events(&self) -> ics::IcsCalendar {
         exchange::load_rich(&exchange::rich_path(&self.path))
     }
+    /// `rich_events` with the events that fire the birthday alerts (Settings > Default Birthday Alert, `birthdays.rs`)
+    /// added, for the shell services that plan alerts and the Up Next list. Never written back to the .ics file.
+    pub fn rich_events_with_birthdays(&self) -> ics::IcsCalendar {
+        let mut rich = self.rich_events();
+        rich.events.extend(birthdays::alert_events_at(&self.path, self.prefs.alert_birthday, self.today.year));
+        rich
+    }
     pub fn events(&self) -> &[CalendarEvent] {
         &self.events
     }
@@ -442,7 +482,7 @@ impl Calendar {
     }
     /// Whether a text field in the event editor has focus (typing goes to it).
     pub fn keyboard_shown(&self) -> bool {
-        self.editor.is_some() && self.focused().is_some()
+        self.editor.is_some() && (self.focused().is_some() || self.invitee_line_open())
     }
 
     pub fn describe(&self) -> String {
@@ -450,7 +490,7 @@ impl Calendar {
             if self.editor.is_some() { "editor" } else { self.view.name() }, self.selected.iso(), self.events.len(), self.agenda().len(), self.keyboard_shown(), self.error.as_deref().unwrap_or(""))
     }
 
-    fn agenda(&self) -> Vec<&CalendarEvent> {
+    fn agenda(&self) -> Vec<Cow<'_, CalendarEvent>> {
         self.shown_events().filter(|e| self.occurs(e, self.selected)).collect()
     }
     fn bottom(&self, ui: &Ui) -> f32 {
@@ -504,7 +544,9 @@ impl Calendar {
         items.extend(pickers::repeat_targets(draft).into_iter().map(Some));
         items.push(Some(Target::Alert));
         items.extend(pickers::alarm_targets(draft).into_iter().map(Some));
-        items.extend([Some(Target::Calendar), Some(Target::Zone), Some(Target::Travel), None, Some(Target::Notes)]);
+        items.extend([Some(Target::Calendar), Some(Target::Zone), Some(Target::Travel), None, Some(Target::AddInvitee)]);
+        items.extend(self.invitee_targets(draft).into_iter().map(Some));
+        items.extend([None, Some(Target::Notes)]);
         if self.notes_address().is_some() {
             items.push(Some(Target::FillAddress));
         }
@@ -551,6 +593,12 @@ impl Calendar {
         for (i, f) in self.fields.iter_mut().enumerate() {
             f.focused = Some(i) == which;
         }
+        // a field that takes the cursor takes it from the invitee line
+        if which.is_some() {
+            if let Some(draft) = self.editor.as_mut() {
+                draft.invitee_line = None;
+            }
+        }
     }
     fn focused(&self) -> Option<usize> {
         self.fields.iter().position(|f| f.focused)
@@ -589,10 +637,10 @@ impl Calendar {
     }
 
     /// The events a day cell lists: up to as many lines as fit, the last one "n more" when some are left out.
-    fn cell_events(&self, ui: &Ui, date: Date) -> (Vec<&CalendarEvent>, usize) {
+    fn cell_events(&self, ui: &Ui, date: Date) -> (Vec<Cow<'_, CalendarEvent>>, usize) {
         let (.., rh) = self.grid_geom(ui);
         let room = ((rh - ui.pt(CELL_HEAD)) / ui.pt(CELL_LINE)).floor().max(0.0) as usize;
-        let all: Vec<&CalendarEvent> = self.shown_events().filter(|e| self.occurs(e, date)).collect();
+        let all: Vec<Cow<'_, CalendarEvent>> = self.shown_events().filter(|e| self.occurs(e, date)).collect();
         if all.len() <= room {
             return (all, 0);
         }
@@ -627,6 +675,9 @@ impl Calendar {
         let wp = self.w as f32 / ui.s;
         if self.goto.is_some() {
             return self.hit_goto(ui, x, y);
+        }
+        if self.colour_sheet.is_some() {
+            return self.hit_colour(ui, x, y);
         }
         if self.quick_line.is_some() || self.line_sheet.is_some() {
             return None;
@@ -800,6 +851,7 @@ impl Calendar {
         copy.existing = false;
         copy.open = None;
         copy.invitees = vec![];
+        copy.invitee_line = None;
         self.error = None;
         self.editor = Some(copy);
     }
@@ -970,6 +1022,10 @@ impl Calendar {
                 if !delete && existing {
                     self.invite_attendees(&original, &event);
                 }
+                // the people invited from the editor get the event as an invitation (`inviting.rs`)
+                if !delete {
+                    self.invite_new_attendees(&event);
+                }
                 self.close();
                 self.scroll.jump_top();
                 self.fit_scroll(ui);
@@ -1008,6 +1064,11 @@ impl Calendar {
 
     /// Escape closes the open event editor without saving.
     pub fn escape(&mut self, ui: &Ui, t: f64) -> bool {
+        // Escape closes the invitee line before it closes the form
+        if self.invitee_line_open() {
+            self.invitee_key(Out::Hide);
+            return true;
+        }
         if self.editor.is_none() && !self.sheet_open() && (self.search_focused || !self.search_box.is_empty()) {
             self.end_search(ui);
             self.dirty = true;
@@ -1066,16 +1127,26 @@ impl Calendar {
             Target::Layer(id) => self.toggle_layer(id),
             Target::Cancel => {
                 self.goto = None;
+                self.goto_line.clear();
+                self.colour_sheet = None;
                 self.quick_line = None;
                 self.line_sheet = None;
                 self.close();
             }
             Target::LineDone => self.line_done(ui, t),
+            Target::ViewZone => self.cycle_view_zone(ui),
+            Target::GoField => {}
+            Target::ColourPick(i) => self.colour_pick(i),
+            Target::ColourDone => self.colour_done(),
+            Target::AddInvitee | Target::InviteeSuggest(_) | Target::InviteeDrop(_) => self.invitee_tap(target),
             Target::QuickOpen => self.open_quick(),
             Target::QuickAdd => self.quick_add(ui, t),
             Target::GoOpen => self.open_goto(),
             Target::GoDay(_) | Target::GoMonth(_) | Target::GoYear(_) => self.goto_step(target),
-            Target::GoToday => self.goto = Some(today(self.wall, t)),
+            Target::GoToday => {
+                self.goto = Some(today(self.wall, t));
+                self.goto_line.clear();
+            }
             Target::GoConfirm => self.goto_confirm(ui),
             Target::Save => self.commit(ui, false, t),
             Target::Delete => self.commit(ui, true, t),
@@ -1185,11 +1256,46 @@ impl Calendar {
             self.quick_key(ui, out, t);
             return;
         }
+        if self.colour_sheet.is_some() {
+            // Return gives the calendar the picked colour; Up and Down move the pick
+            match out {
+                Out::Enter => self.activate(ui, Target::ColourDone, t),
+                Out::Named("Up") => self.colour_step(-1),
+                Out::Named("Down") => self.colour_step(1),
+                _ => return,
+            }
+            self.dirty = true;
+            return;
+        }
         if self.goto.is_some() {
-            // Return accepts the date; the arrow keys step it by a day (Left, Right) or a week (Up, Down)
+            // Typing fills the date row; Return accepts the date; the arrow keys step it by a day (Left, Right, while
+            // the date row is empty) or a week (Up, Down)
+            let typing = !self.goto_line.is_empty();
             let step = match out {
                 Out::Enter => {
                     self.activate(ui, Target::GoConfirm, t);
+                    return;
+                }
+                Out::Text(text) => {
+                    self.goto_line.push_str(&text);
+                    self.goto_read();
+                    self.dirty = true;
+                    return;
+                }
+                Out::Backspace => {
+                    self.goto_line.pop();
+                    self.goto_read();
+                    self.dirty = true;
+                    return;
+                }
+                Out::Named("Left") if typing => {
+                    self.goto_line.move_caret(false);
+                    self.dirty = true;
+                    return;
+                }
+                Out::Named("Right") if typing => {
+                    self.goto_line.move_caret(true);
+                    self.dirty = true;
                     return;
                 }
                 Out::Named("Left") => -1,
@@ -1222,6 +1328,10 @@ impl Calendar {
             };
             self.selected = self.selected.shift_days(step);
             self.dirty = true;
+            return;
+        }
+        // the Add Invitees line, when it is open, takes the keys
+        if self.invitee_key(out.clone()) {
             return;
         }
         if matches!(out, Out::Hide | Out::Enter) {
@@ -1413,6 +1523,8 @@ impl Calendar {
                 self.draw_editor(&mut c, ui, t);
             } else if self.goto.is_some() {
                 self.draw_goto(&mut c, ui);
+            } else if self.colour_sheet.is_some() {
+                self.draw_colour(&mut c, ui);
             } else if self.line_sheet.is_some() {
                 self.draw_line(&mut c, ui);
             } else if self.quick_line.is_some() {
@@ -1605,6 +1717,26 @@ impl Calendar {
                     self.centre(s, ui, &text, MAC_BODY_PT, Weight::Regular, LABEL_2.now(), w / 2.0, mid)
                 }
                 Target::Rsvp(i) => self.centre(s, ui, rsvp::Answer::ALL[i].label(), MAC_BODY_PT, Weight::Regular, colors::LINK.now(), w / 2.0, mid),
+                Target::AddInvitee => match &draft.invitee_line {
+                    Some(line) => {
+                        let k = ui.pt(1.0);
+                        let field = bifrost_app::controls::Rect { x: 36.0, y: top + SPACE_S, w: w / k - 72.0, h: h - 2.0 * SPACE_S };
+                        bifrost_app::widgets::text_field(s, ui, line, field, "Name or email address", true);
+                    }
+                    None => self.text(s, ui, "Add Invitees...", MAC_BODY_PT, colors::LINK.now(), ui.pt(36.0), mid),
+                },
+                Target::InviteeSuggest(i) => {
+                    let who = self.invitee_suggestions().get(i).map_or_else(String::new, |e| inviting::row_label(&extras::Invitee { address: e.email.clone(), name: e.name.clone() }));
+                    let fit = ui.fit(&who, MAC_BODY_PT, w - ui.pt(130.0));
+                    self.text(s, ui, &fit, MAC_BODY_PT, LABEL.now(), ui.pt(36.0), mid);
+                    self.right(s, ui, "Invite", colors::LINK.now(), w - ui.pt(36.0), mid);
+                }
+                Target::InviteeDrop(i) => {
+                    let who = draft.extra.invitees.get(i).map_or_else(String::new, inviting::row_label);
+                    let fit = ui.fit(&who, MAC_BODY_PT, w - ui.pt(130.0));
+                    self.text(s, ui, &fit, MAC_BODY_PT, LABEL.now(), ui.pt(36.0), mid);
+                    self.right(s, ui, "Remove", colors::SYSTEM_RED.now(), w - ui.pt(36.0), mid);
+                }
                 Target::Duplicate => {
                     self.centre(s, ui, "Duplicate Event", MAC_BODY_PT, Weight::Regular, colors::LINK.now(), w / 2.0, mid)
                 }
@@ -1922,6 +2054,10 @@ impl Calendar {
         self.save_prefs();
         if self.time_view() && matches!(setting, prefs::Setting::DayStart(_)) {
             self.scroll_to_morning(ui);
+        }
+        // the birthday alerts are planned with the events: a new choice plans them again
+        if matches!(setting, prefs::Setting::BirthdayAlert(_)) {
+            self.changes.post();
         }
         self.fit_scroll(ui);
         self.dirty = true;

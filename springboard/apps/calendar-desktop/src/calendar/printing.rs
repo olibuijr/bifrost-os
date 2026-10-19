@@ -1,8 +1,12 @@
-//! File > Print: the shown day, week, month or year as an agenda (one heading per day with events, one line per event),
-//! sent to the printing service as plain text. The grid itself is not drawn on paper.
+//! File > Print: the shown day, week, month or year drawn as a grid on landscape pages (`printgrid.rs`, `print_pages`). The
+//! agenda text of the same range (one heading per day with events, one line per event: `agenda_text`, `print_job`) is the
+//! list form of the same events.
+use super::printgrid;
 use super::store::CalendarEvent;
 use super::timeview::View;
 use super::{time_label, Calendar, Date, MONTHS, WEEKDAYS};
+use bifrost_app::print::{PdfPage, PrintInfo};
+use std::borrow::Cow;
 
 /// The width of the time column in the agenda: "23:00 - 01:00 +1" and a space.
 const TIME_W: usize = 17;
@@ -62,17 +66,46 @@ pub fn agenda_text(title: &str, days: &[Date], events: &[CalendarEvent]) -> Stri
 }
 
 impl Calendar {
-    /// The job name and the text File > Print sends: the agenda of what the window shows.
-    pub fn print_job(&self) -> (String, String) {
-        let title = match self.view {
+    /// The heading of what the window shows: the month and year, the year, or the day or week range.
+    fn print_title(&self) -> String {
+        match self.view {
             View::Month => format!("{} {}", MONTHS[(self.selected.month - 1) as usize], self.selected.year),
             View::Year => self.selected.year.to_string(),
             _ => self.range_label(),
+        }
+    }
+
+    /// The job name and the text of the agenda of what the window shows (`agenda_text`). File > Print sends the grid
+    /// (`print_pages`); the agenda is the same events as a list, for a destination that takes text.
+    pub fn print_job(&self) -> (String, String) {
+        let title = self.print_title();
+        let days = match self.view {
+            View::Week => self.view_days(),
+            view => range_days(view, self.selected, self.week_start()),
         };
-        let days = range_days(self.view, self.selected, self.week_start());
-        let shown: Vec<CalendarEvent> = self.shown_events().cloned().collect();
+        let shown: Vec<CalendarEvent> = self.shown_events().map(Cow::into_owned).collect();
         let text = agenda_text(&title, &days, &shown);
         (format!("Calendar {title}"), text)
+    }
+
+    /// The job name, the pages and the paper File > Print sends: the grid of what the window shows drawn on a landscape
+    /// page (`printgrid.rs`), the events as the grid shows them (a view time zone moves them, `viewzone.rs`).
+    pub fn print_pages(&self) -> (String, Vec<PdfPage>, PrintInfo) {
+        let title = self.print_title();
+        let shown: Vec<CalendarEvent> = self.shown_events().map(Cow::into_owned).collect();
+        let grid = printgrid::Grid {
+            view: self.view,
+            title: title.clone(),
+            selected: self.selected,
+            days: self.view_days(),
+            first_weekday: self.prefs.weekday_at(0),
+            day_start: u32::from(self.prefs.day_start),
+            day_end: u32::from(self.prefs.day_end),
+        };
+        let info = printgrid::paper();
+        let occurs = |e: &CalendarEvent, day: Date| self.occurs(e, day);
+        let pages = printgrid::pages(&grid, &shown, &occurs, &info);
+        (format!("Calendar {title}"), pages, info)
     }
 }
 

@@ -50,8 +50,8 @@
    "area": "panel",
    "apple": "GoToDay.nib; View > Go to Date",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:766",
-   "note": "Go to Date sheet (Go menu, Shift-Command-T) with year/month/day steppers, Return/Escape; no typed date or calendar-grid picker, no sheet accessibility nodes yet",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/goto.rs",
+   "note": "Go to Date sheet (Go menu, Shift-Command-T) with year/month/day steppers, a Today row and a row to type the date: 2026-12-24, 24.12.2026, 24 Dec, December 24 2027, or a word such as tomorrow or next Friday (goto.rs read_date, tested). What is typed moves the steppers as it reads; Return or Go takes it, and a date that does not read keeps the sheet open and says what to type. The sheet is published to accessibility (the steppers, Today and the Date field). Code only: not built or run, not verified on Midget. Left: a calendar-grid date picker. Midget check: Go > Go to Date, type 24 dec, press Return.",
    "wire": "Replace the steppers with a month-grid date picker when the kit has one."
   },
   {
@@ -149,9 +149,9 @@
    "area": "menu",
    "apple": "File > New Calendar, New Calendar Group; LocalCalendarInspector.nib; Get Info",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar/linesheet.rs:97",
-   "note": "File > New Calendar... makes a calendar from a line sheet; File > Rename Calendar and File > Delete Calendar work on each calendar made. Each calendar has a palette colour and its own row in the calendar list that shows or hides it, a Calendar row in the event form, and Settings > Default Calendar. Up to ten calendars, the built-in one included. Delete is refused while the calendar holds events, and the message says to delete them first. The calendars and the events' calendar ids are kept in calendar-extras.txt (src/calendar/extras.rs:56). Not yet verified on Midget. Left: Get Info, calendar groups, choosing a colour, and moving events to another calendar on delete.",
-   "wire": "Give saved events a calendar id and colour (store column or sidecar), add File > New Calendar, rename and delete, a Get Info inspector and a calendar popup in the editor."
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/linesheet.rs:97; springboard/apps/calendar-desktop/src/calendar/colours.rs",
+   "note": "File > New Calendar... makes a calendar from a line sheet; File > Rename Calendar and File > Delete Calendar work on each calendar made. File > Calendar Colour > a calendar opens a colour sheet of nine named system colours (Green, Orange, Purple, Pink, Teal, Indigo, Blue, Brown, Gray, from overlay::PALETTE; no red, which is the today marker and the destructive colour) with a swatch and a check mark: a tap picks a row, Done (or Return) gives the calendar the colour, Cancel (or Escape) keeps the old one, Up and Down move the pick. The built-in calendar can be coloured too (it is blue until then). The colour is the dot in the calendar list and the colour of the calendar's events in every view, and is kept in calendar-extras.txt. Each calendar has its own row in the calendar list that shows or hides it, a Calendar row in the event form, and Settings > Default Calendar. Up to ten calendars, the built-in one included. Delete is refused while the calendar holds events, and the message says to delete them first. Code only: not built or run, not verified on Midget. Left: Get Info, calendar groups, and moving events to another calendar on delete. Midget check: File > Calendar Colour > Calendar, pick Brown, Done: the list dot and the events turn brown.",
+   "wire": "Add a Get Info inspector and a calendar popup in the editor."
   },
   {
    "feature": "Show / hide calendar list",
@@ -186,8 +186,8 @@
    "apple": "day/week view direct manipulation",
    "status": "partial",
    "bifrost": "springboard/apps/calendar-desktop/src/calendar/drag.rs::begin_press; springboard/apps/calendar-desktop/src/calendar/layout.rs::drag_resize",
-   "note": "Dragging empty hour-grid space sizes a new event (15 minute snap) and opens the editor; dragging a timed event moves it across times and week days and saves; grabbing its top or bottom edge resizes it to the snapped minute (layout::drag_resize, tested headless in tests/parity_app-calendar.rs). Left: all-day events cannot be dragged, the drag starts only after a 250 ms hold, and the travel time padding is not resized with the edge.",
-   "wire": "Drag at once (no 250 ms hold) when the pointer is a mouse and scrolling has another input; drag all-day events between days."
+   "note": "Dragging empty hour-grid space sizes a new event (15 minute snap) and opens the editor; dragging a timed event moves it across times and week days and saves; its top or bottom edge resizes it (layout::drag_resize); an all-day event in the band above the hours moves to the day under the pointer (drag.rs Kind::AllDay, saved with the series for a repeating event). With a finger the press must be held 250 ms first, so a press that moves at once scrolls. With a mouse or trackpad the drag starts as soon as the pointer has moved 4 points, with no hold: the app takes touch events and reads the touch type of each touch (main.rs touches, Calendar::set_pointer). The shell makes the wheel as a press followed by a short burst of moves (the Wayland path: press, a move 16 ms later, a lift at 32 ms; the evdev path eases a finger), and an app cannot tell that from a hand, so a move that comes within 30 ms of its press is taken as the wheel and scrolls. Under a view time zone the grid place of a moved or resized block is turned back to the event's own clock before it is saved. Tested headless in calendar/tests.rs. Code only: not built or run, not verified on Midget. Left: the travel time padding is not resized with the edge, and the 30 ms rule is a heuristic until the shell marks the touch a wheel notch makes.",
+   "wire": "Have the shell mark the touch a wheel notch makes (a distinct touch type or contact id) so the 30 ms rule can go. Midget check: in Week view drag a block with the mouse without waiting, scroll with the wheel over a block (it scrolls and the block does not move), drag an all-day event to another day."
   },
   {
    "feature": "CalDAV accounts sync",
@@ -212,45 +212,45 @@
    "area": "integration",
    "apple": "AddHoliday.nib; BirthdayCalendarInspector.nib; settings show Birthdays/Holidays",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar/holidays.rs:28",
-   "note": "Holidays row in the calendar list shows Iceland's public holidays and observances (Easter computed) as read-only all-day events; no Birthdays calendar yet; built on parity/team-d-calendar; not yet verified on Midget",
-   "wire": "Add the Birthdays calendar from the Contacts service (needs an async contacts query from the app), a region choice for the holidays, and a Settings toggle for each."
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/holidays.rs:28; springboard/apps/calendar-desktop/src/calendar/birthdays.rs",
+   "note": "Holidays row in the calendar list shows Iceland's public holidays and observances (Easter computed) as read-only all-day events. The Birthdays row shows the birthdays of the cards in Contacts as read-only all-day items (\"Ana Lind's Birthday\", with the age in the notes when the card has a year of birth); a 29 February birthday falls on 1 March in a common year. Calendar reads Contacts' own files (appdata/is.olibuijr.contacts.desktop/Contacts/contacts.tsv and details.txt, the way it reads Reminders) when the shown year changes or the row is switched on; it never writes a card, and the names and dates stay on the machine (birthdays.rs, tested headless in tests/parity_app-calendar-w15b.rs). Settings > Default Birthday Alert (none, on the day, 1 or 2 days or a week before, each at 9 AM) plans the alerts with the other events through the alert service and the Up Next list, and the events are never written to calendar.ics. Code only: not built or run, not verified on Midget. Left: a region choice for the holidays, a Contacts service query instead of reading its files, and the Birthdays row does not refresh while the file changes. Midget check: add a birthday to a card in Contacts, switch Birthdays on in Calendar, open that day.",
+   "wire": "Add a region choice for the holidays, and read the birthdays through a Contacts service query when the shell has one."
   },
   {
    "feature": "Settings: general (week start, day start/end, days per week, default duration, default calendar)",
    "area": "settings",
    "apple": "PreferencesPanel.nib General/Advanced panes",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar/prefs.rs; springboard/apps/calendar-desktop/src/main.rs:70",
-   "note": "File > Settings... (Command-comma) sheet: week start, day start hour, default duration; persisted in calendar-prefs.txt (calendar/prefs.rs) and used by the month grid, week view, scroll position and new events. The default calendar is a Default Calendar submenu (main.rs:85). Missing: day end, days per week, and a separate Settings window (no shell Settings hook found).",
-   "wire": "Add day end hour, days per week and a default calendar (needs multiple calendars) to the Settings menu in main.rs."
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/prefs.rs; springboard/apps/calendar-desktop/src/main.rs",
+   "note": "The Settings menu (persisted in calendar-prefs.txt, calendar/prefs.rs): week start, default event length, Day Starts at (6 to 10 AM), Day Ends at (4 to 10 PM), Show Days per Week (1 to 7), default alerts, Default Calendar and Default Birthday Alert. The grids and new events follow them: the month grid and week view use the week start; the Day and Week views scroll to the day start and shade the hours outside the working day; the Week view shows the chosen number of days (a five day week that starts on Sunday runs Monday to Friday) and the header chips, the click targets, the range label and the printed week follow it. Code only: not built or run, not verified on Midget. Left: a separate Settings window (no shell Settings hook found) and a \"hours at a time\" zoom setting. Midget check: Settings > Show Days per Week > 5 Days, the Week view has five columns.",
+   "wire": "Move the settings into a Settings window when the shell has a hook for one."
   },
   {
    "feature": "Settings: default alerts",
    "area": "settings",
    "apple": "PreferencesPanel.nib Alerts pane",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar/prefs.rs",
-   "note": "Default alert for timed and all-day events in the Settings sheet; applied to new drafts and swapped when All-day is toggled. Birthday default alert missing (no Birthdays calendar).",
-   "wire": "Add a default alert for birthdays once the Birthdays calendar exists."
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/prefs.rs; springboard/apps/calendar-desktop/src/calendar/birthdays.rs",
+   "note": "Default alert for timed and all-day events in the Settings menu; applied to new drafts and swapped when All-day is toggled. Default Birthday Alert (None, On the day at 9 AM, 1 day, 2 days or 1 week before at 9 AM) applies to the birthdays of the cards in Contacts: they are planned as timed alerts at 09:00 with the other events (birthdays.rs alert_events, rich_events_with_birthdays), and choosing a new one plans them again. Code only: not built or run, not verified on Midget. Left: a different alert for a single person.",
+   "wire": "Check on Midget that a birthday alert posts a notification at 9 AM."
   },
   {
    "feature": "Time zone support",
    "area": "settings",
    "apple": "PreferencesPanel.nib time zone support; TimeZonePickerSheet.nib; InspectorTimeZoneView.nib",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar/pickers.rs:283; springboard/apps/calendar-desktop/src/calendar/zones.rs",
-   "note": "A Time Zone row in the event form cycles the device's zone, UTC, Iceland and nine more zones with their daylight saving rules (calendar/zones.rs: London, Paris, Helsinki, New York, Chicago, Denver, Los Angeles, India, Tokyo; the European and North American shift rules, tested at the shift days). The zone sets the alarms per occurrence, so a repeating event in a zone with summer time fires at the right moment on both sides of the shift (alerts.rs utc_offset_secs), and is written as TZID in the .ics export with a STANDARD and DAYLIGHT block with yearly rules (ics.rs write, zones::vtimezone_body). zones::convert turns a wall time in one zone into another. Updated 2026-10-19; code only, not built or run, not verified on Midget. Left: a view time-zone override in the toolbar that shows event times converted (zones::convert is ready for it), southern-hemisphere zones, and reading the rules of an imported VTIMEZONE (an imported zone not in the table keeps the fixed offset its file gives). Midget check: `cargo test -p calendar-desktop zones` and `alerts` pass; then Calendar > New Event > Time Zone row, tap until it reads Paris or New York, Save, File > Export Calendar and confirm the .ics holds a DAYLIGHT block with RRULE for that TZID.",
-   "wire": "Add a time zone popup in the editor (TZID in the rich sidecar) and a toolbar view time-zone override in chrome.rs."
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/pickers.rs:283; springboard/apps/calendar-desktop/src/calendar/zones.rs; springboard/apps/calendar-desktop/src/calendar/viewzone.rs",
+   "note": "A Time Zone row in the event form cycles the device's zone, UTC, Iceland and nine more zones with their daylight saving rules (calendar/zones.rs: London, Paris, Helsinki, New York, Chicago, Denver, Los Angeles, India, Tokyo; the European and North American shift rules, tested at the shift days). The zone sets the alarms per occurrence, so a repeating event in a zone with summer time fires at the right moment on both sides of the shift (alerts.rs utc_offset_secs), and is written as TZID in the .ics export with a STANDARD and DAYLIGHT block with yearly rules (ics.rs write, zones::vtimezone_body). The toolbar's Time Zone button steps through the zones and back to each event's own time, and View > Time Zone chooses one: the Day and Week grids, the month cells, the agenda and the printed grid then show each timed event where it falls on that zone's clock (viewzone.rs, zones::convert_clock; all-day events keep their day), and a block moved or resized in the grid is saved on the event's own clock. The choice is kept in calendar-prefs.txt. Code only: not built or run, not verified on Midget. Left: southern-hemisphere zones, reading the rules of an imported VTIMEZONE (an imported zone not in the table keeps the fixed offset its file gives), and the Day and Week views do not say which zone they show beyond the button's name. Midget check: `cargo test -p bifrost-calendar zones viewzone alerts` pass; then give an event the Tokyo zone, press the toolbar Time Zone button until it reads New York: the event is on the day before; File > Export Calendar holds a DAYLIGHT block with an RRULE for a Paris event.",
+   "wire": "Show the view zone's name in the Day and Week headers; add the southern-hemisphere zones."
   },
   {
    "feature": "Invitees",
    "area": "panel",
    "apple": "iTIPelements.nib; ResendInvitations.nib",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar/invitees.rs:1",
-   "note": "Read-only list of imported attendees. When the account organises a saved event that has invitees, the saved event goes to them as an iTIP REQUEST (METHOD:REQUEST, the event's own lines, written to itip-requests/) by Mail, on Save (rsvp.rs invite_attendees). Cannot add invitees yet; recurrence rules are not sent.",
-   "wire": "Add an Add Invitees field with contacts autocomplete, then send through CalDAV scheduling when the server advertises it (no scheduling PUT exists yet)."
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/invitees.rs:1; springboard/apps/calendar-desktop/src/calendar/inviting.rs",
+   "note": "A list of an imported event's attendees. When the account organises a saved event that has invitees, the saved event goes to them as an iTIP REQUEST (METHOD:REQUEST, the event's own lines, written to itip-requests/) by Mail, on Save (rsvp.rs invite_attendees). The event form's Add Invitees row opens a line: type an email address, or the first letters of a name and the people of the address book Contacts keeps with an address show under the line (up to three, birthdays.rs book and suggest; nothing is looked up anywhere else). Return adds the address, or the first match; a tap on a match adds that person with their name; each invitee has a Remove row; up to 20 per event. The invitees are kept with the event (calendar-extras.txt, invitee lines) and saving the event writes a METHOD:REQUEST for them (organiser the account's address, the repeat rule and the zone included) into itip-requests/ and opens it in Mail, which sends it (inviting.rs invite_new_attendees); without an account address the invitees are kept and the notice says no invitation was sent. Tested headless in calendar/tests.rs. Code only: not built or run, not verified on Midget. Left: sending through CalDAV scheduling (a PUT to the server), showing the answers of people added here (they show only in the reply mail), and a role for each invitee. Midget check: new event, Add Invitees, type the first letters of a contact, tap the match, Save: Mail opens with the invitation attached.",
+   "wire": "Send through CalDAV scheduling when the server advertises it (no scheduling PUT exists yet)."
   },
   {
    "feature": "Respond to invitations; show declined events",
@@ -284,9 +284,9 @@
    "area": "menu",
    "apple": "MainMenu.nib File > Print; PrintPanel.nib",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar/printing.rs:66",
-   "note": "File > Print... (Cmd+P) sends the shown day, week, month or year as a plain-text agenda to the printing service, not a picture of the grid; built on parity/team-d-calendar; not yet verified on Midget",
-   "wire": "Draw the month grid and the day and week columns onto the pages (PrintOperation::pages) instead of an agenda list; text prints in ASCII only, so accented letters need the page writer's font support."
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/printing.rs; springboard/apps/calendar-desktop/src/calendar/printgrid.rs",
+   "note": "File > Print... (Cmd+P) draws the shown day, week, month or year as a grid on a landscape A4 page (printgrid.rs): the month as a table with each day's events in its cell and \"n more\" when a cell is full; the week and the day as columns on an hourly grid with a block for each event (overlapping ones side by side, the times and the place inside the block, all-day events in a band above the hours); the year as twelve small months with the days that have events shaded. Two standard fonts (Helvetica and Helvetica-Bold) in WinAnsi, so the letters of Western European languages print (the Icelandic ones included) and other scripts print as ?. A shorter week prints the days it shows; a view time zone moves the events as the grid shows them. The agenda text of the same range is still built (printing.rs print_job). Drawing is pure and tested headless (printgrid.rs, tests/parity_app-calendar-w15b.rs). Code only: not built or run, not verified on Midget. Left: more than one page for a busy range, a print sheet for the paper size, and non-Latin text.",
+   "wire": "Check File > Print... on Midget with Save as PDF and compare the page with the window."
   },
   {
    "feature": "Publish / share calendar",
