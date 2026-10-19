@@ -3,6 +3,7 @@
 
 pub mod defaults;
 pub mod ditto;
+pub mod audioctl;
 pub mod b64;
 pub mod bzegrep;
 pub mod caffeinate;

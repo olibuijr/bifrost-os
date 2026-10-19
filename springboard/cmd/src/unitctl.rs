@@ -9,10 +9,10 @@ use bifrost_app::audio_engine::units::{
     AudioUnit, ComponentDescription, ComponentRegistry, ParamSpec, SeqEvent, Sequence, SequencerUnit, UnitKind,
 };
 use bifrost_app::audio_engine::{Engine, EngineConfig, OUTPUT};
-use bifrost_app::midi_player::wav_bytes_from_planar;
+use bifrost_app::midi_player::{wav_bytes_from_planar, MidiPlayer};
 use std::path::PathBuf;
 
-pub const USAGE: &str = "usage: bifrost-unit scan [DIRECTORY...]\n       bifrost-unit render UNIT [--seconds N] [--rate HZ] [--note KEY] [--set ID=VALUE]... OUTPUT.wav\n\nUNIT is a plug-in library (a path ending in .so) or a built-in: gain, biquad, sine, gm.\nscan prints each plug-in found in the directories (default: /usr/lib/bifrost/units and ~/.local/share/bifrost/units).\nrender plays one note of an instrument (default 60) or processes a 440 Hz tone for an effect; 2 seconds at 48000 Hz unless told.";
+pub const USAGE: &str = "usage: bifrost-unit scan [DIRECTORY...]\n       bifrost-unit render UNIT [--seconds N] [--rate HZ] [--note KEY] [--set ID=VALUE]... OUTPUT.wav\n       bifrost-unit midi FILE.mid OUTPUT.wav [--rate HZ]\n\nmidi plays a Standard MIDI File through the built-in General MIDI synth into a WAV file.\nUNIT is a plug-in library (a path ending in .so) or a built-in: gain, biquad, sine, gm.\nscan prints each plug-in found in the directories (default: /usr/lib/bifrost/units and ~/.local/share/bifrost/units).\nrender plays one note of an instrument (default 60) or processes a 440 Hz tone for an effect; 2 seconds at 48000 Hz unless told.";
 
 /// What the command line asks for.
 #[derive(Clone, Debug, PartialEq)]
@@ -20,6 +20,7 @@ pub enum Plan {
     Help,
     Scan { dirs: Vec<PathBuf> },
     Render { unit: String, seconds: f64, rate: f64, note: u8, sets: Vec<(u32, f32)>, out: PathBuf },
+    Midi { file: PathBuf, out: PathBuf, rate: f64 },
 }
 
 pub fn parse(args: &[String]) -> Result<Plan, String> {
@@ -28,6 +29,27 @@ pub fn parse(args: &[String]) -> Result<Plan, String> {
     match cmd.as_str() {
         "-h" | "--help" | "help" => Ok(Plan::Help),
         "scan" => Ok(Plan::Scan { dirs: rest.iter().map(PathBuf::from).collect() }),
+        "midi" => {
+            let mut files = Vec::new();
+            let mut rate = 48_000.0f64;
+            let mut i = 0;
+            while i < rest.len() {
+                if rest[i] == "--rate" {
+                    let v = rest.get(i + 1).ok_or_else(|| "--rate needs a value".to_string())?;
+                    rate = v.parse::<f64>().ok().filter(|r| (8_000.0..=192_000.0).contains(r)).ok_or_else(|| format!("`{v}` is not a sample rate (8000 to 192000)"))?;
+                    i += 2;
+                } else if rest[i].starts_with("--") {
+                    return Err(format!("unknown option {}", rest[i]));
+                } else {
+                    files.push(PathBuf::from(&rest[i]));
+                    i += 1;
+                }
+            }
+            match files.as_slice() {
+                [file, out] => Ok(Plan::Midi { file: file.clone(), out: out.clone(), rate }),
+                _ => Err(USAGE.to_string()),
+            }
+        }
         "render" => {
             let mut unit = None;
             let mut out = None;
@@ -178,6 +200,12 @@ pub fn render(unit: Box<dyn AudioUnit>, seconds: f64, rate: f64, note: u8, sets:
     engine.render_offline(frames).map_err(|e| e.to_string())
 }
 
+/// A Standard MIDI File played through the built-in synth, as WAV bytes (the last notes ring out for half a second).
+pub fn render_midi(bytes: &[u8], rate: f64) -> Result<Vec<u8>, String> {
+    let mut player = MidiPlayer::from_bytes(bytes, rate).map_err(|e| e.to_string())?;
+    player.render_to_wav(0.5).map_err(|e| e.to_string())
+}
+
 /// The WAV bytes for a render.
 pub fn wav(planes: &[Vec<f32>], rate: f64) -> Vec<u8> {
     wav_bytes_from_planar(rate as u32, planes)
@@ -318,6 +346,41 @@ mod tests {
         assert_eq!(&w[..4], b"RIFF");
         assert_eq!(u32::from_le_bytes([w[24], w[25], w[26], w[27]]), 44_100);
         assert_eq!(u16::from_le_bytes([w[22], w[23]]), planes.len() as u16);
+    }
+
+    /// A format 0 file, 480 ticks per quarter, 120 bpm: middle C for one beat.
+    fn smf() -> Vec<u8> {
+        let mut track = vec![0x00, 0x90, 60, 100, 0x83, 0x60, 0x80, 60, 0, 0x00, 0xFF, 0x2F, 0x00];
+        let mut file = b"MThd".to_vec();
+        file.extend_from_slice(&[0, 0, 0, 6, 0, 0, 0, 1, 0x01, 0xE0]);
+        file.extend_from_slice(b"MTrk");
+        file.extend_from_slice(&(track.len() as u32).to_be_bytes());
+        file.append(&mut track);
+        file
+    }
+
+    #[test]
+    fn midi_files_render_to_a_wav_of_the_right_length() {
+        let wav = render_midi(&smf(), 24_000.0).unwrap();
+        assert_eq!(&wav[..4], b"RIFF");
+        // 0.5 s of music, 0.5 s of tail, and one frame, stereo 16-bit
+        let data = u32::from_le_bytes([wav[40], wav[41], wav[42], wav[43]]) as usize;
+        assert_eq!(data, (24_000 + 1) * 4);
+        assert!(wav[44..].iter().any(|b| *b != 0));
+        assert!(render_midi(b"nope", 24_000.0).is_err());
+    }
+
+    #[test]
+    fn the_midi_command_line_is_parsed() {
+        assert_eq!(parse(&args(&["midi", "a.mid", "o.wav"])), Ok(Plan::Midi { file: PathBuf::from("a.mid"), out: PathBuf::from("o.wav"), rate: 48_000.0 }));
+        assert_eq!(
+            parse(&args(&["midi", "--rate", "22050", "a.mid", "o.wav"])),
+            Ok(Plan::Midi { file: PathBuf::from("a.mid"), out: PathBuf::from("o.wav"), rate: 22_050.0 })
+        );
+        assert!(parse(&args(&["midi", "a.mid"])).is_err());
+        assert!(parse(&args(&["midi", "a.mid", "o.wav", "--rate"])).unwrap_err().contains("needs a value"));
+        assert!(parse(&args(&["midi", "a.mid", "o.wav", "--rate", "9"])).unwrap_err().contains("sample rate"));
+        assert!(parse(&args(&["midi", "a.mid", "o.wav", "--loud"])).unwrap_err().contains("unknown option"));
     }
 
     #[test]

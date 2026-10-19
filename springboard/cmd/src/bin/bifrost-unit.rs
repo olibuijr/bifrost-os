@@ -17,6 +17,14 @@ fn main() {
                 std::process::exit(1);
             }
         }
+        Ok(Plan::Midi { file, out, rate }) => {
+            let bytes = std::fs::read(&file).unwrap_or_else(|e| die(TOOL, &format!("cannot read {}: {e}", file.display()), 1));
+            let wav = unitctl::render_midi(&bytes, rate).unwrap_or_else(|e| die(TOOL, &e, 1));
+            if let Err(e) = std::fs::write(&out, &wav) {
+                die(TOOL, &format!("cannot write {}: {e}", out.display()), 1);
+            }
+            println!("{}: {} bytes of audio at {} Hz", out.display(), wav.len().saturating_sub(44), rate);
+        }
         Ok(Plan::Render { unit, seconds, rate, note, sets, out }) => {
             let loaded = unitctl::load_unit(&unit).unwrap_or_else(|e| die(TOOL, &e, 1));
             let planes = unitctl::render(loaded, seconds, rate, note, &sets).unwrap_or_else(|e| die(TOOL, &e, 1));

@@ -6,7 +6,7 @@
 use bifrost_app::midi::ump::Ump;
 use bifrost_app::midi_client::{EndpointInfo, Setup};
 
-pub const USAGE: &str = "usage: bifrost-midi list\n       bifrost-midi monitor [SECONDS]\n       bifrost-midi send DESTINATION BYTE...\n       bifrost-midi note DESTINATION KEY [VELOCITY [MILLISECONDS]]\n\nDESTINATION is an id from `list` or part of a name. BYTEs are hexadecimal MIDI bytes (90 3C 64). monitor listens to every source for SECONDS (default 10).";
+pub const USAGE: &str = "usage: bifrost-midi list\n       bifrost-midi monitor [SECONDS]\n       bifrost-midi send DESTINATION BYTE...\n       bifrost-midi note DESTINATION KEY [VELOCITY [MILLISECONDS]]\n       bifrost-midi thru SOURCE DESTINATION [SECONDS [TRANSPOSE]]\n       bifrost-midi ci DESTINATION SOURCE [SECONDS]\n\nDESTINATION and SOURCE are ids from `list` or part of a name. BYTEs are hexadecimal MIDI bytes (90 3C 64). monitor listens to every source for SECONDS (default 10). thru plays SOURCE through to DESTINATION inside the server for SECONDS (default 30), notes moved by TRANSPOSE semitones. ci sends a MIDI-CI discovery inquiry to DESTINATION and prints the devices that answer on SOURCE within SECONDS (default 5).";
 
 /// What the command line asks for.
 #[derive(Clone, Debug, PartialEq)]
@@ -16,6 +16,8 @@ pub enum Plan {
     Monitor { seconds: u64 },
     Send { destination: String, bytes: Vec<u8> },
     Note { destination: String, key: u8, velocity: u8, millis: u64 },
+    Thru { source: String, destination: String, seconds: u64, transpose: i32 },
+    Ci { destination: String, source: String, seconds: u64 },
 }
 
 /// One hexadecimal MIDI byte: one or two digits, optionally with a `0x` prefix.
@@ -59,8 +61,38 @@ pub fn parse(args: &[String]) -> Result<Plan, String> {
             };
             Ok(Plan::Note { destination: rest[0].clone(), key, velocity, millis })
         }
+        "thru" if (2..=4).contains(&rest.len()) => {
+            let seconds = match rest.get(2) {
+                Some(s) => s.parse::<u64>().map_err(|_| format!("`{s}` is not a number of seconds"))?,
+                None => 30,
+            };
+            let transpose = match rest.get(3) {
+                Some(t) => t.parse::<i32>().ok().filter(|t| t.abs() <= 127).ok_or_else(|| format!("`{t}` is not a number of semitones"))?,
+                None => 0,
+            };
+            Ok(Plan::Thru { source: rest[0].clone(), destination: rest[1].clone(), seconds, transpose })
+        }
+        "ci" if (2..=3).contains(&rest.len()) => {
+            let seconds = match rest.get(2) {
+                Some(s) => s.parse::<u64>().map_err(|_| format!("`{s}` is not a number of seconds"))?,
+                None => 5,
+            };
+            Ok(Plan::Ci { destination: rest[0].clone(), source: rest[1].clone(), seconds })
+        }
         _ => Err(USAGE.to_string()),
     }
+}
+
+/// A note-number table that moves every note by `by` semitones, held at the ends of the range (what a thru
+/// connection's note map takes).
+pub fn transpose_table(by: i32) -> Vec<u8> {
+    (0..128i32).map(|i| (i + by).clamp(0, 127) as u8).collect()
+}
+
+/// A MIDI-CI unique id for this process: 28 bits from the clock and the process id.
+pub fn local_muid() -> u32 {
+    let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.subsec_nanos());
+    (t ^ std::process::id().wrapping_mul(2_654_435_761)) & 0x0FFF_FFFF
 }
 
 /// The packet's words in hexadecimal, one group per word (`20903C64`).
@@ -171,6 +203,41 @@ mod tests {
         assert!(parse(&args(&["note", "5", "200"])).unwrap_err().contains("key"));
         assert!(parse(&args(&["note", "5", "60", "0"])).unwrap_err().contains("velocity"));
         assert!(parse(&args(&["fly"])).is_err());
+    }
+
+    #[test]
+    fn thru_ci_and_transpose_are_parsed() {
+        assert_eq!(
+            parse(&args(&["thru", "keys", "synth"])),
+            Ok(Plan::Thru { source: "keys".into(), destination: "synth".into(), seconds: 30, transpose: 0 })
+        );
+        assert_eq!(
+            parse(&args(&["thru", "4", "6", "10", "-12"])),
+            Ok(Plan::Thru { source: "4".into(), destination: "6".into(), seconds: 10, transpose: -12 })
+        );
+        assert!(parse(&args(&["thru", "4"])).is_err());
+        assert!(parse(&args(&["thru", "4", "6", "soon"])).is_err());
+        assert!(parse(&args(&["thru", "4", "6", "5", "999"])).unwrap_err().contains("semitones"));
+        assert_eq!(parse(&args(&["ci", "5", "4"])), Ok(Plan::Ci { destination: "5".into(), source: "4".into(), seconds: 5 }));
+        assert_eq!(parse(&args(&["ci", "5", "4", "9"])), Ok(Plan::Ci { destination: "5".into(), source: "4".into(), seconds: 9 }));
+        assert!(parse(&args(&["ci", "5"])).is_err());
+    }
+
+    #[test]
+    fn the_transpose_table_moves_notes_and_holds_the_ends() {
+        let t = transpose_table(12);
+        assert_eq!(t.len(), 128);
+        assert_eq!((t[0], t[60], t[115], t[116], t[127]), (12, 72, 127, 127, 127));
+        let d = transpose_table(-12);
+        assert_eq!((d[0], d[11], d[12], d[60]), (0, 0, 0, 48));
+        assert_eq!(transpose_table(0), (0..128u8).collect::<Vec<u8>>());
+    }
+
+    #[test]
+    fn the_local_muid_fits_28_bits() {
+        for _ in 0..5 {
+            assert!(local_muid() <= 0x0FFF_FFFF);
+        }
     }
 
     #[test]
