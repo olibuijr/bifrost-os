@@ -1147,6 +1147,13 @@ mod tests {
         assert!(files.controls.nodes().iter().all(|n| n.bounds.y < UNIFIED_BAR_PT), "every control is in the unified bar");
         files.w = 768.;
         assert!(files.bar_layout().overflow.is_empty() && files.bar_layout().rect_of(BAR_SEARCH).is_some(), "a 768 pt window fits the whole bar");
+        // while a query is active the four view buttons are one pop-up control, and the bar still fits
+        files.query.push_str("aqua");
+        files.update_controls();
+        let ids: Vec<u64> = files.controls.nodes().iter().map(|n| n.id).collect();
+        assert!(ids.contains(&(BAR_VIEW as u64)) && ids.contains(&(BAR_SEARCH as u64)), "the pop-up and the field are published");
+        assert!(![BAR_ICONS, BAR_LIST, BAR_COLUMNS, BAR_GALLERY].iter().any(|id| ids.contains(&(*id as u64))), "the four buttons are gone while searching");
+        assert!(files.bar_layout().overflow.is_empty(), "a 768 pt window fits the bar while searching too");
     }
     #[test]
     fn hidden_files_are_shown_only_when_asked() {

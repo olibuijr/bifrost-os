@@ -285,8 +285,9 @@ impl Files {
                 Some(BAR_LIST) => self.set_view(false, false),
                 Some(BAR_COLUMNS) => self.set_view(false, true),
                 Some(BAR_GALLERY) => self.set_gallery(),
-                // the pull-down, share, tags and action buttons queue their menu or sheet (barmenu.rs)
-                Some(id @ (BAR_SORT | BAR_SHARE | BAR_TAGS | BAR_MORE)) => self.bar_action(id),
+                // the pull-downs (views while a query is active, group and sort), share, tags and action buttons queue
+                // their menu or sheet (barmenu.rs)
+                Some(id @ (BAR_VIEW | BAR_SORT | BAR_SHARE | BAR_TAGS | BAR_MORE)) => self.bar_action(id),
                 Some(BAR_SEARCH) => {
                     if self.search_rect().is_some_and(|r| bifrost_app::controls::search::hits_clear(r, !self.query.is_empty(), x, y)) {
                         self.query.clear();

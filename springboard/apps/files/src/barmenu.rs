@@ -22,6 +22,15 @@ pub(crate) const MENU_SORT_REVERSE: u32 = BAR_MENU_BASE + 4;
 /// The action menu's Select Items: taps add or remove items from the selection (the old Select button).
 pub(crate) const MENU_SELECT_MODE: u32 = BAR_MENU_BASE + 5;
 
+/// The view pop-up's choices, in the order of `VIEWS`: as Icons, as List, as Columns, as Gallery.
+pub(crate) const MENU_VIEW_ICONS: u32 = BAR_MENU_BASE + 6;
+
+pub(crate) const MENU_VIEW_LIST: u32 = BAR_MENU_BASE + 7;
+
+pub(crate) const MENU_VIEW_COLUMNS: u32 = BAR_MENU_BASE + 8;
+
+pub(crate) const MENU_VIEW_GALLERY: u32 = BAR_MENU_BASE + 9;
+
 /// Points between a pull-down button's bottom edge and its menu.
 const BAR_MENU_GAP: f32 = 4.;
 
@@ -60,6 +69,12 @@ impl Files {
         items.push(row(MENU_SORT_REVERSE, &marked(!self.vo.asc, "Reverse Sort Order"), true));
         items.push(row(MENU_VIEW_OPTIONS, "Show View Options", true));
         items
+    }
+
+    /// The view pop-up that stands in for the four view buttons while a query is active: as Icons, as List, as Columns and
+    /// as Gallery with the keys of the View menu (Cmd+1 to Cmd+4, which keep working), the view showing checked.
+    pub(crate) fn view_items(&self) -> Vec<ContextItem> {
+        VIEWS.iter().enumerate().map(|(i, (_, _, name))| ContextItem::new(MENU_VIEW_ICONS + i as u32, &marked(self.view_on(i), name)).key(&format!("cmd+{}", i + 1))).collect()
     }
 
     /// The action menu ("..."): what can be done with the selection, or with the folder when nothing is selected, then
@@ -101,6 +116,7 @@ impl Files {
     /// A click on one of the toolbar's pull-down or action buttons (any other id does nothing).
     pub(crate) fn bar_action(&mut self, id: u32) {
         match id {
+            BAR_VIEW => self.pop_bar_menu(id, self.view_items()),
             BAR_SORT => self.pop_bar_menu(id, self.group_sort_items()),
             BAR_MORE => self.pop_bar_menu(id, self.action_menu_items()),
             BAR_TAGS => self.open_tags(),
@@ -144,6 +160,11 @@ impl Files {
                 self.sort_rows();
             }
             MENU_SELECT_MODE => self.select_mode = !self.select_mode,
+            // the view pop-up: the same switches as the four buttons and Cmd+1 to Cmd+4
+            MENU_VIEW_ICONS => self.set_view(true, false),
+            MENU_VIEW_LIST => self.set_view(false, false),
+            MENU_VIEW_COLUMNS => self.set_view(false, true),
+            MENU_VIEW_GALLERY => self.set_gallery(),
             _ => return false,
         }
         self.scroll = 0.;
@@ -254,5 +275,44 @@ mod tests {
         files.bar_action(BAR_TAGS);
         assert!(matches!(files.sys.effects.last(), Some(Effect::Share(paths, _)) if paths == &vec![PathBuf::from("/fixture/A")]));
         assert!(files.tag_panel, "Tags opens the tag panel for the selection");
+    }
+
+    #[test]
+    fn the_view_pop_up_checks_the_current_view_and_a_choice_switches_to_it() {
+        let mut files = fixture(vec![folder("A")]);
+        let items = files.view_items();
+        assert_eq!(items.iter().map(|i| i.title()).collect::<Vec<_>>(), ["✓ as Icons", "as List", "as Columns", "as Gallery"]);
+        assert_eq!(items.iter().map(|i| i.key_combo()).collect::<Vec<_>>(), [Some("cmd+1"), Some("cmd+2"), Some("cmd+3"), Some("cmd+4")], "the keys of the View menu, which keep working");
+        assert_eq!(items.iter().map(|i| i.id).collect::<Vec<_>>(), [MENU_VIEW_ICONS, MENU_VIEW_LIST, MENU_VIEW_COLUMNS, MENU_VIEW_GALLERY]);
+        assert!(MENU_VIEW_GALLERY < crate::extensions::MENU_EXT_BASE, "below the extension rows");
+        assert!(files.bar_menu_action(MENU_VIEW_COLUMNS));
+        assert!(files.columns && !files.grid && !files.vo.gallery);
+        assert_eq!(files.view_items()[2].title(), "✓ as Columns");
+        assert_eq!(files.view_items()[0].title(), "as Icons");
+        assert!(files.context_action(MENU_VIEW_GALLERY), "the context route reaches the pop-up's choices");
+        assert!(files.vo.gallery && !files.columns);
+        assert!(files.context_action(MENU_VIEW_LIST));
+        assert!(files.is_list());
+        assert!(files.context_action(MENU_VIEW_ICONS));
+        assert!(files.grid && !files.vo.gallery);
+    }
+
+    #[test]
+    fn the_view_pop_up_opens_under_its_button_only_while_a_query_is_active() {
+        let mut files = fixture(vec![folder("A")]);
+        files.bar_action(BAR_VIEW);
+        assert!(files.sys.effects.is_empty(), "no query: the four buttons are on the bar and there is no pop-up");
+        files.query.push_str("a");
+        files.update_controls();
+        let view = files.bar_layout().rect_of(BAR_VIEW).unwrap();
+        files.click(view.x + view.w / 2., view.y + view.h / 2., 0.);
+        let queued = std::mem::take(&mut files.sys.effects);
+        match queued.last() {
+            Some(Effect::PopUp(x, y, items)) => {
+                assert_eq!((*x, *y), (view.x, view.y + view.h + BAR_MENU_GAP), "the menu opens under its button");
+                assert_eq!(items.len(), 4);
+            }
+            other => panic!("a click on the view pop-up queues its menu, got {other:?}"),
+        }
     }
 }
