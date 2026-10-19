@@ -212,9 +212,11 @@ mod tests {
         let uri = format!("otpauth://totp/x?secret={SECRET}&digits=8&period=60&algorithm=sha1");
         let otp = parse_otpauth(&uri).unwrap();
         assert_eq!((otp.digits, otp.period), (8, 60));
-        assert_eq!(otp.code_at(59), Ok("94287082".to_string()));
+        // RFC 6238 gives 94287082 for counter 1; with a 60 s step that counter starts at 60 s, so time 119
+        assert_eq!(otp.code_at(119), Ok("94287082".to_string()));
+        assert_eq!(otp.code_at(59), Ok("84755224".to_string()), "time 59 is still counter 0 at a 60 s step");
         assert_eq!(otp.seconds_left(60), 60);
-        assert_eq!(code_at_with(SECRET, 59, 8, 60), Ok("94287082".to_string()));
+        assert_eq!(code_at_with(SECRET, 119, 8, 60), Ok("94287082".to_string()));
     }
 
     #[test]
