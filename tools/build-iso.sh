@@ -193,7 +193,7 @@ echo "ISO ($MODE): $ISO"
 { ls -dt out/iso-lab-* out/iso-release-* 2>/dev/null || true; } | tail -n +$((KEEP + 1)) | while read -r d; do rm -rf --one-file-system "$d"; done
 { ls -dt out/archiso-work-* 2>/dev/null || true; } | tail -n +$((KEEP_WORK + 1)) | while read -r d; do remove_work "$d"; done
 if [ "$DEPLOY" = 1 ]; then
-  D=out/iventoy/iventoy-1.0.44/iso; NAME=bifrost-$MODE$([ "$DEBUG" = 1 ] && echo -debug)-$STAMP.iso
+  D=out/iventoy/iventoy-1.0.44/iso; NAME=bifrost-$MODE$([ "$DEBUG" = 1 ] && echo -debug || true)-$STAMP.iso
   cp --reflink=auto "$ISO" "$D/$NAME"
   curl -s http://127.0.0.1:26000/iventoy/json -d '{"method":"refresh_img_list"}' >/dev/null || true
   echo "deployed to iVentoy as $NAME"
