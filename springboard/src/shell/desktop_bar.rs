@@ -85,6 +85,19 @@ pub(super) fn popup_damage_rect(popup:(usize,usize,usize,usize),bar_h:i32,reach:
     let top=(y-reach).max(bar_h);let bottom=y+h+reach+lip;
     (left,top,right-left,bottom-top)
 }
+/// Where a context menu of `size` (w, h in px) opens for a pointer at `at`, inside `area` (x, y, w, h in px: the screen
+/// below the menu bar and above the Dock). Its top-left corner is the pointer. A menu that would pass the right edge of
+/// the area opens to the left of the pointer instead, and one that would pass the bottom edge opens above it; a menu
+/// that fits on neither side is held inside the area, top-left first.
+#[cfg(any(test, feature = "desktop-wayland"))]
+pub(super) fn context_menu_origin(at:(f32,f32),size:(usize,usize),area:(i32,i32,i32,i32))->(usize,usize) {
+    let (ax,ay,aw,ah)=area;
+    // one axis: the pointer's coordinate `p`, the menu's length `len`, the area's span `lo..hi`
+    let fit=|p:i32,len:i32,lo:i32,hi:i32|{let p=if p+len>hi {p-len} else {p};p.min(hi-len).max(lo)};
+    let x=fit(at.0 as i32,size.0 as i32,ax,ax+aw);
+    let y=fit(at.1 as i32,size.1 as i32,ay,ay+ah);
+    (x.max(0) as usize,y.max(0) as usize)
+}
 /// Top and height in pt (from the popup's top edge) of each row, and the popup's total height.
 #[cfg(feature = "desktop-wayland")]
 pub(super) fn menu_spans(rows:&[Row])->(Vec<(f32,f32)>,f32) {let mut y=MENU_PAD_PT;let v=rows.iter().map(|r|{let h=if r.sep{MENU_SEP_PT}else if r.search{HELP_FIELD_PT}else{MENU_ROW_PT};let s=(y,h);y+=h;s}).collect();(v,y+MENU_PAD_PT)}
@@ -119,6 +132,24 @@ pub(super) fn app_menu_rows(slot:u8,menu:&bifrost_proto::AppMenu)->Vec<Row> {
         let row=if i.enabled&&!i.submenu&&i.id!=0 {Row::action(text,Action::AppMenu(slot,i.id))}else{Row::label(text)};
         if i.key.is_empty(){row}else{row.key(&i.key)}
     }).collect()
+}
+/// Rows of an app's context menu (`ToShell::ContextMenu`): a separator row for `ContextItem::separator`, a disabled item as a
+/// label (secondary ink), an enabled one as a choice that goes back to the app as `ToApp::ContextAction`, and a key
+/// equivalent right-aligned. A separator at either end or next to another is dropped, so an app may build its groups
+/// without checking which are empty; an invalid key equivalent is left out (as in `app_menu_rows`).
+#[cfg(feature = "desktop-wayland")]
+pub(super) fn context_rows(slot:u8,items:&[bifrost_proto::ContextItem])->Vec<Row> {
+    let mut rows:Vec<Row>=Vec::new();
+    for item in items {
+        if item.is_separator() {
+            if rows.last().is_some_and(|r|!r.sep) {rows.push(Row::separator());}
+            continue;
+        }
+        let row=if item.enabled {Row::action(item.title(),Action::Context(slot,item.id))} else {Row::label(item.title())};
+        rows.push(match item.key_combo() {Some(combo)=>row.key(combo),None=>row});
+    }
+    if rows.last().is_some_and(|r|r.sep) {rows.pop();}
+    rows
 }
 /// The enabled item whose key equivalent is `ch` with the chord modifiers `mods` (`CHORD_*`), `NativeMenu.performKeyEquivalent:`.
 pub(super) fn app_menu_chord(menus:&[bifrost_proto::AppMenu],ch:char,mods:u32)->Option<u32> {
@@ -402,7 +433,7 @@ impl Shell {
             Menu::Input=>{let mut v:Vec<Row>=super::kb_layouts::Layout::ALL.iter().enumerate().filter(|(_,l)|super::kb_layouts::is_enabled(**l)).map(|(i,l)|Row::action(format!("{} {}",if *l==super::kb_layouts::active()&&!self.input_providers.is_method_active(){"✓"}else{" "},l.name()),Action::InputSource(i as u8))).collect();v.extend(self.input_providers.modes().into_iter().map(|(id,label,on)|Row::action(format!("{} {}",if on{"✓"}else{" "},label),Action::InputMethod(id))));v.extend([Row::separator(),Row::action("Show Keyboard Viewer",Action::KeyboardViewer),Row::action(if self.keyboard_opened_explicitly(){"Hide On-Screen Keyboard"}else{"Show On-Screen Keyboard"},Action::OnScreenKeyboard)]);v},
             Menu::Status(i)=>self.status_entries_now().get(i as usize).map(|e|e.menu.iter().map(|m|if m.separator{Row::separator()}else if m.enabled{Row::action(format!("{} {}",if m.checked{"✓"}else{" "},m.title),Action::StatusItem(e.slot,e.item,m.id))}else{Row::label(format!("{} {}",if m.checked{"✓"}else{" "},m.title))}).collect()).unwrap_or_default(),
             Menu::Custom(i)=>{let slot=match self.screen {Screen::App(AppId::External(n))=>n,_=>return Vec::new()};self.app_menus().get(i as usize).map(|m|app_menu_rows(slot,m)).unwrap_or_default()},
-            Menu::Context=>self.desktop_context.as_ref().map(|c|c.items.iter().map(|item|if item.enabled {Row::action(&item.label,Action::Context(c.slot,item.id))}else{Row::label(&item.label)}).collect()).unwrap_or_default(),
+            Menu::Context=>self.desktop_context.as_ref().map(|c|context_rows(c.slot,&c.items)).unwrap_or_default(),
             Menu::Dock=>{use super::desktop_dock::{Change,Position};let p=self.dock_preferences();let d=self.desk.as_ref().unwrap();let mut rows=Vec::new();if let Some(index)=d.dock_menu_target{let name=super::apps().get(index).map(|a|a.name).unwrap_or("Application");rows.push(Row::label(name));rows.push(Row::action("Open / Show",Action::Dock(Change::Open(index))));let pinned=self.dock_app_key(index).is_some_and(|key|p.pinned.contains(&key));rows.push(Row::action(if pinned{"Remove from Dock"}else{"Keep in Dock"},Action::Dock(Change::Pin(index))));rows.push(Row::action("Quit",Action::Dock(Change::Quit(index))));if let Some(AppId::External(slot))=super::apps().get(index).map(|a|a.id){if let Some(Some(host))=self.ext.get(slot as usize){for (id,title) in host.windows.menu_items(&host.id){if let Ok(n)=u16::try_from(id){rows.push(Row::action(title,Action::Open(AppId::ExternalWindow(slot,n))));}}if !host.windows.of_app(&host.id).is_empty(){rows.push(Row::separator());}let quick=self.quick_actions_for(slot as usize);for (i,item) in quick.iter().enumerate(){rows.push(Row::action(item.title.clone(),Action::QuickAction(slot,i as u8)));}if !quick.is_empty(){rows.push(Row::separator());}for item in &host.dock_menu{rows.push(if item.enabled{Row::action(item.title.clone(),Action::DockMenu(slot,item.id))}else{Row::label(item.title.clone())});}if !host.dock_menu.is_empty(){rows.push(Row::separator());}}}}rows.push(Row::label("Dock"));for (label,position) in [("Bottom",Position::Bottom),("Left",Position::Left),("Right",Position::Right)] {rows.push(Row::action(format!("{} {}",if p.position==position{"✓"}else{" "},label),Action::Dock(Change::Position(position))));}rows.push(Row::action(format!("{} Automatically hide and show",if p.autohide{"✓"}else{" "}),Action::Dock(Change::Autohide)));rows.push(Row::action("Smaller Icons",Action::Dock(Change::Size(-8.))));rows.push(Row::action("Larger Icons",Action::Dock(Change::Size(8.))));rows},
             Menu::App=>{let enabled=self.foreign_active().is_some()||self.desk.as_ref().and_then(|d|d.front()).is_some();let name=self.app_menu_name();let quit=format!("Quit {name}");let mut rows=vec![Row::action(format!("About {name}"),Action::Settings("About")),Row::separator(),Row::action("Settings…",Action::Settings("")).symbol(crate::symbols::Symbol::GearOutline).key("cmd+,")];let services=super::services_route::menu_entries();if !services.is_empty(){rows.push(Row::separator());rows.push(Row::label("Services"));rows.extend(services.into_iter().map(|(i,title)|Row::action(title,Action::Service(i))));}rows.push(Row::separator());rows.push((if enabled{Row::action(quit,Action::Close)}else{Row::label(quit)}).key("cmd+q"));rows},
             Menu::System=>{use super::power_menu::PowerAction;let mut rows=vec![Row::action("About This Computer",Action::Settings("About")),Row::separator(),Row::action("System Settings…",Action::Settings("")),Row::action("App Store…",Action::Open(AppId::AppStore)),Row::separator()];rows.push(Row::label("Recent Items"));let recent=self.recent_titles();for (i,title) in recent.iter().enumerate(){rows.push(Row::action(title.clone(),Action::Recent(i as u8)));}rows.push(if recent.is_empty(){Row::label("Clear Menu")}else{Row::action("Clear Menu",Action::ClearRecent)});rows.push(Row::separator());rows.extend(vec![Row::action("Sleep",Action::Sleep),Row::action("Restart…",Action::Halt(PowerAction::Restart)),Row::action("Shut Down…",Action::Halt(PowerAction::Off)),Row::separator(),Row::action("Lock Screen",Action::Lock).key("ctrl+cmd+q")]);rows},
@@ -452,7 +483,13 @@ impl Shell {
     #[cfg(test)]
     pub(super) fn menu_row_texts(&self,menu:Menu)->Vec<String> {self.menu_rows(menu).into_iter().map(|r|r.text).collect()}
     pub(super) fn desktop_popup_rect(&self)->Option<(usize,usize,usize,usize)> {
-        let menu=self.desktop_menu?;if menu==Menu::Dock{return self.dock_popup_rect();}if menu==Menu::Document{return self.doc_panel_rect();}if menu==Menu::Context{let c=self.desktop_context.as_ref()?;let width=self.ui.pt(264.) as usize;let height=(self.ui.pt(8.)+c.items.len() as f32*self.ui.pt(36.)) as usize;return Some(((c.x.max(0.) as usize).min((self.w as usize).saturating_sub(width)),(c.y.max(0.) as usize).min((self.h as usize).saturating_sub(height)).max(self.desktop_bar_height()),width,height));}let (_,x,_,_)=self.menu_buttons().into_iter().find(|b|b.0==menu)?;
+        let menu=self.desktop_menu?;if menu==Menu::Dock{return self.dock_popup_rect();}if menu==Menu::Document{return self.doc_panel_rect();}if menu==Menu::Context{
+            // the size is the drawn rows' (`menu_spans`, the same call the bar menus use), so the surface fits its items
+            let c=self.desktop_context.as_ref()?;let rows=self.menu_rows(menu);let width=self.menu_width(&rows);let height=self.ui.pt(menu_spans(&rows).1).ceil() as usize;
+            let area=super::desk::Desk::area(&self.desk_metrics());
+            let (x,y)=context_menu_origin((c.x,c.y),(width,height),(0,area.y,self.w,area.h));
+            return Some((x,y,width,height));
+        }let (_,x,_,_)=self.menu_buttons().into_iter().find(|b|b.0==menu)?;
         let rows=self.menu_rows(menu);let width=self.menu_width(&rows);let height=self.ui.pt(menu_spans(&rows).1).ceil() as usize;
         Some(((x as usize).min((self.w as usize).saturating_sub(width)),self.desktop_bar_height()+self.ui.pt(MENU_GAP_PT) as usize,width,height))
     }
@@ -626,8 +663,9 @@ impl Shell {
     }
     /// Pointer movement with a menu open: highlight the row under it, and a bar title switches the open menu (as Golden Gate does).
     pub(super) fn desktop_menu_hover(&mut self,x:f32,y:f32) {
-        let Some(menu)=self.desktop_menu else{return;};if matches!(menu,Menu::Dock|Menu::Context|Menu::Document){return;}
-        if y<self.desktop_bar_height() as f32 {
+        let Some(menu)=self.desktop_menu else{return;};if matches!(menu,Menu::Dock|Menu::Document){return;}
+        // a context menu stays open when the pointer crosses the bar; only a bar menu follows the pointer to a neighbour
+        if y<self.desktop_bar_height() as f32&&menu!=Menu::Context {
             if let Some(b)=self.menu_buttons().into_iter().find(|(_,l,w,_)|x>=*l&&x<*l+*w) {if b.0!=menu&&b.0!=Menu::ControlCenter{self.desktop_menu=Some(b.0);self.desktop_menu_row=None;self.help_reset();self.dirty=true;}}
             return;
         }
@@ -1119,5 +1157,126 @@ mod help_search_tests {
         assert_eq!(step_index(&sel, Some(1), -1), Some(3), "up wraps to the bottom");
         assert_eq!(step_index(&[false, false], None, 1), None, "no choices");
         assert_eq!(step_index(&[], Some(0), 1), None);
+    }
+}
+
+/// Where a context menu opens: at the pointer, flipped left or up when it would leave the area, held inside when neither fits.
+#[cfg(test)]
+mod context_menu_origin_tests {
+    use super::context_menu_origin;
+
+    // the area under the bar and above the Dock: 1000 x 600 px, its top at y 30
+    const AREA: (i32, i32, i32, i32) = (0, 30, 1000, 600);
+
+    #[test]
+    fn a_menu_that_fits_opens_with_its_corner_at_the_pointer() {
+        assert_eq!(context_menu_origin((300., 200.), (264, 400), AREA), (300, 200));
+    }
+
+    #[test]
+    fn a_menu_flips_left_at_the_right_edge_and_up_at_the_bottom_edge() {
+        // 1000 - 264 = 736: a pointer at 800 leaves no room to the right
+        assert_eq!(context_menu_origin((800., 200.), (264, 100), AREA), (536, 200), "its right edge is the pointer");
+        // the area ends at 630: a 100 px menu at 560 would end at 660
+        assert_eq!(context_menu_origin((300., 560.), (264, 100), AREA), (300, 460), "its bottom edge is the pointer");
+        assert_eq!(context_menu_origin((800., 560.), (264, 100), AREA), (536, 460), "both at once");
+        // a menu that ends exactly at the edge stays where it opened
+        assert_eq!(context_menu_origin((736., 530.), (264, 100), AREA), (736, 530));
+    }
+
+    #[test]
+    fn a_menu_larger_than_the_area_is_held_inside_it_from_the_top_left() {
+        assert_eq!(context_menu_origin((300., 300.), (264, 700), AREA), (300, 30), "too tall to flip: held at the top");
+        assert_eq!(context_menu_origin((10., 300.), (2000, 10), AREA), (0, 300), "wider than the screen: held at the left");
+    }
+
+    #[test]
+    fn a_pointer_outside_the_area_is_pulled_in() {
+        assert_eq!(context_menu_origin((-20., 5.), (264, 100), AREA), (0, 30));
+    }
+}
+
+/// An app's context menu in the shell: the rows come from its items and the surface is as tall as they are.
+#[cfg(all(test, feature = "desktop-wayland"))]
+mod context_menu_shell_tests {
+    use super::*;
+    use bifrost_proto::ContextItem;
+
+    fn items() -> Vec<ContextItem> {
+        vec![
+            ContextItem::new(1, "Open"),
+            ContextItem::new(2, "Get Info").key("cmd+i"),
+            ContextItem::separator(),
+            ContextItem::new(3, "Paste").enabled(false).key("cmd+v"),
+        ]
+    }
+
+    /// A desktop shell with `items()` open as a context menu for a pointer at (x, y).
+    fn open_at(x: f32, y: f32) -> Shell {
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.desktop_context = Some(ContextMenu { slot: 0, x, y, items: items() });
+        sh.desktop_menu = Some(Menu::Context);
+        sh
+    }
+
+    #[test]
+    fn the_surface_is_as_tall_as_its_rows_and_separators() {
+        let sh = open_at(300., 200.);
+        let (_, _, w, h) = sh.desktop_popup_rect().unwrap();
+        // edge padding, three rows, one separator, edge padding
+        let pt = 2. * MENU_PAD_PT + 3. * MENU_ROW_PT + MENU_SEP_PT;
+        assert_eq!(h, sh.ui.pt(pt).ceil() as usize);
+        assert_eq!(h, sh.ui.pt(menu_spans(&sh.menu_rows(Menu::Context)).1).ceil() as usize, "the height the rows are drawn with");
+        assert!((h as f32) < sh.ui.pt(8. + 36. * 4.), "not a fixed 36 pt per item");
+        assert!(w >= sh.ui.pt(264.) as usize, "as wide as the bar menus");
+    }
+
+    #[test]
+    fn it_opens_at_the_pointer_and_flips_at_the_screen_edges() {
+        let sh = open_at(300., 200.);
+        let (x, y, _, _) = sh.desktop_popup_rect().unwrap();
+        assert_eq!((x, y), (300, 200), "top-left at the pointer");
+        // near the bottom of the work area: above the pointer
+        let area = crate::shell::desk::Desk::area(&sh.desk_metrics());
+        let low = area.y + area.h - 10;
+        let sh = open_at(300., low as f32);
+        let (x, y, _, h) = sh.desktop_popup_rect().unwrap();
+        assert_eq!((x, y + h), (300, low as usize), "its bottom edge is the pointer");
+        // near the right edge: left of the pointer
+        let right = sh.w - 10;
+        let sh = open_at(right as f32, 200.);
+        let (x, y, w, _) = sh.desktop_popup_rect().unwrap();
+        assert_eq!((x + w, y), (right as usize, 200), "its right edge is the pointer");
+    }
+
+    #[test]
+    fn rows_follow_the_items_and_disabled_items_are_labels() {
+        let mut list = vec![ContextItem::separator()];
+        list.extend(items());
+        list.extend([ContextItem::separator(), ContextItem::separator()]);
+        let rows = context_rows(4, &list);
+        assert_eq!(rows.len(), 4, "a separator at either end is dropped");
+        assert!(matches!(rows[0].action, Some(Action::Context(4, 1))), "a choice goes back to the app with its id");
+        assert!(rows[0].key_text().is_none());
+        assert_eq!((rows[1].text.as_str(), rows[1].key_text()), ("Get Info", Some("\u{2318}I")));
+        assert!(rows[2].is_separator());
+        assert_eq!(rows[3].text, "Paste", "the key equivalent is not part of the title");
+        assert!(rows[3].action.is_none(), "a disabled item is a label in the secondary ink, not a choice");
+        assert_eq!(rows[3].key_text(), Some("\u{2318}V"));
+        let doubled = context_rows(0, &[ContextItem::new(1, "A"), ContextItem::separator(), ContextItem::separator(), ContextItem::new(2, "B")]);
+        assert_eq!(doubled.len(), 3, "two separators in a row are one");
+    }
+
+    #[test]
+    fn hovering_a_row_highlights_it_and_the_bar_does_not_take_over_the_menu() {
+        let mut sh = open_at(300., 200.);
+        let (x, y, _, _) = sh.desktop_popup_rect().unwrap();
+        let (spans, _) = menu_spans(&sh.menu_rows(Menu::Context));
+        let (top, h) = spans[1];
+        sh.desktop_menu_hover(x as f32 + 12., y as f32 + sh.ui.pt(top + h / 2.));
+        assert_eq!(sh.menu_row_of(Menu::Context), Some(1));
+        sh.desktop_menu_hover(x as f32 + 12., 4.);
+        assert_eq!(sh.desktop_menu, Some(Menu::Context), "crossing the bar keeps the context menu");
+        assert_eq!(sh.menu_row_of(Menu::Context), None);
     }
 }

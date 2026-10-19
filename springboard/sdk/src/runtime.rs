@@ -273,8 +273,13 @@ impl Ctx {
     pub fn appearance(&self) -> kit::appearance::Appearance {
         kit::appearance::current()
     }
-    /// Ask the authenticated system broker to change Remote sharing.
+    /// Opens a context menu at the pointer: `x` and `y` are the window-local pixels `Input::Context` carried. The shell
+    /// draws it like its own menus, with its top-left corner at the pointer (flipped left or up when it would leave the
+    /// screen), and sends the choice back as `Input::ContextAction(id)`. Build the rows with `ContextItem::new(id, title)`,
+    /// `.key("cmd+i")` (shown right-aligned; the app still handles the chord), `.enabled(false)` (secondary ink) and
+    /// `ContextItem::separator()` between groups. At most 32 rows, separators included.
     pub fn context_menu(&self,x:f32,y:f32,items:Vec<crate::proto::ContextItem>){self.send(ToShell::ContextMenu{x,y,items});}
+    /// Ask the authenticated system broker to change Remote sharing.
     pub fn remote_sharing(&self,on:bool) {self.send(ToShell::RemoteSharing{on});}
     pub fn haptic(&self) {
         self.send(ToShell::Haptic);
