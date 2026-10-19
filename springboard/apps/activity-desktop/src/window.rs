@@ -107,6 +107,8 @@ pub const MENU_SAMPLE_LENGTH: u32 = 140;
 pub const MENU_WINDOW_CPU_USAGE: u32 = 160;
 pub const MENU_WINDOW_CPU_HISTORY: u32 = 161;
 pub const MENU_WINDOW_KEEP_TOP: u32 = 162;
+/// Window > GPU History.
+pub const MENU_WINDOW_GPU_HISTORY: u32 = 163;
 
 /// Height of one line of the report view (points) and how often a running job is looked at (milliseconds).
 pub const REPORT_LINE_PT: f32 = 16.0;
@@ -316,6 +318,8 @@ pub struct Monitor {
     pub window_owners: HashSet<u32>,
     /// The window list should be asked for again; taken with `take_window_poll`.
     pub window_poll: bool,
+    /// The Window > GPU History window is open, so the sampler reads the GPU whatever the tab.
+    pub gpu_window: bool,
     /// What the Dock tile shows (View > Dock Icon).
     pub dock_mode: DockMode,
     /// A new Dock tile to send to the shell; taken with `take_dock_update`.
@@ -364,6 +368,7 @@ impl Monitor {
             quit_sheet: None,
             window_owners: HashSet::new(),
             window_poll: false,
+            gpu_window: false,
             dock_mode: DockMode::Off,
             dock_update: None,
             data_dir: PathBuf::new(),
@@ -563,6 +568,10 @@ impl Monitor {
             Some(s) => model::visible_scoped(&s.procs, self.filter, self.sampler.own_uid, &query, self.sort, only.as_ref(), &self.baselines),
             None => Vec::new(),
         };
+        // the Network tab lists the processes whose sockets the monitor can see
+        if self.tab == Tab::Network {
+            self.rows.retain(|p| p.net_sockets.is_some());
+        }
         if let Some(pid) = self.selected {
             if !self.rows.iter().any(|p| p.pid == pid) {
                 self.selected = None;
@@ -624,21 +633,43 @@ impl Monitor {
         self.rebuild();
     }
 
-    /// Tells the sampler which costly readings the window needs now: the GPU on the GPU tab and under the GPU filter,
-    /// the sleep blockers on the Energy tab while its Preventing Sleep column is shown. A reading that has just been
-    /// turned on is taken at once.
+    /// Window > GPU History opened or closed. The GPU is read while the window is open, as it is on the GPU tab.
+    pub fn set_gpu_window(&mut self, open: bool) {
+        self.gpu_window = open;
+        self.sync_scans();
+    }
+
+    /// Tells the sampler which costly readings the window needs now: the GPU on the GPU tab, under the GPU filter and
+    /// while the GPU History window is open, the sleep blockers on the Energy tab while its Preventing Sleep column is
+    /// shown, the sockets on the Network tab, and the memory and program readings while their columns are shown. A
+    /// reading that has just been turned on is taken at once.
     fn sync_scans(&mut self) {
-        let gpu = self.tab == Tab::Gpu || self.filter == Filter::Gpu;
+        let gpu = self.tab == Tab::Gpu || self.filter == Filter::Gpu || self.gpu_window;
         let sleep = self.shown_key(SortKey::PreventingSleep);
         let ports = self.shown_key(SortKey::Ports);
         let private = self.shown_key(SortKey::PrivateMem);
+        let real = self.shown_key(SortKey::RealMem);
+        let purgeable = self.shown_key(SortKey::Purgeable);
+        let kind = self.shown_key(SortKey::Kind);
         let wakeups = self.shown_key(SortKey::WakeUps);
-        let turned_on = (gpu && !self.sampler.scan_gpu) || (sleep && !self.sampler.scan_sleep) || (wakeups && !self.sampler.scan_wakeups);
+        let net = self.tab == Tab::Network;
+        let turned_on = (gpu && !self.sampler.scan_gpu)
+            || (sleep && !self.sampler.scan_sleep)
+            || (wakeups && !self.sampler.scan_wakeups)
+            || (net && !self.sampler.scan_net)
+            || (real && !self.sampler.scan_real)
+            || (purgeable && !self.sampler.scan_purgeable)
+            || (kind && !self.sampler.scan_kind)
+            || (private && !self.sampler.scan_private);
         self.sampler.scan_gpu = gpu;
         self.sampler.scan_sleep = sleep;
         self.sampler.scan_ports = ports;
         self.sampler.scan_private = private;
+        self.sampler.scan_real = real;
+        self.sampler.scan_purgeable = purgeable;
+        self.sampler.scan_kind = kind;
         self.sampler.scan_wakeups = wakeups;
+        self.sampler.scan_net = net;
         if turned_on {
             self.last_sample = None;
         }
@@ -989,13 +1020,9 @@ impl Monitor {
             .collect()
     }
 
-    /// The number of table lines on the current tab (interfaces on Network, processes elsewhere).
+    /// The number of table lines on the current tab: one per process row.
     pub fn line_count(&self) -> usize {
-        if self.tab == Tab::Network {
-            self.snapshot.as_ref().map_or(0, |s| s.ifaces.len())
-        } else {
-            self.rows.len()
-        }
+        self.rows.len()
     }
 
     /// The table's largest scroll offset, set on the scroller.
@@ -1014,7 +1041,7 @@ impl Monitor {
             return None;
         }
         let index = ((y - g.table_top + self.scroll.offset()) / ROW_PT).floor();
-        if index < 0.0 || self.tab == Tab::Network {
+        if index < 0.0 {
             return None;
         }
         self.rows.get(index as usize).map(|p| p.pid)
@@ -1374,6 +1401,16 @@ impl Monitor {
     /// The footer line: counts and the machine's totals.
     pub fn footer_text(&self) -> String {
         let Some(s) = &self.snapshot else { return "Reading the system".into() };
+        if self.tab == Tab::Network {
+            let (rx, tx) = (s.ifaces.iter().map(|i| i.rx_total).sum::<u64>(), s.ifaces.iter().map(|i| i.tx_total).sum::<u64>());
+            return format!(
+                "{} processes with TCP connections   {} interfaces   Received {}   Sent {}",
+                self.rows.len(),
+                s.ifaces.len(),
+                model::bytes(rx),
+                model::bytes(tx)
+            );
+        }
         let procs = format!("{} processes", s.procs.len());
         let cpu = format!("CPU {}", model::percent(s.cpu.busy));
         let mem = format!("Memory {} of {}", model::bytes(s.memory.used()), model::bytes(s.memory.total));
@@ -1932,5 +1969,55 @@ mod tests {
         assert_eq!(model::cell_text(&small, Some(SortKey::PrivateMem), None), "4.0 KB");
         assert_eq!(model::cell_text(&small, Some(SortKey::WakeUps), None), "1.5/s");
         assert_eq!(model::cell_text(&small, Some(SortKey::Ports), None), "2");
+    }
+
+    #[test]
+    fn the_sockets_are_read_only_on_the_network_tab_and_it_lists_the_processes_that_own_some() {
+        let mut m = Monitor::new(800.0, 600.0);
+        assert!(!m.sampler.scan_net);
+        m.set_tab(Tab::Network);
+        assert!(m.sampler.scan_net);
+        assert_eq!(m.sort, Tab::Network.default_sort());
+        let mut web = proc(1, 0, "firefox");
+        web.net_sockets = Some(4);
+        web.net_rx_bps = 900.0;
+        let mut ssh = proc(2, 0, "ssh");
+        ssh.net_sockets = Some(1);
+        ssh.net_rx_bps = 2000.0;
+        let quiet = proc(3, 0, "sleep");
+        with_rows(&mut m, vec![web, quiet, ssh]);
+        assert_eq!(m.rows.iter().map(|p| p.pid).collect::<Vec<_>>(), vec![2, 1], "no sockets, no row; busiest first");
+        assert_eq!(m.line_count(), 2);
+        m.set_tab(Tab::Cpu);
+        assert!(!m.sampler.scan_net);
+        assert_eq!(m.rows.len(), 3, "the other tabs list every process");
+    }
+
+    #[test]
+    fn the_gpu_history_window_keeps_the_gpu_read_while_it_is_open() {
+        let mut m = Monitor::new(800.0, 600.0);
+        assert!(!m.sampler.scan_gpu);
+        m.set_gpu_window(true);
+        assert!(m.sampler.scan_gpu, "read on the CPU tab because the window is open");
+        m.set_tab(Tab::Memory);
+        assert!(m.sampler.scan_gpu);
+        m.set_gpu_window(false);
+        assert!(!m.sampler.scan_gpu);
+    }
+
+    #[test]
+    fn real_memory_purgeable_and_kind_are_read_only_while_shown() {
+        let mut m = Monitor::new(800.0, 600.0);
+        let index = |tab: Tab, key: SortKey| tab.all_columns().iter().position(|c| c.key == Some(key)).unwrap();
+        m.set_tab(Tab::Memory);
+        assert!(!m.sampler.scan_real && !m.sampler.scan_purgeable && !m.sampler.scan_kind);
+        m.toggle_column(index(Tab::Memory, SortKey::RealMem));
+        m.toggle_column(index(Tab::Memory, SortKey::Purgeable));
+        m.toggle_column(index(Tab::Memory, SortKey::Kind));
+        assert!(m.sampler.scan_real && m.sampler.scan_purgeable && m.sampler.scan_kind);
+        m.set_tab(Tab::Cpu);
+        assert!(!m.sampler.scan_real && !m.sampler.scan_purgeable && !m.sampler.scan_kind, "the Memory choices belong to the Memory tab");
+        m.toggle_column(index(Tab::Cpu, SortKey::Kind));
+        assert!(m.sampler.scan_kind && !m.sampler.scan_real);
     }
 }

@@ -40,6 +40,11 @@ pub fn history_window_size(cores: usize) -> (f32, f32) {
     (420.0, 52.0 + rows * 64.0 + (rows - 1.0) * 6.0 + CARD_PAD)
 }
 
+/// Where the plot of the GPU History window starts, and the window's size (points). The width and the plot's height
+/// follow the window when it is resized: only the opening size is fixed here.
+const GPU_PLOT_TOP: f32 = 66.0;
+pub const GPU_WINDOW_SIZE: (f32, f32) = (420.0, 200.0);
+
 /// The footer width the Memory tab's pressure strip and its label take, left of the footer text (points).
 const PRESSURE_SPACE_PT: f32 = 280.0;
 
@@ -87,16 +92,14 @@ fn cell(p: &ProcSample, key: Option<SortKey>, base: Option<&ProcSample>) -> Stri
     label
 }
 
-/// The text of one cell for an interface row on the Network tab, by the column's title.
-fn iface_cell(i: &crate::sample::IfaceRate, title: &str) -> String {
-    match title {
-        "Received/s" => rate(i.rx_bps),
-        "Sent/s" => rate(i.tx_bps),
-        "Total Received" => bytes(i.rx_total),
-        "Total Sent" => bytes(i.tx_total),
-        "Packets In" => i.rx_packets.to_string(),
-        "Packets Out" => i.tx_packets.to_string(),
-        _ => i.name.clone(),
+/// One series as bars in an area `w` by `h` points at (`x`, `top`): one bar per sample, newest at the right, each
+/// from the baseline, `scale` being the value that reaches the top. Shared by the graph card and the GPU History window.
+fn plot_bars(s: &mut Surface, ui: &Ui, x: f32, top: f32, w: f32, h: f32, values: &[f32], scale: f32, color: u32) {
+    let slot = w / HISTORY as f32;
+    let offset = HISTORY.saturating_sub(values.len());
+    for (i, v) in values.iter().enumerate() {
+        let bh = (v / scale).clamp(0.0, 1.0) * h;
+        fill(s, ui, x + (offset + i) as f32 * slot, top + h - bh, (slot - 1.0).max(1.0), bh, color);
     }
 }
 
@@ -344,7 +347,7 @@ impl Monitor {
                 Graph {
                     title: "Network",
                     value: format!("Received {}   Sent {}", rate(rx), rate(tx)),
-                    detail: format!("{n} interfaces, loopback not counted"),
+                    detail: format!("{n} interfaces, loopback not counted. The table counts TCP sockets of your processes."),
                     plots: vec![(h.net_rx.values().collect(), SYSTEM_BLUE.now()), (h.net_tx.values().collect(), SYSTEM_GREEN.now())],
                     scale: h.net_rx.peak().max(h.net_tx.peak()).max(NET_FLOOR),
                 }
@@ -369,15 +372,9 @@ impl Monitor {
         // the plot: one bar per sample, newest at the right, each series from the baseline
         let plot_y = r.y + 62.0;
         let plot_h = (r.h - 72.0).max(4.0);
-        let slot = w / HISTORY as f32;
         fill(s, ui, x, plot_y + plot_h, w, 1.0, SEPARATOR_C.now());
         for (values, color) in &graph.plots {
-            let offset = HISTORY.saturating_sub(values.len());
-            for (i, v) in values.iter().enumerate() {
-                let bh = (v / graph.scale).clamp(0.0, 1.0) * plot_h;
-                let bx = x + (offset + i) as f32 * slot;
-                fill(s, ui, bx, plot_y + plot_h - bh, (slot - 1.0).max(1.0), bh, *color);
-            }
+            plot_bars(s, ui, x, plot_y, w, plot_h, values, graph.scale, *color);
         }
     }
 
@@ -462,6 +459,27 @@ impl Monitor {
         self.core_strips(ui, s, CARD_PAD, 52.0, w - 2.0 * CARD_PAD, h - 52.0 - CARD_PAD);
     }
 
+    /// The Window > GPU History floating window: the busy share of the GPU over the last minute, newest at the right,
+    /// with the process using it most. The sampler reads the GPU while the window is open (`Monitor::set_gpu_window`).
+    pub fn draw_gpu_history_window(&mut self, ui: &Ui, s: &mut Surface) {
+        let (w, h) = (s.w as f32 / ui.pt(1.0), s.h as f32 / ui.pt(1.0));
+        fill(s, ui, 0.0, 0.0, w, h, CONTENT_BG.now());
+        let snap = self.snapshot.as_ref();
+        let value = snap.and_then(|sn| sn.gpu_busy).map_or_else(|| "Reading the GPU".to_string(), |busy| format!("Busy {}", percent(busy)));
+        let top = snap.and_then(|sn| sn.procs.iter().max_by(|a, b| a.gpu.total_cmp(&b.gpu))).filter(|p| p.gpu > 0.0);
+        let detail = top.map_or_else(|| "No process is using the GPU".to_string(), |p| format!("Highest: {} ({})", p.name, percent(p.gpu)));
+        let inner = w - 2.0 * CARD_PAD;
+        text(&mut self.labels, s, ui, "GPU History", MAC_HEADLINE_PT, Weight::Semibold, LABEL.now(), CARD_PAD, 18.0, inner);
+        text(&mut self.labels, s, ui, &value, MAC_SUBHEAD_PT, Weight::Regular, LABEL.now(), CARD_PAD, 36.0, inner);
+        text(&mut self.labels, s, ui, &detail, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), CARD_PAD, 52.0, inner);
+        let plot_y = GPU_PLOT_TOP;
+        let plot_h = (h - plot_y - CARD_PAD).max(4.0);
+        fill(s, ui, CARD_PAD, plot_y + plot_h, inner, 1.0, SEPARATOR_C.now());
+        fill(s, ui, CARD_PAD, plot_y + plot_h / 2.0, inner, 1.0, SEPARATOR_C.now());
+        let samples: Vec<f32> = self.history.gpu.values().collect();
+        plot_bars(s, ui, CARD_PAD, plot_y, inner, plot_h, &samples, 100.0, SYSTEM_GREEN.now());
+    }
+
     /// The table rows that are on screen. Rows scrolled above the table are left out; the header covers the rest.
     fn draw_rows(&mut self, ui: &Ui, s: &mut Surface, g: &Geo) {
         let cols = self.col_frames(ui);
@@ -471,7 +489,7 @@ impl Monitor {
         if count == 0 {
             let msg = match (&self.snapshot, self.tab) {
                 (None, _) => "Reading the system",
-                (Some(_), Tab::Network) => "No network interfaces",
+                (Some(_), Tab::Network) => "No processes with TCP connections",
                 (Some(_), _) => "No matching processes",
             };
             let mid = (g.table_top + g.table_bottom) / 2.0;
@@ -489,15 +507,6 @@ impl Monitor {
                 continue;
             }
             let mid = y + ROW_PT / 2.0;
-            if self.tab == Tab::Network {
-                let Some(iface) = self.snapshot.as_ref().and_then(|s| s.ifaces.get(i)) else { continue };
-                for (col, cx, cw) in &cols {
-                    let quiet = col.key.is_none() && !matches!(col.title, "Interface");
-                    let color = if quiet { LABEL_2.now() } else { LABEL.now() };
-                    text(&mut self.labels, s, ui, &iface_cell(iface, col.title), MAC_SUBHEAD_PT, Weight::Regular, color, cx + PAD, mid, cw - 2.0 * PAD);
-                }
-                continue;
-            }
             let Some(p) = self.rows.get(i) else { continue };
             let selected = self.selected == Some(p.pid);
             if selected {
@@ -602,6 +611,12 @@ mod tests {
         assert_eq!(w, USAGE_WINDOW_W);
         assert!((h8 - h4 - 4.0 * USAGE_ROW_PT).abs() < 0.001, "four more cores add four rows");
         assert_eq!(usage_window_size(0), usage_window_size(1), "a window with no reading yet still has one row");
+    }
+
+    #[test]
+    fn the_gpu_history_window_leaves_room_for_its_plot() {
+        assert!(GPU_WINDOW_SIZE.1 - GPU_PLOT_TOP - CARD_PAD >= 64.0, "a plot at least as tall as one CPU history strip");
+        assert_eq!(GPU_WINDOW_SIZE.0, history_window_size(1).0, "as wide as the CPU History window");
     }
 
     #[test]

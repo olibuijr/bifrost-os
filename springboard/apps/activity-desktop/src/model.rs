@@ -55,7 +55,7 @@ impl Tab {
             Tab::Memory => Sort { key: SortKey::Memory, descending: true },
             Tab::Energy => Sort { key: SortKey::Energy, descending: true },
             Tab::Disk => Sort { key: SortKey::DiskRead, descending: true },
-            Tab::Network => Sort { key: SortKey::Name, descending: false },
+            Tab::Network => Sort { key: SortKey::NetRx, descending: true },
             Tab::Gpu => Sort { key: SortKey::Gpu, descending: true },
         }
     }
@@ -73,6 +73,7 @@ impl Tab {
                 Column::new(Some(SortKey::Cpu), "% CPU", 72.0).required(),
                 Column::new(Some(SortKey::CpuTime), "CPU Time", 88.0).off(),
                 Column::new(None, SINCE_BASELINE, 112.0).off(),
+                Column::new(Some(SortKey::Kind), "Kind", 80.0).off(),
                 threads(),
                 Column::new(Some(SortKey::Ports), "Ports", 64.0).off(),
                 Column::new(Some(SortKey::Ppid), "Parent PID", 88.0).off(),
@@ -82,8 +83,11 @@ impl Tab {
                 name(),
                 user(),
                 Column::new(Some(SortKey::Memory), "Memory", 88.0).required(),
+                Column::new(Some(SortKey::RealMem), "Real Mem", 96.0).off(),
                 Column::new(Some(SortKey::PrivateMem), "Private Memory", 112.0).off(),
+                Column::new(Some(SortKey::Purgeable), "Purgeable", 96.0).off(),
                 Column::new(Some(SortKey::Virtual), "Virtual Size", 104.0).off(),
+                Column::new(Some(SortKey::Kind), "Kind", 80.0).off(),
                 threads(),
                 pid(),
             ],
@@ -107,13 +111,14 @@ impl Tab {
                 pid(),
             ],
             Tab::Network => vec![
-                Column::new(None, "Interface", 0.0).required(),
-                Column::new(None, "Received/s", 104.0),
-                Column::new(None, "Sent/s", 104.0),
-                Column::new(None, "Total Received", 120.0),
-                Column::new(None, "Total Sent", 120.0),
-                Column::new(None, "Packets In", 96.0).off(),
-                Column::new(None, "Packets Out", 104.0).off(),
+                name(),
+                user(),
+                Column::new(Some(SortKey::NetRx), "Received/s", 104.0).required(),
+                Column::new(Some(SortKey::NetTx), "Sent/s", 96.0),
+                Column::new(Some(SortKey::NetRxTotal), "Bytes Received", 120.0),
+                Column::new(Some(SortKey::NetTxTotal), "Bytes Sent", 104.0),
+                Column::new(Some(SortKey::Connections), "Connections", 104.0).off(),
+                pid(),
             ],
             Tab::Gpu => vec![
                 name(),
@@ -236,6 +241,18 @@ pub enum SortKey {
     Ports,
     PrivateMem,
     WakeUps,
+    /// Real memory (the proportional set size).
+    RealMem,
+    /// Memory freed with `MADV_FREE`, which the kernel may take back.
+    Purgeable,
+    /// The machine the program is built for, from its ELF header.
+    Kind,
+    /// Network: bytes per second and bytes so far over the process's TCP sockets, and how many sockets it holds.
+    NetRx,
+    NetTx,
+    NetRxTotal,
+    NetTxTotal,
+    Connections,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -434,6 +451,14 @@ pub fn cell_text(p: &ProcSample, key: Option<SortKey>, base: Option<&ProcSample>
         Some(SortKey::Ports) => p.ports.map_or_else(|| "-".to_string(), |n| n.to_string()),
         Some(SortKey::PrivateMem) => p.private.map_or_else(|| "-".to_string(), bytes),
         Some(SortKey::WakeUps) => format!("{:.1}/s", p.wakeups),
+        Some(SortKey::RealMem) => p.real.map_or_else(|| "-".to_string(), bytes),
+        Some(SortKey::Purgeable) => p.purgeable.map_or_else(|| "-".to_string(), bytes),
+        Some(SortKey::Kind) => p.kind.unwrap_or("-").to_string(),
+        Some(SortKey::NetRx) => rate(p.net_rx_bps),
+        Some(SortKey::NetTx) => rate(p.net_tx_bps),
+        Some(SortKey::NetRxTotal) => bytes(since(p.net_rx_total, base.map(|b| b.net_rx_total))),
+        Some(SortKey::NetTxTotal) => bytes(since(p.net_tx_total, base.map(|b| b.net_tx_total))),
+        Some(SortKey::Connections) => p.net_sockets.map_or_else(|| "-".to_string(), |n| n.to_string()),
         None => String::new(),
     }
 }
@@ -442,9 +467,6 @@ pub fn cell_text(p: &ProcSample, key: Option<SortKey>, base: Option<&ProcSample>
 /// percent sign, as it does in the footer and the graph. `since` is the Since Baseline column's text (empty without a
 /// baseline).
 pub fn row_text(p: &ProcSample, tab: Tab, set: &ColumnSet, base: Option<&ProcSample>, since: &str) -> String {
-    if tab == Tab::Network {
-        return [p.name.clone(), p.user.clone(), p.pid.to_string()].join("\t");
-    }
     let fields: Vec<String> = tab
         .columns(set)
         .iter()
@@ -475,7 +497,7 @@ pub fn elapsed_text(secs: f64) -> String {
 
 /// The sort keys whose figures Show Deltas counts from a baseline.
 pub fn is_cumulative(key: SortKey) -> bool {
-    matches!(key, SortKey::CpuTime | SortKey::BytesRead | SortKey::BytesWritten | SortKey::GpuTime)
+    matches!(key, SortKey::CpuTime | SortKey::BytesRead | SortKey::BytesWritten | SortKey::GpuTime | SortKey::NetRxTotal | SortKey::NetTxTotal)
 }
 
 /// The amount a row's cumulative figure has grown since its baseline, for sorting. A process without a baseline counts
@@ -488,6 +510,8 @@ fn delta_of(p: &ProcSample, key: SortKey, base: Option<&ProcSample>) -> u64 {
         SortKey::BytesRead => since(p.read_total, b.read_total),
         SortKey::BytesWritten => since(p.write_total, b.write_total),
         SortKey::GpuTime => since(p.gpu_ns, b.gpu_ns),
+        SortKey::NetRxTotal => since(p.net_rx_total, b.net_rx_total),
+        SortKey::NetTxTotal => since(p.net_tx_total, b.net_tx_total),
         _ => 0,
     }
 }
@@ -595,6 +619,14 @@ fn compare(a: &ProcSample, b: &ProcSample, key: SortKey) -> Ordering {
         SortKey::Ports => a.ports.unwrap_or(0).cmp(&b.ports.unwrap_or(0)),
         SortKey::PrivateMem => a.private.unwrap_or(0).cmp(&b.private.unwrap_or(0)),
         SortKey::WakeUps => a.wakeups.total_cmp(&b.wakeups),
+        SortKey::RealMem => a.real.unwrap_or(0).cmp(&b.real.unwrap_or(0)),
+        SortKey::Purgeable => a.purgeable.unwrap_or(0).cmp(&b.purgeable.unwrap_or(0)),
+        SortKey::Kind => a.kind.unwrap_or("").cmp(b.kind.unwrap_or("")),
+        SortKey::NetRx => a.net_rx_bps.total_cmp(&b.net_rx_bps),
+        SortKey::NetTx => a.net_tx_bps.total_cmp(&b.net_tx_bps),
+        SortKey::NetRxTotal => a.net_rx_total.cmp(&b.net_rx_total),
+        SortKey::NetTxTotal => a.net_tx_total.cmp(&b.net_tx_total),
+        SortKey::Connections => a.net_sockets.unwrap_or(0).cmp(&b.net_sockets.unwrap_or(0)),
     }
 }
 
@@ -991,10 +1023,54 @@ mod tests {
         for tab in Tab::ALL {
             let cols = tab.columns(&ColumnSet::default());
             assert_eq!(cols.iter().filter(|c| c.width == 0.0).count(), 1);
-            if tab != Tab::Network {
-                assert!(cols.iter().any(|c| c.key == Some(tab.default_sort().key)));
-            }
+            assert!(cols.iter().any(|c| c.key == Some(tab.default_sort().key)));
         }
+    }
+
+    #[test]
+    fn the_network_tab_is_per_process_and_sorts_by_what_it_receives() {
+        let mut busy = proc(1, "firefox", 1000, 0.0, 0);
+        busy.net_rx_bps = 5000.0;
+        busy.net_tx_bps = 100.0;
+        busy.net_rx_total = 9_000;
+        busy.net_tx_total = 2_048;
+        busy.net_sockets = Some(3);
+        let mut quiet = proc(2, "ssh", 1000, 0.0, 0);
+        quiet.net_rx_bps = 10.0;
+        quiet.net_sockets = Some(1);
+        let rows = visible(&[quiet.clone(), busy.clone()], Filter::All, 1000, "", Tab::Network.default_sort());
+        assert_eq!(rows.iter().map(|p| p.pid).collect::<Vec<_>>(), vec![1, 2]);
+        let set = ColumnSet::default();
+        assert_eq!(row_text(&busy, Tab::Network, &set, None, ""), "firefox\tolibuijr\t4.9 KB/s\t100 B/s\t8.8 KB\t2.0 KB\t1");
+        let titles: Vec<&str> = Tab::Network.all_columns().iter().map(|c| c.title).collect();
+        assert!(titles.contains(&"Connections"));
+        assert_eq!(cell_text(&busy, Some(SortKey::Connections), None), "3");
+        assert_eq!(cell_text(&proc(3, "idle", 1000, 0.0, 0), Some(SortKey::Connections), None), "-");
+        // Show Deltas counts the totals from the baseline
+        let mut base = busy.clone();
+        base.net_rx_total = 8_000;
+        assert_eq!(cell_text(&busy, Some(SortKey::NetRxTotal), Some(&base)), "1000 B");
+        assert!(is_cumulative(SortKey::NetRxTotal) && is_cumulative(SortKey::NetTxTotal));
+    }
+
+    #[test]
+    fn real_memory_purgeable_and_kind_read_from_the_sample() {
+        let mut p = proc(1, "bash", 1000, 0.0, 0);
+        assert_eq!(cell_text(&p, Some(SortKey::RealMem), None), "-");
+        assert_eq!(cell_text(&p, Some(SortKey::Purgeable), None), "-");
+        assert_eq!(cell_text(&p, Some(SortKey::Kind), None), "-");
+        p.real = Some(3 * 1024 * 1024);
+        p.purgeable = Some(2048);
+        p.kind = Some("x86_64");
+        assert_eq!(cell_text(&p, Some(SortKey::RealMem), None), "3.0 MB");
+        assert_eq!(cell_text(&p, Some(SortKey::Purgeable), None), "2.0 KB");
+        assert_eq!(cell_text(&p, Some(SortKey::Kind), None), "x86_64");
+        let mut q = proc(2, "zsh", 1000, 0.0, 0);
+        q.real = Some(1024);
+        let rows = visible(&[q, p], Filter::All, 1000, "", Sort { key: SortKey::RealMem, descending: true });
+        assert_eq!(rows.iter().map(|r| r.pid).collect::<Vec<_>>(), vec![1, 2]);
+        let memory: Vec<&str> = Tab::Memory.all_columns().iter().filter(|c| !c.on_by_default).map(|c| c.title).collect();
+        assert_eq!(memory, vec!["Real Mem", "Private Memory", "Purgeable", "Virtual Size", "Kind"]);
     }
 
     #[test]

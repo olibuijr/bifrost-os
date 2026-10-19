@@ -155,6 +155,25 @@ pub struct ProcSample {
     pub wakeups: f64,
     /// Seconds since the process started; None when the boot time is not known.
     pub age_secs: Option<u64>,
+    /// Real memory in bytes: the proportional set size, which splits every shared page between the processes that map
+    /// it. None when not readable or not being read.
+    pub real: Option<u64>,
+    /// Memory the kernel may take back without writing it anywhere (pages freed with `MADV_FREE`) in bytes; None when
+    /// not readable or not being read.
+    pub purgeable: Option<u64>,
+    /// The machine the program runs on, read from its executable's ELF header ("x86_64", "ARM64"); None when the
+    /// executable is not readable (another user's process, a kernel thread) or not being read.
+    pub kind: Option<&'static str>,
+    /// Bytes received and sent per second over the process's TCP sockets. Zero unless the sampler reads sockets.
+    pub net_rx_bps: f64,
+    pub net_tx_bps: f64,
+    /// Bytes received and sent so far over the TCP sockets the process holds open now (a closed socket takes its count
+    /// with it). Zero unless the sampler reads sockets.
+    pub net_rx_total: u64,
+    pub net_tx_total: u64,
+    /// The TCP sockets the process holds; None when it owns none the monitor can see, or the sampler is not reading
+    /// sockets.
+    pub net_sockets: Option<u32>,
 }
 
 /// Everything read in one pass.
@@ -431,23 +450,74 @@ fn read_inhibitors() -> HashSet<u32> {
     }
 }
 
+/// What a process's `smaps_rollup` says about its memory, in bytes. A field is None when its lines are not there.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Rollup {
+    /// Private clean and dirty pages.
+    pub private: Option<u64>,
+    /// The proportional set size: each shared page counted as its size over the processes that map it.
+    pub pss: Option<u64>,
+    /// Pages freed with `MADV_FREE`, which the kernel may drop at any moment (`LazyFree`).
+    pub lazy_free: Option<u64>,
+}
+
+/// The fields of a process's `smaps_rollup` the monitor uses. A line that does not read is skipped.
+pub fn parse_rollup(text: &str) -> Rollup {
+    let mut out = Rollup::default();
+    for line in text.lines() {
+        let Some((key, rest)) = line.split_once(':') else { continue };
+        let Some(kb) = rest.split_whitespace().next().and_then(|v| v.parse::<u64>().ok()) else { continue };
+        let bytes = kb * 1024;
+        if key.starts_with("Private_") {
+            out.private = Some(out.private.unwrap_or(0) + bytes);
+        } else if key == "Pss" {
+            out.pss = Some(bytes);
+        } else if key == "LazyFree" {
+            out.lazy_free = Some(bytes);
+        }
+    }
+    out
+}
+
 /// Private memory of a process in bytes: the private clean and dirty pages of its `smaps_rollup`. None when the file
 /// is not there or has no private lines.
 pub fn parse_private(text: &str) -> Option<u64> {
-    let mut total = None;
-    for line in text.lines() {
-        let Some((key, rest)) = line.split_once(':') else { continue };
-        if key.starts_with("Private_") {
-            let kb: u64 = rest.split_whitespace().next()?.parse().ok()?;
-            total = Some(total.unwrap_or(0) + kb * 1024);
-        }
-    }
-    total
+    parse_rollup(text).private
 }
 
-/// Private memory of a process, or None when its `smaps_rollup` is not readable (another user's process).
-fn read_private(pid: u32) -> Option<u64> {
-    parse_private(&read_file(&format!("/proc/{pid}/smaps_rollup"))?)
+/// The rollup of a process, or None when its `smaps_rollup` is not readable (another user's process).
+fn read_rollup(pid: u32) -> Option<Rollup> {
+    read_file(&format!("/proc/{pid}/smaps_rollup")).map(|t| parse_rollup(&t))
+}
+
+/// The machine an ELF executable is built for, from the first 20 bytes of the file: the byte order tells how to read
+/// `e_machine` (offset 18). None when the bytes are not an ELF header.
+pub fn parse_elf_kind(header: &[u8]) -> Option<&'static str> {
+    if header.len() < 20 || header[..4] != [0x7f, b'E', b'L', b'F'] {
+        return None;
+    }
+    let machine = match header[5] {
+        1 => u16::from_le_bytes([header[18], header[19]]),
+        2 => u16::from_be_bytes([header[18], header[19]]),
+        _ => return None,
+    };
+    Some(match machine {
+        0x3E => "x86_64",
+        0x03 => "x86",
+        0xB7 => "ARM64",
+        0x28 => "ARM",
+        0xF3 => "RISC-V",
+        _ => "Other",
+    })
+}
+
+/// The kind of a process's program, from `/proc/<pid>/exe`. None when the link cannot be opened (another user's
+/// process, a kernel thread) or is not an ELF file.
+fn read_kind(pid: u32) -> Option<&'static str> {
+    use std::io::Read;
+    let mut header = [0u8; 20];
+    fs::File::open(format!("/proc/{pid}/exe")).ok()?.read_exact(&mut header).ok()?;
+    parse_elf_kind(&header)
 }
 
 /// The sockets a process has open, counted from its descriptors. None when its descriptor table is not readable.
@@ -567,6 +637,19 @@ pub struct Sampler {
     pub scan_private: bool,
     /// Count each process's voluntary context switches over its threads (the Idle Wake Ups column). Only while shown.
     pub scan_wakeups: bool,
+    /// Read each process's real memory (the Real Mem column). Only while it is shown.
+    pub scan_real: bool,
+    /// Read each process's purgeable memory (the Purgeable column). Only while it is shown.
+    pub scan_purgeable: bool,
+    /// Read each program's kind from its ELF header (the Kind column). Only while it is shown.
+    pub scan_kind: bool,
+    /// Read the TCP sockets with their byte counters and sum them per process (the Network tab). Runs `ss` once per
+    /// reading, so only while the tab is shown.
+    pub scan_net: bool,
+    /// Each process's socket byte counters at the previous reading, as (received, sent).
+    net_prev: HashMap<u32, (u64, u64)>,
+    /// The kind of each program already read, by pid; a process keeps its program, so it is read once.
+    kinds: HashMap<u32, Option<&'static str>>,
     /// The boot time in seconds since the epoch (zero when unknown), to age the processes.
     boot: u64,
     /// The vendor tool's engine share of each process, read while the GPU is scanned (see `parse_pmon`).
@@ -672,6 +755,13 @@ impl Sampler {
                 }
             }
         }
+        // the sockets are read once for all processes: their counters are summed per owner
+        let net_now: HashMap<u32, crate::sample_net::ProcNet> =
+            if self.scan_net { crate::sample_net::per_process(&crate::sample_net::read_sockets()).into_iter().map(|n| (n.pid, n)).collect() } else { HashMap::new() };
+        let net_ms = dt.map_or(0, |d| (d * 1000.0) as u64);
+        let net_prev = std::mem::take(&mut self.net_prev);
+        let mut net_seen = HashMap::new();
+        let mut kinds_seen = HashMap::new();
         let mut procs = Vec::new();
         let mut seen = HashMap::new();
         if let Ok(entries) = fs::read_dir("/proc") {
@@ -681,7 +771,27 @@ impl Sampler {
                 let Some(stat) = read_file(&format!("{base}/stat")).and_then(|t| parse_stat(&t)) else { continue };
                 let uid = read_file(&format!("{base}/status")).and_then(|t| parse_uid(&t)).unwrap_or(u32::MAX);
                 let ports = self.scan_ports.then(|| count_sockets(pid)).flatten();
-                let private = self.scan_private.then(|| read_private(pid)).flatten();
+                // one read of smaps_rollup serves Private Memory, Real Mem and Purgeable
+                let rollup = (self.scan_private || self.scan_real || self.scan_purgeable).then(|| read_rollup(pid)).flatten();
+                let private = rollup.filter(|_| self.scan_private).and_then(|r| r.private);
+                let real = rollup.filter(|_| self.scan_real).and_then(|r| r.pss);
+                let purgeable = rollup.filter(|_| self.scan_purgeable).and_then(|r| r.lazy_free);
+                let kind = if self.scan_kind {
+                    let known = self.kinds.get(&pid).copied();
+                    let kind = known.unwrap_or_else(|| read_kind(pid));
+                    kinds_seen.insert(pid, kind);
+                    kind
+                } else {
+                    None
+                };
+                let net = net_now.get(&pid);
+                let (net_rx_bps, net_tx_bps) = match (net, net_prev.get(&pid)) {
+                    (Some(n), Some((rx, tx))) => (crate::sample_net::rate(*rx, n.bytes_received, net_ms) as f64, crate::sample_net::rate(*tx, n.bytes_sent, net_ms) as f64),
+                    _ => (0.0, 0.0),
+                };
+                if let Some(n) = net {
+                    net_seen.insert(pid, (n.bytes_received, n.bytes_sent));
+                }
                 let voluntary = self.scan_wakeups.then(|| read_voluntary(pid)).flatten();
                 let statm = read_file(&format!("{base}/statm"));
                 let rss = statm.as_deref().and_then(parse_rss_pages).unwrap_or(0) * PAGE_BYTES;
@@ -734,11 +844,21 @@ impl Sampler {
                     private,
                     wakeups,
                     age_secs: (self.boot > 0).then(|| now_unix.saturating_sub(self.boot + (stat.start_ticks as f64 / TICKS_PER_SEC) as u64)),
+                    real,
+                    purgeable,
+                    kind,
+                    net_rx_bps,
+                    net_tx_bps,
+                    net_rx_total: net.map_or(0, |n| n.bytes_received),
+                    net_tx_total: net.map_or(0, |n| n.bytes_sent),
+                    net_sockets: net.map(|n| n.sockets),
                 });
             }
         }
         // processes that ended drop out of the previous readings
         self.procs = seen;
+        self.net_prev = net_seen;
+        self.kinds = kinds_seen;
 
         let gpu_busy = self.scan_gpu.then(|| procs.iter().map(|p| p.gpu).sum::<f32>().min(100.0));
         Snapshot { cpu, memory, disk_read_bps, disk_write_bps, ifaces, procs, cores: core_busy, gpu_busy }
@@ -901,6 +1021,31 @@ mod tests {
         let rollup = "Rss:  900 kB\nPss:  400 kB\nShared_Clean:  100 kB\nPrivate_Clean:  200 kB\nPrivate_Dirty:  300 kB\nAnonymous:  50 kB\n";
         assert_eq!(parse_private(rollup), Some(500 * 1024));
         assert_eq!(parse_private("Rss: 1 kB\n"), None, "no private lines, nothing to say");
+    }
+
+    #[test]
+    fn the_rollup_gives_real_private_and_purgeable_memory() {
+        let text = "Rss:  900 kB\nPss:  400 kB\nPss_Anon:  10 kB\nPrivate_Clean:  200 kB\nPrivate_Dirty:  300 kB\nLazyFree:  64 kB\n";
+        let r = parse_rollup(text);
+        assert_eq!((r.pss, r.private, r.lazy_free), (Some(400 * 1024), Some(500 * 1024), Some(64 * 1024)), "Pss_Anon is not the Pss line");
+        assert_eq!(parse_rollup("Rss: 1 kB\n"), Rollup::default());
+        assert_eq!(parse_rollup("Pss: lots\nLazyFree: 8 kB\n").pss, None, "a line that does not read is skipped");
+    }
+
+    #[test]
+    fn an_elf_header_names_the_machine() {
+        let header = |class: u8, data: u8, machine: [u8; 2]| {
+            let mut h = vec![0x7f, b'E', b'L', b'F', class, data, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0];
+            h.extend(machine);
+            h
+        };
+        assert_eq!(parse_elf_kind(&header(2, 1, [0x3E, 0])), Some("x86_64"));
+        assert_eq!(parse_elf_kind(&header(2, 1, [0xB7, 0])), Some("ARM64"));
+        assert_eq!(parse_elf_kind(&header(1, 1, [0x03, 0])), Some("x86"));
+        assert_eq!(parse_elf_kind(&header(2, 2, [0, 0x3E])), Some("x86_64"), "big-endian files read their machine the other way round");
+        assert_eq!(parse_elf_kind(&header(2, 1, [0x99, 0])), Some("Other"));
+        assert_eq!(parse_elf_kind(b"#!/bin/sh\nexit 0\n padding"), None);
+        assert_eq!(parse_elf_kind(&[0x7f, b'E']), None);
     }
 
     #[test]

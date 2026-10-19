@@ -34,7 +34,7 @@ use model::{ColumnSet, DockMode, Filter, Tab, UpdateFrequency, SIGNALS};
 use std::io::Write;
 use std::path::PathBuf;
 use window::{
-    Monitor, Request, MENU_WINDOW_CPU_HISTORY, MENU_WINDOW_CPU_USAGE, MENU_WINDOW_KEEP_TOP, MENU_CLOSE_REPORT, MENU_COLUMN, MENU_DOCK, MENU_COPY, MENU_CPU_HISTORY, MENU_DELTAS, MENU_DIAGNOSTICS, MENU_FILTER, MENU_FIND, MENU_FORCE,
+    Monitor, Request, MENU_WINDOW_CPU_HISTORY, MENU_WINDOW_CPU_USAGE, MENU_WINDOW_GPU_HISTORY, MENU_WINDOW_KEEP_TOP, MENU_CLOSE_REPORT, MENU_COLUMN, MENU_DOCK, MENU_COPY, MENU_CPU_HISTORY, MENU_DELTAS, MENU_DIAGNOSTICS, MENU_FILTER, MENU_FIND, MENU_FORCE,
     MENU_FREQ, MENU_INSPECT, MENU_QUIT, MENU_SAMPLE, MENU_SAMPLE_LENGTH, MENU_SAVE, MENU_SIGNAL, MENU_SIGNAL_SHEET, MENU_STOP,
 };
 
@@ -71,11 +71,41 @@ struct ActivityApp {
     cpu_usage_window: Option<WindowId>,
     /// The Window > CPU History window, while it is open.
     cpu_history_window: Option<WindowId>,
-    /// Window > Keep CPU Windows on Top: the CPU windows float above the normal windows.
+    /// The Window > GPU History window, while it is open.
+    gpu_history_window: Option<WindowId>,
+    /// Window > Keep CPU and GPU Windows on Top: the monitor windows float above the normal windows.
     keep_on_top: bool,
 }
 
 impl ActivityApp {
+    /// Window > GPU History: opens the floating window when it is closed, closes it when it is open. While it is open
+    /// the sampler reads the GPU.
+    fn toggle_gpu_window(&mut self, ctx: &Ctx) {
+        if let Some(id) = self.gpu_history_window {
+            let _ = ctx.close_window(id);
+            self.forget_window(id);
+            return;
+        }
+        let (w, h) = draw::GPU_WINDOW_SIZE;
+        match ctx.open_window(WindowSpec::new("GPU History", w, h)) {
+            Ok(id) => {
+                if self.keep_on_top {
+                    windows::set_window_level(ctx, id, Level::Floating);
+                }
+                self.gpu_history_window = Some(id);
+                if let Some(m) = &mut self.monitor {
+                    m.set_gpu_window(true);
+                }
+            }
+            Err(e) => {
+                ctx.log(&format!("window: {e:?}"));
+                if let Some(m) = &mut self.monitor {
+                    m.status = "Could not open the window".into();
+                }
+            }
+        }
+    }
+
     /// Window > CPU Usage or CPU History: opens the floating window when it is closed, closes it when it is open.
     fn toggle_cpu_window(&mut self, ctx: &Ctx, usage: bool) {
         let slot = if usage { self.cpu_usage_window } else { self.cpu_history_window };
@@ -116,15 +146,22 @@ impl ActivityApp {
             self.cpu_history_window = None;
             return true;
         }
+        if self.gpu_history_window == Some(id) {
+            self.gpu_history_window = None;
+            if let Some(m) = &mut self.monitor {
+                m.set_gpu_window(false);
+            }
+            return true;
+        }
         false
     }
 
-    /// Window > Keep CPU Windows on Top: stored, and applied to the CPU windows that are open now.
+    /// Window > Keep CPU and GPU Windows on Top: stored, and applied to the monitor windows that are open now.
     fn toggle_keep_on_top(&mut self, ctx: &Ctx) {
         self.keep_on_top = !self.keep_on_top;
         ctx.defaults_mut().set_bool(PREF_ON_TOP, self.keep_on_top);
         let level = if self.keep_on_top { Level::Floating } else { Level::Normal };
-        for id in [self.cpu_usage_window, self.cpu_history_window].into_iter().flatten() {
+        for id in [self.cpu_usage_window, self.cpu_history_window, self.gpu_history_window].into_iter().flatten() {
             windows::set_window_level(ctx, id, level);
         }
     }
@@ -318,7 +355,7 @@ impl App for ActivityApp {
         let changed = self.monitor.as_mut().map_or(false, |m| m.tick(t));
         self.serve(ctx);
         // the CPU windows show live readings, so they are redrawn every tick while open
-        changed || self.cpu_usage_window.is_some() || self.cpu_history_window.is_some()
+        changed || self.cpu_usage_window.is_some() || self.cpu_history_window.is_some() || self.gpu_history_window.is_some()
     }
 
     fn window_closed(&mut self, _ctx: &Ctx, window: WindowId) -> bool {
@@ -348,6 +385,8 @@ impl App for ActivityApp {
                 m.draw_cpu_usage(&ctx.ui, s);
             } else if Some(window) == self.cpu_history_window {
                 m.draw_cpu_history_window(&ctx.ui, s);
+            } else if Some(window) == self.gpu_history_window {
+                m.draw_gpu_history_window(&ctx.ui, s);
             }
         }
         let mut d = Damage::new(s.w, s.h);
@@ -491,8 +530,9 @@ impl App for ActivityApp {
         let window = vec![
             AppMenuItem::new(MENU_WINDOW_CPU_USAGE, "CPU Usage").checked(cpu_open(self.cpu_usage_window)),
             AppMenuItem::new(MENU_WINDOW_CPU_HISTORY, "CPU History").checked(cpu_open(self.cpu_history_window)),
+            AppMenuItem::new(MENU_WINDOW_GPU_HISTORY, "GPU History").checked(cpu_open(self.gpu_history_window)),
             AppMenuItem::separator(),
-            AppMenuItem::new(MENU_WINDOW_KEEP_TOP, "Keep CPU Windows on Top").checked(self.keep_on_top),
+            AppMenuItem::new(MENU_WINDOW_KEEP_TOP, "Keep CPU and GPU Windows on Top").checked(self.keep_on_top),
         ];
         view.push(AppMenuItem::separator());
         view.push(AppMenuItem::new(MENU_DIAGNOSTICS, "Run System Diagnostics...").enabled(!m.job_running()));
@@ -519,6 +559,10 @@ impl App for ActivityApp {
             }
             MENU_WINDOW_CPU_HISTORY => {
                 self.toggle_cpu_window(ctx, false);
+                true
+            }
+            MENU_WINDOW_GPU_HISTORY => {
+                self.toggle_gpu_window(ctx);
                 true
             }
             MENU_WINDOW_KEEP_TOP => {
@@ -549,6 +593,7 @@ fn main() {
         reveal_request: None,
         cpu_usage_window: None,
         cpu_history_window: None,
+        gpu_history_window: None,
         keep_on_top: false,
     });
 }
