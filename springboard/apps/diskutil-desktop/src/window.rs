@@ -694,6 +694,10 @@ mod tests {
         assert!(w.activate(Target::Toolbar(B_ERASE), 1.0));
         assert!(w.form.is_some() && w.sheet.is_none(), "the options come first");
         assert!(w.activate(Target::Form(FormHit::Button(crate::form::FORM_OK)), 1.0));
+        // a whole disk is erased only after its name is typed into the form again
+        assert!(w.form.is_some() && w.sheet.is_none(), "the name is asked first");
+        assert!(w.form_text("sdb"));
+        assert!(w.activate(Target::Form(FormHit::Button(crate::form::FORM_OK)), 1.0));
         let pending = w.sheet.as_ref().expect("sheet");
         assert!(pending.requests.iter().any(|(id, r)| *id == SHEET_CONFIRM && r.method() == "disk.erase_disk"));
         assert!(w.form.is_none());
