@@ -217,6 +217,7 @@ impl CharacterViewer {
     }
 
     /// The search typed so far.
+    #[cfg(test)]
     pub fn query(&self) -> &str {
         &self.query
     }

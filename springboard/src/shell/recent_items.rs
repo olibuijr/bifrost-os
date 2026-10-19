@@ -47,7 +47,7 @@ pub fn note(list: &mut SharedList, app: AppId) {
 
 /// Marks or unmarks `app` as a favourite. An app not yet in the list is recorded first. False only when the list
 /// refuses the key.
-#[cfg(any(feature = "desktop-wayland", test))]
+#[cfg(test)]
 pub fn set_favourite(list: &mut SharedList, app: AppId, on: bool) -> bool {
     let k = key(app);
     if !list.contains(&k) {
@@ -57,7 +57,7 @@ pub fn set_favourite(list: &mut SharedList, app: AppId, on: bool) -> bool {
 }
 
 /// The favourite apps in list order. Favourites are not capped, so this can be longer than `CAPACITY`.
-#[cfg(any(feature = "desktop-wayland", test))]
+#[cfg(test)]
 pub fn favourite_apps(list: &SharedList) -> Vec<AppId> {
     list.entries()
         .into_iter()

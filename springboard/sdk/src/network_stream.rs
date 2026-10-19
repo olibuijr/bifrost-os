@@ -11,7 +11,6 @@ use crate::tls_client;
 use bifrost_core::net_connection::{ConnEvent, ConnState, Connection, Endpoint, Parameters, TcpOptions, Transport};
 use bifrost_ui::tls_options::TlsOptions;
 use rustls::{ClientConnection, StreamOwned};
-use std::ffi::c_void;
 use std::io::{self, Read, Write};
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs, UdpSocket};
 use std::os::fd::AsRawFd;
@@ -19,7 +18,7 @@ use std::os::unix::net::UnixStream;
 use std::time::Duration;
 
 extern "C" {
-    fn setsockopt(fd: i32, level: i32, name: i32, value: *const c_void, len: u32) -> i32;
+    fn setsockopt(fd: i32, level: i32, name: i32, value: *const i32, len: u32) -> i32;
 }
 
 const SOL_SOCKET: i32 = 1;
@@ -30,7 +29,7 @@ const TCP_KEEPIDLE: i32 = 4;
 fn set_int_option(fd: i32, level: i32, name: i32, value: i32) -> io::Result<()> {
     // SAFETY: `fd` is a socket the caller owns for the duration of the call, and `value` is a live 4-byte integer,
     // which is what every option set here takes.
-    let rc = unsafe { setsockopt(fd, level, name, &value as *const i32 as *const c_void, 4) };
+    let rc = unsafe { setsockopt(fd, level, name, &value as *const i32, 4) };
     if rc < 0 {
         Err(io::Error::last_os_error())
     } else {

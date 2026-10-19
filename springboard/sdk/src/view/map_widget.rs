@@ -17,7 +17,7 @@ use super::{View, ViewBase, ViewEvent};
 use crate::kit::gfx::Image;
 use crate::kit::ui::{DETAIL_BG, DESTRUCTIVE};
 use crate::kit::{Event, Ui};
-use crate::maps::{Coordinate, MapCamera, MapItem, MapView, Picture, Snapshotter};
+use crate::maps::{MapCamera, MapItem, MapView, Picture, Snapshotter};
 use crate::proto::KeyInput;
 use bifrost_render::canvas::{Canvas, ImageRef, RectF};
 use bifrost_ui::{Node, Role};
@@ -222,6 +222,7 @@ impl View for MapWidget {
 
 #[cfg(test)]
 mod tests {
+    use crate::maps::Coordinate;
     use super::*;
 
     fn widget() -> MapWidget {

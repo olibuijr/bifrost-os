@@ -131,11 +131,13 @@ impl Captions {
     }
 
     /// Whether the pipeline runs.
+    #[cfg(test)]
     pub fn running(&self) -> bool {
         self.running
     }
 
     /// The text on the plate now, empty when there is none.
+    #[cfg(test)]
     pub fn current_text(&self) -> String {
         self.shown().map(|(m, _)| m).unwrap_or_default()
     }

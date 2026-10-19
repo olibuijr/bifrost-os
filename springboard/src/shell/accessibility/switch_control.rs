@@ -439,7 +439,7 @@ mod tests {
         let mut sh = shell();
         on(&mut sh);
         let mut buf = vec![0u32; 1200 * 1920];
-        let mut draw = |sh: &mut Shell, buf: &mut Vec<u32>, t: f64| sh.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: buf, y0: 0 }, t).clone();
+        let draw = |sh: &mut Shell, buf: &mut Vec<u32>, t: f64| sh.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: buf, y0: 0 }, t).clone();
         draw(&mut sh, &mut buf, 2000.0);
         let sc = sh.ui.pt(1.0);
         let (rx, ry, rw, rh) = row_rect(sc, 1200.0, 1920.0, 6, 0);

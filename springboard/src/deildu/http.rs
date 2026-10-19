@@ -7,7 +7,6 @@ use std::io::{self, Read, Write};
 use std::net::{SocketAddr, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use rustls::client::danger::ServerCertVerifier as _;
 use url::Url;
 
 const USER_AGENT: &str = "Mozilla/5.0 (bifrost; CPU OS 15_7 like Golden Gate) WebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Browser/604.1";
