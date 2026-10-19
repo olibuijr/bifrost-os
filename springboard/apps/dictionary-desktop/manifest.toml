@@ -12,6 +12,12 @@ permissions = ["storage"]
 window = "full-size"
 schemes = ["dict", "x-dictionary"]
 
+[[service]]
+title = "Look Up in Dictionary"
+send_types = ["public.utf8-plain-text"]
+return_types = []
+method = "look_up"
+
 [[intent]]
 id = "look-up"
 title = "Look Up"

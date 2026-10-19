@@ -3,13 +3,14 @@
 //! Clipboard. The `look-up` intent returns a definition to other callers.
 
 use bifrost_app::intents::{self, Intent, IntentResult, Param, ParamType};
-use bifrost_app::control::{RpcError, INVALID_PARAMS};
+use bifrost_app::control::{RpcError, INTERNAL_ERROR, INVALID_PARAMS, METHOD_NOT_FOUND};
 use bifrost_app::dispatch::{DispatchQueue, Qos};
 use bifrost_app::kit::canvas::{Canvas, RectF};
 use bifrost_app::kit::ui::{Ui, Weight, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, LINK, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, MATERIAL_SELECTION, ROW_PRESSED, SEGMENT_ON, SPACE_XS};
 use bifrost_app::kit::{Damage, Scroller};
 use bifrost_app::widgets;
 use bifrost_app::app_windows::{WindowId, WindowSpec};
+use bifrost_app::services::ServiceCall;
 use bifrost_app::{App, AppMenu, AppMenuItem, Command, Ctx, Input, KeyInput, TouchKind};
 use bifrost_core::json::Json;
 use bifrost_ui::stardict::{load_library, Hit, Library};
@@ -403,6 +404,16 @@ impl DictionaryApp {
         }
         self.scroll.jump_top();
         true
+    }
+
+    /// Shows `word` in this window after another app asked for it (the look-up intent). Before the window has loaded its
+    /// dictionaries there is nothing to show it with, so nothing changes. True when the screen needs a frame.
+    fn show_from_intent(&mut self, word: &str) -> bool {
+        if self.library.is_none() {
+            return false;
+        }
+        self.settings = false;
+        self.show(word, true)
     }
 
     /// The first line of the clipboard, looked up.
@@ -869,11 +880,33 @@ impl App for DictionaryApp {
         }
     }
 
+    fn rpc_methods(&self) -> Vec<&'static str> {
+        vec!["service.look_up"]
+    }
+
+    /// Services menu: "Look Up in Dictionary" shows the selected text in this window, with the history, scope bar and
+    /// find, where the look-up popover only shows the first definition.
+    fn rpc(&mut self, ctx: Option<&Ctx>, _data_dir: &Path, method: &str, params: &Json) -> Result<Json, RpcError> {
+        if method != "service.look_up" {
+            return Err(RpcError::new(METHOD_NOT_FOUND, format!("no method {method}")));
+        }
+        let call = ServiceCall::from_params(params).ok_or_else(|| RpcError::new(INVALID_PARAMS, "the service call has no text"))?;
+        let text = call.text.ok_or_else(|| RpcError::new(INVALID_PARAMS, "the service needs text"))?;
+        if ctx.is_none() {
+            return Err(RpcError::new(INTERNAL_ERROR, "Dictionary is not running yet"));
+        }
+        let word = model::service_word(&text).ok_or_else(|| RpcError::new(INVALID_PARAMS, "the selection has no word to look up"))?;
+        if !self.show_from_intent(&word) {
+            return Err(RpcError::new(INTERNAL_ERROR, "Dictionary has not loaded its dictionaries yet"));
+        }
+        Ok(Json::Obj(Vec::new()))
+    }
+
     fn intents(&self) -> Vec<Intent> {
         vec![Intent::new("look-up", "Look Up", "Looks a word up in the installed dictionaries and returns its definition.").param(Param::new("word", "Word", ParamType::String))]
     }
 
-    fn perform_intent(&mut self, _ctx: Option<&Ctx>, data_dir: &Path, id: &str, params: &Json) -> Result<IntentResult, RpcError> {
+    fn perform_intent(&mut self, ctx: Option<&Ctx>, data_dir: &Path, id: &str, params: &Json) -> Result<IntentResult, RpcError> {
         if id != "look-up" {
             return Err(RpcError::new(INVALID_PARAMS, format!("no intent {id}")));
         }
@@ -883,6 +916,11 @@ impl App for DictionaryApp {
             return Err(intents::failed(format!("no definition for {word}")));
         };
         let text = first.text.clone();
+        // a running window shows the word too, so Look Up from another app (the Services menu, the look-up popover's
+        // Open in Dictionary row) lands in the app's own window with its history, scope bar and find
+        if ctx.is_some() {
+            self.show_from_intent(&word);
+        }
         Ok(IntentResult::value(Json::Str(text.clone())).with_dialog(&format!("{word}: {text}")))
     }
 
@@ -1133,6 +1171,21 @@ mod window_tests {
         other.look_up("ox");
         assert!(!other.history.can_back(), "one look-up in a window leaves nothing to go back to");
         assert!(main.history.can_back());
+    }
+
+    #[test]
+    fn the_look_up_intent_shows_its_word_in_a_window_that_has_its_dictionaries() {
+        let mut app = DictionaryApp::new();
+        app.settings = true;
+        assert!(!app.show_from_intent("cat"), "a window that has not loaded its dictionaries stays as it is");
+        assert!(app.shown.is_none() && app.settings);
+        let dir = std::env::temp_dir().join(format!("bifrost-dictionary-intent-{}", std::process::id()));
+        app.library = Some(load_library(&dir));
+        assert!(app.show_from_intent("  cat "));
+        assert!(!app.settings, "the settings page gives way to the answer");
+        assert_eq!(app.shown.as_ref().map(|s| s.word.as_str()), Some("cat"));
+        assert_eq!(app.history.current(), Some("cat"));
+        assert!(!app.show_from_intent("   "), "a blank word shows nothing");
     }
 
     #[test]
