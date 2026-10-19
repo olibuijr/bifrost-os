@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## 0.10.6 — 2026-10-19
+
+- Inactive windows are opaque: the window server backs their sidebar and toolbar materials with the recipe's plate
+  (the GLES scene drew neither blur nor plate, so stacked windows showed through each other).
+- The window server reports each window's real frame to the shell, so context menus, the share menu and taps land at
+  the pointer (they were off by the window server's placement).
+- App context menus fit their rows, open at the pointer (flipping at the screen edges), have separators, key
+  equivalents, a shadow and a hairline edge.
+- Key equivalents an app publishes in its menus reach the app first: Cmd+W closes a Browser tab, not the window;
+  Shift+Cmd+W closes the window. Cmd+Q quits the front app. Cmd+Up and Cmd+Down reach apps.
+- App menus follow View in the menu bar (File, Edit, View, then the app's own, Window, Help).
+- The Dock's hover label shows the app name in Light.
+- CJK punctuation (U+3000 to U+303F and the other Common-script CJK blocks) falls back to the installed Noto Sans CJK.
+- Files 1.33.1 and Browser 0.17.0: see their changelogs (E2E report docs/e2e/2026-10-19-finder-browser.md).
+
 ## 0.10.5 — 2026-10-19
 
 - Window server: dma-buf feedback v4 names the GPU's render node, so GPU clients (the Browser's engine) get a hardware

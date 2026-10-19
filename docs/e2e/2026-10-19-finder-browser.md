@@ -102,3 +102,20 @@ window server to stay after the next update.
 | N4 | P3 | Files search title truncates to 'Searching "This C...' | The reference collapses the view buttons while searching so the title fits |
 | N5 | P3 | Generic document icons draw the folded corner black | A light folded corner |
 | N6 | P3 | The context menu shows no shadow or edge over white content | Menu shadow like the reference |
+
+## Fix wave 2 and second re-test (23:10)
+
+Branches `fix/e2e2-geometry-menu-shadow`, `fix/e2e2-quit-dock-label`, `fix/e2e2-files-polish`, merged with two small
+lead fixes (`5df7ccba1`: the shadow tests ran on the locked fixture; an irrefutable `if let`). Tests pass: Files 189,
+bifrost-wm 394, springboard `shell::` `files::` `bare::` and the context-menu set (11).
+
+| ID | Result |
+|---|---|
+| N1 | Pass: the shell's window rectangle equals the drawn window (Files `772,330` both) |
+| F4 + N6 | Pass: the menu's top-left is at the pointer (1306,566 px), with a shadow and a hairline edge |
+| N2 | Pass: Cmd+Q ends the Files process |
+| N3 | Pass: the Dock label reads "Camera" |
+| N4 | Pass: 'Searching "This Computer"' fits; the view buttons collapse into one pop-up |
+| N5 | Pass: document icons have a light folded corner |
+
+Released as shell 0.10.6 with Files 1.33.1 and Browser 0.17.0. Still open: B5 needs the engine rebuild.
