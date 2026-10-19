@@ -332,8 +332,8 @@ impl Shell {
         let view = self.input_providers.app_candidate_view(slot)?;
         let (cx, cy, cw, ch) = self.ext.get(slot as usize)?.as_ref()?.caret_rect?;
         let win = self.desk.as_ref()?.wins.iter().find(|w| w.app == AppId::External(slot))?;
-        let title = self.desk_metrics().title as f32;
-        Some((view, Some((win.r.x as f32 + cx, win.r.y as f32 + title + cy, cw, ch))))
+        let body = win.body(&self.desk_metrics());
+        Some((view, Some((body.x as f32 + cx, body.y as f32 + cy, cw, ch))))
     }
 }
 

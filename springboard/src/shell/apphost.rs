@@ -1833,6 +1833,8 @@ impl Shell {
         }
         let Some(Some(h)) = self.ext.get_mut(n as usize) else { return };
         h.feed_touch(super::touch_frames::raw_of_phase(phase), super::touch_frames::contact_sample(id, x, y), t);
+        // two fingers also make the pinch and rotation events of an app that asked for them
+        self.pinch_contact(n, id, phase, x, y);
     }
 
     /// The foreground app lost the touches (focus moved, the window closed, a system gesture took them): every touch it

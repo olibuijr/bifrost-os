@@ -6,7 +6,7 @@
 //! as `Hover` while the pointer is over its window content and `HoverExit` when the pointer goes elsewhere. An app that
 //! asked for nothing gets what it always got: the wheel as a drag, no hover. Windows are found as the desk finds a
 //! click (`Desk::pick`, content hits only); positions are relative to the window content, as for touches.
-use bifrost_ui::pointer_event::PointerEvent;
+use bifrost_ui::pointer_event::{from_gesture, PointerEvent};
 use bifrost_ui::wheel::Phase;
 
 use super::desk::Hit;
@@ -61,6 +61,49 @@ impl Shell {
         }
     }
 
+    /// A touchscreen contact of the app in front (`slot`) at (`x`, `y`), in the app's surface pixels. Two fingers run the
+    /// pinch and the rotation recognizers together (`ui::trackpad_gesture`): the app that asked for gestures gets
+    /// `Magnify` and `Rotate` events at the midpoint of the fingers, and the lift of either finger ends them. A third
+    /// finger is ignored.
+    pub(super) fn pinch_contact(&mut self, slot: u8, id: i32, phase: crate::bare::input::TouchPhase, x: f32, y: f32) {
+        use crate::bare::input::TouchPhase as P;
+        let mid = |a: (f32, f32), b: (f32, f32)| ((a.0 + b.0) / 2.0, (a.1 + b.1) / 2.0);
+        let mut events = Vec::new();
+        match phase {
+            P::Down => {
+                if self.pinch_fingers.len() < 2 && !self.pinch_fingers.iter().any(|(i, _)| *i == id) {
+                    self.pinch_fingers.push((id, (x, y)));
+                }
+            }
+            P::Move => {
+                if let Some(finger) = self.pinch_fingers.iter_mut().find(|(i, _)| *i == id) {
+                    finger.1 = (x, y);
+                }
+                if self.pinch_fingers.len() == 2 {
+                    let (a, b) = (self.pinch_fingers[0].1, self.pinch_fingers[1].1);
+                    let at = mid(a, b);
+                    events = self.pinch.frame(a, b).iter().map(|e| from_gesture(e, at)).collect();
+                }
+            }
+            P::Up | P::Cancel => {
+                let pair = self.pinch_fingers.len() == 2 && self.pinch_fingers.iter().any(|(i, _)| *i == id);
+                let at = if pair { mid(self.pinch_fingers[0].1, self.pinch_fingers[1].1) } else { (x, y) };
+                self.pinch_fingers.retain(|(i, _)| *i != id);
+                if pair {
+                    events = self.pinch.lift().iter().map(|e| from_gesture(e, at)).collect();
+                }
+            }
+        }
+        if events.is_empty() {
+            return;
+        }
+        if let Some(Some(host)) = self.ext.get_mut(slot as usize) {
+            for event in events {
+                host.pointer(event);
+            }
+        }
+    }
+
     /// The pointer left the content of the app it was over: that app gets `HoverExit`.
     fn pointer_leave(&mut self) {
         let Some(slot) = self.pointer_over.take() else { return };
@@ -73,6 +116,26 @@ impl Shell {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn two_fingers_are_tracked_a_third_is_ignored_and_lifting_frees_a_slot() {
+        use crate::bare::input::TouchPhase as P;
+        let mut sh = crate::shell::tests::shell();
+        sh.pinch_contact(0, 1, P::Down, 10.0, 10.0);
+        sh.pinch_contact(0, 2, P::Down, 50.0, 10.0);
+        sh.pinch_contact(0, 3, P::Down, 90.0, 10.0);
+        assert_eq!(sh.pinch_fingers.len(), 2);
+        // a finger that moves is remembered where it went
+        sh.pinch_contact(0, 2, P::Move, 80.0, 10.0);
+        assert_eq!(sh.pinch_fingers[1], (2, (80.0, 10.0)));
+        // the ignored finger lifting changes nothing; a tracked one frees its place
+        sh.pinch_contact(0, 3, P::Up, 90.0, 10.0);
+        assert_eq!(sh.pinch_fingers.len(), 2);
+        sh.pinch_contact(0, 1, P::Up, 10.0, 10.0);
+        assert_eq!(sh.pinch_fingers, vec![(2, (80.0, 10.0))]);
+        sh.pinch_contact(0, 2, P::Cancel, 80.0, 10.0);
+        assert!(sh.pinch_fingers.is_empty());
+    }
 
     #[test]
     fn with_no_desktop_and_no_app_nothing_is_taken() {

@@ -649,6 +649,9 @@ pub struct Shell {
     input_providers: input_providers::Providers,
     /// the external app whose window content the pointer is over and that takes hover events (`pointer_events`)
     pointer_over: Option<u8>,
+    /// the two touchscreen fingers of the app in front and the pinch and rotation recognizers they run (`pointer_events`)
+    pinch_fingers: Vec<(i32, (f32, f32))>,
+    pinch: bifrost_ui::trackpad_gesture::TwoFinger,
     notify: notify::Notify,
     /// `UNUserNotificationCenter` state of the external apps (categories, pending and delivered requests)
     usernotif: usernotif::Registry,
@@ -1091,6 +1094,8 @@ impl Shell {
             assistant,
             compose_ime: compose_window::ComposeWindow::default(),
             pointer_over: None,
+            pinch_fingers: Vec::new(),
+            pinch: Default::default(),
             input_providers: {
                 let mut providers = input_providers::Providers::default();
                 providers.load_dir(&input_providers::dir());
