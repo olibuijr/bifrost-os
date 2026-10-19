@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.9.0
+
+- Upstream designcraft v0.9.0.
+  ## What's Changed
+  * Swatches panel header like InDesign's (Fill/Stroke proxy, container/text, Tint); swatches go to the fill or stroke in front (blocked by #592) by @moppeeer in https://github.com/storytold/designcraft/pull/838
+  * Object › Fitting with InDesign's shortcuts (Fill Frame Proportionally Ctrl+Alt+Shift+C, …) by @moppeeer in https://github.com/storytold/designcraft/pull/840
+  * Respect Find/Change scope and first-match limits by @sanyamsingh001 in https://github.com/storytold/designcraft/pull/845
+  * fix: repaint canvas when entering and leaving parent editing by @harrisonoconnorhover in https://github.com/storytold/designcraft/pull/855
+
 ## 0.8.1
 
 - Upstream designcraft v0.8.0.
