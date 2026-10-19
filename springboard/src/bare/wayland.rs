@@ -692,6 +692,8 @@ fn place_chrome(l:&surface::ZwlrLayerSurfaceV1,frame:&ChromeFrame,screen:(u32,u3
             for s in slots { s.buffer.destroy(); }
         }
         self.gpu = None;
+        // the CPU frame now carries the wallpaper itself: the shell stops leaving it to the presenter
+        bifrost_render::glass::enable(false);
         for slot in &mut self.state.slots { slot.damage.all(); }
         self.fell_back = true;
         let _ = self.conn.flush();

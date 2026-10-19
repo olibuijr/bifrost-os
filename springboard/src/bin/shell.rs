@@ -555,7 +555,7 @@ fn run() -> std::io::Result<()> {
             if let Some((wp, x)) = shell.desktop_wallpaper_once() { disp.wayland_wallpaper(wp, x); }
             if disp.wayland_gpu_active() { shell.note_wallpaper_uploaded(); }
             // the GPU presenter gave up: the SHM path has no frame of its own yet, so the next one is drawn whole
-            if disp.wayland_take_gpu_fallback() { shell.force_full_redraw(); }
+            if disp.wayland_take_gpu_fallback() { shell.gpu_presenter_lost(); }
         }
         #[cfg(feature = "desktop-wayland")]
         let previous_present = last_present;

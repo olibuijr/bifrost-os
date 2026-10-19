@@ -2588,6 +2588,31 @@ impl Shell {
         })
     }
 
+    /// The desktop owes its wallpaper to the presenter again: the fitted still is rebuilt (idle frees it once the GPU
+    /// holds the texture) and the next loop uploads it afresh under a new key, so a texture the presenter lost or never
+    /// made (or a GPU path that gave up for the CPU one) cannot leave the desktop without a wallpaper and without the
+    /// glass backdrop built from it. Done once per unlock and per presenter loss, never per frame.
+    pub(super) fn wallpaper_owed(&mut self) {
+        if !self.desk_active() {
+            return;
+        }
+        if self.fit_home.is_none() {
+            self.fit_home = rotate::fit_wallpaper(self.home_src, self.w, self.h);
+        }
+        self.wallpaper_uploaded = false;
+        #[cfg(target_os = "linux")]
+        crate::gpu::wl::bump_wallpaper_generation();
+        *self.bar_backdrop.borrow_mut() = None;
+        self.dirty = true;
+    }
+
+    /// The GPU presenter gave up for the CPU path: the shell now draws the wallpaper itself (`draw_wallpaper_layer`)
+    /// and must hold a fitted still for it.
+    pub fn gpu_presenter_lost(&mut self) {
+        self.wallpaper_owed();
+        self.force_full_redraw();
+    }
+
     /// The presenter holds the texture now: `lazy_wallpapers` frees the fitted CPU copy when idle.
     pub fn note_wallpaper_uploaded(&mut self) {
         if !self.wallpaper_uploaded {
@@ -3780,6 +3805,7 @@ impl Shell {
                     Anim::Unlock { to, .. } if to >= 1.0 => {
                         self.screen = Screen::Home;
                         self.leave_today();
+                        self.wallpaper_owed();
                         // the lock screen's buffers are gone: hand their pages back to the system
                         #[cfg(target_env = "gnu")]
                         {

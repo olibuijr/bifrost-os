@@ -300,7 +300,10 @@ impl Shell {
     fn finish_anim(&mut self) {
         match self.anim.take() {
             Some((super::Anim::Open { app, .. }, _)) => self.screen = Screen::App(app),
-            Some((super::Anim::Unlock { to, .. }, _)) if to >= 1.0 => self.screen = Screen::Home,
+            Some((super::Anim::Unlock { to, .. }, _)) if to >= 1.0 => {
+                self.screen = Screen::Home;
+                self.wallpaper_owed();
+            }
             _ => {}
         }
         self.transition = None;
