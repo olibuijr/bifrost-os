@@ -773,6 +773,8 @@ pub struct Shell {
     form: bifrost_ui::form_factor::FormFactor,
     /// a physical keyboard is attached; on a tablet it keeps the on-screen keyboard down
     hw_keyboard: bool,
+    /// the user opened the on-screen keyboard on purpose (the Input menu): the one way a desktop gets it
+    osk_pinned: bool,
     /// the touchscreen fingers that are down, so the pointer stream does not report them twice (`touch_frames`)
     touch_contacts: touch_frames::Contacts,
     /// the focused text field of a Wayland client (the window server's input method), and the requests the keyboard
@@ -1167,6 +1169,7 @@ impl Shell {
             keyboard,
             form: bifrost_ui::form_factor::FormFactor::current(),
             hw_keyboard: false,
+            osk_pinned: false,
             touch_contacts: touch_frames::Contacts::default(),
             im: Default::default(),
             im_out: Vec::new(),
@@ -3816,6 +3819,9 @@ impl Shell {
             // on the lock screen the login window owns the keys
             if self.login_owns_keyboard() {
                 effects.extend(self.login_key(&out, t));
+            } else if out == Out::Hide && self.osk_pinned {
+                // the keyboard's own hide key is the user closing the keyboard they opened
+                self.keyboard_close_explicit(t);
             } else {
                 self.type_out(out, t);
             }
@@ -5183,10 +5189,46 @@ impl Shell {
         }
     }
 
-    /// Whether the on-screen keyboard may be raised now: the form factor, the UI in front and any attached
-    /// hardware keyboard decide.
+    /// Whether the on-screen keyboard may be raised now: the form factor and any attached hardware keyboard decide,
+    /// and a keyboard the user opened on purpose (`keyboard_open_explicit`) stays allowed on any form.
     pub(super) fn keyboard_allowed(&self) -> bool {
-        self.form.allows_onscreen_keyboard(self.desk_active(), self.hw_keyboard)
+        self.osk_pinned || self.form.allows_onscreen_keyboard(self.hw_keyboard)
+    }
+
+    /// Whether the desktop UI draws, routes touches to and lifts windows for the on-screen keyboard: a tablet, or a
+    /// desktop whose user opened it. A desktop that did not draws nothing and reserves nothing.
+    pub(super) fn osk_over_desk(&self) -> bool {
+        self.form.is_tablet() || self.osk_pinned
+    }
+
+    /// The one way a desktop gets the on-screen keyboard: the user chose it (Input menu > Show On-Screen Keyboard).
+    /// It stays until the user closes it (`keyboard_close_explicit`, the same menu row or the keyboard's hide key);
+    /// no text field, Terminal, lock screen or sheet raises or lowers it.
+    pub fn keyboard_open_explicit(&mut self, t: f64) {
+        self.osk_pinned = true;
+        self.keyboard.set_user_opened(true);
+        self.set_keyboard(true, t);
+        self.dirty = true;
+    }
+
+    /// Closes a keyboard the user opened on purpose; the windows it lifted go back and the Terminal takes its
+    /// full height again. Does nothing when none is open.
+    pub fn keyboard_close_explicit(&mut self, t: f64) {
+        if !self.osk_pinned {
+            return;
+        }
+        self.osk_pinned = false;
+        // lowered while the client is still allowed, so its process is told; then the client is blocked again
+        self.keyboard.set_shown(false, t);
+        self.keyboard.set_user_opened(false);
+        self.resize_terminals();
+        self.desk_keyboard_lift();
+        self.dirty = true;
+    }
+
+    /// Whether the user has the on-screen keyboard open on purpose (the Input menu row reads it).
+    pub fn keyboard_opened_explicitly(&self) -> bool {
+        self.osk_pinned
     }
 
     /// The form factor this shell runs as.
@@ -5212,11 +5254,13 @@ impl Shell {
 
     /// Slides the keyboard in or out; the terminal takes its final size at once.
     fn set_keyboard(&mut self, shown: bool, t: f64) {
-        // A desktop has a hardware keyboard and Golden Gate has no on-screen one: never raise it there. A tablet
-        // raises it with the desktop UI up too, unless a hardware keyboard is attached. Guarding here, not in each
-        // caller, matters: bringing an app with a focused text field to the front used to raise it, and its top row
-        // showed as grey boxes along the bottom of the window.
-        let shown = shown && self.keyboard_allowed();
+        // A desktop has a hardware keyboard and Golden Gate has no on-screen one: never raise it there on the
+        // system's own account (a focused field, Terminal, the lock screen, a sheet, Search). A tablet raises it
+        // unless a hardware keyboard is attached. Guarding here, not in each caller, matters: bringing an app with a
+        // focused text field to the front used to raise it, and its top row showed as grey boxes along the bottom
+        // of the window. A keyboard the user opened on purpose stays up until they close it
+        // (`keyboard_close_explicit`), so no automatic hide lowers it either.
+        let shown = if self.osk_pinned { true } else { shown && self.keyboard_allowed() };
         if self.keyboard.shown() != shown {
             self.keyboard.set_shown(shown, t);
             self.resize_terminals();

@@ -15,7 +15,7 @@ use crate::gfx::{pack, Surface, View};
 use bifrost_proto::{kbflags, Configure, KeyboardConfig, KeyboardLayout, KeyboardOut, ReturnKey, ToShell, TouchKind};
 use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::time::{Duration, Instant};
 
 pub const BG: u32 = pack(43, 43, 45, 255);
@@ -333,16 +333,38 @@ thread_local! {
     static FAKE_KEYS: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
 }
 
-static DISABLED: AtomicBool = AtomicBool::new(false);
+const POLICY_DEFAULT: u8 = 0;
+const POLICY_OFF: u8 = 1;
+const POLICY_ON: u8 = 2;
+static DISABLED: AtomicU8 = AtomicU8::new(POLICY_DEFAULT);
 
 /// Turns the on-screen keyboard off for the whole session: no view shows one, none reserves room for one, and the
-/// keyboard process is never started. A desktop has a hardware keyboard.
+/// keyboard process is never started. A desktop has a hardware keyboard. The shell binary sets it from the form
+/// factor; until something does, a desktop form is disabled too (`disabled`), so a process that never calls this
+/// cannot raise a keyboard by accident. The one exception is a client the user opened on purpose (`set_user_opened`).
 pub fn set_disabled(off: bool) {
-    DISABLED.store(off, Ordering::Relaxed);
+    DISABLED.store(if off { POLICY_OFF } else { POLICY_ON }, Ordering::Relaxed);
 }
 
 pub fn disabled() -> bool {
-    DISABLED.load(Ordering::Relaxed)
+    match DISABLED.load(Ordering::Relaxed) {
+        POLICY_OFF => true,
+        POLICY_ON => false,
+        _ => default_disabled(),
+    }
+}
+
+/// What the session does when `set_disabled` was never called: the form factor decides. Unit tests and the test kit
+/// start enabled, because they build keyboards for a form of their own choosing.
+fn default_disabled() -> bool {
+    #[cfg(any(test, feature = "testkit"))]
+    {
+        false
+    }
+    #[cfg(not(any(test, feature = "testkit")))]
+    {
+        bifrost_ui::form_factor::FormFactor::current().keyboard_disabled_globally()
+    }
 }
 
 /// A view's handle on the on-screen keyboard.
@@ -361,6 +383,8 @@ pub struct Keyboard {
     slide: Option<(f64, bool)>,
     /// a finger is down on the keyboard
     touching: bool,
+    /// the user opened this keyboard on purpose (the desktop's Input menu): the session-wide switch-off does not apply
+    user_opened: bool,
 }
 
 impl Keyboard {
@@ -385,9 +409,28 @@ impl Keyboard {
             shown: true,
             slide: None,
             touching: false,
+            user_opened: false,
         };
         k.claim(false);
         k
+    }
+
+    /// Whether the session-wide switch-off applies to this client: a desktop keeps every client down except one the
+    /// user opened on purpose.
+    fn blocked(&self) -> bool {
+        disabled() && !self.user_opened
+    }
+
+    /// Marks this client as opened by the user (the desktop's Input menu) or not. It starts hidden either way, so
+    /// the next `set_shown(true)` slides it in; closing drops it at once. Only the shell calls this, from its one
+    /// explicit entry point (`Shell::keyboard_open_explicit` / `keyboard_close_explicit`).
+    pub fn set_user_opened(&mut self, on: bool) {
+        if self.user_opened != on {
+            self.user_opened = on;
+            self.shown = false;
+            self.slide = None;
+            self.touching = false;
+        }
     }
 
     /// A keyboard without the accessory row that starts off screen, to be slid in with `set_shown` when a field is
@@ -438,7 +481,7 @@ impl Keyboard {
         if app_mode() {
             return;
         }
-        if disabled() {
+        if self.blocked() {
             return;
         }
         let (w, h) = self.buffer();
@@ -543,7 +586,7 @@ impl Keyboard {
 
     /// Slides the keyboard in or out over a quarter second.
     pub fn set_shown(&mut self, shown: bool, t: f64) {
-        if disabled() {
+        if self.blocked() {
             self.shown = false;
             return;
         }
@@ -563,13 +606,13 @@ impl Keyboard {
 
     /// Where the keyboard rests (ignoring the slide in progress).
     pub fn shown(&self) -> bool {
-        self.shown && !disabled()
+        self.shown && !self.blocked()
     }
 
     /// The keyboard's height in px: what its process reported, or an estimate until it has. Zero when no keyboard
     /// package is installed, so nothing reserves room for a keyboard that cannot appear.
     pub fn h(&self) -> f32 {
-        if disabled() {
+        if self.blocked() {
             return 0.0;
         }
         if app_mode() {
@@ -590,7 +633,7 @@ impl Keyboard {
     }
 
     pub fn animating(&self) -> bool {
-        if app_mode() || disabled() {
+        if app_mode() || self.blocked() {
             return false;
         }
         self.slide.is_some() || (self.shown && self.owns() && SERVICE.with(|s| s.borrow().dirty))
@@ -775,7 +818,19 @@ mod disabled_tests {
         let mut k = Keyboard::new_hidden(1000.0, 1.0);
         k.set_shown(true, 0.0);
         let (shown, h, spawned) = (k.shown(), k.h(), poll_fd().is_some());
+        // a client the user opened on purpose (the desktop's Input menu) is the one exception, and only that client
+        let mut other = Keyboard::new_hidden(1000.0, 1.0);
+        let mut opened = Keyboard::new_hidden(1000.0, 1.0);
+        opened.set_user_opened(true);
+        opened.set_shown(true, 0.0);
+        other.set_shown(true, 0.0);
+        let (opened_shown, other_shown) = (opened.shown(), other.shown());
+        opened.set_shown(false, 1.0);
+        opened.set_user_opened(false);
+        let closed_and_blocked = !opened.shown() && opened.h() == 0.0;
         set_disabled(false);
         assert!(!shown && h == 0.0 && !spawned);
+        assert!(opened_shown && !other_shown, "only the keyboard the user opened shows on a disabled session");
+        assert!(closed_and_blocked, "closing it takes its space back");
     }
 }

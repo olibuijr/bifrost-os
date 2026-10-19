@@ -3812,32 +3812,22 @@ plus `INDEX.tsv`; both skip cleanly when the folder is absent. `INDEX.tsv` holds
 ## Form factor and on-screen keyboard policy (`bifrost_ui::form_factor`, `bifrost_app::FormFactor`)
 
 One shell and one SDK serve a desktop and a touch tablet. `FormFactor` is `Desktop` or `Tablet`, read once from
-`BIFROST_FORM` or the plain-word file `/etc/bifrost/form`, default `Desktop` (`FormFactor::resolve` is the pure form of
-the lookup). The shell passes `BIFROST_FORM` to sandboxed apps, and `bifrost_app::is_touch_tablet()` answers whether the
-## Form factor and on-screen keyboard policy (`bifrost_ui::form_factor`, `bifrost_app::FormFactor`)
-
-One shell and one SDK serve a desktop and a touch tablet. `FormFactor` is `Desktop` or `Tablet`, read once from
-`BIFROST_FORM` or the plain-word file `/etc/bifrost/form`, default `Desktop` (`FormFactor::resolve` is the pure form of
-the lookup). The shell passes `BIFROST_FORM` to sandboxed apps, and `bifrost_app::is_touch_tablet()` answers whether the
-=======
-## Form factor and on-screen keyboard policy (`bifrost_ui::form_factor`, `bifrost_app::FormFactor`)
-
-One shell and one SDK serve a desktop and a touch tablet. `FormFactor` is `Desktop` or `Tablet`, read once from
 `BIFROST_FORM` or the plain-word file `/etc/bifrost/form`. With neither set, `FormFactor::current` detects it once: a
 tablet or convertible SMBIOS chassis (codes 30 to 32) is a tablet, and without SMBIOS a known tablet device-tree board
 (`samsung,gta8wifi`) or a direct-touch input device (`B: PROP` bit 1 in `/proc/bus/input/devices`) is a tablet. Anything
 else is `Desktop`. `FormFactor::resolve` is the pure form of the lookup, with the machine facts passed in as `Facts`. The shell passes `BIFROST_FORM` to sandboxed apps, and `bifrost_app::is_touch_tablet()` answers whether the
 app runs on a touch tablet.
 
-Keyboard policy (`FormFactor::allows_onscreen_keyboard`): a desktop never raises the on-screen keyboard on the windowed
-desktop UI; a tablet raises it for text fields with or without that UI, and keeps it down while a hardware keyboard is
-attached (`Shell::set_hardware_keyboard`). Tapping outside a field dismisses it as before. A desktop also sets
-`keyboard::set_disabled(true)` for the session; a tablet does not. Apps get `BIFROST_HARDWARE_KEYBOARD=1` only on a
-desktop.
-
-Not wired yet: nothing calls `Shell::set_hardware_keyboard` (the evdev discovery must), and the windowed desktop UI
-(`draw_desk`, `desk_event`) neither draws the keyboard nor routes touches to it, so on a tablet in that UI the policy
-allows a keyboard that is not yet visible. The Bifrost presentation draws and routes it as before.
+Keyboard policy (`FormFactor::allows_onscreen_keyboard`, one gate in `Shell::set_keyboard`): the on-screen keyboard never
+appears by itself on a desktop, whatever raises it (a focused text field, Terminal, an external app or Wayland client,
+the lock screen, a sheet, Search), and a hidden one reserves no inset, `kb_top` offset or window resize. The desktop also
+sets `keyboard::set_disabled(true)` (and a process that never calls it defaults to the form factor), so views that own
+a `Keyboard` stay down too. The only way up is the user's own choice, Input menu > Show On-Screen Keyboard
+(`Shell::keyboard_open_explicit`): it stays until the user closes it (the same row, `keyboard_close_explicit`, or the
+keyboard's hide key), and no automatic hide lowers it. A tablet raises it for text fields and keeps it down while a
+hardware keyboard is attached (`Shell::set_hardware_keyboard`); tapping outside a field dismisses it as before. Apps
+get `BIFROST_HARDWARE_KEYBOARD=1` only on a desktop. Not built: an Accessibility Keyboard switch in Settings; the Input
+menu shows only with several input sources (or while the keyboard is open).
 
 ## Touch gesture recognizers (`bifrost_ui::recognizer`)
 
@@ -3864,34 +3854,6 @@ takes touch input uses `recognizer`, which tracks several fingers by id.
 
 Not done yet: the shell's own system gestures still use `src/shell/gestures.rs` directly; moving them onto
 recognizers is a separate step.
-
-## Form factor and on-screen keyboard policy (`bifrost_ui::form_factor`, `bifrost_app::FormFactor`)
-
-One shell and one SDK serve a desktop and a touch tablet. `FormFactor` is `Desktop` or `Tablet`, read once from
-`BIFROST_FORM` or the plain-word file `/etc/bifrost/form`, default `Desktop` (`FormFactor::resolve` is the pure form of
-the lookup). The shell passes `BIFROST_FORM` to sandboxed apps, and `bifrost_app::is_touch_tablet()` answers whether the
-app runs on a touch tablet.
-
-Keyboard policy (`FormFactor::allows_onscreen_keyboard`): a desktop never raises the on-screen keyboard on the windowed
-desktop UI; a tablet raises it for text fields with or without that UI, and keeps it down while a hardware keyboard is
-attached (`Shell::set_hardware_keyboard`). Tapping outside a field dismisses it as before. A desktop also sets
-`keyboard::set_disabled(true)` for the session; a tablet does not. Apps get `BIFROST_HARDWARE_KEYBOARD=1` only on a
-desktop.
-
-## Form factor and on-screen keyboard policy (`bifrost_ui::form_factor`, `bifrost_app::FormFactor`)
-
-One shell and one SDK serve a desktop and a touch tablet. `FormFactor` is `Desktop` or `Tablet`, read once from
-`BIFROST_FORM` or the plain-word file `/etc/bifrost/form`. With neither set, `FormFactor::current` detects it once: a
-tablet or convertible SMBIOS chassis (codes 30 to 32) is a tablet, and without SMBIOS a known tablet device-tree board
-(`samsung,gta8wifi`) or a direct-touch input device (`B: PROP` bit 1 in `/proc/bus/input/devices`) is a tablet. Anything
-else is `Desktop`. `FormFactor::resolve` is the pure form of the lookup, with the machine facts passed in as `Facts`. The shell passes `BIFROST_FORM` to sandboxed apps, and `bifrost_app::is_touch_tablet()` answers whether the
-app runs on a touch tablet.
-
-Keyboard policy (`FormFactor::allows_onscreen_keyboard`): a desktop never raises the on-screen keyboard on the windowed
-desktop UI; a tablet raises it for text fields with or without that UI, and keeps it down while a hardware keyboard is
-attached (`Shell::set_hardware_keyboard`). Tapping outside a field dismisses it as before. A desktop also sets
-`keyboard::set_disabled(true)` for the session; a tablet does not. Apps get `BIFROST_HARDWARE_KEYBOARD=1` only on a
-desktop.
 
 ## Additional OS-shared policy models
 

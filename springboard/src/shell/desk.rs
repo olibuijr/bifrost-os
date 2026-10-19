@@ -954,10 +954,10 @@ impl Shell {
         self.desk.is_some()
     }
 
-    /// The on-screen keyboard is drawn over the desktop: a touch tablet, not locked, and the keyboard is up or
-    /// sliding. A desktop has a hardware keyboard and never gets one (`set_keyboard`).
+    /// The on-screen keyboard is drawn over the desktop: a touch tablet or a keyboard the user opened on purpose, not
+    /// locked, and the keyboard is up or sliding. A desktop otherwise never gets one (`set_keyboard`).
     pub(super) fn desk_keyboard_visible(&self) -> bool {
-        self.form.is_tablet() && !self.is_locked() && (self.keyboard.shown() || self.keyboard.animating())
+        self.osk_over_desk() && !self.is_locked() && (self.keyboard.shown() || self.keyboard.animating())
     }
 
     /// Lifts the front window clear of the keyboard while it is up, and puts a lifted window back once it is down.
@@ -971,7 +971,7 @@ impl Shell {
                 }
             }
         }
-        if !(self.form.is_tablet() && self.keyboard.shown() && !self.is_locked()) {
+        if !(self.osk_over_desk() && self.keyboard.shown() && !self.is_locked()) {
             return;
         }
         let kb_top = self.kb_top() as i32;
