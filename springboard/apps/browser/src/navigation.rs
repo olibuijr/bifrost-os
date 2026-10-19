@@ -182,7 +182,9 @@ impl Browser {
     }
 
     pub(super) fn refresh_suggestions(&mut self) {
-        self.sugg = if self.editing { suggest::suggestions(&self.store, &self.address.to_string(), store::now()) } else { Vec::new() };
+        // an empty field on the Start Page lists nothing: the Favorites are on the page already
+        let listing = self.editing && !(self.address.is_empty() && self.start_visible());
+        self.sugg = if listing { suggest::suggestions(&self.store, &self.address.to_string(), store::now()) } else { Vec::new() };
         self.sel = None;
     }
 

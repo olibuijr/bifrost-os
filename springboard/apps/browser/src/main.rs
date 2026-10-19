@@ -123,6 +123,8 @@ mod tokens;
 mod session;
 mod autofill;
 mod overview;
+mod startpage;
+mod starttab;
 
 const KEY_F: u32 = 33;
 const KEY_BACKSLASH: u32 = 43;
@@ -214,6 +216,8 @@ struct Browser {
     autofill: autofill::AutoFill,
     /// Tab overview grid (overview.rs).
     overview: overview::Overview,
+    /// Start Page of a blank tab: scroll and press (startpage.rs, starttab.rs).
+    start_page: startpage::State,
 }
 
 /// The bookmark star at the trailing edge of the address field (a square the height of the field).

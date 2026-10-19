@@ -13,6 +13,7 @@ impl Browser {
         if let Some(p) = &mut self.pool {
             p.draw(s);
         }
+        self.draw_start_page(ctx, s);
         self.inspector.draw(ctx, s, self.view());
         self.draw_page_feedback(ctx, s);
         if let (Some(r), Some(text)) = (&self.dev.responsive, self.dev.readout()) {
