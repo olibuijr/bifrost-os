@@ -6,10 +6,14 @@
 //! descriptors and strings), `MatchingCriteria` (what a listener selects), `Event` (attach and detach) and `Error`.
 //!
 //! The manager is pure. [`bus`] is the bus source that reads the kernel's USB device list and reports attach and
-//! detach to it (`bus::poll`). The app sandbox does not bind USB device nodes yet (springboard/src/bare/app_policy.rs), so an app cannot reach a real
-//! accessory through this module until that binding and a device transport exist.
+//! detach to it (`bus::poll`); the shell runs it once a second inside the `usb` service. An app does not receive the
+//! bus: it asks the person for one device (`crate::usb_access::request`, with [`filters_from_criteria`] built from the
+//! same [`MatchingCriteria`] a listener uses), and then gets that device's attach and detach events and can open it
+//! (`crate::usb_access::open`). No USB device node ever enters the app sandbox; the shell opens the node and applies
+//! the claim and endpoint rules of `bifrost_core::usb_session` to every request.
 
 pub use bifrost_core::accessory_manager::{Accessory, AccessoryManager, Error, Event, Session};
+pub use crate::usb_access::filters_from_criteria;
 pub use bifrost_core::usb_bus_source as bus;
 pub use bifrost_core::usb_descriptors::{
     ConfigurationDescriptor, DeviceDescriptor, DeviceMatch, InterfaceDescriptor, InterfaceMatch, InterfaceMatchOption,

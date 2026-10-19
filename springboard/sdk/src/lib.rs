@@ -233,6 +233,7 @@ pub mod print_panel;
 pub mod drawing_model;
 pub mod usb_printer;
 pub mod usb_device;
+pub mod usb_access;
 pub mod pasteboard;
 pub mod pasteboard_item;
 pub mod pasteboard_types;
@@ -937,7 +938,7 @@ pub use bifrost_core::{
     app_disk_writes, app_metrics, auth_context, auth_session, bt_address, bt_service_browser, codereq, content_filter,
     dns_proxy, dns_settings, frame_metrics, geojson, imgmeta, local_push, matter, matter_cluster, matter_fabric,
     matter_interaction, mediaext, obex_packet, provider_host, ptp, relay, resource_exception, rfcomm_frame, sdp_element,
-    serial_line, surface_registry, usb_claim, usb_descriptors, usb_host, usb_pipe,
+    serial_line, surface_registry, usb_claim, usb_descriptors, usb_grants, usb_host, usb_pipe, usb_session,
 };
 pub mod avahi_browse;
 pub mod drawable_pool;
