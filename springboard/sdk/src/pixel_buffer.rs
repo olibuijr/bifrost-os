@@ -300,6 +300,54 @@ impl PixelBuffer {
     }
 }
 
+/// One plane of a format description (`CVPixelFormatDescription`'s per-plane entries).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PlaneDescription {
+    /// Bytes of one stored sample (a chroma pair counts as one sample).
+    pub bytes_per_sample: usize,
+    /// Picture columns covered by one stored sample.
+    pub horizontal_subsampling: usize,
+    /// Picture rows covered by one stored sample.
+    pub vertical_subsampling: usize,
+}
+
+/// What the system knows about a pixel format (`CVPixelFormatDescriptionCreateWithPixelFormatType`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FormatDescription {
+    pub code: FourCc,
+    pub name: &'static str,
+    pub planes: Vec<PlaneDescription>,
+    /// Bits of storage per picture pixel, all planes together (12 for NV12, 32 for the 32-bit RGB layouts).
+    pub bits_per_pixel: usize,
+    /// Whether [`PixelBuffer::from_image`] and [`PixelBuffer::to_image`] convert this format.
+    pub converts_to_image: bool,
+}
+
+/// The description of the format with this code, or `None` when the system does not know it
+/// (`kCVReturnInvalidPixelFormat`). The table is fixed: apps cannot register formats of their own.
+pub fn pixel_format_description(code: FourCc) -> Option<FormatDescription> {
+    let format = pixel_format::find(code)?;
+    let planes: Vec<PlaneDescription> = format
+        .planes
+        .iter()
+        .map(|p| PlaneDescription { bytes_per_sample: p.bytes_per_pixel, horizontal_subsampling: p.h_sub, vertical_subsampling: p.v_sub })
+        .collect();
+    let bits_per_pixel = planes.iter().map(|p| p.bytes_per_sample * 8 / (p.horizontal_subsampling * p.vertical_subsampling)).sum();
+    // Every format in the table converts; the check keeps the flag honest if the table grows.
+    let converts_to_image = bifrost_render::pixel_convert::encode(
+        &bifrost_render::gfx::Image { w: 2, h: 2, px: vec![0; 4] },
+        format,
+        YcbcrMatrix::Bt709,
+    )
+    .is_some();
+    Some(FormatDescription { code: format.code, name: format.name, planes, bits_per_pixel, converts_to_image })
+}
+
+/// Every pixel format code the system knows, in table order (`CVPixelFormatDescriptionArrayCreateWithAllPixelFormatTypes`).
+pub fn pixel_format_codes() -> Vec<FourCc> {
+    pixel_format::TABLE.iter().map(|f| f.code).collect()
+}
+
 impl PixelBuffer {
     /// A buffer in the format with this code holding `img`, converted by `bifrost_render::pixel_convert` (the
     /// 32-bit RGB layouts, RGB565, NV12 and NV16). The buffer is unlocked and its attachments are empty; YCbCr
@@ -609,6 +657,20 @@ mod tests {
             PixelBuffer::from_planes(code("NV12"), 3, 2, vec![vec![0u8; 6], vec![0u8; 5]], Attachments::default()),
             Err(PixelBufferError::InvalidSize)
         );
+    }
+
+    #[test]
+    fn format_descriptions_report_planes_and_storage() {
+        let nv12 = pixel_format_description(code("NV12")).unwrap();
+        assert_eq!((nv12.name, nv12.planes.len(), nv12.bits_per_pixel), ("NV12", 2, 12));
+        assert_eq!(nv12.planes[1], PlaneDescription { bytes_per_sample: 2, horizontal_subsampling: 2, vertical_subsampling: 2 });
+        assert_eq!(pixel_format_description(code("NV16")).unwrap().bits_per_pixel, 16);
+        assert_eq!(pixel_format_description(code("AR24")).unwrap().bits_per_pixel, 32);
+        assert_eq!(pixel_format_description(code("RG16")).unwrap().bits_per_pixel, 16);
+        assert!(pixel_format_description(code("XX99")).is_none());
+        let codes = pixel_format_codes();
+        assert_eq!(codes.len(), 7);
+        assert!(codes.iter().all(|&c| pixel_format_description(c).is_some_and(|d| d.converts_to_image)));
     }
 
     #[test]
