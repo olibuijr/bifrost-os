@@ -14,5 +14,8 @@ Show the items as icons or as a list. Show View Options sets the sort order, and
 ## Show hidden files {#hidden}
 Show Hidden Files shows the items whose names start with a dot. Hide Hidden Files puts them back out of view.
 
+## Rename and open items {#rename}
+Press Return on a selected item to rename it. The name is selected without its extension, so typing replaces it and keeps the type. Press Return to save the new name or Escape to cancel. New Folder in the toolbar (or Shift+Command+N) makes a folder and opens its name the same way. Press Command+O or Command+Down to open the selected item, and Command+Up to go to the folder that holds the one you are in.
+
 ## Find items {#search}
 Type in the Search field to look for a name in the folder you are in. Use Find to search from the top of the search field.

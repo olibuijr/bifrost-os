@@ -49,6 +49,8 @@ impl Files {
             (14, false) => self.trash_selected(),  // Backspace
             (14, true) => self.ask_empty_trash(),  // Shift+Backspace: Empty Trash, after the confirmation sheet
             (28, false) => self.start_rename(),    // Return
+            (24, false) => self.open_selected(),   // O: File > Open
+            (108, false) => self.open_selected(),  // Down: Open (a chord only while Cmd or Ctrl is held)
             (46, false) => self.copy_selected(false), // C
             (45, false) => self.copy_selected(true),  // X
             (47, false) => self.paste(),           // V

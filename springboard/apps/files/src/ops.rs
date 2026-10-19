@@ -1,6 +1,7 @@
 //! File operations (copy, move, duplicate, rename, trash, new folder, compress, extract) on the dispatch queue, with progress
 //! and the name-conflict prompt (Files's copy engine).
 use crate::*;
+use std::ops::Range;
 
 /// File in the Recently Deleted folder that records where each item came from.
 pub(crate) const ORIGINS: &str = ".origins";
@@ -15,6 +16,30 @@ pub(crate) const PROMPT_BUTTONS: [(&str, Resolution, f32, f32); 3] = [
 ];
 
 pub(crate) const PROMPT_ALL_X: f32 = 544.;
+
+/// An item to select, and perhaps rename, once the open folder has been read again: the one a rename just named, or
+/// the folder New Folder just made (`Files::apply_pending`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Pending {
+    pub(crate) path: PathBuf,
+    /// Open its name for editing as well (a new folder), rather than only select it.
+    pub(crate) rename: bool,
+}
+
+/// The part of `name` a rename selects first, as byte offsets: the base name without the extension, so typing
+/// replaces the name and keeps the type ("report.pdf" selects "report", "a.tar.gz" selects "a.tar"). A folder, a
+/// name without an extension, a dot file (".bashrc") and a name that ends in a dot select the whole name.
+pub(crate) fn rename_selection(name: &str, is_dir: bool) -> Range<usize> {
+    let whole = 0..name.len();
+    if is_dir {
+        return whole;
+    }
+    match name.rfind('.') {
+        // a dot at the start names a hidden file, one at the end leaves no extension
+        Some(dot) if dot > 0 && dot + 1 < name.len() => 0..dot,
+        _ => whole,
+    }
+}
 
 /// What a background job does.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -549,6 +574,9 @@ impl Files {
         // the shared pasteboard decides what is pasted; its reply starts the job (system.rs `service_answer`)
         self.sys.effects.push(Effect::ReadBoard(self.path.clone()));
     }
+    /// New Folder (the toolbar button, File > New Folder, Cmd+Shift+N): makes "New Folder" in the open folder. When the
+    /// folder has been read again the new item is selected, scrolled into view and its name is open for editing with
+    /// the whole name selected, so typing names it (`apply_pending`).
     pub(crate) fn new_folder(&mut self) {
         if self.in_bin() || self.in_recents() {
             return;
@@ -558,26 +586,96 @@ impl Files {
         let dir = self.path.clone();
         match fs::new_folder(&dir, &name) {
             Ok(made) => {
-                self.push_undo(Undo::NewFolder(made));
-                self.navigate(dir, false)
+                self.push_undo(Undo::NewFolder(made.clone()));
+                self.navigate(dir, false);
+                self.fx.pending = Some(Pending { path: made, rename: true });
             }
             Err(e) => self.notice = Some(format!("Could not create the folder: {}", batch::friendly(&e))),
         }
     }
-    /// Opens the in-place name field for the focused item (one item only).
+    /// Return, Rename in the menu: opens the in-place name field for the focused item (one item only).
     pub(crate) fn start_rename(&mut self) {
         if self.in_bin() || self.selection.len() != 1 {
             return;
         }
-        let Some(entry) = self.focus_entry() else {
+        if let Some(i) = self.focus() {
+            self.begin_rename(i);
+        }
+    }
+    /// Opens the in-place name field for row `i` with the base name selected (see `rename_selection`), so typing
+    /// replaces it, and scrolls the row into view. The one way a rename starts: Return, the menu and New Folder.
+    pub(crate) fn begin_rename(&mut self, i: usize) {
+        let Some(entry) = self.rows.get(i) else {
             return;
         };
+        let (path, name, is_dir) = (entry.path.clone(), entry.name.clone(), entry.is_dir);
         let mut field = TextField::new();
-        field.push_str(&entry.name);
-        let path = entry.path.clone();
+        field.push_str(&name);
+        field.select(rename_selection(&name, is_dir));
         self.naming = Some((path, field));
         self.searching = false;
         self.preview = None;
+        self.reveal(i);
+        self.revision += 1;
+    }
+    /// Once the open folder has been read again: selects the item a rename or New Folder left pending, scrolls to it
+    /// and, for a new folder, opens its name for editing. An item that is not shown (hidden, or not in the folder) is
+    /// dropped, and so is a pending item whatever else happens, so it never leaks into a later listing.
+    pub(crate) fn apply_pending(&mut self) {
+        let Some(pending) = self.fx.pending.take() else {
+            return;
+        };
+        let Some(i) = self.rows.iter().position(|e| e.path == pending.path) else {
+            return;
+        };
+        if !self.visible().contains(&i) {
+            return;
+        }
+        self.select_only(i);
+        self.reveal(i);
+        if pending.rename {
+            self.begin_rename(i);
+        }
+        self.revision += 1;
+    }
+    /// File > Open (Cmd+O, Cmd+Down): opens the focused item as a double-click does.
+    pub(crate) fn open_selected(&mut self) {
+        if let Some(i) = self.focus() {
+            self.open(i);
+        }
+    }
+    /// Scrolls the icon or list view just far enough that row `i` (an index into `rows`) is fully on screen. The
+    /// columns and gallery views do not scroll.
+    pub(crate) fn reveal(&mut self, i: usize) {
+        if self.columns || self.vo.gallery {
+            return;
+        }
+        let Some(n) = self.visible().iter().position(|&j| j == i) else {
+            return;
+        };
+        // the line's top at scroll 0, its height, and the gap the icon view leaves above its first line
+        let (top, height, gap) = if self.grid {
+            let cols = ((self.w - (self.side() + 16.)) / self.grid_w()).floor().max(1.) as usize;
+            (self.rows_top() + 16. + (n / cols) as f32 * self.grid_h(), self.grid_h(), 16.)
+        } else {
+            (self.rows_top() + n as f32 * 32., 32., 0.)
+        };
+        let (view_top, view_bottom) = (self.rows_top(), self.bottom());
+        if top - gap - self.scroll < view_top {
+            self.scroll = (top - gap - view_top).max(0.);
+        } else if top + height - self.scroll > view_bottom {
+            self.scroll = (top + height - view_bottom).max(0.);
+        }
+    }
+    /// Draws the rename field for the open folder's column row of `e` (columns view) and returns true, or returns
+    /// false when `e` is not the item being renamed so the caller draws the row as usual.
+    pub(crate) fn paint_column_name_field(&self, ui: &Ui, s: &mut Surface, e: &Entry, x0: f32, y: f32) -> bool {
+        let Some(field) = self.naming.as_ref().filter(|(p, _)| *p == e.path).map(|(_, f)| f) else {
+            return false;
+        };
+        icons::entry(s, (ui.pt(x0 + 8.), ui.pt(y + 5.), ui.pt(SPACE_XL), ui.pt(SPACE_XL)), e.kind);
+        bifrost_app::widgets::text_field(s, ui, field, Rect { x: x0 + 32., y: y + 2., w: (self.vo.col_w - 40.).max(40.), h: 24. }, "", true);
+        true
     }
     pub(crate) fn commit_rename(&mut self) {
         let Some((path, field)) = self.naming.take() else {
@@ -593,7 +691,9 @@ impl Files {
                 self.with_tags(|index| index.moved(&path, &to));
                 self.push_undo(Undo::Move(vec![(path.clone(), to.clone())]));
                 let dir = self.path.clone();
-                self.navigate(dir, false)
+                self.navigate(dir, false);
+                // the renamed item stays selected once the folder is read again
+                self.fx.pending = Some(Pending { path: to, rename: false });
             }
             Err(e) => self.notice = Some(format!("Could not rename: {}", batch::friendly(&e))),
         }
@@ -693,5 +793,229 @@ mod receive_tests {
         assert!(report.done.is_empty());
         assert!(!out.join("one.txt").exists());
         let _ = std::fs::remove_dir_all(&d);
+    }
+}
+
+#[cfg(test)]
+mod rename_tests {
+    use super::*;
+    use bifrost_app::kit::{Font, Ui};
+    use bifrost_app::proto::Configure;
+
+    fn test_ctx() -> Ctx {
+        let font = Font::parse(Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice())).unwrap();
+        let cfg = Configure { w: 100, h: 100, scale: 1.0, safe_top: 0.0, safe_bottom: 0.0, dark: true, text_scale: 1.0, reduce_motion: false };
+        Ctx::testing(Ui::new(font, 1.0), cfg)
+    }
+
+    fn dir(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("files-rename-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// A file row in the fixture folder.
+    fn file(name: &str) -> Entry {
+        let mut e = crate::tests::folder(name);
+        e.is_dir = false;
+        e.kind = Kind::Text;
+        e
+    }
+
+    /// A Files open on the real folder `d`, with its rows listed.
+    fn files_in(d: &Path) -> Files {
+        let mut files = crate::tests::fixture(vec![]);
+        files.home = d.to_path_buf();
+        files.path = d.to_path_buf();
+        files.listing_arrives();
+        files
+    }
+
+    fn row_of(files: &Files, name: &str) -> usize {
+        files.rows.iter().position(|e| e.name == name).unwrap()
+    }
+
+    impl Files {
+        /// What the listing worker's final message does in `tick`: the folder's rows, nothing selected, then the
+        /// pending item applied.
+        fn listing_arrives(&mut self) {
+            self.listing = fs::list(&self.path).unwrap();
+            self.refresh_rows();
+            self.selection.clear();
+            self.apply_pending();
+        }
+    }
+
+    #[test]
+    fn a_rename_selects_the_name_without_its_extension() {
+        assert_eq!(rename_selection("report.pdf", false), 0..6);
+        assert_eq!(rename_selection("a.tar.gz", false), 0..5, "only the last extension stays out: a.tar");
+        assert_eq!(rename_selection("Makefile", false), 0..8, "no extension: the whole name");
+        assert_eq!(rename_selection(".bashrc", false), 0..7, "a dot file is all name");
+        assert_eq!(rename_selection(".config.json", false), 0..7, "a dot file with an extension keeps its leading dot");
+        assert_eq!(rename_selection("notes.", false), 0..6, "a trailing dot is no extension");
+        assert_eq!(rename_selection("My.Folder", true), 0..9, "a folder is all name, dots or not");
+        assert_eq!(rename_selection("café.txt", false), 0..5, "offsets are bytes");
+        assert_eq!(rename_selection("", false), 0..0);
+    }
+
+    #[test]
+    fn begin_rename_selects_the_base_name_so_typing_replaces_it() {
+        let mut files = crate::tests::fixture(vec![file("report.pdf"), crate::tests::folder("My.Folder")]);
+        files.select_only(0);
+        files.start_rename();
+        let (path, field) = files.naming.as_mut().expect("the editor is open");
+        assert_eq!(*path, PathBuf::from("/fixture/report.pdf"));
+        assert_eq!(field.selected_text(), "report");
+        field.push_str("Reports");
+        assert_eq!(field.to_string(), "Reports.pdf", "the extension stays");
+        // a folder selects its whole name
+        files.naming = None;
+        files.select_only(1);
+        files.start_rename();
+        assert_eq!(files.naming.as_ref().unwrap().1.selected_text(), "My.Folder");
+        // two items are not renamed
+        files.naming = None;
+        files.select_all();
+        files.start_rename();
+        assert!(files.naming.is_none());
+    }
+
+    #[test]
+    fn return_renames_the_item_and_commits_while_the_editor_is_open() {
+        let ctx = test_ctx();
+        let mut files = crate::tests::fixture(vec![file("a.txt"), file("b.txt")]);
+        files.select_only(0);
+        assert!(files.event(&ctx, Input::Key(KeyInput::Code(13))));
+        assert!(files.naming.is_some(), "Return starts the rename instead of opening the item");
+        assert_eq!(files.naming.as_ref().unwrap().1.selected_text(), "a");
+        // Escape cancels, and the item stays selected
+        assert!(files.event(&ctx, Input::Key(KeyInput::Code(KEY_ESCAPE))));
+        assert!(files.naming.is_none() && files.selection == vec![0]);
+        // Return again, then Return commits (the name is unchanged, so nothing is renamed)
+        files.event(&ctx, Input::Key(KeyInput::Code(13)));
+        assert!(files.naming.is_some());
+        assert!(files.event(&ctx, Input::Key(KeyInput::Code(13))));
+        assert!(files.naming.is_none(), "Return in the editor commits it");
+    }
+
+    #[test]
+    fn return_in_the_search_field_still_opens_the_hit() {
+        let ctx = test_ctx();
+        let mut files = crate::tests::fixture(vec![crate::tests::folder("Alpha"), crate::tests::folder("Beta")]);
+        files.select_only(1);
+        files.searching = true;
+        assert!(files.event(&ctx, Input::Key(KeyInput::Code(13))));
+        assert!(files.naming.is_none(), "no rename from the search field");
+        assert_eq!(files.path, PathBuf::from("/fixture/Beta"), "the selected hit opens");
+    }
+
+    #[test]
+    fn cmd_o_and_cmd_down_open_and_cmd_up_goes_to_the_enclosing_folder() {
+        let mut files = crate::tests::fixture(vec![crate::tests::folder("Alpha"), crate::tests::folder("Beta")]);
+        files.select_only(0);
+        assert!(files.chord(24, CHORD_META), "Cmd+O");
+        assert_eq!(files.path, PathBuf::from("/fixture/Alpha"));
+        assert!(files.chord(103, CHORD_META), "Cmd+Up");
+        assert_eq!(files.path, PathBuf::from("/fixture"));
+        files.rows = vec![crate::tests::folder("Beta")];
+        files.select_only(0);
+        assert!(files.chord(108, CHORD_META), "Cmd+Down");
+        assert_eq!(files.path, PathBuf::from("/fixture/Beta"));
+        // nothing selected: nothing to open
+        files.selection.clear();
+        assert!(files.chord(24, CHORD_META));
+        assert_eq!(files.path, PathBuf::from("/fixture/Beta"));
+        // the editor owns the keys while it is open
+        files.rows = vec![file("c.txt")];
+        files.select_only(0);
+        files.start_rename();
+        assert!(!files.chord(24, CHORD_META), "Cmd+O is not ours while a name is typed");
+    }
+
+    #[test]
+    fn a_new_folder_is_selected_and_named_in_place_once_the_folder_is_listed() {
+        let ctx = test_ctx();
+        let d = dir("newfolder");
+        std::fs::write(d.join("a.txt"), "a").unwrap();
+        let mut files = files_in(&d);
+        files.new_folder();
+        let made = d.join("New Folder");
+        assert!(made.is_dir());
+        assert_eq!(files.fx.pending, Some(Pending { path: made.clone(), rename: true }));
+        // the worker's listing arrives
+        files.listing_arrives();
+        assert!(files.fx.pending.is_none(), "the pending item is used once");
+        assert_eq!(files.selection, vec![row_of(&files, "New Folder")], "the new folder is selected");
+        let (path, field) = files.naming.as_ref().expect("its name is open for editing");
+        assert_eq!(*path, made);
+        assert_eq!(field.selected_text(), "New Folder", "the whole name is selected");
+        // typing replaces the name and Return makes it so; the renamed folder stays selected
+        files.event(&ctx, Input::Key(KeyInput::Text("Reports".into())));
+        assert_eq!(files.naming.as_ref().unwrap().1.to_string(), "Reports");
+        files.event(&ctx, Input::Key(KeyInput::Code(13)));
+        assert!(d.join("Reports").is_dir() && !made.exists());
+        assert_eq!(files.fx.pending, Some(Pending { path: d.join("Reports"), rename: false }));
+        files.listing_arrives();
+        assert_eq!(files.selection, vec![row_of(&files, "Reports")], "the renamed item is selected after the commit");
+        assert!(files.naming.is_none());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_renamed_file_stays_selected_and_keeps_its_extension() {
+        let d = dir("keepsel");
+        std::fs::write(d.join("a.txt"), "a").unwrap();
+        std::fs::write(d.join("z.txt"), "z").unwrap();
+        let mut files = files_in(&d);
+        let at = row_of(&files, "a.txt");
+        files.select_only(at);
+        files.start_rename();
+        assert_eq!(files.naming.as_ref().unwrap().1.selected_text(), "a");
+        files.naming.as_mut().unwrap().1.push_str("m");
+        files.commit_rename();
+        assert!(d.join("m.txt").exists() && !d.join("a.txt").exists());
+        files.listing_arrives();
+        assert_eq!(files.selection, vec![row_of(&files, "m.txt")]);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_pending_item_that_is_not_listed_is_dropped() {
+        let mut files = crate::tests::fixture(vec![file("a.txt")]);
+        files.fx.pending = Some(Pending { path: PathBuf::from("/fixture/gone"), rename: true });
+        files.apply_pending();
+        assert!(files.naming.is_none() && files.selection.is_empty() && files.fx.pending.is_none());
+        // a hidden item is not selected either
+        files.rows = vec![file(".hidden")];
+        files.fx.pending = Some(Pending { path: PathBuf::from("/fixture/.hidden"), rename: false });
+        files.apply_pending();
+        assert!(files.selection.is_empty() && files.fx.pending.is_none());
+    }
+
+    #[test]
+    fn reveal_scrolls_a_row_into_view_and_no_further() {
+        let mut files = crate::tests::fixture((0..100).map(|i| file(&format!("f{i:03}"))).collect());
+        files.grid = false;
+        files.reveal(0);
+        assert_eq!(files.scroll, 0.);
+        files.reveal(60);
+        let (top, bottom) = (files.rows_top() + 60. * 32., files.bottom());
+        assert_eq!(top + 32. - files.scroll, bottom, "a row below the view lands on its bottom edge");
+        let seen = files.scroll;
+        files.reveal(55);
+        assert_eq!(files.scroll, seen, "a row already in view does not move it");
+        files.reveal(0);
+        assert_eq!(files.scroll, 0., "a row above the view scrolls back up");
+        // the icon view scrolls too; the columns view does not
+        files.grid = true;
+        files.reveal(99);
+        assert!(files.scroll > 0.);
+        files.scroll = 0.;
+        files.grid = false;
+        files.columns = true;
+        files.reveal(99);
+        assert_eq!(files.scroll, 0.);
     }
 }

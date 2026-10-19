@@ -22,6 +22,8 @@ pub(crate) struct FileManagerState {
     pub(crate) preview_image: Option<springboard::gfx::Image>,
     /// Go > Connect to Server: the address sheet, the remote folder browser and the recent servers.
     pub(crate) server: crate::server::ServerState,
+    /// The item to select (and maybe rename) when the open folder has been read again: a renamed item, or a new folder.
+    pub(crate) pending: Option<crate::ops::Pending>,
 }
 
 /// Expands a typed path: `~` is the home folder, a relative path is taken from `base`.

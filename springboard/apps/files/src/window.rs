@@ -383,7 +383,7 @@ impl Files {
         let state = format!("{}:{}:{}:{:?}:{}:{}:{:?}:{:?}:{}:{}:{}:{}:{}:{:?}:{:?}:{:?}:{:?}:{}",
             self.revision, self.grid, self.scroll, self.sort, format!("{}:{}:{:?}:{:?}",self.query,self.query.caret(),self.query.selection(),self.controls.focused().map(|n|n.id)), self.searching,
             self.preview, self.error, self.loading, self.w, self.h, ui.s, self.show_hidden,
-            self.naming.as_ref().map(|(p,f)|format!("{}:{}:{:?}",p.display(),f,f.caret())), self.clip, self.notice,
+            self.naming.as_ref().map(|(p,f)|format!("{}:{}:{:?}:{:?}",p.display(),f,f.caret(),f.selection())), self.clip, self.notice,
             self.work.as_ref().map(|w| (&w.title, &w.progress)), self.select_mode);
         let state = format!("{state}:{}:{}", self.status_bar, self.dragging);
         let state = format!("{state}:{}", self.info.as_ref().map_or(0, |i| i.rows.len() * 10000 + i.mode.unwrap_or(0) as usize));
