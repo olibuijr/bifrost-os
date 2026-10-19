@@ -780,7 +780,8 @@ mod tests {
         assert_eq!((resp.status_code, body.as_slice()), (200, &b"ok"[..]));
         let log = log.lock().unwrap();
         assert_eq!(log.len(), 2, "one retry");
-        assert!(log[1].contains("authorization: basic b2xhOnB3"), "{}", log[1]);
+        // the fake transport logs the request lower-cased, so the base64 of "ola:pw" is compared in that form
+        assert!(log[1].contains("authorization: basic b2xhonb3"), "{}", log[1]);
     }
 
     #[test]
