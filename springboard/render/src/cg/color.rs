@@ -259,6 +259,34 @@ impl RgbSpace {
         })
     }
 
+    /// Like `from_pcs`, but a colour outside the gamut is compressed instead of clipped channel by channel: in linear
+    /// light it moves along the straight line towards the grey of equal luminance until every channel fits. That
+    /// keeps hue and lightness and only gives up saturation, which is what the perceptual intent asks for. Spaces
+    /// that keep out-of-range values (the extended ones) are not compressed.
+    fn from_pcs_mapped(&self, xyz: [f64; 3]) -> [f32; 3] {
+        if self.extended {
+            return self.from_pcs(xyz);
+        }
+        let lin = apply(&self.from_xyz, xyz);
+        let eps = 1e-9;
+        if lin.iter().all(|v| *v >= -eps && *v <= 1.0 + eps) {
+            return self.from_pcs(xyz);
+        }
+        // the luminance of the colour, as the grey every channel shares; white is 1, so Y in 0..=1 is a valid grey
+        let l = xyz[1].clamp(0.0, 1.0);
+        let mut t = 1.0f64;
+        for v in lin {
+            if v > 1.0 && v - l > 1e-12 {
+                t = t.min((1.0 - l) / (v - l));
+            } else if v < 0.0 && l - v > 1e-12 {
+                t = t.min(l / (l - v));
+            }
+        }
+        let t = t.clamp(0.0, 1.0);
+        let mapped = lin.map(|v| (l + t * (v - l)).clamp(0.0, 1.0));
+        [0, 1, 2].map(|i| self.trc[i].encode(mapped[i]).clamp(0.0, 1.0) as f32)
+    }
+
     /// Whether the gamut is larger than sRGB's.
     pub fn is_wide_gamut(&self) -> bool {
         self.wide
@@ -614,6 +642,25 @@ impl ColorSpace {
     }
 }
 
+impl ColorSpace {
+    /// Like [`ColorSpace::from_xyz`], but a colour outside an RGB space's gamut is desaturated towards the grey of
+    /// the same luminance rather than clipped per channel (the perceptual rendering intent). Every other kind of
+    /// space, and the extended-range RGB spaces, behave as `from_xyz`.
+    pub fn from_xyz_gamut_mapped(&self, xyz: [f64; 3]) -> Option<Vec<f32>> {
+        match self {
+            ColorSpace::Pattern(_)
+            | ColorSpace::Indexed(_)
+            | ColorSpace::DeviceCmyk
+            | ColorSpace::GenericCmyk
+            | ColorSpace::Lab(_) => self.from_xyz(xyz),
+            _ => match self.core()? {
+                Core::Rgb(r) => Some(r.from_pcs_mapped(xyz).to_vec()),
+                Core::Gray(_) => self.from_xyz(xyz),
+            },
+        }
+    }
+}
+
 impl IndexedSpace {
     /// Scales a table byte to the natural range of component `k` of the base space.
     fn base_component(&self, k: usize, byte: u8) -> f32 {
@@ -748,7 +795,13 @@ impl ColorConversionInfo {
         for (x, s) in xyz.iter_mut().zip(self.abs_scale) {
             *x *= s;
         }
-        self.dst.from_xyz(xyz)
+        // Perceptual compresses out-of-gamut colours towards grey; every other intent clips (the matrix profiles
+        // here carry no saturation or perceptual tables, so saturation is the same as relative colorimetric).
+        if self.intent == RenderingIntent::Perceptual {
+            self.dst.from_xyz_gamut_mapped(xyz)
+        } else {
+            self.dst.from_xyz(xyz)
+        }
     }
 
     /// Converts a colour given as three components to three components (both spaces three-component).
@@ -921,6 +974,35 @@ mod tests {
         assert!(clamped.components().iter().all(|v| (0.0..=1.0).contains(v)));
         let ext = p3.converted(&ColorSpace::ExtendedSrgb, RenderingIntent::Default).unwrap();
         assert!(ext.components()[0] < -0.1, "{:?}", ext.components());
+    }
+
+    #[test]
+    fn perceptual_intent_compresses_out_of_gamut_colours_instead_of_clipping() {
+        let p3 = Color::new(ColorSpace::DisplayP3, &[0.0, 1.0, 0.0], 1.0).unwrap();
+        let clipped = p3.converted(&ColorSpace::Srgb, RenderingIntent::RelativeColorimetric).unwrap();
+        let mapped = p3.converted(&ColorSpace::Srgb, RenderingIntent::Perceptual).unwrap();
+        assert!(mapped.components().iter().all(|v| (0.0..=1.0).contains(v)), "{:?}", mapped.components());
+        // clipping leaves blue at zero; compression gives up some saturation, so blue rises and green drops
+        assert!(mapped.components()[2] > clipped.components()[2] + 0.05, "{:?} {:?}", mapped.components(), clipped.components());
+        assert!(mapped.components()[1] < clipped.components()[1], "{:?}", mapped.components());
+        assert!(mapped.components()[1] > mapped.components()[0] && mapped.components()[1] > mapped.components()[2], "hue is kept");
+    }
+
+    #[test]
+    fn perceptual_intent_leaves_in_gamut_colours_and_greys_alone() {
+        let c = Color::srgb(0.2, 0.6, 0.4, 1.0);
+        let rel = c.converted(&ColorSpace::DisplayP3, RenderingIntent::RelativeColorimetric).unwrap();
+        let per = c.converted(&ColorSpace::DisplayP3, RenderingIntent::Perceptual).unwrap();
+        for (a, b) in rel.components().iter().zip(per.components()) {
+            assert!(near(*a, *b, 1e-4), "{a} {b}");
+        }
+        let grey = Color::new(ColorSpace::DisplayP3, &[0.5, 0.5, 0.5], 1.0).unwrap();
+        let g = grey.converted(&ColorSpace::Srgb, RenderingIntent::Perceptual).unwrap();
+        assert!(g.components().iter().all(|v| near(*v, 0.5, 2e-3)), "{:?}", g.components());
+        // extended-range targets keep out-of-range values whatever the intent
+        let p3 = Color::new(ColorSpace::DisplayP3, &[0.0, 1.0, 0.0], 1.0).unwrap();
+        let ext = p3.converted(&ColorSpace::ExtendedSrgb, RenderingIntent::Perceptual).unwrap();
+        assert!(ext.components()[0] < -0.1);
     }
 
     #[test]

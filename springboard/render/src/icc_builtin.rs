@@ -102,16 +102,16 @@ pub fn gray_profile(desc: &str, decode: impl Fn(f64) -> f64) -> Vec<u8> {
 }
 
 /// XYZ of a chromaticity with luminance 1.
-fn xy_to_xyz((x, y): (f64, f64)) -> [f64; 3] {
+pub(crate) fn xy_to_xyz((x, y): (f64, f64)) -> [f64; 3] {
     [x / y, 1.0, (1.0 - x - y) / y]
 }
 
 /// A signed 15.16 fixed-point value, big-endian.
-fn s15(v: f64) -> [u8; 4] {
+pub(crate) fn s15(v: f64) -> [u8; 4] {
     ((v * 65536.0).round() as i32).to_be_bytes()
 }
 
-fn xyz_body(v: [f64; 3]) -> Vec<u8> {
+pub(crate) fn xyz_body(v: [f64; 3]) -> Vec<u8> {
     let mut b = b"XYZ ".to_vec();
     b.extend([0u8; 4]);
     for x in v {
@@ -121,7 +121,7 @@ fn xyz_body(v: [f64; 3]) -> Vec<u8> {
 }
 
 /// A version 2 `desc` tag: the ASCII text, then empty Unicode and ScriptCode fields.
-fn desc_body(text: &str) -> Vec<u8> {
+pub(crate) fn desc_body(text: &str) -> Vec<u8> {
     let mut b = b"desc".to_vec();
     b.extend([0u8; 4]);
     b.extend(((text.len() + 1) as u32).to_be_bytes());

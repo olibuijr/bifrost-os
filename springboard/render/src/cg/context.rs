@@ -6,7 +6,7 @@
 //! The current path lives in device space (points are transformed when they are added), as the transform may
 //! change while a path is being built.
 use super::color::Color;
-use super::paint::Paint;
+use super::paint::{LinearGradient, Paint, Pattern, RadialGradient, Shading, Tiling};
 use super::path::{Affine, Path, Rect as PathRect};
 use super::raster::{self, Coverage, FillRule, StrokeStyle};
 pub use super::raster::{LineCap, LineJoin};
@@ -743,6 +743,49 @@ impl<'a> DrawContext<'a> {
         self.gs.stroke = p;
     }
 
+    /// Fills with a tiled pattern from now on (the pattern fill of a context).
+    pub fn set_fill_pattern(&mut self, p: Pattern) {
+        self.gs.fill = Paint::Pattern(p);
+    }
+
+    /// Strokes with a tiled pattern from now on.
+    pub fn set_stroke_pattern(&mut self, p: Pattern) {
+        self.gs.stroke = Paint::Pattern(p);
+    }
+
+    /// Fills with a shading from now on (a gradient function evaluated per point, used by fills and strokes).
+    pub fn set_fill_shading(&mut self, s: Shading) {
+        self.gs.fill = Paint::Shading(s);
+    }
+
+    pub fn set_stroke_shading(&mut self, s: Shading) {
+        self.gs.stroke = Paint::Shading(s);
+    }
+
+    /// Paints `paint` over the whole clip region (everything the clip lets through), under the current alpha,
+    /// blend mode and shadow. The paint is evaluated in user space.
+    pub fn draw_paint(&mut self, paint: &Paint) {
+        let clip = self.gs.clip.clone();
+        let cov = self.full_cov(&clip);
+        self.paint_cov_with(&cov, paint);
+    }
+
+    /// Draws a shading over the clip region (`CGContextDrawShading`).
+    pub fn draw_shading(&mut self, s: &Shading) {
+        self.draw_paint(&Paint::Shading(s.clone()));
+    }
+
+    /// Draws a linear gradient over the clip region (`CGContextDrawLinearGradient`); the gradient carries its own
+    /// start, end and extend flags.
+    pub fn draw_linear_gradient(&mut self, g: &LinearGradient) {
+        self.draw_paint(&Paint::Linear(g.clone()));
+    }
+
+    /// Draws a radial gradient over the clip region (`CGContextDrawRadialGradient`).
+    pub fn draw_radial_gradient(&mut self, g: &RadialGradient) {
+        self.draw_paint(&Paint::Radial(g.clone()));
+    }
+
     pub fn fill_paint(&self) -> &Paint {
         &self.gs.fill
     }
@@ -1055,10 +1098,25 @@ impl<'a> DrawContext<'a> {
     /// sampled through the inverse of the CTM, since paint coordinates are user space.
     fn paint_cov(&mut self, cov: &Coverage, fill: bool) {
         let paint = if fill { self.gs.fill.clone() } else { self.gs.stroke.clone() };
-        if let Paint::Solid(c) = &paint {
+        self.paint_cov_with(cov, &paint);
+    }
+
+    /// Paints `cov` with `paint` (see [`DrawContext::paint_cov`]). A tiled pattern whose tiling is not
+    /// `NoDistortion` has its step fitted to whole device pixels under the current transform first.
+    fn paint_cov_with(&mut self, cov: &Coverage, paint: &Paint) {
+        if let Paint::Solid(c) = paint {
             self.composite(cov, &Src::Solid(premul(c)));
             return;
         }
+        let ct = self.gs.ctm;
+        let fitted;
+        let paint = match paint {
+            Paint::Pattern(p) if p.tiling() != Tiling::NoDistortion => {
+                fitted = Paint::Pattern(p.fitted(&[ct.a, ct.b, ct.c, ct.d, ct.tx, ct.ty]));
+                &fitted
+            }
+            _ => paint,
+        };
         let Some(inv) = self.gs.ctm.invert() else { return };
         let sample = |x: i32, y: i32| {
             let (ux, uy) = inv.apply(x as f32 + 0.5, y as f32 + 0.5);
@@ -1920,5 +1978,95 @@ mod tests {
         }
         assert_eq!(px(&bm, 3, 3), 0xff00_00ff);
         assert_ne!(px(&bm, 9, 3) >> 16 & 0xff, 0, "blue shadow six pixels right");
+    }
+
+    #[test]
+    fn a_pattern_fill_repeats_its_cell_through_the_context() {
+        // a 2x2 cell with a red left column, repeated every 4 units
+        let cell = Pattern::from_tile(
+            2,
+            2,
+            vec![0xff00_00ff, 0, 0xff00_00ff, 0],
+            (2.0, 2.0),
+            (4.0, 4.0),
+            [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+            Tiling::NoDistortion,
+        )
+        .unwrap();
+        let mut bm = Bitmap::new(8, 8);
+        {
+            let mut cx = bm.context();
+            cx.set_fill_pattern(cell);
+            cx.fill_rect(Rect::new(0.0, 0.0, 8.0, 8.0));
+        }
+        assert_eq!(px(&bm, 0, 0), 0xff00_00ff);
+        assert_eq!(px(&bm, 4, 1), 0xff00_00ff);
+        assert_eq!(px(&bm, 1, 0), 0, "second column of the cell is empty");
+        assert_eq!(px(&bm, 0, 2), 0, "between cells the pattern is transparent");
+    }
+
+    #[test]
+    fn a_pattern_stroke_uses_the_stroke_paint_not_the_fill() {
+        let cell =
+            Pattern::from_tile(1, 1, vec![0xff00_ff00], (1.0, 1.0), (1.0, 1.0), [1.0, 0.0, 0.0, 1.0, 0.0, 0.0], Tiling::NoDistortion).unwrap();
+        let mut bm = Bitmap::new(8, 8);
+        {
+            let mut cx = bm.context();
+            cx.set_fill_color(red());
+            cx.set_stroke_pattern(cell);
+            cx.set_line_width(2.0);
+            cx.stroke_rect(Rect::new(2.0, 2.0, 4.0, 4.0));
+        }
+        assert_eq!(px(&bm, 2, 3), 0xff00_ff00, "the outline is green");
+        assert_eq!(px(&bm, 4, 4), 0, "the inside is not filled");
+    }
+
+    #[test]
+    fn a_linear_gradient_draws_over_the_clip_only() {
+        use super::super::paint::ColorRamp;
+        let ramp = ColorRamp::from_rgba8(&[(0.0, [0, 0, 0, 255]), (1.0, [255, 255, 255, 255])]).unwrap();
+        let g = LinearGradient::new((0.0, 0.0), (8.0, 0.0), ramp);
+        let mut bm = Bitmap::new(8, 4);
+        {
+            let mut cx = bm.context();
+            cx.clip_to_rect(Rect::new(0.0, 0.0, 6.0, 4.0));
+            cx.draw_linear_gradient(&g);
+        }
+        let (left, right) = (px(&bm, 0, 1) & 0xff, px(&bm, 5, 1) & 0xff);
+        assert!(left < right, "the ramp brightens left to right: {left} {right}");
+        assert_eq!(px(&bm, 7, 1), 0, "outside the clip nothing is drawn");
+        assert_eq!(px(&bm, 0, 1) >> 24, 0xff);
+    }
+
+    #[test]
+    fn a_shading_draw_evaluates_its_function_per_pixel() {
+        use super::super::color::ColorSpace;
+        use super::super::paint::Function;
+        let f = Function::exponential((0.0, 1.0), vec![1.0, 0.0, 0.0], vec![0.0, 0.0, 1.0], 1.0).unwrap();
+        let s = Shading::axial(&ColorSpace::Srgb, (0.0, 0.0), (8.0, 0.0), f, true, true).unwrap();
+        let mut bm = Bitmap::new(8, 2);
+        {
+            let mut cx = bm.context();
+            cx.draw_shading(&s);
+        }
+        let (a, b) = (px(&bm, 0, 0), px(&bm, 7, 0));
+        assert!((a & 0xff) > (a >> 16 & 0xff), "red end: {a:08x}");
+        assert!((b >> 16 & 0xff) > (b & 0xff), "blue end: {b:08x}");
+    }
+
+    #[test]
+    fn a_gradient_draw_follows_the_transform() {
+        use super::super::paint::ColorRamp;
+        let ramp = ColorRamp::from_rgba8(&[(0.0, [255, 0, 0, 255]), (1.0, [0, 0, 255, 255])]).unwrap();
+        let g = LinearGradient::new((0.0, 0.0), (4.0, 0.0), ramp).extended(true, true);
+        let mut bm = Bitmap::new(8, 1);
+        {
+            let mut cx = bm.context();
+            cx.scale_ctm(2.0, 1.0);
+            cx.draw_linear_gradient(&g);
+        }
+        // user x 4 is device x 8: the far pixel is nearly the end colour, the near one nearly the start colour
+        let (a, b) = (px(&bm, 0, 0), px(&bm, 7, 0));
+        assert!((a & 0xff) > 200 && (b >> 16 & 0xff) > 200, "{a:08x} {b:08x}");
     }
 }

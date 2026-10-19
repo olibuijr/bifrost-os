@@ -1,6 +1,7 @@
 //! The one 2D drawing stack: paths and transforms, scan conversion and stroking, colours and colour spaces, paint
 //! (gradients, shadings, functions, patterns), drawing contexts, bitmap images and image input/output, offscreen
 //! layers and PDF documents.
+pub mod boolean;
 pub mod color;
 pub mod context;
 pub mod image;

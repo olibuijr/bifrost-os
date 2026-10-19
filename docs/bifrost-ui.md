@@ -5201,15 +5201,45 @@ text, matrix-shaper curves `curv`/`para`, `wtpt`, `vcgt`), `render/src/icc_lut.r
 | Image decode | `CGImageSource` with `ColorSync` conversion to the display | `cg::imageio::ImageSource::all` converts every decoded frame with an embedded profile (PNG `iCCP`, JPEG `APP2`, TIFF and WebP `ICCP`) to the display profile once per decode. A picture already in the display profile is not tagged with its source profile again. Preview, Photos and any other app that decodes through `ImageSource` get this. sRGB-tagged pictures on an sRGB display are not converted. |
 
 Decisions and limits:
-- The conversion is the matrix or table path only. Perceptual gamut mapping is not done for matrix profiles; out-of-gamut
-  colours clip at the end. A profile's own perceptual table, when it has one, is used as is.
+- The conversion is the matrix or table path only. Image decode and `icc_transform` still clip out-of-gamut colours at the
+  end; the colour-object path (`cg::color::ColorConversionInfo` with `RenderingIntent::Perceptual`) compresses them toward
+  the grey of equal luminance (2026-10-19, see the w15 section below). A profile's own perceptual table, when it has one,
+  is used as is.
 - CMYK and other non-RGB device spaces are not converted: the engine feeds three device channels, so a profile with
   four or more does not convert. A grey profile's pixels take their red channel.
-- Not done: profile creation and embedding (`ColorSyncMutableProfile`), `mluc` text in other scripts than the first
+- Not done: lookup-table (A2B and B2A) profile authoring (matrix-shaper and grey profile creation and embedding in PNG,
+  JPEG and TIFF are built, see below), `mluc` text in other scripts than the first
   record, `vcgt` loading into the hardware (`kms.rs` still applies no ramp), the HDR Headroom Adaptive Gain Curve, the
   PDF `ICCBased` path (`cg/pdf/image.rs` still takes the component count only), and the `ColorSync` SDK call (no app
   calls `icc_transform` yet; the `bifrost_app::colorsync` surface still exposes only the named-space converter).
 - Verified on the host only by unit tests (`cargo test -p bifrost-render icc`, `colorspace`, `edid`). Not verified on Midget.
+
+## Core Graphics, Quartz and ColorSync additions (2026-10-19, wave 15 `core-graphics`)
+
+All of it is host-tested only; the rows stay `partial` until a Midget check, and no shell or app calls the new pieces yet.
+The render crate's `cg` tree reaches apps as `bifrost_app::kit::cg`.
+
+| Apple | BifrOSt |
+|---|---|
+| `CGPath.union`, `intersection`, `subtracting`, `symmetricDifference`, `lineIntersection`, `lineSubtracting`, `normalized(using:)` | `cg::path::Path` methods `union`, `intersection`, `subtracting`, `symmetric_difference`, `line_intersection`, `line_subtracting`, `normalized`, each with a `FillRule` (`render/src/cg/boolean.rs`, also `combine` and `clip_lines`). Curves are flattened, vertices snapped to a 1/1024 grid, edges cut at every crossing with exact integer arithmetic, boundary pieces kept by a left and right probe and linked into closed loops. The result is polygons only. |
+| `CGContext.setFillPattern`, `setStrokePattern` | `DrawContext::set_fill_pattern`, `set_stroke_pattern` (a `cg::paint::Pattern`: coloured cell from a draw callback or an uncoloured one with a tint). The step is fitted to device pixels under the CTM for the two constant-spacing tilings. |
+| `CGContext.drawShading`, `drawLinearGradient`, `drawRadialGradient` | `DrawContext::draw_shading`, `draw_linear_gradient`, `draw_radial_gradient`: paint over the whole clip region in user space, under alpha, blend mode and shadow. `set_fill_shading`, `set_stroke_shading` and `draw_paint` take a shading or any `Paint` as the paint of fills and strokes. |
+| `CGColorConversionInfo` with `kCGRenderingIntentPerceptual` | `ColorConversionInfo` with `RenderingIntent::Perceptual` uses `ColorSpace::from_xyz_gamut_mapped`: an out-of-gamut colour moves in linear light toward the grey of equal luminance until it fits (hue and lightness kept). Other intents clip; extended-range spaces keep out-of-range values; saturation is still relative colorimetric. |
+| `CGPDFContext` path drawing | `graphics_pdf::PdfPage::fill_path`, `stroke_path` (a `cg::raster::StrokeStyle`: width, caps, joins, miter limit, dash), `fill_stroke_path`, each in its own `q`/`Q`. |
+| `QuartzFilter`, `QuartzFilterManager` | `graphics_quartz_filter::QuartzFilter` (3x3 colour matrix, lightness shift, image size limit; `black_and_white`, `blue_tone`, `gray_tone`, `sepia_tone`, `lightness_decrease`, `lightness_increase`, `reduce_file_size`) and `QuartzFilterManager` (`filters`, `find`, `add`, `remove`; built-ins are protected). `PdfWriter::finish_filtered(&filter)` applies it to the colour operators and images of a written file. |
+| `PDFSelection`, `PDFDocument.findString` | `graphics_pdf::Document::search` returns a `Selection` per occurrence (page, line, character range, text as written, baseline, size); `Document::selection_text`. |
+| `PDFView`, `PDFThumbnailView` layout | `graphics_pdf_view::PdfViewState`: `DisplayMode` (single page, continuous, two-up, two-up continuous, book), `layout` and `visible_slots`, zoom (0.1 to 8) and `scale_to_fit` with `set_auto_scales`, `go_to_page`, `go_to_next_page`, `page_at_scroll`, `scroll_offset_for_page`, `point_to_page` and `page_to_point` (origin bottom left); `thumbnail_size` and `thumbnail_grid`. No pixels: the app draws `Document::render` output in each slot. |
+| `ColorSyncMutableProfile`, `ColorSyncProfileCopyData` | `render/src/icc_write.rs` `MutableProfile` (`new`, `rgb_display`, `from_bytes`, tag setters for description, copyright, white point, colorants, gamma, sampled and parametric curves, `vcgt` tables, raw tags, `to_bytes`); `bifrost_app::colorsync::{MutableProfile, encode_with_profile, embedded_profile}` embed a profile in PNG, JPEG and TIFF files. |
+
+Corrections found while reading the code (the parity rows said otherwise): `DrawContext` already draws glyph ids
+(`show_glyphs`, `show_glyphs_at_positions`, `show_text_at_point`), `ui::geometry::Vector` already exists, and
+`ui/src/print.rs` already paginates text (`text_pages`) and writes a `PrintOperation` to PDF.
+
+Gaps that remain: Boolean results are polygons, not curves; no `DrawContext` that writes PDF pages (the SDK writer has its
+own page calls); `Function` has no callback form; PDF selection has no per-glyph rectangles because the extractor keeps
+only a line's baseline and size; quartz filters do not rewrite a PDF read from elsewhere and the print sheet offers none;
+no lookup-table profile authoring; the PDF writer embeds no ICC profile; display and window services still need a live
+check on Midget.
 
 ## SDK modules added 2026-10-17 (parity waves 1 to 8)
 

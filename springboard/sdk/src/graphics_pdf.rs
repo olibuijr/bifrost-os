@@ -1,8 +1,10 @@
 //! PDF documents for apps: open a file to read its pages (count, size, a rasterised picture of a page) and build a new
 //! file from drawn pages. The reader is `bifrost_render::cg::pdf` (`Doc`, `page`, `draw`); the writer is its
-//! `writer` module. Drawing is limited to what the writer emits: filled and stroked rectangles and lines, raster
-//! images, and text in the four standard faces ([`Face`], WinAnsi only). Reading gives the text of each page
-//! ([`Document::page_text`]); annotation editing stays in the PDF app.
+//! `writer` module. Drawing is limited to what the writer emits: filled and stroked rectangles and lines, filled and
+//! stroked paths with curves (`cg::path::Path`, with caps, joins and dashes), raster images, and text in the four
+//! standard faces ([`Face`], WinAnsi only). `PdfWriter::finish_filtered` writes through a `QuartzFilter`. Reading gives
+//! the text of each page ([`Document::page_text`]) and every occurrence of a string ([`Document::search`], a
+//! [`Selection`] per match); annotation editing stays in the PDF app.
 //!
 //! ```ignore
 //! let doc = graphics_pdf::Document::open(bytes)?;
@@ -21,8 +23,90 @@ use bifrost_render::cg::pdf::draw;
 use bifrost_render::cg::pdf::extract::{Extractor, Piece};
 use bifrost_render::cg::pdf::outline_tree::{self, OutlineNode};
 use bifrost_render::cg::pdf::page::{self, PageBox};
+use bifrost_render::cg::path::{Element, Path};
 use bifrost_render::cg::pdf::writer::{self, Page as OutPage, PageImage};
+use bifrost_render::cg::raster::{FillRule, LineCap, LineJoin, StrokeStyle};
 use bifrost_render::gfx::Image;
+
+use crate::graphics_quartz_filter::QuartzFilter;
+
+/// One occurrence of a search string on a page (`PDFSelection`): the zero based page, the line of the page's text it
+/// sits on, its character range in that line, the text as written in the document, and the line's baseline and font
+/// size in page points (the vertical extent a highlight spans).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Selection {
+    pub page: usize,
+    pub line: usize,
+    /// First character of the match in the line.
+    pub start: usize,
+    /// One past the last character of the match.
+    pub end: usize,
+    pub text: String,
+    pub baseline: f64,
+    pub size: f64,
+}
+
+/// The characters of `s`, each lowercased to a single character so indexes line up with the original.
+fn fold(s: &str) -> Vec<char> {
+    s.chars().map(|c| c.to_lowercase().next().unwrap_or(c)).collect()
+}
+
+/// The path as PDF path construction operators (each followed by a space); quadratic curves become cubic ones.
+fn path_ops(path: &Path) -> String {
+    let n = |v: f32| num(v as f64);
+    let mut s = String::new();
+    let mut cur = (0.0f32, 0.0f32);
+    let mut start = cur;
+    for e in path.elements() {
+        match *e {
+            Element::Move(p) => {
+                s.push_str(&format!("{} {} m ", n(p.0), n(p.1)));
+                cur = p;
+                start = p;
+            }
+            Element::Line(p) => {
+                s.push_str(&format!("{} {} l ", n(p.0), n(p.1)));
+                cur = p;
+            }
+            Element::Quad(c, p) => {
+                let c1 = (cur.0 + 2.0 / 3.0 * (c.0 - cur.0), cur.1 + 2.0 / 3.0 * (c.1 - cur.1));
+                let c2 = (p.0 + 2.0 / 3.0 * (c.0 - p.0), p.1 + 2.0 / 3.0 * (c.1 - p.1));
+                s.push_str(&format!("{} {} {} {} {} {} c ", n(c1.0), n(c1.1), n(c2.0), n(c2.1), n(p.0), n(p.1)));
+                cur = p;
+            }
+            Element::Cubic(a, b, p) => {
+                s.push_str(&format!("{} {} {} {} {} {} c ", n(a.0), n(a.1), n(b.0), n(b.1), n(p.0), n(p.1)));
+                cur = p;
+            }
+            Element::Close => {
+                s.push_str("h ");
+                cur = start;
+            }
+        }
+    }
+    s
+}
+
+/// The graphics state operators of a stroke style: width, cap, join, miter limit and dash.
+fn style_ops(st: &StrokeStyle) -> String {
+    let cap = match st.cap {
+        LineCap::Butt => 0,
+        LineCap::Round => 1,
+        LineCap::Square => 2,
+    };
+    let join = match st.join {
+        LineJoin::Miter => 0,
+        LineJoin::Round => 1,
+        LineJoin::Bevel => 2,
+    };
+    let mut s = format!("{} w {cap} J {join} j {} M ", num(st.width.max(0.0) as f64), num(st.miter_limit.max(1.0) as f64));
+    let dash_ok = !st.dash.is_empty() && st.dash.iter().all(|d| d.is_finite() && *d >= 0.0) && st.dash.iter().sum::<f32>() > 0.0;
+    if dash_ok {
+        let lens: Vec<String> = st.dash.iter().map(|d| num(*d as f64)).collect();
+        s.push_str(&format!("[{}] {} d ", lens.join(" "), num(st.dash_phase as f64)));
+    }
+    s
+}
 
 /// One outline (bookmark) entry: its title, the zero based index of the page it opens when that page is in the
 /// document, its level, and the entries nested under it.
@@ -98,6 +182,50 @@ impl Document {
             })
             .map(|page| page.index)
             .collect()
+    }
+
+    /// Every occurrence of `needle` in the text of the pages (`PDFDocument.findString`), in page and line order,
+    /// ignoring case. A match lies within one line and matches do not overlap. An empty needle finds nothing.
+    pub fn search(&self, needle: &str) -> Vec<Selection> {
+        let want = fold(needle.trim());
+        if want.is_empty() {
+            return Vec::new();
+        }
+        let mut found = Vec::new();
+        for page in page::pages(&self.doc).iter() {
+            let mut ex = Extractor::new(&self.doc);
+            ex.page(page);
+            let mut line_no = 0;
+            for piece in &ex.pieces {
+                let Piece::Line { y, size, text } = piece else { continue };
+                let chars: Vec<char> = text.chars().collect();
+                let folded = fold(text);
+                let mut at = 0;
+                while at + want.len() <= folded.len() {
+                    if folded[at..at + want.len()] == want[..] {
+                        found.push(Selection {
+                            page: page.index,
+                            line: line_no,
+                            start: at,
+                            end: at + want.len(),
+                            text: chars[at..at + want.len()].iter().collect(),
+                            baseline: *y as f64,
+                            size: *size as f64,
+                        });
+                        at += want.len();
+                    } else {
+                        at += 1;
+                    }
+                }
+                line_no += 1;
+            }
+        }
+        found
+    }
+
+    /// The text of the selections, one per line, in the order given.
+    pub fn selection_text(selections: &[Selection]) -> String {
+        selections.iter().map(|s| s.text.as_str()).collect::<Vec<_>>().join("\n")
     }
 
     /// The text of page `index` (zero based): its lines in drawing order, joined with `\n`. None when the page does not
@@ -180,6 +308,31 @@ impl PdfPage {
         ));
     }
 
+    /// Fills `path` (PDF points, origin at the bottom left; lines and curves) with `rgb` under `rule`.
+    pub fn fill_path(&mut self, path: &Path, rgb: [f64; 3], rule: FillRule) {
+        let [r, g, b] = rgb.map(clamp01);
+        let op = if rule == FillRule::EvenOdd { "f*" } else { "f" };
+        self.content.push_str(&format!("q {r:.4} {g:.4} {b:.4} rg {}{op} Q\n", path_ops(path)));
+    }
+
+    /// Strokes `path` with `rgb` and the line width, caps, joins, miter limit and dash of `style`.
+    pub fn stroke_path(&mut self, path: &Path, style: &StrokeStyle, rgb: [f64; 3]) {
+        let [r, g, b] = rgb.map(clamp01);
+        self.content.push_str(&format!("q {r:.4} {g:.4} {b:.4} RG {}{}S Q\n", style_ops(style), path_ops(path)));
+    }
+
+    /// Fills `path` with `fill` and then strokes its outline with `stroke` in one paint operation.
+    pub fn fill_stroke_path(&mut self, path: &Path, fill: [f64; 3], stroke: [f64; 3], style: &StrokeStyle, rule: FillRule) {
+        let [fr, fg, fb] = fill.map(clamp01);
+        let [sr, sg, sb] = stroke.map(clamp01);
+        let op = if rule == FillRule::EvenOdd { "B*" } else { "B" };
+        self.content.push_str(&format!(
+            "q {fr:.4} {fg:.4} {fb:.4} rg {sr:.4} {sg:.4} {sb:.4} RG {}{}{op} Q\n",
+            style_ops(style),
+            path_ops(path)
+        ));
+    }
+
     /// Draws a raster image of `w` x `h` pixels (three bytes each, rows top to bottom) into the rectangle at (`x`, `y`)
     /// of size `dw` x `dh`. The image is ignored when its byte count does not match its size.
     pub fn draw_rgb_image(&mut self, rgb: Vec<u8>, w: usize, h: usize, x: f64, y: f64, dw: f64, dh: f64) {
@@ -230,6 +383,27 @@ impl PdfWriter {
                 height: p.height,
                 content: p.content.into_bytes(),
                 images: p.images,
+            })
+            .collect();
+        writer::write(&out, &FACES)
+    }
+
+    /// Writes the document through a [`QuartzFilter`]: fill and stroke colours and raster images are colour-mapped,
+    /// and images are scaled down to the filter's size limit. The page content that is not a colour stays as drawn.
+    pub fn finish_filtered(self, filter: &QuartzFilter) -> Vec<u8> {
+        let out: Vec<OutPage> = self
+            .pages
+            .into_iter()
+            .map(|p| {
+                let images = p
+                    .images
+                    .into_iter()
+                    .map(|im| {
+                        let (rgb, width, height) = filter.filter_image(&im.rgb, im.width, im.height);
+                        PageImage { width, height, rgb }
+                    })
+                    .collect();
+                OutPage { width: p.width, height: p.height, content: filter.filter_content(&p.content).into_bytes(), images }
             })
             .collect();
         writer::write(&out, &FACES)
@@ -359,5 +533,115 @@ mod tests {
         let bytes = PdfWriter::new().finish();
         assert!(bytes.starts_with(b"%PDF"));
         assert_eq!(Document::open(bytes).expect("reads back").page_count(), 0);
+    }
+
+    fn pixel(img: &Image, x: usize, y: usize) -> (u32, u32, u32) {
+        let p = img.px[y * img.w + x];
+        (p & 0xff, (p >> 8) & 0xff, (p >> 16) & 0xff)
+    }
+
+    #[test]
+    fn a_filled_path_with_lines_draws_where_it_says() {
+        let mut path = Path::new();
+        path.move_to((10.0, 10.0));
+        path.line_to((90.0, 10.0));
+        path.line_to((90.0, 90.0));
+        path.line_to((10.0, 90.0));
+        path.close();
+        let mut w = PdfWriter::new();
+        w.add_page(100.0, 100.0).fill_path(&path, [1.0, 0.0, 0.0], FillRule::NonZero);
+        assert!(w.pages[0].content.contains("10.000 10.000 m 90.000 10.000 l 90.000 90.000 l 10.000 90.000 l h f Q"));
+        let img = Document::open(w.finish()).expect("reads back").render(0, 100, 100).expect("renders");
+        let (r, g, _) = pixel(&img, 50, 50);
+        assert!(r > 200 && g < 60, "the middle is red: {r} {g}");
+        let (r, g, b) = pixel(&img, 3, 3);
+        assert!(!(r > 200 && g < 60 && b < 60), "outside the path is not red");
+    }
+
+    #[test]
+    fn curves_and_the_even_odd_rule_reach_the_file() {
+        let mut ring = Path::from_ellipse(bifrost_render::cg::path::Rect::new(10.0, 10.0, 80.0, 80.0));
+        ring.add_ellipse(bifrost_render::cg::path::Rect::new(30.0, 30.0, 40.0, 40.0));
+        let mut w = PdfWriter::new();
+        w.add_page(100.0, 100.0).fill_path(&ring, [0.0, 0.0, 1.0], FillRule::EvenOdd);
+        let content = w.pages[0].content.clone();
+        assert!(content.contains(" c ") && content.contains("f* Q"), "{content}");
+        let img = Document::open(w.finish()).expect("reads back").render(0, 100, 100).expect("renders");
+        let (_, _, b_ring) = pixel(&img, 20, 50);
+        let (r_hole, g_hole, b_hole) = pixel(&img, 50, 50);
+        assert!(b_ring > 200, "the ring is blue");
+        assert!(!(r_hole < 60 && g_hole < 60 && b_hole > 200), "the hole is not blue");
+    }
+
+    #[test]
+    fn a_stroked_path_carries_its_style() {
+        let mut path = Path::new();
+        path.move_to((0.0, 50.0));
+        path.line_to((100.0, 50.0));
+        let style = StrokeStyle { width: 8.0, cap: LineCap::Round, join: LineJoin::Bevel, dash: vec![10.0, 5.0], dash_phase: 2.0, ..StrokeStyle::default() };
+        let mut w = PdfWriter::new();
+        w.add_page(100.0, 100.0).stroke_path(&path, &style, [0.0, 0.0, 0.0]);
+        let content = w.pages[0].content.clone();
+        assert!(content.contains("8.000 w 1 J 2 j 10.000 M [10.000 5.000] 2.000 d "), "{content}");
+        assert!(content.ends_with("S Q\n"));
+        assert_eq!(Document::open(w.finish()).expect("reads back").page_count(), 1);
+    }
+
+    #[test]
+    fn fill_and_stroke_in_one_operation() {
+        let mut w = PdfWriter::new();
+        w.add_page(100.0, 100.0).fill_stroke_path(
+            &Path::from_rect(bifrost_render::cg::path::Rect::new(20.0, 20.0, 60.0, 60.0)),
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0],
+            &StrokeStyle::default(),
+            FillRule::NonZero,
+        );
+        assert!(w.pages[0].content.contains("rg ") && w.pages[0].content.contains("RG ") && w.pages[0].content.contains("B Q"));
+        let img = Document::open(w.finish()).expect("reads back").render(0, 100, 100).expect("renders");
+        let (r, g, b) = pixel(&img, 50, 50);
+        assert!(g > 200 && r < 60 && b < 60, "green inside: {r} {g} {b}");
+    }
+
+    #[test]
+    fn a_black_and_white_filter_greys_a_coloured_page() {
+        let mut w = PdfWriter::new();
+        w.add_page(100.0, 100.0).fill_rect(0.0, 0.0, 100.0, 100.0, [1.0, 0.0, 0.0]);
+        let img = Document::open(w.finish_filtered(&QuartzFilter::black_and_white())).expect("reads back").render(0, 100, 100).expect("renders");
+        let (r, g, b) = pixel(&img, 50, 50);
+        assert!((r as i32 - g as i32).abs() <= 3 && (g as i32 - b as i32).abs() <= 3, "grey: {r} {g} {b}");
+        assert!((70..=82).contains(&r), "luma of red is 0.299: {r}");
+    }
+
+    #[test]
+    fn a_reduce_size_filter_shrinks_images_in_the_file() {
+        let filter = QuartzFilter { max_image_side: Some(4), ..QuartzFilter::identity("tiny") };
+        let rgb: Vec<u8> = (0..16 * 16 * 3).map(|i| ((i * 37 + 11) % 256) as u8).collect();
+        let mut plain = PdfWriter::new();
+        plain.add_page(100.0, 100.0).draw_rgb_image(rgb.clone(), 16, 16, 0.0, 0.0, 50.0, 50.0);
+        let mut small = PdfWriter::new();
+        small.add_page(100.0, 100.0).draw_rgb_image(rgb, 16, 16, 0.0, 0.0, 50.0, 50.0);
+        let (a, b) = (plain.finish(), small.finish_filtered(&filter));
+        assert!(Document::open(b.clone()).is_ok());
+        assert!(b.len() < a.len(), "{} < {}", b.len(), a.len());
+    }
+
+    #[test]
+    fn search_returns_each_occurrence_with_its_line_and_range() {
+        let mut w = PdfWriter::new();
+        w.add_page(300.0, 200.0).draw_text("Hello World hello", 10.0, 150.0, 12.0, Face::Helvetica);
+        w.add_page(300.0, 200.0).draw_text("Nothing here", 10.0, 150.0, 12.0, Face::Helvetica);
+        w.add_page(300.0, 200.0).draw_text("say HELLO", 10.0, 150.0, 12.0, Face::Times);
+        let doc = Document::open(w.finish()).expect("reads back");
+        let hits = doc.search("hello");
+        assert_eq!(hits.len(), 3, "{hits:?}");
+        assert_eq!((hits[0].page, hits[0].line, hits[0].start, hits[0].end), (0, 0, 0, 5));
+        assert_eq!(hits[0].text, "Hello");
+        assert_eq!((hits[1].page, hits[1].start), (0, 12));
+        assert_eq!(hits[1].text, "hello");
+        assert_eq!((hits[2].page, hits[2].start, hits[2].text.as_str()), (2, 4, "HELLO"));
+        assert!(hits.iter().all(|h| h.size > 0.0));
+        assert_eq!(Document::selection_text(&hits), "Hello\nhello\nHELLO");
+        assert!(doc.search("  ").is_empty() && doc.search("absent").is_empty());
     }
 }

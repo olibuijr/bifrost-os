@@ -24,9 +24,9 @@
     {
       "feature": "Color profiles (ICC load, create, inspect, embed)",
       "apple": "ColorSyncProfileCreateWithURL, ColorSyncProfileCopyTag, ColorSyncMutableProfile, ColorSyncProfileCopyData",
-      "bifrost": "springboard/render/src/icc.rs, springboard/render/src/icc_lut.rs, springboard/render/src/icc_builtin.rs, springboard/sdk/src/colorsync.rs; tests: springboard/render/tests/parity_sdk-tests-06.rs, springboard/sdk/tests/parity_sdk-tests-06.rs",
+      "bifrost": "springboard/render/src/icc.rs, springboard/render/src/icc_lut.rs, springboard/render/src/icc_builtin.rs, springboard/render/src/icc_write.rs, springboard/sdk/src/colorsync.rs; tests: springboard/render/tests/parity_sdk-tests-06.rs, springboard/sdk/tests/parity_sdk-tests-06.rs",
       "status": "partial",
-      "note": "Headers, tag tables, desc and mluc text, matrix-shaper curves, wtpt, and the mft1, mft2, mAB and mBA lookup-table pipelines (icc_lut.rs, with a hand-built lut16 test) are read. icc_builtin.rs writes matrix-shaper RGB profiles and grey profiles as ICC bytes, and the tests check that the reader parses them back. Gap: no general profile creation or tag writing API, and no embedding into output files; profiles are read only for apps. Not yet verified on Midget. The PDF reader still takes ICCBased images only by component count and ignores the profile bytes."
+      "note": "Headers, tag tables, desc and mluc text, matrix-shaper curves, wtpt, and the mft1, mft2, mAB and mBA lookup-table pipelines (icc_lut.rs, with a hand-built lut16 test) are read. icc_builtin.rs writes matrix-shaper RGB profiles and grey profiles as ICC bytes, and the tests check that the reader parses them back. Gap (partly closed 2026-10-19, see below): there was no general profile creation or tag writing API for apps and no embedding into output files. Not yet verified on Midget. The PDF reader still takes ICCBased images only by component count and ignores the profile bytes. Built 2026-10-19 (w15-core-graphics): springboard/render/src/icc_write.rs is the mutable profile (ColorSyncMutableProfile): MutableProfile::new, rgb_display (matrix-shaper display profile from primaries, white and gamma) and from_bytes (adopt an existing profile), then set_description, set_copyright, set_media_white, set_colorants, set_gamma_curves, set_curve_table, set_parametric_curve (types 0 to 4), set_gamma_table (vcgt), set_tag, remove_tag and header setters, and to_bytes lays out the tag table with identical bodies shared; Profile::parse reads it back. The SDK (bifrost_app::colorsync) re-exports MutableProfile and adds encode_with_profile, which embeds a profile in a PNG, JPEG or TIFF, and embedded_profile, which reads one back. Lookup-table (A2B and B2A) tag writing is not built. Midget check: run the render crate tests icc_write::tests and the sdk tests colorsync::tests::a_created_profile_converts_to_srgb_with_a_neutral_grey_axis and a_profile_embeds_in_a_png_and_reads_back_byte_for_byte on Midget."
     },
     {
       "feature": "Standard RGB profiles (sRGB, Display P3, Adobe RGB, ProPhoto, Rec. 2020, grey)",
@@ -52,9 +52,9 @@
     {
       "feature": "Rendering intents and black point compensation",
       "apple": "kColorSyncRenderingIntentPerceptual, kColorSyncRenderingIntentRelative, kColorSyncRenderingIntentSaturation, kColorSyncRenderingIntentAbsolute, kColorSyncBlackPointCompensation",
-      "bifrost": "springboard/render/src/icc_transform.rs (Conversion, compensate_black), springboard/render/src/rendering_intent.rs (IntentTransform, BlackPoints, compensate_black), springboard/render/src/cg/color.rs (RenderingIntent)",
+      "bifrost": "springboard/render/src/cg/color.rs (ColorConversionInfo, from_xyz_gamut_mapped), springboard/render/src/icc_transform.rs (Conversion, compensate_black), springboard/render/src/rendering_intent.rs (IntentTransform, BlackPoints, compensate_black), springboard/render/src/cg/color.rs (RenderingIntent)",
       "status": "partial",
-      "note": "The profile engine picks the A2B and B2A table of the intent (perceptual, relative, saturation, falling back to relative), and absolute colorimetric scales by the media white. Black point compensation uses the ICC v4 formula on the PCS black point, which is zero for matrix profiles. Tests in icc_transform.rs cover conversions under relative colorimetric and absolute. The named-space path in rendering_intent.rs keeps its own tests in render/tests/parity_sdk-tests-16.rs. Gaps: matrix profiles have no perceptual gamut mapping (out-of-gamut colours clip), and cg::color::ColorConversionInfo still treats perceptual and saturation as relative. Not yet verified on Midget."
+      "note": "The profile engine picks the A2B and B2A table of the intent (perceptual, relative, saturation, falling back to relative), and absolute colorimetric scales by the media white. Black point compensation uses the ICC v4 formula on the PCS black point, which is zero for matrix profiles. Tests in icc_transform.rs cover conversions under relative colorimetric and absolute. The named-space path in rendering_intent.rs keeps its own tests in render/tests/parity_sdk-tests-16.rs. Gaps: matrix profiles have no perceptual gamut mapping (out-of-gamut colours clip), and cg::color::ColorConversionInfo still treats perceptual and saturation as relative. Not yet verified on Midget. Built 2026-10-19 (w15-core-graphics): cg::color::ColorConversionInfo with the Perceptual intent now gamut-maps an out-of-gamut colour in an RGB destination (ColorSpace::from_xyz_gamut_mapped): in linear light it moves toward the grey of equal luminance until every channel fits, keeping hue and lightness, instead of clipping each channel; extended-range destinations are untouched. Saturation stays the same as relative colorimetric for matrix spaces. Midget check: run the render crate tests cg::color::tests::perceptual_intent_compresses_out_of_gamut_colours_instead_of_clipping and perceptual_intent_leaves_in_gamut_colours_and_greys_alone on Midget."
     },
     {
       "feature": "Image colour conversion on decode",
@@ -79,12 +79,12 @@
     }
   ],
   "gaps": [
-    "No profile creation, tag writing or profile embedding (ColorSyncMutableProfile, ColorSyncProfileCopyData); profiles are read, and the built-in ones are generated only for internal use.",
-    "CMYK and other non-RGB device profiles do not convert; matrix profiles have no perceptual gamut mapping.",
+    "Profile writing covers matrix-shaper and grey profiles, curves, gamma tables and arbitrary raw tags (icc_write::MutableProfile, embedding in PNG, JPEG and TIFF); lookup-table (A2B and B2A) tags are not authored, and the PDF writer embeds no profile.",
+    "CMYK and other non-RGB device profiles do not convert; matrix profiles get a luminance-preserving perceptual gamut compression, with no saturation intent distinct from relative colorimetric.",
     "The PDF ICCBased path (springboard/render/src/cg/pdf/image.rs) is drawn by component count and does not use the profile.",
     "No display profile path to the hardware: kms.rs reads gamma_size but loads no vcgt ramp, the EDID profile is not registered as the device profile, and Night Shift does not use the display profile.",
     "No HAGC (SMPTE ST 2094-50) metadata and no tone mapping into a display; the HDR models are not wired into video output.",
-    "cg::color::ColorConversionInfo still treats perceptual and saturation as relative; the named-space intents in rendering_intent.rs have no caller outside their tests.",
+    "cg::color::ColorConversionInfo treats saturation as relative colorimetric (perceptual is gamut-compressed since 2026-10-19); the named-space intents in rendering_intent.rs have no caller outside their tests.",
     "Colour management modules (CMM plug-ins) remain n/a."
   ]
 }
