@@ -21,7 +21,10 @@ struct Foreign { handle:foreign_handle::ZwlrForeignToplevelHandleV1, info:Foreig
 struct Lock { obj:lock::ExtSessionLockV1, surface:wl_surface::WlSurface, role:lock_surface::ExtSessionLockSurfaceV1, configured:bool, locked:bool }
 
 
-pub struct ChromeFrame {pub id:u32,pub x:i32,pub y:i32,pub width:usize,pub height:usize,pub pixels:Vec<u32>}
+/// A chrome surface's pixels at screen (x, y). `input` limits the pointer to a part of the surface (x, y, w, h in
+/// surface px) when the surface is larger than what takes input: a popup is exported with room for its shadow, and a
+/// click on the shadow must reach what is below. `None` takes the whole surface.
+pub struct ChromeFrame {pub id:u32,pub x:i32,pub y:i32,pub width:usize,pub height:usize,pub pixels:Vec<u32>,pub input:Option<[i32;4]>}
 struct ChromeWindow {surface:wl_surface::WlSurface,layer:surface::ZwlrLayerSurfaceV1,slots:Vec<Slot>,configured:bool,frame:ChromeFrame,pending:Damage}
 #[derive(Clone)]
 pub struct WindowFrame { pub id:u32, pub title:&'static str, pub x:i32, pub y:i32, pub width:usize, pub height:usize, pub pixels:Option<std::sync::Arc<[u32]>>, pub damage:Damage, pub maximized:bool, pub floating:bool, pub title_height:i32,
@@ -562,6 +565,14 @@ fn place_chrome(l:&surface::ZwlrLayerSurfaceV1,frame:&ChromeFrame,screen:(u32,u3
         _ => {l.set_anchor(surface::Anchor::Top|surface::Anchor::Left);l.set_margin(frame.y,0,0,frame.x);l.set_exclusive_zone(-1);}
     }
 }
+/// Limits the pointer input of a chrome surface to `input` (x, y, w, h in surface px); `None` gives the whole surface
+/// back. Applies on the next commit.
+fn set_chrome_input(compositor:Option<&wl_compositor::WlCompositor>,surface:&wl_surface::WlSurface,input:Option<[i32;4]>,qh:&QueueHandle<State>) {
+    match (input,compositor) {
+        (Some([x,y,w,h]),Some(compositor))=>{let region=compositor.create_region(qh,());region.add(x,y,w,h);surface.set_input_region(Some(&region));region.destroy();}
+        _=>surface.set_input_region(None),
+    }
+}
 
     pub fn chrome(&mut self, frames:Vec<ChromeFrame>) -> io::Result<()> {
         let ids:Vec<_>=frames.iter().map(|f|f.id).collect();
@@ -574,6 +585,7 @@ fn place_chrome(l:&surface::ZwlrLayerSurfaceV1,frame:&ChromeFrame,screen:(u32,u3
             let screen=self.state.size;
             if let Some(w)=self.state.chrome.get_mut(&frame.id) {
                 Self::place_chrome(&w.layer,&frame,screen);
+                if w.frame.input!=frame.input {Self::set_chrome_input(self.state.compositor.as_ref(),&w.surface,frame.input,&qh);}
                 if (w.frame.width,w.frame.height)!=(frame.width,frame.height) {
                     for slot in w.slots.drain(..) {slot.buffer.destroy();}
                     if let Some(slots)=self.state.gpu_slots.remove(&frame.id) {for s in slots {s.buffer.destroy();}}
@@ -589,6 +601,7 @@ fn place_chrome(l:&surface::ZwlrLayerSurfaceV1,frame:&ChromeFrame,screen:(u32,u3
                 let s=self.state.compositor.as_ref().unwrap().create_surface(&qh,());
                 let l=self.state.layer.as_ref().unwrap().get_layer_surface(&s,None,if frame.id==0 {layer::Layer::Top}else{layer::Layer::Overlay},"bifrost-desktop-chrome".into(),&qh,frame.id);
                 l.set_size(frame.width as u32,frame.height as u32);Self::place_chrome(&l,&frame,screen);
+                if frame.input.is_some() {Self::set_chrome_input(self.state.compositor.as_ref(),&s,frame.input,&qh);}
                 // id 3 is Search and id 6 the assistant panel: they take the keyboard from the window in front while open
                 l.set_keyboard_interactivity(if frame.id==3 || frame.id==6 {surface::KeyboardInteractivity::Exclusive} else {surface::KeyboardInteractivity::None});s.commit();
                 let mut pending=Damage::new(frame.width,frame.height);pending.all();
