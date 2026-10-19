@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.9.1
+
+- Upstream lightcraft v0.9.1.
+  ## What's Changed
+  * Fix Lightroom catalog import results and reduce CPU and memory use by @skylartaylor in https://github.com/storytold/lightcraft/pull/1406
+  * ci: add comfortable runtime limits to unbounded jobs by @skylartaylor in https://github.com/storytold/lightcraft/pull/1836
+  * Integration batch 36: 110 reviewed community PRs (slideshow, camera verification, translations, never-crash, UI) by @echelon in https://github.com/storytold/lightcraft/pull/1843
+  * DNG export and Convert / Copy as DNG write the colour a raw without matrices opens with by @marcoarnulfo in https://github.com/storytold/lightcraft/pull/1750
+
 ## 0.8.1
 
 - Upstream lightcraft v0.8.0.
