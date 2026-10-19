@@ -32,7 +32,7 @@ pub fn choices_for(kind: Kind) -> (&'static [&'static str], usize) {
     match kind {
         Kind::Location => (&LOCATION_CHOICES[..], 2),
         Kind::Usb => (&USB_CHOICES[..], 2),
-        Kind::Media(_) | Kind::Contacts => (&MEDIA_CHOICES[..], 1),
+        Kind::Media(_) | Kind::Contacts | Kind::Calendars { .. } => (&MEDIA_CHOICES[..], 1),
     }
 }
 
@@ -85,7 +85,7 @@ pub fn buttons_for(kind: Kind) -> &'static [Button] {
     match kind {
         Kind::Location => &LOCATION_BUTTONS[..],
         Kind::Usb => &USB_BUTTONS[..],
-        Kind::Media(_) | Kind::Contacts => &MEDIA_BUTTONS[..],
+        Kind::Media(_) | Kind::Contacts | Kind::Calendars { .. } => &MEDIA_BUTTONS[..],
     }
 }
 
@@ -123,6 +123,8 @@ pub fn detail(prompt: &Prompt) -> String {
         Kind::Location => format!("{} You can change this at any time in {LOCATION_SETTINGS_PATH}.", prompt.purpose),
         Kind::Media(_) => format!("Allowing lets the app use this while it is open. You can change this at any time in {SETTINGS_PATH}."),
         Kind::Contacts => format!("Allowing lets the app read the contacts you choose, while it is open. You can change this at any time in {SETTINGS_PATH}."),
+        Kind::Calendars { write_only: true } => format!("Allowing lets the app add events to your calendar. It cannot read the events you already have. You can change this at any time in {SETTINGS_PATH}."),
+        Kind::Calendars { write_only: false } => format!("Allowing lets the app read, add, change and delete your calendar events, while it is open. You can change this at any time in {SETTINGS_PATH}."),
         Kind::Usb => bifrost_core::usb_grants::sheet_detail(&super::services::usb_access::label_of(&prompt.purpose)),
     }
 }
@@ -260,6 +262,15 @@ mod tests {
         assert_eq!(buttons_for(Kind::Media(Media::Audio)), &[Button::DontAllow, Button::Allow]);
         assert_eq!(choices_for(Kind::Location), (&[ALLOW_ONCE, ALLOW_WHILE_USING, DONT_ALLOW][..], 2));
         assert_eq!(choices_for(Kind::Media(Media::Audio)), (&[ALLOW, DONT_ALLOW][..], 1));
+    }
+
+    #[test]
+    fn a_calendar_request_offers_dont_allow_and_allow_and_says_what_allowing_lets_it_do() {
+        let ask = |write_only| Prompt { app_id: "a".into(), app_name: "A".into(), kind: Kind::Calendars { write_only }, purpose: String::new() };
+        assert_eq!(buttons_for(Kind::Calendars { write_only: true }), &[Button::DontAllow, Button::Allow]);
+        assert_eq!(choices_for(Kind::Calendars { write_only: false }), (&[ALLOW, DONT_ALLOW][..], 1));
+        assert!(detail(&ask(true)).contains("cannot read"));
+        assert!(detail(&ask(false)).contains("read, add, change and delete"));
     }
 
     #[test]

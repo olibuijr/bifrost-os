@@ -168,6 +168,8 @@ pub enum Toggle {
     MenuExtra(super::options::MenuExtra),
     /// Settings › App Permissions › Contacts: the n-th installed app may read contacts
     Contacts(usize),
+    /// Settings › App Permissions › Calendars: the n-th installed app may use the calendar
+    Calendars(usize),
     /// Settings > Screen Saver: flips the n-th (on or off) option of the chosen saver
     SaverOption(usize),
     /// Settings › App Permissions › USB and HID devices: takes back every device the n-th installed app may use
@@ -1675,6 +1677,17 @@ pub fn permissions_page(rows: &[Row]) -> Spec {
         .collect();
     let devices = if devices.is_empty() { vec![Item::new("No apps use USB or HID devices")] } else { devices };
     groups.push(Group::new(devices).header("USB AND HID DEVICES").footer("Apps you allowed to talk to a device directly. Turn a switch off to take back the devices that app may use."));
+    // Calendars (last, so the indexes above stay the same): on while the person lets the app add events to the calendar
+    // (an app that asked only to add shows on too). Turning it on gives full access, off denies it.
+    let calendars: Vec<Item> = if rows.is_empty() {
+        vec![Item::new("No apps installed")]
+    } else {
+        rows.iter()
+            .enumerate()
+            .map(|(i, r)| Item::new(r.name.as_str()).app_icon(r.app_id.as_str()).switch(r.calendars, Action::Toggle(Toggle::Calendars(i))))
+            .collect()
+    };
+    groups.push(Group::new(calendars).header("CALENDARS").footer("Apps that may use your calendar. A switch is on only when you allow it."));
     Spec { id: PageId::PrivacyPermissions, title: "App Permissions".into(), large: false, groups }
 }
 
@@ -2101,9 +2114,12 @@ mod tests {
     fn app_permissions_lists_each_media_type_with_one_switch_per_app() {
         use bifrost_ui::capture_access::CaptureAccess;
         use bifrost_ui::location_auth::AuthorizationStatus;
-        let rows = vec![Row { app_id: "is.example.a".into(), name: "Alpha".into(), access: CaptureAccess::default(), location: AuthorizationStatus::AuthorizedWhenInUse, contacts: false, usb: 2 }];
+        let rows = vec![Row { app_id: "is.example.a".into(), name: "Alpha".into(), access: CaptureAccess::default(), location: AuthorizationStatus::AuthorizedWhenInUse, contacts: false, calendars: true, usb: 2 }];
         let s = permissions_page(&rows);
-        assert_eq!(s.groups.len(), 6, "camera, microphone, screen recording, location, contacts, devices");
+        assert_eq!(s.groups.len(), 7, "camera, microphone, screen recording, location, contacts, devices, calendars");
+        assert_eq!(s.groups[6].header.as_deref(), Some("CALENDARS"));
+        assert_eq!(s.groups[6].items[0].accessory, Accessory::Switch(true), "an app the person let use the calendar is on");
+        assert_eq!(s.groups[6].items[0].action, Action::Toggle(Toggle::Calendars(0)));
         assert_eq!(s.groups[5].header.as_deref(), Some("USB AND HID DEVICES"));
         assert_eq!(s.groups[5].items[0].action, Action::Toggle(Toggle::Usb(0)), "an app that holds device grants is listed");
         assert_eq!(permissions_page(&[]).groups[5].items[0].label, "No apps use USB or HID devices");

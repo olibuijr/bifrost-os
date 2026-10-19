@@ -79,6 +79,7 @@ pub const KNOWN: &[Known] = &[
     flag("display-config", false),
     flag("sensors", false),
     flag("contacts", false),
+    flag("calendars", false),
     flag("camera", true),
     flag("screen", true),
     flag("remote-desktop", true),
