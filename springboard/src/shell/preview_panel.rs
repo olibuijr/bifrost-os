@@ -1126,6 +1126,29 @@ impl Shell {
         self.quick_look.drain_events()
     }
 
+    /// The open card's rectangle on the screen in px (x, y, w, h), clipped to the screen; None while the panel is hidden.
+    /// On the desktop the card is its own overlay surface above the windows (`desktop_chrome_frames`, id 7) and a region
+    /// the GPU presenter keeps (`desk_regions_now`): drawn only into the desktop frame it would sit under the windows.
+    #[cfg(feature = "desktop-wayland")]
+    pub(super) fn quick_look_rect(&self) -> Option<(usize, usize, usize, usize)> {
+        if !self.quick_look.is_visible() {
+            return None;
+        }
+        let card = geometry_with(self.w as f32, self.h as f32, self.ui.pt(1.0), self.quick_look.layout()).card;
+        let (x, y) = (card.x.max(0) as usize, card.y.max(0) as usize);
+        let w = (card.w.max(0) as usize).min((self.w as usize).saturating_sub(x));
+        let h = (card.h.max(0) as usize).min((self.h as usize).saturating_sub(y));
+        (w > 0 && h > 0).then_some((x, y, w, h))
+    }
+
+    /// The card as an overlay surface: its rectangle and the alpha mask of its rounded corners (square when full-screen).
+    #[cfg(feature = "desktop-wayland")]
+    pub(super) fn quick_look_overlay(&self) -> Option<((usize, usize, usize, usize), Vec<u8>)> {
+        let (x, y, w, h) = self.quick_look_rect()?;
+        let radius = if self.quick_look.layout().full { 0.0 } else { self.ui.pt(13.0) };
+        Some(((x, y, w, h), crate::gfx::rrect_mask(w, h, radius)))
+    }
+
     /// Lays out the open panel for a `w` by `h` screen before it is drawn: renders the visible PDF pages and reads the
     /// movie's player. Called once per frame from the desktop, before [`Shell::draw_quick_look`].
     pub(super) fn quick_look_prepare(&mut self, w: f32, h: f32) {
@@ -1737,5 +1760,102 @@ mod tests {
         p.close_by_user();
         assert_eq!(p.info, None, "closing clears the line");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+/// The panel for an external app on the desktop (`desktop_shell`): the app's request opens it, it is an overlay surface
+/// above the windows, and Space, Esc and the arrows work while it is up.
+#[cfg(all(test, feature = "desktop-wayland"))]
+mod desktop_tests {
+    use crate::shell::apphost::AppHost;
+    use crate::shell::hwkeys::Shortcut;
+    use crate::shell::tests::desktop_shell;
+    use crate::shell::{AppId, Screen, Shell};
+    use bifrost_proto::peek::PreviewItem;
+    use bifrost_proto::ToShell;
+
+    const FILES: &str = "is.olibuijr.files.desktop";
+
+    /// A desktop shell with Files (an external app) in slot 0 and in front, and the app's end of its channel.
+    fn desktop_with_files() -> (Shell, bifrost_proto::sys::Channel) {
+        let mut sh = desktop_shell();
+        sh.anim = None;
+        let (mine, peer) = bifrost_proto::sys::socketpair_pair().unwrap();
+        let cfg = sh.ext_cfg();
+        sh.ext = vec![Some(AppHost::with_channel(FILES, mine, None, cfg))];
+        sh.ext_fg = Some(0);
+        sh.screen = Screen::App(AppId::External(0));
+        (sh, peer)
+    }
+
+    fn items() -> Vec<PreviewItem> {
+        ["a", "b", "c"].iter().map(|n| PreviewItem { url: format!("file:///nonexistent-quick-look/{n}.txt"), title: format!("{n}.txt") }).collect()
+    }
+
+    #[test]
+    fn a_preview_message_from_an_external_app_opens_the_panel_on_the_desktop() {
+        let (mut sh, peer) = desktop_with_files();
+        assert!(!sh.quick_look.is_visible());
+        peer.send(&ToShell::Preview { items: items(), index: 1 }.encode(), &[]).unwrap();
+        sh.ext_tick(1.0);
+        assert!(sh.quick_look.is_visible(), "the request reached the panel");
+        assert_eq!(sh.quick_look.index(), 1);
+        assert_eq!(sh.quick_look.count(), 3);
+        // the close message from the same app hides it
+        peer.send(&ToShell::PreviewClose.encode(), &[]).unwrap();
+        sh.ext_tick(2.0);
+        assert!(!sh.quick_look.is_visible());
+    }
+
+    #[test]
+    fn the_quick_look_service_call_shows_the_panel_for_the_calling_app() {
+        let (mut sh, _peer) = desktop_with_files();
+        let body = r#"{"items":[{"url":"file:///nonexistent-quick-look/a.txt","title":"a.txt"}],"index":0}"#;
+        assert!(sh.service_call(FILES, "quick-look", "show", body, 1.0).is_ok(), "show answers");
+        assert!(sh.quick_look.is_visible());
+        assert_eq!(sh.quick_look_owner(), Some(FILES));
+        // another app cannot close it; the owner can
+        assert!(sh.service_call("is.example.other", "quick-look", "close", "{}", 2.0).is_ok());
+        assert!(sh.quick_look.is_visible());
+        assert!(sh.service_call(FILES, "quick-look", "close", "{}", 3.0).is_ok());
+        assert!(!sh.quick_look.is_visible());
+    }
+
+    #[test]
+    fn space_escape_and_the_arrows_work_on_the_open_panel() {
+        let (mut sh, _peer) = desktop_with_files();
+        sh.quick_look_show(FILES, items(), 0);
+        // Right steps, Left steps back (evdev 106 and 105)
+        assert_eq!(sh.hw_menu_key(106, true, 1.0), Some(vec![]));
+        assert_eq!(sh.quick_look.index(), 1);
+        assert_eq!(sh.hw_menu_key(105, true, 2.0), Some(vec![]));
+        assert_eq!(sh.quick_look.index(), 0);
+        // Space closes it, and the owner hears it
+        assert_eq!(sh.hw_menu_key(57, true, 3.0), Some(vec![]));
+        assert!(!sh.quick_look.is_visible());
+        let events = sh.quick_look_drain_events();
+        assert_eq!(events.iter().map(|e| e.0).collect::<Vec<_>>(), ["index", "index", "closed"]);
+        // Escape arrives as the Back shortcut, which the panel takes before the app in front hears it
+        sh.quick_look_show(FILES, items(), 0);
+        sh.hw_shortcut(Shortcut::Back, 4.0);
+        assert!(!sh.quick_look.is_visible(), "Escape closes the panel");
+        assert_eq!(sh.quick_look_drain_events().iter().map(|e| e.0).collect::<Vec<_>>(), ["closed"]);
+    }
+
+    #[test]
+    fn the_open_panel_is_an_overlay_surface_above_the_windows() {
+        let (mut sh, _peer) = desktop_with_files();
+        let (w, h) = (sh.w as usize, sh.h as usize);
+        let pixels = vec![0xff20_2020u32; w * h];
+        let has_card = |sh: &Shell| sh.desktop_chrome_frames(&pixels, w, h).iter().any(|f| f.id == 7);
+        assert!(!has_card(&sh), "no panel, no overlay");
+        sh.quick_look_show(FILES, items(), 0);
+        let frames = sh.desktop_chrome_frames(&pixels, w, h);
+        let card = frames.iter().find(|f| f.id == 7).expect("the open panel is a chrome surface");
+        assert_eq!(card.width * card.height, card.pixels.len());
+        assert!(card.x > 0 && card.y > 0 && card.width < w && card.height < h, "a centred card, not the whole screen");
+        assert_eq!(sh.quick_look_rect().map(|r| (r.0 as i32, r.1 as i32)), Some((card.x, card.y)));
+        sh.quick_look_hide();
+        assert!(!has_card(&sh), "closing removes the surface");
     }
 }

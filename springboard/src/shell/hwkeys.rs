@@ -827,6 +827,11 @@ impl Shell {
     /// Esc: closes the topmost thing (Control Center, Search, the switcher), else steps back in
     /// the app on screen, else leaves it. The terminal and hosted apps get the Escape key itself.
     fn hw_back(&mut self, t: f64) -> Vec<Effect> {
+        // the open Quick Look panel is the topmost thing: Escape closes it (and tells the app that opened it) before
+        // anything under it hears the key
+        if self.quick_look_key(1, true).is_some() {
+            return vec![];
+        }
         #[cfg(feature = "desktop-wayland")]
         if let Some(fx) = self.desktop_menu_key(1, t) {
             return fx;

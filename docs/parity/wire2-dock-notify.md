@@ -7,7 +7,7 @@
    other day. The shell now repaints the tile's paper and draws today's weekday (red) over the day number (black),
    using the shell's local `info.wday` and `info.mday`. The change is in `springboard/src/shell/desk.rs`:
    `calendar_tile_face`, `calendar_face_text`, and the call in the dock tile loop of `draw_desk_dock`.
-   The Calendar app's Dock badge (`dock` service, `calendar/connect.rs`) is unchanged; it still carries the day number.
+   The Calendar app's Dock badge (`dock` service, `calendar/connect.rs`) no longer carries the day number (the tile's face shows the date): it counts pending invitations and is clear without any.
 
 ## How a user reaches it
 

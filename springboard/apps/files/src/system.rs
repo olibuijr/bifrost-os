@@ -426,6 +426,69 @@ mod tests {
         assert_eq!(sys.answered(request), None, "a reply is taken once");
     }
 
+    /// The service calls to `quick-look` in `sent`, as (method, body).
+    fn panel_calls(sent: Vec<ToShell>) -> Vec<(String, String)> {
+        sent.into_iter()
+            .filter_map(|m| match m {
+                ToShell::ServiceCall { service, method, body, .. } if service == "quick-look" => Some((method, body)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn two_files() -> Files {
+        let file = |name: &str| {
+            let mut e = crate::tests::folder(name);
+            e.is_dir = false;
+            e
+        };
+        crate::tests::fixture(vec![file("a.png"), file("b.txt")])
+    }
+
+    #[test]
+    fn space_with_a_selection_asks_the_shell_for_the_panel_and_again_closes_it() {
+        let ctx = test_ctx();
+        let mut files = two_files();
+        files.select_only(1);
+        assert!(files.event(&ctx, Input::Key(KeyInput::Text(" ".into()))), "Space is taken");
+        let calls = panel_calls(ctx.take_sent());
+        assert_eq!(calls.len(), 1, "{calls:?}");
+        assert_eq!(calls[0].0, "show");
+        assert!(calls[0].1.contains("file:///fixture/b.txt"), "the selected file: {}", calls[0].1);
+        assert!(files.sys.preview.is_some(), "the panel is remembered as open");
+        // Space again closes it
+        assert!(files.event(&ctx, Input::Key(KeyInput::Text(" ".into()))));
+        let calls = panel_calls(ctx.take_sent());
+        assert_eq!(calls.iter().map(|c| c.0.as_str()).collect::<Vec<_>>(), ["close"]);
+        assert!(files.sys.preview.is_none());
+    }
+
+    #[test]
+    fn space_with_nothing_selected_or_in_a_text_field_asks_for_no_panel() {
+        let ctx = test_ctx();
+        let mut files = two_files();
+        files.event(&ctx, Input::Key(KeyInput::Text(" ".into())));
+        assert!(panel_calls(ctx.take_sent()).is_empty(), "nothing selected");
+        files.select_only(0);
+        files.searching = true;
+        files.event(&ctx, Input::Key(KeyInput::Text(" ".into())));
+        assert!(panel_calls(ctx.take_sent()).is_empty(), "the Search field takes the space");
+        assert_eq!(files.query.to_string(), " ");
+    }
+
+    #[test]
+    fn the_panel_stepping_moves_the_selection_and_closing_forgets_it() {
+        let ctx = test_ctx();
+        let mut files = two_files();
+        files.selection = vec![0, 1];
+        files.event(&ctx, Input::Key(KeyInput::Text(" ".into())));
+        let _ = ctx.take_sent();
+        assert!(files.preview_event(quick_look::Event::Index(0)));
+        assert_eq!(files.selection.last(), Some(&0), "the focus follows the panel");
+        files.preview_event(quick_look::Event::Closed);
+        assert!(files.sys.preview.is_none());
+    }
+
     #[test]
     fn a_closed_preview_sends_one_close_call() {
         let ctx = test_ctx();

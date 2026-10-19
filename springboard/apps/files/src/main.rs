@@ -800,7 +800,7 @@ mod tests {
             show_hidden:false,clip:None,naming:None,work:None,notice:None,info:None,tag_index:TagIndex::default(),tag_panel:false,smart:vec![],open_with:None,dragging:false,drop_target:None,undo:vec![],columns:false,ancestors:vec![],watch:None,journal:bifrost_app::fswatch::EventJournal::new(JOURNAL_CAP),journal_seen:0,fx:FileManagerState::default(),vo:ViewOpts::default(),data_dir:None,labels:new_labels(),row_text:Default::default(),sys:SystemState::default(),ext:Default::default(),
         }
     }
-    fn folder(name: &str) -> Entry {
+    pub(crate) fn folder(name: &str) -> Entry {
         Entry {name:name.into(),path:format!("/fixture/{name}").into(),is_dir:true,size:0,mtime:0,kind:Kind::Folder,items:None}
     }
     fn temp(name: &str) -> PathBuf {

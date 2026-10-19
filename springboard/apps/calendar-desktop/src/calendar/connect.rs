@@ -1,6 +1,7 @@
 //! Calendar connected to the shell's system services: event alerts are scheduled through `notification-schedule`
 //! (one calendar-trigger request per event alarm, replaced on edit and removed on delete), the Up Next widget
-//! timeline is kept in `widgets_timeline`, and the Dock tile shows today's date through the `dock` service.
+//! timeline is kept in `widgets_timeline`, and the Dock tile's badge counts pending invitations through the `dock` service
+//! (clear when there are none: the tile's picture already shows the date).
 //!
 //! The planning is pure (`plan_alerts`, `diff`, `up_next_entries`) so it can be checked without a shell; [`Connect`]
 //! holds what was last sent and makes the calls. Calls happen only when the store changed or the local day rolled
@@ -132,9 +133,21 @@ pub fn up_next_entries(cal: &IcsCalendar, now: i64, offset: i32) -> Vec<Entry> {
     out
 }
 
-/// The Dock badge: today's day of the month in the local zone.
-pub fn badge_text(now: i64, offset: i32) -> String {
-    Date::from_days(local_day(now, offset)).day.to_string()
+/// The Dock badge: the number of pending notifications or invitations, and nothing (no badge) when there are none. The
+/// tile's picture already shows today's date, so the date is never the badge.
+pub fn badge_text(pending: usize) -> String {
+    if pending == 0 {
+        String::new()
+    } else {
+        pending.to_string()
+    }
+}
+
+/// Invitations and alerts waiting for the user's attention. Calendar receives no invitations that wait for an answer
+/// (invitees are only sent out from the editor) and an alert that fired is delivered by the shell, so nothing is pending
+/// yet; the badge stays clear until Calendar tracks unanswered invitations.
+fn pending_count(_snap: &Snap) -> usize {
+    0
 }
 
 /// The unix time of the next local midnight, when the Up Next timeline is due for a reload.
@@ -211,7 +224,7 @@ impl Connect {
     }
 
     fn send_badge(&mut self, ctx: &Ctx, snap: &Snap) {
-        let text = badge_text(snap.now, snap.offset);
+        let text = badge_text(pending_count(snap));
         if self.badge.as_deref() == Some(text.as_str()) {
             return;
         }
@@ -322,9 +335,29 @@ mod tests {
     }
 
     #[test]
-    fn the_badge_is_today_s_day_of_the_month() {
-        // 2027-01-15 in UTC: the day is 15 at any offset that keeps it on that date.
-        assert_eq!(badge_text(NOW, OFF), "15");
+    fn the_badge_counts_pending_items_and_is_empty_without_any() {
+        assert_eq!(badge_text(0), "", "no pending notifications: no badge");
+        assert_eq!(badge_text(3), "3");
+    }
+
+    #[test]
+    fn the_badge_sent_to_the_dock_is_never_the_date() {
+        let ctx = ctx();
+        let mut c = Connect::default();
+        let rich = IcsCalendar::default();
+        // 2027-01-15: today's day number is 15, which must not reach the tile
+        c.sync(&ctx, &Snap { events: &[], rich: &rich, extras: &Extras::default(), now: NOW, offset: OFF }, 1, TODAY);
+        let badges: Vec<String> = ctx
+            .take_sent()
+            .into_iter()
+            .filter_map(|m| match m {
+                ToShell::ServiceCall { service, method, body, .. } if service == dock_tile::SERVICE && method == "badge" => Some(body),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(badges.len(), 1, "the tile is told once, so any stale badge is cleared");
+        let body = bifrost_core::json::parse(&badges[0]).expect("the badge params are JSON");
+        assert_eq!(body.get("text").and_then(Json::as_str), Some(""), "an empty label clears the badge");
     }
 
     #[test]
