@@ -24,6 +24,8 @@ use bifrost_app::kit::{Scroller, TextCache, Ui, Weight};
 use bifrost_app::layout::{traffic_lights_trailing, UNIFIED_BAR_PT};
 use bifrost_app::widgets::{CAPSULE_PT, TOOLBAR_GAP_PT};
 use bifrost_app::dispatch::DispatchQueue;
+use bifrost_app::document::RecentDocument;
+use bifrost_app::proto::GrantId;
 use bifrost_app::{KeyInput, TouchKind};
 use bifrost_core::log_cursor::Position;
 use std::collections::BTreeSet;
@@ -175,6 +177,9 @@ pub struct Console {
     reveal: Option<u64>,
     /// Files opened and archives captured, shown under Opened Files in the sidebar.
     pub opened: Vec<OpenedLog>,
+    /// The logs opened in earlier launches or earlier in this one, newest first, kept in the preferences. Their grants
+    /// reopen the file (File > Open Recent); the app layer owns the list and writes it back.
+    pub stored: Vec<RecentDocument>,
     /// The systemd unit invocation the table is narrowed to (View > Show Only This Activity), if any.
     pub activity: Option<String>,
 }
@@ -217,6 +222,7 @@ impl Console {
             find_text: String::new(),
             reveal: None,
             opened: Vec::new(),
+            stored: Vec::new(),
             activity: None,
         }
     }
@@ -844,10 +850,9 @@ impl Console {
             id if (MENU_COLUMN..MENU_COLUMN + Col::ALL.len() as u32).contains(&id) => {
                 self.columns.toggle(Col::ALL[(id - MENU_COLUMN) as usize]);
             }
-            id if (MENU_RECENT..MENU_RECENT + MAX_OPENED as u32).contains(&id) => {
-                let i = (id - MENU_RECENT) as usize;
-                // the menu lists the newest first
-                if let Some(i) = self.opened.len().checked_sub(1 + i) {
+            id if (MENU_RECENT..MENU_RECENT + MAX_RECENT as u32).contains(&id) => {
+                // a log open now is shown; one only remembered needs the shell to reopen it, which the app layer does
+                if let Some((_, Recent::Opened(i))) = self.recent_items().into_iter().nth((id - MENU_RECENT) as usize) {
                     self.select_row(OPENED_ROW + i as u32);
                 }
             }
@@ -918,6 +923,19 @@ impl Console {
         self.opened.push(log);
         self.open_view(View::Opened(self.opened.len() - 1));
         dropped
+    }
+
+    /// The entries of File > Open Recent, newest first: the logs open now, then the remembered ones that are not open.
+    /// At most `MAX_RECENT`; the menu item `MENU_RECENT + i` is the i-th.
+    pub fn recent_items(&self) -> Vec<(String, Recent)> {
+        let mut items: Vec<(String, Recent)> = self.opened.iter().enumerate().rev().map(|(i, o)| (o.name.clone(), Recent::Opened(i))).collect();
+        for r in &self.stored {
+            if !self.opened.iter().any(|o| o.grant == Some(r.grant)) {
+                items.push((r.name.clone(), Recent::Stored(r.grant)));
+            }
+        }
+        items.truncate(MAX_RECENT);
+        items
     }
 
     /// The opened log in view, if the view is one.
@@ -1147,13 +1165,23 @@ pub const MENU_REVEAL: u32 = 22;
 pub const MENU_TRASH: u32 = 23;
 /// View > Visible Columns: item `MENU_COLUMN + i` toggles `Col::ALL[i]`.
 pub const MENU_COLUMN: u32 = 30;
-/// File > Open Recent: item `MENU_RECENT + i` shows the i-th newest opened log.
+/// File > Open Recent: item `MENU_RECENT + i` is the i-th of `Console::recent_items`. Clear Menu forgets the logs the
+/// preferences remember; the app layer handles it with the reopening.
 pub const MENU_RECENT: u32 = 40;
+pub const MENU_CLEAR_RECENTS: u32 = 28;
+/// What a recent entry is: a log open now (its index in `Console::opened`) or one only remembered (its grant).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Recent {
+    Opened(usize),
+    Stored(GrantId),
+}
 /// Log > Mark Message (toggles the selected message) and Log > Clear Marks.
 pub const MENU_MARK: u32 = 26;
 pub const MENU_CLEAR_MARKS: u32 = 27;
 /// Logs held under Opened Files; opening one more drops the oldest.
 pub const MAX_OPENED: usize = 8;
+/// Entries in File > Open Recent (and the menu ids set aside for them).
+pub const MAX_RECENT: usize = MAX_OPENED;
 
 #[cfg(test)]
 mod tests {

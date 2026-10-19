@@ -1042,11 +1042,14 @@ fn unhex(s: &str) -> Option<GrantId> {
     Some(out)
 }
 
-fn format_recents(r: &[RecentDocument]) -> String {
+/// The recents as the text the Recents store keeps: one `grant<TAB>name` line each, the grant in hex.
+pub fn format_recents(r: &[RecentDocument]) -> String {
     r.iter().map(|r| format!("{}\t{}\n", hex(&r.grant), r.name.replace(['\n', '\t'], " "))).collect()
 }
 
-fn parse_recents(t: &str) -> Vec<RecentDocument> {
+/// The recents from the text [`format_recents`] wrote; a line that does not read is skipped, and at most
+/// [`MAX_RECENTS`] are kept.
+pub fn parse_recents(t: &str) -> Vec<RecentDocument> {
     t.lines().filter_map(|l| l.split_once('\t').and_then(|(g, n)| Some(RecentDocument { grant: unhex(g)?, name: n.into() }))).take(MAX_RECENTS).collect()
 }
 
