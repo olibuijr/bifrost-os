@@ -52,7 +52,7 @@ async def main():
     app.router.add_post('/login',login); app.router.add_get('/websockify',websocket)
     app.router.add_get('/',lambda r:web.FileResponse(ROOT/'index.html'))
     app.router.add_get('/desktop.html',lambda r:web.FileResponse(ROOT/'desktop.html'))
-    for asset in ('viewer.js','viewer.css','SFUI.woff'):
+    for asset in ('viewer.js','viewer.css'):
         app.router.add_get('/'+asset,lambda r,name=asset:web.FileResponse(ROOT/name))
     app.router.add_static('/novnc/',ROOT/'novnc')
     runner=web.AppRunner(app,access_log=None); await runner.setup()

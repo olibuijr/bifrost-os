@@ -1,3 +1,7 @@
+## 0.2.2 — 2026-10-19
+
+- The web viewer uses the system font; it no longer bundles a font BifrOSt may not redistribute.
+
 ## 0.2.0 — 2026-10-12
 
 - Nearby computers: Remote looks on the local network for other computers that share a desktop and lists them. Tap one to see its address.
