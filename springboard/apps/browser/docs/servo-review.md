@@ -57,10 +57,17 @@ modules (downloads, session, inspector, reader, library and others) retain their
 
 ## Memory and scheduling
 
-Servo normally retains live documents in session history. `session_history_max_length = 0` retains navigation
-entries while allowing older documents to be discarded; Back/Forward may reload them. The JavaScript heap
-preference is 255 MiB: the pinned implementation treats the upper bound, 256, as out of range and falls back
-to an unlimited heap. This is not a limit on the whole engine process or all tabs combined.
+Servo normally retains 20 live documents in each direction of session history. `session_history_max_length` is 3
+(`engine/src/memory.rs`): navigation entries are all retained, the documents of the three nearest entries on each side
+stay alive and a farther entry reloads when it is reached. The distance matters for Back and Forward: a live
+document returns as it was, scroll offset included, while Servo 0.7.0 has no scroll restoration
+(`history.scrollRestoration` is commented out of its `History.webidl`), so a reloaded entry starts at the top. At 0, which
+the engine used before, every entry was evicted and Back always landed at the top of the page (the end-to-end test of
+2026-10-19 on bifrost.olibuijr.com, finding B5); the ten-navigation workload showed no whole-process memory gain
+from it. An entry beyond the distance (or a discarded tab, `src/tabdiscard.rs`, which keeps only the scroll of its
+current page) comes back at the top. The JavaScript heap preference is 255 MiB: the pinned implementation treats the
+upper bound, 256, as out of range and falls back to an unlimited heap. This is not a limit on the whole engine process
+or all tabs combined.
 
 The response cache is reduced to 256 weighted entries (not bytes). Engine commands use a bounded queue,
 Servo wakeups are coalesced, and command work per event-loop turn is bounded. Hidden windows hide the native
@@ -87,6 +94,20 @@ removal fails, and reports that failure; a stopped engine cannot make the clear 
   page-visibility or background-throttling setter: a hidden page can still report `document.visibilityState`
   as `visible`, and its JavaScript can continue. Suspension suppresses frame presentation; it does not claim
   browser-standard background-page throttling.
+- CSS `backdrop-filter` is not implemented (end-to-end test finding B10: the sticky header of bifrost.olibuijr.com,
+  `backdrop-filter: saturate(180%) blur(20px)`, shows the page behind it unblurred). Read in Servo 0.7.0 and its
+  `stylo` 0.22: the property is declared with `servo_pref = "layout.unimplemented"`, so it is parsed only while the
+  `layout_unimplemented` preference is on (off by default) and `@supports (backdrop-filter: blur(1px))` is false;
+  and neither `components/layout` nor `components/paint` ever emits a backdrop filter, although the bundled
+  WebRender (0.70) has `DisplayListBuilder::push_backdrop_filter`. The embedder cannot switch it on:
+  `Preferences::layout_unimplemented` would only make the declaration parse, and would also enable every other
+  unimplemented property, with nothing drawn for this one. The engine is the unmodified release, so nothing is patched
+  here. What it would take: Servo layout builds the stacking context's backdrop filter list into the display list
+  (`push_backdrop_filter` with the border-box clip, after the content behind it is painted), stylo enables the
+  property for Servo (`layout.css.backdrop-filter.enabled`), and the engine pin (`engine.json`) moves to a release
+  that has both; then re-check the compat page list in the README. `filter` itself is supported. Until then a site
+  can keep its header legible with `@supports not (backdrop-filter: blur(1px))` and an opaque or near-opaque
+  background (that query is false here); bifrost.olibuijr.com does not do this yet.
 
 ## Official references
 

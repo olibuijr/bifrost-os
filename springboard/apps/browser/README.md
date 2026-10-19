@@ -58,6 +58,22 @@ approximations and injected platform shims have been removed. `requestIdleCallba
 release; sites must feature-test it and use their own fallback. CJK and emoji need the runtime fonts listed in
 `packaging/arch/runtime-packages.txt`.
 
+CJK punctuation: the engine's font fallback list is fixed in Servo (`components/fonts/platform`). For Han text it tries
+Noto Sans CJK HK, SC and TC; the marks of CJK Symbols and Punctuation (U+3000 to U+303F, for example the ideographic full
+stop U+3002), CJK Strokes, Enclosed CJK Letters and Months, CJK Compatibility and CJK Compatibility Forms are script
+Common, so for them it tries only the generic families, Noto Sans, the Noto symbol fonts, the DejaVu and Free families and,
+last, `Droid Sans Fallback`, and a page showed a missing-glyph box (example.com in Chinese; U+FF0C is in a block the list
+handles, so it rendered). `packaging/arch/fontconfig/61-bifrost-cjk-fallback.conf` is a fontconfig scan rule that gives
+Noto Sans CJK SC (package `noto-fonts-cjk`) the second family name `Droid Sans Fallback`, so the installed CJK font answers
+that last fallback. The Arch package `ttf-droid` is no use for this: its own rules rename that font to `Droid Sans`.
+Fontconfig applies a scan rule only while it scans a font directory, so `springboard.install` rebuilds the system cache
+(`fc-cache -sf`) until `fc-list "Droid Sans Fallback"` lists the faces; the Browser reads the family list at engine start,
+so restart it after a manual rebuild. SC is the face that draws the full stop and comma lower left, as simplified Chinese
+does; Japanese and traditional Chinese pages see that placement for these marks until Servo selects fallback fonts by
+language.
+
+CSS `backdrop-filter` is not supported (Servo 0.7.0): see "Remaining gaps" in `docs/servo-review.md`.
+
 The existing default browser user-agent profile is retained; `BIFROST_BROWSER_UA` can override it at startup.
 The Develop menu and control API update the native preference for subsequent requests. Native APIs include CSS Grid,
 Selection, structuredClone, AbortSignal.timeout/any, CSS.supports and scrollIntoView. API presence does not imply
@@ -68,10 +84,13 @@ ja.wikipedia.org (CJK), news.ycombinator.com, github.com, developer.mozilla.org,
 
 ## Performance budgets
 
-The engine requests zero live documents in the back-forward cache while retaining navigation URLs;
-Back and Forward can reload the document. The matched ten-navigation workload still retained canvas and image
-allocations: approximately 640 MiB PSS before and 641 MiB after. These settings do not establish a whole-process
-memory improvement. The JavaScript GC heap limit is 255 MiB per runtime; other GC settings retain upstream defaults. The
+The engine keeps the documents of the three history entries on each side of the current one alive in the back-forward
+cache (`engine/src/memory.rs`, `session_history_max_length`) and retains every navigation URL; a farther entry reloads
+when it is reached. Back and Forward to a live entry restore the page as it was, scroll offset included. Servo 0.7.0 has
+no scroll restoration of its own (`history.scrollRestoration` is not implemented), so with no live documents (the setting
+used to be 0) Back always reloaded the page at the top. The matched ten-navigation workload with no live documents
+still retained canvas and image allocations: approximately 640 MiB PSS before and 641 MiB after. These settings do not
+establish a whole-process memory improvement. The JavaScript GC heap limit is 255 MiB per runtime; other GC settings retain upstream defaults. The
 HTTP response cache retains at most 256 weighted entries (this is an entry limit, not a byte limit).
 The heap limit does not include images, rendering surfaces or other native allocations.
 

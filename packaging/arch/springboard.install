@@ -36,6 +36,16 @@ bifrost_post_update() {
         systemctl enable bifrost-midid.service >/dev/null 2>&1 || true
         systemctl restart bifrost-midid.service >/dev/null 2>&1 || true
     fi
+    bifrost_fontcache
+}
+
+# /etc/fonts/conf.d/61-bifrost-cjk-fallback.conf is a fontconfig scan rule: it applies only while a font directory is scanned,
+# and fontconfig does not scan again a directory whose cache is valid. The Browser's fallback for CJK punctuation is the
+# family the rule adds, so while that family is not listed the system cache is rebuilt once (-f); afterwards this does nothing.
+bifrost_fontcache() {
+    command -v fc-cache >/dev/null 2>&1 || return 0
+    fc-list "Droid Sans Fallback" family 2>/dev/null | grep -q . || fc-cache -sf >/dev/null 2>&1 || true
+    return 0
 }
 
 # Screen Sharing sign-in rules (one allowed account, lockout) replace the wayvnc package default PAM service.
