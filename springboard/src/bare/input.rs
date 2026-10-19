@@ -12,6 +12,10 @@ pub enum Event {
     Move { x: f32, y: f32, t: f64 },
     Up { x: f32, y: f32, t: f64 },
     Hover{x:f32,y:f32,t:f64},
+    /// The scroll wheel over the window at (x, y): how far the content moves, in pixels (`dy` positive moves it down).
+    /// The Wayland pointer sends it ahead of the drag it also emulates, so a shell that gives the wheel to an app can
+    /// leave that drag out for the app.
+    Wheel{x:f32,y:f32,dx:f32,dy:f32,t:f64},
     Context{x:f32,y:f32,t:f64},
     Key { code: u16, down: bool },
     /// A switch (jack insert and the like): the code and whether it is on.

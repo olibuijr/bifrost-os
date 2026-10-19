@@ -98,6 +98,7 @@ pub mod windows;
 pub mod app_windows;
 pub mod input_events;
 pub mod touch_events;
+pub mod pointer_events;
 pub mod launch_services;
 pub mod user_activity;
 pub mod mail_compose;
@@ -691,6 +692,19 @@ pub trait App {
     /// phase, location in surface pixels, previous location, tap count and optional force and radius. Called only when
     /// `wants_touch_events` is true. A plain pointer arrives as one indirect touch. True when the app needs a new frame.
     fn touches(&mut self, _ctx: &Ctx, _ev: &touch_events::TouchEvent) -> bool {
+        false
+    }
+    /// The pointer events the app takes, as a set of `pointer_events::{WHEEL, HOVER, GESTURES}` bits. The runtime tells
+    /// the shell once, and the shell then sends the scroll wheel (in place of the plain drag it would emulate), the
+    /// pointer moving over the window, and the two-finger magnify and rotate gestures as `pointer` calls. The default
+    /// is 0: no pointer events, the plain touch stream as before.
+    fn pointer_interest(&self) -> u32 {
+        0
+    }
+    /// One pointer event (`scrollWheel`, `mouseMoved`, `mouseExited`, `magnify`, `rotate`), in surface pixels (see
+    /// [`pointer_events::PointerEvent::to_points`]). Called only for the kinds `pointer_interest` names. True when the
+    /// app needs a new frame.
+    fn pointer(&mut self, _ctx: &Ctx, _ev: &pointer_events::PointerEvent) -> bool {
         false
     }
     /// Semantic controls in logical points; sent only when they change.

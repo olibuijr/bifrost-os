@@ -926,6 +926,9 @@ fn run() -> std::io::Result<()> {
                     Event::Up(x, y)
                 }
                 input::Event::Hover{x,y,..}=>{let (x,y)=map(x,y);let Some((x,y))=shell.tap_hover(x,y) else {continue};shell.desktop_pointer(x,y,false,t);continue;},
+                // the wheel goes to an app that asked for it; the drag emulated for it (the next three events) is then
+                // dropped for that app (`pointer_wheel`)
+                input::Event::Wheel{x,y,dx,dy,..}=>{let (x,y)=map(x,y);shell.pointer_wheel(x,y,dx,dy,t);continue;},
                 input::Event::Context{x,y,..}=>{let (x,y)=map(x,y);shell.desktop_pointer(x,y,true,t);continue;},
                 input::Event::Switch { .. } => continue,
                 // per-finger contacts run on the gesture recognizers; the first finger also arrives as Down/Move/Up,

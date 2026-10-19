@@ -72,6 +72,7 @@ pub mod keyboard;
 pub mod textinput;
 pub mod compose_window;
 pub mod input_providers;
+pub mod pointer_events;
 pub mod kb_layouts;
 pub mod kb_capslock;
 pub mod kb_input;
@@ -646,6 +647,8 @@ pub struct Shell {
     compose_ime: compose_window::ComposeWindow,
     /// installed input methods (`input_providers`): the host that runs them and the Search field's session
     input_providers: input_providers::Providers,
+    /// the external app whose window content the pointer is over and that takes hover events (`pointer_events`)
+    pointer_over: Option<u8>,
     notify: notify::Notify,
     /// `UNUserNotificationCenter` state of the external apps (categories, pending and delivered requests)
     usernotif: usernotif::Registry,
@@ -1087,6 +1090,7 @@ impl Shell {
             quicksearch,
             assistant,
             compose_ime: compose_window::ComposeWindow::default(),
+            pointer_over: None,
             input_providers: {
                 let mut providers = input_providers::Providers::default();
                 providers.load_dir(&input_providers::dir());

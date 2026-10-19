@@ -582,6 +582,7 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
     let mut clip_seen = kit::clipboard::text();
     let mut open = true;
     let mut commands_seen = None;
+    let mut pointer_interest_sent = 0u32;
     let mut undo_titles_seen: (String, String) = Default::default();
     let mut menus_seen: Vec<crate::proto::AppMenu> = Vec::new();
     let mut controls_seen = Vec::new();
@@ -738,6 +739,14 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                     }
                 }
                 ToApp::Touches(_) => {}
+                // wheel, hover and gestures reach an app that asked for them; the shell only sends what was asked
+                ToApp::Pointer(ev) => {
+                    if let Some(c) = &ctx {
+                        if app.pointer_interest() & ev.interest() != 0 {
+                            need_frame |= app.pointer(c, &ev);
+                        }
+                    }
+                }
                 // the shell's full-screen state; the app's layout follows the window size it is configured with
                 ToApp::FullScreen { .. } => {}
                 ToApp::GuidedAccessState { active } => {
@@ -975,6 +984,12 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
             break;
         }
         let Some(c) = &ctx else { continue };
+        // the pointer events the app takes, told to the shell when they change (the shell sends nothing before)
+        let interest = app.pointer_interest() & bifrost_ui::pointer_event::ALL;
+        if interest != pointer_interest_sent {
+            pointer_interest_sent = interest;
+            let _ = chan.send(&ToShell::PointerInterest { mask: interest }.encode(), &[]);
+        }
         for activity in pending_activity.drain(..) {
             need_frame |= app.continue_activity(c, activity);
         }
