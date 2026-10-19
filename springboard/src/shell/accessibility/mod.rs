@@ -69,9 +69,6 @@ pub struct AccessibilitySettings {
     /// Switch Scanning: the screen reader's cursor steps through the screen on a timer (`SWITCH_SCAN_MS`) and Ctrl+Alt+Space
     /// presses the element it rests on, so one switch can drive the whole screen (`reader::Reader::scan_due`).
     pub switch_scan: bool,
-    /// Voice Control: the shell listens (on device, with the dictation model) and runs spoken commands (`voice_control`). Stored
-    /// under the key the recognizer service reads (`services::recognizer::VOICE_CONTROL_PREF`).
-    pub voice_control: bool,
     /// Sticky Keys: a modifier tapped once holds for the next key, tapped twice it locks (`sticky_keys`, read by `HwKeys`).
     pub sticky_keys: bool,
     /// Dwell Control: index into `dwell::DELAYS_MS` (0 is Off). The shell's input loop clicks a resting pointer (`dwell_delay_ms`).
@@ -80,16 +77,17 @@ pub struct AccessibilitySettings {
     pub slow: usize,
     /// Mouse Keys: the number keypad moves the pointer and the 5 key clicks (`mouse_keys`, read by the input loop).
     pub mouse_keys: bool,
-    /// Switch Control: the keyboard cursor of the screen reader steps through the screen and selects without speech (`reader`).
+    /// Switch Control: the keyboard cursor of the screen reader steps through the screen and selects without speech (`reader`),
+    /// and the switch keys step through a panel of controls on screen and choose one (`switch_control`).
     pub switch_control: bool,
-    /// Voice Control: spoken commands such as "press Save" run against the element map (`voice_control`).
+    /// Voice Control: the shell listens (on device, with the dictation model) and runs spoken commands such as "press Save"
+    /// against the element map (`voice_control`). Stored under the key the recognizer service reads
+    /// (`services::recognizer::VOICE_CONTROL_PREF`).
     pub voice_control: bool,
     /// Vehicle Motion Cues: dots at the screen edge follow the motion of a moving vehicle (`motion_cues`). Off until chosen.
     pub motion_cues: bool,
     /// Live Captions: the sound the computer plays is turned into captions on screen (`live_captions`, off by default).
     pub live_captions: bool,
-    /// Switch Control: the switch keys step through a panel of controls on screen and choose one (`switch_control`).
-    pub switch_control: bool,
     /// index into `HOLD_MS`
     pub hold: usize,
     /// Cursor Size, 0..1 from the Settings slider: the pointer draws at 1x up to 2x (`cursor_scale`)
@@ -126,16 +124,14 @@ impl AccessibilitySettings {
             guided_access: flag("a11y_guided_access", d.guided_access),
             screen_reader: flag("a11y_screen_reader", d.screen_reader),
             switch_scan: flag("a11y_switch_scan", d.switch_scan),
-            voice_control: flag(super::services::recognizer::VOICE_CONTROL_PREF, d.voice_control),
             sticky_keys: flag("a11y_sticky_keys", d.sticky_keys),
             dwell: index("a11y_dwell", dwell::DELAYS_MS.len()).unwrap_or(d.dwell),
             slow: index("a11y_slow_keys", super::slow_keys::DELAYS_MS.len()).unwrap_or(d.slow),
             mouse_keys: flag("a11y_mouse_keys", d.mouse_keys),
             motion_cues: flag("a11y_motion_cues", d.motion_cues),
             switch_control: flag("a11y_switch_control", d.switch_control),
-            voice_control: flag("a11y_voice_control", d.voice_control),
+            voice_control: flag(super::services::recognizer::VOICE_CONTROL_PREF, d.voice_control),
             live_captions: flag("a11y_live_captions", d.live_captions),
-            switch_control: flag("a11y_switch_control", d.switch_control),
             hold: index("a11y_hold", HOLD_MS.len()).unwrap_or(d.hold),
             cursor_size: p.get_parsed::<f32>("a11y_cursor_size").map_or(d.cursor_size, |v| v.clamp(0.0, 1.0)),
             shortcut: shortcut::parse(p.get(shortcut::PREF).unwrap_or("")),
@@ -159,16 +155,14 @@ impl AccessibilitySettings {
             ("a11y_guided_access", flag(self.guided_access)),
             ("a11y_screen_reader", flag(self.screen_reader)),
             ("a11y_switch_scan", flag(self.switch_scan)),
-            (super::services::recognizer::VOICE_CONTROL_PREF, flag(self.voice_control)),
             ("a11y_sticky_keys", flag(self.sticky_keys)),
             ("a11y_dwell", &self.dwell.to_string()),
             ("a11y_slow_keys", &self.slow.to_string()),
             ("a11y_mouse_keys", flag(self.mouse_keys)),
             ("a11y_motion_cues", flag(self.motion_cues)),
             ("a11y_switch_control", flag(self.switch_control)),
-            ("a11y_voice_control", flag(self.voice_control)),
+            (super::services::recognizer::VOICE_CONTROL_PREF, flag(self.voice_control)),
             ("a11y_live_captions", flag(self.live_captions)),
-            ("a11y_switch_control", flag(self.switch_control)),
             ("a11y_hold", &self.hold.to_string()),
             ("a11y_cursor_size", &format!("{:.3}", self.cursor_size)),
             (shortcut::PREF, &shortcut::encode(&self.shortcut)),
@@ -346,15 +340,6 @@ mod tests {
         let a = AccessibilitySettings { mouse_keys: true, ..Default::default() };
         a.save(&mut p);
         assert!(AccessibilitySettings::load(&p).mouse_keys);
-    }
-
-    #[test]
-    fn switch_control_round_trips_and_is_off_by_default() {
-        let mut p = Prefs::memory();
-        assert!(!AccessibilitySettings::load(&p).switch_control);
-        let a = AccessibilitySettings { switch_control: true, ..Default::default() };
-        a.save(&mut p);
-        assert!(AccessibilitySettings::load(&p).switch_control);
     }
 
     #[test]

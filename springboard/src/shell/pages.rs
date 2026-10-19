@@ -204,22 +204,19 @@ pub enum Toggle {
     ScreenReader,
     /// Accessibility > Switch Scanning (`a11y_switch_scan`)
     SwitchScan,
-    /// Accessibility > Voice Control (`voice_control`)
-    VoiceControl,
     /// Accessibility > Keyboard > Sticky Keys (`a11y_sticky_keys`)
     StickyKeys,
     /// Accessibility > Keyboard > Mouse Keys: the keypad moves and clicks the pointer (`a11y.mouse_keys`)
     MouseKeys,
-    /// Accessibility > Touch > Switch Control: the keyboard steps a highlight through the screen and selects (`a11y.switch_control`)
+    /// Accessibility > Touch > Switch Control: the keyboard steps a highlight through the screen and selects, and the switch
+    /// keys scan a panel of controls (`a11y_switch_control`)
     SwitchControl,
-    /// Accessibility > Touch > Voice Control: spoken commands press what they name (`a11y.voice_control`)
+    /// Accessibility > Voice Control: spoken commands press what they name (`a11y_voice_control`)
     VoiceControl,
     /// Accessibility > Motion > Show Vehicle Motion Cues: dots at the screen edge follow the accelerometer (`a11y.motion_cues`)
     MotionCues,
     /// Accessibility > Hearing > Live Captions: captions for the sound the computer plays (`a11y_live_captions`)
     LiveCaptions,
-    /// Accessibility > Switch Control: the switch keys scan a panel of controls (`a11y.switch_control`)
-    SwitchControl,
     AutoTime,
     LowPower,
     BatteryPercent,
@@ -1434,9 +1431,6 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                     ])
                     .header("VISION")
                     .footer("Screen Reader speaks the element under the keyboard cursor. Ctrl+Alt+Right and Ctrl+Alt+Left move it."),
-                    Group::new(vec![Item::new("Voice Control").switch(a.voice_control, Action::Toggle(Toggle::VoiceControl))])
-                        .header("SPEECH")
-                        .footer("Say \"show numbers\", \"show names\" or \"show grid\" to label what is on screen, then \"press 3\" or \"press Save\". Listening happens on this computer with the Dictation speech model, and your speech is never uploaded."),
                     Group::new(vec![
                         Item::new("Sticky Keys").switch(a.sticky_keys, Action::Toggle(Toggle::StickyKeys)),
                         Item::new("Mouse Keys").switch(a.mouse_keys, Action::Toggle(Toggle::MouseKeys)),
@@ -1451,16 +1445,15 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                         }
                         rows
                     })
+                    .header("MOTION")
+                    .footer(if m.info.motion_sensor_supported {
+                        "Opening, closing and switching apps cross-fade instead of zooming. Vehicle Motion Cues show dots at the edge of the screen that follow the motion of a moving vehicle."
+                    } else {
+                        "Opening, closing and switching apps cross-fade instead of zooming."
+                    }),
                     Group::new(vec![Item::new("Live Captions").switch(a.live_captions, Action::Toggle(Toggle::LiveCaptions))])
                         .header("HEARING")
                         .footer("Shows what is said in the sound this computer plays as captions at the bottom of the screen. It uses the on-device speech model from Keyboard > Dictation, English only, and nothing leaves the computer."),
-                    Group::new(vec![Item::new("Reduce Motion").switch(a.reduce_motion, Action::Toggle(Toggle::ReduceMotion))])
-                        .header("MOTION")
-                        .footer(if m.info.motion_sensor_supported {
-                            "Opening, closing and switching apps cross-fade instead of zooming. Vehicle Motion Cues show dots at the edge of the screen that follow the motion of a moving vehicle."
-                        } else {
-                            "Opening, closing and switching apps cross-fade instead of zooming."
-                        }),
                     Group::new(vec![Item::slider(Ends::Cursor, a.cursor_size, Action::Slider(Slider::CursorSize))]).header("POINTER").footer("The pointer grows as you drag the slider."),
                     Group::new(vec![Item::new("Switch Scanning").switch(a.switch_scan, Action::Toggle(Toggle::SwitchScan))])
                         .header("SWITCH")
@@ -1476,11 +1469,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                         Item::new("Voice Control").switch(a.voice_control, Action::Toggle(Toggle::VoiceControl)),
                     ])
                     .header("TOUCH")
-                    .footer("Use the floating button to reach Home, Control Centre, notifications and other controls. Switch Control highlights one item at a time: Ctrl+Alt+Right and Left move the highlight and Ctrl+Alt+Space selects it. Voice Control listens through the microphone on this computer, with the dictation model from Keyboard settings, and presses what you name: say \"press Save\"."),
-                    .footer("Use the floating button to reach Home, Control Centre, notifications and other controls."),
-                    Group::new(vec![Item::new("Switch Control").switch(a.switch_control, Action::Toggle(Toggle::SwitchControl))])
-                        .header("SWITCH CONTROL")
-                        .footer("Press Space to move through a panel of controls and Enter to choose the highlighted one. Escape closes the panel."),
+                    .footer("Use the floating button to reach Home, Control Centre, notifications and other controls. Switch Control highlights one item at a time: Ctrl+Alt+Right and Left move the highlight and Ctrl+Alt+Space selects it. The switch keys also move through a panel of controls (Space) and choose from it (Enter); Escape closes the panel. Voice Control listens through the microphone on this computer, with the dictation model from Keyboard settings, and presses what you name: say \"press Save\", or \"show numbers\", \"show names\" or \"show grid\" to label what is on screen. Your speech is never uploaded."),
                 ],
             )
         }
