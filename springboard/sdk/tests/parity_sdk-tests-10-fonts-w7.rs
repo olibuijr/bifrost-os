@@ -73,7 +73,7 @@ fn headless_candidates_are_the_class_equivalents_without_the_family_itself() {
     let names: Vec<Option<String>> = candidates(&FontSpec::new().family("Inter")).into_iter().map(|c| c.family).collect();
     assert_eq!(names, vec![Some("Geist".to_string()), Some("Source Sans 3".to_string()), Some("Noto Sans".to_string())]);
     let futura: Vec<String> = candidates(&FontSpec::new().family("Futura")).into_iter().filter_map(|c| c.family).collect();
-    assert_eq!(futura, vec!["Outfit", "Poppins", "Geist", "Inter"]);
+    assert_eq!(futura, vec!["Montserrat", "Outfit", "Poppins", "Geist", "Inter"], "the named substitute first, then the class");
 }
 
 #[test]
