@@ -109,6 +109,11 @@ pub const CHORD_SHIFT: u32 = 2;
 pub const CHORD_ALT: u32 = 4;
 pub const CHORD_META: u32 = 8;
 
+/// The `KeyInput::Code` the SDK delivers for Escape (the direct Wayland path and the shell's app protocol send 1).
+pub const KEY_ESCAPE: u32 = 1;
+/// ASCII ESC. Nothing sends it today; an app matches it next to `KEY_ESCAPE` so either reading cancels.
+pub const KEY_ESCAPE_ASCII: u32 = 27;
+
 impl KeyInput {
     /// `key` is the evdev code of a letter, digit or punctuation key; `mods` is a set of CHORD_* bits.
     pub fn chord(key: u32, mods: u32) -> Self {

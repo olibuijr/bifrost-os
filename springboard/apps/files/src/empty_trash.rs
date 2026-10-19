@@ -83,7 +83,7 @@ impl Files {
         }
         match input {
             Input::Key(KeyInput::Code(13)) => self.empty_trash_now(),
-            Input::Key(KeyInput::Code(27)) => {
+            Input::Key(KeyInput::Code(KEY_ESCAPE | KEY_ESCAPE_ASCII)) => {
                 self.fx.empty_trash = false;
                 self.revision += 1;
             }

@@ -23,7 +23,8 @@ const OPEN_MAX: u64 = 1 << 20;
 const KEY_TAB: u32 = 9;
 const KEY_ENTER: u32 = 13;
 const KEY_BACKSPACE: u32 = 8;
-const KEY_ESCAPE: u32 = 27;
+const KEY_ESCAPE: u32 = 1;
+const KEY_ESCAPE_ASCII: u32 = 27;
 
 struct AutomatorApp {
     auto: Automator,
@@ -67,7 +68,7 @@ impl AutomatorApp {
             KeyInput::Text(text) => self.auto.type_text(&text),
             KeyInput::Code(KEY_BACKSPACE) => self.auto.backspace(),
             KeyInput::Code(KEY_TAB) | KeyInput::Code(KEY_ENTER) => self.auto.next_field(),
-            KeyInput::Code(KEY_ESCAPE) => self.auto.unfocus(),
+            KeyInput::Code(KEY_ESCAPE | KEY_ESCAPE_ASCII) => self.auto.unfocus(),
             _ => return false,
         }
         true

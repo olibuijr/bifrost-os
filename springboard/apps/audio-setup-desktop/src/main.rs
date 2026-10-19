@@ -118,7 +118,7 @@ impl AudioSetup {
                 true
             }
             KeyInput::Code(13) => self.activate(Target::Save, now),
-            KeyInput::Code(27) => self.activate(Target::Cancel, now),
+            KeyInput::Code(1 | 27) => self.activate(Target::Cancel, now),
             _ => false,
         }
     }

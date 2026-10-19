@@ -112,6 +112,7 @@ pub mod running_board;
 pub mod system_intents;
 pub mod endpoint_security;
 pub mod usb_access;
+pub mod process_owners;
 
 /// A named service in the shell.
 pub trait SystemService {
@@ -227,6 +228,7 @@ pub fn all() -> Vec<Box<dyn SystemService>> {
         Box::new(system_intents::SystemIntents),
         Box::new(endpoint_security::EndpointSecurity::default()),
         Box::new(usb_access::UsbAccessService::default()),
+        Box::new(process_owners::ProcessOwners),
     ]
 }
 

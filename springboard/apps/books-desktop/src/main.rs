@@ -376,7 +376,7 @@ impl App for BooksApp {
                 KeyInput::Text(text) => Out::Text(text.clone()),
                 KeyInput::Code(8) => Out::Backspace,
                 KeyInput::Code(13) => Out::Enter,
-                KeyInput::Code(27) => Out::Hide,
+                KeyInput::Code(1 | 27) => Out::Hide,
                 KeyInput::Code(9) => Out::Named("Tab"),
                 KeyInput::Code(37) => Out::Named("Left"),
                 KeyInput::Code(39) => Out::Named("Right"),

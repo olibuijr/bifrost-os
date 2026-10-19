@@ -774,7 +774,7 @@ impl App for FontBookApp {
                 self.commit_edit(&ctx.data_dir);
                 true
             }
-            Input::Key(KeyInput::Code(27)) => {
+            Input::Key(KeyInput::Code(1 | 27)) => {
                 if self.edit != Edit::None {
                     self.edit = Edit::None;
                 } else if self.pending.is_some() {

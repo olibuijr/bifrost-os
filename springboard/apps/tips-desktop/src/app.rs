@@ -543,7 +543,7 @@ impl Tips {
                 self.scroll.jump_top();
                 true
             }
-            27 => {
+            1 | 27 => {
                 if self.open.is_some() {
                     self.open = None;
                     self.keyboard(ctx, false);

@@ -2173,7 +2173,7 @@ impl App for TextEditApp {
                     return match code {
                         8 => self.backspace(),
                         13 => self.perform(ctx, Action::PropsDone),
-                        27 => self.perform(ctx, Action::PropsCancel),
+                        1 | 27 => self.perform(ctx, Action::PropsCancel),
                         9 => {
                             if let Some((_, panel)) = self.props.as_mut() {
                                 panel.next_field();
@@ -2193,7 +2193,7 @@ impl App for TextEditApp {
                             true
                         }
                         13 => self.perform(ctx, Action::SpacingDone),
-                        27 => self.perform(ctx, Action::SpacingCancel),
+                        1 | 27 => self.perform(ctx, Action::SpacingCancel),
                         _ => false,
                     };
                 }
@@ -2209,7 +2209,7 @@ impl App for TextEditApp {
                 if self.plain_sheet {
                     return match code {
                         13 => self.perform(ctx, Action::PlainDone),
-                        27 => self.perform(ctx, Action::PlainCancel),
+                        1 | 27 => self.perform(ctx, Action::PlainCancel),
                         _ => false,
                     };
                 }
@@ -2217,7 +2217,7 @@ impl App for TextEditApp {
                     return match code {
                         8 => self.backspace(),
                         13 => self.perform(ctx, Action::LineDone),
-                        27 => self.perform(ctx, Action::LineCancel),
+                        1 | 27 => self.perform(ctx, Action::LineCancel),
                         _ => false,
                     };
                 }
@@ -2225,7 +2225,7 @@ impl App for TextEditApp {
                     return match code {
                         8 => self.backspace(),
                         13 => self.perform(ctx, Action::LinkDone),
-                        27 => self.perform(ctx, Action::LinkCancel),
+                        1 | 27 => self.perform(ctx, Action::LinkCancel),
                         _ => false,
                     };
                 }
@@ -2238,7 +2238,7 @@ impl App for TextEditApp {
                             self.insert_raw("\n")
                         }
                     }
-                    27 => {
+                    1 | 27 => {
                         if self.find_open {
                             self.perform(ctx, Action::FindDone)
                         } else {

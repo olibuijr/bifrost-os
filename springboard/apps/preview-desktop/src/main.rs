@@ -605,7 +605,7 @@ impl Viewer {
                 self.status = if self.prefs.author.is_empty() { "New markup has no author name.".into() } else { format!("Annotation author: {}", self.prefs.author) };
                 return true;
             }
-            KeyInput::Code(27) => {
+            KeyInput::Code(1 | 27) => {
                 self.authoring = None;
                 self.status.clear();
                 return true;
@@ -775,7 +775,7 @@ impl Viewer {
                 next.pop();
                 doc.set_field_text(widget, &next);
             }
-            KeyInput::Code(13) | KeyInput::Code(27) => self.form_focus = None,
+            KeyInput::Code(13) | KeyInput::Code(1 | 27) => self.form_focus = None,
             _ => return false,
         }
         true
@@ -1034,7 +1034,7 @@ impl Viewer {
                 }
                 return true;
             }
-            KeyInput::Code(27) => {
+            KeyInput::Code(1 | 27) => {
                 self.goto = None;
                 self.status.clear();
                 return true;
@@ -1291,7 +1291,7 @@ impl Viewer {
                 }
                 return true;
             }
-            KeyInput::Code(27) => {
+            KeyInput::Code(1 | 27) => {
                 self.resizing = None;
                 self.status.clear();
                 return true;
@@ -1356,7 +1356,7 @@ impl Viewer {
                 }
                 return true;
             }
-            KeyInput::Code(27) => {
+            KeyInput::Code(1 | 27) => {
                 self.finding = None;
                 self.status.clear();
                 return true;
@@ -1441,7 +1441,7 @@ impl Viewer {
     /// A key during the slideshow: arrows, space and Return move through the pages, Escape ends it.
     fn key_slideshow(&mut self, key: &KeyInput) -> bool {
         match key {
-            KeyInput::Code(27) => self.leave_slideshow(),
+            KeyInput::Code(1 | 27) => self.leave_slideshow(),
             KeyInput::Code(37) | KeyInput::Code(38) | KeyInput::Code(8) => self.slide_by(-1),
             KeyInput::Code(39) | KeyInput::Code(40) | KeyInput::Code(13) => self.slide_by(1),
             KeyInput::Text(t) if t == " " => self.slide_by(1),
@@ -2105,7 +2105,7 @@ impl Viewer {
                 self.open_document(&ask.path, password);
                 return true;
             }
-            KeyInput::Code(27) => {
+            KeyInput::Code(1 | 27) => {
                 self.asking = None;
                 self.status = "The document was not opened.".into();
                 return true;
@@ -2135,7 +2135,7 @@ impl Viewer {
         if self.resizing.is_some() {
             return self.key_resize(&key);
         }
-        if self.mode == Mode::Contact && key == KeyInput::Code(27) {
+        if self.mode == Mode::Contact && matches!(key, KeyInput::Code(1 | 27)) {
             self.mode = Mode::Page;
             return true;
         }
@@ -2159,7 +2159,7 @@ impl Viewer {
                 }
                 true
             }
-            KeyInput::Code(13) | KeyInput::Code(27) => {
+            KeyInput::Code(13) | KeyInput::Code(1 | 27) => {
                 if self.editing.is_none() {
                     return false;
                 }

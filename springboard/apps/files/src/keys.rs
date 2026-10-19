@@ -9,7 +9,7 @@ impl Files {
                 self.commit_rename();
                 return true;
             }
-            27 => {
+            KEY_ESCAPE | KEY_ESCAPE_ASCII => {
                 self.naming = None;
                 return true;
             }

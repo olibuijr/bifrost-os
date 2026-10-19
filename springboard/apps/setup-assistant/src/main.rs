@@ -51,7 +51,7 @@ impl App for Setup {
             }
             Input::Key(key) => match key {
                 KeyInput::Code(13) => self.activate(ctx, Act::Next),
-                KeyInput::Code(27) => self.activate(ctx, Act::Back),
+                KeyInput::Code(1 | 27) => self.activate(ctx, Act::Back),
                 _ => false,
             },
             _ => false,

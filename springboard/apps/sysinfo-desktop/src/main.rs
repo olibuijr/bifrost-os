@@ -288,14 +288,14 @@ impl SysInfo {
     /// the arrows move the sidebar selection, the item list or the card, whichever has focus, and Tab changes the focus.
     fn key(&mut self, key: KeyInput) -> bool {
         if self.is_loading() {
-            return matches!(key, KeyInput::Code(27)) && self.cancel_load();
+            return matches!(key, KeyInput::Code(1 | 27)) && self.cancel_load();
         }
         if self.find.is_some() {
             return match key {
                 KeyInput::Text(text) => self.find_type(&text),
                 KeyInput::Code(8) => self.find_backspace(),
                 KeyInput::Code(13) => self.find_step(true),
-                KeyInput::Code(27) => self.end_find(),
+                KeyInput::Code(1 | 27) => self.end_find(),
                 _ => false,
             };
         }

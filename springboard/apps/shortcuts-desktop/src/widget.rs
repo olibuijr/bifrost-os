@@ -1224,7 +1224,7 @@ impl Shortcuts {
         }
         match key {
             KeyInput::Code(13) => self.commit_edit(),
-            KeyInput::Code(27) => self.cancel_edit(),
+            KeyInput::Code(1 | 27) => self.cancel_edit(),
             KeyInput::Code(8) => self.field_mut().pop(),
             KeyInput::Text(text) => self.field_mut().push_str(&text),
             KeyInput::Code(_) => return false,

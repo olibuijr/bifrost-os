@@ -45,7 +45,7 @@ impl VoiceMemosApp {
                 KeyInput::Code(8) => Out::Backspace,
                 KeyInput::Code(13) => Out::Enter,
                 KeyInput::Code(9) => Out::Named("Tab"),
-                KeyInput::Code(27) if self.memos.as_ref().is_some_and(|m| m.search_active()) => Out::Named("Escape"),
+                KeyInput::Code(1 | 27) if self.memos.as_ref().is_some_and(|m| m.search_active()) => Out::Named("Escape"),
                 KeyInput::Code(37) => Out::Named("Left"),
                 KeyInput::Code(38) => Out::Named("Up"),
                 KeyInput::Code(39) => Out::Named("Right"),
