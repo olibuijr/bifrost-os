@@ -34,6 +34,12 @@ by `springboard/tools/pack.py` from [google/fonts](https://github.com/google/fon
 | Source Sans 3, Source Code Pro | font library | Adobe |
 | Fira Code | font library | The Fira Code Project Authors |
 
+## App icons
+
+The built-in app icons (`springboard/res/app-icons/`, packed by `springboard/tools/pack.py`) and the icons of the
+Music, News, Podcasts, Voice Memos, Clock and Games apps are drawn by `tools/make-icons.py` for BifrOSt, from
+geometric shapes and BifrOSt's own palette. They are covered by the MIT licence like the code.
+
 ## Code
 
 MIT licence, see [LICENSE](LICENSE).
