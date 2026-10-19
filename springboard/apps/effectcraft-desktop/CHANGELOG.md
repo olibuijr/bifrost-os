@@ -4,6 +4,24 @@
 
 # Changelog
 
+## 0.11.2
+
+- Upstream effectcraft v0.11.1.
+  ## What's Changed
+  * Atomic writes: a unique, exclusively created temp file per write (#1233) by @DWAA1660 in https://github.com/storytold/effectcraft/pull/1345
+  * Offloaded analyses: merge the result instead of replacing the group (#1249) by @DWAA1660 in https://github.com/storytold/effectcraft/pull/1366
+  * EPS: idiv and mod of -2^63 by -1 no longer panic by @dotCooCoo in https://github.com/storytold/effectcraft/pull/1223
+  * Prevent duplicate automation edits after lost replies by @onlymoein in https://github.com/storytold/effectcraft/pull/1333
+
+## 0.11.1
+
+- Upstream effectcraft v0.11.1.
+  ## What's Changed
+  * Atomic writes: a unique, exclusively created temp file per write (#1233) by @DWAA1660 in https://github.com/storytold/effectcraft/pull/1345
+  * Offloaded analyses: merge the result instead of replacing the group (#1249) by @DWAA1660 in https://github.com/storytold/effectcraft/pull/1366
+  * EPS: idiv and mod of -2^63 by -1 no longer panic by @dotCooCoo in https://github.com/storytold/effectcraft/pull/1223
+  * Prevent duplicate automation edits after lost replies by @onlymoein in https://github.com/storytold/effectcraft/pull/1333
+
 ## 0.10.1
 
 - Upstream effectcraft v0.10.0.
