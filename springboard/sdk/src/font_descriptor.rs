@@ -59,26 +59,9 @@ impl UserFonts {
     /// Every face in the font library that `spec` matches, best first. Names and fixed pitch must hold; weight,
     /// width, slant and the other traits only rank. When the named family is not in the library, the open
     /// equivalents of its class (`font_substitution`) are tried in preference order, so a document that names a
-    /// family BifrOSt does not ship still gets a face of the same style.
+    /// family BifrOSt does not ship still gets a face of the same style. Only the library is read (BifrOSt's packed
+    /// open faces and the fonts apps install), never any other font folder.
     pub fn resolve(shell_dir: &str, spec: &FontSpec) -> Vec<Installed> {
-        let roots = bifrost_core::ref_assets::Resolver::standard(None).roots().to_vec();
-        Self::resolve_with(&roots, shell_dir, spec)
-    }
-
-    /// `resolve` with the reference roots given. A named family that a reference root holds (its `fonts` folder,
-    /// personal-use assets from `bifrost-ref`) is drawn from that file first; otherwise the library and the open
-    /// equivalents apply as before, so a missing reference face falls back to BifrOSt's own fonts.
-    pub fn resolve_with(ref_roots: &[std::path::PathBuf], shell_dir: &str, spec: &FontSpec) -> Vec<Installed> {
-        if spec.family.is_some() {
-            for root in ref_roots {
-                let mut refs = FontManager::new();
-                refs.scan_dir(&root.join(bifrost_core::ref_assets::Kind::Font.dir()), 2);
-                let hits = Self::installed_for(&refs, spec);
-                if !hits.is_empty() {
-                    return hits;
-                }
-            }
-        }
         let mut m = FontManager::new();
         m.scan_dir(&fontprefs::library(shell_dir), 2);
         let direct = Self::installed_for(&m, spec);
@@ -164,7 +147,7 @@ mod tests {
         let own = UserFonts::choices(&shell).first().expect("library face").family.clone();
         // an installed family resolves to itself
         assert_eq!(UserFonts::resolve(&shell, &FontSpec::new().family(&own))[0].family, own);
-        // a reference family whose class lists the installed family resolves to it
+        // a family BifrOSt does not ship, whose class lists the installed family, resolves to it
         if font_substitution::substitute("Helvetica Neue").contains(&own.as_str()) {
             assert_eq!(UserFonts::resolve(&shell, &FontSpec::new().family("Helvetica Neue"))[0].family, own);
         }
@@ -174,27 +157,25 @@ mod tests {
     }
 
     #[test]
-    fn a_reference_face_is_preferred_and_a_missing_one_falls_back() {
-        let dir = std::env::temp_dir().join(format!("bifrost-font-reference-{}", std::process::id()));
+    fn resolve_reads_only_the_font_library() {
+        let dir = std::env::temp_dir().join(format!("bifrost-font-library-only-{}", std::process::id()));
         let lib = dir.join("fonts");
-        let refroot = dir.join("ref");
+        let beside = dir.join("other").join("fonts");
         let _ = std::fs::create_dir_all(&lib);
-        let _ = std::fs::create_dir_all(refroot.join("fonts"));
+        let _ = std::fs::create_dir_all(&beside);
         let shell = dir.to_string_lossy().into_owned();
         std::fs::write(lib.join("SFUI.ttf"), sf_bytes()).unwrap();
-        std::fs::write(refroot.join("fonts").join("SFUI.ttf"), sf_bytes()).unwrap();
+        // font folders beside the library are never read, whatever their names
+        std::fs::write(beside.join("SFUI.ttf"), sf_bytes()).unwrap();
+        std::fs::write(dir.join("SFUI.ttf"), sf_bytes()).unwrap();
         let own = UserFonts::choices(&shell).first().expect("library face").family.clone();
-        let spec = FontSpec::new().family(&own);
-        // the reference root holds the family: its file is drawn, not the library copy
-        let hits = UserFonts::resolve_with(&[refroot.clone()], &shell, &spec);
-        assert_eq!(hits[0].family, own);
-        assert_eq!(hits[0].path, refroot.join("fonts").join("SFUI.ttf").to_string_lossy());
-        // no reference root: the library face as before
-        let hits = UserFonts::resolve_with(&[dir.join("absent")], &shell, &spec);
-        assert_eq!(hits[0].path, lib.join("SFUI.ttf").to_string_lossy());
-        // an anonymous spec never takes a reference face over the library
-        let hits = UserFonts::resolve_with(&[refroot.clone()], &shell, &FontSpec::new());
-        assert_eq!(hits[0].path, lib.join("SFUI.ttf").to_string_lossy());
+        for spec in [FontSpec::new().family(&own), FontSpec::new()] {
+            let hits = UserFonts::resolve(&shell, &spec);
+            assert!(!hits.is_empty());
+            for hit in &hits {
+                assert!(std::path::Path::new(&hit.path).starts_with(&lib), "{} is outside the library", hit.path);
+            }
+        }
         let _ = std::fs::remove_dir_all(&dir);
     }
 

@@ -76,18 +76,9 @@ pub const APPS: &[AppDef] = &[
     AppDef { id: AppId::Magnifier, name: "Magnifier", icon: "bifrost.magnifier", icon_image: Some(magnifier::icon) },
     AppDef { id: AppId::AppStore, name: "App Store", icon: "bifrost.appstore", icon_image: Some(store::icon) },
 ];
-/// The Terminal icon at `size` px: the reference icon when one is installed (personal-use reference assets,
-/// see `bifrost_core::ref_assets`), else BifrOSt's own layered icon (`res/icons/terminal`, the tile from
+/// The Terminal icon at `size` px: BifrOSt's own layered icon (`res/icons/terminal`, the tile from
 /// `res/term-icon/icon.svg` with its prompt as a layer), drawn by the shared icon renderer.
 pub fn term_icon(size: usize) -> Image {
-    use bifrost_core::ref_assets::{Kind, Resolver};
-    let reference = Resolver::standard(None)
-        .resolve(Kind::AppIcon, "Terminal")
-        .and_then(|p| std::fs::read(p).ok())
-        .and_then(|b| crate::cg::imageio::decode(&b));
-    if let Some(img) = reference {
-        return if img.w == size && img.h == size { img } else { img.resized(size, size) };
-    }
     bifrost_render::icon_doc::render_builtin(TERM_ICON_JSON, &[("prompt.png", TERM_PROMPT_PNG)], size)
         .unwrap_or_else(|| Image { w: size, h: size, px: vec![0; size * size] })
 }
