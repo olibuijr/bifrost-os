@@ -45,6 +45,10 @@ impl Files {
             self.toggle_sidebar(); // ⌃⌘S: View > Show/Hide Sidebar
             return true;
         }
+        if key == 30 && mods & CHORD_CTRL != 0 && mods & CHORD_META != 0 && !shift {
+            self.make_alias(); // ⌃⌘A: Make Alias, the key the context menu shows (⌘L still works)
+            return true;
+        }
         match (key, shift) {
             (14, false) => self.trash_selected(),  // Backspace
             (14, true) => self.ask_empty_trash(),  // Shift+Backspace: Empty Trash, after the confirmation sheet

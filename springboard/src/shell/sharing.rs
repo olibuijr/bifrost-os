@@ -175,6 +175,10 @@ impl super::Shell {
         let (x, y) = (anchor.x + body.x as f32, anchor.y + anchor.h + body.y as f32);
         self.desktop_context = Some(super::desktop_bar::ContextMenu { slot, x, y, items: menu(&list) });
         self.desktop_menu = Some(super::desktop_bar::Menu::Context);
+        #[cfg(feature = "desktop-wayland")]
+        {
+            self.desktop_menu_row = None;
+        }
         self.app_share.pending = Some(Pending { slot, request, items, targets: list });
         self.dirty = true;
     }

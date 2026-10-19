@@ -131,8 +131,32 @@ impl KeyInput {
 /// A damaged rectangle in pixels: x, y, w, h.
 pub type Rect = [u32; 4];
 
+/// One row of an app's context menu (`ToShell::ContextMenu`, `Ctx::context_menu`). The wire format is the three fields; a
+/// separator and a key equivalent ride inside them, so apps that fill the fields by hand keep working:
+/// - a separator is id 0 with an empty label and `enabled` false (`ContextItem::separator`);
+/// - a key equivalent follows the title after a tab, in `KeyCombo::parse` notation (`ContextItem::key`), and the shell
+///   shows it right-aligned. The key is only shown: the app still handles the chord itself.
 #[derive(Clone,Debug,PartialEq)]
 pub struct ContextItem {pub id:u32,pub label:String,pub enabled:bool}
+
+/// Separates a context item's title from its key equivalent inside `ContextItem::label`.
+pub const CONTEXT_KEY_SEPARATOR:char='\t';
+
+impl ContextItem {
+    /// An enabled row with no key equivalent.
+    pub fn new(id:u32,title:&str)->Self {ContextItem{id,label:title.into(),enabled:true}}
+    /// A line between two groups of rows.
+    pub fn separator()->Self {ContextItem{id:0,label:String::new(),enabled:false}}
+    pub fn enabled(mut self,on:bool)->Self {self.enabled=on;self}
+    /// Shows `combo` ("cmd+i", "return", "shift+cmd+backspace") right-aligned in the row.
+    pub fn key(mut self,combo:&str)->Self {let title=self.title().to_string();self.label=format!("{title}{CONTEXT_KEY_SEPARATOR}{combo}");self}
+    /// True for the row `ContextItem::separator` makes.
+    pub fn is_separator(&self)->bool {self.id==0&&self.label.is_empty()}
+    /// The row's title, without its key equivalent.
+    pub fn title(&self)->&str {self.label.split_once(CONTEXT_KEY_SEPARATOR).map_or(self.label.as_str(),|(title,_)|title)}
+    /// The row's key equivalent in `KeyCombo::parse` notation, if it has one.
+    pub fn key_combo(&self)->Option<&str> {self.label.split_once(CONTEXT_KEY_SEPARATOR).map(|(_,key)|key).filter(|key|!key.is_empty())}
+}
 
 /// Layout of the on-screen keyboard (`ToApp::KeyboardConfig`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -2638,6 +2662,23 @@ mod sys_tests {
 #[cfg(test)] mod desktop_context_tests {
  use super::*;
  #[test] fn context_roundtrip_and_limits(){let packet=ToShell::ContextMenu{x:12.,y:34.,items:vec![ContextItem{id:7,label:"Open".into(),enabled:true}]};assert_eq!(ToShell::decode(&packet.encode()),Ok(packet));for message in [ToApp::Context{x:12.,y:34.},ToApp::ContextAction(7)]{assert_eq!(ToApp::decode(&message.encode()),Ok(message));}let bad=ToShell::ContextMenu{x:f32::NAN,y:0.,items:vec![]};assert_eq!(ToShell::decode(&bad.encode()),Err(DecodeError::BadValue));let large=ToShell::ContextMenu{x:0.,y:0.,items:(0..100).map(|id|ContextItem{id,label:"x".repeat(10000),enabled:true}).collect()};let bytes=large.encode();assert!(bytes.len()<MAX_PACKET);let ToShell::ContextMenu{items,..}=ToShell::decode(&bytes).unwrap()else{panic!()};assert_eq!(items.len(),32);}
+    #[test]
+    fn context_items_carry_separators_and_key_equivalents_inside_the_wire_fields() {
+        let plain = ContextItem::new(7, "Open");
+        assert_eq!(plain, ContextItem { id: 7, label: "Open".into(), enabled: true });
+        assert_eq!((plain.title(), plain.key_combo(), plain.is_separator()), ("Open", None, false));
+        let keyed = ContextItem::new(9, "Get Info").key("cmd+i").enabled(false);
+        assert_eq!((keyed.title(), keyed.key_combo(), keyed.enabled), ("Get Info", Some("cmd+i"), false));
+        assert_eq!(ContextItem::new(9, "Get Info").key("cmd+i").key("cmd+j").label, "Get Info\tcmd+j", "a second key replaces the first");
+        let line = ContextItem::separator();
+        assert!(line.is_separator() && !line.enabled);
+        assert!(!ContextItem::new(0, "Remove").is_separator(), "id 0 with a title is a row");
+        // an app built before keys and separators sends plain titles: they stay rows without a key
+        assert_eq!((ContextItem { id: 3, label: "Remove".into(), enabled: true }).key_combo(), None);
+        let packet = ToShell::ContextMenu { x: 1., y: 2., items: vec![keyed.clone(), line.clone(), plain.clone()] };
+        let ToShell::ContextMenu { items, .. } = ToShell::decode(&packet.encode()).unwrap() else { panic!() };
+        assert_eq!(items, vec![keyed, line, plain], "separators and keys survive the wire");
+    }
     #[test]
     fn app_menus_roundtrip_and_limits() {
         let menus = vec![AppMenu { title: "Note".into(), items: vec![

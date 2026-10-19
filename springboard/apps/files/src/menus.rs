@@ -66,6 +66,115 @@ pub(crate) const MENU_NEW_WINDOW: u32 = 32;
 pub(crate) const MENU_GROUP_NAME: u32 = 33;
 pub(crate) const MENU_GROUP_SIZE: u32 = 34;
 
+/// What the menu of the selected items depends on, so its layout can be checked without a window.
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct ItemMenu {
+    /// exactly one item is selected
+    pub(crate) single: bool,
+    pub(crate) in_bin: bool,
+    pub(crate) in_recents: bool,
+    /// the focused item is a file Open With can offer apps for
+    pub(crate) open_with: bool,
+    /// the focused item is an archive
+    pub(crate) expand: bool,
+    pub(crate) can_paste: bool,
+}
+
+/// What the menu of the folder background depends on.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct FolderMenu {
+    pub(crate) in_bin: bool,
+    pub(crate) can_paste: bool,
+    pub(crate) show_hidden: bool,
+    pub(crate) sidebar_hidden: bool,
+    pub(crate) status_bar: bool,
+    pub(crate) group: Group,
+    /// a search is typed in a folder that can hold a smart folder
+    pub(crate) can_save_search: bool,
+}
+
+/// The groups in one menu, a separator between neighbouring groups that have rows.
+pub(crate) fn grouped(groups: Vec<Vec<ContextItem>>) -> Vec<ContextItem> {
+    let mut out = Vec::new();
+    for group in groups.into_iter().filter(|g| !g.is_empty()) {
+        if !out.is_empty() {
+            out.push(ContextItem::separator());
+        }
+        out.extend(group);
+    }
+    out
+}
+
+/// The menu of the selected items, grouped as in the reference: Open | Move to Trash | file actions | clipboard | names |
+/// Tags. The key equivalents are the chords Files handles itself (`keys.rs`).
+pub(crate) fn item_menu(m: ItemMenu) -> Vec<ContextItem> {
+    let files_ok = !m.in_bin && !m.in_recents;
+    grouped(vec![
+        vec![
+            ContextItem::new(MENU_OPEN, "Open").enabled(m.single),
+            ContextItem::new(MENU_OPEN_WITH, "Open With…").enabled(m.open_with),
+        ],
+        vec![if m.in_bin { ContextItem::new(MENU_PUT_BACK, "Put Back") } else { ContextItem::new(MENU_TRASH, "Move to Trash").key("cmd+backspace") }],
+        vec![
+            ContextItem::new(MENU_INFO, "Get Info").enabled(m.single).key("cmd+i"),
+            ContextItem::new(MENU_RENAME, "Rename").enabled(m.single && !m.in_bin).key("return"),
+            ContextItem::new(MENU_COMPRESS, "Compress").enabled(files_ok),
+            ContextItem::new(MENU_COMPRESS_TGZ, "Compress as TAR.GZ").enabled(files_ok),
+            ContextItem::new(MENU_COMPRESS_TXZ, "Compress as TAR.XZ").enabled(files_ok),
+            ContextItem::new(MENU_EXTRACT, "Expand").enabled(m.expand),
+            ContextItem::new(MENU_DUPLICATE, "Duplicate").enabled(!m.in_bin).key("cmd+d"),
+            ContextItem::new(MENU_ALIAS, "Make Alias").enabled(files_ok).key("ctrl+cmd+a"),
+            ContextItem::new(MENU_QUICK_LOOK, "Preview").enabled(m.single),
+        ],
+        vec![
+            ContextItem::new(MENU_COPY, "Copy").key("cmd+c"),
+            ContextItem::new(MENU_CUT, "Cut").key("cmd+x"),
+            ContextItem::new(MENU_PASTE, "Paste").enabled(m.can_paste).key("cmd+v"),
+        ],
+        vec![
+            ContextItem::new(MENU_COPY_NAME, "Copy Name").enabled(m.single),
+            ContextItem::new(MENU_COPY_PATH, "Copy Item Path").enabled(m.single).key("alt+cmd+c"),
+        ],
+        vec![ContextItem::new(MENU_TAGS, "Tags…")],
+    ])
+}
+
+/// The menu of the folder background: new items | Paste | the folder's view and contents | Group By | search and Trash.
+pub(crate) fn folder_menu(m: FolderMenu) -> Vec<ContextItem> {
+    // the checked Group By row names its mark in the title, as the other Files choices do
+    let group = |id: u32, label: &str, this: Group| {
+        ContextItem::new(id, &if m.group == this { format!("✓ {label}") } else { label.to_string() })
+    };
+    // a row whose title names what choosing it does: `when_on` while the setting is on, else `when_off`
+    let toggle = |id: u32, on: bool, when_on: &str, when_off: &str| ContextItem::new(id, if on { when_on } else { when_off });
+    grouped(vec![
+        vec![
+            ContextItem::new(MENU_NEW_WINDOW, "New Window"),
+            ContextItem::new(MENU_NEW_FOLDER, "New Folder").enabled(!m.in_bin).key("shift+cmd+n"),
+        ],
+        vec![ContextItem::new(MENU_PASTE, "Paste").enabled(m.can_paste).key("cmd+v")],
+        vec![
+            toggle(MENU_HIDDEN, m.show_hidden, "Hide Hidden Files", "Show Hidden Files").key("shift+cmd+."),
+            ContextItem::new(MENU_REFRESH, "Refresh"),
+        ],
+        vec![
+            toggle(MENU_SIDEBAR, m.sidebar_hidden, "Show Sidebar", "Hide Sidebar").key("ctrl+cmd+s"),
+            toggle(MENU_STATUS_BAR, m.status_bar, "Hide Status Bar", "Show Status Bar").key("cmd+/"),
+            ContextItem::new(MENU_GALLERY, "as Gallery").key("cmd+4"),
+            ContextItem::new(MENU_VIEW_OPTIONS, "Show View Options").key("cmd+j"),
+        ],
+        vec![
+            group(MENU_GROUP_NONE, "Group By None", Group::None),
+            group(MENU_GROUP_KIND, "Group By Kind", Group::Kind),
+            group(MENU_GROUP_DATE, "Group By Date", Group::Date),
+            group(MENU_GROUP_NAME, "Group By Name", Group::Name),
+            group(MENU_GROUP_SIZE, "Group By Size", Group::Size),
+        ],
+        if m.can_save_search { vec![ContextItem::new(MENU_SAVE_SEARCH, "Save Search as Smart Folder")] } else { Vec::new() },
+        if m.in_bin { vec![ContextItem::new(MENU_EMPTY_TRASH, "Empty Trash…").key("shift+cmd+backspace")] } else { Vec::new() },
+    ])
+}
+
 impl Files {
     /// Right-click: selects the item under the pointer and opens the item or folder menu.
     pub(crate) fn context_menu_at(&mut self, ctx: &Ctx, x: f32, y: f32) {
@@ -79,64 +188,29 @@ impl Files {
             self.selection.clear();
         }
         self.last_click=None;
-        let mut items = if hit.is_some() {
-            let in_bin = self.in_bin();
+        let items = if hit.is_some() {
             let single = self.selection.len() == 1;
-            vec![
-                ContextItem { id: MENU_OPEN, label: "Open".into(), enabled: single },
-                ContextItem { id: MENU_QUICK_LOOK, label: "Preview".into(), enabled: single },
-                ContextItem { id: MENU_COPY_NAME, label: "Copy Name".into(), enabled: single },
-                ContextItem { id: MENU_COPY_PATH, label: "Copy Item Path".into(), enabled: single },
-                ContextItem { id: MENU_INFO, label: "Get Info".into(), enabled: single },
-                ContextItem { id: MENU_OPEN_WITH, label: "Open With…".into(), enabled: single && self.focus_entry().is_some_and(|e| !e.is_dir) },
-                ContextItem { id: MENU_COMPRESS, label: "Compress".into(), enabled: !in_bin && !self.in_recents() },
-                ContextItem { id: MENU_COMPRESS_TGZ, label: "Compress as TAR.GZ".into(), enabled: !in_bin && !self.in_recents() },
-                ContextItem { id: MENU_COMPRESS_TXZ, label: "Compress as TAR.XZ".into(), enabled: !in_bin && !self.in_recents() },
-                ContextItem { id: MENU_TAGS, label: "Tags…".into(), enabled: true },
-                ContextItem { id: MENU_EXTRACT, label: "Expand".into(), enabled: single && self.focus_entry().is_some_and(Self::is_archive) },
-                ContextItem { id: MENU_RENAME, label: "Rename".into(), enabled: single && !in_bin },
-                ContextItem { id: MENU_COPY, label: "Copy".into(), enabled: true },
-                ContextItem { id: MENU_CUT, label: "Cut".into(), enabled: true },
-                ContextItem { id: MENU_PASTE, label: "Paste".into(), enabled: self.clip.is_some() },
-                ContextItem { id: MENU_DUPLICATE, label: "Duplicate".into(), enabled: !in_bin },
-                ContextItem { id: MENU_ALIAS, label: "Make Alias".into(), enabled: !in_bin && !self.in_recents() },
-                if in_bin {
-                    ContextItem { id: MENU_PUT_BACK, label: "Put Back".into(), enabled: true }
-                } else {
-                    ContextItem { id: MENU_TRASH, label: "Move to Trash".into(), enabled: true }
-                },
-            ]
+            item_menu(ItemMenu {
+                single,
+                in_bin: self.in_bin(),
+                in_recents: self.in_recents(),
+                open_with: single && self.focus_entry().is_some_and(|e| !e.is_dir),
+                expand: single && self.focus_entry().is_some_and(Self::is_archive),
+                can_paste: self.clip.is_some(),
+            })
         } else {
-            let mut items = vec![
-                ContextItem { id: MENU_NEW_WINDOW, label: "New Window".into(), enabled: true },
-                ContextItem { id: MENU_NEW_FOLDER, label: "New Folder".into(), enabled: !self.in_bin() },
-                ContextItem { id: MENU_PASTE, label: "Paste".into(), enabled: self.clip.is_some() },
-                ContextItem { id: MENU_HIDDEN, label: if self.show_hidden { "Hide Hidden Files".into() } else { "Show Hidden Files".into() }, enabled: true },
-                ContextItem { id: MENU_REFRESH, label: "Refresh".into(), enabled: true },
-                ContextItem { id: MENU_SIDEBAR, label: if self.sidebar_hidden { "Show Sidebar".into() } else { "Hide Sidebar".into() }, enabled: true },
-                ContextItem { id: MENU_GALLERY, label: "as Gallery".into(), enabled: true },
-                ContextItem { id: MENU_VIEW_OPTIONS, label: "Show View Options".into(), enabled: true },
-                ContextItem { id: MENU_GROUP_NONE, label: if self.vo.group == Group::None { "✓ Group By None".into() } else { "Group By None".into() }, enabled: true },
-                ContextItem { id: MENU_GROUP_KIND, label: if self.vo.group == Group::Kind { "✓ Group By Kind".into() } else { "Group By Kind".into() }, enabled: true },
-                ContextItem { id: MENU_GROUP_DATE, label: if self.vo.group == Group::Date { "✓ Group By Date".into() } else { "Group By Date".into() }, enabled: true },
-                ContextItem { id: MENU_GROUP_NAME, label: if self.vo.group == Group::Name { "✓ Group By Name".into() } else { "Group By Name".into() }, enabled: true },
-                ContextItem { id: MENU_GROUP_SIZE, label: if self.vo.group == Group::Size { "✓ Group By Size".into() } else { "Group By Size".into() }, enabled: true },
-                ContextItem { id: MENU_STATUS_BAR, label: if self.status_bar { "Hide Status Bar".into() } else { "Show Status Bar".into() }, enabled: true },
-            ];
-            if !self.query.trim().is_empty() && !self.in_recents() && !self.in_bin() {
-                items.push(ContextItem { id: MENU_SAVE_SEARCH, label: "Save Search as Smart Folder".into(), enabled: true });
-            }
-            if self.in_bin() {
-                items.push(ContextItem { id: MENU_EMPTY_TRASH, label: "Empty Trash".into(), enabled: true });
-            }
-            items
+            folder_menu(FolderMenu {
+                in_bin: self.in_bin(),
+                can_paste: self.clip.is_some(),
+                show_hidden: self.show_hidden,
+                sidebar_hidden: self.sidebar_hidden,
+                status_bar: self.status_bar,
+                group: self.vo.group,
+                can_save_search: !self.query.trim().is_empty() && !self.in_recents() && !self.in_bin(),
+            })
         };
-        if hit.is_none() && self.in_bin() {
-            items.push(ContextItem { id: MENU_EMPTY_TRASH, label: "Empty Trash…".into(), enabled: true });
-        }
-        // the rows file-manager extensions add for the selection, or for the folder
-        items.extend(self.extension_menu_items(hit.is_some()));
-        ctx.context_menu(x, y, items);
+        // the rows file-manager extensions add for the selection, or for the folder, are a group of their own
+        ctx.context_menu(x, y, grouped(vec![items, self.extension_menu_items(hit.is_some())]));
     }
     /// Copy Item Path (Option+Cmd+C): the focused item's full path as text on the clipboard.
     pub(crate) fn copy_item_path(&mut self) {
@@ -183,5 +257,119 @@ impl Files {
             _ => return self.extension_action(id),
         }
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The menu as one line per row: the title, its key in brackets, `-` for a disabled row, `|` for a separator.
+    fn shape(items: &[ContextItem]) -> Vec<String> {
+        items
+            .iter()
+            .map(|i| {
+                if i.is_separator() {
+                    return "|".to_string();
+                }
+                let key = i.key_combo().map(|k| format!(" [{k}]")).unwrap_or_default();
+                format!("{}{}{}", if i.enabled { "" } else { "-" }, i.title(), key)
+            })
+            .collect()
+    }
+
+    fn one_item() -> ItemMenu {
+        ItemMenu { single: true, open_with: true, can_paste: true, ..ItemMenu::default() }
+    }
+
+    #[test]
+    fn the_item_menu_is_grouped_as_in_the_reference_with_its_key_equivalents() {
+        let menu = item_menu(one_item());
+        assert_eq!(
+            shape(&menu),
+            vec![
+                "Open", "Open With…", "|", "Move to Trash [cmd+backspace]", "|",
+                "Get Info [cmd+i]", "Rename [return]", "Compress", "Compress as TAR.GZ", "Compress as TAR.XZ", "-Expand",
+                "Duplicate [cmd+d]", "Make Alias [ctrl+cmd+a]", "Preview", "|",
+                "Copy [cmd+c]", "Cut [cmd+x]", "Paste [cmd+v]", "|",
+                "Copy Name", "Copy Item Path [alt+cmd+c]", "|", "Tags…",
+            ]
+        );
+        assert_eq!(menu.len(), 23, "18 rows and 5 separators: inside the 32 rows a context menu carries");
+        assert!(!menu.first().unwrap().is_separator() && !menu.last().unwrap().is_separator());
+    }
+
+    #[test]
+    fn the_item_menu_keeps_its_ids_and_enabled_states() {
+        let id_of = |menu: &[ContextItem], title: &str| menu.iter().find(|i| i.title() == title).map(|i| (i.id, i.enabled));
+        let menu = item_menu(one_item());
+        assert_eq!(id_of(&menu, "Open"), Some((MENU_OPEN, true)));
+        assert_eq!(id_of(&menu, "Preview"), Some((MENU_QUICK_LOOK, true)));
+        assert_eq!(id_of(&menu, "Expand"), Some((MENU_EXTRACT, false)), "only an archive can be expanded");
+        assert_eq!(id_of(&menu, "Move to Trash"), Some((MENU_TRASH, true)));
+        // several items: the commands for one item are off, the clipboard ones stay
+        let many = item_menu(ItemMenu { single: false, can_paste: false, ..ItemMenu::default() });
+        assert_eq!(id_of(&many, "Get Info"), Some((MENU_INFO, false)));
+        assert_eq!(id_of(&many, "Copy"), Some((MENU_COPY, true)));
+        assert_eq!(id_of(&many, "Paste"), Some((MENU_PASTE, false)), "nothing to paste");
+        // an archive
+        let archive = item_menu(ItemMenu { expand: true, ..one_item() });
+        assert_eq!(id_of(&archive, "Expand"), Some((MENU_EXTRACT, true)));
+    }
+
+    #[test]
+    fn in_the_bin_the_menu_puts_back_and_cannot_rename_compress_or_duplicate() {
+        let menu = item_menu(ItemMenu { in_bin: true, ..one_item() });
+        let row = |title: &str| menu.iter().find(|i| i.title() == title).map(|i| (i.id, i.enabled));
+        assert_eq!(row("Put Back"), Some((MENU_PUT_BACK, true)));
+        assert_eq!(row("Move to Trash"), None);
+        for title in ["Rename", "Compress", "Compress as TAR.GZ", "Compress as TAR.XZ", "Duplicate", "Make Alias"] {
+            assert_eq!(row(title).map(|r| r.1), Some(false), "{title} is off in the bin");
+        }
+        let recents = item_menu(ItemMenu { in_recents: true, ..one_item() });
+        let recent = |title: &str| recents.iter().find(|i| i.title() == title).map(|i| i.enabled);
+        assert_eq!((recent("Compress"), recent("Make Alias"), recent("Duplicate")), (Some(false), Some(false), Some(true)));
+    }
+
+    fn folder() -> FolderMenu {
+        FolderMenu { in_bin: false, can_paste: false, show_hidden: false, sidebar_hidden: false, status_bar: true, group: Group::None, can_save_search: false }
+    }
+
+    #[test]
+    fn the_folder_menu_is_grouped_with_separators_and_marks_the_group_by_choice() {
+        let menu = folder_menu(FolderMenu { group: Group::Kind, ..folder() });
+        assert_eq!(
+            shape(&menu),
+            vec![
+                "New Window", "New Folder [shift+cmd+n]", "|",
+                "-Paste [cmd+v]", "|",
+                "Show Hidden Files [shift+cmd+.]", "Refresh", "|",
+                "Hide Sidebar [ctrl+cmd+s]", "Hide Status Bar [cmd+/]", "as Gallery [cmd+4]", "Show View Options [cmd+j]", "|",
+                "Group By None", "✓ Group By Kind", "Group By Date", "Group By Name", "Group By Size",
+            ]
+        );
+    }
+
+    #[test]
+    fn the_folder_menu_names_the_opposite_of_each_setting_and_ends_with_search_and_trash() {
+        let on = folder_menu(FolderMenu { show_hidden: true, sidebar_hidden: true, status_bar: false, can_save_search: true, ..folder() });
+        let titles: Vec<&str> = on.iter().filter(|i| !i.is_separator()).map(|i| i.title()).collect();
+        assert!(titles.contains(&"Hide Hidden Files") && titles.contains(&"Show Sidebar") && titles.contains(&"Show Status Bar"));
+        assert_eq!(on[on.len() - 2].is_separator(), true, "the search row is a group of its own");
+        assert_eq!(on.last().unwrap().id, MENU_SAVE_SEARCH);
+        let bin = folder_menu(FolderMenu { in_bin: true, ..folder() });
+        let empty: Vec<&ContextItem> = bin.iter().filter(|i| i.id == MENU_EMPTY_TRASH).collect();
+        assert_eq!(empty.len(), 1, "one Empty Trash row, not two");
+        assert_eq!(bin.last().unwrap().id, MENU_EMPTY_TRASH);
+        assert_eq!(bin.iter().find(|i| i.id == MENU_NEW_FOLDER).map(|i| i.enabled), Some(false), "no new folder in the bin");
+    }
+
+    #[test]
+    fn grouped_puts_a_separator_only_between_groups_that_have_rows() {
+        let a = || vec![ContextItem::new(1, "A")];
+        let b = || vec![ContextItem::new(2, "B"), ContextItem::new(3, "C")];
+        assert_eq!(shape(&grouped(vec![a(), Vec::new(), b()])), vec!["A", "|", "B", "C"]);
+        assert_eq!(shape(&grouped(vec![Vec::new(), a(), Vec::new()])), vec!["A"], "no separator at either end");
+        assert!(grouped(vec![Vec::new()]).is_empty());
     }
 }

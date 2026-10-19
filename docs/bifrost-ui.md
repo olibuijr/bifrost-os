@@ -508,7 +508,8 @@ so layouts derive from `layout::Layout` (window size in points) and never from a
 
 The desktop bar menus use the kits instead of private code: `keys::KeyCombo` is the key equivalent shown in the
 right column (`MENU_KEYS` in `shell/desktop_bar.rs`, conflict-checked by `keys::Shortcuts` in a test), `menu::Menu`
-does type-to-select, and `menu_spans` is the one row-geometry function (rows 36 pt, separators 9 pt). Menus size to
+does type-to-select, and `menu_spans` is the one row-geometry function (rows 24 pt, separators 11 pt, 5 pt padding at
+both ends). Menus size to
 their content (at least 264 pt; the width is cached per row set), long titles are cut with `ui.fit`, and Reduce
 Transparency draws them opaque (`DESKTOP_MENU_SOLID`). Keys with a menu open: Up/Down, Left/Right, Return, Esc,
 letters. Cmd+, opens Settings.
@@ -528,6 +529,29 @@ Gaps against AppKit, recorded: submenus are drawn flat (a header row with indent
 item shows a check mark glyph in its title, there are no item icons, tooltips, `representedObject`, alternate
 (Option) items or `NSMenuDelegate.menuNeedsUpdate` before opening; state is pushed on change instead. Menu items with
 a modifier-less key equivalent are ignored by the chord path.
+
+### App context menus (`Ctx::context_menu`, `NSMenu.popUpContextMenu`)
+
+A right click arrives as `Input::Context { x, y }` (window-local px). The app answers with
+`ctx.context_menu(x, y, items)`; the shell draws the rows with the bar menus' drawing (`menu_spans` geometry, the menu
+material, rounded corners and shadow, hover highlight, Up/Down/Return/Esc) and sends the choice back as
+`Input::ContextAction(id)`. Build the rows with `ContextItem::new(id, title)`, `.key("cmd+i")` (a key equivalent in
+`KeyCombo::parse` notation, shown right-aligned; the app still handles the chord itself), `.enabled(false)` (secondary
+ink, not a choice) and `ContextItem::separator()` between groups; a separator at either end or doubled is dropped by the
+shell. At most 32 rows, separators included (the rest are cut).
+
+Placement (`desktop_bar::context_menu_origin`): the menu's top-left corner is the pointer. A menu that would pass the
+right edge opens to the left of the pointer and one that would pass the bottom edge opens above it; the area is the
+screen below the menu bar and above the Dock (`Desk::area`, the windows' work area), so a menu never covers the Dock.
+A menu larger than the area is held at its top-left. The surface is exactly as tall as its rows and separators; before
+this round it was sized from a fixed 36 pt per item (the rows were drawn 24 pt tall), so it was far taller than its items,
+reached over the Dock and opened above the pointer (Files E2E finding F4).
+
+Wire compatibility: `ContextItem` keeps its three fields (`id`, `label`, `enabled`). A separator is id 0 with an empty
+label; a key equivalent follows the title after a tab inside `label` (`CONTEXT_KEY_SEPARATOR`). Apps that fill the struct
+by hand keep working unchanged; they just show no keys and no separators. Gaps against AppKit, recorded: no submenus,
+no checked-state column (a check mark goes in the title), no icons, no `NSMenuDelegate` and no alternate (Option)
+items in context menus.
 
 ## Uniform type identifiers (`UniformTypeIdentifiers`, 0.4.69)
 
