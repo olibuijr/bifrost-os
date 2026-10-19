@@ -1905,6 +1905,8 @@
     }
 
     /// A `speech_recognizer` that logs the calls it gets and answers a scripted poll, in place of the real service.
+    // Voice Control is being reworked; this rig is kept for it.
+    #[allow(dead_code)]
     struct ScriptedRecognizer {
         calls: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
         refuse: bool,
@@ -1927,6 +1929,8 @@
         }
     }
 
+    // Voice Control is being reworked; this rig is kept for it.
+    #[allow(dead_code)]
     fn voice_rig(refuse: bool) -> (Shell, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
         let calls = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
         let mut sh = desktop_shell();

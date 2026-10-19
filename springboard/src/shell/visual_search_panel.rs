@@ -93,6 +93,7 @@ impl Panel {
         Panel { preview, state: State::Searching, providers }
     }
 
+    #[cfg(test)]
     pub fn state(&self) -> &State {
         &self.state
     }

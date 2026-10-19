@@ -2,7 +2,7 @@
 //! stepping between them. Pure: the player applies the chosen rate through `timestretch::Stretcher::set_rate`, which
 //! clamps it to the same range (`clamp_rate`).
 
-use super::timestretch::{clamp_rate, RATE_MAX, RATE_MIN};
+use super::timestretch::clamp_rate;
 
 /// The speeds the picker offers, slowest first. Every step lies in `RATE_MIN..=RATE_MAX`.
 pub const STEPS: [f32; 7] = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 3.0];
@@ -42,6 +42,7 @@ pub fn is_step(rate: f32) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use super::super::timestretch::{RATE_MAX, RATE_MIN};
     use super::*;
 
     #[test]

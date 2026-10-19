@@ -464,7 +464,7 @@ mod tests {
 
     #[test]
     fn endpoint_security_is_for_the_shell_only() {
-        let g = TestGate { unlocked: Mutex::new(true) };
+        let g = TestGate { unlocked: Mutex::new(true), grant: Mutex::new(None) };
         let body = r#"{"id":1,"method":"endpoint_security.poll","params":{"t":"tok","app":"is.olibuijr.guard","id":1}}"#;
         let other = Peer { root_socket: false, console_shell: false };
         assert!(handle_request(&g, &FakeExec, other, body).contains("only the shell"), "an admitted tool that is not the shell is refused");

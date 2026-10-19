@@ -257,7 +257,7 @@ impl DspManager {
         }
         let mut manager = DspManager::new();
         let mut open: Option<(Target, Vec<Stage>)> = None;
-        let mut finish = |manager: &mut DspManager, open: Option<(Target, Vec<Stage>)>| -> Result<(), Error> {
+        let finish = |manager: &mut DspManager, open: Option<(Target, Vec<Stage>)>| -> Result<(), Error> {
             match open {
                 Some((Target::Device(uid, d), stages)) => manager.set_device_chain(&uid, d, Chain::new(stages)),
                 Some((Target::App(app), stages)) => manager.set_app_chain(&app, Chain::new(stages)),

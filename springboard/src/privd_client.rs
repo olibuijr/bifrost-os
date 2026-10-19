@@ -422,6 +422,13 @@ mod tests {
         fn set_password(&self, _: Option<&str>, _: privd::Peer, _: &str, _: &str) -> Result<(), PErr> {
             Ok(())
         }
+        fn elevate(&self, t: &str, _: &str, _: &str) -> Result<String, PErr> {
+            self.require_unlocked(t)?;
+            Ok("g0".into())
+        }
+        fn consume_grant(&self, t: &str, _: &str, _: Option<&str>) -> Result<(), PErr> {
+            self.require_unlocked(t)
+        }
     }
 
     #[test]

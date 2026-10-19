@@ -85,6 +85,7 @@ impl AppFirewall {
     }
 
     /// The service with its choices in `store` and `applier` loading the rules.
+    #[cfg(test)]
     pub(crate) fn with_applier(store: PathBuf, applier: Arc<dyn Applier>) -> Self {
         Self::with(store, applier)
     }

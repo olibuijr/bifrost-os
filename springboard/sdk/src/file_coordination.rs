@@ -25,7 +25,7 @@ use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use crate::fswatch::{WatchEvent, WatchEventFlags, WatchStream, WatchStreamFlags};
+use crate::fswatch::{WatchEvent, WatchEventFlags, WatchStream};
 
 extern "C" {
     fn flock(fd: i32, op: i32) -> i32;
@@ -213,6 +213,7 @@ pub fn pump(stream: &mut WatchStream, now: Instant) -> usize {
 
 #[cfg(test)]
 mod tests {
+    use crate::fswatch::WatchStreamFlags;
     use super::*;
     use std::rc::Rc;
 

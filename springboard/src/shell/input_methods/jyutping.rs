@@ -190,7 +190,7 @@ impl Composer for JyutpingComposer {
 #[cfg(test)]
 mod tests {
     use super::super::testing::type_keys;
-    use super::super::{InputController, JYUTPING as SOURCE};
+    use super::super::JYUTPING as SOURCE;
     use super::*;
 
     fn typed(s: &str) -> JyutpingComposer {

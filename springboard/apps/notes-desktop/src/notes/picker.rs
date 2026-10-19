@@ -80,6 +80,7 @@ impl Picker {
 
 /// The indices of the photos whose file name contains `query`, ignoring case, in the order given. A blank query matches
 /// every photo. This is the model behind the picker's search field; the field itself is not drawn yet.
+#[cfg(test)]
 pub fn matching(photos: &[PathBuf], query: &str) -> Vec<usize> {
     let needle = query.trim().to_lowercase();
     photos
