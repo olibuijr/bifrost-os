@@ -1,3 +1,7 @@
+## Unreleased
+
+- `browser.content_rules` compiles, stores and applies web content blocker lists (block, make-https, css-display-none) to every tab; `browser.messages` reads what pages post to the `control` message handler; `browser.screenshot` takes `format: "pdf"` and prints the page as a paginated PDF.
+
 ## 0.14.2
 
 - Kept the keychain-backed password-group row type explicitly named at its import so the declared keychain permission is traceable to the code that uses it.

@@ -4,22 +4,22 @@
   "macos_since": "10.5",
   "status": "partial",
   "bifrost": "springboard/sdk/src/webview.rs (WebProcessPool::eval), springboard/sdk/src/webview_dev.rs (dev_eval, DevEvent::Eval); no standalone JS context in the SDK",
-  "summary": "JavaScriptCore lets an app run JavaScript on its own, exchange values with it, and expose its objects to scripts. BifrOSt has no app-facing JavaScript engine: the SDK has no JSContext, JSValue or JSExport equivalent. Apps can only run a script inside a web view (evaluateJavaScript), and the browser's own JavaScript engine (Boa) is not reachable from apps.",
+  "summary": "JavaScriptCore lets an app run JavaScript on its own, exchange values with it, and expose its objects to scripts. BifrOSt now has the JsContext equivalent (bifrost_app::js_context: a standalone Boa realm, typed values, host functions, exceptions, console capture) and still runs scripts inside a web view through evaluateJavaScript. Missing: a shared virtual machine, managed values, exporting Rust types as classes, timers, and the C API.",
   "rea_evidence": "ev_fa2c7a0f3a85b1b57f903a371c17c1126d97616db84c50315f50f10e76b9ad58",
   "features": [
     {
       "feature": "Execution environment (virtual machine and context)",
       "apple": "JSVirtualMachine, JSContext",
-      "bifrost": "springboard/sdk/src/js_value.rs (JsValue::from_eval, JsValue::to_literal); springboard/sdk/src/script_value.rs (ScriptValue); springboard/src/shell/browser/js/mod.rs (one Boa Context per browser tab, internal to the Browser)",
+      "bifrost": "springboard/sdk/src/js_value.rs (JsValue::from_eval, JsValue::to_literal); springboard/sdk/src/script_value.rs (ScriptValue); springboard/src/shell/browser/js/mod.rs (one Boa Context per browser tab, internal to the Browser); springboard/src/shell/js_context.rs (JsContext); springboard/sdk/src/js_context.rs (bifrost_app::js_context)",
       "status": "partial",
-      "note": "Apps read and write typed script values for the web view engine, tested headless in sdk/tests/parity_sdk-rest-11.rs. Gap: there is no standalone VM or context object, scripts run only inside a web view, and the browser's Boa context stays internal to the Browser."
+      "note": "2026-10-19: apps get a standalone context. JsContext is a fresh Boa realm with no DOM, network, timers or file access, evaluate_script at global scope (var and function definitions persist between calls), loop, recursion and stack limits that turn a runaway script into an exception, console capture with levels, and a source size cap. Still missing: JSVirtualMachine sharing between contexts, JSManagedValue, garbage collector hooks, import, timers. Midget check: host tests `shell::js_context::tests::globals_persist_between_evaluations`, `a_runaway_script_is_stopped`, `there_is_no_dom_network_or_timer_in_a_context` (cargo test -p springboard js_context) and `bifrost_app::js_context::tests::*`; no Midget click path, no app uses it yet."
     },
     {
       "feature": "JavaScript values",
       "apple": "JSValue, JSManagedValue",
-      "bifrost": "springboard/sdk/src/js_value.rs (JsValue::from_eval, JsValue::to_literal); springboard/sdk/src/webview.rs (WebViewEvent::EvalResult, a String); springboard/sdk/src/webview_dev.rs (EvalValue { ty, json })",
+      "bifrost": "springboard/sdk/src/js_value.rs (JsValue::from_eval, JsValue::to_literal); springboard/sdk/src/webview.rs (WebViewEvent::EvalResult, a String); springboard/sdk/src/webview_dev.rs (EvalValue { ty, json }); springboard/src/shell/js_context.rs (JsOut); springboard/sdk/src/js_context.rs (to_js_value, to_json)",
       "status": "partial",
-      "note": "Script results read into JsValue (undefined, null, booleans, numbers, strings, arrays, objects), and values write back as script literals; both are tested headless in parity_sdk-complete-43.rs. Gap: functions have no value form, DOM elements are refused, and the conversion needs a live web view to run the script."
+      "note": "2026-10-19: JsOut reads undefined, null, booleans, numbers (NaN and the infinities kept), strings, bigints (decimal text), symbols (description), functions (source text), arrays and objects (fields in script order; a cycle is an exception); set_value writes JSON into a global; js_context::to_js_value and to_json convert to and from the SDK JsValue. Still missing: object identity across calls (values are copied out), a function value cannot be called again from Rust, DOM elements are not applicable in a standalone context. Midget check: host tests `shell::js_context::tests::scripts_return_typed_values`, `arrays_and_objects_keep_their_shape_and_order`, `a_cycle_is_an_exception_not_a_hang` and `bifrost_app::js_context::tests::results_arrive_as_sdk_values_and_values_go_back_in`."
     },
     {
       "feature": "Native object export to JavaScript",
@@ -31,16 +31,16 @@
     {
       "feature": "Script evaluation in an app",
       "apple": "JSContext evaluateScript:, C JSEvaluateScript",
-      "bifrost": "springboard/sdk/src/webview.rs:320 (WebView eval, one line of JS, answer as EvalResult); springboard/sdk/src/webview_dev.rs (dev_eval with token)",
+      "bifrost": "springboard/sdk/src/webview.rs:320 (WebView eval, one line of JS, answer as EvalResult); springboard/sdk/src/webview_dev.rs (dev_eval with token); springboard/sdk/src/js_context.rs (evaluate, set_global, JsContext::set_function)",
       "status": "partial",
-      "note": "Only inside a web view page: the answer is read with JsValue::from_eval (springboard/sdk/src/js_value.rs) and the script text is built with JsValue::to_literal, both tested headless in parity_sdk-complete-43.rs. Gap: no standalone evaluation without a view, which needs the engine, and Servo 0.7.0 evaluate_javascript does not await promises (docs/bifrost-ui.md)."
+      "note": "2026-10-19: scripts run without a web view: evaluate_script returns the last expression as a typed value, a promise result is settled by running its jobs (a promise that needs a timer or I/O is reported as an exception), and set_function exposes a Rust closure to scripts as a global (JSON arguments in, JSON out, an Err is thrown as an Error). In a web view, evaluateJavaScript is unchanged and Servo 0.7.0 evaluate_javascript still does not await promises. Still missing: exporting Rust types as classes with methods (JSExport on objects), calling a script function value from Rust later. Midget check: host tests `shell::js_context::tests::host_functions_take_and_return_json_and_can_fail`, `promises_settle_or_report_that_they_cannot`, `values_go_in_as_globals`; in the Browser, `browser.eval` still runs in the page."
     },
     {
       "feature": "Script dialogs from scripts",
       "apple": "JSContext exception handler, WKWebView alert and confirm panels (not JavaScriptCore)",
-      "bifrost": "springboard/sdk/src/webview.rs (WebViewEvent::Dialog, dialog_reply)",
+      "bifrost": "springboard/sdk/src/webview.rs (WebViewEvent::Dialog, dialog_reply); springboard/src/shell/js_context.rs (JsException, JsContext::set_exception_handler)",
       "status": "partial",
-      "note": "dialogs raised by page scripts are covered; JavaScriptCore exception handler for standalone scripts is missing"
+      "note": "2026-10-19: dialogs raised by page scripts are covered as before (WebViewEvent::Dialog, dialog_reply). The exception handler for standalone scripts now exists: every uncaught exception comes back as JsException (name, message, stack text) and is passed to set_exception_handler before evaluate_script returns it; exception() holds the last one until a later evaluation succeeds. Still missing: line and column of the error as separate fields, source URLs for scripts. Midget check: host test `shell::js_context::tests::exceptions_carry_name_and_message_and_reach_the_handler`."
     },
     {
       "feature": "Syntax checking",
