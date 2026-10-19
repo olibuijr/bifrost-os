@@ -91,7 +91,9 @@ impl Monitor {
 impl Shell {
     /// Posts the thermal warning as a notification from Settings when the zones climb to Serious or Critical.
     pub(super) fn thermal_tick(&mut self, t: f64) {
-        let Some(w) = self.thermal.poll(t, || thermal::worst_in(Path::new(THERMAL_CLASS))) else { return };
+        // tests never read the build machine's own sensors: a hot host would post the warning into every shell test
+        let class = if cfg!(test) { Path::new("/nonexistent/thermal") } else { Path::new(THERMAL_CLASS) };
+        let Some(w) = self.thermal.poll(t, || thermal::worst_in(class)) else { return };
         let now = self.notify.now();
         self.notify(Notification::new(AppId::Settings, w.title, w.body, now));
     }
