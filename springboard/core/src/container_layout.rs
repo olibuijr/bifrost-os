@@ -110,6 +110,11 @@ impl ContainerLayout {
     /// Creates the fixed folders that do not exist yet. Fails if the root or a folder is a symbolic link, or
     /// exists as a file.
     pub fn ensure(&self) -> io::Result<()> {
+        // the container's own parent (for example the app's data folder) may not exist yet; the root itself is still
+        // checked one folder at a time below, so a symbolic link or file there is still refused
+        if let Some(parent) = self.root.parent().filter(|p| !p.as_os_str().is_empty()) {
+            fs::create_dir_all(parent)?;
+        }
         create_checked_dir(&self.root)?;
         for folder in Folder::ALL {
             let mut current = self.root.clone();
