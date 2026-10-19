@@ -5,6 +5,7 @@ mod store;
 mod suggest;
 
 mod browser_ctl;
+mod webbridge;
 mod control;
 mod devtools;
 mod elements;
@@ -334,6 +335,9 @@ impl Browser {
             Ok(mut p) => {
                 // the network log's collector runs at the start of every document (engine devtools module)
                 p.dev_collector(&format!("{};{}", network::COLLECTOR_JS, pagetools::CONSOLE_JS));
+                // the page message bridge and the stored content blockers (webbridge.rs)
+                let profile = self.profile();
+                self.ctl.bridge.attach(&mut p, &profile);
                 self.pool = Some(p);
                 self.watchdog.reset(self.clock.elapsed().as_secs_f64());
                 self.error = None;
@@ -790,6 +794,9 @@ impl Browser {
                 }
                 WebViewEvent::TitleChanged(_) => {
                     self.session.dirty = true;
+                }
+                ev @ WebViewEvent::ScriptMessage { .. } => {
+                    self.ctl.bridge.on_event(&ev);
                 }
                 WebViewEvent::EvalResult(v, text) if self.downloads.on_eval(v, &text) => {}
                 WebViewEvent::EvalResult(v, text) if self.favicons.on_eval(v, &text) => {}

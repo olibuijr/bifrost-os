@@ -111,6 +111,15 @@ pub enum WebViewEvent {
     /// (`NavigationResponsePolicy::Download`, see `web_download`). Build a `WebDownload` from `url` and ask the
     /// `WebDownloadDelegate` for a destination.
     DownloadStarted { id: WebViewId, url: String, suggested_filename: String },
+    /// `WKScriptMessageHandler`: a page posted a message (`window.bifrost.messageHandlers.<name>.postMessage`).
+    /// Route it with `web_bridge::route_script_messages`.
+    ScriptMessage { id: WebViewId, message: crate::web_config::ScriptMessage },
+    /// `decidePolicyFor navigationAction`: a navigation is about to start and the engine waits for the app's answer
+    /// (`WebProcessPool::navigation_reply`). Sent only after `set_navigation_policy_enabled(true)`. The engine
+    /// reports neither the frame nor the cause, so a request from a frame inside the page looks like any other.
+    NavigationRequested { id: WebViewId, token: u32, url: String },
+    /// The answer to `request_cookies`: the cookies the engine holds for the page URL, for `web_bridge::reconcile_cookies`.
+    Cookies { id: WebViewId, token: u32, cookies: Vec<crate::web_data::Cookie> },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -732,6 +741,22 @@ impl WebProcessPool {
                 events.push(WebViewEvent::Menu { id, token, kind, rect, items });
             }
             "control-hide" => events.push(WebViewEvent::ControlHidden(id, tail.parse().unwrap_or(0))),
+            "scriptmsg" => {
+                if let Some(message) = crate::web_bridge::parse_script_message(tail) {
+                    events.push(WebViewEvent::ScriptMessage { id, message });
+                }
+            }
+            "navreq" => {
+                if let Some((token, url)) = crate::web_bridge::parse_navigation_request(tail) {
+                    events.push(WebViewEvent::NavigationRequested { id, token, url });
+                }
+            }
+            "cookies" => {
+                if let Some((token, cookies)) = crate::web_bridge::parse_cookies(tail) {
+                    events.push(WebViewEvent::Cookies { id, token, cookies });
+                }
+            }
+            "download" => events.push(WebViewEvent::DownloadStarted { id, url: tail.into(), suggested_filename: crate::web_bridge::suggested_filename(tail) }),
             "evalresult" => events.push(WebViewEvent::EvalResult(id, unescape_line(tail))),
             "crashed" => {
                 st.loading = false;
@@ -922,7 +947,7 @@ mod tests {
     fn handle_survives_malformed_lines() {
         let Ok(mut pool) = WebProcessPool::spawn(Path::new("/bin/cat"), Path::new("/tmp/bifrost-webview-test")) else { return };
         let mut ev = Vec::new();
-        for l in ["", " ", "frame", "frame x y", "frame 18446744073709551615 18446744073709551615 1", "dialog", "dialog 1 2", "menu 1 select 99999999999 x", "console 1", "console 1 a", "unknown 1 x", "frame 99999999 99999999", "created", "created x", "title", "title 7", "load 1", "crashed -1 x", "closed zz", "\u{0}\u{ff} 1 2", "history 1"] {
+        for l in ["", " ", "frame", "frame x y", "frame 18446744073709551615 18446744073709551615 1", "dialog", "dialog 1 2", "menu 1 select 99999999999 x", "console 1", "console 1 a", "unknown 1 x", "frame 99999999 99999999", "created", "created x", "title", "title 7", "load 1", "crashed -1 x", "closed zz", "\u{0}\u{ff} 1 2", "history 1", "scriptmsg 1", "scriptmsg 1 1", "navreq 1 x", "cookies 1 x", "cookies 1", "download 1"] {
             let _ = pool.handle(l, &mut ev);
         }
         assert!(ev.iter().all(|e| !matches!(e, WebViewEvent::EngineExited)));

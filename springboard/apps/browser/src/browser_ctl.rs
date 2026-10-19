@@ -27,6 +27,8 @@ pub struct CtlState {
     crashed: HashSet<WebViewId>,
     relayout: bool,
     pub(crate) ua: Option<String>,
+    /// content blockers and the page message log (webbridge.rs)
+    pub(crate) bridge: crate::webbridge::Bridge,
 }
 
 impl CtlState {
@@ -58,8 +60,8 @@ enum Step {
     Inspect,
     Net { since: Option<u64>, limit: usize, clear: bool },
     /// waiting for the viewport (or element) geometry before the screenshot is taken
-    ShotInfo { full: bool, selector: Option<String>, rect: Option<(f32, f32, f32, f32)>, max_pixels: u64, scale: f32 },
-    Shot { path: String, dpr: f64, scroll: (f64, f64), scale: f32 },
+    ShotInfo { full: bool, selector: Option<String>, rect: Option<(f32, f32, f32, f32)>, max_pixels: u64, scale: f32, pdf: Option<bifrost_app::web_print::PrintLayout> },
+    Shot { path: String, dpr: f64, scroll: (f64, f64), scale: f32, pdf: Option<bifrost_app::web_print::PrintLayout> },
     Nav { wait: Wait, saw: bool },
     Wait { what: WaitFor, base_seq: u64, inflight: bool, next_poll: Instant, quiet: Option<(String, Instant)> },
     Find,
@@ -381,13 +383,13 @@ impl Browser {
                 let url = self.pool.as_ref().and_then(|p| p.state(view)).map(|s| s.url.clone()).unwrap_or_default();
                 Err(self.ctl_pend(view, timeout_ms, Some(control::JS_SOURCE.to_string()), Step::Source { url })?)
             }
-            Req::Screenshot { id, full_page, selector, rect, max_pixels, timeout_ms, scale } => {
+            Req::Screenshot { id, full_page, selector, rect, max_pixels, timeout_ms, scale, pdf } => {
                 let view = self.ctl_tab(id)?;
                 let js = match &selector {
                     Some(s) => control::js_element_rect(s),
                     None => control::JS_VIEW_INFO.to_string(),
                 };
-                Err(self.ctl_pend(view, timeout_ms, Some(js), Step::ShotInfo { full: full_page, selector, rect, max_pixels, scale })?)
+                Err(self.ctl_pend(view, timeout_ms, Some(js), Step::ShotInfo { full: full_page, selector, rect, max_pixels, scale, pdf })?)
             }
             Req::Inspect { id, x, y, timeout_ms } => {
                 let view = self.ctl_tab(id)?;
@@ -458,6 +460,15 @@ impl Browser {
                     }
                 }
             }
+            Req::ContentRules { op, identifier, rules, url, resource, top_url } => {
+                let profile = self.profile();
+                let pool = self.pool.as_mut();
+                self.ctl
+                    .bridge
+                    .content_rules(pool, &profile, &op, identifier.as_deref(), rules.as_deref(), url.as_deref(), resource.as_deref(), top_url.as_deref())
+                    .map_err(control::invalid)
+            }
+            Req::Messages { since_seq, clear } => Ok(self.ctl.bridge.messages_json(since_seq, clear)),
             Req::UserAgent { ua } => {
                 match ua {
                     None => Ok(control::obj(vec![("ua", control::text(self.ctl.ua.as_deref().or(self.dev.user_agent()).unwrap_or("default")))])),
@@ -691,7 +702,7 @@ impl Browser {
                 done(token, Ok(reply));
                 None
             }
-            Step::ShotInfo { full, selector, rect, max_pixels, scale } => {
+            Step::ShotInfo { full, selector, rect, max_pixels, scale, pdf } => {
                 let info = match res.map_err(internal).and_then(|v| match v.ty.as_str() {
                     "null" => Err(control::invalid("no element matches the selector")),
                     _ => control::inner_string(&v.ty, &v.json).and_then(|s| bifrost_core::json::parse(&s).ok()).ok_or_else(|| internal("unexpected reply from the page")),
@@ -732,7 +743,7 @@ impl Browser {
                     }
                 }
                 p.eval_tok = tok;
-                p.step = Step::Shot { path, dpr, scroll: (n("sx"), n("sy")), scale: *scale };
+                p.step = Step::Shot { path, dpr, scroll: (n("sx"), n("sy")), scale: *scale, pdf: *pdf };
                 Some(p)
             }
             Step::Wait { what, inflight, next_poll, quiet, .. } => {
@@ -773,9 +784,18 @@ impl Browser {
         if !matches!(p.step, Step::Shot { .. }) {
             return Some(p);
         }
-        let Step::Shot { path, dpr, scroll, scale } = &p.step else { return None };
+        let Step::Shot { path, dpr, scroll, scale, pdf } = &p.step else { return None };
+        let title = self.pool.as_ref().and_then(|pl| pl.state(p.view)).map(|s| s.title.clone()).unwrap_or_default();
         let r = match res {
             Ok(_) => match std::fs::read(path) {
+                // a PDF prints the capture as pages (bifrost_app::web_print); the capture is not resampled first
+                Ok(bytes) if pdf.is_some() => {
+                    let layout = pdf.unwrap_or_else(bifrost_app::web_print::PrintLayout::letter);
+                    match resample::png_to_pdf(&bytes, &title, &layout) {
+                        Ok((doc, pages)) => control::pdf_reply(&doc, pages, control::png_size(&bytes).unwrap_or((0, 0)), *dpr),
+                        Err(e) => Err(internal(e)),
+                    }
+                }
                 // `scale` resamples the capture here: the engine always writes device pixels
                 Ok(bytes) => match resample::scale_png(&bytes, *scale) {
                     Ok(scaled) => control::screenshot_reply(&scaled, *dpr, *scroll),

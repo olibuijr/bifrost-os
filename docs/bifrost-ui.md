@@ -1276,14 +1276,40 @@ Host-tested state for embedding apps. The engine glue that feeds it is not wired
 | `WebUIDelegate` alert, confirm, text input, `runOpenPanelWith` | `UiDelegate`; `answer_script_dialog` returns the `(ok, text)` that `dialog_reply` takes |
 | `FindConfiguration`, `FindResult` | `FindConfiguration` (`backwards`, `case_sensitive`, `wraps`), `FindResult`, `FindSession`, `find_matches` |
 
-Gaps: the engine keeps its own cookie jar, so `CookieStore` and the engine are not synchronised; page posts and the open panel have no engine event; a user agent change on a running view is not applied (Servo reads it at start-up).
+Gaps: the open panel has no engine event; a user agent change on a running view is not applied (Servo reads it at start-up).
+
+### Engine wiring, content blockers, page PDF and the JavaScript context (2026-10-19, `web_bridge`, `content_rule_lists`, `web_print`, `js_context`)
+
+The state in `web_config`, `web_nav` and `web_data` now reaches the engine (`apps/browser/engine`) through `bifrost_app::web_bridge`. The verbs are in the engine's header comment; apps use these calls:
+
+| Apple | BifrOSt |
+|---|---|
+| `WKUserContentController.addUserScript`, `WKWebViewConfiguration` | `pool.install_configuration(&config)` keeps the configuration's scripts (the message bridge first, then the app's, each in its own function scope, `AtDocumentEnd` after `DOMContentLoaded`, main frame only when asked) as one document-start script slot in every view; pages loaded afterwards run it. Scripts over 120 KB are refused |
+| `WKScriptMessageHandler.userContentController(_:didReceive:)` | page `window.bifrost.messageHandlers.<name>.postMessage(value)` writes a console line with the prefix `@@bifrost-msg`; the engine turns it into `scriptmsg` (never console text, whatever `devtools` says) and the pool reports `WebViewEvent::ScriptMessage { id, message }`; `route_script_messages(&mut controller, &events)` delivers it to the handler registered under the name. Bodies are JSON text up to 60 KB |
+| `decidePolicyFor navigationAction` | `pool.set_navigation_policy_enabled(true)`, then `WebViewEvent::NavigationRequested { id, token, url }` for every navigation (engine `request_navigation`); answer with `pool.navigation_reply(id, token, policy)`, or `pool.answer_navigation_requests(&mut delegate, &events)` for a synchronous `NavigationDelegate`, or `NavigationRouter` for answers that come later (`DECISION_TIMEOUT_MS`, then allow). `Download` cancels the navigation and reports `WebViewEvent::DownloadStarted` with a file name from the URL |
+| `HTTPCookieStore.getAllCookies` | `pool.request_cookies(id, token)` then `WebViewEvent::Cookies { id, token, cookies }` (the engine's jar for the page URL, HttpOnly cookies included); `reconcile_cookies(&mut store, url, &cookies, now)` makes a `CookieStore` agree with it |
+| `HTTPCookieStore.setCookie` | `pool.set_page_cookie(id, &cookie, now)` through the page's own `document.cookie` (refused for `HttpOnly`); `pool.clear_engine_cookies()` deletes every cookie |
+| `WKContentRuleList`, `WKContentRuleListStore` | `ContentRuleList::compile(id, json)` (the reference's JSON: `block`, `block-cookies`, `css-display-none`, `ignore-previous-rules`, `make-https`, `notify`; triggers `url-filter` with the regular-expression subset in `rule_match`, `url-filter-is-case-sensitive`, `if-domain`, `unless-domain`, `resource-type`, `load-type`, `if-top-url`, `unless-top-url`), `ContentRuleListStore` (`compile`, `look_up`, `remove`, `available_identifiers`, files in `<profile>/content-rules/`), `ContentRuleLists` (the lists a view uses), `pool.set_content_rules(&lists)` |
+| `WKWebView.createPDF(configuration:)`, print operation page layout | `web_print::pdf_from_rgb(rgb, w, h, title, &PrintLayout::letter() / a4())`: the full-page snapshot (`ShotMode::Full`) is scaled to the paper width and cut into pages with a title and "Page n of m" in the margins |
+| `JSContext`, `JSValue`, `JSExport` (functions), `exceptionHandler` | `js_context::JsContext` (`evaluate_script`, `set_value`, `set_function`, `set_exception_handler`, `exception`, `take_console`) over a fresh Boa realm; `JsOut` reads undefined, null, booleans, numbers (NaN and infinities too), strings, bigints, symbols, functions (source text), arrays and objects; `js_context::evaluate` / `set_global` convert to and from the SDK `JsValue` |
+
+Browser (the system counterpart): the control socket has `browser.content_rules` (`op` list, compile, remove, clear, test), `browser.messages` (what pages posted to the `control` handler; `since_seq`, `clear`) and `browser.screenshot` with `format: "pdf"` (`paper` letter or a4, `margin`, `header_footer`; prints the whole page unless `selector` or `rect` is given).
+
+Where Servo 0.7.0 limits this, and Apple behaviour that is not matched yet:
+
+- Content rules: `block` is enforced for every web resource load and navigation (engine `load_web_resource`, `request_navigation`), `make-https` for navigations, `css-display-none` by a page script. `block-cookies` and `notify` have no hook in the engine; they are compiled and reported by `ContentRuleLists::evaluate` for apps that judge URLs themselves, but not applied to page loads. `load-type` compares sites by their last two labels (three for `co.uk` style suffixes) because there is no public suffix list. A pattern is matched on the first 2048 characters of the URL with a step budget.
+- Navigation policy: the engine reports neither the frame nor the cause of a navigation, so every request reaches the delegate as a main-frame navigation of unknown type. A navigation response policy (`decidePolicyFor navigationResponse`) has no engine hook; downloads are still decided from the URL or the Browser's response probe.
+- Cookies: the engine answers for one page URL at a time, and the engine cookie jar stays the source of truth; there is no engine call to set an HttpOnly cookie.
+- Scripts: a script slot cannot target one view, and there are no content worlds. A change applies to documents loaded afterwards.
+- Page PDF: the PDF holds the page as pictures (no selectable text, no CSS print rules, no page breaks at element boundaries); `WKPDFConfiguration.rect` is `ShotMode::Rect` on the snapshot. Printing to a device goes through `print_panel` with that PDF.
+- JavaScript context: values are copied out as JSON-shaped trees, so object identity and `JSManagedValue` are not matched; there is no shared `JSVirtualMachine`, no timers and no `import`; a Rust type cannot be exported as a class with methods (functions only); a promise that needs a timer or I/O to settle is an exception. `JSContext` C API (`JSEvaluateScript` and friends) is not provided.
 
 ### Downloads (`web_download`)
 
 - `navigation_response_policy(content_disposition, mime)` is `WKNavigationResponsePolicy.download` for attachments and MIME types the view cannot render; `WebViewEvent::DownloadStarted` is `didBecome download`.
 - `WebDownload` is `WKDownload` (`original_request`, `web_view`, `progress`, `cancel()` returning `ResumeData` with offset and ETag). `WebDownloadDelegate` mirrors `WKDownloadDelegate` (`decide_destination`, `download_did_finish`, `download_did_fail` with resume data, `will_perform_redirection`); return values stand for completion handlers. `DownloadDriver` feeds transfer events to the delegate.
 - `unique_destination` picks `name (1).ext` in the chosen folder; `resume_headers` builds the `Range` and `If-Range` headers.
-- Gap: the engine does not emit `DownloadStarted` yet and the Browser still uses its own model; verify on Midget before marking parity.
+- The engine emits `DownloadStarted` when the app answers a `NavigationRequested` with `Download` (see the section above); it does not yet choose downloads by response headers, and the Browser still uses its own model.
 
 ### Developer tools (`webview_dev`, Browser round 53)
 
