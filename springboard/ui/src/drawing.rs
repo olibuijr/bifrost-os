@@ -194,6 +194,27 @@ impl Stroke {
     }
 }
 
+/// The most points one segment is subdivided into when a stroke is densified.
+const MAX_SUBDIVISIONS: usize = 1024;
+
+/// `points` with extra interpolated points so that no two neighbours are further than `step` apart (a segment is
+/// split into at most [`MAX_SUBDIVISIONS`] pieces). The original points are all kept.
+fn densified(points: &[StrokePoint], step: f32) -> Vec<StrokePoint> {
+    let mut out = Vec::with_capacity(points.len());
+    for (i, &p) in points.iter().enumerate() {
+        if i > 0 {
+            let prev = points[i - 1];
+            let len = seg_len(prev, p);
+            let pieces = ((len / step).ceil() as usize).clamp(1, MAX_SUBDIVISIONS);
+            for k in 1..pieces {
+                out.push(lerp_point(prev, p, k as f32 / pieces as f32));
+            }
+        }
+        out.push(p);
+    }
+    out
+}
+
 /// The distance between two points.
 fn seg_len(p: StrokePoint, q: StrokePoint) -> f32 {
     ((q.x - p.x).powi(2) + (q.y - p.y).powi(2)).sqrt()
@@ -265,6 +286,12 @@ impl Drawing {
     /// marker ink are not rendered yet. An empty, non-finite or too large rect or scale gives an
     /// empty raster.
     pub fn image(&self, rect: Rect, scale: f32) -> Raster {
+        self.image_with(&[], rect, scale)
+    }
+
+    /// `image` with `overlay` painted on top of the drawing's strokes (in order), without adding them to the drawing:
+    /// a canvas shows the stroke being drawn this way.
+    pub fn image_with(&self, overlay: &[Stroke], rect: Rect, scale: f32) -> Raster {
         let finite = [rect.x, rect.y, rect.w, rect.h, scale].iter().all(|v| v.is_finite());
         if !finite || rect.w <= 0.0 || rect.h <= 0.0 || scale <= 0.0 {
             return Raster::default();
@@ -275,7 +302,7 @@ impl Drawing {
             return Raster::default();
         }
         let mut pixels = vec![0u32; w * h];
-        for s in &self.strokes {
+        for s in self.strokes.iter().chain(overlay) {
             paint_stroke(s, rect, scale, w, h, &mut pixels);
         }
         Raster { width: w, height: h, pixels }
@@ -291,6 +318,42 @@ impl Drawing {
         let before = self.strokes.len();
         self.strokes.retain(|s| !stroke_within(s, x, y, radius));
         before - self.strokes.len()
+    }
+
+    /// The bitmap eraser (`PKEraserTool` in bitmap mode): removes the parts of strokes that lie within `radius` of
+    /// `(x, y)` and keeps the rest. A stroke the eraser cuts through is split in two; one it grazes at an end is
+    /// shortened; one it covers whole goes. Segments are subdivided to about half the radius before cutting, so a long
+    /// segment is cut where the eraser is, not only at its end points. A negative or non-finite radius, or a
+    /// non-finite point, erases nothing. Returns how many strokes were changed or removed.
+    pub fn erase_points_at(&mut self, x: f32, y: f32, radius: f32) -> usize {
+        if !(x.is_finite() && y.is_finite() && radius.is_finite() && radius >= 0.0) {
+            return 0;
+        }
+        let step = (radius * 0.5).max(0.25);
+        let mut changed = 0;
+        let mut out = Vec::with_capacity(self.strokes.len());
+        for s in self.strokes.drain(..) {
+            if !stroke_within(&s, x, y, radius) {
+                out.push(s);
+                continue;
+            }
+            changed += 1;
+            let mut run: Vec<StrokePoint> = Vec::new();
+            for p in densified(&s.points, step) {
+                if ((p.x - x).powi(2) + (p.y - y).powi(2)).sqrt() <= radius {
+                    if !run.is_empty() {
+                        out.push(Stroke { ink: s.ink, points: std::mem::take(&mut run) });
+                    }
+                } else {
+                    run.push(p);
+                }
+            }
+            if !run.is_empty() {
+                out.push(Stroke { ink: s.ink, points: run });
+            }
+        }
+        self.strokes = out;
+        changed
     }
 
     /// The text form: a header line, then for each stroke a `stroke` line and one `point` line per point.
@@ -427,6 +490,20 @@ pub fn pressure_width(width: f32, force: f32) -> f32 {
     }
 }
 
+/// How many times wider a pencil mark gets when the pen lies almost flat (a shading stroke).
+pub const PENCIL_TILT_MAX: f32 = 2.5;
+
+/// The width factor a pen's tilt gives a mark. Only the pencil reacts: its mark widens from 1 (pen upright, altitude of
+/// a right angle) up to [`PENCIL_TILT_MAX`] (pen almost flat). An altitude of exactly zero is the value of a point with
+/// no tilt reading (`StrokePoint::at`), so it gives 1, like a value that is not a number or lies past the right angle.
+/// Pens and markers keep their width at any tilt.
+pub fn tilt_width_factor(kind: InkKind, altitude: f32) -> f32 {
+    if kind != InkKind::Pencil || !(altitude > 0.0) || altitude >= std::f32::consts::FRAC_PI_2 {
+        return 1.0;
+    }
+    1.0 + (PENCIL_TILT_MAX - 1.0) * (1.0 - altitude / std::f32::consts::FRAC_PI_2)
+}
+
 /// One painted piece of a stroke: the segment from `a` to `b`, drawn `radius` either side of it, at `opacity`.
 #[derive(Clone, Copy)]
 struct PaintedSegment {
@@ -443,7 +520,7 @@ fn painted_segments(s: &Stroke) -> Vec<PaintedSegment> {
     let piece = |a: StrokePoint, b: StrokePoint| PaintedSegment {
         a: (a.x, a.y),
         b: (b.x, b.y),
-        radius: pressure_width(width, (a.force + b.force) * 0.5) * 0.5,
+        radius: pressure_width(width * (tilt_width_factor(s.ink.kind, a.altitude) + tilt_width_factor(s.ink.kind, b.altitude)) * 0.5, (a.force + b.force) * 0.5) * 0.5,
         opacity: ((a.opacity + b.opacity) * 0.5).clamp(0.0, 1.0),
     };
     match s.points.as_slice() {
@@ -451,7 +528,7 @@ fn painted_segments(s: &Stroke) -> Vec<PaintedSegment> {
         [p] => vec![PaintedSegment {
             a: (p.x, p.y),
             b: (p.x, p.y),
-            radius: pressure_width(width, p.force) * 0.5,
+            radius: pressure_width(width * tilt_width_factor(s.ink.kind, p.altitude), p.force) * 0.5,
             opacity: p.opacity.clamp(0.0, 1.0),
         }],
         pts => pts.windows(2).map(|w| piece(w[0], w[1])).collect(),
@@ -466,7 +543,7 @@ fn paint_stroke(s: &Stroke, rect: Rect, scale: f32, w: usize, h: usize, pixels: 
         Some(b) => b,
         None => return,
     };
-    let radius = (s.ink.width * 0.5).max(0.0);
+    let radius = (s.ink.width * 0.5).max(0.0) * if s.ink.kind == InkKind::Pencil { PENCIL_TILT_MAX } else { 1.0 };
     let reach = radius + 1.0 / scale;
     let (x0, x1) = pixel_span(bounds.x - reach, bounds.x + bounds.w + reach, rect.x, scale, w);
     let (y0, y1) = pixel_span(bounds.y - reach, bounds.y + bounds.h + reach, rect.y, scale, h);
@@ -783,5 +860,108 @@ mod tests {
         assert_eq!(pts.last().map(|q| (q.x, q.y)), Some((30.0, 0.0)));
         assert!(pts.iter().any(|q| q.y.abs() > 1.0), "the curve leaves the chord");
         assert_eq!(d.strokes()[0].ink, ink());
+    }
+}
+
+#[cfg(test)]
+mod bitmap_eraser_and_tilt_tests {
+    use super::*;
+
+    fn line(kind: InkKind, from: (f32, f32), to: (f32, f32)) -> Stroke {
+        Stroke { ink: Ink { kind, color: 0xff00_0000, width: 4.0 }, points: vec![StrokePoint::at(from.0, from.1), StrokePoint::at(to.0, to.1)] }
+    }
+
+    #[test]
+    fn erasing_the_middle_of_a_stroke_splits_it_in_two() {
+        let mut d = Drawing::from_strokes(vec![line(InkKind::Pen, (0.0, 0.0), (100.0, 0.0))]);
+        assert_eq!(d.erase_points_at(50.0, 0.0, 10.0), 1);
+        let s = d.strokes();
+        assert_eq!(s.len(), 2, "the stroke is cut where the eraser went through");
+        assert!(s[0].points.iter().all(|p| p.x < 40.0 + 1e-3), "the left piece ends before the eraser");
+        assert!(s[1].points.iter().all(|p| p.x > 60.0 - 1e-3), "the right piece starts after the eraser");
+        assert_eq!(s[0].points.first().map(|p| p.x), Some(0.0), "the far end is kept");
+        assert_eq!(s[1].points.last().map(|p| p.x), Some(100.0));
+        assert_eq!(s[0].ink, s[1].ink);
+    }
+
+    #[test]
+    fn grazing_an_end_shortens_the_stroke_and_covering_it_removes_it() {
+        let mut d = Drawing::from_strokes(vec![line(InkKind::Pen, (0.0, 0.0), (100.0, 0.0))]);
+        assert_eq!(d.erase_points_at(0.0, 0.0, 6.0), 1);
+        assert_eq!(d.strokes().len(), 1);
+        assert!(d.strokes()[0].points.iter().all(|p| p.x > 6.0 - 1e-3));
+        let mut dot = Drawing::from_strokes(vec![Stroke { ink: Ink { kind: InkKind::Pen, color: 1, width: 2.0 }, points: vec![StrokePoint::at(5.0, 5.0)] }]);
+        assert_eq!(dot.erase_points_at(6.0, 5.0, 3.0), 1);
+        assert!(dot.is_empty());
+    }
+
+    #[test]
+    fn strokes_out_of_reach_keep_their_points_and_their_order() {
+        let a = line(InkKind::Pen, (0.0, 50.0), (10.0, 50.0));
+        let b = line(InkKind::Marker, (0.0, 0.0), (100.0, 0.0));
+        let c = line(InkKind::Pencil, (0.0, -50.0), (10.0, -50.0));
+        let mut d = Drawing::from_strokes(vec![a.clone(), b, c.clone()]);
+        assert_eq!(d.erase_points_at(50.0, 0.0, 10.0), 1);
+        assert_eq!(d.strokes().len(), 4);
+        assert_eq!(d.strokes()[0], a);
+        assert_eq!(d.strokes()[3], c);
+        assert_eq!(d.strokes()[1].ink.kind, InkKind::Marker);
+    }
+
+    #[test]
+    fn a_hostile_radius_or_point_erases_nothing() {
+        let original = Drawing::from_strokes(vec![line(InkKind::Pen, (0.0, 0.0), (100.0, 0.0))]);
+        for (x, y, r) in [(f32::NAN, 0.0, 5.0), (0.0, f32::INFINITY, 5.0), (50.0, 0.0, -1.0), (50.0, 0.0, f32::NAN), (50.0, 0.0, f32::INFINITY)] {
+            let mut d = original.clone();
+            assert_eq!(d.erase_points_at(x, y, r), 0);
+            assert_eq!(d, original);
+        }
+    }
+
+    #[test]
+    fn a_huge_segment_and_a_tiny_radius_stay_bounded() {
+        let mut d = Drawing::from_strokes(vec![line(InkKind::Pen, (0.0, 0.0), (1.0e9, 0.0))]);
+        assert_eq!(d.erase_points_at(5.0e8, 0.0, 0.0), 1);
+        let total: usize = d.strokes().iter().map(|s| s.points.len()).sum();
+        assert!(total <= 2 * (MAX_SUBDIVISIONS + 2), "subdivision is capped: {total}");
+    }
+
+    #[test]
+    fn the_overlay_is_painted_without_joining_the_drawing() {
+        let d = Drawing::new();
+        let live = line(InkKind::Pen, (2.0, 5.0), (18.0, 5.0));
+        let raster = d.image_with(std::slice::from_ref(&live), Rect { x: 0.0, y: 0.0, w: 20.0, h: 10.0 }, 1.0);
+        assert!(raster.pixels.iter().any(|&p| p >> 24 != 0), "the live stroke shows");
+        assert!(d.is_empty(), "the drawing itself is unchanged");
+        assert_eq!(d.image(Rect { x: 0.0, y: 0.0, w: 20.0, h: 10.0 }, 1.0).pixels.iter().filter(|&&p| p != 0).count(), 0);
+    }
+
+    #[test]
+    fn only_the_pencil_widens_when_the_pen_leans() {
+        let quarter = std::f32::consts::FRAC_PI_4;
+        assert_eq!(tilt_width_factor(InkKind::Pen, quarter), 1.0);
+        assert_eq!(tilt_width_factor(InkKind::Marker, quarter), 1.0);
+        assert_eq!(tilt_width_factor(InkKind::Pencil, std::f32::consts::FRAC_PI_2), 1.0, "upright");
+        assert!((tilt_width_factor(InkKind::Pencil, quarter) - 1.75).abs() < 1e-5);
+        assert!(tilt_width_factor(InkKind::Pencil, 0.01) > 2.4, "almost flat is nearly the widest");
+        assert_eq!(tilt_width_factor(InkKind::Pencil, 0.0), 1.0, "no reading");
+        assert_eq!(tilt_width_factor(InkKind::Pencil, f32::NAN), 1.0);
+        assert_eq!(tilt_width_factor(InkKind::Pencil, 9.0), 1.0);
+    }
+
+    #[test]
+    fn a_leaning_pencil_paints_a_wider_mark_than_an_upright_one() {
+        let mark = |altitude: f32| {
+            let mut s = line(InkKind::Pencil, (4.0, 20.0), (36.0, 20.0));
+            s.ink.width = 4.0;
+            for p in &mut s.points {
+                p.altitude = altitude;
+            }
+            let r = Drawing::from_strokes(vec![s]).image(Rect { x: 0.0, y: 0.0, w: 40.0, h: 40.0 }, 1.0);
+            r.pixels.iter().filter(|&&p| p >> 24 > 128).count()
+        };
+        let upright = mark(std::f32::consts::FRAC_PI_2);
+        let leaning = mark(std::f32::consts::FRAC_PI_4);
+        assert!(leaning as f32 > upright as f32 * 1.3, "leaning {leaning} against upright {upright}");
     }
 }
