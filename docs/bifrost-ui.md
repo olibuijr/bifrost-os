@@ -5880,7 +5880,6 @@ Remaining gaps: the lazy graph and every filter are CPU only and no shell window
 there are no barcode generators, face or text detectors; the colour conversions ignore ICC profiles; RAW and HEIF input are not decoded;
 decoders do not parse the stream's own colour description (the attachments follow the height convention); the compositor has no selectable
 blend operator; Metal and IOSurface have no counterpart.
-||||||| e3beb52f0
 
 ### Accessibility Keyboard and the Input menu (2026-10-19)
 
@@ -5893,7 +5892,6 @@ blend operator; Metal and IOSurface have no counterpart.
   (`desktop_bar::input_menu_visible`), so Show Keyboard Viewer and Show On-Screen Keyboard are reachable with one source.
 - Voice Control: one recognition runs, in the `speech_recognizer` service's voice step; the shell only consumes its final transcripts
   (`Shell::voice_consume`). `Shell::voice_control_tick` is gone.
-||||||| 46c4b7e7c
 
 ## Calendar event time zones with daylight saving (`calendar-desktop` `calendar/zones.rs`, wave 15)
 
