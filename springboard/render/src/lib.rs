@@ -100,6 +100,7 @@ pub mod laplacian_pyramid;
 pub mod lanczos;
 pub mod generators;
 pub mod qr_generate;
+pub mod lazy_graph;
 pub mod qr_decode;
 pub mod colour_stats;
 pub mod transition_filters;
