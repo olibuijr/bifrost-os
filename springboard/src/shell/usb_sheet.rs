@@ -306,6 +306,8 @@ mod tests {
 
     fn shell_on(root: &Path) -> crate::shell::Shell {
         let mut sh = crate::shell::tests::shell();
+        // a new shell starts on the lock screen, and no sheet goes over it: these tests are about an unlocked person
+        sh.screen = Screen::Home;
         sh.usb_watch = Watch::new(root.to_path_buf(), direct);
         sh
     }
