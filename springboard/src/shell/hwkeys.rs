@@ -217,6 +217,8 @@ pub enum Shortcut {
     ZoomStep(bool),
     /// Shift+Cmd+/: opens the Help menu with its search field ready for typing
     HelpSearch,
+    /// Ctrl+Cmd+Q: locks the screen (the System menu's Lock Screen)
+    Lock,
 }
 
 impl Shortcut {
@@ -229,7 +231,7 @@ impl Shortcut {
             Shortcut::SelectAll => "SelectAll",
             Shortcut::Undo => "Undo",
             Shortcut::Redo => "Redo",
-            Shortcut::Term(_) | Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Back | Shortcut::Home | Shortcut::Close | Shortcut::Minimize | Shortcut::Settings | Shortcut::FullScreen | Shortcut::Tile(_) | Shortcut::CycleWindow | Shortcut::InputSource | Shortcut::ReaderStep(_) | Shortcut::ReaderRotor(_) | Shortcut::ReaderActivate | Shortcut::SpeakSelection | Shortcut::AccessibilityShortcut | Shortcut::Capture | Shortcut::ZoomToggle | Shortcut::ZoomStep(_) | Shortcut::LookUp | Shortcut::Photo(_) | Shortcut::HelpSearch | Shortcut::Assistant => return None,
+            Shortcut::Term(_) | Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Back | Shortcut::Home | Shortcut::Close | Shortcut::Minimize | Shortcut::Settings | Shortcut::FullScreen | Shortcut::Tile(_) | Shortcut::CycleWindow | Shortcut::InputSource | Shortcut::ReaderStep(_) | Shortcut::ReaderRotor(_) | Shortcut::ReaderActivate | Shortcut::SpeakSelection | Shortcut::AccessibilityShortcut | Shortcut::Capture | Shortcut::ZoomToggle | Shortcut::ZoomStep(_) | Shortcut::LookUp | Shortcut::Photo(_) | Shortcut::HelpSearch | Shortcut::Lock | Shortcut::Assistant => return None,
         }))
     }
 }
@@ -438,6 +440,8 @@ impl HwKeys {
             // Cmd/Super+M close and minimize the front desktop window; terminals never see them,
             // and where no desktop window is open `shell` lets the key fall through unchanged.
             // Cmd+Q quits the app and Cmd+H hides it; a window is one app here, so they close and minimise it
+            // Ctrl+Cmd+Q locks the screen; the plain Cmd+Q below quits the front window
+            KEY_Q if meta && ctrl && !alt && self.shift == 0 => Some(Shortcut::Lock),
             KEY_W | KEY_Q if meta && !ctrl && !alt && self.shift == 0 => Some(Shortcut::Close),
             KEY_M | KEY_H if meta && !ctrl && !alt && self.shift == 0 => Some(Shortcut::Minimize),
             KEY_F if meta && ctrl && !alt => Some(Shortcut::FullScreen),
@@ -925,7 +929,7 @@ impl Shell {
         let in_terminal = matches!(self.screen, Screen::App(AppId::Terminal | AppId::External(_)));
         // Secure Keyboard Entry: while the Terminal is in front, only its own keys run; the shell's shortcuts
         // (switcher, search, input source, Home, Back, window keys) never see them.
-        if self.screen == Screen::App(AppId::Terminal) && self.terminal_ui.secure && !matches!(sc, Shortcut::Term(_) | Shortcut::Paste) {
+        if self.screen == Screen::App(AppId::Terminal) && self.terminal_ui.secure && !matches!(sc, Shortcut::Term(_) | Shortcut::Paste | Shortcut::Lock) {
             return vec![];
         }
         let fx = match sc {
@@ -942,6 +946,8 @@ impl Shell {
                 vec![]
             }
             Shortcut::Assistant => self.assistant_hotkey(t),
+            // Ctrl+Cmd+Q: the same lock as the System menu's Lock Screen row
+            Shortcut::Lock => self.lock_screen(),
             Shortcut::AppSwitch => {
                 if self.screen != Screen::Switcher {
                     self.open_app_switcher(t);
