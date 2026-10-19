@@ -11,7 +11,7 @@ use bifrost_render::motion::{self,Anim,Curve,Kind};
  pub magnification:bool,pub magnified:f32}
 impl Default for Preferences {fn default()->Self{Self{position:Position::Bottom,size:48.,autohide:false,magnification:true,magnified:80.,pinned:apps().iter().map(|a|a.icon.to_string()).collect()}}}
 impl Preferences {
- pub fn load(path:&std::path::Path)->Self {let mut p=Self::default();if let Ok(text)=std::fs::read_to_string(path.join("desktop-dock.ini")){for line in text.lines(){if let Some((key,value))=line.split_once('='){match key {"position"=>p.position=match value{"left"=>Position::Left,"right"=>Position::Right,_=>Position::Bottom},"size"=>p.size=value.parse::<f32>().ok().filter(|v|v.is_finite()).unwrap_or(48.).clamp(32.,80.),"autohide"=>p.autohide=value=="true","dock_magnification"=>p.magnification=value!="false","dock_magnification_size"=>p.magnified=value.parse::<f32>().ok().filter(|v|v.is_finite()).unwrap_or(80.).clamp(48.,128.),"pinned"=>p.pinned=value.split(',').filter(|s|!s.is_empty()).take(256).map(str::to_string).collect(),_=>{}}}}}for key in &mut p.pinned{if key=="is.olibuijr.browser"&&apps().iter().any(|a|a.icon=="is.olibuijr.browser.desktop"){*key="is.olibuijr.browser.desktop".into();}if key=="bifrost.files"&&apps().iter().any(|a|a.icon=="is.olibuijr.files.desktop"){*key="is.olibuijr.files.desktop".into();}}p}
+ pub fn load(path:&std::path::Path)->Self {let mut p=Self::default();if let Ok(text)=std::fs::read_to_string(path.join("desktop-dock.ini")){for line in text.lines(){if let Some((key,value))=line.split_once('='){match key {"position"=>p.position=match value{"left"=>Position::Left,"right"=>Position::Right,_=>Position::Bottom},"size"=>p.size=value.parse::<f32>().ok().filter(|v|v.is_finite()).unwrap_or(48.).clamp(32.,80.),"autohide"=>p.autohide=value=="true","dock_magnification"=>p.magnification=value!="false","dock_magnification_size"=>p.magnified=value.parse::<f32>().ok().filter(|v|v.is_finite()).unwrap_or(80.).clamp(48.,128.),"pinned"=>p.pinned=value.split(',').filter(|s|!s.is_empty()).take(256).map(str::to_string).collect(),_=>{}}}}}for key in &mut p.pinned{if key=="is.olibuijr.browser"&&apps().iter().any(|a|a.icon=="is.olibuijr.browser.desktop"){*key="is.olibuijr.browser.desktop".into();}if key=="bifrost.files"&&apps().iter().any(|a|a.icon=="is.olibuijr.files.desktop"){*key="is.olibuijr.files.desktop".into();}}super::dock_tiles::normalize_pinned(&super::apphost::installed(),apps(),&mut p.pinned);p}
  pub fn save(&self,path:&std::path::Path){let text=format!("position={}\nsize={}\nautohide={}\ndock_magnification={}\ndock_magnification_size={}\npinned={}\n",match self.position{Position::Bottom=>"bottom",Position::Left=>"left",Position::Right=>"right"},self.size,self.autohide,self.magnification,self.magnified,self.pinned.join(","));let dest=path.join("desktop-dock.ini");let tmp=path.join("desktop-dock.ini.tmp");if std::fs::write(&tmp,text).and_then(|_|std::fs::rename(tmp,dest)).is_err(){eprintln!("BifrOSt: could not save dock preferences");}}
 }
 /// What an app set on its Dock tile through the `dock` service: a progress bar (`None` for none) and an attention
@@ -155,14 +155,21 @@ impl Shell {
  pub(super) fn dock_linux_name(&self,_entry:usize)->String{String::new()}
  /// Whether the app behind a dock list entry has a window (or, for a native client, a mapped surface).
  pub(super) fn dock_item_running(&self,entry:usize)->bool{
-  let Some(d)=self.desk.as_ref()else{return false;};
+  #[cfg_attr(not(feature="desktop-wayland"),allow(unused_variables))] let Some(d)=self.desk.as_ref()else{return false;};
   if entry<apps().len(){
-   #[allow(unused_mut)] let mut running=d.index_of(apps()[entry].id).is_some();
-   #[cfg(feature="desktop-wayland")] if let AppId::External(slot)=apps()[entry].id{running|=super::apphost::installed().get(slot as usize).is_some_and(|p|d.native_windows.iter().any(|w|w.app_id==p.manifest.wayland_app_id));}
-   return running;
+   // one tile stands for every entry of the app (same icon key), so a running instance lights the pinned tile
+   return apps().iter().enumerate().any(|(i,a)|(i==entry||a.icon==apps()[entry].icon)&&self.dock_entry_running(i));
   }
   #[cfg(feature="desktop-wayland")] if entry>apps().len(){return d.linux_apps.get(entry-apps().len()-1).is_some_and(|a|!a.windows.is_empty());}
   false
+ }
+ /// Whether the app of built-in or installed entry `entry` (an index into `apps()`) itself has a window.
+ pub(super) fn dock_entry_running(&self,entry:usize)->bool{
+  let Some(d)=self.desk.as_ref()else{return false;};
+  let Some(app)=apps().get(entry)else{return false;};
+  #[allow(unused_mut)] let mut running=d.index_of(app.id).is_some();
+  #[cfg(feature="desktop-wayland")] if let AppId::External(slot)=app.id{running|=self.foreign_running(slot as usize)||super::apphost::installed().get(slot as usize).is_some_and(|p|d.native_windows.iter().any(|w|w.app_id==p.manifest.wayland_app_id));}
+  running
  }
  /// Starts the launch bounce of a dock entry that has no window yet (it ends when the first window maps).
  pub(super) fn dock_start_bounce(&mut self,entry:usize,t:f64){

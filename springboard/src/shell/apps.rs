@@ -117,16 +117,7 @@ pub fn apps() -> &'static [AppDef] {
     // first call, or apps were installed since: rebuild. Strings are interned by
     // content and the slice is only leaked when its contents changed, so repeated
     // rebuilds with the same apps do not grow memory.
-    let mut v = APPS.to_vec();
-    v[files_index].id = files_id;
-    if let Some(slot)=browser_slot {
-        let a=&installed[slot];
-        v[browser_index]=AppDef {id:browser_id,name:intern(&a.manifest.name),icon:intern(&a.manifest.id),icon_image:None};
-    }
-    for (i, a) in installed.iter().enumerate().take(200) {
-        if files_slot == Some(i) || browser_slot == Some(i) { continue; }
-        v.push(AppDef { id: AppId::External(i as u8), name: intern(&a.manifest.name), icon: intern(&a.manifest.id), icon_image: None });
-    }
+    let v = build_list(&installed);
     if let Ok(mut g) = ALL.write() {
         if g.len() == v.len() && g.iter().zip(v.iter()).all(|(x, y)| x.id == y.id && x.name == y.name && x.icon == y.icon) {
             return *g;
@@ -136,6 +127,27 @@ pub fn apps() -> &'static [AppDef] {
         return all;
     }
     Box::leak(v.into_boxed_slice())
+}
+
+/// The home-screen list for a set of installed apps: the built-in `APPS`, with the installed Files and Browser
+/// taking over their built-in entries (same position and icon key for Files), then every other installed app in
+/// slot order. Pure, so the Dock tests can model an install or an in-place update.
+pub(super) fn build_list(installed: &[apphost::Installed]) -> Vec<AppDef> {
+    let files_slot = installed.iter().position(|a| a.manifest.id == "is.olibuijr.files.desktop");
+    let browser_slot = installed.iter().position(|a| a.manifest.id == "is.olibuijr.browser.desktop");
+    let browser_index = APPS.iter().position(|a| a.id == AppId::Browser).unwrap();
+    let files_index = APPS.iter().position(|a| a.id == AppId::Files).unwrap();
+    let mut v = APPS.to_vec();
+    if let Some(i) = files_slot { v[files_index].id = AppId::External(i as u8); }
+    if let Some(slot) = browser_slot {
+        let a = &installed[slot];
+        v[browser_index] = AppDef { id: AppId::External(slot as u8), name: intern(&a.manifest.name), icon: intern(&a.manifest.id), icon_image: None };
+    }
+    for (i, a) in installed.iter().enumerate().take(200) {
+        if files_slot == Some(i) || browser_slot == Some(i) { continue; }
+        v.push(AppDef { id: AppId::External(i as u8), name: intern(&a.manifest.name), icon: intern(&a.manifest.id), icon_image: None });
+    }
+    v
 }
 
 /// Returns a `'static` copy of `s`, reusing the same allocation for equal strings.

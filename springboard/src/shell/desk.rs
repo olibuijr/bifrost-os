@@ -895,7 +895,10 @@ impl Shell {
         }
         desk.native_windows=windows.iter().filter(|w|apphost::installed().iter().any(|a|(a.manifest.window=="native" && a.manifest.wayland_app_id==w.app_id) || (direct.contains(&a.manifest.id) && a.manifest.id==w.app_id))).cloned().collect();
         // a window of an installed BifrOSt app is never a Linux app of its own (the app's tile stands for it, also while its process winds down)
-        let windows:Vec<_>=windows.into_iter().filter(|w|!w.app_id.starts_with("is.olibuijr.bifrost.") && !desk.native_windows.iter().any(|n|n.id==w.id) && !apphost::installed().iter().any(|a|a.manifest.id==w.app_id||(!a.manifest.wayland_app_id.is_empty()&&a.manifest.wayland_app_id==w.app_id))).collect();
+        let installed=apphost::installed();
+        let windows:Vec<_>=windows.into_iter().filter(|w|!desk.native_windows.iter().any(|n|n.id==w.id) && super::dock_tiles::is_linux_app(&installed,apps(),&w.app_id)).collect();
+        // a Linux tile kept in the Dock for an installed app (or a stale key of one) becomes that app's own key
+        if super::dock_tiles::normalize_pinned(&installed,apps(),&mut desk.dock_preferences.pinned) {desk.dock_preferences.save(&self.data_dir);}
         desk.linux_apps.retain(|app|windows.iter().any(|w|w.app_id==app.app_id)||desk.dock_preferences.pinned.contains(&format!("linux:{}",app.app_id)));
         for key in &desk.dock_preferences.pinned{if let Some(id)=key.strip_prefix("linux:"){if !desk.linux_apps.iter().any(|a|a.app_id==id){desk.linux_apps.push(LinuxDockApp{app_id:id.into(),windows:vec![],icon:linux_icon(id)});}}}
         for w in &windows {
@@ -1244,14 +1247,14 @@ impl Shell {
 
     pub(super) fn desk_dock(&self, m: &Metrics) -> (Vec<usize>, Rect, Vec<Rect>) {
         let desk=self.desk.as_ref().unwrap();
-        let mut list:Vec<usize>=Vec::new();
-        // one tile per app: a key pinned twice, or two entries of one app, never make two tiles
-        for i in desk.dock_preferences.pinned.iter().filter_map(|key|apps().iter().position(|a|a.icon==key)) {if !list.contains(&i){list.push(i);}}
-        for (i,a) in apps().iter().enumerate(){#[cfg_attr(not(feature="desktop-wayland"),allow(unused_mut))] let mut running=desk.index_of(a.id).is_some();
-        #[cfg(feature="desktop-wayland")]if let AppId::External(slot)=a.id {running|=self.foreign_running(slot as usize);}
-        if running&&!list.contains(&i){list.push(i);}}
+        // one tile per app id: a key pinned twice, two entries of one app, or an instance whose id differs from the
+        // pinned key never make a second tile (the pinned tile shows the running dot)
+        #[cfg_attr(not(feature = "desktop-wayland"),allow(unused_mut))]
+        let mut list:Vec<usize>=super::dock_tiles::dock_app_tiles(apps(),&desk.dock_preferences.pinned,|i|self.dock_entry_running(i));
         #[cfg(feature = "desktop-wayland")]
-        list.extend((0..self.desk.as_ref().unwrap().linux_apps.len()).map(|i|apps().len()+1+i));
+        {let installed=apphost::installed();
+        let ids:Vec<&str>=desk.linux_apps.iter().map(|a|a.app_id.as_str()).collect();
+        list.extend(super::dock_tiles::linux_tiles(&installed,apps(),&ids).into_iter().map(|i|apps().len()+1+i));}
         if std::env::var_os("SPRINGBOARD_WAYLAND").is_some() { list.push(apps().len()); }
         // sections: pinned, then recents (running, not kept), then minimized windows and the Trash
         list.sort_by_key(|&i| self.dock_section(i));

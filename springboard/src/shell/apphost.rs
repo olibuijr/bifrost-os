@@ -361,7 +361,7 @@ fn sync_app_types(apps: &[Installed]) {
         eprintln!("springboard: app {} declares document types that were not registered: {e:?}", texts[i].0);
     }
 }
-fn merge_installed(old: &[Installed], scanned: Vec<Installed>) -> Vec<Installed> {
+pub(super) fn merge_installed(old: &[Installed], scanned: Vec<Installed>) -> Vec<Installed> {
     let mut all = old.to_vec();
     for app in scanned {
         if let Some(existing) = all.iter_mut().find(|a| a.manifest.id == app.manifest.id) { *existing = app; }
