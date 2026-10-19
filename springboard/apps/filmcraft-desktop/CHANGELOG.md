@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.9.0
+
+- Upstream filmcraft v0.9.0.
+  ## What's Changed
+  * fix: preserve individual linked-clip selections through deletion by @haranishi in https://github.com/storytold/filmcraft/pull/1639
+  * fix(interchange): avoid UTF-8 slice panics in file URLs by @nuclearspike in https://github.com/storytold/filmcraft/pull/1609
+  * fix(media): preserve Unicode prefixes in image-sequence filenames by @nuclearspike in https://github.com/storytold/filmcraft/pull/1570
+  * fix(export): prevent nested renderer-pool deadlocks by @earlvanze in https://github.com/storytold/filmcraft/pull/861
+
 ## 0.8.1
 
 - Upstream filmcraft v0.8.0.
