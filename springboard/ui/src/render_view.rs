@@ -136,6 +136,31 @@ impl RenderView {
         self.render_loop.request_redraw();
     }
 
+    /// Whether the loop pauses itself when the app resigns active (`pauseOnWillResignActive`).
+    pub fn set_pause_on_resign(&mut self, on: bool) {
+        self.render_loop.set_pause_on_resign(on);
+    }
+
+    /// Whether the loop resumes itself when the app becomes active (`resumeOnDidBecomeActive`).
+    pub fn set_resume_on_active(&mut self, on: bool) {
+        self.render_loop.set_resume_on_active(on);
+    }
+
+    /// The app resigns active. A view set to pause on resign pauses, which leaves a program pause alone.
+    pub fn app_resigned_active(&mut self) {
+        self.render_loop.app_resigned_active();
+    }
+
+    /// The app becomes active. A view set to resume on activity clears the app's pause, and a program pause stays.
+    pub fn app_became_active(&mut self) {
+        self.render_loop.app_became_active();
+    }
+
+    /// The passes drawn since the view was made.
+    pub fn frames_displayed(&self) -> u64 {
+        self.render_loop.frames_displayed()
+    }
+
     /// Reports the time `now` in seconds. Returns the pass to draw, or None when no pass is due or the drawable is empty.
     /// An empty drawable never advances the loop, so a view that is hidden and then shown draws again at once.
     pub fn frame(&mut self, now: f64) -> Option<DrawRequest> {
