@@ -3,13 +3,13 @@
 //! An entitlements file is a property list (XML, binary or the text form) with one dictionary. A key is one of
 //! the names in [`KNOWN`]: a flag (`true` or `false`) for the permissions the sandbox grants (`network`, `storage`,
 //! `audio`, `notifications`, `documents`, `keychain`, `accessibility`, `display-config`, `sensors`, `contacts`, and
-//! the first-party capture and system entitlements `camera`, `screen`, `remote-desktop`, `log-store`), or a list of
+//! the first-party capture and system entitlements `camera`, `screen`, `remote-desktop`, `log-store`, `system-monitor`), or a list of
 //! reverse-DNS group names (`application-groups`, `keychain-access-groups`). An unknown key, a value of the wrong
 //! type, a key that appears twice and a file larger than [`MAX_BYTES`] are refused, so a typo never becomes a
 //! silent denial and a hostile file cannot grow without bound.
 //!
 //! [`Entitlements::check_for`] applies the rule the shell applies today: a first-party-only entitlement is honoured
-//! only for a package whose id starts with `is.olibuijr.`, and `log-store` also needs the `system-app` kind. The
+//! only for a package whose id starts with `is.olibuijr.`, and `log-store` and `system-monitor` also need the `system-app` kind. The
 //! result lists the manifest names the sandbox policy takes ([`Entitlements::held_names`]).
 //!
 //! # Signing
@@ -83,6 +83,7 @@ pub const KNOWN: &[Known] = &[
     flag("screen", true),
     flag("remote-desktop", true),
     flag("log-store", true),
+    flag("system-monitor", true),
     Known { key: "application-groups", shape: Shape::List, first_party_only: false },
     Known { key: "keychain-access-groups", shape: Shape::List, first_party_only: false },
 ];
@@ -247,7 +248,7 @@ impl Entitlements {
                 continue;
             }
             let info = known(key).ok_or_else(|| Error::UnknownKey(key.clone()))?;
-            let needs_system = key == "log-store";
+            let needs_system = key == "log-store" || key == "system-monitor";
             if (info.first_party_only && !first_party) || (needs_system && kind != SYSTEM_APP_KIND) {
                 return Err(Error::NotPermitted(key.clone()));
             }
@@ -529,6 +530,6 @@ mod tests {
         keys.dedup();
         assert_eq!(keys.len(), KNOWN.len());
         let first_party: Vec<&str> = KNOWN.iter().filter(|k| k.first_party_only).map(|k| k.key).collect();
-        assert_eq!(first_party, ["camera", "screen", "remote-desktop", "log-store"]);
+        assert_eq!(first_party, ["camera", "screen", "remote-desktop", "log-store", "system-monitor"]);
     }
 }

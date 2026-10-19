@@ -17,11 +17,12 @@ pub enum Capability {
     DisplayConfig,
     RemoteDesktop,
     LogStore,
+    SystemMonitor,
 }
 
 impl Capability {
     /// Every capability, in the order the manifest names them.
-    pub const ALL: [Capability; 10] = [
+    pub const ALL: [Capability; 11] = [
         Capability::Network,
         Capability::Storage,
         Capability::Audio,
@@ -32,6 +33,7 @@ impl Capability {
         Capability::DisplayConfig,
         Capability::RemoteDesktop,
         Capability::LogStore,
+        Capability::SystemMonitor,
     ];
 
     /// The manifest name of the permission or entitlement that grants this capability.
@@ -47,6 +49,7 @@ impl Capability {
             Capability::DisplayConfig => "display-config",
             Capability::RemoteDesktop => "remote-desktop",
             Capability::LogStore => "log-store",
+            Capability::SystemMonitor => "system-monitor",
         }
     }
 
@@ -62,6 +65,7 @@ impl Capability {
             Capability::DisplayConfig => policy.display_config,
             Capability::RemoteDesktop => policy.remote,
             Capability::LogStore => policy.log_store,
+            Capability::SystemMonitor => policy.system_monitor,
         }
     }
 }

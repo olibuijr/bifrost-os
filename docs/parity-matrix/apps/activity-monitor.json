@@ -16,7 +16,7 @@
    "apple": "main window tab control",
    "status": "parity",
    "bifrost": "springboard/apps/activity-desktop/src/model.rs:22",
-   "note": "Five tabs with per-tab columns and a graph card.",
+   "note": "Five tabs with per-tab columns and a graph card. The app declares `entitlements = [\"system-monitor\"]`, so its sandbox shares the host PID and network namespaces and reads the host /proc read-only (docs/app-isolation.md); without it the CPU tab saw only the app and bwrap. Needs the shell that honours the entitlement; verify on Midget.",
    "wire": ""
   },
   {
@@ -52,7 +52,7 @@
    "apple": "View > Quit Process (toolbar stop button)",
    "status": "parity",
    "bifrost": "springboard/apps/activity-desktop/src/window.rs:208",
-   "note": "SIGTERM / SIGKILL via toolbar and Process menu; no confirmation sheet.",
+   "note": "SIGTERM / SIGKILL via toolbar and Process menu; no confirmation sheet. With the system-monitor entitlement the app signals through the host PID namespace, so Quit works on processes owned by the app account (kill(2) permission is unchanged: capabilities stay dropped and the user namespace stays unshared); other users and root processes still need the privileged helper, which this entitlement does not grant.",
    "wire": "Check the sheet on the lab machine: Return and Escape, and Force Quit as the default from its menu item."
   },
   {
@@ -178,7 +178,7 @@
    "apple": "Network tab: sent/received bytes and packets per process",
    "status": "partial",
    "bifrost": "springboard/apps/activity-desktop/src/sample_net.rs (parse_ss, per_process, rate, read_sockets); springboard/apps/activity-desktop/src/sample.rs (Sampler scan_net, net_prev); springboard/apps/activity-desktop/src/model.rs (Tab::Network columns, SortKey::NetRx, NetTx, NetRxTotal, NetTxTotal, Connections); springboard/apps/activity-desktop/src/window.rs (rebuild, sync_scans, footer_text)",
-   "note": "Built 2026-10-19: the Network tab lists processes, busiest first, with Received/s, Sent/s, Bytes Received, Bytes Sent and an optional Connections column, from the kernel's per-socket counters (ss -tinpH read once per update while the tab is shown; sample_net.rs sums them per owning process and the sampler turns the difference of two readings into a rate). The interface totals moved to the footer and the graph card still plots the interfaces. Show Deltas counts the byte totals from the baseline. Limits: TCP only (no UDP), only sockets of the user's own processes (another user's sockets carry no owner without privileges), a closed socket takes its bytes with it so the totals count the sockets open now, and no packet counts yet (ss reports segs_in and segs_out). Tested on the host: sample_net.rs (parse and sum, rate), model.rs (the_network_tab_is_per_process_and_sorts_by_what_it_receives) and window.rs (the_sockets_are_read_only_on_the_network_tab_and_it_lists_the_processes_that_own_some). Not yet verified on Midget.",
+   "note": "Built 2026-10-19: the Network tab lists processes, busiest first, with Received/s, Sent/s, Bytes Received, Bytes Sent and an optional Connections column, from the kernel's per-socket counters (ss -tinpH read once per update while the tab is shown; sample_net.rs sums them per owning process and the sampler turns the difference of two readings into a rate). The interface totals moved to the footer and the graph card still plots the interfaces. Show Deltas counts the byte totals from the baseline. Limits: TCP only (no UDP), only sockets of the user's own processes (another user's sockets carry no owner without privileges); the sandbox shares the host network namespace through the system-monitor entitlement, so ss sees the machine's sockets rather than an empty namespace, a closed socket takes its bytes with it so the totals count the sockets open now, and no packet counts yet (ss reports segs_in and segs_out). Tested on the host: sample_net.rs (parse and sum, rate), model.rs (the_network_tab_is_per_process_and_sorts_by_what_it_receives) and window.rs (the_sockets_are_read_only_on_the_network_tab_and_it_lists_the_processes_that_own_some). Not yet verified on Midget.",
    "wire": "Midget check: open Activity Monitor, Network tab, and run `curl -o /dev/null https://example.com/large-file` in the Terminal: curl appears with Received/s above zero while it runs and its row is gone once it ends (its socket closes); the footer shows the interface totals; View > Columns > Connections shows the socket count. Needs `ss` (iproute2) on Midget: without it the tab reads No processes with TCP connections. Packet counts from segs_in and segs_out and UDP sockets are the remaining gap."
   },
   {
