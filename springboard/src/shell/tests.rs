@@ -558,6 +558,101 @@
         assert!(sh.desk.as_ref().unwrap().unmapped.contains(&ghost),"drawing keeps the list");
     }
 
+    /// A fixture host standing for a running external app in slot 0.
+    #[cfg(feature="desktop-wayland")]
+    fn fixture_app(sh:&mut Shell)->bifrost_proto::sys::Channel{
+        let (mine,theirs)=bifrost_proto::sys::socketpair_pair().unwrap();
+        let host=apphost::AppHost::with_channel("fixture",mine,None,bifrost_proto::Configure{w:100,h:100,scale:1.,safe_top:0.,safe_bottom:0.,dark:true,text_scale:1.,reduce_motion:false});
+        sh.ext.push(Some(host));
+        theirs
+    }
+
+    /// An app that exits without the shell's `pump` seeing it (a failed send, a stall kill) takes its main and extra
+    /// windows with it: nothing stays on the desk, in the Window menu or in front.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn an_app_that_exits_leaves_no_window_behind() {
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        let _peer=fixture_app(&mut sh);
+        let m=sh.desk_metrics();
+        let before=sh.desk_dock(&m).0.len();
+        sh.desk.as_mut().unwrap().open(&m,AppId::External(0),(600,400));
+        sh.desk.as_mut().unwrap().open(&m,AppId::ExternalWindow(0,3),(500,300));
+        sh.screen=Screen::App(AppId::External(0));
+        // a live app keeps its main window (the extra one is the table's to keep: this fixture's table holds none)
+        sh.ext_tick(1.0);
+        assert!(sh.desk.as_ref().unwrap().index_of(AppId::External(0)).is_some());
+        // the process goes away outside `pump`
+        sh.ext[0].as_mut().unwrap().kill();
+        assert!(!sh.ext[0].as_ref().unwrap().running());
+        // an extra window is back on the desk, as a stale one would be
+        sh.desk.as_mut().unwrap().open(&m,AppId::ExternalWindow(0,4),(500,300));
+        sh.ext_tick(2.0);
+        let d=sh.desk.as_ref().unwrap();
+        assert!(d.wins.is_empty(),"main and extra windows are removed: {:?}",d.wins.iter().map(|w|w.app).collect::<Vec<_>>());
+        assert!(sh.screen==Screen::Home,"the front moves on to the desktop");
+        let rows=sh.menu_rows(desktop_bar::Menu::Window);
+        assert!(!rows.iter().any(|r|matches!(r.action,Some(desktop_bar::Action::Open(AppId::External(_)|AppId::ExternalWindow(..))))),"the Window menu lists no dead window");
+        assert_eq!(sh.desk_dock(&m).0.len(),before,"the Dock gained no tile for the dead app");
+        // drawn once more: no frame for it either
+        let (w,h)=(sh.w as usize,sh.h as usize);
+        let mut px=vec![0u32;w*h];
+        sh.dirty=true;
+        sh.draw_desk(&mut Surface{w,h,stride:w,px:&mut px,y0:0},3.);
+        assert!(sh.take_wayland_windows().is_empty(),"no frame is presented for a dead app");
+    }
+
+    /// A window restored at boot whose app never relaunches (its host is gone) is not drawn, and does not stay.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn a_restored_window_whose_app_does_not_come_back_is_not_drawn() {
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        let _peer=fixture_app(&mut sh);
+        let m=sh.desk_metrics();
+        sh.desk.as_mut().unwrap().open(&m,AppId::External(0),(600,400));
+        sh.ext[0].as_mut().unwrap().kill();
+        sh.desk_refresh_unmapped();
+        assert!(sh.desk.as_ref().unwrap().unmapped.contains(&AppId::External(0)),"a window whose process is gone is not mapped");
+        sh.ext_tick(1.0);
+        assert!(sh.desk.as_ref().unwrap().wins.is_empty());
+    }
+
+    /// One tile per app: a key kept in the Dock twice, or an app with two windows, never makes a second tile.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn the_dock_shows_one_tile_per_app() {
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        let icon=apps().iter().find(|a|a.id==AppId::Settings).unwrap().icon.to_string();
+        sh.desk.as_mut().unwrap().dock_preferences.pinned=vec![icon.clone(),icon];
+        let m=sh.desk_metrics();
+        let index=apps().iter().position(|a|a.id==AppId::Settings).unwrap();
+        assert_eq!(sh.desk_dock(&m).0.iter().filter(|&&i|i==index).count(),1,"a key pinned twice is one tile");
+        sh.desk_open(AppId::Settings,0.);
+        let _peer=fixture_app(&mut sh);
+        let one=sh.desk_dock(&m).0.len();
+        sh.desk.as_mut().unwrap().open(&m,AppId::External(0),(600,400));
+        sh.desk.as_mut().unwrap().open(&m,AppId::ExternalWindow(0,3),(500,300));
+        assert_eq!(sh.desk_dock(&m).0.len(),one,"a second window of an app adds no tile");
+    }
+
+    /// The lock stays up while a window's app lives, dies or changes the desk: no tick lifts a window over it.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn the_lock_survives_the_ticks_of_a_desk_with_external_windows() {
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        let _peer=fixture_app(&mut sh);
+        let m=sh.desk_metrics();
+        sh.desk.as_mut().unwrap().open(&m,AppId::External(0),(600,400));
+        sh.screen=Screen::App(AppId::External(0));
+        sh.lock_screen();
+        assert!(sh.is_locked());
+        for k in 0..5 { sh.ext_tick(10.0+k as f64); assert!(sh.is_locked(),"live app, tick {k}"); }
+        sh.ext[0].as_mut().unwrap().kill();
+        for k in 0..5 { sh.ext_tick(20.0+k as f64); assert!(sh.is_locked(),"dead app, tick {k}"); }
+        sh.desk_open(AppId::Settings,30.);
+        assert!(sh.is_locked(),"opening a window does not unlock");
+    }
+
     /// Desktop frame cost at 1920x1080 with two windows open. Run through `tools/bench.py`.
     #[test]
     #[ignore]
