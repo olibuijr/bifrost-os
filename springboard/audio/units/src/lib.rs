@@ -5,7 +5,7 @@
 //!
 //! Layout of this crate: `param` (parameter specs, the shared control handle and the RT-side ramping tree),
 //! `preset`, `midi`, `unit` (the `AudioUnit` trait, `Block`, errors), `registry` (component descriptions),
-//! `host` (in-process host), `plugin` (loads third-party units from shared libraries over a C ABI), `remote`
+//! `host` (in-process host), `sequencer` (sample-accurate MIDI sequencing inside the render callback), `synth` (a polyphonic General MIDI instrument without a sound bank), `plugin` (loads third-party units from shared libraries over a C ABI), `remote`
 //! (out-of-process hosting on the activation-record and ring ABI of `bifrost-audio-shm`) and `builtin` (gain, biquad
 //! filter, test synth). Safe code only, except `plugin`, the one module allowed `unsafe` (`dlopen` and the calls
 //! through a plug-in's table). The old models in
@@ -24,12 +24,16 @@ pub mod plugin;
 pub mod preset;
 pub mod registry;
 pub mod remote;
+pub mod sequencer;
+pub mod synth;
 pub mod unit;
 
 pub use host::UnitHost;
 pub use midi::MidiEvent;
 pub use param::{ParamHandle, ParamSpec, ParamUnit, ParameterTree};
 pub use plugin::{PluginError, PluginLibrary, PluginUnit};
+pub use sequencer::{SeqEvent, Sequence, SequencerHandle, SequencerUnit};
+pub use synth::GmSynth;
 pub use preset::{Preset, PresetStore};
 pub use registry::{ComponentDescription, ComponentRegistry};
 pub use unit::{AudioUnit, Block, RenderConfig, UnitError, UnitInfo, UnitKind};

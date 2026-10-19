@@ -52,13 +52,14 @@ impl ComponentRegistry {
         ComponentRegistry::default()
     }
 
-    /// The registry with the built-in units (`aufx/gain/bfst`, `aufx/bqad/bfst`, `aumu/sine/bfst`).
+    /// The registry with the built-in units (`aufx/gain/bfst`, `aufx/bqad/bfst`, `aumu/sine/bfst`, `aumu/gmsy/bfst`).
     pub fn with_builtins() -> ComponentRegistry {
         let mut r = ComponentRegistry::new();
         let d = |k: &str, s: &str| ComponentDescription::new(k, s, "bfst").expect("static codes");
         r.register(d("aufx", "gain"), "Gain", || Box::new(crate::builtin::Gain::new()));
         r.register(d("aufx", "bqad"), "Biquad Filter", || Box::new(crate::builtin::Biquad::new()));
         r.register(d("aumu", "sine"), "Sine Synth", || Box::new(crate::builtin::SineSynth::new()));
+        r.register(d("aumu", "gmsy"), "General MIDI Synth", || Box::new(crate::synth::GmSynth::new()));
         r
     }
 
