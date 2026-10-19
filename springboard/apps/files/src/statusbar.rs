@@ -45,7 +45,11 @@ impl Files {
         } else {
             let mut status = match (&self.hits, self.search.is_some()) {
                 (Some(_), true) => format!("{} found so far, searching…", visible.len()),
-                (Some(_), false) => format!("{} found in {}", visible.len(), self.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "Computer".into())),
+                (Some(_), false) => {
+                    // the walk stops at the result cap, so a full list is the first hits, not all of them
+                    let place = self.scope_label(self.effective_scope());
+                    if visible.len() >= RESULT_CAP { format!("First {} found in {place}", visible.len()) } else { format!("{} found in {place}", visible.len()) }
+                }
                 (None, _) => items_text(visible.len()),
             };
             if self.selection.len() > 1 {

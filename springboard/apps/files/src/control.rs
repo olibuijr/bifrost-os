@@ -587,7 +587,9 @@ impl Files {
                 self.query.clear();
                 self.query.push_str(&query);
                 self.searching = !query.trim().is_empty();
-                self.query_changed();
+                // a control call searches the open folder's tree, as it did before the scope bar (an `in:` term still wins)
+                self.scope_bar.scope = Scope::Folder;
+                self.restart_search();
                 self.update_controls();
                 if self.search.is_none() {
                     return Ok(self.search_json());

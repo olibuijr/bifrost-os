@@ -106,6 +106,8 @@ struct Files {
     /// The search hits under the folder, when a search has returned any.
     hits: Option<Vec<Entry>>,
     search: Option<Search>,
+    /// The scope bar under the toolbar while a query searches: This Computer or the open folder, and its plates.
+    scope_bar: ScopeBar,
     /// Selected rows, in the order they were picked; the last one is the focus.
     selection: Vec<usize>,
     /// While on, taps add or remove rows from the selection (the Select button).
@@ -234,6 +236,7 @@ impl Files {
             listing: vec![],
             hits: None,
             search: None,
+            scope_bar: ScopeBar::default(),
             selection: vec![],
             select_mode: false,
             sidebar_hidden: false,
@@ -792,6 +795,7 @@ mod tests {
     use super::*;
     pub(crate) fn fixture(rows: Vec<Entry>) -> Files {
         Files {
+            scope_bar: ScopeBar::default(),
             dnd: Default::default(), windows: Vec::new(), home:"/fixture".into(), path:"/fixture".into(), history:vec![], at:0,
             tabs: tabs::TabStrip::new(tabs::TabState { path: "/fixture".into(), history: vec![], at: 0 }),
             listing: rows.clone(), rows, hits: None, search: None, selection:vec![], select_mode:false, sidebar_hidden:false, status_bar:false, title_w:120., path_segs:vec![], loading:false, error:None, job:None,grid:true,sort:Sort::Name,
@@ -892,7 +896,9 @@ mod tests {
         files.listing = fs::list(&dir).unwrap();
         files.rows = files.listing.clone();
         files.query.push_str("needle");
-        files.query_changed();
+        // the Folder scope: the default, This Computer, would walk the whole disk of the machine running the test
+        files.scope_bar.scope = Scope::Folder;
+        files.restart_search();
         // the search thread streams hits; wait for it to finish
         for _ in 0..500 {
             files.poll_search();

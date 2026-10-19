@@ -312,6 +312,12 @@ impl Files {
             }
             return;
         }
+        if let Some(scope) = self.scope_hit(x, y) {
+            // the scope plates do not take the typing focus from the search field
+            self.pick_scope(scope);
+            self.searching = true;
+            return;
+        }
         if y >= self.bottom() {
             if let Some(i) = bifrost_app::controls::pathbar::hit(&self.path_segs, x, y) {
                 if let Some((_, _, p)) = self.path_items().into_iter().nth(i) {
@@ -386,6 +392,7 @@ impl Files {
             self.naming.as_ref().map(|(p,f)|format!("{}:{}:{:?}",p.display(),f,f.caret())), self.clip, self.notice,
             self.work.as_ref().map(|w| (&w.title, &w.progress)), self.select_mode);
         let state = format!("{state}:{}:{}", self.status_bar, self.dragging);
+        let state = format!("{state}:{:?}", self.scope_bar.scope);
         let state = format!("{state}:{}", self.info.as_ref().map_or(0, |i| i.rows.len() * 10000 + i.mode.unwrap_or(0) as usize));
         let state = format!("{state}:{}", self.open_with.as_ref().map_or(0, |o| o.state()));
         let state = format!("{state}:{:?}:{}", self.fx.goto.as_ref().map(|f| (f.to_string(), f.caret())), self.fx.copy_drag);
@@ -433,6 +440,7 @@ impl Files {
         }
         widgets::toolbar_band(s, ui, Rect { x: self.side(), y: 0., w: w - self.side(), h: HEADER_H });
         self.paint_tab_strip(ui, s);
+        self.paint_scope_bar(ui, s);
         let title = self.title();
         self.title_w = (ui.measure(&title, MAC_TITLE3_PT, Weight::Bold) / ui.pt(1.) + 4.).clamp(40., self.title_room());
         let placed = widgets::toolbar(s, ui, self.bar_bounds(), &self.bar(), None);
@@ -475,6 +483,9 @@ impl Files {
         if self.loading || self.error.is_some() || visible.is_empty() {
             let msg = if self.loading {
                 "Loading…"
+            } else if self.scope_bar_shown() && self.error.is_none() {
+                // a query searching a tree: nothing found yet, or nothing at all
+                if self.search.is_some() { "Searching…" } else { "No results" }
             } else {
                 self.error.as_deref().unwrap_or(if self.in_bin() { "The Trash is empty" } else { "This folder is empty" })
             };
