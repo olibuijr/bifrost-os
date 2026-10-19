@@ -20,7 +20,10 @@ Still open:
 - The control loop runs with `NoObjects`: the object tree of `audio/server/src/objects.rs` is not yet served over the
   socket, so property get, set and listen are limited to what `ServerCore` handles itself.
 - Taps are a registry (`audio/server/src/tap.rs`) that the mixer does not call yet.
-- MIDI: `bifrost-midid` reads rawmidi and the sequencer, but there is no client IPC and no rawmidi output yet.
+- MIDI (2026-10-19, unbuilt and unrun): `bifrost-midid` now has a client socket (`bifrost_midi::wire` and `broker`, the SDK's
+  `midi_client`), rawmidi output for hardware destinations, thru connections and hotplug notifications, and ships with
+  `bifrost-midid.service`. Still open: ALSA sequencer output, kernel UMP endpoints, BLE GATT, RTP-MIDI sockets, shm event
+  rings into the audio server.
 - JACK clients are process-local engines, not one shared graph.
 - There is no `bifrost pc audio ls|get|set|top` subcommand; only `bifrost pc audio-bench` exists
   (`docs/audio-latency.md`). Midget verification steps in `docs/audio/*.md` that name it are targets, not commands.

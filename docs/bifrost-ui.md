@@ -2857,14 +2857,56 @@ the server. Apple parity: the vocabulary follows MIDI Services (clients, virtual
 received packets with host-clock timestamps). Decided: the SDK exposes the pure models only. An app does not open a device here;
 the daemon owns the hub and delivers to apps.
 
-Gaps, decided: no SDK facade that talks to the running daemon yet (apps cannot send to hardware through the SDK until the
-daemon exposes a control socket). Not built or run in this round; the tests in `sdk/src/midi.rs` are unrun.
+Gaps, decided: the pure models stay as they are; the client of the running daemon is `bifrost_app::midi_client`
+(below), added 2026-10-19. Not built or run in this round; the tests in `sdk/src/midi.rs` are unrun.
 
 MIDI-CI (`bifrost_app::midi_ci`, Apple `MIDICIDiscoveryManager`, `MIDICIDevice`, `MIDICIProfile`): `Message::encode` and
 `Message::decode` convert MIDI-CI 1.1 Universal SysEx (discovery inquiry and reply, invalidate MUID, profile inquiry, profile
 inquiry reply, profile set on, profile enabled report) with 28-bit `Muid`s in 7-bit bytes. `DiscoveryManager` builds the
 broadcast inquiry, answers inquiries for the local device and records `Device`s and their `Profile`s from replies. Decided: no
 property exchange or process inquiry, no transport; the caller moves the bytes. Tests in `sdk/src/midi_ci.rs` are unrun.
+
+## Core MIDI: the MIDI server client (`bifrost_app::midi_client`, `bifrost-midi`)
+
+Apple reference: MIDI Services (`MIDIClientCreate`, `MIDIObjectGetIntegerProperty`, `MIDISourceCreate`,
+`MIDIDestinationCreate`, `MIDIPortConnectSource`, `MIDISend`, `MIDIReceived`, `MIDIThruConnectionCreate`, the setup-changed
+notification). Added 2026-10-19; written without a build, so the tests are unrun and nothing is verified on Midget yet.
+
+The daemon `bifrost-midid` now listens on a unix socket (`/run/bifrost/audio/is.olibuijr.midi.sock`, mode 0666, or
+`BIFROST_MIDI_SOCK`). Its frames are `bifrost_midi::wire` (a `u32` length and a little-endian payload, tags below 0x100
+for requests and above for replies and events); the server logic is `bifrost_midi::broker::Broker`, which owns the
+`Hub` and one small state per connection and is tested without a socket; `bifrost-midid/src/server.rs` only moves bytes.
+`MidiClient` is the app side:
+
+- `MidiClient::connect(name)` says hello. `sources()`, `destinations()`, `devices()` and `device_of(endpoint)` read the
+  setup (devices, entities, endpoints with `connected` and `owner`); the lists re-read themselves when the server says
+  `MidiEvent::SetupChanged`, which it does on hardware hotplug (the daemon rescans `/dev/snd` every two seconds) and when
+  any client creates or disposes an endpoint.
+- `connect_source(id)` and `disconnect_source(id)` (a client has one input port and hears every source it connected, in
+  host-time order); `create_source(name)` and `create_destination(name)` for virtual endpoints; `dispose`, `set_ref_con`.
+- `send(destination, host_ns, &[Ump])` and `send_bytes` (MIDI 1.0 bytes, running status and system exclusive handled)
+  queue packets for a destination at a host-clock time (0 or the past: now, a future time waits in the hub). A destination
+  that is hardware is written to its rawmidi port by the daemon (new: rawmidi output); a virtual destination delivers to
+  its owner as `MidiEvent::Delivered`. `inject` and `inject_bytes` send from a virtual source the client owns to everyone
+  connected to it. A refused `send` or `inject` comes back as `MidiEvent::SendRefused`, a separate message so it is never
+  taken for the reply to a later request.
+- `create_thru(source, destination, ThruSpec)` runs `bifrost_midi::thru` inside the server (channel filter, note and
+  velocity value maps, control rewrites; MIDI 1.0 and MIDI 2.0 packets keep their type, other messages pass), so play-
+  through needs no round trip to the app; it ends when disposed or when the client disconnects.
+- `SysexCollector` joins system exclusive packets into whole `F0 .. F7` messages per sender, and `MidiCiLink` runs the
+  MIDI-CI `DiscoveryManager` over the server (`discover`, `inquire_profiles`, `process` answers inquiries), so MIDI-CI has
+  a transport now (still no property exchange subscriptions).
+- Limits: 128 virtual endpoints and 32 thru connections per client, 64 connections, 8192 packets per message,
+  256 KiB per frame; a client that sends a malformed frame or stops reading is dropped and its endpoints go with it.
+- `bifrost-midi list | monitor [SECONDS] | send DEST BYTES | note DEST KEY` (`cmd/src/midictl.rs`) is the check from a
+  shell: `list` prints the devices and endpoints, `monitor` connects every source and prints
+  `host_ns source-name words`, `send 5 90 3C 64` writes a note-on.
+- Packaging: `packaging/arch/bifrost-midid.service` (user `audio`, `/dev/snd` only) is installed with the binary and
+  enabled by the package's post-install step.
+
+Decided gaps: one input port per client (no `MIDIInputPortCreate` ports of their own), timestamps are host-clock
+nanoseconds rather than `MIDITimeStamp` ticks, no ALSA sequencer output (hardware output is rawmidi only), no kernel UMP
+endpoints, no BLE GATT link (the Bluetooth service has to feed `BleIngress`), no RTP-MIDI sockets or Bonjour.
 
 Network sessions (`bifrost_app::midi_network`, Apple `MIDINetworkSession`, `MIDINetworkHost`, `MIDINetworkConnection`):
 `NetworkSession` holds enabled, port (default 5004), names, `ConnectionPolicy`, contacts and connections, and drives the
@@ -2879,6 +2921,45 @@ Accelerometer values are in g and gyroscope rates in rad/s. An interval snaps to
 `sampling_frequency_available` and the choice is written to `sampling_frequency`; a sensor without those files keeps the
 requested interval. Decided: no mounting matrix, no hardware on the lab machine, so only a fixture sysfs tree is tested; not
 yet checked on Midget. Tests in `sdk/src/motion_raw.rs` are unrun.
+
+## Audio Unit: plug-ins, sequencing and the generic view (`bifrost_app::audio_engine::units`, `midi_player`, `audio_unit_view`)
+
+Apple reference: Audio Unit hosting (`AudioComponentFindNext`, `AudioComponentInstanceNew`, `AUAudioUnit`: parameter tree,
+factory presets, `render`, MIDI events), `AVAudioSequencer` and `AVMIDIPlayer`, and CoreAudioKit's generic view. Added
+2026-10-19, unbuilt and unrun. `audio/units` is the unit model the engine hosts; the SDK reaches it through
+`bifrost_app::audio_engine::units` (the engine re-exports the crate).
+
+- Plug-in loader (`audio/units/src/plugin.rs`): a third-party unit is a shared library exporting `bifrost_unit_entry`, which
+  returns a `#[repr(C)]` `UnitVTable` (ABI version 1: `describe`, `param`, `create`, `destroy`, `initialize`,
+  `uninitialize`, `reset`, `render`, `latency`, `tail`, all plain C functions). `PluginLibrary::open(path)` loads it with
+  `dlopen`, reads its description (a four-character component code triple, kind, channels) and its parameters, and
+  `instantiate()` makes a `PluginUnit`, an ordinary `AudioUnit`: it goes into a `UnitHost`, an engine node, or the
+  out-of-process `Worker`. The host owns the parameter tree, so ramps, clamping, read-only flags and presets work as for
+  built-in units; each block the plug-in gets every parameter's value at the first frame and one frame after the last
+  (`param_start`, `param_end`) and interpolates. MIDI arrives as `CMidi` messages at frame offsets. `render` allocates
+  nothing; output that is not finite is silenced. `register_into` adds the plug-in to a `ComponentRegistry` (which now takes
+  boxed, fallible factories), `scan_directory` loads every `*.so` in a directory (`/usr/lib/bifrost/units`,
+  `~/.local/share/bifrost/units`), reporting each failure. `audio/units` moved from `forbid(unsafe_code)` to
+  `deny(unsafe_code)` with `plugin` the one module allowed `unsafe` (the loader and the calls through the table).
+- Sequencer (`sequencer.rs`): `SequencerUnit` wraps an instrument and a `Sequence` and puts each message on its exact
+  frame from inside the render callback, at any block size; `SequencerHandle` (atomics) has `play`, `pause`, `stop`,
+  `seek`, `set_loop`, `set_rate` (0.25 to 4), `position_seconds`, `is_finished`. Pause, seek, loop wrap and the end release
+  held notes; live MIDI is merged by offset. `Sequence::from_ticks` applies a tempo map.
+- Built-in instrument (`synth.rs`): `GmSynth`, 32 voices of an additive tone chosen by the General MIDI program, drums on
+  channel 10, channel volume, pan, expression, sustain pedal, pitch bend, all notes off. No sound bank: it is simpler than a
+  sampled instrument. Registered as `aumu/gmsy/bfst`.
+- `MidiPlayer` (`sdk/src/midi_player.rs`): a Standard MIDI File (or any `Sequence`) through `GmSynth` or any instrument unit
+  in an `Engine`; `control()` is the transport, `render(frames)` pulls audio, `render_to_wav(tail)` renders the whole file,
+  `engine_mut()` reaches the engine (taps, effects, `start_on_device`).
+- Presets: `PresetStore::export_user` and `import_user` keep user presets in a text file (one per line).
+- `UnitView` (`sdk/src/audio_unit_view.rs`, the generic view): a row per parameter with the control that suits it
+  (log-taper slider for frequencies, switch, pop-up, read-out), value text with units, sections by group, and input
+  (`set_position`, `toggle`, `select`, `nudge`, `reset`, `apply_preset`) that sets the unit through its `ParamHandle`.
+  It is a model: an app draws the rows with its kit widgets.
+
+Decided gaps: no extension process for plug-ins (a loaded plug-in runs in the host's process; the shm `Worker` can host one
+but nothing launches it), no plug-in supplied view (only the generic one), no AU v2 or v3 binary compatibility (the ABI is
+ours), no state chunk beyond the parameters and presets.
 
 ## AVFAudio: AVAudioPlayer shape and the node graph (`bifrost_app::audio_player`, `bifrost_app::audio_engine`)
 
@@ -2904,9 +2985,14 @@ Apple reference: `AVAudioPlayer` (volume, `setVolume(_:fadeDuration:)`, `pan`, `
   `springboard/src/svc.rs` `Client::set_rate`. Voice Memos stores the speed per recording (`.<stem>.rate` sidecar) and
   shows a Slower/Faster stepper at 0.5, 1, 1.5 and 2. Tested headless (encode/decode, length, dominant frequency by a
   small DFT); not verified on Midget.
-- Not done here: the player is not yet connected to the audio service (`audiod`) for pan and fade, so they do not reach
-  the speaker (rate does, see above); apps still play through `bifrost_app::audio` (queue, volume, mute). Session
-  categories, interruptions and speech stay gaps. Verify the audio path on Midget before any row is `parity`.
+- Pan and fades reach the speaker (2026-10-19, unbuilt and unrun): `Cmd::SetPan(f32)` (tag 20) and
+  `Cmd::FadeVolume { target, ms }` (tag 21) are in `springboard/proto/src/svc.rs`; `audiod` applies them in
+  `springboard/src/media/audioplayer.rs` through `media/player_fx.rs` (pan is a balance, the far channel falls to silence;
+  a fade ramps the gain across each block so it has no steps and the snapshot volume follows it; `SetVolume` cancels it).
+  The shell client has `set_pan` and `fade_volume` and the SDK has `Command::pan` and `Command::fade_volume`. Rate was
+  already there. The player is still one shared player (apps play through `bifrost_app::audio`); a second source needs
+  `bifrost_app::audio_engine`. Session categories, interruptions and speech stay gaps. Verify the audio path on Midget
+  before any row is `parity`.
 
 Tests: unit tests in `ui/src/audio_player.rs` (not run in this round).
 
@@ -2923,8 +3009,13 @@ Apple reference: `AVAudioSession` (`setCategory(_:mode:options:)`, `setActive(_:
   `unregister` on quit, sends `Ended { should_resume: true }`; the app reactivates itself. Chains resume in order.
 - `set_route` posts `RouteChange` (raw reasons as in the framework) with the previous route to every client; a category
   change posts `CategoryChange` to that client.
-- Not done: the arbitration is not in `audiod` and no wire messages exist yet, the shell does not call `set_route`, and
-  the other modes and options (`interruptSpokenAudioAndMixWithOthers`, `allowBluetooth`) are not modelled. Rows stay
+- Route changes are wired (2026-10-19, unbuilt and unrun): `Shell::set_route` tells `audiod` with `Cmd::SetRoute { headphones,
+  reason }` (tag 22; reason 1 a device appeared, 2 it went away; the shell also reports the route after every service
+  reconnect, reason 0), `audiod` keeps it, sends `Evt::Route` (tag 0x105) to every subscriber and to each new subscriber, and
+  `bifrost_app::audio::Client::take_route_changes` plus `audio_session::apply_service_routes(hub, client)` turn the reports
+  into `SessionHub::apply_service_route`, so every registered session gets `RouteChange` with the system's reason.
+- Not done: the interruption arbitration is not in `audiod` and has no wire messages (apps' `SessionHub`s are local), and the
+  other modes and options (`interruptSpokenAudioAndMixWithOthers`, `allowBluetooth`) are not modelled. Rows stay
   partial until a Midget check.
 
 Routes, inputs and service resets (added in sprint 11):

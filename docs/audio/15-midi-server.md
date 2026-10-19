@@ -37,16 +37,17 @@ All struct sizes, offsets and ioctl numbers are pinned by tests against values m
 
 ## Left (todo_left)
 
-- Client IPC: a unix socket protocol between apps and `bifrost-midid` (client side library in `bifrost-midi`, shm
-  event rings to the audio server so a unit gets MIDI in the render cycle) is not written; the hub is the API it
-  will sit on. The audio server side (units) consuming `HostClock::frame_in_cycle` is task 05/13.
+- Client IPC (2026-10-19): written. `bifrost_midi::wire` (frames), `bifrost_midi::broker` (server logic over the `Hub`),
+  `bifrost-midid/src/server.rs` (the socket) and `sdk/src/midi_client.rs` (the app side), with rawmidi output, thru
+  connections and setup-changed events. Not written: shm event rings to the audio server so a unit gets MIDI in the render
+  cycle. The audio server side (units) consuming `HostClock::frame_in_cycle` is task 05/13.
 - BLE link (scan/connect/GATT characteristic) is the Bluetooth service's job; `BleIngress::ingest` is the entry
   point. The device picker model (`ui/src/midi_ble_picker.rs`) was not moved (it depends on the ui GATT and
   advertising types).
-- Sequencer output (sending to other seq clients) and rawmidi output from hub destinations; kernel UMP endpoints
+- Sequencer output (sending to other seq clients; rawmidi output from hub destinations is done); kernel UMP endpoints
   (`/dev/snd/umpC*D*`) and per-event kernel timestamps (`SNDRV_RAWMIDI_MODE_FRAMING_TSTAMP`) are not used yet;
   events are stamped when the daemon reads them, which adds up to one poll wake-up of jitter.
-- systemd unit for the `audio` user.
+- systemd unit for the `audio` user: `packaging/arch/bifrost-midid.service` (2026-10-19).
 
 ## Midget verification (lead)
 
@@ -55,4 +56,6 @@ All struct sizes, offsets and ioctl numbers are pinned by tests against values m
    nanosecond stamps (host clock), note-on `2090...`, note-off `2080...`.
 3. With the sequencer: `aconnect -l` shows client "BifrOSt MIDI"; `aconnect <kbd> <BifrOSt client>` then `--dump`
    shows `seq` lines. (aconnect is only a test tool.)
-4. 64-frame DAW check waits for the client IPC and the DAW (tasks 05 and 13).
+4. 64-frame DAW check waits for the DAW (tasks 05 and 13); the client IPC exists now: `bifrost-midi list`, then
+   `bifrost-midi monitor 20` and press keys (lines `NS name 2090XXYY`), `bifrost-midi note 'USB' 60` plays a note on an
+   attached USB synth (`systemctl status bifrost-midid` first).
