@@ -271,6 +271,18 @@ fn prepare_data(data: &Path, account: &Account) -> io::Result<()> {
     }
     Ok(())
 }
+/// Prepares an app's data directory and creates the fixed container folders in it (`Documents`, `Library`,
+/// `Library/Caches`, `tmp`; see `bifrost_core::container_layout`) before the ownership change, so the folders belong
+/// to the app's account. A data directory from before the split can hold a file or a link with one of those names;
+/// the folder step is skipped then, and the app keeps launching on the flat directory.
+fn prepare_container(data: &Path, account: &Account) -> io::Result<()> {
+    fs::create_dir_all(data)?;
+    if fs::symlink_metadata(data)?.file_type().is_symlink() {
+        return Err(PolicyError::DataIsSymlink.into());
+    }
+    let _ = bifrost_core::container_layout::ContainerLayout::new(data).ensure();
+    prepare_data(data, account)
+}
 /// Construct a fail-closed sandbox. Only the selected package, app data and
 /// declared resources are mounted; no system/session bus is exposed to apps.
 pub fn command(
@@ -282,7 +294,7 @@ pub fn command(
 ) -> io::Result<Command> {
     let form = bifrost_ui::form_factor::FormFactor::current();
     let account = Account::installed()?;
-    prepare_data(data, &account)?;
+    prepare_container(data, &account)?;
     let exec = fs::canonicalize(exec)?;
     let package = exec
         .parent()

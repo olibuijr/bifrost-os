@@ -112,6 +112,8 @@ pub mod pref_domains;
 pub mod calendar_system;
 pub mod date_interval;
 pub mod bundle_resources;
+pub mod bundle_info;
+pub mod entitlements;
 /// The app container layout lives in bifrost-core so the shell creates the folders too.
 pub use bifrost_core::container_layout;
 pub mod package_layout;
@@ -160,6 +162,7 @@ pub mod ldap_directory;
 pub mod directory_servers;
 pub mod typed_path;
 pub mod archive;
+pub mod archive_format;
 pub mod tar_package;
 pub mod dispatch_data;
 pub mod dispatch_io;

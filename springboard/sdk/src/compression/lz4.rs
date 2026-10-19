@@ -182,20 +182,176 @@ fn read_extension(src: &[u8], i: &mut usize) -> Result<usize, Error> {
 pub fn encode_buffer(src: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(src.len() / 2 + 16);
     for chunk in src.chunks(CHUNK) {
-        let packed = encode_block(chunk);
-        if packed.len() < chunk.len() {
-            out.extend_from_slice(BV4_COMPRESSED);
-            out.extend_from_slice(&(chunk.len() as u32).to_le_bytes());
-            out.extend_from_slice(&(packed.len() as u32).to_le_bytes());
-            out.extend_from_slice(&packed);
-        } else {
-            out.extend_from_slice(BV4_STORED);
-            out.extend_from_slice(&(chunk.len() as u32).to_le_bytes());
-            out.extend_from_slice(chunk);
-        }
+        push_buffer_block(&mut out, chunk);
     }
     out.extend_from_slice(BV4_END);
     out
+}
+
+/// Appends one buffer-framing block for `chunk`: compressed when that is smaller, stored otherwise.
+fn push_buffer_block(out: &mut Vec<u8>, chunk: &[u8]) {
+    let packed = encode_block(chunk);
+    if packed.len() < chunk.len() {
+        out.extend_from_slice(BV4_COMPRESSED);
+        out.extend_from_slice(&(chunk.len() as u32).to_le_bytes());
+        out.extend_from_slice(&(packed.len() as u32).to_le_bytes());
+        out.extend_from_slice(&packed);
+    } else {
+        out.extend_from_slice(BV4_STORED);
+        out.extend_from_slice(&(chunk.len() as u32).to_le_bytes());
+        out.extend_from_slice(chunk);
+    }
+}
+
+/// Incremental encoder for the buffer framing. `write` returns a block as soon as 64 KiB of input are
+/// in, `flush` closes the partial block so a reader can decode everything written so far, and `finish`
+/// writes the rest and the end marker. Without `flush` calls the output is `encode_buffer` of the whole
+/// input, whatever the split into writes.
+#[derive(Debug, Default)]
+pub struct Bv4Encoder {
+    pending: Vec<u8>,
+}
+
+impl Bv4Encoder {
+    pub fn new() -> Bv4Encoder {
+        Bv4Encoder::default()
+    }
+
+    /// Adds `data` and returns the blocks it completed.
+    pub fn write(&mut self, data: &[u8]) -> Vec<u8> {
+        self.pending.extend_from_slice(data);
+        let mut out = Vec::new();
+        let mut used = 0;
+        while self.pending.len() - used >= CHUNK {
+            push_buffer_block(&mut out, &self.pending[used..used + CHUNK]);
+            used += CHUNK;
+        }
+        self.pending.drain(..used);
+        out
+    }
+
+    /// Writes the input collected so far as a block of its own (nothing when none is pending).
+    pub fn flush(&mut self) -> Vec<u8> {
+        let mut out = Vec::new();
+        if !self.pending.is_empty() {
+            push_buffer_block(&mut out, &self.pending);
+            self.pending.clear();
+        }
+        out
+    }
+
+    /// Writes the last block and the end marker.
+    pub fn finish(mut self) -> Vec<u8> {
+        let mut out = self.flush();
+        out.extend_from_slice(BV4_END);
+        out
+    }
+}
+
+/// The largest block a decoder accepts from the buffer framing. The encoder writes 64 KiB blocks; the
+/// cap keeps a damaged size field from making the decoder wait for gigabytes.
+const MAX_BLOCK: usize = 16 << 20;
+
+/// Incremental decoder for the buffer framing. `feed` takes input in any split and returns the bytes of
+/// every block that is whole; a partial block waits for more input. Output past `limit` bytes fails
+/// with `TooBig`, a block whose decoded size disagrees with its header is `InvalidData`, and bytes
+/// after the end marker are `InvalidData`.
+#[derive(Debug)]
+pub struct Bv4Decoder {
+    input: Vec<u8>,
+    /// The last 64 KiB decoded, the history that a later block may match against.
+    history: Vec<u8>,
+    produced: usize,
+    limit: usize,
+    done: bool,
+}
+
+impl Bv4Decoder {
+    pub fn new(limit: usize) -> Bv4Decoder {
+        Bv4Decoder { input: Vec::new(), history: Vec::new(), produced: 0, limit, done: false }
+    }
+
+    fn peek_u32(&self, at: usize) -> Option<usize> {
+        let b = self.input.get(at..at + 4)?;
+        Some(u32::from_le_bytes([b[0], b[1], b[2], b[3]]) as usize)
+    }
+
+    /// Adds `data` and returns the output it completes.
+    pub fn feed(&mut self, data: &[u8]) -> Result<Vec<u8>, Error> {
+        if self.done {
+            return if data.is_empty() { Ok(Vec::new()) } else { Err(Error::InvalidData) };
+        }
+        self.input.extend_from_slice(data);
+        let mut out = Vec::new();
+        let mut pos = 0;
+        while let Some(m) = self.input.get(pos..pos + 4) {
+            let magic = [m[0], m[1], m[2], m[3]];
+            if &magic == BV4_END {
+                pos += 4;
+                self.done = true;
+                break;
+            } else if &magic == BV4_STORED {
+                let Some(size) = self.peek_u32(pos + 4) else { break };
+                if size > MAX_BLOCK {
+                    return Err(Error::InvalidData);
+                }
+                if self.produced + size > self.limit {
+                    return Err(Error::TooBig);
+                }
+                let (from, to) = (pos + 8, pos + 8 + size);
+                if self.input.len() < to {
+                    break;
+                }
+                out.extend_from_slice(&self.input[from..to]);
+                self.history.extend_from_slice(&self.input[from..to]);
+                self.produced += size;
+                pos = to;
+            } else if &magic == BV4_COMPRESSED {
+                let (Some(decoded), Some(encoded)) = (self.peek_u32(pos + 4), self.peek_u32(pos + 8)) else { break };
+                if decoded > MAX_BLOCK || encoded > MAX_BLOCK {
+                    return Err(Error::InvalidData);
+                }
+                if self.produced + decoded > self.limit {
+                    return Err(Error::TooBig);
+                }
+                let (from, to) = (pos + 12, pos + 12 + encoded);
+                if self.input.len() < to {
+                    break;
+                }
+                let start = self.history.len();
+                decode_block_into(&mut self.history, &self.input[from..to], start + decoded).map_err(|e| match e {
+                    Error::TooBig => Error::InvalidData,
+                    other => other,
+                })?;
+                if self.history.len() - start != decoded {
+                    return Err(Error::InvalidData);
+                }
+                out.extend_from_slice(&self.history[start..]);
+                self.produced += decoded;
+                pos = to;
+            } else {
+                return Err(Error::InvalidData);
+            }
+            if self.history.len() > CHUNK {
+                let cut = self.history.len() - CHUNK;
+                self.history.drain(..cut);
+            }
+        }
+        if self.done && self.input.len() > pos {
+            return Err(Error::InvalidData);
+        }
+        self.input.drain(..pos);
+        Ok(out)
+    }
+
+    /// Ends the input. Fails with `Truncated` unless the end marker was read.
+    pub fn finish(self) -> Result<Vec<u8>, Error> {
+        if self.done {
+            Ok(Vec::new())
+        } else {
+            Err(Error::Truncated)
+        }
+    }
 }
 
 /// Decompresses the buffer framing, refusing output larger than `limit`. A block whose decoded
@@ -466,5 +622,124 @@ mod tests {
         data.extend_from_slice(&copy);
         let enc = encode_block(&data);
         assert_eq!(decode_block(&enc, data.len()).unwrap(), data);
+    }
+
+    fn mixed(n: usize) -> Vec<u8> {
+        let mut state = 7u32;
+        let mut data = Vec::with_capacity(n);
+        while data.len() < n {
+            state = state.wrapping_mul(1664525).wrapping_add(1013904223);
+            if (state >> 28) < 8 {
+                data.extend_from_slice(b"the same phrase again and again ");
+            } else {
+                data.push((state >> 24) as u8);
+            }
+        }
+        data.truncate(n);
+        data
+    }
+
+    #[test]
+    fn the_incremental_encoder_gives_the_buffer_bytes_for_any_split() {
+        let data = mixed(200_000);
+        let whole = encode_buffer(&data);
+        for piece in [1usize, 777, 65_536, 300_000] {
+            let mut encoder = Bv4Encoder::new();
+            let mut out = Vec::new();
+            for chunk in data.chunks(piece) {
+                out.extend(encoder.write(chunk));
+            }
+            out.extend(encoder.finish());
+            assert_eq!(out, whole, "piece size {piece}");
+        }
+    }
+
+    #[test]
+    fn the_incremental_encoder_emits_a_block_once_64_kib_are_in() {
+        let mut encoder = Bv4Encoder::new();
+        assert!(encoder.write(&mixed(CHUNK - 1)).is_empty());
+        assert!(!encoder.write(&[1]).is_empty());
+    }
+
+    #[test]
+    fn a_flush_lets_the_decoder_reach_the_input_so_far() {
+        let first = mixed(1000);
+        let second = mixed(5000);
+        let mut encoder = Bv4Encoder::new();
+        let mut decoder = Bv4Decoder::new(1 << 20);
+        encoder.write(&first);
+        let flushed = encoder.flush();
+        assert!(encoder.flush().is_empty(), "nothing pending, nothing written");
+        assert_eq!(decoder.feed(&flushed).unwrap(), first);
+        encoder.write(&second);
+        let tail = encoder.finish();
+        assert_eq!(decoder.feed(&tail).unwrap(), second);
+        assert_eq!(decoder.finish().unwrap(), Vec::<u8>::new());
+    }
+
+    #[test]
+    fn the_incremental_decoder_takes_the_input_one_byte_at_a_time() {
+        let data = mixed(150_000);
+        let packed = encode_buffer(&data);
+        let mut decoder = Bv4Decoder::new(data.len());
+        let mut out = Vec::new();
+        for b in &packed {
+            out.extend(decoder.feed(std::slice::from_ref(b)).unwrap());
+        }
+        assert_eq!(out, data);
+        decoder.finish().unwrap();
+    }
+
+    #[test]
+    fn the_incremental_decoder_follows_matches_across_blocks() {
+        // second block: 4 literals "wxyz", then a match of 8 at offset 12 that reaches into the first block
+        let first = b"abcdefghijklmnop";
+        let mut src = Vec::new();
+        src.extend_from_slice(BV4_STORED);
+        src.extend_from_slice(&(first.len() as u32).to_le_bytes());
+        src.extend_from_slice(first);
+        // token 0x44: 4 literals and a match of 8; then a closing token 0x50 with 5 literals
+        let tail = [0x44, b'w', b'x', b'y', b'z', 0x0c, 0x00, 0x50, b'1', b'2', b'3', b'4', b'5'];
+        src.extend_from_slice(BV4_COMPRESSED);
+        src.extend_from_slice(&17u32.to_le_bytes());
+        src.extend_from_slice(&(tail.len() as u32).to_le_bytes());
+        src.extend_from_slice(&tail);
+        src.extend_from_slice(BV4_END);
+        let one_shot = decode_buffer(&src, 100).unwrap();
+        assert_eq!(one_shot, b"abcdefghijklmnopwxyzijklmnop12345".to_vec());
+        let mut decoder = Bv4Decoder::new(100);
+        let mut out = decoder.feed(&src[..20]).unwrap();
+        out.extend(decoder.feed(&src[20..]).unwrap());
+        assert_eq!(out, one_shot);
+    }
+
+    #[test]
+    fn the_incremental_decoder_refuses_hostile_input() {
+        // a block size beyond the cap is refused before any wait for its bytes
+        let mut big = Vec::new();
+        big.extend_from_slice(BV4_STORED);
+        big.extend_from_slice(&u32::MAX.to_le_bytes());
+        assert_eq!(Bv4Decoder::new(usize::MAX).feed(&big), Err(Error::InvalidData));
+        // output past the limit
+        let packed = encode_buffer(&[9u8; 1000]);
+        assert_eq!(Bv4Decoder::new(999).feed(&packed), Err(Error::TooBig));
+        // an unknown magic
+        assert_eq!(Bv4Decoder::new(10).feed(b"zzzzzzzz"), Err(Error::InvalidData));
+        // bytes after the end marker
+        let mut trailing = encode_buffer(b"abc");
+        trailing.push(0);
+        assert_eq!(Bv4Decoder::new(10).feed(&trailing), Err(Error::InvalidData));
+        // a stream that ends before its end marker
+        let mut cut = Bv4Decoder::new(10);
+        cut.feed(&encode_buffer(b"abc")[..8]).unwrap();
+        assert_eq!(cut.finish(), Err(Error::Truncated));
+        // a header that lies about the decoded size
+        let mut lie = Vec::new();
+        let block = encode_block(&[5u8; 64]);
+        lie.extend_from_slice(BV4_COMPRESSED);
+        lie.extend_from_slice(&63u32.to_le_bytes());
+        lie.extend_from_slice(&(block.len() as u32).to_le_bytes());
+        lie.extend_from_slice(&block);
+        assert_eq!(Bv4Decoder::new(1000).feed(&lie), Err(Error::InvalidData));
     }
 }

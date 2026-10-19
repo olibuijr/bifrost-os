@@ -248,6 +248,21 @@ impl Encoder {
         out
     }
 
+    /// Sync flush (RFC 1951, the zlib `Z_SYNC_FLUSH`): codes the input collected so far as a block that
+    /// is not final, then writes an empty stored block so the output ends on a byte boundary. A decoder
+    /// that has read the returned bytes has produced every byte written so far. Matches in later blocks
+    /// still reach back into the flushed data.
+    pub fn flush(&mut self) -> Vec<u8> {
+        if self.buf.len() > self.start {
+            self.emit(false);
+        }
+        self.w.put(0, 1);
+        self.w.put(0, 2);
+        self.w.align();
+        self.w.out.extend_from_slice(&[0x00, 0x00, 0xff, 0xff]);
+        std::mem::take(&mut self.w.out)
+    }
+
     /// Closes the stream with a final block and returns the remaining bytes.
     pub fn finish(mut self) -> Vec<u8> {
         self.emit(true);
@@ -741,5 +756,40 @@ mod tests {
     fn threaded_encoding_of_a_small_input_is_the_single_thread_output() {
         let data = b"small input";
         assert_eq!(encode_threaded(data, Level::Default, 4), encode(data, Level::Default));
+    }
+
+    #[test]
+    fn a_sync_flush_lets_a_decoder_reach_every_byte_written_so_far() {
+        use super::super::inflate_stream::Decoder;
+        let first = b"first part, first part, first part ".to_vec();
+        let second = b"second part, first part again".to_vec();
+        let mut encoder = Encoder::new(Level::Default);
+        let mut decoder = Decoder::new(false, 1 << 20);
+        let mut seen = Vec::new();
+        encoder.write(&first);
+        let flushed = encoder.flush();
+        assert_eq!(&flushed[flushed.len() - 4..], &[0x00, 0x00, 0xff, 0xff], "ends with the empty stored block");
+        seen.extend(decoder.feed(&flushed).unwrap());
+        assert_eq!(seen, first, "all flushed input is decodable before the stream ends");
+        encoder.write(&second);
+        let tail = encoder.finish();
+        seen.extend(decoder.feed(&tail).unwrap());
+        seen.extend(decoder.finish().unwrap());
+        let mut want = first.clone();
+        want.extend_from_slice(&second);
+        assert_eq!(seen, want);
+    }
+
+    #[test]
+    fn flushing_with_nothing_pending_is_just_the_empty_stored_block() {
+        let mut encoder = Encoder::new(Level::Fast);
+        let a = encoder.flush();
+        let b = encoder.flush();
+        assert_eq!(a, vec![0x00, 0x00, 0x00, 0xff, 0xff]);
+        assert_eq!(b, vec![0x00, 0x00, 0x00, 0xff, 0xff]);
+        let mut out = a;
+        out.extend(b);
+        out.extend(encoder.finish());
+        assert_eq!(inflate::inflate(&out).unwrap(), Vec::<u8>::new());
     }
 }
