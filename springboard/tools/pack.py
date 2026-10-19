@@ -4,19 +4,22 @@ the APK or /data/local/springboard (no image decoding at runtime).
 
 usage: tools/pack.py <bifrost-ref dir> <out assets dir> <screen w> <screen h>
 
+The app icons come only from springboard/res/app-icons/<bundle id>.png (BifrOSt's own, drawn by tools/make-icons.py);
+the <bifrost-ref dir> is read for the UI sounds alone, never for icons.
+
 Output layout:
   wallpaper.raw              default wallpaper (the lock background)
   wallpapers/<id>.raw        every photo in springboard/wallpapers at screen size (centre-cropped)
   wallpapers/<id>.thumb.raw  320 x 180 (16:9) thumbnail for Settings > Wallpaper
   wallpapers/index.ini       id=Display Name, one per line
-  icons/<bundle id>.raw      app icons, premultiplied
+  icons/<bundle id>.raw      app icons from springboard/res/app-icons, premultiplied
   sounds/<name>.pcm          UI sounds as raw 48 kHz stereo signed 16-bit LE PCM
   SFUI.ttf, SFUIMono.ttf, Symbols.ttf   the default UI fonts: open-source lookalikes of the reference desktop fonts
   fonts/<file>.ttf           the font library Settings > Fonts offers as overrides
 
 The wallpapers are the royalty-free photos in springboard/wallpapers (see CREDITS.md). The fonts are open
 source (SIL OFL 1.1), fetched from one pinned google/fonts commit, checked by SHA-256 and cached in
-~/.cache/bifrost/fonts. Icons and UI sounds still come from <ref>, which is not in the repo.
+~/.cache/bifrost/fonts. UI sounds still come from <ref>, which is not in the repo.
 """
 import os
 import shutil
@@ -28,6 +31,7 @@ import urllib.parse
 import urllib.request
 
 WALLPAPERS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "wallpapers")
+APP_ICONS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "res", "app-icons")
 DEFAULT_WALLPAPER = "waterfall_idyllic.jpg"
 ICON_PT = 64
 bifrost_WIDTH_PT = 768
@@ -137,9 +141,9 @@ def main(ref, out, w, h):
     icon = round(ICON_PT * w / bifrost_WIDTH_PT)
     os.makedirs(f"{out}/icons", exist_ok=True)
     write_raw(f"{out}/wallpaper.raw", w, h, rgba(os.path.join(WALLPAPERS, DEFAULT_WALLPAPER), w, h, fill=True))
-    for name in os.listdir(f"{ref}/icons"):
+    for name in sorted(os.listdir(APP_ICONS)):
         if name.endswith(".png"):
-            px = premultiply(rgba(f"{ref}/icons/{name}", icon, icon))
+            px = premultiply(rgba(f"{APP_ICONS}/{name}", icon, icon))
             write_raw(f"{out}/icons/{name[:-4]}.raw", icon, icon, px)
     fonts(out)
     stills(out, w, h)
