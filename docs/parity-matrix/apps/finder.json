@@ -32,7 +32,7 @@
    "apple": "Finder View > as Columns",
    "status": "partial",
    "bifrost": "springboard/apps/files/src/views/column.rs:43",
-   "note": "paint_columns draws the ancestors and the open folder (window.rs:445) Built; not yet verified on Midget, so partial until a Midget check.",
+   "note": "paint_columns draws the ancestors and the open folder (window.rs:445) Built; not yet verified on Midget, so partial until a Midget check. Selection (2026-10-19, RowState in views/column.rs): the open folder's column has the keyboard focus, so its selected rows are the accent plate with white text and a white folder icon; the row each folder above leads through is the neutral inactive plate (SELECTION_INACTIVE) with the normal text.",
    "wire": "Verify on Midget, then promote to parity."
   },
   {
@@ -355,9 +355,9 @@
    "area": "search",
    "apple": "Finder search scope bar",
    "status": "partial",
-   "bifrost": "springboard/apps/files/src/search.rs (Scope, query_changed)",
-   "note": "Built 2026-10-19: in:home and in:disk (also in:folder) pick where the search starts (Scope::root: the open folder, the home folder, or /); the default stays the open folder. Typed term only, no scope control in the search bar yet. Midget check: Files > open Documents > search \"in:home <name of a file in Downloads>\": the file shows although it is outside Documents; \"in:disk hostname\" finds /etc/hostname. Unit tests: `cargo test -p files search`.",
-   "wire": "Add a scope control to the search bar (this folder, Home, This PC) that writes the in: term"
+   "bifrost": "springboard/apps/files/src/search.rs (Scope, Scope::plan, ScopeBar, paint_scope_bar, restart_search)",
+   "note": "Built 2026-10-19: a query shows the scope bar under the toolbar (\"Search:\", This Computer, the open folder's name) and the window title reads Searching \"This Computer\" (or the folder). This Computer is the default: the home folder first, then mounted volumes, then the rest of the disk without /proc, /sys, /dev and /run, on a worker thread, capped at 1000 hits (springboard/src/files/find.rs FileManager::over). The walk is a bounded recursive name search; the system search index only holds what apps indexed, not files. Results show in the current view; clearing the field or Esc restores the folder. in:home, in:disk, in:computer and in:folder in the query still override the bar. Not yet verified on Midget. Midget check: Files > Documents > type a name that lives in Downloads: it shows, title Searching \"This Computer\"; click the folder plate: only Documents' tree. Unit tests: `cargo test -p files search`.",
+   "wire": "Verify on Midget, then promote to parity. Missing against the reference: Save as smart folder and the + criteria buttons in the bar, a Home plate, and the Where column in the list view."
   },
   {
    "feature": "Kind filter for search results",
