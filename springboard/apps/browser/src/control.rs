@@ -53,6 +53,8 @@ pub const METHODS: &[&str] = &[
     "browser.bookmarks",
     "browser.history",
     "browser.favicon",
+    "browser.content_rules",
+    "browser.messages",
 ];
 
 // ---- small Json helpers ----
@@ -236,7 +238,8 @@ pub enum Req {
     Eval { id: Option<u32>, js: String, timeout_ms: u64 },
     Console { id: Option<u32>, level: Option<String>, limit: usize, since_seq: Option<u64>, clear: bool },
     Dom { id: Option<u32>, selector: String, mode: DomMode, limit: usize, max_bytes: usize, timeout_ms: u64 },
-    Screenshot { id: Option<u32>, full_page: bool, selector: Option<String>, rect: Option<(f32, f32, f32, f32)>, scale: f32, max_pixels: u64, timeout_ms: u64 },
+    /// `pdf` set (`format: "pdf"`): the capture is returned as a paginated PDF of that layout instead of a PNG.
+    Screenshot { id: Option<u32>, full_page: bool, selector: Option<String>, rect: Option<(f32, f32, f32, f32)>, scale: f32, max_pixels: u64, timeout_ms: u64, pdf: Option<bifrost_app::web_print::PrintLayout> },
     Network { id: Option<u32>, since_seq: Option<u64>, limit: usize, clear: bool },
     Wait { id: Option<u32>, what: WaitFor, timeout_ms: u64 },
     Viewport { size: Option<(u32, u32)>, dpr: Option<f32>, reset: bool },
@@ -257,6 +260,11 @@ pub enum Req {
     /// deletes the entries last visited at or after that time.
     History { query: Option<String>, limit: usize, remove: Option<String>, clear: bool, clear_since: Option<u64> },
     Favicon { id: Option<u32> },
+    /// Content blockers: `op` is list (default), compile (`identifier` + `rules` JSON, stored and applied), remove
+    /// (`identifier`), clear, or test (what the active rules say about `url`, as `resource` seen from page `top_url`).
+    ContentRules { op: String, identifier: Option<String>, rules: Option<String>, url: Option<String>, resource: Option<String>, top_url: Option<String> },
+    /// Messages pages posted to the `control` handler (`window.bifrost.messageHandlers.control.postMessage(x)`).
+    Messages { since_seq: Option<u64>, clear: bool },
 }
 
 /// CSS size and device pixel ratio of a viewport preset (`mobile`, `bifrost`, `desktop`).
@@ -417,17 +425,33 @@ pub fn parse(method: &str, p: &Json) -> Result<Req, RpcError> {
             if [full_page, selector.is_some(), rect.is_some()].iter().filter(|b| **b).count() > 1 {
                 return Err(invalid("full_page, selector and rect are mutually exclusive"));
             }
-            if let Some(f) = opt_str(p, "format")? {
-                if f != "png" {
-                    return Err(invalid("format must be png"));
+            let pdf = match opt_str(p, "format")?.as_deref() {
+                None | Some("png") => None,
+                Some("pdf") => {
+                    let mut layout = match opt_str(p, "paper")?.as_deref() {
+                        None | Some("letter") => bifrost_app::web_print::PrintLayout::letter(),
+                        Some("a4") => bifrost_app::web_print::PrintLayout::a4(),
+                        Some(_) => return Err(invalid("paper must be letter or a4")),
+                    };
+                    if let Some(m) = opt_num(p, "margin")? {
+                        if !(0.0..=144.0).contains(&m) {
+                            return Err(invalid("margin must be from 0 to 144 points"));
+                        }
+                        layout.margin = m;
+                    }
+                    layout.header_footer = opt_bool(p, "header_footer")?.unwrap_or(true);
+                    Some(layout)
                 }
-            }
+                Some(_) => return Err(invalid("format must be png or pdf")),
+            };
+            // a PDF prints the whole page unless a selector or rectangle names what to print
+            let full_page = full_page || (pdf.is_some() && selector.is_none() && rect.is_none());
             let scale = opt_num(p, "scale")?.unwrap_or(1.0);
             if !(0.1..=4.0).contains(&scale) {
                 return Err(invalid("scale must be from 0.1 to 4"));
             }
             let max_pixels = opt_uint(p, "max_pixels", 64_000_000)?.unwrap_or(MAX_SHOT_PIXELS).max(1);
-            Req::Screenshot { id: tab_id(p)?, full_page, selector, rect, scale: scale as f32, max_pixels, timeout_ms: timeout_ms(p)? }
+            Req::Screenshot { id: tab_id(p)?, full_page, selector, rect, scale: scale as f32, max_pixels, timeout_ms: timeout_ms(p)?, pdf }
         }
         "browser.network" => Req::Network {
             id: tab_id(p)?,
@@ -509,6 +533,24 @@ pub fn parse(method: &str, p: &Json) -> Result<Req, RpcError> {
                 _ => return Err(invalid("x and y are required (page-local CSS pixels, not negative)")),
             }
         }
+        "browser.content_rules" => {
+            let op = opt_str(p, "op")?.unwrap_or_else(|| "list".into());
+            if !matches!(op.as_str(), "list" | "compile" | "remove" | "clear" | "test") {
+                return Err(invalid("op must be list, compile, remove, clear or test"));
+            }
+            let (identifier, rules, url) = (opt_str(p, "identifier")?, opt_str(p, "rules")?, opt_str(p, "url")?);
+            if matches!(op.as_str(), "compile" | "remove") && identifier.is_none() {
+                return Err(invalid("identifier is required for compile and remove"));
+            }
+            if op == "compile" && rules.is_none() {
+                return Err(invalid("rules (the rule list JSON text) is required for compile"));
+            }
+            if op == "test" && url.is_none() {
+                return Err(invalid("url is required for test"));
+            }
+            Req::ContentRules { op, identifier, rules, url, resource: opt_str(p, "resource")?, top_url: opt_str(p, "top_url")? }
+        }
+        "browser.messages" => Req::Messages { since_seq: opt_uint(p, "since_seq", u64::MAX / 2)?, clear: opt_bool(p, "clear")?.unwrap_or(false) },
         "browser.downloads" => Req::Downloads { cancel: opt_uint(p, "cancel", u32::MAX as u64)?.map(|v| v as u32), clear: opt_bool(p, "clear")?.unwrap_or(false) },
         "browser.bookmarks" => {
             let op = opt_str(p, "op")?.unwrap_or_else(|| "list".into());
@@ -719,6 +761,23 @@ pub fn screenshot_reply(png: &[u8], dpr: f64, scroll: (f64, f64)) -> Result<Json
         ("data", Json::Str(base64(png))),
         ("dpr", num(dpr)),
         ("scroll", obj(vec![("x", num(scroll.0)), ("y", num(scroll.1))])),
+    ]))
+}
+
+/// The `browser.screenshot` reply for `format: "pdf"`: the PDF as base64, its page count and the size in pixels
+/// of the capture it was printed from.
+pub fn pdf_reply(pdf: &[u8], pages: usize, capture: (u32, u32), dpr: f64) -> Result<Json, RpcError> {
+    if pdf.len() > MAX_SHOT_BYTES {
+        return Err(RpcError::new(bifrost_app::control::INTERNAL_ERROR, "PDF larger than 16 MB: use rect, selector or a smaller viewport"));
+    }
+    Ok(obj(vec![
+        ("format", text("pdf")),
+        ("encoding", text("base64")),
+        ("data", Json::Str(base64(pdf))),
+        ("pages", num(pages as f64)),
+        ("width", num(capture.0 as f64)),
+        ("height", num(capture.1 as f64)),
+        ("dpr", num(dpr)),
     ]))
 }
 

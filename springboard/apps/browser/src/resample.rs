@@ -53,17 +53,13 @@ pub fn resample_rgba(src: &[u8], w: u32, h: u32, nw: u32, nh: u32) -> Vec<u8> {
     out
 }
 
-/// The PNG scaled by `scale` (0.1 to 4). A scale within 0.5 % of 1 returns the input unchanged.
-pub fn scale_png(png: &[u8], scale: f32) -> Result<Vec<u8>, String> {
-    if (scale - 1.0).abs() < 0.005 {
-        return Ok(png.to_vec());
-    }
+/// The PNG's pixels as RGBA8 with its width and height.
+pub fn decode_rgba(png: &[u8]) -> Result<(Vec<u8>, u32, u32), String> {
     let mut dec = Decoder::new(std::io::Cursor::new(png));
     dec.set_transformations(Transformations::EXPAND | Transformations::STRIP_16);
     let mut reader = dec.read_info().map_err(|e| format!("cannot decode the screenshot: {e}"))?;
     let mut buf = vec![0; reader.output_buffer_size().ok_or("screenshot too large")?];
     let info = reader.next_frame(&mut buf).map_err(|e| format!("cannot decode the screenshot: {e}"))?;
-    let (w, h) = (info.width, info.height);
     let data = &buf[..info.buffer_size()];
     let rgba: Vec<u8> = match info.color_type {
         ColorType::Rgba => data.to_vec(),
@@ -72,6 +68,25 @@ pub fn scale_png(png: &[u8], scale: f32) -> Result<Vec<u8>, String> {
         ColorType::GrayscaleAlpha => data.chunks_exact(2).flat_map(|p| [p[0], p[0], p[0], p[1]]).collect(),
         ColorType::Indexed => return Err("indexed PNG after expansion".into()),
     };
+    Ok((rgba, info.width, info.height))
+}
+
+/// The PNG as a printed page: a paginated PDF (`bifrost_app::web_print`) titled `title`. Returns the PDF and its
+/// page count.
+pub fn png_to_pdf(png: &[u8], title: &str, layout: &bifrost_app::web_print::PrintLayout) -> Result<(Vec<u8>, usize), String> {
+    let (rgba, w, h) = decode_rgba(png)?;
+    let rgb = bifrost_app::web_print::rgba_to_rgb(&rgba, w as usize, h as usize)?;
+    let pages = bifrost_app::web_print::plan_pages(w as usize, h as usize, layout).len();
+    let pdf = bifrost_app::web_print::pdf_from_rgb(&rgb, w as usize, h as usize, title, layout)?;
+    Ok((pdf, pages))
+}
+
+/// The PNG scaled by `scale` (0.1 to 4). A scale within 0.5 % of 1 returns the input unchanged.
+pub fn scale_png(png: &[u8], scale: f32) -> Result<Vec<u8>, String> {
+    if (scale - 1.0).abs() < 0.005 {
+        return Ok(png.to_vec());
+    }
+    let (rgba, w, h) = decode_rgba(png)?;
     let (nw, nh) = scaled_size(w, h, scale);
     if nw as u64 * nh as u64 > MAX_OUT_PIXELS {
         return Err(format!("scaled screenshot would be {nw} x {nh} pixels: use a smaller scale"));
@@ -101,6 +116,30 @@ mod tests {
         let big = resample_rgba(&half, 2, 2, 4, 4);
         assert_eq!(big.len(), 64);
         assert_eq!(scaled_size(1, 1, 0.1), (1, 1));
+    }
+
+    fn tiny_png(w: u32, h: u32, fill: u8) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        {
+            let mut enc = png::Encoder::new(&mut bytes, w, h);
+            enc.set_color(ColorType::Rgba);
+            enc.set_depth(BitDepth::Eight);
+            let mut wr = enc.write_header().unwrap();
+            wr.write_image_data(&vec![fill; (w * h * 4) as usize]).unwrap();
+        }
+        bytes
+    }
+
+    #[test]
+    fn a_png_prints_as_a_paginated_pdf() {
+        let layout = bifrost_app::web_print::PrintLayout { paper_width: 200.0, paper_height: 300.0, margin: 20.0, header_footer: false };
+        // 80 px wide scales 2 points per pixel, 130 rows per page: 300 rows are 3 pages
+        let (pdf, pages) = png_to_pdf(&tiny_png(80, 300, 200), "t", &layout).unwrap();
+        assert_eq!(pages, 3);
+        assert!(pdf.starts_with(b"%PDF"));
+        let doc = bifrost_app::graphics_pdf::Document::open(pdf).unwrap();
+        assert_eq!(doc.page_count(), 3);
+        assert!(png_to_pdf(b"not a png", "t", &layout).is_err());
     }
 
     #[test]
