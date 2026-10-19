@@ -4190,10 +4190,13 @@ mod tests {
         tap_row(&mut st, &ui, &mut prefs, "Wi-Fi");
         // the switch, the networks, and the Country or Region group
         assert_eq!(st.list().unwrap().spec().groups.len(), 3);
-        let fx = tap_row(&mut st, &ui, &mut prefs, "Wi-Fi");
+        // the switch animates right after the tap; the settle that follows reloads the page and ends it
+        let (x, y) = st.row_centre(&ui, "Wi-Fi").unwrap();
+        let fx = tap(&mut st, &ui, &mut prefs, x, y);
         assert_eq!(fx, vec![Effect::Wifi(WifiAction::Enable(false))]);
-        assert_eq!(st.list().unwrap().spec().groups.len(), 1, "no networks while off");
         assert!(st.list().unwrap().animating(50.0), "the switch animates");
+        settle(&mut st, &ui);
+        assert_eq!(st.list().unwrap().spec().groups.len(), 1, "no networks while off");
         let fx = tap_row(&mut st, &ui, &mut prefs, "Wi-Fi");
         assert_eq!(fx, vec![Effect::Wifi(WifiAction::Enable(true)), Effect::Wifi(WifiAction::Scan)]);
         assert_eq!(st.list().unwrap().spec().groups.len(), 2);
@@ -4587,7 +4590,9 @@ mod tests {
     #[test]
     fn network_diagnose_runs_the_probe_off_the_draw_thread_and_shows_the_diagnosis() {
         let ui = super::super::tests::ui();
-        let (mut st, mut prefs) = settings(&ui, &info());
+        // the Network row is the desktop's own network page, so the snapshot has to be there
+        let info = Info { desktop_network: Some(super::super::desktop_network::Snapshot::default()), ..info() };
+        let (mut st, mut prefs) = settings(&ui, &info);
         st.net_probe = std::sync::Arc::new(FakeProbe { resolves: false });
         tap_row(&mut st, &ui, &mut prefs, "Network");
         assert_eq!(st.page(), PageId::Network);
