@@ -203,7 +203,20 @@ pub fn run(socket: Option<&str>, command: &[String]) -> Result<(), Box<dyn Error
         use smithay::backend::renderer::ImportDma;
         backend.borrow().renderer.dmabuf_formats()
     };
-    let _dmabuf_global = state.dmabuf_state.create_global::<WmState>(&state.dh, formats);
+    // linux-dmabuf v4 with default feedback naming the render node: Mesa's Wayland EGL platform learns the device
+    // from `main_device` (a v3 global gives it none, so a client's EGL fails with "failed to get driver name for fd -1")
+    let _dmabuf_global = match crate::sync::render_node_dev(&gpu)
+        .and_then(|dev| crate::sync::build_feedback(&crate::sync::plan_from_formats(dev, formats.clone())).map(|f| (dev, f)))
+    {
+        Ok((dev, feedback)) => {
+            eprintln!("bifrost-wm: dmabuf feedback v4, main device {}:{}", dev_major(dev), dev_minor(dev));
+            state.dmabuf_state.create_global_with_default_feedback::<WmState>(&state.dh, &feedback)
+        }
+        Err(e) => {
+            eprintln!("bifrost-wm: dmabuf feedback unavailable ({e}), linux-dmabuf v3");
+            state.dmabuf_state.create_global::<WmState>(&state.dh, formats)
+        }
+    };
     let b = backend.clone();
     state.dmabuf_import = Some(Box::new(move |d| {
         use smithay::backend::renderer::ImportDma;
@@ -628,4 +641,14 @@ mod tests {
         assert_eq!(at(0, 5), vec![24, 24, 24, 255], "left outline");
         assert_eq!(at(20, 2)[3], 0, "outside");
     }
+}
+
+/// The major number of a `dev_t` (glibc `gnu_dev_major`).
+fn dev_major(dev: u64) -> u32 {
+    (((dev >> 32) & 0xffff_f000) | ((dev >> 8) & 0x0000_0fff)) as u32
+}
+
+/// The minor number of a `dev_t` (glibc `gnu_dev_minor`).
+fn dev_minor(dev: u64) -> u32 {
+    (((dev >> 12) & 0xffff_ff00) | (dev & 0x0000_00ff)) as u32
 }

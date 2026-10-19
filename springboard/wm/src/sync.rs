@@ -78,6 +78,26 @@ pub fn plan_feedback(main_device: u64, render: &[Fmt], scanout_device: Option<u6
     FeedbackPlan { main_device, tranches }
 }
 
+/// Plans the default feedback from the renderer's dma-buf formats alone: one main tranche on `main_device` (the
+/// GPU's render node). There is no scanout tranche; clients render for the renderer and the compositor composes.
+pub fn plan_from_formats(main_device: u64, formats: impl IntoIterator<Item = Format>) -> FeedbackPlan {
+    let render: Vec<Fmt> = formats.into_iter().map(|f| Fmt { fourcc: f.code as u32, modifier: u64::from(f.modifier) }).collect();
+    plan_feedback(main_device, &render, None, &[])
+}
+
+/// The device number of the render node that belongs to the DRM device at `card` (`/dev/dri/card1` gives the
+/// number of `/dev/dri/renderD128`). This is the feedback's `main_device`: Mesa's Wayland EGL platform opens the
+/// render node it names. A card without a render node (some KMS-only drivers) reports its own number.
+#[cfg(feature = "drm")]
+pub fn render_node_dev(card: &Path) -> io::Result<u64> {
+    use smithay::backend::drm::{DrmNode, NodeType};
+    let node = DrmNode::from_path(card).map_err(|e| io::Error::new(io::ErrorKind::NotFound, format!("{}: {e}", card.display())))?;
+    match node.node_with_type(NodeType::Render) {
+        Some(Ok(render)) => Ok(render.dev_id()),
+        _ => Ok(node.dev_id()),
+    }
+}
+
 /// The feedback for one surface. A surface that may be scanned out directly (a full-screen window on the scanout
 /// device) keeps the scanout tranche; any other surface gets the render-only tranches, so its client does not
 /// allocate buffers that only the scanout engine accepts.
@@ -348,6 +368,25 @@ mod tests {
     const NV12: u32 = 0x3231_564e;
     const LINEAR: u64 = 0;
     const TILED: u64 = 0x0100_0000_0000_0001;
+
+    #[test]
+    fn default_feedback_names_the_render_node_as_main_device() {
+        use smithay::backend::allocator::{Format, Fourcc, Modifier};
+        // /dev/dri/renderD128 is char 226:128
+        let render_node = (226u64 << 8) | 128;
+        let formats = [
+            Format { code: Fourcc::Xrgb8888, modifier: Modifier::Linear },
+            Format { code: Fourcc::Argb8888, modifier: Modifier::Linear },
+        ];
+        let plan = plan_from_formats(render_node, formats);
+        assert_eq!(plan.main_device, render_node);
+        assert_eq!(plan.tranches.len(), 1);
+        assert_eq!(plan.tranches[0].device, render_node);
+        assert!(!plan.tranches[0].scanout);
+        assert_eq!(plan.tranches[0].formats, vec![f(XR24, LINEAR), f(AR24, LINEAR)]);
+        // the plan builds into Smithay's feedback (format table included)
+        assert!(build_feedback(&plan).is_ok());
+    }
 
     #[test]
     fn plan_keeps_the_render_formats_in_order_without_duplicates() {

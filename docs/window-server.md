@@ -217,6 +217,27 @@ Reduce Transparency, Increase Contrast or Button Shapes. Format: `key=0|1` lines
 A missing file means all off. Read it with `bifrost_render::appearance::DisplayOptions::read_from(DISPLAY_FILE)` (poll
 it, or watch the directory with inotify) and turn glass off (opaque material tints, no blur) while `reduce_transparency` is set.
 
+## linux-dmabuf feedback and the render node (2026-10-19)
+
+The DRM backend advertises `zwp_linux_dmabuf_v1` as a version 4 global with default feedback
+(`DmabufState::create_global_with_default_feedback`). Before, it created a version 3 global (`create_global`), which
+carries formats but no device. Mesa's Wayland EGL platform learns the GPU from `main_device` in the feedback (or from
+the legacy `wl_drm` global, which Smithay 0.7 does not provide), so a sandboxed client that opened an EGL display
+(the Browser engine's hidden winit window) logged `MESA-EGL: warning: failed to get driver name for fd -1` and
+`MESA-LOADER: failed to retrieve device information`, then fell back to software rendering.
+
+Now `drm::run` derives the render node from the card it opened (`/dev/dri/card1` gives `/dev/dri/renderD128`, via
+`DrmNode::from_path(..).node_with_type(NodeType::Render)` in `sync::render_node_dev`; a card without a render node
+reports its own number). `sync::plan_from_formats` builds one main tranche on that device from the renderer's dma-buf
+texture formats, and `sync::build_feedback` turns it into Smithay's `DmabufFeedback`. Per-surface feedback
+(`get_surface_feedback`) answers with the same default; there is no scanout tranche, because clients render for the
+compositor's GLES renderer and the compositor composes. If the render node cannot be found, the log says
+`dmabuf feedback unavailable` and the v3 global is created as before.
+
+Verify: the window server logs `bifrost-wm: dmabuf feedback v4, main device 226:128`; a client run with
+`WAYLAND_DEBUG=1` shows `zwp_linux_dmabuf_feedback_v1.main_device` followed by `tranche_target_device` and
+`tranche_formats`; the Browser engine logs `renderer=gpu`. Host test: `sync::tests::default_feedback_names_the_render_node_as_main_device`.
+
 ## Key bindings
 
 `wm/src/keybindings.rs` takes these chords before any client sees them (the shell only gets keys while one of its
