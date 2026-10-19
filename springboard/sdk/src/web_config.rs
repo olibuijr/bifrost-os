@@ -74,7 +74,7 @@ pub enum HandlerError {
     InvalidName,
 }
 
-fn valid_handler_name(name: &str) -> bool {
+pub(crate) fn valid_handler_name(name: &str) -> bool {
     let mut chars = name.chars();
     chars.next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_' || c == '$') && chars.all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '$')
 }
