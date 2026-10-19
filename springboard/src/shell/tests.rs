@@ -525,7 +525,7 @@
         sh.desk_open(AppId::Settings,0.);
         let fx=sh.hw_shortcut(hwkeys::Shortcut::Lock,5.);
         assert!(sh.is_locked(),"the chord locks the screen");
-        assert_eq!(fx,vec![Effect::ScreenOff]);
+        assert_eq!(fx,vec![Effect::ScreenOn],"the desktop keeps the display on and shows the login window");
     }
 
     /// A window whose app has committed no frame is not drawn and not hit: it used to show as an empty black window
