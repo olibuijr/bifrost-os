@@ -5,7 +5,7 @@
 //! window's app is laid out for the window body (the shell's `w`/`h` are swapped to the body size
 //! while it draws or takes a touch), drawn into an offscreen buffer and copied in.
 
-use super::ui::{Weight, BLACK, SECONDARY, SYSTEM_GREEN, SYSTEM_RED, SYSTEM_YELLOW, TRAFFIC_INACTIVE_C, WHITE, TRAFFIC_GLYPH, MENU_TINT, MENU_RADIUS_PT, SEPARATOR_C, FIELD_BG, LABEL, MAC_BODY_PT};
+use super::ui::{Weight, BLACK, SECONDARY, SYSTEM_GREEN, SYSTEM_RED, SYSTEM_YELLOW, TRAFFIC_INACTIVE_C, WHITE, TRAFFIC_GLYPH, MENU_TINT, MENU_RADIUS_PT, SEPARATOR_C, FIELD_BG, LABEL, MAC_BODY_PT, MAC_CALLOUT_PT};
 use super::desk_occlusion::{self, grown, opaque_interior, Cover};
 use super::{apphost, apps, window_fx, AppId, Effect, Event, Screen, Shell};
 #[cfg(test)]
@@ -1513,6 +1513,17 @@ impl Shell {
         self.desk_refocus();
     }
 
+    /// Quits the installed SDK app in `slot`: its desk windows go and the app is sent `Quit`, so it saves its state and exits
+    /// (`AppHost::begin_quit` kills it after the grace period). The Dock's Quit and Cmd+Q use it. A direct app's window is the
+    /// window server's, so `desk_close_app` already quits it; an app on the shared-memory route only loses its desk window there
+    /// and its process is quit here. Cmd+W and the traffic light close the window and leave the app running.
+    pub(super) fn desk_quit_app(&mut self, slot: u8) {
+        self.desk_close_app(AppId::External(slot));
+        if self.ext.get(slot as usize).and_then(Option::as_ref).is_some() {
+            self.ext_close(slot as usize);
+        }
+    }
+
     /// The desk windows that float: each app whose host asked for `ToShell::WindowLevel`, and each extra window its app
     /// set to `ToShell::WindowLevelOf`.
     pub(super) fn floating_apps(&self) -> Vec<AppId> {
@@ -2540,23 +2551,30 @@ impl Shell {
                     else if let Some(wi) = super::desktop_dock::dock_min_index(i) { desk.wins.get(wi).and_then(|w| apps().iter().find(|a| a.id == w.app)).map_or(String::new(), |a| a.name.to_string()) }
                     else { self.dock_linux_name(i) };
                 if !name.is_empty() && label_alpha > 0.0 {
-                    let a = (label_alpha * 255.0).round() as u32;
-                    let pos = self.dock_preferences().position;
-                    self.label(&name, 12.0, Weight::Regular, WHITE, |im| {
-                        let (px, py) = (ui.pt(10.0), ui.pt(5.0));
-                        let (w, h) = (im.w as f32 + 2.0 * px, im.h as f32 + 2.0 * py);
-                        let (x, y) = match pos {
-                            super::desktop_dock::Position::Bottom => (((r.x + r.w / 2) as f32 - w / 2.0).clamp(0.0, (s.w as f32 - w).max(0.0)), r.y as f32 - h - ui.pt(8.0)),
-                            super::desktop_dock::Position::Left => ((r.x + r.w) as f32 + ui.pt(8.0), (r.y + r.h / 2) as f32 - h / 2.0),
-                            super::desktop_dock::Position::Right => (r.x as f32 - w - ui.pt(8.0), (r.y + r.h / 2) as f32 - h / 2.0),
-                        };
-                        s.fill_rrect(x, y, w, h, ui.pt(MENU_RADIUS_PT), super::desktop_dock::fade(MENU_TINT.now(), label_alpha));
-                        s.blit(im, (x + px) as i32, (y + py) as i32, 255, a);
-                    });
+                    self.draw_dock_label(s, &name, *r, self.dock_preferences().position, label_alpha, MENU_TINT.now(), LABEL.now());
                 }
             }
         }
         if let Some(Grab::DockDrag{from,at_x,at_y,moved:true,..})=desk.grab {if let Some(&index)=list.get(from){if let Some(base)=self.base_icons.get(index){let size=rects[from].w as usize;let icon=base.resized(size,size);s.blit(&icon,at_x as i32-size as i32/2,at_y as i32-size as i32/2,255,210);}}}
+    }
+
+    /// The Dock's hover label: `name` on the menu material beside the icon slot `r`, faded by `alpha` (0..1). The text is
+    /// rendered white and tinted with `ink` by `blit_colored`, so it follows Light and Dark: a plain white blit read on Dark's
+    /// plate but left an empty pill on Light's pale one. `plate` and `ink` are the resolved `MENU_TINT` and `LABEL`.
+    pub(super) fn draw_dock_label(&self, s: &mut Surface, name: &str, r: Rect, pos: super::desktop_dock::Position, alpha: f32, plate: u32, ink: u32) {
+        let ui = &self.ui;
+        let a = (alpha * 255.0).round() as u32;
+        self.label(name, MAC_CALLOUT_PT, Weight::Regular, WHITE, |im| {
+            let (px, py) = (ui.pt(10.0), ui.pt(5.0));
+            let (w, h) = (im.w as f32 + 2.0 * px, im.h as f32 + 2.0 * py);
+            let (x, y) = match pos {
+                super::desktop_dock::Position::Bottom => (((r.x + r.w / 2) as f32 - w / 2.0).clamp(0.0, (s.w as f32 - w).max(0.0)), r.y as f32 - h - ui.pt(8.0)),
+                super::desktop_dock::Position::Left => ((r.x + r.w) as f32 + ui.pt(8.0), (r.y + r.h / 2) as f32 - h / 2.0),
+                super::desktop_dock::Position::Right => (r.x as f32 - w - ui.pt(8.0), (r.y + r.h / 2) as f32 - h / 2.0),
+            };
+            s.fill_rrect(x, y, w, h, ui.pt(MENU_RADIUS_PT), super::desktop_dock::fade(plate, alpha));
+            s.blit_colored(im, (x + px) as i32, (y + py) as i32, ink, a);
+        });
     }
 }
 

@@ -52,7 +52,7 @@ fn status_icon_lift(battery:bool,ethernet:bool)->f32 {if battery{0.}else if ethe
     /// the open or save panel (`docpanel`): drawn and hit-tested by the panel, not as rows
     Document}
 #[cfg(feature = "desktop-wayland")]
-#[derive(Clone)] pub(super) enum Action {Script(u8),Foreign(u32),Settings(&'static str),Desktop,Close,Minimize,Zoom,ShowAll,Open(super::AppId),Context(u8,u32),QuickAction(u8,u8),AppMenu(u8,u32),Dock(super::desktop_dock::Change),DockMenu(u8,u32),Shortcut(u16),Command(bifrost_proto::Command),Term(super::hwkeys::TermKey),Wifi(bool),Scan,Select(String),Power(String),Lock,Sleep,Halt(super::power_menu::PowerAction),StatusItem(u8,u32,u32),Tile(super::desk::Tile),RestoreSize,CycleWindow,Print,InputSource(u8),InputMethod(String),Recent(u8),ClearRecent,CharacterViewer,KeyboardViewer,OnScreenKeyboard,Media(bifrost_ui::media_session::RemoteCommand),Bluetooth(crate::bare::bluetooth::Cmd),Portal(String),RecordStop,Service(u8),Photo(super::photos::commands::PhotoCommand),PhotoEditWith(String),GameModeOff,LowPowerMode(bool),HelpItem(Menu,usize),HelpTopic(String,Option<String>),Help(String)}
+#[derive(Clone)] pub(super) enum Action {Script(u8),Foreign(u32),Settings(&'static str),Desktop,Close,Quit,Minimize,Zoom,ShowAll,Open(super::AppId),Context(u8,u32),QuickAction(u8,u8),AppMenu(u8,u32),Dock(super::desktop_dock::Change),DockMenu(u8,u32),Shortcut(u16),Command(bifrost_proto::Command),Term(super::hwkeys::TermKey),Wifi(bool),Scan,Select(String),Power(String),Lock,Sleep,Halt(super::power_menu::PowerAction),StatusItem(u8,u32,u32),Tile(super::desk::Tile),RestoreSize,CycleWindow,Print,InputSource(u8),InputMethod(String),Recent(u8),ClearRecent,CharacterViewer,KeyboardViewer,OnScreenKeyboard,Media(bifrost_ui::media_session::RemoteCommand),Bluetooth(crate::bare::bluetooth::Cmd),Portal(String),RecordStop,Service(u8),Photo(super::photos::commands::PhotoCommand),PhotoEditWith(String),GameModeOff,LowPowerMode(bool),HelpItem(Menu,usize),HelpTopic(String,Option<String>),Help(String)}
 // Only the desktop-wayland bar reads these fields; other builds never build the menu.
 #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
 pub(super) struct ContextMenu {pub slot:u8,pub x:f32,pub y:f32,pub items:Vec<bifrost_proto::ContextItem>}
@@ -175,6 +175,37 @@ pub(super) fn app_menu_chord(menus:&[bifrost_proto::AppMenu],ch:char,mods:u32)->
 /// app's Close Tab keeps Cmd+W while it has a tab to close).
 pub(super) fn chord_in_menus(menus:&[bifrost_proto::AppMenu],code:u16,mods:u32)->bool {
     super::evkeys::char_for(code,false).and_then(|c|app_menu_chord(menus,c,mods)).is_some()
+}
+/// What quitting (Cmd+Q, the App menu's Quit) does to the app in front. Cmd+W only ever closes the window.
+#[cfg(feature = "desktop-wayland")]
+#[derive(Clone,Debug,PartialEq,Eq)]
+pub(super) enum QuitStep {
+    /// an installed SDK app, by slot: its desk windows go and it is sent `Quit`, so it saves its state and exits (the host kills it
+    /// after the grace period), the way the Dock's Quit ends it
+    App(u8),
+    /// the toplevels of a native or Linux app: each is closed through the window server, as the Dock's Quit does
+    Windows(Vec<u32>),
+    /// a built-in window (Settings, Terminal, ...): it closes, as it always did
+    Window(AppId),
+    /// nothing is in front
+    Nothing,
+}
+/// The Cmd+Q decision, pure. `foreign` are the window server's windows as (toplevel id, app id, active); `sdk_slot` names the running
+/// direct SDK app whose toplevels carry an app id; `front` is the front window of the shell's own desk. A window server window in
+/// front wins over the desk's, as it does for Cmd+W (`foreign_active`). An extra window of an SDK app quits its app.
+#[cfg(feature = "desktop-wayland")]
+pub(super) fn quit_step(foreign:&[(u32,&str,bool)],sdk_slot:impl Fn(&str)->Option<u8>,front:Option<AppId>)->QuitStep {
+    if let Some(&(_,app_id,_))=foreign.iter().find(|w|w.2) {
+        return match sdk_slot(app_id) {
+            Some(slot)=>QuitStep::App(slot),
+            None=>QuitStep::Windows(foreign.iter().filter(|w|w.1==app_id).map(|w|w.0).collect()),
+        };
+    }
+    match front.map(AppId::parent) {
+        Some(AppId::External(slot))=>QuitStep::App(slot),
+        Some(app)=>QuitStep::Window(app),
+        None=>QuitStep::Nothing,
+    }
 }
 /// Menus that sit right after Edit instead of after View (the document apps' Format menus).
 #[cfg(feature = "desktop-wayland")]
@@ -482,7 +513,7 @@ impl Shell {
             Menu::Custom(i)=>{let slot=match self.screen {Screen::App(AppId::External(n))=>n,_=>return Vec::new()};self.app_menus().get(i as usize).map(|m|app_menu_rows(slot,m)).unwrap_or_default()},
             Menu::Context=>self.desktop_context.as_ref().map(|c|context_rows(c.slot,&c.items)).unwrap_or_default(),
             Menu::Dock=>{use super::desktop_dock::{Change,Position};let p=self.dock_preferences();let d=self.desk.as_ref().unwrap();let mut rows=Vec::new();if let Some(index)=d.dock_menu_target{let name=super::apps().get(index).map(|a|a.name).unwrap_or("Application");rows.push(Row::label(name));rows.push(Row::action("Open / Show",Action::Dock(Change::Open(index))));let pinned=self.dock_app_key(index).is_some_and(|key|p.pinned.contains(&key));rows.push(Row::action(if pinned{"Remove from Dock"}else{"Keep in Dock"},Action::Dock(Change::Pin(index))));rows.push(Row::action("Quit",Action::Dock(Change::Quit(index))));if let Some(AppId::External(slot))=super::apps().get(index).map(|a|a.id){if let Some(Some(host))=self.ext.get(slot as usize){for (id,title) in host.windows.menu_items(&host.id){if let Ok(n)=u16::try_from(id){rows.push(Row::action(title,Action::Open(AppId::ExternalWindow(slot,n))));}}if !host.windows.of_app(&host.id).is_empty(){rows.push(Row::separator());}let quick=self.quick_actions_for(slot as usize);for (i,item) in quick.iter().enumerate(){rows.push(Row::action(item.title.clone(),Action::QuickAction(slot,i as u8)));}if !quick.is_empty(){rows.push(Row::separator());}for item in &host.dock_menu{rows.push(if item.enabled{Row::action(item.title.clone(),Action::DockMenu(slot,item.id))}else{Row::label(item.title.clone())});}if !host.dock_menu.is_empty(){rows.push(Row::separator());}}}}rows.push(Row::label("Dock"));for (label,position) in [("Bottom",Position::Bottom),("Left",Position::Left),("Right",Position::Right)] {rows.push(Row::action(format!("{} {}",if p.position==position{"✓"}else{" "},label),Action::Dock(Change::Position(position))));}rows.push(Row::action(format!("{} Automatically hide and show",if p.autohide{"✓"}else{" "}),Action::Dock(Change::Autohide)));rows.push(Row::action("Smaller Icons",Action::Dock(Change::Size(-8.))));rows.push(Row::action("Larger Icons",Action::Dock(Change::Size(8.))));rows},
-            Menu::App=>{let enabled=self.foreign_active().is_some()||self.desk.as_ref().and_then(|d|d.front()).is_some();let name=self.app_menu_name();let quit=format!("Quit {name}");let mut rows=vec![Row::action(format!("About {name}"),Action::Settings("About")),Row::separator(),Row::action("Settings…",Action::Settings("")).symbol(crate::symbols::Symbol::GearOutline).key("cmd+,")];let services=super::services_route::menu_entries();if !services.is_empty(){rows.push(Row::separator());rows.push(Row::label("Services"));rows.extend(services.into_iter().map(|(i,title)|Row::action(title,Action::Service(i))));}rows.push(Row::separator());rows.push((if enabled{Row::action(quit,Action::Close)}else{Row::label(quit)}).key("cmd+q"));rows},
+            Menu::App=>{let enabled=self.foreign_active().is_some()||self.desk.as_ref().and_then(|d|d.front()).is_some();let name=self.app_menu_name();let quit=format!("Quit {name}");let mut rows=vec![Row::action(format!("About {name}"),Action::Settings("About")),Row::separator(),Row::action("Settings…",Action::Settings("")).symbol(crate::symbols::Symbol::GearOutline).key("cmd+,")];let services=super::services_route::menu_entries();if !services.is_empty(){rows.push(Row::separator());rows.push(Row::label("Services"));rows.extend(services.into_iter().map(|(i,title)|Row::action(title,Action::Service(i))));}rows.push(Row::separator());rows.push((if enabled{Row::action(quit,Action::Quit)}else{Row::label(quit)}).key("cmd+q"));rows},
             Menu::System=>{use super::power_menu::PowerAction;let mut rows=vec![Row::action("About This Computer",Action::Settings("About")),Row::separator(),Row::action("System Settings…",Action::Settings("")),Row::action("App Store…",Action::Open(AppId::AppStore)),Row::separator()];rows.push(Row::label("Recent Items"));let recent=self.recent_titles();for (i,title) in recent.iter().enumerate(){rows.push(Row::action(title.clone(),Action::Recent(i as u8)));}rows.push(if recent.is_empty(){Row::label("Clear Menu")}else{Row::action("Clear Menu",Action::ClearRecent)});rows.push(Row::separator());rows.extend(vec![Row::action("Sleep",Action::Sleep),Row::action("Restart…",Action::Halt(PowerAction::Restart)),Row::action("Shut Down…",Action::Halt(PowerAction::Off)),Row::separator(),Row::action("Lock Screen",Action::Lock).key("ctrl+cmd+q")]);rows},
             Menu::ControlCenter=>Vec::new(),
             Menu::Recording=>vec![Row::action("Stop Recording",Action::RecordStop)],
@@ -765,6 +796,7 @@ impl Shell {
                     Action::Open(app)=>self.desk_open(app,t),
                     Action::ShowAll=>{if let Some(d)=&mut self.desk {for w in &mut d.wins {w.minimized=false;}}self.desk_refocus();},
                     Action::Close|Action::Minimize=>effects.extend(self.desk_window_close_or_minimize(matches!(action,Action::Minimize))),
+                    Action::Quit=>effects.extend(self.desk_quit_front()),
                     Action::Command(command)=>{if let Screen::App(AppId::External(n))=self.screen {if let Some(Some(h))=self.ext.get_mut(n as usize){if h.commands.supports(command){h.input(bifrost_proto::WindowInput::Command(command));}}}},
                     Action::Shortcut(code)=>effects.push(Effect::DesktopShortcut(code)),
                     Action::Term(key)=>effects.extend(self.terminal_hw_key(key,t)),
@@ -860,6 +892,22 @@ impl Shell {
         let mut effects=Vec::new();
         if let Some(id)=self.foreign_active(){effects.push(Effect::ForeignWindowAction(id,minimize));}else if let Some(app)=self.desk.as_ref().and_then(|d|d.front()).map(|w|w.app){if minimize {let t=self.last_input;if let Some(i)=self.desk.as_ref().and_then(|d|d.index_of(app)){self.desk_minimize_window(i,t);}else{self.desk_refocus();}}else{self.desk_close_app(app);}}
         effects
+    }
+    /// Quits the front app (Cmd+Q and the App menu's Quit); `quit_step` decides what that means for the window in front.
+    pub(super) fn desk_quit_front(&mut self)->Vec<Effect> {
+        let step={
+            let desk=self.desk.as_ref();
+            let foreign:Vec<(u32,&str,bool)>=desk.map(|d|d.native_windows.iter().chain(d.linux_apps.iter().flat_map(|a|a.windows.iter())).map(|w|(w.id,w.app_id.as_str(),w.active)).collect()).unwrap_or_default();
+            let installed=super::apphost::installed();
+            let sdk_slot=|app_id:&str|installed.iter().position(|a|a.manifest.id==app_id).filter(|slot|self.ext.get(*slot).and_then(Option::as_ref).is_some_and(|h|h.running()&&h.route()==super::apphost::Route::Direct)).map(|slot|slot as u8);
+            quit_step(&foreign,sdk_slot,desk.and_then(|d|d.front()).map(|w|w.app))
+        };
+        match step {
+            QuitStep::App(slot)=>{self.desk_quit_app(slot);Vec::new()}
+            QuitStep::Windows(ids)=>ids.into_iter().map(|id|Effect::ForeignWindowAction(id,false)).collect(),
+            QuitStep::Window(app)=>{self.desk_close_app(app);Vec::new()}
+            QuitStep::Nothing=>Vec::new(),
+        }
     }
     /// Control Center (chrome id 4) and Notification Center (id 5) as overlay surfaces above every window, each with
     /// room for its shadow: drawn only into the desktop frame they would sit under the windows of the session.
