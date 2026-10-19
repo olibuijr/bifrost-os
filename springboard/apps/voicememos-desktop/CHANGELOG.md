@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.10.1
+
+- BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.
+
 ## 1.10.0 — 2026-10-17
 
 - Playback speed: a Slower and Faster stepper under the volume slider moves through 0.5x, 1x, 1.5x and 2x. The audio

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.5.1
+
+- BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.
+
 ## 1.5.0 — 2026-10-13
 
 - An alarm that fires while the Clock is closed now shows in Notification Centre under Clock. The shell filed these

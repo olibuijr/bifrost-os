@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.13.1
+
+- BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.
+
 ## Unreleased
 
 - Controls > Crossfade Songs: one song fades into the next over 2 to 12 seconds (off by default). The choice is kept in

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.6
+
+- BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.
+
 ## 0.2.5 — 2026-10-14
 
 - Write CSV exports through a synced, owner-only sibling file and atomic replacement, preserving the previous export if

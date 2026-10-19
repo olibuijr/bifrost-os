@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.16.1
+
+- BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.
+
 ## 1.16.0 — 2026-10-17
 
 - Model for the merge review (`dupes::review`, `dupes::merge_with`): it lists the fields where duplicates disagree, and folds the cards with the value picked for each field (a phone or email takes its label along). The review sheet is not drawn yet, so Card > Merge Duplicates still keeps the first card's values.

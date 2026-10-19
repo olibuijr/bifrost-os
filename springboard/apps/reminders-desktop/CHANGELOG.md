@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.19.1
+
+- BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.
+
 ## 1.19.0 — 2026-10-17
 
 - Core Search indexes every reminder with a title: the title, and the first lines of its notes. Edited reminders are indexed again, deleted or untitled ones leave the index, and a Search result opens the reminder in the list.

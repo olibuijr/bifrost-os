@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.2
+
+- BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.
+
 ## 0.4.1 — 2026-10-17
 
 - The BifrOSt Account session comes from the SDK helper `bifrost_app::cloud_account::session` (the `is.bifrost.account`

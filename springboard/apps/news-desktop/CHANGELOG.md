@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.4
+
+- BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.
+
 ## 1.6.3 — 2026-10-14
 
 - Translate Article and Share Article are in an Article menu, avoiding a duplicate shell Edit menu.

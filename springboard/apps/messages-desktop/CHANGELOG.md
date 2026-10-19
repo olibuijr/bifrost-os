@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.1
+
+- BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.
+
 ## 0.7.0 — 2026-10-17
 
 - The Megolm and Olm sessions are kept in an encrypted file in the app's data directory, not in a keychain item. The keychain caps an item at 8 KiB, so a long-lived account overflowed it. The file is sealed with ChaCha20-Poly1305 under the pickle key (which stays in the keychain), the account id is authenticated with it, and each save is written to a temporary file that is flushed and renamed over the old one. A changed byte, a wrong key or another account's file is refused.

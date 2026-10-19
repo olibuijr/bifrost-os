@@ -1,6 +1,6 @@
 id = "is.olibuijr.mail.desktop"
 name = "Mail"
-version = "0.15.0"
+version = "0.15.1"
 exec = "bifrost-mail"
 icon = "icon.png"
 min_shell = "0.4.84"

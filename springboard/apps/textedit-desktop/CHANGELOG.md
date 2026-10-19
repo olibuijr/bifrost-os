@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.11.1
+
+- BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.
+
 ## 1.11.0 — 2026-10-17
 
 - RTFD packages open from the open panel: a package folder of the RTFD type is one file to the panel, chosen whole and not

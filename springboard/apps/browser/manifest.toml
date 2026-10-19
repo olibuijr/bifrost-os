@@ -1,6 +1,6 @@
 id = "is.olibuijr.browser.desktop"
 name = "BifrOSt Browser"
-version = "0.14.3"
+version = "0.14.4"
 exec = "bifrost-browser"
 icon = "icon.png"
 min_shell = "0.4.92"

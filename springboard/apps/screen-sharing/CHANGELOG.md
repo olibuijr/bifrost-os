@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.4
+
+- BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.
+
 ## Unreleased
 
 - Password (VNC) authentication: a Password box next to the address, Tab moves between them, and the password is used only when the server asks for one and is forgotten once connected. Servers that need a password and get none say so.

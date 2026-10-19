@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.13.1
+
+- BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.
+
 ## 1.13.0 — 2026-10-17
 
 - Convert > Currency: ten currencies converted through the day's European Central Bank reference rates. The file is

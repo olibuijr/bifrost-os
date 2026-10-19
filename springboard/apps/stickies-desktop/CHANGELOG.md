@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.1
+
+- BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.
+
 ## 0.9.0 — 2026-10-17
 
 - Window > Float on Top: a checked item that keeps the sticky notes window above the other windows

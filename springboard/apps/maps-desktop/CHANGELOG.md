@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.4
+
+- BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.
+
 ## 0.6.3 — 2026-10-17
 
 - The tile fetch, cache and loader moved into the shell (`springboard::maptiles`) so Photos can draw map tiles under its Places pins. Maps uses the same code through thin re-exports; the offline area helper stays here. Tiles are fetched on one thread each, paced as before, instead of the app dispatch queue.

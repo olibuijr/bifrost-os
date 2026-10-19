@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.6
+
+- BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.
+
 ## 0.2.5 — 2026-10-14
 
 - Stage archive creation and extraction in hidden sibling paths, publishing complete outputs atomically without replacing existing files or folders.

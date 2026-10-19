@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.9
+
+- BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.
+
 ## 0.11.8 — 2026-10-17
 
 - Services menu: "Open Images in Viewer" appears for a picture or PDF selection (the app declares it as a `[[service]]`

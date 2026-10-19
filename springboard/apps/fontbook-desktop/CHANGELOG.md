@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.7
+
+- BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.
+
 ## 0.6.6 — 2026-10-17
 
 - Font collections (.ttc) install: the install preview, Add Fonts and Validate File accept them, and the renderer lists a

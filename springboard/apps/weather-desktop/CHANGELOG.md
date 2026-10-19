@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.8.1
+
+- BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.
+
 ## 1.8.0 — 2026-10-17
 
 - My Location: picking it asks for location (When In Use, never at launch), then lists the device position first in the sidebar and the Locations list, rounded to two decimals and labelled with its coordinates. Weather's purpose string is in the manifest.

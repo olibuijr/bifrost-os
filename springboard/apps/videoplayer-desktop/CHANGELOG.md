@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.5
+
+- BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.
+
 ## Unreleased
 
 - Playback menu: a speed picker (0.5x to 3x, the sound time-stretched so its pitch holds) and a subtitle picker.

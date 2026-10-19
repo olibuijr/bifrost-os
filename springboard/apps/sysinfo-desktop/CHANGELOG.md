@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.1
+
+- BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.
+
 ## 0.9.0
 
 - Software > Installations lists the installed packages read from the pacman local database (`/var/lib/pacman/local`, `desc` files; no pacman run), newest install first, then the package changes from the log.

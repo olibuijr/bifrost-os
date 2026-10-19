@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.13.1
+
+- BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.
+
 ## 1.13.0 — 2026-10-17
 
 - Playback speed is applied: the speed menu, Controls > Playback Speed and Slower/Faster send the rate to the audio

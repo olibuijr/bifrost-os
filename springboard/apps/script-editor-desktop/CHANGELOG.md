@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.4
+
+- BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.
+
 ## 0.1.3 — 2026-10-14
 
 - Use the shared small-control corner radius token.

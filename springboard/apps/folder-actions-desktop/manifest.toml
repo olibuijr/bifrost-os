@@ -1,6 +1,6 @@
 id = "is.olibuijr.folderactions.desktop"
 name = "Folder Actions Setup"
-version = "0.1.0"
+version = "0.1.1"
 exec = "bifrost-folder-actions"
 min_shell = "0.4.84"
 summary = "Attach an app's action to a folder so it runs for each file that is added there."

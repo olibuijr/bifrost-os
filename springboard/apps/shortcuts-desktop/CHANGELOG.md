@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.13.1
+
+- BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.
+
 ## 1.13.0 — 2026-10-17
 
 - Automations can start on more events: when an app closes, at login, when a Focus turns on or off, and at a time of day (every day or on weekdays). The Automation row steps through them.

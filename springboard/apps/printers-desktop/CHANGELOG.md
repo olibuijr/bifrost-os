@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.2
+
+- BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.
+
 ## 0.7.1 — 2026-10-14
 
 - Fix appearance-aware progress tracks and document tiles, remove a fixed initial window size, and move network probes onto the utility dispatch queue.

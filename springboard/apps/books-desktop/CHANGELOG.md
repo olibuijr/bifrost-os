@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.10.1
+
+- BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.
+
 ## 1.10.0
 
 - Books > Settings (File menu, Cmd+,) opens a Settings window. General lists the library folders: the built-in ones,
