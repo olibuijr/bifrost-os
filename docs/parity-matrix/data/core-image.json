@@ -10,16 +10,16 @@
     {
       "feature": "Image and context objects (CIImage, CIContext)",
       "apple": "CIImage, CIContext",
-      "bifrost": "springboard/render/src/lazy_image.rs; springboard/sdk/src/lazy_image.rs (LazyImage, RenderContext, filter)",
+      "bifrost": "springboard/render/src/lazy_image.rs; springboard/sdk/src/lazy_image.rs (LazyImage, RenderContext, filter); springboard/render/src/lazy_graph.rs; springboard/sdk/src/lazy_image.rs (GraphImage, GraphContext)",
       "status": "partial",
-      "note": "The SDK exposes the lazy image and its render context with named filters, and the filter chain and render path are tested headless (sdk/tests/parity_sdk-complete-31.rs). Gap: no shell or app draws a lazy image in a window, and rendering is CPU only."
+      "note": "The SDK exposes the lazy image and its render context with named filters, and the filter chain and render path are tested headless (sdk/tests/parity_sdk-complete-31.rs). Gap: no shell or app draws a lazy image in a window, and rendering is CPU only. Built 2026-10-19: a general lazy graph (GraphImage: source, generator, map, combine; GraphContext renders each shared node once and keeps a byte-limited result cache) with SDK helpers graph_filter, graph_blend and graph_from_lazy, tested headless. Still CPU only and no window draws a graph. Midget check: run `cargo test -p bifrost-render lazy_graph` and `cargo test -p bifrost-app lazy_image::graph_tests` (a_shared_node_is_computed_once_per_render, a_named_filter_node_matches_the_chain_renderer)."
     },
     {
       "feature": "Filter objects and chaining (CIFilter)",
       "apple": "CIFilter, CIFilterGenerator, CIVector, CIColor",
-      "bifrost": "springboard/render/src/effect_chain.rs; wired: springboard/render/src/effect_chain.rs (chain run by springboard/src/shell/photos/edit.rs Edit::apply); springboard/sdk/src/image_filter.rs (FilterChain, the app API for named filters)",
+      "bifrost": "springboard/render/src/effect_chain.rs; wired: springboard/render/src/effect_chain.rs (chain run by springboard/src/shell/photos/edit.rs Edit::apply); springboard/sdk/src/image_filter.rs (FilterChain, the app API for named filters); springboard/sdk/src/lazy_image.rs (graph_filter, graph_blend)",
       "status": "partial",
-      "note": "Named filters and the chain are a pure model with host unit tests, and apps run a chain through the SDK FilterChain. Photos runs a fixed sequence (crop, straighten, filter, brightness, contrast). Gap: the chain has no lazy evaluation or render context, and the app chain is not verified on Midget. Wave (theme-01, image filters round): the SDK VideoFilter (bifrost_app::image_render) runs a FilterChain per video frame, with optional feedback."
+      "note": "Named filters and the chain are a pure model with host unit tests, and apps run a chain through the SDK FilterChain. Photos runs a fixed sequence (crop, straighten, filter, brightness, contrast). Gap: the chain has no lazy evaluation or render context, and the app chain is not verified on Midget. Wave (theme-01, image filters round): the SDK VideoFilter (bifrost_app::image_render) runs a FilterChain per video frame, with optional feedback. Built 2026-10-19: graph nodes take any SDK filter as a closure and combine two inputs (graph_blend), so a chain can now have several branches; the named chain still covers only its eleven effects. Midget check: `cargo test -p bifrost-app lazy_image::graph_tests` (an_opaque_foreground_covers_the_background_and_a_size_mismatch_fails)."
     },
     {
       "feature": "Blur filters (gaussianBlur, boxBlur, motionBlur, zoomBlur, discBlur)",
@@ -45,9 +45,9 @@
     {
       "feature": "Colour lookup and conversion (colour cube, colour map, Lab, palettize)",
       "apple": "CIColorCube, CIColorMap, CIPalettize, CIConvertLab, CIConvertRGBtoLab, CIColorCubeWithColorSpace",
-      "bifrost": "springboard/render/src/colorcube.rs, springboard/render/src/colormap.rs, springboard/render/src/colorlab.rs, springboard/render/src/colorfx.rs, springboard/render/src/gradient.rs",
+      "bifrost": "springboard/render/src/colorcube.rs, springboard/render/src/colormap.rs, springboard/render/src/colorlab.rs, springboard/render/src/colorfx.rs, springboard/render/src/gradient.rs; springboard/sdk/src/image_generate.rs (color_cube, color_map, palettize, rgb_to_lab); springboard/render/src/colorcube.rs (parse_cube_lut)",
       "status": "partial",
-      "note": "Colour cube lookup, colour maps, RGB and Lab palettes and the CIE L*a*b* conversion are tested headless in tests/parity_sdk-complete-01.rs. Gap: no SDK filter wraps them for apps, the conversions ignore ICC profiles and rendering intents, and nothing is verified on Midget. Refreshed 2026-10-17: covered by springboard/render/src/colormap.rs (Palette snaps colours in RGB or CIE Lab); tests colormap::tests and tests/parity_sdk-complete-01.rs."
+      "note": "Colour cube lookup, colour maps, RGB and Lab palettes and the CIE L*a*b* conversion are tested headless in tests/parity_sdk-complete-01.rs. Gap: no SDK filter wraps them for apps, the conversions ignore ICC profiles and rendering intents, and nothing is verified on Midget. Refreshed 2026-10-17: covered by springboard/render/src/colormap.rs (Palette snaps colours in RGB or CIE Lab); tests colormap::tests and tests/parity_sdk-complete-01.rs. Built 2026-10-19: SDK wrappers image_generate::color_cube (with extrapolation), color_map, palettize, rgb_to_lab and lab_to_rgb, and a reader for `.cube` lookup tables (colorcube::parse_cube_lut, color_cube_from_text). Still sRGB only, no ICC profiles or rendering intents. Midget check: `cargo test -p bifrost-app image_generate::tests::color_cube_identity_leaves_pixels_and_the_inverted_cube_flips_them` and `cargo test -p bifrost-render colorcube::cube_text_tests`."
     },
     {
       "feature": "Geometry adjustment (affine transform, crop, rotate, scale)",
@@ -80,16 +80,16 @@
     {
       "feature": "Feature detection (CIDetector: faces, rectangles, text, QR and barcodes)",
       "apple": "CIDetector, CIFaceFeature, CIRectangleFeature, CITextFeature, CIQRCodeFeature, CIQRCodeDescriptor and the other barcode descriptors",
-      "bifrost": "springboard/render/src/feature_detect.rs (bright regions and filled axis-aligned rectangles); springboard/sdk/src/image_effects.rs (app API, rectangles)",
+      "bifrost": "springboard/render/src/feature_detect.rs (bright regions and filled axis-aligned rectangles); springboard/sdk/src/image_effects.rs (app API, rectangles); springboard/render/src/qr_decode.rs; springboard/sdk/src/image_detect.rs (qr_message)",
       "status": "partial",
-      "note": "built on parity/team-j-core-image; not yet verified on Midget. Finds bright connected regions by a luma threshold and keeps those that fill their box. It does not detect perspective quadrilaterals, faces, text or barcodes."
+      "note": "built on parity/team-j-core-image; not yet verified on Midget. Finds bright connected regions by a luma threshold and keeps those that fill their box. It does not detect perspective quadrilaterals, faces, text or barcodes. Built 2026-10-19: QR code detection for apps, image_detect::qr_message (the camera decoder moved to render/src/qr_decode.rs, versions 1 to 10, rotated codes, dark-on-light or light-on-dark). Still no faces, text, barcodes or perspective quadrilaterals. Midget check: Camera app: point it at a QR code shown on another screen, the scan overlay must still read it (decoder moved); `cargo test -p bifrost-app image_detect::tests` reads back codes made by image_generate::qr_code in all segment modes."
     },
     {
       "feature": "Generators and gradients (checkerboard, stripes, linear and radial gradient, QR and barcode generators)",
       "apple": "CILinearGradient, CIRadialGradient, CICheckerboardGenerator, CIStripesGenerator, CIQRCodeGenerator, CIRoundedQRCodeGenerator and the other generator filters",
-      "bifrost": "springboard/render/src/generators.rs (checkerboard, stripes, linear_gradient, radial_gradient); springboard/render/src/gradient.rs; springboard/sdk/src/image_filter.rs (linear_gradient for apps); springboard/render/src/generators.rs (random noise)",
+      "bifrost": "springboard/render/src/generators.rs (checkerboard, stripes, linear_gradient, radial_gradient); springboard/render/src/gradient.rs; springboard/sdk/src/image_filter.rs (linear_gradient for apps); springboard/render/src/generators.rs (random noise); springboard/render/src/qr_generate.rs; springboard/sdk/src/image_generate.rs (checkerboard, stripes, radial_gradient, random, qr_code, qr_code_styled)",
       "status": "partial",
-      "note": "Checkerboard, stripes, and linear and radial gradient generators are pure models tested headless in tests/parity_sdk-complete-01.rs. Apps get the linear gradient through image_filter. Gap: there is no QR or barcode generator, no SDK API for the checkerboard, stripes or radial gradient, and nothing is verified on Midget. Built 2026-10-17: CIRandomGenerator as generators::random, with a determinism test. Refreshed 2026-10-17: generators::tests covers the generator models."
+      "note": "Checkerboard, stripes, and linear and radial gradient generators are pure models tested headless in tests/parity_sdk-complete-01.rs. Apps get the linear gradient through image_filter. Gap: there is no QR or barcode generator, no SDK API for the checkerboard, stripes or radial gradient, and nothing is verified on Midget. Built 2026-10-17: CIRandomGenerator as generators::random, with a determinism test. Refreshed 2026-10-17: generators::tests covers the generator models. Built 2026-10-19: QR code generator (qr_generate: versions 1 to 10, levels L M Q H, numeric, alphanumeric and byte segments, mask chosen by penalty, optional rounded modules) and SDK wrappers for the checkerboard, stripes, radial gradient and random generators. No barcode (Code 128, PDF417, Aztec) generators, QR stops at version 10. Midget check: `cargo test -p bifrost-render qr_generate` (reed_solomon_matches_the_published_hello_world_vector) and `cargo test -p bifrost-app image_detect::tests::a_generated_code_reads_back_in_every_segment_mode`; scan the printed picture with a phone."
     },
     {
       "feature": "Render destinations and video filtering (CIRenderDestination, CIImageAccumulator)",
@@ -108,51 +108,51 @@
     {
       "feature": "Sharpen filters (sharpen luminance, unsharp mask)",
       "apple": "CISharpenLuminance, CIUnsharpMask",
-      "bifrost": "springboard/render/src/stylize_filters.rs",
+      "bifrost": "springboard/render/src/stylize_filters.rs; springboard/sdk/src/image_stylize.rs (unsharp_mask, sharpen_luminance)",
       "status": "partial",
-      "note": "CPU sharpen luminance and unsharp mask have host unit tests, and tests/parity_sdk-complete-01.rs checks that a zero intensity leaves the image unchanged. Gap: the sharpen curve is not checked against reference values, and nothing is verified on Midget."
+      "note": "CPU sharpen luminance and unsharp mask have host unit tests, and tests/parity_sdk-complete-01.rs checks that a zero intensity leaves the image unchanged. Gap: the sharpen curve is not checked against reference values, and nothing is verified on Midget. Built 2026-10-19: app API image_stylize::unsharp_mask and sharpen_luminance. Midget check: `cargo test -p bifrost-app image_stylize::tests::identity_settings_leave_the_image_unchanged`."
     },
     {
       "feature": "Stylize filters (bloom, gloom, crystallize, pixellate, pointillize, edges, comic, highlight and shadow, spot light, depth of field)",
       "apple": "CIBloom, CIGloom, CICrystallize, CIPixellate, CIPointillize, CIEdges, CIEdgeWork, CIComicEffect, CIHighlightShadowAdjust, CISpotLight, CIDepthOfField, CILineOverlay",
-      "bifrost": "springboard/render/src/stylize_filters.rs (bloom, gloom, crystallize, pixellate, pointillize); springboard/render/src/edge_tone_filters.rs (edges, highlight and shadow); springboard/render/src/comic_filter.rs (comic); springboard/render/src/spot_light.rs (spot light); springboard/render/src/depth_blur.rs (depth of field); springboard/sdk/src/image_effects.rs (app API for edges and highlight and shadow)",
+      "bifrost": "springboard/render/src/stylize_filters.rs (bloom, gloom, crystallize, pixellate, pointillize); springboard/render/src/edge_tone_filters.rs (edges, highlight and shadow); springboard/render/src/comic_filter.rs (comic); springboard/render/src/spot_light.rs (spot light); springboard/render/src/depth_blur.rs (depth of field); springboard/sdk/src/image_effects.rs (app API for edges and highlight and shadow); springboard/sdk/src/image_stylize.rs (bloom, gloom, crystallize, pixellate, pointillize, comic, spot_light)",
       "status": "partial",
-      "note": "Comic and spot light are headless and tested in tests/parity_sdk-complete-01.rs, and depth of field is in depth_blur.rs. Gap: comic has an outline and level model rather than the reference curves, spot light has no distance falloff, depth of field needs a caller-supplied depth map, and nothing is verified on Midget."
+      "note": "Comic and spot light are headless and tested in tests/parity_sdk-complete-01.rs, and depth of field is in depth_blur.rs. Gap: comic has an outline and level model rather than the reference curves, spot light has no distance falloff, depth of field needs a caller-supplied depth map, and nothing is verified on Midget. Built 2026-10-19: app API for bloom, gloom, crystallize, pixellate, pointillize, comic and spot light in image_stylize (edges and highlight/shadow stay in image_effects). Midget check: `cargo test -p bifrost-app image_stylize::tests::stylize_filters_keep_the_size`."
     },
     {
       "feature": "Halftone effects (dot, line, circular and hatched screens, CMYK halftone)",
       "apple": "CIDotScreen, CILineScreen, CICircularScreen, CIHatchedScreen, CICMYKHalftone",
-      "bifrost": "springboard/render/src/halftone_tile_filters.rs (screen, cmyk_halftone)",
+      "bifrost": "springboard/render/src/halftone_tile_filters.rs (screen, cmyk_halftone); springboard/sdk/src/image_stylize.rs (halftone, cmyk_halftone)",
       "status": "partial",
-      "note": "CPU dot, line, circular and hatched screens and CMYK halftone are tested headless in springboard/render/tests/parity_sdk-tests-17.rs (dot period, grey coverage, red under CMYK). Not yet tested on Midget."
+      "note": "CPU dot, line, circular and hatched screens and CMYK halftone are tested headless in springboard/render/tests/parity_sdk-tests-17.rs (dot period, grey coverage, red under CMYK). Not yet tested on Midget. Built 2026-10-19: app API image_stylize::halftone(kind, params) and cmyk_halftone. Midget check: `cargo test -p bifrost-app image_stylize::tests::screens_keep_the_size_and_alpha`."
     },
     {
       "feature": "Tile effects (kaleidoscope, op tile, affine, perspective, triangle and parallelogram tiles)",
       "apple": "CIKaleidoscope, CIOpTile, CIAffineTile, CIPerspectiveTile, CITriangleTile, CIParallelogramTile, CIFourfoldReflectedTile, CISixfoldRotatedTile",
-      "bifrost": "springboard/render/src/halftone_tile_filters.rs (kaleidoscope, op_tile, affine_tile); springboard/render/src/tile_shapes.rs (triangle, parallelogram, perspective tiles)",
+      "bifrost": "springboard/render/src/halftone_tile_filters.rs (kaleidoscope, op_tile, affine_tile); springboard/render/src/tile_shapes.rs (triangle, parallelogram, perspective tiles); springboard/sdk/src/image_stylize.rs (kaleidoscope, op_tile, affine_tile, triangle_tile, parallelogram_tile, perspective_tile)",
       "status": "partial",
-      "note": "Kaleidoscope, op tile and affine tile are tested headless in springboard/render/tests/parity_sdk-tests-17.rs. Built 2026-10-17: triangle, parallelogram and perspective tiles are CPU models in tile_shapes.rs with host tests; their cell shapes are this model's own, not the reference cells. Not yet wired into an app or verified on Midget. Refreshed 2026-10-17: covered by springboard/render/src/tile_shapes.rs (triangle_tile, parallelogram_tile, perspective_tile); tests tile_shapes::tests."
+      "note": "Kaleidoscope, op tile and affine tile are tested headless in springboard/render/tests/parity_sdk-tests-17.rs. Built 2026-10-17: triangle, parallelogram and perspective tiles are CPU models in tile_shapes.rs with host tests; their cell shapes are this model's own, not the reference cells. Not yet wired into an app or verified on Midget. Refreshed 2026-10-17: covered by springboard/render/src/tile_shapes.rs (triangle_tile, parallelogram_tile, perspective_tile); tests tile_shapes::tests. Built 2026-10-19: app API for all six tile filters in image_stylize. Midget check: `cargo test -p bifrost-app image_stylize::tests::tiles_keep_the_size_and_refuse_a_degenerate_quad`."
     },
     {
       "feature": "Transition filters (dissolve, swipe, bars swipe, copy machine, flash, mod, page curl, ripple, accordion fold)",
       "apple": "CIDissolveTransition, CISwipeTransition, CIBarsSwipeTransition, CICopyMachineTransition, CIFlashTransition, CIModTransition, CIPageCurlTransition, CIRippleTransition, CIAccordionFoldTransition, CIDisintegrateWithMaskTransition",
-      "bifrost": "springboard/ui/src/video_transition.rs (cross-dissolve timing model); springboard/render/src/transition_filters.rs (swipe, bars swipe, copy machine, flash, mod, page curl, ripple, accordion fold, disintegrate)",
+      "bifrost": "springboard/ui/src/video_transition.rs (cross-dissolve timing model); springboard/render/src/transition_filters.rs (swipe, bars swipe, copy machine, flash, mod, page curl, ripple, accordion fold, disintegrate); springboard/sdk/src/image_stylize.rs (transition, Transition)",
       "status": "partial",
-      "note": "Cross-dissolve is verified on Midget 0.7.25 by 6 tests. Built 2026-10-17: all ten reference transitions have CPU models in transition_filters.rs with host tests. The nine new ones are not yet wired into an app or verified on Midget. Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (docs/macos-os-inventory.md)."
+      "note": "Cross-dissolve is verified on Midget 0.7.25 by 6 tests. Built 2026-10-17: all ten reference transitions have CPU models in transition_filters.rs with host tests. The nine new ones are not yet wired into an app or verified on Midget. Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (docs/macos-os-inventory.md). Built 2026-10-19: app API image_stylize::transition(from, to, time, Transition::...) for all ten transitions plus a linear cross-dissolve. Midget check: `cargo test -p bifrost-app image_stylize::tests::dissolve_runs_from_the_first_image_to_the_second` and `transitions_refuse_mismatched_images_and_swipe_hits_both_ends`."
     },
     {
       "feature": "Reduction filters (area average, histogram, min and max, row and column average, k-means)",
       "apple": "CIAreaAverage, CIAreaHistogram, CIAreaMaximum, CIAreaMinimum, CIAreaMinMax, CIRowAverage, CIColumnAverage, CIKMeans",
-      "bifrost": "springboard/render/src/plane_stats.rs (reduce_rows, reduce_columns, statistics); springboard/render/src/filter.rs (histogram)",
+      "bifrost": "springboard/render/src/plane_stats.rs (reduce_rows, reduce_columns, statistics); springboard/render/src/filter.rs (histogram); springboard/render/src/colour_stats.rs; springboard/sdk/src/image_stylize.rs (average_colour, area_min_max, area_histogram, row_averages, column_averages, kmeans, dominant_colours)",
       "status": "partial",
-      "note": "Row and column min, max, sum and mean, region mean, min and max, and the luma histogram are tested headless in springboard/render/tests/parity_sdk-tests-17.rs. Gap: single planes only (no colour area filters), no k-means; the per-shader list still awaits the macOS 27 inventory (docs/macos-os-inventory.md)."
+      "note": "Row and column min, max, sum and mean, region mean, min and max, and the luma histogram are tested headless in springboard/render/tests/parity_sdk-tests-17.rs. Gap: single planes only (no colour area filters), no k-means; the per-shader list still awaits the macOS 27 inventory (docs/macos-os-inventory.md). Built 2026-10-19: colour area reductions (average, minimum, maximum, per-channel histogram with 1 to 256 bins, row and column averages) and k-means with a repeatable dominant_colours helper, region clipped to the image, in colour_stats with SDK wrappers. The grey-plane gap closes; per-shader names still wait for the macOS 27 inventory. Midget check: `cargo test -p bifrost-render colour_stats` (kmeans_separates_two_colour_groups) and `cargo test -p bifrost-app image_stylize::tests::whole_image_reductions_agree_with_the_pixels`."
     },
     {
       "feature": "Convolution filters (3x3 to 9x9, horizontal and vertical, RGB variants)",
       "apple": "CIConvolution3X3, CIConvolution5X5, CIConvolution7X7, CIConvolution9X9Horizontal, CIConvolution9X9Vertical, CIConvolutionRGB3X3",
-      "bifrost": "springboard/render/src/filter.rs (convolve, convolve_axis, convolve_rgb, is_convolution_side)",
+      "bifrost": "springboard/render/src/filter.rs (convolve, convolve_axis, convolve_rgb, is_convolution_side); springboard/sdk/src/image_stylize.rs (convolve, convolve_line)",
       "status": "partial",
-      "note": "Odd square kernels from 3 to 9, one-dimensional horizontal and vertical kernels, and per-channel RGB convolution are tested headless in tests/parity_sdk-complete-23.rs. Gap: no app-facing filter object and no 9x9 horizontal or vertical preset names, and the per-shader inventory from macOS 27 Golden Gate 26A434 (docs/macos-os-inventory.md) is still pending."
+      "note": "Odd square kernels from 3 to 9, one-dimensional horizontal and vertical kernels, and per-channel RGB convolution are tested headless in tests/parity_sdk-complete-23.rs. Gap: no app-facing filter object and no 9x9 horizontal or vertical preset names, and the per-shader inventory from macOS 27 Golden Gate 26A434 (docs/macos-os-inventory.md) is still pending. Built 2026-10-19: app API image_stylize::convolve (odd sides 3 to 9, with or without alpha for the plain and RGB forms) and convolve_line (taps 3 to 9, horizontal or vertical); bias is a fraction of the channel range. The 9 horizontal and vertical presets are the line form with 9 taps. Midget check: `cargo test -p bifrost-app image_stylize::tests::identity_kernel_changes_nothing_and_a_shift_kernel_moves_pixels`."
     },
     {
       "feature": "Depth and portrait effects (depth blur, disparity, masked variable blur)",
@@ -166,7 +166,7 @@
       "apple": "CIFilter.filterNames(inCategory:), CIFilter.attributes, CIFilterBuiltins",
       "bifrost": "springboard/render/src/filter_catalogue.rs; springboard/render/src/filter_input.rs (check_input, resolve_inputs)",
       "status": "partial",
-      "note": "Registry of the 56 built filters by reference name with category and input keys, filter_names(category) and attributes. Added 2026-10-17: the colour adjustment (exposure, gamma, vibrance, white point), colour effect (sepia, monochrome, posterize, false colour, invert), stylize (edges, highlight and shadow), generator (random, checkerboard, stripes), gradient (linear, radial) and transition (swipe, bars swipe, copy machine) entries. Input values are checked against their ranges by tests in filter_catalogue.rs. Gap: the catalogue is metadata; apps reach the named filter chain only for the eleven effects in effect_chain.rs. Added 2026-10-17: tile entries (triangle, parallelogram, perspective) and six transitions (flash, mod, page curl, ripple, accordion fold, disintegrate)."
+      "note": "Registry of the 56 built filters by reference name with category and input keys, filter_names(category) and attributes. Added 2026-10-17: the colour adjustment (exposure, gamma, vibrance, white point), colour effect (sepia, monochrome, posterize, false colour, invert), stylize (edges, highlight and shadow), generator (random, checkerboard, stripes), gradient (linear, radial) and transition (swipe, bars swipe, copy machine) entries. Input values are checked against their ranges by tests in filter_catalogue.rs. Gap: the catalogue is metadata; apps reach the named filter chain only for the eleven effects in effect_chain.rs. Added 2026-10-17: tile entries (triangle, parallelogram, perspective) and six transitions (flash, mod, page curl, ripple, accordion fold, disintegrate). Built 2026-10-19: 20 more entries (CIQRCodeGenerator, CIRoundedQRCodeGenerator, the eight reduction filters under the new CICategoryReduction, and ten convolution filters), 76 in all; parity_sdk-tests-07 counts updated. Midget check: `cargo test -p bifrost-render --test parity_sdk-tests-07` and `filter_catalogue::tests::reduction_generator_and_convolution_entries_are_listed`."
     }
   ],
   "gaps": [
