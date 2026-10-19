@@ -481,7 +481,7 @@ mod tests {
     }
 
     #[test]
-    fn an_app_that_gives_no_picture_leaves_the_icon() {
+    fn an_app_that_gives_no_picture_gets_the_built_in_provider_for_the_type() {
         let dir = scratch("app-refuses");
         let file = dir.join("refused.textclipping");
         std::fs::write(&file, b"opaque bytes").unwrap();
@@ -493,7 +493,8 @@ mod tests {
         s.request("app", req).unwrap();
         let events = wait_events(&mut s, 1);
         assert_eq!(events[0].event, "ready");
-        assert_eq!(events[0].body.get("art").and_then(Json::as_str), Some("icon"));
+        // an unknown extension is public.data, which the built-in provider draws, so the refusal falls back to it
+        assert_eq!(events[0].body.get("art").and_then(Json::as_str), Some("pixels"));
     }
 
     /// An app that counts the calls it gets and answers each with the same reply.
