@@ -2653,7 +2653,7 @@ fn desktop_network_page(info:&Info)->Spec {
     let wifi=network.is_some_and(|n|n.wifi_available);
     let eth_status=ethernet.map(|i|if i.connected(){"Connected"}else{"Not Connected"}).unwrap_or("No adapter");
     Spec{id:PageId::Network,title:"Network".into(),large:false,groups:vec![
-        Group::new(vec![Item::new("Ethernet").icon(Icon::General).value(eth_status).link(PageId::Ethernet), Item::new("Wi-Fi").icon(Icon::Wifi).value(if wifi {info.wifi.as_str()}else{"No adapter"}).link(PageId::Wifi), Item::new("VPN").icon(Icon::General).value(if super::desktop_network::vpn_profiles().is_empty(){"None"}else{"Configured"}).link(PageId::Vpn), Item::new("Firewall").icon(Icon::Passcode).link(PageId::Firewall)]).header("CONNECTIONS", Item::new("VPN").icon(Icon::General).value(match network.map_or(&[][..], |n|n.vpns.as_slice()){[]=>"None", v if v.iter().any(|c|c.active)=>"Connected", _=>"Not Connected"}).link(PageId::Vpn)]).header("CONNECTIONS"),
+        Group::new(vec![Item::new("Ethernet").icon(Icon::General).value(eth_status).link(PageId::Ethernet), Item::new("Wi-Fi").icon(Icon::Wifi).value(if wifi {info.wifi.as_str()}else{"No adapter"}).link(PageId::Wifi), Item::new("VPN").icon(Icon::General).value(match network.map_or(&[][..], |n|n.vpns.as_slice()){[]=>"None", v if v.iter().any(|c|c.active)=>"Connected", _=>"Not Connected"}).link(PageId::Vpn), Item::new("Firewall").icon(Icon::Passcode).link(PageId::Firewall)]).header("CONNECTIONS"),
         rows(vec![("Network Manager", "NetworkManager".into())]).footer("Ethernet and Wi-Fi use separate connection settings. Changes are applied by the system network service."),
     ]}
 }
@@ -2667,10 +2667,6 @@ fn desktop_ethernet_page(info:&Info)->Spec {
     ]).header(&i.name).footer("Connection details update automatically. Unplugging this cable disconnects remote access over Ethernet.")).collect()};
     Spec{id:PageId::Ethernet,title:"Ethernet".into(),large:false,groups}
 }
-fn desktop_vpn_page(_info:&Info)->Spec {
-    let profiles=super::desktop_network::vpn_profiles();
-    let items:Vec<Item>=if profiles.is_empty(){vec![Item::new("No VPN Configurations").tint(Tint::Dim)]}else{profiles.iter().map(|p|Item::new(p.name.clone()).value(super::desktop_network::vpn_summary(p))).collect()};
-    Spec{id:PageId::Vpn,title:"VPN".into(),large:false,groups:vec![Group::new(items).header("CONFIGURATIONS").footer("VPN configurations are kept by the system network service (NetworkManager). Shortcuts and Search connect and disconnect one by its name; this list does not show them yet.")]}
 fn desktop_vpn_page(info:&Info)->Spec {
     let vpns:&[super::desktop_network::VpnConnection]=info.desktop_network.as_ref().map_or(&[],|n|n.vpns.as_slice());
     let items:Vec<Item>=if vpns.is_empty(){vec![Item::new("No VPN Configurations").tint(Tint::Dim)]}else{vpns.iter().map(|v|Item::new(v.name.clone()).value(v.status_label()).action(Action::Vpn{name:v.name.clone(),up:!v.active})).collect()};

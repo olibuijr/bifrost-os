@@ -2148,7 +2148,6 @@ impl Shell {
             // the accelerometer is read on every wake, so the dots follow the vehicle
             due.add(Some(t + accessibility::motion_cues::POLL_MS));
         }
-        if self.markup_load.is_some() {
         if self.markup_load.is_some() || self.visual_search_pending() {
             due.add(Some(t + 50.0));
         }
@@ -4317,7 +4316,7 @@ impl Shell {
             damage.all();
             self.drawn = Drawn::Nothing;
         }
-        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.pick_sheet.is_some() || self.crash_alert.is_some() || self.notify.ask.is_some() || self.compose_showing() || self.print_showing() || self.char_viewer.is_some() || self.help_viewer.is_some() || self.keyboard_viewer.is_some() || self.auth_showing() || self.volume_showing() || self.access_showing() || self.guardian_sheet.is_some() || self.malware_alert.is_some() || self.usb_showing() || self.net_auth_showing() || self.package_showing() || self.photo_pick_sheet.is_some() || self.trust_sheet.is_some() || self.fw_showing() || self.launch_alert.is_some() || self.a11y_panel.is_some() || self.switch_panel_shown() { || self.a11y_panel.is_some() {
+        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.pick_sheet.is_some() || self.crash_alert.is_some() || self.notify.ask.is_some() || self.compose_showing() || self.print_showing() || self.char_viewer.is_some() || self.help_viewer.is_some() || self.keyboard_viewer.is_some() || self.auth_showing() || self.volume_showing() || self.access_showing() || self.guardian_sheet.is_some() || self.malware_alert.is_some() || self.usb_showing() || self.net_auth_showing() || self.package_showing() || self.photo_pick_sheet.is_some() || self.trust_sheet.is_some() || self.fw_showing() || self.launch_alert.is_some() || self.a11y_panel.is_some() || self.switch_panel_shown() {
             // modal: repaint everything under it every frame, and again once it is gone
             damage.all();
             self.drawn = Drawn::Nothing;
@@ -4418,7 +4417,7 @@ impl Shell {
             && !self.keyboard.animating() && !self.kb_touch && self.term_touch.menu().is_none() && term.plain()
             && !self.hud.visible(t) && !self.input_hud.visible(t) && !self.perf.enabled && !self.overlay_visible() && self.drawn != Drawn::Nothing && !self.captions.visible(t) && !self.captions_drawn
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none() && self.look_up.is_none()
-            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.volume_showing() && !self.access_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage() && self.guardian_sheet.is_none() && !self.usb_showing() && !self.net_auth_showing() && !self.package_showing() && self.trust_sheet.is_none(); && !self.fw_showing() && !self.voice_overlay_damage() && self.visual_search.is_none() && self.launch_alert.is_none() && !self.switch_panel_shown() && self.malware_alert.is_none();
+            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.volume_showing() && !self.access_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage() && self.guardian_sheet.is_none() && !self.usb_showing() && !self.net_auth_showing() && !self.package_showing() && self.trust_sheet.is_none() && !self.fw_showing() && !self.voice_overlay_damage() && self.visual_search.is_none() && self.launch_alert.is_none() && !self.switch_panel_shown() && self.malware_alert.is_none();
         if !quiet {
             return None;
         }
@@ -4439,7 +4438,7 @@ impl Shell {
             && !self.kb_touch && !self.fullscreen
             && !self.hud.visible(t) && !self.hud_drawn && !self.input_hud.visible(t) && !self.input_hud_drawn && !self.perf.enabled && !self.perf_drawn && !self.overlay_visible() && self.drawn != Drawn::Nothing && !self.captions.visible(t) && !self.captions_drawn
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none() && self.look_up.is_none()
-            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.volume_showing() && !self.access_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage() && self.guardian_sheet.is_none() && !self.usb_showing() && !self.net_auth_showing() && !self.package_showing() && self.trust_sheet.is_none(); && !self.fw_showing() && !self.voice_overlay_damage() && self.visual_search.is_none() && self.launch_alert.is_none() && !self.switch_panel_shown() && self.malware_alert.is_none();
+            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.volume_showing() && !self.access_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage() && self.guardian_sheet.is_none() && !self.usb_showing() && !self.net_auth_showing() && !self.package_showing() && self.trust_sheet.is_none() && !self.fw_showing() && !self.voice_overlay_damage() && self.visual_search.is_none() && self.launch_alert.is_none() && !self.switch_panel_shown() && self.malware_alert.is_none();
         if !quiet {
             return None;
         }

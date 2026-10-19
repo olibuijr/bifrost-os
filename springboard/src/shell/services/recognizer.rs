@@ -322,8 +322,8 @@ impl Recognizer {
         Self::with_parts(data_dir, Box::new(GstSpawner), Arc::new(CurlFetcher))
     }
 
-    fn with_parts(data_dir: PathBuf, spawner: Box<dyn PipelineSpawner>, fetcher: Arc<dyn Fetcher>) -> Self {
-        Recognizer { data_dir, spawner, fetcher, session: None, next: 1, voice_retry_at: f64::NEG_INFINITY }
+    pub(crate) fn with_parts(data_dir: PathBuf, spawner: Box<dyn PipelineSpawner>, fetcher: Arc<dyn Fetcher>) -> Self {
+        Recognizer { data_dir, spawner, fetcher, session: None, captions: None, next: 1, voice_retry_at: f64::NEG_INFINITY }
     }
 
     /// One step of the shell's Voice Control recognition at time `t`: starts it when `wanted` and nothing else holds
@@ -353,8 +353,6 @@ impl Recognizer {
             self.voice_retry_at = t + VOICE_RETRY_S;
         }
         heard
-    pub(crate) fn with_parts(data_dir: PathBuf, spawner: Box<dyn PipelineSpawner>, fetcher: Arc<dyn Fetcher>) -> Self {
-        Recognizer { data_dir, spawner, fetcher, session: None, captions: None, next: 1 }
     }
 
     fn stop_captions(&mut self) -> bool {
