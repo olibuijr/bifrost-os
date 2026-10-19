@@ -54,6 +54,7 @@ mod tests {
     fn switching_the_setting_on_opens_the_keyboard_and_off_closes_it() {
         keyboard::fake_process(500.0);
         let mut sh = desktop_shell();
+        crate::shell::tests::unlock(&mut sh);
         assert!(!sh.accessibility_keyboard_on() && !sh.keyboard_opened_explicitly());
         sh.tick(1000.0);
         assert!(!sh.keyboard.shown(), "a desktop does not raise it by itself");

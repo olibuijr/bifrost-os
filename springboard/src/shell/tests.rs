@@ -226,6 +226,8 @@
     fn tablet_desk_with_window_under_keyboard() -> Shell {
         let mut sh = desktop_shell();
         sh.form = bifrost_ui::form_factor::FormFactor::Tablet;
+        // the user unlocks before opening a window; a locked screen is never left by opening one
+        unlock(&mut sh);
         sh.desk_open(AppId::Terminal, 0.);
         // `Desk::place` clamps windows into the visible work area; assign the edge case directly so the bottom really
         // runs under the keyboard and the lift/restore path has a meaningful original position.
@@ -560,6 +562,7 @@
 
     /// A fixture host standing for a running external app in slot 0.
     #[cfg(feature="desktop-wayland")]
+    #[allow(dead_code)]
     fn fixture_app(sh:&mut Shell)->bifrost_proto::sys::Channel{
         let (mine,theirs)=bifrost_proto::sys::socketpair_pair().unwrap();
         let host=apphost::AppHost::with_channel("fixture",mine,None,bifrost_proto::Configure{w:100,h:100,scale:1.,safe_top:0.,safe_bottom:0.,dark:true,text_scale:1.,reduce_motion:false});
@@ -633,6 +636,23 @@
         sh.desk.as_mut().unwrap().open(&m,AppId::External(0),(600,400));
         sh.desk.as_mut().unwrap().open(&m,AppId::ExternalWindow(0,3),(500,300));
         assert_eq!(sh.desk_dock(&m).0.len(),one,"a second window of an app adds no tile");
+    }
+
+    /// On the login lock a session starts on, opening or refocusing a window (a restored window, an app opening
+    /// itself) never leaves the lock: only a successful unlock changes the screen.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn a_window_opened_on_the_login_lock_does_not_leave_it() {
+        let mut sh=desktop_shell();
+        assert!(sh.is_locked(),"a session starts on the login lock");
+        let _peer=fixture_app(&mut sh);
+        sh.desk_open(AppId::Settings,0.);
+        assert!(sh.is_locked(),"desk_open does not unlock");
+        sh.desk_open(AppId::External(0),1.);
+        assert!(sh.is_locked(),"an external app opening itself does not unlock");
+        sh.desk_refocus();
+        assert!(sh.is_locked(),"a refocus does not unlock");
+        for k in 0..3 { sh.ext_tick(10.0+k as f64); assert!(sh.is_locked(),"tick {k}"); }
     }
 
     /// The lock stays up while a window's app lives, dies or changes the desk: no tick lifts a window over it.
