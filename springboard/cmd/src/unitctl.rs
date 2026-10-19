@@ -23,6 +23,12 @@ pub enum Plan {
     Midi { file: PathBuf, out: PathBuf, rate: f64 },
 }
 
+/// The value after an option: moves `i` onto it, or says the option needs one.
+fn next_arg<'a>(rest: &'a [String], i: &mut usize, name: &str) -> Result<&'a String, String> {
+    *i += 1;
+    rest.get(*i).ok_or_else(|| format!("{name} needs a value"))
+}
+
 pub fn parse(args: &[String]) -> Result<Plan, String> {
     let Some(cmd) = args.first() else { return Err(USAGE.to_string()) };
     let rest = &args[1..];
@@ -57,25 +63,21 @@ pub fn parse(args: &[String]) -> Result<Plan, String> {
             let mut i = 0;
             while i < rest.len() {
                 let a = rest[i].as_str();
-                let mut value = |name: &str| -> Result<&String, String> {
-                    i += 1;
-                    rest.get(i).ok_or_else(|| format!("{name} needs a value"))
-                };
                 match a {
                     "--seconds" => {
-                        let v = value("--seconds")?;
+                        let v = next_arg(rest, &mut i, "--seconds")?;
                         seconds = v.parse::<f64>().ok().filter(|s| s.is_finite() && *s > 0.0 && *s <= 600.0).ok_or_else(|| format!("`{v}` is not a length in seconds (0 to 600)"))?;
                     }
                     "--rate" => {
-                        let v = value("--rate")?;
+                        let v = next_arg(rest, &mut i, "--rate")?;
                         rate = v.parse::<f64>().ok().filter(|r| (8_000.0..=192_000.0).contains(r)).ok_or_else(|| format!("`{v}` is not a sample rate (8000 to 192000)"))?;
                     }
                     "--note" => {
-                        let v = value("--note")?;
+                        let v = next_arg(rest, &mut i, "--note")?;
                         note = v.parse::<u8>().ok().filter(|k| *k < 128).ok_or_else(|| format!("`{v}` is not a key number 0 to 127"))?;
                     }
                     "--set" => {
-                        let v = value("--set")?;
+                        let v = next_arg(rest, &mut i, "--set")?;
                         let (id, val) = v.split_once('=').ok_or_else(|| format!("`{v}` is not ID=VALUE"))?;
                         let id = id.parse::<u32>().map_err(|_| format!("`{id}` is not a parameter id"))?;
                         let val = val.parse::<f32>().ok().filter(|x| x.is_finite()).ok_or_else(|| format!("`{val}` is not a number"))?;
