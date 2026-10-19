@@ -79,6 +79,7 @@ pub(crate) fn can_edit(file_uid: u32, me: Option<u32>) -> bool {
 }
 
 /// The permission bits of `path` (the twelve mode bits), following links.
+#[cfg(test)]
 pub(crate) fn mode_of(path: &Path) -> std::io::Result<u32> {
     Ok(std::fs::metadata(path)?.permissions().mode() & 0o7777)
 }

@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 /// Bytes an app may fetch in the background each day.
+#[allow(dead_code)] // app-facing asset pack requests reach the daemon once the app request route lands
 pub const DAILY_BUDGET: u64 = 512 * 1024 * 1024;
 
 /// The asset daemon: the managed download queues of all apps, run while the machine is idle.
@@ -24,11 +25,13 @@ impl AssetDaemon {
     }
 
     /// Queues `pack` for `app`. Refused when that pack is already queued, downloading or done.
+    #[allow(dead_code)] // app-facing asset pack requests reach the daemon once the app request route lands
     pub fn request(&mut self, app: &str, pack: &str, bytes: u64, priority: u8) -> Result<(), RequestError> {
         self.queues.entry(app.to_string()).or_insert_with(|| ManagedDownloads::new(DAILY_BUDGET)).request(pack, bytes, priority)
     }
 
     /// The queue of `app`, if it has ever requested a pack.
+    #[allow(dead_code)] // app-facing asset pack requests reach the daemon once the app request route lands
     pub fn queue(&self, app: &str) -> Option<&ManagedDownloads> {
         self.queues.get(app)
     }
@@ -83,6 +86,7 @@ impl LocalPackSource {
     }
 
     /// The pack ids available for `app`, sorted.
+    #[allow(dead_code)] // app-facing asset pack requests reach the daemon once the app request route lands
     pub fn available(&self, app: &str) -> Vec<String> {
         if !id_ok(app) {
             return Vec::new();
