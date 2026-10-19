@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.3
+
+- BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.
+
 ## 0.4.2
 
 - BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.

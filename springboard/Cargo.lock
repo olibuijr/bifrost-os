@@ -682,7 +682,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-folder-actions"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -769,7 +769,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-keychain-access"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -789,7 +789,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-locate"
-version = "0.4.2"
+version = "0.4.3"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -798,7 +798,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-mail"
-version = "0.15.1"
+version = "0.15.2"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
