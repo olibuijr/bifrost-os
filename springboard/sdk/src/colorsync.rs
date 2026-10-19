@@ -10,6 +10,11 @@ pub use bifrost_render::colorspace::{Space, Transform};
 pub use bifrost_render::cg::color::RenderingIntent;
 pub use bifrost_render::icc::{IccError, MatrixShaper, Profile, Vcgt};
 pub use bifrost_render::icc_builtin::Builtin;
+/// Creating and editing profiles (`ColorSyncMutableProfile`): header fields, tags, curves, gamma tables, output bytes.
+pub use bifrost_render::icc_write::{MutableProfile, WriteError};
+use bifrost_render::cg::image::CgImage;
+pub use bifrost_render::cg::imageio::Format as ImageFormat;
+use bifrost_render::cg::imageio::{ImageDestination, ImageSource, WriteOptions};
 use bifrost_render::icc_transform::{Conversion, Model};
 
 /// Why a profile could not be used.
@@ -89,6 +94,27 @@ impl ProfileConverter {
     }
 }
 
+/// Writes straight RGBA pixels (four bytes per pixel, rows top to bottom) as a PNG, JPEG or TIFF that carries
+/// `profile` (ICC bytes) as its embedded colour profile. `None` for a format that cannot carry one (GIF, BMP, ICO,
+/// WebP), for bytes that are not an ICC profile, or when the pixel buffer does not match the size.
+pub fn encode_with_profile(format: ImageFormat, width: usize, height: usize, rgba: &[u8], profile: &[u8]) -> Option<Vec<u8>> {
+    if !matches!(format, ImageFormat::Png | ImageFormat::Jpeg | ImageFormat::Tiff) || Profile::parse(profile).is_err() {
+        return None;
+    }
+    if width == 0 || height == 0 || rgba.len() != width.checked_mul(height)?.checked_mul(4)? {
+        return None;
+    }
+    let image = CgImage::from_rgba8(width, height, rgba.to_vec())?;
+    let mut dest = ImageDestination::new(format, 1)?;
+    dest.add_image(&image, Some(WriteOptions { icc: Some(profile.to_vec()), ..WriteOptions::default() }));
+    dest.finalize()
+}
+
+/// The ICC profile embedded in an image file (PNG iCCP, JPEG APP2, TIFF, WebP), as bytes.
+pub fn embedded_profile(bytes: &[u8]) -> Option<Vec<u8>> {
+    ImageSource::new(bytes.to_vec()).properties_at(0)?.icc_profile
+}
+
 /// The gamma table of a display profile as three 16-bit ramps of `entries` values each (red, green, blue).
 pub fn gamma_ramps(data: &[u8], entries: usize) -> Result<[Vec<u16>; 3], ColorError> {
     let profile = Profile::parse(data).map_err(ColorError::Profile)?;
@@ -134,6 +160,41 @@ mod tests {
         let t = ProfileToProfile::open(&grey, &srgb, RenderingIntent::Perceptual, true).unwrap();
         let out = t.apply([0.5, 0.5, 0.5]).unwrap();
         assert!((out[0] - out[1]).abs() < 0.01 && (out[1] - out[2]).abs() < 0.01, "{out:?}");
+    }
+
+    #[test]
+    fn a_created_profile_converts_to_srgb_with_a_neutral_grey_axis() {
+        let (prim, white) = Space::Srgb.chromaticities();
+        let made = MutableProfile::rgb_display("Mine", prim, white, 2.2).unwrap().to_bytes();
+        let srgb = Builtin::Srgb.bytes();
+        let t = ProfileToProfile::open(&made, &srgb, RenderingIntent::RelativeColorimetric, false).unwrap();
+        let out = t.apply([0.5, 0.5, 0.5]).unwrap();
+        // a pure 2.2 gamma and the sRGB curve differ by a few thousandths at mid grey
+        assert!(out.iter().all(|c| (c - 0.5).abs() < 0.02), "{out:?}");
+        assert!((out[0] - out[1]).abs() < 0.005 && (out[1] - out[2]).abs() < 0.005, "{out:?}");
+        assert_eq!(t.apply_u8([255, 255, 255]), Some([255, 255, 255]));
+        assert_eq!(t.apply_u8([0, 0, 0]), Some([0, 0, 0]));
+    }
+
+    #[test]
+    fn a_profile_embeds_in_a_png_and_reads_back_byte_for_byte() {
+        let profile = Builtin::DisplayP3.bytes();
+        let pixels = vec![200u8, 40, 40, 255, 40, 200, 40, 255];
+        let png = encode_with_profile(ImageFormat::Png, 2, 1, &pixels, &profile).expect("png with a profile");
+        assert_eq!(embedded_profile(&png), Some(profile.clone()));
+        let jpeg = encode_with_profile(ImageFormat::Jpeg, 2, 1, &pixels, &profile).expect("jpeg with a profile");
+        assert_eq!(embedded_profile(&jpeg), Some(profile));
+    }
+
+    #[test]
+    fn embedding_refuses_formats_without_a_slot_and_data_that_is_not_a_profile() {
+        let profile = Builtin::Srgb.bytes();
+        let pixels = vec![0u8, 0, 0, 255];
+        assert!(encode_with_profile(ImageFormat::Gif, 1, 1, &pixels, &profile).is_none());
+        assert!(encode_with_profile(ImageFormat::Bmp, 1, 1, &pixels, &profile).is_none());
+        assert!(encode_with_profile(ImageFormat::Png, 1, 1, &pixels, &[1, 2, 3]).is_none());
+        assert!(encode_with_profile(ImageFormat::Png, 2, 2, &pixels, &profile).is_none(), "buffer too short");
+        assert!(embedded_profile(&encode_with_profile(ImageFormat::Png, 1, 1, &pixels, &profile).unwrap()).is_some());
     }
 
     #[test]

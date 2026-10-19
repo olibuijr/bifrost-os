@@ -43,6 +43,7 @@ pub mod icc;
 pub mod icc_lut;
 pub mod icc_builtin;
 pub mod icc_transform;
+pub mod icc_write;
 pub mod edid;
 pub mod pixel_layout;
 pub mod bezier;
