@@ -60,6 +60,49 @@ impl PresetStore {
         Ok(())
     }
 
+    /// The user presets as text for a file, one per line: the name, a tab, then `id=value` pairs separated by commas.
+    /// Tabs and line breaks in a name become spaces.
+    pub fn export_user(&self) -> String {
+        let mut out = String::new();
+        for p in &self.user {
+            let name: String = p.name.chars().map(|c| if c == '\t' || c == '\n' || c == '\r' { ' ' } else { c }).collect();
+            let values: Vec<String> = p.values.iter().map(|(id, v)| format!("{id}={v}")).collect();
+            out.push_str(&format!("{name}\t{}\n", values.join(",")));
+        }
+        out
+    }
+
+    /// Adds the presets of `export_user` text as user presets (numbered after the existing ones, the current preset
+    /// unchanged). A line that is not a preset is skipped. Returns how many were added.
+    pub fn import_user(&mut self, text: &str) -> usize {
+        let mut added = 0;
+        for line in text.lines() {
+            let Some((name, rest)) = line.split_once('\t') else { continue };
+            if name.is_empty() {
+                continue;
+            }
+            let mut values = Vec::new();
+            let mut ok = true;
+            for pair in rest.split(',').filter(|p| !p.is_empty()) {
+                match pair.split_once('=').and_then(|(i, v)| Some((i.parse::<u32>().ok()?, v.parse::<f32>().ok()?))) {
+                    Some((id, v)) if v.is_finite() => values.push((id, v)),
+                    _ => {
+                        ok = false;
+                        break;
+                    }
+                }
+            }
+            if !ok {
+                continue;
+            }
+            let number = self.next_user;
+            self.next_user -= 1;
+            self.user.push(Preset { number, name: name.to_string(), values });
+            added += 1;
+        }
+        added
+    }
+
     /// Applies a preset's values to the parameters (jumping).
     pub fn select(&mut self, number: i32, params: &ParamHandle) -> Result<(), UnitError> {
         let p = self.preset(number).ok_or(UnitError::NoPreset)?;
@@ -124,5 +167,43 @@ mod tests {
         assert_eq!(s.current(), None);
         assert_eq!(s.delete_user(-2), Err(UnitError::NoPreset));
         assert_eq!(s.delete_user(0), Err(UnitError::NoPreset));
+    }
+
+    #[test]
+    fn user_presets_survive_a_round_trip_through_text() {
+        let t = tree();
+        let h = t.handle();
+        let mut s = store();
+        h.set(0, 4.5).unwrap();
+        s.save_user("My\tpreset", h.snapshot());
+        h.set(1, 0.125).unwrap();
+        s.save_user("Second", h.snapshot());
+        let text = s.export_user();
+        assert_eq!(text.lines().count(), 2);
+        assert!(text.starts_with("My preset\t0=4.5,1=2\n"), "{text}");
+        let mut fresh = store();
+        assert_eq!(fresh.import_user(&text), 2);
+        let names: Vec<&str> = fresh.presets().map(|p| p.name.as_str()).collect();
+        assert_eq!(names, vec!["Flat", "Loud", "My preset", "Second"]);
+        assert_eq!(fresh.preset(-1).unwrap().values, vec![(0, 4.5), (1, 2.0)]);
+        assert_eq!(fresh.preset(-2).unwrap().values, vec![(0, 4.5), (1, 0.125)]);
+        // importing does not make a preset current, and applying one restores its values
+        assert_eq!(fresh.current(), None);
+        let t2 = tree();
+        let h2 = t2.handle();
+        let mut t2 = t2;
+        fresh.select(-2, &h2).unwrap();
+        t2.sync();
+        assert_eq!((t2.value(0), t2.value(1)), (4.5, 0.125));
+    }
+
+    #[test]
+    fn import_skips_lines_that_are_not_presets() {
+        let mut s = store();
+        let text = "no tab here\n\t0=1\nbad value\t0=abc\nbad id\tx=1\nnan\t0=NaN\nempty\t\ngood\t1=3\n";
+        assert_eq!(s.import_user(text), 2);
+        assert_eq!(s.preset(-1).unwrap().name, "empty");
+        assert_eq!(s.preset(-2).unwrap().values, vec![(1, 3.0)]);
+        assert_eq!(s.export_user(), "empty\t\ngood\t1=3\n");
     }
 }
