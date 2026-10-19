@@ -509,7 +509,7 @@ fn gpu_args(runtime: &Path, display: &str, native: bool, session: bool) -> io::R
     if native {
         push(&["--ro-bind".as_ref(), "/sys".as_ref(), "/sys".as_ref()]);
     } else {
-        for path in ["/sys/dev/char", "/sys/devices"] {
+        for path in ["/sys/dev/char", "/sys/devices", "/sys/bus/pci", "/sys/class/drm"] {
             push(&["--ro-bind-try".as_ref(), path.as_ref(), path.as_ref()]);
         }
     }
