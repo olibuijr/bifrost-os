@@ -285,15 +285,8 @@ impl Files {
                 Some(BAR_LIST) => self.set_view(false, false),
                 Some(BAR_COLUMNS) => self.set_view(false, true),
                 Some(BAR_GALLERY) => self.set_gallery(),
-                Some(BAR_SORT) => {
-                    self.vo.show = !self.vo.show; // Sort By lives in the View Options panel
-                    self.revision += 1;
-                }
-                Some(BAR_NEW_FOLDER) if !self.in_recents() && !self.in_bin() => self.new_folder(),
-                Some(BAR_SELECT) => {
-                    self.select_mode = !self.select_mode;
-                    self.revision += 1;
-                }
+                // the pull-down, share, tags and action buttons queue their menu or sheet (barmenu.rs)
+                Some(id @ (BAR_SORT | BAR_SHARE | BAR_TAGS | BAR_MORE)) => self.bar_action(id),
                 Some(BAR_SEARCH) => {
                     if self.search_rect().is_some_and(|r| bifrost_app::controls::search::hits_clear(r, !self.query.is_empty(), x, y)) {
                         self.query.clear();
@@ -431,7 +424,11 @@ impl Files {
             widgets::source_list(s, ui, self.sidebar_bounds(), &self.sidebar(), SIDEBAR_SCROLL, pressed);
             rect(s, ui, self.side() - 1., 0., 1., h, SEPARATOR_C.now());
         }
-        widgets::toolbar_band(s, ui, Rect { x: self.side(), y: 0., w: w - self.side(), h: HEADER_H });
+        // The toolbar shares the content colour and its button groups float over it as glass capsules (Golden Gate's
+        // Files): no `toolbar_band` behind them. Icons that have scrolled under the toolbar get a hairline at its edge.
+        if self.grid && self.scroll > 0. {
+            rect(s, ui, self.side(), self.body_top() - 1., w - self.side(), 1., SEPARATOR_C.now());
+        }
         self.paint_tab_strip(ui, s);
         let title = self.title();
         self.title_w = (ui.measure(&title, MAC_TITLE3_PT, Weight::Bold) / ui.pt(1.) + 4.).clamp(40., self.title_room());

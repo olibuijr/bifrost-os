@@ -24,6 +24,8 @@ pub(crate) const DOMAIN: &str = "is.olibuijr.files.desktop";
 const MAX_BOARD_ITEMS: usize = 16;
 /// The most calls waiting for a reply; older ones are dropped (their replies then find nothing to match).
 const MAX_WAITING: usize = 32;
+/// The most items one share menu carries (the protocol's limit).
+const MAX_SHARE_ITEMS: usize = 8;
 /// The smallest change of the Dock progress bar that is sent.
 const DOCK_STEP: f32 = 0.01;
 /// Thumbnail requests whose replies are awaited; past this they are forgotten (their picture then still comes as an event).
@@ -48,6 +50,10 @@ pub(crate) enum Effect {
     OpenWithApps(PathBuf),
     /// A picture of the file for a view: the thumbnails service, at `size` pt and `scale` pixels per point.
     Thumbnail(PathBuf, u32, f32),
+    /// A toolbar pull-down: the menu opens at (x, y) window points, under its button.
+    PopUp(f32, f32, Vec<ContextItem>),
+    /// Share: the shell's share menu for these files, under the button at (x, y, w, h) window points.
+    Share(Vec<PathBuf>, (f32, f32, f32, f32)),
 }
 
 /// What a waiting reply is for.
@@ -108,6 +114,13 @@ impl SystemState {
                         }
                         self.thumb_ids.insert(thumbnails::request(ctx, p, size, scale, ThumbKind::Thumbnail));
                     }
+                }
+                // the shell takes window pixels for both; the choice comes back as `Input::ContextAction`
+                Effect::PopUp(x, y, items) => ctx.context_menu(x * ctx.ui.s, y * ctx.ui.s, items),
+                Effect::Share(paths, (x, y, w, h)) => {
+                    let items: Vec<bifrost_app::share::Payload> = paths.iter().take(MAX_SHARE_ITEMS).map(|p| bifrost_app::share::Payload::Url(file_url(p))).collect();
+                    let s = ctx.ui.s;
+                    let _ = bifrost_app::share::show_picker(ctx, &items, Rect { x: x * s, y: y * s, w: w * s, h: h * s });
                 }
             }
         }

@@ -42,6 +42,7 @@ use std::{
 };
 use bifrost_app::kit::ui::{SPACE_L, SPACE_XL, SPACE_XS};
 
+mod barmenu;
 mod control;
 mod dragout;
 mod dragpreview;
@@ -72,6 +73,7 @@ mod undo;
 mod views;
 mod window;
 mod windows;
+use barmenu::*;
 use extensions::*;
 use go::*;
 use info::*;
@@ -299,13 +301,16 @@ impl App for Files {
         // File > Quick Look (the same panel as the context menu's Preview): the shell merges an app menu titled File
         // into its own File menu, and the item needs a selection
         let quick_look = bifrost_app::AppMenuItem::new(MENU_QUICK_LOOK, "Quick Look").enabled(!self.selected_paths().is_empty());
-        vec![bifrost_app::AppMenu { title: "File".into(), items: vec![quick_look] }]
+        // File > New Folder (Shift+Cmd+N): the toolbar has no New Folder button; the folder menus have it too
+        let new_folder = bifrost_app::AppMenuItem::new(MENU_NEW_FOLDER, "New Folder").key("cmd+shift+n").enabled(!self.in_recents() && !self.in_bin());
+        vec![bifrost_app::AppMenu { title: "File".into(), items: vec![new_folder, quick_look] }]
     }
     fn menu_action(&mut self, _ctx: &Ctx, id: u32) -> bool {
-        if id != MENU_QUICK_LOOK {
-            return false;
+        match id {
+            MENU_QUICK_LOOK => self.quick_look(),
+            MENU_NEW_FOLDER if !self.in_recents() && !self.in_bin() => self.new_folder(),
+            _ => return false,
         }
-        self.quick_look();
         true
     }
     fn configure(&mut self, ctx: &Ctx) {
@@ -1001,11 +1006,26 @@ mod tests {
         files.home = dir.clone();
         files.path = dir.clone();
         files.select_only(0);
-        assert_eq!(files.drop_target_at(350., 130.), Some(PathBuf::from("/fixture/B")));
-        assert_eq!(files.drop_target_at(240., 130.), None, "the dragged row is not a target");
-        // sidebar: Recents (no header), Favorites header, Desktop, Documents; the Trash is not a drop target
-        let ids: Vec<PathBuf> = files.places().into_iter().map(|p| p.path).collect();
-        let row = |path: &Path| { let i = ids.iter().position(|p| p == path).unwrap(); let headers = if i == 0 { 0. } else if i <= 3 { 1. } else if i <= 6 { 2. } else { 3. }; -SIDEBAR_SCROLL + 30. * headers + 32. * i as f32 + 5. };
+        // the first line of the icon grid: A in the first cell, B in the second (cell centres follow the icon size)
+        let (cell_a, cell_b) = (files.side() + 16. + 0.5 * files.grid_w(), files.side() + 16. + 1.5 * files.grid_w());
+        let first_line = files.rows_top() + 16. + 0.5 * files.grid_h();
+        assert_eq!(files.drop_target_at(cell_b, first_line), Some(PathBuf::from("/fixture/B")));
+        assert_eq!(files.drop_target_at(cell_a, first_line), None, "the dragged row is not a target");
+        // sidebar: Recents (no header), then each section's header and rows (the Applications row is there only when
+        // the machine has an Applications folder); the Trash is not a drop target
+        let row = |path: &Path| {
+            let mut y = -SIDEBAR_SCROLL;
+            for (header, rows) in files.sections() {
+                y += if header.is_some() { 30. } else { 0. };
+                for place in rows {
+                    if place.path == path {
+                        return y + 5.;
+                    }
+                    y += 32.;
+                }
+            }
+            panic!("no sidebar row for {}", path.display())
+        };
         assert_eq!(files.drop_target_at(80., row(&dir.join("Documents"))), Some(dir.join("Documents")));
         assert_eq!(files.drop_target_at(80., row(&files.bin())), None);
         let _ = std::fs::remove_dir_all(&dir);
@@ -1110,7 +1130,7 @@ mod tests {
         let mut files = fixture(vec![]);
         files.update_controls();
         let ids: Vec<u64> = files.controls.nodes().iter().map(|n| n.id).collect();
-        for id in [BAR_BACK, BAR_FORWARD, BAR_ICONS, BAR_LIST, BAR_COLUMNS, BAR_SORT, BAR_NEW_FOLDER, BAR_SELECT, BAR_SEARCH] {
+        for id in [BAR_BACK, BAR_FORWARD, BAR_ICONS, BAR_LIST, BAR_COLUMNS, BAR_GALLERY, BAR_SORT, BAR_SHARE, BAR_TAGS, BAR_MORE, BAR_SEARCH] {
             assert!(ids.contains(&(id as u64)), "{id} published");
         }
         let list = files.controls.nodes().iter().find(|n| n.id == BAR_LIST as u64).unwrap().bounds;
