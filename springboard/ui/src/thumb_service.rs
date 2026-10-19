@@ -274,8 +274,8 @@ impl Registry {
         self.providers.is_empty()
     }
 
-    /// The provider whose registered type is nearest to `type_id` in the conformance tree.
-    pub fn provider_for(&self, type_id: &str) -> Option<&dyn ThumbProvider> {
+    /// The provider whose registered type is nearest to `type_id` in the conformance tree, and that distance.
+    fn nearest(&self, type_id: &str) -> Option<(usize, &dyn ThumbProvider)> {
         let mut best: Option<(usize, &dyn ThumbProvider)> = None;
         for p in &self.providers {
             let d = p.types().iter().filter_map(|t| uttype::distance(type_id, t)).min();
@@ -285,7 +285,18 @@ impl Registry {
                 }
             }
         }
-        best.map(|(_, p)| p)
+        best
+    }
+
+    /// The provider whose registered type is nearest to `type_id` in the conformance tree.
+    pub fn provider_for(&self, type_id: &str) -> Option<&dyn ThumbProvider> {
+        self.nearest(type_id).map(|(_, p)| p)
+    }
+
+    /// How far the nearest provider's type is from `type_id` (0 when a provider names that very type). `None` when no
+    /// provider draws the type. A provider extension compares its own distance with this one to see who is more specific.
+    pub fn distance_for(&self, type_id: &str) -> Option<usize> {
+        self.nearest(type_id).map(|(d, _)| d)
     }
 
     /// The art for `file`: the icon for [`ThumbKind::Icon`]; for a thumbnail the provider's pixels, else the icon.
@@ -406,6 +417,16 @@ mod tests {
         // html is text but not plain text
         assert!(r.provider_for("public.html").unwrap().render(&file("a.html"), 32).is_none());
         assert!(r.provider_for("public.png").is_none());
+    }
+
+    #[test]
+    fn the_distance_of_the_nearest_provider_is_known() {
+        let mut r = Registry::new();
+        r.register(Box::new(Fixed(&["public.text"], false)));
+        r.register(Box::new(Fixed(&["public.plain-text"], true)));
+        assert_eq!(r.distance_for("public.plain-text"), Some(0));
+        assert!(r.distance_for("public.html").is_some_and(|d| d >= 1), "html is further from the registered types than plain text");
+        assert_eq!(r.distance_for("public.png"), None);
     }
 
     #[test]

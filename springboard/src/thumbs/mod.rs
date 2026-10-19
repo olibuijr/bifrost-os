@@ -122,6 +122,13 @@ impl Generator {
         &self.cache
     }
 
+    /// How far the built-in provider for the file named `file_name` is from the file's own type (0 when a provider
+    /// names that very type). `None` when no built-in provider draws it: the type icon is all it gets.
+    pub fn provider_distance(&self, file_name: &str) -> Option<usize> {
+        let type_id = bifrost_ui::uttype::type_for_extension(file_name).unwrap_or("public.data");
+        self.registry.distance_for(type_id)
+    }
+
     /// The cache key and the answer when it needs no drawing: the icon kind, a folder, or a cache hit.
     pub fn quick(&self, req: &ThumbRequest) -> Result<(String, Option<Answer>), String> {
         let path = Path::new(&req.path);
