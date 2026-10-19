@@ -230,6 +230,9 @@ pub struct Desk {
     window_buf: Vec<u32>,
     /// how many windows have been opened, to cascade them
     opened: usize,
+    /// windows of apps that have not committed a frame yet: not drawn and not hit until the first frame arrives
+    /// (`Shell::desk_refresh_unmapped`), so an app that opened a window it never drew leaves no black shell behind
+    pub(super) unmapped: Vec<AppId>,
     /// running open, minimize, restore and zoom effects (empty at rest: no frames, no timers)
     pub(super) fx: super::window_fx::FxTracker,
     #[cfg(feature = "desktop-wayland")]
@@ -508,7 +511,7 @@ impl Desk {
 
     /// The frontmost visible window hit at (x, y).
     pub fn pick(&self, m: &Metrics, x: f32, y: f32) -> Option<(usize, Hit)> {
-        self.wins.iter().enumerate().rev().filter(|(_, w)| !w.minimized).find_map(|(i, w)| w.hit(m, x, y).map(|h| (i, h)))
+        self.wins.iter().enumerate().rev().filter(|(_, w)| !w.minimized && !self.unmapped.contains(&w.app)).find_map(|(i, w)| w.hit(m, x, y).map(|h| (i, h)))
     }
 
     /// The work area windows live in: below the menu bar, above the dock.
@@ -938,7 +941,9 @@ impl Shell {
         let Some(app) = apps().get(id.saturating_sub(1) as usize).map(|a| a.id) else { return };
         let Some(i) = self.desk.as_ref().and_then(|d| d.index_of(app)) else { return };
         match ev {
-            WindowEvent::Focus(_) => { self.desk.as_mut().unwrap().raise(i); self.screen = Screen::App(app); self.dirty = true; },
+            // the compositor hands focus back to a window when a menu or sheet closes; on a locked screen that must not
+            // lift the window over the lock (Lock Screen from the System menu closes the menu in the same turn)
+            WindowEvent::Focus(_) => { self.desk.as_mut().unwrap().raise(i); if !self.is_locked() { self.screen = Screen::App(app); } self.dirty = true; },
             WindowEvent::Close(_) => self.desk_close_app(app),
             WindowEvent::Maximized(_,maximized) => {let win=&mut self.desk.as_mut().unwrap().wins[i]; if win.maximized!=maximized {if maximized {win.restore=win.r;}else{win.r=win.restore;}win.maximized=maximized;self.dirty=true;}},
             WindowEvent::Resize(_,w,h) if w > 0 && h > 0 => {
@@ -1992,6 +1997,28 @@ impl Shell {
         self.dirty = true;
     }
 
+    /// True when `app`'s window has no content to show yet: an app's window (or one of its extra windows) the app has
+    /// not committed a frame to. A window server maps a window on its first committed buffer, not on creation.
+    pub(super) fn desk_window_unmapped(&self, app: AppId) -> bool {
+        match app {
+            AppId::External(slot) => self.ext.get(slot as usize).and_then(Option::as_ref).is_some_and(|h| !h.incompatible && h.frame().is_none()),
+            AppId::ExternalWindow(slot, id) => self.ext.get(slot as usize).and_then(Option::as_ref).map_or(true, |h| !h.window_mapped(u32::from(id))),
+            _ => false,
+        }
+    }
+
+    /// Recomputes `Desk::unmapped` from the app hosts; a window that just gained its first frame is repainted.
+    pub(super) fn desk_refresh_unmapped(&mut self) {
+        let Some(d) = self.desk.as_ref() else { return };
+        let now: Vec<AppId> = d.wins.iter().map(|w| w.app).filter(|a| self.desk_window_unmapped(*a)).collect();
+        if let Some(d) = self.desk.as_mut() {
+            if d.unmapped != now {
+                d.unmapped = now;
+                self.dirty = true;
+            }
+        }
+    }
+
     /// The wallpaper, the windows back to front, the menu bar and the dock.
     pub(super) fn draw_desk(&mut self, s: &mut Surface, t: f64) {
         let m = self.desk_metrics();
@@ -2006,14 +2033,19 @@ impl Shell {
         #[cfg(feature = "desktop-wayland")]
         {
             let desk = self.desk.as_mut().unwrap();
-            desk.window_cache.retain(|id,_| desk.wins.iter().zip(&fading).any(|(w, f)| (!w.minimized || *f) && apps()[(*id-1) as usize].id == w.app));
+            desk.window_cache.retain(|id,_| desk.wins.iter().zip(&fading).any(|(w, f)| (!w.minimized || *f) && frame_app(*id) == Some(w.app)));
             desk.body_cache.retain(|app,_| desk.wins.iter().zip(&fading).any(|(w, f)| (!w.minimized || *f) && w.app == *app));
         }
-        let front = self.desk.as_ref().and_then(|d| d.wins.iter().rposition(|w| !w.minimized));
+        self.desk_refresh_unmapped();
+        let front = self.desk.as_ref().and_then(|d| d.wins.iter().rposition(|w| !w.minimized && !d.unmapped.contains(&w.app)));
         for i in 0..count {
             let Some(win) = self.desk.as_ref().and_then(|d| d.wins.get(i).copied()) else { break };
             let w = &win;
             if w.minimized && !fading[i] {
+                continue;
+            }
+            // a window whose app has committed no frame has nothing to show: no frame is drawn for it
+            if self.desk.as_ref().is_some_and(|d| d.unmapped.contains(&w.app)) {
                 continue;
             }
             #[cfg(feature = "desktop-wayland")]
@@ -2279,7 +2311,12 @@ impl Shell {
         }
         // title
         if full_size(w.app) { return; }
-        let base: &str = if doc_title.is_empty() { apps().iter().find(|a| a.id == w.app).map_or("", |a| a.name) } else { doc_title };
+        // an extra window carries the title its app gave it in the window table; the catalogue knows only whole apps
+        let table_title: String = match w.app {
+            AppId::ExternalWindow(slot, id) => self.ext.get(slot as usize).and_then(Option::as_ref).and_then(|h| h.windows.of_app(&h.id).iter().find(|x| x.id == u32::from(id)).map(|x| x.title.clone())).unwrap_or_default(),
+            _ => String::new(),
+        };
+        let base: &str = if !table_title.is_empty() { &table_title } else if doc_title.is_empty() { apps().iter().find(|a| a.id == w.app.parent()).map_or("", |a| a.name) } else { doc_title };
         let name: std::borrow::Cow<str> = if doc_edited { format!("{base} \u{2013} Edited").into() } else { base.into() };
         self.label(&name, 13.0, Weight::Semibold, if focused { super::ui::LABEL.now() } else { super::ui::LABEL_2.now() }, |im| s.blit(im, r.x + (r.w - im.w as i32) / 2, r.y + (m.title - im.h as i32) / 2, 255, 255));
     }

@@ -475,6 +475,89 @@
         assert_eq!(sh.settings.as_ref().unwrap().page(),pages::PageId::Network);
     }
 
+    /// System menu > Lock Screen locks the desktop (a click on the row, its action, and the compositor handing focus back
+    /// to the window as the menu closes), and the row names its key equivalent.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn the_system_menu_lock_screen_row_locks_the_desktop_and_shows_ctrl_cmd_q() {
+        use desktop_bar::Menu;
+        let lock_row=|sh:&Shell|sh.menu_rows(Menu::System).iter().position(|r|r.text=="Lock Screen").expect("a Lock Screen row");
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        sh.desk_open(AppId::Settings,0.);
+        assert_eq!(sh.screen,Screen::App(AppId::Settings));
+        let rows=sh.menu_rows(Menu::System);let row=&rows[lock_row(&sh)];
+        assert_eq!(row.key_text(),Some("\u{2303}\u{2318}Q"),"the row shows control-command-Q");
+        // the row's action
+        let action=row.action.clone().expect("Lock Screen is enabled");
+        sh.run_menu_action(action,10.);
+        assert!(sh.is_locked(),"the action locks the screen");
+        // a click on the row (menu open, release inside the popup)
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        sh.desk_open(AppId::Settings,0.);
+        sh.desktop_menu=Some(Menu::System);
+        let (x,top,w,_)=sh.desktop_popup_rect().unwrap();
+        let (spans,_)=desktop_bar::menu_spans(&sh.menu_rows(Menu::System));
+        let (t,h)=spans[lock_row(&sh)];
+        let y=top as f32+sh.ui.pt(t+h/2.);
+        let fx=sh.desktop_bar_event(Event::Up((x+w/2) as f32,y),20.);
+        assert!(fx.is_some());
+        assert!(sh.is_locked(),"a click on Lock Screen locks the desktop");
+        assert!(sh.desktop_menu.is_none());
+        // the compositor gives the window focus back as the menu closes: the lock stays
+        let id=apps().iter().position(|a|a.id==AppId::Settings).unwrap() as u32+1;
+        sh.wayland_window_event(crate::bare::wayland::WindowEvent::Focus(id));
+        assert!(sh.is_locked(),"a focus event must not lift a window over the lock screen");
+    }
+
+    /// Ctrl+Cmd+Q is the lock chord: it maps to `Shortcut::Lock` (the plain Cmd+Q still closes) and locks the desktop.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn ctrl_cmd_q_locks_the_desktop() {
+        let mut keys=hwkeys::HwKeys::default();
+        let mut chord=|mods:&[u16],key:u16,term:bool|{for m in mods{keys.key_front(*m,true,term,false);}let r=keys.key_front(key,true,term,false);keys.key_front(key,false,term,false);for m in mods.iter().rev(){keys.key_front(*m,false,term,false);}r};
+        const CTRL:u16=29;const META:u16=125;const Q:u16=16;
+        assert_eq!(chord(&[CTRL,META],Q,false),Some(hwkeys::Shortcut::Lock));
+        assert_eq!(chord(&[CTRL,META],Q,true),Some(hwkeys::Shortcut::Lock),"also with the Terminal in front");
+        assert_eq!(chord(&[META],Q,false),Some(hwkeys::Shortcut::Close),"Cmd+Q alone still quits the window");
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        sh.desk_open(AppId::Settings,0.);
+        let fx=sh.hw_shortcut(hwkeys::Shortcut::Lock,5.);
+        assert!(sh.is_locked(),"the chord locks the screen");
+        assert_eq!(fx,vec![Effect::ScreenOff]);
+    }
+
+    /// A window whose app has committed no frame is not drawn and not hit: it used to show as an empty black window
+    /// (three grey lights, no content) behind the real ones.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn a_window_whose_app_has_drawn_nothing_is_not_mapped() {
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        let (mine,_theirs)=bifrost_proto::sys::socketpair_pair().unwrap();
+        let host=apphost::AppHost::with_channel("fixture",mine,None,bifrost_proto::Configure{w:100,h:100,scale:1.,safe_top:0.,safe_bottom:0.,dark:true,text_scale:1.,reduce_motion:false});
+        sh.ext.push(Some(host));
+        let m=sh.desk_metrics();
+        let ghost=AppId::External(0);
+        let ghost_extra=AppId::ExternalWindow(0,3);
+        sh.desk.as_mut().unwrap().open(&m,ghost,(600,400));
+        sh.desk.as_mut().unwrap().open(&m,ghost_extra,(600,400));
+        sh.desk_open(AppId::Settings,0.);
+        sh.desk_refresh_unmapped();
+        let d=sh.desk.as_ref().unwrap();
+        assert!(d.unmapped.contains(&ghost),"an app window with no frame is unmapped");
+        assert!(d.unmapped.contains(&ghost_extra),"an extra window the table does not hold has no frame");
+        assert!(!d.unmapped.contains(&AppId::Settings),"a built-in draws its own content");
+        // with Settings out of the way the ghost's rectangle takes no pointer
+        let r=d.wins[d.index_of(ghost).unwrap()].r;
+        let (cx,cy)=((r.x+r.w/2) as f32,(r.y+r.h/2) as f32);
+        let i=d.index_of(AppId::Settings).unwrap();
+        sh.desk.as_mut().unwrap().wins[i].minimized=true;
+        assert_eq!(sh.desk.as_ref().unwrap().pick(&m,cx,cy),None,"an unmapped window takes no pointer");
+        let (w,h)=(sh.w as usize,sh.h as usize);
+        let mut px=vec![0u32;w*h];
+        sh.draw_desk(&mut Surface{w,h,stride:w,px:&mut px,y0:0},0.);
+        assert!(sh.desk.as_ref().unwrap().unmapped.contains(&ghost),"drawing keeps the list");
+    }
+
     /// Desktop frame cost at 1920x1080 with two windows open. Run through `tools/bench.py`.
     #[test]
     #[ignore]
