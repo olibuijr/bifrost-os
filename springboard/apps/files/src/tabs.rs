@@ -113,9 +113,9 @@ impl Files {
     pub(crate) fn tab_strip_h(&self) -> f32 {
         if self.tabs.len() > 1 { TAB_STRIP_H } else { 0. }
     }
-    /// The top of the content under the toolbar and the strip.
+    /// The top of the content under the toolbar, the strip and the search scope bar.
     pub(crate) fn body_top(&self) -> f32 {
-        HEADER_H + self.tab_strip_h()
+        HEADER_H + self.tab_strip_h() + self.scope_bar_h()
     }
     /// The top of the first row: the column headers and the list header are 34 points tall.
     pub(crate) fn rows_top(&self) -> f32 {

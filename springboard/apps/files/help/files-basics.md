@@ -18,4 +18,4 @@ Show Hidden Files shows the items whose names start with a dot. Hide Hidden File
 Press Return on a selected item to rename it. The name is selected without its extension, so typing replaces it and keeps the type. Press Return to save the new name or Escape to cancel. New Folder in the toolbar (or Shift+Command+N) makes a folder and opens its name the same way. Press Command+O or Command+Down to open the selected item, and Command+Up to go to the folder that holds the one you are in.
 
 ## Find items {#search}
-Type in the Search field to look for a name in the folder you are in. Use Find to search from the top of the search field.
+Type in the Search field to look for a name. The window title changes to Searching "This Computer", and a bar under the toolbar shows where Files is looking: click This Computer (the home folder first, then your volumes and the rest of the disk) or the name of the folder you were in to search only that folder and everything in it. The results show in the view you chose, up to the first 1000. Clear the field or press Esc to go back to the folder. Use Find (Command-F) to jump to the Search field.

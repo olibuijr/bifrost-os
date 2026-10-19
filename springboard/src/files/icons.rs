@@ -99,6 +99,18 @@ pub fn entry(s: &mut Surface, rect: (f32, f32, f32, f32), kind: Kind) {
     }
 }
 
+/// The icon of a listing entry on the accent selection plate: a folder turns white, because its blue would vanish into
+/// the plate; a document keeps its pale page, which already stands out.
+pub fn entry_on_accent(s: &mut Surface, rect: (f32, f32, f32, f32), kind: Kind) {
+    match kind {
+        Kind::Folder => {
+            let (x, y, w, h) = rect;
+            folder(s, (x, y + h * 0.1, w, h * 0.8), WHITE);
+        }
+        k => entry(s, rect, k),
+    }
+}
+
 /// A sidebar location glyph, `size` px square at `(x, y)`, in blue.
 pub fn location(s: &mut Surface, (x, y): (f32, f32), size: f32, glyph: Loc) {
     let t = (size * 0.09).max(1.5);
@@ -322,5 +334,18 @@ mod tests {
         chevron(&mut s, (90.0, 90.0), 20.0, 3.0, Point::Right, WHITE);
         clear_button(&mut s, (20.0, 100.0), 10.0);
         assert!(painted(&img) > 300);
+    }
+
+    #[test]
+    fn on_the_accent_plate_a_folder_is_white_and_a_document_is_unchanged() {
+        let mut img = canvas();
+        entry_on_accent(&mut Surface { w: 120, h: 120, stride: 120, px: &mut img.px, y0: 0 }, (10.0, 10.0, 100.0, 80.0), Kind::Folder);
+        assert!(painted(&img) > 500);
+        assert!(img.px.contains(&WHITE), "the folder is drawn white");
+        assert!(!img.px.contains(&FOLDER), "its blue would vanish into the plate");
+        let (mut plain, mut on_plate) = (canvas(), canvas());
+        entry(&mut Surface { w: 120, h: 120, stride: 120, px: &mut plain.px, y0: 0 }, (10.0, 10.0, 100.0, 80.0), Kind::Text);
+        entry_on_accent(&mut Surface { w: 120, h: 120, stride: 120, px: &mut on_plate.px, y0: 0 }, (10.0, 10.0, 100.0, 80.0), Kind::Text);
+        assert_eq!(plain.px, on_plate.px, "a document looks the same on any plate");
     }
 }

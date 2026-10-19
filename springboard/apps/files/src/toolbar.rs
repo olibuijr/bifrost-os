@@ -38,7 +38,16 @@ impl Files {
         let h = widgets::CAPSULE_PT;
         Rect { x, y: (HEADER_H - h) / 2., w: (self.w - x - 16.).max(0.), h }
     }
+    /// The window title: the open folder's name, or while a query searches a tree, the place it searches
+    /// (`Searching "This Computer"`).
     pub(crate) fn title(&self) -> String {
+        if self.scope_bar_shown() {
+            return format!("Searching \u{201C}{}\u{201D}", self.scope_label(self.effective_scope()));
+        }
+        self.folder_title()
+    }
+    /// The open folder's name as the title and the Folder scope plate show it.
+    pub(crate) fn folder_title(&self) -> String {
         if self.path == self.home {
             self.home_name()
         } else if self.in_bin() {
