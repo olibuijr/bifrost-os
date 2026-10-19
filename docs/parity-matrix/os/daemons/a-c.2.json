@@ -3181,7 +3181,7 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/exchange_notes.rs; springboard/apps/notes-desktop/src/notes/exchange.rs; springboard/apps/notes-desktop/src/main.rs; springboard/src/shell/internet_accounts_page.rs; springboard/ui/src/internet_accounts.rs",
+   "bifrost": "springboard/sdk/src/exchange_notes.rs, springboard/apps/notes-desktop/src/notes/exchange.rs, springboard/apps/notes-desktop/src/main.rs, springboard/src/shell/internet_accounts_page.rs, springboard/ui/src/internet_accounts.rs",
    "status": "partial",
    "note": "Syncs Notes with Exchange accounts. Built 2026-10-17: SDK exchange_notes.rs (EWS FindItem, GetItem, CreateItem, UpdateItem, DeleteItem against the notes folder; tests exchange_notes::tests). Wired 2026-10-17 (wave 14): Settings > Internet Accounts > Notes (Exchange) and the Notes app (exchange.rs, Sync in the SDK).",
    "rea": [],

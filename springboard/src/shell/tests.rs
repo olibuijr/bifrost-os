@@ -129,6 +129,7 @@
     fn a_desktop_gets_the_keyboard_only_when_the_user_opens_it_and_can_close_it() {
         keyboard::fake_process(500.0);
         let mut sh=desktop_shell();
+        unlock(&mut sh);
         sh.keyboard_open_explicit(1000.);
         assert!(sh.keyboard.shown() && sh.keyboard_opened_explicitly(),"the Input menu row opens it");
         assert!(sh.desk_keyboard_visible(),"and the desktop draws it");
@@ -350,7 +351,7 @@
         use desktop_bar::Menu;
         let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;
         let rows=sh.menu_row_texts(Menu::App);
-        assert_eq!(rows.iter().filter(|t|t.is_empty()).count(),2,"About | Settings | Quit: {rows:?}");
+        assert_eq!(rows.iter().filter(|t|t.is_empty()).count(),3,"About | Settings | Services | Quit: {rows:?}");
         sh.desktop_menu=Some(Menu::App);
         let (_,_,_,h)=sh.desktop_popup_rect().unwrap();
         assert!((h as f32)<sh.ui.pt(8.+36.*rows.len() as f32),"separators are shorter than rows");

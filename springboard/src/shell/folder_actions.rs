@@ -41,10 +41,11 @@ pub struct Attachment {
 
 impl Attachment {
     /// `None` when the folder is not absolute, is not UTF-8 or has a tab or newline (the saved form needs them),
-    /// or either id is empty or uses a character outside ASCII letters, digits, `-` and `_`.
+    /// the app id is not a reverse-DNS style id (see `valid_app`), or the intent id is empty or uses a character
+    /// outside ASCII letters, digits, `-` and `_`.
     pub fn new(folder: &Path, app_id: &str, intent_id: &str) -> Option<Self> {
         let text = folder.to_str()?;
-        if !folder.is_absolute() || text.contains(['\t', '\n']) || !valid_id(app_id) || !valid_id(intent_id) {
+        if !folder.is_absolute() || text.contains(['\t', '\n']) || !valid_app(app_id) || !valid_id(intent_id) {
             return None;
         }
         Some(Self { folder: folder.to_path_buf(), app_id: app_id.to_string(), intent_id: intent_id.to_string() })
@@ -53,6 +54,11 @@ impl Attachment {
 
 fn valid_id(s: &str) -> bool {
     !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
+/// App ids are reverse-DNS names such as `is.olibuijr.folderactions.desktop`, the same rule the privacy daemon uses.
+fn valid_app(s: &str) -> bool {
+    !s.is_empty() && s.len() <= 128 && s.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_'))
 }
 
 /// A run the shell should start: call `intent_id` of `app_id` for `file`.

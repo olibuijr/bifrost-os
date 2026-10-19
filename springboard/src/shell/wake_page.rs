@@ -184,7 +184,7 @@ mod tests {
         s.add(Entry::new(Weekdays::EVERY_DAY, 7 * 60, WakeAction::Wake));
         // 1970-01-01 00:00 UTC, a Thursday
         assert_eq!(next_at(&s, 0, 0), 7 * 3600);
-        assert!(next_label(&s, 0, 0, true).starts_with("Next: Thursday at 07:00"));
+        assert!(next_label(&s, 0, 0, true).starts_with("Next: Thursday at 7:00"));
         assert_eq!(next_at(&Schedule::new(), 0, 0), 0);
     }
 }
