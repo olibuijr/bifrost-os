@@ -8,8 +8,9 @@ use crate::flow::{SaveOp, Want};
 use crate::form::{Form, FormHit, FORM_CANCEL, FORM_OK};
 use crate::images::{self, BlankSpec, ImageFormat};
 use crate::model::{self, Kind, Node};
+use crate::partition;
 use crate::window::DiskUtility;
-use bifrost_core::disk_format::{Personality, RaidLevel, Scheme};
+use bifrost_core::disk_format::{PartitionSpec, Personality, RaidLevel, Scheme};
 use bifrost_core::disk_request::DiskRequest;
 
 /// What a form was opened for, with what OK needs besides the entered values.
@@ -28,6 +29,10 @@ pub enum FormKind {
     Convert { src: String },
     /// Resize the image file `path`, now `size` bytes long.
     Resize { path: String, size: u64, ext: bool },
+    /// Choose the sizes, names and format of the partitions of the disk `device`, which is `bytes` long.
+    Partition { device: String, bytes: u64 },
+    /// Type the disk's name to confirm `request`, a request that replaces a whole disk.
+    Typed { request: Box<DiskRequest> },
 }
 
 /// The open form sheet.
@@ -40,6 +45,11 @@ pub struct OpenForm {
 /// The file systems the format choices list, as their titles.
 fn fs_titles() -> Vec<&'static str> {
     Personality::ALL.iter().map(|f| f.title()).collect()
+}
+
+/// Whether a request replaces every partition of a disk: such a request asks for the disk's name to be typed.
+fn replaces_a_whole_disk(request: &DiskRequest) -> bool {
+    matches!(request, DiskRequest::EraseDisk { .. } | DiskRequest::PartitionDisk { .. })
 }
 
 /// A one-line description of a disk or volume for a list row: `sdb1 \u{b7} 8.0 GB \u{b7} Games`.
@@ -179,6 +189,53 @@ impl DiskUtility {
         self.show_form(form, FormKind::Raid { members })
     }
 
+    /// Disk > Partition: the sizes, names and format of the new partitions of the selected disk, with a bar that shows
+    /// the layout as it is typed. `count` equal parts are filled in to start from. OK then asks for the disk's name.
+    pub fn open_partition_form(&mut self, count: usize) -> bool {
+        if self.busy() {
+            return false;
+        }
+        let Some(node) = self.selected_node().cloned() else { return false };
+        if node.kind != Kind::Disk {
+            self.error = Some(format!("{} is a volume. Choose its disk to partition it.", node.name));
+            return true;
+        }
+        let probe = DiskRequest::PartitionDisk { device: node.name.clone(), partitions: vec![PartitionSpec { size_mib: 0, fs: self.erase_fs, label: String::new() }] };
+        if let Err(sentence) = actions::check_request(&probe, &self.nodes) {
+            self.error = Some(sentence);
+            return true;
+        }
+        let index = Personality::ALL.iter().position(|p| *p == self.erase_fs).unwrap_or(0);
+        let form = Form::new(&format!("Partition {}", node.name), "Partition", true)
+            .bar("Layout", Vec::new())
+            .text("Sizes", &partition::equal_sizes_text(node.size, count.max(1)), "512m, 4g, rest", 96)
+            .text("Names", "", "optional, separated by commas", 96)
+            .choice("Format", &fs_titles(), index)
+            .note("")
+            .note(&format!("{} in all. Sizes are like 512m or 4g; the last one may be rest.", model::format_size(node.size)))
+            .note("Partitioning deletes everything on the disk.");
+        let shown = self.show_form(form, FormKind::Partition { device: node.name, bytes: node.size });
+        self.sync_partition_form();
+        shown
+    }
+
+    /// Redraws the layout bar and its caption line of the Partition sheet from the typed sizes and names.
+    fn sync_partition_form(&mut self) {
+        let Some(open) = self.form.as_mut() else { return };
+        let FormKind::Partition { bytes, .. } = &open.kind else { return };
+        let bytes = *bytes;
+        let fs = Personality::ALL[open.form.selected(3).min(Personality::ALL.len() - 1)];
+        let (sizes, names) = (open.form.value(1), open.form.value(2));
+        let segments = partition::preview(bytes, &sizes, &names, fs);
+        let line = if segments.is_empty() {
+            "The layout shows here once the sizes are valid.".to_string()
+        } else {
+            segments.iter().map(|s| s.caption.as_str()).collect::<Vec<_>>().join("   ")
+        };
+        open.form.notes[0] = line;
+        open.form.set_bar(0, segments);
+    }
+
     /// File > New Image > Blank Image: a name, a size and an optional empty file system.
     pub fn open_new_blank_form(&mut self) -> bool {
         if self.busy() {
@@ -238,6 +295,9 @@ impl DiskUtility {
                         open.form.notes[0] = level.summary().to_string();
                     }
                 }
+                if changed {
+                    self.sync_partition_form();
+                }
                 changed
             }
         }
@@ -245,13 +305,23 @@ impl DiskUtility {
 
     /// Typed text goes to the focused field.
     pub fn form_text(&mut self, text: &str) -> bool {
-        self.form.as_mut().is_some_and(|f| f.form.type_text(text))
+        let changed = self.form.as_mut().is_some_and(|f| f.form.type_text(text));
+        if changed {
+            self.sync_partition_form();
+        }
+        changed
     }
 
     /// An editing key (shell key codes): 8 backspace, 9 tab, 13 return, 1 or 27 escape. True when the window changed.
     pub fn form_code(&mut self, code: u32) -> bool {
         match code {
-            8 => self.form.as_mut().is_some_and(|f| f.form.backspace()),
+            8 => {
+                let changed = self.form.as_mut().is_some_and(|f| f.form.backspace());
+                if changed {
+                    self.sync_partition_form();
+                }
+                changed
+            }
             9 => self.form.as_mut().is_some_and(|f| f.form.focus_next()),
             13 => self.submit_form(),
             1 | 27 => {
@@ -275,8 +345,26 @@ impl DiskUtility {
         if let Err(sentence) = actions::check_request(&request, &self.nodes) {
             return self.refuse(&sentence);
         }
+        if replaces_a_whole_disk(&request) {
+            return self.ask_for_the_name(title, request, button, destructive);
+        }
         self.form = None;
         self.confirm(title, request, button, destructive);
+        true
+    }
+
+    /// Replaces the form with a sheet that asks for the disk's name to be typed before the request goes to the helper.
+    /// Erasing or partitioning a whole disk takes more than a button press.
+    fn ask_for_the_name(&mut self, title: String, request: DiskRequest, button: &str, destructive: bool) -> bool {
+        let word = request.device().to_string();
+        let mut form = Form::new(&title, button, destructive).text("Disk name", "", &word, 32);
+        for line in model::wrap_text(&request.confirm_text(), 62).lines() {
+            form = form.note(line);
+        }
+        form = form.note(&format!("Type {word} to confirm."));
+        self.error = None;
+        self.notice = None;
+        self.form = Some(OpenForm { form, kind: FormKind::Typed { request: Box::new(request) } });
         true
     }
 
@@ -312,6 +400,28 @@ impl DiskUtility {
                 let name = form.value(1);
                 let chosen: Vec<String> = form.picked(2).iter().filter_map(|&i| members.get(i).cloned()).collect();
                 self.confirm_form_request(format!("Create {name}?"), DiskRequest::CreateRaid { name, level, members: chosen }, "Create", true)
+            }
+            FormKind::Partition { device, bytes } => {
+                let fs = Personality::ALL[form.selected(3).min(Personality::ALL.len() - 1)];
+                let partitions = match partition::specs(bytes, &form.value(1), &form.value(2), fs) {
+                    Ok(partitions) => partitions,
+                    Err(sentence) => return self.refuse(&sentence),
+                };
+                self.erase_fs = fs;
+                self.confirm_form_request(format!("Partition {device}?"), DiskRequest::PartitionDisk { device, partitions }, "Partition", true)
+            }
+            FormKind::Typed { request } => {
+                let word = request.device().to_string();
+                if form.value(0) != word {
+                    return self.refuse(&format!("Type {word} to confirm."));
+                }
+                // the disks may have changed while the sheet was open
+                if let Err(sentence) = actions::check_request(&request, &self.nodes) {
+                    return self.refuse(&sentence);
+                }
+                self.form = None;
+                self.start_request(*request);
+                true
             }
             FormKind::NewBlank => {
                 let bytes = match images::parse_size(&form.value(1)) {
@@ -439,9 +549,143 @@ mod tests {
         assert!(w.form_activate(FormHit::Pick(1, 3)));
         type_into(&mut w, "Backup");
         w.submit_form();
-        let (_, request) = &w.sheet.as_ref().expect("confirmation").requests[0];
-        assert_eq!(*request, DiskRequest::EraseDisk { device: "sdc".into(), fs: Personality::Ntfs, label: "Backup".into(), scheme: Scheme::Mbr });
-        assert!(w.sheet.as_ref().unwrap().sheet.message.contains("Record"));
+        // a whole disk asks for its name to be typed before anything is sent
+        assert!(w.sheet.is_none() && w.job.is_none());
+        let typed = w.form.as_ref().expect("the name sheet");
+        let FormKind::Typed { request } = &typed.kind else { panic!("{:?}", typed.kind) };
+        assert_eq!(**request, DiskRequest::EraseDisk { device: "sdc".into(), fs: Personality::Ntfs, label: "Backup".into(), scheme: Scheme::Mbr });
+        assert!(typed.form.notes.iter().any(|n| n.contains("Record")) && typed.form.notes.last().unwrap().contains("Type sdc"));
+    }
+
+    #[test]
+    fn a_whole_disk_is_erased_only_after_its_name_is_typed() {
+        let mut w = stick();
+        w.selected = Some("sdc".into());
+        w.open_erase_form();
+        w.submit_form();
+        assert!(w.form_activate(FormHit::Button(FORM_OK)));
+        assert!(w.job.is_none(), "nothing typed");
+        assert!(w.form.as_ref().unwrap().form.error.as_deref().is_some_and(|e| e.contains("Type sdc")));
+        type_into(&mut w, "SDC");
+        assert!(w.form_activate(FormHit::Button(FORM_OK)));
+        assert!(w.job.is_none(), "the name is case sensitive");
+        w.form_code(8);
+        w.form_code(8);
+        w.form_code(8);
+        type_into(&mut w, " sdc ");
+        // a stand-in job keeps this test from sending the erase to a real helper; `start_request` leaves a running job alone
+        let (_tx, rx) = std::sync::mpsc::channel();
+        w.job = Some(crate::window::Job { verb: "Waiting", name: "x".into(), rx, commit: None });
+        assert!(w.form_activate(FormHit::Button(FORM_OK)));
+        assert!(w.form.is_none(), "the sheet closes once the name matches");
+        assert_eq!(w.job.as_ref().map(|j| j.verb), Some("Waiting"));
+    }
+
+    #[test]
+    fn cancel_on_the_name_sheet_sends_nothing() {
+        let mut w = stick();
+        w.selected = Some("sdc".into());
+        w.open_erase_form();
+        w.submit_form();
+        assert!(w.form_activate(FormHit::Button(FORM_CANCEL)));
+        assert!(w.form.is_none() && w.job.is_none() && w.sheet.is_none());
+    }
+
+    #[test]
+    fn a_volume_erase_still_uses_the_plain_confirmation() {
+        let mut w = stick();
+        w.selected = Some("sdb1".into());
+        w.open_erase_form();
+        w.submit_form();
+        assert!(w.form.is_none() && w.sheet.is_some());
+    }
+
+    #[test]
+    fn the_partition_sheet_starts_from_equal_parts_and_draws_the_layout() {
+        let mut w = stick();
+        w.selected = Some("sdc".into());
+        assert!(w.open_partition_form(3));
+        let open = w.form.as_ref().expect("the partition sheet");
+        assert_eq!(open.form.value(1).matches(',').count(), 2);
+        match &open.form.rows[0].control {
+            crate::form::Control::Bar { segments } => assert_eq!(segments.len(), 3),
+            other => panic!("{other:?}"),
+        }
+        assert!(open.form.notes[0].contains("Partition 1"));
+        assert_eq!(open.form.focus, Some(1));
+    }
+
+    #[test]
+    fn typing_sizes_updates_the_layout_bar_and_a_bad_size_empties_it() {
+        let mut w = stick();
+        w.selected = Some("sdc".into());
+        w.open_partition_form(2);
+        for _ in 0..40 {
+            w.form_code(8);
+        }
+        type_into(&mut w, "1g, 2g");
+        let segments = |w: &DiskUtility| match &w.form.as_ref().unwrap().form.rows[0].control {
+            crate::form::Control::Bar { segments } => segments.len(),
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(segments(&w), 3, "two partitions and the free space");
+        type_into(&mut w, "x");
+        assert_eq!(segments(&w), 0);
+        assert!(w.form.as_ref().unwrap().form.notes[0].contains("valid"));
+    }
+
+    #[test]
+    fn partition_sends_the_typed_layout_after_the_disk_name_is_typed() {
+        let mut w = stick();
+        w.selected = Some("sdc".into());
+        w.open_partition_form(2);
+        for _ in 0..40 {
+            w.form_code(8);
+        }
+        type_into(&mut w, "1g, rest");
+        w.form_code(9);
+        type_into(&mut w, "BOOT");
+        assert!(w.form_activate(FormHit::Pick(3, 0)));
+        w.submit_form();
+        let typed = w.form.as_ref().expect("the name sheet");
+        let FormKind::Typed { request } = &typed.kind else { panic!("{:?}", typed.kind) };
+        match &**request {
+            DiskRequest::PartitionDisk { device, partitions } => {
+                assert_eq!(device, "sdc");
+                assert_eq!(partitions.iter().map(|p| p.size_mib).collect::<Vec<_>>(), vec![1024, 0]);
+                assert_eq!(partitions[0].label, "BOOT");
+                assert!(partitions.iter().all(|p| p.fs == Personality::Ext4));
+            }
+            other => panic!("{other:?}"),
+        }
+        assert_eq!(w.erase_fs, Personality::Ext4);
+    }
+
+    #[test]
+    fn a_layout_that_does_not_fit_stays_in_the_partition_sheet() {
+        let mut w = stick();
+        w.selected = Some("sdc".into());
+        w.open_partition_form(2);
+        for _ in 0..40 {
+            w.form_code(8);
+        }
+        type_into(&mut w, "20g");
+        w.submit_form();
+        assert!(w.form.as_ref().unwrap().form.error.as_deref().is_some_and(|e| e.contains("more than")));
+        assert!(matches!(w.form.as_ref().unwrap().kind, FormKind::Partition { .. }));
+    }
+
+    #[test]
+    fn a_mounted_disk_or_a_volume_opens_no_partition_sheet() {
+        let mut w = stick();
+        w.nodes[1].mount_point = Some("/mnt/a".into());
+        w.selected = Some("sdb".into());
+        assert!(w.open_partition_form(2));
+        assert!(w.form.is_none() && w.error.as_deref().is_some_and(|e| e.contains("/mnt/a")));
+        w.error = None;
+        w.selected = Some("sdb2".into());
+        assert!(w.open_partition_form(2));
+        assert!(w.form.is_none() && w.error.as_deref().is_some_and(|e| e.contains("volume")));
     }
 
     #[test]

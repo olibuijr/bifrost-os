@@ -8,7 +8,7 @@ use crate::window::{DiskUtility, KEY_PT, LINE_PT, PAD_PT, SIDE_PT};
 use bifrost_app::controls::sheet::SHEET_PAD_PT;
 use bifrost_app::controls::sidebar::SidebarItem;
 use bifrost_app::controls::{Node as Control, Rect, Role};
-use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, DESTRUCTIVE, LABEL, LABEL_2, LABEL_3, LINK, MAC_BODY_PT, MAC_CALLOUT_PT, MAC_FOOTNOTE_PT, MAC_TITLE2_PT, SEPARATOR_C, SIDEBAR_BG, WHITE};
+use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, DESTRUCTIVE, LABEL, LABEL_2, LABEL_3, LINK, MAC_BODY_PT, MAC_CALLOUT_PT, MAC_FOOTNOTE_PT, MAC_TITLE2_PT, SELECTION, SEPARATOR_C, SIDEBAR_BG, WHITE};
 use bifrost_app::kit::{Surface, TextCache, Ui, Weight};
 use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::widgets;
@@ -93,6 +93,7 @@ fn paint_form(labels: &mut TextCache, s: &mut Surface, ui: &Ui, form: &Form, par
                 let names: Vec<&str> = options.iter().map(String::as_str).collect();
                 widgets::segmented(s, ui, g.control, &names, *selected, true);
             }
+            FormControl::Bar { segments } => paint_layout_bar(s, ui, g.control, segments),
             FormControl::List { rows, on, .. } => {
                 for (k, text) in rows.iter().enumerate() {
                     let line = Rect { x: g.control.x, y: g.control.y + k as f32 * LIST_ROW_PT, w: g.control.w, h: LIST_ROW_PT };
@@ -118,6 +119,24 @@ fn paint_form(labels: &mut TextCache, s: &mut Surface, ui: &Ui, form: &Form, par
     }
     if let Some(error) = &form.error {
         text_mid(labels, s, ui, error, MAC_FOOTNOTE_PT, Weight::Regular, DESTRUCTIVE, x, y, width);
+    }
+}
+
+/// The partition layout bar: a track, then each partition in turn (two blues so neighbours differ) and the free space.
+/// Nothing is drawn over the track while the sizes do not parse.
+fn paint_layout_bar(s: &mut Surface, ui: &Ui, area: Rect, segments: &[crate::partition::Segment]) {
+    let track = Rect { x: area.x, y: area.y + (area.h - 12.0) / 2.0, w: area.w, h: 12.0 };
+    fill(s, ui, track, 4.0, SEPARATOR_C.now());
+    let mut x = track.x;
+    let mut shown = 0;
+    for seg in segments {
+        let w = (track.w * seg.fraction).min(track.x + track.w - x).max(0.0);
+        if !seg.free && w > 0.0 {
+            let color = if shown % 2 == 0 { LINK } else { SELECTION.now() };
+            fill(s, ui, Rect { x, y: track.y, w: (w - 1.0).max(1.0), h: track.h }, 4.0, color);
+            shown += 1;
+        }
+        x += w;
     }
 }
 
