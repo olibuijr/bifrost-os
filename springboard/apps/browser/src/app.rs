@@ -117,6 +117,7 @@ pub(super) fn run() {
         crash: Default::default(),
         restore: Vec::new(),
         restore_sel: 0,
+        renderer_fallback: false,
         tabs: Vec::new(),
         current: 0,
         address: TextField::new(),

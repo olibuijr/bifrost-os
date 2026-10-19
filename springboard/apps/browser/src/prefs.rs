@@ -139,6 +139,8 @@ pub struct Sheet {
     home: TextField,
     focus_home: bool,
     status: String,
+    /// The GPU engine could not start and the Browser runs with software rendering (session only).
+    pub fallback: bool,
     /// A destructive action waiting for the confirmation alert.
     confirm: Option<(Action, AlertCard)>,
     /// Vertical scroll in pt when the window is shorter than the panel, and the drag that drives it.
@@ -157,6 +159,7 @@ const GROUP_GAP: f32 = 8.0;
 const TITLE_H: f32 = 22.0;
 const FOOTER_HOME: &str = "New windows open the homepage. Private windows never restore tabs.";
 const FOOTER_RENDERER: &str = "Changing rendering reloads open pages.";
+const FOOTER_FALLBACK: &str = "Using software rendering: the GPU could not start.";
 const FOOTER_CLEAR: &str = "Clearing history or website data cannot be undone.";
 
 struct Geo {
@@ -411,7 +414,7 @@ impl Sheet {
         text(s, "Import Bookmarks\u{2026}", MAC_BODY_PT, Weight::Regular, LINK, lx, g.import_row.y + ROW / 2.0);
         let fx = g.group1.x + ROW_PAD;
         left_footer(s, ui, FOOTER_HOME, fx, g.group1.w - 2.0 * ROW_PAD, g.foot1_y);
-        left_footer(s, ui, FOOTER_RENDERER, fx, g.group1.w - 2.0 * ROW_PAD, g.foot1_y + FOOT_H);
+        left_footer(s, ui, if self.fallback { FOOTER_FALLBACK } else { FOOTER_RENDERER }, fx, g.group1.w - 2.0 * ROW_PAD, g.foot1_y + FOOT_H);
 
         group(s, &g.group2, 2);
         text(s, "Clear History\u{2026}", MAC_BODY_PT, Weight::Regular, DESTRUCTIVE, lx, g.clear_history.y + ROW / 2.0);
