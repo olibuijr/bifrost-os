@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.8.0
+
+- Upstream deckcraft v0.8.0.
+  ## What's Changed
+  * Opus: validate the header in Decoder::from_head (#425) by @MarekSpodBiedry in https://github.com/storytold/deckcraft/pull/442
+  * xtask: assets audit no longer panics on Unicode names and reads real paths from git (#424) by @MarekSpodBiedry in https://github.com/storytold/deckcraft/pull/443
+  * Info: keep a property draft when another field or the side menu is clicked (#422) by @MarekSpodBiedry in https://github.com/storytold/deckcraft/pull/445
+  * Engine: moving the selection to another text body settles the composition (#421) by @MarekSpodBiedry in https://github.com/storytold/deckcraft/pull/446
+
 ## 0.7.1
 
 - Upstream deckcraft v0.7.0.
