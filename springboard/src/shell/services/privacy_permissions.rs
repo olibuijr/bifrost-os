@@ -54,6 +54,8 @@ pub enum Kind {
     Media(Media),
     /// The contact store (the contacts service's access sheet).
     Contacts,
+    /// One USB or raw HID device for one app (the `usb` service's sheet). The prompt's `purpose` holds the device key.
+    Usb,
 }
 
 impl Kind {
@@ -63,6 +65,7 @@ impl Kind {
             Kind::Location => "location",
             Kind::Media(m) => media_name(m),
             Kind::Contacts => "contacts",
+            Kind::Usb => "usb",
         }
     }
 
@@ -74,6 +77,7 @@ impl Kind {
             Kind::Media(Media::Audio) => "use your microphone",
             Kind::Media(Media::Screen) => "record your screen",
             Kind::Contacts => "use your contacts",
+            Kind::Usb => "use a device connected to this computer",
         };
         format!("\u{201c}{app_name}\u{201d} would like to {want}.")
     }
@@ -119,6 +123,7 @@ pub fn still_asked(prompt: &Prompt) -> bool {
         Kind::Location => location_status(&prompt.app_id) == AuthorizationStatus::NotDetermined,
         Kind::Media(m) => access(&prompt.app_id).status(m) == Status::NotDetermined,
         Kind::Contacts => super::contacts::access_of(&prompt.app_id).status() == bifrost_ui::contact_access::Status::NotDetermined,
+        Kind::Usb => super::usb_access::still_asked(&prompt.app_id, &prompt.purpose),
     }
 }
 
@@ -150,6 +155,10 @@ pub fn decide_grant(prompt: &Prompt, grant: Grant) {
         }
         Kind::Media(m) => {
             let _ = set_by_user(&prompt.app_id, m, grant != Grant::Deny);
+        }
+        // Allow Once lasts until the app quits or the device is unplugged; While Using stands for Always Allow here
+        Kind::Usb => {
+            super::usb_access::answer(&prompt.app_id, &prompt.purpose, grant);
         }
         Kind::Contacts => {
             let choice = if grant == Grant::Deny { bifrost_ui::contact_access::Choice::Deny } else { bifrost_ui::contact_access::Choice::All };

@@ -88,7 +88,7 @@ impl From<PolicyError> for io::Error {
 
 /// Every name an entitlement query accepts: the manifest permissions and the first-party entitlements, in the order
 /// [`Policy::held`] lists them.
-pub const ENTITLEMENT_NAMES: [&str; 14] = [
+pub const ENTITLEMENT_NAMES: [&str; 16] = [
     "network",
     "storage",
     "audio",
@@ -101,6 +101,8 @@ pub const ENTITLEMENT_NAMES: [&str; 14] = [
     "display-config",
     "sensors",
     "contacts",
+    "usb",
+    "hid",
     "remote-desktop",
     bifrost_core::log::ENTITLEMENT,
 ];
@@ -136,6 +138,12 @@ pub struct Policy {
     /// `contacts`: declares that the app reads and saves the person's contacts through the SDK contacts module. The
     /// manifest permission is the declaration; the contacts service does not gate calls on it yet.
     pub contacts: bool,
+    /// `usb`: may ask the shell's `usb` service for raw access to a USB device. It binds nothing (no `/dev/bus/usb`
+    /// reaches the sandbox); the person picks each device on a sheet, and the shell runs the transfers.
+    pub usb: bool,
+    /// `hid`: the same for a raw HID device (the shell reads and writes its hidraw node for the app). Keyboards and
+    /// security keys are never offered.
+    pub hid: bool,
     /// `entitlements = ["log-store"]` on a `system-app`: the system journal is mounted read-only so
     /// `LogStore::local()` works (Console). Set through `with_entitlements`, never from `permissions`.
     pub log_store: bool,
@@ -164,6 +172,8 @@ impl Policy {
             "display-config" => self.display_config,
             "sensors" => self.sensors,
             "contacts" => self.contacts,
+            "usb" => self.usb,
+            "hid" => self.hid,
             "remote-desktop" => self.remote,
             other => other == bifrost_core::log::ENTITLEMENT && self.log_store,
         }
@@ -190,6 +200,8 @@ impl Policy {
                 "display-config" => p.display_config = true,
                 "sensors" => p.sensors = true,
                 "contacts" => p.contacts = true,
+                "usb" => p.usb = true,
+                "hid" => p.hid = true,
                 "remote-desktop" if id == "is.olibuijr.remote.desktop" => p.remote = true,
                 _ => return Err(PolicyError::UnsupportedPermission(permission.clone()).into()),
             }
@@ -510,6 +522,16 @@ mod tests {
         let p = Policy::from_permissions("example", &["accessibility".into(), "display-config".into()]).unwrap();
         assert!(p.accessibility && p.display_config);
         assert!(!p.network && !p.storage && !p.remote);
+    }
+
+    #[test]
+    fn usb_and_hid_permissions_are_recognised_and_bind_nothing() {
+        let p = Policy::from_permissions("example", &["usb".into(), "hid".into()]).unwrap();
+        assert!(p.usb && p.hid && p.holds("usb") && p.holds("hid"));
+        assert!(!p.network && !p.storage && !p.camera && !p.remote);
+        assert_eq!(p.held(), vec!["usb", "hid"]);
+        let only_usb = Policy::from_permissions("example", &["usb".into()]).unwrap();
+        assert!(!only_usb.holds("hid"), "the two permissions are separate");
     }
 
     #[test]
