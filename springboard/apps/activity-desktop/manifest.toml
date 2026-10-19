@@ -1,6 +1,6 @@
 id = "is.olibuijr.activity.desktop"
 name = "Activity Monitor"
-version = "0.10.1"
+version = "0.10.2"
 exec = "bifrost-activity"
 icon = "icon.png"
 min_shell = "0.8.3"
@@ -8,5 +8,6 @@ summary = "Shows the processes and the CPU, memory, energy, disk and network use
 category = "Utilities"
 kind = "system-app"
 architecture = "x86_64-linux"
+entitlements = ["system-monitor"]
 permissions = ["documents", "notifications"]
 window = "full-size"

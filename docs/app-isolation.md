@@ -39,6 +39,18 @@ Entitlements are separate from permissions and first-party only (`is.olibuijr.*`
 `system-app` mounts the system journal read-only so `LogStore::local()` works (the Console app); it is set by
 `Policy::with_entitlements`, never from `permissions`.
 
+`entitlements = ["system-monitor"]` on a first-party `system-app` (Activity Monitor) lets the app see the whole machine: the
+sandbox keeps the host PID and network namespaces and binds the host `/proc` read-only, so the app lists every process and
+`ss -tinp` reports the machine's sockets and interfaces. In bubblewrap terms (`app_policy::namespace_args`, `proc_args`):
+`--unshare-all` is replaced by `--unshare-user --unshare-ipc --unshare-uts --unshare-cgroup-try` (no `--unshare-pid`, no
+`--unshare-net`; bubblewrap has no `--share-pid`), and `--proc /proc` becomes `--ro-bind /proc /proc` (a user namespace cannot
+mount procfs for a PID namespace it does not own). Everything else is unchanged: the user namespace, `--cap-drop ALL`, the
+separate app account and the read-only mounts. Writes to other processes are no wider than before: Quit, Force Quit and Send
+Signal call `kill(2)` as the app account, so they reach only processes that account owns; processes of other users and root
+need the privileged-helper path, which this entitlement does not give. The shared network namespace means the app is no longer
+cut off from the network, which is why only first-party system apps may hold it: `Policy::with_entitlements` honours it only
+for an `is.olibuijr.*` id of kind `system-app`, and it is never read from `permissions`.
+
 `entitlements = ["endpoint-security"]` on a first-party `system-app` lets the app subscribe to file open, exec, modify and
 close events of the whole computer, and to allow or deny an open or exec before it happens (the `endpoint-security`
 shell service, `bifrost_app::endpoint_security`). The sandbox gets nothing extra: the root half (`bifrost-privd`, fanotify,

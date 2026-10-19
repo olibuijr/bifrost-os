@@ -88,7 +88,7 @@ impl From<PolicyError> for io::Error {
 
 /// Every name an entitlement query accepts: the manifest permissions and the first-party entitlements, in the order
 /// [`Policy::held`] lists them.
-pub const ENTITLEMENT_NAMES: [&str; 16] = [
+pub const ENTITLEMENT_NAMES: [&str; 17] = [
     "network",
     "storage",
     "audio",
@@ -105,7 +105,12 @@ pub const ENTITLEMENT_NAMES: [&str; 16] = [
     "hid",
     "remote-desktop",
     bifrost_core::log::ENTITLEMENT,
+    SYSTEM_MONITOR_ENTITLEMENT,
 ];
+
+/// `entitlements = ["system-monitor"]` on a first-party `system-app` (Activity Monitor): the sandbox shares the host PID
+/// and network namespaces and sees `/proc` read-only, so the app can list every process and socket of the machine.
+pub const SYSTEM_MONITOR_ENTITLEMENT: &str = "system-monitor";
 
 /// First-party app identities allowed to declare capture device permissions.
 pub const CAMERA_APP_ID: &str = "is.olibuijr.photobooth.desktop";
@@ -147,13 +152,18 @@ pub struct Policy {
     /// `entitlements = ["log-store"]` on a `system-app`: the system journal is mounted read-only so
     /// `LogStore::local()` works (Console). Set through `with_entitlements`, never from `permissions`.
     pub log_store: bool,
+    /// `entitlements = ["system-monitor"]` on a first-party `system-app`: host PID and network namespaces, host `/proc`
+    /// read-only (see [`namespace_args`]). Set through `with_entitlements`, never from `permissions`.
+    pub system_monitor: bool,
 }
 impl Policy {
     /// Applies manifest entitlements; each is honoured only for the package kind that may hold it.
     /// Entitlements are first-party only (`is.olibuijr.*`), like `remote-desktop`: a store package cannot grant
     /// itself the system journal by declaring `kind = "system-app"`.
     pub fn with_entitlements(mut self, id: &str, kind: &str, entitlements: &[String]) -> Self {
-        self.log_store = id.starts_with("is.olibuijr.") && kind == crate::shell::kinds::SYSTEM_APP && entitlements.iter().any(|e| e == bifrost_core::log::ENTITLEMENT);
+        let first_party_system = id.starts_with("is.olibuijr.") && kind == crate::shell::kinds::SYSTEM_APP;
+        self.log_store = first_party_system && entitlements.iter().any(|e| e == bifrost_core::log::ENTITLEMENT);
+        self.system_monitor = first_party_system && entitlements.iter().any(|e| e == SYSTEM_MONITOR_ENTITLEMENT);
         self
     }
     /// Whether the policy holds the named permission or entitlement, spelled as in the manifest. An unknown name is
@@ -175,6 +185,7 @@ impl Policy {
             "usb" => self.usb,
             "hid" => self.hid,
             "remote-desktop" => self.remote,
+            SYSTEM_MONITOR_ENTITLEMENT => self.system_monitor,
             other => other == bifrost_core::log::ENTITLEMENT && self.log_store,
         }
     }
@@ -295,6 +306,30 @@ fn prepare_container(data: &Path, account: &Account) -> io::Result<()> {
     let _ = bifrost_core::container_layout::ContainerLayout::new(data).ensure();
     prepare_data(data, account)
 }
+/// The bubblewrap namespace arguments for `policy`. Everything is unshared (`--unshare-all`: user, ipc, pid, net, uts,
+/// cgroup) except for an app holding `system-monitor`: it keeps the host PID and network namespaces (bubblewrap has no
+/// `--share-pid`, so the other namespaces are unshared one by one) to read every process and `ss` every socket.
+/// User, ipc, uts and cgroup stay unshared, and `--cap-drop ALL` plus the app account still apply, so it can signal only
+/// what that account owns.
+fn namespace_args(policy: Policy) -> Vec<&'static str> {
+    if policy.system_monitor {
+        vec!["--unshare-user", "--unshare-ipc", "--unshare-uts", "--unshare-cgroup-try"]
+    } else {
+        vec!["--unshare-all", "--unshare-user"]
+    }
+}
+
+/// How `/proc` is provided. A fresh procfs belongs to a new PID namespace, so an app in its own gets `--proc`; the host
+/// PID namespace of `system-monitor` is read through a read-only bind of the host `/proc` (a user namespace cannot mount
+/// procfs for a PID namespace it does not own).
+fn proc_args(policy: Policy) -> Vec<&'static str> {
+    if policy.system_monitor {
+        vec!["--ro-bind", "/proc", "/proc"]
+    } else {
+        vec!["--proc", "/proc"]
+    }
+}
+
 /// Construct a fail-closed sandbox. Only the selected package, app data and
 /// declared resources are mounted; no system/session bus is exposed to apps.
 pub fn command(
@@ -312,11 +347,9 @@ pub fn command(
         .parent()
         .ok_or_else(|| io::Error::from(PolicyError::MissingPackageDirectory))?;
     let mut c = Command::new("/usr/bin/bwrap");
-    c.args([
-        "--die-with-parent",
-        "--new-session",
-        "--unshare-all",
-        "--unshare-user",
+    c.args(["--die-with-parent", "--new-session"])
+        .args(namespace_args(policy))
+        .args([
         "--cap-drop",
         "ALL",
         "--uid",
@@ -336,6 +369,7 @@ pub fn command(
     if !native {
         c.arg("--disable-userns");
     }
+    c.args(proc_args(policy));
     c.args([
         "--ro-bind",
         "/usr",
@@ -355,8 +389,6 @@ pub fn command(
         "--symlink",
         "usr/lib",
         "/lib64",
-        "--proc",
-        "/proc",
         "--dev",
         "/dev",
         "--tmpfs",
@@ -598,6 +630,38 @@ mod tests {
             assert!(!is_video_node_path(Path::new(path)), "unexpected camera mount path: {path}");
         }
     }
+    #[test]
+    fn a_plain_app_unshares_every_namespace_and_gets_its_own_proc() {
+        let args = namespace_args(Policy::default());
+        assert_eq!(args, ["--unshare-all", "--unshare-user"]);
+        assert_eq!(proc_args(Policy::default()), ["--proc", "/proc"]);
+    }
+
+    #[test]
+    fn system_monitor_shares_host_pid_and_net_and_reads_proc_read_only() {
+        let policy = Policy::default().with_entitlements("is.olibuijr.activity.desktop", "system-app", &[SYSTEM_MONITOR_ENTITLEMENT.to_string()]);
+        assert!(policy.system_monitor && policy.holds("system-monitor") && policy.held() == vec!["system-monitor"]);
+        let args = namespace_args(policy);
+        assert!(!args.contains(&"--unshare-all") && !args.contains(&"--unshare-pid") && !args.contains(&"--unshare-net"));
+        for kept in ["--unshare-user", "--unshare-ipc", "--unshare-uts", "--unshare-cgroup-try"] {
+            assert!(args.contains(&kept), "{kept} stays unshared");
+        }
+        let proc = proc_args(policy);
+        assert_eq!(proc, ["--ro-bind", "/proc", "/proc"], "host /proc, read-only");
+    }
+
+    #[test]
+    fn system_monitor_is_held_only_by_a_first_party_system_app_that_declares_it() {
+        let declared = [SYSTEM_MONITOR_ENTITLEMENT.to_string()];
+        let base = Policy::default();
+        assert!(base.with_entitlements("is.olibuijr.activity.desktop", "system-app", &declared).system_monitor);
+        assert!(!base.with_entitlements("com.example.top", "system-app", &declared).system_monitor, "a store id cannot take it");
+        assert!(!base.with_entitlements("is.olibuijr.activity.desktop", "app", &declared).system_monitor, "an ordinary kind cannot take it");
+        assert!(!base.with_entitlements("is.olibuijr.activity.desktop", "system-app", &[]).system_monitor, "it must be declared");
+        assert!(Policy::from_permissions("is.olibuijr.activity.desktop", &[SYSTEM_MONITOR_ENTITLEMENT.to_string()]).is_err(), "never a permission");
+        assert_eq!(namespace_args(base.with_entitlements("com.example.top", "system-app", &declared)), ["--unshare-all", "--unshare-user"]);
+    }
+
     #[test]
     fn isolation_root_accounts_rejected() {
         assert!(Account::parse("root", "root:x:0:0:root:/root:/bin/bash").is_err());
