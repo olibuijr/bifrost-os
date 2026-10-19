@@ -783,7 +783,7 @@ impl Shell {
         let Some(desk)=self.desk.as_mut() else{return false};
         if !desk.fx.is_empty() {return false;}
         let mut frames=Vec::new();
-        for w in desk.wins.iter().filter(|w|!w.minimized) {
+        for w in desk.wins.iter().filter(|w|!w.minimized && !desk.unmapped.contains(&w.app)) {
             let Some(id)=win_id(w.app) else{return false};
             if !desk.window_cache.contains_key(&id) {return false;}
             frames.push(crate::bare::wayland::WindowFrame {id,title:frame_title(id),x:w.r.x,y:w.r.y,width:w.r.w as usize,height:w.r.h as usize,pixels:None,damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize),maximized:w.maximized,title_height,drag_height:0,no_drag:Vec::new(),floating:false,fx:bifrost_render::glass::Fx::IDENTITY,opaque:!matches!(w.app,AppId::External(_))});
@@ -894,7 +894,8 @@ impl Shell {
             crate::bare::app_manager::focus(&app.manifest.id, windows.iter().any(|w|w.app_id==compositor_id && w.active));
         }
         desk.native_windows=windows.iter().filter(|w|apphost::installed().iter().any(|a|(a.manifest.window=="native" && a.manifest.wayland_app_id==w.app_id) || (direct.contains(&a.manifest.id) && a.manifest.id==w.app_id))).cloned().collect();
-        let windows:Vec<_>=windows.into_iter().filter(|w|!w.app_id.starts_with("is.olibuijr.bifrost.") && !desk.native_windows.iter().any(|n|n.id==w.id)).collect();
+        // a window of an installed BifrOSt app is never a Linux app of its own (the app's tile stands for it, also while its process winds down)
+        let windows:Vec<_>=windows.into_iter().filter(|w|!w.app_id.starts_with("is.olibuijr.bifrost.") && !desk.native_windows.iter().any(|n|n.id==w.id) && !apphost::installed().iter().any(|a|a.manifest.id==w.app_id||(!a.manifest.wayland_app_id.is_empty()&&a.manifest.wayland_app_id==w.app_id))).collect();
         desk.linux_apps.retain(|app|windows.iter().any(|w|w.app_id==app.app_id)||desk.dock_preferences.pinned.contains(&format!("linux:{}",app.app_id)));
         for key in &desk.dock_preferences.pinned{if let Some(id)=key.strip_prefix("linux:"){if !desk.linux_apps.iter().any(|a|a.app_id==id){desk.linux_apps.push(LinuxDockApp{app_id:id.into(),windows:vec![],icon:linux_icon(id)});}}}
         for w in &windows {
@@ -1243,7 +1244,9 @@ impl Shell {
 
     pub(super) fn desk_dock(&self, m: &Metrics) -> (Vec<usize>, Rect, Vec<Rect>) {
         let desk=self.desk.as_ref().unwrap();
-        let mut list:Vec<usize>=desk.dock_preferences.pinned.iter().filter_map(|key|apps().iter().position(|a|a.icon==key)).collect();
+        let mut list:Vec<usize>=Vec::new();
+        // one tile per app: a key pinned twice, or two entries of one app, never make two tiles
+        for i in desk.dock_preferences.pinned.iter().filter_map(|key|apps().iter().position(|a|a.icon==key)) {if !list.contains(&i){list.push(i);}}
         for (i,a) in apps().iter().enumerate(){#[cfg_attr(not(feature="desktop-wayland"),allow(unused_mut))] let mut running=desk.index_of(a.id).is_some();
         #[cfg(feature="desktop-wayland")]if let AppId::External(slot)=a.id {running|=self.foreign_running(slot as usize);}
         if running&&!list.contains(&i){list.push(i);}}
@@ -1375,13 +1378,20 @@ impl Shell {
         self.quicksearch.note_launch(app);
         self.clear_notifications(app);
         self.fullscreen = false;
-        self.screen = Screen::App(app);
+        if !self.is_locked() {
+            self.screen = Screen::App(app);
+        }
         // the phone dock's recents are not kept on the desktop: Recent Items has its own list
         self.dirty = true;
     }
 
     /// Focus follows the frontmost visible window; with none, the desktop (Home) shows.
     pub(super) fn desk_refocus(&mut self) {
+        // the lock screen stays up whatever the windows do: a per-tick refocus must never lift a window over it
+        if self.is_locked() {
+            self.dirty = true;
+            return;
+        }
         self.screen = match self.desk.as_ref().and_then(|d| d.front()).map(|w| w.app) {
             Some(app) => Screen::App(app.parent()),
             None => Screen::Home,
@@ -1458,8 +1468,14 @@ impl Shell {
             self.desk_close_extra_window(slot, id);
             return;
         }
+        // the app's extra windows go with it (a closed or dead app keeps none on the desk)
+        if let AppId::External(slot) = app {
+            self.desk_drop_app_extras(slot);
+        }
+        // a live direct app's window is the window server's: quitting the app closes it. A dead app's host stays
+        // listed, and its desk windows (if any) are removed below.
         #[cfg(feature = "desktop-wayland")]
-        if let AppId::External(slot)=app { if self.ext.get(slot as usize).and_then(Option::as_ref).is_some_and(|h|h.route()==apphost::Route::Direct) { self.ext_close(slot as usize); return; } }
+        if let AppId::External(slot)=app { if self.ext.get(slot as usize).and_then(Option::as_ref).is_some_and(|h|h.running()&&h.route()==apphost::Route::Direct) { self.ext_close(slot as usize); return; } }
         // the close effect starts while the window is still listed; its last frame is kept for the effect
         let t = self.last_input;
         self.desk_fx_start(app, FxCall::Close, t);
@@ -1491,6 +1507,27 @@ impl Shell {
     /// The extra windows follow each app host's table (`app_window_table::desk_changes`): a window the app opened gets a
     /// desk window of its own, one the app closed (or the table dropped) leaves the desk. Runs from the app host tick.
     pub(super) fn desk_sync_extra_windows(&mut self) {
+        // an extra window whose app has no live process (never started, exited, or its host dropped) has no window
+        let orphans: Vec<(u8, u16)> = self.desk.as_ref().map_or_else(Vec::new, |d| {
+            d.wins.iter().filter_map(|w| match w.app {
+                AppId::ExternalWindow(s, id) if !self.ext.get(s as usize).and_then(Option::as_ref).is_some_and(|h| h.running()) => Some((s, id)),
+                _ => None,
+            }).collect()
+        });
+        for (s, id) in orphans {
+            self.desk_drop_extra_window(s, id);
+        }
+        // a main window whose installed app has no host at all (a restored window whose app never came back) is no window
+        let registered = apphost::installed();
+        let ghosts: Vec<u8> = self.desk.as_ref().map_or_else(Vec::new, |d| {
+            d.wins.iter().filter_map(|w| match w.app {
+                AppId::External(s) if registered.get(s as usize).is_some() && self.ext.get(s as usize).and_then(Option::as_ref).is_none() => Some(s),
+                _ => None,
+            }).collect()
+        });
+        for s in ghosts {
+            self.desk_close_app(AppId::External(s));
+        }
         let Some(d) = self.desk.as_ref() else { return };
         let k = self.ui.pt(1.0) as f32;
         let mut plan = Vec::new();
@@ -1607,6 +1644,15 @@ impl Shell {
                 _ => 0,
             };
             h.set_key_window(key);
+        }
+    }
+
+    /// Removes every extra window of the app in `slot` from the desk (the app exited or is quitting).
+    pub(super) fn desk_drop_app_extras(&mut self, slot: u8) {
+        if let Some(d) = self.desk.as_mut() {
+            while let Some(i) = d.wins.iter().position(|w| matches!(w.app, AppId::ExternalWindow(s, _) if s == slot)) {
+                d.close(i);
+            }
         }
     }
 
@@ -2001,7 +2047,8 @@ impl Shell {
     /// not committed a frame to. A window server maps a window on its first committed buffer, not on creation.
     pub(super) fn desk_window_unmapped(&self, app: AppId) -> bool {
         match app {
-            AppId::External(slot) => self.ext.get(slot as usize).and_then(Option::as_ref).is_some_and(|h| !h.incompatible && h.frame().is_none()),
+            // a host whose process is gone keeps its last frame, but the window has nothing live to show
+            AppId::External(slot) => self.ext.get(slot as usize).and_then(Option::as_ref).is_some_and(|h| !h.incompatible && (!h.running() || h.frame().is_none())),
             AppId::ExternalWindow(slot, id) => self.ext.get(slot as usize).and_then(Option::as_ref).map_or(true, |h| !h.window_mapped(u32::from(id))),
             _ => false,
         }

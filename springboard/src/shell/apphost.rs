@@ -506,6 +506,8 @@ pub struct AppHost {
     pub hello: bool,
     /// the app speaks another SDK protocol (or its packets do not decode): its window shows "This app needs an update"
     pub incompatible: bool,
+    /// the shell has been told this app is gone (`take_exit`), so its windows are removed exactly once
+    exit_reported: bool,
     pub commands: bifrost_proto::Commands,
     /// the app's Edit menu titles for Undo and Redo (empty: the plain words)
     pub undo_titles: (String, String),
@@ -652,6 +654,7 @@ impl AppHost {
             wants_keyboard: false,
             hello: false,
             incompatible: false,
+            exit_reported: false,
             commands: bifrost_proto::Commands::default(),
             undo_titles: Default::default(),
             controls: Vec::new(),
@@ -714,6 +717,19 @@ impl AppHost {
 
     pub fn running(&self) -> bool {
         self.status == Status::Running
+    }
+
+    /// True once per host when the app is gone but the shell was not told by `pump` (a failed send, a stall kill, a
+    /// `kill`, a quit that finished elsewhere): the caller removes its windows. An incompatible app is stopped on
+    /// purpose and keeps its window (it says why), so it never reports.
+    pub fn take_exit(&mut self) -> bool {
+        if self.running() || self.exit_reported || self.incompatible {
+            return false;
+        }
+        self.exit_reported = true;
+        self.windows.close_app(&self.id);
+        self.window_bufs.clear();
+        true
     }
 
     /// The exit status once the app has gone (`128 + signal` when a signal ended it); None while it runs.
@@ -2034,6 +2050,7 @@ impl Shell {
         #[cfg(feature = "desktop-wayland")]
         let mut docs = Vec::new();
         let mut died = Vec::new();
+        let mut vanished: Vec<u8> = Vec::new();
         // apps that exited before saying hello never started: the user is told (`launch_failed`)
         let mut failed = Vec::new();
         // direct apps that fell back to the socket path: their window opens now (after the loop, the shell is free)
@@ -2047,10 +2064,15 @@ impl Shell {
             }
             let p = h.pump();
             if p.died {
+                h.exit_reported = true;
                 died.push(slot as u8);
                 if !h.hello && !h.incompatible {
                     failed.push(slot);
                 }
+            } else if h.take_exit() {
+                // gone without `pump` seeing it (a send failed, a stall or a kill ended it): its windows must still go
+                vanished.push(slot as u8);
+                self.dirty = true;
             }
             if h.take_fallback() {
                 fell_back.push(slot as u8);
@@ -2137,7 +2159,7 @@ impl Shell {
         }
         #[cfg(feature = "desktop-wayland")]
         {
-            for &slot in &died { self.doc_app_gone(slot); }
+            for &slot in died.iter().chain(&vanished) { self.doc_app_gone(slot); }
             for (slot, r) in docs { self.doc_request(slot, r); }
             self.doc_keep_shown();
         }
@@ -2146,10 +2168,11 @@ impl Shell {
         for &slot in &died { self.app_crashed(slot as usize); }
         for (id, code) in late_crashes() { self.app_crashed_late(&id, code); }
         // a window whose app has exited must not keep its last frame on screen
-        for slot in died { self.desk_close_app(super::AppId::External(slot)); }
+        for &slot in &vanished { self.dnd_app_gone(slot); self.extras_app_gone(slot); self.workspace_app_event(bifrost_proto::WorkspaceEventKind::DidTerminateApplication, slot); }
+        for slot in died.into_iter().chain(vanished) { self.desk_close_app(super::AppId::External(slot)); }
         for slot in failed { self.launch_failed(slot); }
         if self.desk.is_some() {
-            for slot in fell_back { self.desk_open(super::AppId::External(slot), t); }
+            for slot in fell_back { if self.ext.get(slot as usize).and_then(Option::as_ref).is_some_and(|h| h.running()) { self.desk_open(super::AppId::External(slot), t); } }
         }
         // the extra windows follow each app's table: opened ones get a desk window, closed ones leave the desk
         self.desk_sync_extra_windows();
