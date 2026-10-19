@@ -832,10 +832,16 @@ impl Notes {
     /// Re-reads every note from disk (after folder changes).
     fn reload(&mut self, ui: &Ui, t: f64) {
         let (notes, loc, folders) = load_everything(&self.dir, self.wall.now(t));
+        // the open note is found by id: its index is into the list being replaced
+        let open = self.editing().map(|n| n.id.clone());
         self.pinned = store::load_pins(&self.dir, &notes);
         self.notes = notes;
         self.loc = loc;
         self.folders = folders;
+        self.screen = match open.and_then(|id| self.notes.iter().position(|n| n.id == id)) {
+            Some(i) => Screen::Editor(i),
+            None => Screen::List,
+        };
         if let View::Folder(f) = &self.view {
             if !self.folders.contains(f) {
                 self.view = View::All;
