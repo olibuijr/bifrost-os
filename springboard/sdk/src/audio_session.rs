@@ -294,14 +294,19 @@ impl SessionHub {
 
     /// Changes the output route and tells every client. Setting the current route does nothing.
     pub fn set_route(&mut self, route: Route) {
-        if route == self.route {
-            return;
-        }
-        let previous = self.route;
         let reason = match route {
             Route::Headphones => RouteChangeReason::NewDeviceAvailable,
             Route::Speaker => RouteChangeReason::OldDeviceUnavailable,
         };
+        self.set_route_with_reason(route, reason);
+    }
+
+    /// As `set_route`, with the reason the system gave (a device appeared, one went away, the user chose).
+    pub fn set_route_with_reason(&mut self, route: Route, reason: RouteChangeReason) {
+        if route == self.route {
+            return;
+        }
+        let previous = self.route;
         self.route = route;
         for s in self.sessions.values_mut() {
             s.events.push(SessionEvent::RouteChange { reason, previous });
@@ -398,6 +403,41 @@ impl Default for SessionHub {
     fn default() -> Self {
         Self::new()
     }
+}
+
+impl RouteChangeReason {
+    /// The reason for a raw value (`AVAudioSession.RouteChangeReason`); anything unknown is `Unknown`.
+    pub fn from_code(code: u8) -> RouteChangeReason {
+        match code {
+            1 => RouteChangeReason::NewDeviceAvailable,
+            2 => RouteChangeReason::OldDeviceUnavailable,
+            3 => RouteChangeReason::CategoryChange,
+            4 => RouteChangeReason::Override,
+            6 => RouteChangeReason::WakeFromSleep,
+            7 => RouteChangeReason::NoSuitableRouteForCategory,
+            8 => RouteChangeReason::RouteConfigurationChange,
+            _ => RouteChangeReason::Unknown,
+        }
+    }
+}
+
+impl SessionHub {
+    /// Applies a route the system reported (`headphones` plugged or removed, with the shell's reason code). Every
+    /// registered client gets the route-change event when the route really changed.
+    pub fn apply_service_route(&mut self, headphones: bool, reason: u8) {
+        let route = if headphones { Route::Headphones } else { Route::Speaker };
+        self.set_route_with_reason(route, RouteChangeReason::from_code(reason));
+    }
+}
+
+/// Feeds the route changes the audio service reported to a client of it (the shell's jack and route picker) into
+/// the session hub, oldest first. Returns how many reports it applied. Call it after `pump`/`tick` of the client.
+pub fn apply_service_routes(hub: &mut SessionHub, service: &mut crate::audio::Client) -> usize {
+    let changes = service.take_route_changes();
+    for (headphones, reason) in &changes {
+        hub.apply_service_route(*headphones, *reason);
+    }
+    changes.len()
 }
 
 #[cfg(test)]
@@ -651,5 +691,54 @@ mod tests {
         assert!(!h.is_active("a"));
         assert_eq!(h.take_events("a").last(), Some(&SessionEvent::MediaServicesWereReset));
         assert_eq!(h.take_events("b"), vec![SessionEvent::MediaServicesWereReset]);
+    }
+
+    #[test]
+    fn a_route_the_service_reports_reaches_every_client_with_the_system_reason() {
+        let mut h = hub(&["a", "b"]);
+        h.apply_service_route(true, 1);
+        for id in ["a", "b"] {
+            assert_eq!(
+                h.take_events(id),
+                vec![SessionEvent::RouteChange { reason: RouteChangeReason::NewDeviceAvailable, previous: Route::Speaker }]
+            );
+        }
+        assert_eq!(h.route(), Route::Headphones);
+        // the same route again is not a change
+        h.apply_service_route(true, 1);
+        assert!(h.take_events("a").is_empty());
+        // the user chose the speaker: reason 4
+        h.apply_service_route(false, 4);
+        assert_eq!(
+            h.take_events("a"),
+            vec![SessionEvent::RouteChange { reason: RouteChangeReason::Override, previous: Route::Headphones }]
+        );
+    }
+
+    #[test]
+    fn reason_codes_map_to_the_framework_values_and_unknown_codes_are_unknown() {
+        for (code, want) in [
+            (1u8, RouteChangeReason::NewDeviceAvailable),
+            (2, RouteChangeReason::OldDeviceUnavailable),
+            (3, RouteChangeReason::CategoryChange),
+            (4, RouteChangeReason::Override),
+            (6, RouteChangeReason::WakeFromSleep),
+            (7, RouteChangeReason::NoSuitableRouteForCategory),
+            (8, RouteChangeReason::RouteConfigurationChange),
+            (0, RouteChangeReason::Unknown),
+            (5, RouteChangeReason::Unknown),
+            (200, RouteChangeReason::Unknown),
+        ] {
+            assert_eq!(RouteChangeReason::from_code(code), want);
+            assert_eq!(want as u8 == code || want == RouteChangeReason::Unknown, true);
+        }
+    }
+
+    #[test]
+    fn an_audio_service_client_with_no_reports_changes_nothing() {
+        let mut h = hub(&["a"]);
+        let mut client = crate::audio::Client::new(std::path::PathBuf::from("/nonexistent/is.olibuijr.audio.sock"));
+        assert_eq!(apply_service_routes(&mut h, &mut client), 0);
+        assert!(h.take_events("a").is_empty());
     }
 }

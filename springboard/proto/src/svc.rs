@@ -251,6 +251,13 @@ pub mod audio {
         /// records the microphone into `path` (WAV); one recording at a time, explicit user action only
         RecordStart { path: String },
         RecordStop,
+        /// the stereo pan of the player, -1 (left only) to 1 (right only); 0 is centre
+        SetPan(f32),
+        /// ramps the volume linearly from where it is to `target` over `ms` milliseconds; `SetVolume` cancels it
+        FadeVolume { target: f32, ms: u32 },
+        /// the shell reports that the output route changed (`headphones` plugged or removed); `reason` is the
+        /// session route-change reason (1 new device, 2 old device gone, 4 override), and audiod tells its subscribers
+        SetRoute { headphones: bool, reason: u8 },
     }
 
     /// audiod -> client.
@@ -261,6 +268,8 @@ pub mod audio {
         Record { active: bool, elapsed_ms: u64, level: f32, error: Option<String> },
         /// a recording was written
         RecordDone { path: String, duration_ms: u64 },
+        /// the output route, sent to a subscriber when it subscribes (once the shell has reported one) and on every change
+        Route { headphones: bool, reason: u8 },
     }
 
     mod t {
@@ -282,9 +291,13 @@ pub mod audio {
         pub const RECORD_STOP: u32 = 17;
         pub const SET_RATE: u32 = 18;
         pub const SET_CROSSFADE: u32 = 19;
+        pub const SET_PAN: u32 = 20;
+        pub const FADE_VOLUME: u32 = 21;
+        pub const SET_ROUTE: u32 = 22;
         pub const STATE: u32 = 0x102;
         pub const RECORD: u32 = 0x103;
         pub const RECORD_DONE: u32 = 0x104;
+        pub const ROUTE: u32 = 0x105;
     }
 
     fn repeat(v: u8) -> Result<Repeat, DecodeError> {
@@ -332,6 +345,9 @@ pub mod audio {
                 Cmd::Stop => Enc::tag(t::STOP),
                 Cmd::RecordStart { path } => Enc::tag(t::RECORD_START).str(path),
                 Cmd::RecordStop => Enc::tag(t::RECORD_STOP),
+                Cmd::SetPan(p) => Enc::tag(t::SET_PAN).f32(*p),
+                Cmd::FadeVolume { target, ms } => Enc::tag(t::FADE_VOLUME).f32(*target).u32(*ms),
+                Cmd::SetRoute { headphones, reason } => Enc::tag(t::SET_ROUTE).bool(*headphones).u8(*reason),
             }
             .done()
         }
@@ -365,6 +381,9 @@ pub mod audio {
                 t::STOP => Cmd::Stop,
                 t::RECORD_START => Cmd::RecordStart { path: d.str()? },
                 t::RECORD_STOP => Cmd::RecordStop,
+                t::SET_PAN => Cmd::SetPan(d.f32()?),
+                t::FADE_VOLUME => Cmd::FadeVolume { target: d.f32()?, ms: d.u32()? },
+                t::SET_ROUTE => Cmd::SetRoute { headphones: d.bool()?, reason: d.u8()? },
                 other => return Err(DecodeError::UnknownTag(other)),
             })
         }
@@ -394,6 +413,7 @@ pub mod audio {
                 }
                 Evt::Record { active, elapsed_ms, level, error } => Enc::tag(t::RECORD).bool(*active).u64(*elapsed_ms).f32(*level).opt_str(error),
                 Evt::RecordDone { path, duration_ms } => Enc::tag(t::RECORD_DONE).str(path).u64(*duration_ms),
+                Evt::Route { headphones, reason } => Enc::tag(t::ROUTE).bool(*headphones).u8(*reason),
             }
             .done()
         }
@@ -414,6 +434,7 @@ pub mod audio {
                 }
                 t::RECORD => Evt::Record { active: d.bool()?, elapsed_ms: d.u64()?, level: d.f32()?, error: d.opt_str()? },
                 t::RECORD_DONE => Evt::RecordDone { path: d.str()?, duration_ms: d.u64()? },
+                t::ROUTE => Evt::Route { headphones: d.bool()?, reason: d.u8()? },
                 other => return Err(DecodeError::UnknownTag(other)),
             })
         }
@@ -488,6 +509,25 @@ pub mod audio {
             assert_eq!(&bytes[bytes.len() - 4..], &6000u32.to_le_bytes());
             assert_ne!(Cmd::SetCrossfade(1).encode(), Cmd::SetRate(1.0).encode());
             assert_eq!(Cmd::decode(&Enc::tag(t::SET_CROSSFADE).done()), Err(DecodeError::Truncated));
+        }
+
+        #[test]
+        fn pan_fade_and_route_round_trip_with_their_own_tags() {
+            let cmds = vec![
+                Cmd::SetPan(-0.5),
+                Cmd::FadeVolume { target: 0.25, ms: 1500 },
+                Cmd::SetRoute { headphones: true, reason: 1 },
+                Cmd::SetRoute { headphones: false, reason: 2 },
+            ];
+            for c in cmds {
+                assert_eq!(Cmd::decode(&c.encode()), Ok(c));
+            }
+            let e = Evt::Route { headphones: true, reason: 1 };
+            assert_eq!(Evt::decode(&e.encode()), Ok(e));
+            assert_eq!(&Cmd::SetPan(0.0).encode()[..4], &t::SET_PAN.to_le_bytes());
+            assert_eq!(&Cmd::FadeVolume { target: 1.0, ms: 1 }.encode()[..4], &t::FADE_VOLUME.to_le_bytes());
+            assert_eq!(Cmd::decode(&Enc::tag(t::FADE_VOLUME).f32(1.0).done()), Err(DecodeError::Truncated));
+            assert_eq!(Evt::decode(&Enc::tag(t::ROUTE).done()), Err(DecodeError::Truncated));
         }
 
         #[test]

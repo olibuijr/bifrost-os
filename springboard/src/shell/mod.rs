@@ -2270,6 +2270,8 @@ impl Shell {
     pub fn set_route(&mut self, route: Route, level: f32, announce: bool, t: f64) {
         self.cc.route = route;
         self.hud.set_route(route);
+        // the apps' audio sessions hear it through the audio service: a device appeared (1) or went away (2)
+        self.audio.set_route(route == Route::Headphones, if route == Route::Headphones { 1 } else { 2 });
         self.set_volume(level);
         if announce && self.screen_on && !self.cc_active() {
             self.hud.show_route(self.cc.volume, route, t);

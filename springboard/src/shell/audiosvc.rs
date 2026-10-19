@@ -100,6 +100,8 @@ impl Shell {
             self.audio_synced = self.audio.connects();
             self.audio.set_muted(self.music_muted);
             self.audio.set_volume(self.cc.volume);
+            // the route as it is now, so a service that restarted tells its subscribers the truth (reason 0: unknown)
+            self.audio.set_route(self.cc.route == crate::media::route::Route::Headphones, 0);
         }
     }
 

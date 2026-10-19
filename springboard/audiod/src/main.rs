@@ -42,6 +42,8 @@ struct Core {
     recorder: Option<(Recorder, PathBuf)>,
     muted: bool,
     clients: Vec<Client>,
+    /// The output route the shell reported last (headphones, reason), told to every subscriber and to new ones.
+    route: Option<(bool, u8)>,
 }
 
 fn track_in(t: &WireTrack) -> Track {
@@ -125,6 +127,13 @@ impl Core {
                 WireRepeat::One => Repeat::One,
             }),
             Cmd::SetVolume(v) => self.player.set_volume(v),
+            Cmd::SetPan(p) => self.player.set_pan(p),
+            Cmd::FadeVolume { target, ms } => self.player.fade_volume(target, ms),
+            Cmd::SetRoute { headphones, reason } => {
+                self.route = Some((headphones, reason));
+                self.send_all(&Evt::Route { headphones, reason });
+                return None;
+            }
             Cmd::SetRate(r) => self.player.set_rate(r),
             Cmd::SetCrossfade(ms) => self.player.set_crossfade_ms(ms),
             Cmd::SetMuted(m) => {
@@ -195,6 +204,14 @@ fn serve(core: Arc<Mutex<Core>>, mut stream: UnixStream) {
                 }
             }
         }
+        // a new subscriber learns the output route at once (it follows the state it just got)
+        if subscribe {
+            if let Some((headphones, reason)) = c.route {
+                if svc::write_frame(&mut stream, &Evt::Route { headphones, reason }.encode()).is_err() {
+                    break;
+                }
+            }
+        }
     }
     if recording {
         lock(&core).apply(Cmd::RecordStop);
@@ -207,7 +224,7 @@ static CLIENTS: std::sync::Condvar = std::sync::Condvar::new();
 fn main() -> std::io::Result<()> {
     let sock = std::env::var("BIFROST_SERVICE_SOCK").unwrap_or_else(|_| "/var/lib/springboard/run/is.olibuijr.audio.sock".into());
     let player = AudioPlayer::open_device()?;
-    let core = Arc::new(Mutex::new(Core { player, recorder: None, muted: true, clients: Vec::new() }));
+    let core = Arc::new(Mutex::new(Core { player, recorder: None, muted: true, clients: Vec::new(), route: None }));
     // socket activation: bifrostd binds the socket and starts this process on the first connection
     let listener = svc::listen(std::path::Path::new(&sock))?;
     eprintln!("audio.player: {CLIENT} {VERSION} listening on {sock}");

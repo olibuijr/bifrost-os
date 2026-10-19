@@ -14,6 +14,7 @@ use super::aac::{Resampler, OUT_RATE};
 use super::crossfade_overlap::{overlap_frames, Crossfader};
 use super::timestretch::{self, Stretcher};
 use super::speaker::SpeakerOut;
+use super::player_fx::{self, Fade};
 use super::audio_out::AudioOut;
 #[cfg(test)]
 use super::audio_out::NullOut;
@@ -28,7 +29,7 @@ use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// Tapping Previous this far into a song restarts it instead.
 pub const RESTART_AFTER_MS: f64 = 3000.0;
@@ -86,6 +87,12 @@ struct Shared {
     /// where to start the reopened song, in ms
     start_ms: f64,
     volume: f32,
+    /// stereo pan, -1 (left) to 1 (right); 0 is centre
+    pan: f32,
+    /// a running volume fade; the thread follows it block by block and writes the volume back as it goes
+    fade: Option<Fade>,
+    /// the clock fades are timed on
+    epoch: Instant,
     /// the playback rate asked for; the thread applies it at its next turn
     rate: f32,
     /// the crossfade between songs asked for, in milliseconds (0 is gapless); the thread applies it at its next turn
@@ -143,6 +150,9 @@ impl AudioPlayer {
             generation: 0,
             start_ms: 0.0,
             volume: 0.6,
+            pan: 0.0,
+            fade: None,
+            epoch: Instant::now(),
             rate: 1.0,
             crossfade_ms: 0,
             muted: true,
@@ -313,7 +323,37 @@ impl AudioPlayer {
 
     /// Software gain 0..=1, applied before the device.
     pub fn set_volume(&mut self, v: f32) {
-        self.shared.lock().unwrap_or_else(|p| p.into_inner()).volume = v.clamp(0.0, 1.0);
+        let mut s = self.shared.lock().unwrap_or_else(|p| p.into_inner());
+        s.volume = if v.is_nan() { 0.0 } else { v.clamp(0.0, 1.0) };
+        // a direct set cancels a fade, as a player's does
+        s.fade = None;
+    }
+
+    /// Stereo pan, -1 (left only) to 1 (right only); 0 keeps both channels at full level.
+    pub fn set_pan(&mut self, pan: f32) {
+        self.shared.lock().unwrap_or_else(|p| p.into_inner()).pan = player_fx::clamp_pan(pan);
+    }
+
+    pub fn pan(&self) -> f32 {
+        self.shared.lock().unwrap_or_else(|p| p.into_inner()).pan
+    }
+
+    /// Ramps the volume linearly from where it is to `target` over `ms` milliseconds (0 is immediate). The snapshot's
+    /// volume follows the ramp; `set_volume` cancels it.
+    pub fn fade_volume(&mut self, target: f32, ms: u32) {
+        let mut s = self.shared.lock().unwrap_or_else(|p| p.into_inner());
+        let now = s.epoch.elapsed().as_secs_f64() * 1000.0;
+        let from = match s.fade {
+            Some(f) => f.volume_at(now),
+            None => s.volume,
+        };
+        let fade = Fade::new(from, target, now, ms as f64);
+        if ms == 0 {
+            s.volume = fade.to;
+            s.fade = None;
+        } else {
+            s.fade = Some(fade);
+        }
     }
 
     /// Whether the samples reach the device (false) or are zeroed (true,
@@ -717,9 +757,26 @@ impl Engine {
 
     /// Writes `pcm` to the device: muted or at the player's volume, ramped up after a flush.
     fn emit(&mut self) {
-        let (volume, muted) = {
-            let s = self.shared.lock().unwrap_or_else(|p| p.into_inner());
-            (s.volume, s.muted)
+        // the volume at the start and the end of this block (they differ while a fade runs), the pan and the mute
+        let (volume, volume_end, pan, muted) = {
+            let mut s = self.shared.lock().unwrap_or_else(|p| p.into_inner());
+            let now = s.epoch.elapsed().as_secs_f64() * 1000.0;
+            let block_ms = (self.pcm.len() / 2) as f64 * 1000.0 / OUT_RATE as f64;
+            let start = match s.fade {
+                Some(f) => f.volume_at(now),
+                None => s.volume,
+            };
+            let end = match s.fade {
+                Some(f) => f.volume_at(now + block_ms),
+                None => s.volume,
+            };
+            if let Some(f) = s.fade {
+                s.volume = end;
+                if f.done(now + block_ms) {
+                    s.fade = None;
+                }
+            }
+            (start, end, s.pan, s.muted)
         };
         if self.traced.elapsed() >= Duration::from_secs(1) {
             self.traced = std::time::Instant::now();
@@ -733,8 +790,15 @@ impl Engine {
         if muted {
             self.pcm.iter_mut().for_each(|s| *s = 0);
         } else {
-            // the shell's curve (media::volume) on this player's own volume, applied once
-            super::volume::scale(&mut self.pcm, super::volume::Volume::new(volume).linear());
+            // the shell's curve (media::volume) on this player's own volume, applied once; a fade ramps the gain
+            // across the block so it has no steps
+            let (g0, g1) = (super::volume::Volume::new(volume).linear(), super::volume::Volume::new(volume_end).linear());
+            if g0 == g1 {
+                super::volume::scale(&mut self.pcm, g0);
+            } else {
+                player_fx::ramp(&mut self.pcm, g0, g1);
+            }
+            player_fx::apply_pan(&mut self.pcm, pan);
         }
         if std::mem::take(&mut self.fade_in) {
             fade_in(&mut self.pcm, FADE_FRAMES);

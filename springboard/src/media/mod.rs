@@ -48,6 +48,7 @@ pub mod time;
 pub mod symfile;
 pub mod system_sound;
 pub mod volume;
+pub mod player_fx;
 pub mod loop_region;
 pub mod engine;
 pub mod push_queue;
