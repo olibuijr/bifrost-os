@@ -8,7 +8,7 @@
 //! because an `Image` holds sRGB codes). The temporal scaler and the interpolator blend frames, so they decode to
 //! linear light first and encode again at the end.
 //!
-//! There is no GPU pass: a GPU scaler would be checked against these. Metal command-buffer encoding has no
+//! There is no GPU pass: a GPU scaler would be checked against these. Encoding into a command buffer has no
 //! counterpart on this system. See docs/bifrost-ui.md "GPU kits" for the decisions and the gaps.
 use bifrost_render::frame_interp::{interpolate, FrameError};
 use bifrost_render::gfx::{rgba, Image};

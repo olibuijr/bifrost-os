@@ -484,6 +484,7 @@ pub mod nn_graph;
 pub mod gpu_texture;
 pub mod gpu_mesh;
 pub mod gpu_view;
+pub mod gpu_sprites;
 pub mod image_effects;
 pub mod image_render;
 pub use restoration::RestorableState;

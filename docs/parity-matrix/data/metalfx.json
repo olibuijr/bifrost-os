@@ -3,44 +3,44 @@
   "doc": "https://developer.apple.com/documentation/metalfx",
   "macos_since": "13.0",
   "status": "partial",
-  "bifrost": "springboard/render/src/gfx.rs:360 (Image::resized), springboard/render/src/gfx/rotate.rs:354 (scale_into), springboard/src/shell/control_center.rs:260 (upscale), springboard/src/gpu/wl.rs:147 (Presenter, GLES)",
-  "summary": "MetalFX offers GPU temporal and spatial upscalers plus frame interpolation, all fed by Metal textures and command buffers. BifrOSt has no upscaling scaler: its nearest code is CPU bilinear resampling and a GL_LINEAR blur pyramid on the GLES presenter, neither of which takes motion, depth or colour-space input.",
+  "bifrost": "springboard/render/src/gfx.rs:360 (Image::resized), springboard/render/src/gfx/rotate.rs:354 (scale_into), springboard/src/shell/control_center.rs:260 (upscale), springboard/src/gpu/wl.rs:147 (Presenter, GLES); springboard/sdk/src/image_scaler.rs",
+  "summary": "MetalFX offers GPU temporal and spatial upscalers plus frame interpolation, all fed by Metal textures and command buffers. BifrOSt has no upscaling scaler: its nearest code is CPU bilinear resampling and a GL_LINEAR blur pyramid on the GLES presenter, neither of which takes motion, depth or colour-space input. Wave 15 (2026-10-19) adds sdk image_scaler: SpatialScaler, TemporalImageScaler and FrameInterpolator over app Images, on the CPU.",
   "rea_evidence": "ev_0ce9d57e5d0b4a3c283da154ba0b0a14527d6bfea12a70f43f67e89c4f6c7348",
   "features": [
     {
       "feature": "Temporal upscaling (MTLFXTemporalScaler)",
       "apple": "MTLFXTemporalScaler, MTLFXTemporalScalerDescriptor, encode(commandBuffer:)",
-      "bifrost": "springboard/render/src/temporal_upscale.rs (TemporalScaler, resolve); tests: springboard/render/tests/parity_sdk-complete-38.rs",
+      "bifrost": "springboard/render/src/temporal_upscale.rs (TemporalScaler, resolve); tests: springboard/render/tests/parity_sdk-complete-38.rs; springboard/sdk/src/image_scaler.rs (TemporalImageScaler)",
       "status": "partial",
-      "note": "Jittered accumulation with depth rejection and neighbourhood clamping is a pure CPU model with host tests, and it is not wired into apps or the shell. Gap: the presenter (springboard/src/gpu/wl.rs:147) receives no motion or depth buffers and the scaler has no GPU pass, so it needs the lab machine to verify."
+      "note": "Jittered accumulation with depth rejection and neighbourhood clamping is a pure CPU model with host tests, and it is not wired into apps or the shell. Gap: the presenter (springboard/src/gpu/wl.rs:147) receives no motion or depth buffers and the scaler has no GPU pass, so it needs the lab machine to verify. Built 2026-10-19: image_scaler::TemporalImageScaler takes Image frames plus depth and motion buffers, decodes sRGB to linear light, accumulates with the render-crate scaler and returns an opaque Image; next_jitter and reset are exposed; sizes and buffer lengths are checked (ScalerError). Still a gap: no GPU pass and no presenter wiring. Midget check: run `cargo test --offline -p bifrost-app image_scaler::tests` on the Midget build host and see every test pass (the_first_temporal_frame_is_the_spatial_upscale_of_its_colour, a_static_scene_converges_and_a_reset_forgets_the_history); there is no app UI for it yet, so no click path."
     },
     {
       "feature": "Temporal denoised upscaling (MTLFXTemporalDenoisedScaler)",
       "apple": "MTLFXTemporalDenoisedScaler, MTLFXTemporalDenoisedScalerDescriptor (macOS 26)",
-      "bifrost": "springboard/render/src/temporal_upscale.rs (Accumulation::Denoised, box_denoise); tests: springboard/render/tests/parity_sdk-complete-38.rs",
+      "bifrost": "springboard/render/src/temporal_upscale.rs (Accumulation::Denoised, box_denoise); tests: springboard/render/tests/parity_sdk-complete-38.rs; springboard/sdk/src/image_scaler.rs (TemporalImageScaler::new with denoised)",
       "status": "partial",
-      "note": "Denoised accumulation runs a 3x3 box filter on the input colour and keeps 95 percent history, all in the CPU model with host tests. Gap: the box filter is not a learned denoiser, and the GPU path has no temporal history buffer, so the lab machine must verify it."
+      "note": "Denoised accumulation runs a 3x3 box filter on the input colour and keeps 95 percent history, all in the CPU model with host tests. Gap: the box filter is not a learned denoiser, and the GPU path has no temporal history buffer, so the lab machine must verify it. Built 2026-10-19: TemporalImageScaler::new(.., denoised = true) selects the 95 percent history mode with the box denoise of the input colour; is_denoised reports it. Still a gap: the denoiser is a box filter, not learned. Midget check: run `cargo test --offline -p bifrost-app image_scaler::tests` on the Midget build host and see every test pass (a_static_scene_converges_and_a_reset_forgets_the_history); there is no app UI for it yet, so no click path."
     },
     {
       "feature": "Spatial upscaling (MTLFXSpatialScaler)",
       "apple": "MTLFXSpatialScaler, MTLFXSpatialScalerDescriptor, encode(commandBuffer:)",
-      "bifrost": "springboard/render/src/upscale.rs",
+      "bifrost": "springboard/render/src/upscale.rs; springboard/sdk/src/image_scaler.rs (SpatialScaler)",
       "status": "partial",
-      "note": "A CPU Catmull-Rom bicubic upscaler with clamped edges is tested headless in springboard/render/tests/parity_sdk-complete-39.rs (flat rasters stay flat, bad sizes and sample counts are refused). Gap: there is no edge-aware scaler, no temporal input and no GPU path, so it is a resampler rather than a spatial upscaler, and it is not wired into apps or the shell."
+      "note": "A CPU Catmull-Rom bicubic upscaler with clamped edges is tested headless in springboard/render/tests/parity_sdk-complete-39.rs (flat rasters stay flat, bad sizes and sample counts are refused). Gap: there is no edge-aware scaler, no temporal input and no GPU path, so it is a resampler rather than a spatial upscaler, and it is not wired into apps or the shell. Built 2026-10-19: image_scaler::SpatialScaler::scale takes an Image of the configured input size and returns the output-size Image: bicubic colour weighted by alpha so soft edges do not darken, alpha resampled linearly, sizes capped at 16384. Still a gap: no edge-aware pass and no GPU path. Midget check: run `cargo test --offline -p bifrost-app image_scaler::tests` on the Midget build host and see every test pass (a_flat_image_stays_flat_in_every_mode, a_gradient_stays_monotone_when_enlarged, transparent_pixels_stay_transparent_and_edges_do_not_darken); there is no app UI for it yet, so no click path."
     },
     {
       "feature": "Spatial colour processing modes",
       "apple": "MTLFXSpatialScalerColorProcessingMode (linear, perceptual, hdr)",
-      "bifrost": "springboard/render/src/upscale.rs",
+      "bifrost": "springboard/render/src/upscale.rs; springboard/sdk/src/image_scaler.rs (SpatialScaler::set_color_processing_mode)",
       "status": "partial",
-      "note": "Linear, perceptual sRGB and HDR modes are tested headless in springboard/render/tests/parity_sdk-complete-39.rs, including overshoot clamped in linear and kept in HDR. Gap: the mode is passed per call rather than read from a colour-space tag on the raster, and nothing is wired into apps or the shell."
+      "note": "Linear, perceptual sRGB and HDR modes are tested headless in springboard/render/tests/parity_sdk-complete-39.rs, including overshoot clamped in linear and kept in HDR. Gap: the mode is passed per call rather than read from a colour-space tag on the raster, and nothing is wired into apps or the shell. Built 2026-10-19: SpatialScaler holds the ColorProcessing mode (Perceptual by default for sRGB Images) with a setter and getter. Still a gap: the mode is a scaler setting, not read from a colour-space tag on the Image, and Hdr output is clamped to 8 bits. Midget check: run `cargo test --offline -p bifrost-app image_scaler::tests` on the Midget build host and see every test pass (a_flat_image_stays_flat_in_every_mode); there is no app UI for it yet, so no click path."
     },
     {
       "feature": "Frame interpolation (MTLFXFrameInterpolator)",
       "apple": "MTLFXFrameInterpolator, MTLFXFrameInterpolatorDescriptor, MTL4FXFrameInterpolator (macOS 26)",
-      "bifrost": "springboard/render/src/frame_interp.rs",
+      "bifrost": "springboard/render/src/frame_interp.rs; springboard/sdk/src/image_scaler.rs (FrameInterpolator)",
       "status": "partial",
-      "note": "Wave 4 (w4-metalfx, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No frame generation anywhere in the shell or the GPU presenter."
+      "note": "Wave 4 (w4-metalfx, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No frame generation anywhere in the shell or the GPU presenter. Built 2026-10-19: image_scaler::FrameInterpolator::interpolate(a, b, motion, t) and intermediate_frames(count) work on Images, blend in linear light, interpolate alpha with the same warp, and refuse bad sizes, buffer lengths and t. Still a gap: no occlusion handling, no depth or UI layer, no GPU pass. Midget check: run `cargo test --offline -p bifrost-app image_scaler::tests` on the Midget build host and see every test pass (interpolation_endpoints_are_exact_and_the_middle_blends_in_linear_light, motion_moves_the_content_between_frames); there is no app UI for it yet, so no click path."
     },
     {
       "feature": "Metal command-buffer encoding of scaler passes",
@@ -52,9 +52,9 @@
     {
       "feature": "Reduced-resolution GPU work with linear upscale",
       "apple": "Render at low resolution, upscale to output (MetalFX landing page)",
-      "bifrost": "springboard/sdk/src/gpu_pass.rs (blur_plan, BlurPlan); springboard/src/gpu/wl.rs:724 (blur pyramid upscale, GL_LINEAR), docs/gpu-first.md:85 (quarter-size base), springboard/render/src/gfx.rs:423 (blur_material)",
+      "bifrost": "springboard/sdk/src/gpu_pass.rs (blur_plan, BlurPlan); springboard/src/gpu/wl.rs:724 (blur pyramid upscale, GL_LINEAR), docs/gpu-first.md:85 (quarter-size base), springboard/render/src/gfx.rs:423 (blur_material); springboard/sdk/src/image_scaler.rs (SpatialScaler)",
       "status": "partial",
-      "note": "The divisor, working size and full-size fallback for a reduced copy are tested headless in tests/parity_sdk-os-02.rs. Gap: the linear upscale runs only inside the shell's presenter, and apps get no scaler."
+      "note": "The divisor, working size and full-size fallback for a reduced copy are tested headless in tests/parity_sdk-os-02.rs. Gap: the linear upscale runs only inside the shell's presenter, and apps get no scaler. Built 2026-10-19: apps now have a scaler to bring a reduced-resolution render back up (SpatialScaler, TemporalImageScaler). Still a gap: the linear upscale of the shell's blur pyramid stays inside the presenter. Midget check: run `cargo test --offline -p bifrost-app image_scaler::tests` on the Midget build host and see every test pass (bad_requests_are_refused); there is no app UI for it yet, so no click path."
     }
   ],
   "gaps": [

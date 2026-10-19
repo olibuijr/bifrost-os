@@ -5,7 +5,7 @@
 //! `plane_arith`, `laplacian_pyramid`, `distance`, `guided`, `filter`, `gaussian_filter`); the luma-only filters are in
 //! `pixel_filter` and the blurs in `image_blur`.
 //!
-//! [`MpsKernel`] names a kernel and its arguments as a value. It implements `bifrost_ui::image_kernels::ImageKernel`, so
+//! [`KernelSpec`] names a kernel and its arguments as a value. It implements `bifrost_ui::image_kernels::ImageKernel`, so
 //! `apply_chain` runs it with the built-in kernels, and [`encode_kernels`] and [`decode_kernels`] store and restore a chain
 //! as text, the counterpart of archiving a kernel. The reader treats its input as hostile: it caps the line length, the
 //! kernel count and the sizes it will allocate.
@@ -33,6 +33,12 @@ pub const MAX_SIDE: usize = 16384;
 pub const MAX_PIXELS: usize = 1 << 26;
 /// The most levels a pyramid may have.
 pub const MAX_LEVELS: usize = 32;
+/// The largest tent radius, in pixels; a larger one is taken as this.
+pub const MAX_TENT_RADIUS: usize = 1024;
+/// The largest side of an erosion, dilation or median window; a kernel with a larger one returns its input.
+pub const MAX_WINDOW: usize = 255;
+/// The largest Gaussian sigma `KernelSpec::Gaussian` uses; a larger one is taken as this.
+pub const MAX_SIGMA: f32 = 64.0;
 
 /// One channel of the stored (premultiplied) pixel.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -232,6 +238,7 @@ pub fn tent_blur(img: &Image, radius: usize) -> Image {
     if !well_formed(img) {
         return img.clone();
     }
+    let radius = radius.min(MAX_TENT_RADIUS);
     let [r, g, b, a] = Channel::ALL.map(|c| gf::tent_blur(&channel_plane(img, c), radius));
     merge(r, g, b, a)
 }
@@ -321,7 +328,7 @@ pub fn find_keypoints(img: &Image, region: (usize, usize, usize, usize), thresho
 /// A kernel with its arguments, as a value an app can run, chain and store. Invalid arguments make `run` return the
 /// input unchanged, as the built-in Core Image kernels do.
 #[derive(Clone, Debug, PartialEq)]
-pub enum MpsKernel {
+pub enum KernelSpec {
     /// Gaussian blur, `sigma` in pixels, edges clamp.
     Gaussian { sigma: f32 },
     /// Tent blur of `radius` pixels.
@@ -348,7 +355,7 @@ pub enum MpsKernel {
     Scale { w: usize, h: usize, mode: ScaleMode },
 }
 
-impl ImageKernel for MpsKernel {
+impl ImageKernel for KernelSpec {
     fn kind(&self) -> KernelKind {
         KernelKind::General
     }
@@ -359,18 +366,21 @@ impl ImageKernel for MpsKernel {
             return same();
         }
         match self {
-            MpsKernel::Gaussian { sigma } => blur_gaussian(img, *sigma, Edge::Clamp),
-            MpsKernel::Tent { radius } => tent_blur(img, *radius),
-            MpsKernel::Threshold { mode, t, max } => grey_image(&f::threshold(&luma_plane(img), *mode, *t, *max)),
-            MpsKernel::Erode { w, h } => f::erode(&luma_plane(img), *w, *h).map(|p| grey_image(&p)).unwrap_or_else(same),
-            MpsKernel::Dilate { w, h } => f::dilate(&luma_plane(img), *w, *h).map(|p| grey_image(&p)).unwrap_or_else(same),
-            MpsKernel::Median { diameter } => f::median(&luma_plane(img), *diameter).map(|p| grey_image(&p)).unwrap_or_else(same),
-            MpsKernel::Sobel => grey_image(&f::sobel(&luma_plane(img))),
-            MpsKernel::Laplacian { bias } => grey_image(&f::laplacian(&luma_plane(img), *bias)),
-            MpsKernel::Equalize => grey_image(&f::equalize(&luma_plane(img))),
-            MpsKernel::Invert => invert(img),
-            MpsKernel::Convolution { w, h, weights, bias } => convolve(img, *w, *h, weights, *bias).unwrap_or_else(same),
-            MpsKernel::Scale { w, h, mode } => scale(img, *w, *h, *mode).unwrap_or_else(same),
+            KernelSpec::Gaussian { sigma } => blur_gaussian(img, sigma.clamp(0.0, MAX_SIGMA), Edge::Clamp),
+            KernelSpec::Tent { radius } => tent_blur(img, *radius),
+            KernelSpec::Threshold { mode, t, max } => grey_image(&f::threshold(&luma_plane(img), *mode, *t, *max)),
+            KernelSpec::Erode { w, h } if *w > MAX_WINDOW || *h > MAX_WINDOW => same(),
+            KernelSpec::Dilate { w, h } if *w > MAX_WINDOW || *h > MAX_WINDOW => same(),
+            KernelSpec::Median { diameter } if *diameter > MAX_WINDOW => same(),
+            KernelSpec::Erode { w, h } => f::erode(&luma_plane(img), *w, *h).map(|p| grey_image(&p)).unwrap_or_else(same),
+            KernelSpec::Dilate { w, h } => f::dilate(&luma_plane(img), *w, *h).map(|p| grey_image(&p)).unwrap_or_else(same),
+            KernelSpec::Median { diameter } => f::median(&luma_plane(img), *diameter).map(|p| grey_image(&p)).unwrap_or_else(same),
+            KernelSpec::Sobel => grey_image(&f::sobel(&luma_plane(img))),
+            KernelSpec::Laplacian { bias } => grey_image(&f::laplacian(&luma_plane(img), *bias)),
+            KernelSpec::Equalize => grey_image(&f::equalize(&luma_plane(img))),
+            KernelSpec::Invert => invert(img),
+            KernelSpec::Convolution { w, h, weights, bias } => convolve(img, *w, *h, weights, *bias).unwrap_or_else(same),
+            KernelSpec::Scale { w, h, mode } => scale(img, *w, *h, *mode).unwrap_or_else(same),
         }
     }
 }
@@ -444,22 +454,22 @@ fn scale_from(name: &str) -> Option<ScaleMode> {
 }
 
 /// Writes a chain of kernels as text, one kernel per line after the header.
-pub fn encode_kernels(kernels: &[MpsKernel]) -> String {
+pub fn encode_kernels(kernels: &[KernelSpec]) -> String {
     let mut out = String::from(ARCHIVE_HEADER);
     out.push('\n');
     for k in kernels {
         let line = match k {
-            MpsKernel::Gaussian { sigma } => format!("gaussian {sigma}"),
-            MpsKernel::Tent { radius } => format!("tent {radius}"),
-            MpsKernel::Threshold { mode, t, max } => format!("threshold {} {t} {max}", threshold_name(*mode)),
-            MpsKernel::Erode { w, h } => format!("erode {w} {h}"),
-            MpsKernel::Dilate { w, h } => format!("dilate {w} {h}"),
-            MpsKernel::Median { diameter } => format!("median {diameter}"),
-            MpsKernel::Sobel => "sobel".to_string(),
-            MpsKernel::Laplacian { bias } => format!("laplacian {bias}"),
-            MpsKernel::Equalize => "equalize".to_string(),
-            MpsKernel::Invert => "invert".to_string(),
-            MpsKernel::Convolution { w, h, weights, bias } => {
+            KernelSpec::Gaussian { sigma } => format!("gaussian {sigma}"),
+            KernelSpec::Tent { radius } => format!("tent {radius}"),
+            KernelSpec::Threshold { mode, t, max } => format!("threshold {} {t} {max}", threshold_name(*mode)),
+            KernelSpec::Erode { w, h } => format!("erode {w} {h}"),
+            KernelSpec::Dilate { w, h } => format!("dilate {w} {h}"),
+            KernelSpec::Median { diameter } => format!("median {diameter}"),
+            KernelSpec::Sobel => "sobel".to_string(),
+            KernelSpec::Laplacian { bias } => format!("laplacian {bias}"),
+            KernelSpec::Equalize => "equalize".to_string(),
+            KernelSpec::Invert => "invert".to_string(),
+            KernelSpec::Convolution { w, h, weights, bias } => {
                 let mut s = format!("convolution {w} {h} {bias}");
                 for v in weights {
                     s.push(' ');
@@ -467,7 +477,7 @@ pub fn encode_kernels(kernels: &[MpsKernel]) -> String {
                 }
                 s
             }
-            MpsKernel::Scale { w, h, mode } => format!("scale {w} {h} {}", scale_name(*mode)),
+            KernelSpec::Scale { w, h, mode } => format!("scale {w} {h} {}", scale_name(*mode)),
         };
         out.push_str(&line);
         out.push('\n');
@@ -488,28 +498,36 @@ fn uint(s: &str) -> Result<usize, &'static str> {
     s.parse().map_err(|_| "not a whole number")
 }
 
+fn window(s: &str) -> Result<usize, &'static str> {
+    let n = uint(s)?;
+    if n > MAX_WINDOW {
+        return Err("a window side is at most 255");
+    }
+    Ok(n)
+}
+
 fn byte(s: &str) -> Result<u8, &'static str> {
     s.parse().map_err(|_| "not a number from 0 to 255")
 }
 
-fn parse_kernel(line: &str) -> Result<MpsKernel, &'static str> {
+fn parse_kernel(line: &str) -> Result<KernelSpec, &'static str> {
     let mut tokens = line.split_whitespace();
     let name = tokens.next().ok_or("empty line")?;
     let rest: Vec<&str> = tokens.collect();
     let args = rest.as_slice();
     match (name, args) {
-        ("gaussian", [s]) => Ok(MpsKernel::Gaussian { sigma: float(s)? }),
-        ("tent", [r]) => Ok(MpsKernel::Tent { radius: uint(r)? }),
+        ("gaussian", [s]) => Ok(KernelSpec::Gaussian { sigma: float(s)? }),
+        ("tent", [r]) => Ok(KernelSpec::Tent { radius: uint(r)? }),
         ("threshold", [m, t, max]) => {
-            Ok(MpsKernel::Threshold { mode: threshold_from(m).ok_or("unknown threshold mode")?, t: byte(t)?, max: byte(max)? })
+            Ok(KernelSpec::Threshold { mode: threshold_from(m).ok_or("unknown threshold mode")?, t: byte(t)?, max: byte(max)? })
         }
-        ("erode", [w, h]) => Ok(MpsKernel::Erode { w: uint(w)?, h: uint(h)? }),
-        ("dilate", [w, h]) => Ok(MpsKernel::Dilate { w: uint(w)?, h: uint(h)? }),
-        ("median", [d]) => Ok(MpsKernel::Median { diameter: uint(d)? }),
-        ("sobel", []) => Ok(MpsKernel::Sobel),
-        ("laplacian", [b]) => Ok(MpsKernel::Laplacian { bias: float(b)? }),
-        ("equalize", []) => Ok(MpsKernel::Equalize),
-        ("invert", []) => Ok(MpsKernel::Invert),
+        ("erode", [w, h]) => Ok(KernelSpec::Erode { w: window(w)?, h: window(h)? }),
+        ("dilate", [w, h]) => Ok(KernelSpec::Dilate { w: window(w)?, h: window(h)? }),
+        ("median", [d]) => Ok(KernelSpec::Median { diameter: window(d)? }),
+        ("sobel", []) => Ok(KernelSpec::Sobel),
+        ("laplacian", [b]) => Ok(KernelSpec::Laplacian { bias: float(b)? }),
+        ("equalize", []) => Ok(KernelSpec::Equalize),
+        ("invert", []) => Ok(KernelSpec::Invert),
         ("convolution", [w, h, bias, weights @ ..]) => {
             let (w, h) = (uint(w)?, uint(h)?);
             if !f::is_convolution_side(w) || !f::is_convolution_side(h) {
@@ -519,14 +537,14 @@ fn parse_kernel(line: &str) -> Result<MpsKernel, &'static str> {
                 return Err("the weight count is not width times height");
             }
             let weights = weights.iter().map(|v| float(v)).collect::<Result<Vec<f32>, _>>()?;
-            Ok(MpsKernel::Convolution { w, h, weights, bias: float(bias)? })
+            Ok(KernelSpec::Convolution { w, h, weights, bias: float(bias)? })
         }
         ("scale", [w, h, m]) => {
             let (w, h) = (uint(w)?, uint(h)?);
             if w == 0 || h == 0 || w > MAX_SIDE || h > MAX_SIDE {
                 return Err("a scale side is from 1 to 16384");
             }
-            Ok(MpsKernel::Scale { w, h, mode: scale_from(m).ok_or("unknown scale mode")? })
+            Ok(KernelSpec::Scale { w, h, mode: scale_from(m).ok_or("unknown scale mode")? })
         }
         ("gaussian" | "tent" | "threshold" | "erode" | "dilate" | "median" | "sobel" | "laplacian" | "equalize" | "invert" | "convolution" | "scale", _) => {
             Err("wrong number of arguments")
@@ -536,7 +554,7 @@ fn parse_kernel(line: &str) -> Result<MpsKernel, &'static str> {
 }
 
 /// Reads a chain written by [`encode_kernels`]. Blank lines are skipped.
-pub fn decode_kernels(text: &str) -> Result<Vec<MpsKernel>, ArchiveError> {
+pub fn decode_kernels(text: &str) -> Result<Vec<KernelSpec>, ArchiveError> {
     let mut lines = text.lines().enumerate();
     match lines.next() {
         Some((_, first)) if first.trim() == ARCHIVE_HEADER => {}
@@ -561,7 +579,7 @@ pub fn decode_kernels(text: &str) -> Result<Vec<MpsKernel>, ArchiveError> {
 }
 
 /// Runs a chain of kernels in order. An empty chain returns a copy of `img`.
-pub fn run_chain(kernels: &[MpsKernel], img: &Image) -> Image {
+pub fn run_chain(kernels: &[KernelSpec], img: &Image) -> Image {
     kernels.iter().fold(img.clone(), |current, k| k.run(&current))
 }
 
@@ -694,6 +712,15 @@ mod tests {
     }
 
     #[test]
+    fn oversized_arguments_are_capped_instead_of_allocated() {
+        let img = grey(4, 4, &[50; 16]);
+        assert_eq!(tent_blur(&img, usize::MAX), img);
+        assert_eq!(KernelSpec::Median { diameter: 100_001 }.run(&img), img);
+        assert_eq!(KernelSpec::Dilate { w: usize::MAX, h: 3 }.run(&img), img);
+        assert_eq!(KernelSpec::Gaussian { sigma: 1e9 }.run(&img).px.len(), 16);
+    }
+
+    #[test]
     fn a_gaussian_pyramid_halves_each_level() {
         let img = grey(9, 5, &[100; 45]);
         let p = gaussian_pyramid(&img, 3);
@@ -750,30 +777,30 @@ mod tests {
     #[test]
     fn mps_kernels_run_as_image_kernels() {
         let img = grey(3, 3, &[10; 9]);
-        assert_eq!(MpsKernel::Invert.kind(), KernelKind::General);
-        let chained = apply_chain(&[&MpsKernel::Invert, &MpsKernel::Invert], &img);
+        assert_eq!(KernelSpec::Invert.kind(), KernelKind::General);
+        let chained = apply_chain(&[&KernelSpec::Invert, &KernelSpec::Invert], &img);
         assert_eq!(chained, img);
         // A bad argument returns the input.
-        assert_eq!(MpsKernel::Erode { w: 2, h: 2 }.run(&img), img);
-        let bin = MpsKernel::Threshold { mode: Threshold::Binary, t: 5, max: 255 }.run(&img);
+        assert_eq!(KernelSpec::Erode { w: 2, h: 2 }.run(&img), img);
+        let bin = KernelSpec::Threshold { mode: Threshold::Binary, t: 5, max: 255 }.run(&img);
         assert!(bin.px.iter().all(|&p| p & 255 == 255));
         assert_eq!(run_chain(&[], &img), img);
     }
 
-    fn sample_chain() -> Vec<MpsKernel> {
+    fn sample_chain() -> Vec<KernelSpec> {
         vec![
-            MpsKernel::Gaussian { sigma: 1.5 },
-            MpsKernel::Tent { radius: 2 },
-            MpsKernel::Threshold { mode: Threshold::ToZeroInverse, t: 100, max: 200 },
-            MpsKernel::Erode { w: 3, h: 5 },
-            MpsKernel::Dilate { w: 3, h: 3 },
-            MpsKernel::Median { diameter: 3 },
-            MpsKernel::Sobel,
-            MpsKernel::Laplacian { bias: 0.25 },
-            MpsKernel::Equalize,
-            MpsKernel::Invert,
-            MpsKernel::Convolution { w: 3, h: 3, weights: vec![0.0, -1.0, 0.0, -1.0, 4.5, -1.0, 0.0, -1.0, 0.0], bias: 0.1 },
-            MpsKernel::Scale { w: 64, h: 32, mode: ScaleMode::Lanczos },
+            KernelSpec::Gaussian { sigma: 1.5 },
+            KernelSpec::Tent { radius: 2 },
+            KernelSpec::Threshold { mode: Threshold::ToZeroInverse, t: 100, max: 200 },
+            KernelSpec::Erode { w: 3, h: 5 },
+            KernelSpec::Dilate { w: 3, h: 3 },
+            KernelSpec::Median { diameter: 3 },
+            KernelSpec::Sobel,
+            KernelSpec::Laplacian { bias: 0.25 },
+            KernelSpec::Equalize,
+            KernelSpec::Invert,
+            KernelSpec::Convolution { w: 3, h: 3, weights: vec![0.0, -1.0, 0.0, -1.0, 4.5, -1.0, 0.0, -1.0, 0.0], bias: 0.1 },
+            KernelSpec::Scale { w: 64, h: 32, mode: ScaleMode::Lanczos },
         ]
     }
 
@@ -790,7 +817,7 @@ mod tests {
     fn a_restored_chain_gives_the_same_pixels() {
         let values: Vec<u8> = (0..64u32).map(|i| ((i * 29) % 256) as u8).collect();
         let img = grey(8, 8, &values);
-        let chain = vec![MpsKernel::Gaussian { sigma: 1.0 }, MpsKernel::Sobel, MpsKernel::Invert];
+        let chain = vec![KernelSpec::Gaussian { sigma: 1.0 }, KernelSpec::Sobel, KernelSpec::Invert];
         let restored = decode_kernels(&encode_kernels(&chain)).unwrap();
         assert_eq!(run_chain(&chain, &img), run_chain(&restored, &img));
     }
@@ -806,6 +833,7 @@ mod tests {
         assert_eq!(decode_kernels(&format!("{h}gaussian inf\n")), Err(ArchiveError::Line { line: 2, reason: "not a finite number" }));
         assert_eq!(decode_kernels(&format!("{h}tent -1\n")), Err(ArchiveError::Line { line: 2, reason: "not a whole number" }));
         assert_eq!(decode_kernels(&format!("{h}threshold binary 256 0\n")), Err(ArchiveError::Line { line: 2, reason: "not a number from 0 to 255" }));
+        assert_eq!(decode_kernels(&format!("{h}erode 1000 3\n")), Err(ArchiveError::Line { line: 2, reason: "a window side is at most 255" }));
         assert_eq!(decode_kernels(&format!("{h}scale 99999999 99999999 nearest\n")), Err(ArchiveError::Line { line: 2, reason: "a scale side is from 1 to 16384" }));
         assert_eq!(decode_kernels(&format!("{h}convolution 3 3 0 1 2\n")), Err(ArchiveError::Line { line: 2, reason: "the weight count is not width times height" }));
         assert_eq!(decode_kernels(&format!("{h}convolution 100000 100000 0\n")), Err(ArchiveError::Line { line: 2, reason: "a convolution side is odd and from 3 to 9" }));
@@ -813,6 +841,6 @@ mod tests {
         assert_eq!(decode_kernels(&long), Err(ArchiveError::Line { line: 2, reason: "line too long" }));
         let many = format!("{h}{}", "sobel\n".repeat(MAX_KERNELS + 1));
         assert_eq!(decode_kernels(&many), Err(ArchiveError::TooManyKernels));
-        assert_eq!(decode_kernels(&format!("{h}\n\nsobel\n")).unwrap(), vec![MpsKernel::Sobel]);
+        assert_eq!(decode_kernels(&format!("{h}\n\nsobel\n")).unwrap(), vec![KernelSpec::Sobel]);
     }
 }
