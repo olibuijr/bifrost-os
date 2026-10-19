@@ -6099,3 +6099,16 @@ Image for Restore, no restore progress bar, and Get Info is still a sheet. Code 
 
 Code only: not built or run, not verified on Midget. The toolbar gains a Time Zone button and the calendar list a Birthdays row, so the
 compliance snapshots of the calendar need a re-bless on Midget.
+
+## Files: inline rename and New Folder (`files`, E2E fixes F1 to F3, 2026-10-19)
+
+| Ours | Apple | Notes |
+|---|---|---|
+| `bifrost_ui::TextField::select(range)` | `NSTextView.selectedRange` setter / `NSTextField.currentEditor()?.selectedRange` | Selects a byte range and puts the caret at its end. An offset past the end is clamped and one inside a character moves back to its start; a reversed range selects the same text. It is a move, not an edit: no undo step is recorded and a typing group ends. Typing, Backspace and Delete replace or remove the selection (they already did). |
+| `files::ops::rename_selection(name, is_dir)`, `Files::begin_rename(row)` | Finder's rename editor selecting the name without its extension | The one start of an inline rename (Return, Rename in the context menu, New Folder). A file selects the part before its last extension (`report.pdf` selects `report`, `a.tar.gz` selects `a.tar`); a folder, a name without an extension, a dot file (`.bashrc`) and a name that ends in a dot select the whole name. The row is scrolled into view (`Files::reveal`, icon and list views). Escape cancels, Return commits. |
+| `Files::new_folder`, `FileManagerState::pending`, `Files::apply_pending` | New Folder (Shift+Cmd+N) | The folder is made on the spot; when the listing that follows arrives, the new folder is selected, scrolled into view and its name is open with the whole name selected. A rename that commits leaves the renamed item selected the same way. A pending item that is not in the listing or is hidden is dropped. |
+| Return, Cmd+O, Cmd+Down, Cmd+Up in Files (`keys.rs`, `main.rs`) | Return renames, Cmd+O and Cmd+Down open, Cmd+Up is Enclosing Folder | Return in the Search field still opens the hit. `HwKeys::chord_mods` (the shell's key path to apps) now names Up and Down as chord keys beside Backspace, because the shell dropped Cmd with an arrow; Ctrl+Cmd and Ctrl+Alt arrows stay shortcuts of the shell. |
+
+Gaps: the rename field does not grow with the text (the field scrolls to keep the caret in view); there is no Shift-arrow selection
+in the field yet; the SDK's direct Wayland key path (`wl::input::translate_key`) still delivers an arrow with Cmd held as the plain
+arrow, so the arrow chords reach an app only through the shell's key path. Code only: not built or run, not verified on Midget.

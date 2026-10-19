@@ -445,11 +445,14 @@ impl App for Files {
                         self.listing = rows;
                         self.refresh_rows();
                         self.selection.clear();
+                        // a renamed item stays selected, and a new folder opens its name for editing
+                        self.apply_pending();
                     }
                     Err(e) => {
                         self.listing.clear();
                         self.refresh_rows();
-                        self.error = Some(e)
+                        self.error = Some(e);
+                        self.fx.pending = None;
                     }
                 }
             }
@@ -732,11 +735,9 @@ impl Files {
                         }
                         37 | 39 if self.vo.gallery => self.move_focus(code == 39),
                         8 | 37 => self.go_back(),
-                        13 => {
-                            if let Some(i) = self.focus() {
-                                self.open(i)
-                            }
-                        }
+                        // Return in the search field opens the hit; on an item it renames (Cmd+O and Cmd+Down open)
+                        13 if self.searching => self.open_selected(),
+                        13 => self.start_rename(),
                         32 => self.quick_look(),
                         38 | 40 => self.move_focus(code == 40),
                         _ => {}

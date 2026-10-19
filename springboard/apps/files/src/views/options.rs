@@ -434,7 +434,13 @@ impl Files {
             self.paint_entry_icon(ui, s, e, cx - side / 2., y0 + 8. + (box_h - side) / 2., side, false);
         }
         let ty = y1 - info_h + 4.;
-        self.centred(s, ui, &e.name, MAC_TITLE3_PT, LABEL.now(), cx, ty, x1 - x0 - 32.);
+        if let Some(field) = self.naming.as_ref().filter(|(p, _)| *p == e.path).map(|(_, f)| f) {
+            // the name being renamed is a field over the title
+            let fw = (x1 - x0 - 32.).min(320.);
+            bifrost_app::widgets::text_field(s, ui, field, Rect { x: cx - fw / 2., y: ty - 3., w: fw, h: 26. }, "", true);
+        } else {
+            self.centred(s, ui, &e.name, MAC_TITLE3_PT, LABEL.now(), cx, ty, x1 - x0 - 32.);
+        }
         let detail = if e.is_dir {
             format!("Folder · {}", date_text(e.mtime))
         } else {

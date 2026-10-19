@@ -488,8 +488,9 @@ impl HwKeys {
     /// The CHORD_* bits of a Ctrl or Cmd chord over a letter, digit or punctuation key. None when
     /// no Ctrl or Meta is held, or the key is not one a chord can name.
     pub fn chord_mods(&self, code: u16) -> Option<u32> {
-        // Backspace is a chord key too: Cmd+Backspace deletes in the apps
-        if self.ctrl == 0 && self.meta == 0 || (code != 14 && !TEXT_KEYS.iter().any(|k| k.0 == code)) {
+        // Backspace, Up and Down are chord keys too: Cmd+Backspace deletes in the apps, Cmd+Up goes to the enclosing
+        // folder in Files and Cmd+Down opens the item (neither arrow types anything while Cmd is held)
+        if self.ctrl == 0 && self.meta == 0 || (!matches!(code, KEY_BACKSPACE | KEY_UP | KEY_DOWN) && !TEXT_KEYS.iter().any(|k| k.0 == code)) {
             return None;
         }
         let mut mods = 0;
@@ -1136,6 +1137,9 @@ mod tests {
         k.key(KEY_LEFTMETA, true);
         assert_eq!(k.chord_mods(33), Some(CHORD_META), "Cmd+F");
         assert_eq!(k.chord_mods(14), Some(CHORD_META), "Cmd+Backspace");
+        assert_eq!(k.chord_mods(KEY_UP), Some(CHORD_META), "Cmd+Up");
+        assert_eq!(k.chord_mods(KEY_DOWN), Some(CHORD_META), "Cmd+Down");
+        assert_eq!(k.chord_mods(KEY_LEFT), None, "the other arrows are not chord keys");
         // Cmd+Space is Search: the shell takes shortcuts before it asks for a chord
     }
 
