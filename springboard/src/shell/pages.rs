@@ -1724,7 +1724,7 @@ pub fn desktop_dock_page(m: &Model<'_>, d: &DeskPrefs) -> Spec {
 /// Where a window goes when it is minimized.
 pub const MINIMIZE_EFFECTS: [&str; 2] = ["Funnel Effect", "Scale Effect"];
 /// What a hot corner does; index 0 is nothing.
-pub const CORNER_ACTIONS: [&str; 6] = ["None", "Overview", "Apps Grid", "Show Desktop", "Lock Screen", "Search"];
+pub const CORNER_ACTIONS: [&str; 7] = ["None", "Overview", "Apps Grid", "Show Desktop", "Lock Screen", "Search", "Start Screen Saver"];
 pub const CORNER_NAMES: [&str; 4] = ["Top Left", "Top Right", "Bottom Left", "Bottom Right"];
 pub const SIDEBAR_ICON_SIZES: [&str; 3] = ["Small", "Medium", "Large"];
 /// Nearby Share: who may send to this computer (index is `Options::nearby`).

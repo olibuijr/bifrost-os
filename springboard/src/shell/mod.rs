@@ -177,6 +177,7 @@ pub mod settings_actions;
 pub mod spotlight_scope;
 pub mod settings_search;
 pub mod screensaver;
+pub mod hot_corners;
 pub mod storage;
 pub mod storage_page;
 pub mod gpu_page;
@@ -690,6 +691,8 @@ pub struct Shell {
     grace_from: Option<(f64, Screen)>,
     /// Settings > Screen Saver: idle activation and the saver on screen (see `screensaver`)
     saver: screensaver::ScreenSaver,
+    /// Settings > Desktop & Dock > Hot Corners: the pointer's dwell in a screen corner (see `hot_corners`)
+    hot_corners: hot_corners::HotCorners,
     /// the menu bar clock's options (Date & Time), see `options::Options::clock_style`
     clock_style: bifrost_ui::menu_extras::ClockStyle,
     lock_time: Option<Image>,
@@ -1108,6 +1111,7 @@ impl Shell {
             idle_off_ms: Options::default().auto_lock_ms as f64,
             grace_from: None,
             saver: screensaver::ScreenSaver::new(),
+            hot_corners: hot_corners::HotCorners::new(),
             clock_style: bifrost_ui::menu_extras::ClockStyle::default(),
             lock_time: None,
             lock_date: None,
@@ -3076,6 +3080,9 @@ impl Shell {
         if ev != Event::Power && self.saver_wake(t) {
             return vec![];
         }
+        if let Event::Move(x, y) = ev {
+            self.hot_corner_pointer(x, y, t);
+        }
         self.size_current_player_app();
         if ev == Event::Power {
             return if self.screen_on {
@@ -3688,6 +3695,10 @@ impl Shell {
         }
         self.dirty |= self.motion_cues_tick(t);
         self.saver_tick(t);
+        let corner_fx = self.hot_corner_tick(t);
+        if !corner_fx.is_empty() {
+            return corner_fx;
+        }
         if self.screen_on && self.idle_off_ms > 0.0 && t - self.last_input > self.idle_off_ms && self.last_input > 0.0 {
             return self.display_off(t);
         }
