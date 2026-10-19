@@ -3323,6 +3323,13 @@ impl Settings {
                 }
                 None => false,
             },
+            Toggle::Usb(index) => match super::apphost::installed().get(index) {
+                Some(app) => {
+                    super::services::usb_access::revoke_app(&app.manifest.id);
+                    false
+                }
+                None => false,
+            },
             Toggle::Location(index) => match super::apphost::installed().get(index) {
                 Some(app) => {
                     let id = app.manifest.id.clone();

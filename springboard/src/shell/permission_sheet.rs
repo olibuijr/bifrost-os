@@ -21,6 +21,9 @@ pub const DONT_ALLOW: &str = "dont_allow";
 /// The choice ids a location question offers: Allow Once, Allow While Using App, Don't Allow (the default).
 pub const ALLOW_ONCE: &str = "allow_once";
 pub const ALLOW_WHILE_USING: &str = "allow_while_using";
+/// The choice id of a device question's Always Allow (it maps to the `WhileUsing` grant, which the device store keeps).
+pub const ALWAYS_ALLOW: &str = "always_allow";
+const USB_CHOICES: [&str; 3] = [ALLOW_ONCE, ALWAYS_ALLOW, DONT_ALLOW];
 const MEDIA_CHOICES: [&str; 2] = [ALLOW, DONT_ALLOW];
 const LOCATION_CHOICES: [&str; 3] = [ALLOW_ONCE, ALLOW_WHILE_USING, DONT_ALLOW];
 
@@ -28,6 +31,7 @@ const LOCATION_CHOICES: [&str; 3] = [ALLOW_ONCE, ALLOW_WHILE_USING, DONT_ALLOW];
 pub fn choices_for(kind: Kind) -> (&'static [&'static str], usize) {
     match kind {
         Kind::Location => (&LOCATION_CHOICES[..], 2),
+        Kind::Usb => (&USB_CHOICES[..], 2),
         Kind::Media(_) | Kind::Contacts => (&MEDIA_CHOICES[..], 1),
     }
 }
@@ -66,10 +70,13 @@ impl QuestionTopic for PrivacyTopic {
 pub enum Button {
     AllowOnce,
     AllowWhileUsing,
+    /// A device question's remembered answer.
+    AlwaysAllow,
     Allow,
     DontAllow,
 }
 
+const USB_BUTTONS: [Button; 3] = [Button::AllowOnce, Button::AlwaysAllow, Button::DontAllow];
 const LOCATION_BUTTONS: [Button; 3] = [Button::AllowOnce, Button::AllowWhileUsing, Button::DontAllow];
 const MEDIA_BUTTONS: [Button; 2] = [Button::DontAllow, Button::Allow];
 
@@ -77,6 +84,7 @@ const MEDIA_BUTTONS: [Button; 2] = [Button::DontAllow, Button::Allow];
 pub fn buttons_for(kind: Kind) -> &'static [Button] {
     match kind {
         Kind::Location => &LOCATION_BUTTONS[..],
+        Kind::Usb => &USB_BUTTONS[..],
         Kind::Media(_) | Kind::Contacts => &MEDIA_BUTTONS[..],
     }
 }
@@ -87,6 +95,7 @@ impl Button {
         match self {
             Button::AllowOnce => ALLOW_ONCE,
             Button::AllowWhileUsing => ALLOW_WHILE_USING,
+            Button::AlwaysAllow => ALWAYS_ALLOW,
             Button::Allow => ALLOW,
             Button::DontAllow => DONT_ALLOW,
         }
@@ -96,13 +105,14 @@ impl Button {
         match self {
             Button::AllowOnce => "Allow Once",
             Button::AllowWhileUsing => "Allow While Using App",
+            Button::AlwaysAllow => "Always Allow",
             Button::Allow => "Allow",
             Button::DontAllow => "Don't Allow",
         }
     }
 
     fn bold(self) -> bool {
-        matches!(self, Button::AllowWhileUsing | Button::Allow)
+        matches!(self, Button::AllowWhileUsing | Button::AlwaysAllow | Button::Allow)
     }
 }
 
@@ -113,6 +123,7 @@ pub fn detail(prompt: &Prompt) -> String {
         Kind::Location => format!("{} You can change this at any time in {LOCATION_SETTINGS_PATH}.", prompt.purpose),
         Kind::Media(_) => format!("Allowing lets the app use this while it is open. You can change this at any time in {SETTINGS_PATH}."),
         Kind::Contacts => format!("Allowing lets the app read the contacts you choose, while it is open. You can change this at any time in {SETTINGS_PATH}."),
+        Kind::Usb => bifrost_core::usb_grants::sheet_detail(&super::services::usb_access::label_of(&prompt.purpose)),
     }
 }
 
@@ -161,7 +172,7 @@ impl Sheet {
         let response = self.center.answer(QUESTION_ID, button.choice(), now).ok()?;
         let grant = match response.choice.as_str() {
             ALLOW_ONCE => Grant::Once,
-            ALLOW_WHILE_USING => Grant::WhileUsing,
+            ALLOW_WHILE_USING | ALWAYS_ALLOW => Grant::WhileUsing,
             ALLOW => Grant::WhileUsing,
             _ => Grant::Deny,
         };
@@ -249,6 +260,15 @@ mod tests {
         assert_eq!(buttons_for(Kind::Media(Media::Audio)), &[Button::DontAllow, Button::Allow]);
         assert_eq!(choices_for(Kind::Location), (&[ALLOW_ONCE, ALLOW_WHILE_USING, DONT_ALLOW][..], 2));
         assert_eq!(choices_for(Kind::Media(Media::Audio)), (&[ALLOW, DONT_ALLOW][..], 1));
+    }
+
+    #[test]
+    fn a_device_request_offers_allow_once_always_allow_and_dont_allow() {
+        assert_eq!(buttons_for(Kind::Usb), &[Button::AllowOnce, Button::AlwaysAllow, Button::DontAllow]);
+        assert_eq!(choices_for(Kind::Usb), (&[ALLOW_ONCE, ALWAYS_ALLOW, DONT_ALLOW][..], 2), "Don't Allow is the default");
+        assert_eq!(Button::AlwaysAllow.choice(), "always_allow");
+        assert_eq!(Kind::Usb.name(), "usb");
+        assert_eq!(Kind::Usb.title("Scope"), "\u{201c}Scope\u{201d} would like to use a device connected to this computer.");
     }
 
     #[test]

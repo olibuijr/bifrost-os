@@ -170,6 +170,8 @@ pub enum Toggle {
     Contacts(usize),
     /// Settings > Screen Saver: flips the n-th (on or off) option of the chosen saver
     SaverOption(usize),
+    /// Settings › App Permissions › USB and HID devices: takes back every device the n-th installed app may use
+    Usb(usize),
     AutoUpdate,
     BackupBeforeUpdate,
     Airplane,
@@ -1662,6 +1664,17 @@ pub fn permissions_page(rows: &[Row]) -> Spec {
             .collect()
     };
     groups.push(Group::new(contacts).header("CONTACTS").footer("Apps that may read your contacts. A switch is on only when you allow it."));
+    // USB and HID devices (after Contacts, so the indexes above stay the same): the apps the person allowed to use a device
+    // directly. A switch is on while the app holds a grant; turning it off takes every device back. It cannot grant, as a
+    // grant names one device and is made on the sheet the app asks with.
+    let devices: Vec<Item> = rows
+        .iter()
+        .enumerate()
+        .filter(|(_, r)| r.usb > 0)
+        .map(|(i, r)| Item::new(r.name.as_str()).app_icon(r.app_id.as_str()).switch(true, Action::Toggle(Toggle::Usb(i))))
+        .collect();
+    let devices = if devices.is_empty() { vec![Item::new("No apps use USB or HID devices")] } else { devices };
+    groups.push(Group::new(devices).header("USB AND HID DEVICES").footer("Apps you allowed to talk to a device directly. Turn a switch off to take back the devices that app may use."));
     Spec { id: PageId::PrivacyPermissions, title: "App Permissions".into(), large: false, groups }
 }
 
@@ -2088,9 +2101,12 @@ mod tests {
     fn app_permissions_lists_each_media_type_with_one_switch_per_app() {
         use bifrost_ui::capture_access::CaptureAccess;
         use bifrost_ui::location_auth::AuthorizationStatus;
-        let rows = vec![Row { app_id: "is.example.a".into(), name: "Alpha".into(), access: CaptureAccess::default(), location: AuthorizationStatus::AuthorizedWhenInUse, contacts: false }];
+        let rows = vec![Row { app_id: "is.example.a".into(), name: "Alpha".into(), access: CaptureAccess::default(), location: AuthorizationStatus::AuthorizedWhenInUse, contacts: false, usb: 2 }];
         let s = permissions_page(&rows);
-        assert_eq!(s.groups.len(), 5, "camera, microphone, screen recording, location, contacts");
+        assert_eq!(s.groups.len(), 6, "camera, microphone, screen recording, location, contacts, devices");
+        assert_eq!(s.groups[5].header.as_deref(), Some("USB AND HID DEVICES"));
+        assert_eq!(s.groups[5].items[0].action, Action::Toggle(Toggle::Usb(0)), "an app that holds device grants is listed");
+        assert_eq!(permissions_page(&[]).groups[5].items[0].label, "No apps use USB or HID devices");
         assert_eq!(s.groups[3].header.as_deref(), Some("LOCATION"));
         assert_eq!(s.groups[3].items[0].accessory, Accessory::Switch(true), "an app the person allowed while in use is on");
         assert_eq!(s.groups[3].items[0].action, Action::Toggle(Toggle::Location(0)));

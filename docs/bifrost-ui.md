@@ -5843,3 +5843,32 @@ App-level work in `springboard/apps/files` (parity rows in `docs/parity-matrix/a
   their change date falls in the span, counted in whole days, `DateTerm::matches`) and `in:folder|home|disk` (where the search
   starts, `Scope::root`). They combine with `kind:` and `tag:`; an unknown value stays one of the name words. Gap: the terms are
   typed, there are no token chips, date picker or scope bar in the search field yet.
+||||||| b14e84efa
+
+
+### USB and HID device access (wave 15, slug `usb`, 2026-10-19)
+
+Frameworks: IOUSBHost, HIDDriverKit, External Accessory, Accessory Access. Rule: privacy first, per app and per device.
+Nothing is open by default, no device node enters an app sandbox, and the shell is the broker.
+
+| Apple name | BifrOSt API | State |
+|---|---|---|
+| `AAUSBAccessoryManager`, `AAUSBAccessoryListener` (attach and detach) | `bifrost_app::usb_access::{request, devices, event}`; bus read by `usb_bus_source::poll` inside the shell's `usb` service once a second | An app hears `connected` and `disconnected` only for devices it was granted |
+| `AAUSBAccessoryMatchingCriteria` | `usb_access::filters_from_criteria(&MatchingCriteria)` gives the filters of `request` | Subclass and protocol cannot be filtered at request time; read them from the open reply |
+| Accessory approval (the user decides which accessory an app may use) | Permission sheet with Allow Once, Always Allow, Don't Allow (`privacy_permissions::Kind::Usb`); `bifrost_core::usb_grants` | Allow Once ends when the app quits or the device is unplugged; Always Allow is saved in `usb-app-grants.txt`; Settings > App Permissions > USB and HID devices takes it back |
+| `IOUSBHostDevice` (descriptors, claim, configure) | `usb_access::open` returns the descriptors; `claim`, `release`, `alternate`, `reset`; rules in `bifrost_core::usb_session::Session` | Interfaces of classes the system drives (audio, HID, storage, video, hub, smart card, wireless) cannot be claimed |
+| `IOUSBHostPipe` (bulk, interrupt), control requests | `usb_access::{read, write, control, clear_halt}`; each returns a token and finishes as an `Event::Done` (worker thread per device, the shell thread never waits) | At most 4096 bytes per call and 16 requests in flight; control requests are class or vendor only |
+| `IOUSBHostIsochronousTransfer*` | `Session::isochronous_plan` plans the frames (`usb_transfer`) | Not sent: isochronous data needs a URB queue and a descriptor-based transport, not messages |
+| `IOUSBHostMatchingPropertyKey` and device or interface properties | `usb_grants::Filter` (vendor, product, class, HID usage page and usage); `usb_access::Device` | No registry-style property tree |
+| `EAAccessoryManager` notifications, `EAAccessory`, `EASession` | `external_accessory::AccessoryManager::{apply_usb_event, sync_usb_devices}`, `accessory_from_usb`, `usb_protocol`, `UsbTransport` (moves a session's streams over a bulk or interrupt endpoint pair) | A USB accessory declares one protocol, `usb.vvvv.pppp`. Bluetooth MFi, Lightning and Wi-Fi accessory setup have no counterpart |
+| `IOHIDDevice` (open, input reports, output and feature reports) | `usb_access::{open, hid_write, hid_get_feature, hid_set_feature}` and `Event::Report`; `usb_access::hid_descriptor` parses the report descriptor into elements | The node is `/dev/hidrawN`, read without grabbing the device. Keyboards, keypads and FIDO keys are never offered |
+| `IOUserHIDDevice` and driver authoring | n/a | The Linux kernel owns drivers |
+| USB printers over `IOUSBHost` | `usb_printer::{find_printer, device_id_request, port_status_request, PrintJob}` | System print dialogs still use CUPS; this is for apps that speak a printer's language |
+
+Manifest permissions: `usb` and `hid` (`bare/app_policy.rs`), separate, and they bind nothing. Service methods and events are
+documented at the top of `springboard/src/shell/services/usb_access.rs`.
+
+Gaps recorded: no isochronous streaming; no multitouch digitizer collection or per-contact data (the evdev decoder keeps slot 0,
+tablet hardware needed); no virtual HID device for apps (synthetic input stays the `events` service with the `accessibility`
+permission); Bluetooth HID devices appear through hidraw only when the kernel exposes them there; two identical devices
+without serial numbers share one grant. Apple behaviour that cannot be matched: MFi authentication chips and Lightning.

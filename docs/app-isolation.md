@@ -31,6 +31,8 @@ Supported manifest capabilities:
 | keychain | May store secrets with the shell (`ToShell::Keychain`); binds nothing |
 | accessibility | May post input events and install event taps through the shell's `events` service; the service checks the manifest on every call |
 | display-config | May ask the shell's `display` service for another display mode |
+| usb | May ask the shell's `usb` service for raw access to one USB device; binds nothing (no `/dev/bus/usb` reaches the sandbox). The person picks each device on the permission sheet, and the shell runs the transfers (see "USB and HID device access" in [bifrost-ui.md](bifrost-ui.md)) |
+| hid | The same for a raw HID device (the shell reads and writes its hidraw node for the app); keyboards, keypads and security keys are never offered |
 | remote-desktop | Fixed Remote sharing broker request, restricted to the Remote package and requiring network/storage |
 
 Entitlements are separate from permissions and first-party only (`is.olibuijr.*`). `entitlements = ["log-store"]` on a

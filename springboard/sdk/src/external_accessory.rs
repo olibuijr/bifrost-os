@@ -5,6 +5,13 @@
 //! device appears or goes away, and passes received bytes to `Session::receive`. Bytes an app writes wait in the
 //! session's output stream, and the transport takes them with `Session::take_output`. Notifications are queued only
 //! while the app is registered, as delivery is in the system's accessory manager.
+//!
+//! On the desktop the bus is the shell's `usb` service (`crate::usb_access`): [`AccessoryManager::apply_usb_event`] and
+//! [`AccessoryManager::sync_usb_devices`] turn its events and device lists into attach and detach, and [`UsbTransport`]
+//! moves a session's bytes over the bulk or interrupt endpoints of the opened device. The person grants each device
+//! first (the shell's sheet), so an app only ever sees accessories it was allowed to use. A USB accessory has no
+//! declared protocol strings on the wire; [`usb_protocol`] names the one protocol each model gets, so a session can be
+//! opened with the same call as for any accessory.
 
 use crate::stream::{InputStream, OutputStream, StreamStatus};
 
@@ -242,6 +249,155 @@ impl Session {
     }
 }
 
+/// The protocol string of a USB accessory model, `usb.vvvv.pppp` in lower-case hex.
+pub fn usb_protocol(vendor_id: u16, product_id: u16) -> String {
+    format!("usb.{vendor_id:04x}.{product_id:04x}")
+}
+
+/// The connection id of a granted USB device: a 64-bit FNV-1a hash of the device id, stable while the device keeps its
+/// serial number, so a re-plug of the same accessory is the same connection id.
+pub fn usb_connection_id(device_id: &str) -> u64 {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in device_id.bytes() {
+        hash ^= u64::from(b);
+        hash = hash.wrapping_mul(0x0100_0000_01b3);
+    }
+    hash
+}
+
+/// The app view of a granted USB device. The serial number is the last part of the device id (`-` means none).
+pub fn accessory_from_usb(device: &crate::usb_access::Device) -> Accessory {
+    let serial = device.id.rsplit(':').next().filter(|s| *s != "-").unwrap_or("");
+    Accessory::new(usb_connection_id(&device.id), &device.name, "", &device.name, serial, &[usb_protocol(device.vendor_id, device.product_id).as_str()])
+}
+
+impl AccessoryManager {
+    /// Applies one event of the `usb` service: a connect (or a granted answer that names a connected device) attaches
+    /// the accessory, a disconnect detaches it. Returns whether the registry changed.
+    pub fn apply_usb_event(&mut self, event: &crate::usb_access::Event) -> bool {
+        use crate::usb_access::Event;
+        match event {
+            Event::Connected(device) | Event::Access { granted: true, device: Some(device), .. } => self.attach(accessory_from_usb(device)),
+            Event::Disconnected { id } => self.detach(usb_connection_id(id)),
+            _ => false,
+        }
+    }
+
+    /// Brings the registry in line with the granted devices the service listed (a `devices` reply): attaches the ones
+    /// missing and detaches the ones that are gone, queueing the notifications of a registered app.
+    pub fn sync_usb_devices(&mut self, devices: &[crate::usb_access::Device]) {
+        let wanted: Vec<u64> = devices.iter().map(|d| usb_connection_id(&d.id)).collect();
+        let gone: Vec<u64> = self.accessories.iter().map(|a| a.connection_id).filter(|id| !wanted.contains(id)).collect();
+        for id in gone {
+            self.detach(id);
+        }
+        for device in devices {
+            self.attach(accessory_from_usb(device));
+        }
+    }
+}
+
+/// What a [`UsbTransport`] asks the app to send to the `usb` service next.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TransportAction {
+    /// `usb_access::read(ctx, handle, endpoint, length, timeout)`.
+    Read { endpoint: u8, length: usize },
+    /// `usb_access::write(ctx, handle, endpoint, &data, timeout)`.
+    Write { endpoint: u8, data: Vec<u8> },
+}
+
+/// Moves a session's bytes over one opened, claimed USB device: a bulk or interrupt IN endpoint feeds the session's
+/// input stream and a bulk or interrupt OUT endpoint carries its output stream. One read and one write are in flight at
+/// a time. A read that times out is normal (the accessory had nothing to say) and is issued again; any other failure
+/// stops the transport and is reported by [`UsbTransport::error`].
+///
+/// The app calls [`UsbTransport::poll`] after each tick and sends what it returns with `usb_access`, and hands every
+/// `usb_access::Event::Done` of the handle to [`UsbTransport::complete`].
+#[derive(Debug)]
+pub struct UsbTransport {
+    in_endpoint: u8,
+    out_endpoint: u8,
+    chunk: usize,
+    reading: bool,
+    writing: bool,
+    pending: Vec<u8>,
+    failed: Option<String>,
+}
+
+impl UsbTransport {
+    /// The most bytes one request moves by default.
+    pub const CHUNK: usize = 512;
+
+    /// A transport over the endpoints `in_endpoint` (with the direction bit, `0x81`) and `out_endpoint` (`0x02`).
+    pub fn new(in_endpoint: u8, out_endpoint: u8) -> Self {
+        UsbTransport { in_endpoint, out_endpoint, chunk: Self::CHUNK, reading: false, writing: false, pending: Vec::new(), failed: None }
+    }
+
+    /// Changes the size of one request, from 1 to `usb_access::MAX_BYTES`.
+    pub fn with_chunk(mut self, chunk: usize) -> Self {
+        self.chunk = chunk.clamp(1, crate::usb_access::MAX_BYTES);
+        self
+    }
+
+    /// The requests to send now: a read when none is in flight, and the next chunk of the session's output when no
+    /// write is in flight. Nothing once the transport failed.
+    pub fn poll(&mut self, session: &mut Session) -> Vec<TransportAction> {
+        let mut actions = Vec::new();
+        if self.failed.is_some() {
+            return actions;
+        }
+        self.pending.extend(session.take_output());
+        if !self.reading {
+            self.reading = true;
+            actions.push(TransportAction::Read { endpoint: self.in_endpoint, length: self.chunk });
+        }
+        if !self.writing && !self.pending.is_empty() {
+            let n = self.pending.len().min(self.chunk);
+            let data: Vec<u8> = self.pending.drain(..n).collect();
+            self.writing = true;
+            actions.push(TransportAction::Write { endpoint: self.out_endpoint, data });
+        }
+        actions
+    }
+
+    /// A finished request of the handle. Data from a read goes to the session's input stream.
+    pub fn complete(&mut self, done: &crate::usb_access::Done, session: &mut Session) {
+        match done.op.as_str() {
+            "read" => {
+                self.reading = false;
+                match (&done.error, done.failure.as_deref()) {
+                    (None, _) => {
+                        if let Some(bytes) = &done.data {
+                            if !bytes.is_empty() {
+                                session.receive(bytes);
+                            }
+                        }
+                    }
+                    (Some(_), Some("timeout")) => {}
+                    (Some(e), _) => self.failed = Some(e.clone()),
+                }
+            }
+            "write" => {
+                self.writing = false;
+                if let Some(e) = &done.error {
+                    self.failed = Some(e.clone());
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Why the transport stopped, if it did.
+    pub fn error(&self) -> Option<&str> {
+        self.failed.as_deref()
+    }
+
+    /// Bytes of the session's output taken but not yet sent.
+    pub fn pending_len(&self) -> usize {
+        self.pending.len()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -412,5 +568,148 @@ mod tests {
             AccessoryError::ProtocolNotSupported.to_string(),
             "The accessory does not support this protocol"
         );
+    }
+    fn usb_device(id: &str, name: &str) -> crate::usb_access::Device {
+        crate::usb_access::Device {
+            id: id.to_string(),
+            name: name.to_string(),
+            vendor_id: 0x0403,
+            product_id: 0x6001,
+            kind: crate::usb_access::DeviceKind::Usb,
+            device_class: 0,
+            interface_classes: vec![0xff],
+            usages: Vec::new(),
+        }
+    }
+
+    fn done(op: &str, data: Option<Vec<u8>>, error: Option<(&str, &str)>) -> crate::usb_access::Done {
+        crate::usb_access::Done {
+            handle: 1,
+            token: 1,
+            op: op.to_string(),
+            data,
+            count: None,
+            error: error.map(|(e, _)| e.to_string()),
+            failure: error.map(|(_, f)| f.to_string()),
+        }
+    }
+
+    #[test]
+    fn a_granted_usb_device_becomes_an_accessory_with_one_protocol_and_a_stable_id() {
+        let a = accessory_from_usb(&usb_device("0403:6001:A1", "Logic Probe"));
+        assert_eq!(a.name, "Logic Probe");
+        assert_eq!(a.serial_number, "A1");
+        assert!(a.supports_protocol("usb.0403.6001"));
+        assert_eq!(a.connection_id(), usb_connection_id("0403:6001:A1"));
+        assert_ne!(usb_connection_id("0403:6001:A1"), usb_connection_id("0403:6001:B2"));
+        assert_eq!(accessory_from_usb(&usb_device("0403:6001:-", "x")).serial_number, "", "no serial");
+    }
+
+    #[test]
+    fn usb_events_attach_and_detach_and_notify_a_registered_app() {
+        use crate::usb_access::Event;
+        let mut m = AccessoryManager::new();
+        m.register_for_notifications();
+        let dev = usb_device("0403:6001:A1", "Logic Probe");
+        assert!(m.apply_usb_event(&Event::Connected(dev.clone())));
+        assert!(!m.apply_usb_event(&Event::Connected(dev.clone())), "the same device attaches once");
+        assert!(!m.apply_usb_event(&Event::Access { id: dev.id.clone(), granted: false, device: None }));
+        assert_eq!(m.connected_accessories().len(), 1);
+        assert!(m.session(usb_connection_id(&dev.id), "usb.0403.6001").is_ok());
+        assert!(m.apply_usb_event(&Event::Disconnected { id: dev.id.clone() }));
+        assert!(!m.apply_usb_event(&Event::Disconnected { id: dev.id.clone() }));
+        let events = m.take_events();
+        assert!(matches!(events[0], AccessoryEvent::Connected(_)) && matches!(events[1], AccessoryEvent::Disconnected(_)));
+        assert!(!m.apply_usb_event(&Event::Closed { handle: 1, reason: String::new() }));
+    }
+
+    #[test]
+    fn a_granted_answer_that_names_the_device_attaches_it() {
+        use crate::usb_access::Event;
+        let mut m = AccessoryManager::new();
+        let dev = usb_device("0403:6001:A1", "Logic Probe");
+        assert!(m.apply_usb_event(&Event::Access { id: dev.id.clone(), granted: true, device: Some(dev) }));
+        assert_eq!(m.connected_accessories().len(), 1);
+    }
+
+    #[test]
+    fn a_device_list_syncs_the_registry() {
+        let mut m = AccessoryManager::new();
+        m.register_for_notifications();
+        let a = usb_device("0403:6001:A1", "A");
+        let b = usb_device("0403:6001:B2", "B");
+        m.sync_usb_devices(&[a.clone(), b.clone()]);
+        assert_eq!(m.connected_accessories().len(), 2);
+        m.sync_usb_devices(&[b.clone()]);
+        let names: Vec<&str> = m.connected_accessories().iter().map(|x| x.name.as_str()).collect();
+        assert_eq!(names, ["B"]);
+        m.sync_usb_devices(&[]);
+        assert!(m.connected_accessories().is_empty());
+        assert_eq!(m.take_events().len(), 4, "two connects and two disconnects");
+    }
+
+    #[test]
+    fn the_transport_reads_continuously_and_sends_output_in_chunks() {
+        let mut m = AccessoryManager::new();
+        m.attach(meter());
+        let mut s = m.session(7, "com.acme.meter").unwrap();
+        s.output_stream().open();
+        s.input_stream().open();
+        let mut t = UsbTransport::new(0x81, 0x02).with_chunk(4);
+        assert_eq!(t.poll(&mut s), vec![TransportAction::Read { endpoint: 0x81, length: 4 }]);
+        assert!(t.poll(&mut s).is_empty(), "one read in flight");
+        s.output_stream().write(b"abcdefghij").unwrap();
+        assert_eq!(t.poll(&mut s), vec![TransportAction::Write { endpoint: 0x02, data: b"abcd".to_vec() }]);
+        assert_eq!(t.pending_len(), 6);
+        assert!(t.poll(&mut s).is_empty(), "one write in flight");
+        t.complete(&done("write", None, None), &mut s);
+        assert_eq!(t.poll(&mut s), vec![TransportAction::Write { endpoint: 0x02, data: b"efgh".to_vec() }]);
+        t.complete(&done("write", None, None), &mut s);
+        assert_eq!(t.poll(&mut s), vec![TransportAction::Write { endpoint: 0x02, data: b"ij".to_vec() }]);
+        // data from the accessory reaches the input stream, and the next read is issued
+        t.complete(&done("read", Some(b"hi".to_vec()), None), &mut s);
+        let mut buf = [0u8; 8];
+        assert_eq!(s.input_stream().read(&mut buf), Ok(2));
+        assert_eq!(&buf[..2], b"hi");
+        assert_eq!(t.poll(&mut s), vec![TransportAction::Read { endpoint: 0x81, length: 4 }]);
+        assert!(t.error().is_none());
+    }
+
+    #[test]
+    fn a_read_timeout_is_normal_and_any_other_failure_stops_the_transport() {
+        let mut m = AccessoryManager::new();
+        m.attach(meter());
+        let mut s = m.session(7, "com.acme.meter").unwrap();
+        let mut t = UsbTransport::new(0x81, 0x02);
+        t.poll(&mut s);
+        t.complete(&done("read", None, Some(("timed out", "timeout"))), &mut s);
+        assert!(t.error().is_none());
+        assert_eq!(t.poll(&mut s).len(), 1, "the read is issued again");
+        t.complete(&done("read", None, Some(("device gone", "disconnected"))), &mut s);
+        assert_eq!(t.error(), Some("device gone"));
+        assert!(t.poll(&mut s).is_empty(), "a failed transport sends nothing more");
+    }
+
+    #[test]
+    fn a_failed_write_stops_the_transport_and_unrelated_results_are_ignored() {
+        let mut m = AccessoryManager::new();
+        m.attach(meter());
+        let mut s = m.session(7, "com.acme.meter").unwrap();
+        s.output_stream().open();
+        let mut t = UsbTransport::new(0x81, 0x02);
+        s.output_stream().write(b"x").unwrap();
+        assert_eq!(t.poll(&mut s).len(), 2);
+        t.complete(&done("claim", None, None), &mut s);
+        assert!(t.error().is_none());
+        t.complete(&done("write", None, Some(("endpoint stalled", "stall"))), &mut s);
+        assert_eq!(t.error(), Some("endpoint stalled"));
+    }
+
+    #[test]
+    fn the_chunk_is_kept_inside_what_the_service_moves() {
+        let big = UsbTransport::new(0x81, 0x02).with_chunk(1 << 20);
+        assert_eq!(big.chunk, crate::usb_access::MAX_BYTES);
+        assert_eq!(UsbTransport::new(0x81, 0x02).with_chunk(0).chunk, 1);
+        assert_eq!(usb_protocol(0x1234, 0xabc), "usb.1234.0abc");
     }
 }
