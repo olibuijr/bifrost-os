@@ -13,7 +13,10 @@ pub const FOLDER: u32 = pack(52, 160, 250, 255);
 const FOLDER_TAB: u32 = pack(33, 128, 230, 255);
 /// The document body of a file icon.
 pub const PAGE: u32 = pack(235, 235, 240, 255);
+/// The flap of the folded corner: a darker shade of the page.
 const FOLD: u32 = pack(200, 200, 208, 255);
+/// The hairline along the crease of the fold, a step darker than the flap.
+const FOLD_EDGE: u32 = pack(172, 172, 182, 255);
 const INK: u32 = pack(120, 120, 128, 255);
 /// systemBlue
 pub const BLUE: u32 = pack(10, 132, 255, 255);
@@ -26,15 +29,34 @@ pub fn folder(s: &mut Surface, (x, y, w, h): (f32, f32, f32, f32), color: u32) {
     s.fill_rrect(x, y + tab_h * 0.7, w, h - tab_h * 0.7, r, color);
 }
 
+/// Signed distance to the rounded rectangle `(x, y, w, h)` of corner radius `r`: negative inside, for `paint`.
+fn rrect_dist((x, y, w, h): (f32, f32, f32, f32), r: f32) -> impl Fn(f32, f32) -> f32 {
+    let (hw, hh) = (w / 2.0, h / 2.0);
+    let (mx, my) = (x + hw, y + hh);
+    let r = r.min(hw).min(hh);
+    move |px, py| {
+        let (qx, qy) = ((px - mx).abs() - hw + r, (py - my).abs() - hh + r);
+        (qx.max(0.0).powi(2) + qy.max(0.0).powi(2)).sqrt() + qx.max(qy).min(0.0) - r
+    }
+}
+
 /// A document with a folded top-right corner, with a kind mark inside.
 pub fn document(s: &mut Surface, (x, y, w, h): (f32, f32, f32, f32), kind: Kind) {
     let r = (w * 0.1).max(1.5);
     let fold = w * 0.3;
-    s.fill_rrect(x, y, w, h, r, PAGE);
-    // the corner is cut away and the fold laid over it
     let (cx, cy) = (x + w, y);
-    paint(s, (cx - fold - 1.0, cy - 1.0, fold + 2.0, fold + 2.0), pack(0, 0, 0, 255), move |px, py| (cx - px) + (py - cy) - fold);
-    paint(s, (cx - fold, cy, fold, fold), FOLD, move |px, py| ((cx - fold) - px).max(py - (cy + fold)).max(fold - (cx - px) - (py - cy)));
+    // The page is its rounded rectangle less the top-right corner (a triangle with legs `fold`). The corner is left
+    // unpainted, so what is behind the icon (either appearance's content colour, or a selection plate) shows through
+    // the cut; painting it a colour drew a black wedge.
+    let body = rrect_dist((x, y, w, h), r);
+    let kept = move |px: f32, py: f32| (fold - (cx - px) - (py - cy)) * std::f32::consts::FRAC_1_SQRT_2;
+    paint(s, (x - 1.0, y - 1.0, w + 2.0, h + 2.0), PAGE, move |px, py| body(px, py).max(kept(px, py)));
+    // the flap folded over the cut: a darker shade of the page, with a hairline along its crease
+    let flap = move |px: f32, py: f32| ((cx - fold) - px).max(py - (cy + fold)).max(fold - (cx - px) - (py - cy));
+    paint(s, (cx - fold, cy, fold, fold), FOLD, flap);
+    let hair = (w * 0.012).max(1.0);
+    let crease = segment((cx - fold, cy), (cx, cy + fold), 2.0 * hair);
+    paint(s, (cx - fold - 1.0, cy - 1.0, fold + 2.0, fold + 2.0), FOLD_EDGE, move |px, py| crease(px, py).max(flap(px, py)));
     let (mx, my, mw) = (x + w * 0.2, y + h * 0.45, w * 0.6);
     let t = (w * 0.06).max(1.0);
     match kind {
@@ -347,5 +369,35 @@ mod tests {
         entry(&mut Surface { w: 120, h: 120, stride: 120, px: &mut plain.px, y0: 0 }, (10.0, 10.0, 100.0, 80.0), Kind::Text);
         entry_on_accent(&mut Surface { w: 120, h: 120, stride: 120, px: &mut on_plate.px, y0: 0 }, (10.0, 10.0, 100.0, 80.0), Kind::Text);
         assert_eq!(plain.px, on_plate.px, "a document looks the same on any plate");
+    }
+
+    #[test]
+    fn the_folded_corner_of_a_document_is_cut_away_not_black() {
+        let black = pack(0, 0, 0, 255);
+        // the flap is a darker shade of the page, and its hairline a step darker again
+        assert!((FOLD & 0xff) < (PAGE & 0xff) && (FOLD_EDGE & 0xff) < (FOLD & 0xff));
+        // a light plate (Light appearance) and a dark one (Dark): the cut shows whichever is behind the icon
+        for plate in [pack(255, 255, 255, 255), pack(30, 30, 32, 255)] {
+            // the large grid icon, then the small list icon: its rectangle and a pixel in the cut corner, one on the
+            // flap and one on the plain page
+            let icons = [((10.0, 10.0, 80.0, 100.0), (88, 12), (70, 30), (20, 80)), ((10.0, 10.0, 20.0, 26.0), (29, 11), (25, 14), (14, 28))];
+            for (rect, cut, flap, page) in icons {
+                let mut img = canvas();
+                img.px.fill(plate);
+                document(&mut Surface { w: 120, h: 120, stride: 120, px: &mut img.px, y0: 0 }, rect, Kind::Other);
+                let at = |(px, py): (usize, usize)| img.px[py * 120 + px];
+                assert_eq!(at(cut), plate, "the cut corner of {rect:?} is not painted, the plate shows");
+                assert_eq!(at(flap), FOLD, "the flap of {rect:?} is its own shade");
+                assert_eq!(at(page), PAGE, "the page of {rect:?} is unchanged");
+                assert!(!img.px.contains(&black), "no black pixel in {rect:?}");
+            }
+            // every kind of entry icon, whole: nothing black anywhere
+            for kind in [Kind::Text, Kind::Image, Kind::Video, Kind::Audio, Kind::Archive, Kind::Other] {
+                let mut img = canvas();
+                img.px.fill(plate);
+                entry(&mut Surface { w: 120, h: 120, stride: 120, px: &mut img.px, y0: 0 }, (10.0, 10.0, 100.0, 80.0), kind);
+                assert!(!img.px.contains(&black), "{kind:?} has a black pixel");
+            }
+        }
     }
 }
