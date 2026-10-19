@@ -86,7 +86,7 @@ def check(m):
         if m.get(k) and (m[k].startswith("/") or ".." in m[k].split("/")):
             sys.exit(f"manifest.toml: `{k}` must be a relative path inside the package")
     for p in m.get("permissions", []):
-        if p not in ("network", "audio", "camera", "storage", "photos", "notifications", "documents", "keychain", "accessibility", "display-config", "sensors", "contacts", "usb", "hid", "remote-desktop"):
+        if p not in ("network", "audio", "camera", "screen", "storage", "photos", "notifications", "documents", "keychain", "accessibility", "display-config", "sensors", "contacts", "usb", "hid", "remote-desktop"):
             sys.exit(f"manifest.toml: unknown permission {p!r}")
 
 
