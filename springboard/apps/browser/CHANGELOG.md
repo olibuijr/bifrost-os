@@ -1,5 +1,10 @@
 ## Unreleased
 
+- Toolbar after the reference: Back and Forward in one capsule, the address field centred with the page menu icon at its leading edge and reload at its trailing edge (it becomes Stop while a page loads), and Share, New Tab and Show All Tabs in one glass capsule at the trailing edge. The "..." button and the bookmark star left the toolbar: the page menu (the field's icon, also Alt+F and F10) holds everything the "..." menu did, and Bookmark This Page stays in the menus and on Cmd+D. There is no sidebar yet, so no sidebar button. Servo 0.7.0 ignores the stop command, so Stop only marks the state until the engine can cancel a load.
+- A loaded page always shows the page menu icon in the address field; the magnifier is only for an empty field or one being edited. Show Reader moved into the page menu (Page Actions) with the icon tinted while Reader shows.
+- The toolbar takes the page's colour (`<meta name="theme-color">`, else the background at the top of the page) under its glass groups; a private window keeps its dark toolbar.
+- Find in page has previous and next buttons (Cmd+G and Cmd+Shift+G as before), a Done button and the match count; Return goes to the next match (Shift+Return to the previous once the shell reports it), Esc closes. The engine selects the current match only; it reports no index and the other matches are not highlighted.
+
 - `browser.content_rules` compiles, stores and applies web content blocker lists (block, make-https, css-display-none) to every tab; `browser.messages` reads what pages post to the `control` message handler; `browser.screenshot` takes `format: "pdf"` and prints the page as a paginated PDF.
 
 ## 0.16.2
