@@ -480,6 +480,7 @@ pub mod image_filter;
 pub mod pixel_filter;
 pub mod image_effects;
 pub mod image_generate;
+pub mod image_detect;
 pub mod image_stylize;
 pub mod image_render;
 pub use restoration::RestorableState;
