@@ -2,6 +2,31 @@
 
 - `browser.content_rules` compiles, stores and applies web content blocker lists (block, make-https, css-display-none) to every tab; `browser.messages` reads what pages post to the `control` message handler; `browser.screenshot` takes `format: "pdf"` and prints the page as a paginated PDF.
 
+## 0.16.0
+
+- Connect Servo's native file inputs to the system file chooser, with multiple selection, accepted file types, asynchronous preparation and cleanup when the document closes.
+- Add native color input controls with RGB sliders and hex entry.
+- Show Stay / Leave confirmation when Servo requests permission to unload an unsaved document during navigation.
+- Show Servo's hovered link destination at the bottom of the page.
+
+## 0.15.1
+
+- Add a top-right main menu with common browsing actions, page and developer tools, and Settings; support keyboard navigation, Alt+F and F10.
+- Open private windows through the local desktop host when running outside the OS shell.
+
+## 0.15.0
+
+- Snapshot shared frames before acknowledgment so input/chrome redraws cannot read pixels while the engine overwrites them, preventing partial frames during scrolling.
+
+- Default to hardware GL rendering with an explicit CPU fallback preference. Preserve RGBA channel order in shared frames, fixing blue skin tones.
+
+- Split browser startup, lifecycle, navigation, menus, layout, drawing, keyboard, pointer and callback handling into small modules. Split the engine runtime, protocol, delegate, events, input and rendering paths.
+- Use Servo's native mouse/clipboard, favicon, user-agent preference, session-history and website-data APIs. Desktop drags select text; wheel/hover and ordinary edit commands reach the page.
+- Remove polling observer/platform shims, enable native observers, and implement Find with standard DOM Range and Selection APIs instead of the unavailable window.find call.
+- Configure live-history retention, limit JavaScript GC heaps to 255 MiB, reduce HTTP cache entries, coalesce wakeups and bound command batches. Suspend frame presentation; background JavaScript throttling remains an upstream API gap. The matched navigation workload has not shown a whole-process memory improvement.
+- Separate engine configuration, memory policy and event-loop scheduling. Expose typed native memory/preference diagnostics, reject oversized commands whole, and cancel pending navigation on view close or shutdown.
+- Use URL parsing for origins/hosts and serde_json for engine evaluation replies. Transfer cookie snapshots through the native cookie API; restrict fallback download cookies to the same origin and strip them on cross-origin redirects.
+
 ## 0.14.4
 
 - BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.

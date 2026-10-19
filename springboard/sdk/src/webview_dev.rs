@@ -9,13 +9,18 @@
 //!   dev shot TOKEN ID MODE X Y W H MAXPX PATH
 //!                                     PNG of the view into PATH. MODE view | rect (CSS px, viewport relative) | full
 //!   dev collector JS                  a script the engine runs at the start of every document (network log)
+//!   dev memory TOKEN                  native engine-wide memory report
+//!   dev preferences TOKEN             effective native Servo preferences
 //! engine -> app
 //!   dev eval TOKEN ok TYPE JSON       TYPE undefined|null|boolean|number|string|array|object|element
 //!   dev eval TOKEN err MESSAGE
 //!   dev shot TOKEN ok W H | dev shot TOKEN err MESSAGE
+//!   dev memory TOKEN ok JSON | dev preferences TOKEN ok JSON
+//!                                     JSON is serialized directly; errors use escaped MESSAGE
 //!
-//! Page input uses the existing verbs (`touch`, `text`, `key`, `chord`, `wheel`) with CSS pixel coordinates.
+//! Desktop page input uses `mouse`, `text`, `key`, `chord`, and `wheel`; public coordinates are CSS pixels.
 
+use bifrost_core::json::{self, Json};
 use crate::webview::{WebProcessPool, WebViewId};
 
 /// What a `dev screenshot` captures.
@@ -44,6 +49,10 @@ pub enum DevEvent {
     Eval { token: u64, result: Result<EvalValue, String> },
     /// the PNG is at the path given in the request; `(width, height)` in pixels
     Shot { token: u64, result: Result<(u32, u32), String> },
+    /// Servo's native report covers the engine and its content processes, without evaluating a page script.
+    Memory { token: u64, result: Result<Json, String> },
+    /// The effective native Servo preferences, including startup and runtime overrides.
+    Preferences { token: u64, result: Result<Json, String> },
 }
 
 /// Escapes `\n`, `\r` and `\\` for the line protocol, with no length cap.
@@ -78,11 +87,32 @@ pub fn parse_dev_line(line: &str) -> Option<DevEvent> {
             Some(DevEvent::Shot { token, result: Ok((w.parse().ok()?, h.parse().ok()?)) })
         }
         ("shot", _) => Some(DevEvent::Shot { token, result: Err(crate::webview::unescape_line(rest)) }),
+        ("memory" | "preferences", _) => {
+            // Native diagnostics serialize JSON directly rather than applying the eval line escaping.
+            // Preserve JSON escapes (including backslashes in preference strings) for the JSON parser.
+            let result = if status == "ok" {
+                json::parse(rest).map_err(|error| format!("invalid {verb} response: {error}"))
+            } else {
+                Err(crate::webview::unescape_line(rest))
+            };
+            Some(if verb == "memory" { DevEvent::Memory { token, result } } else { DevEvent::Preferences { token, result } })
+        }
         _ => None,
     }
 }
 
 impl WebProcessPool {
+    /// Requests Servo's native engine-wide memory report; answered as `DevEvent::Memory`.
+    /// Does not create, select, or revive a web view.
+    pub fn dev_memory(&mut self, token: u64) {
+        self.send_raw(&format!("dev memory {token}"));
+    }
+
+    /// Requests the effective Servo preferences; answered as `DevEvent::Preferences`.
+    pub fn dev_preferences(&mut self, token: u64) {
+        self.send_raw(&format!("dev preferences {token}"));
+    }
+
     /// `evaluateJavaScript:` with a correlation token: the answer comes back from `dev_events` as `DevEvent::Eval`
     /// with the same token (including the page's thrown error text).
     pub fn dev_eval(&mut self, id: WebViewId, token: u64, js: &str) {
@@ -126,7 +156,7 @@ impl WebProcessPool {
             _ => return,
         };
         let s = self.device_scale();
-        self.send_raw(&format!("touch {k} 0 {} {}", x * s, y * s));
+        self.send_raw(&format!("mouse {k} {} {}", x * s, y * s));
     }
 
     /// Scrolls by `dx, dy` CSS pixels at page-local CSS pixels `(x, y)`.

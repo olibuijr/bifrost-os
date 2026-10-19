@@ -9,11 +9,11 @@ Safari-style tab strip that appears only with two or more tabs. Pages render thr
 
 ## Engine
 
-`engine/` is the engine crate: libservo 0.7.0 with a software (offscreen) GL context. It is built as one extra
+`engine/` is the engine crate: libservo 0.7.0 with a hardware GL context and an explicit CPU fallback. It is built as one extra
 workspace member of an unmodified Servo v0.7.0 checkout:
 
 ```sh
-bifrost pc browser-engine 0.7.0-bifrost.8   # build (tools/build-webview-engine.sh), then pin engine.json and ENGINE
+bifrost pc browser-engine 0.7.0-bifrost.15   # build (tools/build-webview-engine.sh), then pin engine.json and ENGINE
 ```
 
 The command writes the archive's SHA-256 to `engine.json` and its first 12 hex digits to `ENGINE` (`src/main.rs`). `tools/pc-app.py` bundles the archive as `assets/servo.tar.gz`; the first launch unpacks it to
@@ -23,33 +23,56 @@ The app runs in the shell's SDK sandbox (`network`, `storage`); Servo's content 
 Engine builds use the release profile with LTO off, 32 codegen units, incremental on, debug off, lld. A first
 build took about 16 minutes on Titan; an engine-only rebuild about 10 seconds.
 
+## Run on a local Linux desktop
+
+`tools/run-local` hosts the built browser with GTK4 outside the BifrOSt shell. It requires GTK4 4.10 or newer,
+Python GObject bindings, and a systemd user session. It runs `springboard/target/fast/bifrost-browser`, with the
+pinned engine archive available as `springboard/target/fast/assets/servo.tar.gz`. The launcher limits the process
+tree to 2 GiB of RAM and disables swap; this is a resource cap, not proof of lower memory usage.
+
+State and logs default to `~/Work/bifrost-browser`; `BIFROST_BROWSER_WORK`, `BIFROST_BROWSER_REPO` and
+`BIFROST_LOCAL_BINARY` override the work directory, repository and executable. The host presents complete frames
+on GTK's display clock. Wheel input uses 40 pixels per notch; surface input uses 2× sensitivity, with no synthetic
+momentum. F10 and Alt+F open the main menu. The native file chooser uses the SDK document portal protocol.
+
 ## Develop (devmenu.rs)
 
 Cmd+Option+U View Source (curl fetch, line-numbered `data:` document in a new tab), Cmd+Shift+R Reload From Origin,
 Cmd+Option+R Responsive Design Mode (iPhone 15 393x852 @2x, letterboxed on DETAIL_BG with a size readout; presets,
 custom WxH and DPR 1/2/3 are in `DevMenu`, menu UI follows). User agent presets live in `DevMenu` and the engine
-accepts `ua`. Gaps: Servo 0.7.0 has no cache-bypass reload flag (`reload-hard` runs a normal reload) and reads the
-user agent at start-up only, so `ua` is not applied yet. http pages show "Not Secure".
+accepts `ua` through `Servo::set_preference`, so subsequent requests use the new value without restarting.
+Reload From Origin clears Servo's HTTP cache before reloading; the API cannot target only one origin.
+http pages show "Not Secure".
 
 ## Web compatibility
 
-Polyfills (`engine/src/compat.js`, defined only when absent): `IntersectionObserver`, `ResizeObserver`, `requestIdleCallback`.
-They approximate the specs (intersection on scroll, resize and a 250 ms tick; size polling per frame). CJK and emoji
-glyphs need the fonts in `packaging/arch/runtime-packages.txt` (Noto CJK, Noto Emoji, DejaVu).
+The engine uses native `IntersectionObserver` (explicitly enabled) and `ResizeObserver`. Polling observer
+approximations and injected platform shims have been removed. `requestIdleCallback` is not exposed by this Servo
+release; sites must feature-test it and use their own fallback. CJK and emoji need the runtime fonts listed in
+`packaging/arch/runtime-packages.txt`.
 
-User agent: Safari 17.5 on macOS by default (engine `DEFAULT_UA`); env `BIFROST_BROWSER_UA` overrides at engine start (empty = Servo's Firefox-style UA).
-Native in Servo 0.7.0 (no polyfill): structuredClone, AbortSignal.timeout/any, CSS.supports, scrollIntoView options. Pref-gated off: navigator.clipboard.
-Known breakages: fullwidth CJK punctuation is tofu when no Noto Sans CJK font is installed (fallback list is fixed in Servo); sites needing Clipboard API or WebAuthn.
-
+The existing default browser user-agent profile is retained; `BIFROST_BROWSER_UA` can override it at startup.
+The Develop menu and control API update the native preference for subsequent requests. Native APIs include CSS Grid,
+Selection, structuredClone, AbortSignal.timeout/any, CSS.supports and scrollIntoView. API presence does not imply
+complete web-platform conformance. `navigator.clipboard` remains disabled; keyboard copy/paste uses the native
+clipboard delegate bridged to the app's pasteboard.
 Compat page list (check after engine changes; not yet verified on Midget): bifrost.olibuijr.com (hero.js), example.com,
 ja.wikipedia.org (CJK), news.ycombinator.com, github.com, developer.mozilla.org, docs.rs, lobste.rs.
 
 ## Performance budgets
 
+The engine requests zero live documents in the back-forward cache while retaining navigation URLs;
+Back and Forward can reload the document. The matched ten-navigation workload still retained canvas and image
+allocations: approximately 640 MiB PSS before and 641 MiB after. These settings do not establish a whole-process
+memory improvement. The JavaScript GC heap limit is 255 MiB per runtime; other GC settings retain upstream defaults. The
+HTTP response cache retains at most 256 weighted entries (this is an entry limit, not a byte limit).
+The heap limit does not include images, rendering surfaces or other native allocations.
+
 `python3 tools/bench.py --browser` (desktop session, browser open): startup <= 1500 ms, idle CPU <= 1 %, idle wakeups
 <= 60/s, PSS <= 600 MiB. A static page must draw nothing: `tick` returns true only for engine frames or events.
 Window suspend stops engine painting. The only periodic wake is the watchdog ping (`next_wake`, 2 s, none while the
-window is hidden). Hidden views are throttled by Servo itself (`hide` -> `SetWebViewHidden` -> `SetThrottled`).
+window is hidden). Native `hide` / `show` control painting; Servo 0.7.0 has no public page-visibility or
+background-throttling setter. Hidden page JavaScript may continue running.
 Background tabs are discarded (`src/tabdiscard.rs`): idle 15 min, or least recently used while engine PSS exceeds
 1.5 GiB (2 most recent kept); the tab keeps its id, URL, title and scroll and reloads on select. Env:
 `BIFROST_TAB_DISCARD_MIN`, `BIFROST_TAB_BUDGET_MIB` (0 = off). Form input and page state are lost on discard.
@@ -61,9 +84,20 @@ Background tabs are discarded (`src/tabdiscard.rs`): idle 15 min, or least recen
 
 Hard reload clears the whole HTTP cache (Servo has no per-origin or bypass-reload API). Servo 0.7.0 `show_console_message` passes level and text only, so console source file:line comes from the page-side collector (see Console below) and can be missing for messages the stack cannot place.
 
-No Stop (Servo 0.7.0 cannot cancel a load), no pointer hover or text selection by drag (the desktop pointer
-reaches SDK apps as a finger, so a drag scrolls), no page context menus, `<select>` popups, alerts or file pickers
-yet, and no bookmarks or downloads.
+Servo 0.7.0 has no public stop-loading API; the toolbar exposes Reload rather than an ineffective Stop action.
+Desktop input uses native mouse events for selection and hover, and native wheel events for wheel/trackpad input,
+including page wheel handlers and `preventDefault`. Developer pointer commands use the same native mouse path.
+Tablet input remains touch input. Script dialogs, context menus and select popups use native embedder controls.
+File inputs use the system document chooser, including multiple selection and accepted file types. Color inputs
+use browser controls with RGB sliders and hex entry. Servo's native unload request opens a Stay / Leave sheet
+before navigation away from an unsaved document. Hovered link destinations come from native status callbacks.
+Find uses standard DOM TreeWalker, Range and Selection APIs because
+neither an embedder find method nor `window.find` is available. It searches the visible main document, capped at
+50,000 text nodes, 2 million UTF-16 units and 10,000 matches; iframe/shadow-root search and highlight-all remain gaps.
+
+Favicons come from `notify_favicon_changed` / `WebView::favicon`; discovery, fetching and image decoding are owned
+by Servo. The app only caches and scales the supplied pixels. `browser.favicon` returns the decoded icon as a PNG
+data URL because Servo does not expose the chosen resource URL.
 
 ## Web Inspector
 
@@ -101,7 +135,7 @@ Non-displayable responses are saved to `~/Downloads` and listed in a popover (to
 download). Servo 0.7.0 cannot hand over a response body (`load_web_resource` only intercepts with an embedder-built
 response; `request_navigation` carries no headers), so a `curl -I` probe runs per http(s) navigation, and on
 "download" the view is stopped and curl writes `NAME.download`, renamed when done. Control `browser.downloads
-{cancel, clear}`, MCP browser action `downloads`. Known gaps: probe and download send no cookies; one extra HEAD per
+{cancel, clear}`, MCP browser action `downloads`. Known gaps: cookies use a native snapshot restricted to the exact origin; one extra HEAD per
 navigation; the same URL is not re-probed in a view until it navigates elsewhere.
 
 ### Control socket methods
@@ -116,13 +150,15 @@ engine answer later (SDK `control::RpcError::pending` + `control::complete`) and
 | Method | Params | Result |
 |---|---|---|
 | `browser.state` | | `version, engine_version, engine_alive, engine_pid, restarts, tabs, current, devtools_open, viewport {w,h,dpr}, zoom, user_agent` (`restarts` = engine restarts in the last minute) |
+| `browser.memory` | `timeout_ms?` | Servo's native memory report (`results`: processes with `pid`, `isMainProcess`, allocation `reports`). Engine-wide; does not revive discarded tabs. Report categories can overlap; do not sum them as PSS. |
+| `browser.engine_preferences` | `timeout_ms?` | Effective native Servo preferences as JSON; does not revive discarded tabs. |
 | `browser.tabs` | | ordered `[{id, index, url, title, loading, can_back, can_forward, current, crashed, zoom, secure}]` |
 | `browser.tab.new` | `url?, background?` | `{id}` |
 | `browser.tab.select` / `browser.tab.close` | `id` | `{ok}` |
 | `browser.tab.reopen` | | `{id}` (error -32602 when nothing was closed) |
 | `browser.navigate` | `url, id?, wait? none/commit/load (default load), timeout_ms?` | `{id, url, title, status: started/committed/loaded/timeout}` (a timeout is a result, not an error) |
 | `browser.back` / `browser.forward` | `id?` | `{ok}` (false when there is no history) |
-| `browser.reload` | `id?, hard?` | `{ok}` (`hard` runs a normal reload: Servo 0.7.0 has no cache bypass) |
+| `browser.reload` | `id?, hard?` | `{ok}` (`hard` clears the HTTP cache, then reloads) |
 | `browser.eval` | `js, id?, timeout_ms?` | `{ok:true, result, type}` or `{ok:false, error}`; `type` is undefined/null/boolean/number/string/array/object/element; results are JSON (depth 32); a promise is not awaited. The input and the result are also recorded in the console as levels `input` and `result` |
 | `browser.console` (alias `console`) | `id?, level? error/warn/info/log/debug/input/result, limit?=200, since_seq?, clear?` | `{entries:[{seq, ts_ms, level, text, source, line}], next_seq}`; pass `next_seq` back as `since_seq` |
 | `browser.dom` | `selector?="html", mode? outer_html/text/attrs/query, limit?=200, max_bytes?=200000` | `{matches, html or text, truncated}` or `{matches, items:[{tag, id, class, text, attrs, rect {x,y,w,h}}]}` (`attrs` = the first match only) |
@@ -135,7 +171,7 @@ engine answer later (SDK `control::RpcError::pending` + `control::complete`) and
 | `browser.viewport` | `width?, height?, dpr?, preset? iphone/ipad/desktop, reset?` | `{width, height, dpr}` (CSS px; the override is Responsive Design Mode, `dpr` rounds to a whole number) |
 | `browser.zoom` | `factor? 0.3 to 5` | `{factor}` (remembered per site like Cmd+Plus) |
 | `browser.find` | `query, dir? n (new)/f/b/c (clear)` | `{count}` |
-| `browser.user_agent` | `ua?` | `{ua}`; setting returns `restart_required:true` (Servo reads it at start-up only) |
+| `browser.user_agent` | `ua?` | `{ua}`; setting updates the native preference and returns `restart_required:false` |
 | `browser.input` | `kind click/move/key/text/scroll, x?, y?, key?, mods? [ctrl,shift,alt,meta], text?, dx?, dy?` | `{ok}`; page-local CSS px of the current tab, left button only (it goes through the touch path) |
 | `browser.devtools` | `open?, panel? console/network/elements` | `{open, panel}` |
 | `browser.source` | `id?` | `{url, html}` (the live DOM as HTML, with the doctype) |
@@ -163,19 +199,27 @@ The Servo 0.7.0 source is in `out/servo-source/servo-0.7.0` after an engine buil
 - Repaints: `spin_event_loop` calls `notify_new_frame_ready` for views that need painting, and Servo wakes the loop
   through the `EventLoopWaker`. No idle timer is needed (`components/servo/webview.rs`, "Rendering Model").
 
-## Page dialogs, context menu and select popups
+## Native page controls
 
 Servo reports these as embedder controls (`show_embedder_control`). The engine keeps each one under a token and
-forwards it (`dialog`, `menu`); `src/pageui.rs` draws the sheet or popover menu and answers with `dialog-reply` /
-`menu-reply`. Unanswered controls are answered with their default when dropped (Servo's `Drop`), a page that withdraws
-one sends `control-hide`. Right-click comes from the shell as `Input::Context`. Gaps: downloads (no Servo hook in 0.7.0),
-long-press, colour and file pickers (cancelled), Inspect Element only opens the inspector (no node picking).
+forwards it (`dialog`, `menu`, `color-picker`, `file-picker`). `src/pageui.rs` owns sheets and popovers;
+`src/uploads.rs` requests file descriptors through the SDK document portal. Files the user selects are streamed
+off the UI thread to private staging files, because Servo 0.7 accepts paths. Their names are preserved, and the
+copies are removed on document navigation, tab close or normal browser exit. Limits: 64 files and 1 GiB per
+selection, 2 GiB retained per window. The document portal uses up to 16 extension filters; All Files remains
+available, as HTML `accept` is a chooser hint. The local GTK host uses `Gtk.FileDialog` for the same portal protocol.
+
+The native `request_unload` callback opens a browser-authored Stay / Leave sheet, with Stay selected initially.
+Pending requests are bounded; navigation, close, crash and shutdown retire their tokens. Retired unload requests
+explicitly deny, since Servo's responder otherwise defaults to allowing. This covers navigation requests emitted
+by Servo; closing a tab or quitting still destroys the view directly and does not offer an unsaved-work prompt.
+Right-click comes from the shell as `Input::Context`. Remaining gaps include native download callbacks (not public
+in Servo 0.7), IME composition, and inspector node picking.
 
 ## Memory bounds (round 55)
 
 Per tab, console and network logs keep at most 5000/2000 entries and 2 MiB of text each. History keeps 5000 entries,
 each with at most 2 KiB of title; longer URLs are not recorded.
-long-press, colour and file pickers (cancelled).
 
 ## Settings, private window, tabs (round 55)
 
@@ -183,3 +227,29 @@ Cmd+, opens the Settings sheet (`src/prefs.rs`): homepage, search engine, restor
 Cmd+Shift+N launches `bifrost-browser --private` (history, session and profile are not kept; marked by a dark toolbar).
 Tabs drag to reorder; a still finger held 0.5 s on the page opens the context menu. Unverified on device: that the shell gives the
 spawned private process its own window, and that ticks run while a finger is held (long-press also fires on lift).
+
+
+## Components and review
+
+The process entry/model is `src/main.rs`; `app.rs` is the SDK boundary. `lifecycle.rs` owns startup/timers,
+`navigation.rs` tabs and address state, `input.rs` routing, `keyboard.rs` edit commands/shortcuts,
+`pointer_input.rs` mouse/touch/scroll, `actions.rs` actions, `menus.rs` menu dispatch, `layout.rs` geometry,
+`drawing.rs` rendering, `events.rs` callbacks and `engine_loader.rs` archive extraction.
+
+The engine has separate runtime, delegate, command, input, event, rendering, favicon and find components.
+`configuration.rs` owns startup/feature preferences, `memory.rs` owns subsystem budgets, and `event_loop.rs`
+owns bounded input delivery, wake coalescing, scheduling and shutdown. Native diagnostics cross the existing
+typed SDK/control boundary; see [embedding patterns](docs/embedding-patterns.md).
+`engine/src/rule_match.rs` links to the SDK rule matcher so staging the engine copies the shared implementation.
+See [the Servo review](docs/servo-review.md) for source contracts, remaining gaps and validation results.
+
+## Rendering selection
+
+Browser Settings > Rendering defaults to **GPU**. Select **CPU fallback** for software rendering; changing the selection reloads open pages. The saved choice applies on subsequent launches. GPU mode reports an initialization error if hardware rendering is unavailable. `browser.engine_preferences` includes `_bifrost_renderer` with the active mode and GL driver. Frames currently use CPU readback and shared memory for presentation.
+
+## Main menu
+
+The top-right ellipsis opens common tab actions, bookmarks, history, downloads, Find in Page, page actions,
+developer tools, and Settings. Page Actions includes zoom and Reader. Use Alt+F or F10 to open the menu,
+arrow keys/type selection to choose a row, Enter to activate, and Escape to dismiss. Settings includes
+homepage, search engine, session restore, GPU/CPU renderer selection and website-data controls.

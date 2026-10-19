@@ -38,8 +38,8 @@ fn path() -> PathBuf {
 
 /// `scheme://host[:port]` of a URL, or empty for pages without one.
 pub fn origin(url: &str) -> String {
-    let Some((scheme, rest)) = url.split_once("://") else { return String::new() };
-    format!("{scheme}://{}", rest.split(['/', '?', '#']).next().unwrap_or(""))
+    url::Url::parse(url).ok().map(|url| url.origin()).filter(|origin| origin.is_tuple())
+        .map(|origin| origin.ascii_serialization()).unwrap_or_default()
 }
 
 /// Format version written as the first line (`v N`). A file with a newer version is ignored (and backed up on the next
@@ -302,5 +302,7 @@ mod tests {
     fn origin_strips_path() {
         assert_eq!(origin("https://a.b:8080/x?y#z"), "https://a.b:8080");
         assert_eq!(origin("about:blank"), "");
+        assert_eq!(origin("https://user:password@EXAMPLE.com:443/path"), "https://example.com");
+        assert_eq!(origin("http://[::1]:8080/path"), "http://[::1]:8080");
     }
 }

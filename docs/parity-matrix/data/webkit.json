@@ -73,9 +73,9 @@
     {
       "feature": "Web UI delegate (alerts, file panels, new windows, window features)",
       "apple": "WKUIDelegate, WKWindowFeatures, WKOpenPanelParameters",
-      "bifrost": "springboard/sdk/src/webview.rs (WebViewEvent::CreateWebView, Closed); springboard/sdk/src/web_config.rs (UiDelegate, OpenPanelParameters, answer_script_dialog)",
+      "bifrost": "springboard/sdk/src/webview.rs (CreateWebView, Closed, Dialog, Menu, FilePicker, ColorPicker, UnloadRequested and typed replies); springboard/apps/browser/src/pageui.rs; springboard/apps/browser/src/uploads.rs; springboard/sdk/src/web_config.rs",
       "status": "partial",
-      "note": "alert, confirm, prompt and open panel callbacks map to dialog_reply, host-tested; the open panel has no engine event yet; select elements are not supported."
+      "note": "2026-10-19: Servo 0.7 native alerts, confirm, prompt, context/select menus, file inputs, RGB color inputs and navigation beforeunload requests are integrated. File selection uses the SDK document portal and private staging copies off the UI thread, with 64 files/1 GiB per selection and 2 GiB retained per window. Unresolved unload confirmations explicitly deny; direct tab close and quit do not prompt. Native window.open uses the provided WebViewBuilder. Not checked on Midget; window feature placement, IME and complete web UI parity remain gaps. No new automated tests run in this round."
     },
     {
       "feature": "Input and appearance",

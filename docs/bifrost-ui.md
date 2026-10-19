@@ -1257,8 +1257,8 @@ spawns the engine `bifrost-webview` (Servo 0.7.0 embedded with libservo and a so
 | `goBack` / `goForward` / `reload` / `stopLoading` | `go_back`, `go_forward`, `reload`, `stop_loading` |
 | `title`, `URL`, `isLoading`, `estimatedProgress`, `canGoBack`, `canGoForward` | `pool.state(id)` (`WebViewState`) |
 | `WKNavigationDelegate` start / commit / finish | `WebViewEvent::LoadStarted`, `LoadCommitted`, `LoadFinished` from `pool.poll()` |
-| Develop > Reload From Origin | `pool.reload_ignoring_cache(id)` (gap: Servo 0.7.0 has no cache flag, plain reload) |
-| `customUserAgent` | `pool.set_user_agent(Option<&str>)` (gap: Servo reads the UA at start-up only, not applied yet) |
+| Develop > Reload From Origin | `pool.reload_ignoring_cache(id)` (clears the HTTP cache, then reloads; no per-origin cache flag) |
+| `customUserAgent` | `pool.set_user_agent(Option<&str>)` (`Servo::set_preference`; subsequent requests) |
 | Responsive Design Mode | `pool.set_viewport_override(area, w, h, dpr)` letterboxes the view |
 | `WKUIDelegate createWebViewWith`, `webViewDidClose` | `WebViewEvent::CreateWebView`, `Closed` |
 | `webViewWebContentProcessDidTerminate` | `WebViewEvent::ContentProcessTerminated`, `EngineExited` |
@@ -1267,19 +1267,33 @@ spawns the engine `bifrost-webview` (Servo 0.7.0 embedded with libservo and a so
 
 Drawing: each frame the engine presents is copied once into shared memory (the `Surface` pixel format) and
 `pool.draw(surface)` blits it. Zero-copy (a Wayland subsurface or dma-buf from a GPU context) is the follow-up.
-Input: `pool.touch` (the desktop pointer arrives as a finger, so drags scroll and taps click, as on iOS),
-`pool.key` (text, named keys and Ctrl/Cmd chords). The event loop wakes on the engine through the new
+Input: `pool.touch` retains tablet touch behavior; `pool.mouse` sends desktop press/drag/release/hover,
+`pool.mouse_leave` clears the native hover target, `pool.scroll` forwards wheel deltas, and `pool.key` forwards text,
+named keys and Ctrl/Cmd chords. `pool.set_clipboard` updates the native clipboard delegate; copied text returns as
+`WebViewEvent::ClipboardChanged`. Favicons return as bounded native `FaviconChanged` RGBA images. The event loop wakes on the engine through the new
 `App::wake_fd` (the runtime polls it with the shell channel); call `poll` from `tick`. `url_for_input` is Safari's
 smart address field (URL, bare host or web search).
 
-Not matched yet: `stopLoading` is a no-op (Servo 0.7.0 cannot cancel a load); no hover, text selection by drag,
-context menus, `<select>`/alert/file panels, `evaluateJavaScript`, `WKUserContentController`, find-in-page or
-snapshots. The engine renders in software (llvmpipe) because SDK apps get no `/dev/dri`.
+`stopLoading` remains a no-op because Servo 0.7.0 has no public cancel-load API; the browser toolbar therefore
+exposes Reload. Native embedder controls handle context menus, select popups, script dialogs, file inputs and color
+inputs. `FilePicker` events carry extension filters and multiple-selection support; `file_picker_reply` supplies
+the selected paths or cancels. Browser `uploads.rs` obtains granted descriptors with `Ctx::open_panel`, streams
+private staging copies off the UI thread, and removes them when the document retires. Color pickers use shared
+RGB controls; `color_picker_reply` supplies the chosen channels or cancels. `UnloadRequested` and `unload_reply`
+surface Servo's navigation confirmation with a safe initial Stay action; direct tab close/quit remains outside
+that confirmation path. `WebViewState::status_text` and `StatusTextChanged` carry native hovered-link destinations.
+These integrations have not been checked on Midget and are not marked full parity.
+Engine-owned cookie/local/session storage and the HTTP cache can be cleared through
+`pool.clear_website_data`; full browser data clearing falls back to a stopped-engine profile reset when
+IndexedDB, CacheStorage or HTTP authentication data exists, preserving content rules.
+`pool.clear_session_history(id)` calls Servo's native API and keeps the current page. The engine defaults to hardware
+GL with an explicit CPU fallback. Frame transport still uses readback and shared-memory copies; full WebView
+parity remains incomplete.
 
 ### Find, zoom, session (Browser, round D2)
 
 - `WebProcessPool::set_zoom` is `WKWebView.pageZoom` (clamped 30% to 500%). The Browser steps 25% with Cmd+Plus, Cmd+Minus, Cmd+0 and remembers the factor per origin in `~/.local/share/bifrost-browser/session.txt`.
-- `WebProcessPool::find(id, query, FindDirection)` and `find_clear` follow `find(_:configuration:)`; the count is `WebViewState::find_matches`. Gap: Servo 0.7.0 has no find API, so the engine injects script (`innerText` count plus `window.find`, case-insensitive, wrapping). No highlight-all, no match index, only the total; the case and whole-word options of `WKFindConfiguration` are not exposed.
+- `WebProcessPool::find(id, query, FindDirection)` and `find_clear` follow `find(_:configuration:)`; the count is `WebViewState::find_matches`. Gap: Servo 0.7.0 has no find API, so the engine uses standard DOM traversal, Range and Selection APIs (case-insensitive, wrapping, bounded main-document search). No highlight-all, no match index, only the total; the case and whole-word options of `WKFindConfiguration` are not exposed.
 - Session restore (tabs, titles, selected tab) and Cmd+Shift+T (10-entry stack) are app-level; per-tab back/forward history is not restored (only the last URL).
 
 ### Configuration, policy, data store, messages and panels (`web_config`, `web_nav`, `web_data`)

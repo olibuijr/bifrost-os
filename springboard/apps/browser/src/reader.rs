@@ -243,7 +243,7 @@ pub fn page(a: &Article, url: &str, dark: bool) -> String {
     } else {
         ("#ffffff", "#1d1d1f", "#6e6e73", "#007aff", "#d2d2d7", "#f2f2f7")
     };
-    let host = url.split("://").nth(1).and_then(|r| r.split(['/', '?', '#']).next()).unwrap_or("");
+    let host = crate::host_of(url);
     let by = if a.byline.is_empty() { host.to_string() } else { format!("{} \u{b7} {}", a.byline, host) };
     format!(
         "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>{t}</title><style>\

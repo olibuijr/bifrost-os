@@ -7,6 +7,7 @@
 //!                                     PNG of the view written to PATH. MODE view | rect (CSS px, relative to the
 //!                                     viewport, X Y W H) | full (viewport width x document height, at most MAXPX pixels)
 //!   dev collector JS                  a script run at the start of every document loaded from now on (network log)
+//!   dev memory TOKEN                  native Servo memory report for all engine processes
 //! engine -> app
 //!   dev eval TOKEN ok TYPE JSON       the value as JSON (TYPE undefined|null|boolean|number|string|array|object|element)
 //!   dev eval TOKEN err MESSAGE        the page threw, or the script did not compile
@@ -64,7 +65,7 @@ pub(super) fn set_user_script(servo: &Servo, rest: &str) {
 }
 
 /// Escapes `\n`, `\r` and `\\`, with no length cap.
-fn esc(s: &str) -> String {
+pub(super) fn esc(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 16);
     for c in s.chars() {
         match c {
@@ -96,25 +97,6 @@ fn unesc(s: &str) -> String {
     out
 }
 
-/// A JSON string literal.
-fn quote(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() + 2);
-    out.push('"');
-    for c in s.chars() {
-        match c {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
-            c => out.push(c),
-        }
-    }
-    out.push('"');
-    out
-}
-
 fn js_type(v: &JSValue) -> &'static str {
     match v {
         JSValue::Undefined => "undefined",
@@ -128,49 +110,17 @@ fn js_type(v: &JSValue) -> &'static str {
     }
 }
 
-/// Writes `v` as JSON. Nesting deeper than 32 becomes `null`; elements, windows and frames become their reference string.
-fn js_json(v: &JSValue, depth: usize, out: &mut String) {
-    if depth > 32 {
-        out.push_str("null");
-        return;
-    }
-    match v {
-        JSValue::Undefined | JSValue::Null => out.push_str("null"),
-        JSValue::Boolean(b) => out.push_str(if *b { "true" } else { "false" }),
-        JSValue::Number(n) => {
-            if !n.is_finite() {
-                out.push_str("null");
-            } else if n.fract() == 0.0 && n.abs() < 9.0e15 {
-                out.push_str(&format!("{}", *n as i64));
-            } else {
-                out.push_str(&format!("{n}"));
-            }
-        }
-        JSValue::String(s) | JSValue::Element(s) | JSValue::ShadowRoot(s) | JSValue::Frame(s) | JSValue::Window(s) => out.push_str(&quote(s)),
-        JSValue::Array(items) => {
-            out.push('[');
-            for (i, item) in items.iter().enumerate() {
-                if i > 0 {
-                    out.push(',');
-                }
-                js_json(item, depth + 1, out);
-            }
-            out.push(']');
-        }
-        JSValue::Object(map) => {
-            out.push('{');
-            let mut keys: Vec<&String> = map.keys().collect();
-            keys.sort();
-            for (i, k) in keys.into_iter().enumerate() {
-                if i > 0 {
-                    out.push(',');
-                }
-                out.push_str(&quote(k));
-                out.push(':');
-                js_json(&map[k], depth + 1, out);
-            }
-            out.push('}');
-        }
+/// Map Servo's tagged values into protocol JSON; serde_json owns escaping and number formatting.
+fn js_json(value: &JSValue, depth: usize) -> serde_json::Value {
+    use serde_json::Value;
+    if depth > 32 { return Value::Null; }
+    match value {
+        JSValue::Undefined | JSValue::Null => Value::Null,
+        JSValue::Boolean(value) => Value::Bool(*value),
+        JSValue::Number(value) => serde_json::Number::from_f64(*value).map_or(Value::Null, Value::Number),
+        JSValue::String(value) | JSValue::Element(value) | JSValue::ShadowRoot(value) | JSValue::Frame(value) | JSValue::Window(value) => Value::String(value.clone()),
+        JSValue::Array(values) => Value::Array(values.iter().map(|value| js_json(value, depth + 1)).collect()),
+        JSValue::Object(values) => Value::Object(values.iter().map(|(key, value)| (key.clone(), js_json(value, depth + 1))).collect()),
     }
 }
 
@@ -197,8 +147,7 @@ fn error_text(e: &JavaScriptEvaluationError) -> String {
 fn eval_reply(token: &str, r: &Result<JSValue, JavaScriptEvaluationError>) -> String {
     match r {
         Ok(v) => {
-            let mut j = String::new();
-            js_json(v, 0, &mut j);
+            let j = js_json(v, 0).to_string();
             if j.len() > MAX_REPLY {
                 return format!("dev eval {token} err result larger than {MAX_REPLY} bytes");
             }
@@ -213,7 +162,6 @@ fn manager(servo: &Servo) -> Option<Rc<UserContentManager>> {
     MANAGER.with(|m| {
         if m.borrow().is_none() {
             let mgr = Rc::new(UserContentManager::new(servo));
-            mgr.add_script(Rc::new(UserScript::new(super::compat::SCRIPT.to_string(), None)));
             if let Some(js) = COLLECTOR.with(|c| c.borrow().clone()) {
                 mgr.add_script(Rc::new(UserScript::new(js, None)));
             }
@@ -242,6 +190,38 @@ impl Engine {
         let (verb, tail) = rest.split_once(' ').unwrap_or((rest, ""));
         match verb {
             "eval" => self.dev_eval(tail),
+            "preferences" => {
+                let token = tail.split(' ').next().unwrap_or("0");
+                let preferences = serde_json::to_value(&*servo::prefs::get()).map(|mut preferences| {
+                    // Embedder diagnostics are namespaced separately from native Servo preferences.
+                    preferences.as_object_mut().expect("Servo preferences serialize as an object").insert(
+                        "_bifrost_renderer".into(),
+                        serde_json::json!({"mode": self.renderer_mode, "driver": self.renderer_driver}),
+                    );
+                    preferences.to_string()
+                });
+                match preferences {
+                    Ok(json) => say(&format!("dev preferences {token} ok {json}")),
+                    Err(error) => say(&format!("dev preferences {token} err {}", esc(&error.to_string()))),
+                }
+            }
+            "memory" => {
+                let token = tail.split(' ').next().unwrap_or("0").to_string();
+                let error_token = token.clone();
+                let callback = servo_base::generic_channel::GenericCallback::new(move |result| {
+                    match result {
+                        Ok(report) => match serde_json::to_string(&report) {
+                            Ok(json) => say(&format!("dev memory {token} ok {json}")),
+                            Err(error) => say(&format!("dev memory {token} err {}", esc(&error.to_string()))),
+                        },
+                        Err(error) => say(&format!("dev memory {token} err {}", esc(&format!("{error:?}")))),
+                    }
+                });
+                match callback {
+                    Ok(callback) => self.servo.create_memory_report(callback),
+                    Err(error) => say(&format!("dev memory {error_token} err {}", esc(&format!("{error:?}")))),
+                }
+            }
             "shot" => self.dev_shot(tail),
             "shotabort" => self.dev_shot_abort(tail),
             "collector" => COLLECTOR.with(|c| *c.borrow_mut() = Some(unesc(tail))),
@@ -348,12 +328,10 @@ mod tests {
         let mut m = HashMap::new();
         m.insert("b".to_string(), JSValue::Number(1.5));
         m.insert("a".to_string(), JSValue::Array(vec![JSValue::Null, JSValue::Boolean(true), JSValue::String("x\"y".into())]));
-        let mut out = String::new();
-        js_json(&JSValue::Object(m), 0, &mut out);
+        let out = js_json(&JSValue::Object(m), 0).to_string();
         assert_eq!(out, r#"{"a":[null,true,"x\"y"],"b":1.5}"#);
         assert_eq!(js_type(&JSValue::Undefined), "undefined");
-        let mut n = String::new();
-        js_json(&JSValue::Number(f64::NAN), 0, &mut n);
+        let n = js_json(&JSValue::Number(f64::NAN), 0).to_string();
         assert_eq!(n, "null");
     }
 

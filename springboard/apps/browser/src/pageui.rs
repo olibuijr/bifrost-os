@@ -3,9 +3,12 @@
 //! browser UI; menus use the shared popover menu. Servo reports them as embedder controls (engine `dialog`, `menu`).
 use std::collections::VecDeque;
 
+#[path = "page_colors.rs"]
+mod page_colors;
+
 use bifrost_app::controls::menu::{Menu, MenuItem};
 use bifrost_app::controls::prefs_layout::m;
-use bifrost_app::controls::{Rect, TextField};
+use bifrost_app::controls::{Node, Rect, Role, TextField};
 use bifrost_app::kit::ui::{Weight, CARD_BG, FIELD_BG, LABEL, LABEL_2, MAC_BODY_PT, MAC_SUBHEAD_PT, TINT, WHITE};
 use bifrost_app::kit::{Surface, Ui};
 use crate::tokens;
@@ -23,6 +26,17 @@ const MAX_LINES: usize = 12;
 const MAX_QUEUE: usize = 8;
 /// Row id added by the browser itself (the page cannot supply it).
 const INSPECT: u32 = u32::MAX;
+const CANCEL_CONTROL: u64 = 0x200100;
+const ACCEPT_CONTROL: u64 = 0x200101;
+const FIELD_CONTROL: u64 = 0x200102;
+const ORIGIN_CONTROL: u64 = 0x200103;
+const UNLOAD_MESSAGE: &str = "Leave this page? Changes you made may not be saved.";
+
+enum NativeDialog {
+    Color(page_colors::ColorState),
+    /// Stay is the initial keyboard focus. Web content cannot provide this dialog's message or button labels.
+    Unload { leave_focused: bool },
+}
 
 pub struct Dialog {
     view: WebViewId,
@@ -31,6 +45,7 @@ pub struct Dialog {
     host: String,
     message: String,
     field: TextField,
+    native: Option<NativeDialog>,
 }
 
 pub struct PageMenu {
@@ -59,8 +74,8 @@ pub struct PageUi {
 }
 
 fn host_of(url: &str) -> String {
-    let rest = url.split_once("://").map_or(url, |(_, r)| r);
-    rest.split(['/', '?', '#']).next().unwrap_or("").to_string()
+    url::Url::parse(url).ok().map(|url| url.origin()).filter(url::Origin::is_tuple)
+        .map(|origin| origin.ascii_serialization()).unwrap_or_else(|| "Local or opaque page".into())
 }
 
 impl PageUi {
@@ -74,6 +89,79 @@ impl PageUi {
         if self.menu.as_ref().is_some_and(|m| m.view == view) {
             self.menu = None;
         }
+    }
+
+    /// Explicit tab switching/closing can cancel outstanding native controls before the engine view changes.
+    /// `forget` remains available after the engine has already destroyed the view and no reply is meaningful.
+    pub fn cancel_view(&mut self, view: WebViewId, pool: &mut Option<WebProcessPool>) {
+        let mut keep = VecDeque::new();
+        for dialog in self.dialogs.drain(..) {
+            if dialog.view == view { Self::reply(dialog, pool, false); }
+            else { keep.push_back(dialog); }
+        }
+        self.dialogs = keep;
+        if self.menu.as_ref().is_some_and(|menu| menu.view == view) { self.dismiss_menu(pool); }
+    }
+
+    /// Resolves every pending request safely before selection changes or engine teardown. Native unload is
+    /// denied, color selection is cancelled, and script dialogs/select menus receive their cancellation reply.
+    pub fn cancel_all(&mut self, pool: &mut Option<WebProcessPool>) {
+        for dialog in self.dialogs.drain(..) { Self::reply(dialog, pool, false); }
+        self.dismiss_menu(pool);
+    }
+
+    pub fn touch_down(&mut self, ui: &Ui, w: u32, h: u32, x: f32, y: f32) {
+        let (x, y) = (x / ui.pt(1.0), y / ui.pt(1.0));
+        let layout = self.layout(ui, w, h);
+        if let Some(native) = self.dialogs.front_mut().and_then(|dialog| dialog.native.as_mut()) {
+            match native {
+                NativeDialog::Color(color) => color.down(&page_colors::ColorState::layout(ui, w, h), x, y),
+                NativeDialog::Unload { leave_focused } => {
+                    if let Some((_, _, cancel, accept, _)) = layout {
+                        if accept.contains(x, y) { *leave_focused = true; }
+                        else if cancel.is_some_and(|cancel| cancel.contains(x, y)) { *leave_focused = false; }
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn touch_cancel(&mut self) {
+        if let Some(NativeDialog::Color(color)) = self.dialogs.front_mut().and_then(|dialog| dialog.native.as_mut()) { color.cancel_drag(); }
+    }
+
+    /// Browser-owned controls exposed to accessibility and the control socket while the page is modal.
+    pub fn controls(&self, ui: &Ui, w: u32, h: u32) -> Vec<Node> {
+        let Some(dialog) = self.dialogs.front() else { return Vec::new() };
+        if let Some(NativeDialog::Color(color)) = &dialog.native {
+            let card = page_colors::ColorState::layout(ui, w, h).card;
+            let mut nodes = color.controls(ui, w, h);
+            nodes.push(Node { id: ORIGIN_CONTROL, role: Role::StaticText, label: format!("Browser — Choose Color for {}", dialog.host), value: String::new(), bounds: Rect { x: card.x + PAD, y: card.y + PAD, w: (card.w - PAD * 2.0).max(0.0), h: LINE * 2.0 }, enabled: true });
+            return nodes;
+        }
+        let Some((card, field, cancel, accept, _)) = self.layout(ui, w, h) else { return Vec::new() };
+        let unload = matches!(dialog.native, Some(NativeDialog::Unload { .. }));
+        let mut nodes = Vec::new();
+        nodes.push(Node { id: ORIGIN_CONTROL, role: Role::StaticText, label: if unload { format!("Browser — {} For {}", UNLOAD_MESSAGE, dialog.host) } else { format!("{} says: {}", dialog.host, dialog.message) }, value: String::new(), bounds: Rect { x: card.x + PAD, y: card.y + PAD, w: (card.w - PAD * 2.0).max(0.0), h: (accept.y - card.y - PAD * 2.0).max(0.0) }, enabled: true });
+        if let Some(bounds) = field {
+            nodes.push(Node { id: FIELD_CONTROL, role: Role::TextField, label: "Page response".into(), value: dialog.field.to_string(), bounds, enabled: true });
+        }
+        if let Some(bounds) = cancel {
+            nodes.push(Node { id: CANCEL_CONTROL, role: Role::Button, label: if unload { "Stay" } else { "Cancel" }.into(), value: String::new(), bounds, enabled: true });
+        }
+        nodes.push(Node { id: ACCEPT_CONTROL, role: Role::Button, label: if unload { "Leave" } else { "OK" }.into(), value: String::new(), bounds: accept, enabled: true });
+        nodes
+    }
+
+    pub fn activate_control(&mut self, id: u64, pool: &mut Option<WebProcessPool>) -> Outcome {
+        if let Some(NativeDialog::Color(color)) = self.dialogs.front_mut().and_then(|dialog| dialog.native.as_mut()) {
+            let choice = color.activate(id);
+            if let Some(accept) = choice { self.answer(pool, accept); }
+        } else if !self.dialogs.is_empty() {
+            if id == CANCEL_CONTROL { self.answer(pool, false); }
+            else if id == ACCEPT_CONTROL { self.answer(pool, true); }
+        }
+        Outcome::None
     }
 
     /// Takes the events this module owns; returns true when it consumed one.
@@ -90,7 +178,25 @@ impl PageUi {
                 let host = pool.as_ref().and_then(|p| p.state(*id)).map(|s| host_of(&s.url)).unwrap_or_default();
                 let mut field = TextField::new();
                 field.push_str(default);
-                self.dialogs.push_back(Dialog { view: *id, token: *token, kind: *kind, host, message: message.clone(), field });
+                self.dialogs.push_back(Dialog { view: *id, token: *token, kind: *kind, host, message: message.clone(), field, native: None });
+                true
+            }
+            WebViewEvent::ColorPicker { id, token, color } => {
+                if self.dialogs.len() >= MAX_QUEUE {
+                    if let Some(pool) = pool { pool.color_picker_reply(*id, *token, None); }
+                    return true;
+                }
+                let host = pool.as_ref().and_then(|pool| pool.state(*id)).map(|state| host_of(&state.url)).unwrap_or_else(|| "Unknown page".into());
+                self.dialogs.push_back(Dialog { view: *id, token: *token, kind: DialogKind::Confirm, host, message: String::new(), field: TextField::new(), native: Some(NativeDialog::Color(page_colors::ColorState::new(*color))) });
+                true
+            }
+            WebViewEvent::UnloadRequested { id, token } => {
+                if self.dialogs.len() >= MAX_QUEUE {
+                    if let Some(pool) = pool { pool.unload_reply(*id, *token, false); }
+                    return true;
+                }
+                let host = pool.as_ref().and_then(|pool| pool.state(*id)).map(|state| host_of(&state.url)).unwrap_or_else(|| "Unknown page".into());
+                self.dialogs.push_back(Dialog { view: *id, token: *token, kind: DialogKind::Confirm, host, message: UNLOAD_MESSAGE.into(), field: TextField::new(), native: Some(NativeDialog::Unload { leave_focused: false }) });
                 true
             }
             WebViewEvent::Menu { id, token, kind, rect, items } => {
@@ -156,9 +262,11 @@ impl PageUi {
     /// Sheet rectangles in window pixels: (card, field, cancel, ok).
     fn layout(&self, ui: &Ui, w: u32, h: u32) -> Option<(Rect, Option<Rect>, Option<Rect>, Rect, Vec<String>)> {
         let d = self.dialogs.front()?;
+        if matches!(d.native, Some(NativeDialog::Color(_))) { return None; }
         let lines = self.wrap(ui, &d.message);
         let field_h = if d.kind == DialogKind::Prompt { FIELD_H + 10.0 } else { 0.0 };
-        let ch = PAD + LINE + 8.0 + LINE * lines.len() as f32 + 8.0 + field_h + PAD + BTN_H + PAD;
+        let attribution = if d.native.is_some() { LINE + 8.0 } else { 0.0 };
+        let ch = PAD + LINE + 8.0 + attribution + LINE * lines.len() as f32 + 8.0 + field_h + PAD + BTN_H + PAD;
         let (wpt, hpt) = (w as f32 / ui.pt(1.0), h as f32 / ui.pt(1.0));
         let card = Rect { x: ((wpt - SHEET_W) / 2.0).max(0.0), y: (hpt * 0.3 - ch / 2.0).max(8.0), w: SHEET_W, h: ch };
         let by = card.y + ch - PAD - BTN_H;
@@ -195,8 +303,16 @@ impl PageUi {
 
     fn answer(&mut self, pool: &mut Option<WebProcessPool>, ok: bool) {
         if let Some(d) = self.dialogs.pop_front() {
-            if let Some(p) = pool {
-                p.dialog_reply(d.view, d.token, ok, &d.field.to_string());
+            Self::reply(d, pool, ok);
+        }
+    }
+
+    fn reply(dialog: Dialog, pool: &mut Option<WebProcessPool>, ok: bool) {
+        if let Some(pool) = pool {
+            match dialog.native {
+                Some(NativeDialog::Color(color)) => pool.color_picker_reply(dialog.view, dialog.token, ok.then(|| color.color())),
+                Some(NativeDialog::Unload { .. }) => pool.unload_reply(dialog.view, dialog.token, ok),
+                None => pool.dialog_reply(dialog.view, dialog.token, ok, &dialog.field.to_string()),
             }
         }
     }
@@ -204,6 +320,11 @@ impl PageUi {
     /// A tap at window pixel (x, y) while something is up. Returns what the browser should do; the tap is consumed.
     pub fn touch_up(&mut self, ui: &Ui, w: u32, h: u32, x: f32, y: f32, pool: &mut Option<WebProcessPool>) -> Outcome {
         let (px, py) = (x / ui.pt(1.0), y / ui.pt(1.0));
+        if let Some(NativeDialog::Color(color)) = self.dialogs.front_mut().and_then(|dialog| dialog.native.as_mut()) {
+            let choice = color.up(&page_colors::ColorState::layout(ui, w, h), px, py);
+            if let Some(accept) = choice { self.answer(pool, accept); }
+            return Outcome::None;
+        }
         let hit = |r: &Rect| px >= r.x && px < r.x + r.w && py >= r.y && py < r.y + r.h;
         if let Some((_, _, cancel, ok, _)) = self.layout(ui, w, h) {
             if hit(&ok) {
@@ -232,6 +353,10 @@ impl PageUi {
     }
 
     pub fn touch_move(&mut self, ui: &Ui, w: u32, h: u32, x: f32, y: f32) {
+        if let Some(NativeDialog::Color(color)) = self.dialogs.front_mut().and_then(|dialog| dialog.native.as_mut()) {
+            color.move_to(&page_colors::ColorState::layout(ui, w, h), x / ui.pt(1.0));
+            return;
+        }
         if let Some(m) = &mut self.menu {
             let (px, py) = (x / ui.pt(1.0), y / ui.pt(1.0));
             let (ox, oy) = Self::menu_origin(m, ui, w, h);
@@ -261,6 +386,20 @@ impl PageUi {
 
     /// Keys while something is up; always consumed. Return confirms, Escape cancels, arrows move in a menu.
     pub fn key(&mut self, k: &KeyInput, pool: &mut Option<WebProcessPool>) -> Outcome {
+        if let Some(native) = self.dialogs.front_mut().and_then(|dialog| dialog.native.as_mut()) {
+            let answer = match native {
+                NativeDialog::Color(color) => color.key(k),
+                NativeDialog::Unload { leave_focused } => match k {
+                    KeyInput::Code(1 | 27) => Some(false),
+                    KeyInput::Code(13) => Some(*leave_focused),
+                    KeyInput::Code(9 | 37 | 39) => { *leave_focused = !*leave_focused; None }
+                    _ if k.as_chord().is_some_and(|(key, mods)| key == 15 && mods & bifrost_app::proto::CHORD_SHIFT != 0) => { *leave_focused = !*leave_focused; None }
+                    _ => None,
+                },
+            };
+            if let Some(accept) = answer { self.answer(pool, accept); }
+            return Outcome::None;
+        }
         if let Some(kind) = self.dialogs.front().map(|d| d.kind) {
             match k {
                 KeyInput::Code(13) => self.answer(pool, true),
@@ -305,14 +444,26 @@ impl PageUi {
     }
 
     pub fn draw(&self, s: &mut Surface, ui: &Ui, w: u32, h: u32) {
+        if let Some(dialog) = self.dialogs.front() {
+            if let Some(NativeDialog::Color(color)) = &dialog.native {
+                color.draw(s, ui, w, h, &dialog.host);
+                return;
+            }
+        }
         if let (Some(d), Some((card, field, cancel, ok, lines))) = (self.dialogs.front(), self.layout(ui, w, h)) {
             s.fill_rect(0, 0, s.w, s.h, tokens::scrim(110));
             s.fill_rrect(ui.pt(card.x), ui.pt(card.y), ui.pt(card.w), ui.pt(card.h), ui.pt(m::CARD_RADIUS), CARD_BG.now());
             let (lx, mut ty) = (ui.pt(card.x + PAD) as i32, ui.pt(card.y + PAD));
-            let title = if d.host.is_empty() { "This page says".to_string() } else { format!("\u{201c}{}\u{201d} says", d.host) };
+            let unload = matches!(d.native, Some(NativeDialog::Unload { .. }));
+            let title = if unload { "Browser — Leave Page?".to_string() } else if d.host.is_empty() { "This page says".to_string() } else { format!("\u{201c}{}\u{201d} says", d.host) };
             let t = ui.text(&ui.fit(&title, MAC_BODY_PT, ui.pt(SHEET_W - 2.0 * PAD)), MAC_BODY_PT, Weight::Semibold, LABEL.now());
             s.blit(&t, lx, ty as i32, 255, 255);
             ty += ui.pt(LINE + 8.0);
+            if unload {
+                let origin = ui.text(&ui.fit(&format!("For {}", d.host), MAC_SUBHEAD_PT, ui.pt(card.w - PAD * 2.0)), MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now());
+                s.blit(&origin, lx, ty as i32, 255, 255);
+                ty += ui.pt(LINE + 8.0);
+            }
             for l in &lines {
                 if !l.is_empty() {
                     let img = ui.text(l, MAC_BODY_PT, Weight::Regular, LABEL.now());
@@ -328,10 +479,13 @@ impl PageUi {
                 let img = ui.text(label, MAC_BODY_PT, Weight::Regular, if primary { WHITE } else { LABEL.now() });
                 s.blit(&img, (ui.pt(r.x + r.w / 2.0) as i32) - img.w as i32 / 2, (ui.pt(r.y + r.h / 2.0) as i32) - img.h as i32 / 2, 255, 255);
             };
-            if let Some(c) = cancel {
-                button(s, c, "Cancel", false);
+            if let Some(NativeDialog::Unload { leave_focused }) = d.native.as_ref() {
+                if let Some(cancel) = cancel { page_colors::draw_button(s, ui, cancel, "Stay", !*leave_focused, true); }
+                page_colors::draw_button(s, ui, ok, "Leave", *leave_focused, true);
+            } else {
+                if let Some(c) = cancel { button(s, c, "Cancel", false); }
+                button(s, ok, "OK", true);
             }
-            button(s, ok, "OK", true);
             if self.dialogs.len() > 1 {
                 let more = ui.text(&format!("{} more dialogs", self.dialogs.len() - 1), MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now());
                 s.blit(&more, lx, ui.pt(card.y + card.h + 6.0) as i32, 255, 255);

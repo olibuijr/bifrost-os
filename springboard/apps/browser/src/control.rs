@@ -26,6 +26,8 @@ pub const MAX_SHOT_PIXELS: u64 = 16_000_000;
 pub const METHODS: &[&str] = &[
     "console",
     "browser.state",
+    "browser.memory",
+    "browser.engine_preferences",
     "browser.tabs",
     "browser.tab.new",
     "browser.tab.select",
@@ -226,6 +228,9 @@ impl Panel {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Req {
     State,
+    /// Native engine-wide diagnostics; these calls do not require a live page.
+    Memory { timeout_ms: u64 },
+    EnginePreferences { timeout_ms: u64 },
     Tabs,
     TabNew { url: Option<String>, background: bool },
     TabSelect { id: u32 },
@@ -355,6 +360,8 @@ pub fn parse(method: &str, p: &Json) -> Result<Req, RpcError> {
     let method = if method == "console" { "browser.console" } else { method };
     Ok(match method {
         "browser.state" => Req::State,
+        "browser.memory" => Req::Memory { timeout_ms: timeout_ms(p)? },
+        "browser.engine_preferences" => Req::EnginePreferences { timeout_ms: timeout_ms(p)? },
         "browser.tabs" => Req::Tabs,
         "browser.tab.new" => Req::TabNew { url: opt_str(p, "url")?, background: opt_bool(p, "background")?.unwrap_or(false) },
         "browser.tab.select" => Req::TabSelect { id: req_tab(p)? },

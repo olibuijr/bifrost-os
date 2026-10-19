@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import re
 import socket
+import signal
 import struct
 import subprocess
 import tempfile
@@ -74,12 +75,13 @@ def smoke(app, output):
                'BIFROST_HARDWARE_KEYBOARD': '1'}
         maps = []
         mapped_size = None
+        generation = 0
         hello = False
         sizes = []
         log = output / (app.name + '.log')
         with log.open('wb') as stderr:
             process = subprocess.Popen([binary], env=env, cwd=data, pass_fds=(child.fileno(),),
-                                       stdin=subprocess.DEVNULL, stdout=stderr, stderr=stderr)
+                                       stdin=subprocess.DEVNULL, stdout=stderr, stderr=stderr, start_new_session=True)
             child.close()
             try:
                 for width, height in SIZES:
@@ -108,6 +110,7 @@ def smoke(app, output):
                                 hello = True
                             elif tag == 0x102:
                                 actual = struct.unpack_from('<II', packet, 4)
+                                generation, = struct.unpack_from('<I', packet, 12)
                                 assert actual == (width, height) and len(descriptors) == 2
                                 mapped_size = actual
                                 for old in maps:
@@ -118,13 +121,13 @@ def smoke(app, output):
                                 index, = struct.unpack_from('<I', packet, 4)
                                 assert hello and len(maps) == 2 and index < 2
                                 if mapped_size != (width, height):
-                                    parent.send(struct.pack('<II', 4, index))
+                                    parent.send(struct.pack('<III', 4, index, generation))
                                     continue
                                 pixels = maps[index][:]
                                 assert len(set(pixels[i:i + 4] for i in range(0, len(pixels), 4))) > 1
                                 png(output / f"{app.name}-{width}x{height}{'' if DARK else '-light'}.png", width, height, pixels)
                                 sizes.append([width, height])
-                                parent.send(struct.pack('<II', 4, index))
+                                parent.send(struct.pack('<III', 4, index, generation))
                                 break
                         finally:
                             for fd in descriptors:
@@ -138,13 +141,20 @@ def smoke(app, output):
                 parent.close()
                 for mapping in maps:
                     mapping.close()
-                if process.poll() is None:
-                    process.terminate()
-                    try:
-                        process.wait(timeout=3)
-                    except subprocess.TimeoutExpired:
-                        process.kill()
-                        process.wait()
+                # Content workers can outlive the app itself. Each preview owns its process group.
+                try:
+                    os.killpg(process.pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+                try:
+                    process.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    pass
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                process.wait()
     return {'app': app.name, 'id': manifest['id'], 'version': manifest['version'], 'frames': sizes}
 
 

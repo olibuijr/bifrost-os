@@ -1,6 +1,6 @@
 //! Web content in an SDK app (WebKit's `WebView`, `WebProcessPool` and `WebNavigationDelegate`).
 //!
-//! Pages run in a separate engine process (`bifrost-webview`: Servo 0.7.0 embedded through libservo, software GL),
+//! Pages run in a separate engine process (`bifrost-webview`: Servo 0.7.0 embedded through libservo),
 //! like WebKit's WebContent process. One [`WebProcessPool`] owns that process and any number of web views in it,
 //! named by [`WebViewId`]; the app shows one of them in a rectangle of its window. Each presented frame is copied
 //! once from shared memory into the app's surface (`draw`). Navigation state arrives as [`WebViewEvent`]s from
@@ -22,7 +22,8 @@
 use std::collections::{HashMap, HashSet};
 use std::io::{self, Read, Write};
 use std::os::fd::AsRawFd;
-use std::path::Path;
+use std::os::unix::process::CommandExt;
+use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
 use crate::proto::sys::{self, Map, Owned};
@@ -31,6 +32,56 @@ use crate::Surface;
 
 /// A web view in the pool (the app's handle; `WebView`).
 pub type WebViewId = u32;
+
+const MAX_PICKER_JSON: usize = 64 * 1024;
+const MAX_PICKER_FILTERS: usize = 64;
+const MAX_PICKER_FILTER_BYTES: usize = 1024;
+const MAX_PICKER_PATHS: usize = 128;
+const MAX_PICKER_PATH_BYTES: usize = 4096;
+const MAX_STATUS_BYTES: usize = 4096;
+
+fn control_token(text: &str) -> Option<u32> {
+    if text.is_empty() || !text.bytes().all(|b| b.is_ascii_digit()) { return None; }
+    text.parse::<u32>().ok().filter(|token| *token != 0)
+}
+
+fn color_channel(text: &str) -> Option<u8> {
+    if text.is_empty() || !text.bytes().all(|b| b.is_ascii_digit()) { return None; }
+    text.parse().ok()
+}
+
+fn picker_request(text: &str) -> Option<(bool, Vec<String>)> {
+    use bifrost_core::json::{self, Json};
+    if text.len() > MAX_PICKER_JSON { return None; }
+    let Json::Obj(fields) = json::parse(text).ok()? else { return None; };
+    // Reject ambiguous duplicate fields as well as unrecognized request shapes.
+    if fields.len() != 2 { return None; }
+    let request = Json::Obj(fields);
+    let Json::Bool(multiple) = request.get("multiple")? else { return None; };
+    let filters = request.get("filters")?.as_array()?;
+    if filters.len() > MAX_PICKER_FILTERS { return None; }
+    let filters = filters.iter().map(|filter| {
+        let value = filter.as_str()?;
+        (value.len() <= MAX_PICKER_FILTER_BYTES && !value.contains('\0')).then(|| value.to_owned())
+    }).collect::<Option<Vec<_>>>()?;
+    Some((*multiple, filters))
+}
+
+/// The requested rendering backend for a new engine process. The engine reports initialization errors rather
+/// than silently substituting CPU rendering when GPU initialization fails.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum WebRenderer {
+    #[default]
+    Gpu,
+    /// Explicit software rendering for systems without a usable GPU context.
+    Cpu,
+}
+
+impl WebRenderer {
+    pub fn as_str(self) -> &'static str {
+        match self { Self::Gpu => "gpu", Self::Cpu => "cpu" }
+    }
+}
 
 /// True when a frame tagged `from` may replace the pixels: untagged frames (older engines) pass, tagged ones
 /// must come from the visible view, so a frame in flight during a tab switch never shows the previous tab.
@@ -61,6 +112,8 @@ pub struct WebViewState {
     pub find_matches: Option<usize>,
     /// `pageZoom` (1.0 is 100%)
     pub page_zoom: f32,
+    /// Native page status text, such as the link currently under the pointer.
+    pub status_text: String,
 }
 
 /// Where `find` searches from (`WebFindConfiguration.backwards`).
@@ -75,6 +128,10 @@ pub enum FindDirection {
 /// What changed (`WebNavigationDelegate` and `WebUIDelegate` callbacks, plus key-value observation of the state).
 #[derive(Clone, Debug, PartialEq)]
 pub enum WebViewEvent {
+    /// A 32 by 32 straight RGBA favicon decoded by Servo.
+    FaviconChanged { id: WebViewId, rgba: Vec<u8> },
+    /// Text copied or cut through Servo's native clipboard delegate.
+    ClipboardChanged(String),
     /// `didStartProvisionalNavigation`
     LoadStarted(WebViewId),
     /// `didCommitNavigation` (the document's head is parsed)
@@ -83,6 +140,7 @@ pub enum WebViewEvent {
     LoadFinished(WebViewId),
     TitleChanged(WebViewId),
     UrlChanged(WebViewId),
+    StatusTextChanged(WebViewId),
     /// `canGoBack` or `canGoForward` changed
     HistoryChanged(WebViewId),
     /// `createWebViewWithConfiguration`: the page opened a window (`window.open`, `target=_blank`). The new view is
@@ -102,6 +160,12 @@ pub enum WebViewEvent {
     /// `runJavaScriptAlertPanel`, `...ConfirmPanel`, `...TextInputPanel`: a script dialog. Present it as a sheet over
     /// the window and answer with `dialog_reply` (an unanswered dialog blocks the page's script).
     Dialog { id: WebViewId, token: u32, kind: DialogKind, message: String, default: String },
+    /// Native file input request. Answer through `file_picker_reply`; paths remain privileged host data.
+    FilePicker { id: WebViewId, token: u32, multiple: bool, filters: Vec<String> },
+    /// Native color input request. Answer through `color_picker_reply`.
+    ColorPicker { id: WebViewId, token: u32, color: (u8, u8, u8) },
+    /// A document asks to confirm leaving. Answer through `unload_reply`.
+    UnloadRequested { id: WebViewId, token: u32 },
     /// A context menu (`WebUIDelegate` `contextMenuConfiguration`) or a `<select>` popup. `rect` is the element's
     /// area in device pixels inside the page frame. Answer with `menu_reply`.
     Menu { id: WebViewId, token: u32, kind: MenuKind, rect: (i32, i32, i32, i32), items: Vec<MenuEntry> },
@@ -228,12 +292,12 @@ pub struct WebProcessPool {
     /// the content rectangle in window pixels and the scale
     frame: (i32, i32, u32, u32),
     scale: f32,
-    /// the last frame, `w * h` pixels
-    /// the engine waits for our ack before it rewrites the shared memory we draw from
-    ack_pending: bool,
+    /// Last complete frame owned by the SDK. Shared pixels may be rewritten after acknowledgment.
+    pixels: Vec<u32>,
     pixels_size: (usize, usize),
     dark: Option<bool>,
     alive: bool,
+    startup_error: Option<String>,
     /// `dev ...` lines from the engine, for `webview_dev` (devtools control replies); not part of `WebViewEvent`
     dev_lines: Vec<String>,
     /// a `pong N` arrived since the last `take_pong`
@@ -246,19 +310,39 @@ pub struct WebProcessPool {
 impl WebProcessPool {
     /// Starts the engine (`engine` is the `bifrost-webview` binary); cookies and site data live in `profile`.
     pub fn spawn(engine: &Path, profile: &Path) -> io::Result<Self> {
+        Self::spawn_with_renderer(engine, profile, WebRenderer::default())
+    }
+
+    /// Starts a new engine with the requested backend. Backend selection is scoped to this child process;
+    /// changing it requires starting a new pool and reloading the open pages.
+    pub fn spawn_with_renderer(engine: &Path, profile: &Path, renderer: WebRenderer) -> io::Result<Self> {
         std::fs::create_dir_all(profile)?;
         let shm = sys::shm_create("bifrost-webview", 4)?;
         sys::make_inheritable(shm.0);
         let mut child = Command::new(engine)
+            // A private group keeps cleanup scoped to this engine and its Servo content processes.
+            .process_group(0)
+            .env("BIFROST_BROWSER_RENDERER", renderer.as_str())
             .env("BIFROST_WEBVIEW_FD", shm.0.to_string())
             .env("BIFROST_WEBVIEW_PROFILE", profile)
             .env_remove("BIFROST_SOCK")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .spawn()?;
-        let stdin = child.stdin.take().ok_or_else(|| io::Error::other("engine stdin"))?;
-        let stdout = child.stdout.take().ok_or_else(|| io::Error::other("engine stdout"))?;
-        sys::set_nonblocking(stdout.as_raw_fd())?;
+        let pipes = (|| {
+            let stdin = child.stdin.take().ok_or_else(|| io::Error::other("engine stdin"))?;
+            let stdout = child.stdout.take().ok_or_else(|| io::Error::other("engine stdout"))?;
+            sys::set_nonblocking(stdout.as_raw_fd())?;
+            Ok::<_, io::Error>((stdin, stdout))
+        })();
+        let (stdin, stdout) = match pipes {
+            Ok(pipes) => pipes,
+            Err(error) => {
+                terminate_engine_group(&mut child);
+                let _ = child.wait();
+                return Err(error);
+            }
+        };
         Ok(WebProcessPool {
             child,
             stdin,
@@ -272,10 +356,11 @@ impl WebProcessPool {
             visible: None,
             frame: (0, 0, 0, 0),
             scale: 1.0,
-            ack_pending: false,
+            pixels: Vec::new(),
             pixels_size: (0, 0),
             dark: None,
             alive: true,
+            startup_error: None,
             dev_lines: Vec::new(),
             pong: false,
             discarded: HashSet::new(),
@@ -294,7 +379,12 @@ impl WebProcessPool {
 
     /// Kills a wedged engine; the next `poll` reports `EngineExited` and the app restarts it.
     pub fn kill_engine(&mut self) {
-        let _ = self.child.kill();
+        terminate_engine_group(&mut self.child);
+    }
+
+    /// A fatal initialization error reported before the engine exited, such as an unavailable GPU context.
+    pub fn startup_error(&self) -> Option<&str> {
+        self.startup_error.as_deref()
     }
 
     fn send(&mut self, line: &str) {
@@ -356,6 +446,16 @@ impl WebProcessPool {
         self.next += 1;
         self.views.insert(id, WebViewState { url: url.into(), loading: true, progress: 0.1, ..Default::default() });
         self.send(&format!("new {id} {url}"));
+        id
+    }
+
+    /// Restores a dormant tab without creating an engine view or starting a network request. Selecting the
+    /// tab later revives it through the normal `show` path.
+    pub fn create_discarded(&mut self, url: &str, title: &str) -> WebViewId {
+        let id = self.next;
+        self.next += 1;
+        self.views.insert(id, WebViewState { url: url.into(), title: title.into(), ..Default::default() });
+        self.discarded.insert(id);
         id
     }
 
@@ -439,9 +539,51 @@ impl WebProcessPool {
     pub fn go_forward(&mut self, id: WebViewId) {
         self.send(&format!("forward {id}"));
     }
+    /// Remove back/forward entries while keeping the current document.
+    pub fn clear_session_history(&mut self, id: WebViewId) {
+        self.send(&format!("clear-history {id}"));
+    }
+    /// Clear engine-owned cookies, local/session storage and the HTTP cache.
+    pub fn clear_website_data(&mut self) {
+        self.send("clear-site-data");
+    }
     /// Answers a `Dialog`: `ok` is OK (true) or Cancel; `text` is a prompt's value.
     pub fn dialog_reply(&mut self, id: WebViewId, token: u32, ok: bool, text: &str) {
         self.send(&format!("dialog-reply {id} {token} {} {}", if ok { "ok" } else { "cancel" }, escape_line(text)));
+    }
+
+    /// Answer a native file input. `None` cancels. Invalid, relative, non-UTF-8 or oversized
+    /// path lists cancel rather than silently uploading a different path. At most 128 paths,
+    /// 4096 UTF-8 bytes per path and 64 KiB encoded JSON are accepted.
+    pub fn file_picker_reply(&mut self, id: WebViewId, token: u32, paths: Option<&[PathBuf]>) {
+        use bifrost_core::json::Json;
+        if token == 0 || !self.views.contains_key(&id) { return; }
+        let selection = paths.filter(|paths| paths.len() <= MAX_PICKER_PATHS).and_then(|paths| {
+            paths.iter().map(|path| {
+                let text = path.to_str()?;
+                (path.is_absolute() && text.len() <= MAX_PICKER_PATH_BYTES && !text.contains('\0'))
+                    .then(|| Json::Str(text.to_owned()))
+            }).collect::<Option<Vec<_>>>()
+        });
+        let json = selection.map(Json::Arr).unwrap_or(Json::Null).encode();
+        let json = if json.len() <= MAX_PICKER_JSON { json.as_str() } else { "null" };
+        self.send(&format!("file-reply {id} {token} {json}"));
+    }
+
+    /// Answer a native color input with RGB channels, or cancel with `None`.
+    pub fn color_picker_reply(&mut self, id: WebViewId, token: u32, color: Option<(u8, u8, u8)>) {
+        if token == 0 || !self.views.contains_key(&id) { return; }
+        let response = match color {
+            Some((r, g, b)) => format!("ok {r} {g} {b}"),
+            None => "cancel".into(),
+        };
+        self.send(&format!("color-reply {id} {token} {response}"));
+    }
+
+    /// Answer a document's request to leave its current page.
+    pub fn unload_reply(&mut self, id: WebViewId, token: u32, allow: bool) {
+        if token == 0 || !self.views.contains_key(&id) { return; }
+        self.send(&format!("unload-reply {id} {token} {}", if allow { "allow" } else { "cancel" }));
     }
 
     /// Answers a `Menu` with the chosen entry indexes (one for a context menu or single select; none dismisses).
@@ -488,6 +630,7 @@ impl WebProcessPool {
     /// The engine reports `Started` late or not at all for some loads; a request shows progress at once.
     fn started(&mut self, id: WebViewId) {
         if let Some(st) = self.views.get_mut(&id) {
+            st.status_text.clear();
             st.loading = true;
             st.progress = 0.1;
         }
@@ -550,6 +693,28 @@ impl WebProcessPool {
         self.send(&format!("touch {k} {finger} {fx} {fy}"));
     }
 
+    /// A primary mouse press, drag, release or hover, preserving native text selection and pointer events.
+    pub fn mouse(&mut self, kind: TouchKind, x: f32, y: f32) {
+        let kind = match kind {
+            TouchKind::Down => "d",
+            TouchKind::Move => "m",
+            TouchKind::Up => "u",
+            TouchKind::Cancel => "c",
+        };
+        self.send(&format!("mouse {kind} {} {}", x - self.frame.0 as f32, y - self.frame.1 as f32));
+    }
+    /// Refresh the text available to the native engine clipboard delegate before a page key event.
+    pub fn set_clipboard(&mut self, text: &str) {
+        self.send(&format!("clipboard {}", crate::webview_dev::escape_full(text)));
+    }
+    /// Clear the native page hover target when the pointer enters chrome or leaves the window.
+    pub fn mouse_leave(&mut self) {
+        if let Some(st) = self.visible.and_then(|id| self.views.get_mut(&id)) {
+            st.status_text.clear();
+        }
+        self.send("mouseleave");
+    }
+
     /// Secondary click (right-click, or a long press) at window pixel `(x, y)`: the page may answer with a `Menu` event.
     pub fn secondary_click(&mut self, x: f32, y: f32) {
         let (fx, fy) = (x - self.frame.0 as f32, y - self.frame.1 as f32);
@@ -598,9 +763,6 @@ impl WebProcessPool {
     pub fn poll(&mut self) -> (Vec<WebViewEvent>, bool) {
         let mut events = Vec::new();
         let mut frame = false;
-        if std::mem::take(&mut self.ack_pending) {
-            self.send("ack");
-        }
         let mut chunk = [0u8; 8192];
         loop {
             match self.stdout.read(&mut chunk) {
@@ -645,6 +807,14 @@ impl WebProcessPool {
 
     fn handle(&mut self, line: &str, events: &mut Vec<WebViewEvent>) -> bool {
         let (verb, rest) = line.split_once(' ').unwrap_or((line, ""));
+        if verb == "fatal" {
+            self.startup_error = Some(unescape_line(rest));
+            return false;
+        }
+        if verb == "clipboard" {
+            events.push(WebViewEvent::ClipboardChanged(unescape_line(rest)));
+            return false;
+        }
         if verb == "pong" {
             self.pong = true;
             return false;
@@ -664,16 +834,26 @@ impl WebProcessPool {
                 if self.map.as_ref().is_none_or(|m| m.len() < len) {
                     self.map = Map::new(&self.shm, self.shm_len).ok();
                 }
-                if self.map.is_some() {
+                if let Some(map) = &self.map {
+                    let count = len / 4;
+                    // The producer is waiting for ack. Finish this snapshot before allowing reuse;
+                    // chrome redraws must read this owned frame, never the producer's buffer.
+                    self.pixels.resize(count, 0);
+                    self.pixels.copy_from_slice(&map.pixels()[..count]);
                     self.pixels_size = (w, h);
                 }
             }
-            // draw() blits straight from the shared memory, so the ack waits for the next poll
-            self.ack_pending = true;
+            // Stale/invalid frames also release the producer without replacing the visible snapshot.
+            self.send("ack");
             return true;
         }
         let (id_text, tail) = rest.split_once(' ').unwrap_or((rest, ""));
         let Ok(id) = id_text.parse::<WebViewId>() else { return false };
+        if matches!(verb, "file-picker" | "color-picker" | "unload" | "status")
+            && (id_text.is_empty() || !id_text.bytes().all(|b| b.is_ascii_digit()))
+        {
+            return false;
+        }
         if verb == "created" {
             let (opener, url) = tail.split_once(' ').unwrap_or((tail, ""));
             let opener = opener.parse().unwrap_or(0);
@@ -683,16 +863,63 @@ impl WebProcessPool {
         }
         let Some(st) = self.views.get_mut(&id) else { return false };
         match verb {
+            "file-picker" => {
+                if let Some((token, request)) = tail.split_once(' ') {
+                    if let (Some(token), Some((multiple, filters))) = (control_token(token), picker_request(request)) {
+                        events.push(WebViewEvent::FilePicker { id, token, multiple, filters });
+                    }
+                }
+            }
+            "color-picker" => {
+                let mut fields = tail.split(' ');
+                if let (Some(token), Some(r), Some(g), Some(b), None) =
+                    (fields.next(), fields.next(), fields.next(), fields.next(), fields.next())
+                {
+                    if let (Some(token), Some(r), Some(g), Some(b)) =
+                        (control_token(token), color_channel(r), color_channel(g), color_channel(b))
+                    {
+                        events.push(WebViewEvent::ColorPicker { id, token, color: (r, g, b) });
+                    }
+                }
+            }
+            "unload" => {
+                if let Some(token) = control_token(tail) {
+                    // load/reload optimistically showed progress. The old document is still current
+                    // until the user permits leaving; Stay may produce no further load notification.
+                    st.loading = false;
+                    st.progress = 1.0;
+                    events.push(WebViewEvent::UnloadRequested { id, token });
+                }
+            }
+            "status" => {
+                // Escaping can expand a 4096-byte native status into twice as many wire bytes.
+                if tail.len() <= MAX_STATUS_BYTES * 2 {
+                    let text = unescape_line(tail);
+                    if text.len() <= MAX_STATUS_BYTES && st.status_text != text {
+                        st.status_text = text;
+                        events.push(WebViewEvent::StatusTextChanged(id));
+                    }
+                }
+            }
+            "favicon" => {
+                if tail.len() == 32 * 32 * 8 {
+                    if let Some(rgba) = bifrost_core::plist::hex_decode(tail) {
+                        events.push(WebViewEvent::FaviconChanged { id, rgba });
+                    }
+                }
+            }
             "title" => {
                 st.title = tail.into();
                 events.push(WebViewEvent::TitleChanged(id));
             }
             "url" => {
+                st.status_text.clear();
                 st.url = tail.into();
                 events.push(WebViewEvent::UrlChanged(id));
             }
             "load" => match tail {
                 "started" => {
+                    st.status_text.clear();
                     st.loading = true;
                     st.progress = 0.1;
                     events.push(WebViewEvent::LoadStarted(id));
@@ -772,11 +999,10 @@ impl WebProcessPool {
     pub fn draw(&mut self, s: &mut Surface) {
         let (fx, fy, fw, fh) = self.frame;
         let (w, h) = self.pixels_size;
-        let Some(map) = &self.map else { return };
-        if w == 0 || self.visible.is_none() || map.pixels().len() < w * h {
+        if w == 0 || self.visible.is_none() || self.pixels.len() < w * h {
             return;
         }
-        let pixels = map.pixels();
+        let pixels = &self.pixels;
         let cols = w.min(fw as usize);
         let rows = h.min(fh as usize);
         // Fast path: full-width contiguous copy avoiding row-by-row slice iterations
@@ -812,10 +1038,6 @@ impl WebProcessPool {
                 s.px[at..at + n].copy_from_slice(&pixels[row * w..row * w + n]);
             }
         }
-        // the pixels are copied out, so the engine may write the next frame now
-        if std::mem::take(&mut self.ack_pending) {
-            self.send("ack");
-        }
     }
 
     /// The pixel size of the content frame.
@@ -830,7 +1052,7 @@ impl WebProcessPool {
 
     /// True when a valid frame with pixels has been received and is ready for display.
     pub fn has_frame(&self) -> bool {
-        self.pixels_size.0 > 0 && self.pixels_size.1 > 0 && self.map.is_some() && self.visible.is_some()
+        self.pixels_size.0 > 0 && self.pixels_size.1 > 0 && !self.pixels.is_empty() && self.visible.is_some()
     }
 }
 
@@ -874,9 +1096,19 @@ pub const ZOOM_MAX: f32 = 5.0;
 impl Drop for WebProcessPool {
     fn drop(&mut self) {
         self.send("quit");
-        let _ = self.child.kill();
+        self.kill_engine();
         let _ = self.child.wait();
     }
+}
+
+fn terminate_engine_group(child: &mut Child) {
+    extern "C" { fn kill(pid: i32, signal: i32) -> i32; }
+    // Each child creates its own process group before exec. A negative PID addresses only that group;
+    // killing it also cleans up Servo content processes when the engine is wedged or has already exited.
+    if let Ok(pid) = i32::try_from(child.id()) {
+        if pid > 0 { unsafe { kill(-pid, 9); } }
+    }
+    let _ = child.kill();
 }
 
 /// The character of a letter, digit or punctuation key (evdev code), for Ctrl/Cmd shortcuts in the page.
@@ -954,6 +1186,27 @@ mod tests {
     }
 
     use super::*;
+
+    #[test]
+    fn native_favicon_and_clipboard_events_validate_the_wire_payload() {
+        let profile = std::env::temp_dir().join(format!("bifrost-native-events-{}", std::process::id()));
+        let mut pool = WebProcessPool::spawn(Path::new("/bin/cat"), &profile).unwrap();
+        pool.views.insert(7, WebViewState::default());
+        let mut events = Vec::new();
+        let encoded = "01ab02ff".repeat(32 * 32);
+        pool.handle(&format!("favicon 7 {encoded}"), &mut events);
+        assert_eq!(events, vec![WebViewEvent::FaviconChanged { id: 7, rgba: [1, 171, 2, 255].repeat(32 * 32) }]);
+        events.clear();
+        for line in [format!("favicon 8 {encoded}"), "favicon 7 00".into(), format!("favicon 7 {}", "z".repeat(encoded.len()))] {
+            pool.handle(&line, &mut events);
+        }
+        assert!(events.is_empty(), "unknown views and malformed icon data must be ignored");
+        pool.handle("clipboard Halló\\nworld\\\\path", &mut events);
+        pool.handle("clipboard ", &mut events);
+        assert_eq!(events, vec![WebViewEvent::ClipboardChanged("Halló\nworld\\path".into()), WebViewEvent::ClipboardChanged(String::new())]);
+        drop(pool);
+        std::fs::remove_dir_all(profile).unwrap();
+    }
 
     #[test]
     fn zoom_clamps_and_find_resets_count() {

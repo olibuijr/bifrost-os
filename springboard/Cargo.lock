@@ -526,12 +526,13 @@ dependencies = [
 
 [[package]]
 name = "bifrost-browser"
-version = "0.14.4"
+version = "0.16.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
  "png",
  "springboard",
+ "url",
 ]
 
 [[package]]

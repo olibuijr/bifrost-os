@@ -25,10 +25,8 @@ const FILL_POST: &str = ");return 'bifrost-fill:1'})()";
 
 /// The host of a URL or a stored site: no scheme, port, path, user info, `www.`, lower case.
 pub fn bare_host(site: &str) -> String {
-    let rest = site.split_once("://").map_or(site, |(_, r)| r);
-    let auth = rest.split(['/', '?', '#']).next().unwrap_or("");
-    let host = auth.rsplit('@').next().unwrap_or("").split(':').next().unwrap_or("");
-    let host = host.trim().to_ascii_lowercase();
+    let value = if site.contains("://") { site.trim().to_string() } else { format!("https://{}", site.trim()) };
+    let Some(host) = url::Url::parse(&value).ok().and_then(|url| url.host_str().map(str::to_string)) else { return String::new() };
     host.strip_prefix("www.").map(str::to_string).unwrap_or(host)
 }
 

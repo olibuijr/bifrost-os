@@ -52,6 +52,8 @@ struct Pend {
 }
 
 enum Step {
+    Memory,
+    EnginePreferences,
     Eval,
     Dom,
     Source { url: String },
@@ -65,6 +67,12 @@ enum Step {
     Nav { wait: Wait, saw: bool },
     Wait { what: WaitFor, base_seq: u64, inflight: bool, next_poll: Instant, quiet: Option<(String, Instant)> },
     Find,
+}
+
+impl Step {
+    fn engine_wide(&self) -> bool {
+        matches!(self, Self::Memory | Self::EnginePreferences)
+    }
 }
 
 fn internal(msg: impl Into<String>) -> RpcError {
@@ -153,6 +161,23 @@ impl Browser {
         Ok(RpcError::pending(token, timeout_ms + 1500))
     }
 
+    /// Engine diagnostics have their own pending path: inspecting resource use must not revive discarded tabs.
+    fn ctl_engine_pend(&mut self, timeout_ms: u64, step: Step) -> Result<RpcError, RpcError> {
+        self.engine_check()?;
+        let token = rpc::new_token();
+        let eval_tok = rpc::new_token();
+        if let Some(pool) = self.pool.as_mut() {
+            match step {
+                Step::Memory => pool.dev_memory(eval_tok),
+                Step::EnginePreferences => pool.dev_preferences(eval_tok),
+                _ => return Err(internal("not an engine diagnostic request")),
+            }
+        }
+        let now = Instant::now();
+        self.ctl.pend.push(Pend { token, view: 0, deadline: now + Duration::from_millis(timeout_ms), started: now, eval_tok, deferred: None, step });
+        Ok(RpcError::pending(token, timeout_ms + 1500))
+    }
+
     fn view_json(&self, i: usize) -> Json {
         let Some(t) = self.tabs.get(i) else { return Json::Null };
         let st = self.pool.as_ref().and_then(|p| p.state(t.view));
@@ -197,6 +222,8 @@ impl Browser {
     pub(crate) fn ctl_rpc(&mut self, method: &str, params: &Json) -> Result<Json, RpcError> {
         let req = control::parse(method, params)?;
         match req {
+            Req::Memory { timeout_ms } => Err(self.ctl_engine_pend(timeout_ms, Step::Memory)?),
+            Req::EnginePreferences { timeout_ms } => Err(self.ctl_engine_pend(timeout_ms, Step::EnginePreferences)?),
             Req::State => {
                 let (w, h, dpr) = self.viewport_now();
                 let cur = self.view();
@@ -260,7 +287,7 @@ impl Browser {
             Req::History { query, limit, remove, clear, clear_since } => {
                 let removed = remove.map(|u| self.store.remove_history(&u));
                 if clear {
-                    self.store.clear_history();
+                    self.clear_browsing_history();
                 }
                 let cleared = clear_since.map(|since| self.store.clear_history_during(since, u64::MAX));
                 let mut sorted = self.store.history.clone();
@@ -473,13 +500,11 @@ impl Browser {
                 match ua {
                     None => Ok(control::obj(vec![("ua", control::text(self.ctl.ua.as_deref().or(self.dev.user_agent()).unwrap_or("default")))])),
                     Some(ua) => {
-                        // Servo 0.7.0 reads the user agent at start-up only (engine `ua` verb); the request is
-                        // remembered and sent, and takes effect when the engine restarts.
                         self.ctl.ua = Some(ua.clone());
                         if let Some(p) = self.pool.as_mut() {
                             p.set_user_agent(Some(&ua).filter(|u| !u.is_empty()).map(|u| u.as_str()));
                         }
-                        Ok(control::obj(vec![("ua", control::text(&ua)), ("restart_required", Json::Bool(true))]))
+                        Ok(control::obj(vec![("ua", control::text(&ua)), ("restart_required", Json::Bool(false))]))
                     }
                 }
             }
@@ -553,6 +578,10 @@ impl Browser {
         }
         let mut keep = Vec::new();
         for mut p in std::mem::take(&mut self.ctl.pend) {
+            if p.step.engine_wide() {
+                keep.push(p);
+                continue;
+            }
             let mine = match ev {
                 WebViewEvent::LoadStarted(v) | WebViewEvent::LoadCommitted(v) | WebViewEvent::LoadFinished(v) | WebViewEvent::Closed(v) | WebViewEvent::ContentProcessTerminated(v, _) => *v == p.view,
                 _ => false,
@@ -622,7 +651,7 @@ impl Browser {
 
     fn ctl_on_dev(&mut self, ev: DevEvent) {
         let token = match &ev {
-            DevEvent::Eval { token, .. } | DevEvent::Shot { token, .. } => *token,
+            DevEvent::Eval { token, .. } | DevEvent::Shot { token, .. } | DevEvent::Memory { token, .. } | DevEvent::Preferences { token, .. } => *token,
         };
         let Some(i) = self.ctl.pend.iter().position(|p| p.eval_tok == token) else { return };
         let mut p = self.ctl.pend.remove(i);
@@ -630,6 +659,15 @@ impl Browser {
         let kept = match ev {
             DevEvent::Eval { result, .. } => self.on_eval(p, result),
             DevEvent::Shot { result, .. } => self.on_shot(p, result),
+            DevEvent::Memory { result, .. } if matches!(p.step, Step::Memory) => {
+                done(p.token, result.map_err(internal));
+                None
+            }
+            DevEvent::Preferences { result, .. } if matches!(p.step, Step::EnginePreferences) => {
+                done(p.token, result.map_err(internal));
+                None
+            }
+            DevEvent::Memory { .. } | DevEvent::Preferences { .. } => Some(p),
         };
         if let Some(p) = kept {
             self.ctl.pend.push(p);
@@ -776,7 +814,7 @@ impl Browser {
                 }
                 Some(p)
             }
-            Step::Nav { .. } | Step::Shot { .. } | Step::Find => Some(p),
+            Step::Nav { .. } | Step::Shot { .. } | Step::Find | Step::Memory | Step::EnginePreferences => Some(p),
         }
     }
 
@@ -841,7 +879,7 @@ impl Browser {
                 }
                 continue;
             }
-            if state.is_none() && !self.tabs.iter().any(|t| t.view == p.view) {
+            if !p.step.engine_wide() && state.is_none() && !self.tabs.iter().any(|t| t.view == p.view) {
                 done(p.token, Err(control::no_tab(p.view)));
                 continue;
             }
