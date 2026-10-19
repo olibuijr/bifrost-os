@@ -49,7 +49,7 @@ impl Browser {
                 if id >= TAB0 {
                     self.select((id - TAB0) as usize);
                 } else {
-                    self.activate(id as u32);
+                    self.activate_in(ctx, id as u32);
                 }
                 self.place_web(ctx);
                 true
@@ -93,6 +93,9 @@ impl Browser {
                     if let Some(i) = overview::hit(self.tabs.len(), wpt, self.content_top(), px, py) {
                         self.overview.open = false;
                         self.select(i);
+                    } else if self.chrome_hit(ui, ctx.cfg.w, x, y) == Some(Press::Bar(OVERVIEW)) {
+                        // the toolbar's Show All Tabs button closes the grid it opened
+                        self.overview.open = false;
                     }
                 }
                 true

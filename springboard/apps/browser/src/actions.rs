@@ -100,7 +100,8 @@ impl Browser {
     /// answers with the chosen target; the app keeps no state for it.
     pub(super) fn share_page(&self, ctx: &Ctx) -> bool {
         if let Some(url) = self.web_url() {
-            let anchor = Rect { x: 0.0, y: 0.0, w: 0.0, h: 0.0 };
+            // under the toolbar's Share button when it is on the bar, else at the window's corner
+            let anchor = self.bar_layout.as_ref().and_then(|l| l.rect_of(SHARE)).unwrap_or(Rect { x: 0.0, y: 0.0, w: 0.0, h: 0.0 });
             let _ = bifrost_app::share::show_picker(ctx, &[bifrost_app::share::Payload::Url(url)], anchor);
         }
         false
@@ -159,7 +160,10 @@ impl Browser {
     pub(super) fn update_pointer(&mut self, ctx: &Ctx, x: f32, y: f32) {
         let ui = &ctx.ui;
         let (px, py) = (x / ui.pt(1.0), y / ui.pt(1.0));
-        let over = !self.sheet.open && !self.pageui.active() && py < UNIFIED_BAR_PT && self.address_rect(ui, ctx.cfg.w).contains(px, py);
+        let field = self.address_rect(ui, ctx.cfg.w);
+        // the page menu icon and reload / stop are buttons in the field: the pointer stays an arrow over them
+        let on_button = self.field_shows_page() && (Self::page_menu_rect(field).contains(px, py) || Self::reload_rect(field).contains(px, py));
+        let over = !self.sheet.open && !self.pageui.active() && py < UNIFIED_BAR_PT && field.contains(px, py) && !on_button;
         if let Some(change) = self.pointer.update(over) {
             system::send_pointer(ctx, change);
         }
@@ -199,6 +203,17 @@ impl Browser {
         }
     }
 
+    /// A toolbar press or an accessibility activation. Share needs the context for the shell's picker; everything
+    /// else is `activate`.
+    pub(super) fn activate_in(&mut self, ctx: &Ctx, id: u32) {
+        if id == SHARE {
+            self.downloads.open = false;
+            self.share_page(ctx);
+        } else {
+            self.activate(id);
+        }
+    }
+
     pub(super) fn activate(&mut self, id: u32) {
         if id == MAIN_MENU {
             self.toggle_main_menu();
@@ -221,6 +236,18 @@ impl Browser {
             (RELOAD, None, _) => {
                 self.storm.clear();
                 self.start()
+            }
+            // Servo 0.7.0 ignores the engine's stop command (the field still shows Stop until the load ends)
+            (STOP, Some(p), Some(v)) => p.stop_loading(v),
+            (OVERVIEW, _, _) => self.toggle_overview(),
+            (findbar::PREV, _, _) => self.find_step(FindDirection::Backward),
+            (findbar::NEXT, _, _) => self.find_step(FindDirection::Forward),
+            (findbar::DONE, _, _) => self.hide_find(),
+            // a click on the find field or the rest of the bar moves the typing there, off the address field
+            (findbar::FIELD, _, _) => {
+                self.editing = false;
+                self.sugg.clear();
+                self.sync_address();
             }
             (NEW_TAB, _, _) => {
                 if self.pool.is_none() {

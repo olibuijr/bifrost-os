@@ -31,8 +31,12 @@ impl Browser {
             s.blit(&img, (w as i32 - img.w as i32) / 2, (h as i32) / 2, 255, 255);
         }
 
-        // the unified toolbar band
+        // the unified toolbar band, tinted with the page's own colour when the page names one (themecolor.rs). The groups
+        // and the field keep their own plates, so the tint is never under text.
         widgets::toolbar_band(s, ui, Rect { x: 0.0, y: 0.0, w: wpt, h: UNIFIED_BAR_PT });
+        if let Some((r, g, b)) = self.toolbar_tint() {
+            s.fill_rrect(0.0, 0.0, s.w as f32, (ui.pt(UNIFIED_BAR_PT) - 1.0).max(0.0), 0.0, bifrost_app::kit::rgba(r, g, b, themecolor::TINT_ALPHA));
+        }
         if self.private {
             // a private window has a visibly dark toolbar (Browser)
             s.fill_rrect(0.0, 0.0, s.w as f32, ui.pt(UNIFIED_BAR_PT), 0.0, tokens::scrim(140));
@@ -46,10 +50,14 @@ impl Browser {
         let field = self.address_rect(ui, w);
         let placeholder = if self.private { "Private Browsing" } else { "Search or enter website name" };
         if self.editing || self.address.is_empty() {
+            // the magnifier belongs to searching: an empty field or one being edited
             widgets::search_field(s, ui, &self.address, field, placeholder, self.editing);
         } else {
-            // not editing: only the host, centred (Browser); the full URL returns on focus
-            widgets::search_field(s, ui, &TextField::new(), field, "", false);
+            // a loaded page: the plate without the magnifier, the page menu icon at its leading edge, reload (stop
+            // while loading) at its trailing edge and only the host between them, centred (Browser); the full URL
+            // returns on focus
+            s.fill_rrect(ui.pt(field.x), ui.pt(field.y), ui.pt(field.w), ui.pt(field.h), ui.pt(field.h / 2.0), bifrost_app::kit::ui::FIELD_BG.now());
+            widgets::outline_if_borders(s, ui, field, field.h / 2.0);
             let url = self.address.to_string();
             let host = host_of(&url);
             // site icon left of the host, the pair centred
@@ -68,19 +76,11 @@ impl Browser {
                 s.blit(ic, left, cy - icon_px as i32 / 2, 255, 255);
             }
             s.blit(&img, left + lead + (tw - img.w as i32) / 2, cy - img.h as i32 / 2, 255, 255);
-        }
-        // Reader button at the leading edge when the page has an article (Browser)
-        if let Some(v) = self.view().filter(|&v| !self.editing && self.reader.button(v)) {
-            let r = reader::button_rect(field);
-            glyphs::glyph(s, ui, "doc", Rect { x: r.x + r.w * 0.2, y: r.y + r.h * 0.2, w: r.w * 0.6, h: r.h * 0.6 }, if self.reader.is_active(v) { TINT } else { LABEL_2.now() });
-        }
-        // the star at the field's trailing edge: filled for a bookmarked page, an outline otherwise (Browser)
-        if let Some(st) = self.view().and_then(|v| self.pool.as_ref()?.state(v)) {
-            if !self.editing {
-                let marked = self.store.is_bookmarked(&st.url);
-                let (name, color) = if marked { ("star.fill", TINT) } else { ("star", LABEL_2.now()) };
-                glyphs::glyph(s, ui, name, star_rect(field), color);
-            }
+            // the page menu icon is tinted while Reader shows, which the menu also toggles
+            let reader_on = self.view().is_some_and(|v| self.reader.is_active(v));
+            glyphs::glyph(s, ui, "text.alignleft", Self::glyph_box(Self::page_menu_rect(field), 0.28), if reader_on { TINT } else { LABEL_2.now() });
+            let reload = if self.page_loading() { "xmark" } else { "arrow.clockwise" };
+            glyphs::glyph(s, ui, reload, Self::glyph_box(Self::reload_rect(field), 0.3), LABEL_2.now());
         }
         // load progress along the bottom of the address field (Browser)
         if let Some(st) = self.view().and_then(|v| self.pool.as_ref()?.state(v)) {

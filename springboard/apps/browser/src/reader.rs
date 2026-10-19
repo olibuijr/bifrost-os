@@ -1,15 +1,14 @@
-//! Reader (Browser: the Reader button in the address field, Cmd+Shift+R). A page script finds the article (an
+//! Reader (Browser: Show Reader in the page menu at the address field's leading edge, Cmd+Shift+R). A page script finds the article (an
 //! `<article>`/`<main>` element or the block with the most paragraph text, scored by text length and link density),
 //! the script reports the article as flat node records; the app builds a `DomSnapshot` (ui `dom_snapshot`) from them and
 //! writes the body from that tree, so only the allowed tags and attributes reach the page. The app renders its title,
 //! byline and body as a clean `data:` page with a system font stack and the window's
-//! Light/Dark appearance, and loads it in the same view. Esc, the button or Cmd+Shift+R loads the original URL again.
+//! Light/Dark appearance, and loads it in the same view. Esc, the menu item or Cmd+Shift+R loads the original URL again.
 //! Answers arrive through the token-correlated dev eval (a plain eval reply is capped at 4 KB).
 //! Print (Cmd+P) is not possible: Servo 0.7.0 exposes no printing API (`WebView` has no print call), so there is no item.
 use std::collections::HashMap;
 
 use bifrost_app::controls::dom_snapshot::{DomSnapshot, NodeKind, NodeRecord};
-use bifrost_app::controls::Rect;
 use bifrost_core::json::Json;
 use bifrost_app::webview::{WebProcessPool, WebViewId};
 use bifrost_app::webview_dev::DevEvent;
@@ -272,11 +271,6 @@ pub fn data_url(html: &str) -> String {
         }
     }
     out
-}
-
-/// The button's rectangle at the field's leading edge (points).
-pub fn button_rect(field: Rect) -> Rect {
-    Rect { x: field.x, y: field.y, w: field.h, h: field.h }
 }
 
 #[cfg(test)]

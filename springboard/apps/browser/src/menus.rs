@@ -2,12 +2,9 @@
 use super::*;
 
 impl Browser {
+    /// The page menu opens under the icon at the address field's leading edge (Alt+F and F10 open it there too).
     pub(super) fn main_menu_anchor(&self, ui: &Ui, w: u32) -> Rect {
-        self.bar_layout.as_ref().and_then(|layout| layout.rect_of(MAIN_MENU))
-            .unwrap_or_else(|| {
-                let bounds = Self::bar_bounds(ui, w);
-                Rect { x: (bounds.x + bounds.w - widgets::CAPSULE_PT).max(0.0), y: 0.0, w: widgets::CAPSULE_PT, h: UNIFIED_BAR_PT }
-            })
+        Self::page_menu_rect(self.address_rect(ui, w))
     }
 
     fn main_menu_items(&self) -> Vec<bifrost_app::controls::menu::MenuItem> {
