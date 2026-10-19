@@ -14,6 +14,17 @@ pub enum Style {
     Timer,
 }
 
+impl Style {
+    /// The style an app names in a timeline entry: `"relative"` or `"timer"`.
+    pub fn from_key(key: &str) -> Option<Style> {
+        match key {
+            "relative" => Some(Style::Relative),
+            "timer" => Some(Style::Timer),
+            _ => None,
+        }
+    }
+}
+
 /// The text shown at `now` for a target date. A fraction of a second is cut off towards zero, so the distance is
 /// counted in whole seconds.
 pub fn text(style: Style, target: f64, now: f64) -> String {
@@ -109,5 +120,12 @@ mod tests {
         assert_eq!(text(Style::Relative, target, at - 0.5), "in 2 minutes");
         assert_eq!(text(Style::Relative, target, at), "in 2 minutes");
         assert_eq!(text(Style::Relative, target, at + 0.5), "in 1 minute");
+    }
+
+    #[test]
+    fn an_app_names_a_style_by_its_key() {
+        assert_eq!(Style::from_key("relative"), Some(Style::Relative));
+        assert_eq!(Style::from_key("timer"), Some(Style::Timer));
+        assert_eq!(Style::from_key("offset"), None);
     }
 }

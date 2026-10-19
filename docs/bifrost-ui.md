@@ -5112,6 +5112,53 @@ energy is not built: `activity-desktop/src/sample.rs` has the `/proc` CPU-time s
 is not shared with the shell. Apple parity gap: ControlWidgetButton, ControlWidgetToggle and ControlValueProvider
 on screen.
 
+## App widgets (WidgetKit and Notification Center: `shell::services::widgets_timeline`, `bifrost_app::widgets_timeline`)
+
+Apps ship widgets through the `widgets_timeline` service. The shell draws them as rows in the Notification Centre
+column (the menu bar clock) and lists them in Edit Widgets. Status (2026-10-19): `partial` for both frameworks.
+
+**Kinds and families.** An app registers the kinds it offers with the service call `register` (SDK `Kind`, `register`)
+or as `[[widget]]` tables in `manifest.toml`: `id`, `name`, `description`, `families = ["small", "medium", "large"]`
+(left out: small and medium), `configurable`. The shell reads the tables for every installed app
+(`apphost::Manifest::widgets`, `ui::widget_kind::parse_manifest`) and registers them on its tick; a table with an unsafe
+id or only unknown sizes is dropped. A registered kind is in the gallery before its first timeline and keeps the
+person's choices (placed, size, options) when registered again; a new registration that drops the size a widget had
+moves it to its smallest size. A kind that was only reloaded keeps the two sizes the gallery always offered (Small,
+Large). `set_family` refuses a size the kind does not support. Edit Widgets shows one chip per supported size, and the
+column draws a row 58 pt (Small), 77 pt (Medium) or 96 pt (Large) high, stacked by `ui::widget_column::flow`.
+
+**Timelines.** `reload` (SDK `reload`, or `reload_rich` for the fields below) sends dated entries and a reload policy;
+the shell asks the app for a new timeline when the reload date passes. Each entry may carry:
+- `clock: {style: "relative" | "timer", target}` (SDK `Rich::with_clock`): live date text. `{}` in the entry's text marks
+  where it goes, else it follows the text, and a blank text shows the clock alone. The shell writes it at draw time
+  (`Text::display`), so it keeps counting while the app is away, and redraws the open column when the wording next
+  changes (`ui::widget_date::next_change`, `widgets_timeline::next_refresh`).
+- `actions: [{id, label, intent, params?, toggle?}]` (SDK `Button`, `Rich::with_button`), at most three. A tap in the
+  column runs the app's own `[[intent]]` with the string parameters over the app's control socket on a worker thread
+  (`shell::intents::run_with`); the app must be running. A toggle also sends its new state as the parameter `on`
+  (`"true"` or `"false"`, read with `controls::control_widget::toggle_param`), shows the new state at once, is drawn
+  lighter while it waits and goes back when the intent fails or cannot be reached; a second tap while it waits is
+  refused, and a reload brings the app's own state (`ui::widget_action::ToggleSet`). Button and intent ids are checked
+  (`ButtonSpec`), so no unsafe id reaches a request line.
+- A reload may carry `link` (`bifrost-app://app/path`, SDK `reload_rich`'s last argument): a tap on the row opens the
+  app at it.
+
+Each row carries a spoken label (`Row::label`: the title, the text as the value and an "Actions:" hint naming the
+buttons, built with `ui::widget_ax`), returned as `label` by the `widgets` call.
+
+**Tests.** `ui` widget_kind, widget_action, widget_column and widget_date; the service's `widgets_timeline::tests`
+(registration, sizes, clocks, buttons, toggles, validation); the SDK's `widgets_timeline::tests` (the JSON the calls
+send).
+
+**Apple gaps, recorded.** Apple runs a widget in its own extension process and starts it on demand; BifrOSt apps answer
+reload events themselves, and a button needs the app to be running (a tap on a button of an app that is not running
+fails, and a toggle goes back). There is no declarative widget view: an entry is a title, a value, live date text and
+buttons, and the shell draws the row. Accented and vibrant rendering modes (`ui::widget_render`), location and network
+grants (`ui::widget_access`), the AT-SPI export of the spoken label, push-driven reloads (no APNs) and the home-screen
+grid for third-party kinds are not built. `ui::widget_column::layout` (Block, Controller, DisplayMode) is still not
+called by the shell. The earlier note that the Control Center panel does not draw app controls is out of date: the
+panel draws one tile per control the user added and has an Edit Controls list (`shell/control_center.rs`).
+
 ## Colour management (ColorSync: `bifrost_render::icc`, `icc_lut`, `icc_transform`, `icc_builtin`, `edid`)
 
 Clean-room from the public ICC.1:2022 specification. Code: `render/src/icc.rs` (header, tag table, `desc`/`mluc`

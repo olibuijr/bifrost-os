@@ -10,9 +10,9 @@
   {
    "feature": "Widget extension and widget configuration (Widget, WidgetBundle, StaticConfiguration)",
    "apple": "Widget, WidgetBundle, StaticConfiguration, WidgetCenter",
-   "bifrost": "springboard/ui/src/widget_kind.rs",
+   "bifrost": "springboard/ui/src/widget_kind.rs; springboard/src/shell/services/widgets_timeline.rs (register, sync_manifests); springboard/sdk/src/widgets_timeline.rs (Kind, register); springboard/src/shell/apphost.rs (Manifest::widgets); springboard/ui/src/widget_kind.rs (parse_manifest)",
    "status": "partial",
-   "note": "The widget kind registry (identifiers, sizes, bundles, lookups by size) is tested headless in springboard/ui/tests/parity_sdk-tests-10-w7.rs. Not wired into apps or the shell, and not yet tested on the VM or Midget. Widgets are compiled into the shell. No app can register a widget kind, and there is no bundle or extension process."
+   "note": "The widget kind registry (identifiers, sizes, bundles, lookups by size) is tested headless in springboard/ui/tests/parity_sdk-tests-10-w7.rs. Not wired into apps or the shell, and not yet tested on the VM or Midget. Widgets are compiled into the shell. No app can register a widget kind, and there is no bundle or extension process. Built 2026-10-19: an app registers the widget kinds it offers, either with the widgets_timeline service call register (SDK Kind and register: id, name, description, sizes) or as [[widget]] tables in manifest.toml (id, name, description, families, configurable), which the shell reads for every installed app and registers on its tick. A registered kind is in the Edit Widgets gallery before its first timeline, keeps the person's choices (placed, size, options) across re-registration and reloads, and moves to its smallest size when a new registration drops the size it had. Tests: ui widget_kind::tests (manifest_tables_become_kinds_*, a_bad_table_is_dropped_*), services widgets_timeline::tests (a_registered_kind_is_in_the_gallery_*, a_kind_takes_only_the_sizes_it_registered_*, registering_checks_the_kinds, a_registered_kind_takes_options_*), sdk widgets_timeline::tests (a_register_call_names_each_kind_*). Still no separate extension process or widget bundle type for apps: the app itself answers reload events. Midget check: click the clock in the menu bar, Edit Widgets: a widget kind an app declares with [[widget]] in its manifest.toml (for example id = \"next-event\", name = \"Next Event\", families = [\"small\", \"medium\", \"large\"]) is listed with its name and description and one chip per declared size, before the app has run."
   },
   {
    "feature": "Configurable widgets (AppIntentConfiguration, WidgetInfo)",
@@ -24,23 +24,23 @@
   {
    "feature": "Timeline updates (TimelineProvider, TimelineEntry, Timeline, WidgetCenter reload)",
    "apple": "TimelineProvider, AppIntentTimelineProvider, TimelineEntry, Timeline, WidgetCenter",
-   "bifrost": "springboard/ui/src/timeline.rs, springboard/ui/src/relevance.rs; tests: springboard/ui/tests/parity_sdk-tests-01b.rs; wired: springboard/src/shell/services/widgets_timeline.rs (reload keeps options and carries the link; current, due)",
+   "bifrost": "springboard/ui/src/timeline.rs, springboard/ui/src/relevance.rs; tests: springboard/ui/tests/parity_sdk-tests-01b.rs; wired: springboard/src/shell/services/widgets_timeline.rs (reload keeps options and carries the link; current, due); springboard/sdk/src/widgets_timeline.rs (reload_rich)",
    "status": "partial",
-   "note": "Entries, reload policies and time clues are tested headless (headless_timeline_* in ui/tests/parity_sdk-tests-01b.rs). Apps send timelines through the widgets_timeline service (reload), and the shell asks an app for a new one when its reload date passes (due). There is no WidgetCenter reload call into the shell from the app side beyond that. Not yet verified on Midget."
+   "note": "Entries, reload policies and time clues are tested headless (headless_timeline_* in ui/tests/parity_sdk-tests-01b.rs). Apps send timelines through the widgets_timeline service (reload), and the shell asks an app for a new one when its reload date passes (due). There is no WidgetCenter reload call into the shell from the app side beyond that. Not yet verified on Midget. Built 2026-10-19: apps can send entries with live date text and buttons through reload_rich, and the shell redraws the open column when live text changes or a toggle waits (next_refresh). Midget check: click the clock in the menu bar with Notes, Calendar or Weather running: their widget rows show the current entry; send a new timeline and the row changes after the next reload event."
   },
   {
    "feature": "Widget families and sizes (systemSmall, systemMedium, systemLarge)",
    "apple": "WidgetFamily, widgetFamily, Supporting additional widget sizes",
-   "bifrost": "springboard/src/shell/homeconf.rs (Size, cells); springboard/src/shell/widgets/mod.rs (SMALL_PT 155, MEDIUM_PT 329, Kind::size); tests: springboard/tests/parity_sdk-tests-01b.rs",
+   "bifrost": "springboard/src/shell/homeconf.rs (Size, cells); springboard/src/shell/widgets/mod.rs (SMALL_PT 155, MEDIUM_PT 329, Kind::size); tests: springboard/tests/parity_sdk-tests-01b.rs; springboard/src/shell/services/widgets_timeline.rs (Widget::family, set_family); springboard/ui/src/widget_column.rs (flow); springboard/src/shell/notify/center.rs (center_widget_rects, size chips)",
    "status": "partial",
-   "note": "Small and medium families only, in points and grid cells (headless_widget_families_* in springboard/tests/parity_sdk-tests-01b.rs). The Large flag in the timeline store makes a row taller in Notification Centre; it is not a systemLarge family. Apps cannot choose a family."
+   "note": "Small and medium families only, in points and grid cells (headless_widget_families_* in springboard/tests/parity_sdk-tests-01b.rs). The Large flag in the timeline store makes a row taller in Notification Centre; it is not a systemLarge family. Apps cannot choose a family. Built 2026-10-19: Small, Medium and Large are real families end to end. A kind supports the sizes it registered (kinds that were only reloaded keep Small and Large); Edit Widgets shows one chip per supported size (Small, Medium, Large) and set_family refuses a size the kind does not support; the Notification Centre column draws a row as tall as its family (58, 77 or 96 pt) and stacks the rows with widget_column::flow, which keeps the leading rows that end above the dock. The app sees the size in the widgets call (family, families) and the visibility event keeps reporting large. Tests: widget_column::tests (flowed_rows_*, the_first_row_that_crosses_the_bottom_*), widgets_timeline::tests (a_registered_kind_is_in_the_gallery_*, a_kind_takes_only_the_sizes_it_registered_*). The row layout is a stack of text lines; an app does not yet get a per-family layout. Midget check: click the clock in the menu bar, Edit Widgets: a widget registered with three sizes shows Small, Medium and Large chips; choose Medium, tap Done and the widget row is taller than Small and shorter than Large."
   },
   {
    "feature": "Home-screen placement and gallery (Add Widget, edit, resize, remove)",
    "apple": "Widget gallery on the Home screen, widget editing",
-   "bifrost": "springboard/src/shell/homeconf.rs (find_spot, resize, fits); tests: springboard/tests/parity_sdk-tests-01b.rs; wired: springboard/src/shell/services/widgets_timeline.rs (set_placed, set_large, listing); springboard/src/shell/widgetgallery.rs; springboard/src/shell/homeedit.rs; springboard/src/shell/notify/center.rs",
+   "bifrost": "springboard/src/shell/homeconf.rs (find_spot, resize, fits); tests: springboard/tests/parity_sdk-tests-01b.rs; wired: springboard/src/shell/services/widgets_timeline.rs (set_placed, set_large, listing); springboard/src/shell/widgetgallery.rs; springboard/src/shell/homeedit.rs; springboard/src/shell/notify/center.rs; springboard/src/shell/services/widgets_timeline.rs (register, listing: families, family); springboard/src/shell/notify/center.rs (center_gallery_layout)",
    "status": "partial",
-   "note": "Spots on the grid, resizing and the gallery's placed and large flags are tested headless (headless_widget_placement_* in springboard/tests/parity_sdk-tests-01b.rs). Users place, resize and remove shell widgets from the gallery. Third-party widgets do not appear in it. Not yet verified on Midget."
+   "note": "Spots on the grid, resizing and the gallery's placed and large flags are tested headless (headless_widget_placement_* in springboard/tests/parity_sdk-tests-01b.rs). Users place, resize and remove shell widgets from the gallery. Third-party widgets do not appear in it. Not yet verified on Midget. Built 2026-10-19: the Edit Widgets gallery lists third-party kinds with the registered name and description (before and after their first timeline) and one size chip per supported size; the add/remove disc and the Options chip behave as before. Tests: widgets_timeline::tests (a_registered_kind_is_in_the_gallery_*). The home-screen grid (homeconf) still places only the shell's own kinds; third-party kinds are placed in the Notification Centre column. Midget check: click the clock in the menu bar, Edit Widgets: widgets that apps registered are listed with their names, a plus or minus disc and their size chips; remove one and it leaves the column, add it and it returns."
   },
   {
    "feature": "Today View and widget list ordering",
@@ -59,9 +59,9 @@
   {
    "feature": "Dynamic dates and clock content in widgets",
    "apple": "Displaying dynamic dates in widgets, Text date styles",
-   "bifrost": "springboard/ui/src/widget_date.rs (text, next_change); springboard/ui/tests/parity_sdk-tests-11.rs",
+   "bifrost": "springboard/ui/src/widget_date.rs (text, next_change); springboard/ui/tests/parity_sdk-tests-11.rs; springboard/src/shell/services/widgets_timeline.rs (Clock, Text::display, next_text_change, next_refresh); springboard/sdk/src/widgets_timeline.rs (ClockStyle, Rich::with_clock); springboard/ui/src/widget_date.rs (Style::from_key); springboard/src/shell/notify/center.rs (refresh_due in center_tick)",
    "status": "partial",
-   "note": "Relative and timer wording and the next change instant are tested headless in widget_date::tests and parity_sdk-tests-11.rs. Gap: the model is not wired into apps or the shell, so widgets show no date-styled text yet, and it is untested on Midget."
+   "note": "Relative and timer wording and the next change instant are tested headless in widget_date::tests and parity_sdk-tests-11.rs. Gap: the model is not wired into apps or the shell, so widgets show no date-styled text yet, and it is untested on Midget. Built 2026-10-19: an entry can carry a clock (style relative or timer, target date). The shell writes the text at draw time (the entry's text with {} replaced, or followed by the wording; a blank text shows the clock alone) so it keeps counting while the app does not run, the current call returns the same wording, and the open column is redrawn when the wording next changes (next_change: each second for a timer or a distance under a minute, then per minute, hour and day). Tests: widget_date::tests (an_app_names_a_style_by_its_key), widgets_timeline::tests (live_date_text_keeps_counting_while_the_app_is_away, a_clock_follows_the_text_or_stands_alone_*, a_bad_clock_is_refused). No date interval, offset or time-zone variants. Midget check: click the clock in the menu bar: a widget whose entry has a relative clock reads, for example, \"starts in 4 minutes\" and the minutes drop while the column stays open."
   },
   {
    "feature": "Widget views (Text, Image, stacks, shapes, gradients, GeometryReader)",
@@ -80,16 +80,16 @@
   {
    "feature": "Interactivity in widgets (Button, Toggle, AppIntent in widget)",
    "apple": "Button, Toggle, Adding interactivity to widgets and Live Activities",
-   "bifrost": "springboard/ui/src/widget_action.rs (hit_test, Toggle); springboard/ui/src/widget_link.rs (Link)",
+   "bifrost": "springboard/ui/src/widget_action.rs (hit_test, Toggle); springboard/ui/src/widget_link.rs (Link); springboard/src/shell/services/widgets_timeline.rs (tap_action, settle_action, Text::buttons); springboard/sdk/src/widgets_timeline.rs (Button, Rich::with_button); springboard/ui/src/widget_action.rs (ButtonSpec, ToggleSet); springboard/src/shell/notify/center.rs (DeskHit::Action, run_widget_action)",
    "status": "partial",
-   "note": "Topmost-region hit testing, link parsing and the toggle that shows a tap and settles on the app's answer are tested headless in springboard/ui/tests/parity_sdk-tests-12.rs; no widget action invokes an app intent, and the shell's tiles only open the shell's own apps."
+   "note": "Topmost-region hit testing, link parsing and the toggle that shows a tap and settles on the app's answer are tested headless in springboard/ui/tests/parity_sdk-tests-12.rs; no widget action invokes an app intent, and the shell's tiles only open the shell's own apps. Built 2026-10-19: a widget entry carries up to three buttons or toggles (SDK Button, reload_rich; service reload entries actions). A tap in the Notification Centre column runs the app intent the button names with its string parameters over the app's control socket on a worker thread (the app must be running); a toggle also passes its new state as the parameter on, shows the new state at once, is drawn lighter while it waits and goes back when the intent fails or the app cannot be reached; a second tap while it waits is refused, and a reload brings the app's own state. Ids are checked so no unsafe intent id reaches a request line. Tests: widget_action::tests (a_toggle_sends_its_new_state_*, a_tapped_toggle_shows_the_new_state_*, unsafe_ids_*, an_entry_takes_a_few_buttons_*), widgets_timeline::tests (an_entry_offers_buttons_and_toggles_*, a_tapped_toggle_shows_the_new_state_until_the_app_answers_*, a_widget_action_is_checked_on_reload), sdk widgets_timeline::tests (a_rich_reload_adds_the_clock_buttons_and_link_*). Not started when the app is not running (Apple runs the intent in a widget extension process); no confirmation or authentication step. Midget check: click the clock in the menu bar: the widget row of an app that sends reload_rich with a Button shows a capsule at the right end of the row; click it with the app running and the app's intent runs (for a toggle, the capsule turns blue at once and stays blue while the app answers ok)."
   },
   {
    "feature": "Deep links from widgets (widgetURL, Link)",
    "apple": "widgetURL(_:), Link, Linking to specific app scenes from your widget",
-   "bifrost": "springboard/ui/src/widget_link.rs; tests: springboard/ui/tests/parity_sdk-tests-01b.rs; wired: springboard/src/shell/services/widgets_timeline.rs (reload link, set_link, link); springboard/src/shell/notify/center.rs (open_widget)",
+   "bifrost": "springboard/ui/src/widget_link.rs; tests: springboard/ui/tests/parity_sdk-tests-01b.rs; wired: springboard/src/shell/services/widgets_timeline.rs (reload link, set_link, link); springboard/src/shell/notify/center.rs (open_widget); springboard/sdk/src/widgets_timeline.rs (reload_rich link)",
    "status": "partial",
-   "note": "Link parsing, scheme and path checks are tested headless (headless_widget_link_* in ui/tests/parity_sdk-tests-01b.rs). An app sets a bifrost-app:// link with its reload, and the shell keeps it per widget. A link names an app and a path, not a scene, and a widget has no SwiftUI-style view-level Link. Not yet verified on Midget."
+   "note": "Link parsing, scheme and path checks are tested headless (headless_widget_link_* in ui/tests/parity_sdk-tests-01b.rs). An app sets a bifrost-app:// link with its reload, and the shell keeps it per widget. A link names an app and a path, not a scene, and a widget has no SwiftUI-style view-level Link. Not yet verified on Midget. Built 2026-10-19: the SDK can now send the widget link with the reload (reload_rich(..., Some(\"bifrost-app://app/path\"))); before, only a raw service call set it. Test: sdk widgets_timeline::tests (a_rich_reload_adds_the_clock_buttons_and_link_*). Midget check: click the clock in the menu bar, then a widget row of an app that sent a link: the app opens at that link."
   },
   {
    "feature": "Live Activities (ActivityConfiguration, DynamicIsland, ActivityKit)",
@@ -103,7 +103,7 @@
    "apple": "ControlWidgetButton, ControlWidgetToggle, AppIntentControlConfiguration, ControlCenter, ControlValueProvider",
    "bifrost": "springboard/ui/src/control_widget.rs (ControlRegistry: buttons and toggles, identifiers, toggle values, presses); springboard/src/shell/app_controls.rs (manifest [[control]] tables, registration as <app id>.<intent>, intent request lines for a press or toggle); springboard/src/shell/control_center.rs (Airplane, volume, backlight, Rotation Lock toggles); springboard/src/shell/assistive_touch.rs (Action enum)",
    "status": "partial",
-   "note": "The control registry holds an app's buttons and toggles under unique identifiers, with their values and presses, tested headless in ui/tests/parity_sdk-os-09.rs. Apps declare [[control]] tables in manifest.toml (kind, title, symbol, intent); the shell parses them and maps each to a registry entry and to the intent request a press or toggle sends (host tests in shell/app_controls.rs). Gap: the Control Center panel does not yet draw the registry's entries or an Edit Controls gallery, so app controls are not visible on screen yet."
+   "note": "The control registry holds an app's buttons and toggles under unique identifiers, with their values and presses, tested headless in ui/tests/parity_sdk-os-09.rs. Apps declare [[control]] tables in manifest.toml (kind, title, symbol, intent); the shell parses them and maps each to a registry entry and to the intent request a press or toggle sends (host tests in shell/app_controls.rs). Corrected 2026-10-19 after reading the code: the Control Center panel draws one tile per app control the user added (springboard/src/shell/control_center.rs, the app tiles loop) with an Edit Controls gallery that switches each app control on or off (restore_app_controls, activate_app runs the intent on a worker thread). Midget check: swipe or click to open Control Center, tap Edit Controls and switch on an app control declared with [[control]] in a manifest, then tap its tile."
   },
   {
    "feature": "Push-driven widget and control updates (WidgetPushHandler, ControlPushHandler, APNs)",
@@ -122,9 +122,9 @@
   {
    "feature": "Accessibility descriptions for widgets",
    "apple": "Adding accessible descriptions to widgets and Live Activities",
-   "bifrost": "springboard/ui/src/widget_ax.rs",
+   "bifrost": "springboard/ui/src/widget_ax.rs; springboard/src/shell/services/widgets_timeline.rs (Row::label, spoken)",
    "status": "partial",
-   "note": "The spoken label, value and hint, skipped blank parts, decorative widgets and multi-part phrasing are tested headless in springboard/ui/tests/parity_sdk-tests-14.rs. Not wired into apps or the shell, and shell tiles are still pixel images with no widget-level label or value."
+   "note": "The spoken label, value and hint, skipped blank parts, decorative widgets and multi-part phrasing are tested headless in springboard/ui/tests/parity_sdk-tests-14.rs. Not wired into apps or the shell, and shell tiles are still pixel images with no widget-level label or value. Built 2026-10-19: every widget row and live activity row gets a spoken label from the widget_ax model (title, the text as the value, and an Actions hint naming the buttons), carried on Row::label and returned as label by the widgets call. Test: widgets_timeline::tests (an_entry_offers_buttons_and_toggles_that_run_the_apps_intents, which asserts the phrase). The label is not yet exported to the AT-SPI bridge, so the screen reader does not speak it, and the shell's own built-in tiles are still pixel images. Midget check: not visible on screen yet; an app that calls the widgets_timeline service method widgets (SDK widgets_timeline::widgets) gets a label field for each entry on screen, for example \"Next, v, Actions: Done, Mute\"."
   },
   {
    "feature": "Accessory, watch complication, StandBy, CarPlay and visionOS widgets (AccessoryWidgetGroup, widgetLabel, WidgetTexture, LevelOfDetail)",
@@ -142,12 +142,11 @@
   }
  ],
  "gaps": [
-  "No app-facing widget extension: apps cannot register a widget kind, a size or a configuration (Widget, WidgetBundle, StaticConfiguration, AppIntentConfiguration).",
-  "No timeline or reload API for apps (TimelineProvider, TimelineEntry, WidgetCenter.reloadTimelines); shell tiles refresh themselves only.",
+  "No separate widget extension process: apps register kinds (register or [[widget]] tables) and answer reload events themselves; there is no WidgetBundle or declarative configuration type for apps (widget_kind::WidgetBundle exists as a model only).",
+  "Widget buttons run over the app's control socket, so the app must be running; there is no start-on-demand extension (Button, Toggle and AppIntent inside a widget extension).",
+  "Timeline API for apps exists (reload, reload_rich, register) but there is no WidgetCenter.reloadAllTimelines call from an app into the shell; shell tiles refresh themselves only.",
   "No Live Activity API (ActivityKit, ActivityConfiguration, DynamicIsland); the lock screen shows shell now-playing only.",
   "No on-screen Control Center panel for app controls yet (ControlWidgetButton, ControlWidgetToggle, ControlValueProvider): manifest [[control]] tables are parsed and registered, but the panel and its Edit Controls gallery do not show them.",
-  "No interactive widget actions that run app intents (Button or Toggle invoking AppIntent) and no widget deep links (widgetURL).",
-  "No large widget family; shell widgets stop at small (155 pt) and medium (329 pt).",
   "No widget container background for the accented look; the accented and vibrant modes exist only as a model (springboard/ui/src/widget_render.rs).",
   "Widget accessibility descriptions are a model only (springboard/ui/src/widget_ax.rs); shell tiles are pixel images.",
   "No relevance input for Smart Stacks; the shell stack is a manual swipe list.",

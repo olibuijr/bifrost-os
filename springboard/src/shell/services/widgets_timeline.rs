@@ -9,6 +9,12 @@
 //!   An optional `relevance` object ranks the widget in the stack: `{score, duration}` (eligible `duration` seconds from
 //!   the entry's date) or `{score, at}` / `{score, from, to, closed?}` (eligible while a time clue is active); `kind`
 //!   ("default"|"informational"|"scheduled") moves the score. Without it the widget keeps its place in the stack.
+//!   Each entry may also carry `clock: {style:"relative"|"timer", target}` (live date text, `{}` in the text marks where
+//!   it goes) and `actions: [{id, label, intent, params?: {name: text}, toggle?: bool}]` (at most 3 buttons or
+//!   toggles; a tap runs the app's `[[intent]]`, a toggle also sends its new state as the parameter `on`).
+//! - `register {kinds:[{id, name?, description?, families?:["small","medium","large"], configurable?}]}` registers the
+//!   widget kinds the app offers; the Edit Widgets gallery lists them (with their name, description and the size chips
+//!   they support) before a first `reload`. Apps can also declare them as `[[widget]]` tables in `manifest.toml`.
 //! - `remove {kind}` drops it; returns whether one was there.
 //! - `current {kind}` returns `{date,title,text}` of the entry on screen now, or null.
 //! - `search {kind, description?, placeholder?, results:[string]}` sets the widget's search view (the reference
@@ -31,6 +37,10 @@ use bifrost_ui::timeline::{Entry, ReloadPolicy, Timeline};
 use bifrost_ui::widget_search::WidgetSearch;
 use bifrost_ui::widget_config::{ConfigError, Configuration, Parameter, Value};
 use bifrost_ui::widget_link::Link;
+use bifrost_ui::widget_action::{check_buttons, ButtonError, ButtonSpec, Invocation, ToggleSet};
+use bifrost_ui::widget_ax::WidgetAccessibility;
+use bifrost_ui::widget_date::{self, Style as DateStyle};
+use bifrost_ui::widget_kind::{Family, WidgetKind};
 use bifrost_core::json::Json;
 use std::sync::Mutex;
 
@@ -38,18 +48,129 @@ use std::sync::Mutex;
 const MAX_KIND: usize = 64;
 /// The most entries one timeline may hold.
 const MAX_ENTRIES: usize = 64;
+/// The most widget kinds one `register` call may carry.
+const MAX_KINDS: usize = 16;
+/// The most parameters one widget button may pass to its intent.
+const MAX_BUTTON_PARAMS: usize = 8;
+
+/// A date shown as live text in an entry: relative ("in 5 minutes") or a timer, counted to `target` (unix seconds).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Clock {
+    pub style: DateStyle,
+    pub target: i64,
+}
 
 /// The text a widget entry or an activity shows.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Text {
     pub title: String,
     pub text: String,
+    /// live date text: replaces `{}` in `text` (or follows it), and keeps counting while the app does not run
+    pub clock: Option<Clock>,
+    /// the buttons and toggles on the entry; a tap runs the app intent each one names
+    pub buttons: Vec<ButtonSpec>,
 }
 
 impl Text {
-    fn of(j: &Json) -> Self {
-        Text { title: j.str_field("title").unwrap_or_default(), text: j.str_field("text").unwrap_or_default() }
+    /// A plain entry: a title and a text, no live date and no buttons.
+    pub fn new(title: &str, text: &str) -> Self {
+        Text { title: title.into(), text: text.into(), ..Default::default() }
     }
+
+    /// The title and text of a JSON body (activities).
+    fn of(j: &Json) -> Self {
+        Text::new(&j.str_field("title").unwrap_or_default(), &j.str_field("text").unwrap_or_default())
+    }
+
+    /// One timeline entry: title, text, an optional `clock: {style:"relative"|"timer", target}` and optional
+    /// `actions: [{id, label, intent, params?, toggle?}]`.
+    fn parse(j: &Json) -> Result<Self, String> {
+        let clock = match j.get("clock") {
+            None | Some(Json::Null) => None,
+            Some(c) => {
+                let style = c.get("style").and_then(Json::as_str).and_then(DateStyle::from_key).ok_or("a clock needs a style, relative or timer")?;
+                let target = c.get("target").and_then(Json::number).filter(|t| t.is_finite()).ok_or("a clock needs a target date")?;
+                Some(Clock { style, target: target as i64 })
+            }
+        };
+        let mut buttons = Vec::new();
+        for b in j.get("actions").and_then(|a| a.as_array()).unwrap_or_default() {
+            buttons.push(button_of(b)?);
+        }
+        check_buttons(&buttons).map_err(button_error)?;
+        Ok(Text { clock, buttons, ..Text::of(j) })
+    }
+
+    /// The text on screen at `now`: `text` with `{}` replaced by the clock's wording, or the wording after the text
+    /// (alone when the text is blank). Without a clock it is `text`.
+    pub fn display(&self, now: i64) -> String {
+        let Some(c) = self.clock else { return self.text.clone() };
+        let live = widget_date::text(c.style, c.target as f64, now as f64);
+        if self.text.contains("{}") {
+            self.text.replace("{}", &live)
+        } else if self.text.trim().is_empty() {
+            live
+        } else {
+            format!("{} {live}", self.text)
+        }
+    }
+}
+
+fn button_error(e: ButtonError) -> String {
+    match e {
+        ButtonError::BadId(id) => format!("{id:?} is not a safe action or intent id"),
+        ButtonError::NoLabel => "an action needs a label".into(),
+        ButtonError::Duplicate(id) => format!("action {id} is listed twice"),
+        ButtonError::TooMany => "an entry holds at most 3 actions".into(),
+    }
+}
+
+/// One action of an entry: `{id, label, intent, params?: {name: text}, toggle?: bool}` (`toggle` is the state shown).
+fn button_of(j: &Json) -> Result<ButtonSpec, String> {
+    let id = j.str_field("id").ok_or("an action needs an id")?;
+    let label = j.str_field("label").ok_or("an action needs a label")?;
+    let intent = j.str_field("intent").ok_or("an action needs an intent")?;
+    let made = match j.get("toggle") {
+        Some(Json::Bool(on)) => ButtonSpec::toggle(&id, &label, &intent, *on),
+        _ => ButtonSpec::button(&id, &label, &intent),
+    };
+    let mut b = made.map_err(button_error)?;
+    if let Some(Json::Obj(pairs)) = j.get("params") {
+        if pairs.len() > MAX_BUTTON_PARAMS {
+            return Err(format!("an action passes at most {MAX_BUTTON_PARAMS} parameters"));
+        }
+        for (k, v) in pairs {
+            if let Some(s) = v.as_str() {
+                b = b.with_param(k, s);
+            }
+        }
+    }
+    Ok(b)
+}
+
+/// One kind of a `register` call: `{id, name?, description?, families?: ["small","medium","large"], configurable?}`.
+fn kind_of(j: &Json) -> Result<WidgetKind, String> {
+    let id = j.str_field("id").ok_or("a widget kind needs an id")?;
+    check_kind(&id)?;
+    let families: Vec<Family> = match j.get("families").and_then(|f| f.as_array()) {
+        None => vec![Family::Small, Family::Medium],
+        Some(list) => list.iter().filter_map(|f| f.as_str().and_then(Family::from_key)).collect(),
+    };
+    let name = j.str_field("name").filter(|n| !n.trim().is_empty()).unwrap_or_else(|| id.clone());
+    let kind = WidgetKind::new(&id, name.trim(), &families).map_err(|e| format!("widget kind {id}: {e:?}"))?;
+    let configurable = matches!(j.get("configurable"), Some(Json::Bool(true)));
+    Ok(kind.with_description(&j.str_field("description").unwrap_or_default()).with_configurable(configurable))
+}
+
+/// A button on a row, with the state it shows now.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RowButton {
+    pub id: String,
+    pub label: String,
+    /// a toggle's shown state; None for a button
+    pub on: Option<bool>,
+    /// the app has not answered the last tap yet
+    pub pending: bool,
 }
 
 /// One line the Notification Centre shows for a widget or an activity.
@@ -59,8 +180,24 @@ pub struct Row {
     pub text: String,
     /// the widget is set to Large in the Edit Widgets gallery: its row is taller
     pub large: bool,
+    /// the size the person gave the widget (a live activity is Small)
+    pub family: Family,
+    /// the entry's buttons and toggles, with the state they show
+    pub buttons: Vec<RowButton>,
+    /// the spoken description for assistive technology: title, value and the actions on offer
+    pub label: String,
     /// the (app, kind) of a widget row; None for a live activity
     pub widget: Option<(String, String)>,
+}
+
+/// The phrase a screen reader speaks for a row: the title, the text as the label's value, and a hint naming the actions.
+fn spoken(title: &str, text: &str, buttons: &[RowButton]) -> String {
+    let mut ax = WidgetAccessibility::new(title).with_value(text);
+    if !buttons.is_empty() {
+        let names: Vec<&str> = buttons.iter().map(|b| b.label.as_str()).collect();
+        ax = ax.with_hint(&format!("Actions: {}", names.join(", ")));
+    }
+    ax.spoken()
 }
 
 /// One widget in the Edit Widgets gallery: every widget an app has reloaded, placed in the column or not.
@@ -68,12 +205,16 @@ pub struct Row {
 pub struct Listing {
     pub app: String,
     pub kind: String,
-    /// the title of the entry on screen, or the kind when there is none
+    /// the title of the entry on screen, or the registered name, or the kind when there is none
     pub title: String,
-    /// the search view's description, when the app set one
+    /// the search view's description, else the description the app registered
     pub description: Option<String>,
     pub placed: bool,
     pub large: bool,
+    /// the size the widget has now
+    pub family: Family,
+    /// the sizes it can take, smallest first: what the app registered, else Small and Large
+    pub families: Vec<Family>,
     /// the widget has user-configurable options (`configure`); Edit Widgets offers Options for it
     pub configurable: bool,
 }
@@ -111,12 +252,29 @@ struct Widget {
     hint: Option<Hint>,
     /// shown in the column (Edit Widgets adds and removes it); kept across reloads
     placed: bool,
-    /// set to Large in the gallery; kept across reloads
-    large: bool,
+    /// the size set in the gallery; kept across reloads
+    family: Family,
+    /// what the app registered for the kind (name, description, sizes); kept across reloads
+    info: Option<WidgetKind>,
     /// the link a tap on the widget opens; set by each reload (`link`)
     link: Option<Link>,
     /// the options the app defined and the person's values; kept across reloads
     config: Option<Configuration>,
+    /// the toggles of the entry on screen between a tap and the app's answer; a reload clears them
+    toggles: ToggleSet,
+}
+
+impl Widget {
+    /// The sizes the widget can take: what the app registered, else Small and Large.
+    fn families(&self) -> Vec<Family> {
+        self.info.as_ref().map_or_else(|| vec![Family::Small, Family::Large], |k| k.families().to_vec())
+    }
+
+    /// The buttons of the entry on screen at `now`, with the state each shows.
+    fn row_buttons(&self, now: i64) -> Vec<RowButton> {
+        let Some(e) = self.timeline.entry_at(now as f64) else { return Vec::new() };
+        e.value.buttons.iter().map(|b| RowButton { id: b.id.clone(), label: b.label.clone(), on: self.toggles.shown(b), pending: self.toggles.is_pending(&b.id) }).collect()
+    }
 }
 
 /// An app's search view for one widget kind.
@@ -194,6 +352,33 @@ pub fn resize(app: &str, kind: &str, large: bool) -> bool {
     with(|s| s.set_large(app, kind, large))
 }
 
+/// Gives `app`'s widget `kind` the size `family`. False when the app has not reloaded or registered that kind, or the
+/// kind does not support the size.
+pub fn set_family(app: &str, kind: &str, family: Family) -> bool {
+    with(|s| s.set_family(app, kind, family))
+}
+
+/// A tap on the button `action` of `app`'s widget `kind` at `now`: the intent to run (see [`Store::tap_action`]).
+pub fn tap_action(app: &str, kind: &str, action: &str, now: i64) -> Result<Invocation, String> {
+    with(|s| s.tap_action(app, kind, action, now))
+}
+
+/// The app's answer to the last tap on a widget toggle: `ok` keeps the new state, otherwise it goes back.
+pub fn settle_action(app: &str, kind: &str, action: &str, ok: bool) {
+    with(|s| s.settle_action(app, kind, action, ok))
+}
+
+/// The unix second after `now` at which some live date text on screen changes, if any shows one.
+pub fn next_text_change(now: i64) -> Option<i64> {
+    with(|s| s.next_text_change(now))
+}
+
+/// When the column's widget text next needs drawing again: the next second while a toggle waits for its app, else the
+/// next change of live date text. None when neither is on screen.
+pub fn next_refresh(now: i64) -> Option<i64> {
+    with(|s| if s.has_pending_action() { Some(now + 1) } else { s.next_text_change(now) })
+}
+
 fn error_text(e: Error) -> String {
     match e {
         Error::Disabled => "live activities are off".into(),
@@ -239,10 +424,112 @@ impl Store {
         }
         let n = entries.len();
         // a reload keeps the person's choices in the gallery; a new widget starts placed, at Small
-        let (placed, large, config) = self.widgets.iter().find(|w| w.app == app && w.kind == kind).map_or((true, false, None), |w| (w.placed, w.large, w.config.clone()));
+        let (placed, family, config, info) =
+            self.widgets.iter().find(|w| w.app == app && w.kind == kind).map_or((true, Family::Small, None, None), |w| (w.placed, w.family, w.config.clone(), w.info.clone()));
         self.widgets.retain(|w| !(w.app == app && w.kind == kind));
-        self.widgets.push(Widget { app: app.into(), kind: kind.into(), timeline: Timeline::new(entries, policy), requested: false, hint, placed, large, link: None, config });
+        self.widgets.push(Widget {
+            app: app.into(),
+            kind: kind.into(),
+            timeline: Timeline::new(entries, policy),
+            requested: false,
+            hint,
+            placed,
+            family,
+            info,
+            link: None,
+            config,
+            toggles: ToggleSet::default(),
+        });
         Ok(n)
+    }
+
+    /// Registers the widget kinds of `app`: their names, descriptions and the sizes each supports. A registered kind
+    /// shows in the Edit Widgets gallery before it has an entry, so the person can add it and choose its size; it
+    /// starts at its smallest size. Registering a kind again replaces its texts and sizes and keeps the person's
+    /// choices (placed, size when still supported, options). Returns the kind count.
+    pub fn register(&mut self, app: &str, kinds: Vec<WidgetKind>) -> Result<usize, String> {
+        if kinds.len() > MAX_KINDS {
+            return Err(format!("an app registers at most {MAX_KINDS} widget kinds at once"));
+        }
+        for k in &kinds {
+            check_kind(k.id())?;
+        }
+        let n = kinds.len();
+        for kind in kinds {
+            let first = kind.families()[0];
+            match self.widgets.iter_mut().find(|w| w.app == app && w.kind == kind.id()) {
+                Some(w) => {
+                    if !kind.supports(w.family) {
+                        w.family = first;
+                    }
+                    w.info = Some(kind);
+                }
+                None => self.widgets.push(Widget {
+                    app: app.into(),
+                    kind: kind.id().into(),
+                    timeline: Timeline::new(Vec::new(), ReloadPolicy::Never),
+                    requested: false,
+                    hint: None,
+                    placed: true,
+                    family: first,
+                    info: Some(kind),
+                    link: None,
+                    config: None,
+                    toggles: ToggleSet::default(),
+                }),
+            }
+        }
+        Ok(n)
+    }
+
+    /// Gives the widget the size `family`. False when the app has not reloaded or registered that kind, or the kind
+    /// does not support the size.
+    pub fn set_family(&mut self, app: &str, kind: &str, family: Family) -> bool {
+        match self.widgets.iter_mut().find(|w| w.app == app && w.kind == kind) {
+            Some(w) if w.families().contains(&family) => {
+                w.family = family;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// A tap on the button `action` of the entry on screen at `now`: the intent to run and its parameters. A toggle
+    /// flips at once and shows the new state until [`Store::settle_action`]; a second tap on it while the app has not
+    /// answered is refused.
+    pub fn tap_action(&mut self, app: &str, kind: &str, action: &str, now: i64) -> Result<Invocation, String> {
+        let w = self.widgets.iter_mut().find(|w| w.app == app && w.kind == kind).ok_or_else(|| format!("no widget {kind}"))?;
+        let spec = w
+            .timeline
+            .entry_at(now as f64)
+            .and_then(|e| e.value.buttons.iter().find(|b| b.id == action))
+            .cloned()
+            .ok_or_else(|| format!("{kind} has no action {action} on screen"))?;
+        w.toggles.tap(&spec).ok_or_else(|| "the app has not answered the last tap".to_string())
+    }
+
+    /// The app's answer to the last tap on `action`: `ok` keeps a toggle's new state, otherwise it goes back.
+    pub fn settle_action(&mut self, app: &str, kind: &str, action: &str, ok: bool) {
+        if let Some(w) = self.widgets.iter_mut().find(|w| w.app == app && w.kind == kind) {
+            w.toggles.settle(action, ok);
+        }
+    }
+
+    /// True while some widget toggle has been tapped and its app has not answered.
+    pub fn has_pending_action(&self) -> bool {
+        self.widgets.iter().any(|w| w.toggles.any_pending())
+    }
+
+    /// The unix second after `now` at which the live date text of some placed widget on screen changes. None when no
+    /// such widget shows one.
+    pub fn next_text_change(&self, now: i64) -> Option<i64> {
+        self.widgets
+            .iter()
+            .filter(|w| w.placed)
+            .filter_map(|w| w.timeline.entry_at(now as f64))
+            .filter_map(|e| e.value.clock)
+            .map(|c| (widget_date::next_change(c.style, c.target as f64, now as f64).ceil() as i64).max(now + 1))
+            .min()
     }
 
     /// Adds the widget to the column (`placed`) or takes it off; false when the app has not reloaded that kind.
@@ -252,7 +539,7 @@ impl Store {
 
     /// Sets the widget's size in the column: Large is the taller row. False when the app has not reloaded that kind.
     pub fn set_large(&mut self, app: &str, kind: &str, large: bool) -> bool {
-        self.widgets.iter_mut().find(|w| w.app == app && w.kind == kind).map(|w| w.large = large).is_some()
+        self.set_family(app, kind, if large { Family::Large } else { Family::Small })
     }
 
     /// Sets the link a tap on the widget opens (None for no link). False when the app has not reloaded that kind.
@@ -310,10 +597,22 @@ impl Store {
             .map(|w| Listing {
                 app: w.app.clone(),
                 kind: w.kind.clone(),
-                title: w.timeline.entry_at(now as f64).map(|e| e.value.title.clone()).filter(|t| !t.is_empty()).unwrap_or_else(|| w.kind.clone()),
-                description: self.search_view(&w.app, &w.kind).and_then(|v| v.description()).map(str::to_string),
+                title: w
+                    .timeline
+                    .entry_at(now as f64)
+                    .map(|e| e.value.title.clone())
+                    .filter(|t| !t.is_empty())
+                    .or_else(|| w.info.as_ref().map(|k| k.display_name.clone()).filter(|n| !n.is_empty()))
+                    .unwrap_or_else(|| w.kind.clone()),
+                description: self
+                    .search_view(&w.app, &w.kind)
+                    .and_then(|v| v.description())
+                    .map(str::to_string)
+                    .or_else(|| w.info.as_ref().map(|k| k.description.clone()).filter(|d| !d.is_empty())),
                 placed: w.placed,
-                large: w.large,
+                large: w.family == Family::Large,
+                family: w.family,
+                families: w.families(),
                 configurable: w.config.as_ref().is_some_and(|c| !c.params().is_empty()),
             })
             .collect()
@@ -373,7 +672,7 @@ impl Store {
     /// column and it has an entry for `now`. None when the app has not reloaded that kind.
     fn appearance(&self, app: &str, kind: &str, now: i64) -> Option<(bool, bool)> {
         let w = self.widgets.iter().find(|w| w.app == app && w.kind == kind)?;
-        Some((w.placed && w.timeline.entry_at(now as f64).is_some(), w.large))
+        Some((w.placed && w.timeline.entry_at(now as f64).is_some(), w.family == Family::Large))
     }
 
     /// Starts (`on`) or stops observing the widget `kind` of `app`. A new observation reports nothing until the
@@ -418,12 +717,16 @@ impl Store {
             .into_iter()
             .map(|i| {
                 let (w, e) = shown[i];
-                Row { title: e.value.title.clone(), text: e.value.text.clone(), large: w.large, widget: Some((w.app.clone(), w.kind.clone())) }
+                let text = e.value.display(now);
+                let buttons = w.row_buttons(now);
+                let label = spoken(&e.value.title, &text, &buttons);
+                Row { title: e.value.title.clone(), text, large: w.family == Family::Large, family: w.family, buttons, label, widget: Some((w.app.clone(), w.kind.clone())) }
             })
             .collect();
         for (id, _) in &self.owners {
             if let Some(c) = self.activities.content(*id, unix(now)) {
-                rows.push(Row { title: c.state.title.clone(), text: c.state.text.clone(), large: false, widget: None });
+                let label = spoken(&c.state.title, &c.state.text, &[]);
+                rows.push(Row { title: c.state.title.clone(), text: c.state.text.clone(), large: false, family: Family::Small, buttons: Vec::new(), label, widget: None });
             }
         }
         rows
@@ -451,7 +754,7 @@ impl Store {
                 let mut entries = Vec::new();
                 for e in p.get("entries").and_then(|j| j.as_array()).unwrap_or_default() {
                     let date = e.get("date").and_then(Json::number).ok_or("an entry needs a date")?;
-                    entries.push(Entry { date, value: Text::of(e) });
+                    entries.push(Entry { date, value: Text::parse(e)? });
                 }
                 let hint = hint_of(p)?;
                 let link = match p.str_field("link") {
@@ -461,6 +764,13 @@ impl Store {
                 let n = self.reload_ranked(app, &kind, entries, policy, hint)?;
                 self.set_link(app, &kind, link);
                 Ok(Json::Num(n as f64))
+            }
+            "register" => {
+                let mut kinds = Vec::new();
+                for j in p.get("kinds").and_then(|j| j.as_array()).unwrap_or_default() {
+                    kinds.push(kind_of(j)?);
+                }
+                Ok(Json::Num(self.register(app, kinds)? as f64))
             }
             "configure" => {
                 let kind = p.str_field("kind").ok_or("configure needs a kind")?;
@@ -530,11 +840,10 @@ impl Store {
             "current" => {
                 let kind = p.str_field("kind").ok_or("current needs a kind")?;
                 Ok(match self.current(app, &kind, now) {
-                    Some(e) => Json::Obj(vec![
-                        ("date".into(), Json::Num(e.date)),
-                        ("title".into(), Json::Str(e.value.title)),
-                        ("text".into(), Json::Str(e.value.text)),
-                    ]),
+                    Some(e) => {
+                        let text = e.value.display(now);
+                        Json::Obj(vec![("date".into(), Json::Num(e.date)), ("title".into(), Json::Str(e.value.title)), ("text".into(), Json::Str(text))])
+                    }
                     None => Json::Null,
                 })
             }
@@ -574,11 +883,15 @@ impl Store {
                         let mut o = vec![
                             ("kind".to_string(), Json::Str(w.kind.clone())),
                             ("on_screen".to_string(), Json::Bool(w.placed && entry.is_some())),
-                            ("large".to_string(), Json::Bool(w.large)),
+                            ("large".to_string(), Json::Bool(w.family == Family::Large)),
+                            ("family".to_string(), Json::Str(w.family.key().into())),
+                            ("families".to_string(), Json::Arr(w.families().into_iter().map(|f| Json::Str(f.key().into())).collect())),
                             ("configurable".to_string(), Json::Bool(w.config.is_some())),
                         ];
                         if let Some(e) = entry {
                             o.push(("title".to_string(), Json::Str(e.value.title.clone())));
+                            let buttons = w.row_buttons(now);
+                            o.push(("label".to_string(), Json::Str(spoken(&e.value.title, &e.value.display(now), &buttons))));
                         }
                         Json::Obj(o)
                     })
@@ -731,6 +1044,28 @@ fn content_of(p: &Json) -> Content<Text> {
     }
 }
 
+/// Registers the `[[widget]]` kinds the installed apps declare in their manifests, so the Edit Widgets gallery offers
+/// them before the app has sent a first timeline. Runs when the installed list is replaced; registering again keeps
+/// what the person chose.
+fn sync_manifests() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static SEEN: AtomicUsize = AtomicUsize::new(0);
+    let list = super::super::apphost::installed();
+    if list.is_empty() {
+        return;
+    }
+    let key = list.as_ptr() as usize;
+    if SEEN.swap(key, Ordering::Relaxed) == key {
+        return;
+    }
+    with(|s| {
+        for app in list.iter().filter(|a| !a.manifest.widgets.is_empty()) {
+            let kinds: Vec<WidgetKind> = app.manifest.widgets.iter().take(MAX_KINDS).cloned().collect();
+            let _ = s.register(&app.manifest.id, kinds);
+        }
+    });
+}
+
 /// The `widgets_timeline` service, registered in [`super::all`].
 pub struct WidgetsTimeline;
 
@@ -745,6 +1080,7 @@ impl SystemService for WidgetsTimeline {
     }
 
     fn tick(&mut self, shell: &mut Shell, _t: f64) -> Vec<Event> {
+        sync_manifests();
         let now = shell.notify.now();
         let mut events: Vec<Event> = with(|s| s.due(now))
             .into_iter()
@@ -768,7 +1104,20 @@ mod tests {
     use super::*;
 
     fn entry(date: f64, title: &str, text: &str) -> Entry<Text> {
-        Entry { date, value: Text { title: title.into(), text: text.into() } }
+        Entry { date, value: Text::new(title, text) }
+    }
+
+    /// The row of a plain entry: no buttons, the label a reader speaks for a title and a value.
+    fn row(title: &str, text: &str, large: bool, widget: Option<(&str, &str)>) -> Row {
+        Row {
+            title: title.into(),
+            text: text.into(),
+            large,
+            family: if large { Family::Large } else { Family::Small },
+            buttons: Vec::new(),
+            label: spoken(title, text, &[]),
+            widget: widget.map(|(a, k)| (a.to_string(), k.to_string())),
+        }
     }
 
     fn obj(pairs: &[(&str, Json)]) -> Json {
@@ -782,7 +1131,7 @@ mod tests {
         assert_eq!(s.current("is.a", "next", 150).map(|e| e.value.text), Some("first".into()));
         assert_eq!(s.current("is.a", "next", 250).map(|e| e.value.text), Some("second".into()));
         assert_eq!(s.current("is.b", "next", 250), None, "another app cannot read the timeline");
-        assert_eq!(s.rows(150), vec![Row { title: "Next".into(), text: "first".into(), large: false, widget: Some(("is.a".into(), "next".into())) }]);
+        assert_eq!(s.rows(150), vec![row("Next", "first", false, Some(("is.a", "next")))]);
     }
 
     #[test]
@@ -849,7 +1198,7 @@ mod tests {
         let p = obj(&[("id", Json::Num(id as f64)), ("title", Json::Str("Ride".into())), ("text", Json::Str("5 km".into()))]);
         assert!(s.call("is.b", "update_activity", &p, 110).is_err(), "another app cannot update it");
         assert_eq!(s.call("is.a", "update_activity", &p, 110), Ok(Json::Bool(true)));
-        assert_eq!(s.rows(110), vec![Row { title: "Ride".into(), text: "5 km".into(), large: false, widget: None }]);
+        assert_eq!(s.rows(110), vec![row("Ride", "5 km", false, None)]);
         let listed = s.call("is.a", "activities", &Json::Null, 110).unwrap();
         assert_eq!(listed.as_array().map(|a| a.len()), Some(1));
         let end = obj(&[("id", Json::Num(id as f64)), ("dismissal", Json::Str("immediate".into()))]);
@@ -995,7 +1344,7 @@ mod tests {
         let mut s = Store::default();
         ranked(&mut s, "is.a", "one", 100.0, "a", None);
         assert!(s.set_large("is.a", "one", true));
-        assert_eq!(s.rows(150), vec![Row { title: "W".into(), text: "a".into(), large: true, widget: Some(("is.a".into(), "one".into())) }]);
+        assert_eq!(s.rows(150), vec![row("W", "a", true, Some(("is.a", "one")))]);
         assert_eq!(s.listing(150)[0].title, "W", "the title of the entry on screen");
         assert_eq!(s.listing(150)[0].description, None);
         s.set_search("is.a", "one", "Notes", "", vec![]).unwrap();
@@ -1108,5 +1457,186 @@ mod tests {
         s.remove("is.a", "one");
         assert_eq!(s.visibility_changes(150), vec![("is.a".to_string(), "one".to_string(), false, false)]);
         assert!(s.observe("is.a", "", true, 150).is_err(), "the kind is checked like a reload's");
+    }
+
+    fn s_(t: &str) -> Json {
+        Json::Str(t.into())
+    }
+
+    /// A `reload` body for `kind` with one entry dated 0; `extra` adds or replaces the entry's fields.
+    fn reload_with(kind: &str, extra: Vec<(&str, Json)>) -> Json {
+        let mut e: Vec<(&str, Json)> = vec![("date", Json::Num(0.0)), ("title", s_("Next")), ("text", s_("v"))];
+        e.retain(|(k, _)| !extra.iter().any(|(ek, _)| ek == k));
+        e.extend(extra);
+        obj(&[("kind", s_(kind)), ("policy", s_("never")), ("entries", Json::Arr(vec![obj(&e)]))])
+    }
+
+    fn actions() -> Json {
+        Json::Arr(vec![
+            obj(&[("id", s_("done")), ("label", s_("Done")), ("intent", s_("mark-done")), ("params", obj(&[("item", s_("7"))]))]),
+            obj(&[("id", s_("mute")), ("label", s_("Mute")), ("intent", s_("set-mute")), ("toggle", Json::Bool(false))]),
+        ])
+    }
+
+    #[test]
+    fn live_date_text_keeps_counting_while_the_app_is_away() {
+        let mut s = Store::default();
+        let clock = obj(&[("style", s_("relative")), ("target", Json::Num(130.0))]);
+        let body = reload_with("next", vec![("text", s_("starts {}")), ("clock", clock)]);
+        assert_eq!(s.call("is.a", "reload", &body, 0), Ok(Json::Num(1.0)));
+        assert_eq!(s.rows(0)[0].text, "starts in 2 minutes");
+        assert_eq!(s.rows(100)[0].text, "starts in 30 seconds", "the same entry reads differently as time passes");
+        assert_eq!(s.next_text_change(0), Some(10), "the wording drops to a minute 10 s from now");
+        assert_eq!(s.next_text_change(100), Some(101), "under a minute it changes each second");
+        let cur = s.call("is.a", "current", &obj(&[("kind", s_("next"))]), 100).unwrap();
+        assert_eq!(cur.get("text").and_then(Json::as_str), Some("starts in 30 seconds"));
+    }
+
+    #[test]
+    fn a_clock_follows_the_text_or_stands_alone_and_a_plain_entry_has_none() {
+        let t = Text { clock: Some(Clock { style: DateStyle::Timer, target: 3725 }), ..Text::new("Run", "") };
+        assert_eq!(t.display(0), "1:02:05", "a blank text shows the clock alone");
+        let after = Text { text: "left".into(), ..t.clone() };
+        assert_eq!(after.display(0), "left 1:02:05", "without a marker the clock follows the text");
+        assert_eq!(Text::new("Run", "5 km").display(0), "5 km");
+        let mut s = Store::default();
+        s.reload("is.a", "plain", vec![entry(0.0, "t", "x")], ReloadPolicy::Never).unwrap();
+        assert_eq!(s.next_text_change(5), None, "no live text on screen");
+    }
+
+    #[test]
+    fn a_bad_clock_is_refused() {
+        let mut s = Store::default();
+        let no_style = reload_with("k", vec![("clock", obj(&[("target", Json::Num(1.0))]))]);
+        assert!(s.call("is.a", "reload", &no_style, 0).is_err());
+        let no_target = reload_with("k", vec![("clock", obj(&[("style", s_("timer"))]))]);
+        assert!(s.call("is.a", "reload", &no_target, 0).is_err());
+        let odd = reload_with("k", vec![("clock", obj(&[("style", s_("offset")), ("target", Json::Num(1.0))]))]);
+        assert!(s.call("is.a", "reload", &odd, 0).is_err());
+    }
+
+    #[test]
+    fn an_entry_offers_buttons_and_toggles_that_run_the_apps_intents() {
+        let mut s = Store::default();
+        s.call("is.a", "reload", &reload_with("k", vec![("actions", actions())]), 5).unwrap();
+        let row = &s.rows(5)[0];
+        assert_eq!(
+            row.buttons,
+            vec![
+                RowButton { id: "done".into(), label: "Done".into(), on: None, pending: false },
+                RowButton { id: "mute".into(), label: "Mute".into(), on: Some(false), pending: false },
+            ]
+        );
+        assert_eq!(row.label, "Next, v, Actions: Done, Mute", "a reader hears the title, the value and the actions");
+        let inv = s.tap_action("is.a", "k", "done", 5).unwrap();
+        assert_eq!(inv, Invocation { intent: "mark-done".into(), params: vec![("item".into(), "7".into())] });
+        assert!(s.tap_action("is.a", "k", "done", 5).is_ok(), "a button can be tapped again at once");
+        assert!(s.tap_action("is.a", "k", "nope", 5).is_err());
+        assert!(s.tap_action("is.b", "k", "done", 5).is_err(), "another app has no such widget");
+    }
+
+    #[test]
+    fn a_tapped_toggle_shows_the_new_state_until_the_app_answers_and_a_failure_puts_it_back() {
+        let mut s = Store::default();
+        s.call("is.a", "reload", &reload_with("k", vec![("actions", actions())]), 5).unwrap();
+        let inv = s.tap_action("is.a", "k", "mute", 5).unwrap();
+        assert_eq!(inv.params, vec![("on".to_string(), "true".to_string())]);
+        assert_eq!(s.rows(5)[0].buttons[1], RowButton { id: "mute".into(), label: "Mute".into(), on: Some(true), pending: true });
+        assert!(s.tap_action("is.a", "k", "mute", 5).is_err(), "no second tap before the answer");
+        assert!(s.has_pending_action(), "the column keeps redrawing while the app has not answered");
+        s.settle_action("is.a", "k", "mute", false);
+        assert!(!s.has_pending_action());
+        assert_eq!(s.rows(5)[0].buttons[1].on, Some(false));
+        s.tap_action("is.a", "k", "mute", 5).unwrap();
+        s.settle_action("is.a", "k", "mute", true);
+        assert_eq!(s.rows(5)[0].buttons[1], RowButton { id: "mute".into(), label: "Mute".into(), on: Some(true), pending: false });
+        s.call("is.a", "reload", &reload_with("k", vec![("actions", actions())]), 6).unwrap();
+        assert_eq!(s.rows(6)[0].buttons[1].on, Some(false), "a reload brings the app's own state");
+    }
+
+    #[test]
+    fn a_widget_action_is_checked_on_reload() {
+        let mut s = Store::default();
+        let one = |a: Json| reload_with("k", vec![("actions", Json::Arr(vec![a]))]);
+        let ok = obj(&[("id", s_("a")), ("label", s_("A")), ("intent", s_("i"))]);
+        assert!(s.call("is.a", "reload", &one(ok.clone()), 0).is_ok());
+        let bad_intent = obj(&[("id", s_("a")), ("label", s_("A")), ("intent", s_("../x"))]);
+        assert!(s.call("is.a", "reload", &one(bad_intent), 0).is_err(), "an unsafe intent id never reaches a request line");
+        let no_label = obj(&[("id", s_("a")), ("label", s_(" ")), ("intent", s_("i"))]);
+        assert!(s.call("is.a", "reload", &one(no_label), 0).is_err());
+        let missing = obj(&[("id", s_("a")), ("label", s_("A"))]);
+        assert!(s.call("is.a", "reload", &one(missing), 0).is_err());
+        let four: Vec<Json> = (0..4).map(|i| obj(&[("id", s_(&format!("a{i}"))), ("label", s_("A")), ("intent", s_("i"))])).collect();
+        assert!(s.call("is.a", "reload", &reload_with("k", vec![("actions", Json::Arr(four))]), 0).is_err(), "at most three");
+        let twice = Json::Arr(vec![ok.clone(), ok]);
+        assert!(s.call("is.a", "reload", &reload_with("k", vec![("actions", twice)]), 0).is_err(), "ids are unique");
+    }
+
+    #[test]
+    fn a_registered_kind_is_in_the_gallery_before_its_first_timeline_with_its_sizes() {
+        let mut s = Store::default();
+        let kinds = Json::Arr(vec![obj(&[
+            ("id", s_("next")),
+            ("name", s_("Next Event")),
+            ("description", s_("The next one.")),
+            ("families", Json::Arr(vec![s_("small"), s_("medium"), s_("large")])),
+        ])]);
+        assert_eq!(s.call("is.a", "register", &obj(&[("kinds", kinds)]), 0), Ok(Json::Num(1.0)));
+        let g = s.listing(0);
+        assert_eq!(g.len(), 1);
+        assert_eq!((g[0].title.as_str(), g[0].description.as_deref()), ("Next Event", Some("The next one.")));
+        assert_eq!((g[0].family, g[0].families.clone(), g[0].placed), (Family::Small, vec![Family::Small, Family::Medium, Family::Large], true));
+        assert!(s.rows(0).is_empty(), "no entry yet, so nothing in the column");
+        assert!(s.set_family("is.a", "next", Family::Medium));
+        s.reload("is.a", "next", vec![entry(0.0, "Standup", "9:00")], ReloadPolicy::Never).unwrap();
+        assert_eq!(s.rows(5)[0].family, Family::Medium, "the app's reload keeps the person's size");
+        assert!(!s.rows(5)[0].large, "Medium is not the Large row");
+        let g = s.listing(5);
+        assert_eq!((g[0].title.as_str(), g[0].description.as_deref()), ("Standup", Some("The next one.")));
+        let listed = s.call("is.a", "widgets", &Json::Null, 5).unwrap();
+        let first = &listed.as_array().unwrap()[0];
+        assert_eq!(first.get("family").and_then(Json::as_str), Some("medium"));
+        assert_eq!(first.get("families").and_then(|f| f.as_array()).map(|f| f.len()), Some(3));
+    }
+
+    #[test]
+    fn a_kind_takes_only_the_sizes_it_registered_and_a_new_registration_moves_a_stranded_widget() {
+        let mut s = Store::default();
+        let kind = |sizes: &[&str]| WidgetKind::new("k", "K", &sizes.iter().filter_map(|k| Family::from_key(k)).collect::<Vec<_>>()).unwrap();
+        s.register("is.a", vec![kind(&["small", "medium"])]).unwrap();
+        assert!(!s.set_family("is.a", "k", Family::Large), "Large was not registered");
+        assert!(!s.set_large("is.a", "k", true));
+        assert!(s.set_family("is.a", "k", Family::Medium));
+        s.register("is.a", vec![kind(&["small"])]).unwrap();
+        assert_eq!(s.listing(0)[0].family, Family::Small, "Medium is gone, so the widget falls back to its smallest size");
+        assert!(!s.set_family("is.a", "nope", Family::Small));
+        // a widget that was only reloaded keeps the two sizes the gallery always offered
+        s.reload("is.a", "plain", vec![entry(0.0, "t", "x")], ReloadPolicy::Never).unwrap();
+        let plain = s.listing(0).into_iter().find(|l| l.kind == "plain").unwrap();
+        assert_eq!(plain.families, vec![Family::Small, Family::Large]);
+        assert!(!s.set_family("is.a", "plain", Family::Medium));
+    }
+
+    #[test]
+    fn registering_checks_the_kinds() {
+        let mut s = Store::default();
+        let body = |kinds: Vec<Json>| obj(&[("kinds", Json::Arr(kinds))]);
+        assert!(s.call("is.a", "register", &body(vec![obj(&[("id", s_("a b"))])]), 0).is_err(), "an unsafe id");
+        assert!(s.call("is.a", "register", &body(vec![obj(&[("id", s_("k")), ("families", Json::Arr(vec![s_("huge")]))])]), 0).is_err(), "no known size");
+        assert!(s.call("is.a", "register", &body(vec![obj(&[("id", s_(&"k".repeat(MAX_KIND + 1)))])]), 0).is_err());
+        let many: Vec<Json> = (0..=MAX_KINDS).map(|i| obj(&[("id", s_(&format!("k{i}")))])).collect();
+        assert!(s.call("is.a", "register", &body(many), 0).is_err());
+        assert!(s.listing(0).is_empty(), "a refused call registers nothing");
+        assert_eq!(s.call("is.a", "register", &body(vec![obj(&[("id", s_("k"))])]), 0), Ok(Json::Num(1.0)));
+        assert_eq!(s.listing(0)[0].families, vec![Family::Small, Family::Medium], "left out: small and medium");
+    }
+
+    #[test]
+    fn a_registered_kind_takes_options_before_its_first_timeline() {
+        let mut s = Store::default();
+        s.register("is.a", vec![WidgetKind::new("k", "K", &[Family::Small]).unwrap()]).unwrap();
+        let p = Parameter::Flag { key: "seconds".into(), default: false };
+        assert_eq!(s.configure("is.a", "k", vec![p]), Ok(1));
+        assert!(s.listing(0)[0].configurable);
     }
 }

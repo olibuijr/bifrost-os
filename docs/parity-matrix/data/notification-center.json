@@ -10,9 +10,9 @@
     {
       "feature": "Widget provider (NCWidgetProviding)",
       "apple": "NCWidgetProviding: widgetPerformUpdate(completionHandler:), widgetMarginInsets(forProposedMarginInsets:), widgetActiveDisplayModeDidChange(_:withMaximumSize:), NCWidgetDisplayMode, NCUpdateResult (https://developer.apple.com/documentation/notificationcenter/ncwidgetproviding)",
-      "bifrost": "springboard/ui/src/widget.rs (DisplayMode, Insets, margin_insets, Limits), springboard/ui/src/widget_list.rs; tests: springboard/ui/tests/parity_sdk-tests-15.rs",
+      "bifrost": "springboard/ui/src/widget.rs (DisplayMode, Insets, margin_insets, Limits), springboard/ui/src/widget_list.rs; tests: springboard/ui/tests/parity_sdk-tests-15.rs; springboard/src/shell/services/widgets_timeline.rs; springboard/sdk/src/widgets_timeline.rs",
       "status": "partial",
-      "note": "Display modes, margin insets and the per-mode maximum size are tested headless in ui/tests/parity_sdk-tests-15.rs. Wave 1 (parity/integration 0d0412c3): pure model; not wired into apps or the shell, not yet tested on the VM or Midget. The shell renders its own widgets (battery, calendar, clock, deildu, weather and others). Apps cannot supply a widget: there is no extension point and no SDK type for NCWidgetProviding. Built 2026-10-17: SDK type sdk today_widgets::WidgetSet (ordered widgets, has-content flags, visible list); tests today_widgets::tests. Apps still have no widget view extension point."
+      "note": "Display modes, margin insets and the per-mode maximum size are tested headless in ui/tests/parity_sdk-tests-15.rs. Wave 1 (parity/integration 0d0412c3): pure model; not wired into apps or the shell, not yet tested on the VM or Midget. The shell renders its own widgets (battery, calendar, clock, deildu, weather and others). Apps cannot supply a widget: there is no extension point and no SDK type for NCWidgetProviding. Built 2026-10-17: SDK type sdk today_widgets::WidgetSet (ordered widgets, has-content flags, visible list); tests today_widgets::tests. Apps still have no widget view extension point. Built 2026-10-19: apps now supply widget content: they register their kinds (register or [[widget]] manifest tables) and send timelines with text, live date text and buttons, and the shell draws them as rows in the Notification Centre column (see the WidgetKit rows). Tests: widgets_timeline::tests. Still no app-drawn widget view extension point; the row is a title, a value and buttons. Midget check: click the clock in the menu bar: the rows under the title are widget rows supplied by apps (Calendar's next event, Weather, Reminders and others); a row an app registered with an Edit Widgets size chip changes height with the chip."
     },
     {
       "feature": "Widget content controller (NCWidgetController)",
@@ -24,9 +24,9 @@
     {
       "feature": "Widget editing and ordering",
       "apple": "NCWidgetProviding: widgetAllowsEditing, widgetDidBeginEditing()",
-      "bifrost": "springboard/src/shell/today.rs (Edit button: switch widgets off and drag them into order, saved in today.ini); tests: springboard/tests/parity_sdk-tests-01b.rs (today layout, widget gallery store); springboard/src/shell/widgetgallery.rs (Add Widget sheet, Small and Medium sizes); wired: springboard/src/shell/notify/center.rs (Edit Widgets gallery); springboard/src/shell/services/widgets_timeline.rs (place, resize)",
+      "bifrost": "springboard/src/shell/today.rs (Edit button: switch widgets off and drag them into order, saved in today.ini); tests: springboard/tests/parity_sdk-tests-01b.rs (today layout, widget gallery store); springboard/src/shell/widgetgallery.rs (Add Widget sheet, Small and Medium sizes); wired: springboard/src/shell/notify/center.rs (Edit Widgets gallery); springboard/src/shell/services/widgets_timeline.rs (place, resize); springboard/src/shell/services/widgets_timeline.rs (set_family, listing); springboard/src/shell/notify/center.rs (center_gallery_layout, DeskHit::Family)",
       "status": "partial",
-      "note": "The shell edits its own widget list. Per-widget editing hooks for apps are missing; the widget gallery is also not exposed to apps. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "note": "The shell edits its own widget list. Per-widget editing hooks for apps are missing; the widget gallery is also not exposed to apps. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity. Built 2026-10-19: the Edit Widgets gallery now shows one size chip per size the widget supports (Small, Medium, Large) instead of fixed Small and Large chips, and lists registered kinds with their name and description. Tests: widgets_timeline::tests (a_kind_takes_only_the_sizes_it_registered_*). Midget check: click the clock in the menu bar, Edit Widgets: a widget registered with Small and Medium shows two chips, one with Small, Medium and Large shows three; Done returns to the column."
     },
     {
       "feature": "Search view (NCWidgetSearchViewController)",
@@ -45,16 +45,16 @@
     {
       "feature": "Notification list in the system column",
       "apple": "Not part of this framework. Apple's user-facing Notification Center is system UI; apps post notifications through UserNotifications.",
-      "bifrost": "springboard/src/shell/notify/center.rs (column of glass cards, one per app, clear per app or all); springboard/src/shell/notify/mod.rs (Notification Center in the notification store); springboard/sdk/src/usernotif.rs (app-facing UNUserNotificationCenter-style API); springboard/tests/parity_sdk-tests-04.rs (tests)",
+      "bifrost": "springboard/src/shell/notify/center.rs (column of glass cards, one per app, clear per app or all); springboard/src/shell/notify/mod.rs (Notification Center in the notification store); springboard/sdk/src/usernotif.rs (app-facing UNUserNotificationCenter-style API); springboard/tests/parity_sdk-tests-04.rs (tests); springboard/src/shell/notify/center.rs (widget rows above the cards)",
       "status": "partial",
-      "note": "The column and delivery exist and apps can post through usernotif. The store behind the column (grouping per app, clear per app or all, the 50-entry limit) and the sheet's hidden state are tested headless in springboard/tests/parity_sdk-tests-04.rs; the drawn cards and the swipe gestures are not tested. Widgets are left out of the column (center.rs comment: the shell has no widget data source on the PC yet). Included only for context: it is not an API of this framework. Round (notify-stacks): groups are per app and thread, and the column's close control and Clear clear one stack (springboard/src/shell/notify/center.rs DeskHit::Close, springboard/src/shell/notify/mod.rs:447 clear_group). Stack headers read 'App · thread'. Not verified on Midget."
+      "note": "The column and delivery exist and apps can post through usernotif. The store behind the column (grouping per app, clear per app or all, the 50-entry limit) and the sheet's hidden state are tested headless in springboard/tests/parity_sdk-tests-04.rs; the drawn cards and the swipe gestures are not tested. Corrected 2026-10-19: widget rows are drawn above the cards from the widgets_timeline store (center.rs, center_widget_rects). Included only for context: it is not an API of this framework. Round (notify-stacks): groups are per app and thread, and the column's close control and Clear clear one stack (springboard/src/shell/notify/center.rs DeskHit::Close, springboard/src/shell/notify/mod.rs:447 clear_group). Stack headers read 'App · thread'. Not verified on Midget. Midget check: click the clock in the menu bar with a notification pending: widget rows sit under the title and the notification cards below them."
     },
     {
       "feature": "Widgets in the column layout",
       "apple": "NCWidgetController, NCWidgetProviding (placement of Today widgets in the column)",
-      "bifrost": "springboard/ui/src/widget_column.rs (layout, block_at, content_height); springboard/ui/src/widget.rs (Controller, Limits, DisplayMode)",
+      "bifrost": "springboard/ui/src/widget_column.rs (layout, block_at, content_height); springboard/ui/src/widget.rs (Controller, Limits, DisplayMode); springboard/ui/src/widget_column.rs (flow); springboard/src/shell/notify/center.rs (center_widget_rects)",
       "status": "partial",
-      "note": "Team J (parity/team-j-notification-center): pure layout model with host unit tests: hidden widgets take no room, expanded widgets take their expanded height, and block_at finds the block under a tap point (tested headless in springboard/ui/tests/parity_sdk-complete-45.rs). Not wired into springboard/src/shell/notify/center.rs, which still draws the notification column only; not yet tested on Midget."
+      "note": "Team J (parity/team-j-notification-center): pure layout model with host unit tests: hidden widgets take no room, expanded widgets take their expanded height, and block_at finds the block under a tap point (tested headless in springboard/ui/tests/parity_sdk-complete-45.rs). Not wired into springboard/src/shell/notify/center.rs, which still draws the notification column only; not yet tested on Midget. Built 2026-10-19: the column's widget area is now laid out by widget_column::flow (rows as tall as their family, 10 pt apart, the leading rows that end above the dock) instead of an ad hoc loop in center.rs. Tests: ui widget_column::tests (flowed_rows_stack_from_the_top_with_their_own_heights, the_first_row_that_crosses_the_bottom_ends_the_column, flowed_rows_treat_negative_heights_and_spacing_as_zero). The Block, Controller and DisplayMode layout (layout, block_at) is still not called by the shell. Midget check: click the clock in the menu bar: widget rows stack under the Notification Center title; set one to Large in Edit Widgets and the rows below it move down."
     },
     {
       "feature": "Framework status (deprecated)",
@@ -65,9 +65,9 @@
     }
   ],
   "gaps": [
-    "No app-drawn widget content: springboard/sdk/src/today_widgets.rs (WidgetSet) sets the order and the has-content flags only, and the shell draws its own widgets (NCWidgetProviding).",
+    "No app-drawn widget view: apps send a title, a value, live date text and buttons (springboard/sdk/src/widgets_timeline.rs); the shell draws the row, and the today_widgets WidgetSet only orders widgets and keeps has-content flags.",
     "No search results view or list view for widgets (NCWidgetSearchViewController, NCWidgetListViewController).",
-    "The Notification Center column does not show widgets: springboard/src/shell/notify/center.rs says the shell has no widget data source on the PC yet. The layout model in springboard/ui/src/widget_column.rs exists but nothing calls it yet.",
+    "The Block, Controller and DisplayMode layout in springboard/ui/src/widget_column.rs (layout, block_at) is still not called by the shell; the column places widget rows with widget_column::flow.",
     "WidgetKit (Apple's replacement) is not in the SDK; it is outside this framework but is where Apple's widget work now lives."
   ]
 }

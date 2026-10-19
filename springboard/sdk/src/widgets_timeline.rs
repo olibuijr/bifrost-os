@@ -66,6 +66,109 @@ pub fn reload(ctx: &Ctx, kind: &str, entries: &[Entry], policy: ReloadPolicy) ->
     service::call(ctx, SERVICE, method, &body)
 }
 
+/// How the date in an entry's clock is written: `Relative` ("in 5 minutes") or `Timer` ("4:59").
+pub use crate::controls::widget_date::Style as ClockStyle;
+/// The sizes a widget kind can take.
+pub use crate::controls::widget_kind::Family;
+
+/// A button or toggle on a widget entry. A tap runs the app's own `[[intent]]` `intent` with `params` over the app's
+/// control socket (the app must be running). A toggle (`toggle` is `Some(shown state)`) also passes its new state as
+/// the parameter `on` (`"true"` or `"false"`, read with [`crate::controls::control_widget::toggle_param`]); the widget
+/// shows the new state at once and puts the old one back when the intent fails. At most three per entry.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Button {
+    pub id: String,
+    pub label: String,
+    pub intent: String,
+    pub params: Vec<(String, String)>,
+    pub toggle: Option<bool>,
+}
+
+impl Button {
+    /// A button that runs `intent`.
+    pub fn new(id: &str, label: &str, intent: &str) -> Self {
+        Button { id: id.into(), label: label.into(), intent: intent.into(), params: Vec::new(), toggle: None }
+    }
+
+    /// A toggle that shows `on` and runs `intent` with the new state.
+    pub fn toggle(id: &str, label: &str, intent: &str, on: bool) -> Self {
+        Button { toggle: Some(on), ..Button::new(id, label, intent) }
+    }
+
+    /// Adds a string parameter the intent receives.
+    pub fn param(mut self, name: &str, value: &str) -> Self {
+        self.params.push((name.into(), value.into()));
+        self
+    }
+}
+
+/// An [`Entry`] with the richer parts of a widget: live date text and buttons.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Rich {
+    pub entry: Entry,
+    /// live date text: `{}` in the entry's text marks where it goes, else it follows the text; it keeps counting while
+    /// the app does not run
+    pub clock: Option<(ClockStyle, f64)>,
+    pub buttons: Vec<Button>,
+}
+
+impl Rich {
+    pub fn new(entry: Entry) -> Self {
+        Rich { entry, clock: None, buttons: Vec::new() }
+    }
+
+    /// Shows the distance to `target` (unix seconds) as live text in `style`.
+    pub fn with_clock(mut self, style: ClockStyle, target: f64) -> Self {
+        self.clock = Some((style, target));
+        self
+    }
+
+    pub fn with_button(mut self, button: Button) -> Self {
+        self.buttons.push(button);
+        self
+    }
+}
+
+/// A widget kind the app offers: its name and description in the Edit Widgets gallery and the sizes it supports.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Kind {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub families: Vec<Family>,
+    pub configurable: bool,
+}
+
+impl Kind {
+    /// A kind offered at Small and Medium.
+    pub fn new(id: &str, name: &str) -> Self {
+        Kind { id: id.into(), name: name.into(), description: String::new(), families: vec![Family::Small, Family::Medium], configurable: false }
+    }
+
+    pub fn with_description(mut self, description: &str) -> Self {
+        self.description = description.into();
+        self
+    }
+
+    /// The sizes the kind supports (replaces Small and Medium).
+    pub fn with_families(mut self, families: &[Family]) -> Self {
+        self.families = families.to_vec();
+        self
+    }
+}
+
+/// Registers the widget kinds the app offers, so the Edit Widgets gallery lists them (with their sizes) before a first
+/// [`reload`]. The reply is the kind count. Apps can also declare them as `[[widget]]` tables in `manifest.toml`.
+pub fn register(ctx: &Ctx, kinds: &[Kind]) -> u32 {
+    service::call(ctx, SERVICE, "register", &register_body(kinds))
+}
+
+/// [`reload`] with live date text and buttons on the entries, and an optional `bifrost-app://app/path` link a tap on
+/// the widget opens.
+pub fn reload_rich(ctx: &Ctx, kind: &str, entries: &[Rich], policy: ReloadPolicy, link: Option<&str>) -> u32 {
+    service::call(ctx, SERVICE, "reload", &rich_reload_body(kind, entries, policy, link))
+}
+
 /// Drops the timeline `kind`.
 pub fn remove(ctx: &Ctx, kind: &str) -> u32 {
     service::call(ctx, SERVICE, "remove", &obj(&[("kind", Json::Str(kind.into()))]))
@@ -152,6 +255,71 @@ fn end_body(id: u32, final_content: Option<(&str, &str)>, dismissal: Dismissal) 
     Json::Obj(pairs)
 }
 
+/// The JSON body of a `register` call.
+fn register_body(kinds: &[Kind]) -> Json {
+    let kind = |k: &Kind| {
+        obj(&[
+            ("id", Json::Str(k.id.clone())),
+            ("name", Json::Str(k.name.clone())),
+            ("description", Json::Str(k.description.clone())),
+            ("families", Json::Arr(k.families.iter().map(|f| Json::Str(f.key().into())).collect())),
+            ("configurable", Json::Bool(k.configurable)),
+        ])
+    };
+    obj(&[("kinds", Json::Arr(kinds.iter().map(kind).collect()))])
+}
+
+/// The JSON body of a rich `reload` call: the plain call's fields, `clock` and `actions` on each entry, and `link`.
+fn rich_reload_body(kind: &str, entries: &[Rich], policy: ReloadPolicy, link: Option<&str>) -> Json {
+    let plain: Vec<Entry> = entries.iter().map(|r| r.entry.clone()).collect();
+    let (_, mut body) = reload_call(kind, &plain, policy);
+    if let Json::Obj(pairs) = &mut body {
+        for (k, v) in pairs.iter_mut() {
+            if k.as_str() == "entries" {
+                let rich: Vec<Json> = entries.iter().map(rich_entry_json).collect();
+                *v = Json::Arr(rich);
+            }
+        }
+        if let Some(l) = link {
+            pairs.push(("link".into(), Json::Str(l.into())));
+        }
+    }
+    body
+}
+
+fn rich_entry_json(r: &Rich) -> Json {
+    let mut pairs = match entry_json(&r.entry) {
+        Json::Obj(p) => p,
+        _ => Vec::new(),
+    };
+    if let Some((style, target)) = r.clock {
+        let key = match style {
+            ClockStyle::Relative => "relative",
+            ClockStyle::Timer => "timer",
+        };
+        pairs.push(("clock".into(), obj(&[("style", Json::Str(key.into())), ("target", Json::Num(target))])));
+    }
+    if !r.buttons.is_empty() {
+        pairs.push(("actions".into(), Json::Arr(r.buttons.iter().map(button_json).collect())));
+    }
+    Json::Obj(pairs)
+}
+
+fn button_json(b: &Button) -> Json {
+    let mut pairs = vec![
+        ("id".to_string(), Json::Str(b.id.clone())),
+        ("label".to_string(), Json::Str(b.label.clone())),
+        ("intent".to_string(), Json::Str(b.intent.clone())),
+    ];
+    if !b.params.is_empty() {
+        pairs.push(("params".into(), Json::Obj(b.params.iter().map(|(k, v)| (k.clone(), Json::Str(v.clone()))).collect())));
+    }
+    if let Some(on) = b.toggle {
+        pairs.push(("toggle".into(), Json::Bool(on)));
+    }
+    Json::Obj(pairs)
+}
+
 fn entry_json(e: &Entry) -> Json {
     obj(&[("date", Json::Num(e.date)), ("title", Json::Str(e.title.clone())), ("text", Json::Str(e.text.clone()))])
 }
@@ -183,6 +351,56 @@ mod tests {
         let first = &body.get("entries").and_then(Json::array).unwrap()[0];
         assert_eq!(first.get("date").and_then(Json::number), Some(10.0));
         assert_eq!(first.str_field("text").as_deref(), Some("Standup"));
+    }
+
+    #[test]
+    fn a_rich_reload_adds_the_clock_buttons_and_link_to_the_plain_call() {
+        let e = Entry { date: 10.0, title: "Next".into(), text: "starts {}".into() };
+        let rich = Rich::new(e)
+            .with_clock(ClockStyle::Relative, 130.0)
+            .with_button(Button::new("done", "Done", "mark-done").param("item", "7"))
+            .with_button(Button::toggle("mute", "Mute", "set-mute", false));
+        let body = rich_reload_body("next", std::slice::from_ref(&rich), ReloadPolicy::After(300.0), Some("bifrost-app://is.x/next"));
+        assert_eq!(body.str_field("kind").as_deref(), Some("next"));
+        assert_eq!(body.str_field("policy").as_deref(), Some("after"), "the plain call's fields stay");
+        assert_eq!(body.get("reload_at").and_then(Json::number), Some(300.0));
+        assert_eq!(body.str_field("link").as_deref(), Some("bifrost-app://is.x/next"));
+        let first = &body.get("entries").and_then(Json::array).unwrap()[0];
+        assert_eq!(first.str_field("text").as_deref(), Some("starts {}"));
+        let clock = first.get("clock").unwrap();
+        assert_eq!((clock.str_field("style").as_deref(), clock.get("target").and_then(Json::number)), (Some("relative"), Some(130.0)));
+        let actions = first.get("actions").and_then(Json::array).unwrap();
+        assert_eq!(actions.len(), 2);
+        assert_eq!(actions[0].str_field("intent").as_deref(), Some("mark-done"));
+        assert_eq!(actions[0].get("params").and_then(|p| p.str_field("item")).as_deref(), Some("7"));
+        assert!(actions[0].get("toggle").is_none(), "a button has no toggle state");
+        assert_eq!(actions[1].get("toggle"), Some(&Json::Bool(false)));
+    }
+
+    #[test]
+    fn a_rich_entry_without_extras_encodes_like_a_plain_one_and_has_no_link() {
+        let e = Entry { date: 1.0, title: "t".into(), text: "x".into() };
+        let body = rich_reload_body("k", &[Rich::new(e.clone())], ReloadPolicy::Never, None);
+        let first = &body.get("entries").and_then(Json::array).unwrap()[0];
+        assert_eq!(first, &entry_json(&e));
+        assert!(body.get("link").is_none());
+    }
+
+    #[test]
+    fn a_register_call_names_each_kind_with_its_sizes() {
+        let kinds = [
+            Kind::new("next", "Next Event").with_description("The next one.").with_families(&[Family::Small, Family::Large]),
+            Kind::new("plain", "Plain"),
+        ];
+        let body = register_body(&kinds);
+        let list = body.get("kinds").and_then(Json::array).unwrap();
+        assert_eq!(list.len(), 2);
+        assert_eq!(list[0].str_field("name").as_deref(), Some("Next Event"));
+        assert_eq!(list[0].str_field("description").as_deref(), Some("The next one."));
+        let sizes: Vec<String> = list[0].get("families").and_then(Json::array).unwrap().iter().filter_map(|f| f.as_str().map(str::to_string)).collect();
+        assert_eq!(sizes, vec!["small".to_string(), "large".to_string()]);
+        let default_sizes: Vec<&str> = list[1].get("families").and_then(Json::array).unwrap().iter().filter_map(Json::as_str).collect();
+        assert_eq!(default_sizes, vec!["small", "medium"]);
     }
 
     #[test]
