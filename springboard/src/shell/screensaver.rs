@@ -15,8 +15,11 @@ use super::ui::{centred, Ui, Weight, SECONDARY, WHITE};
 use super::Shell;
 use crate::gfx::{pack, Image, Surface};
 use crate::status;
+use super::prefs::Prefs;
 use bifrost_core::idle_monitor::{IdleEvent, IdleMonitor};
-use bifrost_ui::screensaver::{ss_random_point_for_size_within_rect, ScreenSaverView};
+use bifrost_ui::saver_random::SaverRandom;
+use bifrost_ui::screensaver::{ConfigureSheet, ScreenSaverView};
+use bifrost_ui::screensaver_manifest::SaverManifest;
 use bifrost_ui::Rect;
 
 /// The savers, in the order the Screen Saver page lists them. Index 0 is the default.
@@ -42,21 +45,85 @@ pub fn saver_name(index: usize) -> &'static str {
     SAVERS[index.min(SAVERS.len() - 1)]
 }
 
-/// A unit value in [0, 1) from a seed, with a fixed integer hash, so the same seed always gives the same spot.
-fn unit(seed: u64) -> f64 {
-    let mut z = seed.wrapping_add(0x9E37_79B9_7F4A_7C15);
-    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-    z ^= z >> 31;
-    (z >> 11) as f64 / (1u64 << 53) as f64
+/// The descriptor of each saver in `SAVERS` order: its name, frame interval and the options its configuration sheet
+/// shows in Settings > Screen Saver. `SaverManifest::parse` turns each into the saver's view settings and sheet.
+const DESCRIPTORS: [&str; 3] = [
+    "name = Clock\nframe_interval = 1\noption.show_date = bool true\noption.move_every = choice 30s,1m,5m 1m\noption.size = choice small,medium,large medium\n",
+    "name = Colours\nframe_interval = 0.1\noption.speed = choice slow,normal,fast normal\n",
+    "name = Black\n",
+];
+
+/// The parsed descriptor of a saver by index, clamped to the list.
+pub fn manifest(index: usize) -> Option<SaverManifest> {
+    SaverManifest::parse(DESCRIPTORS[index.min(DESCRIPTORS.len() - 1)]).ok()
+}
+
+/// The preference key of one saver option. It has the form `ScreenSaver.<module>.<key>`, the same key space the SDK's
+/// per-module defaults use, so one module never reads another's values.
+pub fn pref_key(index: usize, key: &str) -> String {
+    format!("ScreenSaver.{}.{}", saver_name(index).replace('.', "_"), key)
+}
+
+/// The saver's configuration sheet with the values saved in `prefs` applied. A saved value the option refuses is
+/// skipped, so an old or edited preference cannot break the sheet.
+pub fn load_sheet(index: usize, prefs: &Prefs) -> ConfigureSheet {
+    let mut sheet = manifest(index).map(|m| m.sheet().clone()).unwrap_or_default();
+    let keys: Vec<String> = sheet.keys().iter().map(|k| k.to_string()).collect();
+    for key in keys {
+        if let Some(text) = prefs.get(&pref_key(index, &key)) {
+            sheet.set_from_text(&key, text);
+        }
+    }
+    sheet
+}
+
+/// Saves one option value (as the text `ConfigureSheet::text_of` gives) to the saver's preferences.
+pub fn save_option(prefs: &mut Prefs, index: usize, key: &str, text: &str) {
+    let _ = prefs.set(&pref_key(index, key), text);
+}
+
+/// The label of an option in Settings.
+pub fn option_title(key: &str) -> String {
+    match key {
+        "show_date" => "Show Date".to_string(),
+        "move_every" => "Move Every".to_string(),
+        "size" => "Clock Size".to_string(),
+        "speed" => "Colour Change".to_string(),
+        _ => capitalised(key),
+    }
+}
+
+/// The label of a choice value in Settings.
+pub fn choice_title(value: &str) -> String {
+    match value {
+        "30s" => "30 seconds".to_string(),
+        "1m" => "1 minute".to_string(),
+        "5m" => "5 minutes".to_string(),
+        _ => capitalised(value),
+    }
+}
+
+fn capitalised(text: &str) -> String {
+    let spaced = text.replace('_', " ");
+    let mut chars = spaced.chars();
+    chars.next().map_or(String::new(), |c| c.to_uppercase().collect::<String>() + chars.as_str())
+}
+
+/// Where the Clock saver puts its clock in move number `cell`: the same cell always gives the same spot, because the
+/// position comes from a `SaverRandom` seeded with the cell number.
+pub fn clock_spot(cell: u64, size: (f32, f32), area: Rect) -> (f32, f32) {
+    SaverRandom::new(cell).next_point_within(size, area)
 }
 
 /// The clock text the Clock saver last drew, with its images.
 struct Text {
     clock: String,
     date: String,
+    /// the clock size in points the images were made at
+    time_pt: f32,
     time: Image,
-    day: Image,
+    /// None when Show Date is off
+    day: Option<Image>,
 }
 
 /// The screen saver state the shell holds.
@@ -69,12 +136,14 @@ pub struct ScreenSaver {
     /// idle time before the saver starts; its timeout is 0 (never) when Start After is Never
     idle: IdleMonitor,
     text: Option<Text>,
+    /// the chosen saver's options and their saved values (see `load_sheet`)
+    sheet: ConfigureSheet,
 }
 
 impl ScreenSaver {
     pub fn new() -> Self {
         let frame = Rect { x: 0.0, y: 0.0, w: 0.0, h: 0.0 };
-        ScreenSaver { view: ScreenSaverView::new(frame, false), saver: 0, started_ms: 0.0, idle: IdleMonitor::new(0, 0), text: None }
+        ScreenSaver { view: ScreenSaverView::new(frame, false), saver: 0, started_ms: 0.0, idle: IdleMonitor::new(0, 0), text: None, sheet: ConfigureSheet::new() }
     }
 
     /// Takes the saver choice and the Start After delay from Settings (see `Options`). An index past the list is the
@@ -82,6 +151,42 @@ impl ScreenSaver {
     pub fn configure(&mut self, saver: usize, minutes: u32) {
         self.saver = saver.min(SAVERS.len() - 1);
         self.idle.set_timeout(u64::from(minutes) * 60_000);
+    }
+
+    /// Takes the chosen saver's options from its saved values (`load_sheet`) and its frame interval from its
+    /// descriptor, so a static clock is not redrawn thirty times a second.
+    pub fn set_sheet(&mut self, sheet: ConfigureSheet) {
+        self.sheet = sheet;
+        if let Some(m) = manifest(self.saver) {
+            self.view.set_animation_time_interval(m.frame_interval());
+        }
+    }
+
+    /// Seconds the Clock saver keeps its clock still before it moves it.
+    fn move_every_s(&self) -> f64 {
+        match self.sheet.choice_of("move_every") {
+            Some("30s") => 30.0,
+            Some("5m") => 300.0,
+            _ => MOVE_EVERY_S,
+        }
+    }
+
+    /// The Clock saver's time text size in points.
+    fn clock_pt(&self) -> f32 {
+        match self.sheet.choice_of("size") {
+            Some("small") => 64.0,
+            Some("large") => 128.0,
+            _ => 96.0,
+        }
+    }
+
+    /// How fast the Colours saver turns through the colour wheel, in turns of the phase per second.
+    fn colour_rate(&self) -> f64 {
+        match self.sheet.choice_of("speed") {
+            Some("slow") => 0.02,
+            Some("fast") => 0.12,
+            _ => 0.05,
+        }
     }
 
     /// Whether a saver is on screen.
@@ -154,7 +259,7 @@ impl ScreenSaver {
         match self.saver {
             0 => self.draw_clock(s, ui, w, h, clock, date, elapsed),
             1 => {
-                let phase = elapsed * 0.05;
+                let phase = elapsed * self.colour_rate();
                 let channel = |k: f64| (128.0 + 127.0 * (phase + k).sin()) as u8;
                 s.fill_rrect(0.0, 0.0, w as f32, h as f32, 0.0, pack(channel(0.0), channel(2.094), channel(4.188), 255));
             }
@@ -165,24 +270,31 @@ impl ScreenSaver {
     #[allow(clippy::too_many_arguments)]
     fn draw_clock(&mut self, s: &mut Surface, ui: &Ui, w: i32, h: i32, clock: &str, date: &str, elapsed: f64) {
         s.fill_rrect(0.0, 0.0, w as f32, h as f32, 0.0, BLACK);
-        let current = self.text.as_ref().is_some_and(|t| t.clock == clock && t.date == date);
+        let show_date = self.sheet.bool_or("show_date", true);
+        let time_pt = self.clock_pt();
+        let current = self.text.as_ref().is_some_and(|t| t.clock == clock && t.date == date && t.time_pt == time_pt && t.day.is_some() == show_date);
         if !current {
             self.text = Some(Text {
                 clock: clock.to_string(),
                 date: date.to_string(),
-                time: ui.text(clock, 96.0, Weight::Semibold, WHITE),
-                day: ui.text(date, 24.0, Weight::Semibold, SECONDARY),
+                time_pt,
+                time: ui.text(clock, time_pt, Weight::Semibold, WHITE),
+                day: show_date.then(|| ui.text(date, 24.0, Weight::Semibold, SECONDARY)),
             });
         }
+        let cell = (elapsed / self.move_every_s()).floor() as u64;
         let Some(text) = &self.text else { return };
-        let gap = ui.pt(8.0);
-        let size = (text.time.w.max(text.day.w) as f32, text.time.h as f32 + gap + text.day.h as f32);
-        let cell = (elapsed / MOVE_EVERY_S).floor() as u64;
+        let gap = if text.day.is_some() { ui.pt(8.0) } else { 0.0 };
+        let day_w = text.day.as_ref().map_or(0, |d| d.w);
+        let day_h = text.day.as_ref().map_or(0, |d| d.h);
+        let size = (text.time.w.max(day_w) as f32, text.time.h as f32 + gap + day_h as f32);
         let area = Rect { x: 0.0, y: 0.0, w: w as f32, h: h as f32 };
-        let (x, y) = ss_random_point_for_size_within_rect(unit(cell * 2), unit(cell * 2 + 1), size, area);
+        let (x, y) = clock_spot(cell, size, area);
         let cx = (x + size.0 / 2.0) as i32;
         centred(s, &text.time, cx, y as i32);
-        centred(s, &text.day, cx, (y + text.time.h as f32 + gap) as i32);
+        if let Some(day) = &text.day {
+            centred(s, day, cx, (y + text.time.h as f32 + gap) as i32);
+        }
     }
 }
 
@@ -231,12 +343,69 @@ mod tests {
     }
 
     #[test]
-    fn unit_values_stay_in_range() {
-        for seed in [0u64, 1, 2, 1 << 40, u64::MAX] {
-            let u = unit(seed);
-            assert!((0.0..1.0).contains(&u), "{seed} -> {u}");
+    fn the_clock_spot_is_repeatable_and_inside_the_screen() {
+        let area = Rect { x: 0.0, y: 0.0, w: 1920.0, h: 1080.0 };
+        let size = (400.0, 160.0);
+        for cell in [0u64, 1, 2, 59, u64::MAX] {
+            let (x, y) = clock_spot(cell, size, area);
+            assert!(x >= 0.0 && x + size.0 <= area.w, "cell {cell}: x {x}");
+            assert!(y >= 0.0 && y + size.1 <= area.h, "cell {cell}: y {y}");
+            assert_eq!(clock_spot(cell, size, area), (x, y), "the same cell gives the same spot");
         }
-        assert_eq!(unit(7), unit(7), "the same seed gives the same value");
+        assert_ne!(clock_spot(0, size, area), clock_spot(1, size, area), "the next move goes somewhere else");
+    }
+
+    #[test]
+    fn every_saver_has_a_valid_descriptor() {
+        for (i, name) in SAVERS.iter().enumerate() {
+            let m = manifest(i).expect("descriptor parses");
+            assert_eq!(m.name(), *name);
+            assert!(m.frame_interval() > 0.0);
+        }
+        assert_eq!(manifest(0).map(|m| m.sheet().len()), Some(3), "Clock: date, move and size");
+        assert_eq!(manifest(1).map(|m| m.sheet().len()), Some(1), "Colours: speed");
+        assert_eq!(manifest(2).map(|m| m.sheet().len()), Some(0), "Black has no options");
+    }
+
+    #[test]
+    fn saved_option_values_load_and_bad_ones_are_skipped() {
+        let mut prefs = Prefs::memory();
+        assert_eq!(pref_key(0, "show_date"), "ScreenSaver.Clock.show_date");
+        save_option(&mut prefs, 0, "show_date", "false");
+        save_option(&mut prefs, 0, "move_every", "5m");
+        save_option(&mut prefs, 0, "size", "huge");
+        let sheet = load_sheet(0, &prefs);
+        assert!(!sheet.bool_or("show_date", true));
+        assert_eq!(sheet.choice_of("move_every"), Some("5m"));
+        assert_eq!(sheet.choice_of("size"), Some("medium"), "a refused value leaves the default");
+        // another module's values are not read
+        assert_eq!(load_sheet(1, &prefs).choice_of("speed"), Some("normal"));
+    }
+
+    #[test]
+    fn the_options_change_the_clock_and_colour_settings() {
+        let mut prefs = Prefs::memory();
+        let mut s = ScreenSaver::new();
+        s.configure(0, 1);
+        s.set_sheet(load_sheet(0, &prefs));
+        assert_eq!((s.move_every_s(), s.clock_pt()), (MOVE_EVERY_S, 96.0));
+        assert!((s.view.animation_time_interval() - 1.0).abs() < 1e-9, "the Clock descriptor asks for one frame a second");
+        save_option(&mut prefs, 0, "move_every", "30s");
+        save_option(&mut prefs, 0, "size", "large");
+        s.set_sheet(load_sheet(0, &prefs));
+        assert_eq!((s.move_every_s(), s.clock_pt()), (30.0, 128.0));
+        s.configure(1, 1);
+        save_option(&mut prefs, 1, "speed", "fast");
+        s.set_sheet(load_sheet(1, &prefs));
+        assert_eq!(s.colour_rate(), 0.12);
+    }
+
+    #[test]
+    fn option_titles_read_well() {
+        assert_eq!(option_title("show_date"), "Show Date");
+        assert_eq!(option_title("custom_key"), "Custom key");
+        assert_eq!(choice_title("30s"), "30 seconds");
+        assert_eq!(choice_title("medium"), "Medium");
     }
 
     #[test]

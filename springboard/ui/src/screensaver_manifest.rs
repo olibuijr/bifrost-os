@@ -92,6 +92,11 @@ impl SaverManifest {
         &self.name
     }
 
+    /// Seconds between frames the descriptor asks for (the default interval when it names none).
+    pub fn frame_interval(&self) -> f64 {
+        self.frame_interval
+    }
+
     /// The configuration options, with their defaults. Saved values are applied with `ConfigureSheet::restore`.
     pub fn sheet(&self) -> &ConfigureSheet {
         &self.sheet

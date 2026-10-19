@@ -1922,6 +1922,7 @@ impl Shell {
         }
         self.idle_off_ms = low_battery::auto_lock_ms(o.auto_lock_ms, o.low_power) as f64;
         self.saver.configure(o.screensaver_module, o.screensaver_minutes);
+        self.saver.set_sheet(screensaver::load_sheet(o.screensaver_module, &self.prefs));
         if self.clock_style != o.clock_style() {
             self.clock_style = o.clock_style();
             self.chrome.time = None;
