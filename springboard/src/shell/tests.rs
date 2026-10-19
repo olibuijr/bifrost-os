@@ -76,6 +76,35 @@
     }
 
     #[test]
+    fn unlocking_the_desktop_gives_the_wallpaper_to_the_presenter_again() {
+        let mut sh = desktop_shell();
+        sh.screen = Screen::Home;
+        sh.anim = None;
+        sh.note_wallpaper_uploaded();
+        sh.tick(1000.);
+        assert!(sh.desktop_wallpaper_once().is_none(), "the presenter holds the wallpaper before the lock");
+        sh.lock_screen();
+        sh.tick(1100.);
+        assert!(sh.is_locked());
+        sh.anim = Some((Anim::Unlock { from: 0.0, to: 1.0 }, 1200.));
+        sh.tick(1200. + 60_000.);
+        assert_eq!(sh.screen, Screen::Home, "the unlock finished");
+        let (wp, x) = sh.desktop_wallpaper_once().expect("the unlocked desktop owes its wallpaper to the presenter");
+        assert_eq!((wp.w, wp.h, x), (sh.w as usize, sh.h as usize, 0), "a full fitted still");
+        // the desktop background is the wallpaper, not the empty fill
+        let (w, h) = (sh.w as usize, sh.h as usize);
+        let mut img = Image::new(w, h);
+        sh.draw_desktop_background(&mut Surface { w, h, stride: w, px: &mut img.px, y0: 0 });
+        assert_eq!(img.px[(h / 2) * w + w / 2], rgba(20, 20, 30, 255));
+        // once uploaded it is not sent again, frame after frame
+        sh.note_wallpaper_uploaded();
+        for k in 0..5 {
+            sh.tick(70_000. + k as f64 * 16.);
+            assert!(sh.desktop_wallpaper_once().is_none(), "frame {k}");
+        }
+    }
+
+    #[test]
     fn the_desktop_never_raises_the_on_screen_keyboard() {
         // Grey boxes along the bottom of app windows (0.4.58-0.4.62) were this keyboard's top row: bringing an app
         // with a focused text field to the front raised it on the desktop.
