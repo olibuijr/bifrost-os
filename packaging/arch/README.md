@@ -6,7 +6,7 @@ Installs the SpringBoard shell as the sole UI of an x86_64 Arch machine (desktop
 | Path | Content |
 |---|---|
 | `/usr/bin/springboard` | the `shell` binary (`cargo build --release --bin shell`) |
-| `/usr/share/springboard/assets` | packed assets (`springboard/tools/pack.py`: wallpaper, fonts, icons, sounds) |
+| `/usr/share/springboard/assets` | the allowlisted part of the packed assets (`packaging/assets-allowlist.txt`: wallpaper, open-licence fonts, BifrOSt's own icons) |
 | `/var/lib/springboard` | data dir (root's desktop-profile default); seeded from the assets on first start (`.seeded` marker) |
 | `/usr/lib/systemd/system/springboard.service` | runs the shell on tty1 |
 | `/usr/lib/springboard/seed-data` | the first-start seeding script |
@@ -28,6 +28,15 @@ first with `cargo fetch` in `springboard/` (or pass `SPRINGBOARD_CARGO_FLAGS=` t
 Use `BUILDDIR=` to keep `src/`/`pkg/` out of the checkout.
 The assets directory is untracked (about 244 MB, produced by `tools/pack.py ../ipad-ref assets W H`); without it the
 package still builds but ships an empty assets dir.
+
+## What a package may carry
+
+Only BifrOSt's own files and openly licensed ones. `package()` copies the assets through `tools/stage-assets.py`, which
+takes only the files named in `packaging/assets-allowlist.txt` (a vendor font or an icon taken from another system that
+sits in the assets directory is skipped), nothing is read from `bifrost-ref`, and the finished `$pkgdir` must pass
+`tools/check-package-licenses.py` (no path under `/usr/share/bifrost/ref`, every font names an open licence in its name
+table). `tools/pc-publish.py`, `tools/pc-app.py` and `tools/build-iso.sh` run the same guard on what they build; see
+`docs/bifrost-pc-workflow.md`, "Package licences". The fast update package (`fast/PKGBUILD`) carries no assets at all.
 
 ## Why root on tty1
 

@@ -106,6 +106,11 @@ def main():
     run(['strip', '--strip-unneeded', stripped])
     run([sys.executable, ROOT / 'springboard/tools/aap.py', 'pack', app, '--bin', stripped, '--out', out])
     package = out / f"{manifest['id']}-{manifest['version']}.aap"
+    # licence guard: an app package carries only BifrOSt's own and openly licensed files. A failing package is deleted,
+    # so neither a publish nor the ISO bundler (tools/bundle-iso-offline.py reads out/pc-apps) can pick it up.
+    if subprocess.run([sys.executable, str(ROOT / 'tools/check-package-licenses.py'), str(package)]).returncode:
+        package.unlink(missing_ok=True)
+        sys.exit(f"refusing {package.name}: the licence guard failed (see above); the package was deleted")
     if args.action == 'pack':
         # a local package for lab testing (`springboard --install-package`), not published
         print(package)

@@ -35,7 +35,7 @@ tools/arch-vm.sh status | stop
 
 `deploy` takes `SPRINGBOARD_BIN` (default `<repo>/springboard/target/release/shell`) and `SPRINGBOARD_ASSETS`
 (default `<repo>/springboard/assets`; the dir is untracked, so in a worktree point it at the main checkout's).
-Assets go to `/usr/share/springboard/assets` once (marker `.deployed`) and seed `/var/lib/springboard` on the
+Assets go to `/usr/share/springboard/assets` once (marker `.deployed`; only the files `packaging/assets-allowlist.txt` names, via `tools/stage-assets.py`) and seed `/var/lib/springboard` on the
 first service start (marker `.seeded`); delete `/var/lib/springboard/.seeded` in the guest to reseed.
 
 ## Layout, ports, knobs

@@ -7,8 +7,8 @@
 An .aap is an uncompressed POSIX (ustar) tar holding manifest.toml, the
 executable named by `exec`, the 180x180 `icon` PNG and an optional assets/ tree.
 The app dir holds manifest.toml (+ icon.png, assets/); the binary comes from
---bin or target/aarch64-linux-android/release/<exec>. A missing icon is taken
-from bifrost-ref/icons/<id>.png when it exists.
+--bin or target/aarch64-linux-android/release/<exec>. The icon must be a file
+of the app dir; there is no fallback to any other folder.
 
 System packages (`kind = "system"`, e.g. system/keyboard) may be data-only: no
 `exec`, no binary, just manifest, icon and assets/. For `provides = ["keyboard"]`
@@ -137,11 +137,10 @@ def pack(args):
         for lang in sorted(os.listdir(WORDS)):
             if lang.endswith(".txt"):
                 extra["assets/words/" + lang] = open(os.path.join(WORDS, lang), "rb").read()
+    # the icon is the app's own file: nothing is ever taken from the local reference folder
     icon = os.path.join(app, m["icon"])
     if not os.path.isfile(icon):
-        icon = os.path.join(ROOT, "..", "bifrost-ref", "icons", m["id"] + ".png")
-    if not os.path.isfile(icon):
-        sys.exit(f"icon not found: {os.path.join(app, m['icon'])}")
+        sys.exit(f"icon not found: {icon}")
     icon_data = open(icon, "rb").read()
     if png_size(icon_data) != (180, 180):
         sys.exit("icon must be 180x180")

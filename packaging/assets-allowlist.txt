@@ -1,0 +1,38 @@
+# Files of springboard/assets (the packed asset directory, untracked) that may be packaged or put on an ISO.
+# tools/stage-assets.py copies a file only when its path (relative to the assets directory) matches a line here,
+# so a stray file dropped into the directory (a vendor font, an icon taken from another system, a sound) never
+# ships. Packages carry only BifrOSt's own and openly licensed files; tools/check-package-licenses.py checks the
+# result (docs/bifrost-pc-workflow.md, "Package licences").
+#
+# One glob per line, `*` and `?` stay inside one path segment, no `**`. Add a file here only when its licence is
+# known: name a font by its exact file name and give its licence in a comment.
+
+# UI fonts, all SIL Open Font License 1.1 (springboard/tools/pack.py fetches them from a pinned source)
+SFUI.ttf                              # Inter
+SFUIMono.ttf                          # JetBrains Mono
+Symbols.ttf                           # Noto Sans Symbols 2
+NotoColorEmoji.ttf                    # Noto Color Emoji
+
+# the font library Settings > Fonts offers (SIL Open Font License 1.1), one line per face
+fonts/FiraCode-Variable.ttf
+fonts/Geist-Variable.ttf
+fonts/GeistMono-Variable.ttf
+fonts/IBMPlexSans-Variable.ttf
+fonts/SourceCodePro-Variable.ttf
+fonts/SourceSans3-Variable.ttf
+fonts/SourceSans3-Italic-Variable.ttf
+
+# wallpapers: royalty-free photos (springboard/wallpapers/CREDITS.md), packed as raw images with thumbnails
+wallpaper.raw
+wallpapers/*.raw
+wallpapers/index.ini
+
+# app icons: BifrOSt's own artwork only (the bifrost.* names and the owner's is.olibuijr.* apps)
+icons/bifrost.*.raw
+icons/is.olibuijr.*.raw
+
+# Not listed on purpose:
+#   sounds/*.pcm      converted from reference sounds by tools/pack.py, and no code loads them (the keyboard clicks
+#                     are synthesised in src/shell/kb_clicks.rs)
+#   icons/<other>.raw icons of other makers' apps (the reference system's and third-party jailbreak tools')
+#   the reference symbol font and anything else the reference system's makers hold the rights to

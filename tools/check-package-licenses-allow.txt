@@ -1,0 +1,8 @@
+# Excuses for tools/check-package-licenses.py: fonts that cannot name an open licence in their name table.
+# One excuse per line, the reason is mandatory:
+#   path GLOB -- reason        GLOB is matched against the path inside the package (fnmatch; a glob without a
+#                              slash is matched against the file name only)
+#   family NAME -- reason      NAME is the family (name ID 1, 4 or 16) of a face, compared without case
+# Only fonts whose licence permits redistribution belong here, with the reason saying where the licence is stated
+# (for example a licence file shipped beside the font). A vendor font that is not licensed for redistribution never does.
+# No excuses are needed today: every font the system ships names the SIL Open Font License.

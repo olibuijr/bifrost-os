@@ -8,7 +8,7 @@ arch=(x86_64)
 url='https://bifrost.olibuijr.com'
 license=(custom)
 mapfile -t depends < "${PC_PKGSRC:-$(dirname "$(readlink -f "${BASH_SOURCE[0]:-$0}")")}/runtime-packages.txt"
-makedepends=(cargo)
+makedepends=(cargo python)
 options=(!lto !strip)
 install=springboard.install
 source=(springboard.service seed-data bifrost-privd.service pam-bifrost-login sysusers-bifrost.conf sysctl-bifrost.conf)
@@ -79,8 +79,12 @@ package() {
   done
   install -d "$pkgdir/usr/share/springboard"
   if [ -d "$_assets" ]; then
-    cp -a "$_assets" "$pkgdir/usr/share/springboard/assets"
+    # only what packaging/assets-allowlist.txt names: a stray file in the assets dir (a font or icon BifrOSt has no
+    # right to redistribute) is skipped, never copied whole
+    python3 "$_repo/tools/stage-assets.py" "$_assets" "$pkgdir/usr/share/springboard/assets" || return 1
   else
     install -d "$pkgdir/usr/share/springboard/assets"
   fi
+  # licence guard: refuse a package with reference assets or a font that names no open licence
+  python3 "$_repo/tools/check-package-licenses.py" "$pkgdir" || return 1
 }
