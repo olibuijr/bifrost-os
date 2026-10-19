@@ -1232,6 +1232,11 @@ impl AppHost {
         Some((b.map.pixels(), wb.size.0, wb.size.1))
     }
 
+    /// True once the app has committed a frame to its extra window `id` (the desk maps a window on its first frame).
+    pub fn window_mapped(&self, id: u32) -> bool {
+        self.window_frame(id).is_some()
+    }
+
     /// Copies an extra window's newest frame into `s` (top left, clipped to `s`), then gives the frame back to the app.
     /// False when the window has no frame yet.
     pub fn blit_window(&mut self, s: &mut Surface, id: u32) -> bool {
