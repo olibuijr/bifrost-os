@@ -1381,10 +1381,9 @@ impl Dispatch<mat_manager::BifrostMaterialManagerV1,()> for State {
 impl Dispatch<lvl_manager::BifrostWindowLevelManagerV1,()> for State {
     fn event(s:&mut Self,_:&lvl_manager::BifrostWindowLevelManagerV1,e:lvl_manager::Event,_:&(),_:&Connection,_:&QueueHandle<Self>) {
         // the window server's frame of one of our toplevels: the shell keeps its window rectangle from it
-        if let lvl_manager::Event::Frame{surface,x,y,width,height}=e {
-            if let Some(id)=s.windows.iter().find(|(_,w)|w.surface==surface).map(|(&id,_)|id) {
-                s.window_events.push(WindowEvent::Frame(id,x,y,width,height));
-            }
+        let lvl_manager::Event::Frame{surface,x,y,width,height}=e;
+        if let Some(id)=s.windows.iter().find(|(_,w)|w.surface==surface).map(|(&id,_)|id) {
+            s.window_events.push(WindowEvent::Frame(id,x,y,width,height));
         }
     }
 }

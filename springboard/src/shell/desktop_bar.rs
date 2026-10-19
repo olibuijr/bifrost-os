@@ -1404,6 +1404,8 @@ mod context_menu_shell_tests {
     fn the_exported_surface_has_room_for_the_shadow_and_only_the_menu_takes_input() {
         let mut sh = open_at(300., 400.);
         sh.anim = None;
+        // the fixture starts on the lock screen, where no chrome is exported
+        sh.screen = crate::shell::Screen::Home;
         let (w, h) = (sh.w as usize, sh.h as usize);
         let pixels = vec![0u32; w * h];
         let (px, py, pw, ph) = sh.desktop_popup_rect().unwrap();
@@ -1422,6 +1424,8 @@ mod context_menu_shell_tests {
     fn hit_testing_uses_the_menu_rectangle_not_the_shadow() {
         let mut sh = open_at(300., 400.);
         sh.anim = None;
+        // the fixture starts on the lock screen, where no chrome is exported
+        sh.screen = crate::shell::Screen::Home;
         let (px, py, _, _) = sh.desktop_popup_rect().unwrap();
         let (w, h) = (sh.w as usize, sh.h as usize);
         let pixels = vec![0u32; w * h];

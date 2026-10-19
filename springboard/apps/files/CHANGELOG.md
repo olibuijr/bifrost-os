@@ -1,3 +1,8 @@
+## 1.33.1 — 2026-10-19
+
+- While a search is active the four view buttons collapse into one view pop-up, so the whole "Searching ..." title fits.
+- Generic document icons have a light folded corner instead of a black one.
+
 ## 1.33.0 — 2026-10-19
 
 - New Folder selects the new folder and opens its name for editing. Return renames the selection, Cmd+O and Cmd+Down open it, Cmd+Up goes to the enclosing folder. Renaming selects the name without its extension, so typing replaces it; the column and gallery views show the name field too.
