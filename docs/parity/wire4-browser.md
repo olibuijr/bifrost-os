@@ -9,7 +9,8 @@ once), so the first compile is the lead's.
 
 | Piece | Model | Where in the app |
 |---|---|---|
-| History menu: Back and Forward submenus of the selected tab's pages | none in `springboard/ui`; the app's own per-tab list (`tabdiscard::Discarder`, the same list the Back button uses for revived tabs) | `springboard/apps/browser/src/tabdiscard.rs`: `history_menu` builds the items, `menu_entries` picks the entries around the current one, `history_label` shortens each address, `jump_to` and `jump_step` move the tab one engine step per finished load, `step_back` is the Back button's rule. `main.rs`: `menus()` adds the History menu, `menu_action` dispatches the item ids. |
+| History menu: Back and Forward with the selected tab's pages under them | none in `springboard/ui`; the app's own per-tab list (`tabdiscard::Discarder`, the same list the Back button uses for revived tabs) | `springboard/apps/browser/src/tabdiscard.rs`: `history_pages` picks the entries around the current one (`menu_entries`), `history_label` shortens each address, `jump_to` and `jump_step` move the tab one engine step per finished load, `step_back` is the Back button's rule. `menus.rs`: `history_items` builds the menu (Show All History, Reopen Last Closed Tab, Back, Forward, Recently Closed, Recently Visited), `on_menu_action` dispatches the item ids. |
+| Bookmarks menu and the closed-tab stack | the app's own store (`store::Store`) and `session::ClosedTabs` | `menus.rs`: `bookmarks_items` (Show Bookmarks, Add Bookmark, Favorites Bar switch, the bookmarks), `close_tab_item`; `session.rs`: `ClosedTabs` keeps the last 20 closed tabs (page, title, Back list, strip place), `reopen_nth_closed` brings one back at its place; `tabdiscard.rs`: `Discarder::seed` gives it its Back list again. |
 
 ### Why this is the app's own list and not a shared model
 
@@ -21,7 +22,7 @@ it; the shared-model route is listed under gaps.
 
 ### How the jump works
 
-- `history_menu` gives each entry the item id `HISTORY_BASE` (1000) plus its index in the tab's list. `history_target`
+- `history_items` gives each entry the item id `NAV_MENU_BASE` (1000) plus its index in the tab's list. `history_target`
   maps an id back to an index (ids 1000 to 1049, the list keeps at most 50 entries).
 - `jump_to(target)` records the target index for the tab and takes the first step. Each step is one Back (`go_back`, or
   the app-side previous entry for a revived tab) or Forward (`go_forward`). The next step is taken on `LoadFinished`,
@@ -32,26 +33,38 @@ it; the shared-model route is listed under gaps.
 
 ## How a user reaches it
 
-- **History > Back** and **History > Forward** (the menu bar, History menu, after View). Each submenu lists up to ten
-  pages on its side of the current page, nearest first, shortened to 60 characters. The list is empty (with "No Earlier
-  Pages" or "No Later Pages", greyed out) on a new tab.
+- **History > Back** and **History > Forward** (the menu bar, History menu, after View and before Bookmarks). Each is an
+  item of its own (Cmd+[ and Cmd+], greyed out when the tab cannot move) with up to ten pages on its side of the current
+  page under it, nearest first, shortened to 60 characters. On a new tab both are greyed out and have no pages.
 - Choosing a page moves the tab there. The Back and Forward buttons and the address bar keep working as before.
+- **History > Show All History** (Cmd+Y), **Reopen Last Closed Tab** (Cmd+Shift+T), then **Recently Closed** (the last
+  eight closed tabs, newest first; a pick reopens that tab at its old place with its Back list) and **Recently Visited**
+  (the ten newest pages of the history store; a pick loads it in the tab).
+- The menu bar order is File, Edit, View, History, Bookmarks, Develop, Window, Help (the shell puts an app's own menus
+  after View, `desktop_bar::bar_after_app`). **Bookmarks** has Show Bookmarks (Option+Cmd+B), Add Bookmark (Cmd+D),
+  Show or Hide Favorites Bar (Shift+Cmd+B) and the bookmarks under "Favorites" (a pick loads it in the tab).
+- **File > Close Tab** (Cmd+W) closes the tab shown while the window has a second tab. On the last tab it is greyed out
+  and has no key, so the shell takes Cmd+W and closes the window; Shift+Cmd+W always closes the window.
 
 ## How to verify on the test PC (Midget)
 
 1. Build and publish as usual (`bifrost pc publish`, then `bifrost pc midget ota` until `phase=accepted`).
 2. Open a new tab and load three pages in turn (for example `https://example.com/`, then two more links on the page).
-3. Open the History menu: Back lists the two earlier pages, nearest first. Forward is greyed out with "No Later Pages".
+3. Open the History menu: Back lists the two earlier pages under it, nearest first. Forward is greyed out.
 4. Choose the first Back item: the tab goes to that page (one step at a time, so a page with several entries back takes
    more than one load). Forward now lists the pages you left.
 5. Choose a Forward item: the tab goes forward to it. Then open a new link from the page: Forward is empty again
-   ("No Later Pages"), as with the Back and Forward buttons.
+   (greyed out again), as with the Back and Forward buttons.
 6. Take a Midget screenshot with `bifrost pc midget screen PATH` and check the menu with the bifrost-hig checklist (the
    History menu is an app menu after View; its submenus are standard).
 7. To check the engine step rule on a revived tab, lower the discard idle time (`BIFROST_TAB_DISCARD_MIN=1`) and open
    several pages: a discarded tab's earlier pages should still jump from the menu.
 
-Unit tests (not run; the lead runs them), all in `tabdiscard::tests`: `menu_lists_back_nearest_first_and_forward_after_current`,
+Unit tests for the History, Bookmarks and Close Tab menus are in `menus::tests` (`the_history_menu_has_the_usual_items_and_ids_that_map_back`,
+`the_bookmarks_menu_lists_the_favorites_and_toggles_the_bar`, `close_tab_owns_cmd_w_only_while_there_is_another_tab`,
+`the_fullest_menus_fit_the_protocol_limits`), for the closed-tab stack in `session::tests`
+(`closed_tabs_come_back_newest_first_with_their_place`, `the_closed_stack_keeps_the_newest_twenty`,
+`a_tab_without_a_page_is_remembered_as_the_start_page`). The list tests, in `tabdiscard::tests`: `menu_lists_back_nearest_first_and_forward_after_current`,
 `menu_limit_keeps_the_nearest_entries`, `menu_labels_drop_scheme_and_trailing_slash`, `history_menu_ids_map_back_to_entries`,
 `track_reports_only_new_entries`, `jump_target_is_kept_until_cleared_or_forgotten`, and the existing
 `app_history_survives_and_steps_back` (its `track` calls still work; `track` now returns a bool that the test ignores).
@@ -77,7 +90,7 @@ characters and an ellipsis.
 
 | Slug | Feature (as in `docs/parity-matrix/data/<slug>.json`) | BifrOSt path | Status after this round |
 |---|---|---|---|
-| webkit | Navigation and back-forward list | `springboard/apps/browser/src/tabdiscard.rs` (`history_menu`, `jump_to`, `jump_step`); `springboard/apps/browser/src/main.rs` (`menus`, `menu_action`) | still `partial` (the History menu works from the app's list; no back-forward list object in the SDK, and no navigation policy callback) |
+| webkit | Navigation and back-forward list | `springboard/apps/browser/src/tabdiscard.rs` (`history_pages`, `jump_to`, `jump_step`); `springboard/apps/browser/src/menus.rs` (`history_items`, `menus`, `on_menu_action`) | still `partial` (the History menu works from the app's list; no back-forward list object in the SDK, and no navigation policy callback) |
 | webkit | Web data management (cookies, website data, URL scheme handling) | none wired (`springboard/sdk/src/webview.rs` profile directory; `springboard/sdk/src/http_cookies.rs` is not connected to the engine) | still `partial` |
 | webkit | Web views and configuration | none wired | still `partial` |
 

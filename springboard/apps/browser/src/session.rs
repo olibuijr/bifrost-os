@@ -15,14 +15,71 @@ pub mod recover;
 
 /// Zoom step (Browser: 25%).
 pub const ZOOM_STEP: f32 = 0.25;
-const CLOSED_MAX: usize = 10;
+/// Closed tabs kept for Reopen Closed Tab (the last 20).
+pub const CLOSED_MAX: usize = 20;
 /// Seconds a change waits before it is written.
 const DEBOUNCE_S: f64 = 1.0;
+
+/// A tab that was closed, with what Reopen Closed Tab needs to bring it back.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ClosedTab {
+    /// The page it showed (`START` for a tab that never loaded one).
+    pub url: String,
+    pub title: String,
+    /// The tab's Back list up to and including the page it showed (`Discarder::entries`); empty when it kept none. Forward
+    /// entries are not kept: the engine cannot replay them in a new view.
+    pub history: Vec<String>,
+    /// Its place in the tab strip when it was closed.
+    pub at: usize,
+}
+
+/// The tabs closed in this run, newest last. Every way of closing a tab (the X button, Cmd+W, the Close Tab menu items, a
+/// page closing itself, the control socket) pushes here; Cmd+Shift+T and the History menu pop from it.
+#[derive(Default)]
+pub struct ClosedTabs {
+    stack: Vec<ClosedTab>,
+}
+
+impl ClosedTabs {
+    /// Pushes a closed tab; the oldest goes when more than `CLOSED_MAX` are kept.
+    pub fn push(&mut self, tab: ClosedTab) {
+        self.stack.push(tab);
+        if self.stack.len() > CLOSED_MAX {
+            self.stack.remove(0);
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.stack.is_empty()
+    }
+
+    /// The closed tabs, the one closed last first.
+    pub fn newest(&self) -> impl Iterator<Item = &ClosedTab> {
+        self.stack.iter().rev()
+    }
+
+    /// Removes and returns the `n`-th newest closed tab (0 = the one closed last).
+    pub fn take(&mut self, n: usize) -> Option<ClosedTab> {
+        let i = self.stack.len().checked_sub(n + 1)?;
+        Some(self.stack.remove(i))
+    }
+}
+
+/// The page and title a closing tab is remembered by: the engine's state when it has a URL, else the last entry of the tab's
+/// Back list, else `START` (a tab that never loaded anything).
+fn closed_page(state: Option<(String, String)>, history: &[String]) -> (String, String) {
+    let (url, title) = state.unwrap_or_default();
+    if url.is_empty() {
+        (history.last().cloned().unwrap_or_else(|| START.to_string()), title)
+    } else {
+        (url, title)
+    }
+}
 
 #[derive(Default)]
 pub struct Session {
     pub zoom: HashMap<String, f32>,
-    pub closed: Vec<(String, String)>,
+    pub closed: ClosedTabs,
     last: Vec<(String, String)>,
     last_sel: usize,
     last_zoom: HashMap<String, f32>,
@@ -209,24 +266,32 @@ impl Browser {
         s.dirty = false;
     }
 
-    /// Pushes tab `i` on the closed stack (call before it is removed).
+    /// Pushes tab `i` on the closed stack (call before it is removed): its page, title, Back list and place in the strip. A tab
+    /// that never loaded a page is kept too (as `START`), so every closed tab can be reopened.
     pub fn remember_closed(&mut self, i: usize) {
-        let Some(tab) = self.tabs.get(i) else { return };
-        let Some(st) = self.pool.as_ref().and_then(|p| p.state(tab.view)) else { return };
-        if st.url.is_empty() || st.url == START {
-            return;
-        }
-        self.session.closed.push((st.url.clone(), st.title.clone()));
-        if self.session.closed.len() > CLOSED_MAX {
-            self.session.closed.remove(0);
-        }
+        let Some(view) = self.tabs.get(i).map(|t| t.view) else { return };
+        let state = self.pool.as_ref().and_then(|p| p.state(view)).map(|st| (st.url.clone(), st.title.clone()));
+        let (list, index) = self.discard.entries(view).map(|(list, at)| (list.to_vec(), at)).unwrap_or_default();
+        let history: Vec<String> = list.into_iter().take(index + 1).collect();
+        let (url, title) = closed_page(state, &history);
+        self.session.closed.push(ClosedTab { url, title, history, at: i });
     }
 
-    /// Cmd+Shift+T.
+    /// Cmd+Shift+T: brings back the tab closed last.
     pub fn reopen_closed(&mut self) {
-        if let Some((url, _)) = self.session.closed.pop() {
-            self.new_tab(&url);
+        self.reopen_nth_closed(0);
+    }
+
+    /// Reopens the `n`-th newest closed tab (0 = the one closed last) at the place it had in the strip, selected, and gives
+    /// it the Back list it had. False when there is no such tab or no engine to open it in.
+    pub fn reopen_nth_closed(&mut self, n: usize) -> bool {
+        if self.pool.is_none() {
+            return false;
         }
+        let Some(tab) = self.session.closed.take(n) else { return false };
+        let Some(view) = self.new_tab_at(&tab.url, tab.at) else { return false };
+        self.discard.seed(view, tab.history);
+        true
     }
 
     /// Applies the remembered zoom of tab `i`'s site.
@@ -296,6 +361,55 @@ mod tests {
         let many = "tab https://a\n".repeat(MAX_TABS + 50);
         assert_eq!(parse(&many).tabs.len(), MAX_TABS);
         assert_eq!(parse("zoom o 9.0").zoom["o"], ZOOM_MAX);
+    }
+
+    fn closed(url: &str, at: usize) -> ClosedTab {
+        ClosedTab { url: url.to_string(), title: String::new(), history: Vec::new(), at }
+    }
+
+    #[test]
+    fn closed_tabs_come_back_newest_first_with_their_place() {
+        let mut c = ClosedTabs::default();
+        assert!(c.is_empty());
+        assert_eq!(c.take(0), None, "an empty stack has nothing to reopen");
+        c.push(closed("https://a", 0));
+        c.push(closed("https://b", 3));
+        c.push(closed("https://c", 1));
+        assert!(!c.is_empty());
+        assert_eq!(c.newest().map(|t| t.url.as_str()).collect::<Vec<_>>(), vec!["https://c", "https://b", "https://a"]);
+        // Cmd+Shift+T pops the last one closed, at the index it had
+        assert_eq!(c.take(0), Some(closed("https://c", 1)));
+        // the History menu can pick an older one; the rest keep their order
+        assert_eq!(c.take(1), Some(closed("https://a", 0)));
+        assert_eq!(c.newest().map(|t| t.url.as_str()).collect::<Vec<_>>(), vec!["https://b"]);
+        assert_eq!(c.take(1), None, "there is no second tab left");
+        assert_eq!(c.take(0), Some(closed("https://b", 3)));
+        assert!(c.is_empty());
+    }
+
+    #[test]
+    fn the_closed_stack_keeps_the_newest_twenty() {
+        let mut c = ClosedTabs::default();
+        for i in 0..CLOSED_MAX + 5 {
+            c.push(closed(&format!("https://site/{i}"), i));
+        }
+        assert_eq!(c.newest().count(), CLOSED_MAX);
+        assert_eq!(c.take(0).map(|t| t.at), Some(CLOSED_MAX + 4), "the newest is kept");
+        let oldest = c.newest().last().map(|t| t.at);
+        assert_eq!(oldest, Some(5), "the five oldest were dropped");
+    }
+
+    #[test]
+    fn a_tab_without_a_page_is_remembered_as_the_start_page() {
+        let history = vec!["https://a".to_string(), "https://b".to_string()];
+        // the engine knows the page: its URL and title win
+        assert_eq!(closed_page(Some(("https://b".into(), "B".into())), &history), ("https://b".to_string(), "B".to_string()));
+        // no URL yet: the last entry of the Back list
+        assert_eq!(closed_page(Some((String::new(), "B".into())), &history), ("https://b".to_string(), "B".to_string()));
+        assert_eq!(closed_page(None, &history), ("https://b".to_string(), String::new()));
+        // nothing at all: a blank tab is still a closed tab
+        assert_eq!(closed_page(None, &[]), (START.to_string(), String::new()));
+        assert_eq!(closed_page(Some((String::new(), String::new())), &[]), (START.to_string(), String::new()));
     }
 
     #[test]

@@ -1,5 +1,8 @@
 ## Unreleased
 
+- Menu bar: the app menus follow View (File, Edit, View, History, Bookmarks, Develop, Window, Help). File has New Tab, New Private Window, Open Location and Close Tab (Cmd+W); History has Show All History (Cmd+Y), Reopen Last Closed Tab, Back and Forward (Cmd+[ and Cmd+], with the tab's earlier and later pages under them), Recently Closed and Recently Visited; the new Bookmarks menu has Show Bookmarks, Add Bookmark, the Favorites bar switch and the bookmarks.
+- Cmd+W closes the tab shown; on the last tab it closes the window (the shell takes the chord when Close Tab is greyed out), and Shift+Cmd+W always closes the window. Before, the shell took Cmd+W and closed the whole window with its tabs.
+- Every closed tab (X button, Cmd+W, Close Tab, a page closing itself, `browser.tab.close`) goes on the closed-tab stack (the last 20, blank tabs too) with its place in the strip and its Back list; Cmd+Shift+T and the History menu bring it back at that place. `browser.tab.reopen` answers with the reopened tab's id.
 - `browser.content_rules` compiles, stores and applies web content blocker lists (block, make-https, css-display-none) to every tab; `browser.messages` reads what pages post to the `control` message handler; `browser.screenshot` takes `format: "pdf"` and prints the page as a paginated PDF.
 
 ## 0.16.2

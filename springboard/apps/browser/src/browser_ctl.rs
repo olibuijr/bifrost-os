@@ -346,7 +346,8 @@ impl Browser {
                     return Err(control::invalid("there is no closed tab to reopen"));
                 }
                 self.ctl.relayout = true;
-                let id = self.tabs.last().map(|t| t.view).unwrap_or(0);
+                // the reopened tab is selected, at the place it had in the strip
+                let id = self.view().unwrap_or(0);
                 Ok(control::obj(vec![("id", control::num(id as f64))]))
             }
             Req::Navigate { id, url, wait, timeout_ms } => {
