@@ -53,6 +53,7 @@ pub mod textutil;
 pub mod tiff2icns;
 pub mod tiffutil;
 pub mod tmutil;
+pub mod unitctl;
 pub mod units;
 pub mod usdextract;
 pub mod vis;
