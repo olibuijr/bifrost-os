@@ -109,6 +109,15 @@ impl Access {
         matches!(self.status(entity), Status::WriteOnly | Status::FullAccess)
     }
 
+    /// A change the person makes in Settings for events: on is full access, off is denied. Unlike a prompt answer it
+    /// replaces an earlier answer; only a system restriction blocks it. Returns the status that stands.
+    pub fn change_events_in_settings(&mut self, allowed: bool) -> Status {
+        if self.events != Status::Restricted {
+            self.events = if allowed { Status::FullAccess } else { Status::Denied };
+        }
+        self.events
+    }
+
     /// Sets the system restriction for one entity type. The restriction wins over every answer given before it.
     pub fn restrict(&mut self, entity: EntityType) {
         match entity {
@@ -163,6 +172,16 @@ mod tests {
         assert_eq!(a.request(EntityType::Reminder, true, true), Err(Error::NotOfferedForReminders));
         assert_eq!(a.status(EntityType::Reminder), Status::NotDetermined);
         assert_eq!(a.request(EntityType::Event, true, true), Ok(Status::WriteOnly));
+    }
+
+    #[test]
+    fn settings_replace_an_earlier_answer_but_not_a_restriction() {
+        let mut a = Access::new();
+        a.request_write_only_events(false);
+        assert_eq!(a.change_events_in_settings(true), Status::FullAccess);
+        assert_eq!(a.change_events_in_settings(false), Status::Denied);
+        a.restrict(EntityType::Event);
+        assert_eq!(a.change_events_in_settings(true), Status::Restricted);
     }
 
     #[test]

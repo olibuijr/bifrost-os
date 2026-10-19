@@ -5,8 +5,11 @@
 //! Times are local, floating civil times written `YYYY-MM-DDTHH:MM` (no time zone).
 //!
 //! Methods (params are a JSON object):
-//! - `access {}` returns `{status}`: `authorized` when the app declares `calendars`, else `denied`. An app cannot
-//!   grant itself anything by asking; the manifest is the declaration.
+//! - `access {}` returns `{status}`: `not_determined`, `restricted`, `denied`, `write_only` or `authorized` (full
+//!   access). The manifest's `calendars` permission only lets the app ask; the person's answer (the access sheet or
+//!   Settings > Privacy & Security > App Permissions) decides, and an app that does not declare it is always `denied`.
+//! - `request {}` returns the same `{status}` as it stands and, when the person has not answered, queues the access
+//!   sheet (read and write). A first `save_event` queues the add-only sheet instead and fails until it is answered.
 //! - `events {start, end}` returns `{events: [{id, title, start, end, all_day, location}]}`: every event that overlaps
 //!   `[start, end)`, sorted by start then id. Both bounds are required and `end` must be after `start`. An all-day
 //!   event spans its whole civil day. A repeating event appears once for each occurrence that overlaps the range, all
@@ -21,15 +24,94 @@
 //!   unknown id is an error.
 //! - `delete_event {id}` removes event `id` from the shared store and returns `{ok}`. An unknown id is an error.
 //!
-//! Without the `calendars` permission every method but `access` is an error.
+//! Without the `calendars` permission, or before the person allows it, every method but `access` and `request` is an
+//! error. `save_event` needs add access (add-only or full); `events`, `update_event` and `delete_event` need full
+//! access, so an add-only app never reads the person's events.
 use super::{Shell, SystemService};
 use crate::shell::calendar::store::{self, CalendarEvent};
 use crate::shell::calendar::Date;
 use bifrost_core::json::Json;
+use bifrost_ui::calendar_access::{Access, EntityType, Status};
+use std::cell::RefCell;
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-/// The manifest permission that lets an app read events.
+/// The manifest permission that lets an app ask to use the calendar.
 pub const PERMISSION: &str = "calendars";
+
+thread_local! {
+    static ACCESS: RefCell<BTreeMap<String, Access>> = RefCell::new(BTreeMap::new());
+}
+
+/// The grant an app holds (a new app has none answered yet).
+pub fn access_of(app_id: &str) -> Access {
+    ACCESS.with(|a| a.borrow().get(app_id).copied().unwrap_or_default())
+}
+
+/// The answer to the access sheet the app is waiting on: `write_only` is the add-only sheet. Only the first answer
+/// counts, as the model says.
+pub fn answer_prompt(app_id: &str, write_only: bool, granted: bool) -> Status {
+    super::privacy_permissions::mark_grants_dirty();
+    ACCESS.with(|a| {
+        let mut a = a.borrow_mut();
+        let access = a.entry(app_id.to_string()).or_default();
+        access.request(EntityType::Event, write_only, granted).unwrap_or_else(|_| access.status(EntityType::Event))
+    })
+}
+
+/// A change the person makes in Settings: on is full access, off is denied. Returns the status that stands.
+pub fn change_by_user(app_id: &str, allowed: bool) -> Status {
+    super::privacy_permissions::mark_grants_dirty();
+    ACCESS.with(|a| a.borrow_mut().entry(app_id.to_string()).or_default().change_events_in_settings(allowed))
+}
+
+/// Whether the person lets the app use the calendar (add-only or full), for the Settings switch.
+pub fn allowed(app_id: &str) -> bool {
+    access_of(app_id).can_write(EntityType::Event)
+}
+
+/// Every app with an answer, for the privacy store to save.
+pub fn grants_snapshot() -> Vec<(String, Status)> {
+    ACCESS.with(|a| a.borrow().iter().map(|(app, access)| (app.clone(), access.status(EntityType::Event))).collect())
+}
+
+/// The name an `access` reply gives a status.
+pub fn status_name(status: Status) -> &'static str {
+    match status {
+        Status::NotDetermined => "not_determined",
+        Status::Restricted => "restricted",
+        Status::Denied => "denied",
+        Status::WriteOnly => "write_only",
+        Status::FullAccess => "authorized",
+    }
+}
+
+/// Why the app may not call `method`, or `None` when it may. `declared` says whether its manifest has `calendars` and
+/// `status` is the person's answer for it. Pure. A method this service does not know is not refused here.
+pub fn refusal(app_id: &str, declared: bool, status: Status, method: &str) -> Option<String> {
+    let needs_read = match method {
+        "events" | "update_event" | "delete_event" => true,
+        "save_event" => false,
+        _ => return None,
+    };
+    if !declared {
+        return Some(format!("{app_id} has no {PERMISSION} permission"));
+    }
+    match status {
+        Status::FullAccess => None,
+        Status::WriteOnly if !needs_read => None,
+        Status::WriteOnly => Some("calendar access is add-only; reading and changing events needs full access".into()),
+        Status::NotDetermined => Some("calendar access has not been allowed yet; the person has been asked".into()),
+        Status::Denied | Status::Restricted => Some("calendar access is not allowed".into()),
+    }
+}
+
+/// Queues the access sheet for an app (`write_only` asks to add events only).
+fn ask(app_id: &str, write_only: bool) {
+    let name = super::super::apphost::installed().iter().find(|a| a.manifest.id == app_id).map_or_else(|| app_id.to_string(), |a| a.manifest.name.clone());
+    super::privacy_permissions::queue_prompt(app_id, &name, super::privacy_permissions::Kind::Calendars { write_only }, "");
+}
+
 /// The package id of the Calendar app, whose data folder holds the store.
 pub const STORE_APP: &str = "is.olibuijr.calendar.desktop";
 
@@ -250,20 +332,34 @@ impl SystemService for Calendar {
     }
 
     fn call(&mut self, shell: &mut Shell, app_id: &str, method: &str, params: &Json, _t: f64) -> Result<Json, String> {
-        let permitted = super::app_has_permission(app_id, PERMISSION);
-        if method == "save_event" {
-            if !permitted {
-                return Err(format!("{app_id} has no {PERMISSION} permission"));
+        let declared = super::app_has_permission(app_id, PERMISSION);
+        let status = if declared { access_of(app_id).status(EntityType::Event) } else { Status::Denied };
+        let status_reply = Json::Obj(vec![("status".into(), Json::Str(status_name(status).into()))]);
+        match method {
+            "access" => return Ok(status_reply),
+            "request" => {
+                if declared && status == Status::NotDetermined {
+                    ask(app_id, false);
+                }
+                return Ok(status_reply);
             }
+            _ => {}
+        }
+        if let Some(why) = refusal(app_id, declared, status, method) {
+            // a first save by an undecided app asks for the least: add-only access
+            if declared && status == Status::NotDetermined && method == "save_event" {
+                ask(app_id, true);
+            }
+            return Err(why);
+        }
+        if method == "save_event" {
             return save_event(shell, params);
         }
         if method == "update_event" || method == "delete_event" {
-            if !permitted {
-                return Err(format!("{app_id} has no {PERMISSION} permission"));
-            }
             let change = if method == "update_event" { edit_event } else { remove_event };
             return change_store(shell, params, change);
         }
+        let permitted = declared && status == Status::FullAccess;
         let events = if method == "events" && permitted {
             store::load(&store_path(&shell.data_dir)).map_err(|e| e.to_string())?
         } else {
@@ -364,6 +460,54 @@ mod tests {
         assert_eq!(granted.get("status").and_then(Json::as_str), Some("authorized"));
         let refused = answer("is.example.cal", false, "access", &Json::Null, &[]).unwrap();
         assert_eq!(refused.get("status").and_then(Json::as_str), Some("denied"));
+    }
+
+    #[test]
+    fn an_undeclared_or_undecided_or_refused_app_may_not_use_the_calendar() {
+        for method in ["events", "save_event", "update_event", "delete_event"] {
+            assert!(refusal("a", false, Status::FullAccess, method).unwrap().contains("no calendars permission"), "{method}");
+            assert!(refusal("a", true, Status::NotDetermined, method).unwrap().contains("not been allowed"), "{method}");
+            assert!(refusal("a", true, Status::Denied, method).is_some(), "{method}");
+            assert!(refusal("a", true, Status::Restricted, method).is_some(), "{method}");
+            assert_eq!(refusal("a", true, Status::FullAccess, method), None, "{method}");
+        }
+        assert_eq!(refusal("a", false, Status::Denied, "no_such_method"), None, "an unknown method fails later, as before");
+    }
+
+    #[test]
+    fn an_add_only_app_adds_events_but_never_reads_or_changes_them() {
+        assert_eq!(refusal("a", true, Status::WriteOnly, "save_event"), None);
+        for method in ["events", "update_event", "delete_event"] {
+            assert!(refusal("a", true, Status::WriteOnly, method).unwrap().contains("add-only"), "{method}");
+        }
+    }
+
+    #[test]
+    fn the_persons_answer_is_kept_and_settings_can_change_it() {
+        let app = "is.example.cal.answers";
+        assert_eq!(access_of(app).status(EntityType::Event), Status::NotDetermined);
+        assert!(!allowed(app));
+        assert_eq!(answer_prompt(app, true, true), Status::WriteOnly);
+        assert!(allowed(app));
+        assert!(!access_of(app).can_read(EntityType::Event), "add-only does not read");
+        // a later sheet answer does not replace the first one
+        assert_eq!(answer_prompt(app, false, false), Status::WriteOnly);
+        assert_eq!(change_by_user(app, false), Status::Denied);
+        assert!(!allowed(app));
+        assert_eq!(change_by_user(app, true), Status::FullAccess);
+        assert!(access_of(app).can_read(EntityType::Event));
+        assert!(grants_snapshot().contains(&(app.to_string(), Status::FullAccess)));
+    }
+
+    #[test]
+    fn a_refusal_on_the_sheet_denies_and_status_names_are_stable() {
+        let app = "is.example.cal.refused";
+        assert_eq!(answer_prompt(app, false, false), Status::Denied);
+        assert_eq!(status_name(Status::Denied), "denied");
+        assert_eq!(status_name(Status::NotDetermined), "not_determined");
+        assert_eq!(status_name(Status::WriteOnly), "write_only");
+        assert_eq!(status_name(Status::FullAccess), "authorized");
+        assert_eq!(status_name(Status::Restricted), "restricted");
     }
 
     #[test]

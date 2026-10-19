@@ -6,7 +6,9 @@
 //! // in App::service_reply, once the reply for `id` arrives:
 //! //   let today = calendar::decode_events(&reply);   // Vec<Event>, sorted by start
 //! ```
-//! An app reads events only when its manifest declares the `calendars` permission; without it `events` is an error.
+//! An app uses the calendar only when its manifest declares the `calendars` permission and the person has allowed it
+//! (the access sheet, or Settings > Privacy & Security > App Permissions); otherwise every call but `access` and
+//! `request` is an error.
 //! Times are floating local times written `YYYY-MM-DDTHH:MM`. Recurring events appear once, at their base date. The
 //! service is `springboard/src/shell/services/calendar.rs`.
 use crate::runtime::Ctx;
@@ -16,11 +18,20 @@ use bifrost_core::json::Json;
 /// The service name the shell registers.
 pub const SERVICE: &str = "calendar";
 
-/// The access status an app holds: `Authorized` when its manifest declares `calendars`, else `Denied`.
+/// The access status an app holds. The manifest's `calendars` permission only lets the app ask; the person answers
+/// on the access sheet or in Settings > Privacy & Security > App Permissions.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Status {
+    /// Full access: the app reads, adds, changes and deletes events.
     Authorized,
+    /// The person refused, or the manifest does not declare `calendars`.
     Denied,
+    /// The person has not answered yet; a `request` (or a first `save_event`) shows the sheet.
+    NotDetermined,
+    /// The app may add events but not read them.
+    WriteOnly,
+    /// The system blocks calendar access for the app.
+    Restricted,
 }
 
 /// One event in a range. `start` and `end` are local civil times (`YYYY-MM-DDTHH:MM`); an all-day event starts at
@@ -40,6 +51,12 @@ pub fn access(ctx: &Ctx) -> u32 {
     service::call(ctx, SERVICE, "access", &Json::Null)
 }
 
+/// Asks the person for calendar access (the sheet shows when nothing was answered yet). The reply is the status before
+/// the answer and decodes with [`decode_status`]; ask again with [`access`] later.
+pub fn request(ctx: &Ctx) -> u32 {
+    service::call(ctx, SERVICE, "request", &Json::Null)
+}
+
 /// Fetches the events overlapping `[start, end)`, sorted by start. Both bounds are `YYYY-MM-DDTHH:MM` and `end` must be
 /// after `start`. The reply decodes with [`decode_events`].
 pub fn events(ctx: &Ctx, start: &str, end: &str) -> u32 {
@@ -49,7 +66,7 @@ pub fn events(ctx: &Ctx, start: &str, end: &str) -> u32 {
 
 /// Saves a new event and returns the request id. `start` and `end` are `YYYY-MM-DDTHH:MM`; a timed event lasts 15
 /// minutes to 24 hours, and an all-day event takes the civil day of `start`. The reply decodes with [`decode_saved_id`].
-/// Needs the `calendars` permission, like the reads.
+/// Needs the `calendars` permission and the person's consent: a first save shows the sheet and fails until it is answered.
 pub fn save_event(ctx: &Ctx, title: &str, start: &str, end: &str, all_day: bool, location: &str) -> u32 {
     service::call(ctx, SERVICE, "save_event", &save_params(title, start, end, all_day, location))
 }
@@ -100,6 +117,9 @@ pub fn decode_status(reply: &Json) -> Option<Status> {
     match reply.get("status").and_then(Json::as_str)? {
         "authorized" => Some(Status::Authorized),
         "denied" => Some(Status::Denied),
+        "not_determined" => Some(Status::NotDetermined),
+        "write_only" => Some(Status::WriteOnly),
+        "restricted" => Some(Status::Restricted),
         _ => None,
     }
 }
@@ -146,6 +166,9 @@ mod tests {
         assert_eq!(decode_status(&granted), Some(Status::Authorized));
         let refused = Json::Obj(vec![("status".into(), Json::Str("denied".into()))]);
         assert_eq!(decode_status(&refused), Some(Status::Denied));
+        for (name, status) in [("not_determined", Status::NotDetermined), ("write_only", Status::WriteOnly), ("restricted", Status::Restricted)] {
+            assert_eq!(decode_status(&Json::Obj(vec![("status".into(), Json::Str(name.into()))])), Some(status));
+        }
         assert_eq!(decode_status(&Json::Obj(vec![("status".into(), Json::Str("all".into()))])), None);
         assert_eq!(decode_status(&Json::Null), None);
     }

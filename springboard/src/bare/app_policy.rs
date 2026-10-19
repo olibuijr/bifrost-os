@@ -88,7 +88,7 @@ impl From<PolicyError> for io::Error {
 
 /// Every name an entitlement query accepts: the manifest permissions and the first-party entitlements, in the order
 /// [`Policy::held`] lists them.
-pub const ENTITLEMENT_NAMES: [&str; 17] = [
+pub const ENTITLEMENT_NAMES: [&str; 18] = [
     "network",
     "storage",
     "audio",
@@ -101,6 +101,7 @@ pub const ENTITLEMENT_NAMES: [&str; 17] = [
     "display-config",
     "sensors",
     "contacts",
+    "calendars",
     "usb",
     "hid",
     "remote-desktop",
@@ -143,6 +144,10 @@ pub struct Policy {
     /// `contacts`: declares that the app reads and saves the person's contacts through the SDK contacts module. The
     /// manifest permission is the declaration; the contacts service does not gate calls on it yet.
     pub contacts: bool,
+    /// `calendars`: declares that the app adds events to the person's calendar (and reads them, when the person allows)
+    /// through the SDK calendar module. The declaration only lets the app ask: the calendar service answers nothing
+    /// until the person has allowed this app on the access sheet or in Settings. It binds nothing.
+    pub calendars: bool,
     /// `usb`: may ask the shell's `usb` service for raw access to a USB device. It binds nothing (no `/dev/bus/usb`
     /// reaches the sandbox); the person picks each device on a sheet, and the shell runs the transfers.
     pub usb: bool,
@@ -182,6 +187,7 @@ impl Policy {
             "display-config" => self.display_config,
             "sensors" => self.sensors,
             "contacts" => self.contacts,
+            "calendars" => self.calendars,
             "usb" => self.usb,
             "hid" => self.hid,
             "remote-desktop" => self.remote,
@@ -211,6 +217,7 @@ impl Policy {
                 "display-config" => p.display_config = true,
                 "sensors" => p.sensors = true,
                 "contacts" => p.contacts = true,
+                "calendars" => p.calendars = true,
                 "usb" => p.usb = true,
                 "hid" => p.hid = true,
                 "remote-desktop" if id == "is.olibuijr.remote.desktop" => p.remote = true,
@@ -594,6 +601,15 @@ mod tests {
         assert!(!p.network && !p.storage && !p.sensors && !p.remote);
         assert!(p.held().contains(&"contacts"));
         assert!(!Policy::default().holds("contacts"));
+    }
+
+    #[test]
+    fn calendars_permission_is_recognised_and_binds_nothing() {
+        let p = Policy::from_permissions("example", &["calendars".into()]).unwrap();
+        assert!(p.calendars && p.holds("calendars"));
+        assert!(!p.network && !p.storage && !p.contacts && !p.remote);
+        assert!(p.held().contains(&"calendars"));
+        assert!(!Policy::default().holds("calendars"));
     }
 
     #[test]

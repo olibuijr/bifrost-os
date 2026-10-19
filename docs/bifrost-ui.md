@@ -3290,6 +3290,17 @@ eraser removes touched strokes, and committed edits have bounded undo. A gesture
 an eraser pass that removes nothing does not consume history. The shell markup editor still owns its own stroke list;
 this model is not wired into that editor and does not model pressure input.
 
+## Calendar access (`bifrost_app::calendar`, the `calendar` service, the `calendars` permission)
+
+Decision (privacy first): `calendars` is a consent-gated permission, like `contacts`. The manifest declaration only lets
+an app ask (`aap.py`, `app_policy::ENTITLEMENT_NAMES` and the SDK entitlement keys all list it); the person's answer
+decides. `access` reports `not_determined`, `restricted`, `denied`, `write_only` or `authorized`; `request` queues the
+Allow / Don't Allow sheet (read and write). A first `save_event` by an undecided app queues the add-only sheet and fails
+until it is answered, so an app that only adds events (Mail's "Add to Calendar") never gets to read them: `events`,
+`update_event` and `delete_event` need full access. Settings > Privacy & Security > App Permissions has a CALENDARS
+group (on is full access, off is denied); answers are saved in `privacy-grants.tsv`. Model `bifrost_ui::calendar_access`,
+service `springboard/src/shell/services/calendar.rs`. Gaps: reminders have no service yet, and no Midget test.
+
 ## Contacts access, fetch and save (`bifrost_app::contacts`, the `contacts` service)
 
 Apps read and write the person's contacts only after the person allows it. `access` and `request` report the status

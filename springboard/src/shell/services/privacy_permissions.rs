@@ -54,6 +54,8 @@ pub enum Kind {
     Media(Media),
     /// The contact store (the contacts service's access sheet).
     Contacts,
+    /// The person's calendar (the calendar service's access sheet). `write_only` asks only to add events.
+    Calendars { write_only: bool },
     /// One USB or raw HID device for one app (the `usb` service's sheet). The prompt's `purpose` holds the device key.
     Usb,
 }
@@ -65,6 +67,7 @@ impl Kind {
             Kind::Location => "location",
             Kind::Media(m) => media_name(m),
             Kind::Contacts => "contacts",
+            Kind::Calendars { .. } => "calendars",
             Kind::Usb => "usb",
         }
     }
@@ -77,6 +80,8 @@ impl Kind {
             Kind::Media(Media::Audio) => "use your microphone",
             Kind::Media(Media::Screen) => "record your screen",
             Kind::Contacts => "use your contacts",
+            Kind::Calendars { write_only: true } => "add events to your calendar",
+            Kind::Calendars { write_only: false } => "use your calendar",
             Kind::Usb => "use a device connected to this computer",
         };
         format!("\u{201c}{app_name}\u{201d} would like to {want}.")
@@ -123,6 +128,7 @@ pub fn still_asked(prompt: &Prompt) -> bool {
         Kind::Location => location_status(&prompt.app_id) == AuthorizationStatus::NotDetermined,
         Kind::Media(m) => access(&prompt.app_id).status(m) == Status::NotDetermined,
         Kind::Contacts => super::contacts::access_of(&prompt.app_id).status() == bifrost_ui::contact_access::Status::NotDetermined,
+        Kind::Calendars { .. } => super::calendar::access_of(&prompt.app_id).status(bifrost_ui::calendar_access::EntityType::Event) == bifrost_ui::calendar_access::Status::NotDetermined,
         Kind::Usb => super::usb_access::still_asked(&prompt.app_id, &prompt.purpose),
     }
 }
@@ -163,6 +169,9 @@ pub fn decide_grant(prompt: &Prompt, grant: Grant) {
         Kind::Contacts => {
             let choice = if grant == Grant::Deny { bifrost_ui::contact_access::Choice::Deny } else { bifrost_ui::contact_access::Choice::All };
             let _ = super::contacts::answer_prompt(&prompt.app_id, choice);
+        }
+        Kind::Calendars { write_only } => {
+            super::calendar::answer_prompt(&prompt.app_id, write_only, grant != Grant::Deny);
         }
     }
 }
@@ -393,6 +402,8 @@ pub struct Row {
     pub location: AuthorizationStatus,
     /// Whether the app may read contacts (a read grant: full or picked).
     pub contacts: bool,
+    /// Whether the app may use the person's calendar (add-only or full access).
+    pub calendars: bool,
     /// How many USB or raw HID devices the app holds a grant for.
     pub usb: usize,
 }
@@ -407,6 +418,7 @@ pub fn rows() -> Vec<Row> {
             access: access(&a.manifest.id),
             location: location_status(&a.manifest.id),
             contacts: contacts_allowed(&a.manifest.id),
+            calendars: super::calendar::allowed(&a.manifest.id),
             usb: super::usb_access::grant_count(&a.manifest.id),
         })
         .collect()
@@ -423,6 +435,13 @@ pub fn set_contacts_by_user(app_id: &str, allowed: bool) -> bool {
     let choice = if allowed { bifrost_ui::contact_access::Choice::All } else { bifrost_ui::contact_access::Choice::Deny };
     let _ = super::contacts::change_by_user(app_id, choice);
     contacts_allowed(app_id)
+}
+
+/// The person's Settings switch for an app's calendar: on is full access, off is denied. A restricted app keeps its
+/// status. Returns whether the app may now use the calendar.
+pub fn set_calendars_by_user(app_id: &str, allowed: bool) -> bool {
+    super::calendar::change_by_user(app_id, allowed);
+    super::calendar::allowed(app_id)
 }
 
 pub struct PrivacyPermissions;
@@ -735,6 +754,15 @@ pub fn render_grants() -> String {
             bifrost_ui::contact_access::Status::NotDetermined | bifrost_ui::contact_access::Status::Restricted => {}
         }
     }
+    for (app, status) in super::calendar::grants_snapshot() {
+        use bifrost_ui::calendar_access::Status as Cal;
+        match status {
+            Cal::FullAccess => out.push_str(&format!("calendars\t{app}\tfull\n")),
+            Cal::WriteOnly => out.push_str(&format!("calendars\t{app}\tadd\n")),
+            Cal::Denied => out.push_str(&format!("calendars\t{app}\tdeny\n")),
+            Cal::NotDetermined | Cal::Restricted => {}
+        }
+    }
     // Location answers. An Allow Once grant lasts only while its app runs, so it is not saved.
     let once: std::collections::BTreeSet<String> = ONCE.with(|o| o.borrow().clone());
     for (app, status) in location_asked() {
@@ -786,6 +814,15 @@ pub fn apply_grants(text: &str) {
                     let _ = super::contacts::answer_prompt(app, bifrost_ui::contact_access::Choice::Picked(picked));
                 }
             }
+            ["calendars", app, "full"] => {
+                super::calendar::answer_prompt(app, false, true);
+            }
+            ["calendars", app, "add"] => {
+                super::calendar::answer_prompt(app, true, true);
+            }
+            ["calendars", app, "deny"] => {
+                super::calendar::answer_prompt(app, false, false);
+            }
             ["location", app, status] => {
                 let status = match *status {
                     "denied" => AuthorizationStatus::Denied,
@@ -819,6 +856,35 @@ mod grants_tests {
         apply_grants(&text.replace("is.example.grants.round", other).replace("is.example.grants.picked", "is.example.grants.picked2"));
         assert_eq!(access(other).status(Media::Video), Status::Authorized);
         assert_eq!(super::super::contacts::access_of("is.example.grants.picked2").picked().len(), 2);
+    }
+
+    #[test]
+    fn a_calendar_answer_round_trips_through_its_text() {
+        let (add, full, no) = ("is.example.grants.cal.add", "is.example.grants.cal.full", "is.example.grants.cal.no");
+        super::super::calendar::answer_prompt(add, true, true);
+        super::super::calendar::answer_prompt(full, false, true);
+        super::super::calendar::answer_prompt(no, false, false);
+        let text = render_grants();
+        assert!(text.contains(&format!("calendars\t{add}\tadd\n")), "{text}");
+        assert!(text.contains(&format!("calendars\t{full}\tfull\n")), "{text}");
+        assert!(text.contains(&format!("calendars\t{no}\tdeny\n")), "{text}");
+        apply_grants(&format!("{GRANTS_HEADER}\ncalendars\tis.example.grants.cal.back\tadd\n"));
+        assert!(super::super::calendar::allowed("is.example.grants.cal.back"));
+        assert!(!super::super::calendar::access_of("is.example.grants.cal.back").can_read(bifrost_ui::calendar_access::EntityType::Event));
+    }
+
+    #[test]
+    fn the_calendar_sheet_asks_for_the_least_the_app_needs() {
+        let add = Kind::Calendars { write_only: true };
+        assert_eq!(add.name(), "calendars");
+        assert_eq!(add.title("Mail"), "\u{201c}Mail\u{201d} would like to add events to your calendar.");
+        assert_eq!(Kind::Calendars { write_only: false }.title("Mail"), "\u{201c}Mail\u{201d} would like to use your calendar.");
+        let app = "is.example.grants.cal.sheet";
+        let prompt = Prompt { app_id: app.into(), app_name: "Example".into(), kind: add, purpose: String::new() };
+        assert!(still_asked(&prompt));
+        decide(&prompt, true);
+        assert!(!still_asked(&prompt));
+        assert!(super::super::calendar::allowed(app));
     }
 
     #[test]
