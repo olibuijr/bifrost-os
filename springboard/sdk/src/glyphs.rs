@@ -67,7 +67,7 @@ pub fn polygon_verbs(pts: &[(f32, f32)]) -> Vec<PathVerb> {
 }
 
 /// Every name `glyph` draws, for galleries and tests.
-pub const NAMES: [&str; 60] = [
+pub const NAMES: [&str; 62] = [
     "chevron.left", "chevron.right", "sidebar.left", "square.grid.2x2", "list.bullet", "rectangle.split.3x1",
     "magnifyingglass", "xmark.circle.fill", "folder", "folder.badge.plus", "checkmark.circle", "clock",
     "menubar.dock.rectangle", "doc", "arrow.down.circle", "house", "desktopcomputer", "internaldrive", "trash", "tag",
@@ -76,7 +76,7 @@ pub const NAMES: [&str; 60] = [
     "person", "person.crop.circle", "star", "star.fill", "envelope", "phone", "bookmark", "textformat", "pencil",
     "square.and.pencil", "antenna.radiowaves.left.and.right", "mic", "music.note.list", "opticaldisc", "radio",
     "calculator", "cloud.sun", "ellipsis.circle", "info.circle", "flag", "calendar",
-    "arrow.clockwise", "xmark", "rectangle.grid.1x2", "chevron.up",
+    "arrow.clockwise", "xmark", "rectangle.grid.1x2", "chevron.up", "text.alignleft", "square.on.square",
 ];
 
 /// True when `name` has a drawing.
@@ -435,6 +435,17 @@ pub fn glyph(s: &mut dyn Canvas, ui: &Ui, name: &str, bounds: Rect, color: u32) 
                     dot(s, u, v, 0.04);
                 }
             }
+        }
+        // the Browser's page menu icon: lines of text, the last one short
+        "text.alignleft" => {
+            poly(s, &[(0.14, 0.26), (0.86, 0.26)], false);
+            poly(s, &[(0.14, 0.5), (0.86, 0.5)], false);
+            poly(s, &[(0.14, 0.74), (0.6, 0.74)], false);
+        }
+        // the Browser's tab overview: a square in front of another that shows only its top and right edges
+        "square.on.square" => {
+            rbox(s, 0.1, 0.34, 0.56, 0.56, 0.1);
+            poly(s, &[(0.34, 0.34), (0.34, 0.1), (0.9, 0.1), (0.9, 0.66), (0.66, 0.66)], false);
         }
         "checklist" => {
             for v in [0.22, 0.5, 0.78] {
