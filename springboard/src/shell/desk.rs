@@ -898,7 +898,7 @@ impl Shell {
         let installed=apphost::installed();
         let windows:Vec<_>=windows.into_iter().filter(|w|!desk.native_windows.iter().any(|n|n.id==w.id) && super::dock_tiles::is_linux_app(&installed,apps(),&w.app_id)).collect();
         // a Linux tile kept in the Dock for an installed app (or a stale key of one) becomes that app's own key
-        if super::dock_tiles::normalize_pinned(&installed,apps(),&mut desk.dock_preferences.pinned) {desk.dock_preferences.save(&self.data_dir);}
+        if super::dock_tiles::normalize_pinned(&installed,apps(),&mut desk.dock_preferences.pinned,true) {desk.dock_preferences.save(&self.data_dir);}
         desk.linux_apps.retain(|app|windows.iter().any(|w|w.app_id==app.app_id)||desk.dock_preferences.pinned.contains(&format!("linux:{}",app.app_id)));
         for key in &desk.dock_preferences.pinned{if let Some(id)=key.strip_prefix("linux:"){if !desk.linux_apps.iter().any(|a|a.app_id==id){desk.linux_apps.push(LinuxDockApp{app_id:id.into(),windows:vec![],icon:linux_icon(id)});}}}
         for w in &windows {
@@ -1063,7 +1063,8 @@ impl Shell {
         let Some(app) = registered.get(slot) else { return false };
         let direct = self.ext.get(slot).and_then(Option::as_ref).is_some_and(|h| h.running() && h.route() == apphost::Route::Direct);
         let id = if direct { app.manifest.id.as_str() } else { app.manifest.wayland_app_id.as_str() };
-        desk.native_windows.iter().any(|w| w.app_id == id)
+        // an app without a Wayland id has no window to find: an empty id must not match every unnamed window
+        !id.is_empty() && desk.native_windows.iter().any(|w| w.app_id == id)
     }
 
     /// Opens a direct app's window: the window server owns it, so the shell starts the app if needed and raises
