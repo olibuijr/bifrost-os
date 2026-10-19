@@ -308,7 +308,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-activity"
-version = "0.10.2"
+version = "0.10.3"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -672,7 +672,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-files"
-version = "1.32.2"
+version = "1.32.3"
 dependencies = [
  "bifrost-app",
  "bifrost-core",

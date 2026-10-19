@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.10.3
+
+- BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.
+
 ## 0.10.2
 
 - The app declares `entitlements = ["system-monitor"]`. Its sandbox now shares the host PID and network namespaces and reads `/proc` read-only, so the CPU tab lists every process of the machine and the Network tab sees its interfaces and sockets (before, it saw only itself and `bwrap`). Quit and Force Quit still signal only what the app account may signal.
