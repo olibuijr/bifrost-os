@@ -354,6 +354,15 @@ pub mod hid_devices;
 pub mod serial_ports;
 pub mod ble_midi;
 pub mod midi;
+/// The client of the system MIDI server (`MidiClient`): hardware and virtual sources and destinations, connect, timestamped
+/// send and inject, and device hotplug events, over the server's unix socket.
+pub mod midi_client;
+/// MIDI file playback (`MidiPlayer`): a Standard MIDI File or a timed sequence through the General MIDI synth or any
+/// instrument unit in the audio engine, sequenced sample-accurately, with transport, loop, rate, offline render to WAV.
+pub mod midi_player;
+/// The generic view of an audio unit (`UnitView`): a row per parameter with its control (slider with a log taper for
+/// frequencies, switch, pop-up, read-out), its text and its group, and input that sets the unit through its handle.
+pub mod audio_unit_view;
 pub mod midi_ci;
 pub mod midi_ci_property;
 pub mod midi_network;

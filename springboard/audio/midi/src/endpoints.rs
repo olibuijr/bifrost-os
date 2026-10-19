@@ -243,6 +243,26 @@ impl Registry {
         }
     }
 
+    /// Every client with its name, in identifier order.
+    pub fn clients(&self) -> impl Iterator<Item = (ObjectId, &str)> {
+        self.clients.iter().map(|(id, name)| (*id, name.as_str()))
+    }
+
+    /// Every device (built in and external), in identifier order.
+    pub fn devices(&self) -> impl Iterator<Item = &Device> {
+        self.devices.values()
+    }
+
+    /// Every entity, in identifier order.
+    pub fn entities(&self) -> impl Iterator<Item = &Entity> {
+        self.entities.values()
+    }
+
+    /// Every endpoint (hardware and virtual, sources and destinations), in identifier order.
+    pub fn endpoints(&self) -> impl Iterator<Item = &Endpoint> {
+        self.endpoints.values()
+    }
+
     pub fn device(&self, id: ObjectId) -> Option<&Device> {
         self.devices.get(&id)
     }

@@ -8,10 +8,13 @@
 mod ble_link;
 mod rawmidi;
 mod seq;
+mod server;
 
+use bifrost_midi::broker::Broker;
 use bifrost_midi::endpoints::{Direction, ObjectId};
 use bifrost_midi::hub::Hub;
-use bifrost_midi::ump::{Midi1ToUmp, Ump};
+use bifrost_midi::ump::{Midi1ToUmp, Ump, UmpToMidi1};
+use bifrost_midi::wire::SOCKET_NAME;
 use std::collections::BTreeMap;
 
 const LOG: &str = "is.olibuijr.audio/midi";
@@ -29,16 +32,67 @@ fn host_ns() -> u64 {
 }
 
 /// One attached rawmidi node. `conv` lives as long as the open port, so running status and an open system
-/// exclusive carry across reads.
+/// exclusive carry across reads; `out_conv` does the same for what is written to it.
 struct HwPort {
     port: rawmidi::RawPort,
     device: ObjectId,
-    source: ObjectId,
+    /// The source endpoint of a port that can be read, the destination endpoint of one that can be written.
+    source: Option<ObjectId>,
+    destination: Option<ObjectId>,
     conv: Midi1ToUmp,
+    out_conv: UmpToMidi1,
+    /// Bytes the device did not take yet (its buffer was full), written first on the next round.
+    pending: Vec<u8>,
     name: String,
 }
 
-fn open_hardware(hub: &mut Hub, ports: &mut BTreeMap<String, HwPort>) {
+impl HwPort {
+    /// Writes what the device takes of the pending bytes. A device that fails is reported once and its output is
+    /// dropped from then on.
+    fn flush(&mut self) {
+        while !self.pending.is_empty() {
+            match self.port.write(&self.pending) {
+                Ok(0) => break,
+                Ok(n) => {
+                    self.pending.drain(..n.min(self.pending.len()));
+                }
+                Err(e) => {
+                    log(&format!("{} output failed: {e}", self.name));
+                    self.pending.clear();
+                    self.destination = None;
+                    break;
+                }
+            }
+        }
+    }
+}
+
+/// The socket apps connect to: `BIFROST_MIDI_SOCK`, else the audio run directory.
+fn socket_path() -> std::path::PathBuf {
+    match std::env::var_os("BIFROST_MIDI_SOCK") {
+        Some(p) => p.into(),
+        None => std::path::Path::new("/run/bifrost/audio").join(SOCKET_NAME),
+    }
+}
+
+/// How long the poll may sleep: until the next queued packet is due, at most 200 ms, and a short while when a
+/// device or client still has bytes to take.
+fn poll_timeout_ms(broker: &Broker, now: u64, unsent: bool) -> i32 {
+    let due = match broker.hub.next_due_ns() {
+        Some(t) if t <= now => 0,
+        Some(t) => ((t - now) / 1_000_000 + 1).min(200) as i32,
+        None => 200,
+    };
+    if unsent {
+        due.min(2)
+    } else {
+        due
+    }
+}
+
+fn open_hardware(broker: &mut Broker, ports: &mut BTreeMap<String, HwPort>) {
+    let hub = &mut broker.hub;
+    let mut changed = false;
     for dev in rawmidi::scan("/dev/snd") {
         if ports.contains_key(&dev.path) {
             continue;
@@ -53,10 +107,30 @@ fn open_hardware(hub: &mut Hub, ports: &mut BTreeMap<String, HwPort>) {
         let name = port.info().map(|i| rawmidi::c_text(&i.name)).unwrap_or_else(|_| dev.path.clone());
         let d = hub.registry.add_device(&name, true);
         let Some(ent) = hub.registry.add_entity(d, &name) else { continue };
-        let Some(src) = hub.registry.add_endpoint(ent, Direction::Source, &name) else { continue };
-        hub.registry.add_endpoint(ent, Direction::Destination, &name);
+        // an input-only device has no destination, an output-only one no source
+        let source = if port.readable() { hub.registry.add_endpoint(ent, Direction::Source, &name) } else { None };
+        let destination = if port.writable() { hub.registry.add_endpoint(ent, Direction::Destination, &name) } else { None };
+        if let Some(dst) = destination {
+            hub.track_destination(dst);
+        }
         log(&format!("rawmidi {} ({name}) attached", dev.path));
-        ports.insert(dev.path.clone(), HwPort { port, device: d, source: src, conv: Midi1ToUmp::new(0), name });
+        ports.insert(
+            dev.path.clone(),
+            HwPort {
+                port,
+                device: d,
+                source,
+                destination,
+                conv: Midi1ToUmp::new(0),
+                out_conv: UmpToMidi1::new(),
+                pending: Vec::new(),
+                name,
+            },
+        );
+        changed = true;
+    }
+    if changed {
+        broker.setup_changed();
     }
 }
 
@@ -66,9 +140,24 @@ fn describe(p: &Ump) -> String {
 }
 
 fn run(dump_seconds: Option<u64>) {
-    let mut hub = Hub::new();
+    let mut broker = Broker::new(Hub::new());
     let mut ports: BTreeMap<String, HwPort> = BTreeMap::new();
-    let (_client, _vsrc, _vdst) = hub.create_app("bifrost-midid");
+    // The client socket belongs to the daemon, not to the `--dump` check, which may run next to it.
+    let mut server = if dump_seconds.is_none() {
+        let path = socket_path();
+        match server::Server::bind(&path) {
+            Ok(s) => {
+                log(&format!("clients connect at {}", path.display()));
+                Some(s)
+            }
+            Err(e) => {
+                log(&format!("cannot listen at {}: {e}", path.display()));
+                None
+            }
+        }
+    } else {
+        None
+    };
     let seq = match seq::Seq::open("/dev/snd/seq") {
         Ok(s) => {
             let _ = s.set_name("BifrOSt MIDI");
@@ -84,8 +173,9 @@ fn run(dump_seconds: Option<u64>) {
         }
     };
     let seq_source = {
-        let d = hub.registry.add_device("Sequencer", true);
-        hub.registry.add_entity(d, "Sequencer").and_then(|e| hub.registry.add_endpoint(e, Direction::Source, "Sequencer"))
+        let reg = &mut broker.hub.registry;
+        let d = reg.add_device("Sequencer", true);
+        reg.add_entity(d, "Sequencer").and_then(|e| reg.add_endpoint(e, Direction::Source, "Sequencer"))
     };
     let start = host_ns();
     let mut last_scan = 0u64;
@@ -102,7 +192,7 @@ fn run(dump_seconds: Option<u64>) {
             return;
         }
         if now.saturating_sub(last_scan) > 2_000_000_000 || last_scan == 0 {
-            open_hardware(&mut hub, &mut ports);
+            open_hardware(&mut broker, &mut ports);
             last_scan = now;
         }
         // Output-only ports are never read (EBADF), so they are not polled either.
@@ -114,9 +204,14 @@ fn run(dump_seconds: Option<u64>) {
         if let Some(s) = &seq {
             fds.push(libc::pollfd { fd: s.fd(), events: libc::POLLIN, revents: 0 });
         }
-        // SAFETY: `fds` is a valid array of `fds.len()` pollfd structures; every fd in it belongs to a port or to
-        // `seq`, which outlive this call.
-        unsafe { libc::poll(fds.as_mut_ptr(), fds.len() as libc::nfds_t, 200) };
+        if let Some(srv) = &server {
+            srv.fds(&mut fds);
+        }
+        let unsent = ports.values().any(|p| !p.pending.is_empty()) || server.as_ref().is_some_and(|s| s.has_unsent());
+        let timeout = poll_timeout_ms(&broker, now, unsent);
+        // SAFETY: `fds` is a valid array of `fds.len()` pollfd structures; every fd in it belongs to a port, to
+        // `seq` or to `server`, which outlive this call.
+        unsafe { libc::poll(fds.as_mut_ptr(), fds.len() as libc::nfds_t, timeout) };
         let mut dead = Vec::new();
         for (path, p) in ports.iter_mut().filter(|(_, p)| p.port.readable()) {
             let read = p.port.read(&mut buf);
@@ -131,7 +226,9 @@ fn run(dump_seconds: Option<u64>) {
                         p.conv.push(b, &mut pk);
                     }
                     for u in pk {
-                        hub.send_from_source(p.source, stamp, u);
+                        if let Some(src) = p.source {
+                            broker.route(src, stamp, u);
+                        }
                         if dump_seconds.is_some() {
                             println!("{stamp} {} {}", p.name, describe(&u));
                         }
@@ -145,10 +242,17 @@ fn run(dump_seconds: Option<u64>) {
         }
         // Keyed by node path: two devices with the same name stay apart. The registry device goes with the port
         // (closing its fd), so a replug attaches a fresh one instead of piling up stale devices.
+        let removed = !dead.is_empty();
         for path in dead {
             if let Some(p) = ports.remove(&path) {
-                hub.registry.remove_external_device(p.device);
+                if let Some(dst) = p.destination {
+                    broker.hub.untrack_destination(dst);
+                }
+                broker.hub.registry.remove_external_device(p.device);
             }
+        }
+        if removed {
+            broker.setup_changed();
         }
         if let (Some(s), Some(src)) = (&seq, seq_source) {
             let read = s.read_events(&mut seq_buf);
@@ -168,7 +272,7 @@ fn run(dump_seconds: Option<u64>) {
                             pk.push(u);
                         }
                         for u in pk {
-                            hub.send_from_source(src, stamp, u);
+                            broker.route(src, stamp, u);
                             if dump_seconds.is_some() {
                                 println!("{stamp} seq {}:{} {}", from.0, from.1, describe(&u));
                             }
@@ -185,10 +289,23 @@ fn run(dump_seconds: Option<u64>) {
                 }
             }
         }
-        // Everything routed so far has been queued for its listeners; drain what no client collects.
+        // App connections: requests in, events out. Then what apps sent to hardware goes to the devices, each
+        // packet at its timestamp (a packet stamped in the future waits in the hub).
         let now = host_ns();
-        let _ = hub.pending(_client);
-        let _ = hub.drain_inbox(_client, now);
+        if let Some(srv) = server.as_mut() {
+            srv.service(&mut broker, now);
+        } else {
+            // no socket: nothing collects the inboxes, so keep them from growing
+            let _ = broker.pump(now);
+        }
+        for (dst, t) in broker.hardware_output(now) {
+            if let Some(p) = ports.values_mut().find(|p| p.destination == Some(dst)) {
+                p.out_conv.push(&t.packet, &mut p.pending);
+            }
+        }
+        for p in ports.values_mut() {
+            p.flush();
+        }
     }
 }
 

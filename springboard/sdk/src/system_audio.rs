@@ -33,6 +33,8 @@ pub enum AudioError {
     EmptyQueue,
     StartOutOfRange { start: u32, len: usize },
     InvalidVolume,
+    /// A pan outside -1 to 1, or not a number.
+    InvalidPan,
     /// A playback rate outside 0.5 to 3.0, or not a number.
     InvalidRate,
     InvalidPosition,
@@ -149,6 +151,22 @@ impl Command {
         Ok(Command(Cmd::SetRate(rate)))
     }
 
+    /// Stereo pan, -1 (left only) to 1 (right only); 0 keeps both channels at full level.
+    pub fn pan(pan: f32) -> Result<Command, AudioError> {
+        if !(-1.0..=1.0).contains(&pan) {
+            return Err(AudioError::InvalidPan);
+        }
+        Ok(Command(Cmd::SetPan(pan)))
+    }
+
+    /// Ramps the volume linearly from where it is to `target` (0 to 1) over `duration_ms` (0 is at once).
+    pub fn fade_volume(target: f32, duration_ms: u32) -> Result<Command, AudioError> {
+        if !(0.0..=1.0).contains(&target) {
+            return Err(AudioError::InvalidVolume);
+        }
+        Ok(Command(Cmd::FadeVolume { target, ms: duration_ms }))
+    }
+
     pub fn mute(muted: bool) -> Command {
         Command(Cmd::SetMuted(muted))
     }
@@ -254,6 +272,18 @@ mod tests {
         for bad in [0.49f32, 3.01, 0.0, -1.0, f32::NAN, f32::INFINITY] {
             assert_eq!(Command::rate(bad), Err(AudioError::InvalidRate), "{bad}");
         }
+    }
+
+    #[test]
+    fn pan_and_fade_commands_check_their_values() {
+        assert_eq!(Command::pan(-1.0).map(|c| c.0), Ok(Cmd::SetPan(-1.0)));
+        assert_eq!(Command::pan(0.25).map(|c| c.0), Ok(Cmd::SetPan(0.25)));
+        for bad in [-1.01f32, 1.01, f32::NAN, f32::INFINITY] {
+            assert_eq!(Command::pan(bad), Err(AudioError::InvalidPan), "{bad}");
+        }
+        assert_eq!(Command::fade_volume(0.0, 2000).map(|c| c.0), Ok(Cmd::FadeVolume { target: 0.0, ms: 2000 }));
+        assert_eq!(Command::fade_volume(1.5, 10), Err(AudioError::InvalidVolume));
+        assert_eq!(Command::fade_volume(f32::NAN, 10), Err(AudioError::InvalidVolume));
     }
 
     #[test]

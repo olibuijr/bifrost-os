@@ -4,22 +4,22 @@
   "macos_since": "10.0",
   "status": "partial",
   "bifrost": "springboard/apps/daw/src/compose.rs (midi(), pitches()), springboard/apps/daw/src/dsp.rs (mtof), springboard/src/bare/bluetooth.rs (Bluetooth management socket, audio-class devices only)",
-  "summary": "The MIDI stack exists as pure models with host unit tests: UMP and MIDI 1.0 messages, an endpoint registry and routing hub, thru transforms, BLE MIDI packets, MIDI-CI discovery and Property Exchange, and RTP-MIDI session packets. None of it is wired into the shell or apps or verified on Midget, and there is no MIDI driver. Note-number math in the DAW is one small use of it.",
+  "summary": "The MIDI stack: UMP and MIDI 1.0 messages, an endpoint registry and routing hub, thru transforms, BLE MIDI packets, MIDI-CI discovery and Property Exchange, and RTP-MIDI session packets exist as pure models with host unit tests. Since 2026-10-19 bifrost-midid also serves a client socket (rawmidi input and output, hotplug, virtual endpoints, thru connections) and apps reach it through bifrost_app::midi_client, with a bifrost-midi command-line tool. Not wired: BLE GATT, RTP-MIDI sockets, kernel UMP endpoints; nothing is verified on Midget yet. Note-number math in the DAW is one small use of the models.",
   "rea_evidence": "ev_ef3f87daee6586bf7d1842912581de9266baebc583129c4b3454c831ae785502",
   "features": [
     {
       "feature": "MIDI Services (clients, ports, device and entity lookup)",
       "apple": "MIDIClientCreate, MIDIInputPortCreateWithProtocol, MIDIOutputPortCreate, MIDIGetNumberOfDevices, MIDIPortConnectSource, MIDIReceiveBlock (https://developer.apple.com/documentation/coremidi/midi-services)",
-      "bifrost": "springboard/audio/midi/src/endpoints.rs (Registry: clients, devices, entities, endpoints, connections), springboard/audio/midi/src/hub.rs (routing), springboard/audio/midid/ (ALSA rawmidi and seq, BLE link)",
+      "bifrost": "springboard/audio/midi/src/endpoints.rs (Registry: clients, devices, entities, endpoints, connections), springboard/audio/midi/src/hub.rs (routing), springboard/audio/midid/ (ALSA rawmidi and seq, BLE link); springboard/audio/midi/src/wire.rs; springboard/audio/midi/src/broker.rs; springboard/audio/midid/src/server.rs; springboard/sdk/src/midi_client.rs (MidiClient); springboard/cmd/src/midictl.rs (bifrost-midi); packaging/arch/bifrost-midid.service",
       "status": "partial",
-      "note": "Pure models with host unit tests: client and endpoint registry, virtual endpoints, connect_source, and a routing hub with stable timestamp ordering. The midid daemon crate describes ALSA rawmidi and seq and BLE links, not yet verified on the VM or Midget. Not wired into apps or the shell. No app-facing API for device I/O in the SDK beyond the existing MIDI module. Built on parity/team-n-core-midi; not yet verified on Midget."
+      "note": "Built 2026-10-19 (tests unrun): clients, ports and lookup work against the running daemon. bifrost-midid listens on /run/bifrost/audio/is.olibuijr.midi.sock (bifrost_midi::wire frames, bifrost_midi::broker over the Hub, tested without a socket); MidiClient says hello, lists devices, entities, sources and destinations with their connections, connects sources (one input port per client), creates and disposes virtual sources and destinations, sends and injects timestamped UMP packets or MIDI 1.0 bytes, receives packets in host-time order and is told when the setup changed; limits are enforced and a misbehaving client is dropped with its endpoints. bifrost-midid.service ships with the package. Not built: several input ports per client, MIDITimeStamp ticks (host-clock nanoseconds are used), shm event rings into the audio server. Midget check: `systemctl status bifrost-midid` is active, `bifrost-midi list` shows the connected USB MIDI devices with source and destination ids, and `bifrost-midi monitor 20` prints `NS name 2090XXYY` lines when keys are pressed."
     },
     {
       "feature": "MIDI System Setup (driver and external device management)",
       "apple": "MIDISetupAddExternalDevice, MIDIExternalDeviceCreate, MIDIDeviceNewEntity, MIDIEntityAddOrRemoveEndpoints (https://developer.apple.com/documentation/coremidi/midi-system-setup)",
-      "bifrost": "springboard/audio/midi/src/endpoints.rs (Registry: add_device, add_entity, remove_entity, remove_external_device)",
+      "bifrost": "springboard/audio/midi/src/endpoints.rs (Registry: add_device, add_entity, remove_entity, remove_external_device); springboard/audio/midid/src/main.rs (open_hardware, hotplug); springboard/audio/midi/src/broker.rs (setup_changed)",
       "status": "partial",
-      "note": "Pure model with host unit tests: external devices, entities and endpoints in the registry, with removal. No hotplug event source and no driver list; the Linux side (ALSA) is described by the midid crate but not verified. Not wired into apps or the shell. Built on parity/team-n-core-midi; not yet verified on Midget."
+      "note": "Built 2026-10-19 (tests unrun): the hotplug path. midid rescans /dev/snd every two seconds, adds a device with an entity and a source and/or destination only for the directions the node supports, removes the device (with its queue and thru connections) when its port fails, and tells every client with a SetupChanged event so it lists again. There is no driver list and no driver plug-ins (the kernel ALSA drivers are the drivers). Midget check: run `bifrost-midi monitor 60` and unplug then replug the USB keyboard: the new source is connected without restarting the tool and events resume; `bifrost-midi list` shows the device gone while it is unplugged."
     },
     {
       "feature": "MIDI Bluetooth (BLE MIDI peripherals)",
@@ -31,9 +31,9 @@
     {
       "feature": "MIDI Messages (MIDI 1.0 and 2.0 / UMP construction)",
       "apple": "MIDI1UPNoteOn, MIDI1UPControlChange, MIDI2NoteOn, MIDI2PitchBend, MIDIMessage_32, MIDIMessage_64 (https://developer.apple.com/documentation/coremidi/midi-messages)",
-      "bifrost": "springboard/audio/midi/src/ump.rs (UMP and MIDI 1.0 conversion, SysEx), springboard/audio/midi/src/events.rs (MIDI 1.0 parser and encoder), springboard/apps/daw/src/model.rs:152 (note struct)",
+      "bifrost": "springboard/audio/midi/src/ump.rs (UMP and MIDI 1.0 conversion, SysEx), springboard/audio/midi/src/events.rs (MIDI 1.0 parser and encoder), springboard/apps/daw/src/model.rs:152 (note struct); springboard/sdk/src/midi_client.rs (send, send_bytes, inject); springboard/audio/midi/src/wire.rs (packet validation)",
       "status": "partial",
-      "note": "Universal MIDI Packets with MIDI 1.0 and 2.0 channel voice, system, 64-bit and 128-bit data, SysEx assembly, and conversion to and from MIDI 1.0 bytes (ump.rs), with host unit tests. The DAW note model still stores only pitch and velocity. Not yet wired to a device or verified on Midget. Built on parity/team-n-core-midi; not yet verified on Midget."
+      "note": "Built 2026-10-19 (tests unrun): UMP and MIDI 1.0 bytes both travel through the server: MidiClient::send and inject take UMP packets, send_bytes and inject_bytes convert MIDI 1.0 bytes (running status, system exclusive) to UMP, the wire checks that a packet's word count matches its message type, and hardware destinations get MIDI 1.0 bytes through UmpToMidi1. The DAW note model still stores only pitch and velocity. Midget check: `bifrost-midi send USB 90 3C 64` then `bifrost-midi send USB 80 3C 00` starts and releases a note on a connected USB synth (`bifrost-midi note USB 60` does both)."
     },
     {
       "feature": "Note number to pitch and frequency",
@@ -45,9 +45,9 @@
     {
       "feature": "MIDI Thru Connection (play-through, value maps, transforms)",
       "apple": "MIDIThruConnectionCreate, MIDIThruConnectionSetParams, MIDIValueMap, MIDIControlTransform (https://developer.apple.com/documentation/coremidi/midi-thru-connection)",
-      "bifrost": "springboard/audio/midi/src/thru.rs (ValueMap, ControlTransform, ThruConnection), springboard/audio/midi/src/hub.rs (routing between sources and destinations)",
+      "bifrost": "springboard/audio/midi/src/thru.rs (ValueMap, ControlTransform, ThruConnection), springboard/audio/midi/src/hub.rs (routing between sources and destinations); springboard/audio/midi/src/broker.rs (route, thru_packet); springboard/sdk/src/midi_client.rs (create_thru)",
       "status": "partial",
-      "note": "Thru connection with parameters and enable state, value maps (identity, table, linear), control transforms, and routing through the hub, with host unit tests. Not wired into apps or the shell, and not yet verified on Midget. Built on parity/team-n-core-midi; not yet verified on Midget."
+      "note": "Built 2026-10-19 (tests unrun): thru connections run inside the server (ThruCreate, ThruEnable, ThruDispose; MidiClient::create_thru): channel filter, note and velocity value maps, control rewrites; MIDI 1.0 and 2.0 packets keep their type and other messages pass; a connection ends when its client disconnects or an endpoint goes away. Midget check: with a USB keyboard and a USB synth, `bifrost-midi thru Keys Synth 30 12` plays the synth an octave above what you play for 30 s."
     },
     {
       "feature": "MIDI Networking (network sessions and hosts)",
@@ -66,17 +66,17 @@
     {
       "feature": "MIDI Capability Inquiry (MIDI-CI discovery, profiles, property exchange)",
       "apple": "MIDICIDiscoveryManager, MIDICISession, MIDICIProfile, MIDICIResponder, MIDICIDevice (https://developer.apple.com/documentation/coremidi/midi-capability-inquiry)",
-      "bifrost": "springboard/sdk/src/midi_ci.rs, springboard/sdk/src/midi_ci_property.rs",
+      "bifrost": "springboard/sdk/src/midi_ci.rs, springboard/sdk/src/midi_ci_property.rs; springboard/sdk/src/midi_client.rs (SysexCollector, MidiCiLink)",
       "status": "partial",
-      "note": "Sprint 3: MIDI-CI 1.1 discovery, invalidate MUID and profile inquiry/set/enabled messages, DiscoveryManager, Device and Profile, with host unit tests. Property Exchange messages (capabilities, Get and Set Property Data) with chunk split and in-order reassembly, with host unit tests (parity/team-n-core-midi). No transport, no subscription messages, not yet checked on Midget."
+      "note": "Built 2026-10-19 (tests unrun): a transport. SysexCollector joins system exclusive packets into whole messages and MidiCiLink runs the DiscoveryManager over the MIDI server (discover, profile inquiry, answering inquiries). Still no property exchange subscriptions. Midget check: `bifrost-midi ci <destination> <source> 5` against a MIDI-CI capable device prints `device 0123456: manufacturer ..., model ...`; with none it prints `no MIDI-CI device answered`."
     }
   ],
   "gaps": [
-    "Not verified on Midget or the VM: the MIDI models are not yet wired to a live device path (ALSA rawmidi and seq, BLE GATT) or to an app.",
-    "No MIDI-CI subscription messages and no transport for Property Exchange; no property exchange over SysEx packets on a live link.",
+    "Not verified on Midget: the device path (ALSA rawmidi in and out) and the client socket are built (bifrost-midid, MidiClient) but the BLE GATT link is not.",
+    "MIDI-CI has a transport over the MIDI server (MidiCiLink) but no subscription messages and no property exchange over a live link.",
     "No MIDI network sockets or mDNS discovery; the RTP-MIDI session packets are not sent or received.",
-    "No USB or hardware MIDI hotplug event path into the endpoint registry (the midid daemon describes it; not verified).",
+    "Hotplug is a two-second rescan of /dev/snd in midid (SetupChanged to clients), not a udev or kernel event; not verified on Midget.",
     "The DAW note model stores only pitch and velocity (springboard/apps/daw/src/model.rs:152); control change and pitch bend are not used by the DAW.",
-    "No app-facing SDK API for MIDI beyond the protocol modules in springboard/sdk/src/midi*.rs."
+    "The app-facing API is bifrost_app::midi_client (MidiClient); the DAW does not use it yet."
   ]
 }

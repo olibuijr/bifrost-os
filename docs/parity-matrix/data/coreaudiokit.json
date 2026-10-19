@@ -4,15 +4,15 @@
   "macos_since": "10.4",
   "status": "partial",
   "bifrost": "springboard/audiod/src/main.rs (audio service), springboard/src/media/audioplayer.rs, springboard/src/media/route.rs, springboard/src/bare/bluetooth.rs",
-  "summary": "CoreAudioKit is the view layer for Audio Unit plugin UIs, Bluetooth and network MIDI/audio device pickers and inter-app audio widgets. BifrOSt has no Audio Unit host and no AU view API; its audio service and Bluetooth module cover playback routing and device status but none of the CoreAudioKit views. A pure network audio browser model (receiver discovery, expiry and route picker rows) is built in springboard/ui/src/network_audio_browser.rs but is not wired into the shell.",
+  "summary": "CoreAudioKit is the view layer for Audio Unit plugin UIs, Bluetooth and network MIDI/audio device pickers and inter-app audio widgets. BifrOSt has an in-process unit loader and, since 2026-10-19, a generic unit view model (springboard/sdk/src/audio_unit_view.rs), but no plug-in view controller and no drawn unit view; its audio service and Bluetooth module cover playback routing and device status but none of the other CoreAudioKit views. A pure network audio browser model (receiver discovery, expiry and route picker rows) is built in springboard/ui/src/network_audio_browser.rs but is not wired into the shell.",
   "rea_evidence": "ev_fce537cae879085afc4fa492589b09fde26470cac4c1bd04590c15f5923fbaa6",
   "features": [
     {
       "feature": "Audio unit custom UI (view controller, view configuration, generic view)",
       "apple": "AUViewController, AUAudioUnitViewConfiguration, AUGenericView, AUCustomViewPersistentData",
-      "bifrost": "springboard/ui/src/param_view.rs (ParamSpec, GenericView); wired: springboard/apps/daw/src/rack.rs (slider mapping over springboard/ui/src/param_view.rs); springboard/ui/tests/parity_sdk-tests-18.rs",
+      "bifrost": "springboard/ui/src/param_view.rs (ParamSpec, GenericView); wired: springboard/apps/daw/src/rack.rs (slider mapping over springboard/ui/src/param_view.rs); springboard/ui/tests/parity_sdk-tests-18.rs; springboard/sdk/src/audio_unit_view.rs (UnitView); springboard/audio/units/src/plugin.rs",
       "status": "partial",
-      "note": "Headless tests in parity_sdk-tests-18 cover the generic parameter view: expert filtering, clamping, linear and logarithmic slider positions, invalid ranges and reset. The DAW rack maps its sliders through the model. Gap: no Audio Unit host and no plugin view controller; the DAW plugins use built-in device UIs, and the generic ViewController in springboard/sdk/src/view/app.rs is not audio-specific."
+      "note": "Built 2026-10-19 (tests unrun): a generic view model over a unit's ParamHandle (UnitView): a row per parameter with the control that suits it (log-taper slider for frequencies, switch, pop-up, read-out), value text with units, sections by group, drag, toggle, select, key nudge, reset and preset selection, all through the unit's handle. The earlier ui param_view.rs model stays for the DAW rack. The plug-in loader exists (audio/units plugin.rs) but a plug-in supplies no view of its own and nothing draws the rows yet: an app maps them to its widgets. Midget check: there is no drawn view yet; `bifrost-unit scan <dir>` lists the parameters (id, group/name, unit, range, default) the view builds its rows from."
     },
     {
       "feature": "Panner audio unit view",
@@ -45,9 +45,9 @@
     {
       "feature": "Audio playback service shared by apps",
       "apple": "Not part of CoreAudioKit (AVFoundation and Core Audio); listed because CoreAudioKit device views depend on it",
-      "bifrost": "springboard/src/svc.rs (audio::Client); springboard/sdk/src/lib.rs (audio re-export, bifrost_app::audio); springboard/audiod/src/main.rs",
+      "bifrost": "springboard/src/svc.rs (audio::Client); springboard/sdk/src/lib.rs (audio re-export, bifrost_app::audio); springboard/audiod/src/main.rs; springboard/proto/src/svc.rs (Evt::Route); springboard/cmd/src/audioctl.rs (bifrost-audio)",
       "status": "partial",
-      "note": "Apps share the audio service through bifrost_app::audio::Client, used by the music, podcasts, video player and voice memos apps. Headless tests in sdk/tests/parity_sdk-rest-12.rs drive it over a Unix socket with a fake service: handshake, state, transport and queue commands, volume clamping and reconnect. Gap: the service itself owns the speaker and plays sound only on the lab machine."
+      "note": "Updated 2026-10-19 (tests unrun): the shared service now also reports the output route to every subscriber (Evt::Route, audio::Client::take_route_changes) and takes pan and fades (Cmd::SetPan, Cmd::FadeVolume). Apps share the service through bifrost_app::audio::Client (music, podcasts, video player, voice memos); headless tests in sdk/tests/parity_sdk-rest-12.rs drive it over a Unix socket with a fake service. The service plays sound only on the lab machine. Midget check: `bifrost-audio status` prints the player state and `bifrost-audio watch 10` prints state changes and route reports while a song plays."
     },
     {
       "feature": "Inter-device audio picker",
@@ -72,8 +72,8 @@
     }
   ],
   "gaps": [
-    "No Audio Unit host: BifrOSt cannot load third-party AU plugins or show their custom views (AUViewController, AUAudioUnitViewConfiguration).",
-    "No generic audio unit view (AUGenericView) or panner view (AUPannerView) for plugins without a custom UI.",
+    "Third-party units load in-process through our own C ABI (springboard/audio/units/src/plugin.rs) but supply no view of their own, so there is no AUViewController equivalent.",
+    "The generic view is a model (springboard/sdk/src/audio_unit_view.rs) that nothing draws yet; there is no panner view for plug-ins.",
     "No BLE MIDI radio path for apps: the picker and the advertiser are models (springboard/ui/src/midi_ble_picker.rs, MidiPicker and MidiAdvertiser; tests midi_ble_picker::tests), not connected to the Bluetooth controller or any app.",
     "Bluetooth audio streaming (A2DP/AVDTP) is not handled in springboard/src/bare/bluetooth.rs, so a device picker would list devices that cannot carry audio yet.",
     "No SDK route picker for apps: the picker rows exist in springboard/ui/src/route_picker.rs but no SDK API exposes them.",

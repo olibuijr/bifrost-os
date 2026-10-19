@@ -50,6 +50,10 @@ pub mod audio {
         view: Snapshot,
         recording: Option<Recording>,
         done: Vec<(String, u64)>,
+        /// the output route the service last reported: (headphones, route-change reason)
+        route: Option<(bool, u8)>,
+        /// route reports since the last `take_route_changes`
+        route_events: Vec<(bool, u8)>,
         version: Option<String>,
         retry_at: f64,
         backoff: f64,
@@ -61,7 +65,7 @@ pub mod audio {
 
     impl Client {
         pub fn new(path: PathBuf) -> Self {
-            Client { path, stream: None, rx: Vec::new(), tx: Vec::new(), received: idle(), received_at: 0.0, clock: 0.0, view: idle(), recording: None, done: Vec::new(), version: None, retry_at: 0.0, backoff: RETRY_MIN_MS, connects: 0, armed: true }
+            Client { path, stream: None, rx: Vec::new(), tx: Vec::new(), received: idle(), received_at: 0.0, clock: 0.0, view: idle(), recording: None, done: Vec::new(), route: None, route_events: Vec::new(), version: None, retry_at: 0.0, backoff: RETRY_MIN_MS, connects: 0, armed: true }
         }
 
         /// The client of the service under the shell data dir `root`. It connects lazily: nothing is sent to the
@@ -111,6 +115,17 @@ pub mod audio {
         /// Recordings finished since the last call: (path, duration in ms).
         pub fn take_recordings(&mut self) -> Vec<(String, u64)> {
             std::mem::take(&mut self.done)
+        }
+
+        /// The output route the service last reported (the shell's jack and route picker), (headphones, reason). None
+        /// until the service has been told one.
+        pub fn route(&self) -> Option<(bool, u8)> {
+            self.route
+        }
+
+        /// Route reports since the last call, oldest first: (headphones, route-change reason).
+        pub fn take_route_changes(&mut self) -> Vec<(bool, u8)> {
+            std::mem::take(&mut self.route_events)
         }
 
         /// Reads whatever the service sent; true when the snapshot or recording changed.
@@ -272,6 +287,19 @@ pub mod audio {
         pub fn set_volume(&mut self, v: f32) -> bool {
             self.send(Cmd::SetVolume(v.clamp(0.0, 1.0)))
         }
+        /// The stereo pan of the player, -1 (left) to 1 (right).
+        pub fn set_pan(&mut self, pan: f32) -> bool {
+            self.send(Cmd::SetPan(crate::media::player_fx::clamp_pan(pan)))
+        }
+        /// Ramps the volume to `target` over `ms` milliseconds.
+        pub fn fade_volume(&mut self, target: f32, ms: u32) -> bool {
+            self.send(Cmd::FadeVolume { target: if target.is_nan() { 0.0 } else { target.clamp(0.0, 1.0) }, ms })
+        }
+        /// Tells the service the output route changed, so every subscriber (the apps' sessions) sees a route change.
+        /// `reason` follows the session codes: 1 a device appeared, 2 a device went away, 4 the user chose it.
+        pub fn set_route(&mut self, headphones: bool, reason: u8) -> bool {
+            self.send(Cmd::SetRoute { headphones, reason })
+        }
         /// Sets the playback rate (clamped to 0.5 to 2.0); audiod time-stretches, so the pitch does not change.
         pub fn set_rate(&mut self, rate: f32) -> bool {
             self.send(Cmd::SetRate(crate::media::timestretch::clamp_rate(rate)))
@@ -333,6 +361,15 @@ pub mod audio {
                     Ok(Evt::RecordDone { path, duration_ms }) => {
                         self.done.push((path, duration_ms));
                         self.recording = None;
+                        changed = true;
+                    }
+                    Ok(Evt::Route { headphones, reason }) => {
+                        self.route = Some((headphones, reason));
+                        self.route_events.push((headphones, reason));
+                        // bounded: nobody reads the list while the app is not looking
+                        if self.route_events.len() > 32 {
+                            self.route_events.remove(0);
+                        }
                         changed = true;
                     }
                     Err(_) => {}

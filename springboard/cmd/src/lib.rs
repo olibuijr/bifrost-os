@@ -3,6 +3,7 @@
 
 pub mod defaults;
 pub mod ditto;
+pub mod audioctl;
 pub mod b64;
 pub mod bzegrep;
 pub mod caffeinate;
@@ -22,6 +23,7 @@ pub mod leave;
 pub mod lastcomm;
 pub mod mdfind;
 pub mod mdutil;
+pub mod midictl;
 pub mod neighbors;
 pub mod mtree;
 pub mod hdiutil;
@@ -52,6 +54,7 @@ pub mod textutil;
 pub mod tiff2icns;
 pub mod tiffutil;
 pub mod tmutil;
+pub mod unitctl;
 pub mod units;
 pub mod usdextract;
 pub mod vis;

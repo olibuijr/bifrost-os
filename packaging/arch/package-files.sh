@@ -92,6 +92,13 @@ package_bifrost_files() {
     install -Dm755 "$audiobench" "$pkgdir/usr/bin/bifrost-audio-bench"
   fi
   install -Dm644 "$here/bifrost-audiod.service" "$pkgdir/usr/lib/systemd/system/bifrost-audiod.service"
+  # MIDI server (docs/audio/15-midi-server.md): apps connect to /run/bifrost/audio/is.olibuijr.midi.sock. The unit is
+  # installed only with its binary, because post-install enables it.
+  midid=${PC_MIDID:-$(dirname "$binary")/bifrost-midid}
+  if [[ -x $midid ]]; then
+    install -Dm755 "$midid" "$pkgdir/usr/bin/bifrost-midid"
+    install -Dm644 "$here/bifrost-midid.service" "$pkgdir/usr/lib/systemd/system/bifrost-midid.service"
+  fi
   install -Dm644 "$here/sysusers-bifrost-audio.conf" "$pkgdir/usr/lib/sysusers.d/bifrost-audio.conf"
   install -Dm644 "$here/tmpfiles-bifrost-audio.conf" "$pkgdir/usr/lib/tmpfiles.d/bifrost-audio.conf"
   # same-uid processes (Term, apps) must not be able to ptrace the shell, which holds the session token
