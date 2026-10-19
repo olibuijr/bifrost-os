@@ -35,6 +35,22 @@ impl Browser {
         }
     }
 
+    /// Opens `url` in a new tab at strip position `at` (the end when `at` is past it), selected. The tab's view id, or `None`
+    /// without an engine.
+    pub(super) fn new_tab_at(&mut self, url: &str, at: usize) -> Option<WebViewId> {
+        let had = self.tabs.len();
+        self.new_tab(url);
+        if self.tabs.len() == had {
+            return None;
+        }
+        let last = self.tabs.len() - 1;
+        let at = at.min(last);
+        // the new tab is selected: `move_tab` keeps the selection on it
+        self.move_tab(last, at);
+        self.session.dirty = true;
+        self.tabs.get(at).map(|t| t.view)
+    }
+
     pub(super) fn select(&mut self, i: usize) {
         if i >= self.tabs.len() {
             return;

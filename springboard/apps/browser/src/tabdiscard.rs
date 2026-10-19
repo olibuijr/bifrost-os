@@ -13,7 +13,6 @@
 use std::collections::HashMap;
 
 use bifrost_app::webview::{WebViewEvent, WebViewId};
-use bifrost_app::AppMenuItem;
 
 use crate::{perf, Browser, START};
 
@@ -196,6 +195,18 @@ impl Discarder {
         Some((list.as_slice(), *i))
     }
 
+    /// Gives a reopened tab the Back list it had when it was closed, the last entry being the page it loads. Back past that page
+    /// then loads the entry before it (`back_target`), as for a revived tab. An empty list leaves the tab without history.
+    pub fn seed(&mut self, id: WebViewId, mut history: Vec<String>) {
+        if history.is_empty() {
+            return;
+        }
+        let excess = history.len().saturating_sub(MAX_HIST);
+        history.drain(..excess);
+        let at = history.len() - 1;
+        self.hist.insert(id, (history, at));
+    }
+
     pub fn set_jump(&mut self, id: WebViewId, target: usize) {
         self.jumps.insert(id, target);
     }
@@ -320,28 +331,13 @@ impl Browser {
         }
     }
 
-    /// The History menu: Back and Forward submenus of the selected tab's entries, nearest first. Item ids are
-    /// `NAV_MENU_BASE` plus the entry index (see `jump_to`).
-    pub(crate) fn history_menu(&self) -> Vec<AppMenuItem> {
+    /// The selected tab's pages around the current one for the History menu (`menus::history_items`): earlier and later
+    /// entries as (index into the tab's list, address), nearest first. Item ids are `NAV_MENU_BASE` plus the index (see
+    /// `jump_to`).
+    pub(crate) fn history_pages(&self) -> (Vec<(usize, String)>, Vec<(usize, String)>) {
         let none: &[String] = &[];
         let (list, index) = self.view().and_then(|v| self.discard.entries(v)).unwrap_or((none, 0));
-        let (back, forward) = menu_entries(list, index, MENU_LIMIT);
-        let mut items = vec![AppMenuItem::submenu("Back")];
-        if back.is_empty() {
-            items.push(AppMenuItem::new(0, "No Earlier Pages").enabled(false).depth(1));
-        }
-        for (i, url) in back {
-            items.push(AppMenuItem::new(NAV_MENU_BASE + i as u32, &history_label(&url)).depth(1));
-        }
-        items.push(AppMenuItem::separator());
-        items.push(AppMenuItem::submenu("Forward"));
-        if forward.is_empty() {
-            items.push(AppMenuItem::new(0, "No Later Pages").enabled(false).depth(1));
-        }
-        for (i, url) in forward {
-            items.push(AppMenuItem::new(NAV_MENU_BASE + i as u32, &history_label(&url)).depth(1));
-        }
-        items
+        menu_entries(list, index, MENU_LIMIT)
     }
 
     /// Called from `tick`: discards tabs whose probe answered or timed out, and every `SWEEP_S` picks new ones.
@@ -525,6 +521,23 @@ mod tests {
         assert!(!d.track(1, "")); // empty and data URLs are never entries
         assert!(!d.track(1, "data:text/html,x"));
         assert_eq!(d.entries(2), None);
+    }
+
+    #[test]
+    fn a_reopened_tab_keeps_the_back_list_it_had() {
+        let mut d = Discarder::default();
+        d.seed(5, s(&["a", "b", "c"]));
+        assert_eq!(d.entries(5), Some((s(&["a", "b", "c"]).as_slice(), 2)));
+        assert_eq!(d.back_target(5), Some("b"), "Back goes to the page before the one it shows");
+        assert!(!d.track(5, "c"), "loading the page it showed is no new entry");
+        assert_eq!(d.entries(5), Some((s(&["a", "b", "c"]).as_slice(), 2)));
+        // an empty list leaves the tab without history; a long one keeps the newest entries
+        d.seed(6, Vec::new());
+        assert_eq!(d.entries(6), None);
+        let long: Vec<String> = (0..MAX_HIST + 3).map(|i| format!("p{i}")).collect();
+        d.seed(7, long);
+        let (list, at) = d.entries(7).unwrap();
+        assert_eq!((list.len(), at, list[0].as_str()), (MAX_HIST, MAX_HIST - 1, "p3"));
     }
 
     #[test]
