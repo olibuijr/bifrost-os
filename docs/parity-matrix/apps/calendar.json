@@ -69,7 +69,7 @@
    "apple": "event inspector repeat popup",
    "status": "partial",
    "bifrost": "springboard/apps/calendar-desktop/src/calendar/pickers.rs:54",
-   "note": "The Repeat row opens a picker under it: Frequency (Never, Daily, Weekly, Monthly, Yearly), Every N, the weekdays of a weekly rule, and Ends (Never, After N times, Until a date). A preset is saved as before; any other rule is saved as its RRULE in calendar-extras.txt (src/calendar/extras.rs) and worked out in Calendar::occurs (src/calendar/overlay.rs:122). Not yet verified on Midget. Left: copy and paste and the print agenda carry only the preset, so a custom rule is not copied or printed.",
+   "note": "The Repeat row opens a picker under it: Frequency (Never, Daily, Weekly, Monthly, Yearly), Every N, the weekdays of a weekly rule, and Ends (Never, After N times, Until a date). A preset is saved as before; any other rule is saved as its RRULE in calendar-extras.txt (src/calendar/extras.rs) and worked out in Calendar::occurs (src/calendar/overlay.rs:122). Not yet verified on Midget. Copy and paste carry the custom rule (clip.rs copy_text and extra_of). Left: the print agenda carries only the preset, so a custom rule is not printed. Midget check: make a custom weekly rule, select the event, Edit > Copy, pick another day, Edit > Paste: the pasted event repeats weekly (tests/parity_app-calendar.rs and calendar/clip.rs tests).",
    "wire": "Add a Custom repeat sheet (frequency, interval, weekdays, end after N / on date) that writes an RRULE into the rich sidecar via calendar/exchange.rs; open it from Target::Repeat."
   },
   {
@@ -78,7 +78,7 @@
    "apple": "AlarmCustom.nib, AlarmInstance.nib",
    "status": "partial",
    "bifrost": "springboard/apps/calendar-desktop/src/calendar/pickers.rs:76",
-   "note": "The Alert row opens a checklist of the seven presets (several can be on), a custom alarm from 0 minutes to a week in 5-minute steps, and a row that removes each custom alarm. The alarms are kept in calendar-extras.txt and scheduled one by one through alert_calendar_with (src/calendar/alerts.rs:24). Not yet verified on Midget. Left: copy and paste and the .ics export keep only the first preset.",
+   "note": "The Alert row opens a checklist of the seven presets (several can be on), a custom alarm from 0 minutes to a week in 5-minute steps, and a row that removes each custom alarm. The alarms are kept in calendar-extras.txt and scheduled one by one through alert_calendar_with (src/calendar/alerts.rs:24). Not yet verified on Midget. Copy and paste carry the custom alarms (clip.rs). Left: the .ics export of a store event keeps only its first preset unless it has custom alarms (alert_calendar_with). Midget check: add two custom alarms, copy and paste the event, open the copy and see both alarms.",
    "wire": "Allow a list of alerts per event plus a Custom alert sheet (N minutes/hours/days before, or at a time); store as VALARMs in the rich sidecar and schedule each in connect.rs plan_alerts."
   },
   {
@@ -105,8 +105,8 @@
    "apple": "MainMenu.nib Edit > Cut/Copy/Paste",
    "status": "partial",
    "bifrost": "springboard/apps/calendar-desktop/src/main.rs:257",
-   "note": "Copy and Cut act on the event last tapped or opened. A single tap now selects an event (a second tap opens it in a window).",
-   "wire": "Keep custom repeat rules when pasting once the custom repeat sheet exists."
+   "note": "Copy and Cut act on the event last tapped or opened. A single tap now selects an event (a second tap opens it in a window). Custom repeat rules and custom alarms travel with the event through copy, cut and paste (clip.rs copy_text and extra_of, tested). Midget check: select an event with a custom repeat, Edit > Copy then Edit > Paste on another day; the copy repeats.",
+   "wire": "Text selection copy inside the editor fields is routed to the field, not the event."
   },
   {
    "feature": "Export Event (.ics)",
@@ -239,8 +239,8 @@
    "area": "settings",
    "apple": "PreferencesPanel.nib time zone support; TimeZonePickerSheet.nib; InspectorTimeZoneView.nib",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar/pickers.rs:283",
-   "note": "A Time Zone row in the event form cycles the device's zone, UTC and Iceland (the fixed-offset zones; extras.rs ZONES). The zone sets the alarms (alerts.rs:24) and is written as TZID in the .ics export (extras.rs apply_zones). Not yet verified on Midget. Left: a view time-zone override in the toolbar, zones with daylight saving, and converting the displayed times to the view's zone.",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/pickers.rs:283; springboard/apps/calendar-desktop/src/calendar/zones.rs",
+   "note": "A Time Zone row in the event form cycles the device's zone, UTC, Iceland and nine more zones with their daylight saving rules (calendar/zones.rs: London, Paris, Helsinki, New York, Chicago, Denver, Los Angeles, India, Tokyo; the European and North American shift rules, tested at the shift days). The zone sets the alarms per occurrence, so a repeating event in a zone with summer time fires at the right moment on both sides of the shift (alerts.rs utc_offset_secs), and is written as TZID in the .ics export with a STANDARD and DAYLIGHT block with yearly rules (ics.rs write, zones::vtimezone_body). zones::convert turns a wall time in one zone into another. Updated 2026-10-19; code only, not built or run, not verified on Midget. Left: a view time-zone override in the toolbar that shows event times converted (zones::convert is ready for it), southern-hemisphere zones, and reading the rules of an imported VTIMEZONE (an imported zone not in the table keeps the fixed offset its file gives). Midget check: `cargo test -p calendar-desktop zones` and `alerts` pass; then Calendar > New Event > Time Zone row, tap until it reads Paris or New York, Save, File > Export Calendar and confirm the .ics holds a DAYLIGHT block with RRULE for that TZID.",
    "wire": "Add a time zone popup in the editor (TZID in the rich sidecar) and a toolbar view time-zone override in chrome.rs."
   },
   {

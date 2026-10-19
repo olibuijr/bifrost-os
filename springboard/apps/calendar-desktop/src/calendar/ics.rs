@@ -561,11 +561,21 @@ pub fn write(cal: &IcsCalendar, stamp: &str) -> String {
         written.push(tz);
         add(&mut out, "BEGIN:VTIMEZONE".into());
         add(&mut out, format!("TZID:{tz}"));
-        add(&mut out, "BEGIN:STANDARD".into());
-        add(&mut out, "DTSTART:19700101T000000".into());
-        add(&mut out, format!("TZOFFSETFROM:{}", format_offset(off)));
-        add(&mut out, format!("TZOFFSETTO:{}", format_offset(off)));
-        add(&mut out, "END:STANDARD".into());
+        // a zone Calendar knows writes its daylight saving rules; any other zone keeps the offset the file gave it
+        match super::zones::find(tz) {
+            Some(zone) => {
+                for line in super::zones::vtimezone_body(zone) {
+                    add(&mut out, line);
+                }
+            }
+            None => {
+                add(&mut out, "BEGIN:STANDARD".into());
+                add(&mut out, "DTSTART:19700101T000000".into());
+                add(&mut out, format!("TZOFFSETFROM:{}", format_offset(off)));
+                add(&mut out, format!("TZOFFSETTO:{}", format_offset(off)));
+                add(&mut out, "END:STANDARD".into());
+            }
+        }
         add(&mut out, "END:VTIMEZONE".into());
     }
     for e in &cal.events {
@@ -696,6 +706,21 @@ BEGIN:VEVENT\r\nUID:bad\r\nSUMMARY:No start\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
         let c = &cal.events[2];
         assert_eq!(c.tzid.as_deref(), Some("UTC"));
         assert_eq!(c.duration_minutes(), 45);
+    }
+
+    #[test]
+    fn a_zone_with_summer_time_is_written_with_its_rules_and_read_back_at_its_standard_offset() {
+        let mut e = IcsEvent::new("p@x", "Call", Local::new(d(2026, 10, 5), 540), Local::new(d(2026, 10, 5), 600));
+        e.tzid = Some("America/New_York".into());
+        let cal = IcsCalendar { name: String::new(), events: vec![e], timezones: vec![("America/New_York".into(), -300)] };
+        let text = write(&cal, "20261005T120000Z");
+        assert!(text.contains("BEGIN:VTIMEZONE\r\nTZID:America/New_York\r\n"));
+        assert!(text.contains("BEGIN:DAYLIGHT\r\n") && text.contains("BEGIN:STANDARD\r\n"));
+        assert!(text.contains("RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU\r\n"));
+        assert!(text.contains("DTSTART;TZID=America/New_York:20261005T090000\r\n"));
+        let back = parse(&text);
+        assert_eq!(back.timezones, vec![("America/New_York".to_string(), -300)], "the STANDARD block gives the offset");
+        assert_eq!(back.events[0].tzid.as_deref(), Some("America/New_York"));
     }
 
     #[test]
