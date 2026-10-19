@@ -4,6 +4,24 @@
 
 # Changelog
 
+## 0.8.1
+
+- Upstream soundcraft v0.8.0.
+  ## What's Changed
+  * Engine tests compile on Windows: borrow the path in the case test, allow the unix-only mut by @Testsubject1337 in https://github.com/storytold/soundcraft/pull/571
+  * ci: add nix check workflow by @dylanmtaylor in https://github.com/storytold/soundcraft/pull/649
+  * Follow stored paths only on this computer or the session's share by @skylartaylor in https://github.com/storytold/soundcraft/pull/726
+  ## New Contributors
+
+## 0.8.0
+
+- Upstream soundcraft v0.8.0.
+  ## What's Changed
+  * Engine tests compile on Windows: borrow the path in the case test, allow the unix-only mut by @Testsubject1337 in https://github.com/storytold/soundcraft/pull/571
+  * ci: add nix check workflow by @dylanmtaylor in https://github.com/storytold/soundcraft/pull/649
+  * Follow stored paths only on this computer or the session's share by @skylartaylor in https://github.com/storytold/soundcraft/pull/726
+  ## New Contributors
+
 ## 0.7.1
 
 - Upstream soundcraft v0.7.0.
