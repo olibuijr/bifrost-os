@@ -60,8 +60,11 @@ caches for the panel.
 - On a dev VM: `BIFROST_NO_VIDEO=1 BIFROST_DISK_FIXTURE=file SPRINGBOARD_MODE=1920x1080@60 bifrost-installer`
 
 Before building an ISO, prepare the generated `springboard/assets` directory (including its required fonts, default icons,
-wallpaper, and wallpaper index); `tools/build-iso.sh` copies it into the live image and fails closed if those files are
-missing. The ISO builder does not fetch or generate these assets. Installer footage is staged from
+wallpaper, and wallpaper index); `tools/build-iso.sh` copies the files `packaging/assets-allowlist.txt` names into the
+live image (`tools/stage-assets.py`; anything else in the directory is skipped) and fails closed if the required files
+are missing. The ISO builder does not fetch or generate these assets. Before `mkarchiso` it runs
+`tools/check-package-licenses.py` on the airootfs, the bundled shell package and the default apps (no reference assets,
+no font without an open licence). Installer footage is staged from
 `packaging/archiso/airootfs/usr/share/bifrost/video`; lab builds may explicitly select a prepared directory with
 `BIFROST_ISO_VIDEO_DIR`.
   (`BIFROST_DISK_FIXTURE` holds `parted -sm` outputs separated by `---`; `BIFROST_LAYOUT=is` picks a layout).

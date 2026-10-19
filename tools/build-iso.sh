@@ -96,13 +96,18 @@ install -Dm644 packaging/archiso/bootweave.efi "$AIROOT/usr/share/bifrost/bootwe
 # The live installer and installed shell need these generated assets; never inherit a stale profile copy. Preparing the
 # assets (including any font fetches) is a separate build-time step, not an ISO-build/network fallback.
 ASSET_SRC=${BIFROST_ISO_ASSETS_DIR:-springboard/assets}
-for file in SFUI.ttf SFUIMono.ttf Symbols.ttf wallpaper.raw wallpapers/index.ini \
-            icons/bifrost.settings.raw icons/bifrost.appstore.raw icons/bifrost.files.raw icons/bifrost.browser.raw; do
+REQUIRED_ASSETS=(SFUI.ttf SFUIMono.ttf Symbols.ttf wallpaper.raw wallpapers/index.ini
+                 icons/bifrost.settings.raw icons/bifrost.appstore.raw icons/bifrost.files.raw icons/bifrost.browser.raw)
+for file in "${REQUIRED_ASSETS[@]}"; do
   [ -s "$ASSET_SRC/$file" ] || { echo "required ISO asset missing: $ASSET_SRC/$file (prepare assets before building)" >&2; exit 1; }
 done
 ASSET_DEST="$AIROOT/usr/share/springboard/assets"
-mkdir -p "$ASSET_DEST"
-rsync -a --delete "$ASSET_SRC/" "$ASSET_DEST/"
+# Only the redistributable files (packaging/assets-allowlist.txt) go on the image: a stray vendor font or icon in the
+# assets directory is skipped, never copied whole. The destination is rebuilt, not merged.
+python3 tools/stage-assets.py --replace "$ASSET_SRC" "$ASSET_DEST"
+for file in "${REQUIRED_ASSETS[@]}"; do
+  [ -s "$ASSET_DEST/$file" ] || { echo "required ISO asset is not on the allowlist (packaging/assets-allowlist.txt): $file" >&2; exit 1; }
+done
 # Installer footage is a required live-media input. The canonical source is the archiso overlay; lab builds can point
 # at the already-published payload explicitly without depending on an old AIROOT tree.
 VIDEO_SRC=${BIFROST_ISO_VIDEO_DIR:-packaging/archiso/airootfs/usr/share/bifrost/video}
@@ -183,6 +188,11 @@ add = "".join(f'  ["{k}"]="{v}"\n' for k, v in perm.items() if f'["{k}"]' not in
 open(p, "w").write(s.replace("file_permissions=(\n", "file_permissions=(\n" + add, 1))
 PY
 
+# Licence guard (docs/bifrost-pc-workflow.md, "Package licences"): the image carries only BifrOSt's own and openly
+# licensed files. It reads the finished airootfs (no reference assets, every font names an open licence) and the bundled
+# shell package and default apps; the distribution packages beside them come from the Arch repositories. A failure
+# stops the build here, before mkarchiso.
+python3 tools/check-package-licenses.py "$AIROOT" "$AIROOT/usr/share/bifrost/offline/springboard-shell.pkg.tar.zst" "${offline_apps[@]}"
 mkdir -p "$ISO_OUT"
 sudo python3 tools/prepare-mkarchiso.py -v -w "$WORK" -o "$ISO_OUT" -m iso -L BIFROST "$PROFILE"
 sudo chown "$USER" "$ISO_OUT"/*.iso

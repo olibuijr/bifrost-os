@@ -9,6 +9,8 @@ Packages and the pacman database are also exported to ~/Projects/bifrost-site/si
 served at https://bifrost.olibuijr.com/arch/$arch (override the site root with BIFROST_PUBLIC_SITE).
 Installed systems use that repository from /etc/pacman.conf. Version = Cargo version + epoch seconds,
 so every publish is newer than the last.
+The package carries only BifrOSt's own and openly licensed files: tools/check-package-licenses.py inspects it
+before it enters the repo, and a failing package is deleted and the publish stops.
 """
 import argparse, glob, hashlib, os, re, shutil, subprocess, sys, tempfile, time
 
@@ -23,31 +25,18 @@ _h, _, _p = os.environ.get("BIFROST_REPO_BIND", "192.168.1.12:8079").partition("
 BIND = (_h, int(_p or 8079))
 
 
-REF_KINDS = ("sounds/alerts", "sounds/system", "cursors", "wallpapers", "icons/apps", "icons/system", "symbols", "fonts")
-
-
-def ref_asset_files(assets):
-    """(source, installed path under /usr/share/bifrost/ref) for the reference assets under `assets`.
-    Empty when the folder is absent, so the public repo still builds. Never lists anything outside the known kinds."""
-    out = []
-    if not assets or not os.path.isdir(assets):
-        return out
-    index = os.path.join(assets, "INDEX.tsv")
-    if os.path.isfile(index):
-        out.append((index, "INDEX.tsv"))
-    for kind in REF_KINDS:
-        for dirpath, _, names in sorted(os.walk(os.path.join(assets, kind))):
-            for n in sorted(names):
-                src = os.path.join(dirpath, n)
-                out.append((src, os.path.relpath(src, assets)))
-    return out
-
-
 def run(cmd, **kw):
     r = subprocess.run(cmd, **kw)
     if r.returncode:
         sys.exit(f"failed: {' '.join(map(str, cmd))}")
     return r
+
+
+def license_status(package):
+    """Exit status of tools/check-package-licenses.py on `package`: 0 clean, 1 it holds reference assets or a font
+    without an open licence (the paths go to stderr), 2 it could not be read. Packages carry only BifrOSt's own and
+    openly licensed files."""
+    return subprocess.run([sys.executable, os.path.join(REPO, "tools/check-package-licenses.py"), package]).returncode
 
 
 def _contained_path(root, path):
@@ -200,11 +189,19 @@ def main():
     src = os.path.join(REPO, "packaging/arch")
     for f in ("fast/PKGBUILD", "fast/springboard.install"):
         shutil.copy(os.path.join(src, f), work)
-    refdir = os.path.join(REPO, "bifrost-ref/assets")
-    ref_env = {"PC_REFASSETS": refdir} if ref_asset_files(refdir) else {}
-    env = {**os.environ, **ref_env, "PC_VER": ver, "PC_PKGSRC": src, "PC_BIN": binpath, "PC_BOOTWEAVE": bootweave, "PC_PORTAL": portal, "PC_PRIVD": privd, "PC_MCP": mcp, "PC_BIFROSTD": bifrostd, "PC_AUDIOD": audiod, "PC_AUDIO_BENCH": audio_bench, "PC_MIDID": midid, "PC_ALSA_PLUGIN": alsa_plugin, "PC_CMD_DIR": tdir, **wm_env, "PC_GUARD": os.path.join(REPO,"out/bifrost-update-guard-publish"), "PKGDEST": POOL, "BUILDDIR": work + "/b", "SRCDEST": work + "/s", "PKGEXT": ".pkg.tar.zst"}
+    env = {**os.environ, "PC_VER": ver, "PC_PKGSRC": src, "PC_BIN": binpath, "PC_BOOTWEAVE": bootweave, "PC_PORTAL": portal, "PC_PRIVD": privd, "PC_MCP": mcp, "PC_BIFROSTD": bifrostd, "PC_AUDIOD": audiod, "PC_AUDIO_BENCH": audio_bench, "PC_MIDID": midid, "PC_ALSA_PLUGIN": alsa_plugin, "PC_CMD_DIR": tdir, **wm_env, "PC_GUARD": os.path.join(REPO,"out/bifrost-update-guard-publish"), "PKGDEST": POOL, "BUILDDIR": work + "/b", "SRCDEST": work + "/s", "PKGEXT": ".pkg.tar.zst"}
     run(["makepkg", "-f", "--nodeps", "--skipinteg", "--nocheck"], cwd=work, env=env, stdout=subprocess.DEVNULL)
     pkg = sorted(glob.glob(os.path.join(POOL, f"springboard-shell-{ver}-1-x86_64.pkg.tar.zst")))[-1]
+    # licence guard: the package may carry only BifrOSt's own and openly licensed files. A failing package is deleted
+    # before it reaches the repo database or the public export.
+    if license_status(pkg):
+        os.unlink(pkg)
+        sys.exit(f"refusing to publish {os.path.basename(pkg)}: the licence guard failed (see above); the package was deleted")
+    # packages built before the guard existed may hold such files too: drop them, so the public export cannot offer them again
+    for old in sorted(glob.glob(os.path.join(POOL, "springboard-shell-*.pkg.tar.zst"))):
+        if old != pkg and license_status(old) == 1:
+            print(f"removed {os.path.basename(old)}: it holds files BifrOSt may not redistribute", file=sys.stderr)
+            os.unlink(old)
     # keep the last 3 packages
     olds = sorted(glob.glob(os.path.join(POOL, "springboard-shell-*.pkg.tar.zst")), key=os.path.getmtime)[:-3]
     for o in olds:

@@ -17,6 +17,10 @@ Output layout:
 The wallpapers are the royalty-free photos in springboard/wallpapers (see CREDITS.md). The fonts are open
 source (SIL OFL 1.1), fetched from one pinned google/fonts commit, checked by SHA-256 and cached in
 ~/.cache/bifrost/fonts. Icons and UI sounds still come from <ref>, which is not in the repo.
+
+The output is a local working set, not a release set: packages and the ISO take from it only the files named by
+packaging/assets-allowlist.txt (tools/stage-assets.py), so icons and sounds that came from <ref> and are not BifrOSt's
+own never ship.
 """
 import os
 import shutil

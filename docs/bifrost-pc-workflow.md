@@ -475,8 +475,9 @@ Release order used for system 0.4.47 to 0.4.49 and Files 1.10.x:
    `bootweave`, `bifrost-portal`, `bifrost-privd`, `bifrost-mcp`, `bifrostd`, `bifrost-audiod`, the audio bench and ALSA
    plugin, `bifrost-wm`, the chrome clients and `bifrost-log`; compiles the recovery guard (`packaging/arch/recovery/guard.rs`,
    static); packs everything into one `springboard-shell` package (version = Cargo version + build timestamp; the
-   last 3 are kept) and serves the repo at `http://192.168.1.12:8079/bifrost/$arch`. If `bifrost-ref/assets` exists its
-   reference assets are packed under `/usr/share/bifrost/ref` (never committed). First it runs `tools/pc_mirror.py`: Midget installs every package from titan's
+   last 3 are kept) and serves the repo at `http://192.168.1.12:8079/bifrost/$arch`. Nothing from `bifrost-ref` is ever
+   packed: the package passes `tools/check-package-licenses.py` before it enters the repo, and a failing package is
+   deleted and stops the publish (see "Package licences" below). First it runs `tools/pc_mirror.py`: Midget installs every package from titan's
    mirror `http://192.168.1.12:8079/mirror/$repo/os/$arch` (`out/pc-repo/mirror/{core,extra}/os/x86_64`, nothing but
    `pc-publish.py` serves it). The step downloads the current core/extra dbs and every package file the
    `runtime-packages.txt`, base and GPU closure needs (list from `tools/lab-mirror.sh --list`, closure resolved from the
@@ -515,6 +516,46 @@ Tap mapping (2026-10-10): `tap-window "External(2)" 750 32` pressed the Files 1.
 `tap-window "External(2)" 225 32` its sidebar button; raw `tap` with screenshot coordinates landed about (123, 120) px
 off (on a grid item). The 2026-10-08 failures were the same offset. Control-socket taps go through the shell, not the
 compositor, so dragging a window by its toolbar band (compositor `xdg_toplevel.move`) cannot be tested this way.
+
+## Package licences (2026-10-19)
+
+**Rule:** a BifrOSt package, app package or ISO carries only BifrOSt's own files and openly licensed ones. Reference
+material (the gitignored `bifrost-ref/`, and anything under `/usr/share/bifrost/ref`) and vendor fonts BifrOSt has no
+right to redistribute never ship, so a built package can be put on the public site and an ISO handed to anyone.
+
+Two tools enforce it; neither lists what *is* allowed by guesswork:
+
+- **`tools/stage-assets.py SRC DEST [--replace]`** copies the packed asset directory (`springboard/assets`, untracked)
+  into a package or ISO tree, but only the files named by `packaging/assets-allowlist.txt` (UI fonts, the font library,
+  the wallpapers, BifrOSt's own icons). A stray file in `springboard/assets` (a vendor font, an icon or sound taken from
+  another system) is skipped, never copied; links are never followed. The local package (`packaging/arch/PKGBUILD`),
+  the ISO (`tools/build-iso.sh`), the lab sync (`tools/lab-push.sh`) and the VM deploy (`tools/arch-vm.sh`) all go
+  through it, and `--list SRC` prints what would ship. Add a font to the allowlist by file name, with its licence in a
+  comment, and only after reading that licence.
+- **`tools/check-package-licenses.py TARGET...`** inspects a built package (`.pkg.tar.zst`), an app package (`.aap`) or a
+  directory tree and exits 1, naming the paths, when
+  (a) any path is under `usr/share/bifrost/ref` (or a folder is named `bifrost-ref`), or
+  (b) a font file (`.ttf .otf .ttc .otc .woff .woff2`) does not name an open licence. It reads the OpenType name table
+  of every face (IDs 13 licence description, 14 licence URL, 0 copyright) and accepts the SIL Open Font License, Apache,
+  Ubuntu Font Licence, GPL or AGPL with a font exception, LPPL and the GUST Font License, Bitstream Vera and DejaVu, MIT,
+  CC0 and public domain, and the IPA licence. "All rights reserved" without one of them fails, and so does a font with
+  no licence text. `tools/check-package-licenses-allow.txt` excuses a path or family with a mandatory reason
+  (`path GLOB -- reason`, `family NAME -- reason`); it is empty today. fontTools reads the fonts when installed, else a
+  built-in reader does; WOFF2 needs fontTools with brotli. Archives nested inside a package are not opened.
+
+Where the guard runs: `tools/pc-publish.py` after `makepkg` and before `repo-add` (a failing package is deleted, the
+publish stops, and older packages in the pool that fail are removed too, so the public export cannot offer them again);
+`tools/pc-app.py pack|publish` on the `.aap` (deleted on failure, so `tools/bundle-iso-offline.py` cannot pick it up);
+`tools/build-iso.sh` on the finished airootfs, the bundled `springboard-shell` package and the default apps, before
+`mkarchiso`; and the local `PKGBUILD` on `$pkgdir`. Run it by hand on anything: `python3 tools/check-package-licenses.py
+out/pc-repo/bifrost/x86_64/*.pkg.tar.zst out/bifrost-iso/airootfs`. Tests: `python3 tools/test_check_package_licenses.py`,
+`python3 tools/test_stage_assets.py`.
+
+Provenance notes (2026-10-19): `springboard/tools/pack.py` still converts the icons and the UI sounds from the local
+reference folder into `springboard/assets`. Only the `bifrost.*` and `is.olibuijr.*` icons are on the allowlist; the
+sounds (`sounds/*.pcm`, which no code loads) and the icons of other makers' apps are not, so they stay on the build
+machine. The app packager (`springboard/tools/aap.py`) no longer falls back to a reference icon: an app ships
+its own `icon.png`.
 
 ## Improvement measurements
 

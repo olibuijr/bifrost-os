@@ -137,7 +137,11 @@ deploy)
   vssh 'cat > /usr/lib/systemd/system/springboard.service' <"$REPO/packaging/arch/springboard.service" || exit 1
   vssh 'cat > /usr/lib/springboard/seed-data && chmod 755 /usr/lib/springboard/seed-data' <"$REPO/packaging/arch/seed-data" || exit 1
   if [ -d "$ASSETS" ] && ! vssh 'test -e /usr/share/springboard/assets/.deployed'; then
-    tar -C "$ASSETS" -cf - . | vssh 'mkdir -p /usr/share/springboard/assets && tar -C /usr/share/springboard/assets -xf - && touch /usr/share/springboard/assets/.deployed' || exit 1
+    # only the redistributable files (packaging/assets-allowlist.txt), the same set the packages and the ISO carry
+    stage=$(mktemp -d) || exit 1
+    python3 "$REPO/tools/stage-assets.py" "$ASSETS" "$stage/assets" || { rm -rf "$stage"; exit 1; }
+    tar -C "$stage/assets" -cf - . | vssh 'mkdir -p /usr/share/springboard/assets && tar -C /usr/share/springboard/assets -xf - && touch /usr/share/springboard/assets/.deployed' || { rm -rf "$stage"; exit 1; }
+    rm -rf "$stage"
   fi
   vssh 'mv /usr/bin/springboard.new /usr/bin/springboard && systemctl daemon-reload && systemctl enable springboard.service >/dev/null 2>&1; systemctl restart springboard.service; sleep 3; systemctl is-active springboard.service' ;;
 

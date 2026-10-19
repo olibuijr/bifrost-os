@@ -6,19 +6,20 @@ pub = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(pub)
 
 
-class RefAssetFiles(unittest.TestCase):
-    def test_absent_folder_is_empty(self):
-        self.assertEqual(pub.ref_asset_files("/nonexistent/assets"), [])
-        self.assertEqual(pub.ref_asset_files(None), [])
+class NoReferenceAssets(unittest.TestCase):
+    """The reference assets are never packed: the publisher has no way to name them any more."""
 
-    def test_present_tree_lists_known_kinds_only(self):
-        with tempfile.TemporaryDirectory() as d:
-            for rel in ("INDEX.tsv", "sounds/alerts/Basso.wav", "cursors/arrow.png", "stray/x.png"):
-                p = os.path.join(d, rel)
-                os.makedirs(os.path.dirname(p), exist_ok=True)
-                open(p, "w").write("x")
-            got = sorted(dst for _, dst in pub.ref_asset_files(d))
-            self.assertEqual(got, ["INDEX.tsv", "cursors/arrow.png", "sounds/alerts/Basso.wav"])
+    def test_publisher_has_no_reference_asset_path(self):
+        self.assertFalse(hasattr(pub, "ref_asset_files"))
+        self.assertFalse(hasattr(pub, "REF_KINDS"))
+
+    def test_license_status_runs_the_guard_on_the_package(self):
+        with mock.patch.object(pub.subprocess, "run") as run:
+            run.return_value.returncode = 1
+            self.assertEqual(pub.license_status("/x/pkg.pkg.tar.zst"), 1)
+        argv = run.call_args[0][0]
+        self.assertTrue(argv[1].endswith("tools/check-package-licenses.py"))
+        self.assertEqual(argv[2], "/x/pkg.pkg.tar.zst")
 
 
 class PublicRepoExport(unittest.TestCase):
