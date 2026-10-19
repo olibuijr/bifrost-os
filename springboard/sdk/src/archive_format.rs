@@ -381,6 +381,13 @@ fn put_u32(out: &mut Vec<u8>, v: u32) {
 
 /// Writes the archive for `entries`. Every entry is checked first, so an unsafe path or link is refused here too.
 pub fn encode(entries: &[Entry], compression: Compression) -> Result<Vec<u8>, Error> {
+    encode_threaded(entries, compression, 1)
+}
+
+/// Like [`encode`], with up to `threads` threads for a large payload. Only DEFLATE uses them (see
+/// [`compression::encode_buffer_threaded`]); the other codecs ignore the count. The bytes depend on the thread count
+/// for a payload of 2 MiB or more, and every result decodes the same.
+pub fn encode_threaded(entries: &[Entry], compression: Compression, threads: usize) -> Result<Vec<u8>, Error> {
     let limits = Limits::default();
     if entries.len() > limits.max_entries {
         return Err(Error::TooManyEntries);
@@ -413,7 +420,7 @@ pub fn encode(entries: &[Entry], compression: Compression) -> Result<Vec<u8>, Er
     let digest = digest::sha256(&payload);
     let body = match compression.algorithm() {
         None => payload.clone(),
-        Some(alg) => compression::encode_buffer(alg, &payload).map_err(|_| Error::Compression)?,
+        Some(alg) => compression::encode_buffer_threaded(alg, &payload, compression::Level::Default, threads).map_err(|_| Error::Compression)?,
     };
     let mut out = Vec::with_capacity(HEADER_BYTES + body.len());
     out.extend_from_slice(MAGIC);
@@ -677,6 +684,75 @@ fn walk(dir: &Path, rel: &str, depth: usize, limits: &Limits, total: &mut u64, o
         }
     }
     Ok(())
+}
+
+/// Reads one regular file into an entry named after the file (no folder part). A link is not followed: it is refused,
+/// like a folder or a missing path. Mode, owner, modification time and extended attributes are kept.
+pub fn pack_file(path: &Path, limits: &Limits) -> Result<Entry, Error> {
+    let meta = fs::symlink_metadata(path)?;
+    if !meta.file_type().is_file() {
+        return Err(Error::Io(io::ErrorKind::InvalidInput, "not a regular file".to_string()));
+    }
+    if meta.len() > limits.max_payload_bytes {
+        return Err(Error::TooBig);
+    }
+    let name = path.file_name().and_then(|n| n.to_str()).ok_or_else(|| Error::UnsafePath(path.display().to_string()))?;
+    let mut entry = Entry::file(name, &fs::read(path)?, meta.mode() & 0o7777);
+    entry.header.uid = meta.uid();
+    entry.header.gid = meta.gid();
+    entry.header.mtime_secs = meta.mtime();
+    entry.header.mtime_nanos = meta.mtime_nsec().clamp(0, 999_999_999) as u32;
+    if let Ok(names) = file_metadata::list_xattrs(path) {
+        for attr in names {
+            if entry.header.xattrs.len() >= limits.max_xattrs {
+                break;
+            }
+            if let Ok(Some(value)) = file_metadata::xattr(path, &attr) {
+                if value.len() <= MAX_XATTR_VALUE {
+                    entry.header.xattrs.push((attr, value));
+                }
+            }
+        }
+    }
+    entry.header.xattrs.sort();
+    validate_entry(&entry, limits.max_xattrs)?;
+    Ok(entry)
+}
+
+/// The name of the one entry that [`encode_text`] writes.
+pub const TEXT_ENTRY: &str = "text.txt";
+
+/// Archives a string: one entry named [`TEXT_ENTRY`] holding its UTF-8 bytes.
+pub fn encode_text(text: &str, compression: Compression) -> Result<Vec<u8>, Error> {
+    encode(&[Entry::file(TEXT_ENTRY, text.as_bytes(), 0o644)], compression)
+}
+
+/// Reads a string archived by [`encode_text`]. An archive with any other shape, or data that is not UTF-8, is
+/// `Corrupt`.
+pub fn decode_text(data: &[u8], limits: &Limits) -> Result<String, Error> {
+    let mut entries = decode(data, limits)?;
+    if entries.len() != 1 || entries[0].header.path != TEXT_ENTRY || entries[0].header.kind != Kind::File {
+        return Err(Error::Corrupt("not an archived string"));
+    }
+    let entry = entries.remove(0);
+    String::from_utf8(entry.data).map_err(|_| Error::Corrupt("the text is not UTF-8"))
+}
+
+/// Saves a string to a new file (an existing file is not replaced).
+pub fn save_text(path: &Path, text: &str, compression: Compression) -> Result<(), Error> {
+    let bytes = encode_text(text, compression)?;
+    let mut file = fs::OpenOptions::new().write(true).create_new(true).open(path)?;
+    file.write_all(&bytes)?;
+    Ok(())
+}
+
+/// Loads a string saved by [`save_text`]. A file larger than the limits allow is refused before it is read.
+pub fn load_text(path: &Path, limits: &Limits) -> Result<String, Error> {
+    let size = fs::metadata(path)?.len();
+    if size > limits.max_payload_bytes.saturating_mul(2).saturating_add(4096) {
+        return Err(Error::TooBig);
+    }
+    decode_text(&fs::read(path)?, limits)
 }
 
 /// What [`extract`] does beyond writing names and contents.
@@ -1263,5 +1339,55 @@ mod tests {
         assert_eq!(back[0].header.mtime_secs, -86_400);
         old.header.mtime_nanos = 1_000_000_000;
         assert!(matches!(encode(&[old], Compression::None), Err(Error::Corrupt(_))));
+    }
+
+    #[test]
+    fn a_single_file_packs_with_its_attributes_and_extracts_again() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("note.txt");
+        fs::write(&file, b"one file").unwrap();
+        fs::set_permissions(&file, fs::Permissions::from_mode(0o600)).unwrap();
+        let entry = pack_file(&file, &Limits::default()).unwrap();
+        assert_eq!((entry.header.path.as_str(), entry.header.kind, entry.header.mode, entry.header.size), ("note.txt", Kind::File, 0o600, 8));
+        let packed = encode(&[entry], Compression::Deflate).unwrap();
+        let out = dir.path().join("out");
+        extract(&decode(&packed, &Limits::default()).unwrap(), &out, &ExtractOptions::default()).unwrap();
+        assert_eq!(fs::read(out.join("note.txt")).unwrap(), b"one file");
+        assert_eq!(fs::metadata(out.join("note.txt")).unwrap().permissions().mode() & 0o777, 0o600);
+        // a folder, a link and a missing path are not files
+        assert!(pack_file(dir.path(), &Limits::default()).is_err());
+        symlink(&file, dir.path().join("link")).unwrap();
+        assert!(pack_file(&dir.path().join("link"), &Limits::default()).is_err());
+        assert!(pack_file(&dir.path().join("none"), &Limits::default()).is_err());
+        assert_eq!(pack_file(&file, &Limits { max_payload_bytes: 3, ..Limits::default() }), Err(Error::TooBig));
+    }
+
+    #[test]
+    fn a_string_archives_saves_and_loads() {
+        let text = "Ísafjörður \u{1F30A} line\nbreak";
+        for c in [Compression::None, Compression::Deflate, Compression::Lz4, Compression::Lzma] {
+            assert_eq!(decode_text(&encode_text(text, c).unwrap(), &Limits::default()).unwrap(), text);
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("s.bar");
+        save_text(&path, text, Compression::Lzma).unwrap();
+        assert!(save_text(&path, "again", Compression::Lzma).is_err(), "an existing file is not replaced");
+        assert_eq!(load_text(&path, &Limits::default()).unwrap(), text);
+        assert_eq!(load_text(&path, &Limits { max_payload_bytes: 10, ..Limits::default() }), Err(Error::TooBig));
+        // an archive of another shape is not a string
+        assert!(matches!(decode_text(&encode(&sample(), Compression::None).unwrap(), &Limits::default()), Err(Error::Corrupt(_))));
+        let not_utf8 = encode(&[Entry::file(TEXT_ENTRY, &[0xff, 0xfe], 0o644)], Compression::None).unwrap();
+        assert!(matches!(decode_text(&not_utf8, &Limits::default()), Err(Error::Corrupt(_))));
+    }
+
+    #[test]
+    fn threads_change_the_bytes_of_a_large_deflate_archive_but_not_what_it_decodes_to() {
+        let big = vec![Entry::file("big.bin", &bytes_of(2_500_000), 0o644)];
+        let one = encode_threaded(&big, Compression::Deflate, 1).unwrap();
+        let four = encode_threaded(&big, Compression::Deflate, 4).unwrap();
+        assert_eq!(one, encode(&big, Compression::Deflate).unwrap());
+        assert_eq!(decode(&one, &Limits::default()).unwrap(), big);
+        assert_eq!(decode(&four, &Limits::default()).unwrap(), big);
+        assert_eq!(encode_threaded(&big, Compression::Lz4, 4).unwrap(), encode(&big, Compression::Lz4).unwrap(), "other codecs ignore the count");
     }
 }
