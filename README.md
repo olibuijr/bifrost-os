@@ -105,6 +105,9 @@ BifrOSt ships only open-source fonts (SIL Open Font Licence 1.1). The defaults a
 of the macOS system fonts, and Settings > General > Fonts can replace the system and monospaced fonts with
 others from BifrOSt's font library.
 
+At run time BifrOSt loads only its own assets and openly licensed fonts. No reference-asset folder is searched, and a
+vendor symbol font placed beside the packed assets is never opened (only `Symbols.ttf` is).
+
 **Defaults** (packed under the asset names the code loads):
 
 | Asset file | Font | Stands in for | Why |
@@ -129,8 +132,9 @@ commit, checks each file's SHA-256 and caches them in `~/.cache/bifrost/fonts`. 
 Notes:
 
 - The pixel snapshot goldens in `springboard/sdk/tests/snapshots/` are recorded with the default fonts.
-- The renderer test `cff_font_renders_through_the_same_path` needs a CFF symbol font
-  (`assets/SFUISymbols-Regular.otf`) and is skipped without one; no default font uses CFF outlines.
+- The renderer tests `cff_font_renders_through_the_same_path` and `parses_the_cff_table_of_the_test_font` use
+  BifrOSt's own CFF test font, `springboard/render/tests/fixtures/test-cff.otf` (drawn by the script beside it);
+  no default font uses CFF outlines.
 
 ## Repository layout
 
