@@ -3084,17 +3084,51 @@ Shared models in `springboard/ui/src/drawing.rs`, `tool_picker.rs` and `lasso.rs
 apps draw and capture touch.
 
 - **Vector eraser.** `Drawing::erase_strokes_at(x, y, radius)` removes each stroke with a segment inside the radius, as
-  a whole, and returns the count. Decision: the bitmap eraser stays a caller concern (`tool_picker::EraserKind::Bitmap`
-  is only a choice on the picker).
+  a whole, and returns the count (the bitmap eraser is below).
 - **Image render.** `Drawing::image(rect, scale)` returns a `Raster` of 0xAARRGGBB pixels, painted in stroke order with
-  source-over blending. Decision: per-point opacity, pressure and marker blend modes are not rendered yet; colour alpha
-  and width are. Empty, non-finite or over `2^26` pixel requests give an empty raster.
+  source-over blending. Colour alpha, per-point opacity, pressure width and pencil tilt width are rendered; marker blend
+  modes are not. Empty, non-finite or over `2^26` pixel requests give an empty raster.
 - **Tool picker.** `ToolPicker::new()` gives the default items (pen, marker, pencil, bitmap and vector eraser, lasso);
   `with_items` takes a custom set. `current_ink` gives the ink for a new stroke. Widths clamp to `width_range`.
   Decision: observers are not modelled; callers read `selected()` after each event.
-- **Gaps.** No serialised format beyond the text form in `drawing.rs`; no handwriting recognition or Scribble; no
-  ruler; no stroke-level bitmap eraser. Parity rows stay partial until the shell and apps use these models and a
-  Midget test passes.
+- **Bitmap eraser.** `Drawing::erase_points_at(x, y, radius)` cuts the parts of strokes within the radius (segments are
+  subdivided to half the radius first, capped at 1024 pieces a segment): a stroke the eraser crosses splits in two, one
+  it grazes is shortened, one it covers goes. This is the `Bitmap` eraser of the canvas view; the picker still only
+  records the choice.
+- **Live stroke and tilt.** `Drawing::image_with(overlay, rect, scale)` paints strokes that are not yet in the drawing
+  (the stroke being drawn). `tilt_width_factor(kind, altitude)` widens a pencil mark up to 2.5 times as the pen leans
+  (altitude 0 is "no reading" and keeps the width); pens and markers ignore tilt. Marker blend modes are still not
+  rendered.
+- **Gaps.** No handwriting recognition or Scribble routing; no ruler. Parity rows stay partial until a Midget test
+  passes.
+
+### Canvas view (`bifrost_app::canvas_view::CanvasView`, `PKCanvasView`)
+
+`springboard/sdk/src/canvas_view.rs`. The app-facing canvas that joins the models above.
+
+- **Input.** `touches(&TouchEvent)` takes the app's touch frames in view points (`TouchEvent::in_view`): a mouse or
+  trackpad is one `Indirect` touch, a stylus a `Pencil` touch with force. `stylus(&StylusReport, &StylusProfile, now_ms)`
+  takes a pen digitizer's raw reports (pressure and tilt become each point's `force`, `altitude` and `azimuth`; the
+  eraser end erases whole strokes whatever tool is selected; a report with the tip up ends the stroke). Only the first
+  accepted touch draws; a cancel drops the stroke or puts an erase or move back.
+- **Policy** (`drawingPolicy`): `DrawingPolicy::{Default, AnyInput, PencilOnly}`. On the desktop form factor
+  (`bifrost_ui::form_factor`) the default accepts every input and a pen alone never turns fingers off; a mouse or
+  trackpad is never refused. On a tablet the default stops a finger from drawing once a pencil has been seen.
+- **Tools.** The canvas owns a `ToolPicker` (`tool_picker_mut`): pen, marker, pencil (each stroke records the ink's kind,
+  colour and width and each point's time, force and tilt), vector and bitmap eraser (radius `set_eraser_radius`, a fast
+  move still erases what it crossed), and the lasso (selects enclosed strokes, a press inside the selection drags it).
+  Selection edits: `delete_selection`, `move_selection`, `scale_selection`, `select_all`.
+- **Undo** (`undoManager`): `undo`, `redo`, `can_undo`, `can_redo`, `undo_titles` ("Undo Draw", "Undo Erase", "Undo Move",
+  "Undo Delete", "Undo Scale"), `change_count`; 100 levels; an erase or move that changes nothing leaves no step.
+- **Save and load** (`PKDrawing.dataRepresentation`, `PKDrawing(data:)`): `data_representation()` is the drawing's text
+  form as bytes; `set_drawing_data` / `drawing_from_data` refuse over 32 MiB, non-text and malformed data (the canvas is
+  unchanged on an error). A stroke keeps at most 20000 points.
+- **Rendering.** `render(rect, scale)` and `render_view(width, height, scale)` return a `Raster` of the strokes and the
+  stroke in progress; `zoom_scale` and `content_offset` map view points to drawing points.
+- **Gaps.** The compositor does not route tablet-tool events (pressure, tilt, eraser end) to apps yet, so on the PC a
+  pen arrives as a pointer without pressure; the stylus path is exercised by tests with synthetic reports only. No app
+  uses the canvas view yet (Notes' sketch pad, Freeform and the shell's markup editor keep their own stroke code). No
+  handwriting recogniser, Scribble routing, marker blend or scroll view.
 
 Markup has a separate `bifrost_ui::markup_ink::InkCanvas`: pointer gestures make pen, marker and pencil strokes, the
 eraser removes touched strokes, and committed edits have bounded undo. A gesture retains the tool it started with and
@@ -3192,10 +3226,14 @@ Parity rows stay `partial` until checked on Midget.
 
 The `thumbnails` service (`shell/services/thumbnails.rs`) draws by content type with the providers in `springboard/src/thumbs/`: text, rich text, web (title and text), image, font, office (embedded picture), contact, calendar, clippings, audio/video and archives. Unknown types answer with their icon.
 
-- **Audio and video** (`thumbs::media`): the embedded cover, else a waveform card (`thumb_providers::waveform_card`, bars derived from the file name, plus the name). No duration badge and no video poster frame yet (no demuxer or decoder runs in the thumbnail worker).
+- **PDF** (`thumbs::pdf`): the first page, drawn by the PDF renderer (`cg::pdf::draw::render_file_page`).
+- **Audio and video** (`thumbs::media`): the embedded cover, else a video's poster frame (first key frame, decoded by `media::hwdec`), else a waveform card (`thumb_providers::waveform_card`). Each carries the running time as a badge in the bottom right corner (`thumbs::duration`: `duration_secs` reads the MP4 movie header or the audio decoder's declared length, `format_duration` writes `m:ss` or `h:mm:ss`, `badge` draws the pill; none under 48 px).
 - **Archives** (`thumbs::cards::PackageProvider`): zip and plain tar get a card with the format badge and the entry count (`thumb_providers::archive_entries`); other formats keep the icon with a badge.
-- **Representation types**: `thumb_providers::RepresentationType` (`icon`, `lowQualityThumbnail`, `thumbnail`, Apple's `QLThumbnailRepresentation.RepresentationType`) and `tiers(types, px)` decide which tiers a request produces. Not yet carried by the service request; `QLThumbnailProvider.provideThumbnail(for:_:)` and `QLFileThumbnailRequest` are not built (no third-party provider extension point).
-- Parity rows stay `partial` until checked on Midget; Office stays as the embedded-picture case only.
+- **Representation types** (`QLThumbnailRepresentation.RepresentationType`): one model, `bifrost_ui::thumb_service::RepresentationType` (`Icon`, `LowQualityThumbnail`, `Thumbnail`), re-exported by `bifrost_app::thumbnails` and `shell::services::thumb_providers`. The tiers are planned by the client: `GeneratorRequest::plan` turns each wanted tier into one `thumbnails` service request (the icon kind, a low quality request at a quarter of the edge with a 16 px floor, and the full size), so the service needs no per-tier parameter.
+- **Generator with update handler** (`bifrost_app::thumbnail_generator::ThumbnailGenerator`, `QLThumbnailGenerator.generateRepresentations(for:update:)`): runs several generations at once (`generate`), routes each service reply or `ready`/`failed` event to the generation that asked for that file and edge (`accept`), reports `Update::Representation` cheapest tier first and never a worse one after a better one, `Update::Failed` with a `ThumbnailError` code, and supports `cancel`. At most 256 generations run.
+- **Provider extensions** (`QLThumbnailProvider`, `QLFileThumbnailRequest`, `QLThumbnailReply`): an app declares `[[preview]]` for its file types in `manifest.toml` and answers the control call `preview.render` `{file, width, height}` with `{"picture": "<abs PNG path>"}`; `thumbnail_generator::FileThumbnailRequest::parse`, `ThumbnailReply::picture` and `answer_provider_call` are the app side. The `thumbnails` service asks the app for Files and Spotlight thumbnails too (not only the Space panel). An app whose declared type is at least as specific as the built-in provider's (`Registry::distance_for`, `preview_gen::Generator::distance`) is asked first; a broad type such as `public.data` never takes over the system's picture, text or PDF thumbnails. When the app gives no picture in time the built-in provider draws the file, and a type nothing draws shows its icon. Not built: replies that carry data or a drawing callback instead of a PNG path.
+- **Where thumbnails show**: Files (icon, list, column and gallery views), the Space preview panel, and now Spotlight file rows (`shell::search_thumbs::FileThumbs`: asked while the rows are laid out, drawn on two worker threads through the shared disk cache, painted in place of the Files icon; folders and types without a picture keep the icon). Searchable items an app indexed keep drawing their own `thumbnail` PNG.
+- **Gaps**: Live Photo and USDZ thumbnails (no such files on the PC); the system does not wait on an app generator for icon-kind requests; error codes are BifrOSt's own. Parity rows stay `partial` until checked on Midget; Office stays as the embedded-picture case only.
 
 ## System Settings: Mouse pane (`springboard/src/shell/mouse_page.rs`)
 
