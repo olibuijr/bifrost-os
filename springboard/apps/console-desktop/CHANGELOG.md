@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.9.0 — 2026-10-19
+
+- File > Open Recent now lasts across launches. Each log opened with File > Open, handed over by the shell, or saved by Capture Archive is remembered with its document grant (preference `recentLogs`, the SDK's Recents text format). The menu lists the logs open now, then the remembered ones; choosing a remembered log has the shell reopen its grant, and a file that changed, moved or lost its access leaves the menu with a status note saying why. Open Recent > Clear Menu forgets them all and gives the grants back. A log moved to the Trash leaves the menu too.
+- A file named on the command line (`bifrost-console FILE`) opens under Opened Files. A file in the home folder is opened through a document grant, so Reveal in Files works on it; any other path is read directly and has no grant, so Reveal and Move to Trash stay off for it.
+- Not built: Reveal in Files and Move to Trash for the files under Log Files (`/var/log`) and for crash reports. The shell grants only paths inside the home folder (`DocGrantPath` refuses the rest, and its grant store records home-relative paths), so a system log has no grant to hand the workspace service; most of those files are root-owned and could not be trashed anyway. It needs a shell change (a read grant for system log paths for apps with the `log-store` entitlement).
+
 ## 1.8.0 — 2026-10-17
 
 - Spin Reports row in the Reports section: lists the spin files the shell writes and shows each one's text. The shell does not write spin files yet, so the list is empty.

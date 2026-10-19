@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.0 — 2026-10-19
+
+- The Network tab lists processes instead of interfaces: Received/s, Sent/s, Bytes Received, Bytes Sent and (optional) Connections per process, busiest first. The figures come from the kernel's socket counters (`ss -tinpH`, `sample_net.rs`), read once per update while the tab is shown. They cover TCP sockets that belong to your own processes; a socket that closes takes its bytes with it, so the totals count only the sockets open now. Show Deltas counts the byte totals from the baseline. The interface totals moved to the footer.
+- Memory tab: Real Mem (proportional set size, so shared pages are split between the processes that map them), Purgeable (pages freed with `MADV_FREE`, which the kernel may take back) and Kind (the program's machine, read from its ELF header) join the optional columns. Kind is also an optional CPU column. Each is read only while its column is shown, from one `smaps_rollup` read per process.
+- Window > GPU History opens a floating window with the busy share of the GPU over the last minute and the process using it most. The GPU is read while the window is open. Window > Keep CPU and GPU Windows on Top floats all three monitor windows.
+
 ## 0.9.0 — 2026-10-17
 
 - Cmd+W in a CPU Usage or CPU History window closes it, as its traffic light does (`window_input`). The main window's keys and menu items are unchanged.

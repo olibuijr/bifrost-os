@@ -963,6 +963,24 @@ and Move To copy to the new name and leave the old file in place, because the br
 Open requests write access, so a read-only file does not open. Untitled documents are autosaved as private copies, not into a
 Documents folder as autosave-in-place does on macOS. First user: none yet.
 
+### Recents and a command-line file without the controller (Console 1.9.0)
+
+An app that keeps its documents in its own model (Console shows logs under Opened Files) can still have Open Recent across
+launches. `document::format_recents` and `document::parse_recents` are public (the text of the `document.recents` store: one
+`grant<TAB>name` line each, the grant in hex; at most `MAX_RECENTS`), `Ctx::reopen_document(grant)` opens a remembered file
+again (`Failed { code: Stale | NotFound | Revoked }` when it changed or went away), and `Ctx::release_document` gives a grant
+back. Console keeps its own list in the key `recentLogs` (`console-desktop/src/recents.rs`: `noted`, `without`): a log opened
+with the panel, handed over by the shell or saved by Capture Archive is noted newest first, one that falls off the end or leaves
+through Clear Menu or Move to Trash is released unless an open log still holds the grant, and a reopen that fails drops the
+entry with a status note. Open Recent lists the logs open now, then the remembered ones (`Console::recent_items`, `Recent`).
+
+A file named on the command line (`std::env::args`, as the Files, Browser and Video Player apps read theirs) opens in the same
+way: a path inside the home folder is asked for with `Ctx::grant_path` (answered `Opened` or `Failed`), so Reveal in Files
+works on it, and a failed or impossible grant (any path outside the home folder, which `DocGrantPath` refuses) falls back to
+reading the file by its path with no grant. Matches `NSDocumentController.noteNewRecentDocumentURL` and opening a file named in
+`application(_:openFile:)`. Not matched: a grant for system log paths (`/var/log`) for apps with the `log-store` entitlement,
+which needs a second root in the shell's grant store; Console's Reveal and Move to Trash do not reach those files.
+
 ## Folder packages (`bifrost_app::document_package`, TextEdit RTFD)
 
 A folder package is a document whose on-disk form is a directory that the file panels and Files treat as one file (Apple's
@@ -1216,8 +1234,12 @@ Float on Top, the floating CPU window of Activity Monitor). Ours, end to end:
   `windows::set_window_level(ctx, id, Level::Floating)` (it takes the extra window's `WindowId`), which
   sends `ToShell::WindowLevelOf { id, level }` (tag 0x24c, id then one byte). The shell keeps the flag in the window table
   (`app_window_table.rs` `set_floating`, `floating_ids`; id 0 is refused) and `Desk::floating_apps` lists the floating
-  extra windows with the floating apps, so they stack last. Activity Monitor's CPU windows use it (activity-desktop 0.8.0).
-  Built and reviewed by reading only; no Midget run yet.
+  extra windows with the floating apps, so they stack last. Activity Monitor's CPU windows use it (activity-desktop 0.8.0),
+  and its GPU History window joined them in 0.10.0 (Window > GPU History; Keep CPU and GPU Windows on Top levels all three).
+  Built and reviewed by reading only; no Midget run yet. Activity Monitor 0.10.0 also turns its Network tab into a
+  per-process table from the kernel's socket counters (`sample_net.rs`, `ss -tinpH`: TCP only, the user's own processes,
+  no packet counts yet) and adds the Real Mem (proportional set size), Purgeable (`MADV_FREE` pages) and Kind (ELF machine)
+  columns, each read only while its column or tab is shown.
 - Not matched yet: built and reviewed by reading only (no build, no tests, no Midget run). Notes still share one
   window (Stickies' Float on Top applies to the board window). Apple's `NSWindow.Level` names (`.floating`, `.normal`,
   `.statusBar`, `.modalPanel`) beyond these two are not exposed; the menu bar and panels keep their own layer.

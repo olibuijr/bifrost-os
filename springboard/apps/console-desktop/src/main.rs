@@ -16,6 +16,7 @@ mod identity;
 mod kernel;
 mod model;
 mod opened;
+mod recents;
 mod rows;
 mod security;
 mod services;
@@ -73,6 +74,11 @@ struct ConsoleApp {
     copy_pending: Vec<(u32, String)>,
     /// The open panel's request (File > Open).
     open_request: Option<u32>,
+    /// The reopening of a remembered log (File > Open Recent), by request id, with the grant it was asked for.
+    recent_request: Option<(u32, GrantId)>,
+    /// The grant asked for the file named on the command line, by request id, with its path. If the shell refuses the
+    /// grant the file is read directly.
+    argv_request: Option<(u32, PathBuf)>,
     /// The save panel's request and what it is for.
     saving: Option<(u32, Saving)>,
     /// The archive capture running on its queue.
@@ -165,6 +171,8 @@ impl ConsoleApp {
                     if let Some(c) = &mut self.console {
                         c.forget_opened(grant);
                     }
+                    // a trashed file cannot be reopened: it leaves File > Open Recent too
+                    self.remove_recent(ctx, grant);
                     ctx.release_document(grant);
                     self.say("Moved to the Trash.");
                 }
@@ -174,24 +182,117 @@ impl ConsoleApp {
         changed
     }
 
+    /// Whether something still needs a grant: a log open now, or one File > Open Recent remembers.
+    fn grant_kept(&self, grant: GrantId) -> bool {
+        self.console.as_ref().is_some_and(|c| c.opened.iter().any(|o| o.grant == Some(grant)) || c.stored.iter().any(|r| r.grant == grant))
+    }
+
+    /// Gives a grant back to the shell unless something still needs it.
+    fn release_unless_kept(&self, ctx: &Ctx, grant: GrantId) {
+        if !self.grant_kept(grant) {
+            ctx.release_document(grant);
+        }
+    }
+
+    /// Writes the recent logs to the preferences, so File > Open Recent has them in the next launch.
+    fn save_recents(&self, ctx: &Ctx) {
+        if let Some(c) = &self.console {
+            ctx.defaults_mut().set_string(recents::PREF, &bifrost_app::document::format_recents(&c.stored));
+        }
+    }
+
+    /// A log was opened or saved with a grant: it becomes the newest recent log. The logs pushed off the end of the
+    /// list give their grants back unless something else holds them.
+    fn note_recent(&mut self, ctx: &Ctx, grant: GrantId, name: &str) {
+        let Some(c) = &mut self.console else { return };
+        let (list, dropped) = recents::noted(&c.stored, grant, name);
+        c.stored = list;
+        self.save_recents(ctx);
+        for old in dropped {
+            self.release_unless_kept(ctx, old);
+        }
+    }
+
+    /// Takes a log out of the recent list (the file is gone, or it went to the Trash). The grant is the caller's to release.
+    fn remove_recent(&mut self, ctx: &Ctx, grant: GrantId) {
+        let Some(c) = &mut self.console else { return };
+        c.stored = recents::without(&c.stored, grant);
+        self.save_recents(ctx);
+    }
+
+    /// File > Open Recent > Clear Menu: the list is emptied and the grants nothing else holds go back to the shell.
+    fn clear_recents(&mut self, ctx: &Ctx) {
+        let Some(c) = &mut self.console else { return };
+        let old = std::mem::take(&mut c.stored);
+        self.save_recents(ctx);
+        for r in old {
+            self.release_unless_kept(ctx, r.grant);
+        }
+    }
+
+    /// File > Open Recent for a log that is not open: the shell opens its grant again, and the answer reads like any
+    /// other opened file (`document`).
+    fn reopen_recent(&mut self, ctx: &Ctx, grant: GrantId) {
+        self.recent_request = Some((ctx.reopen_document(grant), grant));
+    }
+
+    /// The reopening of a remembered log failed (the file changed, was moved or the access was withdrawn): the entry is
+    /// dropped and the window says why.
+    fn recent_failed(&mut self, ctx: &Ctx, grant: GrantId, code: DocErrorCode) {
+        let name = self.console.as_ref().and_then(|c| c.stored.iter().find(|r| r.grant == grant)).map_or_else(|| "the log".to_string(), |r| r.name.clone());
+        self.remove_recent(ctx, grant);
+        ctx.release_document(grant);
+        self.say(format!("Could not reopen {name}. {}", failure_text(code)));
+    }
+
+    /// The file named on the command line. The shell grants paths in the home folder, so such a file is asked for with a
+    /// grant (and can then be revealed in Files); any other file is read directly and has no grant.
+    fn open_argv(&mut self, ctx: &Ctx, path: PathBuf, home: &Path) {
+        if recents::under_home(&path, home) {
+            let request = ctx.grant_path(&path.to_string_lossy());
+            self.argv_request = Some((request, path));
+        } else {
+            self.open_path(&path);
+        }
+    }
+
+    /// Reads a file by its path and shows it under Opened Files, without a grant.
+    fn open_path(&mut self, path: &Path) {
+        let name = path.file_name().map_or_else(|| path.to_string_lossy().into_owned(), |n| n.to_string_lossy().into_owned());
+        let mut bytes = Vec::new();
+        let read = std::fs::File::open(path).and_then(|f| f.take(opened::MAX_INPUT as u64 + 1).read_to_end(&mut bytes)).map_err(|e| e.to_string());
+        let decoded = read.and_then(|_| if bytes.len() > opened::MAX_INPUT { Err("The file is too large.".to_string()) } else { opened::decode(&name, &bytes) });
+        match decoded {
+            Ok(entries) => {
+                if let Some(c) = &mut self.console {
+                    // no grant was taken, so nothing needs giving back if the oldest log leaves
+                    c.add_opened(OpenedLog { name, entries, grant: None, writable: false });
+                }
+            }
+            Err(e) => self.say(format!("Could not open {name}. {e}")),
+        }
+    }
+
     /// Reads the file the open panel returned and shows it. The window learns the grant, so Reveal in Files works.
     fn opened_document(&mut self, ctx: &Ctx, mut doc: bifrost_app::Document) {
         let mut bytes = Vec::new();
         let read = (&mut doc.file).take(opened::MAX_INPUT as u64 + 1).read_to_end(&mut bytes).map_err(|e| e.to_string());
         let decoded = read.and_then(|_| if bytes.len() > opened::MAX_INPUT { Err("The file is too large.".to_string()) } else { opened::decode(&doc.name, &bytes) });
-        match (decoded, &mut self.console) {
-            (Ok(entries), Some(c)) => {
-                let log = OpenedLog { name: doc.name.clone(), entries, grant: Some(doc.grant), writable: doc.mode == DocMode::Write };
-                if let Some(dropped) = c.add_opened(log) {
-                    ctx.release_document(dropped);
+        let entries = match decoded {
+            Ok(entries) if self.console.is_some() => entries,
+            decoded => {
+                if let Err(e) = decoded {
+                    self.say(format!("Could not open {}. {e}", doc.name));
                 }
+                self.release_unless_kept(ctx, doc.grant);
+                return;
             }
-            (decoded, console) => {
-                if let (Err(e), Some(c)) = (decoded, console) {
-                    c.status = format!("Could not open {}. {e}", doc.name);
-                }
-                ctx.release_document(doc.grant);
-            }
+        };
+        let log = OpenedLog { name: doc.name.clone(), entries, grant: Some(doc.grant), writable: doc.mode == DocMode::Write };
+        let dropped = self.console.as_mut().and_then(|c| c.add_opened(log));
+        self.note_recent(ctx, doc.grant, &doc.name);
+        if let Some(old) = dropped {
+            self.release_unless_kept(ctx, old);
         }
     }
 
@@ -218,20 +319,28 @@ impl ConsoleApp {
     /// The save is in place. Messages: a note. Archive: the captured entries open as a log with the new file's grant.
     fn saved(&mut self, ctx: &Ctx, doc: bifrost_app::Document) {
         let kind = self.saving.take_if(|(r, _)| *r == doc.request).map(|(_, k)| k);
-        match (kind, &mut self.console) {
-            (Some(Saving::Archive), Some(c)) => {
+        if self.console.is_none() {
+            ctx.release_document(doc.grant);
+            return;
+        }
+        match kind {
+            Some(Saving::Archive) => {
                 let entries = self.captured.take().unwrap_or_default();
                 let log = OpenedLog { name: doc.name.clone(), entries, grant: Some(doc.grant), writable: doc.mode == DocMode::Write };
-                c.status.clear();
-                if let Some(dropped) = c.add_opened(log) {
-                    ctx.release_document(dropped);
+                let dropped = self.console.as_mut().and_then(|c| {
+                    c.status.clear();
+                    c.add_opened(log)
+                });
+                self.note_recent(ctx, doc.grant, &doc.name);
+                if let Some(old) = dropped {
+                    self.release_unless_kept(ctx, old);
                 }
             }
-            (Some(Saving::Messages(_)), Some(c)) => {
-                c.status = format!("Saved {}", doc.name);
+            Some(Saving::Messages(_)) => {
+                self.say(format!("Saved {}", doc.name));
                 ctx.release_document(doc.grant);
             }
-            _ => ctx.release_document(doc.grant),
+            None => ctx.release_document(doc.grant),
         }
     }
 
@@ -289,8 +398,14 @@ impl App for ConsoleApp {
             Some(c) => c.resize(w, h),
             None => {
                 let mut c = Console::new(w, h, source::log_files());
+                c.stored = bifrost_app::document::parse_recents(&ctx.defaults().string(recents::PREF).unwrap_or_default());
                 c.open_view(View::Live);
                 self.console = Some(c);
+                // a file named on the command line opens under Opened Files, on top of the live journal
+                let cwd = std::env::current_dir().unwrap_or_default();
+                if let Some(path) = recents::argv_path(std::env::args(), &cwd) {
+                    self.open_argv(ctx, path, &home_dir());
+                }
             }
         }
         // one snapshot when the window opens (a real event, not a frame); later changes are pushed
@@ -377,6 +492,32 @@ impl App for ConsoleApp {
 
     fn document(&mut self, ctx: &Ctx, ev: DocumentEvent) -> bool {
         match ev {
+            // the file named on the command line, granted: it opens like a chosen file
+            DocumentEvent::Opened(doc) if self.argv_request.as_ref().is_some_and(|(r, _)| *r == doc.request) => {
+                self.argv_request = None;
+                self.opened_document(ctx, doc);
+            }
+            // the shell would not grant it: the app may still read the file, only without Reveal and Trash
+            DocumentEvent::Failed { request, .. } if self.argv_request.as_ref().is_some_and(|(r, _)| *r == request) => {
+                if let Some((_, path)) = self.argv_request.take() {
+                    self.open_path(&path);
+                }
+            }
+            // a remembered log, opened again by its grant
+            DocumentEvent::Opened(doc) if self.recent_request.is_some_and(|(r, _)| r == doc.request) => {
+                let asked = self.recent_request.take().map(|(_, grant)| grant);
+                // a shell that answers with another grant leaves the old entry stale: it is dropped
+                if let Some(old) = asked.filter(|old| *old != doc.grant) {
+                    self.remove_recent(ctx, old);
+                    ctx.release_document(old);
+                }
+                self.opened_document(ctx, doc);
+            }
+            DocumentEvent::Failed { request, code } if self.recent_request.is_some_and(|(r, _)| r == request) => {
+                if let Some((_, grant)) = self.recent_request.take() {
+                    self.recent_failed(ctx, grant, code);
+                }
+            }
             DocumentEvent::Opened(doc) if self.open_request == Some(doc.request) => {
                 self.open_request = None;
                 self.opened_document(ctx, doc);
@@ -406,7 +547,16 @@ impl App for ConsoleApp {
             MENU_CAPTURE => self.begin_capture(ctx),
             MENU_REVEAL => self.reveal_active(ctx),
             MENU_TRASH => self.trash_active(ctx),
+            MENU_CLEAR_RECENTS => self.clear_recents(ctx),
             _ => {
+                // a remembered log that is not open needs the shell; an open one is shown by the window below
+                if (MENU_RECENT..MENU_RECENT + MAX_RECENT as u32).contains(&id) {
+                    let item = self.console.as_ref().and_then(|c| c.recent_items().into_iter().nth((id - MENU_RECENT) as usize));
+                    if let Some((_, Recent::Stored(grant))) = item {
+                        self.reopen_recent(ctx, grant);
+                        return true;
+                    }
+                }
                 let Some(c) = &mut self.console else { return false };
                 let changed = c.menu(id);
                 ctx.wants_keyboard(c.search_focused);
@@ -432,11 +582,13 @@ impl App for ConsoleApp {
 /// `can_trash` say whether the log in view has a grant (and a writable one).
 fn menus(c: &Console, can_reveal: bool, can_trash: bool) -> Vec<AppMenu> {
     let stream = if c.streaming && c.is_live() { "Pause Streaming" } else { "Start Streaming" };
-    let mut file = vec![AppMenuItem::new(MENU_OPEN, "Open...").key("cmd+o"), AppMenuItem::submenu("Open Recent").enabled(!c.opened.is_empty())];
-    // the newest first
-    for (i, log) in c.opened.iter().rev().enumerate().take(MAX_OPENED) {
-        file.push(AppMenuItem::new(MENU_RECENT + i as u32, &log.name).depth(1));
+    let recent = c.recent_items();
+    let mut file = vec![AppMenuItem::new(MENU_OPEN, "Open...").key("cmd+o"), AppMenuItem::submenu("Open Recent").enabled(!recent.is_empty())];
+    // the newest first: the logs open now, then the ones remembered from earlier launches
+    for (i, (name, _)) in recent.iter().enumerate() {
+        file.push(AppMenuItem::new(MENU_RECENT + i as u32, name).depth(1));
     }
+    file.push(AppMenuItem::new(MENU_CLEAR_RECENTS, "Clear Menu").enabled(!c.stored.is_empty()).depth(1));
     file.extend([
         AppMenuItem::separator(),
         AppMenuItem::new(MENU_CAPTURE, "Capture Archive..."),
@@ -884,5 +1036,156 @@ mod glue_tests {
         let reveal = file.iter().find(|i| i.id == MENU_REVEAL).unwrap();
         let trash = file.iter().find(|i| i.id == MENU_TRASH).unwrap();
         assert!(!reveal.enabled && !trash.enabled);
+    }
+
+    fn remembered(n: u8, name: &str) -> bifrost_app::document::RecentDocument {
+        bifrost_app::document::RecentDocument { grant: [n; 16], name: name.into() }
+    }
+
+    fn grant_doc(request: u32, grant: GrantId, name: &str, file: std::fs::File) -> bifrost_app::Document {
+        bifrost_app::Document { request, grant, name: name.into(), size: 0, mode: DocMode::Read, file }
+    }
+
+    #[test]
+    fn an_opened_log_is_remembered_for_the_next_launch() {
+        let ctx = services::test_ctx();
+        let mut a = app_with_message();
+        a.menu_action(&ctx, MENU_OPEN);
+        let sent = ctx.take_sent();
+        let [ToShell::DocOpen { request, .. }] = sent.as_slice() else { panic!("one open panel: {sent:?}") };
+        let dir = scratch("remember");
+        let path = dir.join("auth.log");
+        std::fs::write(&path, "one\n").unwrap();
+        a.document(&ctx, DocumentEvent::Opened(doc(*request, "auth.log", DocMode::Read, std::fs::File::open(&path).unwrap())));
+        let stored = a.console.as_ref().unwrap().stored.clone();
+        assert_eq!(stored, vec![remembered(9, "auth.log")]);
+        let text = ctx.defaults().string(recents::PREF).expect("written to the preferences");
+        assert_eq!(bifrost_app::document::parse_recents(&text), stored, "what the next launch reads back");
+        assert!(ctx.take_sent().is_empty(), "the grant stays with the recent log");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_remembered_log_is_reopened_by_its_grant_and_shown() {
+        let ctx = services::test_ctx();
+        let mut a = app_with_message();
+        a.console.as_mut().unwrap().stored = vec![remembered(4, "old.log")];
+        assert_eq!(a.console.as_ref().unwrap().recent_items(), vec![("old.log".to_string(), Recent::Stored([4; 16]))]);
+        a.menu_action(&ctx, MENU_RECENT);
+        let sent = ctx.take_sent();
+        let [ToShell::DocReopen { request, grant }] = sent.as_slice() else { panic!("one reopen: {sent:?}") };
+        assert_eq!(*grant, [4; 16]);
+
+        let dir = scratch("reopen");
+        let path = dir.join("old.log");
+        std::fs::write(&path, "first\nsecond\n").unwrap();
+        a.document(&ctx, DocumentEvent::Opened(grant_doc(*request, [4; 16], "old.log", std::fs::File::open(&path).unwrap())));
+        let c = a.console.as_ref().unwrap();
+        assert_eq!(c.view, View::Opened(0));
+        assert_eq!((c.opened[0].grant, c.visible.len()), (Some([4; 16]), 2));
+        assert_eq!(c.stored, vec![remembered(4, "old.log")], "still one entry, not a second");
+        assert_eq!(c.recent_items(), vec![("old.log".to_string(), Recent::Opened(0))], "open now, so the menu shows the open log");
+        assert!(a.recent_request.is_none());
+        assert!(ctx.take_sent().is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_remembered_log_that_cannot_be_reopened_leaves_the_menu_and_says_why() {
+        let ctx = services::test_ctx();
+        let mut a = app_with_message();
+        a.console.as_mut().unwrap().stored = vec![remembered(4, "old.log")];
+        a.menu_action(&ctx, MENU_RECENT);
+        let sent = ctx.take_sent();
+        let [ToShell::DocReopen { request, .. }] = sent.as_slice() else { panic!("one reopen") };
+        a.document(&ctx, DocumentEvent::Failed { request: *request, code: DocErrorCode::Stale });
+        assert_eq!(status(&a), "Could not reopen old.log. The file changed after it was chosen.");
+        assert!(a.console.as_ref().unwrap().stored.is_empty());
+        assert_eq!(ctx.take_sent(), vec![ToShell::DocRelease { grant: [4; 16] }]);
+        let text = ctx.defaults().string(recents::PREF).unwrap_or_default();
+        assert!(bifrost_app::document::parse_recents(&text).is_empty());
+    }
+
+    #[test]
+    fn clear_menu_forgets_the_remembered_logs_and_keeps_the_grants_of_open_ones() {
+        let ctx = services::test_ctx();
+        let mut a = app_with_opened(true);
+        a.console.as_mut().unwrap().stored = vec![remembered(4, "old.log"), remembered(3, "boot.logarchive")];
+        let menus = menus(a.console.as_ref().unwrap(), false, false);
+        let clear = menus[0].items.iter().find(|i| i.id == MENU_CLEAR_RECENTS).expect("Clear Menu");
+        assert!(clear.enabled);
+        a.menu_action(&ctx, MENU_CLEAR_RECENTS);
+        assert!(a.console.as_ref().unwrap().stored.is_empty());
+        assert_eq!(ctx.take_sent(), vec![ToShell::DocRelease { grant: [4; 16] }], "the open log still needs its grant");
+        let menus = menus_of(&a);
+        assert!(!menus[0].items.iter().find(|i| i.id == MENU_CLEAR_RECENTS).unwrap().enabled);
+    }
+
+    fn menus_of(a: &ConsoleApp) -> Vec<AppMenu> {
+        menus(a.console.as_ref().unwrap(), false, false)
+    }
+
+    #[test]
+    fn a_trashed_log_is_forgotten_by_open_recent_too() {
+        let ctx = services::test_ctx();
+        let mut a = app_with_opened(true);
+        a.console.as_mut().unwrap().streaming = false;
+        a.console.as_mut().unwrap().stored = vec![remembered(3, "boot.logarchive"), remembered(4, "other.log")];
+        a.file_notes.borrow_mut().push(FileNote::Trashed { grant: [3; 16], ok: true });
+        assert!(a.apply_file_notes(&ctx));
+        assert_eq!(a.console.as_ref().unwrap().stored, vec![remembered(4, "other.log")]);
+        assert_eq!(ctx.take_sent(), vec![ToShell::DocRelease { grant: [3; 16] }]);
+    }
+
+    #[test]
+    fn a_file_in_the_home_folder_named_on_the_command_line_is_granted_and_opened() {
+        let ctx = services::test_ctx();
+        let mut a = app_with_message();
+        let dir = scratch("argv-home");
+        let path = dir.join("x.log");
+        std::fs::write(&path, "one\ntwo\n").unwrap();
+        a.open_argv(&ctx, path.clone(), &dir);
+        let sent = ctx.take_sent();
+        let [ToShell::DocGrantPath { request, path: asked }] = sent.as_slice() else { panic!("one grant request: {sent:?}") };
+        assert_eq!(Path::new(asked), path.as_path());
+        a.document(&ctx, DocumentEvent::Opened(grant_doc(*request, [9; 16], "x.log", std::fs::File::open(&path).unwrap())));
+        let c = a.console.as_ref().unwrap();
+        assert_eq!((c.opened.len(), c.opened[0].grant, c.visible.len()), (1, Some([9; 16]), 2));
+        assert!(a.argv_request.is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_refused_grant_for_the_command_line_file_falls_back_to_reading_it() {
+        let ctx = services::test_ctx();
+        let mut a = app_with_message();
+        let dir = scratch("argv-refused");
+        let path = dir.join("x.log");
+        std::fs::write(&path, "one\ntwo\n").unwrap();
+        a.open_argv(&ctx, path.clone(), &dir);
+        let sent = ctx.take_sent();
+        let [ToShell::DocGrantPath { request, .. }] = sent.as_slice() else { panic!("one grant request") };
+        a.document(&ctx, DocumentEvent::Failed { request: *request, code: DocErrorCode::Denied });
+        let c = a.console.as_ref().unwrap();
+        assert_eq!((c.opened.len(), c.opened[0].grant, c.visible.len()), (1, None, 2), "read directly, with no grant");
+        assert!(a.argv_request.is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_file_outside_the_home_folder_is_read_directly_and_a_missing_one_is_reported() {
+        let ctx = services::test_ctx();
+        let mut a = app_with_message();
+        let dir = scratch("argv-outside");
+        let path = dir.join("pacman.log");
+        std::fs::write(&path, "installed\n").unwrap();
+        a.open_argv(&ctx, path.clone(), Path::new("/nonexistent-home"));
+        assert!(ctx.take_sent().is_empty(), "no grant is asked for a path the shell cannot grant");
+        let c = a.console.as_ref().unwrap();
+        assert_eq!((c.opened[0].name.as_str(), c.opened[0].grant, c.opened[0].writable), ("pacman.log", None, false));
+        a.open_argv(&ctx, dir.join("nope.log"), Path::new("/nonexistent-home"));
+        assert!(status(&a).starts_with("Could not open nope.log."), "{}", status(&a));
+        assert_eq!(a.console.as_ref().unwrap().opened.len(), 1);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
