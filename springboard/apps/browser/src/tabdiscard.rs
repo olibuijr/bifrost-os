@@ -138,6 +138,15 @@ pub struct Discarder {
 }
 
 impl Discarder {
+    pub fn clear_history(&mut self) {
+        for (entries, index) in self.hist.values_mut() {
+            let current = entries.get(*index).cloned();
+            entries.clear();
+            entries.extend(current);
+            *index = 0;
+        }
+        self.jumps.clear();
+    }
     pub fn touch(&mut self, id: WebViewId, now: f64) {
         self.last_active.insert(id, now);
     }

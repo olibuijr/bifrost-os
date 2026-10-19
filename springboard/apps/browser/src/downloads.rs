@@ -5,8 +5,8 @@
 //! embedder builds, it never hands over the real body, and `request_navigation` does not carry response headers
 //! (read in servo-0.7.0 `components/servo/webview_delegate.rs`). So this is app-side: when a view starts loading an
 //! http(s) URL, `curl -I` runs on a thread; if the headers say "download", the view is stopped and a second curl
-//! writes `NAME.download`, renamed when it finishes. The probe and the fetch send the page's `document.cookie`
-//! (read after each load; the engine answers from the cookie jar, HttpOnly included), the previous page as Referer and the browser's
+//! writes `NAME.download`, renamed when it finishes. The probe and fetch use a privileged native cookie snapshot
+//! (read after each load, HttpOnly included, restricted to the exact origin), the previous page as Referer and the browser's
 //! User-Agent. A failed or 405/501 HEAD is retried as `GET Range: bytes=0-0`. URLs with no query and an HTML-like or
 //! missing extension are not probed (ordinary navigations).
 use std::collections::HashMap;
@@ -19,10 +19,7 @@ use bifrost_app::dispatch::DispatchQueue;
 
 use crate::inbox::{self, Slot};
 
-/// Prefix of the eval that reads `document.cookie`; the inspector must not list its answer.
-pub const COOKIE_PREFIX: &str = "bifrost-ck:";
 pub const DEFAULT_UA: &str = "Mozilla/5.0 (Macintosh; Intel Golden Gate 10_15_7) WebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Browser/605.1.15";
-pub const COOKIE_JS: &str = "'bifrost-ck:' + document.cookie";
 static ACTIVE: AtomicUsize = AtomicUsize::new(0);
 static WAKER: AtomicBool = AtomicBool::new(false);
 
@@ -37,7 +34,11 @@ struct Ctx {
 impl Ctx {
     fn args(&self) -> Vec<String> {
         let mut a = Vec::new();
-        for (flag, v) in [("-b", &self.cookie), ("-e", &self.referer), ("-A", &self.ua)] {
+        // curl strips explicit Cookie headers on cross-origin redirects; raw -b strings have no domain metadata.
+        if !self.cookie.is_empty() {
+            a.extend(["-H".to_string(), format!("Cookie: {}", self.cookie)]);
+        }
+        for (flag, v) in [("-e", &self.referer), ("-A", &self.ua)] {
             if !v.is_empty() {
                 a.push(flag.to_string());
                 a.push(v.clone());
@@ -341,11 +342,10 @@ impl Downloads {
         self.probes.push((view, slot));
     }
 
-    /// The answer to `COOKIE_JS` for `view`; true when it was one (the caller then hides it from the console).
-    pub fn on_eval(&mut self, view: WebViewId, text: &str) -> bool {
-        let Some(c) = text.trim().trim_matches('"').strip_prefix(COOKIE_PREFIX) else { return false };
-        self.cookies.insert(view, c.trim().to_string());
-        true
+    /// A privileged native cookie snapshot; it is never presented as a JavaScript eval result.
+    pub fn on_cookies(&mut self, view: WebViewId, cookies: &[bifrost_app::web_data::Cookie]) {
+        let header = cookies.iter().map(|cookie| format!("{}={}", cookie.name, cookie.value)).collect::<Vec<_>>().join("; ");
+        self.cookies.insert(view, header);
     }
 
     pub fn forget(&mut self, view: WebViewId) {
@@ -638,11 +638,11 @@ mod tests {
 
     #[test]
     fn hosts_and_same_site_cookie_rule() {
-        assert_eq!(url_host("https://user:pw@a.example.com:8080/x?y#z"), "a.example.com");
-        assert_eq!(url_host("http://example.com"), "example.com");
         assert!(same_site("https://example.com/a", "https://example.com/b"));
-        assert!(same_site("https://cdn.example.com/f.zip", "https://example.com/"));
-        assert!(same_site("https://example.com/f.zip", "https://www.example.com/"));
+        assert!(!same_site("https://cdn.example.com/f.zip", "https://example.com/"));
+        assert!(!same_site("https://example.com/f.zip", "https://www.example.com/"));
+        assert!(!same_site("http://example.com/f.zip", "https://example.com/"));
+        assert!(!same_site("https://example.com:8443/f.zip", "https://example.com/"));
         assert!(!same_site("https://evilexample.com/f.zip", "https://example.com/"));
         assert!(!same_site("https://example.com/f.zip", ""));
         assert!(!same_site("", "https://example.com/"));
@@ -662,17 +662,8 @@ mod tests {
     }
 }
 
-/// True when two URLs share a host or one host is a subdomain of the other (cookies go only to the same site).
+/// The fallback cookie snapshot may only be sent to the same origin; it has no cookie-domain metadata.
 fn same_site(a: &str, b: &str) -> bool {
-    let (a, b) = (url_host(a), url_host(b));
-    !a.is_empty() && (a == b || a.ends_with(&format!(".{b}")) || b.ends_with(&format!(".{a}")))
-}
-
-
-/// The host of an http(s) URL, without port or credentials.
-fn url_host(url: &str) -> &str {
-    let rest = url.split_once("://").map_or(url, |(_, r)| r);
-    let auth = rest.split(['/', '?', '#']).next().unwrap_or("");
-    let host = auth.rsplit('@').next().unwrap_or("");
-    host.split(':').next().unwrap_or("")
+    let (a, b) = (crate::session::origin(a), crate::session::origin(b));
+    !a.is_empty() && a == b
 }

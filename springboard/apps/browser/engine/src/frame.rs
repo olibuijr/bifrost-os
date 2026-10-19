@@ -84,16 +84,16 @@ pub fn unescape_line(s: &str) -> String {
 }
 
 impl Shm {
-    /// Copies `px` (RGBA bytes, `n` pixels) into the mapping as `0xAARRGGBB`. Does nothing when the mapping is too small.
-    pub fn write_argb(&mut self, px: &[u8], n: usize) {
+    /// Copies `px` (RGBA bytes, `n` pixels) into the mapping as SDK premultiplied RGBA (`0xAABBGGRR`). Does nothing when the mapping is too small.
+    pub fn write_rgba(&mut self, px: &[u8], n: usize) {
         if self.ptr.is_null() || n > self.len / 4 {
             return;
         }
         let dst = unsafe { std::slice::from_raw_parts_mut(self.ptr.cast::<u32>(), n) };
         for (d, p) in dst.iter_mut().zip(px.chunks_exact(4)) {
-            // web content is opaque. RGBA bytes -> 0xAARRGGBB by swapping R and B
+            // The SDK uses RGBA bytes too. Preserve channel order; web content is opaque.
             let v = u32::from_le_bytes([p[0], p[1], p[2], p[3]]);
-            *d = 0xff00_0000 | (v & 0xff00) | (v & 0xff) << 16 | (v >> 16) & 0xff;
+            *d = 0xff00_0000 | (v & 0x00ff_ffff);
         }
     }
 }
@@ -124,13 +124,13 @@ mod tests {
     }
 
     #[test]
-    fn write_argb_swaps_and_checks_bounds() {
+    fn write_rgba_preserves_channels_and_checks_bounds() {
         let mut buf = [0u32; 2];
         let mut shm = Shm { fd: -1, ptr: buf.as_mut_ptr().cast(), len: 8 };
-        shm.write_argb(&[0x11, 0x22, 0x33, 0xff, 1, 2, 3, 4], 2);
-        assert_eq!(buf[0], 0xff11_2233);
+        shm.write_rgba(&[0x11, 0x22, 0x33, 0xff, 1, 2, 3, 4], 2);
+        assert_eq!(buf[0], 0xff33_2211);
         let mut shm = Shm { fd: -1, ptr: buf.as_mut_ptr().cast(), len: 4 };
-        shm.write_argb(&[0; 8], 2);
-        assert_eq!(buf[0], 0xff11_2233);
+        shm.write_rgba(&[0; 8], 2);
+        assert_eq!(buf[0], 0xff33_2211);
     }
 }

@@ -1,0 +1,8 @@
+#!/bin/sh
+# Run the browser on a GTK4 desktop, using the existing SDK protocol.
+set -eu
+browser_tools=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+exec systemd-run --user --scope --collect --quiet \
+    --unit="bifrost-browser-local-$$" \
+    -p MemoryHigh=1G -p MemoryMax=2G -p MemorySwapMax=0 \
+    python3 "$browser_tools/local-host.py" "$@"

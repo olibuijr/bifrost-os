@@ -32,7 +32,7 @@ thread_local! {
     static RULES: RefCell<RuleSet> = RefCell::new(RuleSet::default());
     static PENDING_RULES: RefCell<String> = const { RefCell::new(String::new()) };
     static ASK_APP: Cell<bool> = const { Cell::new(false) };
-    static HELD: RefCell<HashMap<u32, NavigationRequest>> = RefCell::new(HashMap::new());
+    static HELD: RefCell<HashMap<u32, (u32, NavigationRequest)>> = RefCell::new(HashMap::new());
 }
 
 pub fn rules_reset() {
@@ -115,21 +115,21 @@ pub fn ask_app() -> bool {
 }
 
 /// Keeps a request until the app answers. The oldest is dropped (and so allowed) when too many wait.
-pub fn hold(token: u32, request: NavigationRequest) {
+pub fn hold(token: u32, view: u32, request: NavigationRequest) {
     HELD.with(|h| {
         let mut h = h.borrow_mut();
         if h.len() >= MAX_HELD {
             if let Some(oldest) = h.keys().min().copied() {
-                h.remove(&oldest);
+                if let Some((_, request)) = h.remove(&oldest) { request.deny(); }
             }
         }
-        h.insert(token, request);
+        h.insert(token, (view, request));
     });
 }
 
 /// The app's answer. Returns the URL when the request became a download.
 pub fn answer(token: u32, word: &str) -> Option<String> {
-    let request = HELD.with(|h| h.borrow_mut().remove(&token))?;
+    let (_, request) = HELD.with(|h| h.borrow_mut().remove(&token))?;
     match word {
         "cancel" => {
             request.deny();
@@ -149,10 +149,28 @@ pub fn answer(token: u32, word: &str) -> Option<String> {
 
 /// Allows every held request (the policy was switched off).
 pub fn release_all() {
-    let all: Vec<NavigationRequest> = HELD.with(|h| h.borrow_mut().drain().map(|(_, r)| r).collect());
+    let all: Vec<NavigationRequest> = HELD.with(|h| h.borrow_mut().drain().map(|(_, (_, request))| request).collect());
     for r in all {
         r.allow();
     }
+}
+
+/// Shutdown cancels pending navigations instead of starting new loads while tearing down Servo.
+pub fn cancel_all() {
+    let all: Vec<NavigationRequest> = HELD.with(|held| held.borrow_mut().drain().map(|(_, (_, request))| request).collect());
+    for request in all {
+        request.deny();
+    }
+}
+
+/// Closing one view must not leave its responders alive or affect another tab's policy decision.
+pub fn cancel_view(view: u32) {
+    let requests: Vec<NavigationRequest> = HELD.with(|held| {
+        let mut held = held.borrow_mut();
+        let tokens: Vec<u32> = held.iter().filter(|(_, (owner, _))| *owner == view).map(|(token, _)| *token).collect();
+        tokens.into_iter().filter_map(|token| held.remove(&token).map(|(_, request)| request)).collect()
+    });
+    for request in requests { request.deny(); }
 }
 
 /// Escapes `\n`, `\r` and `\\`, with no length cap (the line protocol of the SDK's `escape_full`).

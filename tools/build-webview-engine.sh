@@ -1,5 +1,5 @@
 #!/bin/sh
-# Builds the BifrOSt web content engine (bifrost-webview, libservo embedded with a software GL context) from
+# Builds the BifrOSt web content engine (bifrost-webview, libservo embedded with hardware GL and explicit CPU fallback) from
 # official Servo v0.7.0 source and packages it as the Browser's engine archive. Usage: tools/build-webview-engine.sh VERSION
 # Afterwards: put the printed sha256 in springboard/apps/browser/engine.json and its first 12 hex digits in ENGINE
 # (springboard/apps/browser/src/main.rs).
@@ -22,10 +22,13 @@ mkdir -p "$src/ports/bifrost-webview/src"
 cp "$here/Cargo.toml" "$src/ports/bifrost-webview/Cargo.toml"
 cp "$here"/src/*.rs "$here"/src/*.js "$src/ports/bifrost-webview/src/"
 grep -q '"ports/bifrost-webview"' "$src/Cargo.toml" || sed -i 's|    "ports/servoshell",|    "ports/servoshell",\n    "ports/bifrost-webview",|' "$src/Cargo.toml"
+(
+cd "$src"
 CARGO_PROFILE_RELEASE_LTO=false CARGO_PROFILE_RELEASE_CODEGEN_UNITS=32 \
 CARGO_PROFILE_RELEASE_INCREMENTAL=true CARGO_PROFILE_RELEASE_DEBUG=0 \
 CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS='-C link-arg=-fuse-ld=lld' \
-cargo +1.98.1 build --offline --release --manifest-path "$src/Cargo.toml" -p bifrost-webview
+cargo +"${BIFROST_ENGINE_TOOLCHAIN:-stable}" build --offline --release -p bifrost-webview -j "${CARGO_BUILD_JOBS:-2}"
+)
 stage=$(mktemp -d)
 mkdir -p "$stage/servo"
 cp "$src/target/release/bifrost-webview" "$stage/servo/bifrost-webview"

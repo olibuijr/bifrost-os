@@ -7,12 +7,13 @@ use bifrost_app::kit::ui::{AlertCard, MAC_FOOTNOTE_PT, Weight, CARD_BG, DESTRUCT
 use crate::tokens;
 use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::kit::{Surface, Ui};
-use bifrost_app::webview::url_for_input;
+use bifrost_app::webview::{url_for_input, WebRenderer};
 use bifrost_app::{Ctx, KeyInput};
 
 const PREF_HOME: &str = "browser.homepage";
 const PREF_ENGINE: &str = "browser.searchEngine";
 const PREF_RESTORE: &str = "browser.restoreSession";
+const PREF_RENDERER: &str = "browser.renderer";
 /// The SDK's built-in search URL prefix (DuckDuckGo); other engines replace it.
 const DDG: &str = "https://duckduckgo.com/?q=";
 const MAX_HOME: usize = 2048;
@@ -58,11 +59,12 @@ pub struct Prefs {
     pub homepage: String,
     pub engine: Engine,
     pub restore: bool,
+    pub renderer: WebRenderer,
 }
 
 impl Default for Prefs {
     fn default() -> Self {
-        Prefs { homepage: String::new(), engine: Engine::DuckDuckGo, restore: true }
+        Prefs { homepage: String::new(), engine: Engine::DuckDuckGo, restore: true, renderer: WebRenderer::Gpu }
     }
 }
 
@@ -79,6 +81,10 @@ impl Prefs {
         if d.contains(PREF_RESTORE) {
             p.restore = d.bool(PREF_RESTORE);
         }
+        p.renderer = match d.string(PREF_RENDERER).as_deref() {
+            Some("cpu") => WebRenderer::Cpu,
+            _ => WebRenderer::Gpu,
+        };
         p
     }
 
@@ -87,6 +93,7 @@ impl Prefs {
         d.set_string(PREF_HOME, &self.homepage);
         d.set_string(PREF_ENGINE, self.engine.name());
         d.set_bool(PREF_RESTORE, self.restore);
+        d.set_string(PREF_RENDERER, self.renderer.as_str());
     }
 
     /// What a new window opens: the homepage, or `blank`.
@@ -117,6 +124,8 @@ pub enum Action {
     None,
     /// A value changed: save the prefs.
     Changed,
+    /// The selected renderer changed: save and restart the engine on the same pages.
+    RendererChanged,
     ClearHistory,
     ClearData,
     /// Settings > Import Bookmarks: the newest bookmark export in Downloads.
@@ -147,6 +156,7 @@ const FOOT_H: f32 = 18.0;
 const GROUP_GAP: f32 = 8.0;
 const TITLE_H: f32 = 22.0;
 const FOOTER_HOME: &str = "New windows open the homepage. Private windows never restore tabs.";
+const FOOTER_RENDERER: &str = "Changing rendering reloads open pages.";
 const FOOTER_CLEAR: &str = "Clearing history or website data cannot be undone.";
 
 struct Geo {
@@ -156,6 +166,7 @@ struct Geo {
     group2: Rect,
     home: Rect,
     segs: [Rect; 4],
+    renderers: [Rect; 2],
     restore_row: Rect,
     toggle: Rect,
     import_row: Rect,
@@ -188,7 +199,7 @@ impl Sheet {
         let wpt = w as f32 / ui.pt(1.0);
         let pw = W.min(wpt - 16.0).max(0.0);
         let hpt = h as f32 / ui.pt(1.0);
-        let full_h = PAD + TITLE_H + PAD + 4.0 * ROW + FOOT_H + GROUP_GAP + 2.0 * ROW + FOOT_H + PAD;
+        let full_h = PAD + TITLE_H + PAD + 5.0 * ROW + 2.0 * FOOT_H + GROUP_GAP + 2.0 * ROW + FOOT_H + PAD;
         let top = UNIFIED_BAR_PT + 6.0;
         // a short window shrinks the panel to fit and the content scrolls inside it
         let ph = full_h.min((hpt - top - 8.0).max(0.0));
@@ -199,7 +210,7 @@ impl Sheet {
         let gw = panel.w - 2.0 * PAD;
         let title_y = panel.y + PAD - scroll;
         let g1y = title_y + TITLE_H + PAD;
-        let group1 = Rect { x: gx, y: g1y, w: gw, h: 4.0 * ROW };
+        let group1 = Rect { x: gx, y: g1y, w: gw, h: 5.0 * ROW };
         let row = |g: &Rect, i: f32| Rect { x: g.x, y: g.y + ROW * i, w: g.w, h: ROW };
         let r0 = row(&group1, 0.0);
         let fx = r0.x + ROW_PAD + LABEL_W.min(gw * 0.3);
@@ -209,14 +220,17 @@ impl Sheet {
         let segs = [0, 1, 2, 3].map(|i| Rect { x: fx + sw * i as f32, y: r1.y + (ROW - 28.0) / 2.0, w: sw, h: 28.0 });
         let restore_row = row(&group1, 2.0);
         let toggle = Rect { x: restore_row.x + restore_row.w - ROW_PAD - 40.0, y: restore_row.y + (ROW - 24.0) / 2.0, w: 40.0, h: 24.0 };
-        let import_row = row(&group1, 3.0);
+        let r3 = row(&group1, 3.0);
+        let rw = ((r3.x + r3.w - ROW_PAD - fx) / 2.0).max(0.0);
+        let renderers = [0, 1].map(|i| Rect { x: fx + rw * i as f32, y: r3.y + (ROW - 28.0) / 2.0, w: rw, h: 28.0 });
+        let import_row = row(&group1, 4.0);
         let foot1_y = group1.y + group1.h + 3.0;
-        let group2 = Rect { x: gx, y: group1.y + group1.h + FOOT_H + GROUP_GAP, w: gw, h: 2.0 * ROW };
+        let group2 = Rect { x: gx, y: group1.y + group1.h + 2.0 * FOOT_H + GROUP_GAP, w: gw, h: 2.0 * ROW };
         let clear_history = row(&group2, 0.0);
         let clear_data = row(&group2, 1.0);
         let foot2_y = group2.y + group2.h + 3.0;
         let done = Rect { x: panel.x + panel.w - PAD - 56.0, y: title_y - 3.0, w: 56.0, h: TITLE_H + 6.0 };
-        Geo { panel, title_y, group1, group2, home, segs, restore_row, toggle, import_row, clear_history, clear_data, done, foot1_y, foot2_y, max_scroll }
+        Geo { panel, title_y, group1, group2, home, segs, renderers, restore_row, toggle, import_row, clear_history, clear_data, done, foot1_y, foot2_y, max_scroll }
     }
 
     fn ask(&mut self, ui: &Ui, action: Action, title: &str, message: &str, confirm: &str) {
@@ -266,6 +280,14 @@ impl Sheet {
         if let Some(i) = g.segs.iter().position(|r| r.contains(px, py)) {
             p.engine = Engine::ALL[i];
             return Action::Changed;
+        }
+        if let Some(i) = g.renderers.iter().position(|r| r.contains(px, py)) {
+            let renderer = if i == 0 { WebRenderer::Gpu } else { WebRenderer::Cpu };
+            if p.renderer != renderer {
+                p.renderer = renderer;
+                return Action::RendererChanged;
+            }
+            return Action::None;
         }
         if g.restore_row.contains(px, py) {
             p.restore = !p.restore;
@@ -353,7 +375,7 @@ impl Sheet {
         text(s, "Settings", MAC_TITLE2_PT, Weight::Semibold, LABEL.now(), g.panel.x + PAD, g.title_y + TITLE_H / 2.0);
         text(s, "Done", MAC_BODY_PT, Weight::Semibold, TINT, g.done.x + 8.0, g.done.y + g.done.h / 2.0);
 
-        group(s, &g.group1, 4);
+        group(s, &g.group1, 5);
         let lx = g.group1.x + ROW_PAD;
         text(s, "Homepage", MAC_BODY_PT, Weight::Regular, LABEL.now(), lx, g.home.y + g.home.h / 2.0);
         bifrost_app::widgets::text_field(s, ui, &self.home, g.home, "Blank page", self.focus_home);
@@ -375,9 +397,21 @@ impl Sheet {
         let knob = t.h - 4.0;
         let kx = if p.restore { t.x + t.w - knob - 2.0 } else { t.x + 2.0 };
         s.fill_rrect(ui.pt(kx), ui.pt(t.y + 2.0), ui.pt(knob), ui.pt(knob), ui.pt(knob / 2.0), tokens::KNOB);
+        let first = g.renderers[0];
+        text(s, "Rendering", MAC_BODY_PT, Weight::Regular, LABEL.now(), lx, first.y + first.h / 2.0);
+        s.fill_rrect(ui.pt(first.x), ui.pt(first.y), ui.pt(first.w * 2.0), ui.pt(first.h), ui.pt(m::SELECTION_RADIUS), CARD_BG.now());
+        for (i, r) in g.renderers.iter().enumerate() {
+            let on = p.renderer == if i == 0 { WebRenderer::Gpu } else { WebRenderer::Cpu };
+            if on {
+                s.fill_rrect(ui.pt(r.x + 2.0), ui.pt(r.y + 2.0), ui.pt(r.w - 4.0), ui.pt(r.h - 4.0), ui.pt(m::SELECTION_RADIUS), SEGMENT_ON.now());
+            }
+            let img = ui.text(if i == 0 { "GPU" } else { "CPU fallback" }, MAC_SUBHEAD_PT, if on { Weight::Semibold } else { Weight::Regular }, LABEL.now());
+            s.blit(&img, ui.pt(r.x + r.w / 2.0) as i32 - img.w as i32 / 2, ui.pt(r.y + r.h / 2.0) as i32 - img.h as i32 / 2, 255, 255);
+        }
         text(s, "Import Bookmarks\u{2026}", MAC_BODY_PT, Weight::Regular, LINK, lx, g.import_row.y + ROW / 2.0);
         let fx = g.group1.x + ROW_PAD;
         left_footer(s, ui, FOOTER_HOME, fx, g.group1.w - 2.0 * ROW_PAD, g.foot1_y);
+        left_footer(s, ui, FOOTER_RENDERER, fx, g.group1.w - 2.0 * ROW_PAD, g.foot1_y + FOOT_H);
 
         group(s, &g.group2, 2);
         text(s, "Clear History\u{2026}", MAC_BODY_PT, Weight::Regular, DESTRUCTIVE, lx, g.clear_history.y + ROW / 2.0);

@@ -1,7 +1,7 @@
 //! Crash and flood guards of the engine: one bad command must not kill the process, and no queue may grow without bound.
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
-/// Longest command line the engine will parse (bytes). Longer lines are cut on a char boundary.
+/// Longest command line the engine will parse (bytes). Longer commands are discarded whole.
 pub const MAX_LINE: usize = 256 * 1024;
 /// Notes queued between two loop turns. Past `NOTES_SOFT` console notes are dropped, past `NOTES_HARD` every noisy
 /// note (frame, title, url, history) is too; load, crash and eval notes are always kept.
@@ -10,12 +10,12 @@ pub const NOTES_HARD: usize = 8192;
 /// Eval callbacks the engine will have in flight; further `eval` verbs are answered with an error at once.
 pub const MAX_EVALS: usize = 64;
 
-/// Cuts `s` to at most `MAX_LINE` bytes without splitting a character.
-pub fn cap_line(s: &str) -> &str {
-    if s.len() <= MAX_LINE {
+/// Caps display text without splitting a character; never use this to truncate executable commands.
+pub fn cap_text(s: &str, limit: usize) -> &str {
+    if s.len() <= limit {
         return s;
     }
-    let mut end = MAX_LINE;
+    let mut end = limit;
     while !s.is_char_boundary(end) {
         end -= 1;
     }
@@ -42,8 +42,8 @@ mod tests {
     #[test]
     fn long_line_cut_on_boundary() {
         let s = "é".repeat(MAX_LINE);
-        let c = cap_line(&s);
+        let c = cap_text(&s, MAX_LINE);
         assert!(c.len() <= MAX_LINE && s.starts_with(c));
-        assert_eq!(cap_line("abc"), "abc");
+        assert_eq!(cap_text("abc", MAX_LINE), "abc");
     }
 }

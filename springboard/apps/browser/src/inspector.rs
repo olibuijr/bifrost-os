@@ -430,8 +430,6 @@ impl Inspector {
             }
             // scroll probe of a tab about to be discarded (tabdiscard.rs): not console output
             WebViewEvent::EvalResult(_, text) if text.trim().trim_matches('"').starts_with(crate::tabdiscard::SCROLL_PREFIX) => false,
-            WebViewEvent::EvalResult(_, text) if text.trim().trim_matches('"').starts_with(crate::downloads::COOKIE_PREFIX) => false,
-            WebViewEvent::EvalResult(_, text) if text.trim().trim_matches('"').starts_with(crate::favicon::FAV_PREFIX) => false,
             WebViewEvent::EvalResult(id, text) => {
                 self.record(*id, "result", text.clone(), String::new(), 0);
                 self.open
