@@ -280,6 +280,23 @@ impl InputController {
         self.candidates.show(crate::candidates::LocationHint::Below);
     }
 
+    /// Empties the candidate list and hides the window, keeping the composition (the engine has no alternatives for
+    /// the keystrokes typed so far).
+    pub fn clear_candidates(&mut self) {
+        self.candidates.set_items(Vec::new());
+        self.candidates.hide();
+    }
+
+    /// Picks candidate `index`: the composition ends and the candidate is the text to commit. `None` when no
+    /// composition is open or the index is out of range (nothing changes then).
+    pub fn pick_candidate(&mut self, index: usize) -> Option<String> {
+        self.composition.as_ref()?;
+        let picked = self.candidates.items().get(index)?.clone();
+        self.composition = None;
+        self.clear_candidates();
+        Some(picked)
+    }
+
     /// Commits the composition: returns its converted text and clears it, with the candidates. `None` when no
     /// composition is open.
     pub fn commit_composition(&mut self) -> Option<String> {

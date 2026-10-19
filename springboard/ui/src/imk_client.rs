@@ -48,6 +48,45 @@ pub fn apply(outcome: &Outcome, client: &mut dyn TextInputClient) -> bool {
     }
 }
 
+/// The editor is a text input client as it is: an input method's marked text and commits are the editor's own
+/// edits (one undo step per composition), and the ranges are the editor's byte ranges.
+impl TextInputClient for crate::text::TextEditor {
+    fn insert_text(&mut self, text: &str, replacement: Option<Range<usize>>) {
+        match replacement {
+            // a commit over some other range than the composition replaces that range, as one edit
+            Some(r) if self.buf.marked_range().as_ref() != Some(&r) => {
+                self.buf.cancel_marked();
+                let end = r.end.min(self.buf.len());
+                let start = r.start.min(end);
+                self.replace_range(start..end, text, "Typing");
+            }
+            // a commit over the marked range (or the selection) is the editor's own insert
+            _ => {
+                crate::text::TextEditor::insert_text(self, text);
+            }
+        }
+    }
+
+    fn set_marked_text(&mut self, text: &str, selection: Range<usize>, replacement: Option<Range<usize>>) {
+        let start = selection.start.min(text.len());
+        let len = selection.end.saturating_sub(selection.start).min(text.len() - start);
+        crate::text::TextEditor::set_marked_text(self, text, start, len, replacement);
+    }
+
+    fn selected_range(&self) -> Range<usize> {
+        self.buf.selection()
+    }
+
+    fn marked_range(&self) -> Option<Range<usize>> {
+        self.buf.marked_range()
+    }
+
+    fn attributes_for_character_index(&self, _index: usize) -> Option<CharacterAttributes> {
+        // the editor holds text, not layout: the view that draws it knows the line rectangle
+        None
+    }
+}
+
 /// The marked range of a composition, for a client that keeps no range of its own.
 pub fn marked_range_of(c: &Composition) -> Range<usize> {
     c.marked_range()
@@ -144,5 +183,38 @@ mod tests {
         let outcome = server.controller_mut(1).unwrap().handle(&key(Key::Return));
         assert!(apply(&outcome, &mut client));
         assert!(client.calls.is_empty());
+    }
+
+    #[test]
+    fn an_editor_is_a_client_and_a_composition_is_one_undo_step() {
+        use crate::text::TextEditor;
+        let mut ed = TextEditor::with_text("ab", 100);
+        ed.buf.set_selection(2, 2);
+        let reg = Registration::new("Controller").mode("kana", "Kana");
+        let mut server = Server::new(reg).unwrap();
+        server.connect(1).unwrap().activate();
+        let c = server.controller_mut(1).unwrap();
+        c.set_composition(2, "ka", "か", 3);
+        update_composition(c, &mut ed);
+        assert_eq!(ed.buf.text(), "abか");
+        assert_eq!(TextInputClient::marked_range(&ed), Some(2..5));
+        c.set_composition(2, "kak", "かk", 4);
+        update_composition(c, &mut ed);
+        assert_eq!(ed.buf.text(), "abかk");
+        let outcome = c.handle(&key(Key::Return));
+        assert!(!apply(&outcome, &mut ed));
+        assert_eq!(ed.buf.text(), "abかk");
+        assert_eq!(TextInputClient::marked_range(&ed), None);
+        assert!(ed.undo());
+        assert_eq!(ed.buf.text(), "ab");
+    }
+
+    #[test]
+    fn an_editor_commit_over_another_range_replaces_that_range() {
+        use crate::text::TextEditor;
+        let mut ed = TextEditor::with_text("hello", 100);
+        TextInputClient::insert_text(&mut ed, "J", Some(0..1));
+        assert_eq!(ed.buf.text(), "Jello");
+        assert_eq!(TextInputClient::selected_range(&ed), 1..1);
     }
 }
