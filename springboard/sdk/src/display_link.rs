@@ -176,6 +176,159 @@ impl DisplayLink {
     }
 }
 
+impl Time {
+    /// The same time in units of `scale` per second (`CVTimeConvert`-style rescaling), rounded to the nearest unit.
+    /// `None` when either scale is not positive, the time is indefinite, or the result does not fit.
+    pub fn rescaled(&self, scale: i32) -> Option<Time> {
+        if scale <= 0 || self.time_scale <= 0 || self.is_indefinite() {
+            return None;
+        }
+        let num = i128::from(self.value) * i128::from(scale);
+        let den = i128::from(self.time_scale);
+        let half = den / 2;
+        let rounded = if num >= 0 { (num + half) / den } else { (num - half) / den };
+        Some(Time { value: i64::try_from(rounded).ok()?, time_scale: scale, flags: 0 })
+    }
+
+    /// The sum of two definite times, in the scale of `self` (`CVTimeAdd`). `None` when either is indefinite or a
+    /// scale is not positive, or the sum does not fit.
+    pub fn checked_add(&self, other: &Time) -> Option<Time> {
+        let other = other.rescaled(self.time_scale)?;
+        if self.is_indefinite() {
+            return None;
+        }
+        Some(Time { value: self.value.checked_add(other.value)?, time_scale: self.time_scale, flags: 0 })
+    }
+
+    /// The difference `self - other` of two definite times, in the scale of `self` (`CVTimeSubtract`).
+    pub fn checked_sub(&self, other: &Time) -> Option<Time> {
+        let other = other.rescaled(self.time_scale)?;
+        if self.is_indefinite() {
+            return None;
+        }
+        Some(Time { value: self.value.checked_sub(other.value)?, time_scale: self.time_scale, flags: 0 })
+    }
+
+    /// Orders two times whatever their scales (`CVTimeCompare`). `None` when either is indefinite or a scale is not
+    /// positive.
+    pub fn compare(&self, other: &Time) -> Option<std::cmp::Ordering> {
+        if self.is_indefinite() || other.is_indefinite() || self.time_scale <= 0 || other.time_scale <= 0 {
+            return None;
+        }
+        let left = i128::from(self.value) * i128::from(other.time_scale);
+        let right = i128::from(other.value) * i128::from(self.time_scale);
+        Some(left.cmp(&right))
+    }
+}
+
+/// A display link with its output handler (`CVDisplayLinkSetOutputHandler`): the closure runs once for each refresh a
+/// tick reports. The app still drives the ticks from its own loop with the host time; nothing here owns a thread.
+pub struct HandlerLink {
+    link: DisplayLink,
+    handler: Box<dyn FnMut(&TimeStamp)>,
+}
+
+impl HandlerLink {
+    /// A stopped link at `refresh_hz` hertz whose output handler is `handler`. `None` for a rate of zero.
+    pub fn new(refresh_hz: u32, handler: impl FnMut(&TimeStamp) + 'static) -> Option<HandlerLink> {
+        Some(HandlerLink { link: DisplayLink::new(refresh_hz)?, handler: Box::new(handler) })
+    }
+
+    /// Replaces the output handler. Refreshes already reported are not reported again.
+    pub fn set_handler(&mut self, handler: impl FnMut(&TimeStamp) + 'static) {
+        self.handler = Box::new(handler);
+    }
+
+    /// The link underneath, for its period, run state and missed count.
+    pub fn link(&self) -> &DisplayLink {
+        &self.link
+    }
+
+    /// Starts the link; refresh 0 is at `host_time`.
+    pub fn start(&mut self, host_time: u64) {
+        self.link.start(host_time);
+    }
+
+    /// Stops the link.
+    pub fn stop(&mut self) {
+        self.link.stop();
+    }
+
+    /// Re-anchors the link to presentation feedback; see [`DisplayLink::presented`].
+    pub fn presented(&mut self, host_time: u64, refresh_ns: u64) {
+        self.link.presented(host_time, refresh_ns);
+    }
+
+    /// Reports the newest refresh at or before `host_time` to the handler, once per refresh. Returns the time stamp
+    /// that was delivered, or `None` when nothing was due.
+    pub fn tick(&mut self, host_time: u64) -> Option<TimeStamp> {
+        let stamp = self.link.tick(host_time)?;
+        (self.handler)(&stamp);
+        Some(stamp)
+    }
+}
+
+#[cfg(test)]
+mod handler_tests {
+    use super::*;
+    use std::cell::RefCell;
+    use std::cmp::Ordering;
+    use std::rc::Rc;
+
+    #[test]
+    fn rescaling_rounds_to_the_nearest_unit() {
+        let t = Time { value: 1001, time_scale: 30000, flags: 0 };
+        let ms = t.rescaled(1000).unwrap();
+        assert_eq!((ms.value, ms.time_scale), (33, 1000));
+        assert_eq!(Time { value: -3, time_scale: 2, flags: 0 }.rescaled(1).unwrap().value, -2);
+        assert!(t.rescaled(0).is_none());
+        assert!(Time::indefinite().rescaled(10).is_none());
+    }
+
+    #[test]
+    fn times_add_subtract_and_compare_across_scales() {
+        let a = Time { value: 1, time_scale: 2, flags: 0 };
+        let b = Time { value: 250, time_scale: 1000, flags: 0 };
+        // 250 ms is half a unit of the first scale (halves of a second); rounding half up makes it 1 unit.
+        let sum = a.checked_add(&b).unwrap();
+        assert_eq!((sum.value, sum.time_scale), (2, 2));
+        assert_eq!(sum.seconds(), Some(1.0));
+        let diff = a.checked_sub(&b).unwrap();
+        assert_eq!(diff.value, 0);
+        let whole = Time { value: 1, time_scale: 1, flags: 0 };
+        assert_eq!(a.compare(&whole), Some(Ordering::Less));
+        assert_eq!(whole.compare(&a), Some(Ordering::Greater));
+        assert_eq!(a.compare(&Time { value: 500, time_scale: 1000, flags: 0 }), Some(Ordering::Equal));
+        assert_eq!(a.compare(&Time::indefinite()), None);
+        assert!(a.checked_add(&Time::indefinite()).is_none());
+    }
+
+    #[test]
+    fn the_handler_runs_once_per_reported_refresh() {
+        let seen: Rc<RefCell<Vec<u64>>> = Rc::new(RefCell::new(Vec::new()));
+        let sink = seen.clone();
+        let mut link = HandlerLink::new(100, move |s| sink.borrow_mut().push(s.frame_number)).unwrap();
+        assert!(link.tick(5_000_000).is_none(), "stopped");
+        link.start(0);
+        assert_eq!(link.tick(0).map(|s| s.frame_number), Some(0));
+        assert!(link.tick(5_000_000).is_none(), "same refresh");
+        assert_eq!(link.tick(30_000_000).map(|s| s.frame_number), Some(3));
+        assert_eq!(*seen.borrow(), vec![0, 3]);
+        assert_eq!(link.link().missed_refreshes(), 2);
+        let other = seen.clone();
+        link.set_handler(move |s| other.borrow_mut().push(s.frame_number + 100));
+        link.tick(40_000_000);
+        assert_eq!(*seen.borrow(), vec![0, 3, 104]);
+        link.stop();
+        assert!(!link.link().is_running());
+    }
+
+    #[test]
+    fn a_zero_rate_makes_no_handler_link() {
+        assert!(HandlerLink::new(0, |_| {}).is_none());
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
