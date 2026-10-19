@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.10.4 — 2026-10-19
+
+- The wallpaper and window glass come back after lock and unlock (the desktop surface stays mapped under the lock).
+- One Dock tile per app: pins migrate to stable app ids, no duplicates after app updates, no tile for every installed app.
+- Activity Monitor shows each process's real owner through a process-owners service (system-monitor apps only).
+- Esc works in Files and about 20 other apps (the SDK Escape code).
+- New `calendars` permission with consent (add-only for Mail, full access on request); Settings > App Permissions > Calendars.
+
 ## 0.10.3 — 2026-10-19
 
 - Desktop Lock Screen shows the login window at once with the display on (it went black until a key).
