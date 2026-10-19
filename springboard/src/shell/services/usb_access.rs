@@ -108,12 +108,9 @@ pub fn label_of(key: &str) -> String {
     LIVE.with(|l| l.borrow().iter().find(|c| c.key == key).map(|c| c.label())).unwrap_or_else(|| key.to_string())
 }
 
-/// What Settings shows for each app: the number of devices it holds a grant for.
-pub fn grant_counts() -> Vec<(String, usize)> {
-    GRANTS.with(|g| {
-        let g = g.borrow();
-        g.apps().into_iter().map(|a| (a.clone(), g.count(&a))).collect()
-    })
+/// What Settings shows for an app: the number of devices it holds a grant for.
+pub fn grant_count(app: &str) -> usize {
+    GRANTS.with(|g| g.borrow().count(app))
 }
 
 /// Takes every device grant of `app` back (Settings, or the app was removed).
@@ -830,6 +827,10 @@ impl UsbAccessService {
                     out.push(Event { app: Some(o.app), event: "closed".into(), body: obj(vec![("handle", num(handle)), ("reason", text("the device was unplugged"))]) });
                 }
             }
+        }
+        // a handle whose grant was taken back (Settings, or `revoke`) closes
+        for (handle, o) in self.close_where(|o| !Self::granted(&o.app, &o.key)) {
+            out.push(Event { app: Some(o.app), event: "closed".into(), body: obj(vec![("handle", num(handle)), ("reason", text("access was taken back"))]) });
         }
         // an app that quit loses its Allow Once grants, its open devices and its asked-about list
         let apps: BTreeSet<String> = GRANTS

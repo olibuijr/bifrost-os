@@ -393,6 +393,8 @@ pub struct Row {
     pub location: AuthorizationStatus,
     /// Whether the app may read contacts (a read grant: full or picked).
     pub contacts: bool,
+    /// How many USB or raw HID devices the app holds a grant for.
+    pub usb: usize,
 }
 
 /// The installed apps, in the order the shell lists them.
@@ -405,6 +407,7 @@ pub fn rows() -> Vec<Row> {
             access: access(&a.manifest.id),
             location: location_status(&a.manifest.id),
             contacts: contacts_allowed(&a.manifest.id),
+            usb: super::usb_access::grant_count(&a.manifest.id),
         })
         .collect()
 }
