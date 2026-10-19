@@ -22,6 +22,7 @@ pub mod leave;
 pub mod lastcomm;
 pub mod mdfind;
 pub mod mdutil;
+pub mod midictl;
 pub mod neighbors;
 pub mod mtree;
 pub mod hdiutil;
