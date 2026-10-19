@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+## 0.10.0 — 2026-10-19
+
+Waves 14 and 15: about 30 agent branches merged and checked by the lead (0 errors, 0 warnings).
+- Desktop: the on-screen keyboard never appears by itself on the PC; it opens from the Input menu (Show On-Screen Keyboard,
+  reachable with one source via Settings > Keyboard > Show Input menu) or Settings > Accessibility > Accessibility Keyboard.
+- Input methods: an input-method host (Kana, Hangul) with marked text and a candidate window; pointer, magnify, rotate and
+  drag-and-drop events for apps that ask.
+- Quick Look and Image I/O: animated PNG/GIF, archive listings and picture info in the Space panel; running-time badges on
+  media thumbnails; thumbnails in Search rows; extension-provided thumbnails.
+- Graphics: boolean path operations, patterns and shadings, PDF paths/filters/search/view state, ICC profile writing,
+  generators, colour cubes, stylize filters, reductions and lazy filter graphs; pixel buffer conversion.
+- Web: page-to-app script messages, navigation decisions, content blockers, PDF of a page, a standalone JS context.
+- Audio: MIDI server client socket, virtual endpoints and thru; in-process plug-in host, GM synth, MIDI file player;
+  pan and volume fades in audiod; route-change reports to apps.
+- Contacts (vCard import/export, containers), multi-item transfer, widgets (app-declared kinds, sizes, buttons, live dates),
+  screen savers (options, hot corner start), print sheet sides and colour, USB/HID access with per-device consent,
+  compression streams with flush, a signed and sealed archive format, bundle info and entitlements, GPU kit reference code.
+- Apps: Files permissions grid and date:/in: search terms; Calendar time zones, invitees, birthdays, colours, grid print;
+  Activity Monitor per-process network, new columns, GPU History; Console recents; Dictionary look-up service; Disk Utility
+  partition sheet with typed confirmation; Color Meter display profile.
+- Fixes: wave-14 merge seams in the shell, the Files provider deadlock, certificate date parsing, map drag direction, and
+  shell tests no longer read the host's thermal sensors.
+
+
 - Video: the media player takes a playback rate (0.5x to 3x; the audio is time-stretched and the picture clock runs at the rate).
 - Music engine: crossfade between songs (`Crossfader`: the end of a song is held back and the next start is mixed under it with
   equal-power gains, at most half a song, never on live stations); audiod has a `SetCrossfade` command.
