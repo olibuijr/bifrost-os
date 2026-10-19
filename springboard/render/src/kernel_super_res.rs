@@ -46,28 +46,35 @@ pub fn edge_directed_2x(src: &[f32], w: usize, h: usize) -> Option<Vec<f32>> {
         }
     }
     // Pass two: the samples to the right of and below each original, from the four filled neighbours.
-    let get = |buf: &[f32], x: isize, y: isize| -> f32 {
-        let xx = x.clamp(0, ow as isize - 1) as usize;
-        let yy = y.clamp(0, oh as isize - 1) as usize;
-        buf[yy * ow + xx]
+    // Neighbours outside the plane are missing, not clamped: clamping would read the pixel itself, which is
+    // still unwritten here. A missing side takes the other side's value and reports no gradient on that axis.
+    let get = |buf: &[f32], x: isize, y: isize| -> Option<f32> {
+        if x < 0 || y < 0 || x >= ow as isize || y >= oh as isize {
+            None
+        } else {
+            Some(buf[y as usize * ow + x as usize])
+        }
+    };
+    let pair = |a: Option<f32>, b: Option<f32>| -> (f32, f32) {
+        match (a, b) {
+            (Some(a), Some(b)) => ((a + b) * 0.5, (a - b).abs()),
+            (Some(a), None) | (None, Some(a)) => (a, 0.0),
+            (None, None) => (0.0, 0.0),
+        }
     };
     for oy in 0..oh as isize {
         for ox in 0..ow as isize {
             if (ox + oy) % 2 == 0 {
                 continue; // an original (both even) or a diagonal sample (both odd)
             }
-            let l = get(&out, ox - 1, oy);
-            let r = get(&out, ox + 1, oy);
-            let u = get(&out, ox, oy - 1);
-            let d = get(&out, ox, oy + 1);
-            let dh = (l - r).abs();
-            let dv = (u - d).abs();
+            let (h, dh) = pair(get(&out, ox - 1, oy), get(&out, ox + 1, oy));
+            let (vert, dv) = pair(get(&out, ox, oy - 1), get(&out, ox, oy + 1));
             let v = if dh < dv {
-                (l + r) * 0.5
+                h
             } else if dv < dh {
-                (u + d) * 0.5
+                vert
             } else {
-                (l + r + u + d) * 0.25
+                (h + vert) * 0.5
             };
             out[oy as usize * ow + ox as usize] = v;
         }
