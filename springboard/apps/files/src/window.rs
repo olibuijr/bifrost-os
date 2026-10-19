@@ -413,6 +413,8 @@ impl Files {
                 }
             }
             damage.add(0,ui.pt(self.bottom()).floor() as i32,s.w as i32,ui.pt(self.footer_h()).ceil() as i32);
+            // Share, Tags and the action menu enable with the selection
+            damage.add(0,0,s.w as i32,ui.pt(self.body_top()).ceil() as i32);
         }
         let mut spans = Vec::new(); damage.rows(&mut spans);
         for (top,bottom) in spans { self.paint(ui,&mut s.rows(top,bottom)); }

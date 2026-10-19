@@ -1,3 +1,11 @@
+## 1.33.0 — 2026-10-19
+
+- New Folder selects the new folder and opens its name for editing. Return renames the selection, Cmd+O and Cmd+Down open it, Cmd+Up goes to the enclosing folder. Renaming selects the name without its extension, so typing replaces it; the column and gallery views show the name field too.
+- The shortcut menu is grouped with separators and shows key equivalents (Make Alias is also Ctrl+Cmd+A). The folder menu lists Empty Trash once.
+- Column view: the selection in the column with focus is the accent plate with white text and a white icon; the rows that lead to it use the inactive grey plate.
+- Search looks through This Computer by default, with a scope bar to search only the open folder; the title reads Searching "This Computer" and results come from every folder (a bounded walk, first 1000 hits).
+- The toolbar shares the content background, with glass button groups: a Group and Sort pop-up, Share, Tags and an action menu. Icons default to 128 pt, folder emblems are clearly visible, Locations icons are grey and Applications appears under Favorites. New Folder moved to the File menu (Cmd+Shift+N).
+
 ## 1.32.0 — 2026-10-17
 
 - File-manager sync extensions go through the extension host, the one file providers use. An app that declares `file_manager_folders` is now an extension of the system point `is.bifrost.file-manager-sync`; Files starts it in extension mode when one of its folders is shown, and the host stops it again after it has been idle. The app no longer has to be running. The shortcut menu never waits for a launch: if the extension is not running it is started in the background and shows its rows from the next menu.

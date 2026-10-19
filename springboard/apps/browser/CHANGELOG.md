@@ -1,4 +1,4 @@
-## Unreleased
+## 0.17.0 — 2026-10-19
 
 - Menu bar: the app menus follow View (File, Edit, View, History, Bookmarks, Develop, Window, Help). File has New Tab, New Private Window, Open Location and Close Tab (Cmd+W); History has Show All History (Cmd+Y), Reopen Last Closed Tab, Back and Forward (Cmd+[ and Cmd+], with the tab's earlier and later pages under them), Recently Closed and Recently Visited; the new Bookmarks menu has Show Bookmarks, Add Bookmark, the Favorites bar switch and the bookmarks.
 - Cmd+W closes the tab shown; on the last tab it closes the window (the shell takes the chord when Close Tab is greyed out), and Shift+Cmd+W always closes the window. Before, the shell took Cmd+W and closed the whole window with its tabs.
