@@ -85,6 +85,17 @@ pub(super) fn popup_damage_rect(popup:(usize,usize,usize,usize),bar_h:i32,reach:
     let top=(y-reach).max(bar_h);let bottom=y+h+reach+lip;
     (left,top,right-left,bottom-top)
 }
+/// The chrome surface an open popup is exported as under the window server, and the popup inside it. The surface is the
+/// popup grown by its shadow (`popup_damage_rect`) and clipped to the `screen` (w, h), so the shadow is not cut off at
+/// the popup's edge. The array is the popup's own rectangle (x, y, w, h) in surface px: the only part of the surface that
+/// takes the pointer, so a click on the shadow reaches what is below, as it did when the surface was the popup's size.
+#[cfg(any(test, feature = "desktop-wayland"))]
+pub(super) fn popup_surface_rect(popup:(usize,usize,usize,usize),bar_h:i32,reach:i32,lip:i32,screen:(usize,usize))->((usize,usize,usize,usize),[i32;4]) {
+    let (x,y,w,h)=popup_damage_rect(popup,bar_h,reach,lip);
+    let (x,y)=(x.max(0),y.max(0));
+    let right=(x+w).min(screen.0 as i32);let bottom=(y+h).min(screen.1 as i32);
+    ((x as usize,y as usize,(right-x).max(0) as usize,(bottom-y).max(0) as usize),[popup.0 as i32-x,popup.1 as i32-y,popup.2 as i32,popup.3 as i32])
+}
 /// Where a context menu of `size` (w, h in px) opens for a pointer at `at`, inside `area` (x, y, w, h in px: the screen
 /// below the menu bar and above the Dock). Its top-left corner is the pointer. A menu that would pass the right edge of
 /// the area opens to the left of the pointer instead, and one that would pass the bottom edge opens above it; a menu
@@ -613,7 +624,13 @@ impl Shell {
             let r=self.ui.pt(MENU_RADIUS_PT);
             bifrost_render::glass::push(super::control_center::shell_glass_rect(&bifrost_ui::material_request::ShellSurface::MenuBarMenu.request((x as f32,y as f32,w as f32,h as f32),r)));
             s.fill_rect(x,y,w,h,0);super::desk::soft_shadow(s,&self.ui,x as f32,y as f32,w as f32,h as f32,r);s.fill_rrect(x as f32,y as f32,w as f32,h as f32,r,bifrost_render::glass::tint(MENU_TINT.now()));
-        } else {let mut image=Image::new(w,h);let mut bg=Surface{w,h,stride:w,px:&mut image.px,y0:0};bg.fill_rect(0,0,w,h,CELL);{let wp=self.wallpaper_frame();bg.copy(wp,(self.w-wp.w as i32)/2-x as i32,-(y as i32));}image.blur_material(self.ui.pt(10.) as usize);s.blit(&image,x as i32,y as i32,255,255);s.fill_rrect(x as f32,y as f32,w as f32,h as f32,self.ui.pt(MENU_RADIUS_PT),MENU_TINT.now());}
+        } else {
+            // no glass on the CPU path: the blurred wallpaper under the menu, rounded to its corners, over the shadow
+            let r=self.ui.pt(MENU_RADIUS_PT);
+            super::desk::soft_shadow(s,&self.ui,x as f32,y as f32,w as f32,h as f32,r);
+            let mut image=Image::new(w,h);let mut bg=Surface{w,h,stride:w,px:&mut image.px,y0:0};bg.fill_rect(0,0,w,h,CELL);{let wp=self.wallpaper_frame();bg.copy(wp,(self.w-wp.w as i32)/2-x as i32,-(y as i32));}image.blur_material(self.ui.pt(10.) as usize);image.apply_mask(&crate::gfx::rrect_mask(w,h,r));s.blit(&image,x as i32,y as i32,255,255);s.fill_rrect(x as f32,y as f32,w as f32,h as f32,r,MENU_TINT.now());
+        }
+        self.draw_popup_edge(s,x,y,w,h);
         if menu==Menu::Document{self.draw_doc_panel(s,x,y,w,h);return;}
         let sel=self.menu_row_of(menu);let rows=self.menu_rows(menu);let (spans,_)=menu_spans(&rows);
         // Golden Gate: a row's symbol sits at the text edge and pushes only that row's title right
@@ -631,6 +648,11 @@ impl Shell {
             let text_x=(if row.symbol.is_some(){lead+20.}else{lead})+if row.indent{12.}else{0.};
             self.label(&row.text,13.,Weight::Regular,ink,|im|s.blit(im,x as i32+self.ui.pt(text_x) as i32,(mid-im.h as f32/2.) as i32,255,255));
             if let Some(k)=&row.key{let k=shortcut_spaced(k);self.label(&k,13.,Weight::Regular,if hi{super::ui::MENU_HIGHLIGHT_TEXT}else{super::ui::MENU_SHORTCUT},|im|s.blit(im,(x+w) as i32-self.ui.pt(16.) as i32-im.w as i32,(mid-im.h as f32/2.) as i32,255,255));}}
+    }
+    /// The one-pixel edge every popup gets (a menu, the Dock's menu, an open panel), in the separator colour, so the
+    /// translucent menu still has an outline over white content (E2E N6). Its shadow is `soft_shadow`, drawn before the fill.
+    fn draw_popup_edge(&self,s:&mut Surface,x:usize,y:usize,w:usize,h:usize) {
+        s.stroke_rrect(x as f32,y as f32,w as f32,h as f32,self.ui.pt(MENU_RADIUS_PT),self.ui.pt(0.5).max(1.),super::ui::separator_now());
     }
     pub(super) fn desktop_bar_event(&mut self,event:Event,t:f64)->Option<Vec<Effect>> {
         if !self.desk_active()||self.is_locked(){return None;}
@@ -848,8 +870,12 @@ impl Shell {
     #[cfg(feature="desktop-wayland")]
     pub fn desktop_chrome_frames(&self,pixels:&[u32],width:usize,height:usize)->Vec<crate::bare::wayland::ChromeFrame> {
         if !self.desk_active()||self.is_locked()||self.anim.is_some(){return vec![];}
-        let mut frames=Vec::new();for (id,x,y,w,h) in std::iter::once((0,0,0,width,self.desktop_bar_height())).chain({let r=self.dock_overlay_rect();std::iter::once((2,r.x.max(0) as usize,r.y.max(0) as usize,r.w.max(0) as usize,r.h.max(0) as usize))}).chain(self.desktop_popup_rect().map(|(x,y,w,h)|(1,x,y,w,h))).chain(self.desk_panel_overlays()) {
-            let w=w.min(width.saturating_sub(x));let h=h.min(height.saturating_sub(y));if w==0||h==0{continue;}let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}if id==2&&!self.dock_is_visible(){data.fill(0);}if id==1 {let mask=crate::gfx::rrect_mask(w,h,self.ui.pt(MENU_RADIUS_PT));let mut image=Image{w,h,px:data};image.apply_mask(&mask);data=image.px;}frames.push(crate::bare::wayland::ChromeFrame{id,x:x as i32,y:y as i32,width:w,height:h,pixels:data});
+        // The popup (id 1) is exported with room for its shadow: a crop at the menu's own edge cut the shadow off, so a
+        // menu over white content had no edge at all (E2E N6). Only the menu itself takes the pointer (`input`); a click
+        // on the shadow reaches the window below, as when the surface was the menu's size.
+        let popup=self.desktop_popup_rect().map(|p|popup_surface_rect(p,self.desktop_bar_height() as i32,self.ui.pt(super::desk::SHADOW_REACH_PT) as i32+2,self.ui.pt(2.) as i32,(width,height)));
+        let mut frames=Vec::new();for (id,x,y,w,h) in std::iter::once((0,0,0,width,self.desktop_bar_height())).chain({let r=self.dock_overlay_rect();std::iter::once((2,r.x.max(0) as usize,r.y.max(0) as usize,r.w.max(0) as usize,r.h.max(0) as usize))}).chain(popup.map(|(r,_)|(1,r.0,r.1,r.2,r.3))).chain(self.desk_panel_overlays()) {
+            let w=w.min(width.saturating_sub(x));let h=h.min(height.saturating_sub(y));if w==0||h==0{continue;}let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}if id==2&&!self.dock_is_visible(){data.fill(0);}let input=if id==1 {popup.map(|(_,menu)|menu)}else{None};frames.push(crate::bare::wayland::ChromeFrame{id,x:x as i32,y:y as i32,width:w,height:h,pixels:data,input});
         }
         // Search: id 3, an overlay surface above every window that takes the keyboard while it is open
         if let Some(((x,y,w,h),mask))=self.quicksearch.desk_overlay(&self.ui,self.w) {
@@ -858,7 +884,7 @@ impl Shell {
                 let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}
                 let full=mask.len()/h.max(1);let mask:Vec<u8>=(0..w*h).map(|i|mask.get((i/w)*full+i%w).copied().unwrap_or(0)).collect();
                 let mut image=Image{w,h,px:data};image.apply_mask(&mask);
-                frames.push(crate::bare::wayland::ChromeFrame{id:3,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px});
+                frames.push(crate::bare::wayland::ChromeFrame{id:3,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px,input:None});
             }
         }
         // the assistant panel: id 6, an overlay surface like Search (its keyboard is exclusive while it is open)
@@ -868,14 +894,14 @@ impl Shell {
                 let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}
                 let full=mask.len()/h.max(1);let mask:Vec<u8>=(0..w*h).map(|i|mask.get((i/w)*full+i%w).copied().unwrap_or(0)).collect();
                 let mut image=Image{w,h,px:data};image.apply_mask(&mask);
-                frames.push(crate::bare::wayland::ChromeFrame{id:6,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px});
+                frames.push(crate::bare::wayland::ChromeFrame{id:6,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px,input:None});
             }
         }
         // Quick Look: id 7, an overlay surface above every window (its keys come from the shell's own keyboard reader)
         if let Some(((x,y,w,h),mask))=self.quick_look_overlay() {
             let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}
             let mut image=Image{w,h,px:data};image.apply_mask(&mask);
-            frames.push(crate::bare::wayland::ChromeFrame{id:7,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px});
+            frames.push(crate::bare::wayland::ChromeFrame{id:7,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px,input:None});
         }
         frames
     }
@@ -999,7 +1025,44 @@ mod bar_ink_tests {
 
 #[cfg(test)]
 mod menu_damage_tests {
-    use super::popup_damage_rect;
+    use super::{popup_damage_rect, popup_surface_rect};
+
+    const SCREEN: (usize, usize) = (1000, 800);
+
+    #[test]
+    fn the_exported_surface_is_the_popup_and_its_shadow() {
+        // the damage rectangle of the popup at (100, 34) 200 x 150 is (88, 28, 224, 170)
+        let (surface, menu) = popup_surface_rect((100, 34, 200, 150), 28, 12, 2, SCREEN);
+        assert_eq!(surface, (88, 28, 224, 170));
+        assert_eq!(menu, [12, 6, 200, 150], "the popup inside it: 12 px of shadow to its left, 6 px up to the bar");
+    }
+
+    #[test]
+    fn the_surface_is_clipped_to_the_screen_and_the_menu_rectangle_follows() {
+        // at the left edge the shadow is cut at x 0, so the popup starts 5 px in
+        let (surface, menu) = popup_surface_rect((5, 34, 100, 40), 28, 12, 2, SCREEN);
+        assert_eq!(surface, (0, 28, 117, 60));
+        assert_eq!(menu, [5, 6, 100, 40]);
+        // at the right edge it is cut at the screen's width: 888 + 112 = 1000
+        let (surface, menu) = popup_surface_rect((900, 34, 90, 40), 28, 12, 2, SCREEN);
+        assert_eq!(surface, (888, 28, 112, 60));
+        assert_eq!(menu, [12, 6, 90, 40]);
+        // at the bottom it is cut at the screen's height: 748 + 52 = 800
+        let (surface, menu) = popup_surface_rect((100, 760, 200, 30), 28, 12, 2, SCREEN);
+        assert_eq!(surface, (88, 748, 224, 52));
+        assert_eq!(menu, [12, 12, 200, 30]);
+    }
+
+    #[test]
+    fn the_menu_rectangle_stays_inside_the_surface_and_is_smaller_than_it() {
+        for popup in [(100, 200, 264, 150), (0, 34, 300, 100), (700, 600, 300, 200)] {
+            let ((sx, sy, sw, sh), menu) = popup_surface_rect(popup, 28, 12, 2, SCREEN);
+            assert!(menu[0] >= 0 && menu[1] >= 0, "{popup:?}: the menu starts inside the surface");
+            assert!(menu[0] + menu[2] <= sw as i32 && menu[1] + menu[3] <= sh as i32, "{popup:?}: and ends inside it");
+            assert_eq!((sx as i32 + menu[0], sy as i32 + menu[1]), (popup.0 as i32, popup.1 as i32), "{popup:?}: at the popup's screen position");
+            assert!(sw as i32 > menu[2] && sh as i32 > menu[3], "{popup:?}: there is shadow to show");
+        }
+    }
 
     // A menu bar 28 px tall, a shadow reach of 12 px (10 pt + 2 at scale 1) and a 2 px lip.
     #[test]
@@ -1285,6 +1348,65 @@ mod context_menu_shell_tests {
         let sh = open_at(right as f32, 200.);
         let (x, y, w, _) = sh.desktop_popup_rect().unwrap();
         assert_eq!((x + w, y), (right as usize, 200), "its right edge is the pointer");
+    }
+
+    /// E2E N6: under the window server the popup is a chrome surface cropped to the menu, so its shadow was cut off and
+    /// a menu over white content had no edge. The surface now has room for the shadow; only the menu takes input.
+    #[test]
+    fn the_exported_surface_has_room_for_the_shadow_and_only_the_menu_takes_input() {
+        let mut sh = open_at(300., 400.);
+        sh.anim = None;
+        let (w, h) = (sh.w as usize, sh.h as usize);
+        let pixels = vec![0u32; w * h];
+        let (px, py, pw, ph) = sh.desktop_popup_rect().unwrap();
+        let frames = sh.desktop_chrome_frames(&pixels, w, h);
+        let f = frames.iter().find(|f| f.id == 1).expect("an open menu is exported");
+        assert_eq!(f.pixels.len(), f.width * f.height);
+        assert_eq!(f.input, Some([px as i32 - f.x, py as i32 - f.y, pw as i32, ph as i32]), "the menu's own rectangle, in surface px");
+        let reach = sh.ui.pt(crate::shell::desk::SHADOW_REACH_PT) as i32;
+        assert!(f.x <= px as i32 - reach && f.y <= py as i32 - reach, "room for the shadow left of and above the menu");
+        assert!(f.x + f.width as i32 >= (px + pw) as i32 + reach && f.y + f.height as i32 >= (py + ph) as i32 + reach, "and right of and below it");
+        assert!(frames.iter().filter(|f| f.id != 1).all(|f| f.input.is_none()), "the other chrome takes the whole surface");
+    }
+
+    /// The shadow does not change what a click does: the menu's rectangle decides, a press on the shadow closes the menu.
+    #[test]
+    fn hit_testing_uses_the_menu_rectangle_not_the_shadow() {
+        let mut sh = open_at(300., 400.);
+        sh.anim = None;
+        let (px, py, _, _) = sh.desktop_popup_rect().unwrap();
+        let (w, h) = (sh.w as usize, sh.h as usize);
+        let pixels = vec![0u32; w * h];
+        let f = sh.desktop_chrome_frames(&pixels, w, h).into_iter().find(|f| f.id == 1).unwrap();
+        let on_shadow = (px as f32 - 3., py as f32 + 10.);
+        assert!(f.x as f32 <= on_shadow.0, "the point is inside the exported surface");
+        sh.desktop_bar_event(Event::Down(px as f32 + 5., py as f32 + 5.), 1.);
+        assert!(sh.desktop_menu.is_some(), "a press inside the menu keeps it open");
+        sh.desktop_bar_event(Event::Down(on_shadow.0, on_shadow.1), 2.);
+        assert!(sh.desktop_menu.is_none(), "a press on the shadow, outside the menu, closes it");
+    }
+
+    /// Both draw paths give the menu a shadow around it and a one-pixel edge in the separator colour.
+    #[test]
+    fn the_popup_is_drawn_with_a_shadow_and_a_hairline_edge() {
+        let sh = open_at(300., 400.);
+        let (w, h) = (sh.w as usize, sh.h as usize);
+        let (px, py, pw, ph) = sh.desktop_popup_rect().unwrap();
+        let mut buf = vec![0u32; w * h];
+        sh.draw_desktop_popup(&mut Surface { w, h, stride: w, px: &mut buf, y0: 0 });
+        let alpha = |x: usize, y: usize| buf[y * w + x] >> 24;
+        let cx = px + pw / 2;
+        let reach = sh.ui.pt(crate::shell::desk::SHADOW_REACH_PT) as usize;
+        assert!((1..=reach + 2).any(|d| alpha(cx, py + ph + d) > 0), "a shadow below the menu");
+        assert!((1..=reach + 2).any(|d| alpha(px - d, py + ph / 2) > 0), "and beside it");
+        assert_eq!(alpha(cx, py + ph + 3 * reach), 0, "none beyond its reach");
+        let edge = buf[py * w + cx];
+        let want = crate::shell::ui::separator_now();
+        assert_eq!(edge >> 24, 0xff, "the edge is opaque");
+        for shift in [0, 8, 16] {
+            let (a, b) = ((edge >> shift & 0xff) as i32, (want >> shift & 0xff) as i32);
+            assert!((a - b).abs() <= 3, "the top edge is the separator colour (channel at {shift}: {a} vs {b})");
+        }
     }
 
     #[test]

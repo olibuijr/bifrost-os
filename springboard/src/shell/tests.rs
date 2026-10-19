@@ -552,6 +552,53 @@
         assert!(sh.is_locked(),"a focus event must not lift a window over the lock screen");
     }
 
+    /// The window server places and moves toplevels, so the shell's window rectangle follows the frame it reports:
+    /// what is placed from the rectangle (an app's context menu opens at the pointer) is then where the window really
+    /// is. Before, `state` said 852,339 for a window drawn at 800,360 and menus opened 52 px right and 21 px high
+    /// (E2E N1).
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn a_frame_from_the_window_server_moves_the_shell_rectangle_and_the_menus_placed_from_it() {
+        use crate::bare::wayland::WindowEvent;
+        use desktop_bar::{ContextMenu,Menu};
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        sh.desk_open(AppId::Settings,0.);
+        let id=apps().iter().position(|a|a.id==AppId::Settings).unwrap() as u32+1;
+        let m=sh.desk_metrics();
+        let i=sh.desk.as_ref().unwrap().index_of(AppId::Settings).unwrap();
+        let before=sh.desk.as_ref().unwrap().wins[i].r;
+        let body_before=sh.desk.as_ref().unwrap().wins[i].body(&m);
+        // the window server drew it 52 px to the right and 21 px up from where the shell believed it was
+        let (x,y)=(before.x+52,before.y-21);
+        sh.dirty=false;
+        sh.wayland_window_event(WindowEvent::Frame(id,x,y,before.w,before.h));
+        let after=sh.desk.as_ref().unwrap().wins[i].r;
+        assert_eq!((after.x,after.y),(x,y),"the position is the window server's");
+        assert_eq!((after.w,after.h),(before.w,before.h),"the size stays with the configure");
+        assert!(sh.dirty,"the presenter gets the new frame");
+        let body=sh.desk.as_ref().unwrap().wins[i].body(&m);
+        assert_eq!((body.x-body_before.x,body.y-body_before.y),(52,-21),"the body, which menus are placed from, moved with it");
+        // a context menu the app asks for at (40, 30) in its body opens at that point on the screen
+        sh.desktop_context=Some(ContextMenu{slot:0,x:(body.x+40) as f32,y:(body.y+30) as f32,items:vec![bifrost_proto::ContextItem::new(1,"Open")]});
+        sh.desktop_menu=Some(Menu::Context);
+        let (px,py,_,_)=sh.desktop_popup_rect().unwrap();
+        assert_eq!((px as i32,py as i32),(body.x+40,body.y+30),"top-left at the pointer");
+        // the same frame again changes nothing and asks for no redraw
+        sh.dirty=false;
+        sh.wayland_window_event(WindowEvent::Frame(id,x,y,before.w,before.h));
+        assert!(!sh.dirty,"a repeated frame is not a change");
+        // a frame for a window the shell does not have is ignored
+        sh.wayland_window_event(WindowEvent::Frame(9999,1,2,3,4));
+        assert_eq!(sh.desk.as_ref().unwrap().wins[i].r,after);
+        // an app's extra window (a flagged window-server id) follows its frame too
+        let extra=AppId::ExternalWindow(0,3);
+        sh.desk.as_mut().unwrap().open(&m,extra,(600,400));
+        let j=sh.desk.as_ref().unwrap().index_of(extra).unwrap();
+        sh.wayland_window_event(WindowEvent::Frame(desk::win_id(extra).unwrap(),321,123,600,400));
+        let moved=sh.desk.as_ref().unwrap().wins[j].r;
+        assert_eq!((moved.x,moved.y),(321,123),"the extra window is where the window server put it");
+    }
+
     /// Ctrl+Cmd+Q is the lock chord: it maps to `Shortcut::Lock` (the plain Cmd+Q still closes) and locks the desktop.
     #[cfg(feature="desktop-wayland")]
     #[test]

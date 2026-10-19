@@ -71,6 +71,8 @@ pub struct WmState {
     pub bifrost_material: smithay::reexports::wayland_server::backend::GlobalId,
     /// `bifrost_window_level_v1` (the shell puts a toplevel on the floating level).
     pub bifrost_window_level: smithay::reexports::wayland_server::backend::GlobalId,
+    /// The clients that bound it and the frame each was last told for its toplevels (`report_frames`).
+    pub frame_reports: crate::window_level::FrameReports,
     /// The appearance materials follow: Dark unless `BIFROST_WM_APPEARANCE=light`.
     pub material_dark: bool,
     pub lock_state: smithay::wayland::session_lock::SessionLockManagerState,
@@ -171,6 +173,7 @@ impl WmState {
             background_effect: crate::background_effect::init(&dh),
             bifrost_material: crate::bifrost_material::init(&dh),
             bifrost_window_level: crate::window_level::init(&dh),
+            frame_reports: Default::default(),
             material_dark: std::env::var("BIFROST_WM_APPEARANCE").map(|v| v != "light").unwrap_or(true),
             lock_state: smithay::wayland::session_lock::SessionLockManagerState::new::<WmState, _>(&dh, |_| true),
             locked: false,
@@ -254,6 +257,7 @@ impl WmState {
         for w in &order {
             self.space.raise_element(w, false);
         }
+        self.report_frames();
     }
 
     /// Moves every mapped window to the frame `wm` holds for it, in `wm` stacking order.
@@ -265,6 +269,28 @@ impl WmState {
                 None => self.space.unmap_elem(&window),
             }
         }
+        self.report_frames();
+    }
+
+    /// Tells each client that bound `bifrost_window_level_v1` where the window server put its mapped toplevels, when
+    /// that changed (map, move, resize, tile, maximize). The window server owns the positions and xdg-shell never
+    /// tells a client, so the shell would otherwise place menus and taps from a frame of its own that drifts from the
+    /// real one. Called wherever a window's frame reaches the space (`place`, `apply_frames`).
+    pub fn report_frames(&mut self) {
+        if self.frame_reports.is_empty() {
+            return;
+        }
+        let now: Vec<(WindowId, Rect, WlSurface)> = self
+            .wm
+            .stack()
+            .into_iter()
+            .filter_map(|id| {
+                let rect = self.wm.rect(id)?;
+                let surface = self.window(id)?.wl_surface()?.into_owned();
+                Some((id, rect, surface))
+            })
+            .collect();
+        self.frame_reports.send(&now);
     }
 
     /// Raises `id`, gives it keyboard focus and marks it active; every other window is marked inactive.
