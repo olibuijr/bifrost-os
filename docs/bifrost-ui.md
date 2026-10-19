@@ -5509,3 +5509,31 @@ An installed app can provide an extension and another can use it. Wired path, fi
   SDP, OBEX, Matter, GeoJSON, code requirements, surface registry, serial lines and others) are re-exported from `bifrost_app`.
 - **Left open this wave**: Matter (the secure channel and commissioning transports are a whole engine) and MediaIntelligence (no
   open face model). MatterSupport is n/a (an ecosystem app extension point).
+
+## Core Image and Core Video, wave 15 (2026-10-19): generators, QR, stylize, lazy graph, pixel buffer conversion
+
+Host-tested only (written, not run); rows in `core-image.json` and `core-video.json` stay `partial` until the lead checks them on Midget.
+Images are `gfx::Image` (premultiplied, red in the low byte).
+
+| Apple | BifrOSt |
+|---|---|
+| `CIQRCodeGenerator`, `CIRoundedQRCodeGenerator` | `image_generate::qr_code(text, Correction, scale)`, `qr_code_styled(.., quiet, dark, light, rounded)`; model `render/src/qr_generate.rs` (`QrCode::encode`, `encode_bytes`; versions 1 to 10, numeric, alphanumeric or byte segment, lowest-penalty mask) |
+| `CIDetector` (QR code), `CIQRCodeFeature` | `image_detect::qr_message(&Image)`; the decoder moved from the shell's camera module to `render/src/qr_decode.rs` (the camera keeps `shell/camera/qr.rs` as a re-export) |
+| `CICheckerboardGenerator`, `CIStripesGenerator`, `CIRadialGradient`, `CIRandomGenerator` | `image_generate::checkerboard`, `stripes`, `radial_gradient`, `random` |
+| `CIColorCube`, `CIColorMap`, `CIPalettize`, `CIConvertRGBtoLab` | `image_generate::color_cube` (+ `color_cube_from_text` for `.cube` tables), `color_map`, `palettize`, `rgb_to_lab`, `lab_to_rgb` |
+| `CIUnsharpMask`, `CISharpenLuminance`, `CIBloom`, `CIGloom`, `CIPixellate`, `CICrystallize`, `CIPointillize`, `CIComicEffect`, `CISpotLight` | `image_stylize::unsharp_mask`, `sharpen_luminance`, `bloom`, `gloom`, `pixellate`, `crystallize`, `pointillize`, `comic`, `spot_light` |
+| screens, `CICMYKHalftone`, tile filters | `image_stylize::halftone(kind, &ScreenParams)`, `cmyk_halftone`, `kaleidoscope`, `op_tile`, `affine_tile`, `triangle_tile`, `parallelogram_tile`, `perspective_tile` |
+| transition filters | `image_stylize::transition(from, to, time, Transition::...)` (dissolve, swipe, bars swipe, copy machine, flash, mod, page curl, ripple, accordion fold, disintegrate) |
+| `CIConvolution3X3` to `9Vertical`, `CIConvolutionRGB*` | `image_stylize::convolve(img, side, weights, bias, alpha)`, `convolve_line(img, Axis, taps, bias, alpha)`; `alpha` false gives the RGB forms; bias is a fraction of the channel range |
+| `CIAreaAverage`, `CIAreaMinMax`, `CIAreaHistogram`, `CIRowAverage`, `CIColumnAverage`, `CIKMeans` | `image_stylize::average_colour`, `area_average`, `area_min_max`, `area_histogram`, `row_averages`, `column_averages`, `kmeans`, `dominant_colours`; model `render/src/colour_stats.rs` |
+| `CIImage` graph with several inputs, `CIContext` cache | `lazy_image::{GraphImage, GraphContext}`: `from_image`, `generate`, `map`, `combine`; `render` evaluates each shared node once and keeps results in a byte-limited cache; helpers `graph_filter`, `graph_blend`, `graph_from_lazy` |
+| `CVPixelBuffer` from and to `CIImage` | `PixelBuffer::from_image(&Image, fourcc)`, `to_image()` (needs a lock), `write_image`, `from_planes`; conversions in `render/src/pixel_convert.rs` (four 32-bit RGB layouts, RGB565, NV12, NV16 in video range, matrix from the attachments) |
+| `CVPixelFormatDescription` | `pixel_buffer::pixel_format_description(fourcc)`, `pixel_format_codes()` (the table is fixed; no registration) |
+| `CVDisplayLinkSetOutputHandler`, `CVTime` arithmetic | `display_link::HandlerLink` (handler runs per reported refresh), `Time::rescaled`, `checked_add`, `checked_sub`, `compare` |
+| decoded frames with colour metadata | `media::DmaPicture::colour_attachments()` (HD is BT.709, SD is BT.601 / SMPTE 170M, as `convert::matrix_for`), `to_tight_nv12()` |
+| dma-buf NV12 window surfaces | `system::dma_buf::NV12`, `Descriptor::validate` takes two linear planes of an even-sized picture |
+
+Remaining gaps: the lazy graph and every filter are CPU only and no shell window draws a graph; QR stops at version 10 and mixed segments, and
+there are no barcode generators, face or text detectors; the colour conversions ignore ICC profiles; RAW and HEIF input are not decoded;
+decoders do not parse the stream's own colour description (the attachments follow the height convention); the compositor has no selectable
+blend operator; Metal and IOSurface have no counterpart.
