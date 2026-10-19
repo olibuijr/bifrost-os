@@ -19,9 +19,10 @@
 //! stale, and `sources()` and `destinations()` re-read them on the next call.
 
 pub use bifrost_midi::wire::{DeviceInfo, EndpointInfo, EntityInfo, Refusal, Setup, ThruSpec};
-use bifrost_midi::ump::{Midi1ToUmp, Ump};
+use crate::midi_ci::{DiscoveryManager, Muid};
+use bifrost_midi::ump::{Midi1ToUmp, SysexAssembler, Ump};
 use bifrost_midi::wire::{frame, FrameReader, Message, Request, WireError, SOCKET_NAME, VERSION};
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
 use std::fmt;
 use std::io::{self, Read, Write};
 use std::os::unix::net::UnixStream;
@@ -313,6 +314,19 @@ impl MidiClient {
         self.send(destination, host_ns, &packets)
     }
 
+    /// Injects MIDI 1.0 bytes from a virtual source this client created (as `send_bytes` does for a destination).
+    pub fn inject_bytes(&mut self, source: u32, host_ns: u64, bytes: &[u8]) -> Result<(), MidiError> {
+        let mut conv = Midi1ToUmp::new(0);
+        let mut packets = Vec::new();
+        for b in bytes {
+            conv.push(*b, &mut packets);
+        }
+        if packets.is_empty() {
+            return Ok(());
+        }
+        self.inject(source, host_ns, &packets)
+    }
+
     /// Injects packets from a virtual source this client created, to every client connected to it.
     pub fn inject(&mut self, source: u32, host_ns: u64, packets: &[Ump]) -> Result<(), MidiError> {
         for chunk in packets.chunks(bifrost_midi::wire::MAX_PACKETS) {
@@ -385,6 +399,97 @@ impl MidiClient {
             }
         }
         self.poll()
+    }
+}
+
+/// Joins the system exclusive packets of received events into whole messages, one assembler per sender, so a message
+/// split over several packets (and several events) comes out in one piece, from `F0` through `F7`.
+#[derive(Default)]
+pub struct SysexCollector {
+    /// Keyed by (true for a packet that reached a virtual destination, the source or destination id).
+    assemblers: BTreeMap<(bool, u32), SysexAssembler>,
+}
+
+impl SysexCollector {
+    pub fn new() -> SysexCollector {
+        SysexCollector::default()
+    }
+
+    /// Feeds one event; `(sender, message)` when it completes a message. The sender is the source id for a packet
+    /// from a connected source and the sending endpoint for one delivered to a destination.
+    pub fn push(&mut self, event: &MidiEvent) -> Option<(u32, Vec<u8>)> {
+        let (key, id, packet) = match event {
+            MidiEvent::Packet { source, packet, .. } => ((false, *source), *source, packet),
+            MidiEvent::Delivered { from, packet, destination, .. } => ((true, *destination), *from, packet),
+            _ => return None,
+        };
+        let payload = self.assemblers.entry(key).or_default().push(packet)?;
+        let mut message = Vec::with_capacity(payload.len() + 2);
+        message.push(0xF0);
+        message.extend_from_slice(&payload);
+        message.push(0xF7);
+        Some((id, message))
+    }
+
+    /// Feeds a batch of events and returns every whole message in it, in order.
+    pub fn collect(&mut self, events: &[MidiEvent]) -> Vec<(u32, Vec<u8>)> {
+        events.iter().filter_map(|e| self.push(e)).collect()
+    }
+}
+
+/// Where a MIDI-CI link sends its messages: to a destination (a device's input) or out of a virtual source of this
+/// client (to whoever is connected to it).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CiOut {
+    Destination(u32),
+    Source(u32),
+}
+
+/// MIDI-CI (capability inquiry) over the MIDI server: discovers devices and profiles, and answers the inquiries it
+/// receives, with the discovery manager of `midi_ci` doing the protocol and the server carrying the system
+/// exclusive messages.
+pub struct MidiCiLink {
+    manager: DiscoveryManager,
+    collector: SysexCollector,
+    out: CiOut,
+}
+
+impl MidiCiLink {
+    pub fn new(manager: DiscoveryManager, out: CiOut) -> MidiCiLink {
+        MidiCiLink { manager, collector: SysexCollector::new(), out }
+    }
+
+    pub fn manager(&self) -> &DiscoveryManager {
+        &self.manager
+    }
+
+    fn send(&self, client: &mut MidiClient, bytes: &[u8]) -> Result<(), MidiError> {
+        match self.out {
+            CiOut::Destination(d) => client.send_bytes(d, 0, bytes),
+            CiOut::Source(s) => client.inject_bytes(s, 0, bytes),
+        }
+    }
+
+    /// Broadcasts a discovery inquiry; the replies arrive through `process`.
+    pub fn discover(&self, client: &mut MidiClient) -> Result<(), MidiError> {
+        self.send(client, &self.manager.discovery_inquiry())
+    }
+
+    /// Asks a discovered device for its profiles.
+    pub fn inquire_profiles(&self, client: &mut MidiClient, target: Muid) -> Result<(), MidiError> {
+        self.send(client, &self.manager.profile_inquiry(target))
+    }
+
+    /// Feeds the received events to the manager and sends back what it answers. Returns how many whole system
+    /// exclusive messages were handled (MIDI-CI or not).
+    pub fn process(&mut self, client: &mut MidiClient, events: &[MidiEvent]) -> Result<usize, MidiError> {
+        let messages = self.collector.collect(events);
+        for (_, bytes) in &messages {
+            if let Some(reply) = self.manager.handle(bytes) {
+                self.send(client, &reply)?;
+            }
+        }
+        Ok(messages.len())
     }
 }
 
@@ -702,5 +807,70 @@ mod tests {
         let p = socket_path();
         // either the override or the audio run directory, always ending in the socket name or an override
         assert!(p.ends_with(SOCKET_NAME) || std::env::var_os("BIFROST_MIDI_SOCK").is_some());
+    }
+
+    fn ci_info(model: u16) -> crate::midi_ci::DeviceInfo {
+        crate::midi_ci::DeviceInfo {
+            manufacturer: [0x7D, 0, 0],
+            family: 1,
+            model,
+            software_revision: [1, 0, 0, 0],
+            capability_category: 1,
+            max_sysex_size: 512,
+        }
+    }
+
+    #[test]
+    fn long_sysex_arrives_whole_through_the_collector() {
+        let server = TestServer::start(Hub::new());
+        let mut a = server.client("A");
+        let mut b = server.client("B");
+        let out = a.create_source("A out").unwrap();
+        b.connect_source(out).unwrap();
+        // 20 data bytes: four packets of six
+        let mut msg = vec![0xF0];
+        msg.extend((1..=20u8).collect::<Vec<u8>>());
+        msg.push(0xF7);
+        a.inject_bytes(out, 0, &msg).unwrap();
+        let mut collector = SysexCollector::new();
+        let mut got = Vec::new();
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while got.is_empty() && Instant::now() < deadline {
+            let events = b.wait(Duration::from_millis(50)).unwrap();
+            got.extend(collector.collect(&events));
+        }
+        assert_eq!(got, vec![(out, msg)]);
+    }
+
+    #[test]
+    fn two_clients_find_each_other_with_midi_ci_over_the_server() {
+        let server = TestServer::start(Hub::new());
+        let mut device = server.client("Device");
+        let mut host = server.client("Host");
+        let device_in = device.create_destination("Device in").unwrap();
+        let device_out = device.create_source("Device out").unwrap();
+        host.connect_source(device_out).unwrap();
+        let mut device_link = MidiCiLink::new(DiscoveryManager::new(Muid(0x0100_0001), ci_info(7)), CiOut::Source(device_out));
+        let mut host_link = MidiCiLink::new(DiscoveryManager::new(Muid(0x0200_0002), ci_info(9)), CiOut::Destination(device_in));
+        host_link.discover(&mut host).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while host_link.manager().discovered_nodes().is_empty() && Instant::now() < deadline {
+            let events = device.wait(Duration::from_millis(20)).unwrap();
+            device_link.process(&mut device, &events).unwrap();
+            let events = host.wait(Duration::from_millis(20)).unwrap();
+            host_link.process(&mut host, &events).unwrap();
+        }
+        let found = host_link.manager().discovered_nodes();
+        assert_eq!(found.len(), 1);
+        assert_eq!((found[0].muid, found[0].info.model), (Muid(0x0100_0001), 7));
+    }
+
+    #[test]
+    fn the_collector_ignores_events_that_are_not_packets() {
+        let mut c = SysexCollector::new();
+        assert_eq!(c.push(&MidiEvent::SetupChanged), None);
+        assert_eq!(c.push(&MidiEvent::SendRefused(Refusal::BadObject)), None);
+        let plain = MidiEvent::Packet { source: 1, host_ns: 0, packet: note(60) };
+        assert_eq!(c.push(&plain), None);
     }
 }
