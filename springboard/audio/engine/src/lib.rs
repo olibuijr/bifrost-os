@@ -18,5 +18,8 @@ pub mod engine;
 pub mod graph;
 pub mod rt;
 
+/// The unit model the engine hosts (units, parameters, the plug-in loader, the sequencer and the built-in synth), so an
+/// app that has the engine has the units too.
+pub use bifrost_audio_units as units;
 pub use engine::{Engine, EngineConfig, EngineError, NodeId, OUTPUT};
 pub use rt::{EdgeHandle, MidiHandle, NodeHandle, PlayerHandle, Tap};

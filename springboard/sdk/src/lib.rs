@@ -346,6 +346,9 @@ pub mod midi;
 /// The client of the system MIDI server (`MidiClient`): hardware and virtual sources and destinations, connect, timestamped
 /// send and inject, and device hotplug events, over the server's unix socket.
 pub mod midi_client;
+/// MIDI file playback (`MidiPlayer`): a Standard MIDI File or a timed sequence through the General MIDI synth or any
+/// instrument unit in the audio engine, sequenced sample-accurately, with transport, loop, rate, offline render to WAV.
+pub mod midi_player;
 pub mod midi_ci;
 pub mod midi_ci_property;
 pub mod midi_network;
