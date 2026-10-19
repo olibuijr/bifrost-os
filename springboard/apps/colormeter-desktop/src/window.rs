@@ -86,6 +86,8 @@ pub struct ColorMeter {
     /// The readout pixel and loupe size the last loupe request was sent for, to skip repeats while not continuous.
     pub sampled: Option<(u32, u32, u32)>,
     pub space: Space,
+    /// The display's own profile, when one was found: Native shows the reading in it. None leaves Native as the codes.
+    pub profile: Option<color::DisplayProfile>,
     pub format: CopyFormat,
     /// The last thing copied, shown in the readout.
     pub copied: Option<String>,
@@ -107,6 +109,7 @@ impl ColorMeter {
             show_position: true,
             sampled: None,
             space: Space::Srgb,
+            profile: None,
             format: CopyFormat::Hex,
             copied: None,
             size: (0.0, 0.0),
@@ -170,7 +173,25 @@ impl ColorMeter {
         }
         let rect = self.aperture_rect()?;
         let px = color::average(&self.source.read(rect)?)?;
-        Some(convert(px, self.space))
+        Some(self.convert_pixel(px))
+    }
+
+    /// `px` in the chosen space. Native goes through the display's profile when there is one.
+    pub fn convert_pixel(&self, px: Rgb8) -> Reading {
+        if self.space == Space::Native {
+            if let Some(reading) = self.profile.as_ref().and_then(|p| p.convert(px)) {
+                return reading;
+            }
+        }
+        convert(px, self.space)
+    }
+
+    /// What the readout and the View menu call `space`: Native names the display's profile when it has one.
+    pub fn space_title(&self, space: Space) -> String {
+        match (space, &self.profile) {
+            (Space::Native, Some(profile)) => format!("Native ({})", profile.name),
+            _ => space.name().to_string(),
+        }
     }
 
     /// The display pixels the reading averages: the aperture square around the readout's pixel.
@@ -224,7 +245,7 @@ impl ColorMeter {
 
     /// The readout rows, label and value.
     pub fn rows(&self) -> Vec<(String, String)> {
-        let mut rows = vec![("Colour space".to_string(), self.space.name().to_string())];
+        let mut rows = vec![("Colour space".to_string(), self.space_title(self.space))];
         match self.reading() {
             Some(r) => {
                 rows.push(("Hex".into(), color::hex(r.codes)));
@@ -426,6 +447,23 @@ mod tests {
         m.size = (1000.0, 640.0);
         m.refresh();
         m
+    }
+
+    #[test]
+    fn native_goes_through_the_display_profile_when_there_is_one() {
+        let mut m = meter(20, 20, (3, 4));
+        m.space = Space::Native;
+        let plain = m.reading().unwrap();
+        assert_eq!(plain.codes, Rgb8::new(3 + 4 * 20, 40, 200), "no profile: the codes unconverted");
+        assert_eq!(m.space_title(Space::Native), "Native");
+        m.profile = Some(color::DisplayProfile::from_bytes("panel", &bifrost_app::colorsync::Builtin::DisplayP3.bytes()).unwrap());
+        let shown = m.reading().unwrap();
+        assert_ne!(shown.codes, plain.codes, "the same pixel reads differently in the panel's profile");
+        assert_eq!(m.space_title(Space::Native), "Native (Display P3)");
+        assert!(m.rows()[0].1.contains("Display P3"));
+        m.space = Space::Srgb;
+        assert_eq!(m.reading().unwrap().codes, plain.codes, "the other spaces ignore the profile");
+        assert_eq!(m.space_title(Space::Srgb), "sRGB");
     }
 
     #[test]

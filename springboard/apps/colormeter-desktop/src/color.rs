@@ -2,7 +2,11 @@
 //! Display P3, Adobe RGB and Generic RGB, averages the pixels of an aperture, and formats the result as hex, decimal,
 //! 16-bit and percent. Nothing here reads the screen or the clipboard. The sRGB transfer function and the sRGB-to-Display-P3
 //! and sRGB-to-Adobe-RGB matrices are public standards. Generic RGB is modelled as a gamma of 1.8 on the sRGB primaries,
-//! which is an approximation until its own primaries are wired in.
+//! which is an approximation until its own primaries are wired in. `DisplayProfile` is the display's own ICC profile:
+//! Native shows the codes the display is sent as they come out in that profile.
+
+use bifrost_app::colorsync::{Builtin, Profile, ProfileToProfile, RenderingIntent};
+use std::path::{Path, PathBuf};
 
 /// One pixel as 8-bit codes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -208,6 +212,69 @@ pub fn copy_text(reading: &Reading, format: CopyFormat) -> String {
     }
 }
 
+/// The most bytes of a display profile file that are read.
+pub const MAX_PROFILE_BYTES: u64 = 16 << 20;
+
+/// The ICC profile of the display, as an sRGB-to-profile transform. The display is driven with sRGB codes, so this is what
+/// a reading looks like in the profile the display was characterised with.
+#[derive(Clone, Debug)]
+pub struct DisplayProfile {
+    /// The profile's own description, or its file name when it has none.
+    pub name: String,
+    transform: ProfileToProfile,
+}
+
+impl DisplayProfile {
+    /// Prepares the transform for the profile in `bytes`. `fallback_name` names it when it has no description. An error
+    /// is a sentence: the bytes are not a profile, or it is one the transform cannot take (not an RGB profile).
+    pub fn from_bytes(fallback_name: &str, bytes: &[u8]) -> Result<DisplayProfile, String> {
+        let profile = Profile::parse(bytes).map_err(|e| format!("{fallback_name} is not a colour profile ({e:?})."))?;
+        let name = profile.description(bytes).map(|d| d.trim().to_string()).filter(|d| !d.is_empty()).unwrap_or_else(|| fallback_name.to_string());
+        let transform = ProfileToProfile::open(&Builtin::Srgb.bytes(), bytes, RenderingIntent::RelativeColorimetric, false)
+            .map_err(|e| format!("{fallback_name} cannot be used as a display profile ({e:?})."))?;
+        Ok(DisplayProfile { name, transform })
+    }
+
+    /// The reading of the sRGB pixel `px` in this profile, or None when the profile cannot take the colour. Values the
+    /// display cannot show (outside its gamut) are cut to 0 to 1.
+    pub fn convert(&self, px: Rgb8) -> Option<Reading> {
+        let out = self.transform.apply([px.r, px.g, px.b].map(|c| c as f64 / 255.0))?;
+        if out.iter().any(|v| !v.is_finite()) {
+            return None;
+        }
+        let values = out.map(|c| c.clamp(0.0, 1.0) as f32);
+        Some(Reading { codes: Rgb8::new(quantize(values[0]), quantize(values[1]), quantize(values[2])), values })
+    }
+}
+
+/// The files that can hold the display's profile, best first: the file `BIFROST_DISPLAY_PROFILE` names, the user's
+/// `display.icc` in the colour profile folder, and the system's.
+pub fn profile_paths(from_env: Option<&str>, home: &Path) -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    if let Some(p) = from_env.filter(|p| !p.is_empty()) {
+        paths.push(PathBuf::from(p));
+    }
+    paths.push(home.join(".local/share/color/icc/display.icc"));
+    paths.push(PathBuf::from("/usr/share/color/icc/display.icc"));
+    paths
+}
+
+/// The first of `paths` that is a usable display profile. A missing, oversized or unusable file is skipped.
+pub fn load_display_profile(paths: &[PathBuf]) -> Option<DisplayProfile> {
+    for path in paths {
+        let Ok(meta) = std::fs::metadata(path) else { continue };
+        if !meta.is_file() || meta.len() > MAX_PROFILE_BYTES {
+            continue;
+        }
+        let Ok(bytes) = std::fs::read(path) else { continue };
+        let fallback = path.file_stem().and_then(|s| s.to_str()).unwrap_or("Display").to_string();
+        if let Ok(profile) = DisplayProfile::from_bytes(&fallback, &bytes) {
+            return Some(profile);
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -328,5 +395,74 @@ mod tests {
         assert_eq!(average(&px), Some(Rgb8::new(1, 11, 255)));
         assert_eq!(average(&[Rgb8::new(7, 8, 9)]), Some(Rgb8::new(7, 8, 9)));
         assert_eq!(average(&[]), None);
+    }
+}
+
+#[cfg(test)]
+mod profile_tests {
+    use super::*;
+
+    fn p3() -> DisplayProfile {
+        DisplayProfile::from_bytes("fallback", &Builtin::DisplayP3.bytes()).expect("a built-in profile")
+    }
+
+    #[test]
+    fn a_display_profile_reads_the_pixel_in_that_profile() {
+        let profile = p3();
+        assert_eq!(profile.name, "Display P3");
+        // sRGB green is inside the P3 gamut at about (0.46, 0.98, 0.30)
+        let via_profile = profile.convert(Rgb8::new(0, 255, 0)).expect("a reading");
+        let direct = convert(Rgb8::new(0, 255, 0), Space::DisplayP3);
+        for (a, b) in [(via_profile.codes.r, direct.codes.r), (via_profile.codes.g, direct.codes.g), (via_profile.codes.b, direct.codes.b)] {
+            assert!((a as i32 - b as i32).abs() <= 3, "{:?} against {:?}", via_profile.codes, direct.codes);
+        }
+    }
+
+    #[test]
+    fn white_and_black_stay_put_and_values_stay_in_range() {
+        let profile = p3();
+        let white = profile.convert(Rgb8::new(255, 255, 255)).unwrap();
+        assert!(white.codes.r >= 253 && white.codes.g >= 253 && white.codes.b >= 253, "{:?}", white.codes);
+        assert_eq!(profile.convert(Rgb8::new(0, 0, 0)).unwrap().codes, Rgb8::new(0, 0, 0));
+        for px in [Rgb8::new(255, 0, 0), Rgb8::new(0, 0, 255), Rgb8::new(7, 250, 3)] {
+            let r = profile.convert(px).unwrap();
+            assert!(r.values.iter().all(|v| (0.0..=1.0).contains(v)));
+        }
+    }
+
+    #[test]
+    fn bytes_that_are_not_a_profile_are_refused_with_a_sentence() {
+        let err = DisplayProfile::from_bytes("junk", b"definitely not an icc profile").unwrap_err();
+        assert!(err.contains("junk"), "{err}");
+        assert!(DisplayProfile::from_bytes("empty", &[]).is_err());
+        let mut broken = Builtin::Srgb.bytes();
+        broken.truncate(100);
+        assert!(DisplayProfile::from_bytes("cut", &broken).is_err());
+    }
+
+    #[test]
+    fn the_candidate_files_are_the_named_one_then_the_user_then_the_system() {
+        let home = Path::new("/home/me");
+        assert_eq!(
+            profile_paths(Some("/x/panel.icc"), home),
+            vec![PathBuf::from("/x/panel.icc"), PathBuf::from("/home/me/.local/share/color/icc/display.icc"), PathBuf::from("/usr/share/color/icc/display.icc")]
+        );
+        assert_eq!(profile_paths(Some(""), home).len(), 2);
+        assert_eq!(profile_paths(None, home).len(), 2);
+    }
+
+    #[test]
+    fn the_first_usable_file_wins_and_missing_or_junk_files_are_skipped() {
+        let dir = std::env::temp_dir().join(format!("bifrost-colormeter-profile-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let junk = dir.join("junk.icc");
+        let good = dir.join("panel.icc");
+        std::fs::write(&junk, b"junk").unwrap();
+        std::fs::write(&good, Builtin::AdobeRgb1998.bytes()).unwrap();
+        let found = load_display_profile(&[dir.join("missing.icc"), dir.clone(), junk, good]).expect("the good file");
+        assert_eq!(found.name, "Adobe RGB (1998)");
+        assert!(load_display_profile(&[dir.join("missing.icc")]).is_none());
+        assert!(load_display_profile(&[]).is_none());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

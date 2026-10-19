@@ -173,5 +173,10 @@ impl App for ColorMeter {
 }
 
 fn main() {
-    bifrost_app::run(ColorMeter::new(Box::new(ShellSource::default())));
+    let mut meter = ColorMeter::new(Box::new(ShellSource::default()));
+    // Native reads the display's own profile when one is installed (see `color::profile_paths`)
+    let home = std::env::var("HOME").unwrap_or_default();
+    let named = std::env::var("BIFROST_DISPLAY_PROFILE").ok();
+    meter.profile = color::load_display_profile(&color::profile_paths(named.as_deref(), std::path::Path::new(&home)));
+    bifrost_app::run(meter);
 }
