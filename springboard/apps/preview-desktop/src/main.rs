@@ -2135,7 +2135,7 @@ impl Viewer {
         if self.resizing.is_some() {
             return self.key_resize(&key);
         }
-        if self.mode == Mode::Contact && key == KeyInput::Code(27) {
+        if self.mode == Mode::Contact && matches!(key, KeyInput::Code(1 | 27)) {
             self.mode = Mode::Page;
             return true;
         }
