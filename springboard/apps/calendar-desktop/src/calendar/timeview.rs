@@ -142,7 +142,7 @@ impl Calendar {
         let mut out = vec![];
         for (i, d) in self.view_days().iter().enumerate() {
             let x0 = gut + col_w * i as f32;
-            let (all, timed): (Vec<&CalendarEvent>, Vec<&CalendarEvent>) =
+            let (all, timed): (Vec<std::borrow::Cow<CalendarEvent>>, Vec<std::borrow::Cow<CalendarEvent>>) =
                 self.shown_events().filter(|e| self.occurs(e, *d)).partition(|e| e.all_day);
             let spans: Vec<(u32, u32)> = all.iter().map(|_| (0, 1)).collect();
             for (e, slot) in all.iter().zip(layout::layout(&spans, 1)) {
