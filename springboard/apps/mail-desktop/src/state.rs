@@ -2371,7 +2371,11 @@ mod tests {
         // the next recipient does not offer the one already in the field
         type_in_focus(&mut mail, "ana");
         assert!(mail.recipient_suggestions().is_empty());
-        type_in_focus(&mut mail, "ders");
+        // "ana" is wiped and the next name typed whole (typing "ders" after it would spell "anaders")
+        for _ in 0..3 {
+            mail.sheet.as_mut().unwrap().form_mut().backspace();
+        }
+        type_in_focus(&mut mail, "anders");
         assert_eq!(mail.recipient_suggestions().len(), 1);
         assert!(mail.accept_recipient(Some(0)));
         assert_eq!(compose_of(&mail).form.value("To"), "Ana Lovelace <ana@example.com>, Anders Holm <anders@example.com>, ");
