@@ -979,7 +979,10 @@ fn run() -> std::io::Result<()> {
                     if !down && !hw_keys.mods_held() {
                         shell.cmdtab_release(t);
                     }
-                    if let Some(sc) = raw_sc.filter(|sc| shell.hw_window_shortcut(*sc) || !matches!(sc, springboard::shell::hwkeys::Shortcut::Close | springboard::shell::hwkeys::Shortcut::Minimize)) {
+                    // key equivalents go to the app in front first: an app whose menus take the chord (the Browser's Close Tab on Cmd+W) gets
+                    // it from `hw_chord` below, and the shell closes or minimizes the window itself only when the app does not
+                    let app_chord = down && hw_keys.chord_mods(code).is_some_and(|mods| shell.app_owns_chord(code, mods));
+                    if let Some(sc) = raw_sc.filter(|sc| !matches!(sc, springboard::shell::hwkeys::Shortcut::Close | springboard::shell::hwkeys::Shortcut::Minimize) || (shell.hw_window_shortcut(*sc) && !app_chord)) {
                         // a shortcut ends any key repeat in progress
                         key_repeat.press(code, None, t);
                         effects.extend(shell.hw_shortcut(sc, t));

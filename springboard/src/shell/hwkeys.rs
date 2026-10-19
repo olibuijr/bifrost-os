@@ -434,7 +434,8 @@ impl HwKeys {
             KEY_ESC if !ctrl && !alt && !meta => Some(Shortcut::Back),
             // Cmd on a Mac keyboard is Meta here, so it works for edits too
             KEY_Z if (ctrl || meta) && !alt => Some(if self.shift > 0 { Shortcut::Redo } else { Shortcut::Undo }),
-            KEY_Y if (ctrl || meta) && !alt && self.shift == 0 => Some(Shortcut::Redo),
+            // Ctrl+Y redoes; Cmd+Y is not Redo (that is Shift+Cmd+Z) and stays the front app's, the Browser's Show All History
+            KEY_Y if ctrl && !meta && !alt && self.shift == 0 => Some(Shortcut::Redo),
             // Ctrl+Q (quit the shell) is deliberately not bound. Ctrl+W and Ctrl+M are
             // not bound: they reach terminals as readline kill-word and Enter. Cmd/Super+W and
             // Cmd/Super+M close and minimize the front desktop window; terminals never see them,
@@ -443,6 +444,8 @@ impl HwKeys {
             // Ctrl+Cmd+Q locks the screen; the plain Cmd+Q below quits the front window
             KEY_Q if meta && ctrl && !alt && self.shift == 0 => Some(Shortcut::Lock),
             KEY_W | KEY_Q if meta && !ctrl && !alt && self.shift == 0 => Some(Shortcut::Close),
+            // Shift+Cmd+W closes the window of an app that keeps plain Cmd+W for its own Close Tab (`Shell::app_owns_close`)
+            KEY_W if meta && !ctrl && !alt && self.shift > 0 => Some(Shortcut::Close),
             KEY_M | KEY_H if meta && !ctrl && !alt && self.shift == 0 => Some(Shortcut::Minimize),
             KEY_F if meta && ctrl && !alt => Some(Shortcut::FullScreen),
             // Option+Cmd+8 turns Screen Zoom on and off; Option+Cmd+= and Option+Cmd+- zoom in and out
@@ -908,6 +911,17 @@ impl Shell {
     pub fn hw_window_shortcut(&self, sc: Shortcut) -> bool {
         cfg!(feature = "desktop-wayland") && matches!(sc, Shortcut::Close | Shortcut::Minimize) && self.desk_active() && !self.is_locked()
     }
+    /// True when the SDK app in front published an enabled menu item with the key equivalent `code` + `mods` (`CHORD_*`). Key
+    /// equivalents go to the focused app first: the binary leaves Cmd+W and Cmd+M to `hw_chord` (which sends the app its menu
+    /// action) when this is true, and closes or minimizes the window itself only when the app does not take the chord.
+    pub fn app_owns_chord(&self, code: u16, mods: u32) -> bool {
+        matches!(self.screen, Screen::App(AppId::External(_)))
+            && self.ext_fg.and_then(|n| self.ext.get(n as usize)).and_then(Option::as_ref).is_some_and(|h| super::desktop_bar::chord_in_menus(&h.app_menus, code, mods))
+    }
+    /// True when the app in front keeps plain Cmd+W (a tabbed app's Close Tab), so the File menu moves Close Window to Shift+Cmd+W.
+    pub fn app_owns_close(&self) -> bool {
+        self.app_owns_chord(KEY_W, CHORD_META)
+    }
     /// Keys while a desktop menu is open (arrows, Return); None when no menu is open or on release.
     pub fn hw_menu_key(&mut self, code: u16, down: bool, t: f64) -> Option<Vec<Effect>> {
         // the open or save panel takes its own keys; the rest fall through to `hw_type`, which types the file name
@@ -1228,6 +1242,7 @@ mod tests {
         assert_eq!(chord(&mut k, &[KEY_LEFTCTRL, KEY_LEFTSHIFT], KEY_Z), Some(Shortcut::Redo));
         assert_eq!(chord(&mut k, &[KEY_LEFTMETA, KEY_RIGHTSHIFT], KEY_Z), Some(Shortcut::Redo));
         assert_eq!(chord(&mut k, &[KEY_LEFTCTRL], KEY_Y), Some(Shortcut::Redo));
+        assert_eq!(chord(&mut k, &[KEY_LEFTMETA], KEY_Y), None, "Cmd+Y reaches the app (Show All History)");
         assert_eq!(chord(&mut k, &[], KEY_Y), None);
         assert_eq!(Shortcut::Redo.out(), Some(Out::Named("Redo")));
     }
@@ -1317,7 +1332,10 @@ mod tests {
         assert_eq!(chord(&mut k, &[KEY_LEFTCTRL], KEY_W), None);
         assert_eq!(chord(&mut k, &[KEY_LEFTCTRL], KEY_M), None);
         assert_eq!(chord(&mut k, &[], KEY_W), None);
-        assert_eq!(chord(&mut k, &[KEY_LEFTMETA, KEY_LEFTSHIFT], KEY_W), None);
+        // Shift+Cmd+W closes the window of an app that keeps plain Cmd+W for its own Close Tab
+        assert_eq!(chord(&mut k, &[KEY_LEFTMETA, KEY_LEFTSHIFT], KEY_W), Some(Shortcut::Close));
+        assert_eq!(chord(&mut k, &[KEY_LEFTCTRL, KEY_LEFTSHIFT], KEY_W), None, "Ctrl+Shift+W stays a plain key");
+        assert_eq!(chord(&mut k, &[KEY_LEFTMETA, KEY_LEFTSHIFT], KEY_Q), None, "Shift+Cmd+Q is not a quit");
     }
 
     #[test]

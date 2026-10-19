@@ -519,10 +519,17 @@ An SDK app overrides `App::main_menu(&self, ctx) -> Vec<AppMenu>` (`AppMenu { ti
 `AppMenuItem::new(id, title).key("cmd+n").enabled(..).checked(..)`, `::separator()`, `::submenu(title)` followed by its
 children at `.depth(1)`). The runtime calls it after every event and frame and sends `ToShell::AppMenus` (tag 0x117)
 only when the result differs, so recomputing enabled and checked state there is `validateMenuItem:`. The desktop bar
-shows the menus of the app in front right after its name menu, opens them with the same menu drawing, and sends the
-chosen item back as `ToApp::MenuAction(id)` (tag 18), delivered to `App::menu_action(&mut self, ctx, id) -> bool`.
-Key equivalents (`KeyCombo::parse` notation) of enabled items are matched in the shell before a chord reaches the
-app (`performKeyEquivalent:`); the app gets `MenuAction` instead of the key. Limits: 8 menus, 48 items each, titles cut
+opens them with the same menu drawing and sends the chosen item back as `ToApp::MenuAction(id)` (tag 18), delivered to
+`App::menu_action(&mut self, ctx, id) -> bool`. Bar order (Golden Gate; `desktop_bar::bar_after_app`): the app name,
+File, Edit, View, then the app's own menus in the order it publishes them (the Browser's History, Bookmarks, Develop),
+Window, Help; a Format, Font, Text or Insert menu sits right after Edit instead. A menu titled File, Edit, View, Window
+or Help merges into the shell's menu of that name. Key equivalents (`KeyCombo::parse` notation) of enabled items are
+matched in the shell before a chord reaches the app (`performKeyEquivalent:`); the app gets `MenuAction` instead of the
+key. They also win over the shell's window chords: while the app in front publishes an enabled item on Cmd+W (a tabbed
+app's Close Tab) or Cmd+M, the shell does not close or minimize the window with it (`Shell::app_owns_chord`, checked in
+`bin/shell.rs` before `hw_shortcut`). Publish the item disabled and without a key when it has nothing to do (the
+Browser's last tab) and the shell closes the window again. Shift+Cmd+W always closes the window, and the File menu's
+Close Window shows it while the app owns Cmd+W. Cmd+Y is not Redo (Ctrl+Y is), so an app can use it. Limits: 8 menus, 48 items each, titles cut
 to 64 characters, and the whole message fits one 16 KiB packet (extra items and menus are dropped, never split).
 Gaps against AppKit, recorded: submenus are drawn flat (a header row with indented children, not a flyout), a checked
 item shows a check mark glyph in its title, there are no item icons, tooltips, `representedObject`, alternate

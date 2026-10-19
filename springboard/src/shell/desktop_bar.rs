@@ -128,6 +128,31 @@ pub(super) fn app_menu_chord(menus:&[bifrost_proto::AppMenu],ch:char,mods:u32)->
         bifrost_ui::keys::KeyCombo::parse(&i.key).is_some_and(|c|c.key==bifrost_ui::keys::Key::Char(ch)&&c.cmd==(mods&CHORD_META!=0)&&c.ctrl==(mods&CHORD_CTRL!=0)&&c.alt==(mods&CHORD_ALT!=0)&&c.shift==(mods&CHORD_SHIFT!=0))
     }).map(|i|i.id)
 }
+/// Whether the key `code` with the chord modifiers `mods` is a key equivalent of an enabled item in `menus`. Key equivalents go to the
+/// app in front first: the shell closes or minimizes a window with Cmd+W or Cmd+M only when the app does not take the chord (a tabbed
+/// app's Close Tab keeps Cmd+W while it has a tab to close).
+pub(super) fn chord_in_menus(menus:&[bifrost_proto::AppMenu],code:u16,mods:u32)->bool {
+    super::evkeys::char_for(code,false).and_then(|c|app_menu_chord(menus,c,mods)).is_some()
+}
+/// Menus that sit right after Edit instead of after View (the document apps' Format menus).
+#[cfg(feature = "desktop-wayland")]
+fn follows_edit(title:&str)->bool {
+    ["Format","Font","Text","Insert"].iter().any(|t|t.eq_ignore_ascii_case(title.trim()))
+}
+/// The bar after the app's name menu, left to right (Golden Gate): File, Edit, the document apps' Format menus, Image (Photos only),
+/// View, the app's other own menus (History, Bookmarks, Develop of the Browser, ...) and last Window and Help. An app menu titled like
+/// a shell menu merges into it, so only the others get a `Custom` button. The app's order is kept within each group.
+#[cfg(feature = "desktop-wayland")]
+pub(super) fn bar_after_app(app_menus:&[bifrost_proto::AppMenu],image:bool)->Vec<Menu> {
+    let custom=|after_edit:bool|app_menus.iter().enumerate().filter(move|(_,m)|shell_menu(&m.title).is_none()&&follows_edit(&m.title)==after_edit).map(|(i,_)|Menu::Custom(i as u8)).collect::<Vec<Menu>>();
+    let mut bar=vec![Menu::File,Menu::Edit];
+    bar.extend(custom(true));
+    if image{bar.push(Menu::Image);}
+    bar.push(Menu::View);
+    bar.extend(custom(false));
+    bar.extend([Menu::Window,Menu::Help]);
+    bar
+}
 /// Header plus the five largest app groups by `key`; empty when there are no app readings.
 #[cfg(feature = "desktop-wayland")]
 fn top_app_rows(apps:&[super::desktop_metrics::AppUsage],header:&str,key:impl Fn(&super::desktop_metrics::AppUsage)->u64,show:impl Fn(u64)->String)->Vec<Row> {
@@ -216,11 +241,22 @@ impl Shell {
         let mut buttons=vec![(Menu::System,self.ui.pt(6.),self.ui.pt(SYSTEM_MENU_PT),String::from("system"))];let mut x=self.ui.pt(6.+SYSTEM_MENU_PT);
         let name=self.app_menu_name();
         let name=self.fit_chrome(&name,13.,self.ui.pt(160.));
-        // the order of the Golden Gate menu bar: App, File, Edit, View, Window, then Help at the trailing end
-        // the app's own menus follow its name menu (`NativeApp.mainMenu`), before the shell's File, Edit, View, Window and Help
+        // the order of the Golden Gate menu bar: App, File, Edit, View, then the app's own menus (the Browser's History, Bookmarks and
+        // Develop), Window, and Help at the trailing end; the document apps' Format menus sit right after Edit (`bar_after_app`)
         let mut bar:Vec<(Menu,String)>=vec![(Menu::App,name.clone())];
-        bar.extend(self.app_menus().iter().enumerate().filter(|(_,m)|shell_menu(&m.title).is_none()).map(|(i,m)|(Menu::Custom(i as u8),self.fit_chrome(&m.title,13.,self.ui.pt(120.)))));
-        let mut shell_bar:Vec<(Menu,&str)>=vec![(Menu::File,"File"),(Menu::Edit,"Edit")];if self.photos_front(){shell_bar.push((Menu::Image,"Image"));}shell_bar.extend([(Menu::View,"View"),(Menu::Window,"Window"),(Menu::Help,"Help")]);bar.extend(shell_bar.into_iter().map(|(m,l)|(m,l.to_string())));
+        let app_menus=self.app_menus();
+        bar.extend(bar_after_app(app_menus,self.photos_front()).into_iter().map(|m|{
+            let label=match m {
+                Menu::Custom(i)=>app_menus.get(i as usize).map(|am|self.fit_chrome(&am.title,13.,self.ui.pt(120.))).unwrap_or_default(),
+                Menu::File=>"File".to_string(),
+                Menu::Edit=>"Edit".to_string(),
+                Menu::Image=>"Image".to_string(),
+                Menu::View=>"View".to_string(),
+                Menu::Window=>"Window".to_string(),
+                _=>"Help".to_string(),
+            };
+            (m,label)
+        }));
         for (kind,label) in bar.iter().map(|(k,l)|(*k,l.as_str())) {
             let width=self.measure_chrome(label,13.,Weight::Semibold)+self.ui.pt(24.);buttons.push((kind,x,width,label.into()));x+=width;
         }
@@ -419,7 +455,9 @@ impl Shell {
             Menu::View=>{use super::desktop_dock::Change;let autohide=self.desk.as_ref().is_some_and(|d|d.dock_preferences.autohide);let mut v=vec![Row::action(format!("{} Automatically Hide Dock",if autohide{"✓"}else{" "}),Action::Dock(Change::Autohide)),Row::action("Smaller Icons",Action::Dock(Change::Size(-8.))),Row::action("Larger Icons",Action::Dock(Change::Size(8.)))];if self.term_front(){v.splice(0..0,[Row::action("Actual Size",Action::Term(TermKey::ActualSize)).key("cmd+0"),Row::action("Bigger",Action::Term(TermKey::Bigger)).key("cmd+="),Row::action("Smaller",Action::Term(TermKey::Smaller)).key("cmd+-"),Row::separator()]);}v},
             // Window: Minimize and Zoom (also in File), Bring All to Front, then every open window by name, the front one checked
             Menu::Window=>{let Some(d)=self.desk.as_ref() else{return Vec::new();};let enabled=self.foreign_active().is_some()||d.front().is_some();let front=d.front().map(|w|w.app);let mut rows=vec![(if enabled{Row::action("Minimize",Action::Minimize)}else{Row::label("Minimize")}).key("cmd+m"),if enabled{Row::action("Zoom",Action::Zoom)}else{Row::label("Zoom")},Row::separator(),if d.wins.iter().any(|w|w.minimized){Row::action("Bring All to Front",Action::ShowAll)}else{Row::label("Bring All to Front")},Row::action("Show Desktop",Action::Desktop)];let tile_on=self.foreign_active().is_none()&&d.front().is_some();rows.push(Row::separator());rows.extend([("Left Half",super::desk::Tile::Left,"ctrl+cmd+left"),("Right Half",super::desk::Tile::Right,"ctrl+cmd+right"),("Fill",super::desk::Tile::Fill,"ctrl+cmd+up"),("Center",super::desk::Tile::Center,"ctrl+cmd+down")].map(|(l,t,k)|if tile_on&&(t==super::desk::Tile::Fill||!super::desk::compositor_places_windows()){Row::action(l,Action::Tile(t)).key(k)}else{Row::label(l).key(k)}));rows.push(if tile_on{Row::action("Return to Previous Size",Action::RestoreSize)}else{Row::label("Return to Previous Size")});rows.push(if d.wins.len()>=2{Row::action("Next Window",Action::CycleWindow).key("cmd+`")}else{Row::label("Next Window")});let front_parent=d.front().map(|w|w.app.parent());let mut open:Vec<(String,super::AppId)>=d.wins.iter().filter(|w|Some(w.app.parent())==front_parent).map(|w|(self.window_menu_name(w.app),w.app)).collect();open.sort_by_key(|(name,_)|name.to_lowercase());let foreign:Vec<&crate::bare::wayland::ForeignWindow>=d.native_windows.iter().chain(d.linux_apps.iter().flat_map(|a|a.windows.iter())).collect();if !open.is_empty()||!foreign.is_empty(){rows.push(Row::separator());}rows.extend(open.into_iter().take(12).map(|(name,app)|Row::action(format!("{} {}",if front==Some(app)&&self.foreign_active().is_none(){"✓"}else{" "},name),Action::Open(app))));rows.extend(foreign.into_iter().take(12).map(|w|Row::action(format!("{} {}",if w.active{"✓"}else{" "},self.fit_chrome(if w.title.is_empty(){w.app_id.as_str()}else{w.title.as_str()},13.,self.ui.pt(300.))),Action::Foreign(w.id))));rows},
-            Menu::File=>{let enabled=self.foreign_active().is_some()||self.desk.as_ref().and_then(|d|d.front()).is_some();let mut rows=vec![(if enabled{Row::action("Close Window",Action::Close)}else{Row::label("Close Window")}).key("cmd+w"),(if enabled{Row::action("Minimize Window",Action::Minimize)}else{Row::label("Minimize Window")}).key("cmd+m"),if enabled {Row::action("Maximize / Restore Window",Action::Zoom)}else{Row::label("Maximize / Restore Window")}];if self.term_front(){rows.splice(0..0,[Row::action("New Tab",Action::Term(TermKey::NewTab)).key("cmd+t"),Row::separator()]);rows[2]=Row::action("Close Tab",Action::Term(TermKey::CloseTab)).key("cmd+w");}if self.foreign_active().is_none(){rows.push(Row::separator());rows.push((if enabled{Row::action("Print\u{2026}",Action::Print)}else{Row::label("Print\u{2026}")}).key("cmd+p"));}rows},
+            Menu::File=>{let enabled=self.foreign_active().is_some()||self.desk.as_ref().and_then(|d|d.front()).is_some();
+            // an app that keeps Cmd+W for its own Close Tab leaves the window the shifted chord (Close Window is Shift+Cmd+W then)
+            let close_key=if self.app_owns_close(){"cmd+shift+w"}else{"cmd+w"};let mut rows=vec![(if enabled{Row::action("Close Window",Action::Close)}else{Row::label("Close Window")}).key(close_key),(if enabled{Row::action("Minimize Window",Action::Minimize)}else{Row::label("Minimize Window")}).key("cmd+m"),if enabled {Row::action("Maximize / Restore Window",Action::Zoom)}else{Row::label("Maximize / Restore Window")}];if self.term_front(){rows.splice(0..0,[Row::action("New Tab",Action::Term(TermKey::NewTab)).key("cmd+t"),Row::separator()]);rows[2]=Row::action("Close Tab",Action::Term(TermKey::CloseTab)).key("cmd+w");}if self.foreign_active().is_none(){rows.push(Row::separator());rows.push((if enabled{Row::action("Print\u{2026}",Action::Print)}else{Row::label("Print\u{2026}")}).key("cmd+p"));}rows},
             // Undo and Redo first, as in every Golden Gate Edit menu. Native Linux apps get the shortcut (Ctrl+key); Redo has no
             // single key, so it stays a disabled label for them.
             Menu::Edit=>{let mut v:Vec<Row>=[("Undo",Some(44),bifrost_proto::Command::Undo),("Redo",None,bifrost_proto::Command::Redo),("Cut",Some(45),bifrost_proto::Command::Cut),("Copy",Some(46),bifrost_proto::Command::Copy),("Paste",Some(47),bifrost_proto::Command::Paste),("Select All",Some(30),bifrost_proto::Command::SelectAll)].into_iter().map(|(label,key,command)|if let Some(commands)=self.sdk_commands(){if commands.supports(command){Row::action(label,Action::Command(command))}else{Row::label(label)}}else if let (Some(key),true)=(key,self.foreign_active().is_some()||self.screen==Screen::App(AppId::Terminal)){Row::action(label,Action::Shortcut(key))}else{Row::label(label)}).collect();for r in &mut v{if let Some((_,k))=MENU_KEYS.iter().find(|(l,_)|*l==r.text){*r=std::mem::replace(r,Row::separator()).key(k);}}v.insert(2,Row::separator());if let Some(t)=self.sdk_undo_titles(){for r in &mut v{if r.action.is_some(){let t=match r.text.as_str(){"Undo"=>&t.0,"Redo"=>&t.1,_=>continue};if !t.is_empty(){r.text=t.clone();}}}}if self.term_front(){v.extend([Row::separator(),Row::action("Find…",Action::Term(TermKey::Find)).key("cmd+f"),Row::action("Find Next",Action::Term(TermKey::FindNext)).key("cmd+g"),Row::action("Find Previous",Action::Term(TermKey::FindPrev)).key("cmd+shift+g"),Row::separator(),Row::action("Clear Scrollback",Action::Term(TermKey::ClearScrollback)).key("cmd+k")]);v.extend([Row::separator(),Row::label("Copy Special"),Row::action("Plain Text",Action::Term(TermKey::Copy)).indented(),Row::action("Text with Colors",Action::Term(TermKey::CopyStyled)).indented(),Row::action("Without Background Colour",Action::Term(TermKey::CopyStyledPlain)).indented()]);}v.extend([Row::separator(),Row::action("Emoji & Symbols",Action::CharacterViewer)]);v},
@@ -603,7 +641,7 @@ impl Shell {
         let menu=self.desktop_menu?;if !self.desk_active()||self.is_locked(){return None;}
         if menu==Menu::Document{self.doc_key(code,t);return Some(vec![]);}
         if menu==Menu::Help {if let Some(fx)=self.help_key(code) {return Some(fx);}}
-        let mut bar=vec![Menu::System,Menu::App];bar.extend(self.app_menus().iter().enumerate().filter(|(_,m)|shell_menu(&m.title).is_none()).map(|(i,_)|Menu::Custom(i as u8)));bar.extend([Menu::File,Menu::Edit]);if self.photos_front(){bar.push(Menu::Image);}bar.extend([Menu::View,Menu::Window,Menu::Help]);
+        let mut bar=vec![Menu::System,Menu::App];bar.extend(bar_after_app(self.app_menus(),self.photos_front()));
         self.dirty=true;
         match code {
             103|108=>{if let Some(i)=self.menu_step(menu,if code==108{1}else{-1}){self.desktop_menu_row=Some((menu,i));}},

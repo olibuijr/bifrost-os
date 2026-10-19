@@ -2365,7 +2365,7 @@
         let mut host=apphost::AppHost::with_channel("fixture",mine,None,bifrost_proto::Configure{w:100,h:100,scale:1.,safe_top:0.,safe_bottom:0.,dark:true,text_scale:1.,reduce_motion:false});
         host.app_menus=menus;sh.ext.push(Some(host));sh.ext_fg=Some(0);sh.screen=Screen::App(AppId::External(0));
         let order:Vec<desktop_bar::Menu>=sh.menu_buttons().into_iter().map(|b|b.0).filter(|m|matches!(m,desktop_bar::Menu::App|desktop_bar::Menu::Custom(_)|desktop_bar::Menu::File)).collect();
-        assert_eq!(order,vec![desktop_bar::Menu::App,desktop_bar::Menu::Custom(0),desktop_bar::Menu::File]);
+        assert_eq!(order,vec![desktop_bar::Menu::App,desktop_bar::Menu::File,desktop_bar::Menu::Custom(0)],"the app's own menus follow View, not the app name");
         let rows=sh.menu_rows(desktop_bar::Menu::Custom(0));
         assert_eq!(rows.iter().map(|r|r.text.as_str()).collect::<Vec<_>>(),vec!["New Note","","\u{2713} Pin","Lock","Sort By","    Name"]);
         assert_eq!(sh.menu_row_keys(desktop_bar::Menu::Custom(0)),vec!["\u{2318}N".to_string(),"\u{21E7}\u{2318}L".to_string()]);
@@ -2383,6 +2383,57 @@
         assert!(sh.ext_chord(49,CHORD_META),"a key equivalent is consumed as a menu action");
         let bifrost_proto::sys::Recv::Packet(packet,_)=theirs.recv(false).unwrap() else{panic!("missing key equivalent")};
         assert_eq!(bifrost_proto::ToApp::decode(&packet),Ok(bifrost_proto::ToApp::MenuAction(1)));
+    }
+
+    /// The app's own menus sit after View and before Window (the Browser: File, Edit, View, History, Bookmarks, Develop, Window, Help),
+    /// and the document apps' Format menus sit right after Edit. The app's order is kept within each group.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn an_apps_own_menus_follow_view_and_format_menus_follow_edit() {
+        use bifrost_proto::AppMenu;
+        use desktop_bar::Menu;
+        let menu=|title:&str|AppMenu{title:title.into(),items:Vec::new()};
+        // the Browser: File and View merge into the shell's menus, the others keep the app's order
+        let browser=vec![menu("File"),menu("View"),menu("History"),menu("Bookmarks"),menu("Develop")];
+        assert_eq!(desktop_bar::bar_after_app(&browser,false),vec![Menu::File,Menu::Edit,Menu::View,Menu::Custom(2),Menu::Custom(3),Menu::Custom(4),Menu::Window,Menu::Help]);
+        // a document app: Format right after Edit, its other menu after View
+        let notes=vec![menu("Note"),menu("Format")];
+        assert_eq!(desktop_bar::bar_after_app(&notes,false),vec![Menu::File,Menu::Edit,Menu::Custom(1),Menu::View,Menu::Custom(0),Menu::Window,Menu::Help]);
+        // no app menus: the shell's six; Photos adds Image before View
+        assert_eq!(desktop_bar::bar_after_app(&[],false),vec![Menu::File,Menu::Edit,Menu::View,Menu::Window,Menu::Help]);
+        assert_eq!(desktop_bar::bar_after_app(&[],true),vec![Menu::File,Menu::Edit,Menu::Image,Menu::View,Menu::Window,Menu::Help]);
+    }
+
+    /// Key equivalents go to the app in front first. A tabbed app that publishes Close Tab on Cmd+W keeps the chord while the item is
+    /// enabled; the shell closes the window with it only when the app does not take it, and the File menu then moves Close Window to
+    /// Shift+Cmd+W so two items never claim Cmd+W.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn cmd_w_goes_to_an_app_that_defines_it_and_closes_the_window_otherwise() {
+        use bifrost_proto::{AppMenu,AppMenuItem,CHORD_META,CHORD_SHIFT};
+        const W:u16=17;
+        let menus=|enabled:bool|vec![AppMenu{title:"File".into(),items:vec![AppMenuItem::new(7,"Close Tab").key("cmd+w").enabled(enabled)]}];
+        assert!(desktop_bar::chord_in_menus(&menus(true),W,CHORD_META),"an enabled Close Tab takes Cmd+W");
+        assert!(!desktop_bar::chord_in_menus(&menus(false),W,CHORD_META),"a disabled one leaves Cmd+W to the shell");
+        assert!(!desktop_bar::chord_in_menus(&menus(true),W,CHORD_META|CHORD_SHIFT),"Shift+Cmd+W is not Cmd+W");
+        assert!(!desktop_bar::chord_in_menus(&menus(true),16,CHORD_META),"another key is not the chord");
+        assert!(!desktop_bar::chord_in_menus(&[],W,CHORD_META),"an app without the chord never owns it");
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        assert!(!sh.app_owns_close(),"no app in front, the shell closes the window");
+        let (mine,_theirs)=bifrost_proto::sys::socketpair_pair().unwrap();
+        let mut host=apphost::AppHost::with_channel("fixture",mine,None,bifrost_proto::Configure{w:100,h:100,scale:1.,safe_top:0.,safe_bottom:0.,dark:true,text_scale:1.,reduce_motion:false});
+        host.app_menus=menus(true);sh.ext.push(Some(host));sh.ext_fg=Some(0);sh.screen=Screen::App(AppId::External(0));
+        assert!(sh.app_owns_close(),"the front app defines Cmd+W");
+        assert!(sh.app_owns_chord(W,CHORD_META));
+        assert!(!sh.app_owns_chord(W,CHORD_META|CHORD_SHIFT),"Shift+Cmd+W is the window's");
+        let keys=sh.menu_row_keys(desktop_bar::Menu::File);
+        assert!(keys.contains(&"\u{21E7}\u{2318}W".to_string()),"Close Window moves to Shift+Cmd+W: {keys:?}");
+        assert_eq!(keys.iter().filter(|k|k.as_str()=="\u{2318}W").count(),1,"one item claims Cmd+W: {keys:?}");
+        // the app's last tab: Close Tab is disabled, so Cmd+W is the shell's again
+        sh.ext[0].as_mut().unwrap().app_menus=menus(false);
+        assert!(!sh.app_owns_close(),"a disabled Close Tab does not keep the chord");
+        sh.screen=Screen::Home;
+        assert!(!sh.app_owns_chord(W,CHORD_META),"only the app in front owns chords");
     }
 
     #[test]
