@@ -1,6 +1,7 @@
 //! Desktop app launch boundary. The shell chooses identity and resources; apps
 //! never launch with root credentials or select privileged command arguments.
 use std::{
+    ffi::{OsStr, OsString},
     fs, io,
     os::unix::process::CommandExt,
     path::{Path, PathBuf},
@@ -88,7 +89,7 @@ impl From<PolicyError> for io::Error {
 
 /// Every name an entitlement query accepts: the manifest permissions and the first-party entitlements, in the order
 /// [`Policy::held`] lists them.
-pub const ENTITLEMENT_NAMES: [&str; 18] = [
+pub const ENTITLEMENT_NAMES: [&str; 19] = [
     "network",
     "storage",
     "audio",
@@ -104,6 +105,7 @@ pub const ENTITLEMENT_NAMES: [&str; 18] = [
     "calendars",
     "usb",
     "hid",
+    "gpu",
     "remote-desktop",
     bifrost_core::log::ENTITLEMENT,
     SYSTEM_MONITOR_ENTITLEMENT,
@@ -154,6 +156,11 @@ pub struct Policy {
     /// `hid`: the same for a raw HID device (the shell reads and writes its hidraw node for the app). Keyboards and
     /// security keys are never offered.
     pub hid: bool,
+    /// `gpu`: an SDK-drawn app whose engine renders offscreen on the GPU (the Browser's Servo engine) and reads the
+    /// frames back into the SDK's shared-memory frames. The sandbox gains the render node, the sysfs paths the Mesa
+    /// loader reads, `/run/udev` and the compositor socket (a hidden winit window needs the connection); the window is
+    /// still presented from SDK frames. See [`gpu_args`].
+    pub gpu: bool,
     /// `entitlements = ["log-store"]` on a `system-app`: the system journal is mounted read-only so
     /// `LogStore::local()` works (Console). Set through `with_entitlements`, never from `permissions`.
     pub log_store: bool,
@@ -190,6 +197,7 @@ impl Policy {
             "calendars" => self.calendars,
             "usb" => self.usb,
             "hid" => self.hid,
+            "gpu" => self.gpu,
             "remote-desktop" => self.remote,
             SYSTEM_MONITOR_ENTITLEMENT => self.system_monitor,
             other => other == bifrost_core::log::ENTITLEMENT && self.log_store,
@@ -220,6 +228,7 @@ impl Policy {
                 "calendars" => p.calendars = true,
                 "usb" => p.usb = true,
                 "hid" => p.hid = true,
+                "gpu" => p.gpu = true,
                 "remote-desktop" if id == "is.olibuijr.remote.desktop" => p.remote = true,
                 _ => return Err(PolicyError::UnsupportedPermission(permission.clone()).into()),
             }
@@ -458,25 +467,14 @@ pub fn command(
     if form.is_desktop() {
         c.env("BIFROST_HARDWARE_KEYBOARD", "1");
     }
-    if native {
-        c.args(["--ro-bind", "/sys", "/sys", "--ro-bind-try", "/run/udev", "/run/udev"]);
+    if native || policy.gpu {
         let runtime = std::env::var("XDG_RUNTIME_DIR").map_err(io::Error::other)?;
         let display = std::env::var("WAYLAND_DISPLAY").map_err(io::Error::other)?;
-        if display.contains('/') {
-            return Err(io::Error::other("Invalid compositor socket name"));
-        }
-        let socket = PathBuf::from(&runtime).join(&display);
         let session = PathBuf::from(&runtime).join("session.json");
-        if session.is_file() {
-            c.arg("--ro-bind").arg(&session).arg(&session);
-        }
-        c.arg("--bind")
-            .arg(&socket)
-            .arg(&socket)
-            .args(["--dev-bind-try", "/dev/dri", "/dev/dri"]);
+        c.args(gpu_args(Path::new(&runtime), &display, native, native && session.is_file())?);
         // Session bus (bifrost-portal: Light/Dark for GTK, Qt and winit apps); the socket is `$XDG_RUNTIME_DIR/bus`.
         let bus = PathBuf::from(&runtime).join("bus");
-        if bus.exists() {
+        if native && bus.exists() {
             c.arg("--bind-try").arg(&bus).arg(&bus);
             c.env("DBUS_SESSION_BUS_ADDRESS", format!("unix:path={}", bus.display()));
         }
@@ -494,6 +492,36 @@ pub fn command(
     crate::bare::app_manager::configure(&mut c, id)?;
     drop_identity(&mut c, &account)?;
     Ok(c)
+}
+
+/// The sandbox arguments that give a client the GPU and the compositor connection.
+///
+/// `native` (a `window = "native"` app) sees all of `/sys` read-only. An SDK app holding `gpu` gets only what an
+/// offscreen GL or Vulkan client needs: the sysfs paths the Mesa loader reads to identify the render node
+/// (`/sys/dev/char`, `/sys/devices`). Both get `/dev/dri`, `/run/udev` read-only and the Wayland socket. `session`
+/// also mounts `session.json` read-only (native only).
+fn gpu_args(runtime: &Path, display: &str, native: bool, session: bool) -> io::Result<Vec<OsString>> {
+    if display.is_empty() || display.contains('/') {
+        return Err(io::Error::other("Invalid compositor socket name"));
+    }
+    let mut args: Vec<OsString> = Vec::new();
+    let mut push = |parts: &[&OsStr]| args.extend(parts.iter().map(|p| (*p).to_os_string()));
+    if native {
+        push(&["--ro-bind".as_ref(), "/sys".as_ref(), "/sys".as_ref()]);
+    } else {
+        for path in ["/sys/dev/char", "/sys/devices"] {
+            push(&["--ro-bind-try".as_ref(), path.as_ref(), path.as_ref()]);
+        }
+    }
+    push(&["--ro-bind-try".as_ref(), "/run/udev".as_ref(), "/run/udev".as_ref()]);
+    if session {
+        let session = runtime.join("session.json");
+        push(&["--ro-bind".as_ref(), session.as_ref(), session.as_ref()]);
+    }
+    let socket = runtime.join(display);
+    push(&["--bind".as_ref(), socket.as_ref(), socket.as_ref()]);
+    push(&["--dev-bind-try".as_ref(), "/dev/dri".as_ref(), "/dev/dri".as_ref()]);
+    Ok(args)
 }
 
 /// Enumerated video nodes that can stream one of the formats supported by Photo Booth.
@@ -610,6 +638,40 @@ mod tests {
         assert!(!p.network && !p.storage && !p.contacts && !p.remote);
         assert!(p.held().contains(&"calendars"));
         assert!(!Policy::default().holds("calendars"));
+    }
+
+    #[test]
+    fn gpu_permission_is_recognised() {
+        let p = Policy::from_permissions("example", &["gpu".into()]).unwrap();
+        assert!(p.gpu && p.holds("gpu") && p.held() == vec!["gpu"]);
+        assert!(!Policy::default().holds("gpu"));
+    }
+
+    #[test]
+    fn gpu_args_for_an_sdk_app_are_narrow() {
+        let args: Vec<String> = gpu_args(Path::new("/run/user/1000"), "wayland-1", false, false)
+            .unwrap()
+            .iter()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect();
+        let joined = args.join(" ");
+        assert!(joined.contains("--dev-bind-try /dev/dri /dev/dri"));
+        assert!(joined.contains("--ro-bind-try /sys/dev/char /sys/dev/char"));
+        assert!(joined.contains("--ro-bind-try /sys/devices /sys/devices"));
+        assert!(joined.contains("--ro-bind-try /run/udev /run/udev"));
+        assert!(joined.contains("--bind /run/user/1000/wayland-1 /run/user/1000/wayland-1"));
+        assert!(!joined.contains("--ro-bind /sys /sys"), "SDK apps do not get all of /sys");
+        assert!(!joined.contains("session.json"));
+    }
+
+    #[test]
+    fn gpu_args_for_a_native_app_keep_all_of_sys_and_the_session() {
+        let args = gpu_args(Path::new("/run/user/1000"), "wayland-1", true, true).unwrap();
+        let joined = args.iter().map(|a| a.to_string_lossy().into_owned()).collect::<Vec<_>>().join(" ");
+        assert!(joined.starts_with("--ro-bind /sys /sys --ro-bind-try /run/udev /run/udev"));
+        assert!(joined.contains("--ro-bind /run/user/1000/session.json /run/user/1000/session.json"));
+        assert!(joined.ends_with("--dev-bind-try /dev/dri /dev/dri"));
+        assert!(gpu_args(Path::new("/run/user/1000"), "../x", true, false).is_err());
     }
 
     #[test]
