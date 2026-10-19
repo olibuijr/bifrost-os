@@ -15,7 +15,7 @@ use smithay::{
                 texture::{TextureRenderBuffer, TextureRenderElement},
                 Element, Id, Kind, RenderElement,
             },
-            gles::{GlesError, GlesRenderer, GlesTexProgram, GlesTexture, Uniform, UniformName, UniformType},
+            gles::{element::PixelShaderElement, GlesError, GlesPixelProgram, GlesRenderer, GlesTexProgram, GlesTexture, Uniform, UniformName, UniformType},
             utils::{draw_render_elements, CommitCounter},
             Bind, Color32F, Frame, Offscreen, Renderer,
         },
@@ -96,6 +96,43 @@ void main() {
     gl_FragColor = c * alpha;
 }"#;
 
+/// The flat plate of a material region that shows no blur (an inactive window's sidebar and toolbar): the recipe's
+/// opaque colour (premultiplied, so the anti-aliased rim of a rounded corner blends) in a rounded rectangle. A pixel
+/// shader of the element's own size: `v_coords` runs 0..1 over it and `size` is its size in logical px.
+const PLATE: &str = r#"
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+varying vec2 v_coords;
+uniform vec2 size;
+uniform float alpha;
+uniform vec4 color;
+uniform float radius;
+void main() {
+    vec2 extent = size * 0.5;
+    float r = min(radius, min(extent.x, extent.y));
+    vec2 q = abs(v_coords * size - extent) - (extent - vec2(r));
+    float d = length(max(q, vec2(0.0))) + min(max(q.x, q.y), 0.0) - r;
+    gl_FragColor = color * (clamp(0.5 - d, 0.0, 1.0) * alpha);
+}"#;
+
+/// One flat plate to draw under a surface: its rectangle on the output (logical px), its premultiplied colour and the
+/// radius of its corners (0 for square ones).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Plate {
+    pub rect: Rectangle<i32, Logical>,
+    pub color: [f32; 4],
+    pub radius: f32,
+}
+
+/// A plate's element, kept between frames so its id stays, and the colour and radius it was last given (as bits).
+struct PlateSlot {
+    element: PixelShaderElement,
+    look: ([u32; 4], u32),
+}
+
 /// The sizes of the blur pyramid for a `w` x `h` base: PASSES halvings, then PASSES-1 doublings back up.
 pub fn pyramid(w: i32, h: i32) -> Vec<(i32, i32)> {
     let mut down = Vec::with_capacity(PASSES);
@@ -156,8 +193,14 @@ fn signature<E: Element>(output: Size<i32, Physical>, below: &[E], saturation: f
 pub struct Glass {
     down: GlesTexProgram,
     up: GlesTexProgram,
+    /// The plate shader; `None` when it did not compile (the plates are then not drawn, and the log says so).
+    plate: Option<GlesPixelProgram>,
     /// The last backdrop of each blurred surface (keyed by the caller), so its element keeps its id between frames.
     entries: HashMap<u64, Entry>,
+    /// The plate elements of each surface, by the surface's key and the plate's index.
+    plates: HashMap<(u64, usize), PlateSlot>,
+    /// The plates asked for since the last `retain_plates`.
+    plates_seen: Vec<(u64, usize)>,
 }
 
 impl Glass {
@@ -173,7 +216,48 @@ impl Glass {
                 UniformName::new("lum_values", UniformType::_4f),
             ],
         )?;
-        Ok(Glass { down, up, entries: HashMap::new() })
+        // a shader that fails to compile must not stop the window server: the plates are left out instead
+        let plate = match renderer.compile_custom_pixel_shader(
+            PLATE,
+            &[UniformName::new("color", UniformType::_4f), UniformName::new("radius", UniformType::_1f)],
+        ) {
+            Ok(p) => Some(p),
+            Err(e) => {
+                eprintln!("bifrost-wm: plate shader: {e}");
+                None
+            }
+        };
+        Ok(Glass { down, up, plate, entries: HashMap::new(), plates: HashMap::new(), plates_seen: Vec::new() })
+    }
+
+    /// One element per plate of surface `key`, to be drawn right under the surface (next to its `backdrop`). The
+    /// elements keep their ids between frames and change their commit only when a plate's rectangle, colour or radius
+    /// changes, so a frame in which nothing moved has no damage.
+    pub fn plates(&mut self, key: u64, plates: &[Plate]) -> Vec<PixelShaderElement> {
+        let Some(program) = &self.plate else { return Vec::new() };
+        let mut out = Vec::with_capacity(plates.len());
+        for (i, p) in plates.iter().enumerate() {
+            let look = (p.color.map(f32::to_bits), p.radius.to_bits());
+            let uniforms = || vec![Uniform::new("color", p.color), Uniform::new("radius", p.radius)];
+            self.plates_seen.push((key, i));
+            let slot = self.plates.entry((key, i)).or_insert_with(|| PlateSlot {
+                element: PixelShaderElement::new(program.clone(), p.rect, None, 1.0, uniforms(), Kind::Unspecified),
+                look,
+            });
+            slot.element.resize(p.rect, None);
+            if slot.look != look {
+                slot.element.update_uniforms(uniforms());
+                slot.look = look;
+            }
+            out.push(slot.element.clone());
+        }
+        out
+    }
+
+    /// Forgets the plates that were not asked for since the last call (a surface that went away or lost a region).
+    pub fn retain_plates(&mut self) {
+        let seen = std::mem::take(&mut self.plates_seen);
+        self.plates.retain(|k, _| seen.contains(k));
     }
 
     /// The blurred backdrop for surface `key` whose blur `regions` (output logical px) lie over `below` (front-to-back

@@ -150,8 +150,9 @@ the compositor.
    `Wayland::window_materials` sends them as the ext-background-effect blur region of the External(N) window, the
    same path as Settings. No protocol change was needed. Direct apps that own a Wayland surface (route `Direct`)
    do not send a region yet. Unverified on Midget.
-4. Server: draw the inactive-material plate in the window server (it knows activation) and send xdg `activated` to
-   shell windows, so foreign focus no longer leaves the shell believing it is key.
+4. Server: (plate done, 2026-10-19: Vulkan and GLES paths) draw the inactive-material plate in the window server (it
+   knows activation) and send xdg `activated` to shell windows, so foreign focus no longer leaves the shell believing
+   it is key.
 5. Shell chrome (menu bar, dock, panels) are layer clients (`bifrost-chrome`): give them blur regions too and drop
    `Presenter::set_window_stack` / `under`.
 6. (done) labwc is removed and the shell-side live backdrop is deleted (sprint 6).
@@ -196,6 +197,15 @@ Tints equal the shell's `MATERIAL_*` pairs (`render/src/ui.rs`).
   the target so far, so this is exact on the Vulkan path.
 - Active state: a `follows_window` region in a window that is not key draws the opaque inactive plate, except kinds that
   follow no window state (menu, popover, sheet, HUD, tooltip, full-screen UI, plain). An explicit `active` or `inactive` wins.
+  The client leaves a behind-window region clear (a faint tint at most) and the window server backs it, so a region
+  that resolves to a plate must really get one: the Vulkan path draws it as a node (`material_nodes`), the GLES path
+  as a rounded pixel-shader element under the surface (`scene::backing_of`, `glass::Glass::plates`, shader `PLATE`,
+  corner radius from the material). Until 2026-10-19 the GLES path skipped plates ("the client paints those itself",
+  which no client does), so an inactive window's sidebar and toolbar were see-through: its text printed over the
+  windows behind it and the wallpaper showed through (E2E S1, `docs/e2e/2026-10-19-finder-browser.md`). A plate is
+  always opaque (`material_kind::recipe` tests, `scene::tests`); an inactive window dims only its chrome and its body
+  (`desk::BACKGROUND_DIM`, which keeps alpha) and never loses opacity. If the plate shader fails to compile the log
+  says `bifrost-wm: plate shader: ...` and the plates are left out.
 - Within-window: not isolated yet (the compose pass cannot sample one window's earlier pixels alone); resolves to the flat
   plate of the kind. A gap, recorded in the parity rows.
 - Rounded mask: the largest corner radius masks a single-rectangle region with the compose shader's anti-aliased SDF.
