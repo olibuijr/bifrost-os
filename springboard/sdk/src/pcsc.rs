@@ -610,8 +610,8 @@ mod tests {
     #[test]
     fn the_structures_have_the_c_layout_on_64_bit() {
         assert_eq!(std::mem::size_of::<IoRequest>(), 16);
-        // pointer, pointer, three unsigned longs, 33 bytes of answer to reset, padded to 8
-        assert_eq!(std::mem::size_of::<ReaderState>(), 72);
+        // pointer, pointer, three unsigned longs (40 bytes), 33 bytes of answer to reset: 73, padded to 8
+        assert_eq!(std::mem::size_of::<ReaderState>(), 80);
     }
 
     #[test]
