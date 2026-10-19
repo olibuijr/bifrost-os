@@ -96,8 +96,11 @@ place glass is composed now. Bugs of that design, found on Midget on 2026-10-11:
   wholly inside one damage rectangle, and keeps partly damaged shapes on purpose (the clock redraws a strip of the bar
   without re-reporting the bar). A shape that disappears while only partly damaged, or damaged as several rectangles,
   stays in the list, and the presenter keeps drawing its blur and tint on the desktop.
-- **Black desktop after unlock** (fixed in `cbd807d`): the lock unmapped the desktop layer surface and the unlock
-  attached a buffer before the new configure.
+- **Black desktop after unlock** (`cbd807d`, again 0.10.4): the lock unmapped the desktop layer surface with a null-buffer
+  commit and the unlock waited for a new configure. bifrost-wm (smithay) resets a layer surface's configure state only
+  when it is destroyed, so it never answers the fresh initial commit and the desktop stayed unmapped (the window server's
+  clear colour, `0.06 0.06 0.08`, with no wallpaper and no backdrop for the window materials) on every second login. The
+  shell no longer unmaps the desktop surface at a lock: bifrost-wm draws only the lock surface while locked anyway.
 
 ## Desktop issues (user notes, 2026-10-11)
 
