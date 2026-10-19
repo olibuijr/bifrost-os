@@ -3917,6 +3917,47 @@ over built-in kernels, so app-supplied shader bodies are not run; no `MPSImageGa
 `CIGaussianBlur`'s), no per-kernel `MPS` texture descriptors; `CIColorMatrix` and convolution weights are set by value, not
 by `CIFilter` input keys. Written without building or running (owner rule); parity needs a Midget check.
 
+## GPU kits (MetalKit, MetalFX, Metal Performance Shaders): app-facing view, textures, meshes, scalers, image kernels, graphs
+
+Wave 15 (2026-10-19). The GPU path is Vulkan/GLES inside the shell; apps get these modules, all CPU reference code (no
+proprietary shaders), so the same calls run headless in tests and a GPU back end is later checked against them. Code is in
+`springboard/sdk/src/`; the models underneath stay in `bifrost_ui` and `bifrost_render`.
+
+| Apple | BifrOSt |
+|---|---|
+| `MTKView`, `MTKViewDelegate` (`drawableSizeWillChange`, `draw(in:)`) | `gpu_view::GpuView` and `GpuViewDelegate` (`drawable_size_will_change`, `draw(&mut Frame)`): bounds, scale, timed or on-demand loop, pause on resign, clear colour, a pool of 2 or 3 CPU drawables (`take_presented`, `image`, `release`); `draw()` forces a pass |
+| `MTKView.device`, `colorPixelFormat`, `isOpaque` | `GpuView::set_preferred_device`, `set_opaque`, `drawable_request()` (size, `FORMAT_OPAQUE` or `FORMAT_ALPHA`, render node checked); drawables above 16384 on a side or 2^26 pixels are refused |
+| `MTKTextureLoader` (`newTexture(data:)`, `(URL:)`, `(name:...)`, async batch) | `gpu_texture::TextureLoader` (`from_bytes`, `from_file`, `from_catalog` with scale variants, `from_image`, `load_async` with `PendingTextures::poll` and `wait`); options are `texture::LoadOptions` (sRGB, mipmap allocate or generate, origin, usage) |
+| `MTLTexture` (`replace(region:)`, `mipmapLevelCount`, `label`) | `gpu_texture::Texture` (`replace_region`, `mip_level_count`, `loaded_levels`, `pixel`, `sample_nearest`, `label`) |
+| (no MetalKit class: a 2D sprite pass) | `gpu_sprites::draw_batch(target, &SpriteBatch, &[&Texture], scale)` draws the texture runs of a `SpriteBatch` into a view drawable (nearest texel, vertex tint, source-over) |
+| `MTKMesh`, `MTKSubmesh`, `MTKMeshBuffer`, `MTKMeshBufferAllocator` | `gpu_mesh::{box_asset, plane_asset, sphere_asset, load_mesh_file, mesh_from_primitive}` give a `render::mesh::Mesh` (interleaved position, normal, uv; one triangle submesh, 16-bit or 32-bit indices) from a `BufferAllocator` with a byte budget; OBJ, STL and ASCII PLY files |
+| `MTLFXSpatialScaler` (+ `colorProcessingMode`) | `image_scaler::SpatialScaler` over `Image`: bicubic, alpha-weighted, `ColorProcessing::{Linear, Perceptual, Hdr}` |
+| `MTLFXTemporalScaler`, `MTLFXTemporalDenoisedScaler` | `image_scaler::TemporalImageScaler` (`next_jitter`, `reset`, `resolve(color, depth, motion)`; `denoised` flag) |
+| `MTLFXFrameInterpolator` | `image_scaler::FrameInterpolator` (`interpolate(a, b, motion, t)`, `intermediate_frames`), blending in linear light |
+| `MPSImageConvolution`, `MPSImageTent`, `MPSImageLanczosScale`, `MPSImageBilinearScale` | `image_ops::{convolve, tent_blur, scale}` on all four channels (`ScaleMode::{Nearest, Bilinear, Lanczos}`) |
+| `MPSImageStatisticsMeanAndVariance`, `...MinAndMax`, `MPSImageIntegral(OfSquares)`, `MPSImageReduceRowMax` and kin | `image_ops::{statistics, luma_statistics, integral, reduce_rows, reduce_columns}` |
+| `MPSImageAdd`, `Subtract`, `Multiply`, `Divide`, `MPSImageConversion`, `MPSImageTranspose` | `image_ops::{combine, invert, convert_transfer, transpose}` |
+| `MPSImageGaussianPyramid`, `MPSImageLaplacianPyramid(Add/Subtract)` | `image_ops::{gaussian_pyramid, laplacian_pyramid, collapse_laplacian}` |
+| `MPSImageEuclideanDistanceTransform`, `MPSImageGuidedFilter`, `MPSImageFindKeypoints` | `image_ops::{distance_transform, guided_filter, find_keypoints}` |
+| `MPSKernel` with `NSKeyedArchiver` | `image_ops::KernelSpec` (an `ImageKernel`, so `apply_chain` runs it), `encode_kernels` and `decode_kernels` (text archive, hostile-input checked), `run_chain` |
+| `MPSNNGraph` with convolution, pooling, fully connected, relu, add, concat, softmax nodes | `nn_graph::Graph` (`add_input`, `add`, `set_output`, `run`), model file `to_bytes` and `from_bytes` |
+| `MPSRNNImageInferenceLayer` over a sequence, `MPSRNNMatrixInferenceLayer`, `MPSCNNFullyConnected` over a batch | `nn_graph::{lstm_sequence, gru_sequence, matrix_inference}` |
+
+Decisions: pixels are the premultiplied `Image`; colour that is filtered or blended is unpremultiplied (or weighted by alpha)
+first. The view's drawables are CPU images so the model is testable without a device; the shell presenter uploads a presented
+image. The kernel archive and the graph file are our own formats (text and binary), not Apple's keyed archive, and their readers
+cap every length. `KernelSpec` arguments are capped (tent radius 1024, window side 255, sigma 64) rather than allocated.
+`render_view.rs` gained `set_pause_on_resign`, `set_resume_on_active`, `app_resigned_active`, `app_became_active` and
+`frames_displayed` so a view can pause with the app.
+Gaps, stated rather than skipped: no GPU dispatch for any kernel and no GPU device or texture handle for apps (a view's drawable
+is a CPU image until the shell attaches it to the presenter); Metal command-buffer encoding and the `MTL4FX` protocols cannot
+exist on this system; the temporal denoiser is a 3x3 box filter, not a learned one, and the spatial scaler is bicubic, not
+edge-directed; frames passed to the temporal scaler are taken as opaque; no ray intersector or acceleration structures (deprecated
+upstream); no learned-model import (a graph is built in code or read from our file); no batch-normalisation or user-defined
+graph node; no tangents, Model I/O vertex-layout conversion or mesh formats beyond OBJ, STL and ASCII PLY; `sample_nearest`
+is the only texture sampler (no bilinear or mip selection on `Texture`); a texture has no colour-space tag on the raster.
+Written without building or running (owner rule); parity needs the Midget checks listed in the matrix rows.
+
 ## Reference asset layer (`bifrost_core::ref_assets`)
 
 Personal-use reference assets (alert sounds, system sounds, cursors, wallpapers, app and system icons, symbols,

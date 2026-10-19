@@ -3,8 +3,8 @@
  "doc": "https://developer.apple.com/documentation/metalperformanceshaders",
  "macos_since": "10.13",
  "status": "partial",
- "bifrost": "springboard/render/src/gfx.rs (CPU blur), springboard/src/gpu/wl.rs (GPU dual-Kawase blur pyramid), springboard/render/src/gfx/rotate.rs (bilinear resample), springboard/render/src/emoji.rs (area and bilinear resample), springboard/src/gpu/egl.rs (EGL/GLES compute and render path)",
- "summary": "BifrOSt has a GPU blur pyramid and bilinear resampling, both used internally by the shell for glass and scaling. It exposes no app-facing GPU image-filter, histogram, matrix or neural-network API, and only a unary kernel base trait with a chain runner (springboard/render/src/kernel.rs), not a Metal-style kernel layer; most of the framework has no counterpart.",
+ "bifrost": "springboard/render/src/gfx.rs (CPU blur), springboard/src/gpu/wl.rs (GPU dual-Kawase blur pyramid), springboard/render/src/gfx/rotate.rs (bilinear resample), springboard/render/src/emoji.rs (area and bilinear resample), springboard/src/gpu/egl.rs (EGL/GLES compute and render path); springboard/sdk/src/image_ops.rs; springboard/sdk/src/nn_graph.rs",
+ "summary": "BifrOSt has a GPU blur pyramid and bilinear resampling, both used internally by the shell for glass and scaling. It exposes no app-facing GPU image-filter, histogram, matrix or neural-network API, and only a unary kernel base trait with a chain runner (springboard/render/src/kernel.rs), not a Metal-style kernel layer; most of the framework has no counterpart. Wave 15 (2026-10-19) adds app-facing kernels over app Images in sdk image_ops (colour convolution, scaling, statistics, integral images, reductions, arithmetic, pyramids, distance transform, guided filter, keypoints, a storable kernel chain) and sdk nn_graph (a node graph with a model file, sequence layers, batch inference). CPU only; no GPU dispatch.",
  "rea_evidence": "ev_dc16a204f342e059f1a161b951e799bfe8079a8056c0055eac0b1c2c928fba5d",
  "features": [
   {
@@ -17,100 +17,100 @@
   {
    "feature": "Gaussian and box blur image filters",
    "apple": "MPSImageGaussianBlur, MPSImageBox, MPSImageTent",
-   "bifrost": "springboard/render/src/gaussian_filter.rs (separable Gaussian by sigma, box and tent); springboard/render/src/gfx.rs:476 (three-pass CPU box blur); springboard/src/gpu/wl.rs:300 (GPU dual-Kawase blur pyramid)",
+   "bifrost": "springboard/render/src/gaussian_filter.rs (separable Gaussian by sigma, box and tent); springboard/render/src/gfx.rs:476 (three-pass CPU box blur); springboard/src/gpu/wl.rs:300 (GPU dual-Kawase blur pyramid); springboard/sdk/src/image_ops.rs (tent_blur, KernelSpec::{Gaussian, Tent})",
    "status": "partial",
-   "note": "Built on parity/team-k-metal-performance-shaders (commit 3a45ebef1): pure model with host unit tests; not wired into apps or the shell, not yet verified on the VM or Midget. Shell glass blur is still the separate GPU pyramid and CPU box blur; there is no app API. Refreshed 2026-10-17: sdk image_blur::BlurFilter::Gaussian applies the render crate's gaussian_blur to an app Image (tests image_blur::tests)."
+   "note": "Built on parity/team-k-metal-performance-shaders (commit 3a45ebef1): pure model with host unit tests; not wired into apps or the shell, not yet verified on the VM or Midget. Shell glass blur is still the separate GPU pyramid and CPU box blur; there is no app API. Refreshed 2026-10-17: sdk image_blur::BlurFilter::Gaussian applies the render crate's gaussian_blur to an app Image (tests image_blur::tests). Built 2026-10-19: image_ops::tent_blur blurs all four channels of an Image, and KernelSpec::Gaussian and Tent run in a stored chain (radius and sigma capped). Gaussian and box on Images were already in image_blur. Still a gap: no GPU dispatch. Midget check: run `cargo test --offline -p bifrost-app image_ops::tests` on the Midget build host and see every test pass (tent_blur_of_a_flat_image_is_flat, oversized_arguments_are_capped_instead_of_allocated); there is no app UI for it yet, so no click path."
   },
   {
    "feature": "Morphological filters (erode, dilate, area min and max)",
    "apple": "MPSImageErode, MPSImageDilate, MPSImageAreaMin, MPSImageAreaMax",
-   "bifrost": "springboard/render/src/filter.rs",
+   "bifrost": "springboard/render/src/filter.rs; springboard/sdk/src/image_ops.rs (KernelSpec::{Erode, Dilate})",
    "status": "partial",
-   "note": "Rectangular minimum and maximum (erode, dilate, area min and area max) are tested headless in tests/parity_sdk-complete-23.rs, including edge clamping and even-side refusal. Gap: no app-facing image object, and the filters are not wired into the shell or apps. Built 2026-10-17: app-facing luma filters in sdk pixel_filter (threshold, histogram, equalize, erode, dilate, median, sobel, laplacian over an Image); tests pixel_filter::tests. Not yet wired into the shell or apps, and no GPU dispatch."
+   "note": "Rectangular minimum and maximum (erode, dilate, area min and area max) are tested headless in tests/parity_sdk-complete-23.rs, including edge clamping and even-side refusal. Gap: no app-facing image object, and the filters are not wired into the shell or apps. Built 2026-10-17: app-facing luma filters in sdk pixel_filter (threshold, histogram, equalize, erode, dilate, median, sobel, laplacian over an Image); tests pixel_filter::tests. Not yet wired into the shell or apps, and no GPU dispatch. Built 2026-10-19: erode and dilate run as KernelSpec values in a chain that can be stored and restored (window side capped at 255, an invalid window returns the input). Still a gap: no GPU dispatch, luma only. Midget check: run `cargo test --offline -p bifrost-app image_ops::tests` on the Midget build host and see every test pass (a_restored_chain_gives_the_same_pixels, mps_kernels_run_as_image_kernels); there is no app UI for it yet, so no click path."
   },
   {
    "feature": "Convolution, median, Sobel and Laplacian filters",
    "apple": "MPSImageConvolution, MPSImageMedian, MPSImageSobel, MPSImageLaplacian",
-   "bifrost": "springboard/render/src/filter.rs",
+   "bifrost": "springboard/render/src/filter.rs; springboard/sdk/src/image_ops.rs (convolve, KernelSpec::{Convolution, Median, Sobel, Laplacian})",
    "status": "partial",
-   "note": "Convolution with a caller kernel, median, Sobel magnitude and Laplacian are tested headless in tests/parity_sdk-complete-23.rs with concrete pixel values. Gap: no app-facing image object, and the filters are not wired into the shell or apps. Built 2026-10-17: app-facing luma filters in sdk pixel_filter (threshold, histogram, equalize, erode, dilate, median, sobel, laplacian over an Image); tests pixel_filter::tests. Not yet wired into the shell or apps, and no GPU dispatch."
+   "note": "Convolution with a caller kernel, median, Sobel magnitude and Laplacian are tested headless in tests/parity_sdk-complete-23.rs with concrete pixel values. Gap: no app-facing image object, and the filters are not wired into the shell or apps. Built 2026-10-17: app-facing luma filters in sdk pixel_filter (threshold, histogram, equalize, erode, dilate, median, sobel, laplacian over an Image); tests pixel_filter::tests. Not yet wired into the shell or apps, and no GPU dispatch. Built 2026-10-19: image_ops::convolve applies an odd 3 to 9 sided kernel to every channel of an Image (edges clamp, bad shape gives None); median, Sobel and Laplacian are KernelSpec values. Still a gap: no GPU dispatch. Midget check: run `cargo test --offline -p bifrost-app image_ops::tests` on the Midget build host and see every test pass (convolution_with_an_identity_kernel_changes_nothing, a_kernel_chain_round_trips_through_the_archive); there is no app UI for it yet, so no click path."
   },
   {
    "feature": "Pyramid filters (Gaussian, Laplacian)",
    "apple": "MPSImageGaussianPyramid, MPSImageLaplacianPyramid, MPSImageLaplacianPyramidAdd/Subtract",
-   "bifrost": "springboard/src/gpu/wl.rs:300 (blur pyramid for the live backdrop); springboard/render/src/laplacian_pyramid.rs (gaussian_pyramid, laplacian_pyramid, collapse)",
+   "bifrost": "springboard/src/gpu/wl.rs:300 (blur pyramid for the live backdrop); springboard/render/src/laplacian_pyramid.rs (gaussian_pyramid, laplacian_pyramid, collapse); springboard/sdk/src/image_ops.rs (gaussian_pyramid, laplacian_pyramid, collapse_laplacian)",
    "status": "partial",
-   "note": "The shell's glass uses a fixed dual-Kawase pyramid on the GPU. A CPU Gaussian and Laplacian pyramid over 8-bit planes is tested headless in springboard/render/tests/parity_sdk-complete-46.rs, and collapsing a Laplacian pyramid restores the source exactly. Gap: no app API, and the pyramid is not wired into the shell or verified on Midget."
+   "note": "The shell's glass uses a fixed dual-Kawase pyramid on the GPU. A CPU Gaussian and Laplacian pyramid over 8-bit planes is tested headless in springboard/render/tests/parity_sdk-complete-46.rs, and collapsing a Laplacian pyramid restores the source exactly. Gap: no app API, and the pyramid is not wired into the shell or verified on Midget. Built 2026-10-19: image_ops::gaussian_pyramid gives per-channel Image levels (at most 32), laplacian_pyramid and collapse_laplacian work on the luma and restore it exactly. Still a gap: no GPU pyramid for apps and no pyramid add or subtract nodes. Midget check: run `cargo test --offline -p bifrost-app image_ops::tests` on the Midget build host and see every test pass (a_gaussian_pyramid_halves_each_level, collapsing_a_laplacian_pyramid_restores_the_luma); there is no app UI for it yet, so no click path."
   },
   {
    "feature": "Thresholding",
    "apple": "MPSImageThresholdBinary, ThresholdToZero, ThresholdTruncate and their inverses",
-   "bifrost": "springboard/render/src/filter.rs",
+   "bifrost": "springboard/render/src/filter.rs; springboard/sdk/src/image_ops.rs (KernelSpec::Threshold)",
    "status": "partial",
-   "note": "The five threshold modes (binary, binary inverse, to zero, to zero inverse, truncate) are tested headless in tests/parity_sdk-complete-23.rs. Gap: no app-facing image object, and the filters are not wired into the shell or apps. Built 2026-10-17: app-facing luma filters in sdk pixel_filter (threshold, histogram, equalize, erode, dilate, median, sobel, laplacian over an Image); tests pixel_filter::tests. Not yet wired into the shell or apps, and no GPU dispatch."
+   "note": "The five threshold modes (binary, binary inverse, to zero, to zero inverse, truncate) are tested headless in tests/parity_sdk-complete-23.rs. Gap: no app-facing image object, and the filters are not wired into the shell or apps. Built 2026-10-17: app-facing luma filters in sdk pixel_filter (threshold, histogram, equalize, erode, dilate, median, sobel, laplacian over an Image); tests pixel_filter::tests. Not yet wired into the shell or apps, and no GPU dispatch. Built 2026-10-19: KernelSpec::Threshold with the five modes runs in a chain and in the kernel archive. Still a gap: no GPU dispatch. Midget check: run `cargo test --offline -p bifrost-app image_ops::tests` on the Midget build host and see every test pass (a_kernel_chain_round_trips_through_the_archive, mps_kernels_run_as_image_kernels); there is no app UI for it yet, so no click path."
   },
   {
    "feature": "Histogram, histogram equalization and specification",
    "apple": "MPSImageHistogram, MPSImageHistogramEqualization, MPSImageHistogramSpecification",
-   "bifrost": "springboard/render/src/filter.rs",
+   "bifrost": "springboard/render/src/filter.rs; springboard/sdk/src/image_ops.rs (KernelSpec::Equalize, luma_statistics)",
    "status": "partial",
-   "note": "Histogram binning, histogram equalization and histogram specification (filter::specify) are tested headless in tests/parity_sdk-complete-23.rs. Gap: no app-facing image object, and the filters are not wired into the shell or apps. Built 2026-10-17: app-facing luma filters in sdk pixel_filter (threshold, histogram, equalize, erode, dilate, median, sobel, laplacian over an Image); tests pixel_filter::tests. Not yet wired into the shell or apps, and no GPU dispatch."
+   "note": "Histogram binning, histogram equalization and histogram specification (filter::specify) are tested headless in tests/parity_sdk-complete-23.rs. Gap: no app-facing image object, and the filters are not wired into the shell or apps. Built 2026-10-17: app-facing luma filters in sdk pixel_filter (threshold, histogram, equalize, erode, dilate, median, sobel, laplacian over an Image); tests pixel_filter::tests. Not yet wired into the shell or apps, and no GPU dispatch. Built 2026-10-19: KernelSpec::Equalize runs in a chain, and luma_statistics gives mean, variance, minimum and maximum of a region. Specification is still only in render::filter. Still a gap: no GPU dispatch. Midget check: run `cargo test --offline -p bifrost-app image_ops::tests` on the Midget build host and see every test pass (statistics_of_a_channel, a_kernel_chain_round_trips_through_the_archive); there is no app UI for it yet, so no click path."
   },
   {
    "feature": "Integral images and statistics (mean, variance, min and max)",
    "apple": "MPSImageIntegral, MPSImageIntegralOfSquares, MPSImageStatisticsMean, MPSImageStatisticsMeanAndVariance, MPSImageStatisticsMinAndMax",
-   "bifrost": "springboard/render/src/plane_stats.rs (Integral, statistics)",
+   "bifrost": "springboard/render/src/plane_stats.rs (Integral, statistics); springboard/sdk/src/image_ops.rs (integral, statistics, luma_statistics)",
    "status": "partial",
-   "note": "Integral images of values and of squares, and region mean, population variance, min and max, are tested headless in springboard/render/tests/parity_sdk-tests-17.rs. Not wired into apps or the shell, not yet tested on Midget; no image statistics API."
+   "note": "Integral images of values and of squares, and region mean, population variance, min and max, are tested headless in springboard/render/tests/parity_sdk-tests-17.rs. Not wired into apps or the shell, not yet tested on Midget; no image statistics API. Built 2026-10-19: image_ops::integral returns the integral image of one channel (or its squares), statistics and luma_statistics give mean, population variance, minimum and maximum of a clipped region of an Image. Still a gap: no GPU dispatch. Midget check: run `cargo test --offline -p bifrost-app image_ops::tests` on the Midget build host and see every test pass (statistics_of_a_channel, the_integral_gives_region_sums); there is no app UI for it yet, so no click path."
   },
   {
    "feature": "Scaling and resampling",
    "apple": "MPSImageScale, MPSImageLanczosScale, MPSImageBilinearScale",
-   "bifrost": "springboard/render/src/lanczos.rs (Lanczos-3, antialiased when shrinking); springboard/render/src/gfx/rotate.rs:341 (bilinear taps); springboard/render/src/emoji.rs:401 (area-average down, bilinear up); springboard/render/src/gfx.rs:359 (bilinear asset resize)",
+   "bifrost": "springboard/render/src/lanczos.rs (Lanczos-3, antialiased when shrinking); springboard/render/src/gfx/rotate.rs:341 (bilinear taps); springboard/render/src/emoji.rs:401 (area-average down, bilinear up); springboard/render/src/gfx.rs:359 (bilinear asset resize); springboard/sdk/src/image_ops.rs (scale, ScaleMode, KernelSpec::Scale)",
    "status": "partial",
-   "note": "Lanczos-3 and bilinear and area-average paths. The Lanczos model is pure, with host unit tests; not wired into apps or the shell, not yet verified on the VM or Midget. Not exposed through an SDK image API. Refreshed 2026-10-17: ui/src/image_kernels.rs has the LanczosScale kernel (CILanczosScaleTransform) behind the ImageKernel trait; no sdk call resamples with it yet."
+   "note": "Lanczos-3 and bilinear and area-average paths. The Lanczos model is pure, with host unit tests; not wired into apps or the shell, not yet verified on the VM or Midget. Not exposed through an SDK image API. Refreshed 2026-10-17: ui/src/image_kernels.rs has the LanczosScale kernel (CILanczosScaleTransform) behind the ImageKernel trait; no sdk call resamples with it yet. Built 2026-10-19: image_ops::scale resamples an Image with Nearest, Bilinear or Lanczos-3 (per channel, colour held under alpha), refuses zero sizes, sides above 16384 and more than 2^26 pixels, and runs as KernelSpec::Scale. Still a gap: no GPU dispatch. Midget check: run `cargo test --offline -p bifrost-app image_ops::tests` on the Midget build host and see every test pass (scaling_keeps_flat_images_flat_and_refuses_bad_sizes, nearest_scaling_repeats_pixels); there is no app UI for it yet, so no click path."
   },
   {
    "feature": "Image arithmetic and pixel conversion",
    "apple": "MPSImageAdd, MPSImageSubtract, MPSImageMultiply, MPSImageDivide, MPSImageConversion, MPSImageTranspose",
-   "bifrost": "springboard/render/src/plane_arith.rs (combine, invert, convert_transfer, transpose); tests: springboard/render/tests/parity_sdk-complete-38.rs",
+   "bifrost": "springboard/render/src/plane_arith.rs (combine, invert, convert_transfer, transpose); tests: springboard/render/tests/parity_sdk-complete-38.rs; springboard/sdk/src/image_ops.rs (combine, invert, convert_transfer, transpose)",
    "status": "partial",
-   "note": "Pixel arithmetic, inversion, sRGB and linear transfer conversion and transposition are a pure CPU model with host tests, not wired into apps or the shell. Gap: there are no GPU arithmetic kernels, no colour matrices or multi-channel formats, and the lab machine has not verified it."
+   "note": "Pixel arithmetic, inversion, sRGB and linear transfer conversion and transposition are a pure CPU model with host tests, not wired into apps or the shell. Gap: there are no GPU arithmetic kernels, no colour matrices or multi-channel formats, and the lab machine has not verified it. Built 2026-10-19: image_ops::combine (add, subtract, multiply, divide on every channel, None for different sizes), invert (keeps premultiplied pixels valid), convert_transfer (sRGB and linear on straight colour, alpha kept) and transpose work on Images. Still a gap: no multi-channel float formats, no GPU dispatch. Midget check: run `cargo test --offline -p bifrost-app image_ops::tests` on the Midget build host and see every test pass (arithmetic_saturates_and_combines_alpha, invert_twice_restores_a_premultiplied_image, a_transfer_round_trip_stays_within_two_steps, transposing_twice_is_the_identity); there is no app UI for it yet, so no click path."
   },
   {
    "feature": "Reduction filters (row and column min, max, sum, mean)",
    "apple": "MPSImageReduceRowMax and the other MPSImageReduce* classes",
-   "bifrost": "springboard/render/src/plane_stats.rs (reduce_rows, reduce_columns)",
+   "bifrost": "springboard/render/src/plane_stats.rs (reduce_rows, reduce_columns); springboard/sdk/src/image_ops.rs (reduce_rows, reduce_columns)",
    "status": "partial",
-   "note": "Row and column min, max, sum and mean are tested headless in springboard/render/tests/parity_sdk-tests-17.rs, with sums that are not clamped to the byte range. Not wired into apps or the shell, not yet tested on Midget."
+   "note": "Row and column min, max, sum and mean are tested headless in springboard/render/tests/parity_sdk-tests-17.rs, with sums that are not clamped to the byte range. Not wired into apps or the shell, not yet tested on Midget. Built 2026-10-19: image_ops::reduce_rows and reduce_columns fold one channel of an Image (min, max, sum, mean) without clamping sums. Still a gap: no GPU dispatch. Midget check: run `cargo test --offline -p bifrost-app image_ops::tests` on the Midget build host and see every test pass (reductions_are_not_clamped_to_a_byte); there is no app UI for it yet, so no click path."
   },
   {
    "feature": "Euclidean distance transform, guided filter, keypoints",
    "apple": "MPSImageEuclideanDistanceTransform, MPSImageGuidedFilter, MPSImageFindKeypoints",
-   "bifrost": "springboard/render/src/distance.rs (euclidean_distance), springboard/render/src/guided.rs (guided_filter)",
+   "bifrost": "springboard/render/src/distance.rs (euclidean_distance), springboard/render/src/guided.rs (guided_filter); springboard/sdk/src/image_ops.rs (distance_transform, guided_filter, find_keypoints)",
    "status": "partial",
-   "note": "Wave 4 (w4-metal-performance-shaders, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No vision primitives in the repo."
+   "note": "Wave 4 (w4-metal-performance-shaders, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No vision primitives in the repo. Built 2026-10-19: image_ops::distance_transform (with an optional search limit), guided_filter (luma, grey result) and find_keypoints (pixels at or above a threshold, scan order, capped count) take Images. Still a gap: our keypoint record is x, y and value, not Apple's packed layout, and there is no GPU dispatch. Midget check: run `cargo test --offline -p bifrost-app image_ops::tests` on the Midget build host and see every test pass (the_distance_transform_counts_pixels_to_the_nearest_lit_one, the_guided_filter_keeps_a_flat_image_and_refuses_bad_input, keypoints_come_in_scan_order_and_respect_the_limit); there is no app UI for it yet, so no click path."
   },
   {
    "feature": "Neural network graphs and CNN layers",
    "apple": "MPSNNGraph, MPSCNNConvolutionNode, MPSCNNPoolingNode, MPSCNNFullyConnectedNode and the other layer nodes",
-   "bifrost": "springboard/ui/src/cnn_layers.rs (Network, Layer, conv2d, pool2d, dense, relu); tests: springboard/ui/tests/parity_sdk-complete-22.rs",
+   "bifrost": "springboard/ui/src/cnn_layers.rs (Network, Layer, conv2d, pool2d, dense, relu); tests: springboard/ui/tests/parity_sdk-complete-22.rs; springboard/sdk/src/nn_graph.rs (Graph, NodeOp)",
    "status": "partial",
-   "note": "A Network chains convolution, pooling, dense, relu and custom layers, checks every shape before it runs, and is tested headless. Gap: there is no graph object, no node classes for apps, no GPU path and no serialised model."
+   "note": "A Network chains convolution, pooling, dense, relu and custom layers, checks every shape before it runs, and is tested headless. Gap: there is no graph object, no node classes for apps, no GPU path and no serialised model. Built 2026-10-19: nn_graph::Graph is a node graph (input, conv2d, pool, dense, relu, softmax, add, concat) whose nodes read earlier nodes only, so it has no cycles; run takes named input feature maps; to_bytes and from_bytes store and read a model file whose reader checks every length before allocating. Still a gap: no GPU path, no training, no batch normalisation or user-defined node, and no import of Apple's model files. Midget check: run `cargo test --offline -p bifrost-app nn_graph::tests` on the Midget build host and see every test pass (a_residual_graph_computes_front_to_back, a_model_round_trips_and_gives_the_same_scores, every_truncation_of_a_model_is_refused, hostile_model_data_is_refused_without_allocating); there is no app UI for it yet, so no click path."
   },
   {
    "feature": "Recurrent neural network layers",
    "apple": "MPSRNNImageInferenceLayer, MPSRNNMatrixInferenceLayer, MPSRNNMatrixTrainingLayer",
-   "bifrost": "springboard/ui/src/cnn_layers.rs (RecurrentWeights, lstm_step, gru_step); tests: springboard/ui/tests/parity_sdk-complete-22.rs",
+   "bifrost": "springboard/ui/src/cnn_layers.rs (RecurrentWeights, lstm_step, gru_step); tests: springboard/ui/tests/parity_sdk-complete-22.rs; springboard/sdk/src/nn_graph.rs (lstm_sequence, gru_sequence, matrix_inference)",
    "status": "partial",
-   "note": "LSTM and GRU single steps are implemented, and the tests check a bounded LSTM state over a sequence and the refusal of a hidden state of the wrong length. Gap: there is no sequence layer that runs many steps, no training layer and no matrix inference layer for apps."
+   "note": "LSTM and GRU single steps are implemented, and the tests check a bounded LSTM state over a sequence and the refusal of a hidden state of the wrong length. Gap: there is no sequence layer that runs many steps, no training layer and no matrix inference layer for apps. Built 2026-10-19: nn_graph::lstm_sequence and gru_sequence run a whole input sequence from a zero or a given state and return every step's output and the final state; matrix_inference runs a batch through a fully connected layer with an activation. Still a gap: no training layer and no bidirectional or stacked wrapper. Midget check: run `cargo test --offline -p bifrost-app nn_graph::tests` on the Midget build host and see every test pass (an_lstm_sequence_equals_stepping_by_hand, a_gru_sequence_refuses_the_wrong_cell, a_batch_goes_through_a_fully_connected_layer); there is no app UI for it yet, so no click path."
   },
   {
    "feature": "Matrix and vector kernels (multiply, decomposition, solve, softmax)",
    "apple": "MPSMatrix, MPSMatrixMultiplication, MPSMatrixDecompositionCholesky, MPSMatrixDecompositionLU, MPSMatrixSoftMax",
-   "bifrost": "springboard/ui/src/linalg.rs (cholesky",
+   "bifrost": "springboard/ui/src/linalg.rs (cholesky; springboard/sdk/src/nn_graph.rs (matrix_inference)",
    "status": "parity",
-   "note": "verified on Midget 0.7.25 by 15 tests. Wave 4 (w4-metal-performance-shaders, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No GPU linear algebra in springboard."
+   "note": "verified on Midget 0.7.25 by 15 tests. Wave 4 (w4-metal-performance-shaders, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No GPU linear algebra in springboard. Added 2026-10-19: nn_graph::matrix_inference is the batch matrix-times-weights step with bias and activation for apps. Midget check: run `cargo test --offline -p bifrost-app nn_graph::tests` on the Midget build host and see every test pass (a_batch_goes_through_a_fully_connected_layer); there is no app UI for it yet, so no click path."
   },
   {
    "feature": "Ray tracing and acceleration structures",
@@ -122,9 +122,9 @@
   {
    "feature": "Kernel base classes and keyed archiving",
    "apple": "MPSKernel, MPSUnaryImageKernel, MPSBinaryImageKernel, NSKeyedArchiver with MPSKeyedUnarchiver",
-   "bifrost": "springboard/ui/src/image_kernels.rs (ImageKernel, apply_chain), springboard/ui/src/cnn_layers.rs; tests: springboard/ui/tests/parity_sdk-complete-22.rs",
+   "bifrost": "springboard/ui/src/image_kernels.rs (ImageKernel, apply_chain), springboard/ui/src/cnn_layers.rs; tests: springboard/ui/tests/parity_sdk-complete-22.rs; springboard/sdk/src/image_ops.rs (KernelSpec, encode_kernels, decode_kernels, run_chain)",
    "status": "partial",
-   "note": "An app defines a kernel by implementing ImageKernel with its class, the built-in kernels implement it too, and apply_chain runs kernels in order; all tested headless. Gap: there is no GPU kernel dispatch, no keyed archiving of kernels, and the code is not wired into the shell or apps."
+   "note": "An app defines a kernel by implementing ImageKernel with its class, the built-in kernels implement it too, and apply_chain runs kernels in order; all tested headless. Gap: there is no GPU kernel dispatch, no keyed archiving of kernels, and the code is not wired into the shell or apps. Built 2026-10-19: image_ops::KernelSpec is a value that implements ImageKernel (so apply_chain runs it with the built-in kernels); encode_kernels and decode_kernels store and restore a chain as text (header, one kernel per line). The reader refuses a wrong header, unknown kernels, wrong argument counts, non-finite numbers, oversized sides, lines above 4096 bytes and more than 256 kernels. The format is ours, not Apple's keyed archive. Still a gap: no GPU kernel dispatch. Midget check: run `cargo test --offline -p bifrost-app image_ops::tests` on the Midget build host and see every test pass (a_kernel_chain_round_trips_through_the_archive, a_restored_chain_gives_the_same_pixels, hostile_archives_are_refused); there is no app UI for it yet, so no click path."
   }
  ],
  "gaps": [
