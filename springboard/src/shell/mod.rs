@@ -207,6 +207,7 @@ mod desktop_bar;
 #[cfg(feature = "desktop-wayland")]
 pub mod docpanel;
 pub mod preview_panel;
+pub mod preview_info;
 mod desktop_metrics;
 mod desktop_dock;
 pub mod defaultapps;
