@@ -84,7 +84,7 @@ impl App for PodcastsApp {
                 KeyInput::Code(8) => Out::Backspace,
                 KeyInput::Code(13) => Out::Enter,
                 KeyInput::Code(9) => Out::Named("Tab"),
-                KeyInput::Code(27) => Out::Hide,
+                KeyInput::Code(1 | 27) => Out::Hide,
                 KeyInput::Code(38) => Out::Named("Up"),
                 KeyInput::Code(40) => Out::Named("Down"),
                 KeyInput::Code(37) => Out::Named("Left"),

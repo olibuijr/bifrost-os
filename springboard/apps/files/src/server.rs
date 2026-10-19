@@ -177,7 +177,7 @@ impl LoginSheet {
                     LoginAct::Nothing
                 }
                 13 => LoginAct::Connect,
-                27 => LoginAct::Close,
+                KEY_ESCAPE | KEY_ESCAPE_ASCII => LoginAct::Close,
                 9 => {
                     self.on_password = !self.on_password;
                     LoginAct::Nothing
@@ -606,7 +606,7 @@ impl Files {
                         Some(addr) => AddressAct::Connect(addr.clone()),
                         None => AddressAct::Connect(sheet.field.to_string()),
                     },
-                    27 => AddressAct::Close,
+                    KEY_ESCAPE | KEY_ESCAPE_ASCII => AddressAct::Close,
                     40 if !recent.is_empty() => {
                         sheet.picked = Some(sheet.picked.map_or(0, |i| (i + 1).min(recent.len() - 1)));
                         AddressAct::Nothing
@@ -676,7 +676,7 @@ impl Files {
                         None => BrowseAct::Nothing,
                     },
                     8 => BrowseAct::Go(b.remote.parent()),
-                    27 => BrowseAct::Close,
+                    KEY_ESCAPE | KEY_ESCAPE_ASCII => BrowseAct::Close,
                     _ => BrowseAct::Nothing,
                 },
                 _ => BrowseAct::Nothing,
@@ -939,7 +939,7 @@ drwxr-xr-x    2 ftp      ftp          4096 Jan  1 00:00 .\r\n";
         let mut sheet = LoginSheet::new("smb://ann@nas.local".into(), SmbUrl::parse("smb://ann@nas.local").unwrap(), None);
         assert!(sheet.on_password);
         assert_eq!(&*sheet.user, "ann");
-        assert!(matches!(press(&mut sheet, 27), LoginAct::Close));
+        assert!(matches!(press(&mut sheet, KEY_ESCAPE), LoginAct::Close));
         // an empty password is sent as none: the client must not stop to ask on a terminal it does not have
         let Remote::Smb(_, creds) = sheet.remote() else { panic!("an SMB remote") };
         assert_eq!(creds.password, None);

@@ -599,14 +599,14 @@ impl DictionaryApp {
                     self.rename = None;
                     return self.refresh();
                 }
-                KeyInput::Code(27) => self.rename = None,
+                KeyInput::Code(1 | 27) => self.rename = None,
                 _ => return false,
             }
             return true;
         }
         if self.settings {
             return match key {
-                KeyInput::Code(27) => {
+                KeyInput::Code(1 | 27) => {
                     self.settings = false;
                     self.drag = None;
                     true
@@ -625,7 +625,7 @@ impl DictionaryApp {
                     f.cur = None;
                 }
                 KeyInput::Code(13) => return self.step_find(1),
-                KeyInput::Code(27) => self.find = None,
+                KeyInput::Code(1 | 27) => self.find = None,
                 _ => return false,
             }
             return true;
@@ -647,7 +647,7 @@ impl DictionaryApp {
                 let word = self.query.clone();
                 self.look_up(&word)
             }
-            KeyInput::Code(27) => {
+            KeyInput::Code(1 | 27) => {
                 if self.query.is_empty() && self.shown.is_none() {
                     return false;
                 }

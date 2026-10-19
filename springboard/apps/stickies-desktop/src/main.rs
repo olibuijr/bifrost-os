@@ -529,7 +529,7 @@ impl StickiesApp {
     fn key(&mut self, ctx: &Ctx, key: &KeyInput) -> bool {
         if let Some(confirm) = &self.confirm {
             // Escape answers Cancel; the sheet takes every other key so nothing reaches the notes under it
-            if let (KeyInput::Code(27), Some(id)) = (key, confirm.sheet.cancel_button()) {
+            if let (KeyInput::Code(1 | 27), Some(id)) = (key, confirm.sheet.cancel_button()) {
                 return self.answer(id);
             }
             return false;
@@ -548,7 +548,7 @@ impl StickiesApp {
             return self.chord(code, mods);
         }
         // Escape leaves the note: no note takes typing until one is pressed again
-        if let KeyInput::Code(27) = key {
+        if let KeyInput::Code(1 | 27) = key {
             let Some(board) = &mut self.board else { return false };
             if board.focus.take().is_none() {
                 return false;
@@ -672,7 +672,7 @@ impl StickiesApp {
                 self.step_find(true);
                 return true;
             }
-            KeyInput::Code(27) => {
+            KeyInput::Code(1 | 27) => {
                 self.find = None;
                 self.replacing = false;
                 return true;
@@ -699,7 +699,7 @@ impl StickiesApp {
                 }
             }
             KeyInput::Code(13) => return self.replace(Scope::Selection),
-            KeyInput::Code(27) => {
+            KeyInput::Code(1 | 27) => {
                 self.find = None;
                 self.replacing = false;
             }
@@ -768,7 +768,7 @@ impl StickiesApp {
                 }
                 None => false,
             },
-            KeyInput::Code(27) => {
+            KeyInput::Code(1 | 27) => {
                 self.colour_entry = None;
                 true
             }
@@ -794,7 +794,7 @@ impl StickiesApp {
                 self.link_entry = None;
                 self.add_link(&url)
             }
-            KeyInput::Code(27) => {
+            KeyInput::Code(1 | 27) => {
                 self.link_entry = None;
                 true
             }

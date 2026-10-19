@@ -1674,18 +1674,18 @@ impl App for Browser {
                         return true;
                     }
                 }
-                if !self.editing && matches!(k, KeyInput::Code(27)) {
+                if !self.editing && matches!(k, KeyInput::Code(1 | 27)) {
                     if let (Some(v), Some(p)) = (self.view(), self.pool.as_mut()) {
                         if self.reader.exit(p, v) {
                             return true;
                         }
                     }
                 }
-                if self.downloads.open && matches!(k, KeyInput::Code(27)) {
+                if self.downloads.open && matches!(k, KeyInput::Code(1 | 27)) {
                     self.downloads.open = false;
                     return true;
                 }
-                if self.overview.open && matches!(k, KeyInput::Code(27)) {
+                if self.overview.open && matches!(k, KeyInput::Code(1 | 27)) {
                     self.overview.open = false;
                     return true;
                 }
@@ -1712,7 +1712,7 @@ impl App for Browser {
                             self.sel = if n == 0 { None } else { Some(self.sel.map_or(n - 1, |i| (i + n - 1) % n)) };
                         }
                         KeyInput::Code(13) => self.commit_address(),
-                        KeyInput::Code(1) | KeyInput::Code(27) => {
+                        KeyInput::Code(1 | 27) => {
                             self.editing = false;
                             self.sugg.clear();
                             self.sync_address();

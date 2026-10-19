@@ -171,7 +171,7 @@ impl App for ContactsApp {
                     KeyInput::Code(8) => Out::Backspace,
                     KeyInput::Code(13) => Out::Enter,
                     KeyInput::Code(9) => Out::Named("Tab"),
-                    KeyInput::Code(27) => Out::Named("Escape"),
+                    KeyInput::Code(1 | 27) => Out::Named("Escape"),
                     KeyInput::Code(37) => Out::Named("Left"),
                     KeyInput::Code(39) => Out::Named("Right"),
                     KeyInput::Code(_) => return false,

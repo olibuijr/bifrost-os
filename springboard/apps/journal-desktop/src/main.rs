@@ -327,7 +327,7 @@ impl JournalApp {
                     self.refilter();
                     true
                 }
-                KeyInput::Code(27) => {
+                KeyInput::Code(1 | 27) => {
                     self.search.set_text("");
                     self.refilter();
                     true

@@ -347,7 +347,7 @@ impl App for PasswordsApp {
                 self.query.pop();
                 true
             }
-            Input::Key(KeyInput::Code(27)) => {
+            Input::Key(KeyInput::Code(1 | 27)) => {
                 self.query.clear();
                 true
             }

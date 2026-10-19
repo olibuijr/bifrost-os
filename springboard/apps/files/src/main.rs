@@ -6,7 +6,7 @@ use bifrost_app::kit::ui::{CELL_RADIUS_PT, MAC_CALLOUT_PT, MAC_HEADLINE_PT, MAC_
 const CARD_R: f32 = bifrost_app::controls::prefs_layout::m::CARD_RADIUS;
 use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::controls::{Controls, Node, Role, Rect, TextField};
-use bifrost_app::proto::{CHORD_ALT, CHORD_CTRL, CHORD_META, CHORD_SHIFT};
+use bifrost_app::proto::{CHORD_ALT, CHORD_CTRL, CHORD_META, CHORD_SHIFT, KEY_ESCAPE, KEY_ESCAPE_ASCII};
 use bifrost_app::{Command, Commands, App, Ctx, Input, ContextItem, KeyInput, TouchKind};
 use bifrost_app::app_windows::WindowId;
 use bifrost_app::kit::pack;
@@ -711,7 +711,7 @@ impl Files {
                             self.query.delete();
                             self.query_changed();
                         }
-                        27 => {
+                        KEY_ESCAPE | KEY_ESCAPE_ASCII => {
                             if self.work.is_some() {
                                 self.cancel_job();
                             } else {

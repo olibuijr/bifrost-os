@@ -531,7 +531,7 @@ impl App for MusicApp {
                 true
             }
             Input::Activate(id) => self.press_node(id as u64),
-            Input::Key(KeyInput::Code(27)) => self.app.as_mut().is_some_and(|m| m.cancel(0.)),
+            Input::Key(KeyInput::Code(1 | 27)) => self.app.as_mut().is_some_and(|m| m.cancel(0.)),
             Input::Key(KeyInput::Text(s)) => {
                 self.app.as_mut().unwrap().type_text(&s);
                 true

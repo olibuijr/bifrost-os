@@ -116,7 +116,7 @@ impl App for CalculatorApp {
                 }
                 KeyInput::Code(8) => vec![Key::Backspace],
                 KeyInput::Code(13) => vec![Key::Equals],
-                KeyInput::Code(27) => vec![Key::Clear],
+                KeyInput::Code(1 | 27) => vec![Key::Clear],
                 _ => return false,
             };
             let changed = !keys.is_empty();

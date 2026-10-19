@@ -955,7 +955,7 @@ impl Window {
                 }
                 true
             }
-            KeyInput::Code(27) => {
+            KeyInput::Code(1 | 27) => {
                 if self.focused && !self.maps.query.is_empty() {
                     self.maps.query.clear();
                     self.maps.query_edited(ms);

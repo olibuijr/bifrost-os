@@ -120,7 +120,7 @@ impl Files {
                         self.notice = Some(format!("The folder \"{}\" can't be found", typed.trim()));
                     }
                 }
-                27 => self.fx.goto = None,
+                KEY_ESCAPE | KEY_ESCAPE_ASCII => self.fx.goto = None,
                 9 => {
                     let typed = field.to_string();
                     if let Some(done) = complete_path(&self.home, &self.path, &typed) {

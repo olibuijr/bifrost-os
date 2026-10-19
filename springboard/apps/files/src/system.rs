@@ -464,6 +464,20 @@ mod tests {
     }
 
     #[test]
+    fn the_sdk_escape_code_cancels_a_rename_and_clears_the_search() {
+        use bifrost_app::proto::KEY_ESCAPE;
+        let ctx = test_ctx();
+        let mut files = two_files();
+        files.naming = Some((PathBuf::from("/fixture/a.png"), crate::TextField::new()));
+        assert!(files.event(&ctx, Input::Key(KeyInput::Code(KEY_ESCAPE))), "Escape is taken");
+        assert!(files.naming.is_none(), "Escape cancels the rename");
+        files.searching = true;
+        files.query.push_str("ab");
+        assert!(files.event(&ctx, Input::Key(KeyInput::Code(KEY_ESCAPE))));
+        assert!(!files.searching && files.query.to_string().is_empty(), "Escape ends the search");
+    }
+
+    #[test]
     fn space_with_nothing_selected_or_in_a_text_field_asks_for_no_panel() {
         let ctx = test_ctx();
         let mut files = two_files();
