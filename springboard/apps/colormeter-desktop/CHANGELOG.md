@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.4
+
+- BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.
+
 ## 0.5.3 — 2026-10-14
 
 - Require shell 0.8.0 for the launcher's screen permission.

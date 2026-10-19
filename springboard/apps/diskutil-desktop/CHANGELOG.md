@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.6
+
+- BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.
+
 ## 0.7.5 — 2026-10-14
 
 - Derive the initial content geometry from the host-provided window size instead of assuming a default resolution.

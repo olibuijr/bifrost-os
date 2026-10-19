@@ -308,7 +308,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-activity"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -526,7 +526,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-browser"
-version = "0.14.2"
+version = "0.14.3"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -545,7 +545,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-calendar"
-version = "1.18.0"
+version = "1.18.1"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -599,7 +599,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-colormeter"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -617,7 +617,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-console"
-version = "1.9.0"
+version = "1.9.1"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -653,7 +653,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-dictionary"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -663,7 +663,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-diskutil"
-version = "0.7.5"
+version = "0.7.6"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -672,7 +672,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-files"
-version = "1.32.0"
+version = "1.32.1"
 dependencies = [
  "bifrost-app",
  "bifrost-core",

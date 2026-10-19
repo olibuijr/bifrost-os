@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.10.1
+
+- BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.
+
 ## 0.10.0 — 2026-10-19
 
 - The Network tab lists processes instead of interfaces: Received/s, Sent/s, Bytes Received, Bytes Sent and (optional) Connections per process, busiest first. The figures come from the kernel's socket counters (`ss -tinpH`, `sample_net.rs`), read once per update while the tab is shown. They cover TCP sockets that belong to your own processes; a socket that closes takes its bytes with it, so the totals count only the sockets open now. Show Deltas counts the byte totals from the baseline. The interface totals moved to the footer.

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.1
+
+- BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.
+
 ## 1.9.0 — 2026-10-19
 
 - File > Open Recent now lasts across launches. Each log opened with File > Open, handed over by the shell, or saved by Capture Archive is remembered with its document grant (preference `recentLogs`, the SDK's Recents text format). The menu lists the logs open now, then the remembered ones; choosing a remembered log has the shell reopen its grant, and a file that changed, moved or lost its access leaves the menu with a status note saying why. Open Recent > Clear Menu forgets them all and gives the grants back. A log moved to the Trash leaves the menu too.

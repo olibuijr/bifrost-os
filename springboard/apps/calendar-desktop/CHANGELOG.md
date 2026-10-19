@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.18.1
+
+- BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.
+
 ## 1.18.0 — 2026-10-17
 
 - Double-click an event to open its editor in a window of its own. A single tap now selects the event. Save, Delete or

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.1
+
+- BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.
+
 ## 0.6.0 — 2026-10-17
 
 - Keys, Copy and Paste go to the key window, so a second window takes its own typing and Cmd+C copies from it; Cmd+W closes the window it is typed in (`window_input`, `extra_event`).
