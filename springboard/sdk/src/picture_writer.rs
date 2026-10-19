@@ -1,6 +1,6 @@
 //! Writes pictures with their metadata for apps. A writer takes one or more straight RGBA frames and writes one file in
 //! PNG, JPEG, GIF, BMP, TIFF or ICO, with an orientation, a capture date, a camera, the software that wrote it, a
-//! location and altitude, a JPEG quality, a frame delay and a GIF loop count. Each format keeps the metadata it can
+//! location, altitude, speed, direction and GPS time, the exposure and lens, a JPEG quality, a frame delay and a GIF loop count. Each format keeps the metadata it can
 //! carry (JPEG, PNG and TIFF keep the orientation, date, camera, software and location; GIF, BMP and ICO keep only the
 //! pixels and frame timing). WebP is read only.
 //!
@@ -14,7 +14,7 @@
 //! let jpeg = writer.finish().unwrap();
 //! ```
 
-use crate::image_metadata::{decimal_to_dms, Format, Location};
+use crate::image_metadata::{decimal_to_dms, Format, GpsTime, Location};
 use bifrost_render::cg::image::CgImage;
 use bifrost_render::cg::imageio::exif::{Dict, PropValue};
 use bifrost_render::cg::imageio::{ImageDestination, WriteOptions};
@@ -32,6 +32,16 @@ pub struct PictureWriter {
     model: Option<String>,
     software: Option<String>,
     loop_count: u32,
+    exposure_time: Option<f64>,
+    f_number: Option<f64>,
+    iso: Option<u32>,
+    focal_length_mm: Option<f64>,
+    exposure_bias: Option<f64>,
+    lens_make: Option<String>,
+    lens_model: Option<String>,
+    gps_time: Option<GpsTime>,
+    speed_kmh: Option<f64>,
+    direction_deg: Option<f64>,
     frames: Vec<(CgImage, u32)>,
 }
 
@@ -49,6 +59,16 @@ impl PictureWriter {
             model: None,
             software: None,
             loop_count: 0,
+            exposure_time: None,
+            f_number: None,
+            iso: None,
+            focal_length_mm: None,
+            exposure_bias: None,
+            lens_make: None,
+            lens_model: None,
+            gps_time: None,
+            speed_kmh: None,
+            direction_deg: None,
             frames: Vec::new(),
         }
     }
@@ -105,6 +125,58 @@ impl PictureWriter {
         self
     }
 
+    /// The exposure: shutter time in seconds, f-number, ISO and focal length in millimetres. A value that is not
+    /// finite and positive is ignored (zero ISO too), so each part can be left out with `None`.
+    pub fn exposure(mut self, time_s: Option<f64>, f_number: Option<f64>, iso: Option<u32>, focal_length_mm: Option<f64>) -> Self {
+        let good = |v: Option<f64>| v.filter(|x| x.is_finite() && *x > 0.0);
+        self.exposure_time = good(time_s);
+        self.f_number = good(f_number);
+        self.iso = iso.filter(|&i| i > 0);
+        self.focal_length_mm = good(focal_length_mm);
+        self
+    }
+
+    /// Exposure compensation in EV (negative is darker). A value that is not finite is ignored.
+    pub fn exposure_bias(mut self, ev: f64) -> Self {
+        if ev.is_finite() {
+            self.exposure_bias = Some(ev);
+        }
+        self
+    }
+
+    /// The lens maker and model, written as EXIF tags. An empty name is ignored.
+    pub fn lens(mut self, make: impl Into<String>, model: impl Into<String>) -> Self {
+        self.lens_make = non_empty(make.into());
+        self.lens_model = non_empty(model.into());
+        self
+    }
+
+    /// The UTC time of the GPS fix. A time that is not a clock reading (hour 24 or more, minute 60 or more) is
+    /// ignored.
+    pub fn gps_time(mut self, time: GpsTime) -> Self {
+        if time.hour < 24 && time.minute < 60 && time.second >= 0.0 && time.second < 61.0 {
+            self.gps_time = Some(time);
+        }
+        self
+    }
+
+    /// The ground speed in kilometres per hour (written with the unit K). A negative or non-finite value is ignored.
+    pub fn speed_kmh(mut self, speed: f64) -> Self {
+        if speed.is_finite() && speed >= 0.0 {
+            self.speed_kmh = Some(speed);
+        }
+        self
+    }
+
+    /// The direction the camera pointed in, degrees clockwise from true north, 0 up to 360. Other values are
+    /// ignored.
+    pub fn direction(mut self, degrees: f64) -> Self {
+        if (0.0..=360.0).contains(&degrees) {
+            self.direction_deg = Some(degrees);
+        }
+        self
+    }
+
     /// How many times an animation repeats; 0 repeats forever.
     pub fn loop_count(mut self, loop_count: u32) -> Self {
         self.loop_count = loop_count;
@@ -155,6 +227,33 @@ impl PictureWriter {
             let below = i64::from(metres < 0.0);
             gps.insert("AltitudeRef".into(), PropValue::Int(below));
             gps.insert("Altitude".into(), PropValue::Float(metres.abs()));
+        }
+        if let Some(t) = self.gps_time {
+            gps.insert("TimeStamp".into(), PropValue::Floats(vec![f64::from(t.hour), f64::from(t.minute), t.second]));
+            if let Some((y, m, d)) = t.date {
+                gps.insert("DateStamp".into(), PropValue::Text(format!("{y:04}:{m:02}:{d:02}")));
+            }
+        }
+        if let Some(v) = self.speed_kmh {
+            gps.insert("SpeedRef".into(), PropValue::Text("K".into()));
+            gps.insert("Speed".into(), PropValue::Float(v));
+        }
+        if let Some(v) = self.direction_deg {
+            gps.insert("ImgDirectionRef".into(), PropValue::Text("T".into()));
+            gps.insert("ImgDirection".into(), PropValue::Float(v));
+        }
+        for (key, value) in [("ExposureTime", self.exposure_time), ("FNumber", self.f_number), ("FocalLength", self.focal_length_mm), ("ExposureBiasValue", self.exposure_bias)] {
+            if let Some(v) = value {
+                exif.insert(key.into(), PropValue::Float(v));
+            }
+        }
+        if let Some(iso) = self.iso {
+            exif.insert("ISOSpeedRatings".into(), PropValue::Int(i64::from(iso)));
+        }
+        for (key, value) in [("LensMake", &self.lens_make), ("LensModel", &self.lens_model)] {
+            if let Some(text) = value {
+                exif.insert(key.into(), PropValue::Text(text.clone()));
+            }
         }
         let mut tiff = Dict::new();
         for (key, value) in [("Make", &self.make), ("Model", &self.model), ("Software", &self.software)] {
@@ -255,5 +354,51 @@ mod tests {
         let mut webp = PictureWriter::new(Format::Webp);
         assert!(webp.add_frame(2, 1, two_pixels(), 0));
         assert_eq!(webp.finish(), None);
+    }
+
+    #[test]
+    fn exposure_lens_and_gps_motion_are_written_and_read_back() {
+        let time = GpsTime { date: Some((2026, 10, 19)), hour: 9, minute: 30, second: 15.0 };
+        let mut writer = PictureWriter::new(Format::Jpeg)
+            .exposure(Some(0.004), Some(2.8), Some(400), Some(35.0))
+            .exposure_bias(-0.7)
+            .lens("Acme Optics", "Prime 35mm")
+            .gps_time(time)
+            .speed_kmh(48.5)
+            .direction(271.25)
+            .location(Location { latitude: 64.25, longitude: -21.5 });
+        assert!(writer.add_frame(2, 1, two_pixels(), 0));
+        let info = image_metadata::read(&writer.finish().unwrap()).unwrap();
+        assert!((info.exposure_time.unwrap() - 0.004).abs() < 1e-6);
+        assert!((info.f_number.unwrap() - 2.8).abs() < 1e-6);
+        assert_eq!(info.iso, Some(400));
+        assert!((info.focal_length_mm.unwrap() - 35.0).abs() < 1e-6);
+        assert!((info.exposure_bias.unwrap() + 0.7).abs() < 1e-6, "a negative bias is stored as a signed rational");
+        assert_eq!((info.lens_make.as_deref(), info.lens_model.as_deref()), (Some("Acme Optics"), Some("Prime 35mm")));
+        assert_eq!(info.gps_time.map(|t| t.to_text()).as_deref(), Some("2026:10:19 09:30:15"));
+        assert!((info.gps_speed_kmh.unwrap() - 48.5).abs() < 1e-6);
+        assert!((info.gps_direction_deg.unwrap() - 271.25).abs() < 1e-6);
+    }
+
+    #[test]
+    fn bad_exposure_and_gps_values_are_ignored() {
+        let bad_time = GpsTime { date: None, hour: 24, minute: 0, second: 0.0 };
+        let mut writer = PictureWriter::new(Format::Jpeg).exposure(Some(-1.0), Some(f64::NAN), Some(0), Some(0.0)).gps_time(bad_time).speed_kmh(-3.0).direction(400.0);
+        assert!(writer.add_frame(2, 1, two_pixels(), 0));
+        let info = image_metadata::read(&writer.finish().unwrap()).unwrap();
+        assert_eq!((info.exposure_time, info.f_number, info.iso, info.focal_length_mm), (None, None, None, None));
+        assert_eq!((info.gps_time, info.gps_speed_kmh, info.gps_direction_deg), (None, None, None));
+    }
+
+    #[test]
+    fn several_png_frames_make_an_animated_png() {
+        let mut writer = PictureWriter::new(Format::Png).loop_count(3);
+        assert!(writer.add_frame(2, 1, two_pixels(), 80));
+        assert!(writer.add_frame(2, 1, vec![0, 255, 0, 255, 0, 255, 0, 255], 220));
+        let bytes = writer.finish().unwrap();
+        let animation = image_animation::read(&bytes).unwrap();
+        assert!(animation.is_animated());
+        assert_eq!(animation.frames.iter().map(|f| f.delay_ms).collect::<Vec<_>>(), vec![80, 220]);
+        assert_eq!(animation.loop_count, Some(3));
     }
 }

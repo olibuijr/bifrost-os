@@ -93,14 +93,18 @@ fn filter_rows(raw: &[u8], row_len: usize, h: usize, bpp: usize) -> Vec<u8> {
     out
 }
 
-#[allow(clippy::too_many_arguments)] // PNG header fields plus pixel buffer; a struct would only be used here
-fn finish_png(w: usize, h: usize, depth: u8, ctype: u8, raw: &[u8], bpp: usize, row_len: usize, o: &PngOptions) -> Vec<u8> {
+/// The signature and every chunk before the image data: header, gamma, profile, resolution, EXIF and text.
+/// `extra` is written right after the header (the animation control chunk of an animated picture).
+fn png_preamble(w: usize, h: usize, depth: u8, ctype: u8, extra: Option<(&[u8; 4], &[u8])>, o: &PngOptions) -> Vec<u8> {
     let mut out = super::png::SIGNATURE.to_vec();
     let mut ihdr = Vec::new();
     ihdr.extend((w as u32).to_be_bytes());
     ihdr.extend((h as u32).to_be_bytes());
     ihdr.extend([depth, ctype, 0, 0, 0]);
     chunk(&mut out, b"IHDR", &ihdr);
+    if let Some((ty, d)) = extra {
+        chunk(&mut out, ty, d);
+    }
     if let Some(g) = o.gamma {
         chunk(&mut out, b"gAMA", &((g * 100_000.0).round() as u32).to_be_bytes());
     }
@@ -138,6 +142,13 @@ fn finish_png(w: usize, h: usize, depth: u8, ctype: u8, raw: &[u8], bpp: usize, 
             chunk(&mut out, b"iTXt", &d);
         }
     }
+    out
+}
+
+#[allow(clippy::too_many_arguments)] // PNG header fields plus pixel buffer; a struct would only be used here
+fn finish_png(w: usize, h: usize, depth: u8, ctype: u8, raw: &[u8], bpp: usize, row_len: usize, o: &PngOptions) -> Vec<u8> {
+    let level = o.level.unwrap_or(6).min(10);
+    let mut out = png_preamble(w, h, depth, ctype, None, o);
     let filtered = filter_rows(raw, row_len, h, bpp);
     chunk(&mut out, b"IDAT", &miniz_oxide::deflate::compress_to_vec_zlib(&filtered, level));
     chunk(&mut out, b"IEND", &[]);
@@ -168,6 +179,53 @@ pub fn encode_png(w: usize, h: usize, rgba: &[u8], o: &PngOptions) -> Option<Vec
         }
     }
     Some(finish_png(w, h, 8, ctype, &raw, ch, w * ch, o))
+}
+
+/// One full-canvas picture of an animated PNG.
+#[derive(Clone, Copy, Debug)]
+pub struct ApngFrame<'a> {
+    /// Straight 8-bit RGBA, `w * h * 4` bytes.
+    pub rgba: &'a [u8],
+    pub delay_ms: u32,
+}
+
+/// Encodes an animated PNG: every frame covers the whole canvas and replaces what was there, so a reader that does
+/// not know animation shows the first frame. `loop_count` 0 repeats forever. `None` for no frames or a frame
+/// that is too small for the canvas.
+pub fn encode_apng(w: usize, h: usize, frames: &[ApngFrame], loop_count: u32, o: &PngOptions) -> Option<Vec<u8>> {
+    if w == 0 || h == 0 || frames.is_empty() || frames.iter().any(|f| f.rgba.len() < w * h * 4) {
+        return None;
+    }
+    let level = o.level.unwrap_or(6).min(10);
+    let mut actl = Vec::new();
+    actl.extend((frames.len() as u32).to_be_bytes());
+    actl.extend(loop_count.to_be_bytes());
+    let mut out = png_preamble(w, h, 8, 6, Some((b"acTL", &actl[..])), o);
+    let mut seq = 0u32;
+    for (i, f) in frames.iter().enumerate() {
+        let mut fctl = Vec::new();
+        fctl.extend(seq.to_be_bytes());
+        seq += 1;
+        fctl.extend((w as u32).to_be_bytes());
+        fctl.extend((h as u32).to_be_bytes());
+        fctl.extend([0u8; 8]); // x and y offsets
+        fctl.extend((f.delay_ms.min(65535) as u16).to_be_bytes());
+        fctl.extend(1000u16.to_be_bytes());
+        fctl.extend([0, 0]); // dispose none, blend source
+        chunk(&mut out, b"fcTL", &fctl);
+        let filtered = filter_rows(&f.rgba[..w * h * 4], w * 4, h, 4);
+        let z = miniz_oxide::deflate::compress_to_vec_zlib(&filtered, level);
+        if i == 0 {
+            chunk(&mut out, b"IDAT", &z);
+        } else {
+            let mut d = seq.to_be_bytes().to_vec();
+            seq += 1;
+            d.extend(z);
+            chunk(&mut out, b"fdAT", &d);
+        }
+    }
+    chunk(&mut out, b"IEND", &[]);
+    Some(out)
 }
 
 /// Encodes straight 16-bit RGBA (always RGBA, 16 bits per sample).

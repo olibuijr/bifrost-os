@@ -47,6 +47,37 @@ pub struct PictureInfo {
     pub software: Option<String>,
     /// The lens model, when the EXIF block records one.
     pub lens_model: Option<String>,
+    /// The lens maker, when the EXIF block records one.
+    pub lens_make: Option<String>,
+    /// Exposure compensation in EV (negative is darker).
+    pub exposure_bias: Option<f64>,
+    /// The UTC time the GPS fix was taken, when the GPS block records one.
+    pub gps_time: Option<GpsTime>,
+    /// Ground speed in kilometres per hour, converted from the unit the file names (km/h, mph or knots).
+    pub gps_speed_kmh: Option<f64>,
+    /// The direction the camera pointed in degrees clockwise from north, 0 up to 360.
+    pub gps_direction_deg: Option<f64>,
+}
+
+/// The UTC time of a GPS fix, as the GPS block stores it: a date (when present) and a time of day.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GpsTime {
+    /// `(year, month, day)`, when the block has a date stamp.
+    pub date: Option<(u16, u8, u8)>,
+    pub hour: u8,
+    pub minute: u8,
+    pub second: f64,
+}
+
+impl GpsTime {
+    /// The time as `YYYY:MM:DD HH:MM:SS` (seconds rounded down), or `HH:MM:SS` when there is no date.
+    pub fn to_text(&self) -> String {
+        let clock = format!("{:02}:{:02}:{:02}", self.hour, self.minute, self.second.trunc() as u32);
+        match self.date {
+            Some((y, m, d)) => format!("{y:04}:{m:02}:{d:02} {clock}"),
+            None => clock,
+        }
+    }
 }
 
 /// Reads the metadata of the first image in `bytes`. `None` when the data is not a picture in a supported format.
@@ -74,6 +105,11 @@ pub fn read(bytes: &[u8]) -> Option<PictureInfo> {
         altitude_m: altitude(&p.gps),
         software: text(&p.tiff, "Software"),
         lens_model: text(&p.exif, "LensModel"),
+        lens_make: text(&p.exif, "LensMake"),
+        exposure_bias: number(&p.exif, "ExposureBiasValue"),
+        gps_time: gps_time(&p.gps),
+        gps_speed_kmh: gps_speed_kmh(&p.gps),
+        gps_direction_deg: gps_direction(&p.gps),
     })
 }
 
@@ -130,6 +166,42 @@ fn altitude(gps: &Dict) -> Option<f64> {
     let metres = number(gps, "Altitude")?;
     let below = gps.get("AltitudeRef").and_then(PropValue::as_i64) == Some(1);
     Some(if below { -metres } else { metres })
+}
+
+/// The GPS time stamp (hours, minutes, seconds in UTC) with the date stamp when there is one. `None` for a time
+/// that is not a valid clock reading.
+fn gps_time(gps: &Dict) -> Option<GpsTime> {
+    let parts = match gps.get("TimeStamp")? {
+        PropValue::Floats(v) => v.clone(),
+        PropValue::Ints(v) => v.iter().map(|&i| i as f64).collect(),
+        _ => return None,
+    };
+    let [h, m, s] = parts[..] else { return None };
+    if !(0.0..24.0).contains(&h) || !(0.0..60.0).contains(&m) || !(0.0..61.0).contains(&s) {
+        return None;
+    }
+    let date = text(gps, "DateStamp").and_then(|t| {
+        let mut it = t.split(':').map(|x| x.parse::<u16>().ok());
+        let (y, mo, d) = (it.next()??, it.next()??, it.next()??);
+        ((1..=12).contains(&mo) && (1..=31).contains(&d)).then_some((y, mo as u8, d as u8))
+    });
+    Some(GpsTime { date, hour: h as u8, minute: m as u8, second: s })
+}
+
+/// The ground speed in km/h. SpeedRef is `K` (km/h, the default), `M` (miles per hour) or `N` (knots).
+fn gps_speed_kmh(gps: &Dict) -> Option<f64> {
+    let speed = number(gps, "Speed").filter(|v| v.is_finite() && *v >= 0.0)?;
+    let factor = match text(gps, "SpeedRef").map(|r| r.to_ascii_uppercase()).as_deref() {
+        Some("M") => 1.609344,
+        Some("N") => 1.852,
+        _ => 1.0,
+    };
+    Some(speed * factor)
+}
+
+/// The image direction in degrees from true or magnetic north, when it is a compass reading (0 up to 360).
+fn gps_direction(gps: &Dict) -> Option<f64> {
+    number(gps, "ImgDirection").filter(|v| (0.0..=360.0).contains(v))
 }
 
 fn coordinate(gps: &Dict, value_key: &str, ref_key: &str, negative_letter: char, max: f64) -> Option<f64> {
@@ -214,5 +286,43 @@ mod tests {
         let bytes = dest.finalize().unwrap();
         let upright = decode_upright(&bytes).unwrap();
         assert_eq!((upright.w, upright.h), (1, 2));
+    }
+
+    #[test]
+    fn a_gps_time_with_a_date_reads_as_a_utc_clock_reading() {
+        let mut gps = Dict::new();
+        gps.insert("TimeStamp".into(), PropValue::Floats(vec![13.0, 5.0, 9.5]));
+        gps.insert("DateStamp".into(), PropValue::Text("2026:10:19".into()));
+        let t = gps_time(&gps).unwrap();
+        assert_eq!((t.hour, t.minute, t.date), (13, 5, Some((2026, 10, 19))));
+        assert_eq!(t.to_text(), "2026:10:19 13:05:09");
+        gps.remove("DateStamp");
+        assert_eq!(gps_time(&gps).unwrap().to_text(), "13:05:09");
+        gps.insert("TimeStamp".into(), PropValue::Floats(vec![25.0, 0.0, 0.0]));
+        assert_eq!(gps_time(&gps), None, "hour 25 is not a time");
+        gps.insert("TimeStamp".into(), PropValue::Floats(vec![1.0, 2.0]));
+        assert_eq!(gps_time(&gps), None, "two parts are not a time");
+    }
+
+    #[test]
+    fn gps_speed_is_converted_to_kilometres_per_hour() {
+        let mut gps = Dict::new();
+        gps.insert("Speed".into(), PropValue::Float(100.0));
+        assert_eq!(gps_speed_kmh(&gps), Some(100.0), "no unit means km/h");
+        gps.insert("SpeedRef".into(), PropValue::Text("M".into()));
+        assert!(close(gps_speed_kmh(&gps).unwrap(), 160.9344));
+        gps.insert("SpeedRef".into(), PropValue::Text("N".into()));
+        assert!(close(gps_speed_kmh(&gps).unwrap(), 185.2));
+        gps.insert("Speed".into(), PropValue::Float(-1.0));
+        assert_eq!(gps_speed_kmh(&gps), None);
+    }
+
+    #[test]
+    fn a_direction_outside_a_compass_turn_is_refused() {
+        let mut gps = Dict::new();
+        gps.insert("ImgDirection".into(), PropValue::Float(271.5));
+        assert_eq!(gps_direction(&gps), Some(271.5));
+        gps.insert("ImgDirection".into(), PropValue::Float(400.0));
+        assert_eq!(gps_direction(&gps), None);
     }
 }
