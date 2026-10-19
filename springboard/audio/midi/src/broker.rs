@@ -7,9 +7,11 @@
 //! to a virtual destination it owns come back as `Delivered`. Timestamps are host-clock nanoseconds; 0 means now.
 
 use crate::endpoints::{Direction, ObjectId};
+use crate::events::MidiEvent;
 use crate::hub::{Hub, Timed};
-use crate::ump::Ump;
-use crate::wire::{DeviceInfo, EndpointInfo, EntityInfo, Message, Refusal, Request, Setup, VERSION};
+use crate::thru::{ControlTransform, ThruConnection, ThruEvent, ThruParams, ValueMap};
+use crate::ump::{from_midi1, midi1_to_midi2, midi2_to_midi1, to_midi1, Ump};
+use crate::wire::{DeviceInfo, EndpointInfo, EntityInfo, Message, Refusal, Request, Setup, ThruSpec, VERSION};
 use std::collections::BTreeMap;
 
 /// A connection of the daemon's socket, numbered by the daemon.
@@ -17,6 +19,8 @@ pub type ConnId = u64;
 
 /// The most virtual endpoints one client may own, so a runaway app cannot fill the registry.
 pub const MAX_ENDPOINTS_PER_CLIENT: usize = 128;
+/// The most thru connections one client may own.
+pub const MAX_THRUS_PER_CLIENT: usize = 32;
 
 struct Conn {
     client: Option<ObjectId>,
@@ -24,16 +28,88 @@ struct Conn {
     seen_generation: u32,
 }
 
+/// A play-through from a source to a destination, run inside the server.
+struct Thru {
+    owner: ObjectId,
+    source: ObjectId,
+    destination: ObjectId,
+    conn: ThruConnection,
+}
+
 pub struct Broker {
     pub hub: Hub,
     conns: BTreeMap<ConnId, Conn>,
     next_conn: ConnId,
     generation: u32,
+    thrus: BTreeMap<u32, Thru>,
+    next_thru: u32,
+}
+
+/// A value table from the wire: empty is the identity.
+fn map_from(table: &[u8]) -> Option<ValueMap> {
+    if table.is_empty() {
+        return Some(ValueMap::identity());
+    }
+    let t: [u8; 128] = table.try_into().ok()?;
+    ValueMap::from_table(t)
+}
+
+/// The thru parameters a wire spec describes; `None` when a table is malformed.
+fn params_from(spec: &ThruSpec) -> Option<ThruParams> {
+    let mut controls = Vec::with_capacity(spec.controls.len());
+    for (from, to, table) in &spec.controls {
+        controls.push(ControlTransform { from: *from, to: *to, value: map_from(table)? });
+    }
+    Some(ThruParams { channel: spec.channel, note: map_from(&spec.note)?, velocity: map_from(&spec.velocity)?, controls })
+}
+
+fn channel_of(e: &MidiEvent) -> u8 {
+    match *e {
+        MidiEvent::NoteOff { channel, .. }
+        | MidiEvent::NoteOn { channel, .. }
+        | MidiEvent::PolyPressure { channel, .. }
+        | MidiEvent::ControlChange { channel, .. }
+        | MidiEvent::ProgramChange { channel, .. }
+        | MidiEvent::ChannelPressure { channel, .. }
+        | MidiEvent::PitchBend { channel, .. } => channel,
+    }
+}
+
+/// What a thru connection forwards for one packet. Notes and control changes go through its maps and transforms,
+/// other channel messages pass when the channel filter allows, and system messages always pass (when enabled).
+fn thru_packet(conn: &ThruConnection, p: Ump) -> Option<Ump> {
+    if !conn.enabled() {
+        return None;
+    }
+    let mt = p.message_type();
+    let ev = match mt {
+        2 => to_midi1(&p),
+        4 => midi2_to_midi1(&p),
+        _ => None,
+    };
+    let Some(ev) = ev else { return Some(p) };
+    let te = match ev {
+        MidiEvent::NoteOn { channel, key, velocity } => ThruEvent::NoteOn { channel, note: key, velocity },
+        MidiEvent::NoteOff { channel, key, velocity } => ThruEvent::NoteOff { channel, note: key, velocity },
+        MidiEvent::ControlChange { channel, controller, value } => ThruEvent::ControlChange { channel, control: controller, value },
+        other => {
+            let pass = conn.params().channel.map_or(true, |f| f == channel_of(&other));
+            return if pass { Some(p) } else { None };
+        }
+    };
+    let out = match conn.process(te)? {
+        ThruEvent::NoteOn { channel, note, velocity } => MidiEvent::NoteOn { channel, key: note, velocity },
+        ThruEvent::NoteOff { channel, note, velocity } => MidiEvent::NoteOff { channel, key: note, velocity },
+        ThruEvent::ControlChange { channel, control, value } => {
+            MidiEvent::ControlChange { channel, controller: control, value }
+        }
+    };
+    Some(if mt == 2 { from_midi1(p.group(), out) } else { midi1_to_midi2(p.group(), out) })
 }
 
 impl Broker {
     pub fn new(hub: Hub) -> Broker {
-        Broker { hub, conns: BTreeMap::new(), next_conn: 1, generation: 0 }
+        Broker { hub, conns: BTreeMap::new(), next_conn: 1, generation: 0, thrus: BTreeMap::new(), next_thru: 1 }
     }
 
     /// A new connection (no client until it says hello).
@@ -48,9 +124,11 @@ impl Broker {
     pub fn close(&mut self, conn: ConnId) {
         if let Some(c) = self.conns.remove(&conn) {
             if let Some(client) = c.client {
+                self.thrus.retain(|_, t| t.owner != client);
                 if self.hub.dispose_app(client) {
                     self.generation += 1;
                 }
+                self.prune_thrus();
             }
         }
     }
@@ -63,6 +141,35 @@ impl Broker {
     /// The daemon calls this when it added or removed a hardware device, entity or endpoint: every client is told.
     pub fn setup_changed(&mut self) {
         self.generation += 1;
+        self.prune_thrus();
+    }
+
+    /// Drops the thru connections whose source or destination no longer exists.
+    fn prune_thrus(&mut self) {
+        let reg = &self.hub.registry;
+        self.thrus.retain(|_, t| reg.endpoint(t.source).is_some() && reg.endpoint(t.destination).is_some());
+    }
+
+    /// A packet arrives at a source (hardware read, or a client's injection): it is queued for every client
+    /// connected to the source and run through the thru connections that start there. The daemon calls this instead
+    /// of `Hub::send_from_source`. Returns how many clients were connected.
+    pub fn route(&mut self, source: ObjectId, host_ns: u64, packet: Ump) -> usize {
+        let heard = self.hub.send_from_source(source, host_ns, packet);
+        let out: Vec<(ObjectId, Ump)> = self
+            .thrus
+            .values()
+            .filter(|t| t.source == source)
+            .filter_map(|t| thru_packet(&t.conn, packet).map(|p| (t.destination, p)))
+            .collect();
+        for (dst, p) in out {
+            self.hub.send_to_destination(source, dst, host_ns, p);
+        }
+        heard
+    }
+
+    /// The number of thru connections.
+    pub fn thru_count(&self) -> usize {
+        self.thrus.len()
     }
 
     pub fn generation(&self) -> u32 {
@@ -196,6 +303,7 @@ impl Broker {
                 let mine = self.hub.registry.endpoint(id).is_some_and(|e| e.owner == Some(client));
                 if mine && self.hub.dispose_endpoint(id) {
                     self.generation += 1;
+                    self.prune_thrus();
                     vec![Message::Done]
                 } else {
                     vec![Message::Failed(Refusal::BadObject)]
@@ -257,9 +365,41 @@ impl Broker {
                 }
                 let stamp = if host_ns == 0 { now_ns } else { host_ns };
                 for p in packets {
-                    self.hub.send_from_source(src, stamp, p);
+                    self.route(src, stamp, p);
                 }
                 Vec::new()
+            }
+            Request::ThruCreate { source, destination, spec } => {
+                let (src, dst) = (ObjectId(source), ObjectId(destination));
+                let dir = |id: ObjectId| self.hub.registry.endpoint(id).map(|e| e.direction);
+                match (dir(src), dir(dst)) {
+                    (None, _) | (_, None) => return vec![Message::Failed(Refusal::BadObject)],
+                    (Some(Direction::Source), Some(Direction::Destination)) => {}
+                    _ => return vec![Message::Failed(Refusal::WrongDirection)],
+                }
+                if self.thrus.values().filter(|t| t.owner == client).count() >= MAX_THRUS_PER_CLIENT {
+                    return vec![Message::Failed(Refusal::NotApplicable)];
+                }
+                let Some(params) = params_from(&spec) else { return vec![Message::Failed(Refusal::NotApplicable)] };
+                let id = self.next_thru;
+                self.next_thru += 1;
+                self.thrus.insert(id, Thru { owner: client, source: src, destination: dst, conn: ThruConnection::new(params) });
+                vec![Message::Created { id }]
+            }
+            Request::ThruEnable { id, enabled } => match self.thrus.get_mut(&id) {
+                Some(t) if t.owner == client => {
+                    t.conn.set_enabled(enabled);
+                    vec![Message::Done]
+                }
+                _ => vec![Message::Failed(Refusal::BadObject)],
+            },
+            Request::ThruDispose { id } => {
+                if self.thrus.get(&id).is_some_and(|t| t.owner == client) {
+                    self.thrus.remove(&id);
+                    vec![Message::Done]
+                } else {
+                    vec![Message::Failed(Refusal::BadObject)]
+                }
             }
         }
     }

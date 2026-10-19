@@ -104,6 +104,21 @@ impl std::fmt::Display for Refusal {
     }
 }
 
+/// The most control transforms one thru connection carries.
+pub const MAX_THRU_CONTROLS: usize = 32;
+
+/// What a thru connection does to the events passing through it (the wire form of `thru::ThruParams`). A table is
+/// empty (identity) or exactly 128 values of at most 127.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ThruSpec {
+    /// Only this channel (0 to 15) passes; `None` passes all.
+    pub channel: Option<u8>,
+    pub note: Vec<u8>,
+    pub velocity: Vec<u8>,
+    /// (from control, to control, value table): the first match rewrites a control change.
+    pub controls: Vec<(u8, u8, Vec<u8>)>,
+}
+
 /// Requests, app to server.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Request {
@@ -129,6 +144,13 @@ pub enum Request {
     SetRefCon { id: u32, value: u64 },
     /// Reply: `Pong`.
     Ping,
+    /// Creates a thru connection: events of `source` are transformed and sent on to `destination` inside the server,
+    /// without a round trip to the app. Reply: `Created` with the thru id (its own number space).
+    ThruCreate { source: u32, destination: u32, spec: ThruSpec },
+    /// Enables or disables a thru connection this client created. Reply: `Done`.
+    ThruEnable { id: u32, enabled: bool },
+    /// Removes a thru connection this client created. Reply: `Done`.
+    ThruDispose { id: u32 },
 }
 
 /// One device of the setup.
@@ -206,6 +228,9 @@ const T_SEND: u16 = 8;
 const T_INJECT: u16 = 9;
 const T_SET_REF_CON: u16 = 10;
 const T_PING: u16 = 11;
+const T_THRU_CREATE: u16 = 12;
+const T_THRU_ENABLE: u16 = 13;
+const T_THRU_DISPOSE: u16 = 14;
 
 const T_WELCOME: u16 = 0x101;
 const T_SETUP: u16 = 0x102;
@@ -270,6 +295,24 @@ impl Enc {
         self.u32(n as u32);
         for p in &list[..n] {
             self.ump(p);
+        }
+    }
+
+    fn bytes(&mut self, b: &[u8]) {
+        self.u32(b.len() as u32);
+        self.0.extend_from_slice(b);
+    }
+
+    fn thru(&mut self, t: &ThruSpec) {
+        self.u8(t.channel.map_or(0xFF, |c| c & 0x0F));
+        self.bytes(&t.note);
+        self.bytes(&t.velocity);
+        let n = t.controls.len().min(MAX_THRU_CONTROLS);
+        self.u32(n as u32);
+        for (from, to, table) in &t.controls[..n] {
+            self.u8(*from);
+            self.u8(*to);
+            self.bytes(table);
         }
     }
 
@@ -362,6 +405,44 @@ impl<'a> Dec<'a> {
         Ok(v)
     }
 
+    /// A value table: empty or exactly 128 values of at most 127.
+    fn table(&mut self) -> Result<Vec<u8>, WireError> {
+        let n = self.u32()? as usize;
+        if n != 0 && n != 128 {
+            return Err(WireError::BadPacket);
+        }
+        let b = self.take(n)?;
+        if b.iter().any(|v| *v > 127) {
+            return Err(WireError::BadPacket);
+        }
+        Ok(b.to_vec())
+    }
+
+    fn thru(&mut self) -> Result<ThruSpec, WireError> {
+        let ch = self.u8()?;
+        let channel = match ch {
+            0xFF => None,
+            0..=15 => Some(ch),
+            _ => return Err(WireError::BadPacket),
+        };
+        let note = self.table()?;
+        let velocity = self.table()?;
+        let n = self.u32()? as usize;
+        if n > MAX_THRU_CONTROLS {
+            return Err(WireError::BadPacket);
+        }
+        let mut controls = Vec::with_capacity(n);
+        for _ in 0..n {
+            let from = self.u8()?;
+            let to = self.u8()?;
+            if from > 127 || to > 127 {
+                return Err(WireError::BadPacket);
+            }
+            controls.push((from, to, self.table()?));
+        }
+        Ok(ThruSpec { channel, note, velocity, controls })
+    }
+
     fn ids(&mut self) -> Result<Vec<u32>, WireError> {
         let n = self.u32()? as usize;
         // every id takes four bytes, so a count the payload cannot hold is refused before allocating
@@ -442,6 +523,24 @@ impl Request {
                 e.0
             }
             Request::Ping => Enc::tag(T_PING).0,
+            Request::ThruCreate { source, destination, spec } => {
+                let mut e = Enc::tag(T_THRU_CREATE);
+                e.u32(*source);
+                e.u32(*destination);
+                e.thru(spec);
+                e.0
+            }
+            Request::ThruEnable { id, enabled } => {
+                let mut e = Enc::tag(T_THRU_ENABLE);
+                e.u32(*id);
+                e.bool(*enabled);
+                e.0
+            }
+            Request::ThruDispose { id } => {
+                let mut e = Enc::tag(T_THRU_DISPOSE);
+                e.u32(*id);
+                e.0
+            }
         }
     }
 
@@ -459,6 +558,9 @@ impl Request {
             T_INJECT => Request::Inject { source: d.u32()?, host_ns: d.u64()?, packets: d.packets()? },
             T_SET_REF_CON => Request::SetRefCon { id: d.u32()?, value: d.u64()? },
             T_PING => Request::Ping,
+            T_THRU_CREATE => Request::ThruCreate { source: d.u32()?, destination: d.u32()?, spec: d.thru()? },
+            T_THRU_ENABLE => Request::ThruEnable { id: d.u32()?, enabled: d.bool()? },
+            T_THRU_DISPOSE => Request::ThruDispose { id: d.u32()? },
             t => return Err(WireError::UnknownTag(t)),
         })
     }
@@ -678,6 +780,19 @@ mod tests {
             Request::Inject { source: 4, host_ns: 0, packets: sysex },
             Request::SetRefCon { id: 2, value: u64::MAX },
             Request::Ping,
+            Request::ThruCreate { source: 1, destination: 2, spec: ThruSpec::default() },
+            Request::ThruCreate {
+                source: 3,
+                destination: 4,
+                spec: ThruSpec {
+                    channel: Some(5),
+                    note: (0..128u8).collect(),
+                    velocity: Vec::new(),
+                    controls: vec![(1, 74, vec![127; 128]), (7, 11, Vec::new())],
+                },
+            },
+            Request::ThruEnable { id: 9, enabled: false },
+            Request::ThruDispose { id: 9 },
         ];
         for r in all {
             assert_eq!(Request::decode(&r.encode()), Ok(r.clone()), "{r:?}");
@@ -768,6 +883,38 @@ mod tests {
         e.u32(0);
         e.u32(u32::MAX);
         assert_eq!(Message::decode(&e.0), Err(WireError::Short));
+    }
+
+    #[test]
+    fn thru_tables_must_be_empty_or_complete_and_in_range() {
+        let ok = Request::ThruCreate {
+            source: 1,
+            destination: 2,
+            spec: ThruSpec { channel: None, note: vec![0; 128], velocity: Vec::new(), controls: Vec::new() },
+        };
+        assert_eq!(Request::decode(&ok.encode()), Ok(ok.clone()));
+        let short = Request::ThruCreate {
+            source: 1,
+            destination: 2,
+            spec: ThruSpec { channel: None, note: vec![0; 10], velocity: Vec::new(), controls: Vec::new() },
+        };
+        assert_eq!(Request::decode(&short.encode()), Err(WireError::BadPacket));
+        let high = Request::ThruCreate {
+            source: 1,
+            destination: 2,
+            spec: ThruSpec { channel: None, note: Vec::new(), velocity: vec![200; 128], controls: Vec::new() },
+        };
+        assert_eq!(Request::decode(&high.encode()), Err(WireError::BadPacket));
+        let many = Request::ThruCreate {
+            source: 1,
+            destination: 2,
+            spec: ThruSpec { channel: None, note: Vec::new(), velocity: Vec::new(), controls: vec![(1, 2, Vec::new()); MAX_THRU_CONTROLS] },
+        };
+        assert_eq!(Request::decode(&many.encode()), Ok(many.clone()));
+        // a channel above 15 other than the "none" marker is refused
+        let mut raw = Request::ThruCreate { source: 1, destination: 2, spec: ThruSpec::default() }.encode();
+        raw[2 + 4 + 4] = 16;
+        assert_eq!(Request::decode(&raw), Err(WireError::BadPacket));
     }
 
     #[test]

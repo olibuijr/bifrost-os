@@ -227,7 +227,7 @@ fn run(dump_seconds: Option<u64>) {
                     }
                     for u in pk {
                         if let Some(src) = p.source {
-                            broker.hub.send_from_source(src, stamp, u);
+                            broker.route(src, stamp, u);
                         }
                         if dump_seconds.is_some() {
                             println!("{stamp} {} {}", p.name, describe(&u));
@@ -272,7 +272,7 @@ fn run(dump_seconds: Option<u64>) {
                             pk.push(u);
                         }
                         for u in pk {
-                            broker.hub.send_from_source(src, stamp, u);
+                            broker.route(src, stamp, u);
                             if dump_seconds.is_some() {
                                 println!("{stamp} seq {}:{} {}", from.0, from.1, describe(&u));
                             }

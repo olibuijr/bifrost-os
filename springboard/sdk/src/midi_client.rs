@@ -18,7 +18,7 @@
 //! without a device. Devices appear and go away while the app runs: `MidiEvent::SetupChanged` says the lists are
 //! stale, and `sources()` and `destinations()` re-read them on the next call.
 
-pub use bifrost_midi::wire::{DeviceInfo, EndpointInfo, EntityInfo, Refusal, Setup};
+pub use bifrost_midi::wire::{DeviceInfo, EndpointInfo, EntityInfo, Refusal, Setup, ThruSpec};
 use bifrost_midi::ump::{Midi1ToUmp, Ump};
 use bifrost_midi::wire::{frame, FrameReader, Message, Request, WireError, SOCKET_NAME, VERSION};
 use std::collections::VecDeque;
@@ -321,6 +321,21 @@ impl MidiClient {
         Ok(())
     }
 
+    /// A thru connection run inside the server: packets of `source` are transformed by `spec` (channel filter,
+    /// note and velocity maps, control rewrites) and sent on to `destination` without a round trip to this app. It
+    /// lasts until disposed or until this client disconnects. Returns its id (a separate number space).
+    pub fn create_thru(&mut self, source: u32, destination: u32, spec: ThruSpec) -> Result<u32, MidiError> {
+        self.expect_created(Request::ThruCreate { source, destination, spec })
+    }
+
+    pub fn set_thru_enabled(&mut self, thru: u32, enabled: bool) -> Result<(), MidiError> {
+        self.expect_done(Request::ThruEnable { id: thru, enabled })
+    }
+
+    pub fn dispose_thru(&mut self, thru: u32) -> Result<(), MidiError> {
+        self.expect_done(Request::ThruDispose { id: thru })
+    }
+
     /// Round trip to the server; the time it took.
     pub fn ping(&mut self) -> Result<Duration, MidiError> {
         let t = Instant::now();
@@ -586,6 +601,32 @@ mod tests {
             })
             .collect();
         assert_eq!(words, vec![0x2090_3C64, 0x2090_3E5A, 0x20C0_0500]);
+    }
+
+    #[test]
+    fn a_thru_runs_in_the_server_from_a_virtual_source_to_a_virtual_destination() {
+        let server = TestServer::start(Hub::new());
+        let mut player = server.client("Player");
+        let mut synth = server.client("Synth");
+        let out = player.create_source("Player out").unwrap();
+        let inbox = synth.create_destination("Synth in").unwrap();
+        let up_octave: Vec<u8> = (0..128u16).map(|i| (i as u8).saturating_add(12).min(127)).collect();
+        let thru = synth
+            .create_thru(out, inbox, ThruSpec { channel: None, note: up_octave, velocity: Vec::new(), controls: Vec::new() })
+            .unwrap();
+        player.inject(out, 0, &[note(60)]).unwrap();
+        let mut got = Vec::new();
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while !got.iter().any(|e| matches!(e, MidiEvent::Delivered { .. })) && Instant::now() < deadline {
+            got.extend(synth.wait(Duration::from_millis(50)).unwrap());
+        }
+        assert!(
+            got.iter().any(|e| matches!(e, MidiEvent::Delivered { packet, .. } if *packet == note(72))),
+            "{got:?}"
+        );
+        synth.set_thru_enabled(thru, false).unwrap();
+        synth.dispose_thru(thru).unwrap();
+        assert!(matches!(synth.dispose_thru(thru), Err(MidiError::Refused(Refusal::BadObject))));
     }
 
     #[test]
