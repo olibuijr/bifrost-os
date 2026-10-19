@@ -2213,7 +2213,7 @@ mod tests {
         assert_eq!(labels[..4], ["BifrOSt Account", "Airplane Mode", "Wi-Fi", "Bluetooth"]);
         assert_eq!(labels[4..8], ["Notifications", "Sounds", "Focus", "Screen Time"]);
         assert_eq!(labels[8..], ["General", "Control Centre", "Menu Bar", "Display & Brightness", "Home Screen & Dock", "Overview", "Sharing", "Print & Scan", "Keyboard Shortcuts", "Assistant", "Trackpad", "Mouse", "Users & Groups", "Accessibility", "Wallpaper", "Screen Saver", "Battery", "Privacy", "Spotlight", "Lock Screen", "Passcode", "Passwords", "Internet Accounts", "Developer"]);
-        assert_eq!(s.groups[0].items[1].value, "WIFI-5G");
+        assert_eq!(s.groups[1].items[1].value, "WIFI-5G");
         // Sharing, Trackpad, Mouse and Users & Groups sit before Wallpaper
         assert_eq!(s.groups[3].items[14].value, "Lake Day");
         assert_eq!(s.groups[3].items[15].value, "Never", "the screen saver is off by default");
@@ -2557,14 +2557,16 @@ mod tests {
         assert_eq!(e.groups[0].items[6].accessory, Accessory::Check(false));
         let saver_opts = Options { screensaver_module: 1, screensaver_minutes: 5, ..Options::default() };
         let ss = spec(PageId::ScreenSaver, &Model { opts: &saver_opts, ..model(&info, &opts) });
-        assert_eq!(ss.groups.len(), 3);
+        // Colours has its own Speed choice group between Preview and Start After
+        assert_eq!(ss.groups.len(), 4);
         assert_eq!(ss.groups[0].items.len(), super::super::screensaver::SAVERS.len());
         assert_eq!(ss.groups[0].items[1].accessory, Accessory::Check(true));
         assert_eq!(ss.groups[0].items[0].accessory, Accessory::Check(false));
         assert_eq!(ss.groups[1].items[0].label, "Preview");
-        assert_eq!(ss.groups[2].items.len(), super::super::screensaver::START_AFTER.len());
-        assert_eq!(ss.groups[2].items[2].accessory, Accessory::Check(true));
-        assert_eq!(ss.groups[2].items[6].accessory, Accessory::Check(false));
+        assert_eq!(ss.groups[2].items.len(), 3, "Colours: slow, normal, fast");
+        assert_eq!(ss.groups[3].items.len(), super::super::screensaver::START_AFTER.len());
+        assert_eq!(ss.groups[3].items[2].accessory, Accessory::Check(true));
+        assert_eq!(ss.groups[3].items[6].accessory, Accessory::Check(false));
         let a = spec(PageId::AutoLock, &m);
         assert_eq!(a.groups[0].items.len(), AUTO_LOCK.len());
         assert_eq!(a.groups[0].items[4].accessory, Accessory::Check(true));
