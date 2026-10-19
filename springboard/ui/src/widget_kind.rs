@@ -24,6 +24,20 @@ impl Family {
             Family::Large => "large",
         }
     }
+
+    /// The size stored under `key` (see [`Family::key`]); None for any other text.
+    pub fn from_key(key: &str) -> Option<Family> {
+        Family::ALL.iter().copied().find(|f| f.key() == key.trim())
+    }
+
+    /// The name shown on the gallery's size chip.
+    pub fn label(self) -> &'static str {
+        match self {
+            Family::Small => "Small",
+            Family::Medium => "Medium",
+            Family::Large => "Large",
+        }
+    }
 }
 
 /// Longest identifier a kind may have, in bytes.
@@ -87,6 +101,18 @@ impl WidgetKind {
             configurable: false,
             families: sizes,
         })
+    }
+
+    /// Sets the description shown with the name in the gallery.
+    pub fn with_description(mut self, description: &str) -> Self {
+        self.description = description.to_string();
+        self
+    }
+
+    /// Marks the kind as taking user settings (or not).
+    pub fn with_configurable(mut self, configurable: bool) -> Self {
+        self.configurable = configurable;
+        self
     }
 
     /// The identifier the kind is reloaded by.
@@ -154,9 +180,123 @@ impl WidgetBundle {
     }
 }
 
+/// The text inside one pair of double quotes, or the trimmed text when it has none.
+fn unquote(v: &str) -> String {
+    let v = v.trim();
+    v.strip_prefix('"').and_then(|r| r.strip_suffix('"')).unwrap_or(v).to_string()
+}
+
+/// The items of a one-line array, `["a", "b"]`, unquoted. Text that is not an array is one item.
+fn list(v: &str) -> Vec<String> {
+    let v = v.trim();
+    match v.strip_prefix('[').and_then(|r| r.strip_suffix(']')) {
+        Some(inner) => inner.split(',').map(unquote).filter(|s| !s.is_empty()).collect(),
+        None => vec![unquote(v)],
+    }
+}
+
+/// Reads the `[[widget]]` tables of an app manifest into kinds:
+///
+/// ```toml
+/// [[widget]]
+/// id = "next-event"
+/// name = "Next Event"
+/// description = "The next event in your calendar."
+/// families = ["small", "medium"]   # left out: small and medium
+/// configurable = true
+/// ```
+///
+/// A table with an unsafe or empty id, or one whose families are all unknown, is dropped, so one bad table does not
+/// hide the others; a second table with the same id is dropped too. A blank name shows the id.
+pub fn parse_manifest(text: &str) -> Vec<WidgetKind> {
+    #[derive(Default)]
+    struct Draft {
+        id: String,
+        name: String,
+        description: String,
+        families: Option<Vec<String>>,
+        configurable: bool,
+    }
+    let mut drafts: Vec<Draft> = Vec::new();
+    let mut in_table = false;
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if line.starts_with('[') && !line.contains('=') {
+            in_table = line == "[[widget]]";
+            if in_table {
+                drafts.push(Draft::default());
+            }
+            continue;
+        }
+        if !in_table {
+            continue;
+        }
+        let (Some((key, value)), Some(d)) = (line.split_once('='), drafts.last_mut()) else { continue };
+        match key.trim() {
+            "id" => d.id = unquote(value),
+            "name" => d.name = unquote(value),
+            "description" => d.description = unquote(value),
+            "families" => d.families = Some(list(value)),
+            "configurable" => d.configurable = value.trim() == "true",
+            _ => {}
+        }
+    }
+    let mut out: Vec<WidgetKind> = Vec::new();
+    for d in drafts {
+        let families: Vec<Family> = match &d.families {
+            None => vec![Family::Small, Family::Medium],
+            Some(keys) => keys.iter().filter_map(|k| Family::from_key(k)).collect(),
+        };
+        let name = if d.name.trim().is_empty() { d.id.clone() } else { d.name.trim().to_string() };
+        let Ok(kind) = WidgetKind::new(&d.id, &name, &families) else { continue };
+        if out.iter().any(|k| k.id() == kind.id()) {
+            continue;
+        }
+        out.push(kind.with_description(&d.description).with_configurable(d.configurable));
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn manifest_tables_become_kinds_with_their_sizes_and_texts() {
+        let text = "id = \"is.x.app\"\n[[widget]]\nid = \"next\"\nname = \"Next Event\"\ndescription = \"The next one.\"\nfamilies = [\"large\", \"small\"]\nconfigurable = true\n\n[[widget]]\nid = \"plain\"\n";
+        let kinds = parse_manifest(text);
+        assert_eq!(kinds.len(), 2);
+        assert_eq!(kinds[0].id(), "next");
+        assert_eq!(kinds[0].display_name, "Next Event");
+        assert_eq!(kinds[0].description, "The next one.");
+        assert_eq!(kinds[0].families(), &[Family::Small, Family::Large], "sorted, smallest first");
+        assert!(kinds[0].configurable);
+        assert_eq!(kinds[1].display_name, "plain", "a blank name shows the id");
+        assert_eq!(kinds[1].families(), &[Family::Small, Family::Medium], "left out: small and medium");
+        assert!(!kinds[1].configurable);
+    }
+
+    #[test]
+    fn a_bad_table_is_dropped_without_hiding_the_others() {
+        let text = "[[widget]]\nid = \"bad id\"\n[[widget]]\nid = \"nofam\"\nfamilies = [\"huge\"]\n[[widget]]\nid = \"ok\"\nfamilies = [\"medium\", \"huge\"]\n[[widget]]\nid = \"ok\"\n[[control]]\nid = \"other\"\n";
+        let kinds = parse_manifest(text);
+        let ids: Vec<&str> = kinds.iter().map(|k| k.id()).collect();
+        assert_eq!(ids, vec!["ok"], "unsafe id, unknown sizes, a repeated id and other tables are not kinds");
+        assert_eq!(kinds[0].families(), &[Family::Medium], "the unknown size is skipped");
+    }
+
+    #[test]
+    fn family_keys_round_trip_and_unknown_text_is_none() {
+        for f in Family::ALL {
+            assert_eq!(Family::from_key(f.key()), Some(f));
+        }
+        assert_eq!(Family::from_key(" medium "), Some(Family::Medium));
+        assert_eq!(Family::from_key("extra-large"), None);
+        assert_eq!(Family::Large.label(), "Large");
+    }
 
     #[test]
     fn sizes_are_sorted_and_deduplicated() {

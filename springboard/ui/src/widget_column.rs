@@ -58,6 +58,32 @@ pub fn layout(
     frames
 }
 
+/// One row of a flowed column: the index of the row in the list given to [`flow`], its top edge and its height.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Slot {
+    pub index: usize,
+    pub y: f32,
+    pub height: f32,
+}
+
+/// Stacks rows of the given `heights` downwards from `top`, `spacing` apart, and keeps the leading rows that end at or
+/// above `bottom`; the first row that would cross it ends the column (a later, shorter row does not jump the queue).
+/// The Notification Center column uses it for widget rows whose height follows their family. A negative height or
+/// spacing counts as zero.
+pub fn flow(heights: &[f32], top: f32, spacing: f32, bottom: f32) -> Vec<Slot> {
+    let mut slots = Vec::new();
+    let mut y = top;
+    for (index, h) in heights.iter().enumerate() {
+        let height = h.max(0.0);
+        if y + height > bottom {
+            break;
+        }
+        slots.push(Slot { index, y, height });
+        y += height + spacing.max(0.0);
+    }
+    slots
+}
+
 /// The shown block under the vertical point `y`: its top edge is included and its bottom edge is not. A point in a
 /// gap between blocks, above the column or below it, or a NaN point, gives None.
 pub fn block_at(frames: &[Frame], y: f32) -> Option<&Frame> {
@@ -125,5 +151,30 @@ mod tests {
         let blocks = vec![Block::Notifications, widget("is.example.a")];
         let frames = layout(&blocks, &Controller::default(), &HashMap::new(), &limits(), -5.0, -8.0);
         assert_eq!(frames, vec![Frame { block: widget("is.example.a"), y: 0.0, height: 110.0 }]);
+    }
+
+    #[test]
+    fn flowed_rows_stack_from_the_top_with_their_own_heights() {
+        let slots = flow(&[58.0, 96.0, 77.0], 100.0, 10.0, 1000.0);
+        assert_eq!(
+            slots,
+            vec![Slot { index: 0, y: 100.0, height: 58.0 }, Slot { index: 1, y: 168.0, height: 96.0 }, Slot { index: 2, y: 274.0, height: 77.0 }]
+        );
+    }
+
+    #[test]
+    fn the_first_row_that_crosses_the_bottom_ends_the_column() {
+        // 58 fits (ends 158); the 96 row would end at 264 > 200; the later 20 row would fit but is not shown
+        let slots = flow(&[58.0, 96.0, 20.0], 100.0, 10.0, 200.0);
+        assert_eq!(slots.iter().map(|s| s.index).collect::<Vec<_>>(), vec![0]);
+        assert!(flow(&[58.0], 100.0, 10.0, 157.0).is_empty(), "a row ending past the bottom is left out");
+        assert_eq!(flow(&[58.0], 100.0, 10.0, 158.0).len(), 1, "ending exactly at the bottom fits");
+    }
+
+    #[test]
+    fn flowed_rows_treat_negative_heights_and_spacing_as_zero() {
+        let slots = flow(&[-4.0, 10.0], 0.0, -3.0, 50.0);
+        assert_eq!(slots, vec![Slot { index: 0, y: 0.0, height: 0.0 }, Slot { index: 1, y: 0.0, height: 10.0 }]);
+        assert!(flow(&[], 0.0, 8.0, 50.0).is_empty());
     }
 }
