@@ -1,3 +1,7 @@
+## 1.6.5 — 2026-10-19
+
+- A new app icon drawn for BifrOSt (tools/make-icons.py).
+
 # Changelog
 
 ## 1.6.4 — 2026-10-14
