@@ -50,6 +50,51 @@ impl Hub {
         (client, src, dst)
     }
 
+    /// Registers a client with an input port (a listener inbox) and no endpoints. The caller adds virtual endpoints
+    /// with `create_virtual_source` and `create_virtual_destination`.
+    pub fn create_client(&mut self, name: &str) -> ObjectId {
+        let client = self.registry.create_client(name);
+        self.inboxes.insert(client, Vec::new());
+        client
+    }
+
+    /// A virtual source owned by `client`; the client injects events into it with `send_from_source`.
+    pub fn create_virtual_source(&mut self, client: ObjectId, name: &str) -> Option<ObjectId> {
+        self.registry.create_virtual_endpoint(client, Direction::Source, name)
+    }
+
+    /// A virtual destination owned by `client`; events sent to it queue until `take_destination` drains them.
+    pub fn create_virtual_destination(&mut self, client: ObjectId, name: &str) -> Option<ObjectId> {
+        let dst = self.registry.create_virtual_endpoint(client, Direction::Destination, name)?;
+        self.dest_queues.insert(dst, Vec::new());
+        Some(dst)
+    }
+
+    /// Disposes a virtual endpoint with its connections and anything queued for it. `false` for hardware endpoints
+    /// and unknown ids.
+    pub fn dispose_endpoint(&mut self, id: ObjectId) -> bool {
+        if !self.registry.dispose_endpoint(id) {
+            return false;
+        }
+        self.dest_queues.remove(&id);
+        true
+    }
+
+    /// Stops queueing for a hardware destination that went away.
+    pub fn untrack_destination(&mut self, dst: ObjectId) {
+        self.dest_queues.remove(&dst);
+    }
+
+    /// The destinations with a queue (virtual and hardware), in identifier order.
+    pub fn tracked_destinations(&self) -> Vec<ObjectId> {
+        self.dest_queues.keys().copied().collect()
+    }
+
+    /// The clients with an inbox, in identifier order.
+    pub fn clients(&self) -> Vec<ObjectId> {
+        self.inboxes.keys().copied().collect()
+    }
+
     /// Removes an app with its virtual endpoints and anything still queued for it.
     pub fn dispose_app(&mut self, client: ObjectId) -> bool {
         let owned: Vec<ObjectId> = self.dest_queues.keys().copied().filter(|d| {
