@@ -810,6 +810,31 @@
     }
 
     #[test]
+    fn desktop_lock_screen_shows_the_login_window_with_the_display_on() {
+        let mut sh = desktop_shell();
+        sh.login_backend = Some(std::sync::Arc::new(FixedLogin(login::Reply::Unavailable)));
+        sh.screen = Screen::Home;
+        sh.anim = None;
+        let fx = sh.lock_screen();
+        assert_eq!(sh.screen, Screen::Lock);
+        assert!(sh.screen_on, "a desktop lock keeps the display on");
+        assert!(sh.login_open(), "the login window is up at once");
+        assert_eq!(fx, vec![Effect::ScreenOn]);
+    }
+
+    #[test]
+    fn tablet_lock_screen_still_turns_the_screen_off() {
+        let mut sh = shell();
+        sh.login_backend = Some(std::sync::Arc::new(FixedLogin(login::Reply::Unavailable)));
+        sh.screen = Screen::Home;
+        sh.anim = None;
+        let fx = sh.lock_screen();
+        assert_eq!(sh.screen, Screen::Lock);
+        assert!(!sh.screen_on, "a tablet lock is the power button: the screen goes off");
+        assert_eq!(fx, vec![Effect::ScreenOff]);
+    }
+
+    #[test]
     fn with_a_login_backend_return_before_the_first_tick_does_not_unlock() {
         let mut sh = login_shell(login::Reply::Unavailable);
         assert!(sh.is_locked() && sh.login.is_none(), "no tick yet: the window is not up");

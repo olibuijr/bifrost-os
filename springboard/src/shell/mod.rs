@@ -3024,8 +3024,16 @@ impl Shell {
     }
 
     /// menu > Lock Screen, also the control verb `lock`.
+    /// On a desktop the display stays on and the login window is up at once (as the reference Mac); on a tablet the
+    /// lock turns the screen off, as the power button of a phone does.
     pub fn lock_screen(&mut self) -> Vec<Effect> {
-        self.sleep_screen()
+        let fx = self.sleep_screen();
+        if self.form() == bifrost_ui::form_factor::FormFactor::Desktop {
+            self.screen_on = true;
+            self.login_show(self.last_input);
+            return vec![Effect::ScreenOn];
+        }
+        fx
     }
 
     fn sleep_screen(&mut self) -> Vec<Effect> {
