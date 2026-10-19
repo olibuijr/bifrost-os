@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.10.3 — 2026-10-19
+
+- Desktop Lock Screen shows the login window at once with the display on (it went black until a key).
+
 ## 0.10.2 — 2026-10-19
 
 - Windows of an app that exited (crash, stall, failed send) leave the desktop; restored windows wait for their app;
