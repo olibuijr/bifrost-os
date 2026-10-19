@@ -59,6 +59,7 @@ mod map_widget;
 mod scene_widget;
 mod security_views;
 mod sprite_widget;
+mod drag;
 mod content_unavailable;
 mod large_content;
 pub use keyanim::ViewState;
@@ -83,6 +84,7 @@ pub use security_views::{
     ACTION_IDENTITY_CANCEL, ACTION_IDENTITY_CHOOSE, ACTION_IDENTITY_SELECT, ACTION_TRUST_RESET, ACTION_TRUST_SETTING,
 };
 pub use content_unavailable::ContentUnavailableView;
+pub use drag::{accepts_items, pick_operation, DragSpec, DRAG_SLOP};
 pub use large_content::LargeContentView;
 
 /// What a text-editing view tells the shell about itself while it is first responder (`NativeTextInputClient`,
@@ -307,6 +309,32 @@ pub trait View: 'static {
     fn dirty_rect(&self) -> Rect {
         self.base().frame
     }
+    /// Drag source (`NSDraggingSource`): `Some` when a press on this view (or a view inside it that does not take
+    /// the press) that moves past [`DRAG_SLOP`] begins a drag session with these items. The window cancels the control
+    /// that held the press, and `ViewApp` starts the session ([`ViewApp::event`]).
+    fn dnd_source(&self) -> Option<DragSpec> {
+        None
+    }
+    /// The session this view began ended (`draggingSession(_:endedAt:operation:)`): `op` is the `dragop` bit the
+    /// destination performed, 0 when nobody took the drop.
+    fn dnd_ended(&mut self, _op: u8) {}
+    /// `registerForDraggedTypes`: the types this view takes; empty when it is not a destination. A type takes every type
+    /// that conforms to it (`public.image` takes a PNG).
+    fn dnd_types(&self) -> Vec<String> {
+        Vec::new()
+    }
+    /// `draggingEntered` (`entered`) and `draggingUpdated`: the session is over this view at (`x`, `y`) in the view's
+    /// content points, carrying `items`, with the source's `allowed` operations. Returns the operations this view would
+    /// perform (`dragop` bits; 0 refuses); the window picks one that the source allows. Highlight here (`isTargeted`).
+    fn dnd_over(&mut self, _entered: bool, _x: f32, _y: f32, _items: &[crate::proto::DragItem], _allowed: u8) -> u8 {
+        crate::proto::dragop::COPY
+    }
+    /// `draggingExited`, and after a drop: the session left this view; clear the highlight.
+    fn dnd_exited(&mut self) {}
+    /// `performDragOperation`: take the items. True when the drop was accepted.
+    fn dnd_perform(&mut self, _items: &[crate::proto::DragItem]) -> bool {
+        false
+    }
     /// Paints above the whole tree after the normal pass (menus, tooltips).
     fn draw_overlay(&mut self, _s: &mut dyn Canvas, _ui: &Ui) {}
     fn needs_display(&self) -> bool {
@@ -358,6 +386,8 @@ pub struct Window<S: Responder = NoApp> {
     root: Box<dyn View>,
     first: Option<u64>,
     tracking: Option<u64>,
+    /// press, session and destination state of drag and drop (see `drag.rs`)
+    drag: drag::DragState,
     full: bool,
     anim: animation::Animator,
     sent: Vec<(u64, String)>,
@@ -692,7 +722,7 @@ pub struct AxEntry {
 
 impl<S: Responder> Window<S> {
     pub fn new(root: impl View, undo_limit: usize) -> Self {
-        Window { root: Box::new(root), first: None, tracking: None, full: true, anim: Default::default(), sent: Vec::new(), constraints: Constraints::new(), broken_constraints: Vec::new(), undo: UndoManager::new(undo_limit) }
+        Window { root: Box::new(root), first: None, tracking: None, drag: Default::default(), full: true, anim: Default::default(), sent: Vec::new(), constraints: Constraints::new(), broken_constraints: Vec::new(), undo: UndoManager::new(undo_limit) }
     }
     pub fn root(&self) -> &dyn View {
         self.root.as_ref()
@@ -875,12 +905,23 @@ impl<S: Responder> Window<S> {
                     if !self.make_first_responder(Some(id)) && !accepts {
                         self.make_first_responder(None);
                     }
+                    self.drag_press(&p, *x, *y);
                     self.bubble(&p, ev, state, true);
                 } else {
+                    self.drag.press = None;
                     self.make_first_responder(None);
                 }
             }
             ViewEvent::Pointer(_) | ViewEvent::Cancel => {
+                // a press on a drag source that moved past the slop is a drag, not a click or a drag of a control
+                if let ViewEvent::Pointer(Event::Move(x, y)) = ev {
+                    if self.drag_move(*x, *y, state) {
+                        return self.needs_display();
+                    }
+                }
+                if matches!(ev, ViewEvent::Pointer(Event::Up(..)) | ViewEvent::Cancel) {
+                    self.drag.press = None;
+                }
                 let t = self.tracking;
                 let mut p = Vec::new();
                 if t.is_some_and(|id| path_to(self.root(), id, &mut p)) {
