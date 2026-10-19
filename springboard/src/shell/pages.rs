@@ -208,6 +208,10 @@ pub enum Toggle {
     SwitchScan,
     /// Accessibility > Keyboard > Sticky Keys (`a11y_sticky_keys`)
     StickyKeys,
+    /// Accessibility > Keyboard > Accessibility Keyboard: the on-screen keyboard (`a11y_accessibility_keyboard`)
+    AccessibilityKeyboard,
+    /// Keyboard > Input Sources > Show Input menu in menu bar (`show_input_menu`)
+    InputMenu,
     /// Accessibility > Keyboard > Mouse Keys: the keypad moves and clicks the pointer (`a11y.mouse_keys`)
     MouseKeys,
     /// Accessibility > Touch > Switch Control: the keyboard steps a highlight through the screen and selects, and the switch
@@ -1248,7 +1252,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
         PageId::Keyboards => page(
             "Keyboards",
             false,
-            vec![Group::new(super::kb_layouts::Layout::ALL.iter().enumerate().map(|(i, l)| Item::new(l.name()).switch(super::kb_layouts::is_enabled(*l), Action::Toggle(Toggle::Layout(i)))).collect()).footer("The globe key switches between enabled keyboards; touch and hold it to choose one."), Group::new(vec![Item::new("Remember Input Source for Each App").switch(super::kb_layouts::remembers(), Action::Toggle(Toggle::RememberInputSource))]).footer("Each app gets back the keyboard it had when it was last in front.")]),
+            vec![Group::new(super::kb_layouts::Layout::ALL.iter().enumerate().map(|(i, l)| Item::new(l.name()).switch(super::kb_layouts::is_enabled(*l), Action::Toggle(Toggle::Layout(i)))).collect()).footer("The globe key switches between enabled keyboards; touch and hold it to choose one."), Group::new(vec![Item::new("Remember Input Source for Each App").switch(super::kb_layouts::remembers(), Action::Toggle(Toggle::RememberInputSource))]).footer("Each app gets back the keyboard it had when it was last in front."), Group::new(vec![Item::new("Show Input menu in menu bar").switch(o.input_menu, Action::Toggle(Toggle::InputMenu))]).footer("The Input menu always shows while more than one keyboard is enabled. It lists the keyboards and opens the Keyboard Viewer and the on-screen keyboard.")]),
         PageId::Dictation => dictation_page(&super::services::recognizer::model_state(&super::services::recognizer::user_data_dir())),
         PageId::TextReplacements => {
             let mut items: Vec<Item> = super::services::text_services::replacement_rows()
@@ -1426,10 +1430,11 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                     Group::new(vec![
                         Item::new("Sticky Keys").switch(a.sticky_keys, Action::Toggle(Toggle::StickyKeys)),
                         Item::new("Mouse Keys").switch(a.mouse_keys, Action::Toggle(Toggle::MouseKeys)),
+                        Item::new("Accessibility Keyboard").switch(a.accessibility_keyboard, Action::Toggle(Toggle::AccessibilityKeyboard)),
                         Item::new("Slow Keys").value(SLOW_MS[a.slow.min(SLOW_MS.len() - 1)].0).link(PageId::SlowKeys),
                     ])
                         .header("KEYBOARD")
-                        .footer("Press a modifier key once to hold it for the next key you press, or twice to hold it until you press it again. Slow Keys ignores a key that is not held long enough."),
+                        .footer("Press a modifier key once to hold it for the next key you press, or twice to hold it until you press it again. Slow Keys ignores a key that is not held long enough. The Accessibility Keyboard opens the on-screen keyboard until you close it with its hide key or turn this off."),
                     Group::new({
                         let mut rows = vec![Item::new("Reduce Motion").switch(a.reduce_motion, Action::Toggle(Toggle::ReduceMotion))];
                         if m.info.motion_sensor_supported {
@@ -2355,6 +2360,33 @@ mod tests {
         assert_eq!(find(&on, "Switch Control").1, Accessory::Switch(true));
         assert_eq!(find(&on, "Voice Control").1, Accessory::Switch(true));
         assert_eq!(find(&on, "Switch Control").2, Action::Toggle(Toggle::SwitchControl));
+    }
+
+    #[test]
+    fn the_keyboard_group_has_the_accessibility_keyboard_switch() {
+        let opts = Options::default();
+        let info = info();
+        let row = |a: &AccessibilitySettings| -> (Accessory, Action) {
+            let m = Model { a11y: a, ..model(&info, &opts) };
+            let s = spec(PageId::Accessibility, &m);
+            let group = s.groups.iter().find(|g| g.header.as_deref() == Some("KEYBOARD")).expect("the Keyboard group");
+            let item = group.items.iter().find(|i| i.label == "Accessibility Keyboard").expect("the Accessibility Keyboard row");
+            (item.accessory.clone(), item.action.clone())
+        };
+        assert_eq!(row(&AccessibilitySettings::default()), (Accessory::Switch(false), Action::Toggle(Toggle::AccessibilityKeyboard)));
+        assert_eq!(row(&AccessibilitySettings { accessibility_keyboard: true, ..Default::default() }).0, Accessory::Switch(true));
+    }
+
+    #[test]
+    fn input_sources_has_a_show_input_menu_switch_that_is_off_by_default() {
+        let info = info();
+        let row = |opts: &Options| -> (Accessory, Action) {
+            let s = spec(PageId::Keyboards, &model(&info, opts));
+            let item = s.groups.iter().flat_map(|g| g.items.iter()).find(|i| i.label == "Show Input menu in menu bar").expect("the Show Input menu row");
+            (item.accessory.clone(), item.action.clone())
+        };
+        assert_eq!(row(&Options::default()), (Accessory::Switch(false), Action::Toggle(Toggle::InputMenu)));
+        assert_eq!(row(&Options { input_menu: true, ..Options::default() }).0, Accessory::Switch(true));
     }
 
     #[test]

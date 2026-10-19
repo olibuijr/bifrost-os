@@ -3776,6 +3776,7 @@ impl Shell {
             }
         }
         let mut effects = cc_fx;
+        self.accessibility_keyboard_tick(t);
         let typing_on_hardware = self.desk_active();
         if let Some(p) = &mut self.photos {
             if self.screen == Screen::App(AppId::Photos) {
@@ -5204,6 +5205,7 @@ impl Shell {
         self.osk_pinned = true;
         self.keyboard.set_user_opened(true);
         self.set_keyboard(true, t);
+        self.remember_accessibility_keyboard(true);
         self.dirty = true;
     }
 
@@ -5214,6 +5216,7 @@ impl Shell {
             return;
         }
         self.osk_pinned = false;
+        self.remember_accessibility_keyboard(false);
         // lowered while the client is still allowed, so its process is told; then the client is blocked again
         self.keyboard.set_shown(false, t);
         self.keyboard.set_user_opened(false);

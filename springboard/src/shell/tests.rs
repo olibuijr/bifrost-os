@@ -142,6 +142,36 @@
     }
 
     #[test]
+    fn the_input_menu_rule_is_several_sources_an_open_keyboard_or_the_setting() {
+        assert!(!desktop_bar::input_menu_visible(1, false, false), "one source and nothing else: no menu");
+        assert!(desktop_bar::input_menu_visible(2, false, false), "a choice of sources");
+        assert!(desktop_bar::input_menu_visible(1, true, false), "the keyboard is open, so its row must be reachable");
+        assert!(desktop_bar::input_menu_visible(1, false, true), "the user turned the menu on");
+    }
+
+    #[test]
+    fn show_input_menu_in_menu_bar_makes_the_menu_and_its_keyboard_rows_reachable_with_one_source() {
+        use desktop_bar::Menu;
+        keyboard::fake_process(500.0);
+        let mut sh = desktop_shell();
+        // the enabled sources are process-wide and other tests change them: the menu follows them while the switch is off
+        let several = super::kb_layouts::enabled().len() > 1;
+        assert_eq!(sh.menu_extra_shown(Menu::Input), several, "off by default: only a choice of sources shows it");
+        sh.prefs.set("show_input_menu", "1").unwrap();
+        assert!(sh.menu_extra_shown(Menu::Input), "the switch shows it with any number of sources");
+        let rows = sh.menu_row_texts(Menu::Input);
+        assert!(rows.iter().any(|r| r == "Show Keyboard Viewer"), "{rows:?}");
+        assert!(rows.iter().any(|r| r == "Show On-Screen Keyboard"), "{rows:?}");
+        sh.keyboard_open_explicit(1000.);
+        let open = sh.menu_row_texts(Menu::Input);
+        assert!(open.iter().any(|r| r == "Hide On-Screen Keyboard"), "the same row closes it: {open:?}");
+        sh.prefs.set("show_input_menu", "0").unwrap();
+        assert!(sh.menu_extra_shown(Menu::Input), "an open keyboard keeps the menu up so it can be closed");
+        sh.keyboard_close_explicit(1100.);
+        assert_eq!(sh.menu_extra_shown(Menu::Input), several, "switch off and keyboard closed: back to the sources rule");
+    }
+
+    #[test]
     fn the_keyboards_hide_key_closes_the_keyboard_a_desktop_user_opened() {
         keyboard::fake_process(500.0);
         let mut sh=desktop_shell();

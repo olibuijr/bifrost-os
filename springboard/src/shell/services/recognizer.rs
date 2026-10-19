@@ -23,7 +23,7 @@
 //! Refusals are errors: no consent, no model, a non-English locale, or no pipeline program installed.
 //!
 //! Voice Control: while the `voice_control` preference is `1` the shell holds a recognition of its own (the app id
-//! [`SYSTEM_APP`]) when no app has one, runs every final transcript through `Shell::voice_press` ("press Save") and
+//! [`SYSTEM_APP`]) when no app has one, hands every final transcript to `Shell::voice_consume` ("press Save") and
 //! hands the resulting effects to the next shell tick. It needs the same consent and model as dictation, never takes
 //! the microphone from an app, and retries a refused start only every [`VOICE_RETRY_S`] seconds.
 use super::{Event, Shell, SystemService};
