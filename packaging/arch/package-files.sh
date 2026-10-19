@@ -57,7 +57,7 @@ package_bifrost_files() {
   install -Dm644 "$here/bifrost-zram.service" "$pkgdir/usr/lib/systemd/system/bifrost-zram.service"
   # application firewall: the per-app inbound policies (bifrost-firewall, springboard/cmd) loaded as nftables rules
   install -Dm644 "$here/bifrost-firewall.service" "$pkgdir/usr/lib/systemd/system/bifrost-firewall.service"
-  install -Dm644 "$here/bifrost-desktop-ready.service""$pkgdir/usr/lib/systemd/system/bifrost-desktop-ready.service"
+  install -Dm644 "$here/bifrost-desktop-ready.service" "$pkgdir/usr/lib/systemd/system/bifrost-desktop-ready.service"
   install -Dm644 "$here/bifrost-after-desktop.target" "$pkgdir/usr/lib/systemd/system/bifrost-after-desktop.target"
   install -Dm644 "$here/dbus/org.freedesktop.portal.Desktop.service" "$pkgdir/usr/share/dbus-1/services/org.freedesktop.portal.Desktop.service"
   install -Dm644 "$here/springboard.service" "$pkgdir/usr/lib/systemd/system/springboard.service"
