@@ -107,10 +107,6 @@ impl Movie {
         self.player.pause();
     }
 
-    pub fn has_subtitles(&self) -> bool {
-        !self.tracks.is_empty()
-    }
-
     /// The subtitle picker's rows: Off, then one per subtitle file.
     pub fn subtitle_rows(&self) -> Vec<String> {
         self.subtitles.rows()

@@ -115,7 +115,6 @@ impl Shell {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 
     #[test]
     fn two_fingers_are_tracked_a_third_is_ignored_and_lifting_frees_a_slot() {

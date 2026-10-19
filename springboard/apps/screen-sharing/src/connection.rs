@@ -47,6 +47,7 @@ pub fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 
 impl Connection {
     /// Starts connecting to `addr` (`host`, `host:port`, or an IPv6 literal) and returns at once.
+    #[cfg(test)]
     pub fn open(addr: &str) -> Connection {
         Connection::open_with(addr, None)
     }

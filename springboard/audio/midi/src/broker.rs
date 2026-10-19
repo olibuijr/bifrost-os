@@ -481,7 +481,7 @@ mod tests {
 
     fn hello(b: &mut Broker, name: &str) -> (ConnId, u32) {
         let c = b.open();
-        match b.handle(c, Request::Hello { name: name.into(), version: VERSION }).as_slice() {
+        match b.handle(c, Request::Hello { name: name.into(), version: VERSION }, 0).as_slice() {
             [Message::Welcome { client, .. }] => (c, *client),
             other => panic!("{other:?}"),
         }

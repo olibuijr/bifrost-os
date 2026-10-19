@@ -267,8 +267,8 @@ mod tests {
         let out = p.render(46_000).unwrap();
         let cycles = |x: &[f32]| x.windows(2).filter(|w| w[0] <= 0.0 && w[1] > 0.0).count() as f32;
         // C4 at 261.6 Hz over 0.35 s against E4 at 329.6 Hz over 0.35 s
-        let c = cycles(&out[2_400..19_200]);
-        let e = cycles(&out[26_400..43_200]);
+        let c = cycles(&out[0][2_400..19_200]);
+        let e = cycles(&out[0][26_400..43_200]);
         assert!((e / c - 329.63 / 261.63).abs() < 0.06, "{c} {e}");
     }
 

@@ -316,8 +316,8 @@ mod tests {
         for (name, unit) in [("gain", "Gain"), ("biquad", "Biquad Filter"), ("sine", "Sine Synth"), ("gm", "General MIDI Synth")] {
             assert_eq!(load_unit(name).unwrap().info().name, unit);
         }
-        assert!(load_unit("reverb").unwrap_err().contains("built-in"));
-        assert!(load_unit("/nonexistent/x.so").unwrap_err().contains("cannot load"));
+        assert!(load_unit("reverb").err().unwrap().contains("built-in"));
+        assert!(load_unit("/nonexistent/x.so").err().unwrap().contains("cannot load"));
     }
 
     #[test]
