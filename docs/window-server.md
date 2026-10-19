@@ -262,6 +262,48 @@ surfaces has focus). Modifiers must match exactly, so Super+Shift+Space is not t
 | Ctrl+Super+Left / Right | tiles to a half |
 | Ctrl+Super+Up / Down | maximizes / centres at the previous size |
 
+## Window frames reported to the shell (2026-10-19)
+
+The window server places, moves and resizes toplevels (cascade at map, `xdg_toplevel.move` and resize grabs, tiling,
+maximize), and xdg-shell never tells a client where its window is. The shell kept a rectangle of its own for every
+window (`Desk::wins[].r`, with its own cascade), so the two drifted: on Midget `tools/midget.py state` printed
+`window=External(9),852,339,...` for Files drawn at 800,360 (N1 of the Files and Browser E2E re-test, 2026-10-19, in `docs/e2e/`), and an
+earlier run was off by another amount. Everything the shell puts on the screen from that rectangle landed off by the
+difference: app context menus (`ToShell::ContextMenu`, opened at the pointer plus the offset), the share menu
+(`share_begin`) and the control socket's `tap`. The pointer itself was fine, because the shell adds its own offset to
+surface-local coordinates, which is why only the things placed on the screen were off.
+
+One source of truth: the window server. `bifrost_window_level_v1` version 2 adds the event
+`bifrost_window_level_manager_v1.frame(surface, x, y, width, height)` (`wm/protocol/bifrost-window-level-v1.xml`):
+
+- The frame is `wm`'s rectangle of the toplevel, the window geometry the client set (a shadow margin outside it is not
+  part of the frame), in logical desktop px.
+- Server (`wm/src/window_level.rs`, `FrameReports`; `WmState::report_frames` in `state.rs`): after every `place` and
+  `apply_frames` (map, interactive move, tiling keys, maximize, restore, area change) and when a client binds, it
+  sends each bound manager the frames that changed since that manager was last told (`changed_frames`), only for
+  toplevels of the manager's own client. A minimized or gone toplevel is forgotten, so it is reported again when shown.
+- Client (`src/bare/wayland.rs`): the shell binds version 2 (`window_level_client::VERSION`), maps the surface to its
+  window id and queues `WindowEvent::Frame(id, x, y, w, h)`.
+- Shell (`desk.rs`, `wayland_window_event`, `frame_follows`): the position of `wins[i].r` becomes the reported one and the
+  frame is republished (`dirty`). The size stays with the configure (`WindowEvent::Resize`). Context menus, the share
+  menu and `tap` then use the real origin with no further change. A window the shell opened but the window server has
+  not mapped yet keeps the shell's cascade position until the first report.
+
+Not done: the shell's own title-bar drag and tiling (`Desk::move_to`, `tile`) only run without a window server.
+The on-screen-keyboard lift (`desk_keyboard_lift`) still moves `wins[i].r` without moving the toplevel, so the two
+differ while the keyboard is up (tablet); the window server has no request to move a client's toplevel.
+
+## Chrome popups with room for their shadow (2026-10-19)
+
+A shell popup (a bar menu, an app's context menu, the Dock's menu, an open or save panel) is chrome surface id 1,
+exported by `Shell::desktop_chrome_frames` from the desktop frame. It used to be cropped exactly to the menu, so the
+shadow `draw_desktop_popup` draws around it was cut off and a menu over white content had no visible edge (E2E N6).
+Now the surface is the menu grown by its shadow (`popup_surface_rect`: `popup_damage_rect` clipped to the screen) and
+its input region is the menu rectangle (`ChromeFrame::input`, set with `wl_surface.set_input_region` in
+`Display::chrome`), so a click on the shadow still reaches the window below and closes the menu; the shell's hit test
+is still `desktop_popup_rect`. `draw_desktop_popup` draws `soft_shadow` and a one-pixel edge in the separator colour
+(`ui::separator_now`) on every path, including the CPU path, which also rounds its blurred background to the corners.
+
 ## Window models
 
 Pure Rust modules without Smithay types, host-tested. Most are models the compositor does not drive yet:
