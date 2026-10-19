@@ -38,12 +38,20 @@ bifrost_post_update() {
     fi
 }
 
+# Screen Sharing sign-in rules (one allowed account, lockout) replace the wayvnc package default PAM service.
+bifrost_pam_wayvnc() {
+    [ -f /usr/share/bifrost/pam/wayvnc ] && install -m644 /usr/share/bifrost/pam/wayvnc /etc/pam.d/wayvnc
+    return 0
+}
+
 post_install() {
+    bifrost_pam_wayvnc
     bifrost_post_update
     echo "BifrOSt: run 'systemctl enable springboard.service && systemctl set-default graphical.target'"
 }
 
 post_upgrade() {
+    bifrost_pam_wayvnc
     bifrost_post_update
     echo "BifrOSt: apply the update through Settings > Software Update."
 }

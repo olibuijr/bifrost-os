@@ -61,11 +61,9 @@ package_bifrost_files() {
   install -Dm644 "$here/bifrost-after-desktop.target" "$pkgdir/usr/lib/systemd/system/bifrost-after-desktop.target"
   install -Dm644 "$here/dbus/org.freedesktop.portal.Desktop.service" "$pkgdir/usr/share/dbus-1/services/org.freedesktop.portal.Desktop.service"
   install -Dm644 "$here/springboard.service" "$pkgdir/usr/lib/systemd/system/springboard.service"
-  # Printer Sharing: the LPD listener for the cups-lpd that the cups package ships (off until Sharing turns it on)
+  # Printer Sharing uses the cups package own cups-lpd.socket and cups-lpd@.service (off until Sharing turns it on)
   # DHCPv6 for a shared segment: privd writes /run/bifrost/dhcp6/<interface>.conf and starts this unit (dnsmasq)
   install -Dm644 "$here/bifrost-dhcp6@.service" "$pkgdir/usr/lib/systemd/system/bifrost-dhcp6@.service"
-  install -Dm644 "$here/cups-lpd.socket" "$pkgdir/usr/lib/systemd/system/cups-lpd.socket"
-  install -Dm644 "$here/cups-lpd@.service" "$pkgdir/usr/lib/systemd/system/cups-lpd@.service"
   # login round: root helper, PAM service, privd socket group (the user-session migration is a later stage)
   # (PC_PRIVD overrides; otherwise bifrost-privd is looked up next to the shell binary)
   privd=${PC_PRIVD:-$(dirname "$binary")/bifrost-privd}
@@ -77,7 +75,8 @@ package_bifrost_files() {
   # Screen Sharing: wayvnc behind a login (PAM service "wayvnc", limited to the one account Settings names) and its
   # RSA-AES key; off until Settings > Sharing > Screen Sharing turns it on (privd writes the configuration first)
   install -Dm644 "$here/bifrost-wayvnc.service" "$pkgdir/usr/lib/systemd/system/bifrost-wayvnc.service"
-  install -Dm644 "$here/pam-bifrost-wayvnc" "$pkgdir/etc/pam.d/wayvnc"
+  # /etc/pam.d/wayvnc belongs to the wayvnc package: ours ships here and the install script puts it in place
+  install -Dm644 "$here/pam-bifrost-wayvnc" "$pkgdir/usr/share/bifrost/pam/wayvnc"
   # ALSA compatibility plug-in for third-party apps (audio task 08): the default PCM goes to bifrost-audiod
   if [[ -n ${PC_ALSA_PLUGIN:-} && -f ${PC_ALSA_PLUGIN} ]]; then
     install -Dm755 "$PC_ALSA_PLUGIN" "$pkgdir/usr/lib/alsa-lib/libasound_module_pcm_bifrost.so"
