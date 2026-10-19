@@ -464,6 +464,90 @@ pub mod vcard {
     pub use bifrost_ui::contact_book::{label, Contact, LabeledValue};
     pub use bifrost_ui::contact_vcard::{contacts, serialize, Version};
     pub use bifrost_ui::vcard::{Error, MAX_BYTES, MAX_CARDS};
+
+    use crate::runtime::Ctx;
+    use crate::service;
+    use bifrost_core::json::Json;
+
+    /// Asks the shell for the contacts the app may read as vCard text. `ids` narrows it to those contacts (an id the app
+    /// cannot read is left out), `version` is 3.0 or 4.0. Needs a read grant; a limited grant exports only its contacts.
+    /// The reply decodes with [`decode_export`].
+    pub fn export(ctx: &Ctx, ids: Option<&[u64]>, version: Version) -> u32 {
+        service::call(ctx, super::SERVICE, "export_vcard", &export_params(ids, version))
+    }
+
+    /// The params [`export`] sends.
+    pub fn export_params(ids: Option<&[u64]>, version: Version) -> Json {
+        let mut params = vec![(
+            "version".to_string(),
+            Json::Str(match version {
+                Version::V3 => "3.0".into(),
+                Version::V4 => "4.0".into(),
+            }),
+        )];
+        if let Some(ids) = ids {
+            params.push(("ids".to_string(), Json::Arr(ids.iter().map(|id| Json::Num(*id as f64)).collect())));
+        }
+        Json::Obj(params)
+    }
+
+    /// The vCard text and the number of contacts in it, from an `export` reply.
+    pub fn decode_export(reply: &Json) -> Option<(String, usize)> {
+        Some((reply.get("vcard")?.as_str()?.to_string(), reply.get("count")?.as_u64()? as usize))
+    }
+
+    /// Asks the shell to add the people in `text` to the book. Needs full access; the whole text applies or none of it
+    /// does. A person the book already holds is not added again. The reply decodes with [`decode_import`].
+    pub fn import(ctx: &Ctx, text: &str) -> u32 {
+        service::call(ctx, super::SERVICE, "import_vcard", &Json::Obj(vec![("vcard".into(), Json::Str(text.into()))]))
+    }
+
+    /// What an import did: the ids the new contacts got, the cards the store cannot hold, and the cards of people the
+    /// book already held.
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub struct Imported {
+        pub added: Vec<u64>,
+        pub skipped: usize,
+        pub duplicates: usize,
+    }
+
+    /// The outcome in an `import` reply, or `None` for a reply of another shape.
+    pub fn decode_import(reply: &Json) -> Option<Imported> {
+        Some(Imported {
+            added: reply.get("added")?.as_array()?.iter().map(Json::as_u64).collect::<Option<Vec<_>>>()?,
+            skipped: reply.get("skipped")?.as_u64()? as usize,
+            duplicates: reply.get("duplicates")?.as_u64()? as usize,
+        })
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn the_export_params_name_the_version_and_only_the_asked_ids() {
+            let all = export_params(None, Version::V3);
+            assert_eq!(all.get("version").and_then(Json::as_str), Some("3.0"));
+            assert!(all.get("ids").is_none());
+            let some = export_params(Some(&[2, 5]), Version::V4);
+            assert_eq!(some.get("version").and_then(Json::as_str), Some("4.0"));
+            assert_eq!(some.get("ids"), Some(&Json::Arr(vec![Json::Num(2.0), Json::Num(5.0)])));
+        }
+
+        #[test]
+        fn replies_decode_and_other_shapes_do_not() {
+            let reply = Json::Obj(vec![("vcard".into(), Json::Str("BEGIN:VCARD".into())), ("count".into(), Json::Num(1.0))]);
+            assert_eq!(decode_export(&reply), Some(("BEGIN:VCARD".to_string(), 1)));
+            assert_eq!(decode_export(&Json::Null), None);
+            let done = Json::Obj(vec![
+                ("added".into(), Json::Arr(vec![Json::Num(4.0)])),
+                ("skipped".into(), Json::Num(1.0)),
+                ("duplicates".into(), Json::Num(2.0)),
+            ]);
+            assert_eq!(decode_import(&done), Some(Imported { added: vec![4], skipped: 1, duplicates: 2 }));
+            assert_eq!(decode_import(&Json::Null), None);
+        }
+    }
 }
 
 /// People apps saw and donated, and the person's answers (`bifrost_ui::contact_donation`). An app that sees someone who
