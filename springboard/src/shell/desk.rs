@@ -72,6 +72,18 @@ pub fn kb_lift(r: Rect, kb_top: i32, menubar: i32) -> i32 {
     over.min((r.y - menubar).max(0))
 }
 
+/// Moves `r` to the position (`x`, `y`) the window server reports for its toplevel; the size is left alone (the
+/// configure decides it). True when the position changed, so the frame the presenter holds must be sent again.
+#[cfg(feature = "desktop-wayland")]
+pub fn frame_follows(r: &mut Rect, x: i32, y: i32) -> bool {
+    if (r.x, r.y) == (x, y) {
+        return false;
+    }
+    r.x = x;
+    r.y = y;
+    true
+}
+
 pub fn tile_rect(a: Rect, tile: Tile) -> Rect {
     let (hw, hh) = (a.w / 2, a.h / 2);
     let (rw, rh) = (a.w - hw, a.h - hh);
@@ -941,8 +953,10 @@ impl Shell {
     #[cfg(feature = "desktop-wayland")]
     pub fn wayland_window_event(&mut self, ev: crate::bare::wayland::WindowEvent) {
         use crate::bare::wayland::WindowEvent;
-        let id = match ev { WindowEvent::Focus(id) | WindowEvent::Close(id) | WindowEvent::Resize(id,_,_) | WindowEvent::Maximized(id,_) => id };
-        let Some(app) = apps().get(id.saturating_sub(1) as usize).map(|a| a.id) else { return };
+        let id = match ev { WindowEvent::Focus(id) | WindowEvent::Close(id) | WindowEvent::Resize(id,_,_) | WindowEvent::Maximized(id,_) | WindowEvent::Frame(id,..) => id };
+        // a frame is reported for every toplevel of the shell, an app's extra windows (flagged ids) included
+        let app = if matches!(ev, WindowEvent::Frame(..)) { frame_app(id) } else { apps().get(id.saturating_sub(1) as usize).map(|a| a.id) };
+        let Some(app) = app else { return };
         let Some(i) = self.desk.as_ref().and_then(|d| d.index_of(app)) else { return };
         match ev {
             // the compositor hands focus back to a window when a menu or sheet closes; on a locked screen that must not
@@ -955,6 +969,11 @@ impl Shell {
                 let win = &mut self.desk.as_mut().unwrap().wins[i];
                 win.r.w = w.max(m.min_w); win.r.h = h.max(m.min_h + title_of(win.app, &m)); self.desk_layout(i); self.dirty = true;
             },
+            // The window server places, moves and resizes toplevels and xdg-shell never says where, so the shell's own
+            // idea of the position drifted (E2E N1: `state` said 852,339 for a window drawn at 800,360). The frame it
+            // reports is the one source of truth: everything the shell puts on the screen from this rectangle (app
+            // context menus, the share menu, taps) lands on the window. The size stays with the configure (`Resize`).
+            WindowEvent::Frame(_,x,y,_,_) => { let win = &mut self.desk.as_mut().unwrap().wins[i]; if frame_follows(&mut win.r, x, y) { self.dirty = true; } },
             _ => {}
         }
     }
@@ -3393,5 +3412,32 @@ mod keyboard_lift_tests {
         assert_eq!(kb_lift(rect(100, 1800), 1000, 40), 60);
         // a window already at the menu bar cannot move
         assert_eq!(kb_lift(rect(40, 1800), 1000, 40), 0);
+    }
+}
+
+/// The window server's frame of a toplevel moves the shell's rectangle (E2E N1).
+#[cfg(all(test, feature = "desktop-wayland"))]
+mod server_frame_tests {
+    use super::{frame_follows, Rect};
+
+    #[test]
+    fn a_new_position_is_taken_and_reported_as_a_change() {
+        let mut r = Rect { x: 852, y: 339, w: 1184, h: 810 };
+        assert!(frame_follows(&mut r, 800, 360));
+        assert_eq!(r, Rect { x: 800, y: 360, w: 1184, h: 810 }, "the size is not touched");
+    }
+
+    #[test]
+    fn the_same_position_is_not_a_change() {
+        let mut r = Rect { x: 800, y: 360, w: 1184, h: 810 };
+        assert!(!frame_follows(&mut r, 800, 360));
+        assert_eq!(r, Rect { x: 800, y: 360, w: 1184, h: 810 });
+    }
+
+    #[test]
+    fn a_window_dragged_partly_off_screen_keeps_the_reported_negative_position() {
+        let mut r = Rect { x: 100, y: 100, w: 600, h: 400 };
+        assert!(frame_follows(&mut r, -80, 28));
+        assert_eq!((r.x, r.y), (-80, 28));
     }
 }

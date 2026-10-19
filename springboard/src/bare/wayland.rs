@@ -33,7 +33,10 @@ pub struct WindowFrame { pub id:u32, pub title:&'static str, pub x:i32, pub y:i3
     /// The content is opaque inside its corner radius (a shell-drawn window without vibrancy). An opaque window
     /// that covers another one lets the presenter skip drawing the hidden one (`gpu::occlusion`).
     pub opaque:bool }
-pub enum WindowEvent { Focus(u32), Resize(u32,i32,i32), Close(u32), Maximized(u32,bool) }
+/// What a shell window's toplevel reported. `Frame` is the window server's own frame of the toplevel (x, y, width,
+/// height in desktop px, `bifrost_window_level_v1` version 2): the window server places and moves toplevels, so this
+/// is where the window really is.
+pub enum WindowEvent { Focus(u32), Resize(u32,i32,i32), Close(u32), Maximized(u32,bool), Frame(u32,i32,i32,i32,i32) }
 struct Window { surface:wl_surface::WlSurface, level_sent:Option<bool>, xdg:xdg_surface::XdgSurface, top:xdg_toplevel::XdgToplevel, slots:Vec<Slot>, buffer_size:(usize,usize), configured:bool, frame:WindowFrame,
     /// GPU path: content damage not presented yet, the shadow margin around the content, the drawable size
     pending:Damage, margin:i32, gpu_size:(usize,usize),
@@ -805,7 +808,7 @@ impl Dispatch<wl_registry::WlRegistry, ()> for State {
     fn event(s: &mut Self, reg: &wl_registry::WlRegistry, e: wl_registry::Event, _: &(), _: &Connection, q: &QueueHandle<Self>) {
         if let wl_registry::Event::Global { name,interface,version } = e { match interface.as_str() {
             "bifrost_material_manager_v1" => s.mat_manager=Some(reg.bind(name,1,q,())),
-            "bifrost_window_level_manager_v1" => s.level_mgr=Some(reg.bind(name,1,q,())),
+            "bifrost_window_level_manager_v1" => s.level_mgr=Some(reg.bind(name,version.min(super::window_level_client::VERSION),q,())),
             "ext_background_effect_manager_v1" => s.bg_manager=Some(reg.bind(name,1,q,())),
             "zwlr_foreign_toplevel_manager_v1" => s.foreign_manager=Some(reg.bind(name,version.min(3),q,())),
             "ext_idle_notifier_v1" => s.idle_notifier=Some(reg.bind(name,version.min(2),q,())),
@@ -1363,7 +1366,14 @@ impl Dispatch<mat_manager::BifrostMaterialManagerV1,()> for State {
     fn event(_:&mut Self,_:&mat_manager::BifrostMaterialManagerV1,_:mat_manager::Event,_:&(),_:&Connection,_:&QueueHandle<Self>) {}
 }
 impl Dispatch<lvl_manager::BifrostWindowLevelManagerV1,()> for State {
-    fn event(_:&mut Self,_:&lvl_manager::BifrostWindowLevelManagerV1,_:lvl_manager::Event,_:&(),_:&Connection,_:&QueueHandle<Self>) {}
+    fn event(s:&mut Self,_:&lvl_manager::BifrostWindowLevelManagerV1,e:lvl_manager::Event,_:&(),_:&Connection,_:&QueueHandle<Self>) {
+        // the window server's frame of one of our toplevels: the shell keeps its window rectangle from it
+        if let lvl_manager::Event::Frame{surface,x,y,width,height}=e {
+            if let Some(id)=s.windows.iter().find(|(_,w)|w.surface==surface).map(|(&id,_)|id) {
+                s.window_events.push(WindowEvent::Frame(id,x,y,width,height));
+            }
+        }
+    }
 }
 impl Dispatch<mat_surface::BifrostMaterialSurfaceV1,()> for State {
     fn event(_:&mut Self,_:&mat_surface::BifrostMaterialSurfaceV1,_:mat_surface::Event,_:&(),_:&Connection,_:&QueueHandle<Self>) {}

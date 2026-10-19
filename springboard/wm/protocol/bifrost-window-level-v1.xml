@@ -4,11 +4,14 @@
     Copyright 2026 BifrOSt. Private protocol of the BifrOSt window server (docs/bifrost-ui.md, "Window level").
   </copyright>
 
-  <interface name="bifrost_window_level_manager_v1" version="1">
+  <interface name="bifrost_window_level_manager_v1" version="2">
     <description summary="stacking level of a toplevel">
       Lets the shell put a toplevel on the floating level. A floating window stays above the normal windows of the
       desktop and is raised only within its own band; menus, panels and the menu bar are not affected. The level
       belongs to the surface: the window server keeps it for the window's next map too.
+
+      Since version 2 the window server also reports where it put each of the client's own toplevels (`frame`):
+      the window server places, moves and resizes toplevels, and a client never learns their position from xdg-shell.
     </description>
 
     <request name="destroy" type="destructor"/>
@@ -20,6 +23,21 @@
       <arg name="surface" type="object" interface="wl_surface"/>
       <arg name="level" type="uint" summary="0 normal, 1 floating"/>
     </request>
+
+    <event name="frame" since="2">
+      <description summary="the window server's frame of a toplevel">
+        The frame the window server holds for the toplevel of `surface`, in logical desktop pixels: the window
+        geometry the client set (a shadow margin outside it is not part of the frame), so a point at (gx, gy) inside
+        the window geometry is at (x + gx, y + gy) on the desktop. Sent when the toplevel maps, moves or
+        resizes, and for the client's mapped toplevels when it binds. Only toplevels of the binding client are
+        reported; a minimized toplevel is not reported until it is shown again.
+      </description>
+      <arg name="surface" type="object" interface="wl_surface"/>
+      <arg name="x" type="int"/>
+      <arg name="y" type="int"/>
+      <arg name="width" type="int"/>
+      <arg name="height" type="int"/>
+    </event>
 
     <enum name="level">
       <entry name="normal" value="0"/>

@@ -121,6 +121,8 @@ impl WmState {
         }
         window.user_data().insert_if_missing(ResizeTarget::default);
         self.space.map_element(window, (r.x, r.y), false);
+        // the owner hears the frame the window server chose for it (a lock keeps `focus` from running)
+        self.report_frames();
         self.focus(Some(id), smithay::utils::SERIAL_COUNTER.next_serial());
     }
 

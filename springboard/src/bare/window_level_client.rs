@@ -28,6 +28,10 @@ pub mod protocol {
     wayland_scanner::generate_client_code!("wm/protocol/bifrost-window-level-v1.xml");
 }
 
+/// The newest protocol version the shell binds: 2 adds `frame`, the window server's frame of each of the shell's
+/// toplevels (the shell keeps its window rectangles from it).
+pub const VERSION: u32 = 2;
+
 /// The wire value of a window level: `true` is floating.
 pub fn wire(floating: bool) -> u32 {
     floating as u32
@@ -36,6 +40,13 @@ pub fn wire(floating: bool) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_shell_binds_the_version_that_has_the_frame_event() {
+        let xml = include_str!("../../wm/protocol/bifrost-window-level-v1.xml");
+        assert!(xml.contains(&format!("name=\"bifrost_window_level_manager_v1\" version=\"{VERSION}\"")));
+        assert!(xml.contains("<event name=\"frame\" since=\"2\">"));
+    }
 
     #[test]
     fn the_wire_values_are_the_protocol_levels() {

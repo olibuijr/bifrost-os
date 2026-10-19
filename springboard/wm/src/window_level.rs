@@ -1,6 +1,11 @@
 //! `bifrost_window_level_v1` (protocol/bifrost-window-level-v1.xml, docs/bifrost-ui.md "Window level"): the shell puts a
 //! toplevel on the floating level, which the window model (`wm::Level`) keeps above the normal windows. The level is
 //! kept on the surface, so a window mapped later takes it too.
+//!
+//! Version 2 adds the way back. The window server places, moves and resizes toplevels and xdg-shell never tells a
+//! client where, so it reports each frame (`frame`) to the client that owns the toplevel. The shell keeps its window
+//! rectangles from these reports instead of its own guess, so what it places on the screen from them (context menus,
+//! the share menu, taps) lands where the window really is.
 
 #[allow(
     dead_code,
@@ -26,7 +31,7 @@ pub mod protocol {
     wayland_scanner::generate_server_code!("protocol/bifrost-window-level-v1.xml");
 }
 
-use std::sync::Mutex;
+use std::{collections::HashMap, sync::Mutex};
 
 use smithay::{
     reexports::wayland_server::{
@@ -37,10 +42,69 @@ use smithay::{
 };
 
 use self::protocol::bifrost_window_level_manager_v1::{self, BifrostWindowLevelManagerV1};
-use crate::{state::WmState, wm::Level};
+use crate::{
+    state::WmState,
+    wm::{Level, Rect, WindowId},
+};
+
+/// The protocol version the global offers: 2 adds the `frame` event.
+pub const VERSION: u32 = 2;
+/// The version that introduced `frame`; a manager bound at an older version is never sent one.
+pub const FRAME_SINCE: u32 = 2;
 
 pub fn init(dh: &DisplayHandle) -> GlobalId {
-    dh.create_global::<WmState, BifrostWindowLevelManagerV1, ()>(1, ())
+    dh.create_global::<WmState, BifrostWindowLevelManagerV1, ()>(VERSION, ())
+}
+
+/// The toplevels in `now` the client was never told about, or was told about with another frame than `sent` holds.
+pub fn changed_frames(sent: &HashMap<WindowId, Rect>, now: &[(WindowId, Rect)]) -> Vec<(WindowId, Rect)> {
+    now.iter().filter(|(id, rect)| sent.get(id) != Some(rect)).copied().collect()
+}
+
+/// One bound manager and the frame it was last told for each toplevel.
+struct Reporter {
+    manager: BifrostWindowLevelManagerV1,
+    sent: HashMap<WindowId, Rect>,
+}
+
+/// Every bound `bifrost_window_level_manager_v1`, so a change of a toplevel's frame reaches the client that owns it.
+#[derive(Default)]
+pub struct FrameReports {
+    reporters: Vec<Reporter>,
+}
+
+impl FrameReports {
+    pub fn add(&mut self, manager: BifrostWindowLevelManagerV1) {
+        self.reporters.push(Reporter { manager, sent: HashMap::new() });
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.reporters.is_empty()
+    }
+
+    /// Sends each manager the frames that changed since it was last told, for its own client's toplevels only (a
+    /// client never learns where another client's windows are). `now` is every mapped toplevel with its frame and
+    /// surface. A toplevel that is gone or minimized is forgotten, so it is reported again when it is shown.
+    pub fn send(&mut self, now: &[(WindowId, Rect, WlSurface)]) {
+        self.reporters.retain(|r| r.manager.is_alive());
+        for reporter in &mut self.reporters {
+            if reporter.manager.version() < FRAME_SINCE {
+                continue;
+            }
+            let mine: Vec<(WindowId, Rect)> = now
+                .iter()
+                .filter(|(_, _, surface)| reporter.manager.id().same_client_as(&surface.id()))
+                .map(|(id, rect, _)| (*id, *rect))
+                .collect();
+            for (id, rect) in changed_frames(&reporter.sent, &mine) {
+                if let Some((_, _, surface)) = now.iter().find(|(other, _, _)| *other == id) {
+                    reporter.manager.frame(surface, rect.x, rect.y, rect.w, rect.h);
+                }
+                reporter.sent.insert(id, rect);
+            }
+            reporter.sent.retain(|id, _| mine.iter().any(|(other, _)| other == id));
+        }
+    }
 }
 
 /// The level the shell asked for `surface`; normal when it asked for none.
@@ -58,8 +122,11 @@ pub fn from_wire(v: u32) -> Option<Level> {
 }
 
 impl GlobalDispatch<BifrostWindowLevelManagerV1, ()> for WmState {
-    fn bind(_: &mut Self, _: &DisplayHandle, _: &Client, resource: New<BifrostWindowLevelManagerV1>, _: &(), init: &mut DataInit<'_, Self>) {
-        init.init(resource, ());
+    fn bind(state: &mut Self, _: &DisplayHandle, _: &Client, resource: New<BifrostWindowLevelManagerV1>, _: &(), init: &mut DataInit<'_, Self>) {
+        let manager = init.init(resource, ());
+        state.frame_reports.add(manager);
+        // a client that binds after its windows mapped hears their frames now
+        state.report_frames();
     }
 }
 
@@ -86,5 +153,50 @@ impl Dispatch<BifrostWindowLevelManagerV1, ()> for WmState {
             });
             state.set_window_level(&surface, level);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn rect(x: i32, y: i32) -> Rect {
+        Rect::new(x, y, 640, 480)
+    }
+
+    #[test]
+    fn a_toplevel_the_client_was_never_told_about_is_reported() {
+        let sent = HashMap::new();
+        assert_eq!(changed_frames(&sent, &[(1, rect(10, 20))]), vec![(1, rect(10, 20))]);
+    }
+
+    #[test]
+    fn an_unchanged_frame_is_not_reported_again() {
+        let sent = HashMap::from([(1, rect(10, 20)), (2, rect(30, 40))]);
+        assert!(changed_frames(&sent, &[(1, rect(10, 20)), (2, rect(30, 40))]).is_empty());
+    }
+
+    #[test]
+    fn a_moved_or_resized_toplevel_is_reported_alone() {
+        let sent = HashMap::from([(1, rect(10, 20)), (2, rect(30, 40))]);
+        let moved = [(1, rect(10, 20)), (2, rect(52, 19))];
+        assert_eq!(changed_frames(&sent, &moved), vec![(2, rect(52, 19))], "only the moved window");
+        let grown = [(1, Rect::new(10, 20, 700, 480)), (2, rect(30, 40))];
+        assert_eq!(changed_frames(&sent, &grown), vec![(1, Rect::new(10, 20, 700, 480))], "a size change counts");
+    }
+
+    #[test]
+    fn the_protocol_file_declares_the_version_and_the_event_the_server_sends() {
+        let xml = include_str!("../protocol/bifrost-window-level-v1.xml");
+        assert!(xml.contains(&format!("name=\"bifrost_window_level_manager_v1\" version=\"{VERSION}\"")));
+        assert!(xml.contains(&format!("<event name=\"frame\" since=\"{FRAME_SINCE}\">")));
+        assert!(FRAME_SINCE <= VERSION);
+    }
+
+    #[test]
+    fn the_wire_values_are_the_levels() {
+        assert_eq!(from_wire(0), Some(Level::Normal));
+        assert_eq!(from_wire(1), Some(Level::Floating));
+        assert_eq!(from_wire(2), None);
     }
 }
