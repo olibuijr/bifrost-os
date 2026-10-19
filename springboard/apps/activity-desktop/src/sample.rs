@@ -609,6 +609,36 @@ pub fn parse_passwd(text: &str) -> HashMap<u32, String> {
         .collect()
 }
 
+/// The uid a user namespace shows for an owner it does not map (`/proc/sys/kernel/overflowuid`). Activity Monitor runs in
+/// one, so this is what it reads for every process that is not its own account's.
+pub const OVERFLOW_UID: u32 = 65534;
+
+/// The owners the shell's `process-owners` service answered: pid -> (real uid, account name).
+pub type Owners = HashMap<u32, (u32, String)>;
+
+/// Reads the answer of `process-owners.owners`: `{users: [{uid, user, pids: [..]}]}`.
+pub fn parse_owners(answer: &bifrost_core::json::Json) -> Owners {
+    let mut out = Owners::new();
+    for user in answer.get("users").and_then(|u| u.array()).unwrap_or(&[]) {
+        let (Some(uid), Some(name)) = (user.get("uid").and_then(|u| u.as_u64()), user.str_field("user")) else { continue };
+        for pid in user.get("pids").and_then(|p| p.array()).unwrap_or(&[]).iter().filter_map(|p| p.as_u64()) {
+            out.insert(pid as u32, (uid as u32, name.clone()));
+        }
+    }
+    out
+}
+
+/// The uid and account name of process `pid`, which this sandbox reads as `uid`. The overflow uid means the namespace
+/// could not map the real owner, so the shell's answer (when it has one for the pid) takes its place.
+fn owner_of(pid: u32, uid: u32, users: &HashMap<u32, String>, owners: &Owners) -> (u32, String) {
+    if uid == OVERFLOW_UID {
+        if let Some((real, name)) = owners.get(&pid) {
+            return (*real, name.clone());
+        }
+    }
+    (uid, users.get(&uid).cloned().unwrap_or_else(|| uid.to_string()))
+}
+
 fn read_file(path: &str) -> Option<String> {
     fs::read_to_string(path).ok()
 }
@@ -623,6 +653,8 @@ pub struct Sampler {
     net: HashMap<String, (u64, u64)>,
     procs: HashMap<u32, Prev>,
     users: HashMap<u32, String>,
+    /// Real owners from the shell, for the processes this sandbox cannot map (see `owner_of`).
+    owners: Owners,
     sleep_blockers: HashSet<u32>,
     blockers_read_at: Option<f64>,
     /// The user id of this process; its processes are the ones the monitor may quit.
@@ -681,6 +713,11 @@ impl Sampler {
             boot: read_file("/proc/stat").and_then(|t| parse_btime(&t)).unwrap_or(0),
             ..Sampler::default()
         }
+    }
+
+    /// Takes the owners the shell answered; the next sample names the processes with them.
+    pub fn set_owners(&mut self, owners: Owners) {
+        self.owners = owners;
     }
 
     /// Reads the machine now. `now_ms` is a monotonic time in milliseconds; the first sample has no rates.
@@ -820,7 +857,7 @@ impl Sampler {
                     _ => 0.0,
                 };
                 seen.insert(pid, Prev { ticks: stat.ticks, read, written, gpu_ns, voluntary });
-                let user = self.users.get(&uid).cloned().unwrap_or_else(|| uid.to_string());
+                let (uid, user) = owner_of(pid, uid, &self.users, &self.owners);
                 procs.push(ProcSample {
                     pid,
                     ppid: stat.ppid,
@@ -1056,5 +1093,17 @@ mod tests {
         let users = parse_passwd("root:x:0:0:root:/root:/bin/bash\nolibuijr:x:1000:1000::/home/o:/bin/zsh\n");
         assert_eq!(users.get(&1000).map(String::as_str), Some("olibuijr"));
         assert_eq!(users.get(&0).map(String::as_str), Some("root"));
+    }
+
+    #[test]
+    fn unmapped_owners_take_the_shells_answer() {
+        use bifrost_core::json::parse;
+        let answer = parse(r#"{"users":[{"uid":0,"user":"root","pids":[1,20]},{"uid":1000,"user":"olibuijr","pids":[300]}]}"#).unwrap();
+        let owners = parse_owners(&answer);
+        let users = parse_passwd("app:x:1500:1500::/:/bin/false\n");
+        assert_eq!(owner_of(300, OVERFLOW_UID, &users, &owners), (1000, "olibuijr".to_string()), "nobody becomes the real owner");
+        assert_eq!(owner_of(1, OVERFLOW_UID, &users, &owners), (0, "root".to_string()));
+        assert_eq!(owner_of(99, OVERFLOW_UID, &users, &owners), (OVERFLOW_UID, "65534".to_string()), "no answer: unchanged");
+        assert_eq!(owner_of(5, 1500, &users, &owners), (1500, "app".to_string()), "a mapped uid is trusted");
     }
 }

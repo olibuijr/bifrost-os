@@ -65,6 +65,8 @@ struct ActivityApp {
     export: Option<(u32, Export)>,
     /// The window list asked for, by request id.
     window_request: Option<u32>,
+    /// The process owners asked for, by request id.
+    owners_request: Option<u32>,
     /// The read grant asked for the program that Reveal in Files shows, by request id.
     reveal_request: Option<u32>,
     /// The Window > CPU Usage window, while it is open.
@@ -174,6 +176,10 @@ impl ActivityApp {
         }
         if self.monitor.as_mut().map_or(false, Monitor::take_window_poll) {
             self.window_request = Some(windows::list(ctx, WindowListOptions::all()));
+        }
+        // this sandbox maps no user but its own, so the shell says who owns the other processes
+        if self.monitor.as_mut().map_or(false, Monitor::take_owners_poll) && self.owners_request.is_none() {
+            self.owners_request = Some(bifrost_app::service::call(ctx, "process-owners", "owners", &Json::Null));
         }
         // Reveal in Files needs a read grant for the program; the grant comes back as a document event
         if let Some(path) = self.monitor.as_mut().and_then(Monitor::take_reveal) {
@@ -462,6 +468,13 @@ impl App for ActivityApp {
     }
 
     fn service_reply(&mut self, _ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
+        if self.owners_request == Some(request) {
+            self.owners_request = None;
+            if let (Some(m), Ok(answer)) = (&mut self.monitor, result) {
+                m.set_owners(sample::parse_owners(answer));
+            }
+            return true;
+        }
         // the replies to the Dock calls need nothing; taking them keeps the mailbox empty
         if self.window_request != Some(request) {
             return true;
@@ -590,6 +603,7 @@ fn main() {
         monitor: None,
         export: None,
         window_request: None,
+        owners_request: None,
         reveal_request: None,
         cpu_usage_window: None,
         cpu_history_window: None,

@@ -318,6 +318,8 @@ pub struct Monitor {
     pub window_owners: HashSet<u32>,
     /// The window list should be asked for again; taken with `take_window_poll`.
     pub window_poll: bool,
+    /// The shell should be asked who owns the processes (the sandbox maps no other user); taken with `take_owners_poll`.
+    pub owners_poll: bool,
     /// The Window > GPU History window is open, so the sampler reads the GPU whatever the tab.
     pub gpu_window: bool,
     /// What the Dock tile shows (View > Dock Icon).
@@ -368,6 +370,7 @@ impl Monitor {
             quit_sheet: None,
             window_owners: HashSet::new(),
             window_poll: false,
+            owners_poll: false,
             gpu_window: false,
             dock_mode: DockMode::Off,
             dock_update: None,
@@ -411,6 +414,7 @@ impl Monitor {
             self.dock_update = Some(model::dock_content(self.dock_mode, &snap, &self.history));
         }
         self.window_poll = self.filter == Filter::Windowed;
+        self.owners_poll = true;
         self.snapshot = Some(snap);
         self.rebuild();
         self.refresh_inspector();
@@ -625,6 +629,16 @@ impl Monitor {
     /// Hands the app layer the request for a fresh window list, once.
     pub fn take_window_poll(&mut self) -> bool {
         std::mem::take(&mut self.window_poll)
+    }
+
+    /// Hands the app layer the request for the process owners, once.
+    pub fn take_owners_poll(&mut self) -> bool {
+        std::mem::take(&mut self.owners_poll)
+    }
+
+    /// The real owners the shell answered; the next sample names the processes with them.
+    pub fn set_owners(&mut self, owners: crate::sample::Owners) {
+        self.sampler.set_owners(owners);
     }
 
     /// The pids that own a window now, from the shell's list.
