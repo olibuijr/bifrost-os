@@ -210,8 +210,6 @@ impl Shell {
         self.screen_reader_on() || self.switch_control_on()
     }
 
-    /// The rows of the front Settings page (window-local points) and the window-local origin of its content, when the front
-    /// window is Settings.
     /// The rows of the front Settings page (screen pixels, before the window origin is added) and the screen origin of the
     /// page pane's content, when the front window is Settings. In the split layout the pane starts right of the sidebar, so a
     /// row's window-local position is the origin plus its pane position.
