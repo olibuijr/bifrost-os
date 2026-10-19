@@ -261,10 +261,10 @@ impl Files {
         self.vo.icon
     }
     pub(crate) fn grid_w(&self) -> f32 {
-        self.vo.icon + 40.
+        self.vo.icon + GRID_PAD_W
     }
     pub(crate) fn grid_h(&self) -> f32 {
-        self.vo.icon + 44.
+        self.vo.icon + GRID_PAD_H
     }
     pub(crate) fn is_list(&self) -> bool {
         !self.grid && !self.columns && !self.vo.gallery
@@ -534,7 +534,7 @@ impl Files {
         }
         let act = self.panel_hits().into_iter().find(|(r, _)| x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h).map(|(_, a)| a);
         match act {
-            Some(OptAct::Icon(d)) => self.vo.icon = (self.vo.icon + d).clamp(32., 128.),
+            Some(OptAct::Icon(d)) => self.vo.icon = (self.vo.icon + d).clamp(GRID_ICON_MIN, GRID_ICON_MAX),
             Some(OptAct::Text(d)) => self.vo.text = (self.vo.text + d).clamp(10., 16.),
             Some(OptAct::Group(g)) => {
                 self.vo.group = g;
@@ -592,6 +592,24 @@ mod group_tests {
         assert_eq!(Group::Name.key(&entry("Alpha", false, 1)), (0, "A".to_string()));
         assert_eq!(Group::Name.key(&entry("2026 notes", false, 1)), (0, "#".to_string()));
         assert!(Group::Name.key(&entry("#tags", false, 1)) < Group::Name.key(&entry("apple", false, 1)));
+    }
+
+    #[test]
+    fn the_icon_size_setting_still_moves_the_cells_and_stays_in_its_range() {
+        let mut files = crate::tests::fixture(vec![]);
+        files.vo.show = true;
+        let p = files.panel_rect();
+        // the plus and minus plates of the Icon size row
+        let (plus, minus) = ((p.x + p.w - 44. + 4., p.y + 40. + 4.), (p.x + p.w - 96. + 4., p.y + 40. + 4.));
+        for _ in 0..8 {
+            assert!(files.options_click(plus.0, plus.1));
+        }
+        assert_eq!(files.grid_icon(), GRID_ICON_MAX, "the plus steps stop at the largest icon");
+        assert_eq!(files.grid_w(), GRID_ICON_MAX + GRID_PAD_W);
+        for _ in 0..12 {
+            assert!(files.options_click(minus.0, minus.1));
+        }
+        assert_eq!(files.grid_icon(), GRID_ICON_MIN, "the minus steps stop at the smallest icon");
     }
 
     #[test]

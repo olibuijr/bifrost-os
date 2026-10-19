@@ -1,8 +1,23 @@
 //! Icon view: a grid of icons with labels and tag dots.
 use crate::*;
 
-/// Icon view: the default icon's side (the cell pitch comes from `grid_w` and `grid_h`, which follow the icon size).
-pub(crate) const GRID_ICON: f32 = 64.;
+/// Icon view: the default icon's side, points. Golden Gate's Files draws a folder 3.7 sidebar rows wide in its Home
+/// window (a 32 pt row, so the 0.92 of the box the folder fills is about 118 pt); the cell pitch comes from `grid_w`
+/// and `grid_h`, which follow the icon size. View Options > Icon size steps it between `GRID_ICON_MIN` and `GRID_ICON_MAX`.
+pub(crate) const GRID_ICON: f32 = 128.;
+
+pub(crate) const GRID_ICON_MIN: f32 = 32.;
+
+pub(crate) const GRID_ICON_MAX: f32 = 160.;
+
+/// A cell is wider than its icon by this much (the gutter between icons), and taller by `GRID_PAD_H` (the name's room and
+/// the space to the next line): the reference's 166 x 192 pt cell around a 128 pt icon.
+pub(crate) const GRID_PAD_W: f32 = 40.;
+
+pub(crate) const GRID_PAD_H: f32 = 60.;
+
+/// From the icon's bottom edge to the top of the name's plate.
+pub(crate) const GRID_LABEL_GAP: f32 = 10.;
 
 /// The Files emblem of a special folder in the home folder.
 pub(crate) fn folder_emblem(home: &Path, path: &Path) -> Option<&'static str> {
@@ -33,7 +48,7 @@ impl Files {
             return;
         }
         let icon_x = x + (self.grid_w() - self.grid_icon()) / 2.;
-        let label_y = y + self.grid_icon() + 6.;
+        let label_y = y + self.grid_icon() + GRID_LABEL_GAP;
         if selected {
             // Files: a grey plate behind the icon and an accent capsule behind the name
             s.fill_rrect(ui.pt(icon_x - 4.), ui.pt(y - 4.), ui.pt(self.grid_icon() + 8.), ui.pt(self.grid_icon() + 8.), ui.pt(SPACE_S), CARD_BG.now());
@@ -54,5 +69,23 @@ impl Files {
             });
             s.blit(&im, ui.pt(x + self.grid_w() / 2.) as i32 - im.w as i32 / 2, ui.pt(label_y + 2.) as i32, 255, 255);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tests::fixture;
+
+    #[test]
+    fn the_default_icon_is_as_wide_as_the_reference_next_to_a_sidebar_row() {
+        let files = fixture(vec![]);
+        // the folder fills 0.92 of its box; the reference draws it 3.7 sidebar rows wide
+        let ratio = files.grid_icon() * 0.92 / files.sidebar().row_h;
+        assert!((3.4..=4.0).contains(&ratio), "folder width over row pitch: {ratio}");
+        assert_eq!(files.grid_w(), files.grid_icon() + GRID_PAD_W);
+        assert_eq!(files.grid_h(), files.grid_icon() + GRID_PAD_H);
+        // the name's plate fits in the cell under the icon
+        assert!(GRID_LABEL_GAP + files.vo.text + 6. <= GRID_PAD_H);
     }
 }
