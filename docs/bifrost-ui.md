@@ -177,9 +177,33 @@ Core/protocol/Files/shell focused tests passed. Captures live in
 `WindingRule` NonZero or EvenOdd, `set_line_dash`, `line_width`, cap and join styles, `fill`/`stroke`/`add_clip` on a
 `GraphicsContext`); `Gradient` (NSGradient colors at locations, interpolated colour, linear angle and radial
 position); `ShadowStyle` (NSShadow offset, blur, colour, covered extent); `PageLayout` (NSPrintInfo scaling:
-content size, page grid, page count, per-page document rect for A4/Letter, either orientation). Gaps: dash, cap and
-join are stored but the CPU stroker still draws round joins and caps; NSImage representations, NSColorSpace,
-NSColorList, NSPrintOperation.runModal and NSPageLayout are not built yet. Host tests only; not yet checked on Midget.
+content size, page grid, page count, per-page document rect for A4/Letter, either orientation).
+
+Wave 15 (2026-10-19): `BezierPath::stroke` now renders the path's `line_cap_style`, `line_join_style`, `miter_limit` (new field,
+default 10) and dash pattern through the graphics context (they were stored and ignored) and restores the context's own line
+settings. `Gradient::draw_in_path`, `draw_in_rect` (linear, at an angle, same direction as `linear_t`) and `draw_radial_in_path`
+(relative centre -1..1, last colour at the farthest corner of the bounds) fill a path under its winding rule. `BezierPath::fill_with_shadow`
+and `stroke_with_shadow` cast a `ShadowStyle` (`ShadowStyle::effect`) under the shape. `ColorList::system(dark)` is the built-in
+System list of the 13 named system colours, `ColorLists::standard(dark)` starts a registry with it, `swatches()` and
+`apply_to_panel(key, panel)` feed a colour well and the colour panel, and `to_text` / `from_text` keep a list in a text file.
+Gaps: NSImage representations per codec, NSColorSpace pickers, an eyedropper, NSPrintOperation.runModal and NSPageLayout in the
+shell are not built yet. Host tests only; not yet checked on Midget.
+
+## Screen savers in the shell (`springboard/src/shell/screensaver.rs`)
+
+Wave 15 (2026-10-19). Each shell saver (Clock, Colours, Black) has a descriptor parsed by `SaverManifest` (`screensaver::manifest`):
+its name, frame interval and options. The options are the saver's configuration sheet: `ConfigureSheet` gained `text_of`,
+`set_from_text`, `choices`, `int_range`, `is_bool`, `bool_or` and `choice_of` so a sheet is saved and restored as text. Settings >
+Screen Saver shows the chosen saver's options under Preview (a switch per on or off option, a list of checks per choice option), and
+each change is saved under `ScreenSaver.<module>.<key>` (the key space of `ScreenSaverDefaults`) and read by the shell
+(`load_sheet`, `save_option`). Clock options: Show Date, Move Every (30 seconds, 1 minute, 5 minutes), Clock Size (small, medium,
+large); Colours: Colour Change (slow, normal, fast). The Clock draws its position from `SaverRandom` (`clock_spot`), so one move number
+always gives the same spot. The saver's frame interval comes from its descriptor (Clock one frame a second, Colours ten).
+
+Hot corners (`springboard/src/shell/hot_corners.rs`): Settings > Desktop & Dock > Hot Corners now acts. The pointer resting in a
+corner square (4 pt) for 350 ms runs the corner's action once (Overview, Apps Grid, Show Desktop, Lock Screen, Search, or the new
+Start Screen Saver); leaving the corner re-arms it. Gaps: no `.saver` bundle host (savers are built in), integer options have no
+Settings control, and the password-on-wake rule is the existing lock path (the saver ends on input and the lock screen shows as usual).
 
 ## UIKit and AppKit counterparts (`bifrost-ui`, pure models with tests)
 
@@ -2132,6 +2156,7 @@ copies stay inside BifrOSt until multi-MIME sources land; file representations t
 - **Errors**: `PrintError::NoCups` (the scheduler cannot be reached, any I/O or HTTP failure), `NoPrinter` (no name and no default),
   `Failed(String)`. `print::available()` is a 200 ms connect to the local scheduler port.
 - **Printer capabilities** (NSPrinter): `Client::get_printer_attributes(name)` returns `printer_caps::PrinterCapabilities`: `papers` (PWG self-describing names with sizes, `PaperSize::ppd_name()` = PMPaperGetPPDPaperName), `default_paper`, `duplex`, `color_modes`, `status` (state, reasons, message; `statusForTable`), `page_size_for_paper(name)` (`pageSize(forPaper:)`). Printers omitting attributes fall back to Letter/A4, one-sided, auto colour. Not yet done: `deviceDescription`, `isKey(_:inTable:)`, `languageLevel`, the print panel using the lists.
+- **Print sheet rows** (wave 15, 2026-10-19): the shell sheet (`springboard/src/shell/print_sheet.rs`) has Printer, Paper, Orientation, Scale, Copies, Pages, Sides (one-sided, two-sided, two-sided short edge) and Colour (colour, black and white). Sides and Colour fill `PrintInfo.sides` and `PrintInfo.color`, so the job carries `sides` and `print-color-mode`; black and white also greys the pages (`to_grey`) so Save as PDF is monochrome.
 - **Printers**: `bifrost_app::cups` (`Client::printers()`, with the default flagged). The old `print::printers()` (`lpstat`) is gone.
 
 **Plug-in panels** (`bifrost_app::print_panel`, the accessory views of the print and page setup dialogs):

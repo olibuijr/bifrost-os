@@ -14,7 +14,7 @@ use super::ui::{Ui, Weight, CARD_BG, FILL_GRAY, LABEL, LINK, MAC_BODY_PT, MAC_TI
 use super::Shell;
 use crate::gfx::{Image, Surface};
 use bifrost_ui::cups::{Client, Printer, PrinterState};
-use bifrost_ui::print::{Destination, Orientation, PageImage, PaperSize, PdfPage, PrintError, PrintInfo, PrintOperation};
+use bifrost_ui::print::{ColorMode, Destination, Orientation, PageImage, PaperSize, PdfPage, PrintError, PrintInfo, PrintOperation, Sides};
 use bifrost_ui::print_ranges::PageSelection;
 use std::path::Path;
 
@@ -29,9 +29,11 @@ const PAPERS: [PaperSize; 5] = [PaperSize::A4, PaperSize::Letter, PaperSize::A3,
 /// The page preview box, in points: the page fits inside it.
 const PREVIEW_W_PT: f32 = 384.0;
 const PREVIEW_H_PT: f32 = 154.0;
-/// The rows, in order: printer, paper, orientation, scale, copies, pages.
-const ROWS: usize = 6;
-const ROW_NAMES: [&str; ROWS] = ["Printer", "Paper", "Orientation", "Scale", "Copies", "Pages"];
+/// The two-sided choices the Sides row cycles through, with their labels.
+const SIDES: [(Sides, &str); 3] = [(Sides::OneSided, "One-sided"), (Sides::TwoSidedLongEdge, "Two-sided"), (Sides::TwoSidedShortEdge, "Two-sided, short edge")];
+/// The rows, in order: printer, paper, orientation, scale, copies, pages, sides, colour.
+const ROWS: usize = 8;
+const ROW_NAMES: [&str; ROWS] = ["Printer", "Paper", "Orientation", "Scale", "Copies", "Pages", "Sides", "Colour"];
 
 // indices into `PrintSheet::labels`
 const L_TITLE: usize = 0;
@@ -98,6 +100,10 @@ pub struct Setup {
     pub copies: u32,
     /// Which pages print (see [`PageChoice`]).
     pub pages: PageChoice,
+    /// index into `SIDES`
+    pub sides: usize,
+    /// black and white instead of colour
+    pub mono: bool,
 }
 
 /// Where each page of the captured document starts, and how many points one document pixel takes on the paper.
@@ -150,6 +156,15 @@ pub fn pdf_pages(pages: &[Image], paper: (f32, f32), origin: (f32, f32), pt_per_
         .collect()
 }
 
+/// Turns an image to grey by luminance (the weights of the standard video luma), keeping each pixel's alpha.
+pub fn to_grey(img: &mut Image) {
+    for p in img.px.iter_mut() {
+        let (r, g, b) = (*p & 0xff, (*p >> 8) & 0xff, (*p >> 16) & 0xff);
+        let l = (r * 299 + g * 587 + b * 114) / 1000;
+        *p = (*p & 0xff00_0000) | (l << 16) | (l << 8) | l;
+    }
+}
+
 /// One print job, ready to run in the background.
 pub struct Job {
     pub target: Target,
@@ -197,7 +212,7 @@ struct Geo {
 
 fn geo(ui: &Ui, w: i32, h: i32) -> Geo {
     let pt = |v: f32| ui.pt(v);
-    let (cw, ch) = (pt(440.0), pt(540.0));
+    let (cw, ch) = (pt(440.0), pt(600.0));
     let x0 = ((w as f32 - cw) / 2.0).max(0.0);
     let y0 = ((h as f32 - ch) / 2.0).max(0.0);
     let pad = pt(20.0);
@@ -274,7 +289,7 @@ impl PrintSheet {
     /// The sheet for `image` (the captured desktop) with the enabled `printers` and Save as PDF.
     pub fn new(ui: &Ui, image: Image, printers: &[Printer]) -> PrintSheet {
         let targets = targets(printers);
-        let setup = Setup { target: default_index(printers), paper: 0, landscape: false, scale: 2, copies: 1, pages: PageChoice::All };
+        let setup = Setup { target: default_index(printers), paper: 0, landscape: false, scale: 2, copies: 1, pages: PageChoice::All, sides: 0, mono: false };
         let mut sheet = PrintSheet {
             image,
             targets,
@@ -296,6 +311,8 @@ impl PrintSheet {
             margins: [MARGIN_PT; 4],
             copies: self.setup.copies,
             pages: None,
+            sides: SIDES[self.setup.sides.min(SIDES.len() - 1)].0,
+            color: if self.setup.mono { ColorMode::Monochrome } else { ColorMode::Color },
             ..PrintInfo::default()
         }
     }
@@ -345,6 +362,8 @@ impl PrintSheet {
                 PageChoice::Odd => "Odd pages".to_string(),
                 PageChoice::Even => "Even pages".to_string(),
             },
+            SIDES[self.setup.sides.min(SIDES.len() - 1)].1.to_string(),
+            if self.setup.mono { "Black & White".to_string() } else { "Colour".to_string() },
         ];
         let mut labels = vec![ui.text("Print", MAC_TITLE3_PT, Weight::Semibold, WHITE)];
         for name in ROW_NAMES {
@@ -413,8 +432,8 @@ impl PrintSheet {
         }
     }
 
-    /// Advances one row's setting: printer or Save as PDF, paper, orientation, scale, copies (1 to 9), or the page choice
-    /// (all, the previewed page, odd pages, even pages).
+    /// Advances one row's setting: printer or Save as PDF, paper, orientation, scale, copies (1 to 9), the page choice
+    /// (all, the previewed page, odd pages, even pages), one- or two-sided, or colour or black and white.
     fn cycle(&mut self, row: usize) {
         match row {
             0 => self.setup.target = (self.setup.target + 1) % self.targets.len(),
@@ -422,7 +441,9 @@ impl PrintSheet {
             2 => self.setup.landscape = !self.setup.landscape,
             3 => self.setup.scale = (self.setup.scale + 1) % SCALES.len(),
             4 => self.setup.copies = self.setup.copies % 9 + 1,
-            _ => self.setup.pages = self.setup.pages.next(),
+            5 => self.setup.pages = self.setup.pages.next(),
+            6 => self.setup.sides = (self.setup.sides + 1) % SIDES.len(),
+            _ => self.setup.mono = !self.setup.mono,
         }
     }
 
@@ -451,7 +472,11 @@ impl PrintSheet {
             .filter(|(i, _)| selection.contains(*i as u32 + 1))
             .map(|(_, slice)| *slice)
             .collect();
-        let pages: Vec<Image> = slices.iter().map(|&(y, h)| self.image.crop(0, y, self.image.w, h)).collect();
+        let mut pages: Vec<Image> = slices.iter().map(|&(y, h)| self.image.crop(0, y, self.image.w, h)).collect();
+        if self.setup.mono {
+            // the job also asks the printer for monochrome; a saved PDF has no printer, so its pages are greyed here
+            pages.iter_mut().for_each(to_grey);
+        }
         let (l, t, _, _) = info.imageable();
         let pages = pdf_pages(&pages, info.paper_size(), (l, t), self.layout.pt_per_px);
         Job { target: self.targets[self.setup.target].clone(), info, pages }
@@ -683,5 +708,50 @@ mod tests {
         let printers = [printer("Off", false, true), printer("On", true, false)];
         assert_eq!(targets(&printers), vec![Target::Printer("On".into()), Target::Pdf]);
         assert_eq!(default_index(&printers), 0, "a stopped default is skipped, so the first usable target is picked");
+    }
+
+    #[test]
+    fn the_sides_row_cycles_and_reaches_the_job_attributes() {
+        let ui = crate::shell::tests::ui();
+        let mut sheet = PrintSheet::new(&ui, Image::new(100, 100), &[]);
+        assert_eq!(sheet.info().sides, Sides::OneSided);
+        sheet.cycle(6);
+        assert_eq!(sheet.info().sides, Sides::TwoSidedLongEdge);
+        sheet.cycle(6);
+        assert_eq!(sheet.info().sides, Sides::TwoSidedShortEdge);
+        assert_eq!(sheet.job().info.sides, Sides::TwoSidedShortEdge, "the job carries it");
+        sheet.cycle(6);
+        assert_eq!(sheet.info().sides, Sides::OneSided, "the row wraps");
+    }
+
+    #[test]
+    fn black_and_white_sets_the_colour_mode_and_greys_the_pages() {
+        let ui = crate::shell::tests::ui();
+        let mut img = Image::new(8, 8);
+        img.px.iter_mut().for_each(|p| *p = 0xff00_00ff); // opaque red (red is the low byte)
+        let mut sheet = PrintSheet::new(&ui, img, &[]);
+        assert_eq!(sheet.info().color, ColorMode::Color);
+        let colour_job = sheet.job();
+        assert_eq!(&colour_job.pages[0].images[0].rgb[0..3], &[255, 0, 0], "colour pages are untouched");
+        sheet.cycle(7);
+        assert_eq!(sheet.info().color, ColorMode::Monochrome);
+        let job = sheet.job();
+        let rgb = &job.pages[0].images[0].rgb;
+        assert_eq!(rgb[0], rgb[1]);
+        assert_eq!(rgb[1], rgb[2]);
+        assert_eq!(rgb[0], 76, "red has luminance 0.299 of white");
+        sheet.cycle(7);
+        assert_eq!(sheet.info().color, ColorMode::Color);
+    }
+
+    #[test]
+    fn the_greyed_pixel_keeps_its_alpha() {
+        let mut img = Image::new(1, 1);
+        img.px[0] = 0x80ff_ffff;
+        to_grey(&mut img);
+        assert_eq!(img.px[0], 0x80ff_ffff);
+        img.px[0] = 0xff00_ff00; // opaque green
+        to_grey(&mut img);
+        assert_eq!(img.px[0], 0xff95_9595);
     }
 }

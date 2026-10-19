@@ -331,6 +331,73 @@ impl ConfigureSheet {
         saved.iter().filter(|(key, value)| self.set(key, value.clone())).count()
     }
 
+    /// The option's current value as the text a preference file keeps: `true` or `false`, the number, or the choice.
+    pub fn text_of(&self, key: &str) -> Option<String> {
+        self.get(key).map(|v| match v {
+            SaverValue::Bool(b) => b.to_string(),
+            SaverValue::Int(n) => n.to_string(),
+            SaverValue::Choice(c) => c.clone(),
+        })
+    }
+
+    /// Sets an option from saved text, read by the option's kind. Returns false and changes nothing for an unknown key,
+    /// text that does not parse, or a value the option refuses (see `set`).
+    pub fn set_from_text(&mut self, key: &str, text: &str) -> bool {
+        let Some(opt) = self.options.iter().find(|o| o.key == key) else {
+            return false;
+        };
+        let value = match &opt.kind {
+            OptionKind::Bool => match text {
+                "true" => SaverValue::Bool(true),
+                "false" => SaverValue::Bool(false),
+                _ => return false,
+            },
+            OptionKind::Int { .. } => match text.trim().parse::<i64>() {
+                Ok(n) => SaverValue::Int(n),
+                Err(_) => return false,
+            },
+            OptionKind::Choice(_) => SaverValue::Choice(text.to_string()),
+        };
+        self.set(key, value)
+    }
+
+    /// The choices of a choice option in their order; None for another kind of option or an unknown key.
+    pub fn choices(&self, key: &str) -> Option<Vec<String>> {
+        match self.options.iter().find(|o| o.key == key).map(|o| &o.kind) {
+            Some(OptionKind::Choice(list)) => Some(list.clone()),
+            _ => None,
+        }
+    }
+
+    /// The closed range of a whole-number option; None for another kind of option or an unknown key.
+    pub fn int_range(&self, key: &str) -> Option<(i64, i64)> {
+        match self.options.iter().find(|o| o.key == key).map(|o| &o.kind) {
+            Some(OptionKind::Int { min, max }) => Some((*min, *max)),
+            _ => None,
+        }
+    }
+
+    /// Whether the option exists and is an on or off option.
+    pub fn is_bool(&self, key: &str) -> bool {
+        matches!(self.options.iter().find(|o| o.key == key).map(|o| &o.kind), Some(OptionKind::Bool))
+    }
+
+    /// The boolean value of an on or off option, or `default` when the key is unknown or of another kind.
+    pub fn bool_or(&self, key: &str, default: bool) -> bool {
+        match self.get(key) {
+            Some(SaverValue::Bool(b)) => *b,
+            _ => default,
+        }
+    }
+
+    /// The selected choice of a choice option, or None.
+    pub fn choice_of(&self, key: &str) -> Option<&str> {
+        match self.get(key) {
+            Some(SaverValue::Choice(c)) => Some(c.as_str()),
+            _ => None,
+        }
+    }
+
     /// Number of options.
     pub fn len(&self) -> usize {
         self.options.len()
@@ -347,6 +414,32 @@ mod tests {
 
     fn near(a: f64, b: f64) -> bool {
         (a - b).abs() < 1e-9
+    }
+
+    #[test]
+    fn option_values_round_trip_through_text() {
+        let mut sheet = ConfigureSheet::new();
+        assert!(sheet.add_bool("date", true));
+        assert!(sheet.add_int("count", 1, 9, 3));
+        assert!(sheet.add_choice("speed", &["slow", "fast"], "slow"));
+        assert!(sheet.set_from_text("date", "false"));
+        assert!(sheet.set_from_text("count", "7"));
+        assert!(sheet.set_from_text("speed", "fast"));
+        assert_eq!(sheet.text_of("date").as_deref(), Some("false"));
+        assert_eq!(sheet.text_of("count").as_deref(), Some("7"));
+        assert_eq!(sheet.text_of("speed").as_deref(), Some("fast"));
+        // text the option refuses leaves the value alone
+        assert!(!sheet.set_from_text("date", "maybe"));
+        assert!(!sheet.set_from_text("count", "10"));
+        assert!(!sheet.set_from_text("count", "many"));
+        assert!(!sheet.set_from_text("speed", "warp"));
+        assert!(!sheet.set_from_text("missing", "x"));
+        assert_eq!((sheet.bool_or("date", true), sheet.int_range("count")), (false, Some((1, 9))));
+        assert_eq!(sheet.choices("speed"), Some(vec!["slow".to_string(), "fast".to_string()]));
+        assert_eq!(sheet.choice_of("speed"), Some("fast"));
+        assert_eq!(sheet.choices("date"), None);
+        assert!(sheet.is_bool("date") && !sheet.is_bool("count"));
+        assert!(sheet.bool_or("nothing", true), "an unknown key gives the default");
     }
 
     #[test]

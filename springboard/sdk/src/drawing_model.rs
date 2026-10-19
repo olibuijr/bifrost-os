@@ -4,7 +4,10 @@
 //! packed `u32` and interpolated per byte, so any channel order works. Nothing here touches the system.
 
 use crate::graphics_context::{FillRule, GraphicsContext, Path, Seg};
+use crate::graphics_gradient::{Gradient as ContextGradient, GradientOptions};
+use crate::graphics_stroke::{LineCap, LineJoin};
 use crate::print::{Orientation, PrintInfo};
+use bifrost_render::effects::Shadow;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LineCapStyle {
@@ -34,6 +37,8 @@ pub struct BezierPath {
     pub line_cap_style: LineCapStyle,
     pub line_join_style: LineJoinStyle,
     pub winding_rule: WindingRule,
+    /// `miterLimit`: the longest miter, as a multiple of the line width, before a mitered join becomes a bevel.
+    pub miter_limit: f32,
     dash: Vec<f32>,
     dash_phase: f32,
 }
@@ -46,6 +51,7 @@ impl Default for BezierPath {
             line_cap_style: LineCapStyle::Butt,
             line_join_style: LineJoinStyle::Miter,
             winding_rule: WindingRule::NonZero,
+            miter_limit: 10.0,
             dash: Vec::new(),
             dash_phase: 0.0,
         }
@@ -268,8 +274,38 @@ impl BezierPath {
     pub fn fill(&self, ctx: &mut GraphicsContext, color: u32) {
         ctx.fill(&self.path, color, self.rule());
     }
+    /// `stroke()`: the outline with the path's line width, cap, join, miter limit and dash pattern. The context's own
+    /// line settings are put back afterwards.
     pub fn stroke(&self, ctx: &mut GraphicsContext, color: u32) {
+        ctx.save();
+        ctx.set_line_cap(match self.line_cap_style {
+            LineCapStyle::Butt => LineCap::Butt,
+            LineCapStyle::Round => LineCap::Round,
+            LineCapStyle::Square => LineCap::Square,
+        });
+        ctx.set_line_join(match self.line_join_style {
+            LineJoinStyle::Miter => LineJoin::Miter,
+            LineJoinStyle::Round => LineJoin::Round,
+            LineJoinStyle::Bevel => LineJoin::Bevel,
+        });
+        ctx.set_miter_limit(self.miter_limit);
+        ctx.set_line_dash(self.dash_phase, &self.dash);
         ctx.stroke(&self.path, color, self.line_width);
+        ctx.restore();
+    }
+    /// `fill()` with a shadow under the shape (`NSShadow` set before the fill).
+    pub fn fill_with_shadow(&self, ctx: &mut GraphicsContext, color: u32, shadow: &ShadowStyle) {
+        ctx.save();
+        ctx.add_shadow(Some(shadow.effect()));
+        self.fill(ctx, color);
+        ctx.restore();
+    }
+    /// `stroke()` with a shadow under the line.
+    pub fn stroke_with_shadow(&self, ctx: &mut GraphicsContext, color: u32, shadow: &ShadowStyle) {
+        ctx.save();
+        ctx.add_shadow(Some(shadow.effect()));
+        self.stroke(ctx, color);
+        ctx.restore();
     }
     /// `addClip()`.
     pub fn add_clip(&self, ctx: &mut GraphicsContext) {
@@ -352,6 +388,43 @@ impl Gradient {
         let (cx, cy) = (x + w / 2.0, y + h / 2.0);
         (((point.0 - cx) * dx + (point.1 - cy) * dy) / extent + 0.5).clamp(0.0, 1.0)
     }
+    /// The same stops as the drawing context's gradient.
+    fn for_context(&self) -> Option<ContextGradient> {
+        ContextGradient::new(&self.stops)
+    }
+    /// `draw(in: path, angle:)`: fills the inside of `path` (under its winding rule) with a linear gradient across the
+    /// path's bounds at `angle_deg`, with the same direction as `linear_t`. The first and last colours hold past the ends.
+    pub fn draw_in_path(&self, ctx: &mut GraphicsContext, path: &BezierPath, angle_deg: f32) {
+        let Some(g) = self.for_context() else { return };
+        let (x, y, w, h) = path.bounds();
+        let (dx, dy) = (angle_deg.to_radians().cos(), angle_deg.to_radians().sin());
+        let half = (w * dx.abs() + h * dy.abs()) / 2.0;
+        let (cx, cy) = (x + w / 2.0, y + h / 2.0);
+        ctx.save();
+        ctx.clip_with(&path.path, path.rule());
+        let both = GradientOptions { draws_before_start: true, draws_after_end: true };
+        ctx.draw_linear_gradient(&g, (cx - dx * half, cy - dy * half), (cx + dx * half, cy + dy * half), both);
+        ctx.restore();
+    }
+    /// `draw(in: rect, angle:)`.
+    pub fn draw_in_rect(&self, ctx: &mut GraphicsContext, rect: (f32, f32, f32, f32), angle_deg: f32) {
+        self.draw_in_path(ctx, &BezierPath::with_rect(rect.0, rect.1, rect.2, rect.3), angle_deg);
+    }
+    /// `draw(in: path, relativeCenterPosition:)`: a radial gradient whose centre sits at `relative_center` (each axis
+    /// from -1 at the left or top edge of the path's bounds to 1 at the right or bottom edge, 0 in the middle) and whose
+    /// last colour is reached at the farthest corner of the bounds.
+    pub fn draw_radial_in_path(&self, ctx: &mut GraphicsContext, path: &BezierPath, relative_center: (f32, f32)) {
+        let Some(g) = self.for_context() else { return };
+        let (x, y, w, h) = path.bounds();
+        let c = (x + w / 2.0 + relative_center.0.clamp(-1.0, 1.0) * w / 2.0, y + h / 2.0 + relative_center.1.clamp(-1.0, 1.0) * h / 2.0);
+        let far = |px: f32, py: f32| ((px - c.0).powi(2) + (py - c.1).powi(2)).sqrt();
+        let radius = far(x, y).max(far(x + w, y)).max(far(x, y + h)).max(far(x + w, y + h));
+        ctx.save();
+        ctx.clip_with(&path.path, path.rule());
+        let both = GradientOptions { draws_before_start: true, draws_after_end: true };
+        ctx.draw_radial_gradient(&g, c, 0.0, c, radius, both);
+        ctx.restore();
+    }
     /// The position of `point` in a radial gradient (`draw(fromCenter:radius:toCenter:radius:)` with a shared centre).
     pub fn radial_t(&self, center: (f32, f32), start_radius: f32, end_radius: f32, point: (f32, f32)) -> f32 {
         let d = ((point.0 - center.0).powi(2) + (point.1 - center.1).powi(2)).sqrt();
@@ -374,6 +447,10 @@ pub struct ShadowStyle {
 impl ShadowStyle {
     pub fn new(offset: (f32, f32), blur_radius: f32, color: u32) -> Self {
         ShadowStyle { offset, blur_radius: blur_radius.max(0.0), color }
+    }
+    /// The shadow as the drawing context takes it: the offset in pixels, the blur radius and the colour.
+    pub fn effect(&self) -> Shadow {
+        Shadow { color: self.color, radius: self.blur_radius, x: self.offset.0, y: self.offset.1, spread: 0.0 }
     }
     /// The rect (x, y, w, h) a shadow of `rect` covers: offset, then grown by the blur radius on every side.
     pub fn extent(&self, rect: (f32, f32, f32, f32)) -> (f32, f32, f32, f32) {
@@ -532,5 +609,103 @@ mod tests {
     #[test]
     fn bad_scaling_falls_back_to_one() {
         assert_eq!(PageLayout::new(0.0).scaling, 1.0);
+    }
+
+    const INK: u32 = 0xff12_3456;
+
+    #[test]
+    fn a_dashed_stroke_leaves_gaps_and_a_solid_one_does_not() {
+        let mut line = BezierPath::new();
+        line.move_to(0.0, 4.0);
+        line.line_to(40.0, 4.0);
+        line.line_width = 2.0;
+        let mut solid = GraphicsContext::new(40, 8);
+        line.stroke(&mut solid, INK);
+        assert_ne!(solid.layer.get(6, 3) >> 24, 0, "a solid line covers the pixel the dash would skip");
+        line.set_line_dash(&[4.0, 4.0], 0.0);
+        let mut dashed = GraphicsContext::new(40, 8);
+        line.stroke(&mut dashed, INK);
+        assert_ne!(dashed.layer.get(2, 3) >> 24, 0, "the first dash is drawn");
+        assert_eq!(dashed.layer.get(6, 3) >> 24, 0, "the gap after it is empty");
+        assert_ne!(dashed.layer.get(10, 3) >> 24, 0, "the second dash is drawn");
+    }
+
+    #[test]
+    fn a_square_cap_extends_the_line_past_its_end_and_a_butt_cap_does_not() {
+        let mut line = BezierPath::new();
+        line.move_to(10.0, 4.0);
+        line.line_to(30.0, 4.0);
+        line.line_width = 4.0;
+        let mut butt = GraphicsContext::new(40, 8);
+        line.stroke(&mut butt, INK);
+        assert_eq!(butt.layer.get(8, 3) >> 24, 0);
+        line.line_cap_style = LineCapStyle::Square;
+        let mut square = GraphicsContext::new(40, 8);
+        line.stroke(&mut square, INK);
+        assert_ne!(square.layer.get(8, 3) >> 24, 0, "the square cap reaches half the width past the end");
+        assert_eq!(square.layer.get(7, 3) >> 24, 0, "and no further");
+    }
+
+    #[test]
+    fn stroking_puts_the_context_line_settings_back() {
+        let mut ctx = GraphicsContext::new(40, 8);
+        let mut line = BezierPath::new();
+        line.move_to(0.0, 4.0);
+        line.line_to(40.0, 4.0);
+        line.set_line_dash(&[4.0, 4.0], 0.0);
+        line.stroke(&mut ctx, INK);
+        // a plain context stroke afterwards is solid again
+        let mut plain = Path::new();
+        plain.move_to(0.0, 6.0).line_to(40.0, 6.0);
+        ctx.stroke(&plain, INK, 2.0);
+        assert_ne!(ctx.layer.get(6, 5) >> 24, 0);
+    }
+
+    #[test]
+    fn a_linear_gradient_fills_the_path_and_nothing_outside_it() {
+        let g = Gradient::new(&[0xff00_0000, 0xffff_ffff], None).unwrap();
+        let mut ctx = GraphicsContext::new(14, 4);
+        g.draw_in_rect(&mut ctx, (0.0, 0.0, 10.0, 4.0), 0.0);
+        let (left, right) = (ctx.layer.get(0, 1), ctx.layer.get(9, 1));
+        assert_eq!((left >> 24, right >> 24), (0xff, 0xff));
+        assert!((left & 0xff) < 40, "the left end is nearly the first colour: {left:#x}");
+        assert!((right & 0xff) > 215, "the right end is nearly the last colour: {right:#x}");
+        assert_eq!(ctx.layer.get(11, 1), 0, "the gradient stays inside the path");
+    }
+
+    #[test]
+    fn a_gradient_in_an_oval_leaves_the_corners_clear() {
+        let g = Gradient::new(&[0xff00_00ff, 0xffff_0000], None).unwrap();
+        let mut ctx = GraphicsContext::new(20, 20);
+        g.draw_in_path(&mut ctx, &BezierPath::with_oval(0.0, 0.0, 20.0, 20.0), 90.0);
+        assert_eq!(ctx.layer.get(0, 0), 0);
+        assert_ne!(ctx.layer.get(10, 10) >> 24, 0);
+    }
+
+    #[test]
+    fn a_radial_gradient_is_the_first_colour_at_its_centre() {
+        let g = Gradient::new(&[0xff00_00ff, 0xff00_ff00], None).unwrap();
+        let mut ctx = GraphicsContext::new(21, 21);
+        g.draw_radial_in_path(&mut ctx, &BezierPath::with_rect(0.0, 0.0, 21.0, 21.0), (0.0, 0.0));
+        let centre = ctx.layer.get(10, 10);
+        let corner = ctx.layer.get(0, 0);
+        assert!((centre & 0xff) > 200 && ((centre >> 8) & 0xff) < 60, "red at the centre: {centre:#x}");
+        assert!(((corner >> 8) & 0xff) > 200, "green at the far corner: {corner:#x}");
+    }
+
+    #[test]
+    fn a_shadowed_fill_paints_the_shape_and_a_copy_offset_from_it() {
+        let shape = BezierPath::with_rect(4.0, 4.0, 6.0, 6.0);
+        let mut ctx = GraphicsContext::new(24, 24);
+        shape.fill_with_shadow(&mut ctx, INK, &ShadowStyle::new((6.0, 6.0), 1.0, 0xff00_00ff));
+        assert_eq!(ctx.layer.get(5, 5), INK, "the shape is on top");
+        assert_ne!(ctx.layer.get(13, 13) >> 24, 0, "the shadow shows below and to the right");
+        assert_eq!(ctx.layer.get(0, 0), 0);
+        // the shadow does not stay on for later fills
+        let mut after = GraphicsContext::new(30, 30);
+        BezierPath::with_rect(14.0, 14.0, 4.0, 4.0).fill_with_shadow(&mut after, INK, &ShadowStyle::new((6.0, 6.0), 1.0, 0xff00_00ff));
+        BezierPath::with_rect(0.0, 0.0, 2.0, 2.0).fill(&mut after, INK);
+        assert_eq!(after.layer.get(7, 7), 0, "a later fill casts no shadow");
+        assert_ne!(after.layer.get(21, 21) >> 24, 0, "the first fill's shadow is there");
     }
 }

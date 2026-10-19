@@ -168,6 +168,8 @@ pub enum Toggle {
     MenuExtra(super::options::MenuExtra),
     /// Settings › App Permissions › Contacts: the n-th installed app may read contacts
     Contacts(usize),
+    /// Settings > Screen Saver: flips the n-th (on or off) option of the chosen saver
+    SaverOption(usize),
     AutoUpdate,
     BackupBeforeUpdate,
     Airplane,
@@ -345,6 +347,8 @@ pub enum Pick {
     AlertSound(usize),
     /// Settings > Screen Saver > Start After: the index into `screensaver::START_AFTER`
     ScreenSaverStart(usize),
+    /// Settings > Screen Saver: the n-th option of the chosen saver, set to its c-th choice (see `screensaver::load_sheet`)
+    ScreenSaverOption(usize, usize),
     /// Settings > Screen Saver > Preview: the saver starts full screen (the shell does it, see `Settings::take_screensaver_preview`)
     ScreenSaverPreview,
     /// Trackpad > Secondary Click: index into `TRACKPAD_SECONDARY`
@@ -984,19 +988,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
             page("Known Networks", false, vec![Group::new(rows).header("MY NETWORKS").footer("Networks higher in the list are joined first. Open a network to change its priority, turn off Auto-Join or forget it.")])
         }
         PageId::Wallpaper => page("Wallpaper", false, vec![]),
-        PageId::ScreenSaver => page(
-            "Screen Saver",
-            false,
-            vec![
-                Group::new(super::screensaver::SAVERS.iter().enumerate().map(|(i, l)| Item::new(*l).check(i == o.screensaver_module, Action::Pick(Pick::ScreenSaverModule(i)))).collect())
-                    .header("SCREEN SAVER"),
-                Group::new(vec![Item::new("Preview").tint(Tint::Blue).action(Action::Pick(Pick::ScreenSaverPreview))])
-                    .footer("Shows the screen saver full screen. Touch the screen or press a key to return."),
-                Group::new(super::screensaver::START_AFTER.iter().enumerate().map(|(i, (l, min))| Item::new(*l).check(*min == o.screensaver_minutes, Action::Pick(Pick::ScreenSaverStart(i)))).collect())
-                    .header("START AFTER")
-                    .footer("The screen saver starts once the computer has been idle for this long. The display still turns off at the Auto-Lock time."),
-            ],
-        ),
+        PageId::ScreenSaver => screen_saver_page(o, &super::screensaver::manifest(o.screensaver_module).map(|m| m.sheet().clone()).unwrap_or_default()),
         PageId::Sounds => page(
             "Sounds",
             false,
@@ -1724,7 +1716,7 @@ pub fn desktop_dock_page(m: &Model<'_>, d: &DeskPrefs) -> Spec {
 /// Where a window goes when it is minimized.
 pub const MINIMIZE_EFFECTS: [&str; 2] = ["Funnel Effect", "Scale Effect"];
 /// What a hot corner does; index 0 is nothing.
-pub const CORNER_ACTIONS: [&str; 6] = ["None", "Overview", "Apps Grid", "Show Desktop", "Lock Screen", "Search"];
+pub const CORNER_ACTIONS: [&str; 7] = ["None", "Overview", "Apps Grid", "Show Desktop", "Lock Screen", "Search", "Start Screen Saver"];
 pub const CORNER_NAMES: [&str; 4] = ["Top Left", "Top Right", "Bottom Left", "Bottom Right"];
 pub const SIDEBAR_ICON_SIZES: [&str; 3] = ["Small", "Medium", "Large"];
 /// Nearby Share: who may send to this computer (index is `Options::nearby`).
@@ -1874,6 +1866,37 @@ pub fn font_pick_page(m: &Model<'_>, role: FontRole) -> Spec {
 }
 
 /// Desktop & Dock > Hot Corners: one group per corner.
+/// Settings > Screen Saver: the saver choice, Preview, the chosen saver's own options (its configuration sheet, with the
+/// values saved for it) and Start After. A switch is an on or off option; a choice option is a list of checks.
+pub fn screen_saver_page(o: &Options, sheet: &bifrost_ui::screensaver::ConfigureSheet) -> Spec {
+    let mut groups = vec![
+        Group::new(super::screensaver::SAVERS.iter().enumerate().map(|(i, l)| Item::new(*l).check(i == o.screensaver_module, Action::Pick(Pick::ScreenSaverModule(i)))).collect())
+            .header("SCREEN SAVER"),
+        Group::new(vec![Item::new("Preview").tint(Tint::Blue).action(Action::Pick(Pick::ScreenSaverPreview))])
+            .footer("Shows the screen saver full screen. Touch the screen or press a key to return."),
+    ];
+    for (n, key) in sheet.keys().into_iter().enumerate() {
+        let title = super::screensaver::option_title(key);
+        if sheet.is_bool(key) {
+            groups.push(Group::new(vec![Item::new(&title).switch(sheet.bool_or(key, false), Action::Toggle(Toggle::SaverOption(n)))]));
+        } else if let Some(choices) = sheet.choices(key) {
+            let current = sheet.choice_of(key).unwrap_or("");
+            let rows = choices
+                .iter()
+                .enumerate()
+                .map(|(c, name)| Item::new(&super::screensaver::choice_title(name)).check(name == current, Action::Pick(Pick::ScreenSaverOption(n, c))))
+                .collect();
+            groups.push(Group::new(rows).header(&title.to_uppercase()));
+        }
+    }
+    groups.push(
+        Group::new(super::screensaver::START_AFTER.iter().enumerate().map(|(i, (l, min))| Item::new(*l).check(*min == o.screensaver_minutes, Action::Pick(Pick::ScreenSaverStart(i)))).collect())
+            .header("START AFTER")
+            .footer("The screen saver starts once the computer has been idle for this long. The display still turns off at the Auto-Lock time. A hot corner can start it at once (Desktop & Dock > Hot Corners)."),
+    );
+    Spec { id: PageId::ScreenSaver, title: "Screen Saver".into(), large: false, groups }
+}
+
 pub fn hot_corners_page(d: &DeskPrefs) -> Spec {
     let groups = CORNER_NAMES.iter().enumerate().map(|(c, name)| {
         Group::new(CORNER_ACTIONS.iter().enumerate().map(|(a, l)| Item::new(*l).check(d.corners[c] == a, Action::Pick(Pick::HotCorner(c, a)))).collect()).header(&name.to_uppercase())

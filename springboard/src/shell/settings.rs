@@ -329,6 +329,8 @@ pub struct Settings {
     dock_out: Vec<super::desktop_dock::Change>,
     /// Desktop & Dock extras, Overview and the Appearance extras (they live in settings.ini)
     desk: super::pages::DeskPrefs,
+    /// Screen Saver: the chosen saver's options with their saved values (`screensaver::load_sheet`)
+    saver_sheet: bifrost_ui::screensaver::ConfigureSheet,
     /// the Default Apps page's categories as the shell holds them, and the choices not yet applied there
     defaults: Vec<super::defaultapps::CategoryView>,
     defaults_out: Vec<(usize, String)>,
@@ -542,6 +544,7 @@ impl Settings {
     /// current one; `prefs` holds the persisted options.
     pub fn new(ui: &Ui, info: &Info, prefs: &Prefs, w: i32, h: i32, wallpapers: Rc<Vec<Wallpaper>>) -> Self {
         let opts = Options::load(prefs);
+        let saver_sheet = super::screensaver::load_sheet(opts.screensaver_module, prefs);
         crate::bare::pointer_prefs::set(opts.pointer_tuning());
         let mut st = Settings {
             w,
@@ -573,6 +576,7 @@ impl Settings {
             dock: super::desktop_dock::Preferences::default(),
             dock_out: Vec::new(),
             desk: super::pages::DeskPrefs::load(prefs),
+            saver_sheet,
             defaults: Vec::new(),
             defaults_out: Vec::new(),
             login_items: Vec::new(),
@@ -694,6 +698,7 @@ impl Settings {
             PageId::HomeScreen => super::pages::desktop_dock_page(&self.model(), &self.desk),
             PageId::Appearance => super::pages::appearance_page(&self.model(), &self.desk),
             PageId::HotCorners => super::pages::hot_corners_page(&self.desk),
+            PageId::ScreenSaver => super::pages::screen_saver_page(&self.opts, &self.saver_sheet),
             PageId::Overview => super::pages::overview_page(&self.desk),
             PageId::General => {
                 let mut s = spec(id, &self.model());
@@ -2720,6 +2725,19 @@ impl Settings {
                     Pick::ScreenSaverModule(k) => {
                         self.opts.screensaver_module = k.min(super::screensaver::SAVERS.len() - 1);
                         self.opts.save(prefs);
+                        // the options on the page are the new saver's; the page is rebuilt to show them
+                        self.saver_sheet = super::screensaver::load_sheet(self.opts.screensaver_module, prefs);
+                        self.rebuild_visible(ui);
+                        vec![]
+                    }
+                    Pick::ScreenSaverOption(n, c) => {
+                        let key = self.saver_sheet.keys().get(n).map(|k| k.to_string());
+                        let choice = key.as_deref().and_then(|k| self.saver_sheet.choices(k)).and_then(|list| list.get(c).cloned());
+                        if let (Some(key), Some(choice)) = (key, choice) {
+                            if self.saver_sheet.set_from_text(&key, &choice) {
+                                super::screensaver::save_option(prefs, self.opts.screensaver_module, &key, &choice);
+                            }
+                        }
                         vec![]
                     }
                     Pick::AlertSound(k) => {
@@ -3336,6 +3354,20 @@ impl Settings {
                 let on = flip(&mut self.desk.overview_switch);
                 let _ = prefs.set(super::pages::OVERVIEW_SWITCH_PREF, if on { "1" } else { "0" });
                 on
+            }
+            Toggle::SaverOption(n) => {
+                let key = self.saver_sheet.keys().get(n).map(|k| k.to_string());
+                match key {
+                    Some(key) if self.saver_sheet.is_bool(key.as_str()) => {
+                        let on = !self.saver_sheet.bool_or(&key, false);
+                        let text = if on { "true" } else { "false" };
+                        if self.saver_sheet.set_from_text(&key, text) {
+                            super::screensaver::save_option(prefs, self.opts.screensaver_module, &key, text);
+                        }
+                        on
+                    }
+                    _ => false,
+                }
             }
             Toggle::CloseOnQuit => {
                 let on = flip(&mut self.desk.close_on_quit);
@@ -4605,6 +4637,24 @@ mod tests {
         tap_row(&mut st, &ui, &mut prefs, "Preview");
         assert!(st.take_screensaver_preview(), "Preview asks the shell to start the saver");
         assert!(!st.take_screensaver_preview(), "the request is taken once");
+    }
+
+    #[test]
+    fn screen_saver_options_are_saved_per_saver() {
+        let ui = super::super::tests::ui();
+        let (mut st, mut prefs) = settings(&ui, &info());
+        tap_row(&mut st, &ui, &mut prefs, "Screen Saver");
+        // Clock is the first saver: its switch and its choices are on the page
+        tap_row(&mut st, &ui, &mut prefs, "Show Date");
+        assert_eq!(prefs.get("ScreenSaver.Clock.show_date"), Some("false"));
+        tap_row(&mut st, &ui, &mut prefs, "30 seconds");
+        assert_eq!(prefs.get("ScreenSaver.Clock.move_every"), Some("30s"));
+        assert_eq!(prefs.get("ScreenSaver.Colours.speed"), None, "another saver's keys are untouched");
+        // the next saver shows its own options
+        tap_row(&mut st, &ui, &mut prefs, "Colours");
+        tap_row(&mut st, &ui, &mut prefs, "Fast");
+        assert_eq!(prefs.get("ScreenSaver.Colours.speed"), Some("fast"));
+        assert_eq!(prefs.get("ScreenSaver.Clock.move_every"), Some("30s"));
     }
 
     fn drag_slider(st: &mut Settings, ui: &Ui, prefs: &mut Prefs, label_row_above: Option<&str>, g: usize, i: usize, from: f32, to: f32) -> Vec<Effect> {
