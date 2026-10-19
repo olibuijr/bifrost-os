@@ -33,6 +33,7 @@ Supported manifest capabilities:
 | display-config | May ask the shell's `display` service for another display mode |
 | usb | May ask the shell's `usb` service for raw access to one USB device; binds nothing (no `/dev/bus/usb` reaches the sandbox). The person picks each device on the permission sheet, and the shell runs the transfers (see "USB and HID device access" in [bifrost-ui.md](bifrost-ui.md)) |
 | hid | The same for a raw HID device (the shell reads and writes its hidraw node for the app); keyboards, keypads and security keys are never offered |
+| gpu | For an SDK-drawn app whose engine renders offscreen on the GPU and reads frames back (the Browser's Servo engine). Binds `/dev/dri`, read-only `/sys/dev/char`, `/sys/devices` and `/run/udev`, and the Wayland socket (`WAYLAND_DISPLAY`, `WINIT_UNIX_BACKEND=wayland`) for the hidden window that yields the GL context. The window is still presented from SDK frames; a `native` app gets the same bindings (with all of `/sys`) without declaring it |
 | remote-desktop | Fixed Remote sharing broker request, restricted to the Remote package and requiring network/storage |
 
 Entitlements are separate from permissions and first-party only (`is.olibuijr.*`). `entitlements = ["log-store"]` on a

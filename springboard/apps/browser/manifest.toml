@@ -8,5 +8,5 @@ summary = "A Browser-style browser powered by Servo, with a separate BifrOSt pro
 category = "Productivity"
 architecture = "x86_64-linux"
 window = "full-size"
-permissions = ["network", "storage", "keychain", "documents"]
+permissions = ["network", "storage", "keychain", "documents", "gpu"]
 keychain_groups = ["is.bifrost.passwords"]

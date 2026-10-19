@@ -49,15 +49,23 @@ impl ApplicationHandler for HiddenWindow {
 impl Graphics {
     pub(super) fn new(size: PhysicalSize<u32>) -> Result<Self, String> {
         match std::env::var("BIFROST_BROWSER_RENDERER").as_deref() {
-            Err(std::env::VarError::NotPresent) | Ok("gpu") => Self::gpu(size),
-            Ok("cpu") => {
-                let context: Rc<dyn RenderingContext> = Rc::new(SoftwareRenderingContext::new(size)
-                    .map_err(|error| format!("CPU rendering context: {error:?}"))?);
-                Self::finish(context, None, "cpu")
-            }
+            // Default: the GPU, and the CPU when the GPU cannot start (no `gpu` permission, no device). Naming the
+            // renderer explicitly never falls back: `gpu` fails loudly.
+            Err(std::env::VarError::NotPresent) => Self::gpu(size).or_else(|error| {
+                eprintln!("browser: GPU renderer unavailable ({error}); falling back to the CPU renderer");
+                Self::cpu(size)
+            }),
+            Ok("gpu") => Self::gpu(size),
+            Ok("cpu") => Self::cpu(size),
             Ok(value) => Err(format!("invalid BIFROST_BROWSER_RENDERER={value:?}; expected gpu or cpu")),
             Err(error) => Err(format!("BIFROST_BROWSER_RENDERER: {error}")),
         }
+    }
+
+    fn cpu(size: PhysicalSize<u32>) -> Result<Self, String> {
+        let context: Rc<dyn RenderingContext> = Rc::new(SoftwareRenderingContext::new(size)
+            .map_err(|error| format!("CPU rendering context: {error:?}"))?);
+        Self::finish(context, None, "cpu")
     }
 
     fn gpu(size: PhysicalSize<u32>) -> Result<Self, String> {
