@@ -5729,3 +5729,18 @@ blend operator; Metal and IOSurface have no counterpart.
 Gaps: no toolbar view time-zone override yet (`zones::convert` is ready for it); southern-hemisphere zones (summer shift across
 the new year) and the tz database's history (rules before 2007 for North America, before 1996 for Europe) are not modelled;
 an imported VTIMEZONE that is not in the table keeps the fixed offset its file gives. Code only: not built or run, not verified on Midget.
+||||||| e3beb52f0
+
+## Files app: permissions, date and scope search terms (parity wave 15, 2026-10-19)
+
+App-level work in `springboard/apps/files` (parity rows in `docs/parity-matrix/apps/finder.json`).
+
+- **Edit permissions in Get Info (Finder "Sharing & Permissions")**: `perms.rs`. Get Info shows a 3 by 3 grid (Owner, Group,
+  Everyone else by Read, Write, Execute) under the rows; a click flips that mode bit with `chmod` (`set_mode`, `toggled`), only
+  when the person owns the item or is root (`can_edit`). One Cmd+Z puts the old mode back (`Undo::Mode`, label Permissions).
+  Gap left open: changing owner and group needs a privilege prompt and Files has no polkit client, so those rows stay read-only;
+  access control lists are not offered.
+- **Search terms `date:` and `in:`**: `search.rs` `parse_terms` takes `date:today|yesterday|week|month|year` (hits are kept when
+  their change date falls in the span, counted in whole days, `DateTerm::matches`) and `in:folder|home|disk` (where the search
+  starts, `Scope::root`). They combine with `kind:` and `tag:`; an unknown value stays one of the name words. Gap: the terms are
+  typed, there are no token chips, date picker or scope bar in the search field yet.

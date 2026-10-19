@@ -12,6 +12,8 @@ pub(crate) enum Undo {
     NewFolder(PathBuf),
     /// A link made by Make Alias (removed again only while it is still a link).
     Alias(PathBuf),
+    /// Permissions changed in Get Info: (path, the mode bits it had before).
+    Mode(Vec<(PathBuf, u32)>),
 }
 
 impl Undo {
@@ -23,6 +25,7 @@ impl Undo {
             Undo::Trash(_) => "Trash",
             Undo::NewFolder(_) => "New Folder",
             Undo::Alias(_) => "Make Alias",
+            Undo::Mode(_) => "Permissions",
         }
     }
 }
@@ -72,6 +75,15 @@ pub(crate) fn undo_step(step: &Undo, bin: &Path) -> Result<String, String> {
             }
             failed.map_or(Ok("Put the items back".into()), Err)
         }
+        Undo::Mode(items) => {
+            let mut failed = None;
+            for (path, mode) in items {
+                if let Err(e) = perms::set_mode(path, *mode) {
+                    failed = Some(batch::friendly(&e));
+                }
+            }
+            failed.map_or(Ok("Restored the permissions".into()), Err)
+        }
         Undo::NewFolder(path) => std::fs::remove_dir(path).map(|_| "Removed the new folder".into()).map_err(|_| "The new folder is no longer empty".into()),
         Undo::Alias(link) => match link.symlink_metadata() {
             Ok(md) if md.file_type().is_symlink() => std::fs::remove_file(link).map(|_| "Removed the alias".to_string()).map_err(|e| batch::friendly(&e)),
@@ -97,6 +109,11 @@ impl Files {
         let Some(step) = self.undo.pop() else { return };
         let bin = self.bin();
         self.notice = undo_step(&step, &bin).err();
+        if let Undo::Mode(items) = &step {
+            for (path, _) in items {
+                self.refresh_info_perms(path);
+            }
+        }
         let dir = self.path.clone();
         self.navigate(dir, false);
     }

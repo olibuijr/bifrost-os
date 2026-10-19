@@ -255,10 +255,10 @@
    "feature": "Edit owner, group and permissions in Get Info",
    "area": "window",
    "apple": "Finder Sharing & Permissions edit",
-   "status": "gap",
-   "bifrost": "",
-   "note": "The permission rows are read-only (info.rs:87)",
-   "wire": "Add an editable access panel that changes mode bits and owner; owner changes need a privilege prompt"
+   "status": "partial",
+   "bifrost": "springboard/apps/files/src/perms.rs (mode grid, set_mode, toggled, can_edit), info.rs (Info.mode/editable), undo.rs (Undo::Mode)",
+   "note": "Built 2026-10-19: Get Info draws a 3x3 grid (Owner, Group, Everyone else by Read, Write, Execute); a click on a box flips that bit with chmod (perms.rs set_mode), enabled only for the owner or root, and the rows refresh. Cmd+Z restores the old mode (Undo::Mode, label Permissions). Owner and group changes are not offered: they need a privilege prompt and there is no polkit client in Files yet. Midget check: Files > select a file you own > Get Info > click the Everyone else Read box; the row \"Permissions\" changes (for example 644 to 640) and `stat` over `ssh midget` shows the new mode; Cmd+Z restores it; a root-owned file shows the hint \"Only the owner can change the permissions\" and clicks do nothing. Unit tests: `cargo test -p files perms`.",
+   "wire": "Owner and group edits behind a privilege prompt"
   },
   {
    "feature": "Back and forward history",
@@ -346,18 +346,18 @@
    "area": "search",
    "apple": "Finder search tokens",
    "status": "partial",
-   "bifrost": "springboard/apps/files/src/search.rs (parse_terms, poll_search)",
-   "note": "kind: and tag: terms are parsed in search.rs (parse_terms): kind:images narrows the search by TypeFilter and tag:red keeps the hits with that tag. date: is not parsed yet. Built, not yet run on Midget",
-   "wire": "Parse a date: term in search.rs parse_terms (age buckets such as today, this week) and filter the hits by mtime"
+   "bifrost": "springboard/apps/files/src/search.rs (DateTerm, parse_terms, poll_search)",
+   "note": "Built 2026-10-19: date:today, date:yesterday, date:week (7days), date:month (30days) and date:year are parsed in parse_terms and poll_search keeps hits whose mtime falls in the span, counted in whole days (DateTerm::matches); an unknown value stays a name word. Combines with kind: and tag:. No token chips or picker UI yet. Midget check: Files > search \"date:today\" in a folder with a file made today: only today's items show; \"date:yesterday kind:images\" shows only pictures changed yesterday. Unit tests: `cargo test -p files search`.",
+   "wire": "Token chips and a date picker in the search field"
   },
   {
    "feature": "Search scope (this folder, Home, whole disk)",
    "area": "search",
    "apple": "Finder search scope bar",
    "status": "partial",
-   "bifrost": "springboard/apps/files/src/search.rs:31",
-   "note": "Search always starts at the open folder (root = self.path); no scope choice",
-   "wire": "Add a scope control to the search bar (this folder, Home)"
+   "bifrost": "springboard/apps/files/src/search.rs (Scope, query_changed)",
+   "note": "Built 2026-10-19: in:home and in:disk (also in:folder) pick where the search starts (Scope::root: the open folder, the home folder, or /); the default stays the open folder. Typed term only, no scope control in the search bar yet. Midget check: Files > open Documents > search \"in:home <name of a file in Downloads>\": the file shows although it is outside Documents; \"in:disk hostname\" finds /etc/hostname. Unit tests: `cargo test -p files search`.",
+   "wire": "Add a scope control to the search bar (this folder, Home, This PC) that writes the in: term"
   },
   {
    "feature": "Kind filter for search results",
@@ -588,9 +588,9 @@
  "summary": {
   "features": 64,
   "parity": 0,
-  "partial": 60,
-  "gap": 3,
+  "partial": 61,
+  "gap": 2,
   "n/a": 1,
-  "coverage_pct": 47.6
+  "coverage_pct": 48.4
  }
 }
