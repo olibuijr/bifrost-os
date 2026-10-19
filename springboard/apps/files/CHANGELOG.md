@@ -2,6 +2,10 @@
 
 - File-manager sync extensions go through the extension host, the one file providers use. An app that declares `file_manager_folders` is now an extension of the system point `is.bifrost.file-manager-sync`; Files starts it in extension mode when one of its folders is shown, and the host stops it again after it has been idle. The app no longer has to be running. The shortcut menu never waits for a launch: if the extension is not running it is started in the background and shows its rows from the next menu.
 
+## 1.32.2
+
+- BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.
+
 ## 1.32.1
 
 - BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.

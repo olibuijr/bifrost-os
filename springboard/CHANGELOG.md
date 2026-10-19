@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.10.1 — 2026-10-19
+
+Fixes from the 0.10.0 end-to-end run on the lab PC.
+- Lock Screen in the system menu locks again (a focus event after the menu closed undid it); Ctrl+Cmd+Q locks, shown on the row.
+- Quick Look opens above app windows on the desktop (it drew under them); Esc closes it.
+- No empty black window after boot (windows without a first frame are not drawn).
+- Activity Monitor sees every process and network socket through a system-monitor entitlement (first-party system apps only).
+- Calendar shows no day-number badge in the Dock.
+- Packaging: no mandoc (it conflicted with man-db), no files owned by cups or wayvnc; the packager accepts the screen permission.
+
 ## 0.10.0 — 2026-10-19
 
 Waves 14 and 15: about 30 agent branches merged and checked by the lead (0 errors, 0 warnings).

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.18.2
+
+- BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.
+
 ## Unreleased
 
 - Fix: the Dock tile no longer shows today's day number as a red badge (the tile's face already shows the date). The badge

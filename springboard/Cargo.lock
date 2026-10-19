@@ -545,7 +545,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-calendar"
-version = "1.18.1"
+version = "1.18.2"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -672,7 +672,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-files"
-version = "1.32.1"
+version = "1.32.2"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -4429,7 +4429,7 @@ dependencies = [
 
 [[package]]
 name = "springboard"
-version = "0.10.0"
+version = \"0.10.1\"
 dependencies = [
  "bifrost-assistant-client",
  "bifrost-audio-hal",
