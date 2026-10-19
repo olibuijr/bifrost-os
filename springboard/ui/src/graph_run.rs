@@ -392,7 +392,7 @@ mod tests {
         let out = run(&g, &exe, &[]).unwrap();
         assert_eq!(out_f32(&out, 0), [9.0, 8.0, 6.0, 19.0, 18.0, 16.0]);
         assert_eq!(out_f32(&out, 1), [10.0, 5.0, 2.5, 20.0, 10.0, 5.0]);
-        assert_eq!(out_f32(&out, 2), [10.0; 6]);
+        assert_eq!(out_f32(&out, 2), [10.0, 10.0, 10.0, 20.0, 20.0, 20.0]);
         assert_eq!(out_f32(&out, 3), [1.0, 2.0, 4.0, 1.0, 2.0, 4.0]);
         assert_eq!(out_f32(&out, 4), [10.0, 20.0, 40.0, 20.0, 40.0, 80.0]);
         assert_eq!(out[0].1.ty().shape.dims(), [2, 3]);

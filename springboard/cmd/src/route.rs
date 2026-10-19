@@ -120,7 +120,7 @@ mod tests {
     }
 
     const SAMPLE: &str = "Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT\n\
-eth0\t00000000\t0102A8C0\t0003\t0\t0\t100\t00000000\t0\t0\t0\n\
+eth0\t00000000\t0201A8C0\t0003\t0\t0\t100\t00000000\t0\t0\t0\n\
 eth0\t0001A8C0\t00000000\t0001\t0\t0\t100\t00FFFFFF\t0\t0\t0\n\
 lo\t0100007F\t00000000\t0001\t0\t0\t0\t000000FF\t0\t0\t0\n";
 

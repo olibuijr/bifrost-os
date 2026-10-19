@@ -236,7 +236,7 @@ mod tests {
         let fan = hub.get(9).unwrap();
         assert_eq!(fan.name, "Fan");
         assert_eq!(fan.room, "Hall");
-        assert_eq!(fan.clusters, vec![DESCRIPTOR, ON_OFF]);
+        assert_eq!(fan.clusters, vec![ON_OFF, DESCRIPTOR]);
         assert_eq!(hub.rooms(), vec!["Hall".to_string()]);
     }
 
