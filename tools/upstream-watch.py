@@ -64,7 +64,8 @@ def update(app, args):
     old_base = up['binary'].split('/')[0]
     new_base = asset['name'][:-len('.tar.gz')]
     upstream_text = (app / 'upstream.toml').read_text()
-    upstream_text = upstream_text.replace(old_base, new_base).replace(up['url'], asset['browser_download_url'])
+    # the url first: replacing the base name first changes the url so it no longer matches (the tag stays stale)
+    upstream_text = upstream_text.replace(up['url'], asset['browser_download_url']).replace(old_base, new_base)
     upstream_text = upstream_text.replace(up['sha256'], sha)
     (app / 'upstream.toml').write_text(upstream_text)
     (app / 'manifest.toml').write_text(re.sub(r'^version\s*=\s*"[^"]+"', f'version = "{latest_pkg}"', manifest, count=1, flags=re.M))
