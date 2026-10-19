@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.10.2 — 2026-10-19
+
+- Windows of an app that exited (crash, stall, failed send) leave the desktop; restored windows wait for their app;
+  one Dock tile per app; the shell keeps launching apps after an app dies.
+- A lock (menu, Ctrl+Cmd+Q, idle, or the login screen at boot) stays until unlocked: no window focus or open moves the
+  screen off it.
+
 ## 0.10.1 — 2026-10-19
 
 Fixes from the 0.10.0 end-to-end run on the lab PC.
