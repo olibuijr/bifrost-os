@@ -9,6 +9,8 @@
     #[test]
     fn terminal_output_repaints_only_its_rows_and_matches_a_full_frame() {
         let mut sh = tests::shell();
+        // a new shell is on the lock screen, which draws its own frame; the terminal frame needs an unlocked person
+        tests::unlock(&mut sh);
         sh.open(AppId::Terminal, 1000.0);
         sh.tick(3000.0);
         let mut buf = vec![0u32; 1200 * 1920];
