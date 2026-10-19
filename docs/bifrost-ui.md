@@ -474,7 +474,8 @@ On macOS an app follows Light/Dark without opting in. Third-party Linux apps fol
   `packaging/arch/fontconfig/60-bifrost-aliases.conf` maps the compatibility family names (Arial, Helvetica,
   Times New Roman, Courier New, Menlo, Monaco, Symbol, Zapf Dingbats, STIX, LastResort) to them with
   `binding="same"`; `springboard/tests/font_packages.rs` guards the package list, the alias targets and the
-  installer. The matching `docs/parity-matrix/os/assets` rows are `partial` ("open equivalent X, glyph coverage not
+  installer. `61-bifrost-cjk-fallback.conf` is a fontconfig scan rule for the Browser engine's fixed fallback list (CJK
+  punctuation; see "Web view", "Where Servo 0.7.0 limits this"). The matching `docs/parity-matrix/os/assets` rows are `partial` ("open equivalent X, glyph coverage not
   metric-identical") until a Midget check. Not matched: Latin display, SF variant and CJK decorative families
   (substitution task), and Apple's exact glyph shapes outside the Liberation/Croscore metrics.
 
@@ -1340,6 +1341,17 @@ Where Servo 0.7.0 limits this, and Apple behaviour that is not matched yet:
 - Scripts: a script slot cannot target one view, and there are no content worlds. A change applies to documents loaded afterwards.
 - Page PDF: the PDF holds the page as pictures (no selectable text, no CSS print rules, no page breaks at element boundaries); `WKPDFConfiguration.rect` is `ShotMode::Rect` on the snapshot. Printing to a device goes through `print_panel` with that PDF.
 - JavaScript context: values are copied out as JSON-shaped trees, so object identity and `JSManagedValue` are not matched; there is no shared `JSVirtualMachine`, no timers and no `import`; a Rust type cannot be exported as a class with methods (functions only); a promise that needs a timer or I/O to settle is an exception. `JSContext` C API (`JSEvaluateScript` and friends) is not provided.
+- Back and forward: the engine keeps the documents of the three history entries on each side of the current one alive
+  (`engine/src/memory.rs`), so `go_back` and `go_forward` to those entries restore the page and its scroll offset like
+  `WKBackForwardList` does. A farther entry, and an entry of a discarded tab, reloads at the top: Servo 0.7.0 has no
+  scroll restoration (`history.scrollRestoration` is not implemented).
+- Page rendering: CSS `backdrop-filter` is not implemented in Servo 0.7.0 (its style system parses it only under the
+  off-by-default `layout.unimplemented` preference and layout never emits it), so a translucent sticky header shows the
+  page behind it unblurred; `filter` works. The gap and what closing it needs are in `apps/browser/docs/servo-review.md`
+  ("Remaining gaps"); the engine is not patched. `@supports (backdrop-filter: blur(1px))` is false, so a site can fall back.
+- Fonts: the engine's fallback list is fixed in Servo, so CJK punctuation (U+3000 to U+303F and the other Common-script CJK
+  blocks) relies on `packaging/arch/fontconfig/61-bifrost-cjk-fallback.conf`, which makes the installed Noto Sans CJK SC
+  answer the list's last family name; the package scriptlet rebuilds the font cache for it (Browser README, "Web compatibility").
 
 ### Downloads (`web_download`)
 
