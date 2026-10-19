@@ -4,7 +4,7 @@
   "macos_since": "10.15",
   "status": "partial",
   "bifrost": "springboard/src/bare/input.rs (Device, InputSet, Decoder), springboard/src/bare/pointer_finger.rs, springboard/sdk/src/runtime.rs (Input enum)",
-  "summary": "BifrOSt reads human interface devices (keyboards, touch, pointers, lid and jack switches) through Linux evdev in the system layer, and writes synthetic evdev events. Apps get decoded key and touch events but no HID report, element or stylus API, and there is no SDK for authoring a device driver; DriverKit driver authoring is treated as n/a for a desktop SDK because the Linux kernel owns drivers.",
+  "summary": "BifrOSt reads human interface devices through Linux evdev in the system layer. Apps that declare the hid permission can read and write raw reports of one HID device the person picked (the shell reads /dev/hidrawN for them), parse the report descriptor into elements, and match devices by usage; keyboards, keypads and security keys are never offered. Driver authoring is n/a (the kernel owns drivers). Multitouch digitizer data and virtual HID devices for apps remain open.",
   "rea_evidence": "ev_56224fc3f71aad95df7cb680e84b7313d12904ea2c2efa90c0ef737710c346da",
   "features": [
     {
@@ -17,23 +17,23 @@
     {
       "feature": "Reading HID input from devices",
       "apple": "IOHIDDevice, IOUserHIDDevice, IOHIDInterface",
-      "bifrost": "springboard/src/bare/input.rs:140 (Device::open, exclusive EVIOCGRAB), :178 (Device::read)",
-      "status": "os",
-      "note": "Runs in the shell; apps never open devices. Blocker: Device::open takes an exclusive grab, so an app reader would receive no events, and the shell's decoded keys and touches reach apps through the runtime input enum instead."
+      "bifrost": "springboard/src/bare/input.rs:140 (Device::open, exclusive EVIOCGRAB), :178 (Device::read), springboard/core/src/hidraw.rs, springboard/src/shell/services/usb_access.rs, springboard/sdk/src/usb_access.rs",
+      "status": "partial",
+      "note": "Runs in the shell; apps never open devices. Blocker: Device::open takes an exclusive grab, so an app reader would receive no events, and the shell's decoded keys and touches reach apps through the runtime input enum instead. 2026-10-19 (wave 15, usb): Apps now have an API: with the hid manifest permission and the person's consent for one device, the shell opens /dev/hidrawN (read without grabbing, so the desktop keeps the device), reads input reports on a worker and sends them as report events; output and feature reports go through hid_write, hid_get_feature and hid_set_feature. Keyboards, keypads and FIDO keys are refused outright (hidraw::protected). Midget check: cargo test -p bifrost-core usb_grants:: usb_session:: hidraw:: and cargo test -p springboard --features desktop-wayland usb_access::; on the device: plug a gamepad or a vendor HID device, grant it from an app that declares `hid`, and read Event::Report."
     },
     {
       "feature": "Device discovery and matching by capability",
       "apple": "Match Criteria, kIOHIDEventServicePropertiesRequiredForMatching, IOHIDEventService",
-      "bifrost": "springboard/ui/src/device_match.rs",
+      "bifrost": "springboard/ui/src/device_match.rs, springboard/core/src/usb_grants.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 6 tests. Wave 5 (w5-hiddriverkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Matching is by evdev capability, not by HID usage pairs; no app-facing matching API"
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 5 (w5-hiddriverkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Matching is by evdev capability, not by HID usage pairs; no app-facing matching API 2026-10-19 (wave 15, usb): Filters carry the HID usage page and usage, and the service matches them against the top-level collections read from each hidraw device's report descriptor (hidraw::top_level_usages), so an app asks for a device by usage as well as by capability. Midget check: cargo test -p bifrost-core usb_grants:: usb_session:: hidraw:: (usb_grants::tests::hid_candidates_are_always_eligible_and_filter_by_usage, hidraw::tests::top_level_usages_find_each_application_collection_once)."
     },
     {
       "feature": "Keyboard events",
       "apple": "Handling Keyboard Events from a Human Interface Device, kIOHIDSupportedKeyboardUsagePairsKey",
-      "bifrost": "springboard/src/bare/input.rs:16-18 (Key, Switch events), springboard/sdk/src/runtime.rs:20-28 (Input::Key), springboard/src/bare/key_usage.rs (usage_of, code_of, boot_modifier_bit, boot_report)",
+      "bifrost": "springboard/src/bare/input.rs:16-18 (Key, Switch events), springboard/sdk/src/runtime.rs:20-28 (Input::Key), springboard/src/bare/key_usage.rs (usage_of, code_of, boot_modifier_bit, boot_report), springboard/core/src/hidraw.rs",
       "status": "partial",
-      "note": "Key events stay evdev codes, and key_usage maps them to HID keyboard usages (page 0x07) with a boot keyboard report and roll-over, tested in springboard/tests/parity_sdk-complete-46.rs. Gap: no keyboard usage-pair declaration is published to the system, and keys outside the boot set (keypad, media, vendor keys) have no usage."
+      "note": "Key events stay evdev codes, and key_usage maps them to HID keyboard usages (page 0x07) with a boot keyboard report and roll-over, tested in springboard/tests/parity_sdk-complete-46.rs. Gap: no keyboard usage-pair declaration is published to the system, and keys outside the boot set (keypad, media, vendor keys) have no usage. 2026-10-19 (wave 15, usb): Raw keyboard reports are never given to apps (the hidraw path refuses keyboard collections), which is the privacy rule for HID input: an app gets keys only through the window system while it has focus. Midget check: cargo test -p bifrost-core usb_grants:: usb_session:: hidraw:: (hidraw::tests::keyboards_keypads_and_security_keys_are_protected)."
     },
     {
       "feature": "Touch and multitouch digitizer data",
@@ -68,14 +68,14 @@
       "apple": "com.apple.developer.hid.virtual.device",
       "bifrost": "springboard/src/bare/input.rs:205-207 (writes a one-finger swipe or tap into an evdev node)",
       "status": "partial",
-      "note": "Only touch gestures are synthesised, for test and automation; no app-facing virtual device API"
+      "note": "Only touch gestures are synthesised, for test and automation; no app-facing virtual device API 2026-10-19 (wave 15, usb): Decision: no app-facing virtual device. Synthetic input stays the shell's events service, gated by the accessibility permission; a uinput device would let an app type as the person with no consent step. Midget check: none; the events service is checked with its existing tests (services::event_services)."
     },
     {
       "feature": "Raw HID report and element access for apps",
       "apple": "IOHIDElement, HID Usage Tables, Low-Level Information",
-      "bifrost": "springboard/ui/src/hid_report.rs",
+      "bifrost": "springboard/ui/src/hid_report.rs, springboard/sdk/src/usb_access.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 7 tests. Wave 2 (theme-18, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API exposes HID report elements or usage tables to apps"
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 2 (theme-18, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API exposes HID report elements or usage tables to apps 2026-10-19 (wave 15, usb): usb_access::hid_descriptor parses the report descriptor of an opened device into bifrost_ui::hid_report elements and collections, and an element reads its field out of the payload of an Event::Report by usage. Midget check: cargo test -p bifrost-app usb_access:: external_accessory:: usb_printer:: (usb_access::tests::the_report_descriptor_of_an_opened_hid_device_parses_into_elements); on the device the same with a real device's report."
     }
   ],
   "gaps": [

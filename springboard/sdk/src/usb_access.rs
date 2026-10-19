@@ -441,6 +441,16 @@ pub fn parse_opened(reply: &Json) -> Option<Opened> {
     })
 }
 
+/// The parsed report descriptor of an opened HID device, with its elements and collections
+/// (`bifrost_ui::hid_report`), so an app reads fields out of the reports of [`Event::Report`] by usage. `None` for a USB
+/// open or a descriptor that does not parse.
+pub fn hid_descriptor(opened: &Opened) -> Option<bifrost_ui::hid_report::ReportDescriptor> {
+    match opened {
+        Opened::Hid { descriptor, .. } => bifrost_ui::hid_report::ReportDescriptor::parse(descriptor).ok(),
+        Opened::Usb { .. } => None,
+    }
+}
+
 /// Decodes a service event for the `usb` service. Returns `None` for another service or an unknown event, so an app can
 /// pass every `App::service_event` through it.
 pub fn event(service: &str, event: &str, body: &Json) -> Option<Event> {
@@ -582,6 +592,21 @@ mod tests {
         assert_eq!(parse_opened(&hid).unwrap().handle(), 5);
         assert_eq!(parse_opened(&obj(&[("handle", n(1.0)), ("descriptor", s("zz"))])), None, "bad hex is refused");
         assert_eq!(parse_opened(&Json::Null), None);
+    }
+
+    #[test]
+    fn the_report_descriptor_of_an_opened_hid_device_parses_into_elements() {
+        // vendor page 0xFF00, one application collection with an 8-bit input field and an 8-bit output field
+        let descriptor = vec![0x06, 0x00, 0xff, 0x09, 0x01, 0xa1, 0x01, 0x09, 0x02, 0x15, 0x00, 0x26, 0xff, 0x00, 0x75, 0x08, 0x95, 0x01, 0x81, 0x02, 0x09, 0x03, 0x91, 0x02, 0xc0];
+        let hid = Opened::Hid { handle: 1, descriptor, usages: vec![(0xff00, 1)], bus: "usb".into() };
+        let parsed = hid_descriptor(&hid).expect("the descriptor parses");
+        assert_eq!(parsed.elements.len(), 2);
+        assert_eq!((parsed.elements[0].usage_page, parsed.elements[0].usage), (0xff00, 2));
+        let report = [0x2a];
+        assert_eq!(parsed.elements[0].value(&report), Some(42), "a field is read out of an input report by its element");
+        assert_eq!(hid_descriptor(&Opened::Hid { handle: 1, descriptor: vec![0x05], usages: vec![], bus: String::new() }), None, "a cut descriptor is refused");
+        let usb = Opened::Usb { handle: 1, usb_version: 0x0200, device_class: 0, configuration: 1, max_power_ma: 0, interfaces: vec![] };
+        assert!(hid_descriptor(&usb).is_none());
     }
 
     #[test]
