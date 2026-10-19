@@ -563,7 +563,7 @@ mod matmul_tests {
     #[test]
     fn identity_keeps_the_matrix() {
         let a = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
-        assert_eq!(matmul(&a, &[1.0, 0.0, 0.0, 1.0, 0.0, 0.0], 3, 2, 2), Some(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]));
+        assert_eq!(matmul(&a, &[1.0, 0.0, 0.0, 1.0], 3, 2, 2), Some(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]));
     }
 
     #[test]
