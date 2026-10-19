@@ -33,10 +33,13 @@ impl ComponentDescription {
 
 pub type UnitFactory = fn() -> Box<dyn AudioUnit>;
 
+/// A factory that may carry state (a loaded plug-in library) and may fail (the plug-in could not make an instance).
+pub type BoxedFactory = Box<dyn Fn() -> Result<Box<dyn AudioUnit>, UnitError> + Send + Sync>;
+
 struct Entry {
     description: ComponentDescription,
     name: String,
-    factory: UnitFactory,
+    factory: BoxedFactory,
 }
 
 #[derive(Default)]
@@ -60,6 +63,11 @@ impl ComponentRegistry {
     }
 
     pub fn register(&mut self, description: ComponentDescription, name: &str, factory: UnitFactory) {
+        self.entries.push(Entry { description, name: name.to_string(), factory: Box::new(move || Ok(factory())) });
+    }
+
+    /// Registers a component whose factory carries state or can fail, such as a plug-in loaded from a library.
+    pub fn register_boxed(&mut self, description: ComponentDescription, name: &str, factory: BoxedFactory) {
         self.entries.push(Entry { description, name: name.to_string(), factory });
     }
 
@@ -86,7 +94,7 @@ impl ComponentRegistry {
     }
 
     pub fn instantiate(&self, index: usize) -> Result<Box<dyn AudioUnit>, UnitError> {
-        self.entries.get(index).map(|e| (e.factory)()).ok_or(UnitError::NoComponent)
+        self.entries.get(index).ok_or(UnitError::NoComponent).and_then(|e| (e.factory)())
     }
 }
 
@@ -127,5 +135,27 @@ mod tests {
         let r = ComponentRegistry::with_builtins();
         assert_eq!(r.instantiate(0).unwrap().info().name, "Gain");
         assert!(matches!(r.instantiate(9), Err(UnitError::NoComponent)));
+    }
+
+    #[test]
+    fn boxed_factories_carry_state_and_can_fail() {
+        let mut r = ComponentRegistry::new();
+        let d = ComponentDescription::new("aufx", "bxd1", "test").unwrap();
+        let made = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let m = made.clone();
+        r.register_boxed(
+            d,
+            "Counted",
+            Box::new(move || {
+                m.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                Ok(Box::new(crate::builtin::Gain::new()) as Box<dyn AudioUnit>)
+            }),
+        );
+        r.register_boxed(d, "Broken", Box::new(|| Err(UnitError::Remote)));
+        assert!(r.instantiate(0).is_ok());
+        assert!(r.instantiate(0).is_ok());
+        assert_eq!(made.load(std::sync::atomic::Ordering::Relaxed), 2);
+        assert!(matches!(r.instantiate(1), Err(UnitError::Remote)));
+        assert_eq!(r.name(1), Some("Broken"));
     }
 }
