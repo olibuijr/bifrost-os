@@ -259,6 +259,11 @@ impl Drawing {
         self.strokes.push(stroke);
     }
 
+    /// Removes and returns the top stroke (the one drawn last).
+    pub fn pop(&mut self) -> Option<Stroke> {
+        self.strokes.pop()
+    }
+
     pub fn is_empty(&self) -> bool {
         self.strokes.is_empty()
     }

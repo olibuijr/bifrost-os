@@ -672,6 +672,9 @@ pub use bifrost_ui::call_apps as calling_apps;
 /// Drawing models for the reference pencil-canvas framework: drawings, strokes, the lasso and the tool picker,
 /// shared by the shell and apps through `bifrost_ui`.
 pub use bifrost_ui::{drawing, lasso, tool_picker};
+/// The drawing canvas an app embeds (`PKCanvasView`): pointer, touch and stylus input into strokes, with undo, the lasso
+/// selection and save and load. See `canvas_view`.
+pub mod canvas_view;
 
 /// An app. Only `id` and `draw` are required.
 pub trait App {
