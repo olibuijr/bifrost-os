@@ -480,6 +480,7 @@ pub mod image_filter;
 pub mod pixel_filter;
 pub mod image_ops;
 pub mod image_scaler;
+pub mod nn_graph;
 pub mod image_effects;
 pub mod image_render;
 pub use restoration::RestorableState;
