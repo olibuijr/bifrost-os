@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.8.0
+
+- Upstream wordcraft v0.8.0.
+  ## What's Changed
+  * CI: main passes again (Word 2003 check reads through io; first keystroke after a chrome click isn't dropped) by @dkhlapov in https://github.com/storytold/wordcraft/pull/1578
+  * Interface-translation audit green and back in CI (#1128) by @dkhlapov in https://github.com/storytold/wordcraft/pull/1143
+  * Double-click the margin to create and edit a header or footer (#960) by @dkhlapov in https://github.com/storytold/wordcraft/pull/1144
+  * Alt+numpad character codes (#961) by @dkhlapov in https://github.com/storytold/wordcraft/pull/1146
+
 ## 0.7.1
 
 - Upstream wordcraft v0.7.0.
