@@ -62,3 +62,43 @@ reference, **P3** polish or parity gap. Each finding is one fix brief.
 
 Dispatched 2026-10-19 as a workflow of Sonnet agents, one branch each (`fix/e2e-*`), code and commit only; the lead
 reviews, merges into `integration`, builds, deploys to Midget and re-runs this test.
+
+Merged into `integration` (9 branches, `fix/e2e-*`), plus a follow-up repaint fix (`a95839dc2`: the Files toolbar was not
+repainted on a selection change). Checks: `cargo check` of the eight touched crates with all targets (0 errors,
+0 warnings); tests pass for Files (183 + compliance, snapshots re-blessed), Browser (159 + 26 + compliance), bifrost-ui,
+bifrost-proto, bifrost-wm (389), springboard `shell::` and `files::` (4211), bifrost-app, `font_packages` and
+`test_midget_computer_use.py`. The name guard shows no new hits from the wave.
+
+Deployed with the fast loop: the shell and `bifrost-wm` binaries pushed to Midget, the fontconfig rule installed, and
+Files 1.33.0 and Browser 0.17.0 published and installed. Midget still needs a full publish and OTA for the shell and
+window server to stay after the next update.
+
+## Re-test on Midget (2026-10-19, 22:30)
+
+| ID | Result | Evidence |
+|---|---|---|
+| F1, F2, F3 | Pass: New Folder opens in rename with the name selected; Return renames; the item stays selected | `R-rename-and-menu.png` |
+| F4 | Partly: grouped with separators, key equivalents, fits its rows, rounded. Still offset from the pointer (see N1) and no visible shadow (N6) | `R-rename-and-menu.png` |
+| F5 | Pass: path rows grey, focused selection accent with white text and icon | `R-column-and-search.png` |
+| F6 | Pass: scope bar, Searching "This Computer", hits from every folder. Title is truncated (N4) | `R-column-and-search.png` |
+| F7 | Pass: shared toolbar background, 128 pt icons with visible emblems, grey Locations, Applications, toolbar groups | `R-files-1.33.png` |
+| B1, B6 | Pass: Cmd+W closes one tab, Cmd+Shift+T restores it in place | |
+| B2, B7, B8 | Pass: menu order with Bookmarks; toolbar groups, field icon and reload inside the field | `R-browser-0.17.png` |
+| B3 | Pass: Start Page with Favorites, Frequently Visited, Recently Viewed | `R-start-page.png` |
+| B4 | Pass: U+3002 renders | `R-cjk.png` |
+| B5 | Not deployed: needs the engine rebuild `bifrost pc browser-engine 0.7.0-bifrost.16` | |
+| B9 | Pass: previous/next, count, Done | `R-find-bar.png` |
+| B10 | Documented engine gap | |
+| S1 | Pass: inactive windows are opaque | `R-files-1.33.png` |
+| S2, T1 | Pass (tests) | |
+
+### New findings from the re-test
+
+| ID | Sev | Finding | Expected |
+|---|---|---|---|
+| N1 | P2 | The shell's geometry for external windows differs from where the window server draws them (Files: shell `852,339`, drawn at `800,360`; earlier `847,335` vs `826,386`). Anything placed from the shell geometry (context menus, the share menu, `tap`) lands off by that delta; it is what is left of F4's offset | One source of truth for window positions |
+| N2 | P2 | Cmd+Q on Files left the app running (the shell maps Cmd+Q to closing the window) | Cmd+Q quits the front app |
+| N3 | P3 | The Dock's hover label is an empty white pill (no text) | The app name in the label |
+| N4 | P3 | Files search title truncates to 'Searching "This C...' | The reference collapses the view buttons while searching so the title fits |
+| N5 | P3 | Generic document icons draw the folded corner black | A light folded corner |
+| N6 | P3 | The context menu shows no shadow or edge over white content | Menu shadow like the reference |
