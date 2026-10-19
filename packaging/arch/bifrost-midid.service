@@ -1,0 +1,29 @@
+[Unit]
+Description=BifrOSt MIDI server (hardware ports, app clients, virtual endpoints)
+Documentation=file:///usr/share/doc/bifrost/audio-architecture.md
+After=sound.target systemd-tmpfiles-setup.service systemd-sysusers.service bifrost-audiod.service
+Wants=sound.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/bifrost-midid
+User=audio
+Group=audio
+SupplementaryGroups=audio
+NoNewPrivileges=yes
+# /dev/snd only (rawmidi and sequencer); the client socket is /run/bifrost/audio/is.olibuijr.midi.sock (mode 0666).
+DevicePolicy=closed
+DeviceAllow=char-alsa rw
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/run/bifrost/audio
+Restart=on-failure
+TimeoutStopSec=5
+RestartSec=1
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=is.olibuijr.midi
+
+[Install]
+WantedBy=multi-user.target
