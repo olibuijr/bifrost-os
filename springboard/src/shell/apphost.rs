@@ -1828,6 +1828,17 @@ impl Shell {
             self.ext_set_keyboard(false, t);
             return;
         }
+        // an installed input method that is the selected source takes the key before the field does
+        if self.ext_text_focused() {
+            if let Some(slot) = self.ext_fg {
+                if let Some(Some(app)) = self.ext.get_mut(slot as usize) {
+                    if self.input_providers.app_key(slot, &out, app) == bifrost_ui::imk_host::KeyResult::Consumed {
+                        self.dirty = true;
+                        return;
+                    }
+                }
+            }
+        }
         let key = match out {
             Out::Text(s) => KeyInput::Text(s),
             Out::Backspace => KeyInput::Code(8),

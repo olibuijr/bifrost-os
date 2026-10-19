@@ -135,9 +135,9 @@ impl Shell {
     /// Paints the candidate window over the Search field: a numbered list, one row per candidate.
     pub(super) fn draw_compose(&self, s: &mut Surface<'_>, ui: &Ui, w: i32, h: i32) {
         // the candidates of the selected input method, else those of the built-in compose method
-        let view = self.input_providers.candidate_view();
-        let (items, selected): (&[String], Option<usize>) = match &view {
-            Some(v) => (v.items.as_slice(), v.selected),
+        let provided = self.provider_candidates();
+        let (items, selected): (&[String], Option<usize>) = match &provided {
+            Some((v, _)) => (v.items.as_slice(), v.selected),
             None => (self.compose_ime.candidates(), None),
         };
         if items.is_empty() {
@@ -145,8 +145,11 @@ impl Shell {
         }
         let (row, pad, width) = (ui.pt(ROW_PT), ui.pt(PAD_PT), ui.pt(WIDTH_PT));
         let height = pad * 2.0 + row * items.len() as f32;
-        let x = (w as f32 - width) / 2.0;
-        let y = h as f32 * TOP_SHARE;
+        // over the Search field, centred near the top; for an app, beside the caret of its field
+        let (x, y) = match &provided {
+            Some((_, Some(caret))) => super::textinput::popup_origin(*caret, width, height, w as f32, h as f32, ui.pt(PAD_PT)),
+            _ => ((w as f32 - width) / 2.0, h as f32 * TOP_SHARE),
+        };
         s.fill_rrect(x, y, width, height, ui.pt(m::CARD_RADIUS), MENU_SOLID.now());
         for (i, item) in items.iter().enumerate() {
             if selected == Some(i) {

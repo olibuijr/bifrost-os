@@ -90,7 +90,7 @@ impl Shell {
     /// is kept in the Search field.
     pub(super) fn input_layout_selected(&mut self, layout: Layout) {
         let commits = self.input_providers.select_layout(layout);
-        self.input_providers.apply_commits(&commits, &self.ui, self.quicksearch.field_mut());
+        self.apply_provider_commits(commits);
     }
 
     /// A switch of the input source (Ctrl+Space or the input menu) names the new source in the HUD.

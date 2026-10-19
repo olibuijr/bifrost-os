@@ -19,13 +19,22 @@ use bifrost_ui::imk_host::{CandidateView, Engine, HangulEngine, Host, KanaEngine
 use bifrost_ui::keys::{Key, KeyCombo};
 use std::ops::Range;
 
+use bifrost_proto::WindowInput;
+
+use super::apphost::AppHost;
 use super::kb_layouts::Layout;
 use super::keyboard::Out;
 use super::textfield::TextField;
 use super::ui::Ui;
+use super::{AppId, Screen, Shell};
 
-/// The client id of the Search field in the host.
+/// The client id of the Search field in the host. An external app in slot `n` is client `n + 1`.
 pub const SEARCH_CLIENT: u32 = 0;
+
+/// The client id of the external app in `slot`.
+fn app_client(slot: u8) -> u32 {
+    u32::from(slot) + 1
+}
 
 /// Where the input methods are installed.
 pub fn dir() -> PathBuf {
@@ -111,6 +120,44 @@ impl TextInputClient for FieldClient<'_> {
     fn marked_range(&self) -> Option<Range<usize>> {
         let (a, b) = self.field.marked_range()?;
         Some(self.byte_of(a)..self.byte_of(b))
+    }
+
+    fn attributes_for_character_index(&self, _index: usize) -> Option<CharacterAttributes> {
+        None
+    }
+}
+
+/// The focused text field of an external app as the client of an input method. The app owns its text: the adapter
+/// sends marked text and commits as `SetMarkedText` and `UnmarkText`, and reads the caret and the marked range from the
+/// text state the app last reported (the offsets are the app's window of text, not the whole document).
+struct AppClient<'a> {
+    host: &'a mut AppHost,
+}
+
+impl TextInputClient for AppClient<'_> {
+    fn insert_text(&mut self, text: &str, _replacement: Option<Range<usize>>) {
+        if text.is_empty() {
+            // nothing to keep: the composition ends and its marked text goes
+            self.host.input(WindowInput::UnmarkText { commit: false });
+            return;
+        }
+        self.host.input(WindowInput::SetMarkedText { text: text.to_string(), sel_start: text.len() as u32, sel_len: 0 });
+        self.host.input(WindowInput::UnmarkText { commit: true });
+    }
+
+    fn set_marked_text(&mut self, text: &str, selection: Range<usize>, _replacement: Option<Range<usize>>) {
+        let sel_len = selection.end.saturating_sub(selection.start);
+        self.host.input(WindowInput::SetMarkedText { text: text.to_string(), sel_start: selection.start as u32, sel_len: sel_len as u32 });
+    }
+
+    fn selected_range(&self) -> Range<usize> {
+        let state = &self.host.text_state;
+        let (a, b) = (state.anchor as usize, state.cursor as usize);
+        a.min(b)..a.max(b)
+    }
+
+    fn marked_range(&self) -> Option<Range<usize>> {
+        self.host.text_state.marked.map(|(a, b)| a as usize..b as usize)
     }
 
     fn attributes_for_character_index(&self, _index: usize) -> Option<CharacterAttributes> {
@@ -230,9 +277,63 @@ impl Providers {
         self.host.key(SEARCH_CLIENT, &text, combo, &mut client)
     }
 
+    /// A key typed into the focused field of the external app in `slot`. As for the Search field, `Consumed` means the
+    /// method took it; otherwise the app gets the key itself.
+    pub fn app_key(&mut self, slot: u8, out: &Out, app: &mut AppHost) -> KeyResult {
+        if !self.host.is_method_active() {
+            return KeyResult::PassThrough;
+        }
+        let Some((text, combo)) = key_for(out) else { return KeyResult::PassThrough };
+        let client = app_client(slot);
+        self.host.connect(client);
+        self.host.key(client, &text, combo, &mut AppClient { host: app })
+    }
+
+    /// The candidate window of the external app in `slot`.
+    pub fn app_candidate_view(&self, slot: u8) -> Option<CandidateView> {
+        self.host.candidate_view(app_client(slot))
+    }
+
+    /// Puts a composition that a source change ended into the external app in `slot`.
+    pub fn apply_app_commit(&mut self, text: &str, app: &mut AppHost) {
+        AppClient { host: app }.insert_text(text, None);
+    }
+
     /// The candidate window over the Search field, when a conversion offers one.
     pub fn candidate_view(&self) -> Option<CandidateView> {
         self.host.candidate_view(SEARCH_CLIENT)
+    }
+}
+
+impl Shell {
+    /// Puts the compositions that a source change ended into the clients that held them: the Search field and the
+    /// external apps.
+    pub(super) fn apply_provider_commits(&mut self, commits: Vec<PendingCommit>) {
+        self.input_providers.apply_commits(&commits, &self.ui, self.quicksearch.field_mut());
+        for commit in commits.iter().filter(|c| c.client != SEARCH_CLIENT) {
+            let slot = (commit.client - 1) as usize;
+            if let Some(Some(app)) = self.ext.get_mut(slot) {
+                self.input_providers.apply_app_commit(&commit.text, app);
+            }
+        }
+        self.dirty = true;
+    }
+
+    /// The candidate window to draw: the Search field's (no caret rectangle), else that of the external app in front
+    /// with its caret rectangle in screen pixels (the app's caret in its window, below the title bar).
+    pub(super) fn provider_candidates(&self) -> Option<(CandidateView, Option<(f32, f32, f32, f32)>)> {
+        if let Some(view) = self.input_providers.candidate_view() {
+            return Some((view, None));
+        }
+        let slot = self.ext_fg?;
+        if !matches!(self.screen, Screen::App(AppId::External(_))) {
+            return None;
+        }
+        let view = self.input_providers.app_candidate_view(slot)?;
+        let (cx, cy, cw, ch) = self.ext.get(slot as usize)?.as_ref()?.caret_rect?;
+        let win = self.desk.as_ref()?.wins.iter().find(|w| w.app == AppId::External(slot))?;
+        let title = self.desk_metrics().title as f32;
+        Some((view, Some((win.r.x as f32 + cx, win.r.y as f32 + title + cy, cw, ch))))
     }
 }
 
