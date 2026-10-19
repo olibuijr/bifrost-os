@@ -67,7 +67,11 @@ pub fn parse(transcript: &Transcript) -> Option<Command> {
     if verb == RUN_VERB {
         let lower = name.to_lowercase();
         let title = lower.strip_prefix("shortcut ").unwrap_or(&lower).trim();
-        return (!title.is_empty()).then(|| Command::Run(title.to_string()));
+        // "run shortcut" alone names nothing
+        if title.is_empty() || lower == "shortcut" {
+            return None;
+        }
+        return Some(Command::Run(title.to_string()));
     }
     None
 }

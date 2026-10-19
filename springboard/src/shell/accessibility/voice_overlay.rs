@@ -479,6 +479,16 @@ mod tests {
         sh.voice_press(&Transcript { text: text.into(), is_final: true }, t)
     }
 
+    /// Saves Voice Control on or off as the Accessibility panel does: the pref, and the Settings copy while it is open.
+    fn set_voice_control(sh: &mut Shell, on: bool) {
+        sh.prefs.set(VOICE_CONTROL_PREF, if on { "1" } else { "0" }).unwrap();
+        if let Some(st) = sh.settings.as_mut() {
+            let mut a = st.accessibility().clone();
+            a.voice_control = on;
+            st.set_accessibility(a);
+        }
+    }
+
     /// Draws only the overlay onto a blank surface and counts the pixels it touched.
     fn painted(sh: &mut Shell) -> usize {
         let (w, h) = (sh.w as usize, sh.h as usize);
@@ -593,10 +603,11 @@ mod tests {
         let mut sh = voice_shell();
         say(&mut sh, "show numbers", 2.0).unwrap().unwrap();
         assert!(painted(&mut sh) > 0);
-        sh.prefs.set(VOICE_CONTROL_PREF, "0").unwrap();
+        // the way the Accessibility panel saves it: the pref and the copy the open Settings page holds
+        set_voice_control(&mut sh, false);
         assert_eq!(sh.voice_overlay_shown(), None, "off means no overlay even before the next frame");
         assert_eq!(painted(&mut sh), 0);
-        sh.prefs.set(VOICE_CONTROL_PREF, "1").unwrap();
+        set_voice_control(&mut sh, true);
         assert_eq!(sh.voice_overlay_shown(), None, "and it does not come back by itself");
     }
 }
