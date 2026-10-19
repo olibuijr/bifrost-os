@@ -125,6 +125,9 @@ package_bifrost_files() {
   done
   # open equivalents for compat family names (Arial, Times New Roman, Courier New, Menlo, Symbol, ...)
   install -Dm644 "$here/fontconfig/60-bifrost-aliases.conf" "$pkgdir/etc/fonts/conf.d/60-bifrost-aliases.conf"
+  # the Browser engine's last-resort family for CJK punctuation is answered by the installed Noto Sans CJK (a scan rule:
+  # springboard.install rebuilds the font cache so it applies)
+  install -Dm644 "$here/fontconfig/61-bifrost-cjk-fallback.conf" "$pkgdir/etc/fonts/conf.d/61-bifrost-cjk-fallback.conf"
   install -Dm755 "$here/wayland/apps" "$pkgdir/usr/bin/bifrost-apps"
   # bifrost-cmd (springboard/cmd/src/bin/*.rs): every tool of the crate, found by listing the sources, so a new tool
   # ships without editing this script. PC_CMD_DIR holds the release binaries of `cargo build -p bifrost-cmd --bins`.

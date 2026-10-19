@@ -84,6 +84,26 @@ fn library_pins_the_source_sans_italic_face() {
     assert!(digest.chars().all(|c| c.is_ascii_hexdigit()), "digest is not hex: {line}");
 }
 
+/// The Browser engine's fallback list is fixed and its last family, "Droid Sans Fallback", is the only one that can answer the
+/// CJK punctuation marks (script Common). A scan rule gives that name to Noto Sans CJK SC, the package installs the rule and
+/// the scriptlet rebuilds the font cache, which a scan rule needs.
+#[test]
+fn cjk_punctuation_falls_back_to_the_installed_cjk_font() {
+    let conf = arch("fontconfig/61-bifrost-cjk-fallback.conf");
+    assert!(conf.contains("target=\"scan\""), "the engine lists families from the font cache, so the rule must be a scan rule");
+    assert!(conf.contains("<string>Noto Sans CJK SC</string>"), "the rule must test the Noto Sans CJK SC family");
+    assert!(conf.contains("mode=\"append\""), "the family is added, the original names stay");
+    assert!(conf.contains("<string>Droid Sans Fallback</string>"), "the name is the last entry of the engine's fallback list");
+    let list = arch("runtime-packages.txt");
+    assert!(list.lines().any(|l| l.trim() == "noto-fonts-cjk"), "noto-fonts-cjk provides the family the rule extends");
+    let sh = arch("package-files.sh");
+    assert!(sh.contains("fontconfig/61-bifrost-cjk-fallback.conf"), "package-files.sh does not install the CJK fallback rule");
+    assert!(sh.contains("/etc/fonts/conf.d/61-bifrost-cjk-fallback.conf"));
+    let scriptlet = arch("springboard.install");
+    assert!(scriptlet.contains("bifrost_fontcache"), "springboard.install does not rebuild the font cache");
+    assert!(scriptlet.contains("fc-cache -sf"), "a cache built before the rule needs a forced rebuild");
+}
+
 #[test]
 fn installer_ships_the_alias_file() {
     let sh = arch("package-files.sh");
