@@ -242,7 +242,7 @@ impl Broker {
         };
         // Requests that need no client.
         match &req {
-            Request::Ping => return vec![Message::Pong],
+            Request::Ping => return vec![Message::Pong { host_ns: now_ns }],
             Request::Hello { name, version } => {
                 if client.is_some() {
                     return vec![Message::Failed(Refusal::NoClient)];
@@ -501,7 +501,7 @@ mod tests {
         assert_eq!(b.handle(c, Request::List, 0), vec![Message::Failed(Refusal::NoClient)]);
         assert_eq!(b.handle(c, Request::CreateSource { name: "x".into() }, 0), vec![Message::Failed(Refusal::NoClient)]);
         assert_eq!(b.handle(c, Request::Send { destination: 1, host_ns: 0, packets: vec![note(1)] }, 0), vec![Message::SendRefused(Refusal::NoClient)]);
-        assert_eq!(b.handle(c, Request::Ping, 0), vec![Message::Pong]);
+        assert_eq!(b.handle(c, Request::Ping, 77), vec![Message::Pong { host_ns: 77 }]);
         assert_eq!(b.handle(99, Request::Ping, 0), Vec::<Message>::new());
     }
 

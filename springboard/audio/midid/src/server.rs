@@ -242,7 +242,7 @@ mod tests {
         c.send(Request::Ping);
         c.wait(&mut server, &mut broker, |m| m.len() >= 2);
         assert!(matches!(c.seen.first(), Some(Message::Welcome { .. })), "{:?}", c.seen);
-        assert_eq!(c.seen.get(1), Some(&Message::Pong));
+        assert!(matches!(c.seen.get(1), Some(Message::Pong { host_ns }) if *host_ns == 1_000), "{:?}", c.seen);
         assert_eq!(server.clients(), 1);
         assert_eq!(broker.connections(), 1);
         let _ = std::fs::remove_file(&path);

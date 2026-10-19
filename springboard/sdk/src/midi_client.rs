@@ -352,11 +352,24 @@ impl MidiClient {
 
     /// Round trip to the server; the time it took.
     pub fn ping(&mut self) -> Result<Duration, MidiError> {
+        self.ping_clock().map(|(took, _)| took)
+    }
+
+    /// Round trip to the server: how long it took and the server's host clock (`CLOCK_MONOTONIC_RAW`, nanoseconds)
+    /// when it answered. Timestamps for `send` and `inject` are on that clock, so an app that wants a packet to play
+    /// 10 ms from now sends `server_ns + 10_000_000` (the answer took half the round trip to arrive).
+    pub fn ping_clock(&mut self) -> Result<(Duration, u64), MidiError> {
         let t = Instant::now();
         match self.request(Request::Ping)? {
-            Message::Pong => Ok(t.elapsed()),
+            Message::Pong { host_ns } => Ok((t.elapsed(), host_ns)),
             _ => Err(MidiError::Protocol(WireError::BadPacket)),
         }
+    }
+
+    /// The server's host clock now, in nanoseconds, with the answer's travel time taken as half the round trip.
+    pub fn host_now_ns(&mut self) -> Result<u64, MidiError> {
+        let (took, host_ns) = self.ping_clock()?;
+        Ok(host_ns + took.as_nanos() as u64 / 2)
     }
 
     /// The events that are waiting, without blocking.
@@ -773,6 +786,33 @@ mod tests {
         }
         assert!(changed);
         assert!(b.destinations().is_empty());
+    }
+
+    #[test]
+    fn the_server_clock_can_be_read_and_scheduled_against() {
+        let server = TestServer::start(Hub::new());
+        let mut synth = server.client("Synth");
+        let mut host = server.client("Host");
+        let inbox = synth.create_destination("in").unwrap();
+        let (_, first) = host.ping_clock().unwrap();
+        let second = host.host_now_ns().unwrap();
+        assert!(first > 0 && second >= first, "{first} {second}");
+        // a packet stamped far in the future is held; one stamped now is delivered
+        host.send(inbox, second + 60_000_000_000, &[note(1)]).unwrap();
+        host.send(inbox, 0, &[note(2)]).unwrap();
+        let mut got = Vec::new();
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while !got.iter().any(|e| matches!(e, MidiEvent::Delivered { .. })) && Instant::now() < deadline {
+            got.extend(synth.wait(Duration::from_millis(50)).unwrap());
+        }
+        let keys: Vec<Ump> = got
+            .iter()
+            .filter_map(|e| match e {
+                MidiEvent::Delivered { packet, .. } => Some(*packet),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(keys, vec![note(2)]);
     }
 
     #[test]

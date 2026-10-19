@@ -142,7 +142,7 @@ pub enum Request {
     Inject { source: u32, host_ns: u64, packets: Vec<Ump> },
     /// Stores a context value on an endpoint. Reply: `Done`.
     SetRefCon { id: u32, value: u64 },
-    /// Reply: `Pong`.
+    /// Reply: `Pong`, carrying the server's host clock so an app can schedule against it.
     Ping,
     /// Creates a thru connection: events of `source` are transformed and sent on to `destination` inside the server,
     /// without a round trip to the app. Reply: `Created` with the thru id (its own number space).
@@ -206,7 +206,8 @@ pub enum Message {
     Created { id: u32 },
     Done,
     Failed(Refusal),
-    Pong,
+    /// The reply to `Ping`: the server's host clock (`CLOCK_MONOTONIC_RAW`, nanoseconds) when it answered.
+    Pong { host_ns: u64 },
     /// A packet from a source this client's input is connected to.
     Received { source: u32, host_ns: u64, packet: Ump },
     /// A packet that arrived at one of this client's virtual destinations.
@@ -625,7 +626,11 @@ impl Message {
                 e.u8(r.code());
                 e.0
             }
-            Message::Pong => Enc::tag(T_PONG).0,
+            Message::Pong { host_ns } => {
+                let mut e = Enc::tag(T_PONG);
+                e.u64(*host_ns);
+                e.0
+            }
             Message::Received { source, host_ns, packet } => {
                 let mut e = Enc::tag(T_RECEIVED);
                 e.u32(*source);
@@ -694,7 +699,7 @@ impl Message {
             T_CREATED => Message::Created { id: d.u32()? },
             T_DONE => Message::Done,
             T_FAILED => Message::Failed(Refusal::from_code(d.u8()?)),
-            T_PONG => Message::Pong,
+            T_PONG => Message::Pong { host_ns: d.u64()? },
             T_RECEIVED => Message::Received { source: d.u32()?, host_ns: d.u64()?, packet: d.ump()? },
             T_DELIVERED => {
                 Message::Delivered { destination: d.u32()?, from: d.u32()?, host_ns: d.u64()?, packet: d.ump()? }
@@ -818,7 +823,7 @@ mod tests {
             Message::Created { id: 12 },
             Message::Done,
             Message::Failed(Refusal::WrongDirection),
-            Message::Pong,
+            Message::Pong { host_ns: 123_456_789 },
             Message::Received { source: 4, host_ns: 99, packet: note(61) },
             Message::Delivered { destination: 8, from: 4, host_ns: 100, packet: note(62) },
             Message::SetupChanged { generation: 6 },

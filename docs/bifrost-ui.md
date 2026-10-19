@@ -2886,7 +2886,8 @@ for requests and above for replies and events); the server logic is `bifrost_mid
   host-time order); `create_source(name)` and `create_destination(name)` for virtual endpoints; `dispose`, `set_ref_con`.
 - `send(destination, host_ns, &[Ump])` and `send_bytes` (MIDI 1.0 bytes, running status and system exclusive handled)
   queue packets for a destination at a host-clock time (0 or the past: now, a future time waits in the hub). A destination
-  that is hardware is written to its rawmidi port by the daemon (new: rawmidi output); a virtual destination delivers to
+  that is hardware is written to its rawmidi port by the daemon (new: rawmidi output); `host_now_ns()` reads the server's clock (the
+  `Pong` carries it) so an app can stamp a packet a few milliseconds ahead; a virtual destination delivers to
   its owner as `MidiEvent::Delivered`. `inject` and `inject_bytes` send from a virtual source the client owns to everyone
   connected to it. A refused `send` or `inject` comes back as `MidiEvent::SendRefused`, a separate message so it is never
   taken for the reply to a later request.
