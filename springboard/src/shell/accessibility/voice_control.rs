@@ -7,10 +7,8 @@
 //! which resolves the name in the element map. The recognizer service (`services::recognizer`) feeds this parser while
 //! the `voice_control` preference is `1`: it holds the session, and the effects a press returns go out with the next
 //! shell tick. The switch is Settings > Accessibility > Voice Control (the `voice_control` preference).
-//! The shell also keeps one recognition running in the `speech_recognizer`
-//! service while Voice Control is on (`Shell::voice_control_tick`): it starts when the setting is switched on, is polled for
-//! final transcripts, and ends when the setting is switched off. The service refuses without the person's consent and the
-//! installed model (Settings > Keyboard > Dictation); the refusal is announced once and Voice Control tries again later.
+//! Exactly one recognition runs: the recognizer service's own Voice Control step (`services::recognizer`, which holds the
+//! consent check and the retry pause). The shell only consumes what it heard (`Shell::voice_consume`).
 //!
 //! "show numbers", "show names" and "show grid" label the front window (`voice_overlay`); "hide numbers" and kin remove the
 //! label. With numbers shown "press 3" presses the third label; with names shown (or numbers) "press Save" presses the
@@ -18,44 +16,9 @@
 //! centre.
 
 use crate::shell::{Effect, Shell};
-use bifrost_core::json::Json;
 use bifrost_proto::AnnouncePriority;
 use bifrost_ui::voice_commands::Overlay;
 use bifrost_ui::whisper::Transcript;
-
-/// The client name Voice Control's recognition runs under in the service. The service leaves a session of this prefix alone
-/// when no installed app of that name runs (see `services::recognizer`).
-pub const SESSION_APP: &str = "shell:voice-control";
-/// Milliseconds between two polls for transcripts.
-pub const POLL_MS: f64 = 250.0;
-/// Milliseconds before a refused or ended recognition is started again.
-pub const RETRY_MS: f64 = 15_000.0;
-
-/// Voice Control's recognition as the shell keeps it.
-#[derive(Debug, Default)]
-pub struct Session {
-    /// a recognition of this client is running in the service
-    running: bool,
-    /// the earliest time of the next poll or the next start
-    next_ms: f64,
-    /// the person was told why Voice Control cannot listen, since it was last switched on
-    told: bool,
-}
-
-/// What a `poll` reply holds: the final transcripts, and whether the recognition still runs.
-pub fn replies(reply: &Json) -> (Vec<Transcript>, bool) {
-    let finals = reply
-        .get("transcripts")
-        .and_then(Json::as_array)
-        .unwrap_or(&[])
-        .iter()
-        .filter(|t| matches!(t.get("final"), Some(Json::Bool(true))))
-        .filter_map(|t| t.str_field("text"))
-        .map(|text| Transcript { text, is_final: true })
-        .collect();
-    let running = matches!(reply.get("running"), Some(Json::Bool(true)));
-    (finals, running)
-}
 
 /// One command a spoken transcript asks for.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -140,63 +103,19 @@ impl Shell {
         self.settings.as_ref().map_or_else(|| super::AccessibilitySettings::load(&self.prefs).voice_control, |st| st.accessibility().voice_control)
     }
 
-    /// One shell tick of Voice Control. Switched on, it starts a recognition in the `speech_recognizer` service (a refusal is
-    /// announced once and tried again after `RETRY_MS`), polls it every `POLL_MS` and runs each final transcript as a command.
-    /// Switched off, it ends the recognition. The effects are those of the commands that ran.
-    pub(in crate::shell) fn voice_control_tick(&mut self, t: f64) -> Vec<Effect> {
-        let on = self.voice_control_on();
-        if !on {
-            if self.voice.running {
-                let _ = self.service_call(SESSION_APP, "speech_recognizer", "stop", "", t);
-                self.voice.running = false;
-            }
-            self.voice.told = false;
-            return Vec::new();
-        }
-        if t < self.voice.next_ms {
-            return Vec::new();
-        }
-        if !self.voice.running {
-            self.voice.next_ms = t + RETRY_MS;
-            match self.service_call(SESSION_APP, "speech_recognizer", "start", "{\"locale\":\"en_US\"}", t) {
-                Ok(_) => {
-                    self.voice.running = true;
-                    self.voice.next_ms = t + POLL_MS;
-                    self.voice.told = false;
-                }
-                Err(e) => {
-                    if !self.voice.told {
-                        self.voice.told = true;
-                        self.announce.post(&format!("Voice Control cannot listen: {e}"), AnnouncePriority::High);
-                        self.dirty = true;
-                    }
-                }
-            }
-            return Vec::new();
-        }
-        self.voice.next_ms = t + POLL_MS;
-        let reply = match self.service_call(SESSION_APP, "speech_recognizer", "poll", "", t) {
-            Ok(r) => r,
-            Err(_) => {
-                self.voice.running = false;
-                return Vec::new();
-            }
-        };
-        let (finals, running) = replies(&reply);
-        if !running {
-            // the pipeline ended: start again after the pause
-            self.voice.running = false;
-            self.voice.next_ms = t + RETRY_MS;
-        }
+    /// Runs the final transcripts the recognizer service heard while Voice Control is on, as commands, and returns their
+    /// effects. A command that cannot run says why on the announcement banner; a sentence that is no command is ignored.
+    /// The shell starts, polls and stops nothing itself: the one recognition lives in `services::recognizer`.
+    pub(in crate::shell) fn voice_consume(&mut self, heard: &[Transcript], t: f64) -> Vec<Effect> {
         let mut effects = Vec::new();
-        for transcript in finals {
-            match self.voice_press(&transcript, t) {
+        for transcript in heard {
+            match self.voice_press(transcript, t) {
                 Some(Ok((_, fx))) => {
                     effects.extend(fx);
                     self.dirty = true;
                 }
-                Some(Err(e)) => {
-                    self.announce.post(&e, AnnouncePriority::High);
+                Some(Err(why)) => {
+                    self.announce.post(&why, AnnouncePriority::High);
                     self.dirty = true;
                 }
                 None => {}
@@ -310,18 +229,5 @@ mod tests {
         assert_eq!(parse(&fin("press   ")), None);
         assert_eq!(parse(&fin("")), None);
         assert_eq!(parse(&fin("pressing Save")), None, "the verb must be a whole word");
-    }
-
-    #[test]
-    fn a_poll_reply_gives_the_final_transcripts_and_whether_the_recognition_runs() {
-        let reply = bifrost_core::json::parse(r#"{"transcripts":[{"text":"press Save","final":true},{"text":"press Sa","final":false},{"text":"tap Open","final":true}],"running":true}"#).unwrap();
-        let (finals, running) = replies(&reply);
-        assert_eq!(finals.iter().map(|t| t.text.as_str()).collect::<Vec<_>>(), ["press Save", "tap Open"]);
-        assert!(finals.iter().all(|t| t.is_final) && running);
-        let ended = bifrost_core::json::parse(r#"{"transcripts":[],"running":false}"#).unwrap();
-        let (none, running) = replies(&ended);
-        assert!(none.is_empty() && !running);
-        let (garbled, running) = replies(&Json::Null);
-        assert!(garbled.is_empty() && !running, "a reply with no fields is nothing");
     }
 }

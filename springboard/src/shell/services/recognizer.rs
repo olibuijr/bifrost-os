@@ -506,16 +506,10 @@ impl SystemService for Recognizer {
             self.stop_session();
         }
         let wanted = shell.prefs.get(VOICE_CONTROL_PREF) == Some("1");
-        for heard in self.voice_step(wanted, t) {
-            match shell.voice_press(&heard, t) {
-                Some(Ok((_, fx))) => shell.voice_fx.extend(fx),
-                // a command that could not run says why on the announcement banner
-                Some(Err(why)) => {
-                    shell.announce.post(&why, bifrost_proto::AnnouncePriority::High);
-                    shell.dirty = true;
-                }
-                None => {}
-            }
+        let heard = self.voice_step(wanted, t);
+        if !heard.is_empty() {
+            let fx = shell.voice_consume(&heard, t);
+            shell.voice_fx.extend(fx);
         }
         Vec::new()
     }
