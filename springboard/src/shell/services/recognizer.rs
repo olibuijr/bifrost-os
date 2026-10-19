@@ -41,8 +41,9 @@ use std::sync::{Arc, Mutex};
 pub const SERVICE: &str = "speech_recognizer";
 /// The app id of the shell's own Voice Control recognition. It is not an installed app, so it is never reaped as gone.
 pub const SYSTEM_APP: &str = "system.voice_control";
-/// The preference (`1` or `0`) that turns Voice Control on.
-pub const VOICE_CONTROL_PREF: &str = "voice_control";
+/// The preference (`1` or `0`) that turns Voice Control on: the Settings > Accessibility > Voice Control switch
+/// (`AccessibilitySettings::voice_control`).
+pub const VOICE_CONTROL_PREF: &str = "a11y_voice_control";
 /// Seconds to wait before starting Voice Control again after a refusal or an ended pipeline.
 pub const VOICE_RETRY_S: f64 = 30.0;
 /// Clients of the shell's own (Voice Control) are named with this prefix; no installed app has such a name.

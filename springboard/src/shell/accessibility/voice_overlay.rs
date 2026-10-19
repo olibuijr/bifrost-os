@@ -17,7 +17,6 @@
 
 use crate::gfx::Surface;
 use super::walk::{BAR, BAR_ROW};
-use crate::shell::services::recognizer::VOICE_CONTROL_PREF;
 use crate::shell::ui::{Weight, LINK, MAC_CALLOUT_PT, MAC_FOOTNOTE_PT, WHITE};
 use crate::shell::{Effect, Event, Shell};
 use bifrost_ui::ax::Element;
@@ -173,11 +172,6 @@ impl VoiceOverlay {
 }
 
 impl Shell {
-    /// Whether Voice Control is switched on (Settings > Accessibility > Voice Control).
-    pub(in crate::shell) fn voice_control_on(&self) -> bool {
-        self.prefs.get(VOICE_CONTROL_PREF) == Some("1")
-    }
-
     /// The front window in screen pixels.
     fn voice_window(&self) -> Option<Rect> {
         let w = self.desk.as_ref()?.front()?;
@@ -349,6 +343,7 @@ pub fn overlay_name(overlay: Overlay) -> &'static str {
 mod tests {
     use super::*;
     use super::super::walk::SETTINGS;
+    use crate::shell::services::recognizer::VOICE_CONTROL_PREF;
 
     fn el(address: &str, role: &str, name: &str, handle: &str, bounds: Option<Rect>) -> Element {
         Element { address: address.into(), name: name.into(), role: role.into(), value: String::new(), enabled: true, bounds, handle: handle.into() }

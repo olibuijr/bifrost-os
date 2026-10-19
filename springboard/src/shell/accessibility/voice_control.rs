@@ -6,13 +6,11 @@
 //! "tap Save" presses the element called Save, the same way `ax press` does. The shell glue is `Shell::voice_press`,
 //! which resolves the name in the element map. The recognizer service (`services::recognizer`) feeds this parser while
 //! the `voice_control` preference is `1`: it holds the session, and the effects a press returns go out with the next
-//! shell tick. Settings has no switch for the preference yet.
-//! which resolves the name in the element map. The shell keeps one recognition running in the `speech_recognizer`
+//! shell tick. The switch is Settings > Accessibility > Voice Control (the `voice_control` preference).
+//! The shell also keeps one recognition running in the `speech_recognizer`
 //! service while Voice Control is on (`Shell::voice_control_tick`): it starts when the setting is switched on, is polled for
 //! final transcripts, and ends when the setting is switched off. The service refuses without the person's consent and the
 //! installed model (Settings > Keyboard > Dictation); the refusal is announced once and Voice Control tries again later.
-//! the `voice_control` preference is `1` (Settings > Accessibility > Voice Control): it holds the session, and the effects a
-//! press returns go out with the next shell tick.
 //!
 //! "show numbers", "show names" and "show grid" label the front window (`voice_overlay`); "hide numbers" and kin remove the
 //! label. With numbers shown "press 3" presses the third label; with names shown (or numbers) "press Save" presses the
