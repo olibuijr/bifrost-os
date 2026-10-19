@@ -1209,27 +1209,35 @@ mod tests {
         assert_eq!(f.glyph('\u{10FFFD}'), 0);
     }
 
+    /// BifrOSt's own CFF-flavoured test font (a box, a disc and a ring; `tests/fixtures/make_test_cff.py` builds it).
+    /// Every packed font is TrueType, so this is the only CFF face the tests have.
+    fn cff_fixture() -> Vec<u8> {
+        std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/test-cff.otf")).expect("tests/fixtures/test-cff.otf")
+    }
+
     #[test]
     fn cff_font_renders_through_the_same_path() {
-        // a CFF symbol font is optional (the packed defaults are TrueType); skip without one
-        let Ok(data) = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/SFUISymbols-Regular.otf")) else {
-            return;
-        };
+        let data = cff_fixture();
         let f = Font::parse(&data).unwrap();
         assert!(f.cff.is_some());
-        let gid = f.glyph('\u{E8FE}');
-        assert_ne!(gid, 0);
+        assert_eq!(f.num_glyphs(), 4);
+        let gid = f.glyph('\u{25CF}');
+        assert_eq!(gid, 2, "the disc");
         assert!(f.advance(gid) > 0.0);
         let st = Style { px: 40.0, embolden: 0.0, color: pack(255, 255, 255, 255), shadow: false };
         let img = f.render_glyph(gid, &st);
         assert!(ink(&img) > 255 * 40, "the glyph has ink");
         assert!(img.px.iter().any(|&p| p >> 24 == 255), "solid interior");
         assert_eq!(ink(&f.render_glyph(200, &st)), 0, "a glyph past the end is empty");
+        // the ring is the disc with a hole, so it carries clearly less ink
+        let ring = f.render_glyph(f.glyph('\u{25EF}'), &st);
+        assert!(ink(&ring) > 0 && ink(&ring) * 10 < ink(&img) * 8, "ring {} vs disc {}", ink(&ring), ink(&img));
         // every charset name resolves back to its glyph
-        for g in 0..8u16 {
+        for g in 0..f.num_glyphs() {
             let name = f.cff.as_ref().unwrap().glyph_name(g as usize).unwrap();
             assert_eq!(f.glyph_named(&name), Some(g), "{name}");
         }
+        assert_eq!(f.glyph_named("disc"), Some(2));
     }
 
     #[test]
@@ -1278,8 +1286,8 @@ mod tests {
     fn cached_render_matches_exact_raster() {
         let data = sf();
         let f = Font::parse(&data).unwrap();
-        let emoji = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/SFUISymbols-Regular.otf")).ok();
-        let sym = emoji.as_deref().and_then(Font::parse);
+        let cff_data = cff_fixture();
+        let sym = Font::parse(&cff_data).unwrap();
         for text in ["Þórður æði ö", "Hamburg 61%", "Stillingar", "iiiilll", "😀 ok"] {
             for px in [11.0f32, 17.5, 22.0, 41.3] {
                 for w in [400.0, 590.0, 700.0] {
@@ -1294,11 +1302,9 @@ mod tests {
                 }
             }
         }
-        if let Some(sym) = sym {
-            let st = Style { px: 40.0, embolden: 0.0, color: pack(255, 255, 255, 255), shadow: false };
-            let g = sym.glyph('\u{E8FE}');
-            assert!(maxdiff(&sym.render_with(&[g], &st, &[], false), &sym.render_with(&[g], &st, &[], true)) <= 24);
-        }
+        let st = Style { px: 40.0, embolden: 0.0, color: pack(255, 255, 255, 255), shadow: false };
+        let g = sym.glyph('\u{25CF}');
+        assert!(maxdiff(&sym.render_with(&[g], &st, &[], false), &sym.render_with(&[g], &st, &[], true)) <= 24);
     }
 
     #[test]

@@ -830,10 +830,9 @@ mod tests {
     }
 
     #[test]
-    fn parses_the_bifrost_symbols_stub() {
-        let Ok(otf) = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/SFUISymbols-Regular.otf")) else {
-            return;
-        };
+    fn parses_the_cff_table_of_the_test_font() {
+        // BifrOSt's own CFF-flavoured test font: .notdef, a box (lines), a disc and a ring (cubic curves)
+        let otf = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/test-cff.otf")).expect("tests/fixtures/test-cff.otf");
         let n = u16::from_be_bytes([otf[4], otf[5]]) as usize;
         let cff = (0..n).find_map(|i| {
             let r = 12 + 16 * i;
@@ -844,10 +843,13 @@ mod tests {
             })
         });
         let f = Cff::parse(cff.expect("CFF table")).unwrap();
-        assert_eq!(f.num_glyphs(), 8);
-        let names: Vec<_> = (0..8).filter_map(|g| f.glyph_name(g)).collect();
-        assert_eq!(names.len(), 8, "{names:?}");
-        for g in 1..8 {
+        assert_eq!(f.num_glyphs(), 4);
+        let names: Vec<_> = (0..4).filter_map(|g| f.glyph_name(g)).collect();
+        assert_eq!(names, [".notdef", "box", "disc", "ring"]);
+        let mut rec = Rec::default();
+        assert_eq!(f.outline(1, &mut rec), Some(800.0));
+        assert!(rec.0.iter().any(|c| matches!(c, Cmd::L(..))) && !rec.0.iter().any(|c| matches!(c, Cmd::C(..))), "the box is lines");
+        for g in 2..4 {
             let mut rec = Rec::default();
             f.outline(g, &mut rec).unwrap();
             assert!(rec.0.iter().any(|c| matches!(c, Cmd::C(..))), "glyph {g} has curves");

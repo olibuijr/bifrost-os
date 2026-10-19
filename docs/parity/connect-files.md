@@ -56,7 +56,7 @@ broken escapes, the board write (checks the `ServiceCall` message for `pasteboar
 its waiting reply, the `close` call, the search index message under the app domain, the Dock `progress` call, the Dock
 step threshold, the paste plan (own copy, other app's files, fallback, nothing), and `board_files` on a real temporary
 file. The tests use `Ctx::testing` and `take_sent`, as `springboard/sdk/src/service.rs` does, with the font the existing
-Files tests load from the repo's `bifrost-ref/fonts/SFUI.ttf`.
+Files tests load from the packed `springboard/assets/SFUI.ttf` (Inter, SIL OFL 1.1).
 
 ## Official behaviour relied on
 

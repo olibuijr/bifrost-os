@@ -44,8 +44,8 @@ fn headless_only_wifi_and_battery_have_no_code_point() {
 }
 
 #[test]
-fn headless_the_symbol_font_files_are_searched_best_first() {
-    assert_eq!(FONT_FILES, ["SFUISymbols-Regular.otf", "Symbols.ttf"]);
+fn headless_only_the_openly_licensed_symbol_font_is_searched() {
+    assert_eq!(FONT_FILES, ["Symbols.ttf"], "the Noto symbol face is the only file the loader opens");
 }
 
 #[test]

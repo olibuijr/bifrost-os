@@ -131,13 +131,12 @@ impl SystemSounds {
         self.create(&format!("/System/Library/Sounds/{name}.aiff")).ok()
     }
 
-    /// Creates a sound by name (`Sound(named:)`): the reference asset layer is asked first, as an alert sound
-    /// and then as a system sound. `None` means no reference asset has that name, and the caller keeps its
-    /// built-in sound.
-    pub fn create_named(&mut self, resolver: &bifrost_core::ref_assets::Resolver, name: &str) -> Option<Result<SoundId, SoundError>> {
-        use bifrost_core::ref_assets::Kind;
-        let path = resolver.resolve(Kind::AlertSound, name).or_else(|| resolver.resolve(Kind::SystemSound, name))?;
-        Some(self.create(&path.to_string_lossy()))
+    /// Creates a sound by name (`Sound(named:)`). The name is matched, ignoring case and surrounding spaces, against
+    /// BifrOSt's own alert tones (`ALERT_NAMES`); the audio service synthesises each one, and no recording is read
+    /// from anywhere. `None` means no tone has that name, and the caller keeps its built-in sound.
+    pub fn create_named(&mut self, name: &str) -> Option<Result<SoundId, SoundError>> {
+        let tone = ALERT_NAMES.iter().find(|n| n.eq_ignore_ascii_case(name.trim()))?;
+        Some(self.create(&format!("/System/Library/Sounds/{tone}.aiff")))
     }
 
     /// Frees a sound. A play of it that is still waiting or sounding is dropped.
@@ -215,17 +214,18 @@ mod tests {
     }
 
     #[test]
-    fn named_sounds_come_from_the_reference_layer_or_fall_back() {
-        let dir = std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/target/test-named-sound"));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(dir.join("sounds/alerts")).unwrap();
-        std::fs::write(dir.join("sounds/alerts/Basso.wav"), b"x").unwrap();
-        let resolver = bifrost_core::ref_assets::Resolver::with_roots(vec![dir.clone()]);
+    fn named_sounds_are_the_own_alert_tones_or_fall_back() {
         let mut sounds = SystemSounds::new();
-        let id = sounds.create_named(&resolver, "basso").unwrap().unwrap();
-        assert!(sounds.path(id).unwrap().ends_with("sounds/alerts/Basso.wav"));
-        assert!(sounds.create_named(&resolver, "Glass").is_none(), "absent: caller uses the built-in sound");
-        let _ = std::fs::remove_dir_all(dir);
+        let id = sounds.create_named("basso").unwrap().unwrap();
+        assert_eq!(sounds.path(id), Some("/System/Library/Sounds/Basso.aiff"), "the name is matched ignoring case");
+        let id = sounds.create_named(" Glass ").unwrap().unwrap();
+        assert_eq!(sounds.path(id), Some("/System/Library/Sounds/Glass.aiff"));
+        for name in ALERT_NAMES {
+            let id = sounds.create_named(name).unwrap_or_else(|| panic!("{name} is one of the own tones")).unwrap();
+            assert!(sounds.path(id).unwrap().starts_with("/System/Library/Sounds/"), "{name} is the own synthesised tone");
+        }
+        assert!(sounds.create_named("Nope").is_none(), "no such tone: the caller uses its built-in sound");
+        assert!(sounds.create_named("").is_none());
     }
 
     #[test]

@@ -1,5 +1,5 @@
 //! bifrost keyboard click sounds: a letter click, a lower delete click and a modifier click.
-//! No keyboard sounds exist in bifrost-ref, so they are synthesised as short decaying bursts.
+//! BifrOSt ships no recorded keyboard sounds, so they are synthesised as short decaying bursts.
 //! The keyboard only queues the kind; the shell plays it, and only when
 //! Settings > Sounds > Keyboard Clicks is on and the device is not muted.
 

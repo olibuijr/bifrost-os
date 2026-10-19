@@ -4204,22 +4204,33 @@ graph node; no tangents, Model I/O vertex-layout conversion or mesh formats beyo
 is the only texture sampler (no bilinear or mip selection on `Texture`); a texture has no colour-space tag on the raster.
 Written without building or running (owner rule); parity needs the Midget checks listed in the matrix rows.
 
-## Reference asset layer (`bifrost_core::ref_assets`)
+## Run-time assets: BifrOSt's own and openly licensed only
 
-Personal-use reference assets (alert sounds, system sounds, cursors, wallpapers, app and system icons, symbols,
-fonts) live in the gitignored `bifrost-ref/assets/` folder and are never committed. `tools/pc-publish.py`
-(`ref_asset_files`) and `packaging/arch/package-files.sh` install what exists, already converted to wav/png/ttf,
-into `/usr/share/bifrost/ref/{sounds/alerts,sounds/system,cursors,wallpapers,icons/apps,icons/system,symbols,fonts}`
-plus `INDEX.tsv`; both skip cleanly when the folder is absent. `INDEX.tsv` holds `kind<TAB>name<TAB>file` lines
-(file relative to the kind folder), so name mappings are data, not code.
+BifrOSt loads only its own assets and openly licensed ones at run time. Nothing from the reference system is read: no
+reference-asset root (the old `bifrost_core::ref_assets` resolver, its installed root, per-user folder and environment
+override are removed), no reference font and no reference symbol font. `springboard/core/tests/no_reference_assets.rs`
+scans every Rust source and fails if one names that root, brings the resolver back or lists the vendor symbol font.
+What the packages contain is a separate check (the licence guard for packaging); this section is about what the code opens.
 
-- `Resolver::standard(bundled)` searches `$BIFROST_REF_ROOT`, `/usr/share/bifrost/ref`, then `bundled`.
-  `resolve(Kind, name)` normalises case and extension (`Basso.aiff` finds `basso.wav`), caches the answer and
-  returns `None` when absent; `list(Kind)` feeds pickers such as the wallpaper list.
-- `SystemSounds::create_named(resolver, name)` (NSSound `named:`): alert names first, then system sounds; `None` keeps the built-in sound.
-- Not done yet: cursor and icon adoption (`cursor_service`, `cursor_art`, workspace icons) and a shell-side resolver;
-  they will call `resolve` and keep their current art as the fallback. The assets folder was empty when this landed,
-  so the os/assets sound, wallpaper and font rows are `partial` (loader and fallback only, no Midget check).
+What each former caller uses now:
+
+| Caller | Source | Notes |
+|---|---|---|
+| Named sounds (`SystemSounds::create_named(name)`, `Sound(named:)`) | BifrOSt's own alert tones, `system_sound::ALERT_NAMES` | The name is matched ignoring case against the 18 tones the shell synthesises from notes (`shell/alert_sound.rs`); Bell, Chime, Pulse and Tick are the original four, and each other name is a synthesised tone with that name's role. `None` for any other name, and the caller keeps its built-in sound. Interface cues (`shell/ui_sounds.rs`) and the key clicks (`shell/kb_clicks.rs`) are synthesised too, and the cues reach apps through `PlaySystemSound`. No recording is read. |
+| App icons (`shell/apps.rs` `term_icon`) | `res/icons/terminal`, BifrOSt's layered icon document | Drawn by `bifrost_render::icon_doc`; the other built-in apps use `assets/icons/<id>.raw` or a drawn icon (`AppDef::icon_image`). |
+| Font descriptors (`UserFonts::resolve`, sdk `font_descriptor.rs`) | The font library only: `<assets>/fonts` (seeded from `/usr/share/springboard/assets/fonts`) and the fonts apps install | A family that is not in the library falls to the open equivalents of its class (`font_substitution`). No other folder is scanned. |
+| Symbols (`bifrost_render::symbols`) | `FONT_FILES = ["Symbols.ttf"]`, Noto Sans Symbols 2 (SIL OFL 1.1), credited in `CREDITS.md` | The vendor symbol font is never loaded, even when a file with its name sits in the assets folder (`a_vendor_symbol_font_in_the_assets_folder_is_never_loaded`); `only_openly_licensed_symbol_fonts_are_listed` fails when a file is added to the list without being credited. |
+
+Symbol sources after the vendor font left the list. The font held eight glyph slots at private-use code points, and none of
+the 22 `Symbol` values names one of them (it matched neither by glyph name nor by Unicode), so no symbol lost its source:
+18 symbols come from `Symbols.ttf` by Unicode, and Wi-Fi, battery, the gear and the outlined gear were already drawn by hand
+(`shell/icons.rs` and `sdf_glyphs`) because no open font has them. Toolbar, source-list and search-field symbols of the SDK kit
+come from the SDK glyph set (`sdk/src/glyphs.rs`), which needs no font. The outlined gear in the app menu row
+(`Settings…`) has no hand-drawn fallback yet: with no font glyph the row shows no symbol (unchanged from before; the
+open fonts have no U+2699 either).
+
+Tests that need a CFF face use BifrOSt's own `springboard/render/tests/fixtures/test-cff.otf` (a box, a disc and a ring drawn by
+`make_test_cff.py` beside it); no packed font is CFF.
 
 ## Form factor and on-screen keyboard policy (`bifrost_ui::form_factor`, `bifrost_app::FormFactor`)
 

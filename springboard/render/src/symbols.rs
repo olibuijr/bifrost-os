@@ -1,10 +1,8 @@
-//! the system symbol set used by the shell, resolved from whatever symbol fonts are
-//! available. bifrost 15 keeps its symbols in CoreGlyphs.bundle (a CoreUI
-//! catalog, not a font); `SFUISymbols-Regular.otf` on the device is an
-//! 8-glyph CFF stub. So each symbol is looked up by its the system symbol set glyph
-//! name first (for a real the system symbol set font dropped next to the other
-//! assets), then by Unicode in Symbols, and callers fall back to the
-//! hand-drawn glyphs in `status.rs` when neither has it.
+//! The system symbol set the shell draws, resolved from the openly licensed symbol fonts BifrOSt packs. No vendor
+//! symbol font is ever loaded: `FONT_FILES` lists `Symbols.ttf` (Noto Sans Symbols 2, SIL OFL 1.1) and nothing
+//! else. Each symbol is looked up by its glyph name first (only a CFF face carries glyph names; `Symbols.ttf` has
+//! none), then by Unicode, and callers fall back to hand-drawn shapes (`sdf_glyphs`, the SDK glyph set) when neither
+//! has it (Wi-Fi, battery and the gear).
 
 use crate::font::{Font, Style};
 use crate::gfx::Image;
@@ -62,7 +60,7 @@ impl Symbol {
         Symbol::Pause,
     ];
 
-    /// The the system symbol set name, which is also the glyph name in the system symbol set fonts.
+    /// The symbol's name, which is also its glyph name in a font that carries glyph names.
     pub fn name(self) -> &'static str {
         match self {
             Symbol::Wifi => "wifi",
@@ -117,14 +115,15 @@ impl Symbol {
     }
 }
 
-/// Symbol fonts in priority order (an the system symbol set font first, then Symbols).
+/// Symbol fonts in priority order (`FONT_FILES`).
 #[derive(Default)]
 pub struct Symbols {
     fonts: Vec<Font<'static>>,
 }
 
-/// Asset file names tried by `Symbols::load`, best first.
-pub const FONT_FILES: [&str; 2] = ["SFUISymbols-Regular.otf", "Symbols.ttf"];
+/// Asset file names tried by `Symbols::load`, best first. Every entry is an openly licensed face credited in
+/// `CREDITS.md`; a vendor symbol font dropped into the assets folder is never read.
+pub const FONT_FILES: [&str; 1] = ["Symbols.ttf"];
 
 /// The font file mapped (shared page cache) where the platform has mmap, else read and leaked.
 fn read_static(path: &str) -> Option<&'static [u8]> {
@@ -204,6 +203,38 @@ mod tests {
         let none = Symbols::load("/nonexistent");
         assert!(Symbol::ALL.iter().all(|&s| !none.has(s)));
         assert!(none.render(Symbol::Shift, 20.0, pack(255, 255, 255, 255)).is_none());
+    }
+
+    #[test]
+    fn only_openly_licensed_symbol_fonts_are_listed() {
+        // adding a file to FONT_FILES means adding it here too, which is where its licence gets checked
+        const OPEN: [&str; 1] = ["Symbols.ttf"];
+        assert!(FONT_FILES.iter().all(|f| OPEN.contains(f)), "{FONT_FILES:?}");
+        // each one is credited in the font section of CREDITS.md, where every font is under the SIL OFL 1.1
+        let credits = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../CREDITS.md")).expect("CREDITS.md");
+        let fonts = credits.split("\n## ").find(|s| s.starts_with("Fonts")).expect("a Fonts section");
+        assert!(fonts.contains("SIL Open Font Licence"));
+        for f in FONT_FILES {
+            assert!(fonts.contains(&format!("`{f}`")), "{f} is not credited as an open font");
+        }
+    }
+
+    #[test]
+    fn a_vendor_symbol_font_in_the_assets_folder_is_never_loaded() {
+        let Ok(open) = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/Symbols.ttf")) else {
+            return;
+        };
+        let dir = std::env::temp_dir().join(format!("bifrost-symbols-vendor-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let at = dir.to_string_lossy().into_owned();
+        // a valid face under the vendor's file names: only the names in FONT_FILES are ever opened
+        for name in ["SFUISymbols-Regular.otf", "SFUISymbols-Regular.ttf"] {
+            std::fs::write(dir.join(name), &open).unwrap();
+        }
+        assert!(Symbols::load(&at).fonts.is_empty(), "the vendor file names are not read");
+        std::fs::write(dir.join("Symbols.ttf"), &open).unwrap();
+        assert_eq!(Symbols::load(&at).fonts.len(), FONT_FILES.len());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
