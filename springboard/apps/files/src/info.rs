@@ -115,6 +115,11 @@ fn named(name: Option<String>, id: u32) -> String {
 pub(crate) struct Info {
     pub(crate) name: String,
     pub(crate) rows: Vec<(&'static str, String)>,
+    /// The item Get Info describes, and its permission bits for the editable grid (`perms.rs`).
+    pub(crate) path: PathBuf,
+    pub(crate) mode: Option<u32>,
+    /// True when the person owns the item (or is root), so a click on the grid changes the mode.
+    pub(crate) editable: bool,
 }
 
 /// A tag's colour in the surface's pixel format (tags are stored as 0xRRGGBB).
@@ -183,13 +188,17 @@ impl Files {
             rows.extend(disk_image_rows(&entry.path, entry.size));
             rows.extend(exif_rows(&entry.path));
         }
+        let (mut mode, mut editable) = (None, false);
         if let Ok(st) = bifrost_app::file_stat::stat(&entry.path) {
             let passwd = std::fs::read_to_string("/etc/passwd").unwrap_or_default();
             let group = std::fs::read_to_string("/etc/group").unwrap_or_default();
             rows.extend(permission_rows(&st, &passwd, &group));
+            mode = Some(st.permissions().bits() & 0o7777);
+            // provider folders are stand-in paths with no mode of their own to change
+            editable = perms::can_edit(st.user_id, perms::current_uid()) && !provider::is_path(&entry.path);
         }
         self.preview = None;
-        self.info = Some(Info { name: entry.name.clone(), rows });
+        self.info = Some(Info { name: entry.name.clone(), rows, path: entry.path.clone(), mode, editable });
         self.revision += 1;
     }
     /// The Tags panel.
@@ -223,7 +232,16 @@ impl Files {
                 text(s, ui, label, 12., LABEL_2.now(), x + 20., row_y + 2., 120.);
                 text(s, ui, value, 13., LABEL.now(), x + 150., row_y, w - x - 190.);
             }
-            text(s, ui, "Press Escape or click to close", 11., LABEL_2.now(), x + 20., y + 56. + info.rows.len() as f32 * 26. + 12., w - x - 56.);
+            self.paint_perm_grid(ui, s);
+            let grid_h = if info.mode.is_some() { perms::GRID_H + 14. } else { 0. };
+            let hint = if info.mode.is_none() {
+                "Press Escape or click to close"
+            } else if info.editable {
+                "Click a box to change who can read, write or run it. Press Escape to close"
+            } else {
+                "Only the owner can change the permissions. Press Escape to close"
+            };
+            text(s, ui, hint, 11., LABEL_2.now(), x + 20., y + 56. + info.rows.len() as f32 * 26. + 12. + grid_h, w - x - 56.);
         }
     }
 }

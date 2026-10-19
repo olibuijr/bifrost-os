@@ -263,6 +263,9 @@ impl Files {
         self.searching=self.controls.focused().is_some_and(|n|n.id==BAR_SEARCH as u64);
         // a pointer click does not leave a keyboard focus ring on a button (Golden Gate: only Tab moves the ring there)
         if self.controls.focused().is_some_and(|n|n.role==Role::Button) { self.controls.focus(None); }
+        if self.info.is_some() && self.info_click(x, y) {
+            return;
+        }
         if self.preview.is_some() || self.info.is_some() || self.open_with.is_some() {
             self.preview = None;
             self.info = None;
@@ -383,7 +386,7 @@ impl Files {
             self.naming.as_ref().map(|(p,f)|format!("{}:{}:{:?}",p.display(),f,f.caret())), self.clip, self.notice,
             self.work.as_ref().map(|w| (&w.title, &w.progress)), self.select_mode);
         let state = format!("{state}:{}:{}", self.status_bar, self.dragging);
-        let state = format!("{state}:{}", self.info.as_ref().map_or(0, |i| i.rows.len()));
+        let state = format!("{state}:{}", self.info.as_ref().map_or(0, |i| i.rows.len() * 10000 + i.mode.unwrap_or(0) as usize));
         let state = format!("{state}:{}", self.open_with.as_ref().map_or(0, |o| o.state()));
         let state = format!("{state}:{:?}:{}", self.fx.goto.as_ref().map(|f| (f.to_string(), f.caret())), self.fx.copy_drag);
         let vo = &self.vo;
