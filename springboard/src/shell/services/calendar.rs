@@ -578,6 +578,7 @@ mod tests {
     fn a_deleted_event_is_gone_from_the_events_call() {
         let left = remove_event(&id_params(1), &day_book()).unwrap();
         let reply = answer("is.example.cal", true, "events", &range("2026-10-13T00:00", "2026-10-14T00:00"), &left).unwrap();
-        assert_eq!(ids(&reply), vec![4]);
+        // event 2 overlaps the 13th (it runs past midnight) and sorts first; event 1 is the one that is gone
+        assert_eq!(ids(&reply), vec![2, 4]);
     }
 }
