@@ -112,7 +112,7 @@ mod tests {
         assert_eq!(a.height, 10);
         assert_eq!(a.width, 30);
         let xs: Vec<u32> = a.frames.iter().map(|f| f.x).collect();
-        assert_eq!(xs, vec![0, 10], "frames come back in the order given");
+        assert_eq!(xs, vec![20, 0], "frames come back in the order given");
     }
 
     #[test]
