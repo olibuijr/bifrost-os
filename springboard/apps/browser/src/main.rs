@@ -130,6 +130,8 @@ mod session;
 mod autofill;
 mod overview;
 mod themecolor;
+mod startpage;
+mod starttab;
 
 const KEY_F: u32 = 33;
 const KEY_BACKSLASH: u32 = 43;
@@ -220,6 +222,8 @@ struct Browser {
     overview: overview::Overview,
     /// Each tab's page colour, which tints the toolbar (themecolor.rs).
     themes: themecolor::ThemeColors,
+    /// Start Page of a blank tab: scroll and press (startpage.rs, starttab.rs).
+    start_page: startpage::State,
 }
 
 fn home() -> PathBuf {

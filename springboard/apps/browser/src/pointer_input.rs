@@ -36,6 +36,9 @@ impl Browser {
                 true
             }
             PointerEvent::Wheel { x, y, dx, dy, .. } => {
+                if self.start_wheel(ctx, x, y, dy) {
+                    return true;
+                }
                 if let Some(pool) = self.pool.as_mut().filter(|p| p.contains(x, y)) {
                     pool.scroll(dx, dy, x, y);
                 }
@@ -76,6 +79,9 @@ impl Browser {
                     }
                 }
             }
+        }
+        if self.start_touch(ctx, kind, x, y) {
+            return true;
         }
         if kind == TouchKind::Down {
             self.inspector.blur();

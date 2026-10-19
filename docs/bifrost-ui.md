@@ -2614,7 +2614,17 @@ and shows Safari-style Top Hits under the address field. Gaps against AppKit/Saf
   the address field with bookmarks listed; a menu and a full History window wait for the SDK menu API.
 - No popup list control (`NSPopUpButton`/`NSTableView` popover for the suggestion list); the browser draws the dropdown itself with
   `CARD_BG`, `SEPARATOR_C` and `TINT`.
-- No Start Page and favourites grid yet (needs the engine to serve a page). The private-mode flag exists in the store but is not wired.
+- Start Page (`startpage.rs`, `starttab.rs`): a blank tab (`about:blank`) shows Favorites (the bookmarks as tiles), Frequently Visited
+  (one tile per site from history: frecency order, at least two visits, not already a favorite) and Recently Viewed (history, newest first)
+  in a centred column under title 2 headings, Light and Dark through the kit pairs. Decision: it is drawn natively over the page area (like the
+  tab overview) and not served to the engine as a page, so the tab stays on `about:blank` and its address, history and session handling are
+  unchanged, and Back from a site returns to it. A tile shows the site icon `favicon.rs` already cached on disk, else a monogram on one of eight
+  system colours picked from the host (FNV-1a, stable across releases); nothing is fetched. A tap opens the tile in the same tab, the wheel and a
+  drag scroll, tiles are published as accessibility buttons, and the address field stays focused and empty after Cmd+T (an empty field on the
+  Start Page lists no suggestions, the Favorites are on the page). A private window shows a notice instead of the lists. Gaps against the
+  reference, decided for now: no Privacy Report (the Browser counts no blocked trackers yet), no Edit mode or Favorites folders (bookmarks have
+  no folders), icons are the 32 px favicons rather than touch icons, no topics from other devices (needs account sync).
+- The private-mode flag exists in the store and a private window uses it (`--private`).
 - Unit tests live in `suggest.rs` (a binary crate cannot be imported from `tests/compliance.rs`).
 
 ## Golden Gate kit: sheets and small controls (round 58)

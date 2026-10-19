@@ -225,6 +225,7 @@ impl Browser {
                 nodes.push(Node { id: TAB0 + i as u64, role: Role::Button, label: if title.is_empty() { "Untitled".into() } else { title }, value: if i == self.current { "selected".into() } else { String::new() }, bounds: r, enabled: true });
             }
         }
+        nodes.extend(self.start_nodes(ui));
         nodes
     }
 }

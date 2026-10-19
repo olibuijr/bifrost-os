@@ -8,6 +8,7 @@
 - The toolbar takes the page's colour (`<meta name="theme-color">`, else the background at the top of the page) under its glass groups; a private window keeps its dark toolbar.
 - Find in page has previous and next buttons (Cmd+G and Cmd+Shift+G as before), a Done button and the match count; Return goes to the next match (Shift+Return to the previous once the shell reports it), Esc closes. The engine selects the current match only; it reports no index and the other matches are not highlighted.
 
+- A new tab shows a Start Page instead of a blank white page: Favorites (the bookmarks as rounded tiles), Frequently Visited (sites from history) and Recently Viewed (the latest pages), in a centred column that follows Light and Dark. A tile shows the site icon already cached on disk, else a monogram on a colour taken from the host, and makes no network request. A click opens it in the same tab; the page scrolls with the wheel or a drag; the address field stays focused and empty, and its suggestion list stays closed while it is empty. A private window shows a notice instead.
 - `browser.content_rules` compiles, stores and applies web content blocker lists (block, make-https, css-display-none) to every tab; `browser.messages` reads what pages post to the `control` message handler; `browser.screenshot` takes `format: "pdf"` and prints the page as a paginated PDF.
 
 ## 0.16.2

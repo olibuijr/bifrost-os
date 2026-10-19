@@ -45,6 +45,12 @@ impl Browser {
                 self.pageui.activate_control(id, &mut self.pool);
                 true
             }
+            Input::Activate(id) if id >= startpage::NODE0 => {
+                if let Some(url) = self.start_page.site_of_node(id).map(|s| s.url.clone()) {
+                    self.start_open(&url);
+                }
+                true
+            }
             Input::Activate(id) => {
                 if id >= TAB0 {
                     self.select((id - TAB0) as usize);
@@ -57,6 +63,9 @@ impl Browser {
             Input::Context { x, y } => {
                 if self.pageui.active() {
                     return false;
+                }
+                if self.start_swallows_context(x, y) {
+                    return true;
                 }
                 if let Some(p) = self.pool.as_mut().filter(|p| p.contains(x, y)) {
                     self.pageui.last_point = (x, y);

@@ -35,6 +35,13 @@ State and logs default to `~/Work/bifrost-browser`; `BIFROST_BROWSER_WORK`, `BIF
 on GTK's display clock. Wheel input uses 40 pixels per notch; surface input uses 2× sensitivity, with no synthetic
 momentum. F10 and Alt+F open the main menu. The native file chooser uses the SDK document portal protocol.
 
+## Start Page (startpage.rs, starttab.rs)
+
+A blank tab (`about:blank`) shows the Start Page: Favorites (the bookmarks), Frequently Visited and Recently Viewed (from history), drawn
+natively over the page area, so the tab keeps its blank-page address, history and session handling. Tiles show the site icon already
+cached by `favicon.rs`, else a monogram on a colour taken from the host; nothing is fetched. The data and layout are pure functions with unit
+tests in `startpage.rs`. There is no Privacy Report: the Browser does not count blocked trackers.
+
 ## Develop (devmenu.rs)
 
 Cmd+Option+U View Source (curl fetch, line-numbered `data:` document in a new tab), Cmd+Shift+R Reload From Origin,
