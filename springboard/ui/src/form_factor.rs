@@ -21,7 +21,7 @@ pub const TABLET_BOARDS: &[&str] = &["samsung,gta8wifi"];
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum FormFactor {
-    /// Pointer and hardware keyboard: no on-screen keyboard.
+    /// Pointer and hardware keyboard: no on-screen keyboard unless the user opens it.
     #[default]
     Desktop,
     /// Touch first: text fields raise the on-screen keyboard unless a hardware keyboard is attached.
@@ -97,12 +97,13 @@ impl FormFactor {
         self == Self::Desktop
     }
 
-    /// Whether the on-screen keyboard may be raised. `desktop_ui` is true while the windowed desktop UI is up.
-    /// A desktop never raises it in that UI (the old touch-only presentation still can); a tablet raises it with or
-    /// without the desktop UI, unless a hardware keyboard is attached.
-    pub fn allows_onscreen_keyboard(self, desktop_ui: bool, hardware_keyboard: bool) -> bool {
+    /// Whether the on-screen keyboard may be raised *by the system* (a focused text field, Terminal opening, the lock
+    /// screen, a sheet, Search). A desktop never does, whatever UI is up: it appears there only when the user opens it
+    /// on purpose (the Input menu's Keyboard, `Shell::keyboard_open_explicit`). A tablet raises it unless a hardware
+    /// keyboard is attached.
+    pub fn allows_onscreen_keyboard(self, hardware_keyboard: bool) -> bool {
         match self {
-            Self::Desktop => !desktop_ui,
+            Self::Desktop => false,
             Self::Tablet => !hardware_keyboard,
         }
     }
@@ -242,23 +243,20 @@ mod tests {
     }
 
     #[test]
-    fn a_desktop_never_raises_the_keyboard_on_the_desktop_ui() {
+    fn a_desktop_never_raises_the_keyboard_by_itself() {
         for hw in [false, true] {
-            assert!(!FormFactor::Desktop.allows_onscreen_keyboard(true, hw));
+            assert!(!FormFactor::Desktop.allows_onscreen_keyboard(hw));
         }
-        assert!(FormFactor::Desktop.allows_onscreen_keyboard(false, false));
     }
 
     #[test]
-    fn a_tablet_raises_it_with_the_desktop_ui_up() {
-        assert!(FormFactor::Tablet.allows_onscreen_keyboard(true, false));
-        assert!(FormFactor::Tablet.allows_onscreen_keyboard(false, false));
+    fn a_tablet_raises_it_without_a_hardware_keyboard() {
+        assert!(FormFactor::Tablet.allows_onscreen_keyboard(false));
     }
 
     #[test]
     fn a_hardware_keyboard_on_a_tablet_hides_it() {
-        assert!(!FormFactor::Tablet.allows_onscreen_keyboard(true, true));
-        assert!(!FormFactor::Tablet.allows_onscreen_keyboard(false, true));
+        assert!(!FormFactor::Tablet.allows_onscreen_keyboard(true));
     }
 
     #[test]

@@ -36,8 +36,11 @@
         if !desktop {
             sh.desk = None;
         }
-        // tests do not depend on BIFROST_FORM or /etc/bifrost/form of the machine they run on
-        sh.form = bifrost_ui::form_factor::FormFactor::Desktop;
+        // tests do not depend on BIFROST_FORM or /etc/bifrost/form of the machine they run on. The touch presentation
+        // (no desk) is the tablet form: it is the one that raises the on-screen keyboard. The desktop shell is a desktop.
+        sh.form = if desktop { bifrost_ui::form_factor::FormFactor::Desktop } else { bifrost_ui::form_factor::FormFactor::Tablet };
+        // the keyboard client starts out shown; the shell raises it when a field asks, so start every test from down
+        sh.keyboard.set_shown(false, 0.0);
         sh
     }
 
@@ -78,11 +81,74 @@
         // with a focused text field to the front raised it on the desktop.
         let mut sh=shell();
         sh.set_keyboard(true,1000.);
-        assert!(sh.keyboard.shown(),"the bifrost still gets its keyboard");
+        assert!(sh.keyboard.shown(),"the touch presentation (a tablet) still gets its keyboard");
         sh.set_keyboard(false,1100.);
+        sh.form=bifrost_ui::form_factor::FormFactor::Desktop;
         sh.desk=Some(desk::Desk::new());
         sh.set_keyboard(true,1200.);
         assert!(!sh.keyboard.shown(),"a desktop has a hardware keyboard");
+    }
+
+    #[test]
+    fn a_desktop_never_raises_the_keyboard_without_the_desktop_ui_either() {
+        // the old touch-only presentation on a desktop-form machine used to raise it; the form alone decides now
+        let mut sh=shell();
+        sh.form=bifrost_ui::form_factor::FormFactor::Desktop;
+        assert!(sh.desk.is_none());
+        sh.set_keyboard(true,1000.);
+        assert!(!sh.keyboard.shown());
+        assert!(!sh.desk_keyboard_visible());
+    }
+
+    #[test]
+    fn on_a_desktop_no_automatic_path_shows_the_keyboard() {
+        keyboard::fake_process(500.0);
+        // a Wayland client's text field takes focus
+        let mut sh=desktop_shell();
+        sh.input_method_batch(textinput::ImBatch{focus:Some(true),..textinput::ImBatch::default()},1000.);
+        assert!(!sh.keyboard.shown(),"a focused text field of a client");
+        assert!(!sh.desk_keyboard_visible());
+        // Terminal, Search, sheets and the rest all raise it through `set_keyboard`
+        sh.set_keyboard(true,1100.);
+        assert!(!sh.keyboard.shown(),"Terminal, Search or a sheet");
+        // the lock screen's password field, even when the window asks for a touch keyboard
+        keyboard::fake_process(500.0);
+        let mut sh=login_shell(login::Reply::Unavailable);
+        sh.form=bifrost_ui::form_factor::FormFactor::Desktop;
+        sh.set_keyboard(false,0.);
+        sh.anim=None;
+        sh.login_ensure(0.0);
+        sh.login.as_mut().unwrap().touch_keyboard=true;
+        let picture=(600.0,1920.0*0.62+sh.ui.pt(30.0));
+        tap(&mut sh,picture.0,picture.1,100.0);
+        assert!(!sh.keyboard.shown(),"the lock screen");
+        assert!(!sh.login_owns_keyboard());
+    }
+
+    #[test]
+    fn a_desktop_gets_the_keyboard_only_when_the_user_opens_it_and_can_close_it() {
+        keyboard::fake_process(500.0);
+        let mut sh=desktop_shell();
+        sh.keyboard_open_explicit(1000.);
+        assert!(sh.keyboard.shown() && sh.keyboard_opened_explicitly(),"the Input menu row opens it");
+        assert!(sh.desk_keyboard_visible(),"and the desktop draws it");
+        sh.set_keyboard(false,1100.);
+        assert!(sh.keyboard.shown(),"tapping outside a field does not close the one the user opened");
+        sh.keyboard_close_explicit(1200.);
+        assert!(!sh.keyboard.shown() && !sh.keyboard_opened_explicitly(),"the same row closes it");
+        assert!(!sh.desk_keyboard_visible(),"nothing is drawn or reserved afterwards");
+        sh.set_keyboard(true,1300.);
+        assert!(!sh.keyboard.shown(),"and it does not come back by itself");
+    }
+
+    #[test]
+    fn the_keyboards_hide_key_closes_the_keyboard_a_desktop_user_opened() {
+        keyboard::fake_process(500.0);
+        let mut sh=desktop_shell();
+        sh.keyboard_open_explicit(1000.);
+        keyboard::fake_typed(keyboard::Out::Hide);
+        sh.tick(1100.);
+        assert!(!sh.keyboard.shown() && !sh.keyboard_opened_explicitly());
     }
 
     #[test]
@@ -115,6 +181,7 @@
     #[test]
     fn a_desktop_ignores_the_hardware_keyboard_state() {
         let mut sh=shell();
+        sh.form=bifrost_ui::form_factor::FormFactor::Desktop;
         sh.desk=Some(desk::Desk::new());
         sh.set_hardware_keyboard(false,1000.);
         sh.set_keyboard(true,1100.);
