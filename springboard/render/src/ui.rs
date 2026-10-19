@@ -67,6 +67,9 @@ pub const FIELD_BG: Pair = Pair::new(pack(58, 58, 60, 255), pack(226, 226, 228, 
 pub const LABEL_3: Pair = Pair::new(pack(99, 99, 102, 255), pack(184, 184, 188, 255));
 /// Golden Gate sidebar selection: a neutral plate under a bold label (Files, Notes, Reminders references).
 pub const SIDEBAR_PLATE: Pair = Pair::new(pack(66, 66, 70, 255), pack(220, 220, 222, 255));
+/// A selected row in a list or column that does not have keyboard focus (the folders along a column path): the same
+/// neutral plate, under the normal label. The focused column keeps the accent `SELECTION` with white text.
+pub const SELECTION_INACTIVE: Pair = SIDEBAR_PLATE;
 /// Toolbar capsules (Golden Gate glass button groups) and their one-pixel edge.
 pub const CAPSULE_BG: Pair = Pair::new(pack(50, 50, 53, 255), pack(255, 255, 255, 255));
 pub const CAPSULE_EDGE: Pair = Pair::new(pack(72, 72, 76, 255), pack(224, 224, 227, 255));
