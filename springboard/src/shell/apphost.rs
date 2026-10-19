@@ -75,6 +75,9 @@ pub struct Manifest {
     pub entity_types: Vec<String>,
     /// `[[control]]` tables: buttons and toggles the app adds to Control Center (`shell::app_controls`).
     pub controls: Vec<super::app_controls::ManifestControl>,
+    /// `[[widget]]` tables: the widget kinds the app offers, with their names and sizes
+    /// (`bifrost_ui::widget_kind::parse_manifest`). The shell registers them in the Edit Widgets gallery.
+    pub widgets: Vec<bifrost_ui::widget_kind::WidgetKind>,
     /// the `[[focus_filter]] intent` ids: run when the Focus changes (`services::focus_filter::focus_calls`)
     pub focus_intents: Vec<String>,
     /// `[[service]]` tables: Services menu entries this app provides for a selection (`bifrost_ui::app_services`).
@@ -222,6 +225,7 @@ impl Manifest {
             }
         }
         m.controls = super::app_controls::parse_controls(text);
+        m.widgets = bifrost_ui::widget_kind::parse_manifest(text);
         m.focus_intents = super::services::focus_filter::parse_declarations(text).into_iter().filter_map(|d| d.intent).collect();
         m.quick_actions = super::quick_actions::parse_static(text);
         m.settings_panes = super::settings_panes::parse_static(text);

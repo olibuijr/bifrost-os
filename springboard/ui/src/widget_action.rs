@@ -203,6 +203,11 @@ impl ToggleSet {
         self.toggles.iter().any(|(i, t)| i == id && t.is_pending())
     }
 
+    /// True while any toggle waits for the app's answer.
+    pub fn any_pending(&self) -> bool {
+        self.toggles.iter().any(|(_, t)| t.is_pending())
+    }
+
     /// A tap on `spec`: the invocation to send. A toggle flips and waits for [`ToggleSet::settle`]; a second tap while
     /// it waits is refused with None. A button always yields its invocation.
     pub fn tap(&mut self, spec: &ButtonSpec) -> Option<Invocation> {

@@ -213,7 +213,7 @@ fn headless_widget_link_store_keeps_the_link_per_widget() {
 // ---- helpers ----
 
 fn entry(date: f64, title: &str, text: &str) -> Entry<Text> {
-    Entry { date, value: Text { title: title.into(), text: text.into() } }
+    Entry { date, value: Text::new(title, text) }
 }
 
 // ---- now-playing: playback position and transport (springboard::shell::services::now_playing) ----

@@ -11,6 +11,7 @@ use super::super::gestures::{ease_out_quartic, progress, Drag, SPRING_MS};
 use super::super::ui::{centred, Weight, WHITE};
 use super::super::{apps, AppId, Effect, Event, Screen, Shell};
 use bifrost_ui::material_request::ShellSurface;
+use bifrost_ui::widget_kind::Family;
 use super::list::{Hit, ListView, Mode, Slide, CARD_W_PT};
 use crate::deildu::scroll::Scroller;
 use crate::gfx::{rgba, Image, Surface};
@@ -70,11 +71,14 @@ pub struct Center {
     editing: bool,
     /// the gallery row (listing index) whose Options are open in the gallery's place
     configuring: Option<usize>,
+    /// the unix second from which the column's widget text is redrawn: live date text changes, and a toggle waits for
+    /// its app (`widgets_timeline::next_refresh`)
+    refresh_due: i64,
 }
 
 impl Default for Center {
     fn default() -> Self {
-        Center { state: State::Hidden, touch: None, revealed: None, backdrop: None, list: None, list_key: (u32::MAX, 0), scroll: Scroller::new(), title: None, empty: None, desk_press: None, editing: false, configuring: None }
+        Center { state: State::Hidden, touch: None, revealed: None, backdrop: None, list: None, list_key: (u32::MAX, 0), scroll: Scroller::new(), title: None, empty: None, desk_press: None, editing: false, configuring: None, refresh_due: 0 }
     }
 }
 
@@ -324,6 +328,12 @@ impl Shell {
 
     /// Finishes a settle animation and scrolling.
     pub(super) fn center_tick(&mut self, t: f64) {
+        // live date text and pending toggles redraw the open column when their next change is due
+        let now = self.notify.now();
+        if !self.notify.center.is_hidden() && now >= self.notify.center.refresh_due {
+            self.notify.center.refresh_due = widgets_timeline::next_refresh(now).unwrap_or(now + 30);
+            self.dirty = true;
+        }
         let c = &mut self.notify.center;
         if let State::Settling { to, start, .. } = c.state {
             if progress(start, t, SPRING_MS) >= 1.0 {
@@ -422,15 +432,21 @@ impl Shell {
 // radius, 10 apart; a "Notification Center" title row with a 20 pt clear disc.
 // One card per app (its newest notification), a stacked edge when the app has
 // more; the card's disc clears that app, the title's clears all, a click on a
-// card opens its app, a click elsewhere closes the column. Widgets are left
-// out: the shell has no widget data source on the PC yet.
+// card opens its app, a click elsewhere closes the column.
 //
 // Widget area (services/widgets_timeline.rs): under the title, one row per widget entry or live activity on screen,
-// 58 pt high, 10 apart, above the notification cards.
+// 58 pt (Small), 77 pt (Medium) or 96 pt (Large) high by the family the person chose, 10 apart, above the
+// notification cards, stacked by `bifrost_ui::widget_column::flow`. An entry's buttons and toggles sit at the row's
+// trailing edge; a tap runs the app's intent over its control socket.
 
 const NC_WIDGET_PT: f32 = 58.0;
+/// a widget set to Medium in the Edit Widgets gallery
+const NC_WIDGET_MEDIUM_PT: f32 = 77.0;
 /// a widget set to Large in the Edit Widgets gallery
 const NC_WIDGET_LARGE_PT: f32 = 96.0;
+/// a widget button's width, and how long a tap waits for the app's control socket
+const NC_ACTION_W_PT: f32 = 64.0;
+const WIDGET_ACTION_WAIT: std::time::Duration = std::time::Duration::from_secs(2);
 /// the Edit Widgets capsule at the foot of the column, its height and the gap above it
 const NC_EDIT_PT: f32 = 28.0;
 const NC_EDIT_TOP_PT: f32 = 14.0;
@@ -464,18 +480,21 @@ enum DeskHit {
     Done,
     /// the gallery row's add or remove disc (index into the gallery listing)
     Toggle(usize),
-    /// the gallery row's Small (false) or Large (true) chip
-    Size(usize, bool),
+    /// the gallery row's size chip (listing index, the size it sets)
+    Family(usize, Family),
     /// the gallery row's Options chip (listing index): the widget's options replace the gallery
     Options(usize),
     /// an option row (option index) and the side tapped: -1 left half, +1 right half
     Param(usize, i64),
     /// a widget row in the column (index into `center_widget_rects`)
     Widget(usize),
+    /// a button or toggle on a widget row (row index into `center_widget_rects`, button index)
+    Action(usize, usize),
 }
 
-/// One gallery row: (index in the listing, row rect, add/remove disc, Small chip, Large chip).
-type GalleryRow = (usize, R4, R4, R4, R4, Option<R4>);
+/// One gallery row: (index in the listing, row rect, add/remove disc, the size chips the widget supports with the size
+/// each sets, the Options chip when the widget has options).
+type GalleryRow = (usize, R4, R4, Vec<(Family, R4)>, Option<R4>);
 
 type R4 = (f32, f32, f32, f32);
 
@@ -521,17 +540,28 @@ impl Shell {
         let ui = &self.ui;
         let w = ui.pt(NC_W_PT);
         let x = self.w as f32 - ui.pt(NC_RIGHT_PT) - w;
-        let mut y = self.desktop_bar_height() as f32 + ui.pt(NC_TOP_GAP_PT) + ui.pt(NC_TITLE_PT);
-        let mut out = vec![];
-        for row in widgets_timeline::rows(self.notify.now()) {
-            let h = ui.pt(if row.large { NC_WIDGET_LARGE_PT } else { NC_WIDGET_PT });
-            if y + h > self.h as f32 - ui.pt(NC_BOTTOM_PT) {
-                break;
-            }
-            out.push(((x, y, w, h), row));
-            y += h + ui.pt(NC_GAP_PT);
-        }
-        out
+        let top = self.desktop_bar_height() as f32 + ui.pt(NC_TOP_GAP_PT) + ui.pt(NC_TITLE_PT);
+        let rows = widgets_timeline::rows(self.notify.now());
+        // each row is as tall as its family; the column keeps the leading rows that end above the dock
+        let heights: Vec<f32> = rows
+            .iter()
+            .map(|r| {
+                ui.pt(match r.family {
+                    Family::Small => NC_WIDGET_PT,
+                    Family::Medium => NC_WIDGET_MEDIUM_PT,
+                    Family::Large => NC_WIDGET_LARGE_PT,
+                })
+            })
+            .collect();
+        let slots = bifrost_ui::widget_column::flow(&heights, top, ui.pt(NC_GAP_PT), self.h as f32 - ui.pt(NC_BOTTOM_PT));
+        slots.into_iter().zip(rows).map(|(slot, row)| ((x, slot.y, w, slot.height), row)).collect()
+    }
+
+    /// The rects of a widget row's `count` buttons, from the row's trailing pad leftwards, in the app's order.
+    fn center_action_rects(&self, (x, y, w, h): R4, count: usize) -> Vec<R4> {
+        let ui = &self.ui;
+        let (cw, ch, gap, pad) = (ui.pt(NC_ACTION_W_PT), ui.pt(NC_DISC_PT), ui.pt(NC_CHIP_GAP_PT), ui.pt(NC_PAD_PT));
+        (0..count).map(|j| (x + w - pad - (count - j) as f32 * cw - (count - 1 - j) as f32 * gap, y + (h - ch) / 2.0, cw, ch)).collect()
     }
 
     /// The Edit Widgets capsule: the column's width, just under the last widget or notification (under the title when
@@ -570,11 +600,17 @@ impl Shell {
             }
             let cy = y + h / 2.0;
             let toggle = (x + w - pad - disc, cy - disc / 2.0, disc, disc);
-            let large = (toggle.0 - gap - chip, cy - disc / 2.0, chip, disc);
-            let small = (large.0 - gap - chip, cy - disc / 2.0, chip, disc);
-            // a widget with options offers an Options chip to the left of Small
-            let opts = list[i].configurable.then(|| (small.0 - gap - 2.0 * chip, cy - disc / 2.0, 2.0 * chip, disc));
-            rows.push((i, (x, y, w, h), toggle, small, large, opts));
+            // one chip per size the widget supports, the largest nearest the disc
+            let mut chips = Vec::new();
+            let mut edge = toggle.0 - gap;
+            for f in list[i].families.iter().rev() {
+                edge -= chip;
+                chips.push((*f, (edge, cy - disc / 2.0, chip, disc)));
+                edge -= gap;
+            }
+            // a widget with options offers an Options chip to the left of the size chips
+            let opts = list[i].configurable.then(|| (edge - 2.0 * chip, cy - disc / 2.0, 2.0 * chip, disc));
+            rows.push((i, (x, y, w, h), toggle, chips, opts));
             y += h + ui.pt(NC_GAP_PT);
         }
         (title, done, rows)
@@ -611,18 +647,15 @@ impl Shell {
         if within(done, x, y) {
             return Some(DeskHit::Done);
         }
-        for (i, _, toggle, small, large, opts) in rows {
+        for (i, _, toggle, chips, opts) in rows {
             if opts.is_some_and(|o| within(o, x, y)) {
                 return Some(DeskHit::Options(i));
             }
             if within(toggle, x, y) {
                 return Some(DeskHit::Toggle(i));
             }
-            if within(small, x, y) {
-                return Some(DeskHit::Size(i, false));
-            }
-            if within(large, x, y) {
-                return Some(DeskHit::Size(i, true));
+            if let Some((f, _)) = chips.into_iter().find(|(_, r)| within(*r, x, y)) {
+                return Some(DeskHit::Family(i, f));
             }
         }
         None
@@ -632,7 +665,13 @@ impl Shell {
         if self.notify.center.editing {
             return if self.notify.center.configuring.is_some() { self.center_options_hit(x, y) } else { self.center_gallery_hit(x, y) };
         }
-        if let Some(i) = self.center_widget_rects().iter().position(|(r, _)| within(*r, x, y)) {
+        let widgets = self.center_widget_rects();
+        for (i, (r, row)) in widgets.iter().enumerate() {
+            if let Some(j) = self.center_action_rects(*r, row.buttons.len()).into_iter().position(|b| within(b, x, y)) {
+                return Some(DeskHit::Action(i, j));
+            }
+        }
+        if let Some(i) = widgets.iter().position(|(r, _)| within(*r, x, y)) {
             return Some(DeskHit::Widget(i));
         }
         if within(self.center_edit_rect(), x, y) {
@@ -705,6 +744,28 @@ impl Shell {
         self.dirty = true;
     }
 
+    /// A tap on button `j` of widget row `i`. The app's intent runs on a worker thread through its control socket (the
+    /// app has to be running); a toggle shows its new state at once and goes back when the app answers with an error
+    /// or cannot be reached.
+    fn run_widget_action(&mut self, i: usize, j: usize) {
+        let Some((_, row)) = self.center_widget_rects().into_iter().nth(i) else { return };
+        let (Some((app, kind)), Some(button)) = (row.widget.clone(), row.buttons.get(j)) else { return };
+        let id = button.id.clone();
+        let Ok(inv) = widgets_timeline::tap_action(&app, &kind, &id, self.notify.now()) else { return };
+        std::thread::spawn(move || {
+            let params: Vec<(&str, &str)> = inv.params.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+            let ok = match super::super::intents::run_with(&app, &inv.intent, &params, WIDGET_ACTION_WAIT) {
+                Ok(_) => true,
+                Err(e) => {
+                    eprintln!("notification centre: widget {app}/{kind}: {e}");
+                    false
+                }
+            };
+            widgets_timeline::settle_action(&app, &kind, &id, ok);
+        });
+        self.notify.center.refresh_due = 0;
+    }
+
     /// Opens the desktop column (the menu bar clock, as on Golden Gate).
     pub(crate) fn open_desk_notification_center(&mut self, t: f64) {
         if !self.screen_on || self.is_locked() {
@@ -717,6 +778,7 @@ impl Shell {
         // it opens on the widgets, not on the gallery of an earlier visit
         c.editing = false;
         c.configuring = None;
+        c.refresh_due = 0;
         c.settle(0.0, true, t);
         self.dirty = true;
     }
@@ -765,14 +827,15 @@ impl Shell {
                             }
                         }
                         DeskHit::Widget(i) => self.open_widget(i, t),
+                        DeskHit::Action(i, j) => self.run_widget_action(i, j),
                         DeskHit::Toggle(i) => {
                             if let Some(item) = self.gallery_item(i) {
                                 widgets_timeline::place(&item.app, &item.kind, !item.placed);
                             }
                         }
-                        DeskHit::Size(i, large) => {
+                        DeskHit::Family(i, family) => {
                             if let Some(item) = self.gallery_item(i) {
-                                widgets_timeline::resize(&item.app, &item.kind, large);
+                                widgets_timeline::set_family(&item.app, &item.kind, family);
                             }
                         }
                     }
@@ -826,10 +889,27 @@ impl Shell {
         }
         let pad = ui.pt(NC_PAD_PT);
         for ((x, y, w, h), row) in self.center_widget_rects() {
+            let rects = self.center_action_rects((x, y, w, h), row.buttons.len());
             let x = x + slide;
             let r = ui.pt(NC_CARD_R_PT);
             desk_glass(s, ShellSurface::NotificationPanel, (x, y, w, h), r, alpha);
-            let room = w - 2.0 * pad;
+            // the entry's buttons: a capsule plate with a link-coloured label; a toggle that is on has a link plate
+            // with a white label, and one waiting for its app is drawn lighter
+            for (button, (bx, by, bw, bh)) in row.buttons.iter().zip(rects.iter().copied()) {
+                let bx = bx + slide;
+                let on = button.on == Some(true);
+                let plate = if on { LINK } else { FIELD_BG.now() };
+                let plate_alpha = if button.pending { alpha / 2 } else { alpha };
+                s.fill_rrect(bx, by, bw, bh, bh / 2.0, crate::gfx::scale(plate, plate_alpha));
+                let ink = if on { WHITE } else { LINK };
+                let bt = ui.text(&ui.fit(&button.label, MAC_SUBHEAD_PT, bw - ui.pt(NC_CHIP_GAP_PT)), MAC_SUBHEAD_PT, Weight::Semibold, ink);
+                s.blit(&bt, (bx + (bw - bt.w as f32) / 2.0) as i32, (by + (bh - bt.h as f32) / 2.0) as i32, 255, plate_alpha);
+            }
+            let buttons_room = match rects.first() {
+                Some(first) => x - slide + w - first.0 + ui.pt(NC_CHIP_GAP_PT),
+                None => 0.0,
+            };
+            let room = w - 2.0 * pad - buttons_room;
             let head = ui.text(&ui.fit(&row.title, MAC_SUBHEAD_PT, room), MAC_SUBHEAD_PT, Weight::Regular, secondary);
             let value = ui.text(&ui.fit(&row.text, MAC_HEADLINE_PT, room), MAC_HEADLINE_PT, Weight::Semibold, label);
             let ly = y + (h - (head.h + value.h) as f32) / 2.0;
@@ -937,13 +1017,14 @@ impl Shell {
             let none = ui.text("No widgets yet", MAC_SUBHEAD_PT, Weight::Regular, secondary);
             s.blit(&none, (title.0 + slide) as i32, (title.1 + title.3 + ui.pt(NC_GAP_PT)) as i32, 255, alpha);
         }
-        for (i, (x, y, w, h), toggle, small, large, opts) in rows {
+        for (i, (x, y, w, h), toggle, chips, opts) in rows {
             let item = &list[i];
             let x = x + slide;
             desk_glass(s, ShellSurface::Popover, (x, y, w, h), r, alpha);
             // the name, and the search view's description under it, as far as the room between the pad and the controls
             let options_room = if opts.is_some() { 2.0 * ui.pt(NC_CHIP_W_PT) + ui.pt(NC_CHIP_GAP_PT) } else { 0.0 };
-            let room = w - 2.0 * pad - ui.pt(NC_DISC_PT) - 3.0 * ui.pt(NC_CHIP_GAP_PT) - 2.0 * ui.pt(NC_CHIP_W_PT) - options_room;
+            let n = chips.len() as f32;
+            let room = w - 2.0 * pad - ui.pt(NC_DISC_PT) - (n + 1.0) * ui.pt(NC_CHIP_GAP_PT) - n * ui.pt(NC_CHIP_W_PT) - options_room;
             let name = ui.text(&ui.fit(&item.title, MAC_HEADLINE_PT, room), MAC_HEADLINE_PT, Weight::Semibold, label);
             let desc = item.description.as_ref().map(|d| ui.text(&ui.fit(d, MAC_SUBHEAD_PT, room), MAC_SUBHEAD_PT, Weight::Regular, secondary));
             let block = name.h as f32 + desc.as_ref().map_or(0.0, |d| d.h as f32);
@@ -971,7 +1052,8 @@ impl Shell {
                 s.blit(&ot, (ox + (ow - ot.w as f32) / 2.0) as i32, (oy + (oh - ot.h as f32) / 2.0) as i32, 255, alpha);
             }
             // the size chips: the chosen one has a plate and the label colour
-            for (rect, text, selected) in [(small, "Small", !item.large), (large, "Large", item.large)] {
+            for (family, rect) in chips {
+                let (text, selected) = (family.label(), item.family == family);
                 let (cx0, cy0, cw, ch) = (rect.0 + slide, rect.1, rect.2, rect.3);
                 if selected {
                     s.fill_rrect(cx0, cy0, cw, ch, ch / 2.0, crate::gfx::scale(field, alpha));

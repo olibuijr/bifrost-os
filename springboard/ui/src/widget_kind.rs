@@ -72,7 +72,7 @@ fn check_id(id: &str) -> Result<(), KindError> {
 }
 
 /// One widget kind an app registers.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct WidgetKind {
     id: String,
     /// The name shown when a user adds or edits the widget.
