@@ -286,6 +286,7 @@ impl ImageSource {
         }
         match f {
             Format::Gif => gif::count(&self.data).unwrap_or(1),
+            Format::Png => png::frame_count(&self.data),
             Format::Ico => bmp::ico_count(&self.data).unwrap_or(1),
             Format::Tiff => tiff::count(&self.data).unwrap_or(1),
             _ => 1,
@@ -587,6 +588,11 @@ impl ImageDestination {
                     gamma: fo.gamma,
                     level: None,
                 };
+                // Several pictures of one size make an animated PNG (the first is also what other readers show).
+                let same: Vec<encode::ApngFrame> = items.iter().filter(|i| i.1 == *w && i.2 == *h).map(|i| encode::ApngFrame { rgba: &i.0, delay_ms: i.3.delay_ms.unwrap_or(100) }).collect();
+                if same.len() > 1 {
+                    return encode::encode_apng(*w, *h, &same, self.loop_count, &o);
+                }
                 encode::encode_png(*w, *h, first_px, &o)
             }
             Format::Jpeg => {

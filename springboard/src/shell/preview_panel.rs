@@ -21,6 +21,7 @@
 
 use super::ui::{Ui, Weight, CARD_BG, DETAIL_BG, LABEL, LINK, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_HEADLINE_PT, SECONDARY, SEPARATOR_C};
 use super::preview_gen::{Generator, Generators};
+use super::preview_info::{self, ListError, PictureAnim};
 use super::Shell;
 use crate::cg::pdf::doc::Doc;
 use crate::cg::pdf::draw;
@@ -44,6 +45,7 @@ const PDF: &str = "desk.pdf";
 const AUDIO: &str = "desk.audio";
 const VIDEO: &str = "desk.video";
 const FONT: &str = "desk.font";
+const ARCHIVE: &str = "desk.archive";
 
 /// The registry the panel previews with: one provider per kind of item.
 pub fn registry() -> Registry {
@@ -54,6 +56,7 @@ pub fn registry() -> Registry {
     let _ = r.register(AUDIO, &["public.audio"]);
     let _ = r.register(VIDEO, &["public.movie"]);
     let _ = r.register(FONT, &["public.font"]);
+    let _ = r.register(ARCHIVE, &["public.archive"]);
     r
 }
 
@@ -96,6 +99,8 @@ pub enum Kind {
     Audio,
     Video,
     Font,
+    /// a ZIP or tar archive: its entries are listed
+    Archive,
     /// a directory: its item count and size (see [`folder_summary`]), never an extension
     Folder,
     Other,
@@ -116,6 +121,7 @@ fn kind_of_provider(provider: Option<&str>) -> Kind {
         Some(AUDIO) => Kind::Audio,
         Some(VIDEO) => Kind::Video,
         Some(FONT) => Kind::Font,
+        Some(ARCHIVE) => Kind::Archive,
         _ => Kind::Other,
     }
 }
@@ -476,6 +482,8 @@ pub enum Body {
     Pdf(Box<PdfView>),
     /// a font file's bytes, leaked once per path (see [`Panel::font_data`]); the sample is set in its face
     Font(&'static [u8]),
+    /// a GIF or an animated PNG, played frame by frame
+    Animation(Box<PictureAnim>),
     Media(Box<Media>),
     Info(String),
 }
@@ -490,7 +498,16 @@ pub fn load_body(item: Option<&PreviewItem>) -> Body {
     let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
     let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
     match kind_for_path(p) {
-        Kind::Image => Body::Loading,
+        // an animated picture plays here; a still one waits for the thumbnails service
+        Kind::Image => match preview_info::load_animation(p) {
+            Some(a) => Body::Animation(Box::new(a)),
+            None => Body::Loading,
+        },
+        Kind::Archive => match preview_info::archive_entries(p) {
+            Ok(entries) => Body::Text(preview_info::listing_lines(&entries)),
+            Err(ListError::Unsupported) => Body::Info(if ext.is_empty() { "No listing for this archive. Extract it in Files to see what is inside.".into() } else { format!("No listing for .{ext} archives. Extract it in Files to see what is inside.") }),
+            Err(ListError::Unreadable) => Body::Info("This archive cannot be read.".into()),
+        },
         Kind::Pdf | Kind::Audio => fallback_body(item),
         Kind::Folder => match folder_summary(p) {
             Some((count, bytes, truncated)) => Body::Info(folder_text(count, bytes, truncated)),
@@ -527,6 +544,8 @@ pub struct Panel {
     owner: Option<String>,
     visible: bool,
     body: Body,
+    /// the line under a picture: its size, format, camera, date and exposure (see `preview_info::picture_info`)
+    info: Option<String>,
     /// the local file whose thumbnail the body waits for; taken once by the `quick-look` service, which asks for it
     wanted: Option<String>,
     /// events for the owner, drained by the `quick-look` service's tick: (event name, body)
@@ -567,6 +586,7 @@ impl Panel {
         let was = std::mem::replace(&mut self.visible, false);
         self.dirty = true;
         self.body = Body::Empty;
+        self.info = None;
         self.face = None;
         self.drag = None;
         was
@@ -779,6 +799,7 @@ impl Panel {
             },
             None => load_body(item.as_ref()),
         };
+        self.info = path.as_deref().filter(|p| kind_for_path(Path::new(p)) == Kind::Image).and_then(|p| preview_info::picture_info_for(Path::new(p)));
         self.wanted = match (&self.body, url) {
             (Body::Loading, Some((u, _))) => local_path(&u).map(str::to_string),
             _ => None,
@@ -797,6 +818,11 @@ impl Panel {
                 v.prepare(self.viewport);
             }
             Body::Media(m) => m.tick(),
+            Body::Animation(a) => {
+                if a.tick() {
+                    self.dirty = true;
+                }
+            }
             _ => {}
         }
         let font = match &self.body {
@@ -1165,6 +1191,14 @@ impl Shell {
                 let r = rect(bx + (bw - w) / 2.0, by + (bh - h) / 2.0, w, h);
                 super::switcher::draw_scaled(s, im, r, ui.pt(4.0), 255);
             }
+            Body::Animation(a) => {
+                let im = a.frame();
+                let k = (bw - ui.pt(24.0)) / im.w.max(1) as f32;
+                let k = k.min((bh - ui.pt(24.0)) / im.h.max(1) as f32);
+                let (w, h) = (im.w as f32 * k, im.h as f32 * k);
+                let r = rect(bx + (bw - w) / 2.0, by + (bh - h) / 2.0, w, h);
+                super::switcher::draw_scaled(s, im, r, ui.pt(4.0), 255);
+            }
             Body::Pdf(v) => {
                 // each page that shows is cut to the body's rows, so nothing is drawn over the card's header or strip
                 let offset = v.scroll().offset();
@@ -1239,10 +1273,12 @@ impl Shell {
             _ => {}
         }
 
-        // the URL of an item that has a title of its own, centred under the body in secondary grey
-        if let Some(item) = p.current().filter(|i| !i.title.is_empty() && !i.url.is_empty()) {
+        // a picture's information line, else the URL of an item that has a title of its own, centred under the body in
+        // secondary grey
+        let caption = p.info.clone().or_else(|| p.current().filter(|i| !i.title.is_empty() && !i.url.is_empty()).map(|i| i.url.clone()));
+        if let Some(text) = caption {
             let c = g.caption;
-            let url = ui.fit(&item.url, MAC_FOOTNOTE_PT, c.w as f32);
+            let url = ui.fit(&text, MAC_FOOTNOTE_PT, c.w as f32);
             self.label(&url, MAC_FOOTNOTE_PT, Weight::Regular, SECONDARY, |im| {
                 s.blit(im, c.x + (c.w - im.w as i32) / 2, c.y + (c.h - im.h as i32) / 2, 255, 255)
             });
@@ -1299,7 +1335,9 @@ mod tests {
         assert_eq!(kind_for("clip.mov"), Kind::Video);
         assert_eq!(kind_for("face.ttf"), Kind::Font);
         assert_eq!(kind_for("face.otf"), Kind::Font);
-        assert_eq!(kind_for("archive.zip"), Kind::Other);
+        assert_eq!(kind_for("archive.zip"), Kind::Archive);
+        assert_eq!(kind_for("backup.tar"), Kind::Archive);
+        assert_eq!(kind_for("stuff.7z"), Kind::Archive);
         assert_eq!(kind_for("README"), Kind::Other, "no extension, no type");
     }
 
@@ -1400,7 +1438,7 @@ mod tests {
         // line is shown at once, so nothing is waited for.
         assert_eq!(p.take_wanted(), None, "an archive is not asked for a thumbnail");
         assert!(!p.thumbnail("/b.zip", None), "no picture is waited for");
-        assert!(matches!(p.body, Body::Info(t) if t == "No preview for .zip files."));
+        assert!(matches!(p.body, Body::Info(t) if t == "This archive cannot be read."), "the archive is listed or says it cannot be read");
     }
 
     #[test]
@@ -1645,5 +1683,59 @@ mod tests {
         // the caption strip sits at the bottom of the card, below the body
         assert_eq!(g.caption.y + g.caption.h, g.card.y + g.card.h);
         assert!(g.body.y + g.body.h <= g.caption.y);
+    }
+
+    #[test]
+    fn an_archive_is_listed_and_a_format_without_a_listing_says_so() {
+        use crate::files::zip::Writer;
+        let dir = std::env::temp_dir().join(format!("ql-archive-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut w = Writer::new(std::fs::File::create(dir.join("pack.zip")).unwrap());
+        w.add_bytes("notes/a.txt", b"hello there", 0).unwrap();
+        w.add_bytes("b.txt", b"x", 0).unwrap();
+        w.finish().unwrap();
+        std::fs::write(dir.join("old.7z"), b"7z\xBC\xAF\x27\x1C plus enough bytes to not be empty").unwrap();
+        let zip = format!("file://{}", dir.join("pack.zip").display());
+        match load_body(Some(&item(&zip, "pack"))) {
+            Body::Text(lines) => {
+                assert!(lines[0].starts_with("2 items, "), "{:?}", lines);
+                assert!(lines[1].starts_with("notes/a.txt  ("));
+                assert!(lines[2].starts_with("b.txt  ("));
+            }
+            _ => panic!("a ZIP is listed as text lines"),
+        }
+        let sevenz = format!("file://{}", dir.join("old.7z").display());
+        assert!(matches!(load_body(Some(&item(&sevenz, "old"))), Body::Info(t) if t.starts_with("No listing for .7z archives")));
+        let mut p = Panel::default();
+        p.show("app", vec![item(&zip, "pack")], 0);
+        assert!(matches!(p.body, Body::Text(_)));
+        assert_eq!(p.take_wanted(), None, "a listing waits for no thumbnail");
+        assert_eq!(p.info, None, "only pictures have an information line");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn an_animated_png_plays_in_the_panel_and_a_picture_gets_its_information_line() {
+        use crate::cg::imageio::encode::{encode_apng, ApngFrame, PngOptions};
+        let dir = std::env::temp_dir().join(format!("ql-anim-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let (a, b) = (vec![255u8, 0, 0, 255].repeat(4), vec![0u8, 255, 0, 255].repeat(4));
+        let frames = [ApngFrame { rgba: &a, delay_ms: 100 }, ApngFrame { rgba: &b, delay_ms: 100 }];
+        std::fs::write(dir.join("spin.png"), encode_apng(2, 2, &frames, 0, &PngOptions::default()).unwrap()).unwrap();
+        std::fs::write(dir.join("still.png"), crate::cg::imageio::tests::png_bytes(2, 2, [1, 2, 3, 255])).unwrap();
+        let mut p = Panel::default();
+        p.show("app", vec![item(&format!("file://{}/spin.png", dir.display()), "spin"), item(&format!("file://{}/still.png", dir.display()), "still")], 0);
+        assert!(matches!(p.body, Body::Animation(_)), "an animated picture plays without waiting for a thumbnail");
+        assert_eq!(p.take_wanted(), None);
+        assert!(p.info.as_deref().is_some_and(|i| i.starts_with("2 \u{D7} 2") && i.contains("2 frames")), "{:?}", p.info);
+        p.step(1);
+        assert!(matches!(p.body, Body::Loading), "a still picture waits for the thumbnails service");
+        assert_eq!(p.take_wanted().map(|f| f.ends_with("still.png")), Some(true));
+        assert!(p.info.as_deref().is_some_and(|i| i.starts_with("2 \u{D7} 2  \u{B7}  PNG")), "{:?}", p.info);
+        p.close_by_user();
+        assert_eq!(p.info, None, "closing clears the line");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -47,7 +47,7 @@
       "apple": "EXIF Dictionary Keys (kCGImagePropertyExif*)",
       "bifrost": "springboard/sdk/src/image_metadata.rs (read: PictureInfo with camera, date, exposure, f-number, ISO, focal length, dpi, altitude, software, lens model); system layer: springboard/src/shell/photos/exif.rs:113, wired in springboard/apps/files/src/info.rs; springboard/sdk/tests/parity_sdk-complete-07.rs",
       "status": "partial",
-      "note": "PictureInfo reads camera, date, exposure, f-number, ISO, focal length, dpi, altitude, software and lens model from the file that the cg::imageio EXIF reader fills; the software and altitude reads are tested headless in parity_sdk-complete-07. Gap: maker notes and XMP packets are skipped as opaque, and the shell's own reader is not yet checked on Midget."
+      "note": "PictureInfo reads camera, date, exposure, f-number, ISO, focal length, dpi, altitude, software and lens model from the file that the cg::imageio EXIF reader fills; the software and altitude reads are tested headless in parity_sdk-complete-07. Built 2026-10-19: lens make, exposure bias, GPS time stamp (GpsTime, with the date stamp), ground speed (converted to km/h from km/h, mph or knots) and image direction are read too (image_metadata tests: a_gps_time_with_a_date_reads_as_a_utc_clock_reading, gps_speed_is_converted_to_kilometres_per_hour, a_direction_outside_a_compass_turn_is_refused); the Quick Look panel shows size, format, camera, date and exposure under a picture (preview_info::picture_info). Gap: maker notes and XMP packets are skipped as opaque, and the shell's own reader is not yet checked on Midget. Midget check: select a JPEG with EXIF in Files and press Space; the line under the picture reads like \"4032 × 3024  ·  JPG  ·  3.2 MB  ·  <camera>  ·  <date>  ·  1/250 s  ·  f/2.8  ·  ISO 200\" (test preview_info::tests::the_picture_line_names_the_camera_once_and_leaves_out_what_is_missing)."
     },
     {
       "feature": "EXIF orientation applied on decode",
@@ -59,16 +59,16 @@
     {
       "feature": "EXIF write",
       "apple": "CGImageDestination with EXIF properties",
-      "bifrost": "springboard/sdk/src/picture_writer.rs (date_taken, orientation, camera, software, altitude); springboard/render/src/cg/imageio/exif.rs (build_block); system layer: springboard/src/shell/camera/jpeg.rs:249; springboard/sdk/tests/parity_sdk-complete-07.rs",
+      "bifrost": "springboard/sdk/src/picture_writer.rs (date_taken, orientation, camera, software, altitude); springboard/render/src/cg/imageio/exif.rs (build_block); system layer: springboard/src/shell/camera/jpeg.rs:249; springboard/sdk/tests/parity_sdk-complete-07.rs; springboard/sdk/src/picture_writer.rs (exposure, exposure_bias, lens)",
       "status": "partial",
-      "note": "Writes DateTimeOriginal, Orientation, camera make and model, Software and altitude for JPEG, PNG and TIFF; the JPEG values read back in parity_sdk-complete-07. Gap: exposure and lens tags are not written by the SDK writer, and the camera's own writer is not yet checked on Midget."
+      "note": "Writes DateTimeOriginal, Orientation, camera make and model, Software and altitude for JPEG, PNG and TIFF; the JPEG values read back in parity_sdk-complete-07. Built 2026-10-19: PictureWriter::exposure (shutter time, f-number, ISO, focal length), exposure_bias and lens (make and model) write the matching EXIF tags, and bad values are ignored; they read back through image_metadata::read (test picture_writer::tests::exposure_lens_and_gps_motion_are_written_and_read_back, bad_exposure_and_gps_values_are_ignored). Gap: the camera's own writer is not yet checked on Midget. Midget check: run the SDK tests picture_writer::tests on the host; on Midget write a picture with PictureWriter from an app and open it in Files (Space shows the camera and exposure line)."
     },
     {
       "feature": "GPS dictionary",
       "apple": "GPS Dictionary Keys",
-      "bifrost": "springboard/sdk/src/image_metadata.rs (Location read, altitude_m, decimal_to_dms, dms_to_decimal); springboard/sdk/src/picture_writer.rs (location and altitude write); springboard/render/src/cg/imageio/exif.rs (GPS_TAGS); springboard/sdk/tests/parity_sdk-complete-07.rs",
+      "bifrost": "springboard/sdk/src/image_metadata.rs (Location read, altitude_m, decimal_to_dms, dms_to_decimal); springboard/sdk/src/picture_writer.rs (location and altitude write); springboard/render/src/cg/imageio/exif.rs (GPS_TAGS); springboard/sdk/tests/parity_sdk-complete-07.rs; springboard/sdk/src/picture_writer.rs (gps_time, speed_kmh, direction)",
       "status": "partial",
-      "note": "Latitude, longitude and altitude are read and written (decimal degrees and metres, negative below sea level); the altitude round trip is tested headless in parity_sdk-complete-07. Gap: the GPS time stamp, speed and direction are not exposed, and the values are not yet checked on Midget."
+      "note": "Latitude, longitude and altitude are read and written (decimal degrees and metres, negative below sea level); the altitude round trip is tested headless in parity_sdk-complete-07. Built 2026-10-19: the GPS time stamp and date stamp (PictureInfo::gps_time), ground speed (gps_speed_kmh, with the SpeedRef unit applied) and image direction (gps_direction_deg) are read, and PictureWriter writes gps_time, speed_kmh and direction (the GPS tag table names Speed, SpeedRef, Track, TrackRef, ImgDirection and ImgDirectionRef). Gap: the values are not yet checked on Midget. Midget check: host tests image_metadata::tests::gps_speed_is_converted_to_kilometres_per_hour and picture_writer::tests::exposure_lens_and_gps_motion_are_written_and_read_back; on Midget write and read back a picture with PictureWriter::speed_kmh(48.5) from an app."
     },
     {
       "feature": "XMP, IPTC and 8BIM metadata",
@@ -80,9 +80,9 @@
     {
       "feature": "Animated GIF and APNG frames",
       "apple": "CGAnimateImageAtURLWithBlock, CGAnimateImageDataWithBlock, kCGImageAnimationDelayTime",
-      "bifrost": "springboard/sdk/src/image_animation.rs (read: frames, delay_ms, loop_count; frame_at, shown_ms, duration_ms); springboard/sdk/src/picture_writer.rs (frame writing); springboard/core/src/gifframes.rs; springboard/sdk/tests/parity_sdk-complete-07.rs",
+      "bifrost": "springboard/sdk/src/image_animation.rs (read: frames, delay_ms, loop_count; frame_at, shown_ms, duration_ms); springboard/sdk/src/picture_writer.rs (frame writing); springboard/core/src/gifframes.rs; springboard/sdk/tests/parity_sdk-complete-07.rs; springboard/render/src/cg/imageio/png.rs (composite, read_animation, frame_count); springboard/render/src/cg/imageio/encode.rs (encode_apng)",
       "status": "partial",
-      "note": "Apps read every GIF frame with its delay and loop count, get the frame on screen at an elapsed time (zero delays shown for 100 ms, the loop count applied), and write animated GIFs; tested headless in parity_sdk-complete-07. Gap: APNG frames are not composited, because the PNG reader parses the frame count but does not decode the frames."
+      "note": "Apps read every GIF frame with its delay and loop count, get the frame on screen at an elapsed time (zero delays shown for 100 ms, the loop count applied), and write animated GIFs; tested headless in parity_sdk-complete-07. Built 2026-10-19: animated PNG is decoded and composited (blend source and over, dispose none, background and previous, clipped rectangles; delays and loop count from the file; the default image of a file that does not animate it is skipped), ImageSource::count reports the frames, and encode_apng and PictureWriter write an APNG when a PNG gets several frames of one size. Tests: png::tests (an_animated_png_round_trips_frames_delays_and_loop_count, blending_over_keeps_what_is_below_and_source_replaces_it, dispose_ops_clear_or_restore_the_rectangle_after_the_frame, a_frame_that_sticks_out_of_the_canvas_is_clipped) and picture_writer::tests::several_png_frames_make_an_animated_png. Gap: frames are composited to the full canvas (no region-only frames kept) and WebP animation is not decoded. Midget check: in Files select an animated PNG or GIF and press Space; the card plays the frames and its caption says \"N frames\" (shell tests preview_info::tests::an_animated_png_on_disk_loads_as_an_animation_and_a_still_one_does_not and preview_panel::tests::an_animated_png_plays_in_the_panel_and_a_picture_gets_its_information_line)."
     },
     {
       "feature": "Colour profiles and HDR gain maps",
@@ -122,9 +122,9 @@
     {
       "feature": "Tiled image providers",
       "apple": "kCGImageProviderPreferredTileWidth, kCGImageProviderPreferredTileHeight",
-      "bifrost": "springboard/render/src/image_tiles.rs (TileGrid, TileCache)",
+      "bifrost": "springboard/render/src/image_tiles.rs (TileGrid, TileCache), TiledPicture, crop_tile",
       "status": "partial",
-      "note": "Tile geometry and a bounded TileCache that a streaming provider fills on demand, evicting the least recently used tile, are tested headless in render/tests/parity_sdk-complete-37.rs. Gap: no decoder or pixel source feeds the cache yet, and the model is not wired into apps or the shell or tested on Midget."
+      "note": "Tile geometry and a bounded TileCache that a streaming provider fills on demand, evicting the least recently used tile, are tested headless in render/tests/parity_sdk-complete-37.rs. Built 2026-10-19: TiledPicture decodes a picture file once and serves its tiles through the TileCache (region, tile, crop_tile; tests a_tiled_picture_serves_the_region_and_remembers_the_tiles, the_cache_bounds_the_tiles_held_and_evicts_the_oldest, a_picture_file_is_decoded_and_tiled_and_bad_input_is_refused in image_tiles.rs). Gap: the codecs still decode the whole picture (no region decode), and no app or the shell uses it yet. Midget check: host tests render image_tiles::tests; there is no on-screen user yet, so nothing to click on Midget."
     }
   ],
   "gaps": [

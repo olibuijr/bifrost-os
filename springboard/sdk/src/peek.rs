@@ -11,6 +11,7 @@ pub use crate::proto::peek::{PreviewItem, MAX_ITEMS};
 pub use bifrost_ui::preview::{Attachment, Content, ModelError, PreviewProvider, Registry, Reply};
 use crate::proto::ToShell;
 use crate::Ctx;
+use bifrost_core::json::Json;
 
 /// `previewItemDisplayState`: how far an item's preview has got. The app sets it. The wire message carries only the URL
 /// and title, so the shell does not draw this state yet.
@@ -175,9 +176,68 @@ impl PreviewPanel {
         }
     }
 
+    /// Follows what the user did in the shell's panel. The panel is drawn by the shell, so Esc, Space or the close
+    /// button hide it and the arrows step it without this model hearing from the app's own calls: without this the
+    /// model would still think it is visible, and the next Space would close a panel that is already gone.
+    /// `Closed` hides the model; `Index` moves the current index (clamped). `None` when the event changes nothing
+    /// (a close while hidden, a step with no items).
+    pub fn apply_event(&mut self, event: crate::quick_look::Event) -> Option<PanelChange> {
+        use crate::quick_look::Event;
+        match event {
+            Event::Closed => std::mem::replace(&mut self.visible, false).then_some(PanelChange::Closed),
+            Event::Index(i) => {
+                if self.items.is_empty() {
+                    return None;
+                }
+                self.set_current_preview_item_index(i);
+                Some(PanelChange::Index(self.index))
+            }
+        }
+    }
+
+    /// Reads a `service_event` call of the `quick-look` service (`App::service_event`), applies it with
+    /// [`PreviewPanel::apply_event`] and tells the delegate. `None` for another service's event or an event that
+    /// changes nothing.
+    pub fn handle_service_event(&mut self, service: &str, name: &str, body: &Json, delegate: Option<&mut dyn PreviewPanelDelegate>) -> Option<PanelChange> {
+        if !crate::quick_look::is_quick_look(service) {
+            return None;
+        }
+        let change = self.apply_event(crate::quick_look::event(name, body)?)?;
+        if let Some(d) = delegate {
+            match change {
+                PanelChange::Closed => d.panel_did_close(),
+                PanelChange::Index(i) => {
+                    if let Some(item) = self.items.get(i) {
+                        d.panel_did_change_item(i, item);
+                    }
+                }
+            }
+        }
+        Some(change)
+    }
+
     pub(crate) fn message(&self) -> ToShell {
         ToShell::Preview { items: self.items.clone(), index: self.index as u32 }
     }
+}
+
+/// What the user did in the shell's panel, as the model sees it (see [`PreviewPanel::apply_event`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PanelChange {
+    /// The user closed the panel.
+    Closed,
+    /// The user stepped to this index.
+    Index(usize),
+}
+
+/// `QLPreviewPanelDelegate`: what an app hears about the user's actions in the panel. Both methods do nothing by
+/// default. Not matched: the key-event and source-frame callbacks, because the shell does not ask the app for
+/// either (the panel's keys are handled by the shell, and the card opens at its own place).
+pub trait PreviewPanelDelegate {
+    /// The user stepped to item `index`.
+    fn panel_did_change_item(&mut self, _index: usize, _item: &PreviewItem) {}
+    /// The user closed the panel.
+    fn panel_did_close(&mut self) {}
 }
 
 /// The keys a preview panel answers to.
@@ -519,5 +579,58 @@ mod preview_view_tests {
         v.set_closes_with_window(true);
         assert!(v.window_closed());
         assert!(v.preview_item().is_none());
+    }
+
+    /// A delegate that records what it heard.
+    #[derive(Default)]
+    struct Heard {
+        stepped: Vec<(usize, String)>,
+        closed: u32,
+    }
+
+    impl PreviewPanelDelegate for Heard {
+        fn panel_did_change_item(&mut self, index: usize, item: &PreviewItem) {
+            self.stepped.push((index, item.title.clone()));
+        }
+
+        fn panel_did_close(&mut self) {
+            self.closed += 1;
+        }
+    }
+
+    fn index_body(i: usize) -> Json {
+        Json::Obj(vec![("index".into(), Json::Num(i as f64))])
+    }
+
+    #[test]
+    fn the_users_steps_and_close_in_the_shell_move_and_hide_the_model() {
+        let mut p = PreviewPanel::new();
+        p.set_items(vec![item("a"), item("b"), item("c")]);
+        p.visible = true;
+        assert_eq!(p.apply_event(crate::quick_look::Event::Index(2)), Some(PanelChange::Index(2)));
+        assert_eq!(p.current_preview_item_index(), 2);
+        assert_eq!(p.apply_event(crate::quick_look::Event::Index(9)), Some(PanelChange::Index(2)), "an index past the end is clamped");
+        assert_eq!(p.apply_event(crate::quick_look::Event::Closed), Some(PanelChange::Closed));
+        assert!(!p.is_visible(), "the model no longer thinks the panel is up");
+        assert_eq!(p.apply_event(crate::quick_look::Event::Closed), None, "a second close changes nothing");
+        assert_eq!(PreviewPanel::new().apply_event(crate::quick_look::Event::Index(1)), None, "no items, no step");
+    }
+
+    #[test]
+    fn service_events_reach_the_delegate_and_other_services_are_ignored() {
+        let mut p = PreviewPanel::new();
+        p.set_items(vec![item("a"), item("b")]);
+        p.visible = true;
+        let mut heard = Heard::default();
+        assert_eq!(p.handle_service_event("quick-look", "index", &index_body(1), Some(&mut heard)), Some(PanelChange::Index(1)));
+        assert_eq!(heard.stepped, vec![(1, "b".to_string())]);
+        assert_eq!(p.handle_service_event("thumbnails", "index", &index_body(0), Some(&mut heard)), None);
+        assert_eq!(p.handle_service_event("quick-look", "mystery", &Json::Null, Some(&mut heard)), None);
+        assert_eq!(p.current_preview_item_index(), 1, "other events did not move it");
+        assert_eq!(p.handle_service_event("quick-look", "closed", &Json::Null, Some(&mut heard)), Some(PanelChange::Closed));
+        assert_eq!(heard.closed, 1);
+        assert_eq!(p.handle_service_event("quick-look", "closed", &Json::Null, Some(&mut heard)), None);
+        assert_eq!(heard.closed, 1, "the delegate hears a close once");
+        assert_eq!(p.handle_service_event("quick-look", "index", &index_body(0), None), Some(PanelChange::Index(0)), "no delegate is fine");
     }
 }

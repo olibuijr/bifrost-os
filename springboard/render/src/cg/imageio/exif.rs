@@ -134,6 +134,7 @@ pub(super) const EXIF_TAGS: &[(u16, &str)] = &[
     (0x9202, "ApertureValue"),
     (0x9204, "ExposureBiasValue"),
     (0x9207, "MeteringMode"),
+    (0x9011, "OffsetTimeOriginal"),
     (0x9209, "Flash"),
     (0x920A, "FocalLength"),
     (0x9286, "UserComment"),
@@ -143,6 +144,7 @@ pub(super) const EXIF_TAGS: &[(u16, &str)] = &[
     (0xA402, "ExposureMode"),
     (0xA403, "WhiteBalance"),
     (0xA405, "FocalLenIn35mmFilm"),
+    (0xA433, "LensMake"),
     (0xA434, "LensModel"),
 ];
 pub(super) const GPS_TAGS: &[(u16, &str)] = &[
@@ -154,9 +156,15 @@ pub(super) const GPS_TAGS: &[(u16, &str)] = &[
     (0x05, "AltitudeRef"),
     (0x06, "Altitude"),
     (0x07, "TimeStamp"),
+    (0x0C, "SpeedRef"),
+    (0x0D, "Speed"),
+    (0x0E, "TrackRef"),
+    (0x0F, "Track"),
+    (0x10, "ImgDirectionRef"),
+    (0x11, "ImgDirection"),
     (0x1D, "DateStamp"),
 ];
-const RATIONAL_TAGS: &[&str] = &["XResolution", "YResolution", "ExposureTime", "FNumber", "FocalLength", "ShutterSpeedValue", "ApertureValue", "ExposureBiasValue", "Altitude", "Latitude", "Longitude", "TimeStamp"];
+const RATIONAL_TAGS: &[&str] = &["XResolution", "YResolution", "ExposureTime", "FNumber", "FocalLength", "ShutterSpeedValue", "ApertureValue", "ExposureBiasValue", "Altitude", "Latitude", "Longitude", "TimeStamp", "Speed", "Track", "ImgDirection"];
 const BYTE_TAGS: &[&str] = &["VersionID", "AltitudeRef"];
 
 fn tag_name(table: &[(u16, &str)], tag: u16) -> String {
