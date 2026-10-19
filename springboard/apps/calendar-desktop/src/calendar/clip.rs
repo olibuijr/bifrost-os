@@ -114,7 +114,8 @@ impl Calendar {
     pub fn edit_commands(&self, pasteboard: Option<&str>) -> Commands {
         if self.editor.is_some() {
             let Some(i) = self.focused() else {
-                return Commands::default().with(Edit::Copy, self.copy_target().is_some());
+                // the Add Invitees line, when it is open, takes Paste
+                return Commands::default().with(Edit::Copy, self.copy_target().is_some()).with(Edit::Paste, self.invitee_line_open() && pasteboard.is_some());
             };
             let (a, b) = self.fields[i].selection();
             let field = &self.fields[i];
@@ -166,6 +167,9 @@ impl Calendar {
             };
         }
         if self.editor.is_some() {
+            if let (Edit::Paste, Some(text), true) = (cmd, pasteboard, self.invitee_line_open()) {
+                return self.invitee_paste(text);
+            }
             if let Some(i) = self.focused() {
                 let name = match cmd {
                     Edit::Cut => "Cut",

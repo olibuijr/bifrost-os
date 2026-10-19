@@ -47,8 +47,11 @@ const EVENT_NODE: u64 = 1 << 32;
 pub(super) const B_SAVE: u32 = 14;
 pub(super) const B_GO: u32 = 15;
 pub(super) const B_QUICK: u32 = 16;
-/// The line sheet's Done button (`linesheet.rs`).
+/// The line sheet's Done button (`linesheet.rs`), the colour sheet's Done button (`colours.rs`) and the Time Zone button
+/// (`viewzone.rs`).
 pub(super) const B_LINE: u32 = 17;
+pub(super) const B_COLOUR: u32 = 18;
+pub(super) const B_ZONE: u32 = 19;
 
 /// The width the kit's `toolbar` gives each button (glyph buttons are a capsule, titled ones their label).
 fn item_w(ui: &Ui) -> impl Fn(&ToolbarItem) -> f32 + '_ {
@@ -132,6 +135,20 @@ impl Calendar {
             ));
             return bars;
         }
+        if self.colour_sheet.is_some() {
+            let title = "Calendar Colour";
+            bars.push((
+                Toolbar::new(vec![
+                    ToolbarItem::button(B_CANCEL, "Cancel"),
+                    ToolbarItem::flexible_space(),
+                    ToolbarItem::custom(B_TITLE, title, (ui.measure(title, MAC_BODY_PT, Weight::Bold) / k).ceil()),
+                    ToolbarItem::flexible_space(),
+                    ToolbarItem::button(B_COLOUR, "Done"),
+                ]),
+                band(start, end - start),
+            ));
+            return bars;
+        }
         if self.goto.is_some() {
             let title = "Go to Date";
             bars.push((
@@ -156,6 +173,8 @@ impl Calendar {
             items.push(ToolbarItem::button(id, v.label()).in_group(1).selected(self.view == v));
         }
         items.push(ToolbarItem::flexible_space());
+        // the time zone the grids show times in: a tap steps through the zones, back to each event's own (`viewzone.rs`)
+        items.push(ToolbarItem::button(B_ZONE, self.view_zone_label()).selected(self.prefs.view_zone.is_some()));
         if self.file_export {
             items.push(ToolbarItem::button(B_WEEKNO, "Week Numbers").selected(self.prefs.week_numbers));
             items.push(ToolbarItem::icon(B_EXPORT, "Export Calendar", "square.and.arrow.up"));
@@ -225,6 +244,8 @@ impl Calendar {
             B_GO => Target::GoConfirm,
             B_QUICK => Target::QuickAdd,
             B_LINE => Target::LineDone,
+            B_COLOUR => Target::ColourDone,
+            B_ZONE => Target::ViewZone,
             _ => Target::Save,
         })
     }
@@ -241,6 +262,8 @@ impl Calendar {
         nodes.extend(self.search_nodes(ui));
         if self.editor.is_some() {
             nodes.extend(self.editor_nodes(ui));
+        } else if self.colour_sheet.is_some() {
+            nodes.extend(self.colour_nodes(ui));
         } else if self.goto.is_some() {
             nodes.extend(self.goto_nodes(ui));
         } else if self.line_sheet.is_some() {
@@ -327,6 +350,18 @@ impl Calendar {
                 Target::Delete => (210, Role::Button, "Delete Event", String::new(), draft.existing),
                 Target::Invitees => (211, Role::StaticText, "Invitees", invitees::summary(&draft.invitees), true),
                 Target::ShowInMaps => (215, Role::Button, "Show in Maps", String::new(), true),
+                Target::AddInvitee => {
+                    let line = draft.invitee_line.as_ref();
+                    (216, if line.is_some() { Role::TextField } else { Role::Button }, "Add Invitees", line.map_or_else(String::new, |l| l.to_string()), true)
+                }
+                Target::InviteeSuggest(i) => {
+                    let who = self.invitee_suggestions().get(i).map_or_else(String::new, |e| inviting::row_label(&extras::Invitee { address: e.email.clone(), name: e.name.clone() }));
+                    (280 + i as u64, Role::Button, "Invite from Contacts", who, true)
+                }
+                Target::InviteeDrop(i) => {
+                    let who = draft.extra.invitees.get(i).map_or_else(String::new, inviting::row_label);
+                    (260 + i as u64, Role::Button, "Remove Invitee", who, true)
+                }
                 _ => continue,
             };
             out.push(Node { id, role, label: label.into(), value, bounds: Rect { x, y: top, w, h }, enabled });
@@ -355,9 +390,10 @@ impl Calendar {
         let dot = |shown: bool, colour: u32| if shown { colour } else { LABEL_3.now() };
         let mut items = vec![
             SidebarItem::header("On My Computer"),
-            SidebarItem::row(overlay::LAYER_LOCAL, "Calendar").with_dot(dot(self.prefs.show_local, cal_colour())),
+            SidebarItem::row(overlay::LAYER_LOCAL, "Calendar").with_dot(dot(self.prefs.show_local, self.calendar_colour(extras::DEFAULT_CALENDAR))),
             SidebarItem::header("Other"),
             SidebarItem::row(overlay::LAYER_HOLIDAYS, "Holidays").with_dot(dot(self.prefs.show_holidays, overlay::colour(0))),
+            SidebarItem::row(overlay::LAYER_BIRTHDAYS, "Birthdays").with_dot(dot(self.prefs.show_birthdays, overlay::colour(birthdays::BIRTHDAY_SLOT))),
         ];
         // the calendars the user made sit under the built-in one, before the holidays and the subscriptions
         let made: Vec<SidebarItem> = self

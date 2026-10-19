@@ -1864,3 +1864,574 @@ fn an_empty_subscription_address_keeps_the_sheet_open() {
     tap_bar(&mut c, &ui, chrome::B_CANCEL, 2.0);
     assert!(c.line_sheet.is_none());
 }
+
+// ---- a mouse that drags at once, all-day drags, the view time zone, a shorter week, typed dates, colours, invitees,
+// ---- birthdays and the printed grid
+
+#[test]
+fn a_mouse_drags_at_once_while_a_finger_must_hold() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = week_calendar(&ui, temp.file());
+    c.set_pointer(true);
+    let (x, y) = grid_xy(&c, &ui, 3, 600);
+    let (_, y2) = grid_xy(&c, &ui, 3, 690);
+    c.touch(&ui, Event::Down(x, y), 0.0);
+    c.touch(&ui, Event::Move(x, y + ui.pt(2.0)), 100.0);
+    assert!(c.drag.is_none(), "a wobble smaller than the slop is not a drag");
+    c.touch(&ui, Event::Move(x, y2), 120.0);
+    assert!(c.drag.is_some(), "the mouse has moved: there is no hold to wait for");
+    assert_eq!(c.drag.map(|d| d.span), Some(layout::DragSpan { start: 600, end: 705 }));
+    c.touch(&ui, Event::Up(x, y2), 140.0);
+    let draft = c.editor.as_ref().expect("the editor opens on the drawn-out event");
+    assert_eq!((draft.event.date, draft.event.minute, draft.event.duration), (date(2026, 10, 7), 600, 105));
+    // the same moves with a finger are a scroll: it has not held
+    let mut f = week_calendar(&ui, temp.file());
+    f.set_pointer(false);
+    let before = f.scroll.offset();
+    f.touch(&ui, Event::Down(x, y), 0.0);
+    f.touch(&ui, Event::Move(x, y + ui.pt(60.0)), 40.0);
+    f.touch(&ui, Event::Move(x, y2), 120.0);
+    assert!(f.drag.is_none());
+    f.touch(&ui, Event::Up(x, y2), 140.0);
+    assert_ne!(f.scroll.offset(), before, "a finger that moves at once scrolls");
+}
+
+#[test]
+fn a_mouse_that_drags_an_event_moves_it_and_one_that_only_clicks_selects_it() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    store::save(&temp.file(), &[event(1, "Standup")]).unwrap();
+    let mut c = week_calendar(&ui, temp.file());
+    c.set_pointer(true);
+    let (x, y) = grid_xy(&c, &ui, 0, 560);
+    let (x2, y2) = grid_xy(&c, &ui, 2, 800);
+    c.touch(&ui, Event::Down(x, y), 0.0);
+    c.touch(&ui, Event::Move(x2, y2), 200.0);
+    assert!(matches!(c.drag.map(|d| d.kind), Some(drag::Kind::Move { id: 1, .. })));
+    c.touch(&ui, Event::Up(x2, y2), 250.0);
+    assert_eq!((c.events[0].date, c.events[0].minute), (date(2026, 10, 6), 780));
+    // a click with no move is a tap
+    c.picked = None;
+    let (x, y) = grid_xy(&c, &ui, 2, 800);
+    c.touch(&ui, Event::Down(x, y), 400.0);
+    c.touch(&ui, Event::Up(x, y), 450.0);
+    assert!(c.drag.is_none());
+    assert_eq!(c.picked, Some(1), "the click selected the event");
+    assert_eq!((c.events[0].date, c.events[0].minute), (date(2026, 10, 6), 780), "a click moves nothing");
+}
+
+#[test]
+fn the_wheels_burst_of_moves_scrolls_the_grid_even_for_a_pointer() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    store::save(&temp.file(), &[event(1, "Standup")]).unwrap();
+    let mut c = week_calendar(&ui, temp.file());
+    c.set_pointer(true);
+    let before = c.scroll.offset();
+    // the shell makes a wheel notch as a press, a move 16 ms later and a lift 32 ms after the press
+    let (x, y) = grid_xy(&c, &ui, 0, 560);
+    c.touch(&ui, Event::Down(x, y), 0.0);
+    c.touch(&ui, Event::Move(x, y + ui.pt(40.0)), 16.0);
+    assert!(c.drag.is_none(), "the burst is the wheel, not a hand dragging the event");
+    c.touch(&ui, Event::Move(x, y + ui.pt(80.0)), 100.0);
+    assert!(c.drag.is_none(), "and the press stays the wheel's");
+    c.touch(&ui, Event::Up(x, y + ui.pt(80.0)), 140.0);
+    assert_ne!(c.scroll.offset(), before, "the grid scrolled");
+    assert_eq!((c.events[0].date, c.events[0].minute), (date(2026, 10, 4), 540), "the event did not move");
+}
+
+#[test]
+fn an_all_day_event_is_dragged_to_another_day() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut offsite = event(1, "Offsite");
+    offsite.all_day = true;
+    offsite.minute = 0;
+    offsite.duration = 1440;
+    store::save(&temp.file(), &[offsite]).unwrap();
+    let mut c = week_calendar(&ui, temp.file());
+    c.scroll.jump_top();
+    let rect = c.time_rects(&ui).into_iter().find(|r| r.0 == 1).expect("the all-day block");
+    let (x, y) = (c.x0 + rect.1 + rect.3 / 2.0, rect.2 + rect.4 / 2.0);
+    let (x2, _) = grid_xy(&c, &ui, 2, 600);
+    c.touch(&ui, Event::Down(x, y), 0.0);
+    c.touch(&ui, Event::Move(x + 1.0, y), 300.0);
+    assert!(matches!(c.drag.map(|d| d.kind), Some(drag::Kind::AllDay { id: 1 })), "held long enough, the move drags");
+    c.touch(&ui, Event::Move(x2, y), 400.0);
+    assert_eq!(c.drag.map(|d| d.day), Some(date(2026, 10, 6)));
+    draw_once(&mut c, &ui);
+    c.touch(&ui, Event::Up(x2, y), 450.0);
+    assert!(c.editor.is_none(), "a moved event does not open the editor");
+    assert_eq!(c.events[0].date, date(2026, 10, 6));
+    assert!(c.events[0].all_day);
+    assert_eq!(c.notice.as_deref(), Some("Moved Offsite to Tuesday, October 6, 2026"));
+    let again = new(&ui, temp.file());
+    assert_eq!(again.events[0].date, date(2026, 10, 6), "saved");
+}
+
+#[test]
+fn a_view_time_zone_moves_the_events_in_the_grids_and_not_in_the_store() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    store::save(&temp.file(), &[event(1, "Call")]).unwrap();
+    let mut c = new(&ui, temp.file());
+    // 09:00 on 4 October in Tokyo is 00:00 UTC and 20:00 on the 3rd in New York (summer time)
+    c.extras.put(1, extras::Extra { tzid: Some("Asia/Tokyo".into()), ..extras::Extra::default() });
+    let ny = zones::TABLE.iter().position(|z| z.id == "America/New_York").unwrap();
+    assert!(c.view_zone_checked(None) && !c.view_zone_checked(Some(ny)));
+    assert_eq!(c.view_zone_label(), "Time Zone");
+    assert!(c.set_view_zone(&ui, Some(ny)));
+    assert!(c.view_zone_checked(Some(ny)) && !c.view_zone_checked(None));
+    assert_eq!(c.view_zone_label(), "New York");
+    let shown: Vec<(Date, u16)> = c.shown_events().map(|e| (e.date, e.minute)).collect();
+    assert_eq!(shown, vec![(date(2026, 10, 3), 1200)]);
+    assert_eq!((c.events[0].date, c.events[0].minute), (date(2026, 10, 4), 540), "the store keeps the event's own time");
+    c.selected = date(2026, 10, 3);
+    assert_eq!(c.agenda().len(), 1, "the day cell and the agenda follow the view zone");
+    c.selected = date(2026, 10, 4);
+    assert_eq!(c.agenda().len(), 0);
+    assert_eq!(c.to_own_clock(1, date(2026, 10, 3), 1200), (date(2026, 10, 4), 540));
+    assert_eq!(c.to_view_clock(1, date(2026, 10, 4), 540), (date(2026, 10, 3), 1200));
+    // a zone chosen once is kept, and every view still draws
+    assert_eq!(new(&ui, temp.file()).prefs.view_zone, Some("America/New_York"));
+    for view in [View::Day, View::Week, View::Month, View::Year] {
+        c.activate(&ui, Target::View(view), 0.0);
+        draw_once(&mut c, &ui);
+    }
+    // the toolbar button steps through the zones and back to each event's own time
+    c.cycle_view_zone(&ui);
+    assert_eq!(c.prefs.view_zone, zones::TABLE.get(ny + 1).map(|z| z.id));
+    for _ in 0..(zones::TABLE.len() - ny - 1) {
+        c.cycle_view_zone(&ui);
+    }
+    assert_eq!(c.prefs.view_zone, None);
+    assert_eq!(c.view_zone_label(), "Time Zone");
+    let shown: Vec<(Date, u16)> = c.shown_events().map(|e| (e.date, e.minute)).collect();
+    assert_eq!(shown, vec![(date(2026, 10, 4), 540)]);
+    assert!(!c.set_view_zone(&ui, Some(99)), "a zone that is not in the table");
+}
+
+#[test]
+fn moving_a_block_under_a_view_time_zone_saves_the_event_on_its_own_clock() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    store::save(&temp.file(), &[event(1, "Call")]).unwrap();
+    let mut c = new(&ui, temp.file());
+    c.extras.put(1, extras::Extra { tzid: Some("Asia/Tokyo".into()), ..extras::Extra::default() });
+    let ny = zones::TABLE.iter().position(|z| z.id == "America/New_York").unwrap();
+    c.set_view_zone(&ui, Some(ny));
+    // the week of Saturday 3 October, where the block is shown at 20:00 in the last column
+    c.selected = date(2026, 10, 3);
+    c.activate(&ui, Target::View(View::Week), 0.0);
+    let (x, y) = grid_xy(&c, &ui, 6, 1215);
+    let (_, y2) = grid_xy(&c, &ui, 6, 1275);
+    c.touch(&ui, Event::Down(x, y), 0.0);
+    c.touch(&ui, Event::Move(x, y + 1.0), 300.0);
+    c.touch(&ui, Event::Move(x, y2), 400.0);
+    c.touch(&ui, Event::Up(x, y2), 450.0);
+    // an hour later in New York is an hour later on Tokyo's clock too: 10:00 on the 4th
+    assert_eq!((c.events[0].date, c.events[0].minute, c.events[0].duration), (date(2026, 10, 4), 600, 60));
+    assert_eq!(c.notice.as_deref(), Some("Moved Call to 21:00"), "the notice speaks of the grid the person is looking at");
+}
+
+#[test]
+fn the_week_view_shows_the_chosen_number_of_days() {
+    use prefs::Setting;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = week_calendar(&ui, temp.file());
+    assert_eq!(c.view_days().len(), 7);
+    assert_eq!(c.view_days()[0], date(2026, 10, 4));
+    // five days, with the week starting on Sunday, are Monday to Friday
+    assert!(c.change_setting(&ui, Setting::DaysPerWeek(4)));
+    let days = c.view_days();
+    assert_eq!((days.len(), days[0], days[4]), (5, date(2026, 10, 5), date(2026, 10, 9)));
+    draw_once(&mut c, &ui);
+    // a tap on the header's second chip picks Tuesday, not the seven day layout's second chip
+    let (gut, col_w) = c.col_geometry(&ui);
+    assert!(col_w > 0.0);
+    assert_eq!(c.hit_view(&ui, gut + col_w * 1.5, ui.pt(150.0)), Some(Target::Pick(date(2026, 10, 6))));
+    // a Monday start, on a Wednesday: the week is 5 to 11 October, and three days of it are shown
+    assert!(c.change_setting(&ui, Setting::MondayFirst));
+    c.selected = date(2026, 10, 7);
+    assert_eq!(c.view_days()[0], date(2026, 10, 5));
+    assert!(c.change_setting(&ui, Setting::DaysPerWeek(2)));
+    assert_eq!(c.view_days().len(), 3);
+    assert_eq!(c.range_label(), "Oct 5 - 7, 2026");
+    for view in [View::Week, View::Day, View::Month] {
+        c.activate(&ui, Target::View(view), 0.0);
+        draw_once(&mut c, &ui);
+    }
+    // the settings are kept
+    let again = new(&ui, temp.file());
+    assert_eq!((again.prefs.days_per_week, again.prefs.monday_first), (3, true));
+}
+
+#[test]
+fn the_hours_outside_the_working_day_are_shaded() {
+    use prefs::Setting;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = week_calendar(&ui, temp.file());
+    assert_eq!((c.prefs.day_start, c.prefs.day_end), (8, 18));
+    assert!(c.prefs.off_hour(7) && !c.prefs.off_hour(8) && c.prefs.off_hour(18));
+    assert!(c.change_setting(&ui, Setting::DayEnd(6)));
+    assert_eq!(c.prefs.day_end, 22);
+    assert!(c.setting_checked(Setting::DayEnd(6)) && !c.setting_checked(Setting::DayEnd(0)));
+    draw_once(&mut c, &ui);
+    assert_eq!(new(&ui, temp.file()).prefs.day_end, 22);
+}
+
+#[test]
+fn a_date_typed_in_go_to_date_moves_the_sheet_and_go_takes_it() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    assert!(c.perform(&ui, Command::GoToDate, 0.0));
+    c.key(&ui, Out::Text("2027-03-09".into()), 1.0);
+    assert_eq!(c.goto, Some(date(2027, 3, 9)), "the steppers follow what is typed");
+    draw_once(&mut c, &ui);
+    c.key(&ui, Out::Backspace, 2.0);
+    assert_eq!(c.goto, Some(date(2027, 3, 9)), "a date that does not read yet leaves them where they are");
+    c.key(&ui, Out::Text("4".into()), 3.0);
+    assert_eq!(c.goto, Some(date(2027, 3, 4)));
+    // the arrow keys move the caret while there is text, and step the day once the row is empty
+    c.key(&ui, Out::Named("Left"), 4.0);
+    c.key(&ui, Out::Named("Right"), 4.5);
+    assert_eq!(c.goto, Some(date(2027, 3, 4)));
+    for _ in 0..10 {
+        c.key(&ui, Out::Backspace, 5.0);
+    }
+    assert!(c.goto_line.is_empty());
+    c.key(&ui, Out::Named("Left"), 6.0);
+    assert_eq!(c.goto, Some(date(2027, 3, 3)));
+    c.key(&ui, Out::Text("24 dec".into()), 7.0);
+    assert_eq!(c.goto, Some(date(2027, 12, 24)), "a day and a month name are in the year the sheet shows");
+    c.key(&ui, Out::Enter, 8.0);
+    assert!(c.goto.is_none() && c.goto_line.is_empty());
+    assert_eq!(c.selected, date(2027, 12, 24));
+}
+
+#[test]
+fn a_typed_date_that_does_not_read_keeps_the_sheet_open_and_says_what_to_type() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.perform(&ui, Command::GoToDate, 0.0);
+    c.key(&ui, Out::Text("soon".into()), 1.0);
+    c.key(&ui, Out::Enter, 2.0);
+    assert!(c.goto.is_some(), "the sheet stays open");
+    assert!(c.error.as_deref().is_some_and(|e| e.contains("2026-12-24")));
+    draw_once(&mut c, &ui);
+    assert_eq!(c.selected, date(2026, 10, 4), "nothing moved");
+    for _ in 0..4 {
+        c.key(&ui, Out::Backspace, 3.0);
+    }
+    c.key(&ui, Out::Text("tomorrow".into()), 4.0);
+    assert_eq!(c.goto, Some(date(2026, 10, 5)));
+    c.key(&ui, Out::Enter, 5.0);
+    assert_eq!(c.selected, date(2026, 10, 5));
+    // Cancel throws what was typed away
+    c.perform(&ui, Command::GoToDate, 6.0);
+    c.key(&ui, Out::Text("junk".into()), 7.0);
+    tap_bar(&mut c, &ui, chrome::B_CANCEL, 8.0);
+    assert!(c.goto.is_none() && c.goto_line.is_empty());
+    c.perform(&ui, Command::GoToDate, 9.0);
+    assert!(c.goto_line.is_empty(), "the next sheet starts with an empty row");
+    assert!(c.controls(&ui).iter().any(|n| n.label == "Date"), "the typed row is published");
+}
+
+#[test]
+fn a_calendar_is_given_a_colour_from_the_palette() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    let work = c.extras.new_calendar("Work").unwrap();
+    assert!(!c.open_colour(7), "a calendar that does not exist");
+    assert!(c.open_colour(work));
+    assert_eq!(c.colour_sheet().map(|s| s.pick), Some(c.extras.colour_index(work)));
+    assert!(c.sheet_open() && !c.enabled(Command::NewEvent), "the sheet is modal");
+    draw_once(&mut c, &ui);
+    let published: Vec<String> = c.controls(&ui).into_iter().filter(|n| overlay::PALETTE.contains(&n.label.as_str())).map(|n| n.label).collect();
+    assert_eq!(published.len(), overlay::PALETTE.len(), "a button per colour");
+    // a tap on the Brown row picks it; Done gives it to the calendar
+    let (i, top, h) = c.colour_rows().into_iter().find(|r| overlay::palette_name(r.0) == "Brown").unwrap();
+    let old = c.extras.colour_index(work);
+    tap(&mut c, &ui, 400.0, top + h / 2.0, 1.0);
+    assert_eq!(c.colour_sheet().map(|s| s.pick), Some(i));
+    assert_eq!(c.extras.colour_index(work), old, "nothing changes until Done");
+    tap_bar(&mut c, &ui, chrome::B_COLOUR, 5.0);
+    assert!(c.colour_sheet().is_none());
+    assert_eq!(c.extras.colour_index(work), i);
+    assert_eq!(c.notice.as_deref(), Some("Work is now Brown"));
+    assert_eq!(c.calendar_colour(work), overlay::palette_colour(i));
+    assert_eq!(new(&ui, temp.file()).extras.colour_index(work), i, "kept with the calendars");
+    // events on that calendar use it
+    let mut e = event(5, "Plan");
+    e.date = date(2026, 10, 4);
+    c.events.push(e);
+    c.extras.put(5, extras::Extra { calendar: work, ..extras::Extra::default() });
+    assert_eq!(c.event_colour(5), overlay::palette_colour(i));
+}
+
+#[test]
+fn the_built_in_calendar_can_be_coloured_and_cancel_and_the_keys_work() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    assert_eq!(c.calendar_colour(extras::DEFAULT_CALENDAR), chrome::cal_colour(), "the accent until it is changed");
+    assert!(c.open_colour(extras::DEFAULT_CALENDAR));
+    c.activate(&ui, Target::ColourPick(4), 0.0);
+    tap_bar(&mut c, &ui, chrome::B_CANCEL, 1.0);
+    assert!(c.colour_sheet().is_none() && c.extras.builtin_colour.is_none(), "Cancel keeps the old colour");
+    // Up and Down move the pick, Return takes it, Escape cancels
+    assert!(c.open_colour(extras::DEFAULT_CALENDAR));
+    c.key(&ui, Out::Named("Down"), 2.0);
+    c.key(&ui, Out::Named("Down"), 3.0);
+    assert_eq!(c.colour_sheet().map(|s| s.pick), Some(overlay::BLUE + 2));
+    c.key(&ui, Out::Named("Up"), 4.0);
+    c.key(&ui, Out::Enter, 5.0);
+    assert!(c.colour_sheet().is_none());
+    assert_eq!(c.extras.builtin_colour, Some(overlay::BLUE + 1));
+    assert_eq!(c.calendar_colour(extras::DEFAULT_CALENDAR), overlay::palette_colour(overlay::BLUE + 1));
+    assert!(c.open_colour(extras::DEFAULT_CALENDAR));
+    assert!(c.escape(&ui, 6.0) && c.colour_sheet().is_none());
+    c.activate(&ui, Target::ColourPick(200), 7.0);
+    assert!(c.colour_sheet().is_none(), "a pick with no sheet does nothing");
+}
+
+#[test]
+fn invitees_are_added_in_the_form_kept_with_the_event_and_invited_by_mail_on_save() {
+    use extras::Invitee;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.set_account_email(Some("me@example.is".into()));
+    c.open(&ui, None);
+    type_text(&mut c, &ui, "Lunch");
+    c.key(&ui, Out::Hide, 1.0);
+    assert!(c.rows().iter().any(|r| r.0 == Target::AddInvitee), "the form has the Add Invitees row");
+    c.activate(&ui, Target::AddInvitee, 2.0);
+    assert!(c.invitee_line_open() && c.keyboard_shown());
+    type_text(&mut c, &ui, "ana@example.is");
+    c.key(&ui, Out::Enter, 3.0);
+    let invited = |c: &Calendar| c.editor.as_ref().unwrap().extra.invitees.clone();
+    assert_eq!(invited(&c), vec![Invitee { address: "ana@example.is".into(), name: String::new() }]);
+    assert!(c.invitee_line_open(), "the line is ready for the next one");
+    assert!(c.rows().iter().any(|r| r.0 == Target::InviteeDrop(0)), "a Remove row for the first");
+    // the same address again, and something that is not an address
+    type_text(&mut c, &ui, "ANA@example.is");
+    c.key(&ui, Out::Enter, 4.0);
+    assert_eq!(invited(&c).len(), 1);
+    assert_eq!(c.notice.as_deref(), Some("Already invited"));
+    type_text(&mut c, &ui, "nonsense");
+    c.key(&ui, Out::Enter, 5.0);
+    assert_eq!(invited(&c).len(), 1);
+    assert!(c.error.is_some(), "it says what to type");
+    draw_once(&mut c, &ui);
+    // Escape closes the line first, then the form
+    assert!(c.escape(&ui, 6.0));
+    assert!(!c.invitee_line_open() && c.editor.is_some());
+    // a second person, then remove the first
+    c.activate(&ui, Target::AddInvitee, 7.0);
+    type_text(&mut c, &ui, "bo@example.is");
+    c.key(&ui, Out::Enter, 8.0);
+    c.key(&ui, Out::Hide, 9.0);
+    assert_eq!(invited(&c).len(), 2);
+    c.activate(&ui, Target::InviteeDrop(0), 10.0);
+    assert_eq!(invited(&c), vec![Invitee { address: "bo@example.is".into(), name: String::new() }]);
+    draw_once(&mut c, &ui);
+    c.activate(&ui, Target::Save, 11.0);
+    assert!(c.editor.is_none(), "saved");
+    let id = c.events[0].id;
+    assert_eq!(c.extras().events.get(&id).unwrap().invitees.len(), 1, "kept with the event");
+    assert_eq!(new(&ui, temp.file()).extras().events.get(&id).unwrap().invitees.len(), 1, "and with the file");
+    let mail = c.take_outgoing();
+    assert_eq!(mail.len(), 1);
+    assert_eq!(mail[0].to, vec!["bo@example.is".to_string()]);
+    assert_eq!(mail[0].subject, "Invitation: Lunch");
+    // the file's long lines are folded; read them as one
+    let text = fs::read_to_string(&mail[0].file).unwrap().replace("\r\n ", "");
+    for part in ["METHOD:REQUEST", "SUMMARY:Lunch", "ORGANIZER:mailto:me@example.is", "ATTENDEE", "mailto:bo@example.is", "PARTSTAT=NEEDS-ACTION"] {
+        assert!(text.contains(part), "{part}\n{text}");
+    }
+    // opening the event again shows its invitee, and Save sends the update again
+    c.open(&ui, Some(id));
+    assert_eq!(invited(&c).len(), 1);
+    c.activate(&ui, Target::Save, 12.0);
+    assert_eq!(c.take_outgoing().len(), 1);
+}
+
+#[test]
+fn without_an_account_the_invitees_are_kept_and_nothing_is_sent() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.open(&ui, None);
+    type_text(&mut c, &ui, "Lunch");
+    c.key(&ui, Out::Hide, 1.0);
+    c.activate(&ui, Target::AddInvitee, 2.0);
+    type_text(&mut c, &ui, "ana@example.is");
+    c.key(&ui, Out::Enter, 3.0);
+    c.key(&ui, Out::Hide, 4.0);
+    c.activate(&ui, Target::Save, 5.0);
+    assert!(c.take_outgoing().is_empty());
+    assert!(c.notice.as_deref().is_some_and(|n| n.contains("Invitees saved")));
+    let id = c.events[0].id;
+    assert_eq!(c.extras().events.get(&id).unwrap().invitees.len(), 1);
+}
+
+#[test]
+fn paste_goes_into_the_invitee_line_when_it_is_open() {
+    use bifrost_app::Command as Edit;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.open(&ui, None);
+    c.key(&ui, Out::Hide, 1.0);
+    assert!(!c.edit_commands(Some("ana@example.is")).supports(Edit::Paste), "no field has the cursor");
+    c.activate(&ui, Target::AddInvitee, 2.0);
+    assert!(c.edit_commands(Some("ana@example.is")).supports(Edit::Paste));
+    assert!(c.edit_command(&ui, Edit::Paste, Some("ana@example.is\nsecond line"), 3.0));
+    assert_eq!(c.editor.as_ref().unwrap().invitee_line.as_ref().map(|l| l.to_string()).as_deref(), Some("ana@example.is"));
+}
+
+/// A calendar whose events file sits beside a Contacts folder with two cards: Ana (an address, a birthday on 6 October
+/// 1990) and Bo (no address, a birthday on 4 October with no year).
+fn calendar_with_contacts(ui: &Ui, temp: &Temp) -> Calendar {
+    let apps = temp.0.join("appdata");
+    let own = apps.join("is.olibuijr.calendar.desktop");
+    let cards = apps.join("is.olibuijr.contacts.desktop").join("Contacts");
+    fs::create_dir_all(&own).unwrap();
+    fs::create_dir_all(&cards).unwrap();
+    fs::write(cards.join("contacts.tsv"), "springboard-contacts-v1\n1\tAna Lind\t\tana@example.is\t\n2\tBo Berg\t\t\t\n").unwrap();
+    fs::write(cards.join("details.txt"), "springboard-contact-details-v1\n1\tbirthday\t1990-10-06\n2\tbirthday\t--10-04\n").unwrap();
+    new(ui, own.join("events.tsv"))
+}
+
+#[test]
+fn the_birthdays_of_the_cards_in_contacts_are_a_calendar_the_list_switches_on_and_off() {
+    use overlay::LAYER_BIRTHDAYS;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = calendar_with_contacts(&ui, &temp);
+    assert!(!c.prefs.show_birthdays);
+    assert_eq!(c.shown_events().count(), 0);
+    let (x, y) = layer_point(&c, &ui, LAYER_BIRTHDAYS);
+    tap(&mut c, &ui, x, y, 0.0);
+    assert!(c.prefs.show_birthdays);
+    let titles: Vec<String> = c.shown_events().map(|e| e.title.clone()).collect();
+    assert_eq!(titles.iter().filter(|t| *t == "Ana Lind's Birthday").count(), 3, "the years around the shown one");
+    // today is Sunday 4 October 2026: Bo's birthday is in the agenda, and a tap says what it is
+    let today: Vec<String> = c.agenda().iter().map(|e| e.title.clone()).collect();
+    assert_eq!(today, vec!["Bo Berg's Birthday".to_string()]);
+    let id = c.agenda()[0].id;
+    assert!(overlay::is_overlay(id) && overlay::slot_of(id) == birthdays::BIRTHDAY_SLOT);
+    c.activate(&ui, Target::Row(id), 1.0);
+    assert!(c.editor.is_none());
+    assert_eq!(c.notice.as_deref(), Some("Bo Berg's Birthday (Birthdays)"));
+    assert_eq!(c.event_colour(id), overlay::colour(birthdays::BIRTHDAY_SLOT));
+    // Ana's is on the 6th, with her age in the notes
+    c.selected = date(2026, 10, 6);
+    let ana = c.agenda().into_iter().map(|e| e.into_owned()).find(|e| e.title == "Ana Lind's Birthday").unwrap();
+    assert_eq!((ana.all_day, ana.notes.as_str()), (true, "Turns 36"));
+    // the row is kept with the settings, and a second tap hides the calendar again
+    assert!(new(&ui, c.path.clone()).prefs.show_birthdays);
+    let (x, y) = layer_point(&c, &ui, LAYER_BIRTHDAYS);
+    tap(&mut c, &ui, x, y, 5.0);
+    assert!(!c.prefs.show_birthdays && c.shown_events().count() == 0);
+    for view in [View::Month, View::Week, View::Year] {
+        c.activate(&ui, Target::View(view), 6.0);
+        draw_once(&mut c, &ui);
+    }
+}
+
+#[test]
+fn a_birthday_alert_is_planned_with_the_events_and_never_written_to_the_calendar_file() {
+    use prefs::Setting;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = calendar_with_contacts(&ui, &temp);
+    assert!(c.rich_events_with_birthdays().events.is_empty(), "no alert, no events");
+    let before = c.store_generation();
+    assert!(c.change_setting(&ui, Setting::BirthdayAlert(2)));
+    assert_ne!(c.store_generation(), before, "the alerts are planned again");
+    assert_eq!(c.prefs.alert_birthday, 2);
+    let events = c.rich_events_with_birthdays().events;
+    assert_eq!(events.len(), 4, "two people, this year and the next");
+    assert!(events.iter().all(|e| e.summary.ends_with("'s Birthday") && e.alarms == vec![1440] && e.start.minute == 540));
+    assert!(c.rich_events().events.is_empty(), "the file's own events carry none");
+    assert!(c.setting_checked(Setting::BirthdayAlert(2)) && !c.setting_checked(Setting::BirthdayAlert(0)));
+    assert_eq!(new(&ui, c.path.clone()).prefs.alert_birthday, 2);
+    // the alert scan finds Bo's alert: 09:00 on 3 October for a birthday on the 4th (a device on UTC)
+    let cal = alerts::alert_calendar_with(&[], &c.rich_events_with_birthdays(), c.extras());
+    let fire = date(2026, 10, 3).days() * 86_400 + 9 * 3600;
+    let due = alerts::due(&cal, fire - 1, fire, 0);
+    assert_eq!(due.len(), 1);
+    assert_eq!(due[0].title, "Bo Berg's Birthday");
+}
+
+#[test]
+fn the_address_book_suggests_people_under_the_invitee_line() {
+    use extras::Invitee;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = calendar_with_contacts(&ui, &temp);
+    c.open(&ui, None);
+    c.key(&ui, Out::Hide, 1.0);
+    c.activate(&ui, Target::AddInvitee, 2.0);
+    assert_eq!(c.invitee_suggestions().len(), 0, "nothing is suggested before anything is typed");
+    type_text(&mut c, &ui, "an");
+    assert_eq!(c.invitee_suggestions().len(), 1, "Bo has no address, so Bo is not offered");
+    assert!(c.rows().iter().any(|r| r.0 == Target::InviteeSuggest(0)));
+    draw_once(&mut c, &ui);
+    assert!(c.controls(&ui).iter().any(|n| n.label == "Invite from Contacts" && n.value.contains("ana@example.is")));
+    c.activate(&ui, Target::InviteeSuggest(0), 3.0);
+    assert_eq!(c.editor.as_ref().unwrap().extra.invitees, vec![Invitee { address: "ana@example.is".into(), name: "Ana Lind".into() }]);
+    // a person already invited is not offered again, and Return with no match says what to type
+    type_text(&mut c, &ui, "lind");
+    assert_eq!(c.invitee_suggestions().len(), 0);
+    c.key(&ui, Out::Enter, 4.0);
+    assert!(c.error.is_some(), "no one else matches");
+    // an address of someone in the book is added with their name
+    for _ in 0..4 {
+        c.key(&ui, Out::Backspace, 5.0);
+    }
+    c.editor.as_mut().unwrap().extra.invitees.clear();
+    type_text(&mut c, &ui, "ANA@example.is");
+    c.key(&ui, Out::Enter, 6.0);
+    assert_eq!(c.editor.as_ref().unwrap().extra.invitees[0].name, "Ana Lind");
+}
+
+#[test]
+fn print_draws_the_grid_of_what_the_window_shows() {
+    use bifrost_app::print::Orientation;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = searchable(&ui, temp.file());
+    let (job, pages, info) = c.print_pages();
+    assert_eq!(job, "Calendar October 2026");
+    assert_eq!(pages.len(), 1);
+    assert_eq!(info.orientation, Orientation::Landscape);
+    let text = String::from_utf8_lossy(&pages[0].content).into_owned();
+    for part in ["(October 2026) Tj", "Standup", "Lunch with Ana", "Dentist", "(Sun) Tj"] {
+        assert!(text.contains(part), "{part}");
+    }
+    c.activate(&ui, Target::View(View::Week), 0.0);
+    let (job, pages, _) = c.print_pages();
+    assert_eq!(job, "Calendar Oct 4 - 10, 2026");
+    let text = String::from_utf8_lossy(&pages[0].content).into_owned();
+    assert!(text.contains("(Sun 4) Tj") && text.contains("(Sat 10) Tj") && text.contains("Standup") && text.contains("Dentist"));
+    // a shorter week prints the days it shows
+    c.change_setting(&ui, prefs::Setting::DaysPerWeek(4));
+    let text = String::from_utf8_lossy(&c.print_pages().1[0].content).into_owned();
+    assert!(text.contains("(Mon 5) Tj") && text.contains("(Fri 9) Tj") && !text.contains("(Sat 10) Tj"));
+    c.activate(&ui, Target::View(View::Day), 0.0);
+    assert_eq!(c.print_pages().0, "Calendar Sunday, October 4");
+    c.activate(&ui, Target::View(View::Year), 0.0);
+    assert_eq!(c.print_pages().0, "Calendar 2026");
+    // the agenda of the same range is still there as text
+    assert!(c.print_job().1.contains("Standup"));
+    assert!(c.enabled(Command::Print) && !c.perform(&ui, Command::Print, 0.0), "the app runs the print job");
+}

@@ -181,6 +181,7 @@ impl Calendar {
             alarms,
             custom_alarm: CUSTOM_ALARM_START,
             extra,
+            invitee_line: None,
         }
     }
 
@@ -392,6 +393,7 @@ mod tests {
             alarms,
             custom_alarm: CUSTOM_ALARM_START,
             extra: Extra::default(),
+            invitee_line: None,
         }
     }
 

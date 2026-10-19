@@ -20,7 +20,10 @@ use std::collections::HashMap;
 use std::io::Write;
 use bifrost_calendar::calendar::connect::{self, Connect, Snap};
 use bifrost_calendar::calendar::prefs::{self, Setting};
+use bifrost_calendar::calendar::printgrid;
 use bifrost_calendar::calendar::window::{self, EDITOR_HEIGHT, EDITOR_WIDTH};
+use bifrost_calendar::calendar::zones;
+use bifrost_app::touch_events::{TouchEvent, TouchPhase, TouchType};
 use bifrost_calendar::calendar::{self, Command};
 use bifrost_core::json::Json;
 use springboard::shell::clock::Wall;
@@ -39,6 +42,8 @@ struct CalendarApp {
     fetcher: Fetcher,
     /// The grants of files attached to a Mail message, by the compose request: released when Mail answers.
     attached: HashMap<u32, GrantId>,
+    /// The id of the touch that drives the calendar until it lifts: a second finger is left alone.
+    primary: Option<u32>,
 }
 
 /// Menu ids of File > Unsubscribe from, one per subscription, clear of the commands and the settings.
@@ -46,6 +51,10 @@ const UNSUBSCRIBE_BASE: u32 = 300;
 /// Menu ids of File > Rename Calendar and File > Delete Calendar: the calendar's id added to the base.
 const RENAME_BASE: u32 = 400;
 const DELETE_BASE: u32 = 500;
+/// Menu ids of View > Time Zone (the base is "Event Time Zones", then one per zone of `zones::TABLE`) and of File >
+/// Calendar Colour (the calendar's id added to the base).
+const ZONE_BASE: u32 = 600;
+const COLOUR_BASE: u32 = 700;
 
 /// What an open or save panel is for.
 enum Job {
@@ -115,10 +124,18 @@ fn settings_items(c: &calendar::Calendar) -> Vec<AppMenuItem> {
     items.extend((0..prefs::DURATIONS.len()).map(|i| choice(Setting::Length(i))));
     items.push(AppMenuItem::submenu("Day Starts at"));
     items.extend((0..prefs::DAY_STARTS.len()).map(|i| choice(Setting::DayStart(i))));
+    // the working day ends here: the Day and Week grids shade the hours outside it
+    items.push(AppMenuItem::submenu("Day Ends at"));
+    items.extend((0..prefs::DAY_ENDS.len()).map(|i| choice(Setting::DayEnd(i))));
+    items.push(AppMenuItem::submenu("Show Days per Week"));
+    items.extend((0..prefs::DAYS_PER_WEEK.len()).map(|i| choice(Setting::DaysPerWeek(i))));
     items.push(AppMenuItem::submenu("Default Alert"));
     items.extend((0..prefs::ALERT_CHOICES).map(|v| choice(Setting::Alert(v))));
     items.push(AppMenuItem::submenu("Default All-Day Alert"));
     items.extend((0..prefs::ALERT_CHOICES).map(|v| choice(Setting::AllDayAlert(v))));
+    // the alert of the birthdays shown from Contacts
+    items.push(AppMenuItem::submenu("Default Birthday Alert"));
+    items.extend((0..prefs::BIRTHDAY_ALERT_CHOICES).map(|v| choice(Setting::BirthdayAlert(v))));
     // the calendar new events go to: one choice per calendar, the built-in one first
     items.push(AppMenuItem::submenu("Default Calendar"));
     let calendars = c.extras().choices();
@@ -126,6 +143,26 @@ fn settings_items(c: &calendar::Calendar) -> Vec<AppMenuItem> {
         let s = Setting::DefaultCalendar(*id);
         AppMenuItem::new(s.id(), name).checked(c.setting_checked(s)).enabled(c.settings_enabled()).depth(1)
     }));
+    items
+}
+
+/// View > Time Zone: the zone the grids show times in. "Event Time Zones" shows each event at its own time.
+fn zone_items(c: &calendar::Calendar) -> Vec<AppMenuItem> {
+    let enabled = c.settings_enabled();
+    let mut items = vec![
+        AppMenuItem::submenu("Time Zone"),
+        AppMenuItem::new(ZONE_BASE, "Event Time Zones").checked(c.view_zone_checked(None)).enabled(enabled).depth(1),
+    ];
+    items.extend(zones::TABLE.iter().enumerate().map(|(i, z)| {
+        AppMenuItem::new(ZONE_BASE + 1 + i as u32, z.title).checked(c.view_zone_checked(Some(i))).enabled(enabled).depth(1)
+    }));
+    items
+}
+
+/// File > Calendar Colour: one choice per calendar, the built-in one first; each opens the colour sheet.
+fn colour_items(c: &calendar::Calendar) -> Vec<AppMenuItem> {
+    let mut items = vec![AppMenuItem::submenu("Calendar Colour")];
+    items.extend(c.extras().choices().iter().map(|(id, name)| AppMenuItem::new(COLOUR_BASE + id, name).enabled(c.settings_enabled()).depth(1)));
     items
 }
 
@@ -209,6 +246,8 @@ impl App for CalendarApp {
                 .into_iter()
                 .chain(subscription_items(c, &item(Command::Subscribe)))
                 .chain(calendar_items(c))
+                .chain(std::iter::once(AppMenuItem::separator()))
+                .chain(colour_items(c))
                 .chain([
                     AppMenuItem::separator(),
                     item(Command::Import),
@@ -261,8 +300,11 @@ impl App for CalendarApp {
                     item(Command::ShowReminders),
                     item(Command::ShowDeclined),
                     AppMenuItem::separator(),
-                    item(Command::RefreshCalendars),
-                ],
+                ]
+                .into_iter()
+                .chain(zone_items(c))
+                .chain([AppMenuItem::separator(), item(Command::RefreshCalendars)])
+                .collect(),
             },
             AppMenu { title: "Settings".into(), items: settings_items(c) },
         ]
@@ -285,6 +327,15 @@ impl App for CalendarApp {
         }
         if let Some(cal) = id.checked_sub(DELETE_BASE).filter(|i| (2..=extras::MAX_CALENDARS).contains(i)) {
             return self.cal.as_mut().is_some_and(|c| c.delete_calendar(cal));
+        }
+        // View > Time Zone: the base is "Event Time Zones", the ones after it are the zones of the table
+        if let Some(i) = id.checked_sub(ZONE_BASE).filter(|i| *i <= zones::TABLE.len() as u32) {
+            let choice = i.checked_sub(1).map(|zone| zone as usize);
+            return self.cal.as_mut().is_some_and(|c| c.set_view_zone(&ctx.ui, choice));
+        }
+        // File > Calendar Colour: the colour sheet of the calendar
+        if let Some(cal) = id.checked_sub(COLOUR_BASE).filter(|i| (1..=extras::MAX_CALENDARS).contains(i)) {
+            return self.cal.as_mut().is_some_and(|c| c.open_colour(cal));
         }
         let Some(cmd) = Command::from_id(id) else { return false };
         // the CalDAV sync runs on its own thread; asking for a refresh only makes the next poll start it now
@@ -328,8 +379,9 @@ impl App for CalendarApp {
                 if !c.enabled(cmd) {
                     return false;
                 }
-                let (job, text) = c.print_job();
-                match PrintOperation::text(job, text).run() {
+                // the grid of the shown day, week, month or year on a landscape page (`printgrid.rs`)
+                let (job, pages, info) = c.print_pages();
+                match PrintOperation::pages(job, pages, printgrid::FONTS.to_vec()).with_info(info).run() {
                     Ok(_) => c.show_notice("Sent to the printer"),
                     Err(PrintError::NoCups) => c.show_error("The printing service is not running"),
                     Err(PrintError::NoPrinter) => c.show_error("No printer is set up"),
@@ -405,6 +457,44 @@ impl App for CalendarApp {
         true
     }
 
+    /// The calendar takes touch events, not the plain touch stream, to know what made a touch: a finger must hold before
+    /// it drags in the hour grid, a mouse or trackpad drags as soon as it moves (`Calendar::set_pointer`).
+    fn wants_touch_events(&self) -> bool {
+        true
+    }
+
+    /// One frame of touches: the first touch that went down drives the calendar until it lifts, as the plain stream did.
+    fn touches(&mut self, ctx: &Ctx, ev: &TouchEvent) -> bool {
+        let Some(c) = &mut self.cal else { return false };
+        let primary = self.primary;
+        let Some(touch) = ev.touches.iter().find(|t| match primary {
+            Some(id) => t.id == id,
+            None => t.phase == TouchPhase::Began,
+        }) else {
+            return false;
+        };
+        let (x, y) = (touch.x, touch.y);
+        let e = match touch.phase {
+            TouchPhase::Began => {
+                self.primary = Some(touch.id);
+                Event::Down(x, y)
+            }
+            TouchPhase::Moved => Event::Move(x, y),
+            TouchPhase::Ended | TouchPhase::Cancelled => {
+                self.primary = None;
+                Event::Up(x, y)
+            }
+            // a finger that rests changes nothing
+            TouchPhase::Stationary => return false,
+        };
+        c.set_pointer(touch.kind == TouchType::Indirect);
+        c.touch(&ctx.ui, e, touch.timestamp);
+        share_copy(c, ctx);
+        self.open_event_window(ctx);
+        self.send_outbox(ctx);
+        true
+    }
+
     fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
         self.send_outbox(ctx);
         let Some(c) = &mut self.cal else { return false };
@@ -418,7 +508,7 @@ impl App for CalendarApp {
         let day = connect::local_day(now, wall.offset);
         let gen = c.store_generation();
         if self.connect.is_stale(gen, day) {
-            let rich = c.rich_events();
+            let rich = c.rich_events_with_birthdays();
             self.connect.sync(ctx, &Snap { events: c.events(), rich: &rich, extras: c.extras(), now, offset: wall.offset }, gen, day);
         }
         // Without the alert service (an older shell), the app posts its own alerts as before.
@@ -550,7 +640,7 @@ impl App for CalendarApp {
         }
         let Some(c) = &self.cal else { return false };
         let wall = Wall::sample(0.0);
-        let rich = c.rich_events();
+        let rich = c.rich_events_with_birthdays();
         let snap = Snap { events: c.events(), rich: &rich, extras: c.extras(), now: wall.unix, offset: wall.offset };
         self.connect.refresh_up_next(ctx, &snap);
         false
@@ -697,5 +787,5 @@ fn pane_input(c: &mut calendar::Calendar, ctx: &Ctx, ev: Input) -> bool {
 }
 
 fn main() {
-    bifrost_app::run(CalendarApp { cal: None, last_wall: 0.0, connect: Connect::default(), dav: bifrost_app::dav_sync::Sync::new(Service::Calendars), jobs: HashMap::new(), fetcher: Fetcher::default(), attached: HashMap::new() });
+    bifrost_app::run(CalendarApp { cal: None, last_wall: 0.0, connect: Connect::default(), dav: bifrost_app::dav_sync::Sync::new(Service::Calendars), jobs: HashMap::new(), fetcher: Fetcher::default(), attached: HashMap::new(), primary: None });
 }

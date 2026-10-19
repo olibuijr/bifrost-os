@@ -28,7 +28,7 @@ pub struct Zone {
 }
 
 /// The zones, in the order the editor's Time Zone row steps through them after "Device Time Zone".
-pub const TABLE: [Zone; 11] = [
+pub static TABLE: [Zone; 11] = [
     Zone { id: "UTC", title: "UTC", standard: 0, dst: Dst::Never },
     Zone { id: "Atlantic/Reykjavik", title: "Iceland (GMT)", standard: 0, dst: Dst::Never },
     Zone { id: "Europe/London", title: "London", standard: 0, dst: Dst::Eu },
@@ -112,6 +112,48 @@ pub fn unix_of(zone: &Zone, date: Date, minute: u32) -> i64 {
 pub fn local_in(zone: &Zone, unix: i64) -> (Date, u32) {
     let minutes = unix.div_euclid(60) + offset_at_utc(zone, unix) as i64;
     (Date::from_days(minutes.div_euclid(1440)), minutes.rem_euclid(1440) as u32)
+}
+
+/// A clock a wall time is read on: the device's (a fixed offset in minutes east of UTC, as the shell gives it) or a zone
+/// of the table with its daylight saving rules.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Clock {
+    Device(i32),
+    Zone(&'static Zone),
+}
+
+impl Clock {
+    /// The clock an event's zone name stands for: the device's when it names none, None for a name the table lacks.
+    pub fn of(tzid: Option<&str>, device_offset: i32) -> Option<Clock> {
+        match tzid {
+            None => Some(Clock::Device(device_offset)),
+            Some(id) => find(id).map(Clock::Zone),
+        }
+    }
+}
+
+/// The moment (unix seconds) the wall time `minute` of `date` is on `clock`.
+pub fn clock_unix(clock: Clock, date: Date, minute: u32) -> i64 {
+    match clock {
+        Clock::Device(offset) => (date.days() * 1440 + minute as i64 - offset as i64) * 60,
+        Clock::Zone(zone) => unix_of(zone, date, minute),
+    }
+}
+
+/// The wall date and minute of the moment `unix` on `clock`.
+pub fn clock_local(clock: Clock, unix: i64) -> (Date, u32) {
+    match clock {
+        Clock::Device(offset) => {
+            let minutes = unix.div_euclid(60) + offset as i64;
+            (Date::from_days(minutes.div_euclid(1440)), minutes.rem_euclid(1440) as u32)
+        }
+        Clock::Zone(zone) => local_in(zone, unix),
+    }
+}
+
+/// Where the wall time `minute` of `date` on clock `from` lands on clock `to`.
+pub fn convert_clock(from: Clock, date: Date, minute: u32, to: Clock) -> (Date, u32) {
+    clock_local(to, clock_unix(from, date, minute))
 }
 
 /// Where a wall time in `from` (None: the device, whose offset is `device_offset` minutes) lands in the zone `to`.
@@ -261,6 +303,25 @@ mod tests {
         assert_eq!(convert(None, day, 60, 120, "UTC"), Some((d(2026, 1, 19), 1380)));
         assert_eq!(convert(Some("Mars/Olympus"), day, 0, 0, "UTC"), None);
         assert_eq!(convert(None, day, 0, 0, "Mars/Olympus"), None);
+    }
+
+    #[test]
+    fn clocks_convert_both_ways_and_the_device_is_a_fixed_offset() {
+        let day = d(2026, 7, 10);
+        let paris = Clock::Zone(zone("Europe/Paris"));
+        let tokyo = Clock::Zone(zone("Asia/Tokyo"));
+        let device = Clock::Device(-120);
+        // 10:00 in Paris in summer is 08:00 UTC, 17:00 in Tokyo and 06:00 on a device two hours behind UTC
+        assert_eq!(convert_clock(paris, day, 600, tokyo), (day, 1020));
+        assert_eq!(convert_clock(paris, day, 600, device), (day, 360));
+        // and back again
+        assert_eq!(convert_clock(tokyo, day, 1020, paris), (day, 600));
+        assert_eq!(convert_clock(device, day, 360, paris), (day, 600));
+        // across midnight
+        assert_eq!(convert_clock(tokyo, day, 60, paris), (d(2026, 7, 9), 1080));
+        assert_eq!(Clock::of(None, 30), Some(Clock::Device(30)));
+        assert_eq!(Clock::of(Some("Asia/Tokyo"), 30), Some(tokyo));
+        assert_eq!(Clock::of(Some("Mars/Olympus"), 30), None);
     }
 
     #[test]
