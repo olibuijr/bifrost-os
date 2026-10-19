@@ -2000,6 +2000,8 @@ impl Music {
                 self.playback = self.playback.with_crossfade(secs);
                 self.player.set_crossfade_ms(self.playback.crossfade_secs * 1000);
                 if let Some(dir) = &self.store {
+                    // the store folder may not exist yet when nothing else has been saved to it
+                    let _ = std::fs::create_dir_all(dir);
                     let _ = std::fs::write(dir.join("playback.txt"), self.playback.to_text());
                 }
             }

@@ -2358,9 +2358,11 @@ mod tests {
         assert_eq!(mail.recipient_suggestions().iter().map(|s| s.address.as_str()).collect::<Vec<_>>(), ["bob@example.com"]);
         type_in_focus(&mut mail, "an");
         let got: Vec<String> = mail.recipient_suggestions().iter().map(|s| s.address.clone()).collect();
-        assert_eq!(got, ["anders@example.com", "ana@example.com"], "both contacts match at a word start, in name order");
+        assert_eq!(got, ["ana@example.com", "anders@example.com"], "both contacts match at a word start, in display-name order");
         assert!(mail.move_recipient_highlight(true) && mail.move_recipient_highlight(true));
         assert_eq!(mail.recipient_field.highlighted(), Some(1));
+        assert!(mail.move_recipient_highlight(false));
+        assert_eq!(mail.recipient_field.highlighted(), Some(0));
         assert!(mail.accept_recipient(None));
         assert_eq!(compose_of(&mail).form.value("To"), "Ana Lovelace <ana@example.com>, ");
         assert!(mail.recipient_suggestions().is_empty(), "nothing is offered after a finished recipient");

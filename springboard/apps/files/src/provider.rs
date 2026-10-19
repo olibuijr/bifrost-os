@@ -338,25 +338,29 @@ mod tests {
         }
     }
 
-    /// Runs the real SDK service in a thread on the socket the host names.
+    /// How long a test waits for the in-process service to leave. A regression fails here instead of hanging.
+    const SERVICE_EXIT_WAIT: Duration = Duration::from_secs(5);
+
+    /// Runs the real SDK service in a thread on the socket the host names. The service leaves only on a shutdown request
+    /// it receives over its socket, so when the socket is already gone (the test removed its folder) there is nothing to
+    /// wait for: the thread is left to end with the test process instead of being joined.
     struct InProcess {
         socket: PathBuf,
-        thread: Option<std::thread::JoinHandle<()>>,
+        /// signalled when the service loop returns
+        done: std::sync::mpsc::Receiver<()>,
     }
 
     impl Instance for InProcess {
         fn alive(&mut self) -> bool {
-            self.thread.as_ref().is_some_and(|t| !t.is_finished())
+            matches!(self.done.try_recv(), Err(std::sync::mpsc::TryRecvError::Empty))
         }
         fn stop(&mut self) {
-            if let Ok(mut s) = UnixStream::connect(&self.socket) {
-                let _ = s.write_all(b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"extension.shutdown\",\"params\":{}}\n");
-                let _ = s.shutdown(std::net::Shutdown::Write);
-                let _ = std::io::Read::read_to_end(&mut s, &mut Vec::new());
-            }
-            if let Some(t) = self.thread.take() {
-                let _ = t.join();
-            }
+            let Ok(mut s) = UnixStream::connect(&self.socket) else { return };
+            let _ = s.set_read_timeout(Some(SERVICE_EXIT_WAIT));
+            let _ = s.write_all(b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"extension.shutdown\",\"params\":{}}\n");
+            let _ = s.shutdown(std::net::Shutdown::Write);
+            let _ = std::io::Read::read_to_end(&mut s, &mut Vec::new());
+            let _ = self.done.recv_timeout(SERVICE_EXIT_WAIT);
         }
     }
 
@@ -366,10 +370,12 @@ mod tests {
         fn launch(&self, _entry: &HostEntry, socket: &Path) -> std::io::Result<Box<dyn Instance>> {
             self.0.fetch_add(1, Ordering::SeqCst);
             let (path, fetches) = (socket.to_path_buf(), Arc::clone(&self.1));
-            let thread = std::thread::spawn(move || {
+            let (done_tx, done) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
                 let _ = serve_at(&path, &mut FileProviderService(Memory { fetches }), false);
+                let _ = done_tx.send(());
             });
-            Ok(Box::new(InProcess { socket: socket.to_path_buf(), thread: Some(thread) }))
+            Ok(Box::new(InProcess { socket: socket.to_path_buf(), done }))
         }
     }
 

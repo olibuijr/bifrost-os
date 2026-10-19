@@ -81,6 +81,9 @@ pub fn read_date(text: &str, today: Date, year: i64) -> Option<Date> {
     if let Some(d) = by_month_name(t, year) {
         return Some(d);
     }
+    if let Some(d) = quick::day_phrase(t, today) {
+        return Some(d);
+    }
     let q = quick::parse(t, today);
     if q.title.trim().is_empty() && q.minute.is_none() {
         q.date

@@ -73,6 +73,21 @@ pub fn parse_date(text: &str) -> Option<Date> {
     date.valid().then_some(date)
 }
 
+/// A text that is only a day phrase: "today", "tomorrow", a weekday, or "next", "this" or "on" with a weekday, counted from
+/// `today`. Unlike `parse`, a bare weekday at the start counts here (there is no title to keep).
+pub fn day_phrase(text: &str, today: Date) -> Option<Date> {
+    let lows: Vec<String> = text.split_whitespace().map(str::to_lowercase).collect();
+    match lows.as_slice() {
+        [w] if w == "today" => Some(today),
+        [w] if w == "tomorrow" => Some(today.shift_days(1)),
+        [w] => weekday(w).map(|wd| next_weekday(today, wd, false)),
+        [p, w] if matches!(p.as_str(), "next" | "this" | "on") => {
+            weekday(w).map(|wd| next_weekday(today, wd, p == "next"))
+        }
+        _ => None,
+    }
+}
+
 /// A clock time at word `i`: "12:30", "12:30pm", "5pm", "noon", or "5 pm" (two words). The minute of the day and the
 /// number of words used. A bare "5" is not a time.
 fn clock(lows: &[String], i: usize) -> Option<(u16, usize)> {
