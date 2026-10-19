@@ -300,6 +300,116 @@ impl PixelBuffer {
     }
 }
 
+/// One plane of a format description (`CVPixelFormatDescription`'s per-plane entries).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PlaneDescription {
+    /// Bytes of one stored sample (a chroma pair counts as one sample).
+    pub bytes_per_sample: usize,
+    /// Picture columns covered by one stored sample.
+    pub horizontal_subsampling: usize,
+    /// Picture rows covered by one stored sample.
+    pub vertical_subsampling: usize,
+}
+
+/// What the system knows about a pixel format (`CVPixelFormatDescriptionCreateWithPixelFormatType`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FormatDescription {
+    pub code: FourCc,
+    pub name: &'static str,
+    pub planes: Vec<PlaneDescription>,
+    /// Bits of storage per picture pixel, all planes together (12 for NV12, 32 for the 32-bit RGB layouts).
+    pub bits_per_pixel: usize,
+    /// Whether [`PixelBuffer::from_image`] and [`PixelBuffer::to_image`] convert this format.
+    pub converts_to_image: bool,
+}
+
+/// The description of the format with this code, or `None` when the system does not know it
+/// (`kCVReturnInvalidPixelFormat`). The table is fixed: apps cannot register formats of their own.
+pub fn pixel_format_description(code: FourCc) -> Option<FormatDescription> {
+    let format = pixel_format::find(code)?;
+    let planes: Vec<PlaneDescription> = format
+        .planes
+        .iter()
+        .map(|p| PlaneDescription { bytes_per_sample: p.bytes_per_pixel, horizontal_subsampling: p.h_sub, vertical_subsampling: p.v_sub })
+        .collect();
+    let bits_per_pixel = planes.iter().map(|p| p.bytes_per_sample * 8 / (p.horizontal_subsampling * p.vertical_subsampling)).sum();
+    // Every format in the table converts; the check keeps the flag honest if the table grows.
+    let converts_to_image = bifrost_render::pixel_convert::encode(
+        &bifrost_render::gfx::Image { w: 2, h: 2, px: vec![0; 4] },
+        format,
+        YcbcrMatrix::Bt709,
+    )
+    .is_some();
+    Some(FormatDescription { code: format.code, name: format.name, planes, bits_per_pixel, converts_to_image })
+}
+
+/// Every pixel format code the system knows, in table order (`CVPixelFormatDescriptionArrayCreateWithAllPixelFormatTypes`).
+pub fn pixel_format_codes() -> Vec<FourCc> {
+    pixel_format::TABLE.iter().map(|f| f.code).collect()
+}
+
+impl PixelBuffer {
+    /// A buffer in the format with this code holding `img`, converted by `bifrost_render::pixel_convert` (the
+    /// 32-bit RGB layouts, RGB565, NV12 and NV16). The buffer is unlocked and its attachments are empty; YCbCr
+    /// formats use the BT.709 matrix, video range. Fails with `UnknownFormat` for a format without a conversion and
+    /// `InvalidSize` for an empty image or one whose pixel count does not match its size.
+    pub fn from_image(img: &bifrost_render::gfx::Image, code: FourCc) -> Result<Self, PixelBufferError> {
+        let mut buf = Self::new(code, img.w, img.h)?;
+        let planes = bifrost_render::pixel_convert::encode(img, buf.layout, YcbcrMatrix::Bt709).ok_or_else(|| {
+            if img.w == 0 || img.h == 0 || img.px.len() != img.w * img.h {
+                PixelBufferError::InvalidSize
+            } else {
+                PixelBufferError::UnknownFormat
+            }
+        })?;
+        buf.planes = planes;
+        Ok(buf)
+    }
+
+    /// A buffer that takes ownership of already-decoded `planes` (one tightly packed byte vector per plane, the sizes
+    /// `PixelFormat::plane_size` gives) and their colour `attachments`: the way a decoder or a media app hands a
+    /// frame over. Fails with `UnknownFormat` or `InvalidSize` like [`PixelBuffer::new`], and with `InvalidSize` when
+    /// the plane count or any plane length is not what the format needs for this size.
+    pub fn from_planes(code: FourCc, width: usize, height: usize, planes: Vec<Vec<u8>>, attachments: Attachments) -> Result<Self, PixelBufferError> {
+        let mut buf = Self::new(code, width, height)?;
+        let sizes_match = planes.len() == buf.planes.len() && planes.iter().zip(&buf.planes).all(|(given, own)| given.len() == own.len());
+        if !sizes_match {
+            return Err(PixelBufferError::InvalidSize);
+        }
+        buf.planes = planes;
+        buf.attachments = attachments;
+        Ok(buf)
+    }
+
+    /// The pixels as an image, for the image filters. Like any read of the bytes it needs a lock: `None` while the
+    /// buffer is unlocked or when the format has no conversion. The YCbCr matrix is the one in the attachments,
+    /// BT.709 when unset. The image is opaque for the formats without alpha.
+    pub fn to_image(&self) -> Option<bifrost_render::gfx::Image> {
+        if !self.is_locked() {
+            return None;
+        }
+        let matrix = self.attachments.matrix.unwrap_or(YcbcrMatrix::Bt709);
+        bifrost_render::pixel_convert::decode(self.layout, &self.planes, self.width, self.height, matrix)
+    }
+
+    /// Replaces the pixels with `img`, converted to this buffer's format. Needs a read-write lock, and the image must
+    /// be the buffer's size. The revision advances when the read-write lock is released, as for any write. Returns
+    /// false when the buffer is not write-locked, the size differs, or the format has no conversion.
+    pub fn write_image(&mut self, img: &bifrost_render::gfx::Image) -> bool {
+        if self.read_write_locks == 0 || img.w != self.width || img.h != self.height {
+            return false;
+        }
+        let matrix = self.attachments.matrix.unwrap_or(YcbcrMatrix::Bt709);
+        match bifrost_render::pixel_convert::encode(img, self.layout, matrix) {
+            Some(planes) => {
+                self.planes = planes;
+                true
+            }
+            None => false,
+        }
+    }
+}
+
 /// A pool of pixel buffers of one format and size (`CVPixelBufferPool`). Released buffers are reused; the limits come
 /// from [`PoolConfig`]. Times are tick counts the caller supplies, as in `bifrost_render::buffer_pool`.
 #[derive(Debug)]
@@ -481,5 +591,93 @@ mod tests {
         assert_eq!(buf.clean_rect(), Rect { x: 4, y: 2, w: 8, h: 6 });
         // Attachments do not touch the pixels.
         assert_eq!(buf.revision(), before);
+    }
+
+    fn image(w: usize, h: usize, px: u32) -> bifrost_render::gfx::Image {
+        bifrost_render::gfx::Image { w, h, px: vec![px; w * h] }
+    }
+
+    #[test]
+    fn an_image_goes_into_a_buffer_and_comes_back_only_under_a_lock() {
+        let img = image(3, 2, 0xff11_2233);
+        let mut buf = PixelBuffer::from_image(&img, code("AR24")).unwrap();
+        assert_eq!((buf.width(), buf.height(), buf.data_size()), (3, 2, 24));
+        assert!(buf.to_image().is_none(), "unlocked");
+        buf.lock(true);
+        assert_eq!(buf.to_image().unwrap(), img);
+        assert_eq!(buf.base_address(0).unwrap()[..4], [0x11, 0x22, 0x33, 0xff]);
+    }
+
+    #[test]
+    fn nv12_buffers_convert_with_the_attached_matrix() {
+        let img = image(4, 4, 0xff00_00ff);
+        let mut buf = PixelBuffer::from_image(&img, code("NV12")).unwrap();
+        assert_eq!(buf.data_size(), 24);
+        buf.lock(true);
+        let back = buf.to_image().unwrap();
+        assert!((back.px[0] & 0xff) >= 250 && (back.px[0] >> 8 & 0xff) <= 4);
+        buf.unlock(true).unwrap();
+        // Reading with a different matrix gives different colours: the attachment is honoured.
+        buf.set_attachments(Attachments { matrix: Some(YcbcrMatrix::Bt601), ..Attachments::default() });
+        buf.lock(true);
+        assert_ne!(buf.to_image().unwrap().px[0], back.px[0]);
+    }
+
+    #[test]
+    fn write_image_needs_a_write_lock_and_the_same_size() {
+        let mut buf = PixelBuffer::new(code("AB24"), 2, 2).unwrap();
+        let white = image(2, 2, 0xffff_ffff);
+        assert!(!buf.write_image(&white), "no lock");
+        buf.lock(true);
+        assert!(!buf.write_image(&white), "read-only lock");
+        buf.unlock(true).unwrap();
+        buf.lock(false);
+        assert!(!buf.write_image(&image(3, 2, 0)), "wrong size");
+        assert!(buf.write_image(&white));
+        assert_eq!(buf.to_image().unwrap(), white);
+        buf.unlock(false).unwrap();
+        assert_eq!(buf.revision(), 1);
+    }
+
+    #[test]
+    fn decoded_planes_become_a_buffer_with_their_attachments() {
+        let attachments = Attachments { matrix: Some(YcbcrMatrix::Bt601), ..Attachments::default() };
+        let planes = vec![vec![126u8; 6], vec![128u8; 4]];
+        let mut buf = PixelBuffer::from_planes(code("NV12"), 3, 2, planes.clone(), attachments).unwrap();
+        assert_eq!(buf.attachments().matrix, Some(YcbcrMatrix::Bt601));
+        buf.lock(true);
+        assert_eq!(buf.base_address(0).unwrap(), &planes[0][..]);
+        let grey = buf.to_image().unwrap();
+        assert!((grey.px[0] & 0xff).abs_diff(128) <= 3);
+        assert_eq!(
+            PixelBuffer::from_planes(code("NV12"), 3, 2, vec![vec![0u8; 6]], Attachments::default()),
+            Err(PixelBufferError::InvalidSize)
+        );
+        assert_eq!(
+            PixelBuffer::from_planes(code("NV12"), 3, 2, vec![vec![0u8; 6], vec![0u8; 5]], Attachments::default()),
+            Err(PixelBufferError::InvalidSize)
+        );
+    }
+
+    #[test]
+    fn format_descriptions_report_planes_and_storage() {
+        let nv12 = pixel_format_description(code("NV12")).unwrap();
+        assert_eq!((nv12.name, nv12.planes.len(), nv12.bits_per_pixel), ("NV12", 2, 12));
+        assert_eq!(nv12.planes[1], PlaneDescription { bytes_per_sample: 2, horizontal_subsampling: 2, vertical_subsampling: 2 });
+        assert_eq!(pixel_format_description(code("NV16")).unwrap().bits_per_pixel, 16);
+        assert_eq!(pixel_format_description(code("AR24")).unwrap().bits_per_pixel, 32);
+        assert_eq!(pixel_format_description(code("RG16")).unwrap().bits_per_pixel, 16);
+        assert!(pixel_format_description(code("XX99")).is_none());
+        let codes = pixel_format_codes();
+        assert_eq!(codes.len(), 7);
+        assert!(codes.iter().all(|&c| pixel_format_description(c).is_some_and(|d| d.converts_to_image)));
+    }
+
+    #[test]
+    fn from_image_refuses_bad_input() {
+        assert_eq!(PixelBuffer::from_image(&image(2, 2, 0), code("XX99")), Err(PixelBufferError::UnknownFormat));
+        let short = bifrost_render::gfx::Image { w: 2, h: 2, px: vec![0; 3] };
+        assert_eq!(PixelBuffer::from_image(&short, code("AR24")), Err(PixelBufferError::InvalidSize));
+        assert_eq!(PixelBuffer::from_image(&image(0, 0, 0), code("AR24")), Err(PixelBufferError::InvalidSize));
     }
 }

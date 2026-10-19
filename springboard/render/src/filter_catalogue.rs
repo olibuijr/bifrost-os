@@ -17,6 +17,7 @@ pub const CATEGORY_COLOR_EFFECT: &str = "CICategoryColorEffect";
 pub const CATEGORY_GENERATOR: &str = "CICategoryGenerator";
 pub const CATEGORY_GRADIENT: &str = "CICategoryGradient";
 pub const CATEGORY_TRANSITION: &str = "CICategoryTransition";
+pub const CATEGORY_REDUCTION: &str = "CICategoryReduction";
 
 /// One input attribute: its reference key, default and range.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -41,6 +42,8 @@ const fn a(key: &'static str, default: f32, min: f32, max: f32) -> Attribute {
 
 const RADIUS: Attribute = a("inputRadius", 300.0, 0.0, 1000.0);
 const ANGLE: Attribute = a("inputAngle", 0.0, -PI, PI);
+/// The bias added to a convolution sum, in 0..=1 of the channel range (reference default 0).
+const BIAS: Attribute = a("inputBias", 0.0, -1.0, 1.0);
 const TIME: Attribute = a("inputTime", 0.0, 0.0, 1.0);
 
 static FILTERS: &[FilterInfo] = &[
@@ -100,6 +103,26 @@ static FILTERS: &[FilterInfo] = &[
     FilterInfo { name: "CITriangleTile", category: CATEGORY_TILE, attributes: &[ANGLE, a("inputWidth", 100.0, 1.0, 1000.0)] },
     FilterInfo { name: "CIParallelogramTile", category: CATEGORY_TILE, attributes: &[ANGLE, a("inputAcuteAngle", 1.047, 0.0, 3.1416), a("inputWidth", 100.0, 1.0, 1000.0)] },
     FilterInfo { name: "CIPerspectiveTile", category: CATEGORY_TILE, attributes: &[] },
+    FilterInfo { name: "CIQRCodeGenerator", category: CATEGORY_GENERATOR, attributes: &[] },
+    FilterInfo { name: "CIRoundedQRCodeGenerator", category: CATEGORY_GENERATOR, attributes: &[a("inputRadius", 1.0, 0.0, 1.0)] },
+    FilterInfo { name: "CIAreaAverage", category: CATEGORY_REDUCTION, attributes: &[] },
+    FilterInfo { name: "CIAreaMinimum", category: CATEGORY_REDUCTION, attributes: &[] },
+    FilterInfo { name: "CIAreaMaximum", category: CATEGORY_REDUCTION, attributes: &[] },
+    FilterInfo { name: "CIAreaMinMax", category: CATEGORY_REDUCTION, attributes: &[] },
+    FilterInfo { name: "CIAreaHistogram", category: CATEGORY_REDUCTION, attributes: &[a("inputCount", 64.0, 1.0, 256.0)] },
+    FilterInfo { name: "CIRowAverage", category: CATEGORY_REDUCTION, attributes: &[] },
+    FilterInfo { name: "CIColumnAverage", category: CATEGORY_REDUCTION, attributes: &[] },
+    FilterInfo { name: "CIKMeans", category: CATEGORY_REDUCTION, attributes: &[a("inputCount", 8.0, 1.0, 128.0), a("inputPasses", 5.0, 0.0, 20.0)] },
+    FilterInfo { name: "CIConvolution3X3", category: CATEGORY_STYLIZE, attributes: &[BIAS] },
+    FilterInfo { name: "CIConvolution5X5", category: CATEGORY_STYLIZE, attributes: &[BIAS] },
+    FilterInfo { name: "CIConvolution7X7", category: CATEGORY_STYLIZE, attributes: &[BIAS] },
+    FilterInfo { name: "CIConvolution9Horizontal", category: CATEGORY_STYLIZE, attributes: &[BIAS] },
+    FilterInfo { name: "CIConvolution9Vertical", category: CATEGORY_STYLIZE, attributes: &[BIAS] },
+    FilterInfo { name: "CIConvolutionRGB3X3", category: CATEGORY_STYLIZE, attributes: &[BIAS] },
+    FilterInfo { name: "CIConvolutionRGB5X5", category: CATEGORY_STYLIZE, attributes: &[BIAS] },
+    FilterInfo { name: "CIConvolutionRGB7X7", category: CATEGORY_STYLIZE, attributes: &[BIAS] },
+    FilterInfo { name: "CIConvolutionRGB9Horizontal", category: CATEGORY_STYLIZE, attributes: &[BIAS] },
+    FilterInfo { name: "CIConvolutionRGB9Vertical", category: CATEGORY_STYLIZE, attributes: &[BIAS] },
 ];
 
 /// Every catalogued filter name, in catalogue order.
@@ -178,6 +201,19 @@ mod tests {
         assert_eq!(default_value("CIVibrance", "inputAmount"), Some(0.0));
         assert_eq!(default_value("CIColorPosterize", "inputLevels"), Some(6.0));
         assert_eq!(default_value("CISwipeTransition", "inputTime"), Some(0.0));
+    }
+
+    #[test]
+    fn reduction_generator_and_convolution_entries_are_listed() {
+        assert_eq!(
+            filter_names(Some(CATEGORY_REDUCTION)),
+            ["CIAreaAverage", "CIAreaMinimum", "CIAreaMaximum", "CIAreaMinMax", "CIAreaHistogram", "CIRowAverage", "CIColumnAverage", "CIKMeans"]
+        );
+        assert!(filter_names(Some(CATEGORY_GENERATOR)).contains(&"CIQRCodeGenerator"));
+        assert!(filter_names(Some(CATEGORY_STYLIZE)).contains(&"CIConvolutionRGB9Vertical"));
+        assert_eq!(default_value("CIKMeans", "inputCount"), Some(8.0));
+        assert_eq!(default_value("CIAreaHistogram", "inputCount"), Some(64.0));
+        assert_eq!(default_value("CIConvolution3X3", "inputBias"), Some(0.0));
     }
 
     #[test]

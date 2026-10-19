@@ -10,9 +10,9 @@
     {
       "feature": "Pixel buffers (CPU-side image buffers)",
       "apple": "CVPixelBuffer, CVPixelBufferCreate, CVPixelBufferLockBaseAddress, CVPixelBufferGetBaseAddress, CVPixelBufferGetBytesPerRow",
-      "bifrost": "springboard/sdk/src/pixel_buffer.rs",
+      "bifrost": "springboard/sdk/src/pixel_buffer.rs; springboard/render/src/pixel_convert.rs; springboard/sdk/src/pixel_buffer.rs (from_image, to_image, write_image, from_planes)",
       "status": "partial",
-      "note": "PixelBuffer holds the planes of a BGRA or NV12 buffer, reaches them only under a lock, counts read-write unlocks as a revision, and recycles through PixelBufferPool; the Layout description and the lock, revision and pool rules are tested headless in sdk/tests/parity_sdk-complete-08.rs. Gap: no app or the shell uses these buffers yet, and the presenter and media decoders do not fill them; that needs the lab machine."
+      "note": "PixelBuffer holds the planes of a BGRA or NV12 buffer, reaches them only under a lock, counts read-write unlocks as a revision, and recycles through PixelBufferPool; the Layout description and the lock, revision and pool rules are tested headless in sdk/tests/parity_sdk-complete-08.rs. Gap: no app or the shell uses these buffers yet, and the presenter and media decoders do not fill them; that needs the lab machine. Built 2026-10-19: PixelBuffer::from_image, to_image (under a lock), write_image (under a read-write lock) and from_planes convert between buffers and gfx::Image for the four 32-bit RGB layouts, RGB565, NV12 and NV16 (video range, the matrix from the attachments), so a frame can go through the image filters. Decoders and the presenter still do not fill buffers. Midget check: `cargo test -p bifrost-render pixel_convert` and `cargo test -p bifrost-app pixel_buffer::tests::an_image_goes_into_a_buffer_and_comes_back_only_under_a_lock`."
     },
     {
       "feature": "Pixel buffer pool",
@@ -24,23 +24,23 @@
     {
       "feature": "Image buffer attachments and colour metadata",
       "apple": "CVBufferSetAttachment, CVBufferCopyAttachments, CVImageBufferGetColorSpace, CVImageBufferGetCleanRect, CVImageBufferCreateColorSpaceFromAttachments",
-      "bifrost": "springboard/render/src/buffer_attach.rs; springboard/sdk/src/pixel_buffer.rs (PixelBuffer::attachments, set_attachments, color_space, clean_rect)",
+      "bifrost": "springboard/render/src/buffer_attach.rs; springboard/sdk/src/pixel_buffer.rs (PixelBuffer::attachments, set_attachments, color_space, clean_rect); springboard/src/media/mod.rs (DmaPicture::colour_attachments, to_tight_nv12)",
       "status": "partial",
-      "note": "The typed attachments (primaries, transfer, YCbCr matrix, clean aperture) are set and read through PixelBuffer, and the colour space and clean rect follow them; tested headless in sdk/tests/parity_sdk-complete-08.rs. Gap: decoded pictures (springboard/src/media/mod.rs DmaPicture) do not carry primaries, transfer or YCbCr matrix, so decoders do not fill them; that needs the decode path on the lab machine."
+      "note": "The typed attachments (primaries, transfer, YCbCr matrix, clean aperture) are set and read through PixelBuffer, and the colour space and clean rect follow them; tested headless in sdk/tests/parity_sdk-complete-08.rs. Gap: decoded pictures (springboard/src/media/mod.rs DmaPicture) do not carry primaries, transfer or YCbCr matrix, so decoders do not fill them; that needs the decode path on the lab machine. Built 2026-10-19: decoded pictures now yield colour attachments (DmaPicture::colour_attachments: HD is BT.709, SD is BT.601 with SMPTE 170M primaries, BT.709 transfer, the height convention of convert::matrix_for) and a tightly packed NV12 copy (to_tight_nv12) that PixelBuffer::from_planes takes with those attachments. The stream's own colour description (VUI) is still not parsed. Midget check: `cargo test dma_tests` in the shell crate (colour_attachments_follow_the_height_convention, to_tight_nv12_packs_the_cropped_rows_without_padding); in Videos play an HD clip and check it still shows."
     },
     {
       "feature": "Pixel format description and fourcc types",
       "apple": "CVPixelFormatDescription, CVPixelFormatType, CVPixelBufferIsPlanar, CVPixelBufferGetPlaneCount",
-      "bifrost": "springboard/render/src/pixel_format.rs",
+      "bifrost": "springboard/render/src/pixel_format.rs; springboard/sdk/src/pixel_buffer.rs (pixel_format_description, pixel_format_codes)",
       "status": "partial",
-      "note": "Fourcc parsing and printing, the format table, plane sizes and buffer lengths (NV12, NV16, RGBA, RGB565, odd sizes) are tested headless in springboard/render/tests/parity_sdk-tests-17.rs. Not wired into apps or the shell, not yet tested on Midget. Formats are DRM fourccs chosen internally; apps cannot register or query pixel format descriptions."
+      "note": "Fourcc parsing and printing, the format table, plane sizes and buffer lengths (NV12, NV16, RGBA, RGB565, odd sizes) are tested headless in springboard/render/tests/parity_sdk-tests-17.rs. Not wired into apps or the shell, not yet tested on Midget. Formats are DRM fourccs chosen internally; apps cannot register or query pixel format descriptions. Built 2026-10-19: apps can query the format table: pixel_format_description(code) gives the name, per-plane sample size and subsampling, bits per pixel and whether the format converts to an image; pixel_format_codes() lists the seven codes. Registration of custom formats stays out (the table is fixed). Midget check: `cargo test -p bifrost-app pixel_buffer::tests::format_descriptions_report_planes_and_storage`."
     },
     {
       "feature": "Display timing and vsync (CVDisplayLink, CVTime, CVTimeStamp)",
       "apple": "CVDisplayLinkCreateWithActiveCGDisplays, CVDisplayLinkSetOutputHandler, CVDisplayLinkStart, CVDisplayLinkGetActualOutputVideoRefreshPeriod, CVTimeStamp",
-      "bifrost": "springboard/sdk/src/display_link.rs (Time, DisplayLink::refresh_time, TimeStamp::time); tests: springboard/sdk/tests/parity_sdk-complete-20.rs",
+      "bifrost": "springboard/sdk/src/display_link.rs (Time, DisplayLink::refresh_time, TimeStamp::time); tests: springboard/sdk/tests/parity_sdk-complete-20.rs; springboard/sdk/src/display_link.rs (HandlerLink, Time::rescaled, checked_add, checked_sub, compare)",
       "status": "partial",
-      "note": "Output times are typed CVTime-style values: refresh_time and TimeStamp::time give nanoseconds at the video scale, indefinite times carry a flag, and the refresh period is queryable (headless_display_time_* and headless_the_refresh_time_* in sdk/tests/parity_sdk-complete-20.rs). Not wired into apps or the shell, and still needs a check on the VM or Midget; vsync prediction stays internal to the KMS path, and docs/bifrost-ui.md (around line 892) records the decision not to add CADisplayLink, so there is no per-display callback."
+      "note": "Output times are typed CVTime-style values: refresh_time and TimeStamp::time give nanoseconds at the video scale, indefinite times carry a flag, and the refresh period is queryable (headless_display_time_* and headless_the_refresh_time_* in sdk/tests/parity_sdk-complete-20.rs). Not wired into apps or the shell, and still needs a check on the VM or Midget; vsync prediction stays internal to the KMS path, and docs/bifrost-ui.md (around line 892) records the decision not to add CADisplayLink, so there is no per-display callback. Built 2026-10-19: HandlerLink is the output-handler form (CVDisplayLinkSetOutputHandler): the closure runs once per refresh a tick reports, and the handler can be replaced; Time gets rescaled, checked_add, checked_sub and compare (CVTimeAdd, CVTimeSubtract, CVTimeCompare). Apps still tick it from their own loop; there is no per-display thread. Midget check: `cargo test -p bifrost-app display_link::handler_tests`."
     },
     {
       "feature": "GPU presenter and frame submission",
@@ -59,9 +59,9 @@
     {
       "feature": "dma-buf surfaces for windows",
       "apple": "CVPixelBufferCreateWithIOSurface, CVPixelBufferGetIOSurface",
-      "bifrost": "springboard/sdk/src/system/dma_buf.rs (Descriptor, Plane, validate, fourcc); springboard/src/bare/wayland.rs (dma-buf wl_buffer around a presenter drawable, line 48); springboard/src/bare/scanout.rs (scanout render buffer)",
+      "bifrost": "springboard/sdk/src/system/dma_buf.rs (Descriptor, Plane, validate, fourcc); springboard/src/bare/wayland.rs (dma-buf wl_buffer around a presenter drawable, line 48); springboard/src/bare/scanout.rs (scanout render buffer); springboard/sdk/src/system/dma_buf.rs (NV12 descriptors)",
       "status": "partial",
-      "note": "Linear one-plane 32-bit RGB descriptors are checked for stride and file bounds, with tests. Passing the file descriptor to the compositor stays a system feature, and IOSurface is not available here."
+      "note": "Linear one-plane 32-bit RGB descriptors are checked for stride and file bounds, with tests. Passing the file descriptor to the compositor stays a system feature, and IOSurface is not available here. Built 2026-10-19: Descriptor::validate also takes two-plane NV12 (even size, linear, each plane inside the file, new OddSize error), for video frames. Passing the fd to the compositor stays a system feature. Midget check: `cargo test -p bifrost-app system::dma_buf` and `--test parity_sdk-os-07` (the planar-format test now uses NV16)."
     },
     {
       "feature": "Core Video result codes and error type",

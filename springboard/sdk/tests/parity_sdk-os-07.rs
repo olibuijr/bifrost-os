@@ -342,8 +342,8 @@ fn a_descriptor_with_a_tiled_modifier_or_another_plane_count_is_refused() {
 #[test]
 fn a_descriptor_in_a_planar_format_or_with_an_empty_size_is_refused() {
     let mut planar = argb_descriptor(4, 2, 16, 0);
-    planar.format = dma_buf::fourcc(*b"NV12");
-    assert_eq!(planar.validate(32), Err(DmaBufError::UnsupportedFormat(dma_buf::fourcc(*b"NV12"))));
+    planar.format = dma_buf::fourcc(*b"NV16");
+    assert_eq!(planar.validate(32), Err(DmaBufError::UnsupportedFormat(dma_buf::fourcc(*b"NV16"))));
     assert_eq!(argb_descriptor(0, 2, 16, 0).validate(32), Err(DmaBufError::EmptySize));
 }
 

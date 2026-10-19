@@ -84,6 +84,68 @@ impl ColorCube {
     }
 }
 
+/// Reads a 3D lookup table in the common `.cube` text format: an optional `TITLE`, `LUT_3D_SIZE n`, then
+/// `n^3` lines of three numbers (red varies fastest, the order `ColorCube::new` takes). `#` starts a comment.
+/// `DOMAIN_MIN` and `DOMAIN_MAX` must be 0 0 0 and 1 1 1 if present. `None` for a one-dimensional table, a
+/// size outside 2..=`MAX_SIZE`, a missing or surplus entry, a number that does not parse, or another domain.
+pub fn parse_cube_lut(text: &str) -> Option<ColorCube> {
+    let mut size = 0usize;
+    let mut data: Vec<Rgb> = Vec::new();
+    for line in text.lines() {
+        let line = line.split('#').next().unwrap_or("").trim();
+        if line.is_empty() {
+            continue;
+        }
+        let mut words = line.split_whitespace();
+        let first = words.next()?;
+        match first {
+            "TITLE" => {}
+            "LUT_1D_SIZE" => return None,
+            "LUT_3D_SIZE" => size = words.next()?.parse().ok()?,
+            "DOMAIN_MIN" | "DOMAIN_MAX" => {
+                let want = if first == "DOMAIN_MIN" { 0.0 } else { 1.0 };
+                let vals: Vec<f32> = words.map(|w| w.parse().ok()).collect::<Option<_>>()?;
+                if vals.len() != 3 || vals.iter().any(|&v| v != want) {
+                    return None;
+                }
+            }
+            _ => {
+                let r: f32 = first.parse().ok()?;
+                let g: f32 = words.next()?.parse().ok()?;
+                let b: f32 = words.next()?.parse().ok()?;
+                if words.next().is_some() {
+                    return None;
+                }
+                data.push(Rgb::new(r, g, b));
+            }
+        }
+    }
+    ColorCube::new(size, data)
+}
+
+#[cfg(test)]
+mod cube_text_tests {
+    use super::*;
+
+    #[test]
+    fn parses_a_two_sample_cube_with_comments_and_a_title() {
+        let text = "# graded\nTITLE \"warm\"\nLUT_3D_SIZE 2\n0 0 0\n1 0 0\n0 1 0\n1 1 0\n0 0 1\n1 0 1\n0 1 1\n1 1 1 # white\n";
+        let cube = parse_cube_lut(text).unwrap();
+        assert_eq!(cube.size(), 2);
+        let mid = cube.lookup(Rgb::new(0.5, 0.25, 1.0));
+        assert!((mid.r - 0.5).abs() < 1e-5 && (mid.g - 0.25).abs() < 1e-5 && (mid.b - 1.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn refuses_bad_tables() {
+        assert!(parse_cube_lut("LUT_3D_SIZE 2\n0 0 0\n").is_none(), "too few entries");
+        assert!(parse_cube_lut("LUT_1D_SIZE 4\n0 0 0\n").is_none(), "1D table");
+        assert!(parse_cube_lut("LUT_3D_SIZE 2\nDOMAIN_MAX 2 2 2\n").is_none(), "other domain");
+        assert!(parse_cube_lut("LUT_3D_SIZE 2\n0 0 x\n").is_none(), "bad number");
+        assert!(parse_cube_lut("").is_none());
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
