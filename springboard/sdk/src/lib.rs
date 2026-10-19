@@ -330,6 +330,7 @@ pub mod route_picker;
 pub mod media_receivers;
 pub mod thumbnails;
 pub mod thumbnail_error;
+pub mod thumbnail_generator;
 pub mod peek_pdf;
 pub mod web_download;
 pub mod web_config;
