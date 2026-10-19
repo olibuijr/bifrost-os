@@ -125,6 +125,10 @@ pub fn probe(data: &[u8]) -> Option<Properties> {
     Some(p)
 }
 
+/// An animated PNG is decoded only when its composited frames hold at most this many pixels in all; a larger one
+/// shows its first image.
+pub const MAX_ANIMATION_PIXELS: usize = 96 << 20;
+
 /// What happens to a frame's rectangle after it was shown (APNG `dispose_op`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Dispose {
@@ -308,8 +312,12 @@ pub fn read_animation(data: &[u8]) -> Option<(Vec<SubFrame>, u32)> {
 
 /// Decodes an animated PNG into one composited full-canvas frame per animation frame.
 fn decode_animated(data: &[u8], props: &Properties) -> Option<Decoded> {
-    let (subs, plays) = read_animation(data)?;
     let (cw, ch) = (props.pixel_width, props.pixel_height);
+    // every composited frame is a whole canvas: refuse an animation that would hold more than this many pixels
+    if cw.saturating_mul(ch).saturating_mul(frame_count(data)) > MAX_ANIMATION_PIXELS {
+        return None;
+    }
+    let (subs, plays) = read_animation(data)?;
     let shown = composite(cw, ch, &subs);
     let frames: Vec<Frame> = shown.into_iter().zip(&subs).map(|(rgba8, s)| Frame { w: cw, h: ch, rgba8, rgba16: None, delay_ms: s.delay_ms }).collect();
     let props = vec![props.clone(); frames.len()];
