@@ -33,8 +33,8 @@ fn headless_a_reference_family_name_maps_to_its_class_ignoring_case_and_spacing(
 
 #[test]
 fn headless_a_known_family_substitutes_the_open_equivalents_of_its_class_in_order() {
-    assert_eq!(substitute("Helvetica Neue"), vec!["TeX Gyre Heros", "Inter", "Geist", "Source Sans 3"]);
-    assert_eq!(substitute("Menlo")[0], "JetBrains Mono");
+    assert_eq!(substitute("Helvetica Neue"), vec!["TeX Gyre Heros", "Inter", "Geist", "Source Sans 3", "Noto Sans"]);
+    assert_eq!(substitute("Menlo")[0], "DejaVu Sans Mono");
     assert!(substitute("Comic Nonsense Face").is_empty());
 }
 
@@ -71,7 +71,7 @@ fn headless_an_unknown_family_with_a_fixed_pitch_trait_falls_back_to_a_monospace
 fn headless_candidates_are_the_class_equivalents_without_the_family_itself() {
     assert!(candidates(&FontSpec::new()).is_empty(), "a descriptor with no family has no candidates");
     let names: Vec<Option<String>> = candidates(&FontSpec::new().family("Inter")).into_iter().map(|c| c.family).collect();
-    assert_eq!(names, vec![Some("Geist".to_string()), Some("Source Sans 3".to_string())]);
+    assert_eq!(names, vec![Some("Geist".to_string()), Some("Source Sans 3".to_string()), Some("Noto Sans".to_string())]);
     let futura: Vec<String> = candidates(&FontSpec::new().family("Futura")).into_iter().filter_map(|c| c.family).collect();
     assert_eq!(futura, vec!["Outfit", "Poppins", "Geist", "Inter"]);
 }

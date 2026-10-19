@@ -19,7 +19,7 @@ const ASSET_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../assets");
 
 #[test]
 fn a_reference_sans_family_substitutes_to_the_open_grotesque_faces() {
-    assert_eq!(substitute("Helvetica"), vec!["Inter", "Geist", "Source Sans 3"]);
+    assert_eq!(substitute("Helvetica"), vec!["Inter", "Geist", "Source Sans 3", "Noto Sans"]);
     assert_eq!(class_of_family("  Helvetica Neue "), Some(FamilyClass::GrotesqueSans), "case and spaces are ignored");
 }
 
@@ -37,7 +37,8 @@ fn a_family_the_table_does_not_know_has_no_substitute() {
 
 #[test]
 fn a_reference_monospaced_family_substitutes_to_the_open_fixed_pitch_faces() {
-    assert_eq!(substitute("Menlo").first().copied(), Some("JetBrains Mono"));
+    assert_eq!(substitute("Menlo").first().copied(), Some("DejaVu Sans Mono"), "the licensed face gets its open stand-in first");
+    assert!(substitute("Menlo").contains(&"JetBrains Mono"));
 }
 
 #[test]
@@ -46,7 +47,7 @@ fn candidates_are_the_open_equivalents_of_the_requested_family_in_order() {
     let families: Vec<Option<String>> = candidates(&spec).into_iter().map(|s| s.family).collect();
     assert_eq!(
         families,
-        vec![Some("Inter".to_string()), Some("Geist".to_string()), Some("Source Sans 3".to_string())]
+        vec![Some("Inter".to_string()), Some("Geist".to_string()), Some("Source Sans 3".to_string()), Some("Noto Sans".to_string())]
     );
 }
 

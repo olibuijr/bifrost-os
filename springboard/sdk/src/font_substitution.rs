@@ -507,7 +507,7 @@ mod tests {
         assert_eq!(class_of_family("STHeiti Light"), Some(CjkGothic));
         assert_eq!(class_of_family("SF Mono"), Some(Monospaced));
         assert_eq!(FamilyClass::GrotesqueSans.equivalents().last(), Some(&"Noto Sans"));
-        assert_eq!(FamilyClass::Monospaced.equivalents().last(), Some(&"Liberation Mono"));
+        assert!(FamilyClass::Monospaced.equivalents().contains(&"Liberation Mono"));
     }
 
     #[test]

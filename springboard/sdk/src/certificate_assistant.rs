@@ -323,7 +323,8 @@ pub fn describe_args(cert: &Path) -> Vec<String> {
 pub fn parse_openssl_time(text: &str) -> Option<u64> {
     const MONTHS: [&str; 12] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     let mut parts = text.split_whitespace();
-    let month = MONTHS.iter().position(|m| Some(*m) == parts.next())? as i64 + 1;
+    let name = parts.next()?;
+    let month = MONTHS.iter().position(|m| *m == name)? as i64 + 1;
     let day: i64 = parts.next()?.parse().ok()?;
     let mut clock = parts.next()?.split(':');
     let (h, m, s): (i64, i64, i64) = (clock.next()?.parse().ok()?, clock.next()?.parse().ok()?, clock.next()?.parse().ok()?);

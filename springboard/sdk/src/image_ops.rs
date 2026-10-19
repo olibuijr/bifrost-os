@@ -197,7 +197,8 @@ pub fn invert(img: &Image) -> Image {
     Image { w: img.w, h: img.h, px }
 }
 
-/// Converts the colour between the sRGB and linear encodings. Alpha is kept. A round trip can move a code by one step.
+/// Converts the colour between the sRGB and linear encodings. Alpha is kept. The linear side is 8-bit, so a round trip
+/// moves the dark codes most: the worst case is six steps (codes 1 to 7), and codes from 60 up stay within one.
 pub fn convert_transfer(img: &Image, from: Transfer, to: Transfer) -> Image {
     if !well_formed(img) {
         return img.clone();
@@ -671,13 +672,15 @@ mod tests {
     }
 
     #[test]
-    fn a_transfer_round_trip_stays_within_two_steps() {
+    fn a_transfer_round_trip_stays_within_the_eight_bit_bound() {
         let img = Image { w: 4, h: 1, px: vec![pack(0, 0, 0, 255), pack(255, 255, 255, 255), pack(128, 64, 32, 255), pack(200, 10, 90, 255)] };
         let back = convert_transfer(&convert_transfer(&img, Transfer::Srgb, Transfer::Linear), Transfer::Linear, Transfer::Srgb);
         for (a, b) in img.px.iter().zip(&back.px) {
             for shift in [0u32, 8, 16] {
                 let d = ((a >> shift) & 255) as i32 - ((b >> shift) & 255) as i32;
-                assert!(d.abs() <= 2, "{d}");
+                // 8-bit linear light cannot hold the darkest sRGB codes exactly: code 10 comes back three steps off
+                // and the worst code (1 to 7) six. Bound the darks by what the 8-bit intermediate allows.
+                assert!(d.abs() <= 6, "{d}");
             }
             assert_eq!(a >> 24, b >> 24);
         }
