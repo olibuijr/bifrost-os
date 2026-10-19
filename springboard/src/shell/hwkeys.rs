@@ -939,6 +939,7 @@ impl Shell {
             // shows the new label
             Shortcut::InputSource => {
                 let source = super::kb_layouts::cycle();
+                self.input_layout_selected(source);
                 self.show_input_source(source, t);
                 vec![]
             }

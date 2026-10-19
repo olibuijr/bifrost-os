@@ -86,6 +86,13 @@ impl SourceHud {
 }
 
 impl Shell {
+    /// A keyboard layout was chosen: an input method that was the selected source stops, and the composition it held
+    /// is kept in the Search field.
+    pub(super) fn input_layout_selected(&mut self, layout: Layout) {
+        let commits = self.input_providers.select_layout(layout);
+        self.input_providers.apply_commits(&commits, &self.ui, self.quicksearch.field_mut());
+    }
+
     /// A switch of the input source (Ctrl+Space or the input menu) names the new source in the HUD.
     pub(super) fn show_input_source(&mut self, source: Layout, t: f64) {
         self.input_hud.show(source, t);

@@ -52,7 +52,7 @@ fn status_icon_lift(battery:bool,ethernet:bool)->f32 {if battery{0.}else if ethe
     /// the open or save panel (`docpanel`): drawn and hit-tested by the panel, not as rows
     Document}
 #[cfg(feature = "desktop-wayland")]
-#[derive(Clone)] pub(super) enum Action {Script(u8),Foreign(u32),Settings(&'static str),Desktop,Close,Minimize,Zoom,ShowAll,Open(super::AppId),Context(u8,u32),QuickAction(u8,u8),AppMenu(u8,u32),Dock(super::desktop_dock::Change),DockMenu(u8,u32),Shortcut(u16),Command(bifrost_proto::Command),Term(super::hwkeys::TermKey),Wifi(bool),Scan,Select(String),Power(String),Lock,Sleep,Halt(super::power_menu::PowerAction),StatusItem(u8,u32,u32),Tile(super::desk::Tile),RestoreSize,CycleWindow,Print,InputSource(u8),Recent(u8),ClearRecent,CharacterViewer,KeyboardViewer,Media(bifrost_ui::media_session::RemoteCommand),Bluetooth(crate::bare::bluetooth::Cmd),Portal(String),RecordStop,Service(u8),Photo(super::photos::commands::PhotoCommand),PhotoEditWith(String),GameModeOff,LowPowerMode(bool),HelpItem(Menu,usize),HelpTopic(String,Option<String>),Help(String)}
+#[derive(Clone)] pub(super) enum Action {Script(u8),Foreign(u32),Settings(&'static str),Desktop,Close,Minimize,Zoom,ShowAll,Open(super::AppId),Context(u8,u32),QuickAction(u8,u8),AppMenu(u8,u32),Dock(super::desktop_dock::Change),DockMenu(u8,u32),Shortcut(u16),Command(bifrost_proto::Command),Term(super::hwkeys::TermKey),Wifi(bool),Scan,Select(String),Power(String),Lock,Sleep,Halt(super::power_menu::PowerAction),StatusItem(u8,u32,u32),Tile(super::desk::Tile),RestoreSize,CycleWindow,Print,InputSource(u8),InputMethod(String),Recent(u8),ClearRecent,CharacterViewer,KeyboardViewer,Media(bifrost_ui::media_session::RemoteCommand),Bluetooth(crate::bare::bluetooth::Cmd),Portal(String),RecordStop,Service(u8),Photo(super::photos::commands::PhotoCommand),PhotoEditWith(String),GameModeOff,LowPowerMode(bool),HelpItem(Menu,usize),HelpTopic(String,Option<String>),Help(String)}
 // Only the desktop-wayland bar reads these fields; other builds never build the menu.
 #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
 pub(super) struct ContextMenu {pub slot:u8,pub x:f32,pub y:f32,pub items:Vec<bifrost_proto::ContextItem>}
@@ -197,7 +197,7 @@ impl Shell {
     fn menu_extra_shown(&self,menu:Menu)->bool {
         use super::options::MenuExtra as E;
         // the input menu shows only when there is a choice of keyboards, as the reference input menu does
-        if menu==Menu::Input {return super::kb_layouts::enabled().len()>1;}
+        if menu==Menu::Input {return super::kb_layouts::enabled().len()>1||self.input_providers.has_modes();}
         if menu==Menu::Scripts {return super::scripts_menu::folder().is_some_and(|d|!super::scripts_menu::list(&d).is_empty());}
         let e=match menu {Menu::Cpu=>E::Cpu,Menu::Memory=>E::Memory,Menu::Power=>E::Battery,Menu::Network=>E::Network,Menu::ControlCenter=>E::ControlCenter,_=>return true};
         self.options().menu_extras&e.bit()!=0
@@ -231,7 +231,7 @@ impl Shell {
         let cpu=format!("CPU {:.0}%",self.desktop_metrics.cpu);let memory=format!("RAM {:.0}%",self.desktop_metrics.memory_percent());
         let cw=self.measure_chrome(&cpu,12.,Weight::Regular)+self.ui.pt(2.*STATUS_PAD_PT);let mw=self.measure_chrome(&memory,12.,Weight::Regular)+self.ui.pt(2.*STATUS_PAD_PT);
         // the input source sits left of Control Center (the extras are placed from the clock leftwards)
-        let source=super::kb_layouts::active().short_name();let input=self.measure_chrome(source,12.,Weight::Regular)+self.ui.pt(2.*STATUS_PAD_PT);
+        let source_label=self.input_providers.label().unwrap_or_else(||super::kb_layouts::active().short_name().to_string());let source=source_label.as_str();let input=self.measure_chrome(source,12.,Weight::Regular)+self.ui.pt(2.*STATUS_PAD_PT);
         let mut extras=vec![(Menu::ControlCenter,self.ui.pt(STATUS_ICON_PT),String::from("control")),(Menu::Input,input,source.to_string()),(Menu::Network,nw,if wired {"ethernet"}else{"wifi"}.into()),(Menu::Power,pw,String::from("power")),(Menu::Memory,mw,memory),(Menu::Cpu,cw,cpu)];
         // the Script menu extra sits left of the input source; `menu_extra_shown` hides it while the folder is empty
         let script_label=String::from("Script");let script_w=self.measure_chrome(&script_label,12.,Weight::Regular)+self.ui.pt(2.*STATUS_PAD_PT);extras.insert(1,(Menu::Scripts,script_w,script_label));
@@ -398,7 +398,7 @@ impl Shell {
             Menu::Image=>self.photo_image_rows(),
             // each enabled source, the active one checked; picking one makes it the source (`kb_layouts::set_active`)
             Menu::Scripts=>super::scripts_menu::folder().map(|d|super::scripts_menu::list(&d).iter().enumerate().map(|(i,n)|Row::action(super::scripts_menu::title(n),Action::Script(i as u8))).collect()).unwrap_or_default(),
-            Menu::Input=>{let mut v:Vec<Row>=super::kb_layouts::Layout::ALL.iter().enumerate().filter(|(_,l)|super::kb_layouts::is_enabled(**l)).map(|(i,l)|Row::action(format!("{} {}",if *l==super::kb_layouts::active(){"✓"}else{" "},l.name()),Action::InputSource(i as u8))).collect();v.extend([Row::separator(),Row::action("Show Keyboard Viewer",Action::KeyboardViewer)]);v},
+            Menu::Input=>{let mut v:Vec<Row>=super::kb_layouts::Layout::ALL.iter().enumerate().filter(|(_,l)|super::kb_layouts::is_enabled(**l)).map(|(i,l)|Row::action(format!("{} {}",if *l==super::kb_layouts::active()&&!self.input_providers.is_method_active(){"✓"}else{" "},l.name()),Action::InputSource(i as u8))).collect();v.extend(self.input_providers.modes().into_iter().map(|(id,label,on)|Row::action(format!("{} {}",if on{"✓"}else{" "},label),Action::InputMethod(id))));v.extend([Row::separator(),Row::action("Show Keyboard Viewer",Action::KeyboardViewer)]);v},
             Menu::Status(i)=>self.status_entries_now().get(i as usize).map(|e|e.menu.iter().map(|m|if m.separator{Row::separator()}else if m.enabled{Row::action(format!("{} {}",if m.checked{"✓"}else{" "},m.title),Action::StatusItem(e.slot,e.item,m.id))}else{Row::label(format!("{} {}",if m.checked{"✓"}else{" "},m.title))}).collect()).unwrap_or_default(),
             Menu::Custom(i)=>{let slot=match self.screen {Screen::App(AppId::External(n))=>n,_=>return Vec::new()};self.app_menus().get(i as usize).map(|m|app_menu_rows(slot,m)).unwrap_or_default()},
             Menu::Context=>self.desktop_context.as_ref().map(|c|c.items.iter().map(|item|if item.enabled {Row::action(&item.label,Action::Context(c.slot,item.id))}else{Row::label(&item.label)}).collect()).unwrap_or_default(),
@@ -647,7 +647,8 @@ impl Shell {
                     Action::RestoreSize=>{if self.foreign_active().is_none(){self.desk_restore_front();}},
                     Action::CycleWindow=>{self.desk_cycle_window();let t=self.last_input;self.cmdtab_release(t);},
                     Action::Script(i)=>{if let Some(dir)=super::scripts_menu::folder(){if let Some(name)=super::scripts_menu::list(&dir).get(i as usize){if let Err(e)=super::scripts_menu::run(&dir,name){eprintln!("springboard: script {name}: {e}");}}}self.dirty=true;},
-                    Action::InputSource(i)=>{if let Some(l)=super::kb_layouts::Layout::ALL.get(i as usize) {super::kb_layouts::set_active(*l);self.show_input_source(*l,t);}self.dirty=true;},
+                    Action::InputSource(i)=>{if let Some(l)=super::kb_layouts::Layout::ALL.get(i as usize) {super::kb_layouts::set_active(*l);self.input_layout_selected(*l);self.show_input_source(*l,t);}self.dirty=true;},
+                    Action::InputMethod(id)=>{let commits=self.input_providers.select(&id);self.input_providers.apply_commits(&commits,&self.ui,self.quicksearch.field_mut());self.dirty=true;},
                     Action::Zoom=>{if let Some(id)=self.foreign_active(){let max=self.desk.as_ref().is_some_and(|d|d.native_windows.iter().chain(d.linux_apps.iter().flat_map(|a|a.windows.iter())).any(|w|w.id==id&&w.maximized));effects.push(Effect::ForeignWindowMaximize(id,!max));}else if let Some(i)=self.desk.as_ref().and_then(|d|d.wins.iter().rposition(|w|!w.minimized)){self.desk_zoom_window(i);}},
                     Action::Foreign(id)=>effects.push(Effect::ActivateForeign(id)),
                     Action::Print=>self.print_sheet_open(t),

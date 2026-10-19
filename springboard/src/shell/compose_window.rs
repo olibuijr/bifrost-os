@@ -7,11 +7,12 @@
 //! the state and the typing flow are the ones every SDK text field uses.
 use super::kb_layouts::{self, Layout};
 use super::keyboard::Out;
-use super::ui::{Ui, Weight, LABEL, MAC_BODY_PT, MENU_SOLID, WHITE};
+use super::ui::{Ui, Weight, LABEL, MAC_BODY_PT, MENU_HIGHLIGHT, MENU_HIGHLIGHT_TEXT, MENU_SOLID, WHITE};
 use super::{Effect, Shell};
 use crate::gfx::Surface;
 use bifrost_proto::ToApp;
 use bifrost_ui::compose_method::{self, ComposeTarget, Composer};
+use bifrost_ui::imk_host::KeyResult;
 use bifrost_ui::prefs_layout::m;
 
 /// Row pitch, padding and width of the candidate window, in points.
@@ -77,6 +78,12 @@ impl ComposeTarget for SearchField<'_> {
 impl Shell {
     /// Keys typed while the Search field is open go through the compose method first.
     pub(super) fn compose_search_key(&mut self, out: Out, t: f64) -> Vec<Effect> {
+        // an installed input method that is the selected source takes the key first
+        let routed = self.input_providers.search_key(&out, &self.ui, self.quicksearch.field_mut());
+        if routed == KeyResult::Consumed {
+            self.dirty = true;
+            return vec![];
+        }
         let japanese = kb_layouts::active() == Layout::Japanese;
         let mut composer = std::mem::take(&mut self.compose_ime.composer);
         let fx = {
@@ -127,7 +134,12 @@ impl Shell {
 
     /// Paints the candidate window over the Search field: a numbered list, one row per candidate.
     pub(super) fn draw_compose(&self, s: &mut Surface<'_>, ui: &Ui, w: i32, h: i32) {
-        let items = self.compose_ime.candidates();
+        // the candidates of the selected input method, else those of the built-in compose method
+        let view = self.input_providers.candidate_view();
+        let (items, selected): (&[String], Option<usize>) = match &view {
+            Some(v) => (v.items.as_slice(), v.selected),
+            None => (self.compose_ime.candidates(), None),
+        };
         if items.is_empty() {
             return;
         }
@@ -137,10 +149,14 @@ impl Shell {
         let y = h as f32 * TOP_SHARE;
         s.fill_rrect(x, y, width, height, ui.pt(m::CARD_RADIUS), MENU_SOLID.now());
         for (i, item) in items.iter().enumerate() {
+            if selected == Some(i) {
+                s.fill_rrect(x + pad / 2.0, y + pad + row * i as f32, width - pad, row, ui.pt(m::SELECTION_RADIUS), MENU_HIGHLIGHT);
+            }
             let label = format!("{}   {}", i + 1, item);
             let img = ui.text(&label, MAC_BODY_PT, Weight::Regular, WHITE);
             let ty = y + pad + row * i as f32 + (row - img.h as f32) / 2.0;
-            s.blit_colored(&img, (x + pad * 2.0) as i32, ty as i32, LABEL.now(), 255);
+            let ink = if selected == Some(i) { MENU_HIGHLIGHT_TEXT } else { LABEL.now() };
+            s.blit_colored(&img, (x + pad * 2.0) as i32, ty as i32, ink, 255);
         }
     }
 }
@@ -229,6 +245,42 @@ mod tests {
         assert_eq!(sh.quicksearch.field_mut().marked_range(), None);
         kb_layouts::set_active(Layout::Icelandic);
         kb_layouts::toggle(Layout::Japanese);
+    }
+
+    #[test]
+    fn an_installed_input_method_composes_kana_in_the_search_field() {
+        let mut sh = crate::shell::tests::shell();
+        let dir = std::env::temp_dir().join(format!("bifrost-compose-ime-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let bundle = dir.join("Kana.imk");
+        std::fs::create_dir_all(&bundle).unwrap();
+        let info = r#"<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0"><dict>
+<key>CFBundleIdentifier</key><string>org.example.kana</string>
+<key>BifrostEngine</key><string>kana</string>
+<key>IMKControllerClass</key><string>KanaController</string>
+<key>IMKModeDictionary</key><dict><key>romaji</key><dict><key>label</key><string>Romaji</string></dict></dict>
+</dict></plist>"#;
+        std::fs::write(bundle.join("Info.plist"), info).unwrap();
+        assert_eq!(sh.input_providers.load_dir(&dir), 1);
+        let _ = std::fs::remove_dir_all(&dir);
+        // with no method selected a letter is plain typing: the method does not see it
+        assert_eq!(sh.input_providers.search_key(&Out::Text("k".into()), &sh.ui, sh.quicksearch.field_mut()), KeyResult::PassThrough);
+        sh.input_providers.select("org.example.kana.romaji");
+        sh.compose_search_key(Out::Text("k".into()), 0.0);
+        sh.compose_search_key(Out::Text("a".into()), 0.0);
+        assert_eq!(sh.quicksearch.field_mut().text(), "か");
+        assert_eq!(sh.quicksearch.field_mut().marked_range(), Some((0, 1)));
+        let view = sh.input_providers.candidate_view().expect("a candidate window is offered");
+        assert_eq!(view.items, vec!["か".to_string(), "カ".to_string()]);
+        // a digit picks a candidate: it replaces the marked kana and the window closes
+        sh.compose_search_key(Out::Text("2".into()), 0.0);
+        assert_eq!(sh.quicksearch.field_mut().text(), "カ");
+        assert_eq!(sh.quicksearch.field_mut().marked_range(), None);
+        assert!(sh.input_providers.candidate_view().is_none());
+        // choosing a keyboard layout ends the method: a letter is typed by the field again
+        sh.input_layout_selected(Layout::English);
+        assert!(!sh.input_providers.is_method_active());
     }
 
     #[test]
