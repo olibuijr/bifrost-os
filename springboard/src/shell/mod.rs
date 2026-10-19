@@ -47,6 +47,7 @@ pub mod calendar;
 pub mod contactextras;
 pub mod contactcard;
 pub mod contactchanges;
+pub mod contactcontainers;
 pub mod contactdonations;
 pub mod contactpick;
 pub mod contactphotos;
