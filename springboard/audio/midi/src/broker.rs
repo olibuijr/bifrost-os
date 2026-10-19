@@ -153,7 +153,12 @@ impl Broker {
             }
             _ => {}
         }
-        let Some(client) = client else { return vec![Message::Failed(Refusal::NoClient)] };
+        let Some(client) = client else {
+            return vec![match req {
+                Request::Send { .. } | Request::Inject { .. } => Message::SendRefused(Refusal::NoClient),
+                _ => Message::Failed(Refusal::NoClient),
+            }];
+        };
         match req {
             Request::Ping | Request::Hello { .. } => Vec::new(),
             Request::List => {
@@ -229,15 +234,15 @@ impl Broker {
             Request::Send { destination, host_ns, packets } => {
                 let dst = ObjectId(destination);
                 match self.hub.registry.endpoint(dst).map(|e| e.direction) {
-                    None => return vec![Message::Failed(Refusal::BadObject)],
-                    Some(Direction::Source) => return vec![Message::Failed(Refusal::WrongDirection)],
+                    None => return vec![Message::SendRefused(Refusal::BadObject)],
+                    Some(Direction::Source) => return vec![Message::SendRefused(Refusal::WrongDirection)],
                     Some(Direction::Destination) => {}
                 }
                 let from = self.sender_of(client);
                 let stamp = if host_ns == 0 { now_ns } else { host_ns };
                 for p in packets {
                     if !self.hub.send_to_destination(from, dst, stamp, p) {
-                        return vec![Message::Failed(Refusal::BadObject)];
+                        return vec![Message::SendRefused(Refusal::BadObject)];
                     }
                 }
                 Vec::new()
@@ -245,9 +250,9 @@ impl Broker {
             Request::Inject { source, host_ns, packets } => {
                 let src = ObjectId(source);
                 match self.hub.registry.endpoint(src) {
-                    None => return vec![Message::Failed(Refusal::BadObject)],
-                    Some(e) if e.direction != Direction::Source => return vec![Message::Failed(Refusal::WrongDirection)],
-                    Some(e) if e.owner != Some(client) => return vec![Message::Failed(Refusal::BadObject)],
+                    None => return vec![Message::SendRefused(Refusal::BadObject)],
+                    Some(e) if e.direction != Direction::Source => return vec![Message::SendRefused(Refusal::WrongDirection)],
+                    Some(e) if e.owner != Some(client) => return vec![Message::SendRefused(Refusal::BadObject)],
                     Some(_) => {}
                 }
                 let stamp = if host_ns == 0 { now_ns } else { host_ns };
@@ -355,6 +360,7 @@ mod tests {
         let c = b.open();
         assert_eq!(b.handle(c, Request::List, 0), vec![Message::Failed(Refusal::NoClient)]);
         assert_eq!(b.handle(c, Request::CreateSource { name: "x".into() }, 0), vec![Message::Failed(Refusal::NoClient)]);
+        assert_eq!(b.handle(c, Request::Send { destination: 1, host_ns: 0, packets: vec![note(1)] }, 0), vec![Message::SendRefused(Refusal::NoClient)]);
         assert_eq!(b.handle(c, Request::Ping, 0), vec![Message::Pong]);
         assert_eq!(b.handle(99, Request::Ping, 0), Vec::<Message>::new());
     }
@@ -411,9 +417,9 @@ mod tests {
         let (d, _) = hello(&mut b, "d");
         let src = created(b.handle(a, Request::CreateSource { name: "o".into() }, 0));
         let dst = created(b.handle(d, Request::CreateDestination { name: "i".into() }, 0));
-        assert_eq!(b.handle(d, Request::Inject { source: src, host_ns: 0, packets: vec![note(1)] }, 0), vec![Message::Failed(Refusal::BadObject)]);
-        assert_eq!(b.handle(a, Request::Inject { source: dst, host_ns: 0, packets: vec![note(1)] }, 0), vec![Message::Failed(Refusal::WrongDirection)]);
-        assert_eq!(b.handle(a, Request::Inject { source: 999, host_ns: 0, packets: vec![note(1)] }, 0), vec![Message::Failed(Refusal::BadObject)]);
+        assert_eq!(b.handle(d, Request::Inject { source: src, host_ns: 0, packets: vec![note(1)] }, 0), vec![Message::SendRefused(Refusal::BadObject)]);
+        assert_eq!(b.handle(a, Request::Inject { source: dst, host_ns: 0, packets: vec![note(1)] }, 0), vec![Message::SendRefused(Refusal::WrongDirection)]);
+        assert_eq!(b.handle(a, Request::Inject { source: 999, host_ns: 0, packets: vec![note(1)] }, 0), vec![Message::SendRefused(Refusal::BadObject)]);
     }
 
     #[test]
@@ -444,8 +450,8 @@ mod tests {
         let mut b = Broker::new(Hub::new());
         let (a, _) = hello(&mut b, "a");
         let src = created(b.handle(a, Request::CreateSource { name: "s".into() }, 0));
-        assert_eq!(b.handle(a, Request::Send { destination: src, host_ns: 0, packets: vec![note(1)] }, 0), vec![Message::Failed(Refusal::WrongDirection)]);
-        assert_eq!(b.handle(a, Request::Send { destination: 555, host_ns: 0, packets: vec![note(1)] }, 0), vec![Message::Failed(Refusal::BadObject)]);
+        assert_eq!(b.handle(a, Request::Send { destination: src, host_ns: 0, packets: vec![note(1)] }, 0), vec![Message::SendRefused(Refusal::WrongDirection)]);
+        assert_eq!(b.handle(a, Request::Send { destination: 555, host_ns: 0, packets: vec![note(1)] }, 0), vec![Message::SendRefused(Refusal::BadObject)]);
     }
 
     #[test]
@@ -524,7 +530,7 @@ mod tests {
         assert_eq!(b.connections(), 1);
         assert!(b.hub.registry.endpoint(ObjectId(src)).is_none());
         assert!(b.hub.registry.endpoint(ObjectId(dst)).is_none());
-        assert_eq!(b.handle(d, Request::Send { destination: dst, host_ns: 0, packets: vec![note(1)] }, 0), vec![Message::Failed(Refusal::BadObject)]);
+        assert_eq!(b.handle(d, Request::Send { destination: dst, host_ns: 0, packets: vec![note(1)] }, 0), vec![Message::SendRefused(Refusal::BadObject)]);
         // the survivor is told the setup changed
         assert!(b.pump(0).iter().any(|(c, m)| *c == d && matches!(m, Message::SetupChanged { .. })));
     }

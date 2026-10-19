@@ -6,8 +6,10 @@
 //! so a broken peer cannot make the server forward a half packet to a hardware port.
 //!
 //! `Request` goes from an app to the server, `Message` comes back: the replies to a request (`Welcome`, `Setup`,
-//! `Created`, `Done`, `Failed`, `Pong`) and the events the server pushes (`Received`, `Delivered`, `SetupChanged`).
-//! `Send` and `Inject` have no reply; a refused one is answered with `Failed`.
+//! `Created`, `Done`, `Failed`, `Pong`) and the events the server pushes (`Received`, `Delivered`, `SetupChanged`,
+//! `SendRefused`).
+//! `Send` and `Inject` have no reply; a refused one is answered with the event `SendRefused`, so it can never be
+//! mistaken for the reply to a later request.
 //!
 //! Pure: no socket is touched here. `FrameReader` assembles frames from whatever a non-blocking read returned.
 
@@ -189,6 +191,8 @@ pub enum Message {
     Delivered { destination: u32, from: u32, host_ns: u64, packet: Ump },
     /// A device, entity or endpoint appeared or went away: ask for the list again.
     SetupChanged { generation: u32 },
+    /// A `Send` or `Inject` was refused (they have no reply of their own).
+    SendRefused(Refusal),
 }
 
 const T_HELLO: u16 = 1;
@@ -212,6 +216,7 @@ const T_PONG: u16 = 0x106;
 const T_RECEIVED: u16 = 0x110;
 const T_DELIVERED: u16 = 0x111;
 const T_SETUP_CHANGED: u16 = 0x112;
+const T_SEND_REFUSED: u16 = 0x113;
 
 #[derive(Default)]
 struct Enc(Vec<u8>);
@@ -462,7 +467,10 @@ impl Request {
 impl Message {
     /// True for the events the server pushes on its own (as opposed to the reply to a request).
     pub fn is_event(&self) -> bool {
-        matches!(self, Message::Received { .. } | Message::Delivered { .. } | Message::SetupChanged { .. })
+        matches!(
+            self,
+            Message::Received { .. } | Message::Delivered { .. } | Message::SetupChanged { .. } | Message::SendRefused(_)
+        )
     }
 
     /// The payload (without the frame length).
@@ -536,6 +544,11 @@ impl Message {
                 e.u32(*generation);
                 e.0
             }
+            Message::SendRefused(r) => {
+                let mut e = Enc::tag(T_SEND_REFUSED);
+                e.u8(r.code());
+                e.0
+            }
         }
     }
 
@@ -585,6 +598,7 @@ impl Message {
                 Message::Delivered { destination: d.u32()?, from: d.u32()?, host_ns: d.u64()?, packet: d.ump()? }
             }
             T_SETUP_CHANGED => Message::SetupChanged { generation: d.u32()? },
+            T_SEND_REFUSED => Message::SendRefused(Refusal::from_code(d.u8()?)),
             t => return Err(WireError::UnknownTag(t)),
         })
     }
@@ -693,6 +707,7 @@ mod tests {
             Message::Received { source: 4, host_ns: 99, packet: note(61) },
             Message::Delivered { destination: 8, from: 4, host_ns: 100, packet: note(62) },
             Message::SetupChanged { generation: 6 },
+            Message::SendRefused(Refusal::BadObject),
         ];
         for m in all {
             assert_eq!(Message::decode(&m.encode()), Ok(m.clone()), "{m:?}");
@@ -705,6 +720,7 @@ mod tests {
         assert!(Message::Received { source: 1, host_ns: 0, packet: note(1) }.is_event());
         assert!(!Message::Done.is_event());
         assert!(!Message::Failed(Refusal::BadObject).is_event());
+        assert!(Message::SendRefused(Refusal::BadObject).is_event());
     }
 
     #[test]

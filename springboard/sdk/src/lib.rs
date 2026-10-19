@@ -343,6 +343,9 @@ pub mod hid_devices;
 pub mod serial_ports;
 pub mod ble_midi;
 pub mod midi;
+/// The client of the system MIDI server (`MidiClient`): hardware and virtual sources and destinations, connect, timestamped
+/// send and inject, and device hotplug events, over the server's unix socket.
+pub mod midi_client;
 pub mod midi_ci;
 pub mod midi_ci_property;
 pub mod midi_network;
