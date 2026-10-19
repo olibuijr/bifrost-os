@@ -4,64 +4,64 @@
   "macos_since": "10.15",
   "status": "partial",
   "bifrost": "bifrost_app::peek (springboard/sdk/src/peek.rs), bifrost_app::cache (springboard/render/src/purgeable.rs), bifrost_render::imgdec, springboard/src/shell/photos/thumbs.rs, springboard/sdk/src/thumbnail_error.rs (ThumbnailError, ThumbnailErrorCode)",
-  "summary": "BifrOSt has a cached-thumbnail path and cache for apps (thumbnail_path, ThumbnailCache) and the image decoder and scaler a generator would need, but no generator for file types (images, text, PDF, audio, video) and no thumbnail-provider extension point for custom file types. The Quick Look panel that would show thumbnails is decoded by the shell and not drawn.",
+  "summary": "BifrOSt has a system thumbnails service with providers for images, text, PDF, audio and video (cover, poster frame, waveform card and a running time badge), archives, fonts and documents, a shared disk cache, an app extension point ([[preview]] with preview.render, with the system provider as the fallback), an SDK generator with tier updates and cancel, and thumbnails in Files, the Space panel and Spotlight file rows. Apple's error codes are not matched, and Desktop icons and the Dock do not show thumbnails yet.",
   "rea_evidence": "ev_e60d2e785c18d96337877fec2a26816888c3df03b4f9de1625c2b21080e1e058",
   "features": [
     {
       "feature": "Thumbnail generation for common file types",
       "apple": "QLThumbnailGenerator: images, Live Photos, text files, PDFs, audio and video files, USDZ (iOS and iPadOS only)",
-      "bifrost": "springboard/src/thumbs/ (providers), springboard/src/shell/services/thumbnails.rs, thumb_providers.rs",
+      "bifrost": "springboard/src/thumbs/ (providers: image, text, rich text, web, font, office, package, contact, calendar, audiovisual, pdf, clippings; pdf.rs, media.rs, duration.rs), springboard/src/shell/services/thumbnails.rs, thumb_providers.rs",
       "status": "partial",
-      "note": "The thumbnails service draws text, image, audio/video (cover or waveform card), font, contact, calendar, web, archive (entry count) and clipping files; unknown types get the icon. No PDF, video poster frame or duration badge, no extension point for third-party providers. Needs a Midget check."
+      "note": "2026-10-19, corrected against the code: the earlier note was stale. The thumbnails service already drew PDF (first page, thumbs/pdf.rs) and video poster frames (first key frame, thumbs/media.rs poster_frame), besides text, image, audio/video cover or waveform card, font, contact, calendar, web, archive (entry count) and clipping files; unknown types get the icon. Built now: the running time badge (m:ss or h:mm:ss, bottom right) on every audio and video thumbnail (thumbs/duration.rs: duration_secs from the MP4 movie header or the audio decoder's declared length, format_duration, badge; tests in duration.rs). Live Photos and USDZ do not exist on the PC. Midget check: open Files in icon view on a folder with an .mp4, an .mp3 and a .flac: each thumbnail shows its running time in a dark pill at the bottom right; `cargo test -p springboard thumbs::duration` for the header reads."
     },
     {
       "feature": "Thumbnail request by size and scale (generateBestRepresentation)",
       "apple": "QLThumbnailGenerator.generateBestRepresentation(for:), QLThumbnailGenerator.Request (fileAt, size, scale, representationTypes)",
       "bifrost": "springboard/sdk/src/thumbnails.rs (request, reply, ThumbRequest and edge_px re-exported from bifrost_ui::thumb_service); springboard/sdk/tests/parity_sdk-tests-01d.rs",
       "status": "partial",
-      "note": "A request names a path, a size in points, a scale and a kind, and is validated (BadPath, BadSize); the answer (pending, pixels, icon or failed) decodes headless (thumbnail_edges_scale_and_clamp_to_the_pixel_limits, a_thumbnail_request_needs_an_absolute_clean_path_and_a_sane_size, thumbnail_answers_decode_into_their_states). There is no cache object and no completion or error callback in the SDK; the answer arrives as thumbnail ready or failed events. Verify on Midget for parity."
+      "note": "A request names a path, a size in points, a scale and a kind, and is validated (BadPath, BadSize); the answer (pending, pixels, icon or failed) decodes headless (thumbnail_edges_scale_and_clamp_to_the_pixel_limits, a_thumbnail_request_needs_an_absolute_clean_path_and_a_sane_size, thumbnail_answers_decode_into_their_states). 2026-10-19: the completion side is built as ThumbnailGenerator (sdk/src/thumbnail_generator.rs): generate(ctx, GeneratorRequest) returns an id, accept(reply) routes the service's reply or ready/failed event to the generation that asked for that file and edge, and failures carry a ThumbnailError code; cancel(id) stops a generation (tests in thumbnail_generator.rs). The cache is shared by the shell (see the cache row), so no cache object is needed in the app. Midget check: in a test app, call ThumbnailGenerator::generate on a PNG and a PDF from service_reply and service_event, and see an icon update, then the picture; `cargo test -p bifrost-app thumbnail_generator`."
     },
     {
       "feature": "Thumbnail representation types (icon, low quality, thumbnail)",
       "apple": "QLThumbnailRepresentation, QLThumbnailRepresentationType",
-      "bifrost": "springboard/src/shell/services/thumb_providers.rs (RepresentationType, tiers; headless_tier_tests); springboard/ui/src/thumb_service.rs (ThumbKind)",
+      "bifrost": "springboard/ui/src/thumb_service.rs (RepresentationType, tiers, low_quality_edge, ThumbKind); springboard/sdk/src/thumbnails.rs (GeneratorRequest::plan, re-exports RepresentationType); springboard/src/shell/services/thumb_providers.rs (re-export)",
       "status": "partial",
-      "note": "The icon, low quality (a quarter of the edge, at least 16 px) and thumbnail tiers are chosen from the asked types with headless tests (an_empty_request_asks_for_every_tier_cheapest_first, a_request_gets_each_asked_tier_once_in_the_fixed_order). The service does not yet read the requested types from the request or draw per tier. Needs a Midget check."
+      "note": "2026-10-19, corrected: the tiers are planned by the client, so the service needs no per-tier parameter (the earlier note said the service did not read the types). One model now (bifrost_ui::thumb_service::RepresentationType; the shell and SDK copies were merged, which also fixed a disagreement: the SDK used half the edge for low quality, the shell a quarter). GeneratorRequest::plan sends the icon kind, a low quality request at a quarter of the edge (16 px floor) and the full size; ThumbnailGenerator delivers them cheapest first and never a worse one after a better one. Tests: thumb_service::tests::tiers_are_cheapest_first_deduplicated_and_the_low_tier_is_a_quarter, thumbnails::tests::the_plan_goes_icon_then_low_quality_then_full. Midget check: `cargo test -p bifrost-app thumbnails` and `-p bifrost-ui thumb_service`."
     },
     {
       "feature": "Progressive or updated thumbnails",
       "apple": "QLThumbnailGenerator update handler, generateThumbnail(for:completionHandler:)",
-      "bifrost": "springboard/sdk/src/thumbnails.rs (Progressive)",
+      "bifrost": "springboard/sdk/src/thumbnails.rs (Generation), springboard/sdk/src/thumbnail_generator.rs (ThumbnailGenerator, Update)",
       "status": "partial",
-      "note": "Wave 2 (theme-35, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Single synchronous result per call. docs/bifrost-ui.md states the same gap."
+      "note": "2026-10-19, corrected: the old path (Progressive) does not exist in the code. The update handler is Generation (per-request tier tracking) plus ThumbnailGenerator (several generations at once, Update::Representation and Update::Failed, cancel, at most 256 running); the shell already answers a slow thumbnail as pending and then sends a ready or failed event to every asker. Tests in thumbnail_generator.rs (updates_run_icon_low_full_and_the_finished_generation_is_dropped, a_failure_reports_its_code_and_ends_that_generation_only, a_cancelled_generation_hears_nothing_more). No app calls it yet (Files asks the service directly). Midget check: `cargo test -p bifrost-app thumbnail_generator`; in Files, scrolling a folder of large PDFs shows icons first, then pictures."
     },
     {
       "feature": "Thumbnail cache and memory-pressure purge",
       "apple": "Framework-managed thumbnail cache on disk",
-      "bifrost": "springboard/sdk/src/peek.rs:104 (ThumbnailCache), springboard/render/src/purgeable.rs:75 (Cache), springboard/sdk/src/lib.rs:75 (bifrost_app::cache)",
+      "bifrost": "springboard/src/thumbs/mod.rs (Generator, cache_dir, MAX_FILES, MAX_BYTES), springboard/src/shell/photos/thumbs.rs (DiskCache), springboard/ui/src/thumb_service.rs (cache_key), springboard/sdk/src/peek.rs:104 (ThumbnailCache), springboard/render/src/purgeable.rs:75 (Cache)",
       "status": "parity",
-      "note": "Generated paths are remembered and purged under memory pressure, and a test covers the cache hit (peek.rs thumbnails_are_cached). The disk cache is the app's responsibility."
+      "note": "2026-10-19, corrected: the shell keeps one shared disk cache (~/.cache/bifrost/thumbnails, 4000 files and 256 MB) keyed by path, modification time, size, pixel edge and kind, so a changed file is a new key; Files, the preview panel and Spotlight share it. Apps also remember generated paths (ThumbnailCache) and purge under memory pressure. Tests: thumbs::tests::a_picture_is_drawn_once_and_then_served_from_the_cache, peek.rs thumbnails_are_cached."
     },
     {
       "feature": "Custom file type thumbnail extension (QLThumbnailProvider)",
       "apple": "QLThumbnailProvider, QLFileThumbnailRequest, QLThumbnailReply",
-      "bifrost": "springboard/sdk/src/thumbnails.rs (FileThumbnailRequest, springboard/sdk/src/peek.rs",
+      "bifrost": "springboard/sdk/src/thumbnail_generator.rs (FileThumbnailRequest, ThumbnailReply, answer_provider_call); springboard/ui/src/preview_manifest.rs ([[preview]] blocks); springboard/src/shell/preview_gen.rs (Generators, Requests, Generator::distance); springboard/src/shell/services/thumbnails.rs (request, poll); springboard/ui/src/thumb_service.rs (Registry::distance_for)",
       "status": "partial",
-      "note": "Wave 2 (theme-35, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No extension point lets an app register a thumbnail generator for another app's file type, and the system does not ask apps for thumbnails of their files."
+      "note": "2026-10-19, corrected: the earlier note and its paths were stale (FileThumbnailRequest was not in sdk/thumbnails.rs). The extension point exists: an app declares [[preview]] (id, types, generator preview.render, timeout_ms) in manifest.toml and answers the control call with the PNG it drew; the thumbnails service asked such an app only for types no built-in provider draws. Built now: (1) the app side API (FileThumbnailRequest::parse validates file and size, ThumbnailReply::picture accepts only an absolute .png path, answer_provider_call dispatches and turns failures into error replies); (2) an app whose declared type is at least as specific as the system provider's is asked first for Files and Spotlight thumbnails, and a broad declaration such as public.data never overrides the system pictures; (3) when the app gives no picture in time the built-in provider draws the file (the askers keep waiting on the same key), else the icon. Tests: thumbnails::tests::an_app_that_declares_the_very_type_draws_it_before_the_system_provider, when_the_app_gives_no_picture_the_system_provider_draws_the_file, an_app_that_declares_only_a_broad_type_does_not_take_over_the_system_pictures; thumbnail_generator::tests (request, reply, dispatch). Notes already declares Markdown. Not built: replies carrying data or a drawing callback instead of a PNG path. Midget check: Notes declares [[preview]] for Markdown; put a .md file in a Files folder, icon view: the thumbnail is the note's first lines drawn by Notes (control call preview.render, `bifrost pc control call notes preview.render '{\"file\":\"/path/a.md\",\"width\":128,\"height\":128}'`); with Notes stopped it is the text provider's page."
     },
     {
       "feature": "System-wide thumbnails in Files, Spotlight and other apps",
       "apple": "Finder and Spotlight display thumbnails from QLThumbnailGenerator and extensions",
-      "bifrost": "springboard/ui/src/thumb_service.rs, springboard/sdk/src/thumbnails.rs",
+      "bifrost": "springboard/ui/src/thumb_service.rs, springboard/sdk/src/thumbnails.rs, springboard/src/shell/services/thumbnails.rs, springboard/apps/files/src/views/options.rs (blit_thumb, paint_entry_icon), springboard/src/shell/search_thumbs.rs (FileThumbs), springboard/src/shell/quicksearch.rs (file rows), springboard/src/shell/spotindex.rs (load_thumbnail)",
       "status": "partial",
-      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (thumb_service.rs, thumbnails.rs); not wired into the shell or apps, not tested on Midget. Searchable items store a thumbnail path, but the search panel does not draw it. Files shows only the picker preview from springboard/src/files/preview.rs:28 (preview_for), which picks an in-app preview kind, not a thumbnail."
+      "note": "2026-10-19, corrected against the code: Files already draws the service's thumbnails in its icon, list, column and gallery views (views/options.rs), the Space panel asks the service for its picture, and Spotlight already drew the thumbnail PNG of an indexed item (spotindex::load_thumbnail); the earlier notes (not wired, search panel does not draw it) were stale. Missing and now built: Spotlight file rows (Hit::File) showed only the Files icon; FileThumbs asks the system providers for the file's picture while the rows are laid out, draws it on two worker threads through the shared disk cache, and the card paints it in place of the icon and redraws when it arrives (folders and types with only an icon keep the icon). Tests: search_thumbs::tests (a_picture_is_drawn_once_and_then_ready, a_folder_a_missing_file_and_a_relative_path_keep_their_icons, a_file_that_is_not_what_its_name_says_keeps_its_icon_and_does_not_stop_the_others, the_waiting_list_is_bounded). Not wired: Finder-style desktop icons and the Dock stacks. Midget check: press Cmd+Space, type the name of a PNG or PDF in the home folder: its row shows the picture in place of the Files icon within a second; Files icon view shows the same pictures."
     },
     {
       "feature": "Quick Look panel showing thumbnails and previews",
       "apple": "QLPreviewPanel and QLPreviewItem (the preview panel is a separate Apple framework, linked from this page)",
       "bifrost": "springboard/sdk/src/peek.rs (PreviewPanel, PreviewDataSource, ItemState); springboard/proto/src/peek.rs (ToShell::Preview 0x1e0); springboard/sdk/tests/parity_sdk-tests-01d.rs; wired: springboard/src/shell/preview_panel.rs (no thumbnails yet; stays partial)",
       "status": "partial",
-      "note": "The panel model keeps items, a current index, per-item display state and visibility, with headless tests (the_preview_index_stays_inside_the_list, each_item_keeps_its_display_state_and_a_new_list_resets_them, the_data_source_fills_at_most_the_item_cap, the_panel_shows_and_hides_through_the_shell_and_an_empty_panel_stays_hidden). The shell decodes the message but does not draw the panel yet, so no thumbnail is shown through it."
+      "note": "The panel model keeps items, a current index, per-item display state and visibility, with headless tests (the_preview_index_stays_inside_the_list, each_item_keeps_its_display_state_and_a_new_list_resets_them, the_data_source_fills_at_most_the_item_cap, the_panel_shows_and_hides_through_the_shell_and_an_empty_panel_stays_hidden). 2026-10-19, corrected: the shell does draw the panel (springboard/src/shell/preview_panel.rs, 1700 lines) and fills a picture item from the thumbnails service (services/quick_look.rs asks for it; a_thumbnail_answer_fills_the_body_only_for_the_current_item), so the earlier statement that the shell does not draw it was stale. Midget check: select a PNG in Files and press Space: the panel shows the picture from the thumbnails service; Left/Right steps to the next item."
     },
     {
       "feature": "Error reporting for thumbnail generation",
@@ -72,10 +72,10 @@
     }
   ],
   "gaps": [
-    "No QLThumbnailProvider extension point for custom file types",
-    "No system-wide thumbnail display in Files, Spotlight or the search panel",
-    "No thumbnail generator for PDF, text, audio, video or Live Photo files; only the Photos app decodes images",
-    "No representation types (icon, low quality, thumbnail) and no update or completion handlers",
+    "Provider extensions answer with a PNG path only; no data or drawing-callback replies",
+    "Thumbnails are not drawn for Desktop icons or Dock stacks",
+    "No Live Photo or USDZ thumbnails (no such files on the PC)",
+    "No app calls ThumbnailGenerator yet; Files asks the thumbnails service directly",
     "The shell answers a failed thumbnail with a message only; the error codes in springboard/sdk/src/thumbnail_error.rs are derived from it, and they are not the reference error codes."
   ]
 }

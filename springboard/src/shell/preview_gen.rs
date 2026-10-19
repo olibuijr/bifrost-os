@@ -27,6 +27,12 @@ pub struct Generator {
 }
 
 impl Generator {
+    /// How far the declared types are from `type_id` in the conformance tree (0 for the very type); None when the block
+    /// declares no type `type_id` conforms to.
+    pub fn distance(&self, type_id: &str) -> Option<usize> {
+        self.decl.types.iter().filter_map(|t| bifrost_ui::uttype::distance(type_id, t)).min()
+    }
+
     /// The registry key of this declaration: unique across apps and blocks.
     fn key(&self) -> String {
         format!("{}#{}", self.app_id, self.decl.id)

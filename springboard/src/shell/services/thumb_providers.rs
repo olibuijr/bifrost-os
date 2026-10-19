@@ -2,52 +2,12 @@
 //! `representationTypes`), the entry count of an archive, and the cards drawn for an archive and for audio or video
 //! with no embedded cover. The providers in `crate::thumbs` call these before falling back to the type icon.
 //!
-//! Not built: the duration badge of audio and video (no demuxer runs in the thumbnail worker) and a video poster frame.
+//! The duration badge and the video poster frame are drawn by `crate::thumbs::duration` and `crate::thumbs::media`.
 use crate::thumbs::canvas::{Canvas, ACCENT, INK, MUTED};
 use bifrost_render::ui::Weight;
 use bifrost_ui::thumb_service::ThumbArt;
 
-/// `QLThumbnailRepresentation.RepresentationType`, ordered from the cheapest to the best.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum RepresentationType {
-    Icon,
-    LowQualityThumbnail,
-    Thumbnail,
-}
-
-impl RepresentationType {
-    pub fn parse(s: &str) -> Option<Self> {
-        match s {
-            "icon" => Some(Self::Icon),
-            "lowQualityThumbnail" => Some(Self::LowQualityThumbnail),
-            "thumbnail" => Some(Self::Thumbnail),
-            _ => None,
-        }
-    }
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Icon => "icon",
-            Self::LowQualityThumbnail => "lowQualityThumbnail",
-            Self::Thumbnail => "thumbnail",
-        }
-    }
-}
-
-/// Smallest edge of a low quality thumbnail, in pixels.
-pub const LOW_QUALITY_MIN_PX: u32 = 16;
-
-/// The tiers to produce for a request of `px` pixels, cheapest first, without repeats. An empty list asks for all.
-/// The icon needs no drawing, so its edge is `px`; the low quality tier is a quarter of the edge.
-pub fn tiers(types: &[RepresentationType], px: u32) -> Vec<(RepresentationType, u32)> {
-    [RepresentationType::Icon, RepresentationType::LowQualityThumbnail, RepresentationType::Thumbnail]
-        .into_iter()
-        .filter(|t| types.is_empty() || types.contains(t))
-        .map(|t| match t {
-            RepresentationType::LowQualityThumbnail => (t, (px / 4).max(LOW_QUALITY_MIN_PX)),
-            _ => (t, px),
-        })
-        .collect()
-}
+pub use bifrost_ui::thumb_service::{tiers, RepresentationType};
 
 /// Entries of a zip, from the tail of the file (the end-of-central-directory record).
 pub fn zip_entries(tail: &[u8]) -> Option<usize> {
@@ -142,38 +102,6 @@ pub fn waveform_card(name: &str, px: u32) -> Option<ThumbArt> {
     c.into_pixels().map(ThumbArt::Pixels)
 }
 
-/// Headless model tests: the tiers of a request are pure values, with no drawing and no file read.
-#[cfg(test)]
-mod headless_tier_tests {
-    use super::*;
-
-    #[test]
-    fn an_empty_request_asks_for_every_tier_cheapest_first() {
-        assert_eq!(tiers(&[], 128), [(RepresentationType::Icon, 128), (RepresentationType::LowQualityThumbnail, 32), (RepresentationType::Thumbnail, 128)]);
-    }
-
-    #[test]
-    fn the_low_quality_tier_is_a_quarter_of_the_edge_and_never_below_its_minimum() {
-        assert_eq!(tiers(&[RepresentationType::LowQualityThumbnail], 40), [(RepresentationType::LowQualityThumbnail, LOW_QUALITY_MIN_PX)]);
-        assert_eq!(tiers(&[RepresentationType::LowQualityThumbnail], 256), [(RepresentationType::LowQualityThumbnail, 64)]);
-    }
-
-    #[test]
-    fn a_request_gets_each_asked_tier_once_in_the_fixed_order() {
-        let asked = [RepresentationType::Thumbnail, RepresentationType::Icon, RepresentationType::Thumbnail];
-        assert_eq!(tiers(&asked, 64), [(RepresentationType::Icon, 64), (RepresentationType::Thumbnail, 64)]);
-    }
-
-    #[test]
-    fn representation_names_round_trip_and_order_from_cheapest() {
-        for t in [RepresentationType::Icon, RepresentationType::LowQualityThumbnail, RepresentationType::Thumbnail] {
-            assert_eq!(RepresentationType::parse(t.as_str()), Some(t));
-        }
-        assert_eq!(RepresentationType::parse("poster"), None);
-        assert!(RepresentationType::Icon < RepresentationType::Thumbnail);
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -194,23 +122,6 @@ mod tests {
         h[124..135].copy_from_slice(format!("{size:011o}").as_bytes());
         h[257..262].copy_from_slice(b"ustar");
         h
-    }
-
-    #[test]
-    fn representation_types_round_trip_by_reference_name() {
-        for t in [RepresentationType::Icon, RepresentationType::LowQualityThumbnail, RepresentationType::Thumbnail] {
-            assert_eq!(RepresentationType::parse(t.as_str()), Some(t));
-        }
-        assert_eq!(RepresentationType::parse("poster"), None);
-    }
-
-    #[test]
-    fn representation_types_limit_the_tiers() {
-        assert_eq!(tiers(&[], 128).len(), 3);
-        assert_eq!(tiers(&[RepresentationType::Thumbnail], 128), vec![(RepresentationType::Thumbnail, 128)]);
-        let t = tiers(&[RepresentationType::Thumbnail, RepresentationType::LowQualityThumbnail], 128);
-        assert_eq!(t, vec![(RepresentationType::LowQualityThumbnail, 32), (RepresentationType::Thumbnail, 128)]);
-        assert_eq!(tiers(&[RepresentationType::LowQualityThumbnail], 32)[0].1, 16);
     }
 
     #[test]

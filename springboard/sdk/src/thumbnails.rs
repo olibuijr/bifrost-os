@@ -20,7 +20,7 @@ use crate::service;
 use bifrost_core::json::Json;
 use bifrost_render::gfx::Image;
 
-pub use bifrost_ui::thumb_service::{edge_px, FileStamp, RequestError, ThumbArt, ThumbKind, ThumbRequest, MAX_PX, MIN_PX};
+pub use bifrost_ui::thumb_service::{edge_px, low_quality_edge, FileStamp, RequestError, ThumbArt, ThumbKind, ThumbRequest, MAX_PX, MIN_PX};
 
 /// The shell service name.
 pub const SERVICE: &str = "thumbnails";
@@ -96,21 +96,7 @@ pub fn load_pixels(path: &str) -> Option<Image> {
     Image::from_raw(&std::fs::read(path).ok()?)
 }
 
-/// The kinds of picture a generator can deliver, from the cheapest to the best (`QLThumbnailGenerator.Request.RepresentationTypes`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum RepresentationType {
-    /// The icon of the file's type.
-    Icon,
-    /// A small picture of the content, drawn quickly (half the requested edge).
-    LowQualityThumbnail,
-    /// The picture at the requested size.
-    Thumbnail,
-}
-
-impl RepresentationType {
-    /// All kinds, the default of a request that names none.
-    pub const ALL: [RepresentationType; 3] = [RepresentationType::Icon, RepresentationType::LowQualityThumbnail, RepresentationType::Thumbnail];
-}
+pub use bifrost_ui::thumb_service::RepresentationType;
 
 /// A generator request (`QLThumbnailGenerator.Request`): the file, the size in points, the scale and the wanted kinds.
 #[derive(Clone, Debug, PartialEq)]
@@ -141,7 +127,7 @@ impl GeneratorRequest {
             .map(|&t| {
                 let (kind, size) = match t {
                     RepresentationType::Icon => (ThumbKind::Icon, self.request.size),
-                    RepresentationType::LowQualityThumbnail => (ThumbKind::Thumbnail, (self.request.size / 2).max(1)),
+                    RepresentationType::LowQualityThumbnail => (ThumbKind::Thumbnail, ((self.request.size as f32 / 4.0).round() as u32).max(1)),
                     RepresentationType::Thumbnail => (ThumbKind::Thumbnail, self.request.size),
                 };
                 let req = ThumbRequest { size, kind, ..self.request.clone() };
@@ -195,6 +181,11 @@ impl Generation {
         self.best = Some(kind);
         self.done = self.plan.last().is_some_and(|(t, _)| *t == kind);
         Some(Representation { kind, reply })
+    }
+
+    /// True when a reply for the pixel edge `px` belongs to this generation (one of its planned requests).
+    pub fn wants(&self, px: u32) -> bool {
+        self.plan.iter().any(|(_, p)| *p == px)
     }
 
     /// True once the best wanted kind arrived or a request failed.
@@ -304,7 +295,7 @@ mod tests {
             kinds,
             vec![
                 (RepresentationType::Icon, ThumbKind::Icon, 200),
-                (RepresentationType::LowQualityThumbnail, ThumbKind::Thumbnail, 100),
+                (RepresentationType::LowQualityThumbnail, ThumbKind::Thumbnail, 50),
                 (RepresentationType::Thumbnail, ThumbKind::Thumbnail, 200),
             ]
         );
@@ -315,12 +306,12 @@ mod tests {
         let mut g = Generation::new(&GeneratorRequest::new("/a/b.png", 100, 2.0, &[]).unwrap());
         assert_eq!(g.accept(ready(200, State::Pending)), None);
         assert_eq!(g.accept(ready(200, icon())).unwrap().kind, RepresentationType::Icon);
-        assert_eq!(g.accept(ready(100, pixels())).unwrap().kind, RepresentationType::LowQualityThumbnail);
+        assert_eq!(g.accept(ready(50, pixels())).unwrap().kind, RepresentationType::LowQualityThumbnail);
         assert!(!g.is_finished());
         assert_eq!(g.accept(ready(200, icon())), None, "an icon is no better than the low picture");
         assert_eq!(g.accept(ready(200, pixels())).unwrap().kind, RepresentationType::Thumbnail);
         assert!(g.is_finished());
-        assert_eq!(g.accept(ready(100, pixels())), None);
+        assert_eq!(g.accept(ready(50, pixels())), None);
     }
 
     #[test]

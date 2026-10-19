@@ -70,7 +70,7 @@ pub struct Thumbnails {
     apps: Generators,
     /// App generator calls in flight, and the key and size each file's call answers.
     requests: Requests,
-    app_jobs: HashMap<String, (String, u32)>,
+    app_jobs: HashMap<String, (String, u32, ThumbRequest)>,
     exchanger: Arc<dyn Exchanger>,
     /// The shell's clock in milliseconds, from the last call or tick (the app calls' deadlines).
     now_ms: u64,
@@ -153,7 +153,7 @@ impl Thumbnails {
         let px = req.px();
         let first = !self.waiting.contains_key(key);
         if first {
-            self.app_jobs.insert(req.path.clone(), (key.to_string(), px));
+            self.app_jobs.insert(req.path.clone(), (key.to_string(), px, req.clone()));
             self.requests.start(self.exchanger.clone(), app, &req.path, px, px, self.now_ms);
         }
         let waiting = self.waiting.entry(key.to_string()).or_default();
@@ -166,11 +166,20 @@ impl Thumbnails {
     /// Answers a request now when it can, else queues it for `app_id`.
     pub fn request(&mut self, app_id: &str, req: ThumbRequest) -> Result<Json, String> {
         let (key, quick) = self.generator.quick(&req)?;
-        // a file no built-in provider draws goes to the app that declared its type (folders and icons never do)
+        // a file whose type an app declared goes to that app first, unless a picture is cached or the built-in provider
+        // names a nearer type than the app does (an app that declares only a broad type does not take over the
+        // pictures, text files or PDFs the system draws). Folders and icons never go to an app.
         let app_drawn = req.kind == ThumbKind::Thumbnail && app_id != PANEL_ASKER && !self.memo.contains_key(&key);
-        if let (true, Some(Answer::Icon { type_id, .. })) = (app_drawn, &quick) {
-            if type_id != "public.folder" {
-                if let Some(app) = self.apps.for_file(name_of(&req.path)).cloned() {
+        let uncached = match &quick {
+            None => true,
+            Some(Answer::Icon { type_id, .. }) => type_id != "public.folder",
+            Some(Answer::Pixels { .. }) => false,
+        };
+        if app_drawn && uncached {
+            if let Some(app) = self.apps.for_file(name_of(&req.path)).cloned() {
+                let type_id = bifrost_ui::uttype::type_for_extension(name_of(&req.path)).unwrap_or("public.data");
+                let built_in = self.generator.provider_distance(name_of(&req.path));
+                if app.distance(type_id).is_some_and(|d| built_in.map_or(true, |b| d <= b)) {
                     return Ok(self.ask_app(app_id, &key, &app, &req));
                 }
             }
@@ -265,12 +274,18 @@ impl Thumbnails {
             events.extend(self.finish(done.key, done.file, done.px, done.result));
         }
         for (file, outcome) in self.requests.poll(self.now_ms) {
-            let Some((key, px)) = self.app_jobs.remove(&file) else { continue };
-            let result = match outcome {
-                Outcome::Generated(picture) => self.picture_answer(&key, px, &picture).or_else(|_| Self::icon_answer(&file)),
-                Outcome::Generic => Self::icon_answer(&file),
+            let Some((key, px, req)) = self.app_jobs.remove(&file) else { continue };
+            let drawn = match outcome {
+                Outcome::Generated(picture) => self.picture_answer(&key, px, &picture).ok(),
+                Outcome::Generic => None,
             };
-            events.extend(self.finish(key, file, px, result));
+            match drawn {
+                Some(answer) => events.extend(self.finish(key, file, px, Ok(answer))),
+                // the app gave no usable picture: the built-in provider for the type gets its turn (the askers keep
+                // waiting for the same key), and a type nothing draws shows its icon
+                None if self.generator.provider_distance(name_of(&file)).is_some() => self.queue.push_back(Job { key, req }),
+                None => events.extend(self.finish(key, file.clone(), px, Self::icon_answer(&file))),
+            }
         }
         self.start_jobs();
         events
@@ -479,6 +494,75 @@ mod tests {
         let events = wait_events(&mut s, 1);
         assert_eq!(events[0].event, "ready");
         assert_eq!(events[0].body.get("art").and_then(Json::as_str), Some("icon"));
+    }
+
+    /// An app that counts the calls it gets and answers each with the same reply.
+    struct Counting(std::sync::atomic::AtomicUsize, String);
+
+    impl Exchanger for Counting {
+        fn exchange(&self, _app_id: &str, _line: &str, _wait: Duration) -> Result<String, String> {
+            self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(self.1.clone())
+        }
+    }
+
+    fn counting(reply: String) -> Arc<Counting> {
+        Arc::new(Counting(std::sync::atomic::AtomicUsize::new(0), reply))
+    }
+
+    fn calls(c: &Counting) -> usize {
+        c.0.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    #[test]
+    fn an_app_that_declares_the_very_type_draws_it_before_the_system_provider() {
+        let dir = scratch("app-overrides");
+        let theirs = png_file(&dir, "theirs.png");
+        let file = png_file(&dir, "a.png");
+        let mut s = service(&dir);
+        s.apps = app_for(&["public.png"]);
+        let app = counting(format!("{{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{{\"picture\":\"{theirs}\"}}}}"));
+        s.exchanger = app.clone();
+        let req = ThumbRequest::new(&file, 64, 1.0, ThumbKind::Thumbnail).unwrap();
+        assert_eq!(s.request("app", req).unwrap().get("state").and_then(Json::as_str), Some("pending"));
+        let events = wait_events(&mut s, 1);
+        assert_eq!(events[0].body.get("art").and_then(Json::as_str), Some("pixels"));
+        assert_eq!(calls(&app), 1, "the app was asked once");
+    }
+
+    #[test]
+    fn when_the_app_gives_no_picture_the_system_provider_draws_the_file() {
+        let dir = scratch("app-falls-back");
+        let file = png_file(&dir, "a.png");
+        let mut s = service(&dir);
+        s.apps = app_for(&["public.png"]);
+        let app = counting("{\"jsonrpc\":\"2.0\",\"id\":1,\"error\":{\"code\":1,\"message\":\"no\"}}".into());
+        s.exchanger = app.clone();
+        let req = ThumbRequest::new(&file, 64, 1.0, ThumbKind::Thumbnail).unwrap();
+        s.request("app.one", req.clone()).unwrap();
+        s.request("app.two", req).unwrap();
+        let events = wait_events(&mut s, 2);
+        assert_eq!(events.len(), 2, "both askers hear the answer: {events:?}");
+        for e in &events {
+            assert_eq!(e.event, "ready");
+            assert_eq!(e.body.get("art").and_then(Json::as_str), Some("pixels"), "the built-in provider drew the picture");
+        }
+        assert_eq!(calls(&app), 1, "one call serves both askers");
+    }
+
+    #[test]
+    fn an_app_that_declares_only_a_broad_type_does_not_take_over_the_system_pictures() {
+        let dir = scratch("app-broad");
+        let file = png_file(&dir, "a.png");
+        let mut s = service(&dir);
+        s.apps = app_for(&["public.data"]);
+        let app = counting("{\"jsonrpc\":\"2.0\",\"id\":1,\"error\":{\"code\":1,\"message\":\"no\"}}".into());
+        s.exchanger = app.clone();
+        let req = ThumbRequest::new(&file, 64, 1.0, ThumbKind::Thumbnail).unwrap();
+        s.request("app", req).unwrap();
+        let events = wait_events(&mut s, 1);
+        assert_eq!(events[0].body.get("art").and_then(Json::as_str), Some("pixels"));
+        assert_eq!(calls(&app), 0, "the image provider is nearer than public.data");
     }
 
     #[test]

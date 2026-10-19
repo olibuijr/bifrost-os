@@ -15,7 +15,7 @@
 //! | [`cards::PackageProvider`] | `public.archive` | the type icon with a format badge |
 //! | [`cards::ContactProvider`] | `public.vcard` | a contact card |
 //! | [`cards::CalendarProvider`] | `public.calendar-event` | a calendar page |
-//! | [`media::AudiovisualProvider`] | `public.audiovisual-content` | the cover picture the file embeds, else a video's first key frame or an audio waveform card |
+//! | [`media::AudiovisualProvider`] | `public.audiovisual-content` | the cover picture the file embeds, else a video's first key frame or an audio waveform card; each with the running time badge ([`duration`]) |
 //! | [`pdf::PdfProvider`] | `com.adobe.pdf` | the first page, drawn by the PDF renderer |
 //! | [`text::ClippingsProvider`] | text clippings and web locations | the clipped text on a tabbed page |
 //!
@@ -23,6 +23,7 @@
 
 pub mod canvas;
 pub mod cards;
+pub mod duration;
 pub mod images;
 pub mod media;
 pub mod pdf;
@@ -119,6 +120,13 @@ impl Generator {
 
     pub fn cache(&self) -> &DiskCache {
         &self.cache
+    }
+
+    /// How far the built-in provider for the file named `file_name` is from the file's own type (0 when a provider
+    /// names that very type). `None` when no built-in provider draws it: the type icon is all it gets.
+    pub fn provider_distance(&self, file_name: &str) -> Option<usize> {
+        let type_id = bifrost_ui::uttype::type_for_extension(file_name).unwrap_or("public.data");
+        self.registry.distance_for(type_id)
     }
 
     /// The cache key and the answer when it needs no drawing: the icon kind, a folder, or a cache hit.

@@ -48,6 +48,58 @@ impl ThumbKind {
     }
 }
 
+/// `QLThumbnailRepresentation.RepresentationType`, ordered from the cheapest to the best. A generator request names the
+/// tiers it wants; each tier is one service request (see `bifrost_app::thumbnails::GeneratorRequest::plan`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum RepresentationType {
+    /// The icon of the file's type; needs no drawing.
+    Icon,
+    /// A small picture of the content, drawn quickly: a quarter of the requested edge ([`low_quality_edge`]).
+    LowQualityThumbnail,
+    /// The picture at the requested size.
+    Thumbnail,
+}
+
+impl RepresentationType {
+    /// Every tier, cheapest first: the default of a request that names none.
+    pub const ALL: [RepresentationType; 3] = [RepresentationType::Icon, RepresentationType::LowQualityThumbnail, RepresentationType::Thumbnail];
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "icon" => Some(Self::Icon),
+            "lowQualityThumbnail" => Some(Self::LowQualityThumbnail),
+            "thumbnail" => Some(Self::Thumbnail),
+            _ => None,
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Icon => "icon",
+            Self::LowQualityThumbnail => "lowQualityThumbnail",
+            Self::Thumbnail => "thumbnail",
+        }
+    }
+}
+
+/// The edge of the low quality tier for a request of `px` pixels: a quarter of it, never below [`MIN_PX`].
+pub fn low_quality_edge(px: u32) -> u32 {
+    (px / 4).max(MIN_PX)
+}
+
+/// The tiers to produce for a request of `px` pixels, cheapest first, without repeats. An empty list asks for all.
+/// The icon needs no drawing, so its edge is `px`.
+pub fn tiers(types: &[RepresentationType], px: u32) -> Vec<(RepresentationType, u32)> {
+    RepresentationType::ALL
+        .into_iter()
+        .filter(|t| types.is_empty() || types.contains(t))
+        .map(|t| match t {
+            RepresentationType::LowQualityThumbnail => (t, low_quality_edge(px)),
+            _ => (t, px),
+        })
+        .collect()
+}
+
 /// Why a request was refused.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RequestError {
@@ -222,8 +274,8 @@ impl Registry {
         self.providers.is_empty()
     }
 
-    /// The provider whose registered type is nearest to `type_id` in the conformance tree.
-    pub fn provider_for(&self, type_id: &str) -> Option<&dyn ThumbProvider> {
+    /// The provider whose registered type is nearest to `type_id` in the conformance tree, and that distance.
+    fn nearest(&self, type_id: &str) -> Option<(usize, &dyn ThumbProvider)> {
         let mut best: Option<(usize, &dyn ThumbProvider)> = None;
         for p in &self.providers {
             let d = p.types().iter().filter_map(|t| uttype::distance(type_id, t)).min();
@@ -233,7 +285,18 @@ impl Registry {
                 }
             }
         }
-        best.map(|(_, p)| p)
+        best
+    }
+
+    /// The provider whose registered type is nearest to `type_id` in the conformance tree.
+    pub fn provider_for(&self, type_id: &str) -> Option<&dyn ThumbProvider> {
+        self.nearest(type_id).map(|(_, p)| p)
+    }
+
+    /// How far the nearest provider's type is from `type_id` (0 when a provider names that very type). `None` when no
+    /// provider draws the type. A provider extension compares its own distance with this one to see who is more specific.
+    pub fn distance_for(&self, type_id: &str) -> Option<usize> {
+        self.nearest(type_id).map(|(d, _)| d)
     }
 
     /// The art for `file`: the icon for [`ThumbKind::Icon`]; for a thumbnail the provider's pixels, else the icon.
@@ -266,6 +329,24 @@ mod tests {
 
     fn file(name: &str) -> SourceFile {
         SourceFile::new(PathBuf::from(format!("/d/{name}")), FileStamp { mtime: 5, size: 9 })
+    }
+
+    #[test]
+    fn tiers_are_cheapest_first_deduplicated_and_the_low_tier_is_a_quarter() {
+        assert_eq!(tiers(&[], 128), [(RepresentationType::Icon, 128), (RepresentationType::LowQualityThumbnail, 32), (RepresentationType::Thumbnail, 128)]);
+        let asked = [RepresentationType::Thumbnail, RepresentationType::Icon, RepresentationType::Thumbnail];
+        assert_eq!(tiers(&asked, 64), [(RepresentationType::Icon, 64), (RepresentationType::Thumbnail, 64)]);
+        assert_eq!(low_quality_edge(40), MIN_PX, "never below the smallest edge");
+        assert_eq!(low_quality_edge(256), 64);
+    }
+
+    #[test]
+    fn representation_names_round_trip_and_order_from_the_cheapest() {
+        for t in RepresentationType::ALL {
+            assert_eq!(RepresentationType::parse(t.as_str()), Some(t));
+        }
+        assert_eq!(RepresentationType::parse("poster"), None);
+        assert!(RepresentationType::Icon < RepresentationType::LowQualityThumbnail && RepresentationType::LowQualityThumbnail < RepresentationType::Thumbnail);
     }
 
     #[test]
@@ -336,6 +417,16 @@ mod tests {
         // html is text but not plain text
         assert!(r.provider_for("public.html").unwrap().render(&file("a.html"), 32).is_none());
         assert!(r.provider_for("public.png").is_none());
+    }
+
+    #[test]
+    fn the_distance_of_the_nearest_provider_is_known() {
+        let mut r = Registry::new();
+        r.register(Box::new(Fixed(&["public.text"], false)));
+        r.register(Box::new(Fixed(&["public.plain-text"], true)));
+        assert_eq!(r.distance_for("public.plain-text"), Some(0));
+        assert!(r.distance_for("public.html").is_some_and(|d| d >= 1), "html is further from the registered types than plain text");
+        assert_eq!(r.distance_for("public.png"), None);
     }
 
     #[test]

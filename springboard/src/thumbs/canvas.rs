@@ -62,6 +62,16 @@ impl Canvas {
         Some(Canvas { ui: make_ui(s)?, w, h, s, px: vec![0; w * h] })
     }
 
+    /// A canvas over an existing picture, where `logical_w` points span its width: what is drawn lands on top of the
+    /// picture. `None` without a font or with a non-positive width.
+    pub fn over(pixels: Pixels, logical_w: f32) -> Option<Canvas> {
+        if logical_w <= 0.0 {
+            return None;
+        }
+        let s = pixels.w as f32 / logical_w;
+        Some(Canvas { ui: make_ui(s)?, w: pixels.w, h: pixels.h, s, px: pixels.px })
+    }
+
     pub fn surface(&mut self) -> Surface<'_> {
         Surface { w: self.w, h: self.h, stride: self.w, px: &mut self.px, y0: 0 }
     }

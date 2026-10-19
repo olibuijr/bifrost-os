@@ -188,6 +188,7 @@ pub mod gpu_page;
 pub mod startup_disk_page;
 pub mod quicksearch;
 pub mod quicksearch_math;
+pub mod search_thumbs;
 pub mod switcher;
 pub mod touch_gestures;
 pub mod textarea;
