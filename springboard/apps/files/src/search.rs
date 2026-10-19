@@ -100,10 +100,10 @@ pub(crate) struct SearchPlan {
     pub(crate) skip: Vec<PathBuf>,
 }
 
-/// Trees that hold nothing a person searches for: the kernel's views, device nodes and the runtime folder. They are
-/// endless or meaningless as results, so the disk walk does not enter them (mounted volumes are read as roots of
-/// their own).
-const VIRTUAL_TREES: [&str; 4] = ["/proc", "/sys", "/dev", "/run"];
+/// Trees that hold nothing a person searches for: the kernel's views, device nodes and the runtime folder, and the
+/// snapshot folders, which repeat every file of the disk many times. They are endless or meaningless as results, so
+/// the disk walk does not enter them (mounted volumes are read as roots of their own).
+const VIRTUAL_TREES: [&str; 6] = ["/proc", "/sys", "/dev", "/run", "/.snapshots", "/home/.snapshots"];
 
 impl Scope {
     fn named(value: &str) -> Option<Scope> {
@@ -465,6 +465,7 @@ mod tests {
         let disk = Scope::Disk.plan(open, home, &[]);
         assert_eq!(disk.roots, vec![PathBuf::from("/")]);
         assert!(disk.skip.contains(&PathBuf::from("/proc")) && disk.skip.contains(&PathBuf::from("/sys")), "the virtual trees are not entered");
+        assert!(disk.skip.contains(&PathBuf::from("/.snapshots")), "nor the snapshots, which repeat the disk");
     }
 
     #[test]
