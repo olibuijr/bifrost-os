@@ -9,9 +9,12 @@ IV=out/iventoy/iventoy-1.0.44
 # the panel's native mode: iVentoy's boot menu sets the firmware display to this, and the kernel and installer inherit it.
 # Its default 1024x768 showed a 4:3 picture and then a blink to black when i915 switched to the panel's own mode.
 LAB_RESOLUTION=${LAB_RESOLUTION:-2560x1440}
+# out/ is gitignored and has been lost before (2026-10-16): without the iVentoy tree, set up the NIC and NAT only and
+# leave a running iVentoy alone (stopping it with nothing to start takes PXE down)
+HAVE_IV=1; [ -x "$IV/iventoy.sh" ] || { echo "iVentoy missing at $IV: NIC and NAT only, no PXE"; HAVE_IV=0; }
 # an iVentoy still running from another directory (the repo was renamed) keeps the ports and saves its settings into a
 # deleted tree: stop it first
-for pid in $(pgrep -x iventoy || true); do
+[ "$HAVE_IV" = 1 ] && for pid in $(pgrep -x iventoy || true); do
   exe=$(sudo readlink -f "/proc/$pid/exe" 2>/dev/null || true)
   case "$exe" in "$(realpath "$IV")"/*) ;; *) echo "stopping iVentoy from $exe"; sudo kill "$pid" || true; sleep 2 ;; esac
 done
@@ -38,6 +41,7 @@ fi
 # Docker's FORWARD policy would drop the lab traffic
 sudo iptables -C DOCKER-USER -i "$LAB_NIC" -o "$LAN_NIC" -j ACCEPT 2>/dev/null || sudo iptables -I DOCKER-USER -i "$LAB_NIC" -o "$LAN_NIC" -j ACCEPT
 sudo iptables -C DOCKER-USER -i "$LAN_NIC" -o "$LAB_NIC" -m state --state ESTABLISHED,RELATED -j ACCEPT 2>/dev/null || sudo iptables -I DOCKER-USER -i "$LAN_NIC" -o "$LAB_NIC" -m state --state ESTABLISHED,RELATED -j ACCEPT
+[ "$HAVE_IV" = 1 ] || { echo "lab up: $LAB_NIC ($LAB_IP) with NAT, no PXE"; exit 0; }
 sudo "$IV/iventoy.sh" status 2>/dev/null | grep -q 'is running' || sudo "$IV/iventoy.sh" start
 for _ in $(seq 20); do curl -s http://127.0.0.1:26000/ >/dev/null && break; sleep 0.5; done
 # start the PXE service on the lab NIC ONLY (the UI defaults to the LAN interface; never use that)
