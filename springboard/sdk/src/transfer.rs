@@ -10,6 +10,9 @@
 //! representation exports and hand back the bytes they received, so a model type needs one declaration instead of
 //! hand-written conversions at every site.
 //!
+//! Several values move as several items ([`drag_items`], [`begin_drag_all`], [`share_items_all`]), and a drop that brings
+//! files is read back through the file representations ([`drop_values_with_files`]).
+//!
 //! Remaining gap: a file representation travels as bytes on a pasteboard item (the shell has no file promise yet).
 
 use crate::dnd::{self, DragItem, DragPreview, Payload};
@@ -292,6 +295,15 @@ impl<T> Representations<T> {
         self.items.iter().filter(|r| r.imports_bytes()).find(|r| offered.contains(&r.uti)).map(|r| r.uti)
     }
 
+    /// The first file representation, in preference order, that can rebuild the model from a received file of type
+    /// `offered` (the file's own type conforms to the representation's type) and that is not export-only.
+    pub fn best_file_import(&self, offered: &str) -> Option<&'static str> {
+        self.items
+            .iter()
+            .find(|r| matches!(&r.io, Io::File { import: Some(_), .. }) && bifrost_ui::uttype::conforms(offered, r.uti))
+            .map(|r| r.uti)
+    }
+
     /// The `TransferRepresentation` kind declared for `uti`.
     pub fn kind_of(&self, uti: &str) -> Option<Kind> {
         self.items.iter().find(|r| r.uti == uti).map(|r| r.kind)
@@ -379,6 +391,53 @@ pub fn drop_values<T>(reps: &Representations<T>, items: &[DragItem]) -> Vec<T> {
         })
         .collect()
 }
+
+/// The drag items for several values, one item each, in order. A value that has no text or link to carry is left out,
+/// and so is everything past the eight items a drag session holds.
+pub fn drag_items<T>(reps: &Representations<T>, values: &[T]) -> Vec<DragItem> {
+    values.iter().filter_map(|v| drag_item(reps, v)).take(MAX_SESSION_ITEMS).collect()
+}
+
+/// Starts a drag of several values as one session (a multi-selection drag) and returns the session id. `None` when no
+/// value has anything to carry.
+pub fn begin_drag_all<T>(ctx: &Ctx, allowed: u8, values: &[T], reps: &Representations<T>, preview: DragPreview) -> Option<u32> {
+    let items = drag_items(reps, values);
+    if items.is_empty() {
+        return None;
+    }
+    Some(dnd::begin(ctx, allowed, items, preview))
+}
+
+/// The share menu's items for several values (`ShareLink` over a selection): the text or link each exports to another
+/// app, in order, up to the eight items a share holds.
+pub fn share_items_all<T>(reps: &Representations<T>, values: &[T]) -> Vec<Payload> {
+    values.iter().filter_map(|v| text_payload(reps, v)).take(MAX_SESSION_ITEMS).collect()
+}
+
+/// The values a drop carries, like [`drop_values`], and also the files: a file item is read through the first file
+/// representation that accepts its type. `resolve` turns the item's document grant and name into the path of the
+/// arrived file (the app keeps the `App::document` events of the drop; see [`crate::dnd`]); an item whose file it
+/// cannot find is skipped. The received file is the receiver's own copy, never the sender's original.
+pub fn drop_values_with_files<T>(
+    reps: &Representations<T>,
+    items: &[DragItem],
+    resolve: &dyn Fn(&crate::proto::GrantId, &str) -> Option<PathBuf>,
+) -> Vec<T> {
+    items
+        .iter()
+        .filter_map(|item| match &item.payload {
+            Payload::File { grant, name } => {
+                let uti = reps.best_file_import(&item.payload.uti())?;
+                let file = resolve(grant, name)?;
+                reps.import_file(uti, &ReceivedTransferredFile { file, is_original_file: false })
+            }
+            _ => drop_values(reps, std::slice::from_ref(item)).pop(),
+        })
+        .collect()
+}
+
+/// The items a drag or share session holds (the shell keeps the first eight).
+const MAX_SESSION_ITEMS: usize = 8;
 
 #[cfg(test)]
 mod tests {
@@ -579,5 +638,53 @@ mod tests {
             DragItem::new(Payload::File { grant: [1; 16], name: "a.txt".into() }),
         ];
         assert_eq!(drop_values(&reps, &items), vec![Note { text: "hi".into() }]);
+    }
+
+    #[test]
+    fn several_values_become_several_drag_and_share_items_in_order() {
+        let reps = note_representations();
+        let notes: Vec<Note> = ["a", "b", "c"].iter().map(|t| Note { text: (*t).into() }).collect();
+        let items = drag_items(&reps, &notes);
+        assert_eq!(items.len(), 3);
+        assert_eq!(items[1].payload, Payload::Text("b".into()));
+        assert_eq!(share_items_all(&reps, &notes), vec![Payload::Text("a".into()), Payload::Text("b".into()), Payload::Text("c".into())]);
+    }
+
+    #[test]
+    fn a_session_holds_at_most_eight_items_and_skips_values_with_nothing_to_carry() {
+        let reps = note_representations();
+        let many: Vec<Note> = (0..12).map(|i| Note { text: i.to_string() }).collect();
+        assert_eq!(drag_items(&reps, &many).len(), 8);
+        assert_eq!(share_items_all(&reps, &many).len(), 8);
+        // a model whose only representation is private has nothing another app may receive
+        let private: Representations<Note> = Representations::new().proxy(PRIVATE, Visibility::OwnProcess, export_private);
+        assert!(drag_items(&private, &many).is_empty());
+        assert!(share_items_all(&private, &many).is_empty());
+    }
+
+    #[test]
+    fn a_dropped_file_is_read_through_the_file_representation_that_accepts_its_type() {
+        let reps = Representations::new().file("public.plain-text", Visibility::All, |d: &Doc| SentTransferredFile::new(format!("/work/{}.txt", d.0)), |r| {
+            r.file.file_stem().and_then(|s| s.to_str()).map(|s| Doc(s.to_owned()))
+        });
+        let items = vec![
+            DragItem::new(Payload::File { grant: [3; 16], name: "memo.txt".into() }),
+            // a picture is not plain text: no file representation takes it
+            DragItem::new(Payload::File { grant: [4; 16], name: "photo.png".into() }),
+            // a file whose grant the app cannot resolve is skipped
+            DragItem::new(Payload::File { grant: [5; 16], name: "lost.txt".into() }),
+        ];
+        let resolve = |grant: &crate::proto::GrantId, name: &str| (grant[0] != 5).then(|| PathBuf::from(format!("/in/{name}")));
+        assert_eq!(drop_values_with_files(&reps, &items, &resolve), vec![Doc("memo".into())]);
+        assert_eq!(reps.best_file_import("public.png"), None);
+        assert_eq!(reps.best_file_import("public.plain-text"), Some("public.plain-text"));
+    }
+
+    #[test]
+    fn text_items_in_a_mixed_drop_are_still_read_and_an_export_only_file_representation_reads_nothing() {
+        let reps = note_representations();
+        let items = vec![DragItem::new(Payload::Text("hi".into())), DragItem::new(Payload::File { grant: [1; 16], name: "a.txt".into() })];
+        let resolve = |_: &crate::proto::GrantId, name: &str| Some(PathBuf::from(format!("/in/{name}")));
+        assert_eq!(drop_values_with_files(&reps, &items, &resolve), vec![Note { text: "hi".into() }]);
     }
 }
