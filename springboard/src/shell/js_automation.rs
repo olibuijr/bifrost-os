@@ -280,7 +280,7 @@ globalThis.doShellScript=function(command){return call('shell',String(command));
 function logger(){return function(...a){call('log',a.map(x=>typeof x==='string'?x:JSON.stringify(x)).join(' '));};}
 globalThis.console={log:logger(),error:logger(),info:logger(),warn:logger()};
 globalThis.__main=function(){
-  const s=JSON.parse(H.source());
+  const s=call('source');
   try{
     let out=(0,eval)(s.source);
     if(typeof globalThis.run==='function'){out=globalThis.run(s.argv);}
