@@ -10,9 +10,12 @@
 //! has no codec for (Brotli, LZBITMAP, LZFSE) are named so that app code keeps the reference shape, and they
 //! fail with `Error::Unsupported`. `Algorithm::Deflate` (raw DEFLATE, no wrapper) is a BifrOSt addition.
 //!
-//! Streams and filters are incremental. The encoder emits each block as soon as it is full (65535 bytes of input), and
-//! the decoder returns output as soon as each symbol completes (`inflate_stream`), so output appears
-//! before `finalize`. Output is delivered in chunks of the requested size.
+//! Streams and filters are incremental for DEFLATE, zlib and LZ4. The DEFLATE encoder emits each block as soon as it is
+//! full (65535 bytes of input) and the decoder returns output as soon as each symbol completes (`inflate_stream`); the
+//! LZ4 encoder and decoder work on whole blocks (`lz4::Bv4Encoder`, `lz4::Bv4Decoder`), so output appears
+//! before `finalize`. `Stream::flush` and `OutputFilter::flush` make everything written so far decodable (a sync flush
+//! for DEFLATE and zlib, a closed block for LZ4). LZMA streams run on finalize. Output is delivered in chunks of the
+//! requested size.
 
 mod dynamic;
 mod inflate_stream;
@@ -204,6 +207,13 @@ impl Compressor {
         out
     }
 
+    /// Sync flush: the input so far becomes decodable output, header first. The trailer waits for `finish`.
+    fn flush(&mut self) -> Vec<u8> {
+        let mut out = std::mem::take(&mut self.header);
+        out.extend(self.deflate.flush());
+        out
+    }
+
     /// Closes the stream and returns the rest of the output, trailer last.
     fn finish(self) -> Vec<u8> {
         let mut out = self.header;
@@ -215,13 +225,15 @@ impl Compressor {
     }
 }
 
-/// The codec under a stream or filter: an incremental DEFLATE or zlib compressor or decoder, or, for an
-/// algorithm with no incremental codec here (LZ4 and LZMA), the input buffered and run through the one-shot codec
+/// The codec under a stream or filter: an incremental DEFLATE, zlib or LZ4 compressor or decoder, or, for an
+/// algorithm with no incremental codec here (LZMA), the input buffered and run through the one-shot codec
 /// when the stream ends.
 #[derive(Debug)]
 enum Codec {
     Encode(Compressor),
     Decode(Decoder),
+    Lz4Encode(lz4::Bv4Encoder),
+    Lz4Decode(lz4::Bv4Decoder),
     Buffered { op: FilterOperation, algorithm: Algorithm, input: Vec<u8> },
 }
 
@@ -229,7 +241,9 @@ impl Codec {
     fn new(op: FilterOperation, algorithm: Algorithm) -> Codec {
         let zlib = algorithm == Algorithm::Zlib;
         match (op, algorithm) {
-            (_, Algorithm::Lz4 | Algorithm::Lzma) => Codec::Buffered { op, algorithm, input: Vec::new() },
+            (FilterOperation::Compress, Algorithm::Lz4) => Codec::Lz4Encode(lz4::Bv4Encoder::new()),
+            (FilterOperation::Decompress, Algorithm::Lz4) => Codec::Lz4Decode(lz4::Bv4Decoder::new(inflate::MAX_OUT)),
+            (_, Algorithm::Lzma) => Codec::Buffered { op, algorithm, input: Vec::new() },
             (FilterOperation::Compress, _) => Codec::Encode(Compressor::new(zlib)),
             (FilterOperation::Decompress, _) => Codec::Decode(Decoder::new(zlib, inflate::MAX_OUT)),
         }
@@ -240,10 +254,22 @@ impl Codec {
         match self {
             Codec::Encode(c) => Ok(c.write(src)),
             Codec::Decode(d) => d.feed(src).map_err(Error::from),
+            Codec::Lz4Encode(e) => Ok(e.write(src)),
+            Codec::Lz4Decode(d) => d.feed(src),
             Codec::Buffered { input, .. } => {
                 input.extend_from_slice(src);
                 Ok(Vec::new())
             }
+        }
+    }
+
+    /// Makes everything written so far decodable: a sync flush for DEFLATE and zlib, a block of its own for
+    /// LZ4. A decoder has nothing held back, and a buffered codec (LZMA) has no partial output, so those return nothing.
+    fn flush(&mut self) -> Result<Vec<u8>, Error> {
+        match self {
+            Codec::Encode(c) => Ok(c.flush()),
+            Codec::Lz4Encode(e) => Ok(e.flush()),
+            _ => Ok(Vec::new()),
         }
     }
 
@@ -252,6 +278,8 @@ impl Codec {
         match self {
             Codec::Encode(c) => Ok(c.finish()),
             Codec::Decode(d) => d.finish().map_err(Error::from),
+            Codec::Lz4Encode(e) => Ok(e.finish()),
+            Codec::Lz4Decode(d) => d.finish(),
             Codec::Buffered { op: FilterOperation::Compress, algorithm, input } => encode_buffer(algorithm, &input),
             Codec::Buffered { op: FilterOperation::Decompress, algorithm, input } => decode_buffer(algorithm, &input),
         }
@@ -293,6 +321,14 @@ impl Stream {
             }
         }
         Ok(out)
+    }
+
+    /// Flushes a compress stream (a BifrOSt addition; the reference stream API has no flush): everything processed so far comes back as output that a decoder can decode in full, and the stream
+    /// stays open. DEFLATE and zlib end the output with an empty stored block; LZ4 closes its partial block. A
+    /// decompress stream already returns each byte as soon as it is complete, so it returns nothing. LZMA streams
+    /// run on finalize and return nothing here. Fails with `Finished` after finalize.
+    pub fn flush(&mut self) -> Result<Vec<u8>, Error> {
+        self.codec.as_mut().ok_or(Error::Finished)?.flush()
     }
 }
 
@@ -401,6 +437,18 @@ impl<F: FnMut(&[u8])> OutputFilter<F> {
                 Err(FilterError::InvalidData)
             }
         }
+    }
+
+    /// Sends everything written so far to the sink as output that a decoder can decode in full (see
+    /// `Stream::flush`). The filter stays open. Fails with `InvalidState` after `finalize`.
+    pub fn flush(&mut self) -> Result<(), FilterError> {
+        if let Some(e) = self.failure {
+            return Err(e);
+        }
+        let codec = self.codec.as_mut().ok_or(FilterError::InvalidState)?;
+        let out = codec.flush().map_err(|_| FilterError::InvalidData)?;
+        deliver(&mut self.sink, self.capacity, &out);
+        Ok(())
     }
 
     /// Ends the input and sends the rest of the output to the sink. Fails with `InvalidState` if the
@@ -669,5 +717,61 @@ mod tests {
             assert_eq!(f.finalize(), Err(FilterError::InvalidData));
         }
         assert_eq!(calls, 0);
+    }
+
+    #[test]
+    fn a_flushed_compress_stream_is_decodable_before_it_is_finalized() {
+        for alg in [Algorithm::Zlib, Algorithm::Deflate, Algorithm::Lz4] {
+            let first = b"flush me flush me flush me".to_vec();
+            let second = lcg(3000);
+            let mut enc = Stream::init(FilterOperation::Compress, alg).unwrap();
+            let mut dec = Stream::init(FilterOperation::Decompress, alg).unwrap();
+            let mut packed = enc.process(&first, false).unwrap();
+            packed.extend(enc.flush().unwrap());
+            assert_eq!(dec.process(&packed, false).unwrap(), first, "{alg:?}: everything written is out after the flush");
+            let tail = enc.process(&second, true).unwrap();
+            assert_eq!(dec.process(&tail, true).unwrap(), second, "{alg:?}");
+            assert_eq!(enc.flush(), Err(Error::Finished));
+        }
+    }
+
+    #[test]
+    fn flushing_a_decompress_stream_returns_nothing_and_changes_nothing() {
+        let packed = encode_buffer(Algorithm::Lz4, b"hello lz4 stream").unwrap();
+        let mut dec = Stream::init(FilterOperation::Decompress, Algorithm::Lz4).unwrap();
+        assert!(dec.flush().unwrap().is_empty());
+        assert_eq!(dec.process(&packed, true).unwrap(), b"hello lz4 stream".to_vec());
+    }
+
+    #[test]
+    fn an_lz4_compress_stream_returns_full_blocks_before_finalize_and_gives_the_one_shot_bytes() {
+        let data = lcg(150_000);
+        let mut enc = Stream::init(FilterOperation::Compress, Algorithm::Lz4).unwrap();
+        let early = enc.process(&data[..100_000], false).unwrap();
+        assert!(!early.is_empty(), "a full 64 KiB block is out before finalize");
+        let mut all = early;
+        all.extend(enc.process(&data[100_000..], true).unwrap());
+        assert_eq!(all, encode_buffer(Algorithm::Lz4, &data).unwrap());
+    }
+
+    #[test]
+    fn an_lz4_decompress_stream_reports_damage_as_it_arrives_and_stops_at_the_limit() {
+        let mut dec = Stream::init(FilterOperation::Decompress, Algorithm::Lz4).unwrap();
+        assert_eq!(dec.process(b"nope nope", false), Err(Error::InvalidData));
+        let packed = encode_buffer(Algorithm::Lz4, b"abc").unwrap();
+        let mut cut = Stream::init(FilterOperation::Decompress, Algorithm::Lz4).unwrap();
+        assert_eq!(cut.process(&packed[..packed.len() - 4], true), Err(Error::Truncated));
+    }
+
+    #[test]
+    fn an_output_filter_flush_sends_decodable_output_to_the_sink() {
+        let mut sink: Vec<u8> = Vec::new();
+        {
+            let mut filter = OutputFilter::new(FilterOperation::Compress, Algorithm::Deflate, 16, |chunk: &[u8]| sink.extend_from_slice(chunk)).unwrap();
+            filter.write(b"filter flush text, filter flush text").unwrap();
+            filter.flush().unwrap();
+        }
+        let mut dec = Stream::init(FilterOperation::Decompress, Algorithm::Deflate).unwrap();
+        assert_eq!(dec.process(&sink, false).unwrap(), b"filter flush text, filter flush text".to_vec());
     }
 }
