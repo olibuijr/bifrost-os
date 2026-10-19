@@ -94,6 +94,7 @@ Gotchas: the lab key only works on the live (lab ISO) system; the installed syst
 | `ota [--timeout=S]` | Settings > General > Software Update by element name: check, download, install, restart, unlock, wait for `phase=accepted`. Handles an update already staged by `update` |
 | `update [--restart]` | `bifrost-update-guard install` (stages the package transaction), then `apply` with `--restart` |
 | `recovery`, `apps`, `mem`, `idle LABEL` | `bifrost-update-guard status`; `/run/bifrost/app-resources.json` ([app-manager.md](app-manager.md)); process-tree PSS; idle CPU per process |
+| `shot`, `click`, `type`, `key`, `move`, `drag`, `scroll`, `seq` | computer use: look at a screenshot, act at its pixels with a real keyboard and pointer (below) |
 | `open-app ID`, `open-url URL`, `open-folder ID PATH`, `show-in-files PATH`, `context X Y`, `hover X Y`, `tap`, `swipe`, `tap-window`, `key`, `trace on\|off`, `appearance`, `wallpaper` | input and shell commands (below) |
 | `login-bypass on\|off` | root touches or removes `/etc/bifrost/no-login`; with it on the login window accepts an empty password. Recovery only, turn it off again |
 | `labboot on\|off` | UEFI BootOrder with PXE first (a reset always lands in the live lab ISO) or the disk first |
@@ -110,6 +111,57 @@ Address and login notes (2026-10-12):
 - The tool probes `192.168.20.140` (VLAN 20), `10.99.0.200` (the lab NIC on Titan's eno2) and `192.168.1.187` (Wi-Fi) at once with a 1.5 s timeout and takes the first in that order that answers ssh; with none answering it uses the lab NIC. When VLAN 20 is down, the lab NIC 10.99.0.200 is the working fallback (`MIDGET_HOST` overrides).
 - After every reboot Midget shows the lock screen. `midget.py unlock` types the Tester password (`out/lab/tester.password`, or `~/.config/bifrost/midget-login`); `bifrost pc midget key enter` alone only unlocks an older shell without the login window.
 - `bios find WORD` is a case-insensitive substring match over `/sys/class/firmware-attributes/thinklmi/attributes` (names such as "Intel(R) Manageability Control", "After Power Loss", "Wake on LAN"); `bios get NAME` and `bios set NAME VALUE` take the exact attribute name (quote it in the shell) and print `possible_values`.
+
+### Computer use on Midget (2026-10-19)
+
+Look at a screenshot, then click, type and drag at the pixel coordinates seen in it, like a person with a mouse and keyboard.
+Every command opens a temporary `/dev/uinput` device on Midget over the existing ssh, waits 0.5 s for the shell to pick it up
+(`MIDGET_UINPUT_SETTLE` changes that), acts and destroys it. Python 3 on both sides, nothing to install.
+
+| Command | What |
+|---|---|
+| `shot [OUT.png] [--max W]` | `screen`, plus `OUT-small.png` (width at most W, default 1280, aspect kept; Pillow, else a pure-python nearest-neighbour fallback) and the scale between them. Look at the small image, multiply what you read by the scale |
+| `click X Y [--right] [--double] [--mods cmd+shift]` | moves an absolute pointer to screenshot pixel (X, Y) and clicks; modifiers are held on a second, keyboard device |
+| `move X Y` | hover |
+| `drag X0 Y0 X1 Y1 [MS]` | press, interpolated moves (default 400 ms), release |
+| `scroll X Y DY [DX]` | wheel notches at the pixel: DY > 0 scrolls down, DX > 0 right (REL_WHEEL / REL_HWHEEL) |
+| `type [--raw] [--delay MS] TEXT` | US layout: letters, digits, punctuation with Shift, space; `\n` is Enter and `\t` Tab (unless `--raw`); about 15 ms per key; characters with no US key are listed and skipped |
+| `key SPEC...` | `enter`, chords `cmd+shift+4`, repeats `down*3`, several in a row: `key cmd+l tab*2 enter` (also `f1`..`f12`, `home`, `end`, `pageup`, `pagedown`, `delete`) |
+| `seq FILE` | runs one command per line (`click`, `type`, `key`, `move`, `drag`, `scroll`, `shot`, `screen`, `tap-window`, `tap`, `state`, `unlock`, `sleep S`, `# comments`); stops at the first failure, `--keep-going` goes on; `-` reads stdin |
+
+Coordinates are compositor pixels, the same space as `screen`/`shot`: the pointer's range is 0..w-1 by 0..h-1 with the output size
+read from the last `screen`/`shot` (10 minutes, `out/lab/output-size`), else from a fresh screenshot's header; `--size WxH` or
+`$MIDGET_OUTPUT` overrides it. `--scale F` multiplies the coordinates, so `click --scale 2 640 360` clicks where the 1280-wide
+small image shows (640, 360) on a 2560-wide screen. Unlike `tap` and `tap-window` it goes through the compositor's input, so the
+window under the pointer gets it and no window geometry is needed. The pointer is a plain absolute device (`INPUT_PROP_DIRECT`
+off), so the shell treats it as a pointing device, not a touchscreen: a right click is the shell's long press.
+
+```bash
+bifrost pc midget shot /tmp/m.png                  # then read /tmp/m-small.png, note "scale: 2.0000"
+bifrost pc midget click --scale 2 420 300          # a point on the small image
+bifrost pc midget click 1500 900 --double --mods cmd
+bifrost pc midget type "hello world\n"
+bifrost pc midget key cmd+a cmd+c
+bifrost pc midget drag 400 300 900 300 600
+bifrost pc midget scroll 1280 720 5
+```
+
+A repeatable flow (`bifrost pc midget seq flow.txt`):
+
+```
+# open Spotlight, search, open the first hit
+key cmd+space
+sleep 0.5
+type calculator
+sleep 0.4
+key enter
+sleep 1
+shot /tmp/flow-calc.png
+click 1280 720 --right
+shot /tmp/flow-menu.png
+```
+
+Unit tests for the pure parts (keymap, scaling, seq parsing, PNG resize): `python3 tools/test_midget_computer_use.py`.
 
 ### AMT findings (2026-10-12)
 
