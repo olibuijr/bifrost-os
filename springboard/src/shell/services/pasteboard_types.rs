@@ -9,9 +9,9 @@
 //! (hex), `can_read {board, types}` and `best {board, types}` (the first preferred type the board holds, exact match, as
 //! `availableType(from:)`; null when none). An item is `{"reps": [{"uti", "text"}]}`; data that is not text travels as
 //! `"hex"`. Limits: 16 items a write, 16 representations an item, 16 named boards. Binary data is hex, not base64, so
-//! the codec stays a few lines on each side. Gap: the general board's items are flat (one representation each), since
-//! the shell's clipboard state does not keep item grouping, and general writes do not yet re-broadcast to other apps'
-//! mirrors.
+//! the codec stays a few lines on each side. The general board keeps item grouping (`shell::pasteboard::set_items`, `snapshot_items`), so
+//! the representations of one copy read back together; the wire to and from apps (`ToShell::PasteboardSet`,
+//! `ToApp::Pasteboard`) is still flat, and general writes do not yet re-broadcast to other apps' mirrors.
 use super::{Event, Shell, SystemService};
 use crate::shell::{clipboard, pasteboard as shell_pasteboard, pasteboard_transfer as shell_pasteboard_transfer};
 use bifrost_core::json::Json;
@@ -250,8 +250,11 @@ impl Pasteboards {
     /// A copy of the board for reading. The general board is built from the shell's clipboard state.
     fn view(&self, name: &str) -> Board {
         if name == GENERAL {
-            let (count, flat) = shell_pasteboard::snapshot();
-            let items = flat.into_iter().map(|(uti, data)| Item { reps: vec![Representation { uti, data }] }).collect();
+            let (count, grouped) = shell_pasteboard::snapshot_items();
+            let items = grouped
+                .into_iter()
+                .map(|reps| Item { reps: reps.into_iter().map(|(uti, data)| Representation { uti, data }).collect() })
+                .collect();
             Board { change_count: count, items, announced: 0 }
         } else {
             self.boards.get(name).cloned().unwrap_or_default()
@@ -260,8 +263,10 @@ impl Pasteboards {
 
     fn write(&mut self, name: &str, items: Vec<Item>) -> Result<u32, String> {
         if name == GENERAL {
-            let flat: Vec<(String, Vec<u8>)> = items.iter().flat_map(|it| it.reps.iter().map(|r| (r.uti.clone(), r.data.clone()))).collect();
-            if let Some(text) = shell_pasteboard::set(flat.clone()) {
+            let grouped: Vec<Vec<(String, Vec<u8>)>> =
+                items.iter().map(|it| it.reps.iter().map(|r| (r.uti.clone(), r.data.clone())).collect()).collect();
+            let flat: Vec<(String, Vec<u8>)> = grouped.iter().flatten().cloned().collect();
+            if let Some(text) = shell_pasteboard::set_items(grouped) {
                 clipboard::set_text(&text);
             }
             shell_pasteboard::offer_wayland(&flat);
@@ -360,6 +365,21 @@ mod tests {
 
     fn text_item(s: &str) -> Item {
         Item { reps: vec![rep("public.utf8-plain-text", s.as_bytes())] }
+    }
+
+    #[test]
+    fn the_general_board_reads_back_the_items_with_their_representations_together() {
+        let _turn = shell_pasteboard::TURN.lock().unwrap_or_else(|e| e.into_inner());
+        let both = |text: &str, url: &str| {
+            vec![("public.utf8-plain-text".to_string(), text.as_bytes().to_vec()), ("public.url".to_string(), url.as_bytes().to_vec())]
+        };
+        shell_pasteboard::set_items(vec![both("Ada", "https://ada.is"), vec![("public.png".to_string(), vec![1, 2])]]);
+        let view = Pasteboards::default().view(GENERAL);
+        assert_eq!(view.items.len(), 2);
+        assert_eq!(view.items[0].reps.len(), 2);
+        assert_eq!(view.items[0].available_type(&["public.url"]), Some("public.url"));
+        assert_eq!(view.items[1].data("public.png"), Some(&[1u8, 2][..]));
+        assert_eq!(view.types(), vec!["public.utf8-plain-text".to_string(), "public.url".to_string(), "public.png".to_string()]);
     }
 
     #[test]
