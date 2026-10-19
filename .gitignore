@@ -31,6 +31,8 @@ springboard/sdk/tests/snapshots/*.diff.png
 !springboard/apps/*/tests/snapshots/*.png
 springboard/apps/*/tests/snapshots/*.actual.png
 springboard/apps/*/tests/snapshots/*.diff.png
+# BifrOSt's own built-in app icons, drawn by tools/make-icons.py, are committed
+!springboard/res/app-icons/*.png
 
 # licensed reference material: the Apple-derived fonts, wallpapers and screenshots stay on the build machine only
 bifrost-ref/
