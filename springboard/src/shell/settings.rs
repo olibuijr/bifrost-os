@@ -3116,7 +3116,8 @@ impl Settings {
             Action::Bluetooth(c) => vec![Effect::Bluetooth(c)],
             // the network service runs nmcli on its own thread; the page shows the new state on its next read
             Action::Vpn { name, up } => {
-                super::desktop_network::send(super::desktop_network::Request::Vpn { name, up });
+                use super::desktop_network::{Request, VpnAction};
+                super::desktop_network::send(Request::Vpn(if up { VpnAction::Up(name) } else { VpnAction::Down(Some(name)) }));
                 vec![]
             }
             Action::AudioOutput => vec![Effect::BluetoothOutput],

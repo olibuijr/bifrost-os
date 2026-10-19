@@ -133,15 +133,6 @@ pub fn parse_vpn_connections(text: &str) -> Vec<VpnConnection> {
         .collect()
 }
 
-/// The `nmcli` arguments that bring the VPN connection `name` up or down. Refuses a blank name or one with a control
-/// character (the name is a single argument, so it cannot add options).
-pub fn vpn_args(name: &str, up: bool) -> Result<Vec<String>, String> {
-    if name.trim().is_empty() || name.chars().any(char::is_control) {
-        return Err("That VPN name cannot be used".into());
-    }
-    let args: &[&str] = if up { &["--wait", "6", "connection", "up", "id"] } else { &["connection", "down", "id"] };
-    Ok(args.iter().map(|a| a.to_string()).chain([name.to_string()]).collect())
-}
 pub enum Request {
     Wifi(WifiAction),
     /// Brings a VPN connection NetworkManager keeps up or down.
@@ -151,8 +142,6 @@ pub enum Request {
     Offer(Offer),
     /// Takes down the network offered by [`Request::Offer`].
     StopOffer,
-    /// Brings the VPN connection `name` up (`up`) or down.
-    Vpn { name: String, up: bool },
 }
 
 /// A VPN request. The system network service (NetworkManager, with its VPN and WireGuard plug-ins) keeps the
@@ -557,11 +546,6 @@ fn apply(request: Request) -> Result<(), String> {
         Request::Offer(offer) => start_offer(&offer),
         Request::StopOffer => stop_offer(),
         Request::Vpn(action) => apply_vpn(action),
-        Request::Vpn { name, up } => {
-            let args = vpn_args(&name, up)?;
-            let args: Vec<&str> = args.iter().map(String::as_str).collect();
-            output("nmcli", &args)
-        }
         Request::Wifi(action) => match action {
             WifiAction::Scan => output("nmcli", &["--wait", "5", "device", "wifi", "rescan"]),
             WifiAction::Enable(on) => {
@@ -628,7 +612,7 @@ pub fn vpn_summary(profile: &VpnProfile) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_vpn_connections, security_of, vpn_args, vpn_profiles, vpn_summary, VpnConnection};
+    use super::{parse_vpn_connections, security_of, vpn_profiles, vpn_summary, VpnConnection};
     use crate::net::wifi_config::{Eap, Security};
     use bifrost_core::tunnel::{VpnProfile, VpnProtocol};
 
@@ -648,15 +632,6 @@ mod tests {
         assert_eq!(vpns[0].status_label(), "Not Connected");
         assert_eq!(vpns[1].status_label(), "Connected");
         assert!(parse_vpn_connections("").is_empty());
-    }
-
-    #[test]
-    fn the_vpn_request_is_one_nmcli_command_with_the_name_as_a_single_argument() {
-        assert_eq!(vpn_args("Office VPN", true).unwrap(), ["--wait", "6", "connection", "up", "id", "Office VPN"]);
-        assert_eq!(vpn_args("wg0", false).unwrap(), ["connection", "down", "id", "wg0"]);
-        assert_eq!(vpn_args("--help", true).unwrap().last().map(String::as_str), Some("--help"), "the name follows id, so it is a value and not an option");
-        assert!(vpn_args("  ", true).is_err());
-        assert!(vpn_args("a\nb", true).is_err());
     }
 
     #[test]
