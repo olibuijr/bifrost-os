@@ -4,6 +4,7 @@
 //! own, so a damaged line costs that line only.
 use super::ics::IcsCalendar;
 use super::recur;
+use super::zones;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
@@ -13,9 +14,22 @@ pub const DEFAULT_CALENDAR: u32 = 1;
 pub const MAX_CALENDARS: u32 = 10;
 /// Longest calendar name kept, in characters.
 pub const NAME_MAX: usize = 60;
-/// The time zones an event can name. Only fixed-offset zones are offered: a zone with daylight saving would need its
-/// rules, and a fixed offset would be wrong for half the year. `None` is the device's own zone.
-pub const ZONES: [Option<&str>; 3] = [None, Some("UTC"), Some("Atlantic/Reykjavik")];
+/// The time zones an event can name: the device's own zone (`None`) and the zones of `zones::TABLE`, in its order,
+/// which know their daylight saving rules.
+pub const ZONES: [Option<&str>; 12] = [
+    None,
+    Some("UTC"),
+    Some("Atlantic/Reykjavik"),
+    Some("Europe/London"),
+    Some("Europe/Paris"),
+    Some("Europe/Helsinki"),
+    Some("America/New_York"),
+    Some("America/Chicago"),
+    Some("America/Denver"),
+    Some("America/Los_Angeles"),
+    Some("Asia/Kolkata"),
+    Some("Asia/Tokyo"),
+];
 /// The travel times an event can name (minutes); 0 is none.
 pub const TRAVEL: [u16; 5] = [0, 15, 30, 45, 60];
 /// Custom alarms step by this many minutes, between one step and a week.
@@ -71,12 +85,10 @@ pub fn preset_alarms(alert: u8) -> Vec<u32> {
     super::alerts::ALERT_MINUTES.get(alert as usize).copied().flatten().into_iter().collect()
 }
 
-/// The offset in minutes east of UTC of a zone in `ZONES`, None for an unknown name.
+/// The standard offset in minutes east of UTC of a zone in `ZONES`, None for an unknown name. A zone with daylight
+/// saving is shifted by `zones::offset_at`.
 pub fn zone_minutes(tzid: &str) -> Option<i32> {
-    match tzid {
-        "UTC" | "Atlantic/Reykjavik" => Some(0),
-        _ => None,
-    }
+    zones::find(tzid).map(|z| z.standard)
 }
 
 /// Gives the store events of `cal` the zone they name, so the .ics text says which zone their times are in. A zone the
@@ -98,8 +110,7 @@ pub fn apply_zones(cal: &mut IcsCalendar, extras: &Extras) {
 pub fn zone_title(tzid: Option<&str>) -> &'static str {
     match tzid {
         None => "Device Time Zone",
-        Some("UTC") => "UTC",
-        Some(_) => "Iceland (GMT)",
+        Some(id) => zones::find(id).map_or("Other Time Zone", |z| z.title),
     }
 }
 
@@ -440,10 +451,18 @@ mod tests {
     }
 
     #[test]
-    fn only_fixed_offset_zones_are_known() {
+    fn the_zones_are_the_table_and_the_device() {
         assert_eq!(zone_minutes("Atlantic/Reykjavik"), Some(0));
-        assert_eq!(zone_minutes("Europe/London"), None);
+        assert_eq!(zone_minutes("Europe/Paris"), Some(60));
+        assert_eq!(zone_minutes("America/New_York"), Some(-300));
+        assert_eq!(zone_minutes("Mars/Olympus"), None);
         assert_eq!(zone_title(None), "Device Time Zone");
+        assert_eq!(zone_title(Some("Europe/Paris")), "Paris");
+        assert_eq!(zone_title(Some("Zone/X")), "Other Time Zone");
+        assert_eq!(ZONES.len(), zones::TABLE.len() + 1);
+        for (choice, zone) in ZONES.iter().skip(1).zip(zones::TABLE.iter()) {
+            assert_eq!(*choice, Some(zone.id));
+        }
     }
 
     #[test]

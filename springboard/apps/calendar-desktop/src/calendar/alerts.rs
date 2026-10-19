@@ -117,10 +117,15 @@ pub struct Alert {
     pub body: String,
 }
 
-fn utc_offset_secs(e: &IcsEvent, zones: &[(String, i32)], device: i32) -> i32 {
+/// Seconds east of UTC for the event's wall time on `date`: a zone Calendar knows follows its daylight saving rules
+/// (`zones.rs`), another named zone uses the offset its VTIMEZONE gave, and a floating event uses the device's.
+fn utc_offset_secs(e: &IcsEvent, zones: &[(String, i32)], device: i32, date: Date) -> i32 {
     match e.tzid.as_deref() {
         Some("UTC") => 0,
-        Some(tz) => zones.iter().find(|(n, _)| n == tz).map_or(device, |&(_, m)| m * 60),
+        Some(tz) => match super::zones::find(tz) {
+            Some(zone) => super::zones::offset_at(zone, date, e.start.minute as u32) * 60,
+            None => zones.iter().find(|(n, _)| n == tz).map_or(device, |&(_, m)| m * 60),
+        },
         None => device,
     }
 }
@@ -137,7 +142,7 @@ pub fn due(cal: &IcsCalendar, from: i64, to: i64, device_offset: i32) -> Vec<Ale
         return out;
     }
     for e in cal.events.iter().filter(|e| !e.alarms.is_empty()) {
-        let off = utc_offset_secs(e, &cal.timezones, device_offset);
+        let off = utc_offset_secs(e, &cal.timezones, device_offset, e.start.date);
         let longest = *e.alarms.iter().max().unwrap_or(&0) as i64 * 60;
         let lo = date_of(from, off).shift_days(-1);
         let hi = date_of(to + longest, off).shift_days(1);
@@ -149,6 +154,8 @@ pub fn due(cal: &IcsCalendar, from: i64, to: i64, device_offset: i32) -> Vec<Ale
             None => vec![],
         };
         for date in dates {
+            // each occurrence has its own offset: a weekly meeting in a zone with summer time moves with it
+            let off = utc_offset_secs(e, &cal.timezones, device_offset, date);
             let start = date.days() * 86_400 + e.start.minute as i64 * 60 - off as i64;
             for &m in &e.alarms {
                 let fire = start - m as i64 * 60;
@@ -238,6 +245,34 @@ mod tests {
         let c = IcsCalendar { name: String::new(), events: vec![e], timezones: vec![("Zone/X".into(), -300)] };
         let fire = unix(d(10, 5), 10, 0, -300 * 60);
         assert_eq!(due(&c, fire - 1, fire, 0).len(), 1);
+    }
+
+    #[test]
+    fn a_zone_with_summer_time_moves_the_alert_with_the_clock() {
+        // 10:00 New York time every day: -4 hours until Sunday 1 November 2026, -5 hours from then
+        let mut e = event(vec![0]);
+        e.tzid = Some("America/New_York".into());
+        e.rule = recur::parse_rrule("FREQ=DAILY");
+        let c = cal(e);
+        let summer = unix(d(10, 31), 10, 0, -240 * 60);
+        let winter = unix(d(11, 2), 10, 0, -300 * 60);
+        assert_eq!(due(&c, summer - 1, summer, 0).len(), 1);
+        assert_eq!(due(&c, winter - 1, winter, 0).len(), 1);
+        assert!(due(&c, winter - 3601, winter - 3600, 0).is_empty(), "the summer offset would fire an hour early");
+    }
+
+    #[test]
+    fn a_european_zone_shifts_on_the_last_sunday_of_march() {
+        let mut e = event(vec![0]);
+        e.tzid = Some("Europe/Paris".into());
+        e.start = Local::new(d(3, 20), 600);
+        e.end = Local::new(d(3, 20), 660);
+        e.rule = recur::parse_rrule("FREQ=DAILY;COUNT=20");
+        let c = cal(e);
+        let before = unix(d(3, 28), 10, 0, 60 * 60);
+        let after = unix(d(3, 30), 10, 0, 120 * 60);
+        assert_eq!(due(&c, before - 1, before, 0).len(), 1);
+        assert_eq!(due(&c, after - 1, after, 0).len(), 1);
     }
 
     #[test]

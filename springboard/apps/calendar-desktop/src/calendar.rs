@@ -32,6 +32,7 @@ pub use springboard::shell::calendar::{store, Date};
 pub mod subscribe;
 pub mod timeview;
 pub mod window;
+pub mod zones;
 
 use bifrost_app::layout::top_inset;
 use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_L, SPACE_XL, SPACE_XS, SPACE_XXS};

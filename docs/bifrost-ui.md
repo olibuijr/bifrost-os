@@ -5676,3 +5676,16 @@ Remaining gaps: the lazy graph and every filter are CPU only and no shell window
 there are no barcode generators, face or text detectors; the colour conversions ignore ICC profiles; RAW and HEIF input are not decoded;
 decoders do not parse the stream's own colour description (the attachments follow the height convention); the compositor has no selectable
 blend operator; Metal and IOSurface have no counterpart.
+
+## Calendar event time zones with daylight saving (`calendar-desktop` `calendar/zones.rs`, wave 15)
+
+| Ours | Apple | Notes |
+|---|---|---|
+| `zones::TABLE` (`Zone { id, title, standard, dst }`), `zones::find` | `TimeZone(identifier:)`, the event inspector's time zone popup | Eleven zones: UTC, Iceland, London, Paris, Helsinki, New York, Chicago, Denver, Los Angeles, India, Tokyo. The event editor's Time Zone row steps through them (`extras::ZONES`). |
+| `zones::offset_at(zone, date, minute)`, `offset_at_utc`, `unix_of`, `local_in`, `convert` | `TimeZone.secondsFromGMT(for:)`, `isDaylightSavingTime(for:)`, `Calendar.date(from:)` in a zone | The European rule (last Sunday of March to last Sunday of October, 01:00 UTC) and the North American rule (second Sunday of March to first Sunday of November, 02:00 local). A wall time the spring shift skips counts as summer time; a repeated autumn hour counts as its first pass. |
+| `alerts::utc_offset_secs` per occurrence | `UNCalendarNotificationTrigger` in an event's zone | A repeating event in a zone with summer time fires at the right moment on both sides of the shift. |
+| `zones::vtimezone_body`, `ics::write` | `VTIMEZONE` export | A zone in the table writes STANDARD and DAYLIGHT blocks with yearly RRULEs; reading a VTIMEZONE still takes only its standard offset. |
+
+Gaps: no toolbar view time-zone override yet (`zones::convert` is ready for it); southern-hemisphere zones (summer shift across
+the new year) and the tz database's history (rules before 2007 for North America, before 1996 for Europe) are not modelled;
+an imported VTIMEZONE that is not in the table keeps the fixed offset its file gives. Code only: not built or run, not verified on Midget.
