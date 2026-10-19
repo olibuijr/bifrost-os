@@ -1418,7 +1418,8 @@ mod tests {
     fn an_app_lists_its_own_widgets_with_what_the_person_arranged() {
         let mut s = Store::default();
         s.reload("is.a", "one", vec![entry(100.0, "One", "a")], ReloadPolicy::Never).unwrap();
-        s.reload("is.a", "two", vec![entry(900.0, "Two", "b")], ReloadPolicy::Never).unwrap();
+        // a timeline shows its first entry even before that entry's date (the SDK rule), so "two" has none at all
+        s.reload("is.a", "two", vec![], ReloadPolicy::Never).unwrap();
         s.reload("is.b", "other", vec![entry(100.0, "Other", "c")], ReloadPolicy::Never).unwrap();
         s.set_large("is.a", "one", true);
         let list = s.call("is.a", "widgets", &Json::Null, 150).unwrap();
