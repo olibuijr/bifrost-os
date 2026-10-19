@@ -5729,3 +5729,17 @@ blend operator; Metal and IOSurface have no counterpart.
 Gaps: no toolbar view time-zone override yet (`zones::convert` is ready for it); southern-hemisphere zones (summer shift across
 the new year) and the tz database's history (rules before 2007 for North America, before 1996 for Europe) are not modelled;
 an imported VTIMEZONE that is not in the table keeps the fixed offset its file gives. Code only: not built or run, not verified on Midget.
+
+## Dictionary, Digital Color Meter and Disk Utility (wave 15 `smallapps`, 2026-10-19)
+
+| Ours | Apple | Notes |
+|---|---|---|
+| Dictionary manifest `[[service]] look_up`, `DictionaryApp::rpc` (`service.look_up`), `model::service_word` | Services menu "Look Up in Dictionary" | The Services menu lists it for a text selection; it opens the app and shows the word in its window (history, scope bar, find). The look-up popover's Open in Dictionary row and the `look-up` intent also land in the window now (`show_from_intent`). |
+| Color Meter `color::DisplayProfile`, `profile_paths`, `load_display_profile`; `ColorMeter::convert_pixel`, `space_title` | Digital Color Meter "Display in Native Values" and the display profile | Native reads the pixel through the display's ICC profile (`bifrost_app::colorsync::ProfileToProfile`, sRGB to the profile). The file is `BIFROST_DISPLAY_PROFILE`, else `~/.local/share/color/icc/display.icc`, else `/usr/share/color/icc/display.icc`. Without one, Native shows the delivered codes. |
+| Disk Utility `partition.rs` (`specs`, `segments`), `FormKind::Partition`, Disk > Partition (cmd+shift+P), `form::Control::Bar` | Partition sheet with the layout chart | Sizes (512m, 4g, rest), optional names and a format; a bar shows the layout as it is typed. The old 2 to 4 equal parts items open the same sheet prefilled. No drag-resize of the bar and no per-partition format. |
+| Disk Utility `FormKind::Typed` | Erase and Partition confirmation | Erasing or partitioning a whole disk asks for the disk name to be typed before the request goes to the privileged daemon. Volume requests keep the confirmation sheet. |
+
+Gaps: Dictionary find does not match a phrase wrapped over two lines, and there are no tabs (the SDK has no tab strip). Color
+Meter's Generic RGB is still a 1.8 gamma on sRGB primaries. Disk Utility has no Image from Device (a root copy into a user-chosen
+file needs the privileged daemon to receive an open file descriptor, not a path), no Change Password for encrypted images, no Scan
+Image for Restore, no restore progress bar, and Get Info is still a sheet. Code only: not built or run, not verified on Midget.
