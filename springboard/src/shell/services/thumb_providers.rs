@@ -124,6 +124,7 @@ mod tests {
         h
     }
 
+    #[test]
     fn a_zip_gives_its_entry_count() {
         assert_eq!(zip_entries(&zip_with(12)), Some(12));
         assert_eq!(zip_entries(b"no record here"), None);
