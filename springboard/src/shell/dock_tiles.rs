@@ -45,15 +45,20 @@ pub(super) fn is_linux_app(installed: &[Installed], defs: &[AppDef], app_id: &st
 
 /// Rewrites the pinned keys so each app is kept once under its entry's icon key: a `linux:<id>` or a stale key that
 /// resolves to an app becomes that app's key (a pin of the shell's own window is dropped), repeats are removed, other
-/// keys (a real Linux client, an app that is not installed right now) are kept. True when the list changed.
-pub(super) fn normalize_pinned(installed: &[Installed], defs: &[AppDef], pinned: &mut Vec<String>) -> bool {
+/// keys (a real Linux client) are kept; a key of an app that is not installed goes when `drop_unknown`. True when the list changed.
+pub(super) fn normalize_pinned(installed: &[Installed], defs: &[AppDef], pinned: &mut Vec<String>, drop_unknown: bool) -> bool {
     let mut out: Vec<String> = Vec::with_capacity(pinned.len());
     for key in pinned.iter() {
         let resolved = match key.strip_prefix("linux:") {
             Some(id) if id.starts_with(OWN_WINDOW_PREFIX) => continue,
             Some(id) => owner_icon(installed, defs, id).map(str::to_string),
             None if defs.iter().any(|d| d.icon == key) => None,
-            None => owner_icon(installed, defs, key).map(str::to_string),
+            None => match owner_icon(installed, defs, key) {
+                Some(icon) => Some(icon.to_string()),
+                // the app is not installed: its pin goes (only once the registry is known, never at start-up)
+                None if drop_unknown && !installed.is_empty() => continue,
+                None => None,
+            },
         };
         let key = resolved.unwrap_or_else(|| key.clone());
         if !out.contains(&key) {
@@ -63,6 +68,12 @@ pub(super) fn normalize_pinned(installed: &[Installed], defs: &[AppDef], pinned:
     let changed = out != *pinned;
     *pinned = out;
     changed
+}
+
+/// The keys kept in the Dock when the user has chosen none: the built-in apps only (the first `APPS.len()` entries
+/// of `defs`, the installed Files and Browser standing in for theirs), never every installed app.
+pub(super) fn default_pinned(defs: &[AppDef]) -> Vec<String> {
+    defs.iter().take(super::apps::APPS.len()).map(|a| a.icon.to_string()).collect()
 }
 
 /// The `defs` entries the Dock shows: those kept in the Dock in their order, then the running ones. An app is one
@@ -150,9 +161,9 @@ mod tests {
             ["bifrost.settings", "linux:is.olibuijr.notes", "is.olibuijr.notes.desktop", "linux:is.olibuijr.bifrost.7", "linux:is.olibuijr.notes.desktop", "linux:firefox", "bifrost.settings"]
                 .map(String::from)
                 .to_vec();
-        assert!(normalize_pinned(&installed, &defs, &mut pins));
+        assert!(normalize_pinned(&installed, &defs, &mut pins, true));
         assert_eq!(pins, vec!["bifrost.settings", "is.olibuijr.notes.desktop", "linux:firefox"]);
-        assert!(!normalize_pinned(&installed, &defs, &mut pins), "idempotent");
+        assert!(!normalize_pinned(&installed, &defs, &mut pins, true), "idempotent");
         assert!(!is_linux_app(&installed, &defs, "is.olibuijr.notes.desktop"));
         assert!(!is_linux_app(&installed, &defs, "is.olibuijr.notes"), "the package suffix does not make a second app");
         assert!(!is_linux_app(&installed, &defs, "is.olibuijr.bifrost.3"));
@@ -168,7 +179,7 @@ mod tests {
         let defs = build_list(&installed);
         let files = APPS.iter().find(|a| a.id == AppId::Files).unwrap().icon;
         let mut pins = vec![files.to_string(), "is.olibuijr.files.desktop".to_string()];
-        normalize_pinned(&installed, &defs, &mut pins);
+        normalize_pinned(&installed, &defs, &mut pins, true);
         assert_eq!(pins, vec![files.to_string()]);
         assert_eq!(tiles_of(&installed, &pins, &["is.olibuijr.files.desktop"]).len(), 1);
     }
@@ -189,5 +200,30 @@ mod tests {
         let last = defs.len() - 1;
         let list = dock_app_tiles(&defs, &[defs[last].icon.to_string()], |i| i == last);
         assert_eq!(list.len(), 1);
+    }
+
+    /// 40 installed apps, 3 of them kept in the Dock: the Dock shows the 3 (in the saved order) and a running app
+    /// that is not kept, never the installed list; a pin of an app that is gone is dropped; the default is built-ins.
+    #[test]
+    fn the_dock_shows_the_pinned_apps_and_running_ones_not_every_installed_app() {
+        let ids: Vec<String> = (0..40).map(|n| format!("is.example.app{n}.desktop")).collect();
+        let installed = merge_installed(&[], ids.iter().map(|id| pkg(id, "1")).collect());
+        let defs = build_list(&installed);
+        let mut pins: Vec<String> = [&ids[7], &ids[2], &ids[30]].map(|s| s.to_string()).to_vec();
+        pins.insert(1, "is.example.gone.desktop".into());
+        pins.push("linux:is.example.app2".into());
+        assert!(normalize_pinned(&installed, &defs, &mut pins, true));
+        assert_eq!(pins, vec![ids[7].clone(), ids[2].clone(), ids[30].clone()], "order kept, the gone app and the repeat dropped");
+        let shown = tiles_of(&installed, &pins, &[]);
+        assert_eq!(shown, vec![ids[7].as_str(), ids[2].as_str(), ids[30].as_str()]);
+        let with_running = tiles_of(&installed, &pins, &[ids[11].as_str(), ids[2].as_str()]);
+        assert_eq!(with_running, vec![ids[7].as_str(), ids[2].as_str(), ids[30].as_str(), ids[11].as_str()]);
+        // at start-up, before the registry is known, an unknown key is kept
+        let mut early = vec!["is.example.gone.desktop".to_string()];
+        assert!(!normalize_pinned(&[], &build_list(&[]), &mut early, true));
+        // no saved choice: the built-in apps, not the 40
+        let defaults = default_pinned(&defs);
+        assert_eq!(defaults.len(), APPS.len());
+        assert!(defaults.iter().all(|k| !k.starts_with("is.example.")));
     }
 }
