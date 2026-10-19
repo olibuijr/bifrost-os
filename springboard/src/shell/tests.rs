@@ -129,6 +129,7 @@
     fn a_desktop_gets_the_keyboard_only_when_the_user_opens_it_and_can_close_it() {
         keyboard::fake_process(500.0);
         let mut sh=desktop_shell();
+        unlock(&mut sh);
         sh.keyboard_open_explicit(1000.);
         assert!(sh.keyboard.shown() && sh.keyboard_opened_explicitly(),"the Input menu row opens it");
         assert!(sh.desk_keyboard_visible(),"and the desktop draws it");
