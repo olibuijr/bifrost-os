@@ -160,6 +160,7 @@ pub mod ldap_directory;
 pub mod directory_servers;
 pub mod typed_path;
 pub mod archive;
+pub mod archive_format;
 pub mod tar_package;
 pub mod dispatch_data;
 pub mod dispatch_io;
