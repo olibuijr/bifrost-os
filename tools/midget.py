@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Machine-level control of "midget" (Lenovo ThinkCentre M900 on titan's eno2, 10.99.0.0/24) from titan.
 
-usage: tools/midget.py idle LABEL [--seconds N] | kbench LABEL [--seconds N] | kab [--seconds N] | amt-info | amt-activate | power state|on|off|cycle|reset | mem | apps | recovery | unlock | login-bypass on|off | status | bios [list|get N|set N V|find WORD|dump] | me | labboot on|off | wake | reboot [--netboot|--disk] | poweroff | bootnext pxe|disk|NNNN | efi | hw | screen OUT.png | state | ota | wait NAME --value V | ax [PREFIX] | press NAME | key enter|esc|tab|space|backspace|up|down|left|right|cmd+o | tap-window APP X Y | tap X Y | context X Y | hover X Y | open-url URL | open-app ID | open-folder ID PATH | show-in-files PATH | swipe X0 Y0 X1 Y1 [MS] | trace on|off | update [--restart] | appearance light|dark|auto | wallpaper ID | logs [N] | amt | ssh CMD... | qa-install [--disk DEV] [--shots DIR] [--timeout S] | reinstall --confirm \"REINSTALL midget\" [--timeout S] [--shots S] [--loop N] | follow [--timeout S] [--shots S] | wipe --disk DEV --confirm "WIPE 10.99.0.200 DEV" [--dry-run]
+usage: tools/midget.py idle LABEL [--seconds N] | kbench LABEL [--seconds N] | kab [--seconds N] | amt-info | amt-activate | power state|on|off|cycle|reset | mem | apps | recovery | unlock | login-bypass on|off | status | bios [list|get N|set N V|find WORD|dump] | me | labboot on|off | wake | reboot [--netboot|--disk] | poweroff | bootnext pxe|disk|NNNN | efi | hw | screen OUT.png | state | ota | wait NAME --value V | ax [PREFIX] | press NAME | key enter|cmd+o|cmd+shift+4|down*3 | type TEXT | click X Y [--right] [--double] [--mods cmd+shift] | move X Y | drag X0 Y0 X1 Y1 [MS] | scroll X Y DY [DX] | shot [OUT.png] [--max W] | seq FILE | tap-window APP X Y | tap X Y | context X Y | hover X Y | open-url URL | open-app ID | open-folder ID PATH | show-in-files PATH | swipe X0 Y0 X1 Y1 [MS] | trace on|off | update [--restart] | appearance light|dark|auto | wallpaper ID | logs [N] | amt | ssh CMD... | qa-install [--disk DEV] [--shots DIR] [--timeout S] | reinstall --confirm \"REINSTALL midget\" [--timeout S] [--shots S] [--loop N] | follow [--timeout S] [--shots S] | wipe --disk DEV --confirm "WIPE 10.99.0.200 DEV" [--dry-run]
+Computer use (real uinput keyboard and absolute pointer; coordinates are `screen`/`shot` pixels, `--scale F` takes small-image
+pixels; docs/bifrost-pc-workflow.md "Computer use"): `shot` then `click`/`type`/`drag`/`scroll`, or a `seq` script.
 Coordinates: `screen` writes compositor pixels. `tap`/`swipe`/`context`/`hover` take the shell's own geometry (what
 `state` prints as window=APP,X,Y,W,H), which can be offset from the screenshot because the compositor places windows
 itself (seen 2026-10-10: Files at 557,187 in `state`, 680,307 in the PNG). For anything inside a window use
@@ -235,6 +237,7 @@ def cmd_screen(out):
             open(out, "wb").write(capture.stdout)
             from PIL import Image
             with Image.open(out) as img: w,h = img.size
+            remember_size((w, h))
             print(f"{out} ({w}x{h} compositor pixels)")
             return 0
         script = "exec 3<>/dev/tcp/127.0.0.1/7777; echo 'shot 1' >&3; timeout 20 cat <&3"
@@ -243,6 +246,7 @@ def cmd_screen(out):
             w, h = struct.unpack("<II", blob[4:12])
             from PIL import Image
             Image.frombuffer("RGBA", (w, h), blob[12:12 + w * h * 4], "raw", "BGRA", 0, 1).convert("RGB").save(out)
+            remember_size((w, h))
             print(f"{out} ({w}x{h} panel pixels)")
             return 0
     print(f"no screen grab possible (state {st})")
@@ -284,7 +288,9 @@ def cmd_control(args):
 # evdev codes for `key`: named keys, modifiers, letters and digits
 KEY_CODES = {"enter": 28, "esc": 1, "tab": 15, "space": 57, "backspace": 14,
              "up": 103, "down": 108, "left": 105, "right": 106,
-             "cmd": 125, "super": 125, "ctrl": 29, "shift": 42, "alt": 56,
+             "cmd": 125, "super": 125, "meta": 125, "ctrl": 29, "shift": 42, "alt": 56, "option": 56,
+             "home": 102, "end": 107, "pageup": 104, "pagedown": 109, "delete": 111, "insert": 110, "capslock": 58,
+             **{f"f{n}": c for n, c in zip(range(1, 13), [*range(59, 69), 87, 88])},
              **{c: n for c, n in zip("qwertyuiop", range(16, 26))},
              **{c: n for c, n in zip("asdfghjkl", range(30, 39))},
              **{c: n for c, n in zip("zxcvbnm", range(44, 51))},
@@ -470,47 +476,530 @@ def cmd_login_bypass(args):
     return result.returncode
 
 
+# ---- computer use: look at a screenshot, then click / type / drag at its pixels through temporary uinput devices ----
+# (docs/bifrost-pc-workflow.md "Computer use"). Plans are built here as plain tuples (testable), then run on Midget by one
+# python3 program that creates the devices, waits for the compositor to pick them up, acts and destroys them.
+
+BTN_LEFT, BTN_RIGHT, REL_HWHEEL, REL_WHEEL = 0x110, 0x111, 6, 8
+SETTLE = float(os.environ.get("MIDGET_UINPUT_SETTLE", "0.5"))  # seconds the shell gets to open a fresh /dev/input node
+
+
 def key_codes(spec):
     """`enter`, `o` or a combination `cmd+shift+s` -> evdev codes in press order; None when a part is unknown."""
     parts = spec.lower().split("+")
-    if not spec or any(p not in KEY_CODES for p in parts):
-        return None
-    return [KEY_CODES[p] for p in parts]
+    codes = [KEY_CODES.get(p) or _PUNCT.get({"minus": "-", "equal": "=", "comma": ",", "period": ".", "slash": "/"}.get(p, p)) for p in parts]
+    return None if not spec or None in codes else codes
 
 
-def cmd_key(args):
-    """Inject a real compositor keyboard key or combination (`cmd+o`) through a temporary uinput device."""
-    codes = key_codes(args[0]) if len(args) == 1 else None
-    if not codes:
-        print("usage: key NAME or MOD+KEY (names: " + " ".join(sorted(KEY_CODES)) + ")")
-        return 2
-    script = """import os,fcntl,struct,time
-codes=CODES
-fd=os.open('/dev/uinput',os.O_WRONLY|os.O_NONBLOCK)
-def ev(code,value):
- os.write(fd,struct.pack('qqHHi',0,0,1,code,value))
- os.write(fd,struct.pack('qqHHi',0,0,0,0,0))
- time.sleep(.05)
-try:
- fcntl.ioctl(fd,0x40045564,1)
- for c in codes:
-  fcntl.ioctl(fd,0x40045565,c)
- os.write(fd,struct.pack('80sHHHHI',b'BifrOSt remote keyboard',3,1,1,1,0)+bytes(1024))
+def key_steps(args):
+    """`cmd+shift+4 down*3 enter` -> [codes, ...] with each `*N` repeat expanded (N 1..200); None when a part is unknown."""
+    steps = []
+    for a in args:
+        spec, star, n = a.rpartition("*")
+        if not star:
+            spec, n = a, "1"
+        codes = key_codes(spec) if n.isdigit() and 1 <= int(n) <= 200 else None
+        if codes is None:
+            return None
+        steps += [codes] * int(n)
+    return steps or None
+
+
+def type_events(text):
+    """Text -> ([(shift, evdev code)], [skipped characters]) on a US keyboard: newline is Enter, tab is Tab, `\\r` is dropped."""
+    seq, skipped = [], []
+    for ch in text:
+        keys = [(False, KEY_CODES["enter"])] if ch == "\n" else [(False, KEY_CODES["tab"])] if ch == "\t" else [] if ch == "\r" else text_keys(ch)
+        if keys is None:
+            skipped.append(ch)
+        else:
+            seq += keys
+    return seq, skipped
+
+
+def unescape_text(text):
+    """`\\n`, `\\t` and `\\\\` in an argument (a seq line cannot hold a real newline) -> the character; other backslashes stay."""
+    return re.sub(r"\\([nt\\])", lambda m: {"n": "\n", "t": "\t", "\\": "\\"}[m.group(1)], text)
+
+
+def px_to_abs(x, y, size):
+    """Screenshot pixel (x, y) on an output of `size` (w, h) -> uinput absolute values. The device range is 0..w-1 and
+    0..h-1, so the value equals the pixel; points outside the screen clamp to its edge."""
+    w, h = size
+    return max(0, min(w - 1, round(x))), max(0, min(h - 1, round(y)))
+
+
+def scale_point(x, y, factor):
+    """A point read from a downscaled copy (`shot`'s small image) -> screenshot pixels."""
+    return x * factor, y * factor
+
+
+def shot_size(size, max_w):
+    """(scale, (w, h)) of the downscaled copy `shot` writes: width at most `max_w`, aspect kept; scale 1 when it already fits."""
+    w, h = size
+    if max_w <= 0 or w <= max_w:
+        return 1.0, (w, h)
+    return w / max_w, (max_w, max(1, round(h * max_w / w)))
+
+
+def drag_points(x0, y0, x1, y1, steps):
+    """`steps` evenly spaced points from (x0, y0) to (x1, y1), both ends included."""
+    steps = max(1, int(steps))
+    return [(x0 + (x1 - x0) * i / steps, y0 + (y1 - y0) * i / steps) for i in range(steps + 1)]
+
+
+def click_plan(x, y, size, right=False, double=False, mods=()):
+    """Move to the pixel, hover a beat, press and release (twice for a double click), with `mods` (evdev codes) held."""
+    ax, ay = px_to_abs(x, y, size)
+    btn = BTN_RIGHT if right else BTN_LEFT
+    plan = [("kd", c) for c in mods] + [("sleep", 0.1)] * bool(mods) + [("move", ax, ay), ("sleep", 0.15)]
+    for _ in range(2 if double else 1):
+        plan += [("btn", btn, 1), ("sleep", 0.06), ("btn", btn, 0), ("sleep", 0.08)]
+    return plan + [("ku", c) for c in reversed(mods)]
+
+
+def drag_plan(x0, y0, x1, y1, size, ms=400):
+    """Press at the start, interpolated moves (about 16 ms apart) over `ms`, release at the end."""
+    steps = max(4, int(ms) // 16)
+    pts = [px_to_abs(x, y, size) for x, y in drag_points(x0, y0, x1, y1, steps)]
+    plan = [("move", *pts[0]), ("sleep", 0.15), ("btn", BTN_LEFT, 1), ("sleep", 0.12)]
+    for p in pts[1:]:
+        plan += [("move", *p), ("sleep", max(0.004, ms / 1000 / steps))]
+    return plan + [("sleep", 0.12), ("btn", BTN_LEFT, 0), ("sleep", 0.1)]
+
+
+def scroll_plan(x, y, size, dy, dx=0):
+    """Hover the pixel and turn the wheel: `dy` notches down (negative up), `dx` notches right (negative left)."""
+    ax, ay = px_to_abs(x, y, size)
+    plan = [("move", ax, ay), ("sleep", 0.15)]
+    for code, n, sign in ((REL_WHEEL, dy, -1), (REL_HWHEEL, dx, 1)):  # evdev: a positive vertical value is wheel up
+        for _ in range(abs(int(n))):
+            plan += [("wheel", code, sign if n > 0 else -sign), ("sleep", 0.04)]
+    return plan + [("sleep", 0.6)]  # the shell eases the wheel into a drag and lifts it when idle
+
+
+def plan_seconds(plan):
+    """A generous estimate of how long the Midget side runs the plan, for the ssh timeout."""
+    t = SETTLE + 1.0
+    for op in plan:
+        t += op[1] if op[0] == "sleep" else len(op[1]) * op[2] * 3 if op[0] == "type" else 0.02
+    return t
+
+
+def uinput_plan_script(plan, size=None):
+    """Python source run on Midget: the keyboard and/or absolute pointer (with wheels) the plan needs, then the plan.
+    Ops: ("kd"|"ku", code) ("key", [codes], hold_s) ("type", [(shift, code)], delay_s) ("move", ax, ay) ("btn", code, 0|1)
+    ("wheel", REL code, value) ("sleep", s). The pointer is absolute (ABS_X/Y 0..w-1, 0..h-1), not INPUT_PROP_DIRECT, so
+    the shell treats it as a pointing device, not a touchscreen."""
+    kb_codes = sorted(set(KEY_CODES.values()) | set(_PUNCT.values()) | {54, 97, 100})  # every letter, so it counts as a keyboard
+    return f"""import os,fcntl,struct,time
+PLAN={plan!r}
+KB={kb_codes!r}
+SIZE={tuple(size or (1, 1))!r}
+def mk(name,pid,keys,rels,absmax):
+ fd=os.open('/dev/uinput',os.O_WRONLY|os.O_NONBLOCK)
+ io=lambda r,v: fcntl.ioctl(fd,r,v)
+ io(0x40045564,1)
+ for c in keys: io(0x40045565,c)
+ for r in rels:
+  io(0x40045564,2); io(0x40045566,r)
+ am=[0]*64
+ if absmax:
+  io(0x40045564,3); io(0x40045567,0); io(0x40045567,1); am[0],am[1]=absmax
+ os.write(fd,struct.pack('80sHHHHI',name,3,1,pid,1,0)+struct.pack('64i',*am)+bytes(768))
  fcntl.ioctl(fd,0x5501)
- time.sleep(.3)
- for c in codes:
-  ev(c,1)
- for c in reversed(codes):
-  ev(c,0)
- fcntl.ioctl(fd,0x5502)
+ return fd
+def ev(fd,t,c,v): os.write(fd,struct.pack('qqHHi',0,0,t,c,v))
+def put(fd,t,c,v):
+ ev(fd,t,c,v); ev(fd,0,0,0)
+kinds=set(o[0] for o in PLAN)
+kb=mk(b'BifrOSt remote keyboard',1,KB,[],None) if kinds&{{'kd','ku','key','type'}} else None
+pt=mk(b'BifrOSt remote pointer',2,[272,273],[6,8],(SIZE[0]-1,SIZE[1]-1)) if kinds&{{'move','btn','wheel'}} else None
+try:
+ time.sleep({SETTLE!r})
+ for o in PLAN:
+  k=o[0]
+  if k=='sleep': time.sleep(o[1])
+  elif k=='kd': put(kb,1,o[1],1)
+  elif k=='ku': put(kb,1,o[1],0)
+  elif k=='key':
+   for c in o[1]: put(kb,1,c,1)
+   time.sleep(o[2])
+   for c in reversed(o[1]): put(kb,1,c,0)
+  elif k=='type':
+   for sh,c in o[1]:
+    if sh: put(kb,1,42,1)
+    put(kb,1,c,1); time.sleep(o[2]); put(kb,1,c,0); time.sleep(o[2])
+    if sh: put(kb,1,42,0)
+  elif k=='move':
+   ev(pt,3,0,o[1]); ev(pt,3,1,o[2]); ev(pt,0,0,0)
+  elif k=='btn': put(pt,1,o[1],o[2])
+  elif k=='wheel': put(pt,2,o[1],o[2])
+ time.sleep(.25)
 finally:
- os.close(fd)
-""".replace("CODES", repr(codes))
-    result = run(SSH + ["python3 -c " + shlex.quote(script)], 10)
+ for f in (kb,pt):
+  if f is not None:
+   try: fcntl.ioctl(f,0x5502)
+   except OSError: pass
+   os.close(f)
+"""
+
+
+def run_plan(plan, size=None):
+    """Run a plan on Midget over ssh; the exit code is the remote python's."""
+    result = run(SSH + ["python3 -c " + shlex.quote(uinput_plan_script(plan, size))], plan_seconds(plan) * 1.5 + 15)
     print(result.stdout, end="")
     if result.stderr:
         print(result.stderr, end="", file=sys.stderr)
     return result.returncode
+
+
+def cmd_key(args):
+    """Inject real compositor keys through a temporary uinput keyboard: `key cmd+shift+4`, `key down*3`, `key tab tab enter`."""
+    steps = key_steps(args)
+    if not steps:
+        print("usage: key SPEC... where SPEC is NAME, MOD+KEY (cmd+shift+4) or either with *N (down*3); names: " + " ".join(sorted(KEY_CODES)))
+        return 2
+    plan = []
+    for codes in steps:
+        plan += [("key", codes, 0.05), ("sleep", 0.05)]
+    return run_plan(plan)
+
+
+def cmd_type(args):
+    """`type [--raw] [--delay MS] TEXT`: type arbitrary text on a US keyboard (newline = Enter, tab = Tab; `\\n` and `\\t` in
+    TEXT count unless --raw). Characters with no US key are reported and skipped."""
+    raw, delay = False, 15.0
+    while args and args[0] in ("--raw", "--delay"):
+        if args[0] == "--raw":
+            raw, args = True, args[1:]
+        else:
+            try:
+                delay, args = float(args[1]), args[2:]
+            except (IndexError, ValueError):
+                args = []
+    if args and args[0] == "--":
+        args = args[1:]
+    text = " ".join(args)
+    if not text:
+        print("usage: type [--raw] [--delay MS] TEXT   (\\n = Enter, \\t = Tab unless --raw)")
+        return 2
+    seq, skipped = type_events(text if raw else unescape_text(text))
+    if skipped:
+        print("skipped (no US key): " + " ".join(repr(c) for c in dict.fromkeys(skipped)), file=sys.stderr)
+    if not seq:
+        return 1
+    print(f"typing {len(seq)} keys")
+    return run_plan([("type", seq, delay / 1000)])
+
+
+# the output size comes from a screenshot's PNG header: remembered by `screen`/`shot`, cached for a while, or given as --size WxH
+SIZE_CACHE = os.path.join(os.path.dirname(KEY), "output-size")
+_SIZE = {}
+
+
+def parse_size(text):
+    m = re.fullmatch(r"\s*(\d+)\s*[xX,]\s*(\d+)\s*", text or "")
+    return (int(m.group(1)), int(m.group(2))) if m and int(m.group(1)) > 0 and int(m.group(2)) > 0 else None
+
+
+def png_size(data):
+    """(w, h) from a PNG's IHDR (the first 24 bytes); None when it is not one."""
+    return struct.unpack(">II", data[16:24]) if data[:8] == b"\x89PNG\r\n\x1a\n" and data[12:16] == b"IHDR" and len(data) >= 24 else None
+
+
+def remember_size(size):
+    _SIZE["v"] = tuple(size)
+    try:
+        open(SIZE_CACHE, "w").write(f"{HOST} {size[0]}x{size[1]}\n")
+    except OSError:
+        pass
+
+
+def output_size(spec=None):
+    """The compositor output (w, h) that `screen` pixels are in: --size/$MIDGET_OUTPUT, else what a recent `screen`/`shot` saw
+    (10 minutes, same host), else a fresh screenshot is taken and its header read. None when nothing works."""
+    given = parse_size(spec or os.environ.get("MIDGET_OUTPUT"))
+    if given:
+        return given
+    if "v" in _SIZE:
+        return _SIZE["v"]
+    try:
+        host, _, dims = open(SIZE_CACHE).read().strip().partition(" ")
+        if host == HOST and time.time() - os.path.getmtime(SIZE_CACHE) < 600 and parse_size(dims):
+            _SIZE["v"] = parse_size(dims)
+            return _SIZE["v"]
+    except OSError:
+        pass
+    import tempfile
+    fd, tmp = tempfile.mkstemp(suffix=".png")
+    os.close(fd)
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            ok = cmd_screen(tmp) == 0
+        size = png_size(open(tmp, "rb").read(32)) if ok else None
+    finally:
+        os.unlink(tmp)
+    if size:
+        remember_size(size)
+    return size
+
+
+def split_flags(args, valued=("--mods", "--size", "--scale", "--max"), bools=("--right", "--double")):
+    """-> (positional args, {flag: value or True}); raises ValueError for an unknown option or a missing value."""
+    pos, fl, i = [], {}, 0
+    while i < len(args):
+        a = args[i]
+        if a in valued:
+            if i + 1 >= len(args):
+                raise ValueError(f"{a} needs a value")
+            fl[a] = args[i + 1]
+            i += 1
+        elif a in bools:
+            fl[a] = True
+        elif a.startswith("--"):
+            raise ValueError(f"unknown option {a}")
+        else:
+            pos.append(a)
+        i += 1
+    return pos, fl
+
+
+def pointer_args(args, usage, lo, hi, coords):
+    """Parse a pointer command: (numbers, flags, output size), the first `coords` numbers scaled by --scale; None after
+    printing the usage or the reason."""
+    try:
+        pos, fl = split_flags(args)
+        nums = [float(p) for p in pos]
+        factor = float(fl.get("--scale", 1))
+    except ValueError as e:
+        print(f"{e}\nusage: {usage}")
+        return None
+    if not lo <= len(nums) <= hi:
+        print("usage: " + usage)
+        return None
+    nums[:coords] = [v * factor for v in nums[:coords]]
+    size = output_size(fl.get("--size"))
+    if not size:
+        print("cannot learn the output size: pass --size WxH or set $MIDGET_OUTPUT (or run `screen`/`shot` first)")
+        return None
+    return nums, fl, size
+
+
+def cmd_click(args):
+    usage = "click X Y [--right] [--double] [--mods cmd+shift] [--scale F] [--size WxH]   (X Y = screenshot pixels)"
+    got = pointer_args(args, usage, 2, 2, 2)
+    if not got:
+        return 2
+    (x, y), fl, size = got
+    mods = key_codes(fl["--mods"]) if "--mods" in fl else []
+    if mods is None:
+        print("unknown modifier in --mods " + fl["--mods"])
+        return 2
+    print(f"click {px_to_abs(x, y, size)} of {size[0]}x{size[1]}" + (" right" if "--right" in fl else "") + (" double" if "--double" in fl else ""))
+    return run_plan(click_plan(x, y, size, "--right" in fl, "--double" in fl, mods), size)
+
+
+def cmd_move(args):
+    got = pointer_args(args, "move X Y [--scale F] [--size WxH]   (hover at a screenshot pixel)", 2, 2, 2)
+    if not got:
+        return 2
+    (x, y), fl, size = got
+    return run_plan([("move", *px_to_abs(x, y, size)), ("sleep", 0.3)], size)
+
+
+def cmd_drag(args):
+    got = pointer_args(args, "drag X0 Y0 X1 Y1 [MS] [--scale F] [--size WxH]   (left button, default 400 ms)", 4, 5, 4)
+    if not got:
+        return 2
+    (x0, y0, x1, y1, *ms), fl, size = got
+    return run_plan(drag_plan(x0, y0, x1, y1, size, ms[0] if ms else 400), size)
+
+
+def cmd_scroll(args):
+    got = pointer_args(args, "scroll X Y DY [DX] [--scale F] [--size WxH]   (notches: DY > 0 down, DX > 0 right)", 3, 4, 2)
+    if not got:
+        return 2
+    (x, y, dy, *dx), fl, size = got
+    return run_plan(scroll_plan(x, y, size, dy, dx[0] if dx else 0), size)
+
+
+# ---- shot: a screenshot plus a downscaled copy for viewing ----
+
+def png_decode(data):
+    """8-bit non-interlaced gray/gray+alpha/RGB/RGBA PNG -> (w, h, channels, [row bytearrays]); None for any other kind."""
+    import zlib
+    if data[:8] != b"\x89PNG\r\n\x1a\n":
+        return None
+    pos, idat, hdr = 8, [], None
+    while pos + 8 <= len(data):
+        n, typ = struct.unpack(">I4s", data[pos:pos + 8])
+        chunk, pos = data[pos + 8:pos + 8 + n], pos + 12 + n
+        if typ == b"IHDR":
+            hdr = struct.unpack(">IIBBBBB", chunk)
+        elif typ == b"IDAT":
+            idat.append(chunk)
+        elif typ == b"IEND":
+            break
+    if not hdr:
+        return None
+    w, h, depth, ctype, _, _, interlace = hdr
+    bpp = {0: 1, 2: 3, 4: 2, 6: 4}.get(ctype)
+    if depth != 8 or interlace or not bpp:
+        return None
+    raw, stride, rows, prev = zlib.decompress(b"".join(idat)), w * bpp, [], bytearray(w * bpp)
+    for y in range(h):
+        f, line = raw[y * (stride + 1)], bytearray(raw[y * (stride + 1) + 1:(y + 1) * (stride + 1)])
+        if f == 1:
+            for i in range(bpp, stride):
+                line[i] = (line[i] + line[i - bpp]) & 255
+        elif f == 2:
+            for i in range(stride):
+                line[i] = (line[i] + prev[i]) & 255
+        elif f == 3:
+            for i in range(stride):
+                line[i] = (line[i] + (((line[i - bpp] if i >= bpp else 0) + prev[i]) >> 1)) & 255
+        elif f == 4:
+            for i in range(stride):
+                a, b, c = (line[i - bpp], prev[i], prev[i - bpp]) if i >= bpp else (0, prev[i], 0)
+                p = a + b - c
+                pa, pb, pc = abs(p - a), abs(p - b), abs(p - c)
+                line[i] = (line[i] + (a if pa <= pb and pa <= pc else b if pb <= pc else c)) & 255
+        elif f != 0:
+            return None
+        rows.append(line)
+        prev = line
+    return w, h, bpp, rows
+
+
+def png_encode(w, h, ctype, rows):
+    """Rows of raw bytes (ctype 0 gray or 2 RGB, 8 bit) -> PNG bytes."""
+    import zlib
+    chunk = lambda t, d: struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d))
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, ctype, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(b"".join(b"\0" + bytes(r) for r in rows), 3)) + chunk(b"IEND", b""))
+
+
+def png_resize_nearest(data, max_w):
+    """Pure-python nearest-neighbour downscale of a PNG to width `max_w`; None for a PNG kind png_decode cannot read."""
+    dec = png_decode(data)
+    if not dec:
+        return None
+    w, h, bpp, rows = dec
+    scale, (nw, nh) = shot_size((w, h), max_w)
+    keep = 3 if bpp >= 3 else 1  # drop alpha
+    cols = [min(w - 1, int(x * w / nw)) * bpp for x in range(nw)]
+    out = [b"".join(bytes(rows[min(h - 1, int(y * h / nh))][c:c + keep]) for c in cols) for y in range(nh)]
+    return png_encode(nw, nh, 2 if keep == 3 else 0, out)
+
+
+def resize_png(src, dst, max_w):
+    """Write a copy of `src` at width <= `max_w` to `dst` with Pillow, else the pure-python fallback. -> (w, h) or None."""
+    data = open(src, "rb").read()
+    size = png_size(data)
+    if not size:
+        return None
+    _, (nw, nh) = shot_size(size, max_w)
+    try:
+        from PIL import Image
+        with Image.open(src) as img:
+            img.convert("RGB").resize((nw, nh), Image.LANCZOS).save(dst)
+        return nw, nh
+    except ImportError:
+        small = png_resize_nearest(data, max_w)
+        if small is None:
+            return None
+        open(dst, "wb").write(small)
+        return nw, nh
+
+
+def cmd_shot(args):
+    """`shot [OUT.png] [--max W]`: `screen`, plus OUT-small.png at width <= W (default 1280) and the scale factor between them."""
+    try:
+        pos, fl = split_flags(args)
+        max_w = int(fl.get("--max", 1280))
+    except ValueError as e:
+        print(f"{e}\nusage: shot [OUT.png] [--max W]")
+        return 2
+    out = pos[0] if pos else "/tmp/midget.png"
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        rc = cmd_screen(out)
+    if rc:
+        print(buf.getvalue(), end="")
+        return rc
+    size = png_size(open(out, "rb").read(32))
+    if not size:
+        print(f"{out}: not a PNG")
+        return 1
+    remember_size(size)
+    print(f"full:  {out} ({size[0]}x{size[1]})")
+    scale, (nw, nh) = shot_size(size, max_w)
+    small = os.path.splitext(out)[0] + "-small.png"
+    if scale == 1.0 or not resize_png(out, small, max_w):
+        print("small: none needed" if scale == 1.0 else "small: no resizer for this PNG; use the full image")
+        print("scale: 1.0")
+        return 0
+    print(f"small: {small} ({nw}x{nh})")
+    print(f"scale: {scale:.4f} (small -> full: multiply by it; or `click --scale {scale:.4f} X Y` with small-image coordinates)")
+    return 0
+
+
+# ---- seq: a script of the commands above ----
+
+def parse_seq(text):
+    """A seq script -> [(line number, argv)]: one command per line, `#` comments, blank lines skipped. Raises ValueError
+    with the line number for an unbalanced quote."""
+    out = []
+    for n, line in enumerate(text.splitlines(), 1):
+        try:
+            argv = shlex.split(line, comments=True)
+        except ValueError as e:
+            raise ValueError(f"line {n}: {e}")
+        if argv:
+            out.append((n, argv))
+    return out
+
+
+def seq_ops():
+    return {"type": cmd_type, "click": cmd_click, "move": cmd_move, "drag": cmd_drag, "scroll": cmd_scroll, "key": cmd_key,
+            "shot": cmd_shot, "screen": lambda a: cmd_screen(a[0] if a else "/tmp/midget.png"), "tap-window": cmd_window_tap,
+            "tap": lambda a: cmd_control(["tap"] + a), "unlock": lambda a: cmd_unlock(), "state": lambda a: cmd_control(["state"])}
+
+
+def cmd_seq(args):
+    """`seq FILE [--keep-going]` (FILE `-` = stdin): run the lines (`type`, `click`, `move`, `drag`, `scroll`, `key`, `shot`,
+    `screen`, `tap-window`, `tap`, `state`, `unlock`, `sleep S`) in order; stops at the first failing line unless --keep-going."""
+    files = [a for a in args if a != "--keep-going"]
+    if len(files) != 1:
+        print("usage: seq FILE|- [--keep-going]   (lines: click X Y | type TEXT | key SPEC | sleep S | shot PATH | # comment)")
+        return 2
+    try:
+        lines = parse_seq(sys.stdin.read() if files[0] == "-" else open(files[0], encoding="utf-8").read())
+    except (OSError, ValueError) as e:
+        print(e)
+        return 2
+    ops, worst = seq_ops(), 0
+    for n, argv in lines:
+        if argv[0] != "sleep" and argv[0] not in ops:
+            print(f"line {n}: unknown command {argv[0]!r} (one of: sleep {' '.join(sorted(ops))})")
+            return 2
+    for n, argv in lines:
+        print(f"[{n}] {' '.join(shlex.quote(a) for a in argv)}", flush=True)
+        if argv[0] == "sleep":
+            try:
+                time.sleep(float(argv[1]))
+            except (IndexError, ValueError):
+                print(f"line {n}: usage: sleep SECONDS")
+                return 2
+            continue
+        rc = ops[argv[0]](argv[1:])
+        if rc:
+            print(f"line {n} failed with {rc}")
+            if "--keep-going" not in args:
+                return rc
+            worst = rc
+    return worst
 
 
 def cmd_window_tap(args):
@@ -1981,6 +2470,13 @@ def main():
         "tap": lambda: cmd_control(["tap"] + rest),
         "tap-window": lambda: cmd_window_tap(rest),
         "key": lambda: cmd_key(rest),
+        "type": lambda: cmd_type(rest),
+        "click": lambda: cmd_click(rest),
+        "move": lambda: cmd_move(rest),
+        "drag": lambda: cmd_drag(rest),
+        "scroll": lambda: cmd_scroll(rest),
+        "shot": lambda: cmd_shot(rest),
+        "seq": lambda: cmd_seq(rest),
         "swipe": lambda: cmd_control(["swipe"] + rest),
         "trace": lambda: cmd_control(["trace"] + rest),
         "update": lambda: cmd_update(rest),
