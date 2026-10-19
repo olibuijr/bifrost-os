@@ -69,6 +69,7 @@ pub fn scan(dir: &str) -> Vec<RawDevice> {
 pub struct RawPort {
     fd: libc::c_int,
     readable: bool,
+    writable: bool,
 }
 
 impl RawPort {
@@ -81,7 +82,7 @@ impl RawPort {
             // SAFETY: `c` is a valid NUL-terminated path that outlives the call; open has no other requirements.
             let fd = unsafe { libc::open(c.as_ptr(), mode | libc::O_NONBLOCK | libc::O_CLOEXEC) };
             if fd >= 0 {
-                return Ok(RawPort { fd, readable: mode != libc::O_WRONLY });
+                return Ok(RawPort { fd, readable: mode != libc::O_WRONLY, writable: mode != libc::O_RDONLY });
             }
             first.get_or_insert_with(io::Error::last_os_error);
         }
@@ -95,6 +96,11 @@ impl RawPort {
     /// False for an output-only device (opened write-only): reading it would fail with EBADF, so it is not polled.
     pub fn readable(&self) -> bool {
         self.readable
+    }
+
+    /// False for an input-only device (opened read-only): writing it would fail with EBADF.
+    pub fn writable(&self) -> bool {
+        self.writable
     }
 
     /// The device's description (`SNDRV_RAWMIDI_IOCTL_INFO`).
@@ -132,7 +138,6 @@ impl RawPort {
     }
 
     /// Writes MIDI bytes. Returns how many the device took; a signal retries.
-    #[allow(dead_code)]
     pub fn write(&self, data: &[u8]) -> io::Result<usize> {
         loop {
             // SAFETY: `data` is a valid readable slice of the length passed.

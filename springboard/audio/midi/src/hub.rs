@@ -164,6 +164,22 @@ impl Hub {
         }
     }
 
+    /// The earliest timestamp still queued for a live client or destination, so a daemon can sleep until then.
+    /// Queues of objects that no longer exist are ignored.
+    pub fn next_due_ns(&self) -> Option<u64> {
+        let inboxes = self
+            .inboxes
+            .iter()
+            .filter(|(c, _)| self.registry.client_name(**c).is_some())
+            .filter_map(|(_, q)| q.first());
+        let dests = self
+            .dest_queues
+            .iter()
+            .filter(|(d, _)| self.registry.endpoint(**d).is_some())
+            .filter_map(|(_, q)| q.first());
+        inboxes.chain(dests).map(|t| t.host_ns).min()
+    }
+
     /// The number of events waiting for a client.
     pub fn pending(&self, client: ObjectId) -> usize {
         self.inboxes.get(&client).map_or(0, Vec::len)
@@ -278,5 +294,46 @@ mod tests {
         let evs = hub.drain_inbox(daw, cycle_end_ns);
         assert_eq!(evs.len(), 1);
         assert_eq!(clock.frame_in_cycle(evs[0].host_ns, 96.0, 64), Some(48));
+    }
+
+    #[test]
+    fn next_due_is_the_earliest_queued_stamp_of_live_objects() {
+        let mut hub = Hub::new();
+        assert_eq!(hub.next_due_ns(), None);
+        let (_a, a_src, a_dst) = hub.create_app("a");
+        let (b, _, _) = hub.create_app("b");
+        hub.registry.connect_source(b, a_src);
+        hub.send_from_source(a_src, 700, note(1));
+        hub.send_to_destination(a_src, a_dst, 300, note(2));
+        assert_eq!(hub.next_due_ns(), Some(300));
+        hub.take_destination(a_dst, 300);
+        assert_eq!(hub.next_due_ns(), Some(700));
+        // a queue whose destination left the registry no longer counts
+        let dev = hub.registry.add_device("D", true);
+        let ent = hub.registry.add_entity(dev, "E").unwrap();
+        let hw = hub.registry.add_endpoint(ent, Direction::Destination, "in").unwrap();
+        hub.track_destination(hw);
+        hub.send_to_destination(a_src, hw, 5, note(3));
+        assert_eq!(hub.next_due_ns(), Some(5));
+        hub.registry.remove_external_device(dev);
+        assert_eq!(hub.next_due_ns(), Some(700));
+    }
+
+    #[test]
+    fn clients_and_virtual_endpoints_made_one_by_one_have_queues() {
+        let mut hub = Hub::new();
+        let c = hub.create_client("app");
+        let d = hub.create_client("other");
+        let src = hub.create_virtual_source(c, "out").unwrap();
+        let dst = hub.create_virtual_destination(c, "in").unwrap();
+        assert_eq!(hub.clients(), vec![c, d]);
+        assert!(hub.registry.connect_source(d, src));
+        assert_eq!(hub.send_from_source(src, 1, note(1)), 1);
+        assert!(hub.send_to_destination(src, dst, 2, note(2)));
+        assert_eq!(hub.tracked_destinations(), vec![dst]);
+        assert!(hub.dispose_endpoint(dst));
+        assert!(hub.tracked_destinations().is_empty());
+        assert!(!hub.dispose_endpoint(dst));
+        assert!(hub.create_virtual_source(ObjectId(999), "x").is_none());
     }
 }
