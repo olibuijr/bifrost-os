@@ -3084,6 +3084,31 @@ Errors: `contacts::ContactsError` is the typed failure of a contacts call (`NotG
 reply, and `ContactsError::from(contact_access::Error)` maps the access model's errors. The variants are matched by
 name; Apple's `CNErrorCode` raw values are not mapped yet because they are not verified against the reference.
 
+### Contacts: vCard import and export, and containers (2026-10-19, wave 15)
+
+vCard through the service. `contacts::vcard::export(ctx, ids, version)` asks for the readable contacts as vCard 3.0 or 4.0
+text (`decode_export` gives the text and the count); `contacts::vcard::import(ctx, text)` adds the people in the text
+(`decode_import` gives `added`, `skipped` and `duplicates`). Export needs a read grant (a limited grant exports only its
+contacts, and an id outside the grant is left out without an error); import needs full access and applies the whole text or
+nothing. The shell side is `springboard/src/shell/contactcard.rs` (pure: `export`, `plan_import`) and the `export_vcard` and
+`import_vcard` methods of `services/contacts.rs`. A card maps onto the store's one phone, email and address plus the extras
+sidecar (more phones and emails, URLs, birthday, dates) and the picture store; a person already in the book (same name and the
+same email or phone) is a duplicate and is not added again, a card with nothing to name it by is skipped and counted, and new
+contacts get the next free ids and a new UID. Each import is an `added` event per contact in the change log.
+Gaps: a name prefix, nickname (used only when there is no name), department, job title, relations, social profiles and instant
+messages are read from a card but not stored, because the shell store has no field for them; the address is one line.
+
+Containers (`CNContainer`). `contacts::containers` lists containers, their members, and the container of one contact, and with
+full access adds, renames, removes and assigns. The local container (id 1, "On My Computer") always exists and cannot be
+removed; every contact is in exactly one container, the local one unless assigned elsewhere; removing a container moves its
+contacts home and deletes none. The store is the sidecar `contact-containers.tsv` beside the contacts file
+(`springboard/src/shell/contactcontainers.rs`, service methods `containers`, `container_members`, `container_of`,
+`container_add`, `container_rename`, `container_remove`, `container_assign`); deleting a contact removes it from its container,
+and moving one is an `updated` event in the change log. Gaps: the groups are not scoped to a container (they stay book-wide),
+and no account sync fills an `account` container yet, so only the local container is non-empty by default.
+
+System search finds a contact by name, phone, email and company (notes and address stay out of Search by design).
+
 ## InputMethodKit: composing input methods (`springboard/src/shell/input_methods`)
 
 Provider side of text input, pure Rust, no fcitx. `InputController` mirrors the reference controller:
@@ -4517,6 +4542,14 @@ the value exports, a promised file for a file representation, and the data per t
 `transfer::share_items` and `share::show_transferable` / `SharingService::sharing_services_for_transferable` drive the share menu from the
 exported representations; `transfer::paste_values` reads every pasteboard item a model can import.
 Not done yet: the shell pasteboard wire still carries one item, and the view kit has no modifier that attaches these to a view.
+
+Wave 15 (2026-10-19): `transfer::drag_items`, `begin_drag_all` and `share_items_all` move a selection of values as several items
+(one per value, at most eight); `transfer::drop_values_with_files(reps, items, resolve)` reads dropped file items through the first
+file representation whose type accepts the file (`Representations::best_file_import`), with `resolve` mapping the item's grant and
+name to the arrived file. On the shell side the general pasteboard now keeps each item's representations together
+(`shell::pasteboard::set_items`, `snapshot_items`), so `pasteboard` service writes and reads of `general` return the same
+items the writer sent; the app wire (`ToShell::PasteboardSet`, `ToApp::Pasteboard`) is still flat, and the Wayland selection still
+offers one MIME type. Not done: a file promise (a lazily resolved file on a pasteboard item) and a file drag source.
 
 ## Touch events (`bifrost_ui::touch`, `bifrost_app::touch_events`)
 

@@ -332,6 +332,134 @@ pub mod groups {
     }
 }
 
+/// Containers (CNContainer): the places a contact lives, such as the local book or a synced account. Every contact is in
+/// exactly one container, the local one (id 1, which always exists and cannot be removed) unless it was assigned
+/// elsewhere. Removing a container moves its contacts back to the local one and deletes none. The shell keeps the
+/// containers beside the contact store, so they persist and are shared by every app with a read grant; writes need
+/// full access.
+pub mod containers {
+    use super::*;
+
+    /// The id of the local container.
+    pub const LOCAL: u64 = 1;
+
+    fn call_with(ctx: &Ctx, method: &str, pairs: &[(&str, u64)]) -> u32 {
+        let params = pairs.iter().map(|(k, v)| (k.to_string(), Json::Num(*v as f64))).collect();
+        service::call(ctx, SERVICE, method, &Json::Obj(params))
+    }
+
+    /// What kind of place a container is.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub enum Kind {
+        Local,
+        Account,
+        Other,
+    }
+
+    impl Kind {
+        /// The wire name.
+        pub fn name(self) -> &'static str {
+            match self {
+                Kind::Local => "local",
+                Kind::Account => "account",
+                Kind::Other => "other",
+            }
+        }
+
+        pub fn from_name(name: &str) -> Option<Kind> {
+            match name {
+                "local" => Some(Kind::Local),
+                "account" => Some(Kind::Account),
+                "other" => Some(Kind::Other),
+                _ => None,
+            }
+        }
+    }
+
+    /// Lists the containers. Decodes with [`decode_list`].
+    pub fn list(ctx: &Ctx) -> u32 {
+        service::call(ctx, SERVICE, "containers", &Json::Null)
+    }
+
+    /// The contacts the app can read that live in `container`. Decodes with [`decode_members`].
+    pub fn members(ctx: &Ctx, container: u64) -> u32 {
+        call_with(ctx, "container_members", &[("container", container)])
+    }
+
+    /// The container one contact lives in. Decodes with [`decode_container`].
+    pub fn of_contact(ctx: &Ctx, contact: u64) -> u32 {
+        call_with(ctx, "container_of", &[("contact", contact)])
+    }
+
+    /// Adds a container (`Kind::Local` is refused: the book has one). Needs full access. The reply holds the new `id`.
+    pub fn add(ctx: &Ctx, name: &str, kind: Kind) -> u32 {
+        let params = Json::Obj(vec![("name".into(), Json::Str(name.into())), ("kind".into(), Json::Str(kind.name().into()))]);
+        service::call(ctx, SERVICE, "container_add", &params)
+    }
+
+    /// Renames a container. Needs full access.
+    pub fn rename(ctx: &Ctx, container: u64, name: &str) -> u32 {
+        let params = Json::Obj(vec![("container".into(), Json::Num(container as f64)), ("name".into(), Json::Str(name.into()))]);
+        service::call(ctx, SERVICE, "container_rename", &params)
+    }
+
+    /// Removes a container; its contacts go back to the local one. Needs full access.
+    pub fn remove(ctx: &Ctx, container: u64) -> u32 {
+        call_with(ctx, "container_remove", &[("container", container)])
+    }
+
+    /// Moves a contact to a container. Needs full access and a contact the app can read.
+    pub fn assign(ctx: &Ctx, container: u64, contact: u64) -> u32 {
+        call_with(ctx, "container_assign", &[("container", container), ("contact", contact)])
+    }
+
+    /// The containers in a `containers` reply as `(id, name, kind)`, or `None` for a reply of another shape.
+    pub fn decode_list(reply: &Json) -> Option<Vec<(u64, String, Kind)>> {
+        reply
+            .get("containers")?
+            .as_array()?
+            .iter()
+            .map(|c| Some((c.get("id")?.as_u64()?, c.get("name")?.as_str()?.to_string(), Kind::from_name(c.get("kind")?.as_str()?)?)))
+            .collect()
+    }
+
+    /// The contact ids in a `container_members` reply.
+    pub fn decode_members(reply: &Json) -> Option<Vec<u64>> {
+        reply.get("contacts")?.as_array()?.iter().map(Json::as_u64).collect()
+    }
+
+    /// The container id in a `container_of` reply.
+    pub fn decode_container(reply: &Json) -> Option<u64> {
+        reply.get("container")?.as_u64()
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn a_list_reply_decodes_with_kinds_and_an_unknown_kind_is_refused() {
+            let row = |id: f64, name: &str, kind: &str| {
+                Json::Obj(vec![("id".into(), Json::Num(id)), ("name".into(), Json::Str(name.into())), ("kind".into(), Json::Str(kind.into()))])
+            };
+            let reply = Json::Obj(vec![("containers".into(), Json::Arr(vec![row(1.0, "On My Computer", "local"), row(2.0, "Work", "account")]))]);
+            let got = decode_list(&reply).unwrap();
+            assert_eq!(got[0], (LOCAL, "On My Computer".to_string(), Kind::Local));
+            assert_eq!(got[1].2, Kind::Account);
+            let odd = Json::Obj(vec![("containers".into(), Json::Arr(vec![row(3.0, "X", "cloud")]))]);
+            assert_eq!(decode_list(&odd), None);
+        }
+
+        #[test]
+        fn member_and_container_replies_decode() {
+            let members = Json::Obj(vec![("contacts".into(), Json::Arr(vec![Json::Num(2.0), Json::Num(5.0)]))]);
+            assert_eq!(decode_members(&members), Some(vec![2, 5]));
+            assert_eq!(decode_container(&Json::Obj(vec![("container".into(), Json::Num(2.0))])), Some(2));
+            assert_eq!(decode_container(&Json::Null), None);
+        }
+    }
+}
+
 /// Change history for contacts (CNChangeHistoryFetchRequest). The shell logs each applied save as numbered events, and
 /// [`history::changes`] returns the events after a token. `Store` is the in-process model of the same log, for an app
 /// that keeps its own batches; the shell posts `system.contacts.change` when the contact file changes.
@@ -464,6 +592,90 @@ pub mod vcard {
     pub use bifrost_ui::contact_book::{label, Contact, LabeledValue};
     pub use bifrost_ui::contact_vcard::{contacts, serialize, Version};
     pub use bifrost_ui::vcard::{Error, MAX_BYTES, MAX_CARDS};
+
+    use crate::runtime::Ctx;
+    use crate::service;
+    use bifrost_core::json::Json;
+
+    /// Asks the shell for the contacts the app may read as vCard text. `ids` narrows it to those contacts (an id the app
+    /// cannot read is left out), `version` is 3.0 or 4.0. Needs a read grant; a limited grant exports only its contacts.
+    /// The reply decodes with [`decode_export`].
+    pub fn export(ctx: &Ctx, ids: Option<&[u64]>, version: Version) -> u32 {
+        service::call(ctx, super::SERVICE, "export_vcard", &export_params(ids, version))
+    }
+
+    /// The params [`export`] sends.
+    pub fn export_params(ids: Option<&[u64]>, version: Version) -> Json {
+        let mut params = vec![(
+            "version".to_string(),
+            Json::Str(match version {
+                Version::V3 => "3.0".into(),
+                Version::V4 => "4.0".into(),
+            }),
+        )];
+        if let Some(ids) = ids {
+            params.push(("ids".to_string(), Json::Arr(ids.iter().map(|id| Json::Num(*id as f64)).collect())));
+        }
+        Json::Obj(params)
+    }
+
+    /// The vCard text and the number of contacts in it, from an `export` reply.
+    pub fn decode_export(reply: &Json) -> Option<(String, usize)> {
+        Some((reply.get("vcard")?.as_str()?.to_string(), reply.get("count")?.as_u64()? as usize))
+    }
+
+    /// Asks the shell to add the people in `text` to the book. Needs full access; the whole text applies or none of it
+    /// does. A person the book already holds is not added again. The reply decodes with [`decode_import`].
+    pub fn import(ctx: &Ctx, text: &str) -> u32 {
+        service::call(ctx, super::SERVICE, "import_vcard", &Json::Obj(vec![("vcard".into(), Json::Str(text.into()))]))
+    }
+
+    /// What an import did: the ids the new contacts got, the cards the store cannot hold, and the cards of people the
+    /// book already held.
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub struct Imported {
+        pub added: Vec<u64>,
+        pub skipped: usize,
+        pub duplicates: usize,
+    }
+
+    /// The outcome in an `import` reply, or `None` for a reply of another shape.
+    pub fn decode_import(reply: &Json) -> Option<Imported> {
+        Some(Imported {
+            added: reply.get("added")?.as_array()?.iter().map(Json::as_u64).collect::<Option<Vec<_>>>()?,
+            skipped: reply.get("skipped")?.as_u64()? as usize,
+            duplicates: reply.get("duplicates")?.as_u64()? as usize,
+        })
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn the_export_params_name_the_version_and_only_the_asked_ids() {
+            let all = export_params(None, Version::V3);
+            assert_eq!(all.get("version").and_then(Json::as_str), Some("3.0"));
+            assert!(all.get("ids").is_none());
+            let some = export_params(Some(&[2, 5]), Version::V4);
+            assert_eq!(some.get("version").and_then(Json::as_str), Some("4.0"));
+            assert_eq!(some.get("ids"), Some(&Json::Arr(vec![Json::Num(2.0), Json::Num(5.0)])));
+        }
+
+        #[test]
+        fn replies_decode_and_other_shapes_do_not() {
+            let reply = Json::Obj(vec![("vcard".into(), Json::Str("BEGIN:VCARD".into())), ("count".into(), Json::Num(1.0))]);
+            assert_eq!(decode_export(&reply), Some(("BEGIN:VCARD".to_string(), 1)));
+            assert_eq!(decode_export(&Json::Null), None);
+            let done = Json::Obj(vec![
+                ("added".into(), Json::Arr(vec![Json::Num(4.0)])),
+                ("skipped".into(), Json::Num(1.0)),
+                ("duplicates".into(), Json::Num(2.0)),
+            ]);
+            assert_eq!(decode_import(&done), Some(Imported { added: vec![4], skipped: 1, duplicates: 2 }));
+            assert_eq!(decode_import(&Json::Null), None);
+        }
+    }
 }
 
 /// People apps saw and donated, and the person's answers (`bifrost_ui::contact_donation`). An app that sees someone who

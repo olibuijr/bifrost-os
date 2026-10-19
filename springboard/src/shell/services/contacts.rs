@@ -20,6 +20,20 @@
 //!   fields it names; `null` clears one). `delete` holds `{id}` objects. Only full access writes: a limited grant is read-only. The whole
 //!   call applies or none of it does, and the shell stores the book only when it succeeds.
 //!
+//! - `export_vcard {ids?, version?}` returns `{vcard, count}`: the contacts the app may read as vCard text (`version` is
+//!   `"3.0"` by default or `"4.0"`; `ids` narrows it). Needs a read grant; a contact the app cannot read is left out.
+//! - `import_vcard {vcard}` reads the cards in the text, adds the people the book does not hold yet (same name and the
+//!   same email or phone counts as held) and returns `{added: [id, ...], skipped, duplicates}`. Needs full access; the
+//!   whole text applies or none of it does. Extra phones, emails, URLs, the birthday and dates go to the sidecar and a
+//!   card's picture to the picture store; each added contact is an added event in the change log.
+//! - `containers {}` returns `{containers: [{id, name, kind}]}`; `kind` is `local`, `account` or `other`. The local
+//!   container (id 1) always exists. `container_members {container}` returns `{contacts: [id, ...]}` of the contacts the
+//!   app can read; `container_of {contact}` returns `{container}`. Every contact is in exactly one container, the local
+//!   one unless it was assigned elsewhere. These need a read grant.
+//! - `container_add {name, kind?}` returns `{id}`; `container_rename {container, name}`; `container_remove {container}`
+//!   returns `{moved}` (its contacts go back to the local container, none is deleted; the local one cannot be
+//!   removed); `container_assign {container, contact}` returns `{changed}` and records an updated event for the contact.
+//!   These need full access.
 //! - `donate {name?, handle, value}` (any app) offers a person the app saw: `handle` is `email` or `phone`. The shell keeps
 //!   it in a sidecar (`contactdonations`) with the app as its source, and returns `{donated}`: false for an address the
 //!   person dismissed before. A value that is no email address or phone number is an error.
@@ -36,7 +50,9 @@
 //! grants live per shell thread (thread-local, like the `privacy` service), so they reset when the shell restarts.
 use super::{Shell, SystemService};
 use crate::shell::contactextras::{self, Book, Extras};
+use crate::shell::contactcard;
 use crate::shell::contactchanges;
+use crate::shell::contactcontainers::{self, Containers};
 use crate::shell::contactdonations;
 use crate::shell::contactgroups;
 use crate::shell::contactpick;
@@ -123,11 +139,11 @@ pub fn record_with(c: &Contact, extras: &Extras) -> Record {
 /// The parts of a store name: given, middle, family and suffix. The store keeps one name string, so these are derived
 /// from it on read and joined back into it on save.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-struct NameParts {
-    given: String,
-    middle: String,
-    family: String,
-    suffix: String,
+pub(crate) struct NameParts {
+    pub(crate) given: String,
+    pub(crate) middle: String,
+    pub(crate) family: String,
+    pub(crate) suffix: String,
 }
 
 /// Generational and professional suffixes that end a name ("Jr", "III", "Esq."). Matched without case.
@@ -136,7 +152,7 @@ const NAME_SUFFIXES: [&str; 9] = ["Jr", "Jr.", "Sr", "Sr.", "II", "III", "IV", "
 /// Splits a name the way a contact card reads it: a trailing suffix is taken off first, then the first word is the
 /// given name, the last word the family name and any words between them the middle name. A one-word name is a given
 /// name; a two-word name has no middle.
-fn name_parts(name: &str) -> NameParts {
+pub(crate) fn name_parts(name: &str) -> NameParts {
     let mut words: Vec<&str> = name.split_whitespace().collect();
     let mut parts = NameParts::default();
     if words.len() > 1 {
@@ -160,7 +176,7 @@ fn name_parts(name: &str) -> NameParts {
 }
 
 /// Joins name parts back into the one name string the store keeps, skipping empty parts.
-fn join_name(parts: &NameParts) -> String {
+pub(crate) fn join_name(parts: &NameParts) -> String {
     [&parts.given, &parts.middle, &parts.family, &parts.suffix]
         .into_iter()
         .filter(|part| !part.is_empty())
@@ -471,6 +487,144 @@ pub fn groups_answer(
     }
 }
 
+/// Answers `export_vcard {ids?, version?}`: the cards of the contacts the app may read, as `{vcard, count}`. `version` is
+/// `"3.0"` (the default) or `"4.0"`; `ids` narrows the export to those contacts (an id the app cannot read is left out,
+/// never an error, so the reply does not tell the app which unreadable contacts exist). Needs a read grant.
+pub fn vcard_export_answer(
+    app_id: &str,
+    params: &Json,
+    book: &[Contact],
+    extras: &Book,
+    photo: &dyn Fn(u64) -> Option<Vec<u8>>,
+) -> Result<Json, String> {
+    if !reads(app_id) {
+        return Err("contacts access is not granted".into());
+    }
+    let access = access_of(app_id);
+    let version = match params.get("version").and_then(Json::as_str) {
+        None | Some("3.0") => contact_vcard::Version::V3,
+        Some("4.0") => contact_vcard::Version::V4,
+        Some(other) => return Err(format!("export_vcard version is 3.0 or 4.0, not {other}")),
+    };
+    let wanted: Option<Vec<u64>> = match params.get("ids") {
+        None | Some(Json::Null) => None,
+        Some(Json::Arr(items)) => Some(items.iter().filter_map(Json::as_u64).collect()),
+        Some(_) => return Err("ids is a list".into()),
+    };
+    let readable: Vec<Contact> = book
+        .iter()
+        .filter(|c| access.can_read(c.id) && wanted.as_ref().map_or(true, |w| w.contains(&c.id)))
+        .cloned()
+        .collect();
+    let text = contactcard::export(&readable, extras, None, photo, version);
+    Ok(Json::Obj(vec![("vcard".into(), Json::Str(text)), ("count".into(), Json::Num(readable.len() as f64))]))
+}
+
+/// Answers `import_vcard {vcard}`: reads the cards in the text and plans their addition to the book. Needs full access
+/// (a limited grant is read-only). Returns the reply `{added: [id, ...], skipped, duplicates}` and the plan the caller
+/// stores; nothing is stored when this is an error. A person already in the book is a duplicate and is not added.
+pub fn vcard_import_plan(app_id: &str, params: &Json, book: &[Contact]) -> Result<(Json, contactcard::Plan), String> {
+    access_of(app_id).check_write().map_err(|e| match e {
+        Error::ReadOnly => "a limited contacts grant only reads; importing needs full access".to_string(),
+        _ => "contacts write access is not granted".to_string(),
+    })?;
+    let text = params.get("vcard").and_then(Json::as_str).ok_or_else(|| "import_vcard needs vcard".to_string())?;
+    let plan = contactcard::plan_import(text, book)?;
+    let reply = Json::Obj(vec![
+        ("added".into(), Json::Arr(plan.added.iter().map(|id| Json::Num(*id as f64)).collect())),
+        ("skipped".into(), Json::Num(plan.skipped as f64)),
+        ("duplicates".into(), Json::Num(plan.duplicates as f64)),
+    ]);
+    Ok((reply, plan))
+}
+
+/// The container methods. Reads need a read grant, writes need full access, and a container lists only the contacts
+/// the app can see. Returns the reply, whether the containers changed (so the caller saves the sidecar) and the
+/// contacts whose container changed (an updated event each in the change log).
+pub fn containers_answer(
+    app_id: &str,
+    method: &str,
+    params: &Json,
+    contacts: &[Contact],
+    containers: &mut Containers,
+) -> Result<(Json, bool, Vec<u64>), String> {
+    let access = access_of(app_id);
+    let number = |key: &str| params.get(key).and_then(Json::as_u64).ok_or_else(|| format!("{method} needs {key}"));
+    let writable = || access.check_write().map_err(|_| "contacts write access is not granted".to_string());
+    let no_grant = || "contacts access is not granted".to_string();
+    let fail = |e: contactcontainers::Error| e.message().to_string();
+    match method {
+        "containers" => {
+            if !reads(app_id) {
+                return Err(no_grant());
+            }
+            let rows: Vec<Json> = containers
+                .all()
+                .map(|c| {
+                    Json::Obj(vec![
+                        ("id".into(), Json::Num(c.id as f64)),
+                        ("name".into(), Json::Str(c.name.clone())),
+                        ("kind".into(), Json::Str(c.kind.name().into())),
+                    ])
+                })
+                .collect();
+            Ok((Json::Obj(vec![("containers".into(), Json::Arr(rows))]), false, Vec::new()))
+        }
+        "container_members" => {
+            if !reads(app_id) {
+                return Err(no_grant());
+            }
+            let ids: Vec<u64> = contacts.iter().map(|c| c.id).filter(|id| access.can_read(*id)).collect();
+            let members = containers.members(number("container")?, &ids).map_err(fail)?;
+            let list = members.into_iter().map(|m| Json::Num(m as f64)).collect();
+            Ok((Json::Obj(vec![("contacts".into(), Json::Arr(list))]), false, Vec::new()))
+        }
+        "container_of" => {
+            if !reads(app_id) {
+                return Err(no_grant());
+            }
+            let contact = number("contact")?;
+            if !contacts.iter().any(|c| c.id == contact) || !access.can_read(contact) {
+                return Err("no such contact".into());
+            }
+            Ok((Json::Obj(vec![("container".into(), Json::Num(containers.container_of(contact) as f64))]), false, Vec::new()))
+        }
+        "container_add" => {
+            writable()?;
+            let name = params.get("name").and_then(Json::as_str).ok_or_else(|| "container_add needs name".to_string())?;
+            let kind = match params.get("kind").and_then(Json::as_str) {
+                None => contactcontainers::Kind::Other,
+                Some(k) => contactcontainers::Kind::from_name(k).ok_or_else(|| format!("container kind {k} is unknown"))?,
+            };
+            let id = containers.add(name, kind).map_err(fail)?;
+            Ok((Json::Obj(vec![("id".into(), Json::Num(id as f64))]), true, Vec::new()))
+        }
+        "container_rename" => {
+            writable()?;
+            let name = params.get("name").and_then(Json::as_str).ok_or_else(|| "container_rename needs name".to_string())?;
+            containers.rename(number("container")?, name).map_err(fail)?;
+            Ok((Json::Obj(vec![("renamed".into(), Json::Bool(true))]), true, Vec::new()))
+        }
+        "container_remove" => {
+            writable()?;
+            let moved = containers.remove(number("container")?).map_err(fail)?;
+            let reply = Json::Obj(vec![("moved".into(), Json::Num(moved.len() as f64))]);
+            Ok((reply, true, moved))
+        }
+        "container_assign" => {
+            writable()?;
+            let (container, contact) = (number("container")?, number("contact")?);
+            if !contacts.iter().any(|c| c.id == contact) || !access.can_read(contact) {
+                return Err("no such contact".into());
+            }
+            let changed = containers.assign(contact, container).map_err(fail)?;
+            let reply = Json::Obj(vec![("changed".into(), Json::Bool(changed))]);
+            Ok((reply, changed, if changed { vec![contact] } else { Vec::new() }))
+        }
+        _ => Err(format!("contacts has no method {method}")),
+    }
+}
+
 pub struct Contacts;
 
 /// The apps that own the book: only they see the donated people and answer for them.
@@ -613,6 +767,18 @@ impl SystemService for Contacts {
                         }
                     }
                 }
+                // A deleted contact leaves its container too.
+                let containers_path = contactcontainers::path_for(&path);
+                let mut containers = contactcontainers::load(&containers_path);
+                let mut left = false;
+                for (kind, id) in &changes {
+                    if *kind == contactchanges::Kind::Deleted {
+                        left |= containers.forget_contact(*id);
+                    }
+                }
+                if left {
+                    contactcontainers::save(&containers_path, &containers).map_err(|e| e.to_string())?;
+                }
                 // A deleted contact leaves every group it was in.
                 let mut groups = contactgroups::load(&groups_path);
                 let stale: Vec<u64> = groups
@@ -631,6 +797,39 @@ impl SystemService for Contacts {
             "fetch" if reads(app_id) => {
                 let extras = contactextras::load(&contactextras::path_for(&path));
                 answer_with(app_id, method, params, &load()?, &extras)
+            }
+            "export_vcard" => {
+                if !reads(app_id) {
+                    return Err("contacts access is not granted".into());
+                }
+                let extras = contactextras::load(&contactextras::path_for(&path));
+                let photos = contactphotos::dir_for(&path);
+                let photo = |id: u64| contactphotos::read(&photos, id).map(|(_, bytes)| bytes);
+                vcard_export_answer(app_id, params, &load()?, &extras, &photo)
+            }
+            "import_vcard" => {
+                let book = if access_of(app_id).check_write().is_ok() { load()? } else { Vec::new() };
+                let (reply, plan) = vcard_import_plan(app_id, params, &book)?;
+                if plan.added.is_empty() {
+                    return Ok(reply);
+                }
+                contactstore::save(&path, &plan.book).map_err(|e| e.to_string())?;
+                if !plan.extras.is_empty() {
+                    let extras_path = contactextras::path_for(&path);
+                    let mut extras = contactextras::load(&extras_path);
+                    for (id, e) in &plan.extras {
+                        extras.insert(*id, e.clone());
+                    }
+                    contactextras::save(&extras_path, &extras).map_err(|e| e.to_string())?;
+                }
+                // a picture the store refuses (not PNG or JPEG, or too big) leaves the contact without one
+                let photos = contactphotos::dir_for(&path);
+                for (id, bytes) in &plan.photos {
+                    let _ = contactphotos::write(&photos, *id, bytes);
+                }
+                let created: Vec<(contactchanges::Kind, u64)> = contactchanges::diff(&book, &plan.book);
+                contactchanges::record_for(&path, &created).map_err(|e| e.to_string())?;
+                Ok(reply)
             }
             "pick" => {
                 // A pick shows the whole book to the person, who chooses; the app itself reads nothing from it.
@@ -757,6 +956,21 @@ impl SystemService for Contacts {
                 let (reply, changed) = donations_answer(app_id, method, params, &mut store, &book, now)?;
                 if changed {
                     contactdonations::save(&donations_path, &store).map_err(|e| e.to_string())?;
+                }
+                Ok(reply)
+            }
+            "containers" | "container_members" | "container_of" | "container_add" | "container_rename" | "container_remove" | "container_assign" => {
+                let containers_path = contactcontainers::path_for(&path);
+                let mut containers = contactcontainers::load(&containers_path);
+                let contacts = if access_of(app_id).check_write().is_ok() || reads(app_id) { load()? } else { Vec::new() };
+                let (reply, changed, moved) = containers_answer(app_id, method, params, &contacts, &mut containers)?;
+                if changed {
+                    contactcontainers::save(&containers_path, &containers).map_err(|e| e.to_string())?;
+                }
+                if !moved.is_empty() {
+                    // a contact that changed container is an updated contact in the change log
+                    let events: Vec<_> = moved.iter().map(|id| (contactchanges::Kind::Updated, *id)).collect();
+                    contactchanges::record_for(&path, &events).map_err(|e| e.to_string())?;
                 }
                 Ok(reply)
             }
@@ -1218,5 +1432,149 @@ mod tests {
         let grace = rows.iter().find(|r| r.get("id").and_then(Json::as_u64) == Some(2)).unwrap();
         assert_eq!(grace.get("emails").and_then(Json::as_array).map(|a| a.len()), Some(1));
         assert_eq!(grace.get("birthday"), Some(&Json::Null));
+    }
+
+    fn no_photo(_: u64) -> Option<Vec<u8>> {
+        None
+    }
+
+    #[test]
+    fn export_needs_a_read_grant_and_a_limited_grant_exports_only_its_contacts() {
+        let id = "is.example.contacts-vcard-export";
+        assert!(vcard_export_answer(id, &Json::Null, &book(), &Book::new(), &no_photo).is_err());
+        answer_prompt(id, Choice::Picked([1u64, 3].into_iter().collect())).unwrap();
+        let reply = vcard_export_answer(id, &Json::Null, &book(), &Book::new(), &no_photo).unwrap();
+        assert_eq!(reply.get("count"), Some(&Json::Num(2.0)));
+        let text = reply.get("vcard").and_then(Json::as_str).unwrap();
+        assert_eq!(text.matches("BEGIN:VCARD").count(), 2);
+        // asking by id for a contact the grant does not hold leaves it out, without an error
+        let ask = obj(&[("ids", Json::Arr(vec![Json::Num(2.0), Json::Num(3.0)]))]);
+        let reply = vcard_export_answer(id, &ask, &book(), &Book::new(), &no_photo).unwrap();
+        assert_eq!(reply.get("count"), Some(&Json::Num(1.0)));
+    }
+
+    #[test]
+    fn export_takes_the_version_and_refuses_an_unknown_one() {
+        let id = "is.example.contacts-vcard-version";
+        answer_prompt(id, Choice::All).unwrap();
+        let four = obj(&[("version", text("4.0"))]);
+        let reply = vcard_export_answer(id, &four, &book(), &Book::new(), &no_photo).unwrap();
+        assert!(reply.get("vcard").and_then(Json::as_str).unwrap().contains("VERSION:4.0"));
+        let odd = obj(&[("version", text("2.1"))]);
+        assert!(vcard_export_answer(id, &odd, &book(), &Book::new(), &no_photo).is_err());
+    }
+
+    #[test]
+    fn import_needs_full_access_and_adds_new_people_with_the_next_ids() {
+        let card = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Ada King\r\nN:King;Ada;;;\r\nEMAIL:ada@king.is\r\nEND:VCARD\r\n";
+        let ask = obj(&[("vcard", text(card))]);
+        let none = "is.example.contacts-vcard-import-none";
+        assert!(vcard_import_plan(none, &ask, &book()).is_err());
+        let limited = "is.example.contacts-vcard-import-limited";
+        answer_prompt(limited, Choice::Picked([1u64].into_iter().collect())).unwrap();
+        assert!(vcard_import_plan(limited, &ask, &book()).is_err());
+        let full = "is.example.contacts-vcard-import-full";
+        answer_prompt(full, Choice::All).unwrap();
+        let (reply, plan) = vcard_import_plan(full, &ask, &book()).unwrap();
+        assert_eq!(reply.get("added"), Some(&Json::Arr(vec![Json::Num(4.0)])));
+        assert_eq!(plan.book.len(), 4);
+        assert_eq!(plan.book[3].email, "ada@king.is");
+    }
+
+    #[test]
+    fn importing_the_same_cards_twice_adds_nothing_the_second_time() {
+        let id = "is.example.contacts-vcard-twice";
+        answer_prompt(id, Choice::All).unwrap();
+        let exported = vcard_export_answer(id, &Json::Null, &book(), &Book::new(), &no_photo).unwrap();
+        let ask = obj(&[("vcard", text(exported.get("vcard").and_then(Json::as_str).unwrap()))]);
+        let (reply, plan) = vcard_import_plan(id, &ask, &book()).unwrap();
+        assert_eq!(reply.get("added"), Some(&Json::Arr(vec![])));
+        assert_eq!(reply.get("duplicates"), Some(&Json::Num(3.0)));
+        assert_eq!(plan.book, book());
+    }
+
+    #[test]
+    fn import_refuses_text_without_cards_and_a_call_without_text() {
+        let id = "is.example.contacts-vcard-bad";
+        answer_prompt(id, Choice::All).unwrap();
+        assert!(vcard_import_plan(id, &obj(&[("vcard", text("not a card"))]), &book()).is_err());
+        assert!(vcard_import_plan(id, &Json::Null, &book()).is_err());
+    }
+
+    #[test]
+    fn containers_list_the_local_one_and_a_read_grant_is_needed() {
+        let id = "is.example.contacts-containers-list";
+        let mut containers = Containers::default();
+        assert!(containers_answer(id, "containers", &Json::Null, &book(), &mut containers).is_err());
+        answer_prompt(id, Choice::All).unwrap();
+        let (reply, changed, _) = containers_answer(id, "containers", &Json::Null, &book(), &mut containers).unwrap();
+        assert!(!changed);
+        let rows = reply.get("containers").and_then(Json::as_array).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].get("kind").and_then(Json::as_str), Some("local"));
+    }
+
+    #[test]
+    fn a_contact_assigned_to_a_container_leaves_the_local_one_and_the_move_is_logged() {
+        let id = "is.example.contacts-containers-assign";
+        answer_prompt(id, Choice::All).unwrap();
+        let mut containers = Containers::default();
+        let (added, changed, _) = containers_answer(id, "container_add", &obj(&[("name", text("Work")), ("kind", text("account"))]), &book(), &mut containers).unwrap();
+        assert!(changed);
+        let work = added.get("id").and_then(Json::as_u64).unwrap();
+        let assign = obj(&[("container", Json::Num(work as f64)), ("contact", Json::Num(2.0))]);
+        let (reply, changed, moved) = containers_answer(id, "container_assign", &assign, &book(), &mut containers).unwrap();
+        assert_eq!((reply.get("changed"), changed, moved), (Some(&Json::Bool(true)), true, vec![2]));
+        let ask = obj(&[("container", Json::Num(work as f64))]);
+        let (members, _, _) = containers_answer(id, "container_members", &ask, &book(), &mut containers).unwrap();
+        assert_eq!(members.get("contacts"), Some(&Json::Arr(vec![Json::Num(2.0)])));
+        let local = obj(&[("container", Json::Num(1.0))]);
+        let (members, _, _) = containers_answer(id, "container_members", &local, &book(), &mut containers).unwrap();
+        assert_eq!(members.get("contacts"), Some(&Json::Arr(vec![Json::Num(1.0), Json::Num(3.0)])));
+        // assigning again changes nothing and logs nothing
+        let (_, changed, moved) = containers_answer(id, "container_assign", &assign, &book(), &mut containers).unwrap();
+        assert!(!changed && moved.is_empty());
+    }
+
+    #[test]
+    fn removing_a_container_moves_its_contacts_home_and_the_local_one_stays() {
+        let id = "is.example.contacts-containers-remove";
+        answer_prompt(id, Choice::All).unwrap();
+        let mut containers = Containers::default();
+        let work = containers.add("Work", contactcontainers::Kind::Account).unwrap();
+        containers.assign(1, work).unwrap();
+        let ask = obj(&[("container", Json::Num(work as f64))]);
+        let (reply, changed, moved) = containers_answer(id, "container_remove", &ask, &book(), &mut containers).unwrap();
+        assert_eq!((reply.get("moved"), changed, moved), (Some(&Json::Num(1.0)), true, vec![1]));
+        assert_eq!(containers.container_of(1), contactcontainers::LOCAL);
+        let local = obj(&[("container", Json::Num(1.0))]);
+        assert!(containers_answer(id, "container_remove", &local, &book(), &mut containers).is_err());
+    }
+
+    #[test]
+    fn container_writes_need_full_access_and_a_contact_the_app_can_see() {
+        let limited = "is.example.contacts-containers-limited";
+        answer_prompt(limited, Choice::Picked([1u64].into_iter().collect())).unwrap();
+        let mut containers = Containers::default();
+        let add = obj(&[("name", text("Nope"))]);
+        assert!(containers_answer(limited, "container_add", &add, &book(), &mut containers).is_err());
+        let full = "is.example.contacts-containers-full";
+        answer_prompt(full, Choice::All).unwrap();
+        let work = containers.add("Work", contactcontainers::Kind::Account).unwrap();
+        let ghost = obj(&[("container", Json::Num(work as f64)), ("contact", Json::Num(99.0))]);
+        assert!(containers_answer(full, "container_assign", &ghost, &book(), &mut containers).is_err());
+        let unknown = obj(&[("container", Json::Num(99.0)), ("contact", Json::Num(1.0))]);
+        assert!(containers_answer(full, "container_assign", &unknown, &book(), &mut containers).is_err());
+    }
+
+    #[test]
+    fn a_limited_grant_sees_only_its_contacts_in_a_container() {
+        let id = "is.example.contacts-containers-picked";
+        answer_prompt(id, Choice::Picked([1u64, 3].into_iter().collect())).unwrap();
+        let mut containers = Containers::default();
+        let ask = obj(&[("container", Json::Num(1.0))]);
+        let (members, _, _) = containers_answer(id, "container_members", &ask, &book(), &mut containers).unwrap();
+        assert_eq!(members.get("contacts"), Some(&Json::Arr(vec![Json::Num(1.0), Json::Num(3.0)])));
+        assert!(containers_answer(id, "container_of", &obj(&[("contact", Json::Num(2.0))]), &book(), &mut containers).is_err());
     }
 }
