@@ -175,7 +175,6 @@ impl PasswordsApp {
     }
 }
 
-/// Seconds since the Unix epoch, for one-time codes (0 if the clock is before the epoch).
 /// Puts a password on the pasteboard as a concealed copy: the shell keeps it in memory only, hands it to the app in front
 /// and not to apps in the background, marks it for other programs so clipboard managers leave it out, and clears it after
 /// 45 seconds when nothing else was copied. The password is never put on the plain-text clipboard (that copy would be kept
@@ -184,6 +183,7 @@ fn copy_secret(ctx: &Ctx, password: &str) {
     NativePasteboard::general().write_concealed_string(ctx, password);
 }
 
+/// Seconds since the Unix epoch, for one-time codes (0 if the clock is before the epoch).
 fn unix_now() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }

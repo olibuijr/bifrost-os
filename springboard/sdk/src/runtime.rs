@@ -805,11 +805,9 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                         app.resume(c);
                     }
                     need_frame = true;
-                    // the board changed while the app was in the background and only the count arrived: ask for the contents
-                    // (the shell also sends them to the app in front on its own; this covers a message that was dropped)
-                    if crate::pasteboard::take_stale() {
-                        let _ = chan.send(&ToShell::PasteboardRead.encode(), &[]);
-                    }
+                    // A board that changed in the background arrives with the shell's own push to the app in front, sent in the
+                    // same tick as `Resume`: asking for it here would transfer a large copy twice on every app switch. An app that
+                    // needs it sooner calls `NativePasteboard::request_contents`.
                 }
                 ToApp::Suspend => {
                     active = false;

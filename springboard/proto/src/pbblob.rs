@@ -49,7 +49,11 @@ pub fn check(types: &[(String, u32)]) -> io::Result<usize> {
 }
 
 /// Writes `items` into a new memfd and describes them. Fails for a payload over the limits.
+///
+/// An item whose type has a control character is left out, as the inline message leaves it out: the reader refuses a
+/// layout with one, and that would end the app.
 pub fn write(items: &[(String, Vec<u8>)]) -> io::Result<(Owned, Layout)> {
+    let items: Vec<&(String, Vec<u8>)> = items.iter().filter(|(t, _)| crate::valid_pb_type(t)).collect();
     let layout: Layout = items
         .iter()
         .map(|(t, d)| u32::try_from(d.len()).map(|n| (crate::cut_type(t).to_string(), n)).map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "a pasteboard item is too large")))
@@ -59,7 +63,7 @@ pub fn write(items: &[(String, Vec<u8>)]) -> io::Result<(Owned, Layout)> {
     // SAFETY: the descriptor stays owned by `fd`; `ManuallyDrop` keeps the `File` from closing it.
     let file = ManuallyDrop::new(unsafe { File::from_raw_fd(fd.0) });
     let mut at = 0u64;
-    for (_, data) in items {
+    for (_, data) in &items {
         file.write_all_at(data, at)?;
         at += data.len() as u64;
     }
@@ -115,6 +119,14 @@ mod tests {
     fn a_descriptor_shorter_than_the_layout_is_refused() {
         let (fd, _) = write(&[("t".to_string(), vec![1, 2, 3])]).unwrap();
         assert!(read(&fd, &[("t".to_string(), 10)]).is_err());
+    }
+
+    #[test]
+    fn an_item_with_a_control_character_in_its_type_is_left_out_of_the_blob() {
+        let mixed = vec![("bad\0type".to_string(), vec![1; 10]), ("public.png".to_string(), vec![2; 5])];
+        let (fd, layout) = write(&mixed).unwrap();
+        assert_eq!(layout, vec![("public.png".to_string(), 5)]);
+        assert_eq!(read(&fd, &layout).unwrap(), vec![("public.png".to_string(), vec![2; 5])]);
     }
 
     #[test]

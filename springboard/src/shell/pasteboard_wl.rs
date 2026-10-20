@@ -347,8 +347,12 @@ impl Client {
     }
 
     /// Reacts to what the window server announced since the last pass. `abort_fd` becomes readable when the shell has a
-    /// new offer: a read in progress is dropped then, the shell's copy is newer.
-    fn settle(&mut self, out: &Sender<Vec<Read>>, notify: &mut UnixStream, abort_fd: c_int) {
+    /// new offer: a read in progress is dropped then, the shell's copy is newer, and the selection is kept to be read again
+    /// (the byte can also belong to a command that was applied already, and that import must not be lost).
+    ///
+    /// True when another program's selection (or its clearing) was dealt with: the shell's last offer no longer stands for
+    /// the selection, so a new connection must not offer it again.
+    fn settle(&mut self, out: &Sender<Vec<Read>>, notify: &mut UnixStream, abort_fd: c_int) -> bool {
         for generation in std::mem::take(&mut self.st.cancelled) {
             if self.st.alive == Some(generation) {
                 self.st.alive = None;
@@ -365,15 +369,16 @@ impl Client {
             }
         };
         match self.st.selection {
-            None => return,
+            None => return false,
             Some(None) => {
                 self.st.selection = None;
                 // the shell's source is cancelled before a program clears the selection, so a clear while the source is
                 // alive is the shell's own (the shell ignores a clear that does not follow an import in any case)
                 if self.st.alive.is_none() {
                     tell(vec![(CLEARED_MARK.to_string(), Vec::new())], notify);
+                    return true;
                 }
-                return;
+                return false;
             }
             Some(Some(_)) => {}
         }
@@ -382,22 +387,31 @@ impl Client {
             if let Some(Some((offer, _))) = self.st.selection.take() {
                 offer.destroy();
             }
-            return;
+            return false;
         }
         let now = now_ms();
         if self.last_import > 0.0 && now < self.last_import + MIN_IMPORT_GAP_MS {
             // selections follow each other too fast: wait, and a newer one replaces this one unread
-            return;
+            return false;
         }
-        let Some(Some((offer, mimes))) = self.st.selection.take() else { return };
+        let Some(Some((offer, mimes))) = self.st.selection.take() else { return false };
+        let previous_import = self.last_import;
         self.last_import = now;
         let secret = mimes.iter().any(|m| is_secret_hint(m));
-        let mut read = read_offer(&self.conn, &offer, &wanted(&mimes), abort_fd);
+        let Some(mut read) = read_offer(&self.conn, &offer, &wanted(&mimes), abort_fd) else {
+            // stopped by the wake byte: kept for the next pass, which applies the command (a newer shell offer then makes
+            // the window server send another selection, and this one is destroyed with it) or, when the command was applied
+            // already, reads it
+            self.last_import = previous_import;
+            self.st.selection = Some(Some((offer, mimes)));
+            return false;
+        };
         offer.destroy();
         if secret && !read.is_empty() {
             read.push((SECRET_MARK.to_string(), Vec::new()));
         }
         tell(read, notify);
+        true
     }
 }
 
@@ -424,8 +438,8 @@ struct Reading {
 
 /// Reads `types` of another program's selection, all at once under one deadline of [`READ_MS`] and one byte budget
 /// ([`MAX_IMPORT_BYTES`] per type, [`MAX_IMPORT_TOTAL`] together). A type that did not arrive in time, was too large or
-/// failed is left out. `abort_fd` becoming readable ends the read with nothing.
-fn read_offer(conn: &Connection, offer: &off::ZwlrDataControlOfferV1, types: &[String], abort_fd: c_int) -> Vec<Read> {
+/// failed is left out. `abort_fd` becoming readable ends the read: `None`, so the caller can keep the selection.
+fn read_offer(conn: &Connection, offer: &off::ZwlrDataControlOfferV1, types: &[String], abort_fd: c_int) -> Option<Vec<Read>> {
     let mut reads: Vec<Reading> = Vec::new();
     let mut writers: Vec<OwnedFd> = Vec::new();
     for mime in types {
@@ -435,7 +449,7 @@ fn read_offer(conn: &Connection, offer: &off::ZwlrDataControlOfferV1, types: &[S
         writers.push(writer);
     }
     if conn.flush().is_err() {
-        return Vec::new();
+        return Some(Vec::new());
     }
     // the programs hold their own copies of the write ends now; ours must go for the reads to see the end
     drop(writers);
@@ -452,7 +466,7 @@ fn read_offer(conn: &Connection, offer: &off::ZwlrDataControlOfferV1, types: &[S
         fds.push(abort_fd);
         let ready = wait(&fds, left.ceil() as i32);
         if ready.last().copied().unwrap_or(false) {
-            return Vec::new();
+            return None;
         }
         for (slot, &i) in open.iter().enumerate() {
             if !ready.get(slot).copied().unwrap_or(false) {
@@ -476,7 +490,7 @@ fn read_offer(conn: &Connection, offer: &off::ZwlrDataControlOfferV1, types: &[S
             }
         }
     }
-    reads.into_iter().filter(|r| r.done && !r.failed).map(|r| (r.mime, r.data)).collect()
+    Some(reads.into_iter().filter(|r| r.done && !r.failed).map(|r| (r.mime, r.data)).collect())
 }
 
 /// Reports `error` on stderr unless it is the one reported last (a window server without data control would otherwise
@@ -557,7 +571,10 @@ fn run(commands: &Receiver<Vec<Offer>>, wake: &mut UnixStream, notify: &mut Unix
             }
         }
         c.queue.dispatch_pending(&mut c.st).map_err(|e| e.to_string())?;
-        c.settle(out, notify, wake.as_raw_fd());
+        if c.settle(out, notify, wake.as_raw_fd()) {
+            // another program's selection stands now: the shell's older offer must not replace it on a reconnect
+            *latest = None;
+        }
         c.queue.flush().map_err(|e| e.to_string())?;
         if let Some(guard) = c.queue.prepare_read() {
             let fd = guard.connection_fd().as_raw_fd();

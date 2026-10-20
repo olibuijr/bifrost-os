@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.8
+
+- Documentation only: the doc comment of the one-time-code clock helper is back above it.
+
 ## 0.2.7
 
 - Copied passwords are concealed: the shell keeps them in memory (never in `clipboard.txt`), gives them only to the app in

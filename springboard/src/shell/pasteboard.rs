@@ -81,6 +81,13 @@ pub fn expired(now: f64) -> bool {
     kind == Kind::Concealed && at == count() && now - since >= bifrost_proto::PB_CONCEALED_SECS as f64 * 1000.0
 }
 
+/// When (monotonic ms) the concealed contents on the board are due to be cleared, `None` when there are none (a transient copy
+/// has no deadline). The shell's idle loop wakes then, so the clear is not left to the next unrelated wake-up.
+pub fn expiry_deadline() -> Option<f64> {
+    let (kind, at, since) = *MARK.lock().unwrap_or_else(|e| e.into_inner());
+    (kind == Kind::Concealed && at == count()).then(|| since + bifrost_proto::PB_CONCEALED_SECS as f64 * 1000.0)
+}
+
 /// The state is process-wide, so the tests that write and read it take turns.
 #[cfg(test)]
 pub(crate) static TURN: Mutex<()> = Mutex::new(());
@@ -207,9 +214,11 @@ mod tests {
         set_marked(vec![("public.utf8-plain-text".into(), b"pw".to_vec()), (bifrost_proto::PB_CONCEALED.into(), Vec::new())], 5000.0);
         assert!(!expired(5000.0 + secs - 1.0));
         assert!(expired(5000.0 + secs));
+        assert_eq!(expiry_deadline(), Some(5000.0 + secs), "the idle loop wakes for it");
         // a newer write of any kind ends the mark
         set_plain("later");
         assert!(!expired(5000.0 + secs * 2.0));
+        assert_eq!(expiry_deadline(), None, "nothing to clear once something else was copied");
         assert_eq!(kind(), Kind::Normal);
         // a transient copy never expires on a timer
         set_marked(vec![("public.utf8-plain-text".into(), b"t".to_vec()), (bifrost_proto::PB_TRANSIENT.into(), Vec::new())], 0.0);

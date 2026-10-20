@@ -2262,6 +2262,8 @@ impl Shell {
         if let Some(at) = self.dying.iter().filter_map(apphost::AppHost::quit_deadline).reduce(f64::min) {
             due.add(Some(at));
         }
+        // a concealed copy is cleared on time, not at the next unrelated wake-up
+        due.add(pasteboard::expiry_deadline());
         if let Some(w) = self.screentime_wake(t) {
             due.add(Some(w));
         }

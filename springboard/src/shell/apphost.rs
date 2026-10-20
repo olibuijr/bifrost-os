@@ -476,6 +476,8 @@ pub struct Pumped {
     /// `frame` was asked for by more than pixels: a title, menus, a window's size or level, commands. The shell draws
     /// those itself, so they cost a whole desktop frame; pixels alone only republish the windows.
     pub chrome: bool,
+    /// A pasteboard blob was already read in this pump: the rest are dropped unread (one read costs up to 64 MiB).
+    blob_read: bool,
 }
 
 impl Pumped {
@@ -529,6 +531,12 @@ pub struct AppHost {
     /// The last time (monotonic ms) the app was the one in front; a clipboard write is taken from the app in front, and for
     /// `PB_WRITE_GRACE_MS` after it left (a copy and a quick switch).
     fg_seen_ms: f64,
+    /// Whether a clipboard write from the app would be taken in this pass (set by the shell before each pump). A large write
+    /// is read from its descriptor only when it would be: an app that may not write costs the shell nothing.
+    pb_may_write: bool,
+    /// The out-of-band copy of the board built for the change count (kept while the socket is full, so a retry does not copy
+    /// the board again).
+    pb_blob: Option<(u32, sys::Owned, bifrost_proto::pbblob::Layout)>,
     child: Option<Child>,
     chan: Channel,
     bufs: Vec<Buf>,
@@ -689,6 +697,8 @@ impl AppHost {
             pb_sent: None,
             pb_noted: None,
             fg_seen_ms: f64::NEG_INFINITY,
+            pb_may_write: false,
+            pb_blob: None,
             child,
             chan,
             bufs: Vec::new(),
@@ -831,17 +841,28 @@ impl AppHost {
             self.send(&ToApp::Clipboard { text: super::pasteboard::text_of(items).unwrap_or_default() });
             return;
         }
-        match bifrost_proto::pbblob::write(items) {
-            Ok((fd, types)) => {
-                if self.send_fd(&ToApp::PasteboardBlob { change_count: count, types }, fd.0) {
+        // the blob goes out behind everything queued (it bypasses the backlog, so it must not overtake an older board)
+        self.flush();
+        if !self.running() || !self.backlog.is_empty() {
+            return;
+        }
+        if !matches!(&self.pb_blob, Some((c, _, _)) if *c == count) {
+            self.pb_blob = None;
+            match bifrost_proto::pbblob::write(items) {
+                Ok((fd, types)) => self.pb_blob = Some((count, fd, types)),
+                Err(e) => {
+                    // too large to hand over: the app keeps what it had, and is not asked again for this change
+                    eprintln!("springboard: app {} was not given the pasteboard: {e}", self.id);
                     self.pb_sent = Some(count);
+                    return;
                 }
             }
-            Err(e) => {
-                // too large to hand over: the app keeps what it had, and is not asked again for this change
-                eprintln!("springboard: app {} was not given the pasteboard: {e}", self.id);
-                self.pb_sent = Some(count);
-            }
+        }
+        let Some((_, fd, types)) = &self.pb_blob else { return };
+        let (raw, msg) = (fd.0, ToApp::PasteboardBlob { change_count: count, types: types.clone() });
+        if self.send_fd(&msg, raw) {
+            self.pb_sent = Some(count);
+            self.pb_blob = None;
         }
     }
 
@@ -1337,11 +1358,17 @@ impl AppHost {
             ToShell::PointerInterest { mask } => self.pointer_interest = mask,
             // a pasteboard write too large for a packet: the descriptor holds the bytes. It becomes an ordinary write; one
             // that cannot be read (no descriptor, a layout over the limits, a file shorter than it claims) is dropped
-            ToShell::PasteboardBlob { types } => match fds.first().map(|fd| bifrost_proto::pbblob::read(fd, &types)) {
-                Some(Ok(items)) => out.requests.push(ToShell::PasteboardSet { items }),
-                Some(Err(e)) => eprintln!("springboard: app {} sent a pasteboard write that could not be read: {e}", self.id),
-                None => eprintln!("springboard: app {} sent a pasteboard write without its descriptor", self.id),
-            },
+            // The read allocates up to 64 MiB, so it happens only for an app whose write would be taken (`pb_may_write`, the same
+            // gate as `ext_tick`'s) and once per pump; any other blob is dropped unread with its descriptor.
+            ToShell::PasteboardBlob { .. } if !self.pb_may_write || out.blob_read => {}
+            ToShell::PasteboardBlob { types } => {
+                out.blob_read = true;
+                match fds.first().map(|fd| bifrost_proto::pbblob::read(fd, &types)) {
+                    Some(Ok(items)) => out.requests.push(ToShell::PasteboardSet { items }),
+                    Some(Err(e)) => eprintln!("springboard: app {} sent a pasteboard write that could not be read: {e}", self.id),
+                    None => eprintln!("springboard: app {} sent a pasteboard write without its descriptor", self.id),
+                }
+            }
             other => out.requests.push(other),
         }
     }
@@ -2354,6 +2381,7 @@ impl Shell {
             if fg == Some(slot as u8) {
                 h.fg_seen_ms = now;
             }
+            h.pb_may_write = h.may_write_clipboard(fg == Some(slot as u8), now);
             h.sync_appearance(appearance);
             h.sync_input_source(japanese);
             if fg == Some(slot as u8) && h.running() && h.size() != (cfg.w as usize, cfg.h as usize) {
@@ -2771,6 +2799,7 @@ mod tests {
         let (channel, _peer) = sys::socketpair_pair().unwrap();
         let cfg = Configure { w: 4, h: 3, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
         let mut host = AppHost::with_channel("fixture", channel, None, cfg);
+        host.pb_may_write = true;
         let items = vec![("public.png".to_string(), vec![3u8; 100_000]), ("org.nspasteboard.ConcealedType".to_string(), Vec::new())];
         let (fd, types) = bifrost_proto::pbblob::write(&items).unwrap();
         let mut pumped = Pumped::default();
@@ -2783,6 +2812,53 @@ mod tests {
         let (short, _) = bifrost_proto::pbblob::write(&[("t".to_string(), vec![1u8; 4])]).unwrap();
         host.handle(ToShell::PasteboardBlob { types: vec![("t".to_string(), 4000)] }, vec![short], &mut none);
         assert!(none.requests.is_empty());
+    }
+
+    #[test]
+    fn a_background_apps_blob_is_not_read_and_only_one_blob_is_read_per_pump() {
+        let (channel, _peer) = sys::socketpair_pair().unwrap();
+        let cfg = Configure { w: 4, h: 3, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
+        let mut host = AppHost::with_channel("fixture", channel, None, cfg);
+        let items = vec![("public.png".to_string(), vec![3u8; 100_000])];
+        // an app that may not write: the descriptor is dropped unread, no request, no allocation for its layout
+        let (fd, types) = bifrost_proto::pbblob::write(&items).unwrap();
+        let mut pumped = Pumped::default();
+        host.handle(ToShell::PasteboardBlob { types }, vec![fd], &mut pumped);
+        assert!(pumped.requests.is_empty());
+        assert!(!pumped.blob_read);
+        // an app that may write: the first blob of a pump is read, the next ones are dropped
+        host.pb_may_write = true;
+        for _ in 0..3 {
+            let (fd, types) = bifrost_proto::pbblob::write(&items).unwrap();
+            host.handle(ToShell::PasteboardBlob { types }, vec![fd], &mut pumped);
+        }
+        assert_eq!(pumped.requests, vec![ToShell::PasteboardSet { items }]);
+    }
+
+    #[test]
+    fn a_blob_waits_for_the_backlog_and_a_full_socket_does_not_copy_the_board_again() {
+        let (channel, peer) = sys::socketpair_pair().unwrap();
+        let cfg = Configure { w: 4, h: 3, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
+        let mut host = AppHost::with_channel("fixture", channel, None, cfg);
+        let board = vec![("public.png".to_string(), vec![5u8; 100_000])];
+        // fill the socket until it refuses
+        for _ in 0..100_000 {
+            if host.chan.try_send(&[0u8; 4000], &[]).is_err() {
+                break;
+            }
+        }
+        host.sync_pasteboard(3, &board);
+        assert_eq!(host.pb_known(), None, "the socket was full: nothing was sent");
+        let first = host.pb_blob.as_ref().map(|(c, fd, _)| (*c, fd.0)).expect("the copy is kept for the retry");
+        host.sync_pasteboard(3, &board);
+        assert_eq!(host.pb_blob.as_ref().map(|(c, fd, _)| (*c, fd.0)), Some(first), "the same descriptor, not another copy");
+        // a queued older message is ahead of the blob: nothing is built while the backlog is not empty
+        host.pb_blob = None;
+        host.backlog.push_back(vec![0u8; 8]);
+        host.sync_pasteboard(4, &board);
+        assert!(host.pb_blob.is_none());
+        assert_eq!(host.pb_known(), None);
+        drop(peer);
     }
 
     #[test]

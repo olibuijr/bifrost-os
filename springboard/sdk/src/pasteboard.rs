@@ -95,7 +95,9 @@ pub(crate) fn note_changed(change_count: u32) {
     STALE.with(|s| s.set(true));
 }
 
-/// True once after [`note_changed`] when the contents have not arrived since; the runtime then asks the shell for them.
+/// True once after [`note_changed`] when the contents have not arrived since. The runtime does not ask the shell on its own
+/// (the shell pushes the contents to the app in front); this is for tests and for a caller that decides to ask.
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn take_stale() -> bool {
     STALE.with(|s| s.replace(false))
 }
