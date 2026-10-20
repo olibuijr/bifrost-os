@@ -77,12 +77,22 @@ impl Wm {
 
     /// Places a new `w` x `h` window: centred, cascaded by the windows already shown, fitted inside the area. It is
     /// raised and focused.
-    pub fn map(&mut self, id: WindowId, w: i32, h: i32) -> Rect {
+    pub fn map(&mut self, id: WindowId, w: i32, h: i32) -> Rect { self.map_at(id, w, h, None) }
+
+    /// Like `map`, but a window the shell brings back (its toplevel was destroyed while Overview or a minimize hid it)
+    /// asks for the position it had, `origin`: the cascade is skipped and the frame is only fitted inside the usable
+    /// area, so the window returns exactly where the person left it.
+    pub fn map_at(&mut self, id: WindowId, w: i32, h: i32, origin: Option<(i32, i32)>) -> Rect {
         let a = self.area;
         let (w, h) = (w.min(a.w), h.min(a.h));
         let step = CASCADE * self.windows.iter().filter(|w| !w.minimized).count() as i32;
-        let x = (a.x + (a.w - w) / 2 + step).min(a.x + a.w - w);
-        let y = (a.y + (a.h - h) / 2 + step).min(a.y + a.h - h);
+        let (x, y) = match origin {
+            Some((ox, oy)) => (ox.clamp(a.x, (a.x + a.w - w).max(a.x)), oy.clamp(a.y, (a.y + a.h - h).max(a.y))),
+            None => (
+                (a.x + (a.w - w) / 2 + step).min(a.x + a.w - w),
+                (a.y + (a.h - h) / 2 + step).min(a.y + a.h - h),
+            ),
+        };
         let rect = Rect::new(x, y, w, h);
         let level = self.level(id).unwrap_or_default();
         self.windows.retain(|w| w.id != id);
@@ -361,6 +371,24 @@ mod tests {
         let big = wm.map(3, 4000, 3000);
         assert_eq!(big, AREA, "a window larger than the area is fitted to it");
         assert_eq!(wm.focused(), Some(3));
+    }
+
+    #[test]
+    fn a_window_mapped_with_an_origin_returns_there_instead_of_cascading() {
+        let mut wm = Wm::new(AREA);
+        wm.map(1, 800, 600);
+        wm.map(2, 800, 600);
+        // two windows left at their own places, brought back in the other order than they were mapped
+        // 524 + 600 would leave the area (it ends at 1080), so only the bottom edge is fitted
+        assert_eq!(wm.map_at(3, 800, 600, Some((1065, 524))), Rect::new(1065, 480, 800, 600));
+        assert_eq!(wm.map_at(4, 400, 300, Some((737, 336))), Rect::new(737, 336, 400, 300));
+    }
+
+    #[test]
+    fn an_origin_outside_the_usable_area_is_fitted_inside_it() {
+        let mut wm = Wm::new(AREA);
+        assert_eq!(wm.map_at(1, 800, 600, Some((-300, 0))), Rect::new(0, 28, 800, 600), "left and top edges");
+        assert_eq!(wm.map_at(2, 800, 600, Some((5000, 5000))), Rect::new(1120, 480, 800, 600), "right and bottom edges");
     }
 
     #[test]

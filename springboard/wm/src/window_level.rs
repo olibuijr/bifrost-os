@@ -47,12 +47,14 @@ use crate::{
     wm::{Level, Rect, WindowId},
 };
 
-/// The protocol version the global offers: 2 adds the `frame` event, 3 the `tile` request.
-pub const VERSION: u32 = 3;
+/// The protocol version the global offers: 2 adds the `frame` event, 3 the `tile` request, 4 `set_origin`.
+pub const VERSION: u32 = 4;
 /// The version that introduced `frame`; a manager bound at an older version is never sent one.
 pub const FRAME_SINCE: u32 = 2;
 /// The version that introduced `tile`.
 pub const TILE_SINCE: u32 = 3;
+/// The version that introduced `set_origin`.
+pub const ORIGIN_SINCE: u32 = 4;
 
 pub fn init(dh: &DisplayHandle) -> GlobalId {
     dh.create_global::<WmState, BifrostWindowLevelManagerV1, ()>(VERSION, ())
@@ -114,6 +116,11 @@ pub fn level(surface: &WlSurface) -> Level {
     with_states(surface, |s| s.data_map.get::<Mutex<Level>>().map(|l| *l.lock().unwrap_or_else(|p| p.into_inner())).unwrap_or_default())
 }
 
+/// The position the shell asked for the toplevel of `surface` to map at (`set_origin`), if it asked.
+pub fn origin(surface: &WlSurface) -> Option<(i32, i32)> {
+    with_states(surface, |s| s.data_map.get::<Mutex<Option<(i32, i32)>>>().and_then(|o| *o.lock().unwrap_or_else(|p| p.into_inner())))
+}
+
 /// The level of a wire value (`bifrost_window_level_manager_v1.set_level`), or `None` for an unknown one.
 pub fn from_wire(v: u32) -> Option<Level> {
     match v {
@@ -155,6 +162,14 @@ impl Dispatch<BifrostWindowLevelManagerV1, ()> for WmState {
                     }
                 });
                 state.set_window_level(&surface, level);
+            }
+            bifrost_window_level_manager_v1::Request::SetOrigin { surface, x, y } => {
+                with_states(&surface, |s| {
+                    s.data_map.insert_if_missing_threadsafe(|| Mutex::new(None::<(i32, i32)>));
+                    if let Some(o) = s.data_map.get::<Mutex<Option<(i32, i32)>>>() {
+                        *o.lock().unwrap_or_else(|p| p.into_inner()) = Some((x, y));
+                    }
+                });
             }
             bifrost_window_level_manager_v1::Request::Tile { surface, placement } => {
                 let Some(placement) = crate::tiling::placement_from_wire(placement) else {
@@ -203,7 +218,8 @@ mod tests {
         assert!(xml.contains(&format!("name=\"bifrost_window_level_manager_v1\" version=\"{VERSION}\"")));
         assert!(xml.contains(&format!("<event name=\"frame\" since=\"{FRAME_SINCE}\">")));
         assert!(xml.contains(&format!("<request name=\"tile\" since=\"{TILE_SINCE}\">")));
-        assert!(FRAME_SINCE <= TILE_SINCE && TILE_SINCE <= VERSION);
+        assert!(xml.contains(&format!("<request name=\"set_origin\" since=\"{ORIGIN_SINCE}\">")));
+        assert!(FRAME_SINCE <= TILE_SINCE && TILE_SINCE <= ORIGIN_SINCE && ORIGIN_SINCE <= VERSION);
     }
 
     #[test]

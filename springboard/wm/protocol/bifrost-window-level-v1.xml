@@ -4,7 +4,7 @@
     Copyright 2026 BifrOSt. Private protocol of the BifrOSt window server (docs/bifrost-ui.md, "Window level").
   </copyright>
 
-  <interface name="bifrost_window_level_manager_v1" version="3">
+  <interface name="bifrost_window_level_manager_v1" version="4">
     <description summary="stacking level of a toplevel">
       Lets the shell put a toplevel on the floating level. A floating window stays above the normal windows of the
       desktop and is raised only within its own band; menus, panels and the menu bar are not affected. The level
@@ -16,6 +16,10 @@
       Since version 3 the shell can also ask the window server to place a toplevel (`tile`): the halves, the quarters,
       fill, centre and the way back to the previous size, the same actions the window server's own Ctrl+Super arrow
       keys perform. Full screen is the plain xdg_toplevel set_fullscreen and unset_fullscreen.
+
+      Since version 4 the shell can say where a toplevel goes when it maps again (`set_origin`): the shell destroys
+      the toplevel of a window that is hidden (Overview, a minimize) and creates it again when it comes back, and the
+      window server would otherwise cascade it as a new window.
     </description>
 
     <request name="destroy" type="destructor"/>
@@ -36,6 +40,18 @@
       </description>
       <arg name="surface" type="object" interface="wl_surface"/>
       <arg name="placement" type="uint" summary="a placement value"/>
+    </request>
+
+    <request name="set_origin" since="4">
+      <description summary="the position the toplevel of a surface takes when it maps">
+        The top-left corner (x, y), in logical desktop pixels, of the frame the toplevel of `surface` takes when it
+        maps: the window server skips its cascade and fits the frame inside the usable area. Like the level it belongs
+        to the surface and applies on the next map only; a toplevel that is already mapped is not moved (the shell
+        uses `tile` for that).
+      </description>
+      <arg name="surface" type="object" interface="wl_surface"/>
+      <arg name="x" type="int"/>
+      <arg name="y" type="int"/>
     </request>
 
     <event name="frame" since="2">

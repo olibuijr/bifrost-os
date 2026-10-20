@@ -159,6 +159,14 @@ pub fn kb_lift(r: Rect, kb_top: i32, menubar: i32) -> i32 {
     over.min((r.y - menubar).max(0))
 }
 
+/// The position a window's toplevel asks to map at: where the window is (`x`, `y`) when the window server placed it
+/// before (the toplevel was destroyed while the window was hidden and comes back), none for a window never placed, which
+/// the window server cascades as a new window.
+#[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+pub fn origin_hint(placed: &std::collections::HashSet<AppId>, app: AppId, x: i32, y: i32) -> Option<(i32, i32)> {
+    placed.contains(&app).then_some((x, y))
+}
+
 /// Moves `r` to the position (`x`, `y`) the window server reports for its toplevel; the size is left alone (the
 /// configure decides it). True when the position changed, so the frame the presenter holds must be sent again.
 #[cfg(feature = "desktop-wayland")]
@@ -352,6 +360,10 @@ pub struct Desk {
     window_buf: Vec<u32>,
     /// how many windows have been opened, to cascade them
     opened: usize,
+    /// the apps whose window the window server has placed (it reported a frame): when the shell hides such a window
+    /// (Overview, a minimize) its toplevel is destroyed, and the new toplevel must map where the window was, not at the
+    /// window server's cascade
+    pub(super) placed: std::collections::HashSet<AppId>,
     /// windows of apps that have not committed a frame yet: not drawn and not hit until the first frame arrives
     /// (`Shell::desk_refresh_unmapped`), so an app that opened a window it never drew leaves no black shell behind
     pub(super) unmapped: Vec<AppId>,
@@ -800,6 +812,8 @@ impl Desk {
         // the frame the user left the window at (the zoomed one goes back to the frame before zoom)
         let r = if w.maximized { w.restore } else { w.r };
         self.closed_sizes.insert(w.app, (r.w, r.h));
+        // a window opened again is a new window: the window server places it
+        self.placed.remove(&w.app);
         self.release_app_buffers(w.app);
         self.collapsed.remove(&w.app);
         w.app
@@ -1041,7 +1055,7 @@ impl Shell {
             let Some(id)=win_id(w.app) else{return false};
             // a covered window has no cache entry by design (see `hidden_ids`); anything else without one needs a full draw
             if !desk.window_cache.contains_key(&id) && !desk.hidden_ids.contains(&id) {return false;}
-            frames.push(crate::bare::wayland::WindowFrame {id,title:frame_title(id),x:w.r.x,y:w.r.y,width:w.r.w as usize,height:w.r.h as usize,pixels:None,damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize),maximized:w.maximized,fullscreen:w.full,title_height,drag_height:0,no_drag:Vec::new(),floating:false,fx:bifrost_render::glass::Fx::IDENTITY,opaque:!matches!(w.app,AppId::External(_))});
+            frames.push(crate::bare::wayland::WindowFrame {id,title:frame_title(id),x:w.r.x,y:w.r.y,width:w.r.w as usize,height:w.r.h as usize,pixels:None,damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize),maximized:w.maximized,fullscreen:w.full,title_height,drag_height:0,no_drag:Vec::new(),floating:false,fx:bifrost_render::glass::Fx::IDENTITY,opaque:!matches!(w.app,AppId::External(_)),origin:None});
             let controls=match w.app {AppId::External(slot)=>ext.get(slot as usize).and_then(Option::as_ref).map_or(&[][..],|h|&h.controls[..]),_=>&[][..]};
             let (dh,nd)=drag_zone(w,&m,controls);
             if let Some(f)=frames.last_mut(){f.drag_height=dh;f.no_drag=nd;}
@@ -1123,6 +1137,9 @@ impl Shell {
                 f.floating = frame_app(f.id).is_some_and(|a| d.is_floating(a));
             }
             frames.sort_by_key(|f| f.floating);
+            for f in frames.iter_mut() {
+                f.origin = frame_app(f.id).and_then(|a| origin_hint(&d.placed, a, f.x, f.y));
+            }
             // Lock/overlays destroy the backend's windows; rebuilding must send
             // complete pixels rather than a cached unchanged-window sentinel.
             if frames.is_empty() { d.window_cache.clear(); d.body_cache.clear(); }
@@ -1257,7 +1274,7 @@ impl Shell {
             // idea of the position drifted (E2E N1: `state` said 852,339 for a window drawn at 800,360). The frame it
             // reports is the one source of truth: everything the shell puts on the screen from this rectangle (app
             // context menus, the share menu, taps) lands on the window. The size stays with the configure (`Resize`).
-            WindowEvent::Frame(_,x,y,_,_) => { let win = &mut self.desk.as_mut().unwrap().wins[i]; if frame_follows(&mut win.r, x, y) { self.dirty = true; } },
+            WindowEvent::Frame(_,x,y,_,_) => { self.desk.as_mut().unwrap().placed.insert(app); let win = &mut self.desk.as_mut().unwrap().wins[i]; if frame_follows(&mut win.r, x, y) { self.dirty = true; } },
             // The window server put the toplevel on the whole output or took it back (its own keys, or an answer to a
             // request the shell made): the shell's window follows, so its menu bar, Dock and layout agree.
             WindowEvent::Fullscreen(_,on) => { if self.desk.as_ref().is_some_and(|d| d.wins[i].full != on) { self.desk_set_full_screen(app, on); } },
@@ -2693,7 +2710,7 @@ impl Shell {
                         id, title: frame_title(id), x:w.r.x, y:w.r.y,
                         width:w.r.w as usize, height:w.r.h as usize, pixels:None,
                         damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize), maximized:w.maximized, fullscreen:w.full, title_height:m.title,
-                        drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false,
+                        drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false, origin:None,
                     });
                     continue;
                 }
@@ -2702,7 +2719,7 @@ impl Shell {
                         id, title: frame_title(id), x:w.r.x, y:w.r.y,
                         width:w.r.w as usize, height:w.r.h as usize, pixels:None,
                         damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize), maximized:w.maximized, fullscreen:w.full, title_height:m.title,
-                        drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false,
+                        drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false, origin:None,
                     });
                     self.desk.as_mut().unwrap().window_cache.insert(id,cached.unwrap());
                     continue;
@@ -2754,7 +2771,7 @@ impl Shell {
                         let desk=self.desk.as_mut().unwrap();
                         desk.body_cache.remove(&w.app);
                         desk.window_cache.insert(id,retained);
-                        desk.frames.push(crate::bare::wayland::WindowFrame{id,title:frame_title(id),x:w.r.x,y:w.r.y,width,height,pixels:outgoing,damage,maximized:w.maximized,fullscreen:w.full,title_height:m.title,drag_height,no_drag,fx:bifrost_render::glass::Fx::IDENTITY,opaque,floating:false});
+                        desk.frames.push(crate::bare::wayland::WindowFrame{id,title:frame_title(id),x:w.r.x,y:w.r.y,width,height,pixels:outgoing,damage,maximized:w.maximized,fullscreen:w.full,title_height:m.title,drag_height,no_drag,fx:bifrost_render::glass::Fx::IDENTITY,opaque,floating:false,origin:None});
                         continue;
                     }
                 }
@@ -2789,7 +2806,7 @@ impl Shell {
                 desk.frames.push(crate::bare::wayland::WindowFrame {
                     id, title: frame_title(id), x:w.r.x, y:w.r.y,
                     width:w.r.w as usize, height:w.r.h as usize, pixels, damage, maximized:w.maximized, fullscreen:w.full, title_height:m.title,
-                    drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false,
+                    drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false, origin:None,
                 });
                 continue;
             }

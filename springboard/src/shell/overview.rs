@@ -1380,6 +1380,115 @@ mod tests {
         sh.draw_overview(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, 1e9);
     }
 
+    fn rects_of(sh: &Shell) -> Vec<(AppId, super::super::desk::Rect)> {
+        sh.desk.as_ref().unwrap().wins.iter().map(|w| (w.app, w.r)).collect()
+    }
+
+    /// Moves window `app` to (`x`, `y`) as a drag does.
+    fn drag_to(sh: &mut Shell, app: AppId, x: i32, y: i32) {
+        let m = sh.desk_metrics();
+        let d = sh.desk.as_mut().unwrap();
+        let i = d.index_of(app).expect("the window is open");
+        d.move_to(&m, i, x, y);
+    }
+
+    #[test]
+    fn windows_moved_by_hand_come_back_to_their_rects_after_overview_closes() {
+        let mut sh = desk_with(3, 1920, 1080, 1.0);
+        drag_to(&mut sh, AppId::Settings, 1065, 524);
+        drag_to(&mut sh, AppId::AppStore, 737, 336);
+        let before = rects_of(&sh);
+        let front = sh.desk.as_ref().unwrap().front().map(|w| w.app);
+        for (open, close) in [(1000.0, 2000.0), (3000.0, 4000.0)] {
+            sh.overview_toggle(open);
+            assert!(sh.overview.open);
+            sh.overview_toggle(close);
+            settle(&mut sh);
+            assert!(!sh.overview.open);
+            assert_eq!(rects_of(&sh), before, "every window is where it was");
+        }
+        assert_eq!(sh.desk.as_ref().unwrap().front().map(|w| w.app), front, "and the stack is as it was");
+        // choosing a window raises it at its own rect
+        sh.overview_toggle(5000.0);
+        let mut ov = std::mem::take(&mut sh.overview);
+        ov.close(&mut sh, Some(AppId::AppStore), 5100.0);
+        sh.overview = ov;
+        settle(&mut sh);
+        let after = rects_of(&sh);
+        assert_eq!(after.iter().find(|(a, _)| *a == AppId::AppStore).map(|(_, r)| *r), before.iter().find(|(a, _)| *a == AppId::AppStore).map(|(_, r)| *r));
+        assert_eq!(sh.desk.as_ref().unwrap().front().map(|w| w.app), Some(AppId::AppStore));
+        for (app, r) in &before {
+            assert_eq!(after.iter().find(|(a, _)| a == app).map(|(_, x)| *x), Some(*r), "{app:?} did not move");
+        }
+    }
+
+    #[test]
+    fn a_zoomed_or_tiled_window_keeps_its_frame_through_overview() {
+        let mut sh = desk_with(2, 1920, 1080, 1.0);
+        let m = sh.desk_metrics();
+        {
+            let d = sh.desk.as_mut().unwrap();
+            let i = d.index_of(AppId::Settings).unwrap();
+            d.tile(&m, i, super::super::desk::Tile::Left);
+            let j = d.index_of(AppId::AppStore).unwrap();
+            d.toggle_zoom(&m, j);
+        }
+        let before: Vec<_> = sh.desk.as_ref().unwrap().wins.iter().map(|w| (w.app, w.r, w.maximized)).collect();
+        sh.overview_toggle(1000.0);
+        sh.overview_toggle(2000.0);
+        settle(&mut sh);
+        let after: Vec<_> = sh.desk.as_ref().unwrap().wins.iter().map(|w| (w.app, w.r, w.maximized)).collect();
+        assert_eq!(after, before);
+    }
+
+    #[test]
+    fn a_window_the_window_server_placed_asks_to_map_where_it_was() {
+        use super::super::desk::origin_hint;
+        let mut placed = HashSet::new();
+        assert_eq!(origin_hint(&placed, AppId::Settings, 1065, 524), None, "a new window is cascaded by the window server");
+        placed.insert(AppId::Settings);
+        assert_eq!(origin_hint(&placed, AppId::Settings, 1065, 524), Some((1065, 524)));
+        assert_eq!(origin_hint(&placed, AppId::AppStore, 7, 8), None, "only the window that was placed");
+    }
+
+    #[test]
+    fn closing_a_window_forgets_that_it_was_placed() {
+        let mut sh = desk_with(2, 1920, 1080, 1.0);
+        let d = sh.desk.as_mut().unwrap();
+        d.placed.insert(AppId::Settings);
+        d.placed.insert(AppId::AppStore);
+        let i = d.index_of(AppId::Settings).unwrap();
+        d.close(i);
+        assert!(!d.placed.contains(&AppId::Settings), "a window opened again is cascaded as new");
+        assert!(d.placed.contains(&AppId::AppStore));
+    }
+
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn the_toplevel_of_a_window_that_overview_hid_is_created_at_the_rect_the_window_server_reported() {
+        use super::super::desk::win_id;
+        let mut sh = desk_with(2, 1920, 1080, 1.0);
+        // the window server reports where each window is (the person dragged them there)
+        for (app, x, y) in [(AppId::Settings, 1065, 524), (AppId::AppStore, 737, 336)] {
+            let id = win_id(app).unwrap();
+            sh.wayland_window_event(crate::bare::wayland::WindowEvent::Frame(id, x, y, 800, 500));
+        }
+        let before = rects_of(&sh);
+        sh.overview_toggle(1000.0);
+        sh.overview_toggle(2000.0);
+        settle(&mut sh);
+        assert_eq!(rects_of(&sh), before);
+        let (w, h) = (sh.w as usize, sh.h as usize);
+        let mut px = vec![0u32; w * h];
+        sh.draw_desk_windows(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, 3000.0);
+        let frames = sh.take_wayland_windows();
+        for (app, x, y) in [(AppId::Settings, 1065, 524), (AppId::AppStore, 737, 336)] {
+            let f = frames.iter().find(|f| Some(f.id) == win_id(app)).expect("the window is back in the frames");
+            assert_eq!(f.origin, Some((x, y)), "{app:?} maps at its own place");
+            assert_eq!((f.x, f.y), (x, y));
+        }
+    }
+
     #[test]
     fn the_layout_scales_with_the_area_it_is_given() {
         let sizes = [(900.0, 600.0), (700.0, 500.0), (1100.0, 640.0), (500.0, 500.0)];

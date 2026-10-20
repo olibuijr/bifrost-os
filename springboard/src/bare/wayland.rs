@@ -30,6 +30,10 @@ struct ChromeWindow {surface:wl_surface::WlSurface,layer:surface::ZwlrLayerSurfa
 pub struct WindowFrame { pub id:u32, pub title:&'static str, pub x:i32, pub y:i32, pub width:usize, pub height:usize, pub pixels:Option<std::sync::Arc<[u32]>>, pub damage:Damage, pub maximized:bool, pub floating:bool, pub title_height:i32,
     /// The window is full screen: the window server puts it on the whole output (xdg_toplevel set_fullscreen).
     pub fullscreen:bool,
+    /// Where a toplevel created for this frame maps (`bifrost_window_level_v1` `set_origin`): the position of a window the
+    /// window server placed before and whose toplevel was destroyed while it was hidden. None lets the window server
+    /// place it (cascade). Used only when the toplevel is created.
+    pub origin:Option<(i32,i32)>,
     /// A press above `drag_height` (window px) moves the window, unless it lands in one of `no_drag` (x, y, w, h):
     /// the traffic lights and an app's toolbar controls in a full-size-content window.
     pub drag_height:i32, pub no_drag:Vec<[i32;4]>,
@@ -408,7 +412,12 @@ impl Display {
                 let surface = self.state.compositor.as_ref().unwrap().create_surface(&qh,());
                 let xdg = self.state.wm.as_ref().ok_or_else(||err("xdg-shell unavailable"))?.get_xdg_surface(&surface,&qh,frame.id);
                 let top = xdg.get_toplevel(&qh,frame.id); top.set_title(frame.title.to_string()); top.set_app_id(format!("is.olibuijr.bifrost.{}",frame.id));
-                top.set_min_size(320,220); surface.commit();
+                top.set_min_size(320,220);
+                // a window coming back from Overview or a minimize maps where it was, not at the cascade
+                if let (Some((ox,oy)),Some(mgr))=(frame.origin,self.state.level_mgr.as_ref()) {
+                    if mgr.version()>=super::window_level_client::ORIGIN_SINCE { mgr.set_origin(&surface,ox,oy); }
+                }
+                surface.commit();
                 let mut pending=Damage::new(frame.width,frame.height); pending.all();
                 self.state.windows.insert(frame.id,Window { surface,xdg,top,level_sent:None,slots:vec![],buffer_size:(0,0),configured:false,frame,fs_pending:None,pending,margin:0,gpu_size:(0,0),bg:None,bg_rects:Vec::new(),mat:None,mat_sent:(0,Vec::new()) });
             }
