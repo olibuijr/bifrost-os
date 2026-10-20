@@ -532,7 +532,7 @@ a window it hides (Overview hides every window, a minimize hides one) and create
 the window server cascaded that toplevel like a new window: a window dragged to 1065,524 came back at 681,240. A window
 the window server has placed before (it reported a `frame`, `Desk::placed`) now sends `set_origin` with its own position
 (`WindowFrame::origin`, `desk::origin_hint`) before its first commit; like the level it belongs to the surface and applies
-on the next map only. `Wm::map_at` takes the origin, fits it inside the usable area and skips the cascade; a window never
+on the next map only. `Wm::map_at` takes the origin, keeps it on screen by the rule a drag follows (`keep_on_screen`: `KEEP_VISIBLE` px stay inside the area, so a window dragged partly off an edge returns there) and skips the cascade; a window never
 placed (a new one) or opened again after a close (`Desk::close` forgets it) still cascades. A zoomed or tiled window comes
 back at its frame but the window server forgets the frame it would un-zoom to.
 

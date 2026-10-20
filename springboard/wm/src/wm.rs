@@ -80,14 +80,18 @@ impl Wm {
     pub fn map(&mut self, id: WindowId, w: i32, h: i32) -> Rect { self.map_at(id, w, h, None) }
 
     /// Like `map`, but a window the shell brings back (its toplevel was destroyed while Overview or a minimize hid it)
-    /// asks for the position it had, `origin`: the cascade is skipped and the frame is only fitted inside the usable
-    /// area, so the window returns exactly where the person left it.
+    /// asks for the position it had, `origin`: the cascade is skipped and the frame is only kept on screen the way a
+    /// drag keeps it (`keep_on_screen`), so the window returns exactly where the person left it.
     pub fn map_at(&mut self, id: WindowId, w: i32, h: i32, origin: Option<(i32, i32)>) -> Rect {
         let a = self.area;
         let (w, h) = (w.min(a.w), h.min(a.h));
         let step = CASCADE * self.windows.iter().filter(|w| !w.minimized).count() as i32;
         let (x, y) = match origin {
-            Some((ox, oy)) => (ox.clamp(a.x, (a.x + a.w - w).max(a.x)), oy.clamp(a.y, (a.y + a.h - h).max(a.y))),
+            // the rule a drag follows: a window may hang off the edges while `KEEP_VISIBLE` of it stays on screen
+            Some((ox, oy)) => {
+                let r = keep_on_screen(Rect::new(ox, oy, w, h), a);
+                (r.x, r.y)
+            }
             None => (
                 (a.x + (a.w - w) / 2 + step).min(a.x + a.w - w),
                 (a.y + (a.h - h) / 2 + step).min(a.y + a.h - h),
@@ -379,16 +383,33 @@ mod tests {
         wm.map(1, 800, 600);
         wm.map(2, 800, 600);
         // two windows left at their own places, brought back in the other order than they were mapped
-        // 524 + 600 would leave the area (it ends at 1080), so only the bottom edge is fitted
-        assert_eq!(wm.map_at(3, 800, 600, Some((1065, 524))), Rect::new(1065, 480, 800, 600));
+        assert_eq!(wm.map_at(3, 800, 600, Some((1065, 524))), Rect::new(1065, 524, 800, 600));
         assert_eq!(wm.map_at(4, 400, 300, Some((737, 336))), Rect::new(737, 336, 400, 300));
     }
 
     #[test]
-    fn an_origin_outside_the_usable_area_is_fitted_inside_it() {
+    fn an_origin_outside_the_usable_area_is_fitted_like_a_drag_fits_it() {
         let mut wm = Wm::new(AREA);
-        assert_eq!(wm.map_at(1, 800, 600, Some((-300, 0))), Rect::new(0, 28, 800, 600), "left and top edges");
-        assert_eq!(wm.map_at(2, 800, 600, Some((5000, 5000))), Rect::new(1120, 480, 800, 600), "right and bottom edges");
+        // KEEP_VISIBLE px stay on screen: x in [a.x - w + 48, a.x + a.w - 48], y in [a.y, a.y + a.h - 48]
+        assert_eq!(wm.map_at(1, 800, 600, Some((-300, 0))), Rect::new(-300, 28, 800, 600), "top edge only");
+        assert_eq!(wm.map_at(2, 800, 600, Some((-5000, 0))), Rect::new(-752, 28, 800, 600), "left edge");
+        assert_eq!(
+            wm.map_at(3, 800, 600, Some((5000, 5000))),
+            Rect::new(AREA.x + AREA.w - KEEP_VISIBLE, AREA.y + AREA.h - KEEP_VISIBLE, 800, 600),
+            "right and bottom edges"
+        );
+    }
+
+    #[test]
+    fn a_window_dragged_partly_off_screen_returns_to_the_same_rect_after_unmap_and_map_at() {
+        let mut wm = Wm::new(AREA);
+        wm.map(1, 800, 600);
+        let grab = wm.begin_move(1, 900, 40).expect("grab");
+        // drag so the frame runs past the right and bottom edges
+        let dragged = wm.motion(&grab, 1900, 700).expect("moved");
+        assert!(dragged.x + dragged.w > AREA.x + AREA.w && dragged.y + dragged.h > AREA.y + AREA.h, "{dragged:?}");
+        wm.unmap(1);
+        assert_eq!(wm.map_at(1, dragged.w, dragged.h, Some((dragged.x, dragged.y))), dragged);
     }
 
     #[test]
