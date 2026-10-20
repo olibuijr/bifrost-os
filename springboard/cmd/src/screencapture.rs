@@ -19,7 +19,7 @@
 //! Gap: `-R` coordinates are panel pixels, not points, and the capture has no cursor.
 
 use crate::control;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::io::Write;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -152,8 +152,8 @@ pub fn interactive_request(mode: Interactive) -> &'static str {
 }
 
 /// Asks the desktop to open its screenshot toolbar for `mode` and reads its answer.
-pub fn start_interactive(mode: Interactive, port: u16) -> Result<(), String> {
-    let reply = control::request(interactive_request(mode), port)?;
+pub fn start_interactive(mode: Interactive, socket: &Path) -> Result<(), String> {
+    let reply = control::request(interactive_request(mode), socket)?;
     let text = String::from_utf8_lossy(&reply);
     let text = text.trim();
     if text == "ok" {
@@ -207,8 +207,8 @@ pub fn parse_frame(bytes: &[u8]) -> Result<Frame, String> {
 }
 
 /// Asks the shell for the whole panel at full resolution.
-pub fn grab(port: u16) -> Result<Frame, String> {
-    parse_frame(&control::request("shot 1", port)?)
+pub fn grab(socket: &Path) -> Result<Frame, String> {
+    parse_frame(&control::request("shot 1", socket)?)
 }
 
 /// The part of `frame` inside `r`. A rectangle that reaches past the panel is an error.
@@ -249,8 +249,8 @@ pub fn copy_png(png: &[u8]) -> Result<(), String> {
 }
 
 /// Sends a control request and returns the desktop's text answer, or its error.
-fn ask(line: &str, port: u16) -> Result<String, String> {
-    let answer = String::from_utf8_lossy(&control::request(line, port)?).trim().to_string();
+fn ask(line: &str, socket: &Path) -> Result<String, String> {
+    let answer = String::from_utf8_lossy(&control::request(line, socket)?).trim().to_string();
     match answer.strip_prefix("error: ") {
         Some(e) => Err(e.to_string()),
         None => Ok(answer),
@@ -259,7 +259,7 @@ fn ask(line: &str, port: u16) -> Result<String, String> {
 
 /// Records the screen through the desktop: for `-V` seconds, else until the recording is stopped from the menu bar.
 /// The command returns once the recording has ended.
-fn record(o: &Options, port: u16) -> Result<(), String> {
+fn record(o: &Options, socket: &Path) -> Result<(), String> {
     if o.delay > 0 {
         std::thread::sleep(Duration::from_secs(o.delay as u64));
     }
@@ -274,15 +274,15 @@ fn record(o: &Options, port: u16) -> Result<(), String> {
         }
         None => String::new(),
     };
-    ask(&format!("rec start{area}{file}"), port)?;
+    ask(&format!("rec start{area}{file}"), socket)?;
     match o.seconds {
         Some(s) => {
             std::thread::sleep(Duration::from_secs(s as u64));
-            ask("rec stop", port)?;
+            ask("rec stop", socket)?;
         }
         None => loop {
             std::thread::sleep(Duration::from_millis(500));
-            if !ask("rec status", port)?.starts_with("recording") {
+            if !ask("rec status", socket)?.starts_with("recording") {
                 break;
             }
         },
@@ -291,19 +291,19 @@ fn record(o: &Options, port: u16) -> Result<(), String> {
 }
 
 /// Runs a capture: waits the delay, grabs the panel, crops it, then writes the file or the clipboard.
-pub fn run(o: &Options, port: u16) -> Result<PathBuf, String> {
+pub fn run(o: &Options, socket: &Path) -> Result<PathBuf, String> {
     if o.video {
-        record(o, port)?;
+        record(o, socket)?;
         return Ok(PathBuf::from("recording"));
     }
     if let Some(mode) = o.interactive {
-        start_interactive(mode, port)?;
+        start_interactive(mode, socket)?;
         return Ok(PathBuf::from("Photos"));
     }
     if o.delay > 0 {
         std::thread::sleep(Duration::from_secs(o.delay as u64));
     }
-    let mut frame = grab(port)?;
+    let mut frame = grab(socket)?;
     if let Some(r) = o.rect {
         frame = crop(&frame, r)?;
     }
@@ -434,11 +434,11 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let file = dir.join("crop.png");
-        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
-        let port = listener.local_addr().unwrap().port();
+        let sock = dir.join("c.sock");
+        let listener = std::os::unix::net::UnixListener::bind(&sock).unwrap();
         let bytes = frame_bytes(2, 2, &[1, 2, 3, 4]);
         let server = std::thread::spawn(move || {
-            let (mut conn, _) = std::net::TcpListener::accept(&listener).unwrap();
+            let (mut conn, _) = listener.accept().unwrap();
             use std::io::{Read, Write};
             let mut buf = [0u8; 32];
             let n = conn.read(&mut buf).unwrap();
@@ -446,7 +446,7 @@ mod tests {
             String::from_utf8_lossy(&buf[..n]).into_owned()
         });
         let o = Options { rect: Some(Rect { x: 0, y: 0, w: 1, h: 1 }), file: Some(file.to_string_lossy().into_owned()), ..Options::default() };
-        let path = run(&o, port).unwrap();
+        let path = run(&o, &sock).unwrap();
         assert_eq!(path, file);
         assert_eq!(server.join().unwrap(), "shot 1\n");
         assert_eq!(&std::fs::read(&file).unwrap()[..8], b"\x89PNG\r\n\x1a\n");

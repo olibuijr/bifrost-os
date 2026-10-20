@@ -1,4 +1,9 @@
-//! Remote control socket (127.0.0.1 only; reach it through `adb forward`).
+//! The shell's control socket: a Unix stream socket at `/run/bifrost/shell-control.sock` (mode 0600, owned by the
+//! installed account, which runs the window server). There is no TCP listener: a loopback port would be open to every
+//! local process, sandboxed apps included, which share the host network. The kernel reports the uid of each peer
+//! (`SO_PEERCRED`); only root (lab tools over ssh, `bifrost-mcp`), the shell's own uid and the account the window server
+//! runs as are served, everyone else is refused and logged once per uid. The sandbox mounts a fresh `/run`, so apps do not
+//! even see the path.
 //! One request per connection, a single text line:
 //!   shot [scale]                 -> "RIMG" w h + premultiplied RGBA, downscaled
 //!   tap x y                      -> "ok"
@@ -18,19 +23,49 @@
 //!   image-attach ro|rw <path>      -> "ok <loop device> <folder>" (binds a disk image and mounts it, `shell::disk_image`)
 //!   image-detach <device|folder>   -> "ok <loop device>" (unmounts a disk image and releases its loop device)
 
+use std::collections::HashSet;
 use std::io::{self, BufRead, BufReader, Read, Write};
-use std::net::{TcpListener, TcpStream};
+use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+use std::os::unix::net::{UnixListener, UnixStream};
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::time::Duration;
 
-pub const PORT: u16 = 7777;
+/// Where the shell listens.
+pub const SOCKET: &str = "/run/bifrost/shell-control.sock";
+/// The socket's mode: its owner (and root) only.
+pub const SOCKET_MODE: u32 = 0o600;
 
-/// The port to listen on: `SPRINGBOARD_CONTROL_PORT` when set (several emulators on one host), else `PORT`.
-pub fn port() -> u16 {
-    port_from(std::env::var("SPRINGBOARD_CONTROL_PORT").ok().as_deref())
+extern "C" {
+    fn geteuid() -> u32;
+    fn chown(path: *const std::os::raw::c_char, uid: u32, gid: u32) -> i32;
 }
 
-fn port_from(v: Option<&str>) -> u16 {
-    v.and_then(|s| s.trim().parse().ok()).unwrap_or(PORT)
+/// The socket to listen on: `SPRINGBOARD_CONTROL_SOCKET` when it is an absolute path (several emulators on one host, a
+/// shell run without root), else `SOCKET`.
+pub fn socket_path() -> PathBuf {
+    socket_path_from(std::env::var("SPRINGBOARD_CONTROL_SOCKET").ok().as_deref())
+}
+
+fn socket_path_from(v: Option<&str>) -> PathBuf {
+    match v.map(str::trim) {
+        Some(p) if p.starts_with('/') && p.len() > 1 => PathBuf::from(p),
+        _ => PathBuf::from(SOCKET),
+    }
+}
+
+/// The uids served: root, the uid the shell runs as, and the installed account (the window server's uid) when known.
+pub fn allowed_uids(own: u32, account: Option<u32>) -> Vec<u32> {
+    let mut v = vec![0, own];
+    v.extend(account);
+    v.sort_unstable();
+    v.dedup();
+    v
+}
+
+/// True when a peer with this uid may use the control socket.
+pub fn peer_allowed(uid: u32, allowed: &[u32]) -> bool {
+    allowed.contains(&uid)
 }
 /// Longest synthetic swipe.
 pub const MAX_SWIPE_MS: f32 = 10_000.0;
@@ -297,14 +332,52 @@ pub fn double_tap(x: f32, y: f32) -> Vec<(f64, u8, f32, f32)> {
 }
 
 pub struct Server {
-    listener: TcpListener,
+    listener: UnixListener,
+    allowed: Vec<u32>,
+    /// uids already logged as refused, so a busy local process cannot flood the journal
+    refused: Mutex<HashSet<u32>>,
+}
+
+/// Binds `path` as a socket with `SOCKET_MODE`, owned by `owner` (uid, gid) when given.
+///
+/// The socket is made inside a private staging directory (mode 0700), given its owner and mode, and renamed into place,
+/// so it is never reachable with the default creation mode. The process umask is not touched (it is process-wide).
+pub fn bind_at(path: &Path, owner: Option<(u32, u32)>) -> io::Result<UnixListener> {
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    std::fs::create_dir_all(parent)?;
+    let _ = std::fs::remove_file(path);
+    let name = path.file_name().unwrap_or_default().to_string_lossy().into_owned();
+    let stage = parent.join(format!(".{name}.stage"));
+    let _ = std::fs::remove_dir_all(&stage);
+    std::fs::DirBuilder::new().mode(0o700).create(&stage)?;
+    let staged = stage.join("s");
+    let made = (|| {
+        let l = UnixListener::bind(&staged)?;
+        if let Some((uid, gid)) = owner {
+            let c = std::ffi::CString::new(staged.as_os_str().as_encoded_bytes()).map_err(io::Error::other)?;
+            // SAFETY: `c` is a valid NUL-terminated path.
+            if unsafe { chown(c.as_ptr(), uid, gid) } != 0 {
+                return Err(io::Error::last_os_error());
+            }
+        }
+        std::fs::set_permissions(&staged, std::fs::Permissions::from_mode(SOCKET_MODE))?;
+        std::fs::rename(&staged, path)?;
+        Ok(l)
+    })();
+    let _ = std::fs::remove_dir_all(&stage);
+    made
 }
 
 impl Server {
     pub fn bind() -> io::Result<Self> {
-        let listener = TcpListener::bind(("127.0.0.1", port()))?;
+        // SAFETY: geteuid has no preconditions.
+        let own = unsafe { geteuid() };
+        let account = crate::privd::account_ids();
+        // as root the socket belongs to the account the window server runs as; root connects whatever the mode
+        let owner = if own == 0 { account.as_ref().map(|(uid, gid, _)| (*uid, *gid)) } else { None };
+        let listener = bind_at(&socket_path(), owner)?;
         listener.set_nonblocking(true)?;
-        Ok(Server { listener })
+        Ok(Server { listener, allowed: allowed_uids(own, account.map(|(uid, ..)| uid)), refused: Mutex::new(HashSet::new()) })
     }
 
     pub fn fd(&self) -> std::ffi::c_int {
@@ -312,19 +385,44 @@ impl Server {
         self.listener.as_raw_fd()
     }
 
-    /// Accepts one pending connection and reads its request line.
-    pub fn accept(&self) -> Option<(TcpStream, Result<Request, String>)> {
-        let (stream, _) = self.listener.accept().ok()?;
-        stream.set_nonblocking(false).ok()?;
-        stream.set_read_timeout(Some(Duration::from_secs(2))).ok()?;
-        stream.set_write_timeout(Some(Duration::from_secs(5))).ok()?;
-        let mut line = String::new();
-        BufReader::new((&stream).take(MAX_LINE)).read_line(&mut line).ok()?;
-        Some((stream, parse(&line)))
+    /// Checks one connection's peer credentials: `true` to serve it. A refused uid is logged the first time only.
+    fn admit(&self, stream: &UnixStream) -> bool {
+        match crate::privd::server::peer(stream) {
+            Ok((_, uid)) if peer_allowed(uid, &self.allowed) => true,
+            Ok((pid, uid)) => {
+                if self.refused.lock().is_ok_and(|mut seen| seen.insert(uid)) {
+                    eprintln!("springboard: control socket: refused uid {uid} (pid {pid})");
+                }
+                false
+            }
+            Err(e) => {
+                eprintln!("springboard: control socket: no peer credentials: {e}");
+                false
+            }
+        }
+    }
+
+    /// Accepts one pending connection from an allowed peer and reads its request line. Refused peers are dropped
+    /// without a read.
+    pub fn accept(&self) -> Option<(UnixStream, Result<Request, String>)> {
+        // a few refused connections must not hide an allowed one queued behind them
+        for _ in 0..8 {
+            let (stream, _) = self.listener.accept().ok()?;
+            if !self.admit(&stream) {
+                continue;
+            }
+            stream.set_nonblocking(false).ok()?;
+            stream.set_read_timeout(Some(Duration::from_secs(2))).ok()?;
+            stream.set_write_timeout(Some(Duration::from_secs(5))).ok()?;
+            let mut line = String::new();
+            BufReader::new((&stream).take(MAX_LINE)).read_line(&mut line).ok()?;
+            return Some((stream, parse(&line)));
+        }
+        None
     }
 }
 
-pub fn reply(mut stream: TcpStream, body: &[u8]) {
+pub fn reply(mut stream: UnixStream, body: &[u8]) {
     let _ = stream.write_all(body);
 }
 
@@ -367,12 +465,85 @@ mod tests {
     }
 
     #[test]
-    fn port_defaults_and_overrides() {
-        assert_eq!(port_from(None), 7777);
-        assert_eq!(port_from(Some("7801")), 7801);
-        assert_eq!(port_from(Some(" 7802\n")), 7802);
-        assert_eq!(port_from(Some("nope")), 7777);
-        assert_eq!(port_from(Some("99999")), 7777);
+    fn socket_path_defaults_and_overrides() {
+        assert_eq!(SOCKET, "/run/bifrost/shell-control.sock");
+        assert_eq!(socket_path_from(None), PathBuf::from(SOCKET));
+        assert_eq!(socket_path_from(Some(" /tmp/emu1/control.sock\n")), PathBuf::from("/tmp/emu1/control.sock"));
+        assert_eq!(socket_path_from(Some("relative.sock")), PathBuf::from(SOCKET), "only an absolute path overrides");
+        assert_eq!(socket_path_from(Some("")), PathBuf::from(SOCKET));
+        assert_eq!(socket_path_from(Some("/")), PathBuf::from(SOCKET));
+    }
+
+    #[test]
+    fn only_root_the_shell_and_the_account_are_served() {
+        let allowed = allowed_uids(0, Some(1000));
+        assert_eq!(allowed, [0, 1000]);
+        assert!(peer_allowed(0, &allowed), "root: lab tools over ssh and bifrost-mcp");
+        assert!(peer_allowed(1000, &allowed), "the account the window server runs as");
+        assert!(!peer_allowed(1001, &allowed), "another local user is refused");
+        assert!(!peer_allowed(65534, &allowed), "nobody is refused");
+        assert!(!peer_allowed(u32::MAX, &allowed), "an unreadable credential is refused");
+        // no account yet: root only
+        assert_eq!(allowed_uids(0, None), [0]);
+        assert!(!peer_allowed(1000, &allowed_uids(0, None)));
+        // a shell run as an ordinary user serves itself and root
+        assert_eq!(allowed_uids(1234, None), [0, 1234]);
+        assert_eq!(allowed_uids(1000, Some(1000)), [0, 1000], "no duplicates");
+    }
+
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("control-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn the_socket_is_a_unix_socket_with_mode_0600() {
+        use std::os::unix::fs::{FileTypeExt, MetadataExt};
+        let dir = scratch("mode");
+        let path = dir.join("run/shell-control.sock");
+        let listener = bind_at(&path, None).unwrap();
+        let meta = std::fs::metadata(&path).unwrap();
+        assert!(meta.file_type().is_socket());
+        assert_eq!(meta.permissions().mode() & 0o7777, 0o600);
+        // SAFETY: geteuid has no preconditions.
+        assert_eq!(meta.uid(), unsafe { geteuid() });
+        assert!(!dir.join("run/.shell-control.sock.stage").exists(), "the staging directory is removed");
+        // binding again replaces a stale socket
+        drop(listener);
+        assert!(bind_at(&path, None).is_ok());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_connection_from_an_allowed_uid_is_served_and_one_from_another_uid_is_refused() {
+        // SAFETY: geteuid has no preconditions.
+        let own = unsafe { geteuid() };
+        for (allowed, served) in [(vec![own], true), (vec![own.wrapping_add(1)], false)] {
+            let dir = scratch(if served { "served" } else { "refused" });
+            let path = dir.join("c.sock");
+            let listener = bind_at(&path, None).unwrap();
+            listener.set_nonblocking(true).unwrap();
+            let server = Server { listener, allowed, refused: Mutex::new(HashSet::new()) };
+            let mut client = UnixStream::connect(&path).unwrap();
+            client.write_all(b"version\n").unwrap();
+            let got = server.accept();
+            let mut answer = String::new();
+            if served {
+                let (stream, req) = got.expect("an allowed peer is served");
+                assert_eq!(req, Ok(Request::Version));
+                reply(stream, b"version=1\n");
+                client.read_to_string(&mut answer).unwrap();
+                assert_eq!(answer, "version=1\n");
+            } else {
+                assert!(got.is_none(), "a refused peer is dropped");
+                client.read_to_string(&mut answer).unwrap();
+                assert!(answer.is_empty(), "a refused peer gets no answer");
+                assert!(server.refused.lock().unwrap().contains(&own), "the refused uid is remembered for the one-time log");
+            }
+            let _ = std::fs::remove_dir_all(&dir);
+        }
     }
 
     #[test]

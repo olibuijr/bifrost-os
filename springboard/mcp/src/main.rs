@@ -1,7 +1,7 @@
 #![recursion_limit = "256"]
 //! bifrost-mcp: a Model Context Protocol server (stdio, JSON-RPC 2.0, one message per line) that drives
 //! BifrOSt PC from inside: the compositor over one persistent Wayland connection, keys through uinput,
-//! the shell's control port, every app's control socket, and the system itself. Run it on the machine
+//! the shell's control socket, every app's control socket, and the system itself. Run it on the machine
 //! (as root), for example `ssh midget bifrost-mcp` as a Claude Code stdio server. Docs: docs/bifrost-mcp.md.
 
 mod app;

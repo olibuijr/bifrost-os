@@ -782,7 +782,7 @@ fn run() -> std::io::Result<()> {
             use springboard::bare::control::{self, Key, Request};
             if let Some((stream, req)) = server.accept() {
                 let mut path = |from, to, ms| synthetic.extend(control::path(from, to, ms).into_iter().map(|(dt, ph, x, y)| (t + dt, ph, x, y)));
-                // the port is loopback TCP any local user can reach: while locked it only reports state and takes raw
+                // the socket serves root and the account only (peer uid): while locked it still only reports state and takes raw
                 // input (which reaches nothing but the login window), never opens, presses or types (review 2026-10-11)
                 let refused = shell.is_locked() && req.as_ref().is_ok_and(|r| !control::allowed_while_locked(r));
                 let body: Vec<u8> = match req {

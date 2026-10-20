@@ -290,7 +290,7 @@ pub fn perform(a: &Action) -> Result<String, String> {
                 return Err("nothing to open".into());
             };
             for request in open::plan(&options)? {
-                open::send(&request, open::port())?;
+                open::send(&request, &open::socket())?;
             }
             Ok(format!("showed {name}"))
         }

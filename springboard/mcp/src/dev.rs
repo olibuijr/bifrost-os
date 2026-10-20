@@ -277,7 +277,7 @@ fn restart_shell(wait: Duration) -> Result<String, String> {
             }
         }
         if t.elapsed() >= wait {
-            return Err(format!("shell control port not answering after {} ms; try logs unit=springboard and crash", t.elapsed().as_millis()));
+            return Err(format!("shell control socket not answering after {} ms; try logs unit=springboard and crash", t.elapsed().as_millis()));
         }
         std::thread::sleep(Duration::from_millis(200));
     }

@@ -6,7 +6,7 @@
 //!
 //! [`action`] is pure (keysym and modifiers in, action out) and host-tested. [`WmState::run_action`] performs one.
 
-use std::{io::Write, net::TcpStream, time::Duration};
+use std::{io::Write, os::unix::net::UnixStream, path::{Path, PathBuf}, time::Duration};
 
 use smithay::{desktop::Window, input::keyboard::ModifiersState, utils::SERIAL_COUNTER};
 
@@ -25,8 +25,9 @@ pub mod keysym {
     pub const DOWN: u32 = 0xff54;
 }
 
-/// The shell's control port (`control.rs`, one line per connection).
-pub const CONTROL_ADDR: &str = "127.0.0.1:7777";
+/// The shell's control socket (`bare/control.rs`, one line per connection). A Unix socket owned by the account this
+/// window server runs as; the shell checks the peer's uid, so only root and that account are served.
+pub const CONTROL_SOCKET: &str = "/run/bifrost/shell-control.sock";
 /// The line sent to the shell for the search panel.
 pub const QUICKSEARCH_LINE: &[u8] = b"quicksearch\n";
 /// The line sent to the shell for Overview.
@@ -50,11 +51,11 @@ impl From<&ModifiersState> for Mods {
 /// What a compositor key binding does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Action {
-    /// Super+Space: sends `quicksearch` to the shell control port.
+    /// Super+Space: sends `quicksearch` to the shell control socket.
     QuickSearch,
-    /// Ctrl+Up and F3: Overview, sends `overview` to the shell control port.
+    /// Ctrl+Up and F3: Overview, sends `overview` to the shell control socket.
     MissionControl,
-    /// F4: the Apps grid, sends `appgrid` to the shell control port.
+    /// F4: the Apps grid, sends `appgrid` to the shell control socket.
     AppGrid,
     /// Alt+Tab: focuses the next window.
     NextWindow,
@@ -93,15 +94,28 @@ pub fn action(sym: u32, mods: Mods) -> Option<Action> {
 /// repeated presses walk through all of them. With fewer than two there is nothing to switch to.
 pub fn next_window(stack: &[WindowId]) -> Option<WindowId> { if stack.len() >= 2 { stack.first().copied() } else { None } }
 
+/// The socket to use: `SPRINGBOARD_CONTROL_SOCKET` when it is an absolute path (as in the shell), else `CONTROL_SOCKET`.
+fn control_socket() -> PathBuf {
+    control_socket_from(std::env::var("SPRINGBOARD_CONTROL_SOCKET").ok().as_deref())
+}
+
+fn control_socket_from(v: Option<&str>) -> PathBuf {
+    match v.map(str::trim) {
+        Some(p) if p.starts_with('/') && p.len() > 1 => PathBuf::from(p),
+        _ => PathBuf::from(CONTROL_SOCKET),
+    }
+}
+
+/// Writes one request line to the shell's control socket.
+fn send_line(socket: &Path, line: &[u8]) -> std::io::Result<()> {
+    let mut s = UnixStream::connect(socket)?;
+    s.set_write_timeout(Some(Duration::from_millis(200)))?;
+    s.write_all(line)
+}
+
 fn tell_shell(line: &[u8]) {
-    let Ok(addr) = CONTROL_ADDR.parse() else { return };
-    match TcpStream::connect_timeout(&addr, Duration::from_millis(200)) {
-        Ok(mut s) => {
-            if let Err(e) = s.write_all(line) {
-                eprintln!("bifrost-wm: shell control port: {e}");
-            }
-        }
-        Err(e) => eprintln!("bifrost-wm: shell control port: {e}"),
+    if let Err(e) = send_line(&control_socket(), line) {
+        eprintln!("bifrost-wm: shell control socket: {e}");
     }
 }
 
@@ -166,7 +180,7 @@ mod tests {
     }
 
     #[test]
-    fn mission_control_is_one_line_for_the_control_port() { assert_eq!(OVERVIEW_LINE, b"overview\n"); }
+    fn mission_control_is_one_line_for_the_control_socket() { assert_eq!(OVERVIEW_LINE, b"overview\n"); }
 
     #[test]
     fn f4_is_the_apps_grid_and_alt_f4_still_closes() {
@@ -218,5 +232,33 @@ mod tests {
     }
 
     #[test]
-    fn quicksearch_is_one_line_for_the_control_port() { assert_eq!(QUICKSEARCH_LINE, b"quicksearch\n"); }
+    fn quicksearch_is_one_line_for_the_control_socket() { assert_eq!(QUICKSEARCH_LINE, b"quicksearch\n"); }
+
+    #[test]
+    fn the_control_socket_is_the_shells_unix_socket_not_a_tcp_port() {
+        assert_eq!(CONTROL_SOCKET, "/run/bifrost/shell-control.sock");
+        assert_eq!(control_socket_from(None), PathBuf::from(CONTROL_SOCKET));
+        assert_eq!(control_socket_from(Some("/tmp/emu/c.sock")), PathBuf::from("/tmp/emu/c.sock"));
+        assert_eq!(control_socket_from(Some("127.0.0.1:7777")), PathBuf::from(CONTROL_SOCKET), "an address is not a socket path");
+    }
+
+    #[test]
+    fn a_binding_writes_its_line_to_the_socket() {
+        use std::io::Read;
+        use std::os::unix::net::UnixListener;
+        let dir = std::env::temp_dir().join(format!("bifrost-wm-control-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let sock = dir.join("c.sock");
+        let listener = UnixListener::bind(&sock).unwrap();
+        for line in [QUICKSEARCH_LINE, OVERVIEW_LINE, APPGRID_LINE] {
+            send_line(&sock, line).unwrap();
+            let (mut conn, _) = listener.accept().unwrap();
+            let mut got = Vec::new();
+            conn.read_to_end(&mut got).unwrap();
+            assert_eq!(got, line);
+        }
+        assert!(send_line(&dir.join("missing.sock"), OVERVIEW_LINE).is_err(), "no shell, no panic: an error to log");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

@@ -2,7 +2,7 @@
 use std::{
     fs, io,
     io::{Read, Write},
-    net::{SocketAddr, TcpStream},
+    os::unix::net::UnixStream,
     os::unix::fs::MetadataExt,
     path::Path,
     process::Command,
@@ -10,6 +10,8 @@ use std::{
 };
 mod system;
 const STORE: &str = "/var/lib/bifrost-recovery";
+// The shell's control socket (root and the installed account only); there is no TCP control port.
+const CONTROL_SOCKET: &str = "/run/bifrost/shell-control.sock";
 const FILES: &[&str] = &[
     "usr/bin/bifrost-open-url",
     "usr/share/applications/bifrost-browser.desktop",
@@ -176,14 +178,11 @@ fn running(inode: &str) -> bool {
                 .is_ok_and(|m| format!("{}:{}", m.dev(), m.ino()) == inode)
     })
 }
-fn probe() -> bool {
-    if !Path::new("/run/bifrost/user/wayland-0").exists() {
-        return false;
-    }
-    let Ok(mut s) = TcpStream::connect_timeout(
-        &"127.0.0.1:7777".parse::<SocketAddr>().unwrap(),
-        Duration::from_secs(1),
-    ) else {
+fn state_is_complete(text: &str) -> bool {
+    text.contains("screen=") && text.contains("screen_on=")
+}
+fn probe_at(socket: &Path) -> bool {
+    let Ok(mut s) = UnixStream::connect(socket) else {
         return false;
     };
     let _ = s.set_read_timeout(Some(Duration::from_secs(1)));
@@ -195,8 +194,13 @@ fn probe() -> bool {
     let Ok(n) = s.read(&mut buf) else {
         return false;
     };
-    let text = String::from_utf8_lossy(&buf[..n]);
-    text.contains("screen=") && text.contains("screen_on=")
+    state_is_complete(&String::from_utf8_lossy(&buf[..n]))
+}
+fn probe() -> bool {
+    if !Path::new("/run/bifrost/user/wayland-0").exists() {
+        return false;
+    }
+    probe_at(Path::new(CONTROL_SOCKET))
 }
 fn watch() -> io::Result<()> {
     let store = Path::new(STORE);
@@ -377,6 +381,29 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn the_probe_asks_the_shell_over_its_unix_socket() {
+        use std::os::unix::net::UnixListener;
+        assert_eq!(CONTROL_SOCKET, "/run/bifrost/shell-control.sock");
+        let dir = std::env::temp_dir().join(format!("bifrost-probe-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let sock = dir.join("c.sock");
+        assert!(!probe_at(&sock), "no socket, no shell");
+        let listener = UnixListener::bind(&sock).unwrap();
+        let server = std::thread::spawn(move || {
+            let (mut conn, _) = listener.accept().unwrap();
+            let mut buf = [0u8; 16];
+            let n = conn.read(&mut buf).unwrap();
+            conn.write_all(b"version=1\nscreen=1280x800\nscreen_on=1\n").unwrap();
+            buf[..n].to_vec()
+        });
+        assert!(probe_at(&sock));
+        assert_eq!(server.join().unwrap(), b"state\n");
+        assert!(state_is_complete("screen=1x1\nscreen_on=0\n"));
+        assert!(!state_is_complete("version=1\n"));
+        let _ = fs::remove_dir_all(&dir);
+    }
     #[test]
     fn recovery_restores_files_and_database() {
         let base =

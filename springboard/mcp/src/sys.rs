@@ -1,7 +1,6 @@
-//! The shell's control port, app control sockets, processes and files: plain syscalls, no helpers.
+//! The shell's control socket, app control sockets, processes and files: plain syscalls, no helpers.
 
 use std::io::{Read, Write};
-use std::net::TcpStream;
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -10,10 +9,29 @@ use std::time::{Duration, Instant};
 pub const RUNTIME: &str = "/run/bifrost/user";
 pub const APPDATA: &str = "/var/lib/springboard/appdata";
 
-/// One request on the shell's control port (127.0.0.1:7777, one line per connection).
+/// The shell's control socket (a Unix socket the shell serves to root and the installed account only).
+pub const SHELL_SOCKET: &str = "/run/bifrost/shell-control.sock";
+
+/// The socket to use: `SPRINGBOARD_CONTROL_SOCKET` when it is an absolute path, else `SHELL_SOCKET`.
+pub fn shell_socket() -> PathBuf {
+    shell_socket_from(std::env::var("SPRINGBOARD_CONTROL_SOCKET").ok().as_deref())
+}
+
+fn shell_socket_from(v: Option<&str>) -> PathBuf {
+    match v.map(str::trim) {
+        Some(p) if p.starts_with('/') && p.len() > 1 => PathBuf::from(p),
+        _ => PathBuf::from(SHELL_SOCKET),
+    }
+}
+
+/// One request on the shell's control socket (`/run/bifrost/shell-control.sock`, one line per connection).
 pub fn shell(line: &str) -> Result<Vec<u8>, String> {
-    let port = std::env::var("SPRINGBOARD_CONTROL_PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(7777u16);
-    let mut s = TcpStream::connect_timeout(&([127, 0, 0, 1], port).into(), Duration::from_secs(2)).map_err(|e| format!("shell control port: {e}"))?;
+    shell_at(&shell_socket(), line)
+}
+
+fn shell_at(socket: &Path, line: &str) -> Result<Vec<u8>, String> {
+    let mut s = UnixStream::connect(socket).map_err(|e| format!("shell control socket {}: {e}", socket.display()))?;
+    s.set_write_timeout(Some(Duration::from_secs(2))).ok();
     s.set_read_timeout(Some(Duration::from_secs(20))).ok();
     s.write_all(format!("{}\n", line.trim()).as_bytes()).map_err(|e| e.to_string())?;
     let mut out = Vec::new();
@@ -226,4 +244,43 @@ pub fn processes() -> Vec<(u32, u64, u64, String)> {
 
 pub fn read(path: &str) -> String {
     std::fs::read_to_string(path).unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_shell_socket_defaults_and_overrides() {
+        assert_eq!(SHELL_SOCKET, "/run/bifrost/shell-control.sock");
+        assert_eq!(shell_socket_from(None), PathBuf::from(SHELL_SOCKET));
+        assert_eq!(shell_socket_from(Some("/tmp/emu/c.sock\n")), PathBuf::from("/tmp/emu/c.sock"));
+        assert_eq!(shell_socket_from(Some("c.sock")), PathBuf::from(SHELL_SOCKET));
+        assert_eq!(shell_socket_from(Some("7777")), PathBuf::from(SHELL_SOCKET), "a port number is no longer a setting");
+    }
+
+    #[test]
+    fn a_request_goes_over_the_unix_socket_as_one_line() {
+        let dir = std::env::temp_dir().join(format!("bifrost-mcp-sys-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("c.sock");
+        let listener = std::os::unix::net::UnixListener::bind(&path).unwrap();
+        let server = std::thread::spawn(move || {
+            let (mut conn, _) = listener.accept().unwrap();
+            let mut buf = [0u8; 64];
+            let n = conn.read(&mut buf).unwrap();
+            conn.write_all(b"version=9.9.9\n").unwrap();
+            String::from_utf8_lossy(&buf[..n]).into_owned()
+        });
+        let out = shell_at(&path, "  version ").unwrap();
+        assert_eq!(out, b"version=9.9.9\n");
+        assert_eq!(server.join().unwrap(), "version\n");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_missing_socket_is_an_error_not_a_hang() {
+        assert!(shell_at(Path::new("/nonexistent/shell-control.sock"), "state").is_err());
+    }
 }
