@@ -1755,6 +1755,40 @@ impl TextEditApp {
         true
     }
 
+    /// A delete key: with a selection it deletes the selection, without one the character, word or line the key names.
+    fn delete_key(&mut self, ctx: &Ctx, key: select::DeleteKey) -> bool {
+        if self.refuse_edit() {
+            return true;
+        }
+        let width = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h).text_w;
+        self.ensure_layout(&ctx.ui, width);
+        let Some(cache) = self.cache.as_ref() else { return false };
+        let Some(doc) = active_doc_mut(&mut self.docs) else { return false };
+        if !doc.text.has_selection() {
+            let Some(range) = select::delete_range(key, &cache.cells, &cache.layout, doc.text.head()) else { return true };
+            doc.text.select(range.start, range.end);
+        }
+        doc.text.delete_backward();
+        self.edited();
+        true
+    }
+
+    /// Page Up or Page Down: the caret goes a window's height of lines up or down, and with Shift the selection grows to it.
+    fn page_move(&mut self, ctx: &Ctx, down: bool, shift: bool) -> bool {
+        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        self.ensure_layout(&ctx.ui, geom.text_w);
+        let (aspects, fit) = self.cache.as_ref().map_or((Vec::new(), 0.0), |c| (c.art.aspects.clone(), c.width));
+        let measure = view::measure_in(&ctx.ui, &aspects, fit);
+        let Some(cache) = self.cache.as_ref() else { return false };
+        let Some(doc) = active_doc_mut(&mut self.docs) else { return false };
+        let lines = select::page_lines(geom.body_bottom - geom.body_top, &cache.layout);
+        let to = select::page_target(down, select::NavMods::default(), &cache.cells, &cache.layout, doc.text.head(), &measure, lines);
+        let anchor = if shift { doc.text.anchor() } else { to };
+        doc.text.select(anchor, to);
+        self.follow = true;
+        true
+    }
+
     /// A plain key that moves the caret (the page only).
     fn page_key(&mut self, ctx: &Ctx, code: u32) -> bool {
         match select::nav_of_code(code) {
@@ -2257,13 +2291,25 @@ impl App for TextEditApp {
             Input::Key(KeyInput::Text(s)) => self.type_into(&s),
             Input::Key(KeyInput::Code(code)) => {
                 if code & CHORD_FLAG != 0 {
-                    // chords are the menus' key equivalents, which the shell routes as menu actions. The navigation keys
-                    // with Shift, Alt, Ctrl or Cmd come as chords too (the manifest's `edit_keys`): they move or extend the
-                    // selection.
+                    // chords are the menus' key equivalents, which the shell routes as menu actions. The editing keys come as
+                    // chords too (the manifest's `edit_keys`): the arrows, Home, End and Page Up and Down with Shift, Alt, Ctrl
+                    // or Cmd move or extend the selection, Backspace and Delete with Alt, Ctrl or Cmd delete a word or a line,
+                    // and Ctrl with A, E, F, B, N, P, D, H, K are the emacs keys (`select::chord_action`).
                     let Some((key, bits)) = KeyInput::Code(code).as_chord() else { return false };
-                    return match select::nav_of_evdev(key) {
-                        Some(nav) if self.page_has_keys() => self.navigate(ctx, nav, nav_mods(bits)),
-                        _ => false,
+                    let (shift, alt, ctrl, meta) = (bits & CHORD_SHIFT != 0, bits & CHORD_ALT != 0, bits & CHORD_CTRL != 0, bits & CHORD_META != 0);
+                    // Cmd (or Ctrl) with A, C, X, V, Z is the standard command, which the shell sends as `Input::Command` when it
+                    // knows the app takes it; the chord is what arrives when the app's last report is stale
+                    if let Some(action) = chord_edit_action(key, shift, alt, ctrl, meta) {
+                        return self.perform(ctx, action);
+                    }
+                    if !self.page_has_keys() {
+                        return false;
+                    }
+                    return match select::chord_action(key, shift, alt, ctrl, meta) {
+                        Some(select::ChordAction::Move(nav, mods)) => self.navigate(ctx, nav, mods),
+                        Some(select::ChordAction::Page { down, shift }) => self.page_move(ctx, down, shift),
+                        Some(select::ChordAction::Delete(key)) => self.delete_key(ctx, key),
+                        None => false,
                     };
                 }
                 // the properties panel takes the keys while it is open
@@ -2605,9 +2651,20 @@ impl App for TextEditApp {
     }
 }
 
-/// The modifiers of a navigation chord: Shift extends, Alt or Ctrl move by word, Cmd by line.
-fn nav_mods(bits: u32) -> select::NavMods {
-    select::NavMods { shift: bits & CHORD_SHIFT != 0, word: bits & (CHORD_ALT | CHORD_CTRL) != 0, line: bits & CHORD_META != 0 }
+/// The standard editing command a Cmd (or Ctrl) chord names: A select all, C copy, X cut, V paste, Z undo (Shift redo).
+/// Ctrl+A is the line start (`select::chord_action`), not Select All.
+fn chord_edit_action(key: u32, shift: bool, alt: bool, ctrl: bool, meta: bool) -> Option<Action> {
+    if alt || !(meta || ctrl) {
+        return None;
+    }
+    match key {
+        46 if !shift => Some(Action::Copy),
+        45 if !shift => Some(Action::Cut),
+        47 if !shift => Some(Action::Paste),
+        30 if meta && !ctrl && !shift => Some(Action::SelectAll),
+        44 => Some(if shift { Action::Redo } else { Action::Undo }),
+        _ => None,
+    }
 }
 
 fn main() {
@@ -3007,7 +3064,10 @@ mod tests {
         // Cmd+Left is the line start as well, and a chord on another key is not a move
         assert!(app.event(&ctx, Input::Key(KeyInput::chord(105, CHORD_META))));
         assert_eq!(active_doc(&app.docs).unwrap().text.head(), 0);
-        assert!(!app.event(&ctx, Input::Key(KeyInput::chord(30, CHORD_META))));
+        assert!(!app.event(&ctx, Input::Key(KeyInput::chord(49, CHORD_META))), "a chord on another key is not a move");
+        // Cmd+A as a chord (the shell sends it so when its last report of the commands is stale) selects everything
+        assert!(app.event(&ctx, Input::Key(KeyInput::chord(30, CHORD_META))));
+        assert_eq!(active_doc(&app.docs).unwrap().text.selection(), 0..SENTENCE.len());
     }
 
     #[test]
@@ -3023,6 +3083,95 @@ mod tests {
         assert_eq!(active_doc(&app.docs).unwrap().text.head(), 3);
     }
 
+    fn text_of(app: &TextEditApp) -> String {
+        active_doc(&app.docs).unwrap().text.text()
+    }
+
+    fn caret_of(app: &TextEditApp) -> Range<usize> {
+        active_doc(&app.docs).unwrap().text.selection()
+    }
+
+    /// The report: Cmd+A, C, X, V did nothing and Undo had nothing to undo. The shell sends them as the standard commands
+    /// (`Input::Command`); each one acts on the page, and each edit is one undo step.
+    #[test]
+    fn select_all_copy_cut_paste_and_undo_act_on_the_page() {
+        let ctx = window(1200, 780);
+        let mut app = app_with_text(SENTENCE, 5..5);
+        assert!(app.event(&ctx, Input::Command(Command::SelectAll)));
+        assert_eq!(caret_of(&app), 0..SENTENCE.len(), "Cmd+A selects everything");
+        app.event(&ctx, Input::Command(Command::Copy));
+        assert_eq!(clipboard::text().as_deref(), Some(SENTENCE), "Cmd+C reaches the clipboard");
+        assert_eq!(text_of(&app), SENTENCE, "copy leaves the text");
+        assert!(app.event(&ctx, Input::Command(Command::Cut)));
+        assert_eq!(text_of(&app), "", "Cmd+X removes the selection");
+        assert_eq!(clipboard::text().as_deref(), Some(SENTENCE));
+        assert!(app.event(&ctx, Input::Command(Command::Undo)));
+        assert_eq!(text_of(&app), SENTENCE, "Cmd+Z puts the cut back");
+        assert!(app.event(&ctx, Input::Command(Command::Redo)));
+        assert_eq!(text_of(&app), "", "Shift+Cmd+Z cuts again");
+        assert!(app.event(&ctx, Input::Command(Command::Paste)));
+        assert_eq!(text_of(&app), SENTENCE, "Cmd+V pastes the clipboard");
+        assert!(app.event(&ctx, Input::Command(Command::Undo)));
+        assert_eq!(text_of(&app), "", "the paste is an undo step of its own");
+        // the app reports what it takes, so the shell sends the command (and not the chord)
+        let commands = app.commands(&ctx);
+        assert!(commands.supports(Command::SelectAll) && commands.supports(Command::Paste) && commands.supports(Command::Redo));
+    }
+
+    /// Option+Backspace deletes a word, Cmd+Backspace the line before the caret, Option+Delete a word forward, Fn+Delete a
+    /// character forward, and Ctrl+K the rest of the paragraph; each is one chord and one undo step.
+    #[test]
+    fn the_delete_chords_remove_a_word_or_a_line() {
+        let ctx = window(1200, 780);
+        let mut app = app_with_text(SENTENCE, 22..22);
+        // Option+Backspace (evdev 14) after "BifrOSt" removes the word
+        assert!(app.event(&ctx, Input::Key(KeyInput::chord(14, CHORD_ALT))));
+        assert_eq!(text_of(&app), "Hello from the  E2E run.");
+        assert_eq!(caret_of(&app), 15..15);
+        // Cmd+Backspace removes everything back to the start of the line
+        assert!(app.event(&ctx, Input::Key(KeyInput::chord(14, CHORD_META))));
+        assert_eq!(text_of(&app), " E2E run.");
+        assert_eq!(caret_of(&app), 0..0);
+        // Option+Delete (evdev 111) removes the next word, blanks first; plain Delete one character
+        assert!(app.event(&ctx, Input::Key(KeyInput::chord(111, CHORD_ALT))));
+        assert_eq!(text_of(&app), " run.");
+        assert!(app.event(&ctx, Input::Key(KeyInput::chord(111, 0))));
+        assert_eq!(text_of(&app), "run.");
+        // Ctrl+E is the line end, Ctrl+H a backspace, Ctrl+A the line start, Ctrl+D a forward delete, Ctrl+K the rest
+        assert!(app.event(&ctx, Input::Key(KeyInput::chord(18, CHORD_CTRL))));
+        assert_eq!(caret_of(&app), 4..4);
+        assert!(app.event(&ctx, Input::Key(KeyInput::chord(35, CHORD_CTRL))));
+        assert_eq!(text_of(&app), "run");
+        assert!(app.event(&ctx, Input::Key(KeyInput::chord(30, CHORD_CTRL))));
+        assert_eq!(caret_of(&app), 0..0);
+        assert!(app.event(&ctx, Input::Key(KeyInput::chord(32, CHORD_CTRL))));
+        assert_eq!(text_of(&app), "un");
+        assert!(app.event(&ctx, Input::Key(KeyInput::chord(37, CHORD_CTRL))));
+        assert_eq!(text_of(&app), "");
+        // with a selection each of them deletes the selection
+        let mut app = app_with_text(SENTENCE, 6..10);
+        assert!(app.event(&ctx, Input::Key(KeyInput::chord(14, CHORD_ALT))));
+        assert_eq!(text_of(&app), "Hello  the BifrOSt E2E run.");
+        // the undo stack has the steps
+        assert!(app.event(&ctx, Input::Command(Command::Undo)));
+        assert_eq!(text_of(&app), SENTENCE);
+    }
+
+    #[test]
+    fn page_up_and_page_down_move_a_window_of_lines_and_extend_with_shift() {
+        let ctx = window(1200, 780);
+        let long: String = (0..200).map(|i| format!("line {i}\n")).collect();
+        let mut app = app_with_text(&long, 0..0);
+        assert!(app.event(&ctx, Input::Key(KeyInput::chord(109, 0))), "Page Down");
+        let down = caret_of(&app).start;
+        assert!(down > 0 && down < long.len(), "the caret moved down by a page, not to the end: {down}");
+        assert!(app.event(&ctx, Input::Key(KeyInput::chord(109, CHORD_SHIFT))), "Shift+Page Down");
+        let sel = caret_of(&app);
+        assert_eq!(sel.start, down, "the selection grows from where Page Down left the caret");
+        assert!(sel.end > sel.start);
+        assert!(app.event(&ctx, Input::Key(KeyInput::chord(104, 0))), "Page Up");
+        assert_eq!(caret_of(&app).start, caret_of(&app).end, "a plain Page Up collapses the selection");
+    }
     fn centre(r: bifrost_app::controls::Rect) -> (f32, f32) {
         (r.x + r.w / 2.0, r.y + r.h / 2.0)
     }

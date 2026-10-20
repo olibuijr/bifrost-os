@@ -250,6 +250,132 @@ pub fn word_right(cells: &[Cell], from: usize) -> usize {
     at
 }
 
+/// A key that removes text when nothing is selected (with a selection every one of them removes the selection).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DeleteKey {
+    /// Backspace, Ctrl+H: the character before the caret.
+    Back,
+    /// Delete (Fn+Delete), Ctrl+D: the character after the caret.
+    Forward,
+    /// Option+Backspace: back to the start of the word.
+    WordBack,
+    /// Option+Delete: on to the end of the word.
+    WordForward,
+    /// Cmd+Backspace: back to the start of the line (at a line start, the break before it).
+    ToLineStart,
+    /// Ctrl+K: on to the end of the paragraph (at its end, the break after it).
+    ToLineEnd,
+}
+
+/// The characters a delete key removes from a caret at `head`; None when there is nothing there to remove.
+pub fn delete_range(key: DeleteKey, cells: &[Cell], layout: &Layout, head: usize) -> Option<Range<usize>> {
+    let head = head.min(cells.len());
+    let range = match key {
+        DeleteKey::Back => head.saturating_sub(1)..head,
+        DeleteKey::Forward => head..(head + 1).min(cells.len()),
+        DeleteKey::WordBack => word_left(cells, head)..head,
+        DeleteKey::WordForward => head..word_right(cells, head),
+        DeleteKey::ToLineStart => {
+            let start = layout.line_start(head);
+            if start == head {
+                head.saturating_sub(1)..head
+            } else {
+                start..head
+            }
+        }
+        DeleteKey::ToLineEnd => {
+            let end = cells[head..].iter().position(|c| c.ch == '\n' || is_break(c.ch)).map_or(cells.len(), |i| head + i);
+            if end == head {
+                head..(head + 1).min(cells.len())
+            } else {
+                head..end
+            }
+        }
+    };
+    (!range.is_empty()).then_some(range)
+}
+
+/// What a chord does in the page: a move (with its modifiers), a page up or down, or a delete.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ChordAction {
+    Move(Nav, NavMods),
+    Page { down: bool, shift: bool },
+    Delete(DeleteKey),
+}
+
+/// The action of a chord on the evdev key `key` with the modifiers held, in the standard text key table: the arrows, Home and
+/// End with Shift (extend), Option or Ctrl (by word) and Cmd (by line, or to the ends of the text for Up and Down); Page Up and
+/// Page Down; Backspace and forward Delete with Option or Ctrl (a word) and Cmd (to the line start or end); and Ctrl with A, E,
+/// F, B, N, P (move), D, H, K (delete). None for any other chord.
+pub fn chord_action(key: u32, shift: bool, alt: bool, ctrl: bool, meta: bool) -> Option<ChordAction> {
+    let mods = NavMods { shift, word: alt || ctrl, line: meta };
+    if let Some(nav) = nav_of_evdev(key) {
+        return Some(ChordAction::Move(nav, mods));
+    }
+    let word = alt || ctrl;
+    match key {
+        104 => Some(ChordAction::Page { down: false, shift }),
+        109 => Some(ChordAction::Page { down: true, shift }),
+        111 => Some(ChordAction::Delete(if meta {
+            DeleteKey::ToLineEnd
+        } else if word {
+            DeleteKey::WordForward
+        } else {
+            DeleteKey::Forward
+        })),
+        14 => Some(ChordAction::Delete(if meta {
+            DeleteKey::ToLineStart
+        } else if word {
+            DeleteKey::WordBack
+        } else {
+            DeleteKey::Back
+        })),
+        _ if ctrl && !alt && !meta => {
+            let plain = NavMods { shift, word: false, line: false };
+            Some(match key {
+                30 => ChordAction::Move(Nav::Home, plain),
+                18 => ChordAction::Move(Nav::End, plain),
+                33 => ChordAction::Move(Nav::Right, plain),
+                48 => ChordAction::Move(Nav::Left, plain),
+                49 => ChordAction::Move(Nav::Down, plain),
+                25 => ChordAction::Move(Nav::Up, plain),
+                32 => ChordAction::Delete(DeleteKey::Forward),
+                35 => ChordAction::Delete(DeleteKey::Back),
+                37 => ChordAction::Delete(DeleteKey::ToLineEnd),
+                _ => return None,
+            })
+        }
+        _ => None,
+    }
+}
+
+/// How many lines a page up or down moves: the height of the page less one line, in lines of the document's average height.
+pub fn page_lines(viewport: f32, layout: &Layout) -> usize {
+    let line = layout.height / layout.lines.len().max(1) as f32;
+    if line.is_finite() && line > 0.0 {
+        ((viewport / line) as usize).saturating_sub(1).clamp(1, 200)
+    } else {
+        1
+    }
+}
+
+/// Where a page up or down takes the caret: `lines` lines up or down, and to the start or end of the text when the
+/// document has no line left (as one Up or Down does).
+pub fn page_target(down: bool, mods: NavMods, cells: &[Cell], layout: &Layout, head: usize, measure: &Measure, lines: usize) -> usize {
+    let key = if down { Nav::Down } else { Nav::Up };
+    let step = NavMods { shift: false, word: false, line: mods.line };
+    let none = head..head;
+    let mut at = head;
+    for _ in 0..lines.max(1) {
+        let next = target(key, step, cells, layout, at, &none, measure);
+        if next == at {
+            break;
+        }
+        at = next;
+    }
+    at
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -377,6 +503,92 @@ mod tests {
         let lines = cells("ab\ncd");
         assert_eq!(word_right(&lines, 2), 5, "a break is skipped like a blank");
         assert_eq!(word_left(&lines, 3), 0);
+    }
+
+    /// The chords of the standard text key table, as the shell delivers them (evdev key, modifiers).
+    #[test]
+    fn the_standard_text_keys_are_chord_actions() {
+        use ChordAction::*;
+        use DeleteKey::*;
+        let (shift, alt, ctrl, meta) = (|k| chord_action(k, true, false, false, false), |k| chord_action(k, false, true, false, false), |k| chord_action(k, false, false, true, false), |k| chord_action(k, false, false, false, true));
+        let none = |k| chord_action(k, false, false, false, false);
+        let plain = NavMods::default();
+        assert_eq!(none(102), Some(Move(Nav::Home, plain)), "Home");
+        assert_eq!(none(107), Some(Move(Nav::End, plain)), "End");
+        assert_eq!(shift(102), Some(Move(Nav::Home, NavMods { shift: true, ..plain })), "Shift+Home");
+        assert_eq!(alt(105), Some(Move(Nav::Left, NavMods { word: true, ..plain })), "Option+Left");
+        assert_eq!(ctrl(106), Some(Move(Nav::Right, NavMods { word: true, ..plain })), "Ctrl+Right");
+        assert_eq!(meta(103), Some(Move(Nav::Up, NavMods { line: true, ..plain })), "Cmd+Up");
+        assert_eq!(chord_action(105, true, true, false, false), Some(Move(Nav::Left, NavMods { shift: true, word: true, line: false })), "Shift+Option+Left");
+        assert_eq!(none(104), Some(Page { down: false, shift: false }), "Page Up");
+        assert_eq!(shift(109), Some(Page { down: true, shift: true }), "Shift+Page Down");
+        assert_eq!(none(111), Some(Delete(Forward)), "Fn+Delete");
+        assert_eq!(alt(111), Some(Delete(WordForward)), "Option+Delete");
+        assert_eq!(alt(14), Some(Delete(WordBack)), "Option+Backspace");
+        assert_eq!(ctrl(14), Some(Delete(WordBack)), "Ctrl+Backspace");
+        assert_eq!(meta(14), Some(Delete(ToLineStart)), "Cmd+Backspace");
+        assert_eq!(ctrl(30), Some(Move(Nav::Home, plain)), "Ctrl+A");
+        assert_eq!(ctrl(18), Some(Move(Nav::End, plain)), "Ctrl+E");
+        assert_eq!(chord_action(18, true, false, true, false), Some(Move(Nav::End, NavMods { shift: true, ..plain })), "Shift+Ctrl+E");
+        assert_eq!(ctrl(37), Some(Delete(ToLineEnd)), "Ctrl+K");
+        assert_eq!(ctrl(32), Some(Delete(Forward)), "Ctrl+D");
+        assert_eq!(ctrl(35), Some(Delete(Back)), "Ctrl+H");
+        assert_eq!(ctrl(33), Some(Move(Nav::Right, plain)), "Ctrl+F");
+        assert_eq!(ctrl(48), Some(Move(Nav::Left, plain)), "Ctrl+B");
+        assert_eq!(ctrl(49), Some(Move(Nav::Down, plain)), "Ctrl+N");
+        assert_eq!(ctrl(25), Some(Move(Nav::Up, plain)), "Ctrl+P");
+        assert_eq!(meta(30), None, "Cmd+A is the Select All command, not a chord of the page");
+        assert_eq!(none(30), None, "a plain letter is text");
+        assert_eq!(chord_action(30, false, true, true, false), None, "Ctrl+Option+A is nobody's");
+    }
+
+    /// What each delete key removes, and the text and caret that remain.
+    #[test]
+    fn the_delete_keys_remove_a_character_a_word_or_a_line() {
+        let c = cells("one two three\nfour five");
+        let l = layout(&c, 100.0, &one);
+        use DeleteKey::*;
+        // (key, caret, removed range)
+        let table: &[(DeleteKey, usize, Option<Range<usize>>)] = &[
+            (Back, 5, Some(4..5)),
+            (Back, 0, None),
+            (Forward, 5, Some(5..6)),
+            (Forward, 23, None),
+            (WordBack, 7, Some(4..7)),
+            (WordBack, 4, Some(0..4)),
+            (WordBack, 0, None),
+            (WordForward, 4, Some(4..7)),
+            (WordForward, 7, Some(7..13)),
+            (WordForward, 23, None),
+            (ToLineStart, 20, Some(14..20)),
+            (ToLineStart, 14, Some(13..14)),
+            (ToLineStart, 0, None),
+            (ToLineEnd, 4, Some(4..13)),
+            (ToLineEnd, 13, Some(13..14)),
+            (ToLineEnd, 16, Some(16..23)),
+            (ToLineEnd, 23, None),
+        ];
+        for (key, head, want) in table {
+            assert_eq!(&delete_range(*key, &c, &l, *head), want, "{key:?} at {head}");
+        }
+        // a wrapped line: Cmd+Backspace goes back to the start of the visual line
+        let wrapped = cells("aaa bbb ccc");
+        let lw = layout(&wrapped, 4.0, &one);
+        assert_eq!(delete_range(ToLineStart, &wrapped, &lw, 6), Some(4..6));
+    }
+
+    #[test]
+    fn a_page_moves_the_height_of_the_window_in_lines_and_stops_at_the_ends() {
+        let c = cells("aaa bbb ccc ddd eee");
+        let l = layout(&c, 4.0, &one);
+        let none = NavMods::default();
+        // five lines of four characters: two lines down from the first
+        assert_eq!(page_target(true, none, &c, &l, 1, &one, 2), 9);
+        assert_eq!(page_target(true, none, &c, &l, 9, &one, 5), 19, "no line left: the end of the text");
+        assert_eq!(page_target(false, none, &c, &l, 17, &one, 2), 9);
+        assert_eq!(page_target(false, none, &c, &l, 5, &one, 3), 0, "no line left: the start of the text");
+        assert!(page_lines(100.0, &l) >= 1);
+        assert_eq!(page_lines(0.0, &l), 1, "a page is always at least one line");
     }
 
     fn nav(c: &[Cell], width: f32, key: Nav, mods: NavMods, head: usize, sel: Range<usize>) -> usize {
