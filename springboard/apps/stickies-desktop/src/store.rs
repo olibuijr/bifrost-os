@@ -12,6 +12,11 @@ pub fn path_in(data_dir: &Path) -> PathBuf {
     data_dir.join(FILE_NAME)
 }
 
+/// True when no board has been saved yet: the app has never run here (a board emptied by the person is still a file).
+pub fn first_launch(data_dir: &Path) -> bool {
+    !path_in(data_dir).exists() && !data_dir.join(format!("{FILE_NAME}.bad")).exists()
+}
+
 /// The saved board, or an empty one when there is no file yet. A file that cannot be read or decoded is kept
 /// aside as `stickies.json.bad` and the board starts empty, so the user's notes are never silently overwritten.
 pub fn load(data_dir: &Path) -> Board {
@@ -57,6 +62,15 @@ mod tests {
         save(&dir, &b).unwrap();
         assert!(!dir.join("stickies.json.tmp").exists());
         assert_eq!(load(&dir), b);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn only_a_data_folder_with_no_board_file_is_a_first_launch() {
+        let dir = scratch("first");
+        assert!(first_launch(&dir));
+        save(&dir, &Board::default()).unwrap();
+        assert!(!first_launch(&dir), "an emptied board is not a first launch");
         let _ = fs::remove_dir_all(&dir);
     }
 

@@ -126,6 +126,8 @@ const SHEET_CANCEL: u32 = 1;
 const SHEET_DELETE: u32 = 2;
 
 /// Stacking offset of each new note, so new notes do not land on each other.
+/// The text of the note the first launch opens.
+const WELCOME_TEXT: &str = "Make a note of it!\n\nSticky Notes keeps small notes on your desktop: reminders, lists, or text you use often.\n\n\u{2022} To add another note, choose File, New Sticky Note.\n\n\u{2022} To collapse a note, double-click its title bar.\n\nYour notes are here again when you open Sticky Notes.";
 const CASCADE_PT: f32 = 24.0;
 const CASCADE_STEPS: usize = 8;
 /// Two presses on the same note within this many seconds are a double press.
@@ -1451,7 +1453,14 @@ impl App for StickiesApp {
 
     fn configure(&mut self, ctx: &Ctx) {
         if self.board.is_none() {
-            self.board = Some(store::load(&ctx.data_dir));
+            let first = store::first_launch(&ctx.data_dir);
+            let mut board = store::load(&ctx.data_dir);
+            if first && board.notes.is_empty() {
+                let (x, y) = Self::cascade_position(&board);
+                board.add_text(WELCOME_TEXT, x, y, Self::now());
+                self.dirty = true;
+            }
+            self.board = Some(board);
         }
         self.prefs = Prefs::load(&ctx.defaults());
         self.page = page::load(&ctx.defaults());
@@ -1641,6 +1650,34 @@ mod tests {
         }
         app.board = Some(board);
         app
+    }
+
+    fn ctx_in(dir: &std::path::Path) -> Ctx {
+        use bifrost_app::kit::{Font, Ui};
+        use bifrost_app::proto::Configure;
+        let assets = concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets");
+        let data: &'static [u8] = Box::leak(std::fs::read(format!("{assets}/SFUI.ttf")).unwrap().into_boxed_slice());
+        let cfg = Configure { w: 800, h: 600, scale: 1.0, safe_top: 0.0, safe_bottom: 0.0, dark: true, text_scale: 1.0, reduce_motion: false };
+        let mut ctx = Ctx::testing(Ui::new(Font::parse(data).unwrap(), 1.0), cfg);
+        ctx.data_dir = dir.to_path_buf();
+        ctx
+    }
+
+    #[test]
+    fn the_first_launch_opens_a_welcome_note_and_a_later_empty_board_stays_empty() {
+        let dir = std::env::temp_dir().join(format!("stickies-first-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut app = StickiesApp::new();
+        app.configure(&ctx_in(&dir));
+        let board = app.board.as_ref().unwrap();
+        assert_eq!(board.notes.len(), 1, "a first note is open");
+        assert!(board.notes[0].text.starts_with("Make a note of it!"));
+        assert!(app.dirty, "and it is saved");
+        store::save(&dir, &Board::default()).unwrap();
+        let mut again = StickiesApp::new();
+        again.configure(&ctx_in(&dir));
+        assert!(again.board.as_ref().unwrap().notes.is_empty(), "a board the person emptied is not refilled");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     fn focused(app: &StickiesApp) -> &Note {

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.2
+
+- The first launch opens a welcome note. With no notes the app draws nothing: the hint it drew on its transparent full-screen surface floated over other apps' windows.
+
 ## 0.9.1
 
 - BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.
