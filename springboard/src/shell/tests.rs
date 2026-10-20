@@ -2912,6 +2912,77 @@
         assert!(!sh.app_owns_chord(W,CHORD_META),"only the app in front owns chords");
     }
 
+    /// Cmd+A, Cmd+C, Cmd+X, Cmd+V and Cmd+Z are the SDK app's: the shell used to take them as shortcuts for a text control of its
+    /// own and drop them whenever an external app was in front, so a Text Editor or a Mail field never saw them. The app now gets the
+    /// standard command when it reported that it takes it, the chord when it did not, its own menu item on the chord first; Ctrl+A
+    /// is the line start, so it reaches the app as a chord and never as Select All. The keys that move or delete in text reach an SDK
+    /// app only while one of its text fields has the focus.
+    #[test]
+    fn the_editing_shortcuts_reach_the_sdk_app_in_front_instead_of_being_swallowed() {
+        use bifrost_proto::{AppMenu,AppMenuItem,Command,Commands,KeyInput,ToApp,CHORD_ALT,CHORD_CTRL,CHORD_META,CHORD_SHIFT};
+        use hwkeys::{HwKeys,Shortcut};
+        let (mine,theirs)=bifrost_proto::sys::socketpair_pair().unwrap();
+        let mut host=apphost::AppHost::with_channel("fixture",mine,None,bifrost_proto::Configure{w:100,h:100,scale:1.,safe_top:0.,safe_bottom:0.,dark:true,text_scale:1.,reduce_motion:false});
+        host.commands=Commands::default().with(Command::SelectAll,true).with(Command::Copy,true).with(Command::Cut,true).with(Command::Paste,true).with(Command::Undo,true);
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        sh.ext.push(Some(host));sh.ext_fg=Some(0);sh.screen=Screen::App(AppId::External(0));
+        let sent=||{
+            let mut all=Vec::new();
+            while let bifrost_proto::sys::Recv::Packet(packet,_)=theirs.recv(false).unwrap(){all.push(bifrost_proto::ToApp::decode(&packet).unwrap());}
+            all
+        };
+        let _=sent();
+        // each shortcut reaches the app as its command
+        for (shortcut,command) in [(Shortcut::SelectAll,Command::SelectAll),(Shortcut::Copy,Command::Copy),(Shortcut::Cut,Command::Cut),(Shortcut::Paste,Command::Paste),(Shortcut::Undo,Command::Undo)] {
+            sh.hw_shortcut(shortcut,1.0);
+            assert!(sent().contains(&ToApp::Command(command)),"{shortcut:?} reaches the app as {command:?}");
+        }
+        // a command the app did not report goes as the Cmd chord of the same key: Redo is Shift+Cmd+Z (evdev 44)
+        sh.hw_shortcut(Shortcut::Redo,2.0);
+        assert!(sent().contains(&ToApp::Key(KeyInput::chord(44,CHORD_META|CHORD_SHIFT))),"Redo, unreported, is Shift+Cmd+Z");
+        // the app's own enabled menu item on the chord wins over the command
+        sh.ext[0].as_mut().unwrap().app_menus=vec![AppMenu{title:"Edit".into(),items:vec![AppMenuItem::new(7,"Select All").key("cmd+a")]}];
+        sh.hw_shortcut(Shortcut::SelectAll,3.0);
+        assert_eq!(sent(),vec![ToApp::MenuAction(7)],"performKeyEquivalent: first");
+        // the physical keys reach `hw_shortcut` as the shortcuts the table names
+        let mut keys=HwKeys::default();
+        let pressed=|keys:&mut HwKeys,held:&[u16],code:u16|{
+            for k in held{keys.key_front(*k,true,false,false);}
+            let sc=keys.key_front(code,true,false,false);
+            keys.key_front(code,false,false,false);
+            for k in held{keys.key_front(*k,false,false,false);}
+            sc
+        };
+        assert_eq!(pressed(&mut keys,&[125],30),Some(Shortcut::SelectAll),"Cmd+A");
+        assert_eq!(pressed(&mut keys,&[125],46),Some(Shortcut::Copy),"Cmd+C");
+        assert_eq!(pressed(&mut keys,&[125],45),Some(Shortcut::Cut),"Cmd+X");
+        assert_eq!(pressed(&mut keys,&[125],47),Some(Shortcut::Paste),"Cmd+V");
+        assert_eq!(pressed(&mut keys,&[125],44),Some(Shortcut::Undo),"Cmd+Z");
+        assert_eq!(pressed(&mut keys,&[125,42],44),Some(Shortcut::Redo),"Shift+Cmd+Z");
+        // Ctrl+A is Select All as a shortcut; the binary withholds it from an SDK app, which gets the chord (the line start)
+        assert_eq!(pressed(&mut keys,&[29],30),Some(Shortcut::SelectAll));
+        assert!(sh.sdk_app_front());
+        assert!(sh.hw_chord(30,CHORD_CTRL));
+        assert_eq!(sent(),vec![ToApp::Key(KeyInput::chord(30,CHORD_CTRL))]);
+        // Option+Backspace and Option+Delete are chords; the editing keys go to an app only with a text field focused
+        let mut k=HwKeys::default();
+        k.key_front(56,true,false,false);
+        assert_eq!(k.chord_mods(14),Some(CHORD_ALT),"Option+Backspace");
+        assert_eq!(k.chord_mods(111),Some(CHORD_ALT),"Option+Delete");
+        assert_eq!(k.nav_mods(106),Some(CHORD_ALT),"Option+Right");
+        assert!(!sh.ext_text_focused(),"no text field is focused: an app without `edit_keys` keeps its plain arrows");
+        sh.ext[0].as_mut().unwrap().caret_rect=Some((0.,0.,1.,16.));
+        assert!(sh.ext_text_focused());
+        assert!(sh.hw_nav(106,CHORD_ALT),"a focused field takes Option+Right");
+        assert_eq!(sent(),vec![ToApp::Key(KeyInput::chord(106,CHORD_ALT))]);
+        assert!(sh.hw_nav(102,0),"Home alone, too");
+        assert_eq!(sent(),vec![ToApp::Key(KeyInput::chord(102,0))]);
+        // the shell's own screens take none of it
+        sh.screen=Screen::Home;
+        assert!(!sh.sdk_app_front());
+        assert!(!sh.hw_nav(106,CHORD_ALT));
+    }
+
     /// Cmd+Q quits the front app and Cmd+W only closes its window. The decision (`desktop_bar::quit_step`) is pure: a window server
     /// toplevel of a running SDK app quits the app, a native or Linux app closes all its windows (as the Dock's Quit does), and a
     /// window of the shell's own desk quits its app or, for a built-in window, closes as before.

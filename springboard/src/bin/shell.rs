@@ -1006,6 +1006,8 @@ fn run() -> std::io::Result<()> {
                     key_repeat.set_timing(f64::from(kp.repeat_delay_ms), kp.repeat_rate);
                     shell.keyboard_viewer_key(code, down);
                     let raw_sc = hw_keys.key_front(code, down, shell.term_front(), shell.photos_front()).filter(|sc| springboard::shell::kb_input::enabled(*sc, kp.shortcuts_off));
+                    // Ctrl+A is the line start in an app's text (Cmd+A selects all): the app in front gets the chord, not Select All
+                    let raw_sc = raw_sc.filter(|sc| !(*sc == springboard::shell::hwkeys::Shortcut::SelectAll && hw_keys.ctrl_held() && !hw_keys.meta_held() && shell.sdk_app_front()));
                     shell.set_photos_shift(hw_keys.shift_held());
                     if trace {
                         eprintln!("springboard: key {code} {} shortcut={raw_sc:?}", if down { "down" } else { "up" });
@@ -1073,7 +1075,10 @@ fn run() -> std::io::Result<()> {
                         hw_keys.set_layout(springboard::installer::keymaps::layout_index(source.keymap()).unwrap_or(0));
                         springboard::shell::fcitx_bridge::follow(source);
                     }
-                    let typed = if down { hw_keys.typed(code) } else { None };
+                    // Home, End, the word and line keys, Shift with the arrows and the deletes edit a shell text field (an app in front
+                    // gets them as chords, the Terminal as its own keys)
+                    let field_edit = if down && !shell.sdk_app_front() && !shell.term_front() { hw_keys.field_edit(code) } else { None };
+                    let typed = if down { field_edit.or_else(|| hw_keys.typed(code)) } else { None };
                     if let Some(out) = typed {
                         key_repeat.press(code, Some(out.clone()), t);
                         // a replacement whose word this key ends: erase the word and type its phrase first
