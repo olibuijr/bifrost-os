@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.16.2 — 2026-10-20
+
+- Reading hostile mail no longer hangs or crashes Mail: HTML tags are parsed in linear time (a tag is at most 4 KB, and
+  an unfinished tag shows as text), HTML input is capped at 4 MB, and multipart messages are followed at most 12 levels
+  deep and 2000 parts wide.
+- Servers named by a domain's autoconfig file are trusted only when the file came from the address's own domain (a
+  redirect to another domain does not count) and names a server in that domain; any other server is shown for
+  confirmation before the password goes there.
+- A Subject, In-Reply-To or References value can no longer start another header (line breaks are removed), and a lone
+  CR in a message body is a line end, so it can no longer end the SMTP data early.
+- The inbox watcher really idles: the socket's read timeout no longer ends IDLE, IDLE is renewed after 25 minutes, and a
+  watcher stops when its account is removed or its settings change (and starts again with the new login).
+- A Passwords item shared by two accounts with the same server and user name is kept when one of them is removed or
+  edited, and adding an account does not overwrite another account's saved password.
+- An account set to no encryption connects only to this computer or a private network.
+- After the message is handed to the SMTP server Mail waits up to five minutes for the answer; with none, the message is
+  not sent again by itself (it may have been delivered) and the person is told to check Sent Items.
+- The message cache is limited to 96 MB as well as 64 messages, a mailbox export is limited to 256 MB, and a message
+  literal is quoted without an extra copy.
+- Remote images are counted in the decoded HTML part of a message, not in the raw text.
+- The new-mail baseline follows UIDVALIDITY (a renumbered mailbox announces nothing old) and starts on an empty inbox.
+- Mail's DNS client asks the system's name servers only (no public resolver), retries after a failure, does not stay
+  disabled after a SERVFAIL or REFUSED, uses random transaction ids and follows a truncated reply over TCP.
+- A damaged outbox file is kept as `mail-queue.json.bad` with a note in the status line instead of being overwritten, and
+  saved attachment names stay unique.
+
 ## 0.16.1 — 2026-10-20
 
 - The New Mail banner is built in one place for the window and the background check, and a test holds that its sender and
