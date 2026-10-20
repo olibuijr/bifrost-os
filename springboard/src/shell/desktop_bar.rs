@@ -1066,21 +1066,21 @@ impl Shell {
             let w=w.min(width.saturating_sub(x));let h=h.min(height.saturating_sub(y));if w==0||h==0{continue;}let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}if id==2&&!self.dock_is_visible(){data.fill(0);}let input=if id==1 {popup.map(|(_,menu)|menu)}else{None};frames.push(crate::bare::wayland::ChromeFrame{id,x:x as i32,y:y as i32,width:w,height:h,pixels:data,input});
         }
         // Search: id 3, an overlay surface above every window that takes the keyboard while it is open
-        if let Some(((x,y,w,h),mask))=self.quicksearch.desk_overlay(&self.ui,self.w) {
-            let w=w.min(width.saturating_sub(x));let h=h.min(height.saturating_sub(y));
+        if let Some(((x,y,ow,oh),mask))=self.quicksearch.desk_overlay(&self.ui,self.w) {
+            let w=ow.min(width.saturating_sub(x));let h=oh.min(height.saturating_sub(y));
             if w>0&&h>0 {
                 let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}
-                let full=mask.len()/h.max(1);let mask:Vec<u8>=(0..w*h).map(|i|mask.get((i/w)*full+i%w).copied().unwrap_or(0)).collect();
+                let mask=crop_mask(&mask,ow,w,h);
                 let mut image=Image{w,h,px:data};image.apply_mask(&mask);
                 frames.push(crate::bare::wayland::ChromeFrame{id:3,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px,input:None});
             }
         }
         // the assistant panel: id 6, an overlay surface like Search (its keyboard is exclusive while it is open)
-        if let Some(((x,y,w,h),mask))=self.assistant.desk_overlay(&self.ui,self.w) {
-            let w=w.min(width.saturating_sub(x));let h=h.min(height.saturating_sub(y));
+        if let Some(((x,y,ow,oh),mask))=self.assistant.desk_overlay(&self.ui,self.w) {
+            let w=ow.min(width.saturating_sub(x));let h=oh.min(height.saturating_sub(y));
             if w>0&&h>0 {
                 let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}
-                let full=mask.len()/h.max(1);let mask:Vec<u8>=(0..w*h).map(|i|mask.get((i/w)*full+i%w).copied().unwrap_or(0)).collect();
+                let mask=crop_mask(&mask,ow,w,h);
                 let mut image=Image{w,h,px:data};image.apply_mask(&mask);
                 frames.push(crate::bare::wayland::ChromeFrame{id:6,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px,input:None});
             }
@@ -1143,6 +1143,28 @@ impl Shell {
             }
         }
         frames
+    }
+}
+
+/// The top-left `w` x `h` of a mask that is `stride` px wide (its own width, before the card was clipped to the screen).
+/// The stride is the mask's width, not its length over the clipped height: a card that runs off the bottom of the
+/// screen has fewer rows than the mask, and dividing by them sheared the rows.
+#[cfg(feature="desktop-wayland")]
+fn crop_mask(mask:&[u8],stride:usize,w:usize,h:usize)->Vec<u8> {
+    (0..w*h).map(|i|mask.get((i/w)*stride+i%w).copied().unwrap_or(0)).collect()
+}
+
+#[cfg(all(test,feature="desktop-wayland"))]
+mod crop_tests {
+    use super::crop_mask;
+    #[test]
+    fn a_clipped_card_keeps_its_mask_rows() {
+        // a 4 x 3 mask, rows 0..3 hold 1, 2, 3
+        let mask=[1,1,1,1, 2,2,2,2, 3,3,3,3];
+        // clipped to 4 x 2 (the bottom row ran off the screen): rows 1 and 2 stay whole
+        assert_eq!(crop_mask(&mask,4,4,2),vec![1,1,1,1,2,2,2,2]);
+        // clipped to 3 x 3 (the right side ran off): the row stride is still 4
+        assert_eq!(crop_mask(&mask,4,3,3),vec![1,1,1,2,2,2,3,3,3]);
     }
 }
 
