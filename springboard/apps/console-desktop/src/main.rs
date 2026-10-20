@@ -132,7 +132,13 @@ impl ConsoleApp {
 
     /// File > Capture Archive: the save panel picks the place; the capture starts when the shell answers `SaveTo`.
     fn begin_capture(&mut self, ctx: &Ctx) {
-        if self.capture.is_some() || matches!(self.saving, Some((_, Saving::Archive))) {
+        // choosing Capture Archive again while the journal is being read stops that capture
+        if let Some(capture) = &self.capture {
+            capture.cancel();
+            self.say("Cancelling the capture...");
+            return;
+        }
+        if matches!(self.saving, Some((_, Saving::Archive))) {
             self.say("An archive is already being captured.");
             return;
         }

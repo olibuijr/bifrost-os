@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.3
+
+- The code identity pane (executable, hash, requirements) shows a process only when it was running when the entry was logged, so a recycled process id no longer shows an unrelated program; a crash report's detail is matched on the dump's own time as well as its process id.
+- Capture Archive reads the journal command's error output on its own thread, so it can no longer stall on a full pipe, and choosing Capture Archive again while it runs (or closing the window) cancels it.
+
 ## 1.9.2
 
 - The live row is named This Computer (it said a platform name). Hang Diagnostics and Spin Reports have icons.
