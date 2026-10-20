@@ -171,6 +171,12 @@ const MAC_GAP_PT: f32 = 12.0;
 /// Golden Gate: the top-hit plate's inset from the card edge and its corner radius
 const MAC_PLATE_INSET_PT: f32 = 10.0;
 const MAC_PLATE_R_PT: f32 = 12.0;
+/// Golden Gate: the gap kept between the bottom of the results card and the top of the Dock (or the screen's bottom edge)
+const MAC_DOCK_MARGIN_PT: f32 = 12.0;
+/// Golden Gate: the most result rows built for the scrolling list; the rest of the ranking is not shown
+const MAC_MAX_ROWS: usize = 30;
+/// How long after a wheel notch the touches the window server emulates for it (a down, a move, an up) are dropped
+const WHEEL_DRAG_MS: f64 = 250.0;
 
 const fn rgba_const(r: u8, g: u8, b: u8, a: u8) -> u32 {
     let k = a as u32;
@@ -1088,6 +1094,15 @@ pub struct QuickSearch {
     sections: Vec<Section>,
     /// the row the arrow keys moved to: (section, row); Return opens it instead of the Top Hit
     selected: Option<(usize, usize)>,
+    /// Golden Gate: the top of the Dock in px while it stands along the bottom edge, None when it does not limit the card
+    dock_top: Option<f32>,
+    /// Golden Gate: the lowest y in px the results card may reach (a margin above the Dock or the screen's bottom)
+    max_bottom: f32,
+    /// Golden Gate: how far the rows are scrolled up inside the card, in px, and the query the offset belongs to
+    scroll: f32,
+    scroll_query: String,
+    /// touches of the drag emulated for a wheel notch that are still to be dropped: (count, until ms)
+    wheel_swallow: (u8, f64),
     deildu_titles: Vec<String>,
     /// `fuzzy::fold` of each Deildu title, kept so keystrokes do not re-fold them
     deildu_folded: Vec<String>,
@@ -1200,6 +1215,11 @@ impl QuickSearch {
             row_icons: vec![],
             sections: vec![],
             selected: None,
+            dock_top: None,
+            max_bottom: f32::MAX,
+            scroll: 0.0,
+            scroll_query: String::new(),
+            wheel_swallow: (0, 0.0),
             thumbs: vec![],
             file_thumbs: super::search_thumbs::FileThumbs::default(),
             deildu_titles: vec![],
@@ -1488,6 +1508,7 @@ impl QuickSearch {
     pub fn open(&mut self, ui: &Ui, h: i32, y0: f32, y: f32, t: f64, range: f32) {
         self.field.set_text(ui, "");
         self.field.focused = false;
+        self.scroll = 0.0;
         self.search(ui, h);
         self.touch = None;
         let mut drag = Drag::new(y0, t, 0.0, range);
@@ -1571,11 +1592,11 @@ impl QuickSearch {
         }
         match out {
             Out::Named("Down") => {
-                self.move_selection(1);
+                self.move_selection(ui, 1);
                 return None;
             }
             Out::Named("Up") => {
-                self.move_selection(-1);
+                self.move_selection(ui, -1);
                 return None;
             }
             // Space on an arrow-selected file previews it in Files instead of typing a space
@@ -1600,9 +1621,69 @@ impl QuickSearch {
     }
 
     /// Moves the keyboard selection one row down (`step` 1) or up (-1) through the shown rows.
-    fn move_selection(&mut self, step: isize) {
+    fn move_selection(&mut self, ui: &Ui, step: isize) {
         let rows: Vec<(usize, usize)> = self.rows().into_iter().map(|(si, ri, _)| (si, ri)).collect();
         self.selected = step_row(&rows, self.selected, step);
+        self.reveal_selected(ui);
+    }
+
+    /// Golden Gate: scrolls the list the least that brings the selected row fully into the card.
+    fn reveal_selected(&mut self, ui: &Ui) {
+        let Some((si, ri)) = self.selected.filter(|_| self.mac) else { return };
+        let m = self.m();
+        let rh = self.px(ui, m.row);
+        let mut top = 0.0;
+        for (i, sec) in self.sections.iter().enumerate() {
+            top += self.px(ui, m.header);
+            if i == si {
+                top += rh * ri as f32;
+                break;
+            }
+            top += rh * sec.rows.len() as f32;
+        }
+        let view = self.viewport_h(ui);
+        if top < self.scroll {
+            self.scroll = top;
+        } else if top + rh > self.scroll + view {
+            self.scroll = top + rh - view;
+        }
+        self.scroll = self.scroll.clamp(0.0, self.max_scroll(ui));
+    }
+
+    /// Golden Gate: scrolls the list by `delta` px (positive: further down the results). True when it moved.
+    pub fn scroll_by(&mut self, ui: &Ui, delta: f32) -> bool {
+        let to = (self.scroll + delta).clamp(0.0, self.max_scroll(ui));
+        let moved = (to - self.scroll).abs() > 0.01;
+        self.scroll = to;
+        moved
+    }
+
+    /// Golden Gate: sets the top of the Dock (px) the card must stay above, None when the Dock does not limit it.
+    /// The rows are laid out again when it changed; true then.
+    pub fn set_dock_top(&mut self, ui: &Ui, h: i32, top: Option<f32>) -> bool {
+        let same = match (self.dock_top, top) {
+            (Some(a), Some(b)) => (a - b).abs() < 0.5,
+            (a, b) => a == b,
+        };
+        if same {
+            return false;
+        }
+        self.dock_top = top;
+        if self.mac && self.active() {
+            self.search(ui, h);
+            return true;
+        }
+        false
+    }
+
+    /// True for each touch of the drag emulated for a wheel notch Search took already.
+    fn swallows_touch(&mut self, t: f64) -> bool {
+        if self.wheel_swallow.0 == 0 || t > self.wheel_swallow.1 {
+            self.wheel_swallow = (0, 0.0);
+            return false;
+        }
+        self.wheel_swallow.0 -= 1;
+        true
     }
 
     /// The first result: what Return opens.
@@ -1633,7 +1714,11 @@ impl QuickSearch {
         let keep = self.selected_hit();
         let mut sections = vec![];
         let mut y = self.content_top(ui) + self.px(ui, m.bottom_pad) + self.chips_band(ui);
-        let bottom = if self.mac { h as f32 - ui.pt(12.0) } else { self.keyboard_top(ui, h) - ui.pt(8.0) };
+        // Golden Gate: the card ends a margin above the Dock (or the screen) and the rows scroll inside it, so every
+        // result is built up to a cap; the bifrost cuts the list at the keyboard
+        self.max_bottom = if self.mac { self.dock_top.unwrap_or(h as f32) - ui.pt(MAC_DOCK_MARGIN_PT) } else { f32::MAX };
+        let bottom = if self.mac { f32::MAX } else { self.keyboard_top(ui, h) - ui.pt(8.0) };
+        let mut built = 0usize;
         // thumbnails are fitted to the row's icon square; a size change (another scale) reloads them
         let isz = self.px(ui, m.row_icon).round() as usize;
         self.thumbs.retain(|(_, s, _)| *s == isz);
@@ -1649,9 +1734,10 @@ impl QuickSearch {
             let mut subs = vec![];
             for hit in g.hits {
                 let need = self.px(ui, m.row) + if rows.is_empty() { self.px(ui, m.header) } else { 0.0 };
-                if y + need > bottom {
+                if y + need > bottom || (self.mac && built >= MAC_MAX_ROWS) {
                     break 'fill;
                 }
+                built += 1;
                 y += need;
                 if let Hit::Indexed { app_id, thumb, .. } = &hit {
                     let key = format!("{app_id}/{thumb}");
@@ -1700,6 +1786,12 @@ impl QuickSearch {
         self.sections = sections;
         self.selected = keep.and_then(|wanted| self.sections.iter().enumerate().find_map(|(si, s)| s.rows.iter().position(|(r, _)| *r == wanted).map(|ri| (si, ri))));
         self.selected = None;
+        // a new query starts at the top; the same one (late rows, another Dock) keeps its place within the new bounds
+        if self.scroll_query != query {
+            self.scroll = 0.0;
+            self.scroll_query = query;
+        }
+        self.scroll = self.scroll.clamp(0.0, self.max_scroll(ui));
     }
 
     /// Rows as the list shows them: (section, row, label text).
@@ -1776,9 +1868,45 @@ impl QuickSearch {
         } else if self.sections.is_empty() {
             0.0
         } else {
-            let gap = if self.mac { self.px(ui, MAC_GAP_PT + m.bottom_pad) + self.chips_band(ui) } else { 0.0 };
-            gap + self.sections.iter().map(|s| self.px(ui, m.header) + self.px(ui, m.row) * s.rows.len() as f32).sum::<f32>() + self.px(ui, m.bottom_pad)
+            let natural = self.list_fixed(ui) + self.rows_h(ui);
+            if self.mac {
+                // never taller than what ends a margin above the Dock, but always room for one row
+                let room = self.max_bottom - self.px(ui, m.card_top + m.field);
+                natural.min(room.max(self.list_fixed(ui) + self.px(ui, m.row)))
+            } else {
+                natural
+            }
         }
+    }
+
+    /// The height of every result row together, in px.
+    fn rows_h(&self, ui: &Ui) -> f32 {
+        let m = self.m();
+        self.sections.iter().map(|s| self.px(ui, m.header) + self.px(ui, m.row) * s.rows.len() as f32).sum()
+    }
+
+    /// The part of the results card that does not scroll, in px: the gap under the capsule, the padding above the chips
+    /// and the chips (Golden Gate), and the padding under the last row.
+    fn list_fixed(&self, ui: &Ui) -> f32 {
+        let m = self.m();
+        let gap = if self.mac { self.px(ui, MAC_GAP_PT + m.bottom_pad) + self.chips_band(ui) } else { 0.0 };
+        gap + self.px(ui, m.bottom_pad)
+    }
+
+    /// The height of the window the rows scroll in, in px (the card's content less what does not scroll).
+    fn viewport_h(&self, ui: &Ui) -> f32 {
+        if self.sections.is_empty() || self.suggestions_shown() {
+            return 0.0;
+        }
+        (self.content_h(ui) - self.list_fixed(ui)).max(0.0)
+    }
+
+    /// How far the rows can be scrolled, in px: 0 when they all fit in the card.
+    fn max_scroll(&self, ui: &Ui) -> f32 {
+        if !self.mac || self.sections.is_empty() || self.suggestions_shown() {
+            return 0.0;
+        }
+        (self.rows_h(ui) - self.viewport_h(ui)).max(0.0)
     }
 
     /// The card (x, y, w, h) in px at rest.
@@ -1847,13 +1975,24 @@ impl QuickSearch {
     pub fn row_rects(&self, ui: &Ui, w: i32) -> Vec<((usize, usize), Rect)> {
         let m = self.m();
         let (x, _, cw, _) = self.card(ui, w);
-        let mut y = self.rows_top(ui);
+        let top = self.rows_top(ui);
+        let bottom = top + self.viewport_h(ui);
+        let mut y = top - self.scroll;
         let mut out = vec![];
         for (si, s) in self.sections.iter().enumerate() {
             y += self.px(ui, m.header);
             for ri in 0..s.rows.len() {
-                out.push(((si, ri), (x, y, cw, self.px(ui, m.row))));
-                y += self.px(ui, m.row);
+                let rh = self.px(ui, m.row);
+                if !self.mac {
+                    out.push(((si, ri), (x, y, cw, rh)));
+                } else {
+                    // a row cut by the card's edge answers only where it shows
+                    let (y0, y1) = (y.max(top), (y + rh).min(bottom));
+                    if y1 > y0 {
+                        out.push(((si, ri), (x, y0, cw, y1 - y0)));
+                    }
+                }
+                y += rh;
             }
         }
         out
@@ -1974,6 +2113,7 @@ impl QuickSearch {
                 // a chip narrows the results to its kind; the same chip again shows every kind
                 let title = self.chips.get(i).map(|(t, _)| *t);
                 self.chip = if self.chip == title { None } else { title };
+                self.scroll = 0.0;
                 self.search(ui, h);
                 None
             }
@@ -2094,6 +2234,14 @@ impl QuickSearch {
                 }
             }
         } else {
+            // Golden Gate: the rows scroll under the chips and are cut by the card above its bottom padding, as in the
+            // reference where the last row runs out at the card's rounded edge
+            let (clip_top, clip_bot) = if self.mac { (y, cy + ch - self.px(ui, m.bottom_pad)) } else { (0.0, h as f32) };
+            let mut clipped = s.rows(clip_top.max(0.0).floor() as usize, clip_bot.max(0.0).ceil() as usize);
+            let s = &mut clipped;
+            if self.mac {
+                y -= self.scroll;
+            }
             for (si, sec) in self.sections.iter().enumerate() {
                 if !self.mac {
                     let hd = &sec.header;
@@ -2103,6 +2251,10 @@ impl QuickSearch {
                 y += self.px(ui, m.header);
                 for (ri, (hit, label)) in sec.rows.iter().enumerate() {
                     let rh = self.px(ui, m.row);
+                    if self.mac && (y + rh <= clip_top || y >= clip_bot) {
+                        y += rh;
+                        continue;
+                    }
                     let top = self.mac && si == 0 && ri == 0;
                     if top {
                         let pi = self.px(ui, MAC_PLATE_INSET_PT);
@@ -2198,6 +2350,10 @@ impl Shell {
     pub(super) fn quicksearch_event(&mut self, ev: Event, t: f64) -> Option<Vec<Effect>> {
         let range = self.ui.pt(REVEAL_PT);
         let (w, h) = (self.w, self.h);
+        // the touches the window server emulates after a wheel notch must not tap the row under the pointer
+        if matches!(self.quicksearch.state, State::Shown) && matches!(ev, Event::Down(..) | Event::Move(..) | Event::Up(..)) && self.quicksearch.swallows_touch(t) {
+            return Some(vec![]);
+        }
         match (self.quicksearch.state, ev) {
             (State::Hidden, Event::Down(x, y)) => {
                 let zone = y >= self.layout.status_h as f32 && y < self.h as f32 - home_zone(&self.ui);
@@ -2250,6 +2406,31 @@ impl Shell {
         }
     }
 
+    /// Where Search's results card must stop on the desktop, in px: the top of the Dock while it stands along the bottom
+    /// edge and shows, else None (the screen's bottom edge limits it).
+    fn quicksearch_dock_top(&self) -> Option<f32> {
+        use super::desktop_dock::Position;
+        if !self.desk_active() || self.dock_preferences().position != Position::Bottom || !self.dock_is_visible() {
+            return None;
+        }
+        let m = self.desk_metrics();
+        let (_, bar, _) = self.desk_dock(&m);
+        Some((bar.y as f32).min(self.h as f32))
+    }
+
+    /// The wheel turned while Search is up on the desktop: the results scroll by `dy` px of content travel (negative
+    /// for a wheel turned down) and the drag emulated for the notch is dropped. False when Search does not take it.
+    pub fn quicksearch_wheel(&mut self, dy: f32, t: f64) -> bool {
+        if !(self.quicksearch.mac && self.quicksearch.is_shown()) {
+            return false;
+        }
+        if self.quicksearch.scroll_by(&self.ui, -dy) {
+            self.dirty = true;
+        }
+        self.quicksearch.wheel_swallow = (3, t + WHEEL_DRAG_MS);
+        true
+    }
+
     /// Shows the card at once (the App Library's search field), as if pulled all the way down.
     pub(super) fn quicksearch_show(&mut self, t: f64) {
         let range = self.ui.pt(REVEAL_PT);
@@ -2264,6 +2445,8 @@ impl Shell {
     fn quicksearch_open(&mut self, y0: f32, y: f32, t: f64, range: f32) {
         self.request_index_extensions();
         self.quicksearch.set_mac(&self.ui, self.desk_active());
+        let dock_top = self.quicksearch_dock_top();
+        self.quicksearch.dock_top = dock_top;
         if !self.quicksearch.has_icons() {
             let icons = apps().iter().enumerate().map(|(i, a)| (a.id, if i < super::IN_DOCK { &self.dock[i].icon } else { &self.grid[i - super::IN_DOCK].icon })).collect();
             self.quicksearch.set_icons(&self.ui, icons);
@@ -2419,6 +2602,8 @@ impl Shell {
             return vec![];
         }
         self.dirty = true;
+        let dock_top = self.quicksearch_dock_top();
+        self.quicksearch.set_dock_top(&self.ui, self.h, dock_top);
         match self.quicksearch.key(&self.ui, self.h, out, t) {
             Some(hit) => self.quicksearch_act(hit, t),
             None => vec![],
@@ -2427,7 +2612,12 @@ impl Shell {
 
     /// Advances the card's settle and keyboard; true when a frame is needed.
     pub(super) fn quicksearch_tick(&mut self, t: f64) -> bool {
-        self.quicksearch.tick(&self.ui, self.h, t)
+        // the Dock may show or hide under the open card: its top moves the card's limit
+        let moved = self.quicksearch.active() && {
+            let dock_top = self.quicksearch_dock_top();
+            self.quicksearch.set_dock_top(&self.ui, self.h, dock_top)
+        };
+        self.quicksearch.tick(&self.ui, self.h, t) || moved
     }
 
     /// The home screen with the card and keyboard over it; the keyboard
@@ -3152,5 +3342,128 @@ mod file_actions_tests {
         q.selected = Some((0, 0));
         assert_eq!(q.key(&u, 800, Out::Text(" ".into()), 0.0), Some(file), "Space previews the selected file");
         assert_eq!(q.query(), " ", "the query is untouched by the preview");
+    }
+}
+
+#[cfg(test)]
+mod dock_and_scroll_tests {
+    use super::*;
+    use crate::shell::keyboard::Out;
+    use crate::shell::Event;
+
+    /// A desktop shell with Search open and "se" typed (several kinds of result).
+    fn typed() -> Shell {
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.open_quicksearch_hw(1000.0);
+        sh.quicksearch_tick(2000.0);
+        assert!(sh.quicksearch.is_shown());
+        sh.quicksearch.key(&sh.ui, sh.h, Out::Text("se".into()), 2100.0);
+        sh
+    }
+
+    /// The Dock top that leaves room for exactly `rows` result rows under the chips.
+    fn dock_for_rows(sh: &Shell, rows: f32) -> f32 {
+        let qs = &sh.quicksearch;
+        let m = qs.m();
+        qs.px(&sh.ui, m.card_top + m.field) + qs.list_fixed(&sh.ui) + rows * qs.px(&sh.ui, m.row) + sh.ui.pt(MAC_DOCK_MARGIN_PT)
+    }
+
+    fn row_h(sh: &Shell) -> f32 {
+        sh.quicksearch.px(&sh.ui, sh.quicksearch.m().row)
+    }
+
+    #[test]
+    fn the_dock_limits_the_card_on_the_desktop_and_the_screen_otherwise() {
+        let mut sh = crate::shell::tests::desktop_shell();
+        let top = sh.quicksearch_dock_top().expect("the Dock stands along the bottom and shows");
+        assert!(top > 0.0 && top < sh.h as f32, "the Dock's top is on the screen");
+        sh.desk.as_mut().unwrap().dock_preferences.position = crate::shell::desktop_dock::Position::Left;
+        assert_eq!(sh.quicksearch_dock_top(), None, "a Dock on a side does not limit the height");
+    }
+
+    #[test]
+    fn the_results_card_stays_above_the_dock_however_many_results() {
+        let mut sh = typed();
+        let dock = sh.quicksearch_dock_top().unwrap();
+        let h = sh.h;
+        let margin = sh.ui.pt(MAC_DOCK_MARGIN_PT);
+        // from the real Dock to one that leaves four rows, three rows and one row
+        for floor in [dock, dock_for_rows(&sh, 4.0), dock_for_rows(&sh, 3.0), dock_for_rows(&sh, 1.0)] {
+            sh.quicksearch.set_dock_top(&sh.ui, h, Some(floor));
+            let (_, cy, _, ch) = sh.quicksearch.card(&sh.ui, sh.w);
+            assert!(cy + ch <= floor - margin + 0.5, "the card ends {} px above the Dock's top {floor}", floor - cy - ch);
+            for (_, (_, ry, _, rh)) in sh.quicksearch.row_rects(&sh.ui, sh.w) {
+                assert!(ry + rh <= cy + ch, "a row shows only inside the card");
+            }
+        }
+        // the Dock hiding gives the screen's bottom back
+        sh.quicksearch.set_dock_top(&sh.ui, h, None);
+        let (_, cy, _, ch) = sh.quicksearch.card(&sh.ui, sh.w);
+        assert!(cy + ch <= h as f32 - margin + 0.5);
+    }
+
+    #[test]
+    fn rows_beyond_the_card_scroll_with_the_wheel_and_do_not_tap_through() {
+        let mut sh = typed();
+        let floor = dock_for_rows(&sh, 3.0);
+        sh.quicksearch.set_dock_top(&sh.ui, sh.h, Some(floor));
+        let row = row_h(&sh);
+        let qs = &sh.quicksearch;
+        assert!(qs.rows_h(&sh.ui) > qs.viewport_h(&sh.ui) + row, "more results than the card shows");
+        assert!((qs.viewport_h(&sh.ui) - 3.0 * row).abs() < 1.0, "the card shows three rows");
+        assert!(qs.row_rects(&sh.ui, sh.w).len() < qs.rows().len(), "rows below the card's edge cannot be hit");
+        assert_eq!(qs.scroll, 0.0);
+        // a wheel turned down (negative content travel) scrolls the list
+        assert!(sh.quicksearch_wheel(-row, 3000.0));
+        assert!((sh.quicksearch.scroll - row).abs() < 0.5);
+        // the drag emulated for the notch lands on a row and must not open it
+        let (_, (x, y, w, rh)) = sh.quicksearch.row_rects(&sh.ui, sh.w)[0];
+        sh.event(Event::Down(x + w / 2.0, y + rh / 2.0), 3000.0);
+        sh.event(Event::Move(x + w / 2.0, y + rh / 2.0 - 3.0), 3016.0);
+        sh.event(Event::Up(x + w / 2.0, y + rh / 2.0 - 3.0), 3032.0);
+        assert!(sh.quicksearch.is_shown(), "the emulated drag is dropped");
+        // far past the end stops at the last row
+        sh.quicksearch_wheel(-100_000.0, 4000.0);
+        let qs = &sh.quicksearch;
+        assert!((qs.scroll - qs.max_scroll(&sh.ui)).abs() < 0.5);
+        let last = qs.row_rects(&sh.ui, sh.w).last().unwrap().0;
+        assert_eq!(last, (qs.sections.len() - 1, qs.sections.last().unwrap().rows.len() - 1), "the last result shows at the end");
+        // and back to the top
+        sh.quicksearch_wheel(100_000.0, 5000.0);
+        assert_eq!(sh.quicksearch.scroll, 0.0);
+    }
+
+    #[test]
+    fn the_arrow_keys_keep_the_selected_row_in_view() {
+        let mut sh = typed();
+        let floor = dock_for_rows(&sh, 3.0);
+        sh.quicksearch.set_dock_top(&sh.ui, sh.h, Some(floor));
+        let (all, row) = (sh.quicksearch.rows().len(), row_h(&sh));
+        for i in 0..all {
+            sh.quicksearch.key(&sh.ui, sh.h, Out::Named("Down"), 3000.0 + i as f64);
+            let qs = &sh.quicksearch;
+            let at = qs.selected.expect("Down selects a row");
+            let rect = qs.row_rects(&sh.ui, sh.w).into_iter().find(|(a, _)| *a == at).expect("the selected row is in view").1;
+            assert!((rect.3 - row).abs() < 0.5, "the selected row shows whole");
+        }
+        assert!(sh.quicksearch.scroll > 0.0, "the list followed the selection down");
+        for i in 0..all {
+            sh.quicksearch.key(&sh.ui, sh.h, Out::Named("Up"), 4000.0 + i as f64);
+            let qs = &sh.quicksearch;
+            let at = qs.selected.expect("Up keeps a row selected");
+            assert!(qs.row_rects(&sh.ui, sh.w).iter().any(|(a, r)| *a == at && (r.3 - row).abs() < 0.5), "the selected row shows whole");
+        }
+        assert_eq!(sh.quicksearch.scroll, 0.0, "the first row is back at the top");
+    }
+
+    #[test]
+    fn a_new_query_scrolls_back_to_the_top() {
+        let mut sh = typed();
+        let floor = dock_for_rows(&sh, 3.0);
+        sh.quicksearch.set_dock_top(&sh.ui, sh.h, Some(floor));
+        sh.quicksearch_wheel(-200.0, 3000.0);
+        assert!(sh.quicksearch.scroll > 0.0);
+        sh.quicksearch.key(&sh.ui, sh.h, Out::Text("t".into()), 3100.0);
+        assert_eq!(sh.quicksearch.scroll, 0.0);
     }
 }
