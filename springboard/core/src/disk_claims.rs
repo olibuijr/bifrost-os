@@ -37,6 +37,21 @@ impl Claims {
         Ok(())
     }
 
+    /// Drops every claim `owner` holds (the owner quit). Returns how many were dropped.
+    pub fn release_owner(&mut self, owner: &str) -> usize {
+        let before = self.by_device.len();
+        self.by_device.retain(|_, holder| holder != owner);
+        before - self.by_device.len()
+    }
+
+    /// The owners that hold at least one claim, each once.
+    pub fn owners(&self) -> Vec<String> {
+        let mut owners: Vec<String> = self.by_device.values().cloned().collect();
+        owners.sort();
+        owners.dedup();
+        owners
+    }
+
     /// Whether any owner holds the device.
     pub fn is_claimed(&self, device: &str) -> bool {
         self.by_device.contains_key(device)
@@ -62,6 +77,18 @@ impl Claims {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_claims_of_an_owner_that_quit_are_dropped() {
+        let mut claims = Claims::new();
+        claims.claim("sdb", "gone").unwrap();
+        claims.claim("sdc", "gone").unwrap();
+        claims.claim("sdd", "other").unwrap();
+        assert_eq!(claims.owners(), vec!["gone".to_string(), "other".to_string()]);
+        assert_eq!(claims.release_owner("gone"), 2);
+        assert!(!claims.is_claimed("sdb") && claims.is_claimed("sdd"));
+        assert_eq!(claims.release_owner("gone"), 0);
+    }
 
     #[test]
     fn a_free_device_can_be_claimed_and_is_then_reported_claimed() {

@@ -59,7 +59,9 @@ impl SystemService for BluetoothService {
         "bluetooth"
     }
 
-    fn call(&mut self, shell: &mut Shell, _app_id: &str, method: &str, params: &Json, _t: f64) -> Result<Json, String> {
+    fn call(&mut self, shell: &mut Shell, app_id: &str, method: &str, params: &Json, _t: f64) -> Result<Json, String> {
+        // pairing, connecting and removing devices is for system apps
+        super::require_system_app(app_id, "bluetooth")?;
         if method == "status" {
             return Ok(status_json(&shell.info.bt));
         }
