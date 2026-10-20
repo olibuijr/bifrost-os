@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.10.10 — 2026-10-20
+
 - Security: apps can no longer control the desktop through the shell's control port. The shell used to listen on TCP
   127.0.0.1:7777, which any local process could reach, sandboxed apps included, to type, click, take screenshots or start a
   recording. The port is gone (also on lab builds); the shell now listens on a private socket, `/run/bifrost/shell-control.sock`,
@@ -19,6 +21,15 @@
   capture) to clients that connect through a second socket only root can open (`/run/bifrost/wm-privileged`); apps no longer
   see them, so a sandboxed app can no longer read the screen. The shell, the screen recorder and the screenshot tool use it.
 - A window minimized through the window server is kept (hidden, not dropped), so it can be captured and shown again.
+- Sound works again: the audio server now chooses a default output when it starts and when a device is plugged in
+  (built-in speakers or the headphone jack first, then a display with sound), so alert sounds, the terminal bell, Music
+  Radio, Podcasts and Voice Memos have somewhere to play. Apps open their connection to the media service again (it was
+  never opened since the services start on demand). Music says why a station cannot play.
+- Closing Notification Center no longer leaves blurred tiles on the screen; the Launchpad icon in the Dock opens and
+  closes Launchpad again; closing Mission Control without picking a window keeps the window that was in front.
+- Full screen: the menu bar stays hidden until the pointer reaches the top edge, and clicking the green button exits
+  full screen.
+- The menu bar's CPU and memory readings no longer redraw the whole desktop every second while nothing else changes.
 
 ## 0.10.9 — 2026-10-20
 

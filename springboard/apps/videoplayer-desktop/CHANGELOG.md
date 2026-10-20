@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.6 — 2026-10-20
+
+- Playback reaches the system's media service again (the app's audio connection was never opened, so nothing played).
+
 ## 0.2.5
 
 - BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.

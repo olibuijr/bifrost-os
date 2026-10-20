@@ -1,6 +1,6 @@
 [package]
 name = "bifrost-daw"
-version = "0.5.4"
+version = "0.5.5"
 edition = "2021"
 description = "DAW for BifrOSt PC: a Rust port of the mobile DAW (clip launcher, arrangement, piano roll, instruments and effects)."
 

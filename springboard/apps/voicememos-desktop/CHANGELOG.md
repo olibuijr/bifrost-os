@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.10.4 — 2026-10-20
+
+- Playback reaches the system's media service again (the app's audio connection was never opened, so nothing played).
+
 ## 1.10.3 — 2026-10-20
 
 - Nothing else changed: this release only rewords the notes for the new app icon.

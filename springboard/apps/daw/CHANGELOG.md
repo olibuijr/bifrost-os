@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.5 — 2026-10-20
+
+- Playback reaches the system's media service again (the app's audio connection was never opened, so nothing played).
+
 ## 0.5.4
 
 - Device changes: the match on `audio_devices::decode_event` ignores the new `volume_changed` event (the SDK's `Change::Volume`).
