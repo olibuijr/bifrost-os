@@ -543,13 +543,23 @@ Two tools enforce it; neither lists what *is* allowed by guesswork:
   (`path GLOB -- reason`, `family NAME -- reason`); it is empty today. fontTools reads the fonts when installed, else a
   built-in reader does; WOFF2 needs fontTools with brotli. Archives nested inside a package are not opened.
 
+**System assets in the update package (2026-10-20).** `tools/pc-publish.py` stages the allowlisted files of
+`springboard/assets` with `tools/stage-assets.py --replace` into `out/pc-repo/build/system-assets` and passes the tree to
+`makepkg` as `PC_SYSTEM_ASSETS`; `packaging/arch/package-files.sh` installs it at `/usr/share/springboard/system-assets`
+(a path the package alone owns), so a publish can change fonts, icons and wallpapers. With no `springboard/assets` the
+publish warns and ships none; the machine keeps what it has. Run `springboard/tools/pack.py` before a publish that
+should change assets. The guard below checks the built package, assets included. On the machine the package's
+`post_upgrade` removes the old unowned copies in `/usr/share/springboard/assets` and `seed-data` refreshes the data dir
+(`docs/installer-and-boot.md`, "System assets"); verify after an OTA with `pacman -Qo /usr/share/springboard/system-assets/SFUI.ttf`
+and `ls /usr/share/springboard/assets`.
+
 Where the guard runs: `tools/pc-publish.py` after `makepkg` and before `repo-add` (a failing package is deleted, the
 publish stops, and older packages in the pool that fail are removed too, so the public export cannot offer them again);
 `tools/pc-app.py pack|publish` on the `.aap` (deleted on failure, so `tools/bundle-iso-offline.py` cannot pick it up);
 `tools/build-iso.sh` on the finished airootfs, the bundled `springboard-shell` package and the default apps, before
 `mkarchiso`; and the local `PKGBUILD` on `$pkgdir`. Run it by hand on anything: `python3 tools/check-package-licenses.py
 out/pc-repo/bifrost/x86_64/*.pkg.tar.zst out/bifrost-iso/airootfs`. Tests: `python3 tools/test_check_package_licenses.py`,
-`python3 tools/test_stage_assets.py`.
+`python3 tools/test_stage_assets.py`, `python3 tools/test_asset_scripts.py`.
 
 Provenance notes (2026-10-19): `springboard/tools/pack.py` still converts the icons and the UI sounds from the local
 reference folder into `springboard/assets`. Only the `bifrost.*` and `is.olibuijr.*` icons are on the allowlist; the

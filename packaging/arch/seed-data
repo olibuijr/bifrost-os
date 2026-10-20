@@ -1,10 +1,41 @@
 #!/bin/sh
-# Seeds /var/lib/springboard from the packaged assets. Every start copies asset files the data dir does
-# not have yet (new or renamed icons and fonts after an update) and never overwrites one that exists,
-# so the user's data and changed files stay as they are.
+# Seeds /var/lib/springboard (the shell's data dir, where it reads fonts, icons and wallpapers) from the packaged assets.
+#
+# The package owns /usr/share/springboard/system-assets, so an update can change an asset. When the package brings it,
+# the data dir follows: whenever the set changes (a stamp of file names, sizes and times), every file that differs is
+# copied over, and icons/ becomes a mirror of the package's icons (an icon the package no longer has is removed, so a
+# retired icon disappears). Wallpapers, fonts and the user's own files are only added or replaced by name, never deleted.
+# A machine whose package predates system-assets still seeds from /usr/share/springboard/assets and never overwrites
+# a file that exists, so the user's data and changed files stay as they are.
+#
+# SEED_SYSTEM_ASSETS, SEED_ASSETS and SEED_DATA replace the three directories (tests).
 set -eu
-src=/usr/share/springboard/assets
-dst=/var/lib/springboard
+sys=${SEED_SYSTEM_ASSETS:-/usr/share/springboard/system-assets}
+src=${SEED_ASSETS:-/usr/share/springboard/assets}
+dst=${SEED_DATA:-/var/lib/springboard}
 mkdir -p "$dst"
-[ -d "$src" ] && cp -an "$src"/. "$dst"/
+if [ -n "$(ls -A "$sys" 2>/dev/null)" ]; then
+    stamp="$dst/.system-assets"
+    now=$(cd "$sys" && find . -type f -printf '%p %s %T@\n' | LC_ALL=C sort | sha256sum | cut -d' ' -f1)
+    if [ "$(cat "$stamp" 2>/dev/null || true)" != "$now" ]; then
+        (cd "$sys" && find . -type f) | while IFS= read -r f; do
+            if cmp -s "$sys/$f" "$dst/$f" 2>/dev/null; then continue; fi
+            mkdir -p "$(dirname "$dst/$f")"
+            rm -f "$dst/$f"
+            cp "$sys/$f" "$dst/$f"
+        done
+        if [ -d "$sys/icons" ] && [ -d "$dst/icons" ]; then
+            for f in "$dst"/icons/*; do
+                if [ ! -e "$f" ] && [ ! -L "$f" ]; then continue; fi
+                if [ ! -e "$sys/icons/${f##*/}" ]; then
+                    rm -f "$f"
+                    echo "seed-data: removed retired icon ${f##*/}"
+                fi
+            done
+        fi
+        echo "$now" > "$stamp"
+    fi
+elif [ -d "$src" ]; then
+    cp -an "$src"/. "$dst"/
+fi
 touch "$dst/.seeded"

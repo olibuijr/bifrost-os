@@ -11,6 +11,8 @@ Installed systems use that repository from /etc/pacman.conf. Version = Cargo ver
 so every publish is newer than the last.
 The package carries only BifrOSt's own and openly licensed files: tools/check-package-licenses.py inspects it
 before it enters the repo, and a failing package is deleted and the publish stops.
+The system assets (UI fonts, app icons, wallpapers) ship in it too, at /usr/share/springboard/system-assets: they are
+staged from springboard/assets by tools/stage-assets.py (only what packaging/assets-allowlist.txt names).
 """
 import argparse, glob, hashlib, os, re, shutil, subprocess, sys, tempfile, time
 
@@ -21,6 +23,7 @@ POOL = os.path.join(REPO, "out/pc-repo/bifrost/x86_64")
 PIDF = os.path.join(REPO, "out/pc-repo/server.pid")
 PUBLIC_SITE = os.path.abspath(os.path.expanduser(os.environ.get(
     "BIFROST_PUBLIC_SITE", "~/Projects/bifrost-site/site")))
+ASSETS_SRC = os.path.join(REPO, "springboard/assets")
 _h, _, _p = os.environ.get("BIFROST_REPO_BIND", "192.168.1.12:8079").partition(":")
 BIND = (_h, int(_p or 8079))
 
@@ -139,6 +142,20 @@ def serve():
     return p.pid
 
 
+def stage_system_assets(work, assets=ASSETS_SRC):
+    """Stage the packed assets (springboard/assets, from tools/pack.py) into `work`/system-assets with
+    tools/stage-assets.py, so only what packaging/assets-allowlist.txt names can ship, and return the environment
+    for the package build ({"PC_SYSTEM_ASSETS": dir}). The package installs the tree at the package-owned
+    /usr/share/springboard/system-assets (packaging/arch/package-files.sh). With no assets directory the package ships
+    none and a machine keeps the ones it has; the licence guard then runs on the built package as for any other file."""
+    if not os.path.isdir(assets):
+        print(f"pc-publish: no packed assets at {assets} (run springboard/tools/pack.py); the package ships no system-assets", file=sys.stderr)
+        return {}
+    dest = os.path.join(work, "system-assets")
+    run([sys.executable, os.path.join(REPO, "tools/stage-assets.py"), "--replace", assets, dest])
+    return {"PC_SYSTEM_ASSETS": dest}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--release", action="store_true")
@@ -189,7 +206,8 @@ def main():
     src = os.path.join(REPO, "packaging/arch")
     for f in ("fast/PKGBUILD", "fast/springboard.install"):
         shutil.copy(os.path.join(src, f), work)
-    env = {**os.environ, "PC_VER": ver, "PC_PKGSRC": src, "PC_BIN": binpath, "PC_BOOTWEAVE": bootweave, "PC_PORTAL": portal, "PC_PRIVD": privd, "PC_MCP": mcp, "PC_BIFROSTD": bifrostd, "PC_AUDIOD": audiod, "PC_AUDIO_BENCH": audio_bench, "PC_MIDID": midid, "PC_ALSA_PLUGIN": alsa_plugin, "PC_CMD_DIR": tdir, **wm_env, "PC_GUARD": os.path.join(REPO,"out/bifrost-update-guard-publish"), "PKGDEST": POOL, "BUILDDIR": work + "/b", "SRCDEST": work + "/s", "PKGEXT": ".pkg.tar.zst"}
+    assets_env = stage_system_assets(work)
+    env = {**os.environ, **assets_env, "PC_VER": ver, "PC_PKGSRC": src, "PC_BIN": binpath, "PC_BOOTWEAVE": bootweave, "PC_PORTAL": portal, "PC_PRIVD": privd, "PC_MCP": mcp, "PC_BIFROSTD": bifrostd, "PC_AUDIOD": audiod, "PC_AUDIO_BENCH": audio_bench, "PC_MIDID": midid, "PC_ALSA_PLUGIN": alsa_plugin, "PC_CMD_DIR": tdir, **wm_env, "PC_GUARD": os.path.join(REPO,"out/bifrost-update-guard-publish"), "PKGDEST": POOL, "BUILDDIR": work + "/b", "SRCDEST": work + "/s", "PKGEXT": ".pkg.tar.zst"}
     run(["makepkg", "-f", "--nodeps", "--skipinteg", "--nocheck"], cwd=work, env=env, stdout=subprocess.DEVNULL)
     pkg = sorted(glob.glob(os.path.join(POOL, f"springboard-shell-{ver}-1-x86_64.pkg.tar.zst")))[-1]
     # licence guard: the package may carry only BifrOSt's own and openly licensed files. A failing package is deleted

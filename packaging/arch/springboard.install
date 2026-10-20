@@ -1,4 +1,19 @@
+# The package owns /usr/share/springboard/system-assets. Older installs also hold unowned copies of the assets in
+# /usr/share/springboard/assets (copied from the live medium by the installer); once system-assets has files, the helper
+# removes the ones no package owns that the package now supersedes or that the allowlist does not name (vendor-derived
+# icons among them). Idempotent; what it removes is logged to the package output and /var/log/bifrost-assets.log.
+bifrost_prune_assets() {
+    [ -x /usr/lib/springboard/prune-stale-assets ] || return 0
+    out=$(/usr/lib/springboard/prune-stale-assets 2>&1) || true
+    if [ -n "$out" ]; then
+        echo "$out"
+        { date -u +%FT%TZ; echo "$out"; } >> /var/log/bifrost-assets.log 2>/dev/null || true
+    fi
+    return 0
+}
+
 bifrost_post_update() {
+    bifrost_prune_assets
     install -d -m700 /var/lib/bifrost-recovery
     install -m755 /usr/bin/bifrost-update-guard /var/lib/bifrost-recovery/engine
     systemctl daemon-reload >/dev/null 2>&1 || true
