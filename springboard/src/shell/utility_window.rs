@@ -389,8 +389,9 @@ impl Shell {
         v
     }
 
-    /// Ends one Force Quit row. An installed app's process is killed at once through its host; a built-in app (it runs in the
-    /// shell) has its windows closed; a Linux app's windows are asked to close.
+    /// Ends one Force Quit row. An installed app's process is killed at once through its host, or, when the window server
+    /// runs it, through the app manager (SIGKILL to its whole cgroup); a built-in app (it runs in the shell) has its windows
+    /// closed; a Linux app that is not installed has its windows asked to close (its process is not known to the shell).
     fn utility_force_quit(&mut self, target: Target) -> Vec<Effect> {
         match target {
             Target::App(AppId::External(slot)) => {
@@ -403,10 +404,14 @@ impl Shell {
                 if has_host {
                     return Vec::new();
                 }
-                // an app with no host of ours: its windows belong to the window server, so they are asked to close
+                // an app with no host of ours runs under the window server: its whole process tree is killed through the
+                // app manager (the cgroup of its id), which a hung app cannot ignore, and its windows are also asked to
+                // close so the desk drops them at once
                 super::apphost::installed()
                     .get(slot as usize)
                     .map(|p| {
+                        #[cfg(feature = "desktop-wayland")]
+                        crate::bare::app_manager::terminate(&p.manifest.id);
                         self.desk
                             .as_ref()
                             .map(|d| d.native_windows.iter().filter(|w| w.app_id == p.manifest.wayland_app_id).map(|w| Effect::ForeignWindowAction(w.id, false)).collect())
