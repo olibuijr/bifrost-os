@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.3
+
+- A board file that cannot be read (not text, an I/O or permission error) or decoded is kept aside as stickies.json.bad (or the next free .bad.N, never replacing an earlier copy) before the board starts empty, so a later save cannot overwrite the notes. A damaged file whose style run lengths overflow no longer panics.
+
 ## 0.9.2
 
 - The first launch opens a welcome note. With no notes the app draws nothing: the hint it drew on its transparent full-screen surface floated over other apps' windows.

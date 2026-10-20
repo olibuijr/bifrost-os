@@ -1195,8 +1195,9 @@ pub fn decode(text: &str) -> Result<Board, String> {
         note.set_text(&item.str_field("text").unwrap_or_default());
         if let Some(runs) = item.get("runs").and_then(Json::as_array) {
             let counts: Vec<(usize, Style)> = runs.iter().map(|run| (run.get("n").and_then(Json::number).unwrap_or(0.0).max(0.0) as usize, style_from(run))).collect();
-            // the runs are kept only when they cover the text exactly; otherwise the note keeps its one style
-            if counts.iter().map(|(n, _)| n).sum::<usize>() == note.text.chars().count() {
+            // the runs are kept only when they cover the text exactly; otherwise the note keeps its one style. A sum
+            // that overflows covers nothing (a damaged or hand-edited file must not panic or wrap).
+            if counts.iter().try_fold(0usize, |sum, (n, _)| sum.checked_add(*n)) == Some(note.text.chars().count()) {
                 note.styles = counts.iter().flat_map(|(n, s)| std::iter::repeat(*s).take(*n)).collect();
             }
         }
@@ -1899,6 +1900,14 @@ mod tests {
         let text = r#"{"version":1,"next_id":1,"notes":[{"id":1,"text":"abc","runs":[{"n":2,"bold":true}]}]}"#;
         let b = decode(text).unwrap();
         assert!(b.notes[0].styles.iter().all(|s| !s.bold), "the note keeps its one style");
+    }
+
+    #[test]
+    fn decode_survives_run_lengths_that_overflow() {
+        let text = r#"{"version":1,"next_id":1,"notes":[{"id":1,"text":"abc","runs":[{"n":1e30,"bold":true},{"n":1e30}]}]}"#;
+        let b = decode(text).unwrap();
+        assert_eq!(b.notes.len(), 1);
+        assert!(b.notes[0].styles.iter().all(|s| !s.bold), "the runs cover nothing, so the note keeps its one style");
     }
 
     #[test]
