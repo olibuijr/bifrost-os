@@ -888,7 +888,8 @@ mod tests {
 
     #[test]
     fn pause_freezes_and_resume_continues() {
-        let mut p = player(BASELINE);
+        // strict: no frame is dropped as late, so a loaded run cannot leave the resumed stretch without a frame
+        let mut p = strict_player(BASELINE);
         pump(&mut p, 10_000, |p| p.position_ms() > 150.0);
         p.pause();
         assert_eq!(p.state(), State::Paused);
@@ -898,8 +899,7 @@ mod tests {
         assert!((p.position_ms() - at).abs() < 1.0);
         p.play();
         assert_eq!(p.state(), State::Playing);
-        // Frames more than LATE_MS behind the clock are dropped, so under a loaded test run 200 ms of media can pass
-        // with few frames shown; wait for 400 ms of media within a longer budget.
+        // Wait for 400 ms of media within a long budget; the strict player shows every frame, late or not.
         let frames = pump(&mut p, 15_000, |p| p.position_ms() > at + 400.0);
         assert!(!frames.is_empty());
         p.stop();

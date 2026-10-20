@@ -27,10 +27,11 @@ if [ -n "$(ls -A "$sys" 2>/dev/null)" ]; then
         list=$(cd "$sys" && find . -type f)
         while IFS= read -r f; do
             [ -n "$f" ] || continue
+            name=${f#./}
             if cmp -s "$sys/$f" "$dst/$f" 2>/dev/null; then continue; fi
-            mkdir -p "$(dirname "$dst/$f")" 2>/dev/null || { note "cannot create the directory for $f"; continue; }
-            rm -f "$dst/$f" 2>/dev/null || { note "cannot replace $f"; continue; }
-            cp "$sys/$f" "$dst/$f" 2>/dev/null || { rm -f "$dst/$f" 2>/dev/null; note "cannot copy $f"; }
+            mkdir -p "$(dirname "$dst/$f")" 2>/dev/null || { note "cannot create the directory for $name"; continue; }
+            rm -f "$dst/$f" 2>/dev/null || { note "cannot replace $name"; continue; }
+            cp "$sys/$f" "$dst/$f" 2>/dev/null || { rm -f "$dst/$f" 2>/dev/null; note "cannot copy $name"; }
         done <<LIST
 $list
 LIST

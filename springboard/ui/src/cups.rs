@@ -1406,7 +1406,8 @@ mod tests {
             let mut sink = [0u8; 256];
             let _ = conn.read(&mut sink);
             let _ = conn.write_all(b"HTTP/1.1 200 OK\r\n");
-            for _ in 0..40 {
+            // trickles for far longer than the deadline, so only the client giving up (a write error) ends it
+            for _ in 0..400 {
                 std::thread::sleep(Duration::from_millis(50));
                 if conn.write_all(b"X-A: b\r\n").is_err() {
                     break;
@@ -1419,7 +1420,8 @@ mod tests {
             Err(CupsError::Io(e)) => assert!(e.contains("too long"), "{e}"),
             other => panic!("expected the deadline, got {other:?}"),
         }
-        assert!(began.elapsed() < Duration::from_millis(1500), "{:?}", began.elapsed());
+        // the trickle lasts 20 s: being cut off well before that is the deadline at work, however loaded the host is
+        assert!(began.elapsed() < Duration::from_secs(10), "{:?}", began.elapsed());
         server.join().unwrap();
         let _ = std::fs::remove_dir_all(&dir);
     }

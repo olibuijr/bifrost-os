@@ -17,7 +17,8 @@ build() {
         system-prepared|system-probation|system-restoring|prepared|probation|restoring) return 0 ;;
     esac
     [[ -r $stamp ]] || return 0
-    read -r rec_k rec_fw < "$stamp" || return 0
+    # the guard writes the stamp without a trailing newline, which makes `read` fail after it has filled the variables
+    read -r rec_k rec_fw < "$stamp" || true
     [[ -n $rec_k ]] || return 0
     [[ -z ${KERNELVERSION:-} || $KERNELVERSION == "$rec_k" ]] || return 0
     fw=${BIFROST_FIRMWARE_VERSION-$(pacman -Q linux-firmware 2>/dev/null | cut -d' ' -f2)}
