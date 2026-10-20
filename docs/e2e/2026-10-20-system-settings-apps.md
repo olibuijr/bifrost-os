@@ -169,3 +169,13 @@ Midget 0.10.10 (`integration` at `8fd4bcf32`), Music 1.13.4, Podcasts 1.13.4, Vo
 | L4 | Fixed | The Launchpad icon in the Dock opens and closes it (r35, r36). |
 | AU1, MU1 | Partly | The audio server now picks a default output (`default-output is now alsa:PCH:0 (ALC233 Analog)`); Music reaches the media service, shows a now-playing bar and states the error ("Cannot play: audio output: the audio server is not reachable; retrying later", r31). The bell and the media service fail one step later: `sound: add the IO procedure: UnknownObject`. Fix in progress (`fix/audio-ioproc`). |
 | Idle | Not fixed, P1 | With Music retrying playback in front, the shell used 98.6% of a core and Music 25.6%: the shell drew about 65 frames a second with zero damage (`why app(external(42)):dirty`). Quitting Music brought the shell to 7.6%. Without Music the shell still draws a 22 ms CPU frame about once a second. Fix in progress (`perf/idle-redraw`). |
+
+## Re-test on 0.10.11 (05:06 to 05:10)
+
+| ID | Result | Notes |
+|---|---|---|
+| AU1 | Fixed | `tput bel` in Term: the PCM goes RUNNING; `device alsa:PCH:0 started at 48000 Hz, quantum 256`, `audio.speaker: opened the SoundEffects device`. |
+| MU1 | Fixed | Music Radio (Rás 2) plays: the PCM is RUNNING for the whole 15 s sample, decoded peaks 1134 to 14557, the played-frame count rises, Pause and the station show in the player and the menu bar (r41). |
+| Idle | Fixed | With Music playing in front: springboard 0.8% CPU (was 98.6%), Music 3.4% (was 25.6%), bifrost-audiod 1.2%, the media service 0.8%; no shell frame and no slow frame in 10 s of trace. |
+
+New: the speaker trace reports `underruns 768` and a slowest write of 30 ms during radio playback, and the audio server logged one device xrun when the first stream started. Check for audible glitches and the stream buffer size.
