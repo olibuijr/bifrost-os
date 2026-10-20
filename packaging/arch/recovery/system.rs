@@ -43,8 +43,52 @@ fn bootid() -> io::Result<String> {
         .trim()
         .into())
 }
+/// The boot marker says the staged update is complete (`ready` wrote `0`).
+pub fn pending_cleared() -> bool {
+    fs::read_to_string(Path::new(ESP).join("pending")).is_ok_and(|s| s.trim() == "0")
+}
+/// The boot marker file: while it exists the loader may boot the fallback line.
+pub fn pending_path() -> std::path::PathBuf {
+    Path::new(ESP).join("pending")
+}
+/// Phases between `prepare` and accept or rollback, in which the rollback generation must stay as prepared.
+pub fn update_in_flight(phase: &str) -> bool {
+    matches!(
+        phase.trim(),
+        "system-prepared" | "system-probation" | "system-restoring" | "prepared" | "probation" | "restoring"
+    )
+}
+/// An update is between prepare and accept now: the state says so, or the boot marker is still there.
+fn in_flight_now() -> bool {
+    update_in_flight(&state(Path::new(STORE))) || Path::new(ESP).join("pending").exists()
+}
+/// Marker in the store: `restore` swapped @system for the restored snapshot (so a retry does not swap again).
+const RESTORE_SWAPPED: &str = "restore-swapped";
+/// Counter in the store: how many times `restore` started for the current rollback generation.
+const RESTORE_ATTEMPTS: &str = "restore-attempts";
+/// The attempts a fallback boot may make at `restore` before it stops retrying.
+const MAX_RESTORE_ATTEMPTS: u32 = 3;
+/// Whether the `attempts`-th restore (counting from 1) may run.
+pub fn restore_attempt_allowed(attempts: u32) -> bool {
+    attempts <= MAX_RESTORE_ATTEMPTS
+}
+/// The `@failed-*` subvolumes to delete: all but the newest, which stays for diagnosis. Names carry the nanosecond
+/// clock after the prefix, so they sort numerically.
+pub fn failed_to_prune(names: &[String]) -> Vec<String> {
+    let mut failed: Vec<(u128, &String)> = names
+        .iter()
+        .filter_map(|n| Some((n.strip_prefix("@failed-")?.parse::<u128>().ok()?, n)))
+        .collect();
+    failed.sort();
+    failed.pop();
+    failed.into_iter().map(|(_, n)| n.clone()).collect()
+}
 pub fn prepare() -> io::Result<()> {
     let store = Path::new(STORE);
+    if state(store).trim() == "system-prepared" && super::abandoned_now(Path::new("/"), store, super::pacman_active()) {
+        // an earlier install() never reached (or never finished) its pacman transaction
+        super::abandon(store)?;
+    }
     if matches!(
         state(store).trim(),
         "system-prepared" | "system-probation" | "system-restoring" | "prepared" | "probation"
@@ -79,6 +123,12 @@ pub fn prepare() -> io::Result<()> {
         ],
     )?;
     fs::create_dir_all(store)?;
+    // a new rollback generation: forget the last one's restore bookkeeping and its kernel files (a different kernel
+    // package would otherwise leave stale names behind)
+    for marker in [RESTORE_SWAPPED, RESTORE_ATTEMPTS] {
+        let _ = fs::remove_file(store.join(marker));
+    }
+    let _ = fs::remove_dir_all(format!("{ESP}/previous"));
     fs::create_dir_all(format!("{ESP}/previous"))?;
     for file in &kernel_files() {
         copy(
@@ -131,34 +181,41 @@ pub fn accept() -> io::Result<()> {
     fs::remove_file(Path::new(ESP).join("pending"))?;
     phase(Path::new(STORE), "accepted")
 }
-pub fn restore() -> io::Result<()> {
-    let store = Path::new(STORE);
-    save(
-        &store.join("last-fallback"),
-        fs::read_to_string("/proc/cmdline")?.as_bytes(),
-    )?;
-    phase(store, "system-restoring")?;
-    top()?;
-    let root = Path::new(TOP);
-    let rollback = root.join("@rollback");
-    if !rollback.exists() {
-        return Err(err("No complete system snapshot"));
+/// The kernel and initramfs file names in `ESP/previous` (what `prepare` saved), from a directory listing.
+pub fn kernel_set(names: &[String]) -> Vec<String> {
+    let mut out: Vec<String> = names
+        .iter()
+        .filter(|n| n.starts_with("vmlinuz-") || (n.starts_with("initramfs-") && n.ends_with(".img")))
+        .cloned()
+        .collect();
+    out.sort();
+    out
+}
+/// Whether a saved set holds a kernel and an initramfs.
+pub fn kernel_set_complete(set: &[String]) -> bool {
+    set.iter().any(|n| n.starts_with("vmlinuz-")) && set.iter().any(|n| n.starts_with("initramfs-"))
+}
+fn saved_kernel_files() -> io::Result<Vec<String>> {
+    let names: Vec<String> = fs::read_dir(Path::new(ESP).join("previous"))?
+        .flatten()
+        .filter_map(|e| e.file_name().into_string().ok())
+        .collect();
+    let set = kernel_set(&names);
+    if !kernel_set_complete(&set) {
+        return Err(err("The saved kernel files are incomplete"));
     }
+    Ok(set)
+}
+/// Replaces @system with a fresh snapshot of @rollback; the old @system is kept as @failed-<ns>. Safe to re-run after a
+/// failure in the middle: a missing @system (renamed away already) is skipped.
+fn swap_system(root: &Path, rollback: &Path) -> io::Result<()> {
     let candidate = root.join("@restored");
     if candidate.exists() {
-        run(
-            "btrfs",
-            &["subvolume", "delete", candidate.to_str().unwrap()],
-        )?;
+        run("btrfs", &["subvolume", "delete", candidate.to_str().unwrap()])?;
     }
     run(
         "btrfs",
-        &[
-            "subvolume",
-            "snapshot",
-            rollback.to_str().unwrap(),
-            candidate.to_str().unwrap(),
-        ],
+        &["subvolume", "snapshot", rollback.to_str().unwrap(), candidate.to_str().unwrap()],
     )?;
     if root.join("@system").exists() {
         let name = format!(
@@ -170,8 +227,47 @@ pub fn restore() -> io::Result<()> {
         );
         fs::rename(root.join("@system"), root.join(name))?;
     }
-    fs::rename(candidate, root.join("@system"))?;
-    for file in &kernel_files() {
+    fs::rename(candidate, root.join("@system"))
+}
+/// Deletes the @failed-* subvolumes of earlier rollbacks, keeping the newest for diagnosis (best effort).
+fn prune_failed(root: &Path) {
+    let names: Vec<String> = fs::read_dir(root)
+        .map(|d| d.flatten().filter_map(|e| e.file_name().into_string().ok()).collect())
+        .unwrap_or_default();
+    for name in failed_to_prune(&names) {
+        let _ = run("btrfs", &["subvolume", "delete", root.join(name).to_str().unwrap_or_default()]);
+    }
+}
+pub fn restore() -> io::Result<()> {
+    let store = Path::new(STORE);
+    save(
+        &store.join("last-fallback"),
+        fs::read_to_string("/proc/cmdline")?.as_bytes(),
+    )?;
+    // A restore that keeps failing must not loop forever creating @failed-* subvolumes (the unit restarts it).
+    let attempts = fs::read_to_string(store.join(RESTORE_ATTEMPTS))
+        .ok()
+        .and_then(|s| s.trim().parse::<u32>().ok())
+        .unwrap_or(0)
+        + 1;
+    if !restore_attempt_allowed(attempts) {
+        eprintln!("BifrOSt recovery: restore failed {} times; giving up, the running fallback system stays as it is", attempts - 1);
+        return Ok(());
+    }
+    save(&store.join(RESTORE_ATTEMPTS), attempts.to_string().as_bytes())?;
+    phase(store, "system-restoring")?;
+    top()?;
+    let root = Path::new(TOP);
+    let rollback = root.join("@rollback");
+    if !rollback.exists() {
+        return Err(err("No complete system snapshot"));
+    }
+    // Prepare and validate everything that can fail first; the subvolume swap is the last step that changes the system.
+    let previous = fs::read(store.join("previous-cmdline"))?;
+    let kernel = saved_kernel_files()?;
+    // the kernel and initramfs the previous generation booted, by the names `prepare` saved (the current /boot may
+    // hold a different kernel package after the update)
+    for file in &kernel {
         copy(
             &Path::new(ESP).join("previous").join(file),
             &Path::new("/boot").join(file),
@@ -182,13 +278,18 @@ pub fn restore() -> io::Result<()> {
     if previous_image.exists() {
         copy(&previous_image, &Path::new(ESP).join("bifrost.efi"))?;
     }
-    let previous = fs::read(store.join("previous-cmdline"))?;
     // The loader prefers EFI/BIFROST/boot.cfg, so restore whichever copies exist.
     for path in [Path::new(ESP).join("boot.cfg"), "/boot/EFI/BOOT/cmdline.txt".into()] {
         if path.exists() {
             save(&path, &previous)?;
         }
     }
+    // Swap last, once: after a swap the marker keeps a retry from snapshotting and renaming again.
+    if !store.join(RESTORE_SWAPPED).exists() {
+        swap_system(root, &rollback)?;
+        save(&store.join(RESTORE_SWAPPED), b"1")?;
+    }
+    prune_failed(root);
     // Keep @rollback intact until the marker is cleared, including across power loss.
     if Path::new(ESP).join("pending").exists() {
         fs::remove_file(Path::new(ESP).join("pending"))?;
@@ -446,10 +547,42 @@ pub fn reconcile_modules() -> io::Result<bool> {
     }
 }
 
+/// Waits until no update is in flight (accepted, rolled back or idle); false when `max` passes first.
+fn wait_until_settled(max: Duration) -> bool {
+    let deadline = Instant::now() + max;
+    while in_flight_now() {
+        if Instant::now() >= deadline {
+            return false;
+        }
+        std::thread::sleep(Duration::from_secs(2));
+    }
+    true
+}
+
+/// The kernel release and the linux-firmware package version the firmware list belongs to: the initramfs hook prunes
+/// firmware by that list only for the same pair (`firmware-stamp`). `pacman_q` is `pacman -Q linux-firmware`'s output.
+pub fn firmware_stamp(kernel_release: &str, pacman_q: &str) -> Option<String> {
+    let kernel = kernel_release.trim();
+    let version = pacman_q.split_whitespace().nth(1)?;
+    (!kernel.is_empty() && !kernel.contains(char::is_whitespace)).then(|| format!("{kernel} {version}"))
+}
+
+fn current_firmware_stamp() -> Option<String> {
+    let release = fs::read_to_string("/proc/sys/kernel/osrelease").ok()?;
+    let q = text("pacman", &["-Q", "linux-firmware"]).ok()?;
+    firmware_stamp(&release, &q)
+}
+
 /// Records the modules loaded now (called after desktop-ready). The image is rebuilt only when the list or the
 /// hardware changed, so a steady machine never touches the previous generation.
 pub fn record_modules() -> io::Result<bool> {
     let store = Path::new(STORE);
+    // The recorded image is rebuilt after the update is accepted: on the probation boot the rollback generation
+    // (bifrost-previous.efi) and the boot line are the update's safety net. Wait for accept, a rollback or a timeout.
+    if !wait_until_settled(Duration::from_secs(300)) {
+        eprintln!("BifrOSt: an update is still on probation; the module record waits for the next boot");
+        return Ok(false);
+    }
     let names = module_names(&fs::read_to_string("/proc/modules")?);
     if names.is_empty() {
         return Err(err("No loaded modules to record"));
@@ -461,10 +594,18 @@ pub fn record_modules() -> io::Result<bool> {
         .map(|o| firmware_names(&String::from_utf8_lossy(&o.stdout)))
         .unwrap_or_default();
     let fw_text = firmware.join("\n");
+    // the list is only valid for the kernel and linux-firmware it was recorded with (the initramfs hook checks the pair)
+    let stamp = current_firmware_stamp();
+    let stamp_changed = stamp
+        .as_deref()
+        .is_some_and(|s| fs::read_to_string(store.join("firmware-stamp")).map_or(true, |o| o.trim() != s));
     let fw_changed = !firmware.is_empty()
-        && fs::read_to_string(store.join("firmware")).map_or(true, |s| s.trim() != fw_text);
+        && (fs::read_to_string(store.join("firmware")).map_or(true, |s| s.trim() != fw_text) || stamp_changed);
     if fw_changed {
         save(&store.join("firmware"), fw_text.as_bytes())?;
+        if let Some(s) = &stamp {
+            save(&store.join("firmware-stamp"), s.as_bytes())?;
+        }
     }
     let same = !fw_changed
         && fs::read_to_string(store.join("modules")).is_ok_and(|s| module_names(&s) == names)
@@ -509,8 +650,14 @@ fn ucode_images() -> io::Result<Vec<String>> {
     Ok(v)
 }
 
+/// Whether a rebuilt image makes the current one the rollback generation. Not while an update is in flight.
+pub fn replaces_previous(update_in_flight: bool) -> bool {
+    !update_in_flight
+}
+
 /// Builds `EFI/BIFROST/bifrost.efi` from the kernel, the microcode and the initramfs, with the boot line's options.
-/// The old image becomes `bifrost-previous.efi`. `boot.cfg` is rewritten only after the new image exists, so a
+/// The old image becomes `bifrost-previous.efi`, except while an update is in flight (`prepare` saved the rollback
+/// generation, which stays). `boot.cfg` is rewritten only after the new image exists, so a
 /// failed build leaves the last good boot line in place. Returns whether the image changed.
 pub fn build_uki() -> io::Result<bool> {
     let esp = Path::new(ESP);
@@ -544,7 +691,11 @@ pub fn build_uki() -> io::Result<bool> {
         return Ok(false);
     }
     if out.exists() {
-        copy(&out, &esp.join("bifrost-previous.efi"))?;
+        // While an update is in flight (prepared, on probation, restoring) bifrost-previous.efi is the rollback
+        // generation `prepare` saved: the image built here is not accepted yet and must never replace it.
+        if replaces_previous(in_flight_now()) {
+            copy(&out, &esp.join("bifrost-previous.efi"))?;
+        }
     } else if !esp.join("rollback.txt").exists() {
         // The first image on an older install: the boot line it replaces is the rollback.
         save(&esp.join("rollback.txt"), line.as_bytes())?;
@@ -665,6 +816,65 @@ mod uki_tests {
     #[test]
     fn empty_hardware_has_the_fnv_offset_fingerprint() {
         assert_eq!(hardware_fingerprint(&[]), "cbf29ce484222325");
+    }
+}
+
+#[cfg(test)]
+mod update_tests {
+    use super::*;
+
+    fn strings(v: &[&str]) -> Vec<String> {
+        v.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn the_rollback_generation_is_kept_while_an_update_is_in_flight() {
+        for phase in ["system-prepared", "system-probation", "system-restoring", "prepared", "probation", "restoring\n"] {
+            assert!(update_in_flight(phase), "{phase}");
+            assert!(!replaces_previous(update_in_flight(phase)), "{phase}");
+        }
+        for phase in ["", "accepted", "rolled-back", "system-accepted"] {
+            assert!(!update_in_flight(phase), "{phase:?}");
+            assert!(replaces_previous(update_in_flight(phase)), "{phase:?}");
+        }
+    }
+
+    #[test]
+    fn a_restore_gives_up_after_a_few_attempts() {
+        assert!(restore_attempt_allowed(1));
+        assert!(restore_attempt_allowed(MAX_RESTORE_ATTEMPTS));
+        assert!(!restore_attempt_allowed(MAX_RESTORE_ATTEMPTS + 1));
+    }
+
+    #[test]
+    fn old_failed_subvolumes_are_pruned_but_the_newest_stays() {
+        let names = strings(&["@system", "@rollback", "@failed-900", "@failed-1000", "@failed-20", "@failed-x", "@home"]);
+        // numeric order, not text order: 1000 is newer than 900
+        assert_eq!(failed_to_prune(&names), strings(&["@failed-20", "@failed-900"]));
+        assert!(failed_to_prune(&strings(&["@failed-5"])).is_empty());
+        assert!(failed_to_prune(&[]).is_empty());
+    }
+
+    #[test]
+    fn the_saved_kernel_set_names_what_the_previous_generation_booted() {
+        let listing = strings(&["initramfs-linux.img", "vmlinuz-linux", "notes.txt"]);
+        let set = kernel_set(&listing);
+        assert_eq!(set, strings(&["initramfs-linux.img", "vmlinuz-linux"]));
+        assert!(kernel_set_complete(&set));
+        // an update to the realtime kernel does not matter: the saved set is the stock kernel's
+        assert!(!kernel_set_complete(&kernel_set(&strings(&["vmlinuz-linux"]))));
+        assert!(!kernel_set_complete(&[]));
+    }
+
+    #[test]
+    fn the_firmware_stamp_pairs_the_kernel_with_the_firmware_package() {
+        assert_eq!(
+            firmware_stamp("7.2.9-rt3-1-rt\n", "linux-firmware 20260101-1\n").as_deref(),
+            Some("7.2.9-rt3-1-rt 20260101-1")
+        );
+        assert_eq!(firmware_stamp("", "linux-firmware 1-1"), None);
+        assert_eq!(firmware_stamp("7.2.9", "linux-firmware"), None);
+        assert_eq!(firmware_stamp("7.2 9", "linux-firmware 1-1"), None);
     }
 }
 
