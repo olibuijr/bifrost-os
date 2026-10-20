@@ -2,8 +2,8 @@
 //! docs/boot-architecture.md "Services on demand").
 //!
 //! Services live like apps, under `<root>/apps/<id>/current/` with a `manifest.toml`, and the system's own services
-//! ship with the OS package under `/usr/lib/bifrost/services/<id>/` (read-only; a store-installed copy wins only when
-//! its manifest version is newer, see [`scan_with`]). bifrostd binds each service's
+//! ship with the OS package under `/usr/lib/bifrost/services/<id>/` (read-only; a store-installed service can never
+//! take over a packaged id, see [`scan_with`], and never runs as root, see [`effective_user`]). bifrostd binds each service's
 //! socket (`<root>/run/<id>.sock`) itself, and starts the service's child only when a client is waiting on that
 //! socket (socket activation). The waiting connection sits in the listen backlog until the child accepts it: the
 //! child gets the listening socket as its stdin and `BIFROST_ACTIVATED=1` (`bifrost_proto::svc::listen`). A child
@@ -53,8 +53,8 @@ pub struct Manifest {
     pub version: String,
     pub kind: String,
     pub exec: String,
-    /// who the service runs as: empty or `root` (the default), `session` (the logged-in desktop user), or a system
-    /// user name. A service that decodes untrusted data (the media player) is `session`, never root.
+    /// who the service runs as: `session` (the logged-in desktop user; also what an empty value means), `root` (only a
+    /// packaged service may say so) or a system user name (packaged services only). See [`effective_user`].
     pub user: String,
 }
 
@@ -88,6 +88,8 @@ pub struct Found {
     pub manifest: Manifest,
     /// the resolved version directory `current` points at
     pub dir: PathBuf,
+    /// provided by the OS package (`/usr/lib/bifrost/services`), not installed from the store
+    pub packaged: bool,
 }
 
 impl Found {
@@ -130,7 +132,7 @@ fn scan_store(root: &Path) -> Vec<Found> {
             let cur = e.path().join("current");
             let dir = std::fs::canonicalize(&cur).ok()?;
             let manifest = Manifest::parse(&std::fs::read_to_string(dir.join("manifest.toml")).ok()?)?;
-            (manifest.id == e.file_name().to_string_lossy() && exec_inside(&dir, &manifest.exec)).then_some(Found { manifest, dir })
+            (manifest.id == e.file_name().to_string_lossy() && exec_inside(&dir, &manifest.exec)).then_some(Found { manifest, dir, packaged: false })
         })
         .collect()
 }
@@ -142,7 +144,7 @@ fn scan_system(system: &Path) -> Vec<Found> {
         .filter_map(|e| {
             let dir = std::fs::canonicalize(e.path()).ok()?;
             let manifest = Manifest::parse(&std::fs::read_to_string(dir.join("manifest.toml")).ok()?)?;
-            (manifest.id == e.file_name().to_string_lossy() && exec_inside(&dir, &manifest.exec)).then_some(Found { manifest, dir })
+            (manifest.id == e.file_name().to_string_lossy() && exec_inside(&dir, &manifest.exec)).then_some(Found { manifest, dir, packaged: true })
         })
         .collect()
 }
@@ -153,18 +155,14 @@ pub fn scan(root: &Path) -> Vec<Found> {
 }
 
 /// Every service to supervise: the store-installed ones under `<root>/apps` and the package-provided ones under
-/// `system`. When both name the same id the store copy wins only if its manifest version is newer than the package's,
-/// so an update of the OS never loses to a stale store install, and a store update still takes effect. Sorted by id.
+/// `system`. A packaged id always wins: a store copy of the same id is ignored whatever its version, so a catalogue entry
+/// (or a compromised catalogue) can never replace a system service's binary. The OS updates its own services through the
+/// package. Sorted by id.
 pub fn scan_with(root: &Path, system: &Path) -> Vec<Found> {
     let mut v = scan_system(system);
     for s in scan_store(root) {
-        match v.iter_mut().find(|f| f.manifest.id == s.manifest.id) {
-            Some(sys) => {
-                if version_newer(&s.manifest.version, &sys.manifest.version) {
-                    *sys = s;
-                }
-            }
-            None => v.push(s),
+        if !v.iter().any(|f| f.manifest.id == s.manifest.id) {
+            v.push(s);
         }
     }
     v.sort_by(|a, b| a.manifest.id.cmp(&b.manifest.id));
@@ -372,15 +370,27 @@ pub fn resolve_identity(user: &str, account: Option<&str>, passwd: &str, group: 
     Ok(Some(Identity { name: entry.name, uid: entry.uid, gid: entry.gid, home: entry.home, groups, fallback }))
 }
 
-/// [`resolve_identity`] for a manifest, reading `<root>/account` and `<etc>/passwd` and `<etc>/group`.
-pub fn identity_for(root: &Path, etc: &Path, m: &Manifest) -> Result<Option<Identity>, String> {
-    if m.user.is_empty() || m.user == "root" {
+/// The user a service runs as, from its manifest `user` and where it comes from. Nothing runs as root by default: an
+/// empty value means the session user. A packaged service may name `root` or a system user (its manifest ships with the OS);
+/// a store-installed service may only be `session`, so a catalogue entry cannot ask for more than the logged-in user has.
+pub fn effective_user(packaged: bool, declared: &str) -> Result<&str, String> {
+    match declared {
+        "" => Ok(SESSION_USER),
+        d if packaged || d == SESSION_USER => Ok(d),
+        d => Err(format!("a store-installed service may only run as the session user, not {d}")),
+    }
+}
+
+/// [`resolve_identity`] for a service, reading `<root>/account` and `<etc>/passwd` and `<etc>/group`.
+pub fn identity_for(root: &Path, etc: &Path, f: &Found) -> Result<Option<Identity>, String> {
+    let user = effective_user(f.packaged, &f.manifest.user)?;
+    if user == "root" {
         return Ok(None);
     }
     let account = std::fs::read_to_string(root.join("account")).ok();
     let passwd = std::fs::read_to_string(etc.join("passwd")).map_err(|e| format!("cannot read passwd: {e}"))?;
     let group = std::fs::read_to_string(etc.join("group")).unwrap_or_default();
-    resolve_identity(&m.user, account.as_deref(), &passwd, &group)
+    resolve_identity(user, account.as_deref(), &passwd, &group)
 }
 
 /// The uid and gid that own the socket of a service run as `who` (None: root keeps it).
@@ -561,7 +571,7 @@ impl Supervisor {
             let id = f.manifest.id.clone();
             // who the service runs as; a session service whose user is not known yet is neither bound nor started
             // (retried on the next tick), and never falls back to root
-            let identity = identity_for(&self.root, &self.etc, &f.manifest);
+            let identity = identity_for(&self.root, &self.etc, &f);
             match &identity {
                 Ok(Some(i)) if i.fallback && self.noted.insert(format!("fallback:{id}")) => {
                     eprintln!("bifrostd: {id}: the account file names no user, running as {} (uid {FALLBACK_UID})", i.name)
@@ -771,20 +781,15 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// A service exists on disk but is not started until a client connects to its socket.
+    /// A service exists on disk but is not started until a client connects to its socket. (A packaged root service: the
+    /// test process is not root, so it cannot drop to a session user, and a store service is never root.)
     #[test]
     fn a_service_starts_only_when_a_client_is_waiting() {
         let root = std::env::temp_dir().join(format!("bifrostd-activation-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
-        let version = root.join("apps/is.test.echo/versions/1.0.0");
-        std::fs::create_dir_all(&version).unwrap();
-        std::fs::write(version.join("manifest.toml"), "id = \"is.test.echo\"\nversion = \"1.0.0\"\nkind = \"service\"\nexec = \"svc.sh\"\n").unwrap();
-        let exec = version.join("svc.sh");
-        std::fs::write(&exec, "#!/bin/sh\nexec sleep 30\n").unwrap();
-        std::fs::set_permissions(&exec, std::fs::Permissions::from_mode(0o755)).unwrap();
-        std::os::unix::fs::symlink(&version, root.join("apps/is.test.echo/current")).unwrap();
+        write_service(&root.join("system/is.test.echo"), "is.test.echo", "1.0.0");
 
-        let mut sup = Supervisor::with_system_dir(root.clone(), root.join("no-system-services"));
+        let mut sup = Supervisor::with_system_dir(root.clone(), root.join("system"));
         sup.tick();
         assert!(sock_path(&root, "is.test.echo").exists(), "the socket is bound before anyone connects");
         assert_eq!(sup.running(), 0, "nothing starts without a client");
@@ -799,8 +804,12 @@ mod tests {
 
     /// Writes a service package (`manifest.toml` and an executable) into `dir`.
     fn write_service(dir: &Path, id: &str, version: &str) {
+        write_service_as(dir, id, version, "root");
+    }
+
+    fn write_service_as(dir: &Path, id: &str, version: &str, user: &str) {
         std::fs::create_dir_all(dir).unwrap();
-        std::fs::write(dir.join("manifest.toml"), format!("id = \"{id}\"\nversion = \"{version}\"\nkind = \"service\"\nexec = \"svc.sh\"\n")).unwrap();
+        std::fs::write(dir.join("manifest.toml"), format!("id = \"{id}\"\nversion = \"{version}\"\nkind = \"service\"\nexec = \"svc.sh\"\nuser = \"{user}\"\n")).unwrap();
         let exec = dir.join("svc.sh");
         std::fs::write(&exec, "#!/bin/sh\nexec sleep 30\n").unwrap();
         std::fs::set_permissions(&exec, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -858,28 +867,75 @@ mod tests {
     }
 
     #[test]
-    fn a_store_copy_wins_only_when_its_version_is_newer() {
+    fn a_packaged_id_always_wins_over_a_store_copy() {
         let d = scratch("precedence");
         let (root, system) = (d.join("root"), d.join("system"));
         write_service(&system.join("is.test.audio"), "is.test.audio", "0.2.0");
-        // older store copy (a stale install from before the OS shipped the service): the package wins
-        store_install(&root, "is.test.audio", "0.1.0");
-        let f = scan_with(&root, &system);
-        assert_eq!(f.len(), 1);
-        assert_eq!(f[0].dir, system.join("is.test.audio"), "an older store copy loses");
-        // equal version: the package wins too
-        store_install(&root, "is.test.audio", "0.2.0");
-        assert_eq!(scan_with(&root, &system)[0].dir, system.join("is.test.audio"), "a tie goes to the package");
-        // newer store copy wins
-        store_install(&root, "is.test.audio", "0.10.0");
-        let f = scan_with(&root, &system);
-        assert_eq!(f.len(), 1, "one service per id");
-        assert_eq!(f[0].manifest.version, "0.10.0");
-        assert!(f[0].dir.starts_with(root.join("apps")));
+        // an older, an equal and a far newer store copy: the package wins every time
+        for v in ["0.1.0", "0.2.0", "9.9.9"] {
+            store_install(&root, "is.test.audio", v);
+            let f = scan_with(&root, &system);
+            assert_eq!(f.len(), 1, "one service per id");
+            assert_eq!(f[0].dir, system.join("is.test.audio"), "store {v} must not take over a packaged id");
+            assert!(f[0].packaged);
+        }
         // services only in the store are kept alongside, sorted by id
         store_install(&root, "is.test.net", "1.0.0");
-        let ids: Vec<String> = scan_with(&root, &system).into_iter().map(|f| f.manifest.id).collect();
+        let found = scan_with(&root, &system);
+        let ids: Vec<&str> = found.iter().map(|f| f.manifest.id.as_str()).collect();
         assert_eq!(ids, ["is.test.audio", "is.test.net"]);
+        assert!(!found[1].packaged);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn nothing_runs_as_root_unless_a_packaged_manifest_says_so() {
+        assert_eq!(effective_user(true, ""), Ok(SESSION_USER), "no user named: the session user, not root");
+        assert_eq!(effective_user(false, ""), Ok(SESSION_USER));
+        assert_eq!(effective_user(true, "root"), Ok("root"), "a packaged manifest may ask for root");
+        assert_eq!(effective_user(true, "audio"), Ok("audio"));
+        assert_eq!(effective_user(false, SESSION_USER), Ok(SESSION_USER));
+        assert!(effective_user(false, "root").is_err(), "a store service never runs as root");
+        assert!(effective_user(false, "audio").is_err(), "nor as another system user");
+    }
+
+    #[test]
+    fn a_store_service_naming_root_is_neither_bound_nor_started() {
+        let d = scratch("store-root");
+        let (root, system, etc) = (d.join("root"), d.join("system"), d.join("etc"));
+        std::fs::create_dir_all(&etc).unwrap();
+        std::fs::write(etc.join("passwd"), PASSWD).unwrap();
+        std::fs::write(etc.join("group"), GROUP).unwrap();
+        write_service_as(&root.join("apps/is.test.evil/versions/1.0.0"), "is.test.evil", "1.0.0", "root");
+        std::os::unix::fs::symlink(root.join("apps/is.test.evil/versions/1.0.0"), root.join("apps/is.test.evil/current")).unwrap();
+        let found = scan_with(&root, &system);
+        assert_eq!(found.len(), 1);
+        assert!(identity_for(&root, &etc, &found[0]).is_err());
+        let mut sup = Supervisor::with_system_dir(root.clone(), system).with_etc(etc);
+        sup.tick();
+        assert!(!sock_path(&root, "is.test.evil").exists(), "refused: no socket, so nothing can start it");
+        assert_eq!(sup.running(), 0);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_store_service_without_a_user_runs_as_the_session_user() {
+        let d = scratch("store-default");
+        let (root, system, etc) = (d.join("root"), d.join("system"), d.join("etc"));
+        std::fs::create_dir_all(&etc).unwrap();
+        std::fs::write(etc.join("passwd"), PASSWD).unwrap();
+        std::fs::write(etc.join("group"), GROUP).unwrap();
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("account"), "username=guest\n").unwrap();
+        let v = root.join("apps/is.test.plain/versions/1.0.0");
+        std::fs::create_dir_all(&v).unwrap();
+        std::fs::write(v.join("manifest.toml"), "id = \"is.test.plain\"\nversion = \"1.0.0\"\nkind = \"service\"\nexec = \"svc.sh\"\n").unwrap();
+        std::fs::write(v.join("svc.sh"), "#!/bin/sh\n").unwrap();
+        std::fs::set_permissions(v.join("svc.sh"), std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::os::unix::fs::symlink(&v, root.join("apps/is.test.plain/current")).unwrap();
+        let found = scan_with(&root, &system);
+        let who = identity_for(&root, &etc, &found[0]).unwrap().expect("not root");
+        assert_eq!((who.name.as_str(), who.uid), ("guest", 1001));
         let _ = std::fs::remove_dir_all(&d);
     }
 
@@ -909,7 +965,7 @@ mod tests {
     #[test]
     fn the_manifest_names_who_the_service_runs_as() {
         let m = |user: &str| format!("id = \"is.olibuijr.audio\"\nversion = \"1\"\nkind = \"service\"\nexec = \"audiod\"\n{user}");
-        assert_eq!(Manifest::parse(&m("")).unwrap().user, "", "root by default");
+        assert_eq!(Manifest::parse(&m("")).unwrap().user, "", "unnamed: effective_user makes it the session user");
         assert_eq!(Manifest::parse(&m("user = \"session\"\n")).unwrap().user, "session");
         assert_eq!(Manifest::parse(&m("user = \"audio\"\n")).unwrap().user, "audio");
         assert!(Manifest::parse(&m("user = \"a/b\"\n")).is_none(), "an unsafe user name is refused");
@@ -917,12 +973,12 @@ mod tests {
     }
 
     #[test]
-    fn the_shipped_manifests_run_audio_as_the_session_and_the_rest_as_root() {
+    fn the_shipped_manifests_run_audio_as_the_session_and_net_and_update_as_root_by_name() {
         let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../system");
         let user = |d: &str| Manifest::parse(&std::fs::read_to_string(dir.join(d).join("manifest.toml")).unwrap()).unwrap().user;
         assert_eq!(user("audio"), "session");
-        assert_eq!(user("net"), "");
-        assert_eq!(user("update"), "");
+        assert_eq!(user("net"), "root", "root is named in the packaged manifest, never a default");
+        assert_eq!(user("update"), "root");
     }
 
     #[test]
