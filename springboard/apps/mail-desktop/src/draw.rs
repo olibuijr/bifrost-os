@@ -281,7 +281,9 @@ fn sidebar_model(mail: &Mail) -> (SourceList, Vec<(u32, Side)>) {
     items.push(SidebarItem::header("Favorites"));
     for (title, names) in standard {
         let symbol = mailbox_symbol(names[0]);
-        match mail.find_mailbox(names) {
+        // `Mail::new` seeds the Inbox, so without an account nothing is found: the row stays greyed
+        let found = if mail.accounts.is_empty() { None } else { mail.find_mailbox(names) };
+        match found {
             Some(name) => {
                 let id = actions.len() as u32 + 1;
                 items.push(SidebarItem::row(id, title).with_symbol(symbol));
@@ -1389,7 +1391,12 @@ mod tests {
 
     #[test]
     fn the_sidebar_enables_the_mailboxes_the_account_has() {
-        let mut mail = Mail::new(vec![]);
+        let mut mail = Mail::new(vec![bifrost_app::controls::internet_accounts::Account::new(
+            bifrost_app::controls::internet_accounts::Kind::Mail,
+            "work",
+            "Work",
+            "user",
+        )]);
         mail.mailboxes = vec!["INBOX".into(), "Sent Items".into(), "Deleted Items".into(), "Work".into()];
         let (list, actions) = sidebar_model(&mail);
         let rows = row_labels(&list);

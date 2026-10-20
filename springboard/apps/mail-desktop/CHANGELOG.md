@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.15.4 — 2026-10-20
+
+- With no account the Favorites rows, Inbox included, are greyed and do nothing; they come alive once an account is added.
+
 ## 0.15.3 — 2026-10-20
 
 - The title "Mail" starts clear of the window buttons instead of running under them, and the toolbar starts after them too.
