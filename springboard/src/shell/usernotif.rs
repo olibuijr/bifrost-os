@@ -16,6 +16,12 @@ use std::collections::{HashMap, HashSet};
 pub const MAX_PENDING: usize = 64;
 /// Answers kept for an app that is not running.
 const MAX_QUEUED: usize = 32;
+/// Requests of one app that wait for its first-time alert, per kind (requests, scheduled requests, authorizations), and
+/// delivered requests the registry keeps for one app. The oldest goes first when an app passes the limit.
+pub const MAX_HELD: usize = 64;
+/// Immediate deliveries one app may make in [`RATE_WINDOW_MS`] (shell clock, ms); more are refused as `Full`.
+pub const RATE_LIMIT: usize = 10;
+pub const RATE_WINDOW_MS: f64 = 10_000.0;
 /// The largest attachment file the shell reads (bytes), and the side of its thumbnail (pixels).
 const MAX_ATTACHMENT_BYTES: u64 = 4 * 1024 * 1024;
 const ATTACHMENT_PX: usize = 96;
@@ -116,9 +122,25 @@ pub struct Registry {
     /// notifications that wait for their app's `willPresent` answer
     presenting: Vec<Presenting>,
     next_token: u32,
+    /// when each app's recent immediate deliveries were made (shell clock, ms), newest last
+    recent: HashMap<String, std::collections::VecDeque<f64>>,
 }
 
 impl Registry {
+    /// Whether the app may deliver another request now: at most [`RATE_LIMIT`] in the last [`RATE_WINDOW_MS`]. A
+    /// permitted call counts; a refused one does not. Without it an app could flood banners and sounds.
+    pub fn delivery_allowed(&mut self, app: &str, now: f64) -> bool {
+        let q = self.recent.entry(app.to_string()).or_default();
+        while q.front().is_some_and(|t| now - *t >= RATE_WINDOW_MS || *t > now) {
+            q.pop_front();
+        }
+        if q.len() >= RATE_LIMIT {
+            return false;
+        }
+        q.push_back(now);
+        true
+    }
+
     /// `setNotificationCategories`: replaces the app's set.
     pub fn set_categories(&mut self, app: &str, list: Vec<NotifCategory>) {
         self.categories.insert(app.to_string(), list);
@@ -206,8 +228,17 @@ impl Registry {
     }
 
     /// The store entry that shows a delivered request.
-    pub fn record_delivery(&mut self, app: &str, req: NotifRequest, store_id: u64) {
+    /// Returns the store entries of the app's oldest delivered requests that this one pushes past [`MAX_HELD`]; the
+    /// caller removes them, so the registry and the store stay the same size.
+    pub fn record_delivery(&mut self, app: &str, req: NotifRequest, store_id: u64) -> Vec<u64> {
         self.delivered.push(Delivered { app: app.to_string(), req, store_id });
+        let mut dropped = Vec::new();
+        while self.delivered.iter().filter(|d| d.app == app).count() > MAX_HELD {
+            if let Some(i) = self.delivered.iter().position(|d| d.app == app) {
+                dropped.push(self.delivered.remove(i).store_id);
+            }
+        }
+        dropped
     }
 
     /// `removeDeliveredNotifications` / `removePendingNotificationRequests`; empty `ids` removes every one of the
@@ -279,6 +310,7 @@ impl Registry {
 
     /// A request waits until the person answers the first-time alert of its app (`take_held` returns it then).
     pub fn hold(&mut self, app: &str, slot: u8, request: u32, req: NotifRequest) {
+        drop_oldest(&mut self.held, app);
         self.held.push((app.to_string(), slot, request, req));
     }
 
@@ -290,6 +322,7 @@ impl Registry {
     }
 
     pub fn hold_schedule(&mut self, app: &str, slot: u8, request: u32, req: NotifRequest, trigger: NotifTrigger) {
+        drop_oldest(&mut self.held_schedules, app);
         self.held_schedules.push((app.to_string(), slot, request, req, trigger));
     }
 
@@ -301,6 +334,7 @@ impl Registry {
     }
 
     pub fn hold_authorization(&mut self, app: &str, slot: u8, request: u32, options: u8) {
+        drop_oldest(&mut self.auth_held, app);
         self.auth_held.push((app.to_string(), slot, request, options));
     }
 
@@ -401,10 +435,44 @@ impl Registry {
         self.delivered.retain(|d| d.app != app);
         self.queued.retain(|(a, _)| a != app);
         self.held.retain(|(a, ..)| a != app);
+        self.held_schedules.retain(|(a, ..)| a != app);
+        self.recent.remove(app);
         self.auth_held.retain(|(a, ..)| a != app);
         if self.granted.remove(app).is_some() {
             self.save_granted();
         }
+    }
+}
+
+/// Makes room for one more waiting request of `app`: when it already has [`MAX_HELD`], its oldest is dropped.
+fn drop_oldest<T: HeldBy>(list: &mut Vec<T>, app: &str) {
+    while list.iter().filter(|h| h.owner() == app).count() >= MAX_HELD {
+        match list.iter().position(|h| h.owner() == app) {
+            Some(i) => {
+                list.remove(i);
+            }
+            None => break,
+        }
+    }
+}
+
+/// A waiting request, by the app that made it.
+trait HeldBy {
+    fn owner(&self) -> &str;
+}
+impl HeldBy for (String, u8, u32, NotifRequest) {
+    fn owner(&self) -> &str {
+        &self.0
+    }
+}
+impl HeldBy for (String, u8, u32, NotifRequest, NotifTrigger) {
+    fn owner(&self) -> &str {
+        &self.0
+    }
+}
+impl HeldBy for (String, u8, u32, u8) {
+    fn owner(&self) -> &str {
+        &self.0
     }
 }
 
@@ -613,6 +681,11 @@ impl super::Shell {
 
     /// Adds a request of a permitted app: it is delivered now, scheduled, or refused. Returns the status for the app.
     fn usernotif_submit(&mut self, slot: u8, app: &str, req: NotifRequest, t: f64) -> NotifStatus {
+        // an immediate delivery is rate limited like the legacy notify call; checked before the registry replaces
+        // anything, so a refused request changes nothing
+        if req.delay_ms == 0 && self.usernotif.check(app, &req).is_none() && !self.usernotif.delivery_allowed(app, t) {
+            return NotifStatus::Full;
+        }
         match self.usernotif.add(app, req.clone(), t) {
             Added::Refused(status) => status,
             Added::Scheduled => NotifStatus::Ok,
@@ -811,7 +884,9 @@ impl super::Shell {
                 self.dirty = true;
             }
         }
-        self.usernotif.record_delivery(app, req, id);
+        for old in self.usernotif.record_delivery(app, req, id) {
+            self.notify_remove(old);
+        }
         // the banner was built before the delivery was recorded, so its category's buttons are added now
         let actions = self.usernotif.actions(id);
         self.usernotif_banner_actions(id, &actions);
@@ -1092,6 +1167,41 @@ mod tests {
         }
         assert_eq!(r.add(APP, NotifRequest { delay_ms: 10, ..req("x") }, 0.0), Added::Refused(NotifStatus::Full));
         assert_eq!(r.add("other", NotifRequest { delay_ms: 10, ..req("x") }, 0.0), Added::Scheduled);
+    }
+
+    #[test]
+    fn an_app_cannot_flood_deliveries_or_grow_its_held_queues() {
+        let mut r = Registry::default();
+        for i in 0..RATE_LIMIT {
+            assert!(r.delivery_allowed(APP, 1000.0 + i as f64), "{i}");
+        }
+        assert!(!r.delivery_allowed(APP, 1500.0), "the eleventh in the window is refused");
+        assert!(r.delivery_allowed("other", 1500.0), "the limit is per app");
+        assert!(r.delivery_allowed(APP, 1000.0 + RATE_WINDOW_MS), "the window slides");
+
+        for i in 0..(MAX_HELD + 20) as u32 {
+            r.hold(APP, 0, i, req("h"));
+            r.hold_schedule(APP, 0, i, req("s"), NotifTrigger::Interval { seconds: 5, repeats: false });
+            r.hold_authorization(APP, 0, i, 0);
+        }
+        r.hold("other", 0, 1, req("o"));
+        let held = r.take_held(APP);
+        assert_eq!(held.len(), MAX_HELD);
+        assert_eq!(held[0].1, 20, "the oldest were dropped first");
+        assert_eq!(r.take_held_schedules(APP).len(), MAX_HELD);
+        assert_eq!(r.take_authorization(APP).len(), MAX_HELD);
+        assert_eq!(r.take_held("other").len(), 1, "another app's queue is untouched");
+    }
+
+    #[test]
+    fn delivered_requests_per_app_are_bounded_and_the_oldest_store_entries_come_back() {
+        let mut r = Registry::default();
+        for i in 0..MAX_HELD as u64 {
+            assert!(r.record_delivery(APP, req(&format!("n{i}")), 100 + i).is_empty());
+        }
+        assert_eq!(r.record_delivery(APP, req("extra"), 999), vec![100]);
+        assert_eq!(r.list(APP, true).len(), MAX_HELD);
+        assert!(r.record_delivery("other", req("a"), 5).is_empty());
     }
 
     #[test]
