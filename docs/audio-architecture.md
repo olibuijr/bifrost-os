@@ -54,6 +54,11 @@ The section below describes Midget at the start of the work (0.5.44).
   - Shell and media playback go through `media/speaker.rs`, a client of `bifrost-audio-hal` (`SpeakerOut`
     implements `AudioOut` from `media/audio_out.rs`); capture is `media/capture.rs` over the same HAL. There is no
     libasound and no direct ALSA ioctl in `media/`.
+  - `SpeakerOut` adds its IO procedure when the stream opens and starts the device only once the ring holds the
+    prefill (50 ms; one frame for system sounds; `START_MAX_WAIT` 60 ms after the first write at the latest), and the IO
+    procedure plays silence until the ring has refilled to the prefill after a discard or a starve. Its trace line
+    (`audio.speaker: trace ...`) splits underruns (events and silent frames) from prebuffering, per interval and in total.
+    The IO procedure takes no lock shared with the player thread (atomics only).
   - Card controls and the uapi struct layouts live in `audio/alsa` (`bifrost_audio_alsa::ctl`); jack routing and
     volume are `media/route.rs` and `media/volume.rs`.
   - Unused kit models were deleted (AC-9); the remaining ones in `springboard/ui/src/audio_*.rs` are shapes with
@@ -350,6 +355,8 @@ The daemon keeps working with the policy process gone, using the last defaults.
 ### Observability and tools
 
 - Unified Logging subsystem `is.olibuijr.audio`, with categories `io`, `driver`, `client`, `policy`, `xrun`.
+- Xruns in the first 8 cycles after a device start are logged apart (`start-up xrun(s) ... last at cycle N`) and do
+  not count towards the sustained-xrun fallback; later ones are `device xrun(s)`, both with the frames lost and the cycle.
 - `bifrost pc audio top` reads the profiler records: per node, the signal, awake and finish times, the xruns, the
   quantum and the DLL rate. `bifrost pc audio ls|get|set|listen` cover the object model.
 - An MCP `audio` tool with the same surface (`docs/bifrost-mcp.md`).
