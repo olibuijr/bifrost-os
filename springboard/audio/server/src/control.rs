@@ -1210,7 +1210,14 @@ mod tests {
 
     #[test]
     fn an_unplugged_device_stops_leaves_the_defaults_and_refuses_new_streams() {
-        let (mut c, h) = core();
+        // The null driver's stereo device is a virtual one, which is never a default; these two are real devices.
+        let real = |uid: &str| DeviceDesc { transport: "builtin".into(), ..NullDriver::stereo(uid, 48_000.0) };
+        let d = NullDriver::new(vec![real("n0"), real("n1")]);
+        let h = d.handle();
+        let cfg = CoreConfig { spawn_threads: false, wait: WaitPolicy::None, idle_stop: Duration::from_secs(2) };
+        let mut c = ServerCore::new(vec![Box::new(d)], Box::new(NoObjects), cfg);
+        // SAFETY: getuid cannot fail.
+        c.add_client(1, std::process::id() as i32, unsafe { libc::getuid() });
         hello(&mut c, 1, false);
         let a = add(&mut c, 1, 256);
         assert_eq!(c.handle(1, Request::StartIoProc { id: a }).reply, Reply::Done);
@@ -1222,9 +1229,15 @@ mod tests {
         c.tick(Instant::now());
         assert!(!c.device_running(0));
         assert_eq!(c.apps().get(dev, PropertyAddress::global(bifrost_audio_types::props::IS_ALIVE)), Ok(PropertyValue::Bool(false)));
-        assert_eq!(c.apps().get(sys, PropertyAddress::global(bifrost_audio_types::props::DEFAULT_OUTPUT)), Ok(PropertyValue::Object(ObjectId(0))));
+        // the defaults move to the remaining real device; once none is left they read 0, "no default device"
+        let other = c.device_id(1);
+        let default_output = bifrost_audio_types::props::DEFAULT_OUTPUT;
+        assert_eq!(c.apps().get(sys, PropertyAddress::global(default_output)), Ok(PropertyValue::Object(other)));
         assert_eq!(c.handle(1, proc_req(256)).reply, Reply::Error(AudioError::DeviceGone));
         assert_eq!(c.handle(1, Request::StartIoProc { id: a }).reply, Reply::Error(AudioError::DeviceGone));
+        h.push_event(DriverEvent::DeviceRemoved { uid: "n1".into() });
+        c.tick(Instant::now());
+        assert_eq!(c.apps().get(sys, PropertyAddress::global(default_output)), Ok(PropertyValue::Object(ObjectId(0))));
     }
 
     #[test]
