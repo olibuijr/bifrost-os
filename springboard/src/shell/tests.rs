@@ -963,10 +963,15 @@
         // the first frame draws the desktop whole (it is what sets desk_drawn)
         sh.draw(&mut Surface{w,h,stride:w,px:&mut pixels,y0:0},0.);
         assert!(sh.desk_drawn);
+        // settled, as the shell is between ticks: the test shell's keyboard client still slides out (it starts shown), and an
+        // animating desktop is by design a whole-frame desktop
+        sh.dirty=false;
+        sh.keyboard.tick(1.0e6);
+        assert!(!sh.desk_animating(1000.),"nothing animates on the settled desktop");
         let before=pixels.clone();
         sh.ext_frame=true;
         assert!(sh.needs_frame(),"the pixels ask for a frame");
-        let damage=sh.draw(&mut Surface{w,h,stride:w,px:&mut pixels,y0:0},1.);
+        let damage=sh.draw(&mut Surface{w,h,stride:w,px:&mut pixels,y0:0},1000.);
         // (a colour fade of the appearance is process-wide state another test may be running: that frame is a full one)
         if !bifrost_render::appearance::fading() {
             assert!(damage.is_empty(),"no damage on the shell's own surface");
@@ -975,7 +980,7 @@
         assert!(!sh.ext_frame,"the frame settled it");
         // another cause pending: the ordinary frame
         sh.ext_frame=true;sh.dirty=true;
-        sh.draw(&mut Surface{w,h,stride:w,px:&mut pixels,y0:0},2.);
+        sh.draw(&mut Surface{w,h,stride:w,px:&mut pixels,y0:0},2000.);
         assert!(!sh.ext_frame);
         if let Some(v)=saved {std::env::set_var("SPRINGBOARD_WAYLAND",v)} else {std::env::remove_var("SPRINGBOARD_WAYLAND")};
     }
@@ -1511,7 +1516,10 @@
         let mut pixels=vec![0;w*h];
         sh.draw(&mut Surface{w,h,stride:w,px:&mut pixels,y0:0},0.);
         let band=sh.desktop_bar_height().min(h);
-        sh.bar_only=true;
+        // a changed reading asks for the frame (`note_metrics_frame` sets `dirty` with `bar_only`); the keyboard client of the
+        // test shell still slides out until a tick, which only the settled desktop skips
+        sh.keyboard.tick(1.0e6);
+        sh.dirty=true;sh.bar_only=true;
         sh.bar_rects=vec![(w as i32/2,0,100,band as i32)];
         let damage=sh.draw(&mut Surface{w,h,stride:w,px:&mut pixels,y0:0},1000.);
         assert!(!damage.is_all());
