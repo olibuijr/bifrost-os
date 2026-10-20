@@ -289,10 +289,10 @@ mod tests {
         o.drag_to(102.0, 101.0);
         assert!(!o.release(), "a small move is still a tap");
         o.grab(100.0, 100.0);
-        o.drag_to(160.0, 90.0);
+        o.drag_to(40.0, 90.0);
         assert!(o.release(), "a move past the slop is a drag");
         let moved = o.thumb_rect();
-        assert_eq!((moved.x - rest.x, moved.y - rest.y), (60, -10));
+        assert_eq!((moved.x - rest.x, moved.y - rest.y), (-60, -10));
         o.grab(0.0, 0.0);
         o.drag_to(-5000.0, 5000.0);
         o.release();

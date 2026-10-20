@@ -1437,22 +1437,19 @@ pub(crate) mod tests {
         ALLOW.with(|a| a.set(true));
         let (d, mut sh, peer) = shell_with_app("e2e-save");
         ask(&peer, &mut sh, ToShell::DocSave { request: 4, suggested_name: "Untitled.md".into(), filters: vec![] });
-        // erase the suggestion's ".md", type "ME" (text comes from the layout path, `hw_type`), Return
-        for _ in 0..3 {
-            sh.hw_menu_key(14, true, 1.0);
-        }
+        // the base name "Untitled" is selected on open, so typing replaces it and keeps ".md"; then Return
         assert_eq!(sh.hw_menu_key(18, true, 1.0), None, "a letter is not a panel key: it falls through to typing");
-        sh.hw_type(super::super::keyboard::Out::Text(".ME".into()), 1.0);
+        sh.hw_type(super::super::keyboard::Out::Text("Report".into()), 1.0);
         sh.hw_menu_key(28, true, 1.0);
         let got = replies(&peer);
         let [(ToApp::DocGranted { request: 4, grant, ref name, .. }, Some(ref f))] = got[..] else { panic!("{got:?}") };
-        assert_eq!(name, "Untitled.ME");
+        assert_eq!(name, "Report.md");
         (&*f).write_all(b"# notes").unwrap();
-        assert!(!d.join("home/Documents/Untitled.ME").exists(), "nothing replaced before the commit");
+        assert!(!d.join("home/Documents/Report.md").exists(), "nothing replaced before the commit");
         ask(&peer, &mut sh, ToShell::DocCommit { request: 4 });
         let got = replies(&peer);
         assert!(matches!(got[..], [(ToApp::DocGranted { request: 4, grant: g, size: 7, .. }, Some(_))] if g == grant), "{got:?}");
-        assert_eq!(fs::read_to_string(d.join("home/Documents/Untitled.ME")).unwrap(), "# notes");
+        assert_eq!(fs::read_to_string(d.join("home/Documents/Report.md")).unwrap(), "# notes");
         ALLOW.with(|a| a.set(false));
         fs::remove_dir_all(&d).unwrap();
     }
