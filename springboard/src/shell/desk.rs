@@ -3294,7 +3294,7 @@ mod tests {
         assert!(sh.dock_picture(AppId::Settings).is_some());
         let picture_centre = minimized_slot_centre(&sh, i, 5000.0);
         assert_ne!(picture_centre, icon_centre, "the slot no longer shows the icon");
-        assert_eq!(picture_centre >> 16 & 255, 250, "it shows the window's own pixels");
+        assert_eq!(picture_centre & 255, 250, "it shows the window's own pixels");
     }
 
     #[cfg(feature = "desktop-wayland")]

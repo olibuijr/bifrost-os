@@ -1565,7 +1565,7 @@ mod tests {
         let (cx2, cy2) = ((tile.x + tile.w / 2.0) as usize, (tile.y + tile.h * 0.9) as usize);
         let picture = draw(&mut sh);
         assert_ne!(plate[cy * w + cx], picture[cy2 * w + cx2], "the picture is drawn where the plate was");
-        assert_eq!(picture[cy2 * w + cx2] >> 16 & 255, 250, "the window's own red, not the plate");
+        assert_eq!(picture[cy2 * w + cx2] & 255, 250, "the window's own red, not the plate");
     }
 
     #[cfg(feature = "desktop-wayland")]
