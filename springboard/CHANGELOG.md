@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Streaming audio starts clean: the speaker output prebuffers about 50 ms before the device starts (a short system sound
+  starts at once) and again after a seek, a skip or a stall, instead of playing into an empty ring. The speaker trace now
+  says whether glitches continue: underruns as events and silent frames per interval and in total, prebuffering counted
+  apart, the fill of the ring, and how many writes slept for room (back-pressure of a full ring, not a stall). The audio
+  server starts its IO thread's logging and timer before the device starts, and logs xruns in the first 8 cycles as
+  start-up xruns (with frames lost and the cycle) that do not feed the quantum fallback.
+
 ## 0.10.11 — 2026-10-20
 
 - Sound plays on the default output: opening a stream on the device the audio server chose no longer fails with
