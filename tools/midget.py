@@ -518,16 +518,117 @@ def key_steps(args):
     return steps or None
 
 
-def type_events(text):
-    """Text -> ([(shift, evdev code)], [skipped characters]) on a US keyboard: newline is Enter, tab is Tab, `\\r` is dropped."""
+def installer_layout_xkb(path=None):
+    """{(xkb layout, xkb variant): installer layout id} from the installer's LAYOUTS table (keymaps_data.rs), the same pairing
+    `layout_from_keyboard_env` uses on the device."""
+    text = open(path or os.path.join(REPO, "springboard/src/installer/keymaps_data.rs"), encoding="utf-8").read()
+    lay = text[text.index("pub const LAYOUTS"):text.index("pub const KEYMAPS")]
+    rows = re.findall(r'^\s*\("([^"]+)",\s*"[^"]*",\s*"([^"]*)",\s*"([^"]*)",', lay, re.M)
+    return {(xkb, variant): ident for ident, xkb, variant in rows}
+
+
+def layout_from_env_text(text, table=None):
+    """The installer layout id named by `XKB_DEFAULT_LAYOUT=` / `XKB_DEFAULT_VARIANT=` lines (the format of
+    /etc/bifrost/keyboard.env and of a process environment); None when absent or unknown."""
+    vals = dict(l.strip().split("=", 1) for l in text.splitlines() if "=" in l)
+    if not vals.get("XKB_DEFAULT_LAYOUT"):
+        return None
+    table = installer_layout_xkb() if table is None else table
+    return table.get((vals["XKB_DEFAULT_LAYOUT"].strip(), vals.get("XKB_DEFAULT_VARIANT", "").strip()))
+
+
+# Printed on Midget by one ssh call: the XKB_DEFAULT_* of the session process (it wins, as in the shell's
+# `configured_layout`), a `---` line, then /etc/bifrost/keyboard.env, which the installer writes from its Language step.
+LAYOUT_PROBE = ("for p in /proc/[0-9]*; do case \"$(cat $p/comm 2>/dev/null)\" in springboard|shell|bifrost-wm) "
+                "tr '\\0' '\\n' <$p/environ 2>/dev/null | grep '^XKB_DEFAULT_' && break;; esac; done; "
+                "echo ---; cat /etc/bifrost/keyboard.env 2>/dev/null")
+
+
+def session_layout(table=None):
+    """The installer layout id of Midget's session (see LAYOUT_PROBE); None when it cannot be read or is not a known layout."""
+    try:
+        table = installer_layout_xkb() if table is None else table
+    except (OSError, ValueError):
+        return None
+    session, _, installed = ssh(LAYOUT_PROBE, 15).partition("---")
+    return layout_from_env_text(session, table) or layout_from_env_text(installed, table)
+
+
+def type_events(text, layout=None, tables=None):
+    """Text -> ([key presses], [skipped characters]): newline is Enter, tab is Tab, `\\r` is dropped. For `us` (or no layout) a
+    press is (shift, code); for any other installer layout it is (shift, code, altgr) from the installer's keymap tables, with a
+    dead key before the letter for accented ones. A character with no key on the layout is skipped."""
     seq, skipped = [], []
+    ltab = None
+    if layout not in (None, "us"):
+        ltab = tables or installer_keymaps()
+        if layout not in ltab[0]:
+            raise ValueError(f"unknown layout {layout!r}; known: {' '.join(ltab[0])}")
     for ch in text:
-        keys = [(False, KEY_CODES["enter"])] if ch == "\n" else [(False, KEY_CODES["tab"])] if ch == "\t" else [] if ch == "\r" else text_keys(ch)
+        if ch == "\n":
+            keys = [(False, KEY_CODES["enter"])]
+        elif ch == "\t":
+            keys = [(False, KEY_CODES["tab"])]
+        elif ch == "\r":
+            keys = []
+        elif ltab is None:
+            keys = text_keys(ch)
+        else:
+            keys = layout_keys(ch, layout, ltab)
         if keys is None:
             skipped.append(ch)
         else:
             seq += keys
     return seq, skipped
+
+
+def decode_keys(seq, layout, tables=None):
+    """Inverse of `type_events` (for tests and `layout_selftest`): the text a layout's keymap produces for key presses
+    (shift, code[, altgr]), composing a dead key with the next character."""
+    ids, maps, comp = tables or installer_keymaps()
+    km = maps[ids.index(layout)]
+    plain = {28: "\n", 57: " ", 15: "\t"}
+    out, dead = "", None
+    for press in seq:
+        shift, code = press[0], press[1]
+        altgr = len(press) > 2 and press[2]
+        ch = km[code][int(bool(shift)) + 2 * int(bool(altgr))] if code in km else plain.get(code, "\0")
+        if "̀" <= ch <= "ͯ":
+            dead = ch
+        elif dead:
+            out += comp.get((dead, ch), ch)
+            dead = None
+        else:
+            out += ch
+    return out
+
+
+# Icelandic symbols and the (shift, code, altgr) presses that type them (xkb `is`): AltGr is KEY_RIGHTALT, 100
+ICELANDIC_SYMBOLS = {"@": (False, 16, True), '"': (True, 3, False), "#": (True, 4, False), "$": (True, 5, False),
+                     "&": (True, 7, False), "/": (True, 8, False), "(": (True, 9, False), ")": (True, 10, False),
+                     "=": (True, 11, False), "-": (False, 13, False), "_": (True, 13, False), "\\": (False, 12, True),
+                     "{": (False, 8, True), "[": (False, 9, True), "]": (False, 10, True), "}": (False, 11, True),
+                     "|": (False, 25, True), "'": (False, 27, False), "?": (True, 27, False), "+": (False, 43, False),
+                     "<": (False, 86, False), ">": (True, 86, False)}
+
+
+def layout_selftest(layouts=("us", "is")):
+    """Every printable ASCII character must type back to itself through the layout's installer keymap, and the Icelandic
+    symbols must sit on the keys ICELANDIC_SYMBOLS lists. Offline; raises AssertionError. Run:
+    MIDGET_HOST=none python3 -c "import sys; sys.path.insert(0, 'tools'); import midget; midget.layout_selftest()" """
+    tables = installer_keymaps()
+    ascii_text = "".join(chr(c) for c in range(32, 127))
+    for layout in layouts:
+        seq, skipped = type_events(ascii_text, layout, tables)
+        assert not skipped, f"{layout}: no key for {skipped}"
+        for ch in ascii_text:  # one character at a time, so a dead key cannot hide a wrong neighbour
+            got = decode_keys(type_events(ch, layout, tables)[0], layout, tables)
+            assert got == ch, f"{layout}: {ch!r} typed as {got!r}"
+    if "is" in layouts:
+        for ch, press in ICELANDIC_SYMBOLS.items():
+            got = type_events(ch, "is", tables)[0]
+            assert got == [press], f"is: {ch!r} is {got}, want {[press]}"
+    return True
 
 
 def unescape_text(text):
@@ -601,10 +702,10 @@ def plan_seconds(plan):
 
 def uinput_plan_script(plan, size=None):
     """Python source run on Midget: the keyboard and/or absolute pointer (with wheels) the plan needs, then the plan.
-    Ops: ("kd"|"ku", code) ("key", [codes], hold_s) ("type", [(shift, code)], delay_s) ("move", ax, ay) ("btn", code, 0|1)
+    Ops: ("kd"|"ku", code) ("key", [codes], hold_s) ("type", [(shift, code) or (shift, code, altgr)], delay_s) ("move", ax, ay) ("btn", code, 0|1)
     ("wheel", REL code, value) ("sleep", s). The pointer is absolute (ABS_X/Y 0..w-1, 0..h-1), not INPUT_PROP_DIRECT, so
     the shell treats it as a pointing device, not a touchscreen."""
-    kb_codes = sorted(set(KEY_CODES.values()) | set(_PUNCT.values()) | {54, 97, 100})  # every letter, so it counts as a keyboard
+    kb_codes = sorted(set(KEY_CODES.values()) | set(_PUNCT.values()) | {54, 97, 100} | set(range(1, 89)) | {86})  # every letter and the layouts' extra keys (86), so it counts as a keyboard
     return f"""import os,fcntl,struct,time
 PLAN={plan!r}
 KB={kb_codes!r}
@@ -640,10 +741,13 @@ try:
    time.sleep(o[2])
    for c in reversed(o[1]): put(kb,1,c,0)
   elif k=='type':
-   for sh,c in o[1]:
+   for p in o[1]:
+    sh,c,ag=p[0],p[1],len(p)>2 and p[2]
+    if ag: put(kb,1,100,1)
     if sh: put(kb,1,42,1)
     put(kb,1,c,1); time.sleep(o[2]); put(kb,1,c,0); time.sleep(o[2])
     if sh: put(kb,1,42,0)
+    if ag: put(kb,1,100,0)
   elif k=='move':
    ev(pt,3,0,o[1]); ev(pt,3,1,o[2]); ev(pt,0,0,0)
   elif k=='btn': put(pt,1,o[1],o[2])
@@ -680,13 +784,34 @@ def cmd_key(args):
     return run_plan(plan)
 
 
+def resolve_type_layout(spec=None):
+    """(layout id, note) for `type`: `spec` (--layout) when given, else the session's layout read from Midget once; `us` with a
+    warning note when it cannot be read. Raises ValueError for a layout the installer does not know."""
+    if spec:
+        ids = installer_keymaps()[0]
+        if spec not in ids:
+            raise ValueError(f"unknown layout {spec!r}; known: {' '.join(ids)}")
+        return spec, None
+    found = session_layout()
+    if found:
+        return found, None
+    return "us", "warning: could not read Midget's keyboard layout (/etc/bifrost/keyboard.env); typing as us (use --layout is|us|...)"
+
+
 def cmd_type(args):
-    """`type [--raw] [--delay MS] TEXT`: type arbitrary text on a US keyboard (newline = Enter, tab = Tab; `\\n` and `\\t` in
-    TEXT count unless --raw). Characters with no US key are reported and skipped."""
-    raw, delay = False, 15.0
-    while args and args[0] in ("--raw", "--delay"):
+    """`type [--raw] [--delay MS] [--layout ID] TEXT`: type arbitrary text through the session's keyboard layout (read from
+    Midget once per call; --layout us|is|... overrides; `us` when it cannot be read) (newline = Enter, tab = Tab; `\\n` and
+    `\\t` in TEXT count unless --raw). Characters with no key on the layout are reported and skipped."""
+    raw, delay, layout = False, 15.0, None
+    while args and (args[0] in ("--raw", "--delay", "--layout") or args[0].startswith("--layout=")):
         if args[0] == "--raw":
             raw, args = True, args[1:]
+        elif args[0].startswith("--layout="):
+            layout, args = args[0].partition("=")[2], args[1:]
+        elif args[0] == "--layout":
+            layout, args = (args[1] if len(args) > 1 else ""), args[2:]
+            if not layout:
+                args = []
         else:
             try:
                 delay, args = float(args[1]), args[2:]
@@ -696,14 +821,21 @@ def cmd_type(args):
         args = args[1:]
     text = " ".join(args)
     if not text:
-        print("usage: type [--raw] [--delay MS] TEXT   (\\n = Enter, \\t = Tab unless --raw)")
+        print("usage: type [--raw] [--delay MS] [--layout us|is|...] TEXT   (\\n = Enter, \\t = Tab unless --raw)")
         return 2
-    seq, skipped = type_events(text if raw else unescape_text(text))
+    try:
+        layout, note = resolve_type_layout(layout)
+    except ValueError as e:
+        print(e, file=sys.stderr)
+        return 2
+    if note:
+        print(note, file=sys.stderr)
+    seq, skipped = type_events(text if raw else unescape_text(text), layout)
     if skipped:
-        print("skipped (no US key): " + " ".join(repr(c) for c in dict.fromkeys(skipped)), file=sys.stderr)
+        print(f"skipped (no {layout} key): " + " ".join(repr(c) for c in dict.fromkeys(skipped)), file=sys.stderr)
     if not seq:
         return 1
-    print(f"typing {len(seq)} keys")
+    print(f"typing {len(seq)} keys ({layout})")
     return run_plan([("type", seq, delay / 1000)])
 
 

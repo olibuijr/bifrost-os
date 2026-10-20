@@ -1,5 +1,6 @@
 """The pure parts of midget.py's computer-use commands (type, click, drag, scroll, shot, seq): no machine is contacted."""
 import importlib.util, pathlib, struct, unittest, zlib
+from unittest.mock import patch
 spec = importlib.util.spec_from_file_location("midget", pathlib.Path(__file__).with_name("midget.py"))
 m = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)
@@ -54,6 +55,81 @@ class Keys(unittest.TestCase):
         self.assertEqual(m.type_events(text)[1], [])
 
 
+class Layouts(unittest.TestCase):
+    """`type` follows the session's keyboard layout (Icelandic on Midget) instead of assuming US."""
+
+    def test_icelandic_symbols_use_the_keys_of_that_layout(self):
+        # US Shift+2 is '@'; on Icelandic it types '"', and '@' is AltGr+q (RIGHTALT held around code 16)
+        self.assertEqual(m.type_events("@", "is")[0], [(False, 16, True)])
+        self.assertEqual(m.type_events('"', "is")[0], [(True, 3, False)])
+        self.assertEqual(m.type_events("@", "us")[0], [(True, 3)])
+        self.assertEqual(m.type_events("@")[0], [(True, 3)], "no layout is the US table")
+        for ch, press in m.ICELANDIC_SYMBOLS.items():
+            self.assertEqual(m.type_events(ch, "is")[0], [press], ch)
+
+    def test_newline_tab_and_space_work_on_every_layout(self):
+        seq, skipped = m.type_events("a b\n\t", "is")
+        self.assertEqual(seq, [(False, 30, False), (False, 57, False), (False, 48, False), (False, 28), (False, 15)])
+        self.assertEqual(skipped, [])
+
+    def test_unmapped_characters_are_reported(self):
+        self.assertEqual(m.type_events("a☃b", "is")[1], ["☃"])
+        self.assertEqual(m.type_events("é", "us")[1], ["é"])
+
+    def test_unknown_layout_is_an_error(self):
+        with self.assertRaises(ValueError):
+            m.type_events("a", "xx")
+
+    def test_selftest_round_trips_ascii_on_us_and_is(self):
+        self.assertTrue(m.layout_selftest())
+
+    def test_layout_is_read_from_the_env_text(self):
+        table = m.installer_layout_xkb()
+        self.assertEqual(m.layout_from_env_text("XKB_DEFAULT_LAYOUT=is\nXKB_DEFAULT_VARIANT=\n", table), "is")
+        self.assertEqual(m.layout_from_env_text("XKB_DEFAULT_LAYOUT=us\nXKB_DEFAULT_VARIANT=intl\n", table), "us-intl")
+        self.assertIsNone(m.layout_from_env_text("XKB_DEFAULT_LAYOUT=xx\n", table))
+        self.assertIsNone(m.layout_from_env_text("", table))
+
+    def test_session_layout_prefers_the_session_environment_over_the_installed_file(self):
+        out = "XKB_DEFAULT_LAYOUT=de\nXKB_DEFAULT_VARIANT=\n---\nXKB_DEFAULT_LAYOUT=is\nXKB_DEFAULT_VARIANT=\n"
+        with patch.object(m, "ssh", return_value=out):
+            self.assertEqual(m.session_layout(), "de")
+        with patch.object(m, "ssh", return_value="---\nXKB_DEFAULT_LAYOUT=is\nXKB_DEFAULT_VARIANT=\n"):
+            self.assertEqual(m.session_layout(), "is")
+        with patch.object(m, "ssh", return_value=""):
+            self.assertIsNone(m.session_layout())
+
+    def test_cmd_type_reads_the_layout_once_and_override_skips_the_probe(self):
+        with patch.object(m, "session_layout", return_value="is") as probe, patch.object(m, "run_plan", return_value=0) as run:
+            self.assertEqual(m.cmd_type(["a@"]), 0)
+            probe.assert_called_once()
+            self.assertEqual(run.call_args.args[0], [("type", [(False, 30, False), (False, 16, True)], 0.015)])
+        with patch.object(m, "session_layout", return_value="is") as probe, patch.object(m, "run_plan", return_value=0) as run:
+            self.assertEqual(m.cmd_type(["--layout", "us", "a@"]), 0)
+            probe.assert_not_called()
+            self.assertEqual(run.call_args.args[0], [("type", [(False, 30), (True, 3)], 0.015)])
+            self.assertEqual(m.cmd_type(["--layout=us", "a"]), 0)
+
+    def test_cmd_type_falls_back_to_us_with_a_warning(self):
+        with patch.object(m, "session_layout", return_value=None), patch.object(m, "run_plan", return_value=0) as run, \
+                patch("sys.stderr") as err:
+            self.assertEqual(m.cmd_type(["@"]), 0)
+            self.assertEqual(run.call_args.args[0], [("type", [(True, 3)], 0.015)])
+            self.assertIn("typing as us", "".join(c.args[0] for c in err.write.call_args_list))
+
+    def test_cmd_type_rejects_an_unknown_layout(self):
+        with patch.object(m, "run_plan") as run, patch("sys.stderr"):
+            self.assertEqual(m.cmd_type(["--layout", "xx", "a"]), 2)
+            run.assert_not_called()
+
+    def test_device_script_holds_altgr_around_the_key(self):
+        src = m.uinput_plan_script([("type", [(False, 16, True), (True, 3, False)], 0.01)])
+        compile(src, "plan", "exec")
+        self.assertIn("if ag: put(kb,1,100,1)", src)
+        self.assertIn("if ag: put(kb,1,100,0)", src)
+        self.assertIn(" 86,", src, "the extra key of non-US boards is on the virtual keyboard")
+
+
 class Pointer(unittest.TestCase):
     def test_pixels_equal_absolute_values_and_clamp(self):
         self.assertEqual(m.px_to_abs(0, 0, SIZE), (0, 0))
@@ -102,7 +178,7 @@ class Pointer(unittest.TestCase):
 
     def test_device_script_compiles_for_every_op(self):
         plan = (m.click_plan(1, 2, SIZE, mods=[125]) + m.drag_plan(0, 0, 9, 9, SIZE, 100) + m.scroll_plan(1, 1, SIZE, 1, 1)
-                + [("key", [125, 24], 0.05), ("type", [(True, 30)], 0.015), ("sleep", 0.1)])
+                + [("key", [125, 24], 0.05), ("type", [(True, 30), (False, 16, True)], 0.015), ("sleep", 0.1)])
         src = m.uinput_plan_script(plan, SIZE)
         compile(src, "plan", "exec")
         self.assertIn("SIZE=(2560, 1440)", src)

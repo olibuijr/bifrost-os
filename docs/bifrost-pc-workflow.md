@@ -140,7 +140,8 @@ off), so the shell treats it as a pointing device, not a touchscreen: a right cl
 bifrost pc midget shot /tmp/m.png                  # then read /tmp/m-small.png, note "scale: 2.0000"
 bifrost pc midget click --scale 2 420 300          # a point on the small image
 bifrost pc midget click 1500 900 --double --mods cmd
-bifrost pc midget type "hello world\n"
+bifrost pc midget type "hello world\n"             # follows the session keyboard layout (read from /etc/bifrost/keyboard.env once per call)
+bifrost pc midget type --layout is "a@b"          # override: us, is, ... (AltGr is held around the key)
 bifrost pc midget key cmd+a cmd+c
 bifrost pc midget drag 400 300 900 300 600
 bifrost pc midget scroll 1280 720 5
