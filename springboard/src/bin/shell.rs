@@ -1015,6 +1015,15 @@ fn run() -> std::io::Result<()> {
                             continue;
                         }
                     }
+                    // the arrows, Home and End with Shift, Alt, Ctrl or Cmd (and Home and End alone) go to a text editor in front that
+                    // declares `edit_keys`, as chords; any other app gets the plain arrows below, as before
+                    if down {
+                        if let Some(mods) = hw_keys.nav_mods(code) {
+                            if shell.hw_nav(code, mods) {
+                                continue;
+                            }
+                        }
+                    }
                     // a physical keyboard types into the terminal and text fields
                     // only a key-down types: a dead key keeps state between presses
                     // an input source switch (Ctrl+Space or the input menu) moves the hardware layout with it

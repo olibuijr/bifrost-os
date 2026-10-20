@@ -509,6 +509,20 @@ impl HwKeys {
         Some(mods)
     }
 
+    /// The CHORD_* bits of a navigation key (an arrow, Home or End) that goes to a text editor in front (the manifest's
+    /// `edit_keys`): every modifier held is named, so the editor can extend the selection (Shift), move by word (Alt or Ctrl)
+    /// and by line (Cmd). Home and End go even with no modifier, as `Some(0)`, since the apps never got them otherwise; an
+    /// arrow with none held is `None` (it types as before). None for any other key.
+    pub fn nav_mods(&self, code: u16) -> Option<u32> {
+        let ends = matches!(code, KEY_HOME | KEY_END);
+        if !ends && !matches!(code, KEY_LEFT | KEY_RIGHT | KEY_UP | KEY_DOWN) {
+            return None;
+        }
+        let held = [(self.ctrl > 0, CHORD_CTRL), (self.shift > 0, CHORD_SHIFT), (self.alt > self.altgr, CHORD_ALT), (self.meta > 0, CHORD_META)];
+        let mods = held.iter().filter(|(on, _)| *on).fold(0u32, |all, (_, bit)| all | *bit);
+        (mods != 0 || ends).then_some(mods)
+    }
+
     /// What a key-down types into a text control or the terminal: characters, Backspace, Enter
     /// and the terminal's named keys. None while Ctrl, Alt or Meta is held (those are shortcuts).
     pub fn typed(&mut self, code: u16) -> Option<Out> {
@@ -714,6 +728,18 @@ impl Shell {
             return false;
         }
         self.ext_chord(u32::from(code), mods)
+    }
+
+    /// A navigation key with its modifiers (`HwKeys::nav_mods`) for a text editor in front: the app that declares `edit_keys`
+    /// gets it as a chord on the evdev key. False when the app in front is not one (or no app is), so the key goes on as an
+    /// ordinary arrow.
+    pub fn hw_nav(&mut self, code: u16, mods: u32) -> bool {
+        if !self.screen_on {
+            return false;
+        }
+        let Screen::App(AppId::External(slot)) = self.screen else { return false };
+        let takes = super::apphost::installed().get(slot as usize).is_some_and(|a| a.manifest.edit_keys);
+        takes && self.ext_chord(u32::from(code), mods)
     }
 
     pub fn hw_type(&mut self, out: Out, t: f64) -> Vec<Effect> {
@@ -1167,6 +1193,26 @@ mod tests {
         assert_eq!(k.chord_mods(KEY_DOWN), Some(CHORD_META), "Cmd+Down");
         assert_eq!(k.chord_mods(KEY_LEFT), None, "the other arrows are not chord keys");
         // Cmd+Space is Search: the shell takes shortcuts before it asks for a chord
+    }
+
+    #[test]
+    fn navigation_keys_name_their_modifiers_for_text_editors() {
+        let mut k = HwKeys::default();
+        assert_eq!(k.nav_mods(KEY_LEFT), None, "a plain arrow types as before");
+        assert_eq!(k.nav_mods(KEY_HOME), Some(0), "Home and End go to an editor alone");
+        assert_eq!(k.nav_mods(KEY_END), Some(0));
+        assert_eq!(k.nav_mods(49), None, "other keys are not navigation keys");
+        k.key(KEY_LEFTSHIFT, true);
+        assert_eq!(k.nav_mods(KEY_LEFT), Some(CHORD_SHIFT));
+        assert_eq!(k.nav_mods(KEY_HOME), Some(CHORD_SHIFT));
+        k.key(KEY_LEFTALT, true);
+        assert_eq!(k.nav_mods(KEY_RIGHT), Some(CHORD_SHIFT | CHORD_ALT));
+        k.key(KEY_LEFTALT, false);
+        k.key(KEY_LEFTSHIFT, false);
+        assert_eq!(k.nav_mods(KEY_RIGHT), None);
+        k.key(KEY_LEFTMETA, true);
+        assert_eq!(k.nav_mods(KEY_UP), Some(CHORD_META));
+        assert_eq!(k.nav_mods(KEY_END), Some(CHORD_META));
     }
 
     #[test]

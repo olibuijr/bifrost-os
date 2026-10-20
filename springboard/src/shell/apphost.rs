@@ -43,6 +43,11 @@ pub struct Manifest {
     /// Files and the file panels treat a folder with a known extension as one document; declaring it here is what
     /// lets the app open one.
     pub package_types: Vec<String>,
+    /// `edit_keys = true`: the app is a text editor that takes the navigation keys with their modifiers. The arrows, Home and
+    /// End with Shift, Alt, Ctrl or Cmd (and Home and End alone) reach it as chords on the evdev key
+    /// (`KeyInput::chord(105, CHORD_SHIFT)` for Shift+Left), so it can extend the selection and move by word and line. Any other
+    /// app gets those keys as the plain arrow codes, as before (see `Shell::hw_nav`).
+    pub edit_keys: bool,
     /// `index_extension = true`: the app answers the shell's reindex requests (`CSIndexExtensionRequestHandler`). The
     /// shell asks once per run, when the app has no items in the Search index (see `request_index_extensions`).
     pub index_extension: bool,
@@ -206,6 +211,7 @@ impl Manifest {
                 "category" => m.category = unquote(v),
                 "game" => m.game = unquote(v) == "true",
                 "index_extension" => m.index_extension = unquote(v) == "true",
+                "edit_keys" => m.edit_keys = unquote(v) == "true",
                 "file_manager_folders" => m.file_manager_folders = strs(),
                 "permissions" => m.permissions = strs(),
                 "keychain_groups" => m.keychain_groups = strs(),
@@ -2291,6 +2297,14 @@ mod tests {
         assert_eq!(m.package_types, vec!["rtfd".to_string()]);
         let none = Manifest::parse("id = \"is.a.edit\"\nname = \"Edit\"\nexec = \"x\"\n").unwrap();
         assert!(none.package_types.is_empty());
+    }
+    #[test]
+    fn edit_keys_is_declared_by_text_editors_only() {
+        let m = Manifest::parse("id = \"is.a.edit\"\nname = \"Edit\"\nexec = \"x\"\nedit_keys = true\n").unwrap();
+        assert!(m.edit_keys);
+        let no = Manifest::parse("id = \"is.a.edit\"\nname = \"Edit\"\nexec = \"x\"\nedit_keys = false\n").unwrap();
+        assert!(!no.edit_keys);
+        assert!(!Manifest::parse("id = \"is.a.edit\"\nname = \"Edit\"\nexec = \"x\"\n").unwrap().edit_keys);
     }
     #[test]
     fn file_manager_extensions_declare_the_folders_they_watch() {
