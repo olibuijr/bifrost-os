@@ -526,7 +526,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-browser"
-version = "0.17.0"
+version = "0.17.1"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -577,7 +577,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-clock"
-version = "1.5.1"
+version = "1.5.2"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -709,7 +709,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-games"
-version = "1.6.4"
+version = "1.6.5"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -855,7 +855,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-music"
-version = "1.13.1"
+version = "1.13.2"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -864,7 +864,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-news"
-version = "1.6.4"
+version = "1.6.5"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -903,7 +903,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-podcasts"
-version = "1.13.1"
+version = "1.13.2"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -939,7 +939,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-remote"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -1075,7 +1075,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-voicememos"
-version = "1.10.1"
+version = "1.10.2"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -4430,7 +4430,7 @@ dependencies = [
 
 [[package]]
 name = "springboard"
-version = "0.10.6"
+version = "0.10.7"
 dependencies = [
  "bifrost-assistant-client",
  "bifrost-audio-hal",
