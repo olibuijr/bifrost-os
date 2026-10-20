@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## 0.10.15 — 2026-10-20
+
+Leftovers from the 0.10.14 re-test (`docs/e2e/2026-10-20-second-pass.md`).
+
+- Search: the results card ends above the Dock and its rows scroll (wheel and arrow keys keep the selection in
+  view). The Apps grid panel and the Cmd+Tab strip are frosted glass like Search instead of opaque plates.
+- Printing works on an installed system: the CUPS client talks to `/run/cups/cups.sock` (what `cups.socket` listens
+  on), honours `CUPS_SERVER`, and falls back to localhost:631.
+- Settings: Energy's sleep time and Power Mode are pop-up rows; every app row in Notifications has its icon (built-in
+  apps too); "Center" everywhere; About counts physical cores ("4 cores" on an i7-6700T, not threads).
+- Notification Center shows the Weather card: the shell read a store app's data from the bare id instead of the
+  package id (`appdata/is.olibuijr.weather.desktop`).
+
 ## 0.10.14 — 2026-10-20
 
 Fixes from the second Midget E2E pass (`docs/e2e/2026-10-20-second-pass.md`).
