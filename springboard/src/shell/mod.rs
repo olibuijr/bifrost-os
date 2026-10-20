@@ -925,6 +925,11 @@ pub struct Shell {
     desk_regions:Option<Vec<(i32,i32,i32,i32)>>,
     /// set while a partial GPU desktop frame draws: the only rectangles the wallpaper layer clears
     desk_clear:Option<Vec<(i32,i32,i32,i32)>>,
+    /// the Dock capsule as the last desktop frame pushed it as a glass shape (x, y, w, h), and the capsules it has left
+    /// since: the presenter keeps a glass shape until redrawn pixels wholly cover it, and a Dock that shrank or hid
+    /// changes only a few rows of them, so the frame damages these too (`note_dock_glass`)
+    dock_glass_bar:std::cell::Cell<Option<(i32,i32,i32,i32)>>,
+    dock_glass_vacated:std::cell::RefCell<Vec<(i32,i32,i32,i32)>>,
     /// A full desktop frame has been drawn since the last frame of any other screen (the HUD-only fast path needs it).
     desk_drawn:bool,
     desktop_context:Option<desktop_bar::ContextMenu>,
@@ -1265,7 +1270,7 @@ impl Shell {
             quick_look:Default::default(),
             pip:Default::default(),
             thermal:Default::default(),
-            bar_backdrop:std::cell::RefCell::new(None),chrome_text:std::cell::RefCell::new(bifrost_render::cache::TextCache::for_screen(w.max(0) as usize, h.max(0) as usize)),bar_shadows:Default::default(),desk_regions:None,desk_clear:None,desk_drawn:false,
+            bar_backdrop:std::cell::RefCell::new(None),chrome_text:std::cell::RefCell::new(bifrost_render::cache::TextCache::for_screen(w.max(0) as usize, h.max(0) as usize)),bar_shadows:Default::default(),desk_regions:None,desk_clear:None,dock_glass_bar:std::cell::Cell::new(None),dock_glass_vacated:std::cell::RefCell::new(Vec::new()),desk_drawn:false,
             desktop_metrics:Default::default(),desktop_metrics_at:0.,metrics_sampler:Default::default(),metrics_running:false,
             desk: Some(desk::Desk::new()),
             desktop_gate: Default::default(),
@@ -2008,6 +2013,10 @@ impl Shell {
             if let Some(t) = tile {
                 t.icon = fresh;
             }
+        }
+        // the Dock's scaled copies belong to the icons just replaced
+        if let Some(d) = self.desk.as_ref() {
+            d.clear_icon_cache();
         }
         self.quicksearch.clear_icons();
         self.overview.clear_icons();
@@ -4220,6 +4229,10 @@ impl Shell {
                         None => for (x, y, w, h) in rects { damage.add(x, y, w, h); },
                     },
                     None => damage.all(),
+                }
+                // a Dock capsule that moved, shrank or hid: its old glass shape must fall inside redrawn pixels
+                for (x, y, w, h) in self.dock_glass_vacated.take() {
+                    damage.add(x - 2, y - 2, w + 4, h + 4);
                 }
                 // the panels fade and slide in: repaint everything until they settle
                 if self.cc.animating() || self.notify.animating() {

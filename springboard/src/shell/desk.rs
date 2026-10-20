@@ -27,6 +27,9 @@ const DOCK_PAD_PT: f32 = 10.0;
 const DOCK_GAP_PT: f32 = 10.0;
 const DOCK_MARGIN_PT: f32 = 10.0;
 const DOCK_SEP_PT: f32 = 14.0;
+/// Corner radius of a minimised window's Dock thumbnail, and the width of its app badge as a share of the Dock icon.
+const MINIMIZED_THUMB_RADIUS_PT: f32 = 6.0;
+const MINIMIZED_BADGE_K: f32 = 0.4;
 /// How far past the Dock a dragged icon must be released to leave it, in pt.
 const DOCK_REMOVE_PT: f32 = 40.0;
 /// The dock's Trash slot in the `desk_dock` list (after the divider, always last).
@@ -234,8 +237,9 @@ pub struct Desk {
     /// neighbours sliding aside while a dock icon is lifted, and the slot it hovers
     pub(super) dock_slide: std::cell::RefCell<bifrost_ui::dockdrag::Slide>,
     dock_drop: Option<usize>,
-    /// dock icons scaled to the dock size, keyed by (source pixels, width): resized once, not per frame
-    icon_cache: std::cell::RefCell<std::collections::HashMap<(usize, usize), Image>>,
+    /// dock icons scaled to the dock size, keyed by the app they belong to, the icon generation and the size (never by
+    /// where the source pixels live in memory): resized once, not per frame
+    icon_cache: std::cell::RefCell<std::collections::HashMap<DockIconKey, Image>>,
     buf: Vec<u32>,
     /// scratch for drawing one window in the Wayland path
     #[cfg(feature = "desktop-wayland")]
@@ -660,6 +664,25 @@ impl Desk {
         }
     }
 
+    /// Runs `f` on `src` scaled to `w` x `h`, resized once per (owner, generation, size). Only the current generation
+    /// is kept when the cache grows, so icons drawn before a rebuild never come back.
+    pub(super) fn with_scaled_icon<R>(&self, key: DockIconKey, src: &Image, w: usize, h: usize, f: impl FnOnce(&Image) -> R) -> R {
+        let mut cache = self.icon_cache.borrow_mut();
+        if cache.len() > 48 {
+            cache.retain(|k, _| k.generation == key.generation && k.size == key.size);
+            if cache.len() > 48 {
+                cache.clear();
+            }
+        }
+        let icon = cache.entry(key).or_insert_with(|| src.resized(w, h));
+        f(icon)
+    }
+
+    /// Forgets every scaled Dock icon (the icons were drawn again).
+    pub(super) fn clear_icon_cache(&self) {
+        self.icon_cache.borrow_mut().clear();
+    }
+
     /// Drops the per-window pixel caches and stale dock icon resizes; true when something was freed.
     pub fn release_app_buffers(&mut self, app: AppId) -> bool {
         let mut freed = false;
@@ -727,6 +750,33 @@ const CALENDAR_TILE: &str = "is.olibuijr.calendar.desktop";
 pub(super) fn calendar_face_text(wday: i32, mday: i32) -> (&'static str, String) {
     const DAYS: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     (DAYS[wday.rem_euclid(7) as usize], mday.to_string())
+}
+
+/// Whose icon a cached Dock resize is: an entry of `apps()` or a Linux client by Wayland app id.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(super) enum DockIconOwner {
+    App(usize),
+    #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+    Linux(String),
+}
+
+/// Key of a cached, scaled Dock icon. It names the app (not the address of its pixel buffer: a freed buffer's address
+/// is handed to the next icon drawn, so an address key showed one app's picture on another's slot after the icons
+/// were rebuilt), the icon generation (`Shell::icon_rebuilds`) and the side in px.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(super) struct DockIconKey {
+    pub owner: DockIconOwner,
+    pub generation: u32,
+    pub size: usize,
+}
+
+/// The frame of a minimised window's Dock thumbnail inside its square `slot`: the window's aspect (`w` / `h`, clamped
+/// so a very wide or tall window still reads), fitted to the slot and centred on it.
+pub(super) fn thumbnail_frame(slot: Rect, window_w: i32, window_h: i32) -> Rect {
+    let aspect = if window_w > 0 && window_h > 0 { (window_w as f32 / window_h as f32).clamp(0.5, 2.0) } else { 1.0 };
+    let (w, h) = if aspect >= 1.0 { (slot.w as f32, slot.w as f32 / aspect) } else { (slot.h as f32 * aspect, slot.h as f32) };
+    let (w, h) = ((w.round() as i32).clamp(1, slot.w.max(1)), (h.round() as i32).clamp(1, slot.h.max(1)));
+    Rect { x: slot.x + (slot.w - w) / 2, y: slot.y + (slot.h - h) / 2, w, h }
 }
 
 #[cfg(test)]
@@ -2417,11 +2467,23 @@ impl Shell {
         });
     }
 
+    /// Records the Dock capsule this frame pushed as a glass shape (`None`: none was). A capsule that differs from the
+    /// last one is kept in `dock_glass_vacated`: the presenter drops a stored glass shape only when redrawn pixels wholly
+    /// cover it, and a Dock that lost an icon or hid changes just a few rows of its old area (the middle of the plate
+    /// comes out the same), so the old, wider shape stayed as a pale slab at both ends.
+    pub(super) fn note_dock_glass(&self, bar: Option<Rect>) {
+        let now = bar.map(|b| (b.x, b.y, b.w, b.h));
+        if let Some(prev) = self.dock_glass_bar.replace(now).filter(|p| Some(*p) != now) {
+            self.dock_glass_vacated.borrow_mut().push(prev);
+        }
+    }
+
     fn draw_desk_dock(&self, s: &mut Surface, m: &Metrics, t: f64) {
-        if !self.dock_is_visible(){return;}
+        if !self.dock_is_visible(){self.note_dock_glass(None);return;}
         let (list, bar0, rects0) = self.desk_dock(m);
         // autohide slide, then magnification around the pointer (both pure functions of the clock)
         let (bar, slid) = self.dock_slid(bar0, &rects0, t / 1000.0);
+        self.note_dock_glass(bifrost_render::glass::gpu().then_some(bar));
         let rects = self.dock_magnified(&slid, t / 1000.0);
         let ui = &self.ui;
         // frosted material: blur what is behind the dock, tint it, and edge it with a hairline
@@ -2472,15 +2534,27 @@ impl Shell {
             if i == DOCK_TRASH { draw_trash(s, r); continue; }
             if i == super::dock_stack::DOCK_STACK { super::dock_stack::draw_stack(s, r, &desk.stack_files); continue; }
             if let Some(wi) = super::desktop_dock::dock_min_index(i) {
-                // a minimized window: a plate with its app's icon, to the right of the last divider
-                if let Some(ai) = desk.wins.get(wi).and_then(|w| apps().iter().position(|a| a.id == w.app)) {
-                    s.fill_rrect(r.x as f32, r.y as f32, r.w as f32, r.h as f32, ui.pt(10.0), super::ui::CELL);
-                    let inset = r.w / 6;
-                    let side = (r.w - 2 * inset).max(1) as usize;
-                    let base = &self.base_icons[ai];
-                    let mut cache = desk.icon_cache.borrow_mut(); if cache.len() > 48 { cache.retain(|k, _| k.1 == side); if cache.len() > 48 { cache.clear(); } }
-                    let icon = cache.entry((base.px.as_ptr() as usize, side)).or_insert_with(|| base.resized(side, side));
-                    s.blit(icon, r.x + inset, r.y + inset, 255, 255);
+                // a minimized window, to the right of the last divider: a thumbnail frame at the window's aspect with
+                // its app's icon in it and a small badge of the app (no window pixels are kept while it is minimized)
+                if let Some(win) = desk.wins.get(wi) {
+                    let frame = thumbnail_frame(*r, win.r.w, win.r.h);
+                    let (fx, fy, fw, fh) = (frame.x as f32, frame.y as f32, frame.w as f32, frame.h as f32);
+                    let radius = ui.pt(MINIMIZED_THUMB_RADIUS_PT).min(fw.min(fh) / 2.0);
+                    s.fill_rrect(fx, fy, fw, fh, radius, SEPARATOR_C.now());
+                    let hair = ui.pt(1.0).max(1.0);
+                    s.fill_rrect(fx + hair, fy + hair, (fw - 2.0 * hair).max(1.0), (fh - 2.0 * hair).max(1.0), (radius - hair).max(0.0), FIELD_BG.now());
+                    if let Some(ai) = apps().iter().position(|a| a.id == win.app) {
+                        let base = &self.base_icons[ai];
+                        let key = |size: usize| DockIconKey { owner: DockIconOwner::App(ai), generation: self.icon_rebuilds, size };
+                        let body = ((frame.w.min(frame.h) as f32) * 0.6).round().max(1.0) as usize;
+                        desk.with_scaled_icon(key(body), base, body, body, |icon| {
+                            s.blit(icon, frame.x + (frame.w - body as i32) / 2, frame.y + (frame.h - body as i32) / 2, 255, 255);
+                        });
+                        let badge = ((r.w as f32) * MINIMIZED_BADGE_K).round().max(1.0) as usize;
+                        desk.with_scaled_icon(key(badge), base, badge, badge, |icon| {
+                            s.blit(icon, frame.x + frame.w - badge as i32 + badge as i32 / 4, frame.y + frame.h - badge as i32 + badge as i32 / 4, 255, 255);
+                        });
+                    }
                 }
                 continue;
             }
@@ -2496,10 +2570,8 @@ impl Shell {
             if i > apps().len() {
                 let app=&desk.linux_apps[i-apps().len()-1];
                 let pressed=matches!(desk.grab,Some(Grab::DockDrag{from:g,..}) if g==k);
-                let mut cache=desk.icon_cache.borrow_mut();if cache.len()>48{cache.retain(|k,_|k.1==r.w as usize);if cache.len()>48{cache.clear();}}
-                let icon=cache.entry((app.icon.px.as_ptr() as usize,r.w as usize)).or_insert_with(||app.icon.resized(r.w as usize,r.h as usize));
-                s.blit(icon,r.x,r.y,255,if pressed {150} else {255});
-                drop(cache);
+                let key=DockIconKey{owner:DockIconOwner::Linux(app.app_id.clone()),generation:self.icon_rebuilds,size:r.w as usize};
+                desk.with_scaled_icon(key,&app.icon,r.w as usize,r.h as usize,|icon|s.blit(icon,r.x,r.y,255,if pressed {150} else {255}));
                 if !app.windows.is_empty() {
                     let d=ui.pt(4.0);
                     s.fill_rrect((r.x+r.w/2) as f32-d/2.0,(r.y+r.h) as f32+ui.pt(3.0),d,d,d/2.0,WHITE);
@@ -2511,9 +2583,8 @@ impl Shell {
             if base.w as i32 == r.w {
                 s.blit(base, r.x, r.y, 255, if pressed { 150 } else { 255 });
             } else {
-                let mut cache = desk.icon_cache.borrow_mut(); if cache.len() > 48 { cache.retain(|k, _| k.1 == r.w as usize); if cache.len() > 48 { cache.clear(); } }
-                let icon = cache.entry((base.px.as_ptr() as usize, r.w as usize)).or_insert_with(|| base.resized(r.w as usize, r.h as usize));
-                s.blit(icon, r.x, r.y, 255, if pressed { 150 } else { 255 });
+                let key = DockIconKey { owner: DockIconOwner::App(i), generation: self.icon_rebuilds, size: r.w as usize };
+                desk.with_scaled_icon(key, base, r.w as usize, r.h as usize, |icon| s.blit(icon, r.x, r.y, 255, if pressed { 150 } else { 255 }));
             }
             if apps()[i].icon == CALENDAR_TILE {
                 self.calendar_tile_face(s, ui.s, (r.x as f32, r.y as f32, r.w as f32, r.h as f32), (self.info.wday, self.info.mday));
@@ -2832,11 +2903,77 @@ mod tests {
         let i = d.open(&m, AppId::Settings, (900, 600));
         #[cfg(feature = "desktop-wayland")]
         d.body_cache.insert(AppId::Settings, vec![0u32; 1024]);
-        d.icon_cache.borrow_mut().insert((1, 1), Image { w: 1, h: 1, px: vec![0; 1] });
+        d.icon_cache.borrow_mut().insert(DockIconKey { owner: DockIconOwner::App(0), generation: 0, size: 1 }, Image { w: 1, h: 1, px: vec![0; 1] });
         d.close(i);
         #[cfg(feature = "desktop-wayland")]
         assert!(d.body_cache.is_empty());
         assert!(d.icon_cache.borrow().is_empty());
+    }
+
+    #[test]
+    fn the_dock_icon_cache_is_keyed_by_app_and_generation_not_by_pixel_address() {
+        let d = Desk::new();
+        let solid = |c: u32| Image { w: 2, h: 2, px: vec![c; 4] };
+        let (red, blue) = (solid(0xffff_0000), solid(0xff00_00ff));
+        let key = |i: usize, generation: u32| DockIconKey { owner: DockIconOwner::App(i), generation, size: 2 };
+        let pick = |k: DockIconKey, src: &Image| d.with_scaled_icon(k, src, 2, 2, |im| im.px[0]);
+        assert_eq!(pick(key(1, 0), &red), 0xffff_0000);
+        assert_eq!(pick(key(2, 0), &blue), 0xff00_00ff);
+        // one buffer standing in for two apps (a freed buffer's address reused) never shares a slot
+        assert_eq!(pick(key(3, 0), &blue), 0xff00_00ff);
+        assert_eq!(pick(key(1, 0), &red), 0xffff_0000, "slot 1 keeps its own picture");
+        // the icons were rebuilt: the new generation draws the new picture, whatever the old one was
+        assert_eq!(pick(key(1, 1), &blue), 0xff00_00ff);
+        // a Linux client is its own owner, never an `apps()` entry
+        let linux = DockIconKey { owner: DockIconOwner::Linux("firefox".into()), generation: 0, size: 2 };
+        assert_eq!(pick(linux, &red), 0xffff_0000);
+    }
+
+    #[test]
+    fn a_full_dock_icon_cache_keeps_only_the_current_generation() {
+        let d = Desk::new();
+        let img = Image { w: 2, h: 2, px: vec![0xff11_2233; 4] };
+        for i in 0..50 {
+            d.with_scaled_icon(DockIconKey { owner: DockIconOwner::App(i), generation: 0, size: 2 }, &img, 2, 2, |_| ());
+        }
+        d.with_scaled_icon(DockIconKey { owner: DockIconOwner::App(0), generation: 1, size: 2 }, &img, 2, 2, |_| ());
+        let cache = d.icon_cache.borrow();
+        assert_eq!(cache.len(), 1);
+        assert!(cache.keys().all(|k| k.generation == 1));
+    }
+
+    #[test]
+    fn a_dock_capsule_that_changed_or_hid_vacates_its_old_glass_shape() {
+        let sh = crate::shell::tests::desktop_shell();
+        let capsule = |x: i32, w: i32| Rect { x, y: 900, w, h: 80 };
+        let vacated = || sh.dock_glass_vacated.take();
+        sh.note_dock_glass(Some(capsule(100, 800)));
+        assert!(vacated().is_empty(), "the first capsule leaves nothing behind");
+        sh.note_dock_glass(Some(capsule(100, 800)));
+        assert!(vacated().is_empty(), "an unchanged capsule leaves nothing behind");
+        sh.note_dock_glass(Some(capsule(150, 700)));
+        assert_eq!(vacated(), vec![(100, 900, 800, 80)], "a Dock that lost icons vacates its wider capsule");
+        sh.note_dock_glass(None);
+        assert_eq!(vacated(), vec![(150, 900, 700, 80)], "a hidden Dock vacates its capsule");
+        sh.note_dock_glass(None);
+        assert!(vacated().is_empty());
+    }
+
+    #[test]
+    fn a_minimised_thumbnail_takes_the_windows_aspect_inside_its_slot() {
+        let slot = Rect { x: 10, y: 20, w: 48, h: 48 };
+        let inside = |f: Rect| f.x >= slot.x && f.y >= slot.y && f.x + f.w <= slot.x + slot.w && f.y + f.h <= slot.y + slot.h;
+        let wide = thumbnail_frame(slot, 1600, 900);
+        assert_eq!((wide.w, wide.h), (48, 27));
+        assert_eq!(wide.x + wide.w / 2, slot.x + slot.w / 2, "centred across");
+        assert!((wide.y + wide.h / 2 - (slot.y + slot.h / 2)).abs() <= 1, "centred down");
+        let tall = thumbnail_frame(slot, 500, 1000);
+        assert_eq!((tall.w, tall.h), (24, 48));
+        let extreme = thumbnail_frame(slot, 4000, 100);
+        assert_eq!((extreme.w, extreme.h), (48, 24), "the aspect is clamped");
+        let none = thumbnail_frame(slot, 0, 0);
+        assert_eq!((none.w, none.h), (48, 48), "a window without a size gets a square");
+        assert!([wide, tall, extreme, none].into_iter().all(inside));
     }
 
     #[test]
