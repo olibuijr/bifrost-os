@@ -474,6 +474,14 @@ pub fn drag_zone(w: &Win, m: &Metrics, controls: &[bifrost_proto::Node]) -> (i32
     zone_of(w, m, controls, full_size(w.app) && w.app != AppId::Settings)
 }
 
+/// Whether a published node of this role handles a press itself, so a press on it must reach the app instead of moving
+/// the window. The kit also publishes containers (the toolbar and sidebar `List` that span a whole row or column),
+/// rows, static text and sheet windows: those are not controls, and the empty toolbar space they cover must drag.
+pub fn takes_press(role: bifrost_proto::Role) -> bool {
+    use bifrost_proto::Role;
+    matches!(role, Role::Button | Role::TextField | Role::Toggle | Role::Checkbox | Role::Slider | Role::SegmentedControl | Role::MenuItem)
+}
+
 /// `drag_zone` for a window that is (`unified`) or is not a full-size app window.
 fn zone_of(w: &Win, m: &Metrics, controls: &[bifrost_proto::Node], unified: bool) -> (i32, Vec<[i32; 4]>) {
     if !unified {
@@ -483,7 +491,7 @@ fn zone_of(w: &Win, m: &Metrics, controls: &[bifrost_proto::Node], unified: bool
     let band = (UNIFIED_BAR_PT * pt).round() as i32;
     let l2 = w.light_rect(m, 2);
     let mut out = vec![[0, 0, l2.x + l2.w - w.r.x + (6.0 * pt) as i32, band]];
-    for n in controls.iter().filter(|n| n.bounds.y < UNIFIED_BAR_PT) {
+    for n in controls.iter().filter(|n| n.bounds.y < UNIFIED_BAR_PT && takes_press(n.role)) {
         let b = n.bounds;
         out.push([(b.x * pt).floor() as i32, (b.y * pt).floor() as i32, (b.w * pt).ceil() as i32, (b.h * pt).ceil() as i32]);
     }
@@ -3328,6 +3336,69 @@ mod tests {
         assert!(holes[0][0] == 0 && holes[0][2] > 0, "the lights are not a drag area");
         let (title, none) = zone_of(&w, &m, &[node(220.0, 10.0)], false);
         assert_eq!((title, none.len()), (m.title, 0), "a normal window drags from its title bar only");
+    }
+
+    fn kit_node(role: bifrost_proto::Role, label: &str, x: f32, y: f32, w: f32, h: f32) -> bifrost_proto::Node {
+        bifrost_proto::Node { id: 1, role, label: label.into(), value: String::new(), bounds: bifrost_ui::Rect { x, y, w, h }, enabled: true }
+    }
+
+    /// The press the shell tests on a full-size window: inside the band, right of the lights, outside every hole.
+    fn drags(band: i32, holes: &[[i32; 4]], x: i32, y: i32) -> bool {
+        y < band && !holes.iter().any(|r| x >= r[0] && x < r[0] + r[2] && y >= r[1] && y < r[1] + r[3])
+    }
+
+    #[test]
+    fn empty_toolbar_space_drags_under_a_toolbar_container_and_only_interactive_nodes_block() {
+        use bifrost_proto::Role;
+        let m = Metrics { pt: 1.5, ..metrics() };
+        let r = Rect { x: 100, y: 50, w: 900, h: 600 };
+        let w = Win { app: AppId::External(3), r, maximized: false, minimized: false, full: false, restore: r };
+        // what the kit publishes for a unified toolbar: the "Toolbar" and "Sidebar" containers, the title labels, two
+        // buttons and a search field, in points
+        let nodes = [
+            kit_node(Role::List, "Toolbar", 220.0, 10.0, 520.0, 32.0),
+            kit_node(Role::List, "Sidebar", 0.0, 0.0, 200.0, 600.0),
+            kit_node(Role::StaticText, "Notes", 230.0, 12.0, 120.0, 28.0),
+            kit_node(Role::Row, "All Notes", 0.0, 40.0, 200.0, 30.0),
+            kit_node(Role::Window, "Sheet", 0.0, 0.0, 900.0, 600.0),
+            kit_node(Role::Button, "Grid", 600.0, 10.0, 32.0, 32.0),
+            kit_node(Role::Button, "More", 640.0, 10.0, 32.0, 32.0),
+            kit_node(Role::TextField, "Search", 680.0, 10.0, 100.0, 32.0),
+        ];
+        let (band, holes) = zone_of(&w, &m, &nodes, true);
+        assert_eq!(holes.len(), 4, "the lights plus the two buttons and the search field, nothing else");
+        // empty toolbar space between the title block and the buttons, at the height a capsule would be hit
+        assert!(drags(band, &holes, (400.0 * 1.5) as i32, (20.0 * 1.5) as i32), "empty space drags");
+        assert!(drags(band, &holes, (400.0 * 1.5) as i32, (2.0 * 1.5) as i32), "the top strip drags");
+        assert!(drags(band, &holes, (100.0 * 1.5) as i32, (20.0 * 1.5) as i32), "the sidebar's top drags past the lights");
+        assert!(drags(band, &holes, (260.0 * 1.5) as i32, (20.0 * 1.5) as i32), "the title label drags");
+        for (x, y) in [(616.0, 26.0), (656.0, 26.0), (730.0, 26.0)] {
+            assert!(!drags(band, &holes, (x * 1.5) as i32, (y * 1.5) as i32), "({x},{y}) is a control");
+        }
+        assert!(!drags(band, &holes, (400.0 * 1.5) as i32, band + 1), "below the band is the app");
+        assert!(takes_press(Role::SegmentedControl) && takes_press(Role::MenuItem) && !takes_press(Role::ProgressIndicator));
+    }
+
+    #[test]
+    fn a_store_app_with_a_full_size_manifest_gets_the_52_pt_band() {
+        let m = Metrics { pt: 2.0, ..metrics() };
+        let r = Rect { x: 0, y: 0, w: 1200, h: 800 };
+        let w = Win { app: AppId::External(18), r, maximized: false, minimized: false, full: false, restore: r };
+        // `drag_zone` asks `full_size`, which is true for an installed app whose manifest says `window = "full-size"`
+        // (the shipped Notes and Mail manifests do); `zone_of` is what it computes for such a window
+        for path in ["apps/notes-desktop/manifest.toml", "apps/mail-desktop/manifest.toml"] {
+            let text = std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(path)).unwrap();
+            assert!(apphost::Manifest::parse(&text).unwrap().full_size_content(), "{path} asks for a full-size window");
+        }
+        let plain = apphost::Manifest::parse("id = \"is.x.app\"\nname = \"X\"\nexec = \"x\"\n").unwrap();
+        assert!(!plain.full_size_content(), "a manifest without the style keeps its title bar");
+        let nodes = [kit_node(bifrost_proto::Role::List, "Toolbar", 100.0, 8.0, 400.0, 36.0), kit_node(bifrost_proto::Role::Button, "New", 560.0, 8.0, 36.0, 36.0)];
+        let (band, holes) = zone_of(&w, &m, &nodes, true);
+        assert_eq!(band, 104, "52 pt at 2 px per point");
+        assert!(drags(band, &holes, 600, 40), "empty toolbar space moves the window");
+        assert!(!drags(band, &holes, 1130, 40), "the button does not");
+        let (title, none) = zone_of(&w, &m, &nodes, false);
+        assert_eq!((title, none.len()), (m.title, 0), "a window without the style drags from its title bar");
     }
 
     #[test]
