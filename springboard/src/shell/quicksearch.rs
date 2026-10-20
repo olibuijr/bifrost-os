@@ -15,9 +15,12 @@ use super::keyboard::{Keyboard, Out};
 use super::quicksearch_math;
 use super::prefs::Prefs;
 use super::textfield::TextField;
-use super::ui::{home_indicator, home_zone, Ui, Weight, CELL, LABEL, LABEL_2, MAC_LARGE_TITLE_PT, MAC_SUBHEAD_PT, MAC_TITLE2_PT, MENU_SOLID, MENU_TINT, SECONDARY, SIDEBAR_PLATE, WHITE};
+use super::icons::{self, Icon};
+use super::pages::PageId;
+use super::row_glyphs::{self, Glyph};
+use super::ui::{home_indicator, home_zone, Ui, Weight, CELL, FIELD_BG, LABEL, LABEL_2, MAC_BODY_PT, MAC_LARGE_TITLE_PT, MAC_TITLE2_PT, MENU_SOLID, SEARCH_TINT, SECONDARY, SIDEBAR_PLATE, WHITE};
 use super::{fuzzy, glyphs, settings, AppId, Effect, Event, Screen, Shell, apps};
-use crate::gfx::{rgba, scale, Image, Surface};
+use crate::gfx::{scale, Image, Surface};
 use bifrost_ui::{search_rank, uttype};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -100,6 +103,8 @@ struct Metrics {
     label_pt: f32,
     /// the empty field shows Assistant Suggestions (bifrost) or nothing (Golden Gate)
     suggestions: bool,
+    /// the band of filter chips above the results (Golden Gate; 0 on the bifrost, which has section headers)
+    chips: f32,
 }
 
 const BIFROST: Metrics = Metrics {
@@ -121,12 +126,15 @@ const BIFROST: Metrics = Metrics {
     bottom_pad: BOTTOM_PAD_PT,
     label_pt: 17.0,
     suggestions: true,
+    chips: 0.0,
 };
 
 /// Golden Gate Search on the desktop, measured from the Golden Gate captures (27-Golden-Gate-Search-Search-v2):
 /// a 520 pt wide, 84 pt tall glass capsule 139 pt from the top with the query in the large-title size, and the
-/// results in a separate glass card 12 pt below it (radius 28) with 36 pt icons on 48 pt rows, the top hit on an
-/// inset systemBlue plate (Return opens it). With nothing typed only the capsule shows.
+/// results in a separate glass card 12 pt below it (radius 28): filter chips across its top (one per kind of result
+/// present, in place of section headers), then rows of a 40 pt icon with a title and a second line, the top hit on
+/// an inset neutral plate (Return opens it). With nothing typed only the capsule shows. That is 0.37 of a 1408 pt
+/// wide screen: on a wider one everything grows with the screen (`QuickSearch::k`) so the proportions hold.
 const MAC: Metrics = Metrics {
     card_w: 520.0,
     card_top: 139.0,
@@ -136,17 +144,28 @@ const MAC: Metrics = Metrics {
     glass_x: 0.0,
     clear_x: 30.0,
     mic: false,
-    header: 28.0,
+    header: 0.0,
     header_mid: 16.0,
     inset: 26.0,
-    row: 48.0,
+    row: 56.0,
     row_icon_x: 20.0,
-    row_icon: 36.0,
-    row_text_x: 66.0,
+    row_icon: 40.0,
+    row_text_x: 76.0,
     bottom_pad: 12.0,
     label_pt: MAC_TITLE2_PT,
     suggestions: false,
+    chips: 52.0,
 };
+/// Golden Gate: the card is this fraction of the screen's width (the reference's 520 pt of 1408 pt), never narrower than
+/// its point size, and the whole layout grows by at most `MAC_K_MAX` with it.
+const MAC_CARD_FRACTION: f32 = 0.37;
+const MAC_K_MAX: f32 = 2.5;
+/// Golden Gate: a filter chip's height, the gap between chips and the padding either side of its text
+const MAC_CHIP_H_PT: f32 = 28.0;
+const MAC_CHIP_GAP_PT: f32 = 8.0;
+const MAC_CHIP_PAD_PT: f32 = 14.0;
+/// Result groups that are not a kind of result a person filters to: the best match, the folder action and the Terminal row.
+const NOT_A_KIND: [&str; 3] = ["Top Hit", "Show in Folder", "Search in Apps"];
 /// Golden Gate: the gap between the search capsule and the results card
 const MAC_GAP_PT: f32 = 12.0;
 /// Golden Gate: the top-hit plate's inset from the card edge and its corner radius
@@ -224,6 +243,121 @@ mod indexed_label_tests {
         assert_eq!(indexed_label("Q1 report", "PDF document"), "Q1 report · PDF document");
         assert_eq!(indexed_label("Notes", ""), "Notes");
     }
+}
+
+/// The symbol a Settings result draws: the tile its pane has in the Settings list, so a row in Search and the row in
+/// Settings read as the same thing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Symbol {
+    Tile(Icon),
+    Glyph(Glyph),
+}
+
+/// The symbol of a Settings pane.
+fn pane_symbol(page: PageId) -> Symbol {
+    use PageId as P;
+    match page {
+        P::Wifi | P::WifiDetail | P::KnownNetworks | P::Network | P::Ethernet | P::Vpn | P::Sharing | P::Firewall => Symbol::Tile(Icon::Wifi),
+        P::Bluetooth | P::BluetoothDetail => Symbol::Tile(Icon::Bluetooth),
+        P::Notifications | P::NotificationApp => Symbol::Tile(Icon::Notifications),
+        P::Sounds => Symbol::Tile(Icon::Sounds),
+        P::Focus => Symbol::Tile(Icon::Focus),
+        P::ScreenTime => Symbol::Tile(Icon::ScreenTime),
+        P::ControlCentre | P::MenuBar => Symbol::Tile(Icon::ControlCentre),
+        P::Display | P::Appearance => Symbol::Tile(Icon::Display),
+        P::HomeScreen | P::Overview | P::HotCorners => Symbol::Tile(Icon::HomeScreen),
+        P::Accessibility | P::AccessibilityShortcut => Symbol::Tile(Icon::Accessibility),
+        P::Wallpaper | P::ScreenSaver => Symbol::Tile(Icon::Wallpaper),
+        P::Battery => Symbol::Tile(Icon::Battery),
+        P::Privacy => Symbol::Tile(Icon::Privacy),
+        P::Passcode | P::Passwords | P::LockScreen | P::Users | P::Account => Symbol::Tile(Icon::Passcode),
+        P::About => Symbol::Glyph(Glyph::About),
+        P::SoftwareUpdate => Symbol::Glyph(Glyph::Update),
+        P::Storage | P::StartupDisk => Symbol::Glyph(Glyph::Storage),
+        P::DateTime => Symbol::Glyph(Glyph::DateTime),
+        P::Keyboard | P::Shortcuts => Symbol::Glyph(Glyph::Keyboard),
+        P::Language => Symbol::Glyph(Glyph::Language),
+        P::Backup => Symbol::Glyph(Glyph::Backup),
+        P::LoginItems | P::DefaultApps => Symbol::Glyph(Glyph::DefaultApps),
+        _ => Symbol::Tile(Icon::General),
+    }
+}
+
+/// The symbol of a result that is not an app: a Settings page by its row name, a Settings intent by the pane it opens, a
+/// shell action by what it changes, the Now Playing transport by sound. None for every other kind of result.
+fn result_symbol(hit: &Hit) -> Option<Symbol> {
+    use super::settings_actions::SettingsIntent as Action;
+    match hit {
+        Hit::Settings(name) => Some(match *name {
+            "Wi-Fi" => Symbol::Tile(Icon::Wifi),
+            "Display & Brightness" => Symbol::Tile(Icon::Display),
+            "Wallpaper" => Symbol::Tile(Icon::Wallpaper),
+            "About" => Symbol::Glyph(Glyph::About),
+            "Battery" => Symbol::Tile(Icon::Battery),
+            "Focus" | "Do Not Disturb" => Symbol::Tile(Icon::Focus),
+            "Notifications" => Symbol::Tile(Icon::Notifications),
+            "Accessibility" | "AssistiveTouch" => Symbol::Tile(Icon::Accessibility),
+            _ => Symbol::Tile(Icon::General),
+        }),
+        Hit::SettingsIntent { id, .. } => Some(super::settings_intents::page_for(id).map_or(Symbol::Tile(Icon::General), pane_symbol)),
+        Hit::SettingsAction { intent, .. } => Some(match intent {
+            Action::WifiPower(_) | Action::WifiScan => Symbol::Tile(Icon::Wifi),
+            Action::SetWallpaper(_) => Symbol::Tile(Icon::Wallpaper),
+            Action::LockScreen => Symbol::Tile(Icon::Passcode),
+        }),
+        Hit::MediaTransport { .. } => Some(Symbol::Tile(Icon::Sounds)),
+        _ => None,
+    }
+}
+
+/// The second line of an action result.
+fn action_line(intent: &super::settings_actions::SettingsIntent) -> &'static str {
+    use super::settings_actions::SettingsIntent as Action;
+    match intent {
+        Action::WifiScan => "Look for Wi-Fi networks nearby",
+        Action::WifiPower(true) => "Switch the Wi-Fi radio on",
+        Action::WifiPower(false) => "Switch the Wi-Fi radio off",
+        Action::SetWallpaper(_) => "Use this picture as the desktop wallpaper",
+        Action::LockScreen => "Lock the screen now",
+    }
+}
+
+/// A result as the Golden Gate panel shows it: its title and its second line (what kind of thing it is, where it is, or
+/// what it does). The second line is empty when there is nothing more to say.
+fn row_text(hit: &Hit, apps_name: impl Fn(AppId) -> String) -> (String, String) {
+    let folder_of = |path: &Path| path.parent().and_then(|p| p.file_name()).map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    match hit {
+        Hit::App(app) => (apps_name(*app), "Application".to_string()),
+        Hit::Settings(name) => (name.to_string(), "Settings".to_string()),
+        Hit::City(name) => (name.to_string(), "World Clock".to_string()),
+        Hit::Deildu(title) => (title.clone(), "Deildu".to_string()),
+        Hit::Contact { name, .. } => (name.clone(), "Contact".to_string()),
+        Hit::Event { title } => (title.clone(), "Calendar event".to_string()),
+        Hit::Terminal(query) => ("Search in Terminal".to_string(), query.clone()),
+        Hit::Answer(a) => (format!("= {a}"), "Calculator".to_string()),
+        Hit::File { path, name } => {
+            let kind = crate::files::fs::kind_of(name, path.is_dir()).label();
+            let folder = folder_of(path);
+            (name.clone(), if folder.is_empty() { kind.to_string() } else { format!("{kind} \u{b7} {folder}") })
+        }
+        Hit::Reveal { folder, name } => (format!("Show {name} in Folder"), folder.display().to_string()),
+        Hit::Shortcut { title, app_name, .. } => (title.clone(), format!("Shortcut \u{b7} {app_name}")),
+        Hit::SettingsIntent { id, title } => (title.to_string(), super::settings_intents::find(id).map_or("Settings", |i| i.description).to_string()),
+        Hit::SettingsAction { intent, title } => (title.clone(), action_line(intent).to_string()),
+        Hit::MediaTransport { title, .. } => (title.clone(), "Control the playing media".to_string()),
+        Hit::Indexed { title, kind, .. } => (title.clone(), kind.clone()),
+    }
+}
+
+/// The filter chips of a result list: the title of each group that is a kind of result, once each, in list order.
+fn chips_of(groups: &[Group]) -> Vec<&'static str> {
+    let mut out: Vec<&'static str> = vec![];
+    for g in groups {
+        if !NOT_A_KIND.contains(&g.title) && !out.contains(&g.title) && !g.hits.is_empty() {
+            out.push(g.title);
+        }
+    }
+    out
 }
 
 /// The runnable `[[intent]]` shortcuts of the installed apps, with their folded search text.
@@ -321,6 +455,66 @@ mod step_row_tests {
     fn no_rows_means_no_selection() {
         assert_eq!(step_row(&[], None, 1), None);
         assert_eq!(step_row(&[], Some((0, 0)), -1), None);
+    }
+}
+
+#[cfg(test)]
+mod symbol_and_line_tests {
+    use super::*;
+    use super::super::settings_actions::SettingsIntent as Action;
+
+    #[test]
+    fn settings_results_draw_the_symbol_their_pane_has_in_settings() {
+        assert_eq!(result_symbol(&Hit::Settings("Wi-Fi")), Some(Symbol::Tile(Icon::Wifi)));
+        assert_eq!(result_symbol(&Hit::Settings("About")), Some(Symbol::Glyph(Glyph::About)));
+        assert_eq!(result_symbol(&Hit::Settings("Do Not Disturb")), Some(Symbol::Tile(Icon::Focus)));
+        assert_eq!(pane_symbol(PageId::Wallpaper), Symbol::Tile(Icon::Wallpaper));
+        assert_eq!(pane_symbol(PageId::Keyboard), Symbol::Glyph(Glyph::Keyboard));
+        assert_eq!(pane_symbol(PageId::Root), Symbol::Tile(Icon::General), "an unnamed pane keeps the general symbol");
+        // every Settings page and every Settings intent has a symbol: no blank square is left
+        for page in settings::PAGES {
+            assert!(result_symbol(&Hit::Settings(page)).is_some(), "{page}");
+        }
+        for intent in super::super::settings_intents::CATALOGUE {
+            assert!(result_symbol(&Hit::SettingsIntent { id: intent.id, title: intent.title }).is_some(), "{}", intent.id);
+        }
+    }
+
+    #[test]
+    fn actions_and_transport_commands_have_a_symbol_and_other_results_use_their_app() {
+        let wallpaper = Hit::SettingsAction { intent: Action::SetWallpaper("dusk".into()), title: "Set Wallpaper to Dusk".into() };
+        assert_eq!(result_symbol(&wallpaper), Some(Symbol::Tile(Icon::Wallpaper)));
+        assert_eq!(result_symbol(&Hit::SettingsAction { intent: Action::WifiPower(true), title: "x".into() }), Some(Symbol::Tile(Icon::Wifi)));
+        assert_eq!(result_symbol(&Hit::SettingsAction { intent: Action::LockScreen, title: "x".into() }), Some(Symbol::Tile(Icon::Passcode)));
+        assert!(result_symbol(&Hit::App(AppId::Files)).is_none(), "an app result is drawn with the app's icon");
+        assert!(result_symbol(&Hit::Terminal("x".into())).is_none());
+    }
+
+    #[test]
+    fn rows_have_a_title_and_a_second_line_saying_what_they_are() {
+        let name = |_: AppId| "Files".to_string();
+        assert_eq!(row_text(&Hit::App(AppId::Files), name), ("Files".to_string(), "Application".to_string()));
+        assert_eq!(row_text(&Hit::Settings("Wi-Fi"), name), ("Wi-Fi".to_string(), "Settings".to_string()));
+        let file = Hit::File { path: PathBuf::from("/home/u/Downloads/photo.jpg"), name: "photo.jpg".into() };
+        assert_eq!(row_text(&file, name), ("photo.jpg".to_string(), "Image \u{b7} Downloads".to_string()));
+        let shortcut = Hit::Shortcut { app_id: "a.b".into(), app_name: "Notes".into(), intent: "new".into(), title: "New Note".into() };
+        assert_eq!(row_text(&shortcut, name), ("New Note".to_string(), "Shortcut \u{b7} Notes".to_string()));
+        let wallpaper = Hit::SettingsAction { intent: Action::SetWallpaper("dusk".into()), title: "Set Wallpaper to Dusk".into() };
+        assert_eq!(row_text(&wallpaper, name).1, "Use this picture as the desktop wallpaper");
+        assert_eq!(row_text(&Hit::Answer("4".into()), name), ("= 4".to_string(), "Calculator".to_string()));
+        assert_eq!(row_text(&Hit::Terminal("ls".into()), name), ("Search in Terminal".to_string(), "ls".to_string()));
+        let indexed = Hit::Indexed { app_id: "a".into(), unique_id: "1".into(), domain: String::new(), title: "Q1 report".into(), kind: "PDF document".into(), thumb: String::new() };
+        assert_eq!(row_text(&indexed, name), ("Q1 report".to_string(), "PDF document".to_string()));
+        let intent = Hit::SettingsIntent { id: "open-keyboard", title: "Open Keyboard" };
+        assert_eq!(row_text(&intent, name), ("Open Keyboard".to_string(), "Show the keyboard settings".to_string()));
+    }
+
+    #[test]
+    fn one_chip_per_kind_of_result_and_none_for_the_best_match_or_the_actions() {
+        let g = |title: &'static str, n: usize| Group { title, hits: (0..n).map(|i| Hit::City(if i == 0 { "A" } else { "B" })).collect() };
+        let groups = vec![g("Top Hit", 1), g("Applications", 2), g("Settings", 1), g("Shortcuts", 3), g("Applications", 1), g("Files", 0), g("Show in Folder", 1), g("Search in Apps", 1)];
+        assert_eq!(chips_of(&groups), vec!["Applications", "Settings", "Shortcuts"]);
+        assert!(chips_of(&[]).is_empty());
     }
 }
 
@@ -829,6 +1023,8 @@ pub enum Target {
     Search(usize),
     /// (section, row)
     Row(usize, usize),
+    /// a filter chip above the results (Golden Gate): the index into the chips shown
+    Chip(usize),
     Outside,
 }
 
@@ -847,6 +1043,8 @@ pub type Rect = (f32, f32, f32, f32);
 struct Section {
     header: Image,
     rows: Vec<(Hit, Image)>,
+    /// the second line of each row (Golden Gate), when it has one
+    subs: Vec<Option<Image>>,
 }
 
 fn app_key(app: AppId) -> String {
@@ -866,6 +1064,13 @@ pub struct QuickSearch {
     prefs: Prefs,
     /// Golden Gate presentation (desktop), see `MAC`
     mac: bool,
+    /// the screen's width in px: the Golden Gate card is `MAC_CARD_FRACTION` of it
+    screen_w: f32,
+    /// the kind of result the list is filtered to (the title of a group), and the chips shown with their text
+    chip: Option<&'static str>,
+    chips: Vec<(&'static str, Image)>,
+    /// the `k` the field and the chips were made for
+    made_k: f32,
     recents: Vec<AppId>,
     /// recent queries, newest first, and their rendered rows
     searches: Vec<String>,
@@ -877,6 +1082,9 @@ pub struct QuickSearch {
     searches_header: Image,
     /// (app, 60 pt icon, 29 pt icon, label)
     icons: Vec<(AppId, Image, Image, Image)>,
+    /// the app icons resized to the Golden Gate row's icon square, so they match the pane tiles; rebuilt by `search`
+    /// whenever the square changes (another scale) or the icons were reset
+    row_icons: Vec<(AppId, Image)>,
     sections: Vec<Section>,
     /// the row the arrow keys moved to: (section, row); Return opens it instead of the Top Hit
     selected: Option<(usize, usize)>,
@@ -916,7 +1124,6 @@ pub struct QuickSearch {
     calendar_stamp: Option<(PathBuf, std::time::SystemTime)>,
     suggestions: Image,
     chevron: Image,
-    icon_colour: Vec<(&'static str, u32)>,
 }
 
 impl QuickSearch {
@@ -937,12 +1144,35 @@ impl QuickSearch {
 
     /// Chooses the presentation before the card opens; the field placeholder follows it.
     pub fn set_mac(&mut self, ui: &Ui, mac: bool) {
-        if self.mac == mac {
+        let k = if mac { self.mac_k(ui) } else { 1.0 };
+        if self.mac == mac && (self.made_k - k).abs() < 0.005 {
             return;
         }
         self.mac = mac;
-        self.field = if mac { TextField::new(ui, "Spotlight Search", MAC_LARGE_TITLE_PT, false, QUERY_MAX) } else { TextField::new(ui, "Search", FIELD_TEXT_PT, false, QUERY_MAX) };
+        self.made_k = k;
+        self.chip = None;
+        self.field = if mac { TextField::new(ui, "Search", MAC_LARGE_TITLE_PT * k, false, QUERY_MAX) } else { TextField::new(ui, "Search", FIELD_TEXT_PT, false, QUERY_MAX) };
         self.search_imgs.clear();
+    }
+
+    /// How much the Golden Gate layout is enlarged: the card is `MAC_CARD_FRACTION` of the screen's width, and when that is
+    /// wider than the card's point size everything in it (the field, the rows, the text) grows by the same factor.
+    fn mac_k(&self, ui: &Ui) -> f32 {
+        (self.screen_w * MAC_CARD_FRACTION / ui.pt(MAC.card_w).max(1.0)).clamp(1.0, MAC_K_MAX)
+    }
+
+    /// The layout factor of the presentation on show: `mac_k` for Golden Gate, 1 on the bifrost.
+    fn k(&self, ui: &Ui) -> f32 {
+        if self.mac {
+            self.mac_k(ui)
+        } else {
+            1.0
+        }
+    }
+
+    /// `v` points, enlarged by the layout factor, in px.
+    fn px(&self, ui: &Ui, v: f32) -> f32 {
+        ui.pt(v * self.k(ui))
     }
 
     pub fn new(ui: &Ui, w: f32, s: f32) -> Self {
@@ -958,11 +1188,16 @@ impl QuickSearch {
             },
             prefs: Prefs::memory(),
             mac: false,
+            screen_w: w,
+            chip: None,
+            chips: vec![],
+            made_k: 1.0,
             recents: vec![],
             searches: vec![],
             search_imgs: vec![],
             searches_header: ui.text("Recent Searches", 20.0, Weight::Semibold, WHITE),
             icons: vec![],
+            row_icons: vec![],
             sections: vec![],
             selected: None,
             thumbs: vec![],
@@ -989,18 +1224,12 @@ impl QuickSearch {
             calendar_stamp: None,
             suggestions: ui.text("Assistant Suggestions", 20.0, Weight::Semibold, WHITE),
             chevron: ui.text("›", 22.0, Weight::Semibold, SECONDARY),
-            icon_colour: vec![
-                ("Wi-Fi", rgba(0, 122, 255, 255)),
-                ("Display & Brightness", rgba(10, 132, 255, 255)),
-                ("Wallpaper", rgba(50, 173, 230, 255)),
-                ("About", rgba(142, 142, 147, 255)),
-                ("Battery", rgba(52, 199, 89, 255)),
-            ],
         }
     }
 
     /// The screen turned: the keyboard takes the new width.
     pub fn resize(&mut self, w: f32) {
+        self.screen_w = w;
         self.keyboard.resize(w);
     }
 
@@ -1076,6 +1305,7 @@ impl QuickSearch {
     /// or an install).
     pub fn clear_icons(&mut self) {
         self.icons.clear();
+        self.row_icons.clear();
     }
 
     /// Icons for the suggestion row and the result rows, from the home
@@ -1090,6 +1320,7 @@ impl QuickSearch {
                 (app, img.resized(big, big), img.resized(small, small), label)
             })
             .collect();
+        self.row_icons.clear();
     }
 
     pub fn has_icons(&self) -> bool {
@@ -1382,23 +1613,42 @@ impl QuickSearch {
     /// Rebuilds the result rows for the query, keeping what fits above the keyboard.
     fn search(&mut self, ui: &Ui, h: i32) {
         let m = self.m();
+        let k = self.k(ui);
         let query = self.field.text().to_string();
-        let groups = self.groups_for(&query);
+        let mut groups = self.groups_for(&query);
+        // Golden Gate: one chip per kind of result present; a chosen one narrows the list to that kind
+        if self.mac {
+            let kinds = chips_of(&groups);
+            if self.chip.is_some_and(|c| !kinds.contains(&c)) {
+                self.chip = None;
+            }
+            self.chips = kinds.into_iter().map(|t| (t, ui.text(t, MAC_BODY_PT * k, Weight::Regular, WHITE))).collect();
+            if let Some(c) = self.chip {
+                groups.retain(|g| g.title == c);
+            }
+        } else {
+            self.chips.clear();
+        }
         // the row the person is on stays selected, wherever the late rows put it
         let keep = self.selected_hit();
         let mut sections = vec![];
-        let mut y = self.content_top(ui) + ui.pt(m.bottom_pad);
+        let mut y = self.content_top(ui) + self.px(ui, m.bottom_pad) + self.chips_band(ui);
         let bottom = if self.mac { h as f32 - ui.pt(12.0) } else { self.keyboard_top(ui, h) - ui.pt(8.0) };
         // thumbnails are fitted to the row's icon square; a size change (another scale) reloads them
-        let isz = ui.pt(m.row_icon).round() as usize;
+        let isz = self.px(ui, m.row_icon).round() as usize;
         self.thumbs.retain(|(_, s, _)| *s == isz);
+        if self.mac && self.row_icons.first().map_or(!self.icons.is_empty(), |(_, img)| img.h != isz) {
+            // the 60 pt icons are the sharpest source for the (larger) Golden Gate row square
+            self.row_icons = self.icons.iter().map(|(app, big, ..)| (*app, big.resized(isz, isz))).collect();
+        }
         if self.thumbs.len() > 64 {
             self.thumbs.clear();
         }
         'fill: for g in groups {
             let mut rows = vec![];
+            let mut subs = vec![];
             for hit in g.hits {
-                let need = ui.pt(m.row) + if rows.is_empty() { ui.pt(m.header) } else { 0.0 };
+                let need = self.px(ui, m.row) + if rows.is_empty() { self.px(ui, m.header) } else { 0.0 };
                 if y + need > bottom {
                     break 'fill;
                 }
@@ -1414,8 +1664,17 @@ impl QuickSearch {
                 if let Hit::File { path, .. } = &hit {
                     self.file_thumbs.want(path, isz);
                 }
+                let name_of = |app: AppId| apps().iter().find(|a| a.id == app).map_or(String::new(), |a| a.name.to_string());
+                let max_w = self.px(ui, m.card_w - m.row_text_x - m.inset);
+                let label_pt = self.m().label_pt * k;
+                if self.mac {
+                    let (title, sub) = row_text(&hit, name_of);
+                    rows.push((hit, ui.text(&ui.fit(&title, label_pt, max_w), label_pt, Weight::Regular, WHITE)));
+                    subs.push((!sub.is_empty()).then(|| ui.text(&ui.fit(&sub, MAC_BODY_PT * k, max_w), MAC_BODY_PT * k, Weight::Regular, WHITE)));
+                    continue;
+                }
                 let label = match &hit {
-                    Hit::App(app) => apps().iter().find(|a| a.id == *app).map_or(String::new(), |a| a.name.to_string()),
+                    Hit::App(app) => name_of(*app),
                     Hit::Settings(name) | Hit::City(name) => name.to_string(),
                     Hit::Deildu(title) => title.clone(),
                     Hit::Contact { name, .. } => name.clone(),
@@ -1429,12 +1688,13 @@ impl QuickSearch {
                     Hit::SettingsAction { title, .. } | Hit::MediaTransport { title, .. } => title.clone(),
                     Hit::Indexed { title, kind, .. } => indexed_label(title, kind),
                 };
-                let max_w = ui.pt(m.card_w - m.row_text_x - m.inset);
-                rows.push((hit, ui.text(&ui.fit(&label, self.m().label_pt, max_w), self.m().label_pt, Weight::Regular, WHITE)));
+                rows.push((hit, ui.text(&ui.fit(&label, label_pt, max_w), label_pt, Weight::Regular, WHITE)));
+                subs.push(None);
             }
             if !rows.is_empty() {
-                let header = if self.mac { ui.text(g.title, MAC_SUBHEAD_PT, Weight::Semibold, WHITE) } else { ui.text(g.title, 20.0, Weight::Semibold, WHITE) };
-                sections.push(Section { header, rows });
+                // Golden Gate has chips where the bifrost has section headers
+                let header = if self.mac { Image::new(1, 1) } else { ui.text(g.title, 20.0, Weight::Semibold, WHITE) };
+                sections.push(Section { header, rows, subs });
             }
         }
         self.sections = sections;
@@ -1451,13 +1711,56 @@ impl QuickSearch {
 
     fn card_x(&self, ui: &Ui, w: i32) -> f32 {
         let m = self.m();
-        ((w as f32 - ui.pt(m.card_w)) / 2.0).round()
+        ((w as f32 - self.px(ui, m.card_w)) / 2.0).round()
     }
 
     /// Below the field, where the suggestions or the results start.
     fn content_top(&self, ui: &Ui) -> f32 {
         let m = self.m();
-        ui.pt(m.card_top + m.field + if self.mac { MAC_GAP_PT } else { 0.0 })
+        self.px(ui, m.card_top + m.field + if self.mac { MAC_GAP_PT } else { 0.0 })
+    }
+
+    /// The height of the band of filter chips over the results, in px: none without chips (or on the bifrost).
+    fn chips_band(&self, ui: &Ui) -> f32 {
+        if self.mac && !self.chips.is_empty() {
+            self.px(ui, self.m().chips)
+        } else {
+            0.0
+        }
+    }
+
+    /// Where the first result row starts: under the card's top padding and the chips. On the bifrost the first section's
+    /// header follows `content_top` directly.
+    fn rows_top(&self, ui: &Ui) -> f32 {
+        if self.mac {
+            self.content_top(ui) + self.px(ui, self.m().bottom_pad) + self.chips_band(ui)
+        } else {
+            self.content_top(ui)
+        }
+    }
+
+    /// The filter chips (x, y, w, h) in px, left to right from the card's inset; chips that would run off the card are
+    /// not shown. Empty on the bifrost and while no results are listed.
+    fn chip_rects(&self, ui: &Ui, w: i32) -> Vec<Rect> {
+        if self.chips_band(ui) == 0.0 {
+            return vec![];
+        }
+        let m = self.m();
+        let (cx, _, cw, _) = self.card(ui, w);
+        let (h, gap, pad) = (self.px(ui, MAC_CHIP_H_PT), self.px(ui, MAC_CHIP_GAP_PT), self.px(ui, MAC_CHIP_PAD_PT));
+        let y = self.content_top(ui) + self.px(ui, m.bottom_pad) + (self.chips_band(ui) - h) / 2.0;
+        let (left, right) = (cx + self.px(ui, m.bottom_pad + 4.0), cx + cw - self.px(ui, m.bottom_pad + 4.0));
+        let mut x = left;
+        let mut out = vec![];
+        for (_, img) in &self.chips {
+            let chip_w = img.w as f32 + 2.0 * pad;
+            if x + chip_w > right {
+                break;
+            }
+            out.push((x, y, chip_w, h));
+            x += chip_w + gap;
+        }
+        out
     }
 
     fn suggestions_shown(&self) -> bool {
@@ -1473,8 +1776,8 @@ impl QuickSearch {
         } else if self.sections.is_empty() {
             0.0
         } else {
-            let gap = if self.mac { ui.pt(MAC_GAP_PT + m.bottom_pad) } else { 0.0 };
-            gap + self.sections.iter().map(|s| ui.pt(m.header) + ui.pt(m.row) * s.rows.len() as f32).sum::<f32>() + ui.pt(m.bottom_pad)
+            let gap = if self.mac { self.px(ui, MAC_GAP_PT + m.bottom_pad) + self.chips_band(ui) } else { 0.0 };
+            gap + self.sections.iter().map(|s| self.px(ui, m.header) + self.px(ui, m.row) * s.rows.len() as f32).sum::<f32>() + self.px(ui, m.bottom_pad)
         }
     }
 
@@ -1488,7 +1791,7 @@ impl QuickSearch {
         let m = self.m();
         let (cx, cy, cw, ch) = self.card(ui, w);
         let (x, y, ow, oh) = (cx.max(0.0) as usize, cy.max(0.0) as usize, cw.ceil() as usize, ch.ceil() as usize);
-        let fh = ui.pt(m.field).ceil() as usize;
+        let fh = self.px(ui, m.field).ceil() as usize;
         let mut mask = vec![0u8; ow * oh];
         let mut put = |top: usize, h: usize, r: f32| {
             for (i, a) in crate::gfx::rrect_mask(ow, h, r).into_iter().enumerate() {
@@ -1499,29 +1802,29 @@ impl QuickSearch {
             }
         };
         put(0, fh.min(oh), fh as f32 / 2.0);
-        let gap = ui.pt(MAC_GAP_PT) as usize;
+        let gap = self.px(ui, MAC_GAP_PT) as usize;
         if oh > fh + gap {
-            put(fh + gap, oh - fh - gap, ui.pt(m.radius));
+            put(fh + gap, oh - fh - gap, self.px(ui, m.radius));
         }
         Some(((x, y, ow, oh), mask))
     }
 
     pub fn card(&self, ui: &Ui, w: i32) -> Rect {
         let m = self.m();
-        (self.card_x(ui, w), ui.pt(m.card_top), ui.pt(m.card_w), ui.pt(m.field) + self.content_h(ui))
+        (self.card_x(ui, w), self.px(ui, m.card_top), self.px(ui, m.card_w), self.px(ui, m.field) + self.content_h(ui))
     }
 
     fn field_rect(&self, ui: &Ui, w: i32) -> Rect {
         let m = self.m();
         let (x, y, cw, _) = self.card(ui, w);
-        (x, y, cw, ui.pt(m.field))
+        (x, y, cw, self.px(ui, m.field))
     }
 
     /// Centre of the clear button at the field's right end.
     fn clear_centre(&self, ui: &Ui, w: i32) -> (f32, f32) {
         let m = self.m();
         let (x, y, cw, fh) = self.field_rect(ui, w);
-        (x + cw - ui.pt(m.clear_x), y + fh / 2.0)
+        (x + cw - self.px(ui, m.clear_x), y + fh / 2.0)
     }
 
     /// The suggestion icon `i` (x, y, w, h) in px.
@@ -1544,13 +1847,13 @@ impl QuickSearch {
     pub fn row_rects(&self, ui: &Ui, w: i32) -> Vec<((usize, usize), Rect)> {
         let m = self.m();
         let (x, _, cw, _) = self.card(ui, w);
-        let mut y = self.content_top(ui);
+        let mut y = self.rows_top(ui);
         let mut out = vec![];
         for (si, s) in self.sections.iter().enumerate() {
-            y += ui.pt(m.header);
+            y += self.px(ui, m.header);
             for ri in 0..s.rows.len() {
-                out.push(((si, ri), (x, y, cw, ui.pt(m.row))));
-                y += ui.pt(m.row);
+                out.push(((si, ri), (x, y, cw, self.px(ui, m.row))));
+                y += self.px(ui, m.row);
             }
         }
         out
@@ -1590,6 +1893,9 @@ impl QuickSearch {
             if let Some(i) = (0..self.searches.len()).find(|&i| inside(self.search_rect(ui, w, i))) {
                 return Target::Search(i);
             }
+        }
+        if let Some(i) = self.chip_rects(ui, w).into_iter().position(inside) {
+            return Target::Chip(i);
         }
         if let Some((at, _)) = self.row_rects(ui, w).into_iter().find(|(_, r)| inside(*r)) {
             return Target::Row(at.0, at.1);
@@ -1643,7 +1949,7 @@ impl QuickSearch {
         match target {
             Target::Field => {
                 self.show_keyboard(t);
-                self.field.tap(ui, x - self.card_x(ui, w) - ui.pt(m.text_x), t);
+                self.field.tap(ui, x - self.card_x(ui, w) - self.px(ui, m.text_x), t);
                 None
             }
             Target::Clear => {
@@ -1664,6 +1970,13 @@ impl QuickSearch {
             }
             Target::Suggestion(i) => self.recents.get(i).map(|&a| Hit::App(a)),
             Target::Row(si, ri) => self.sections.get(si).and_then(|s| s.rows.get(ri)).map(|(hit, _)| hit.clone()),
+            Target::Chip(i) => {
+                // a chip narrows the results to its kind; the same chip again shows every kind
+                let title = self.chips.get(i).map(|(t, _)| *t);
+                self.chip = if self.chip == title { None } else { title };
+                self.search(ui, h);
+                None
+            }
             Target::Keyboard | Target::Outside => None,
         }
     }
@@ -1679,14 +1992,14 @@ impl QuickSearch {
         let alpha = (p.clamp(0.0, 1.0) * 255.0) as u32;
         let a = |c: u32| scale(c, alpha);
         let cy = cy + slide;
-        let fh = ui.pt(m.field);
+        let fh = self.px(ui, m.field);
         if self.mac {
-            // Golden Gate: a glass capsule for the field and, when there are results, a glass card under it,
-            // both through the presenter's glass hook as the menus are.
+            // Golden Gate: a glass capsule for the field and, when there are results, a glass card under it of the
+            // same material, both through the presenter's glass hook as the menus are.
             mac_glass(s, cx, cy, cw, fh, fh / 2.0, alpha);
             if ch > fh {
-                let ry = cy + fh + ui.pt(MAC_GAP_PT);
-                mac_glass(s, cx, ry, cw, ch - fh - ui.pt(MAC_GAP_PT), ui.pt(m.radius), alpha);
+                let ry = cy + fh + self.px(ui, MAC_GAP_PT);
+                mac_glass(s, cx, ry, cw, ch - fh - self.px(ui, MAC_GAP_PT), self.px(ui, m.radius), alpha);
             }
         } else {
             // Liquid Glass (regular): blur the wallpaper and dock beneath, tint it, and light the edge.
@@ -1696,14 +2009,14 @@ impl QuickSearch {
 
         // the field: magnifier (bifrost), query or placeholder, clear button
         let mid = cy + fh / 2.0;
-        let (gx, gr) = (cx + ui.pt(m.glass_x), ui.pt(GLASS_R_PT));
+        let (gx, gr) = (cx + self.px(ui, m.glass_x), ui.pt(GLASS_R_PT));
         let stroke = ui.pt(2.2);
         let glass = glyphs::either(glyphs::ring((gx, mid - ui.pt(1.5)), gr, stroke), glyphs::segment((gx + gr * 0.72, mid - ui.pt(1.5) + gr * 0.72), (gx + gr * 1.55, mid - ui.pt(1.5) + gr * 1.55), stroke * 1.2));
         if !self.mac {
             glyphs::paint(s, (gx - gr - stroke, mid - gr - stroke - ui.pt(2.0), gr * 2.6 + stroke, gr * 2.6 + stroke), a(SECONDARY), glass);
         }
-        let tx = cx + ui.pt(m.text_x);
-        let text_w = cw - ui.pt(m.text_x + m.clear_x + CLEAR_R_PT + 8.0);
+        let tx = cx + self.px(ui, m.text_x);
+        let text_w = cw - self.px(ui, m.text_x + m.clear_x + CLEAR_R_PT + 8.0);
         if alpha == 255 {
             self.field.draw(s, ui, (tx, cy, text_w, fh), t);
         }
@@ -1714,7 +2027,7 @@ impl QuickSearch {
             }
         } else {
             let (kx, ky) = self.clear_centre(ui, w);
-            let (ky, r) = (ky + slide, ui.pt(CLEAR_R_PT));
+            let (ky, r) = (ky + slide, self.px(ui, CLEAR_R_PT));
             s.fill_rrect(kx - r, ky - r, 2.0 * r, 2.0 * r, r, a(SECONDARY));
             let d = r * 0.42;
             let x_mark = glyphs::either(glyphs::segment((kx - d, ky - d), (kx + d, ky + d), ui.pt(1.8)), glyphs::segment((kx - d, ky + d), (kx + d, ky - d), ui.pt(1.8)));
@@ -1728,8 +2041,21 @@ impl QuickSearch {
             Some(Touch::Target(t)) => Some(t),
             _ => None,
         };
-        let header_x = (cx + ui.pt(m.inset)) as i32;
-        let mut y = cy + fh + if self.mac && ch > fh { ui.pt(MAC_GAP_PT + m.bottom_pad) } else { 0.0 };
+        let header_x = (cx + self.px(ui, m.inset)) as i32;
+        let mut y = cy + fh + if self.mac && ch > fh { self.px(ui, MAC_GAP_PT + m.bottom_pad) } else { 0.0 };
+        // Golden Gate: the filter chips across the top of the results card
+        if self.mac && ch > fh {
+            let chosen = self.chip;
+            for (i, (cxr, cyr, cwr, chr)) in self.chip_rects(ui, w).into_iter().enumerate() {
+                let Some((title, img)) = self.chips.get(i) else { break };
+                let on = chosen == Some(*title);
+                let plate = if on { SIDEBAR_PLATE.now() } else { FIELD_BG.now() };
+                let pressed_chip = pressed == Some(Target::Chip(i));
+                s.fill_rrect(cxr, cyr + slide, cwr, chr, chr / 2.0, a(if on || pressed_chip { plate } else { scale(plate, 140) }));
+                s.blit_colored(img, (cxr + (cwr - img.w as f32) / 2.0) as i32, (cyr + slide + (chr - img.h as f32) / 2.0) as i32, LABEL.now(), alpha);
+            }
+            y += self.chips_band(ui);
+        }
         if self.suggestions_shown() {
             if self.search_imgs.len() != self.searches.len() {
                 let max_w = ui.pt(m.card_w - m.row_text_x - m.inset);
@@ -1769,20 +2095,22 @@ impl QuickSearch {
             }
         } else {
             for (si, sec) in self.sections.iter().enumerate() {
-                let hd = &sec.header;
-                let hy = (y + ui.pt(m.header_mid) - hd.h as f32 / 2.0) as i32;
-                s.blit_colored(hd, header_x, hy, LABEL_2.now(), alpha);
-                y += ui.pt(m.header);
+                if !self.mac {
+                    let hd = &sec.header;
+                    let hy = (y + ui.pt(m.header_mid) - hd.h as f32 / 2.0) as i32;
+                    s.blit_colored(hd, header_x, hy, LABEL_2.now(), alpha);
+                }
+                y += self.px(ui, m.header);
                 for (ri, (hit, label)) in sec.rows.iter().enumerate() {
-                    let rh = ui.pt(m.row);
+                    let rh = self.px(ui, m.row);
                     let top = self.mac && si == 0 && ri == 0;
                     if top {
-                        let pi = ui.pt(MAC_PLATE_INSET_PT);
-                        s.fill_rrect(cx + pi, y, cw - 2.0 * pi, rh, ui.pt(MAC_PLATE_R_PT), a(SIDEBAR_PLATE.now())); // the reference: a neutral plate, not the accent
+                        let pi = self.px(ui, MAC_PLATE_INSET_PT);
+                        s.fill_rrect(cx + pi, y, cw - 2.0 * pi, rh, self.px(ui, MAC_PLATE_R_PT), a(SIDEBAR_PLATE.now())); // the reference: a neutral plate, not the accent
                     } else if pressed == Some(Target::Row(si, ri)) || self.selected == Some((si, ri)) {
                         s.fill_rrect(cx + ui.pt(6.0), y, cw - ui.pt(12.0), rh, ui.pt(8.0), a(PRESSED));
                     }
-                    let (ix, isz) = (cx + ui.pt(m.row_icon_x), ui.pt(m.row_icon));
+                    let (ix, isz) = (cx + self.px(ui, m.row_icon_x), self.px(ui, m.row_icon));
                     let iy = y + (rh - isz) / 2.0;
                     let app = match hit {
                         Hit::App(a) => Some(*a),
@@ -1808,20 +2136,34 @@ impl QuickSearch {
                     if let Some(img) = thumb_img {
                         s.blit(img, (ix + (isz - img.w as f32) / 2.0) as i32, (iy + (isz - img.h as f32) / 2.0) as i32, 255, alpha);
                     }
-                    match (app, hit) {
-                        (Some(app), _) if thumb_img.is_none() => {
-                            if let Some((_, _, small, _)) = self.icons.iter().find(|(a, ..)| *a == app) {
-                                s.blit(small, ix as i32, iy as i32, 255, alpha);
-                            }
+                    let sized = app.and_then(|app| self.row_icons.iter().find(|(a, _)| *a == app)).map(|(_, img)| img).filter(|img| self.mac && img.h == isz.round() as usize);
+                    let icon = sized.or_else(|| app.and_then(|app| self.icons.iter().find(|(a, ..)| *a == app)).map(|(_, _, small, _)| small));
+                    match (icon, result_symbol(hit)) {
+                        // an app icon: the row-square copy fills the slot, the 29 pt one is centred in it
+                        (Some(small), _) if thumb_img.is_none() => {
+                            s.blit(small, (ix + (isz - small.w as f32) / 2.0) as i32, (iy + (isz - small.h as f32) / 2.0) as i32, 255, alpha);
                         }
-                        (None, Hit::Settings(name)) => {
-                            let colour = self.icon_colour.iter().find(|(n, _)| n == name).map_or(SECONDARY, |(_, c)| *c);
-                            s.fill_rrect(ix, iy, isz, isz, ui.pt(6.5), a(colour));
+                        // a Settings result, a shell action or a Now Playing command: the symbol of its pane
+                        (None, Some(Symbol::Tile(icon))) if thumb_img.is_none() => {
+                            icons::tile_sized(s, ui, icon, ix, iy, isz / ui.s);
+                        }
+                        (None, Some(Symbol::Glyph(glyph))) if thumb_img.is_none() => {
+                            row_glyphs::tile(s, ui, glyph, ix, iy, isz / ui.s);
                         }
                         _ => {}
                     }
-                    let (lx, ly) = ((cx + ui.pt(m.row_text_x)) as i32, (y + rh / 2.0 - label.h as f32 / 2.0) as i32);
-                    s.blit_colored(label, lx, ly, LABEL.now(), alpha);
+                    let lx = (cx + self.px(ui, m.row_text_x)) as i32;
+                    let sub = sec.subs.get(ri).and_then(|i| i.as_ref());
+                    match sub {
+                        // two lines: the title over the kind, where it is or what it does, centred as a pair
+                        Some(sub) => {
+                            let gap = ui.pt(1.0);
+                            let top = y + (rh - (label.h + sub.h) as f32 - gap) / 2.0;
+                            s.blit_colored(label, lx, top as i32, LABEL.now(), alpha);
+                            s.blit_colored(sub, lx, (top + label.h as f32 + gap) as i32, LABEL_2.now(), alpha);
+                        }
+                        None => s.blit_colored(label, lx, (y + rh / 2.0 - label.h as f32 / 2.0) as i32, LABEL.now(), alpha),
+                    }
                     y += rh;
                 }
             }
@@ -2458,10 +2800,79 @@ mod tests {
         sh.desk = Some(crate::shell::desk::Desk::new());
         open(&mut sh, 2000.0);
         let (x, y, w, h) = sh.quicksearch.card(&sh.ui, sh.w);
-        assert_eq!(w, sh.ui.pt(520.0));
+        let k = sh.quicksearch.k(&sh.ui);
+        assert!((1.0..=MAC_K_MAX).contains(&k));
+        assert_eq!(w, sh.ui.pt(520.0 * k), "520 pt, grown with the screen so the card is 0.37 of its width");
+        assert!(w >= sh.ui.pt(520.0) && (w >= sh.w as f32 * 0.37 - 1.0 || k == MAC_K_MAX));
         assert!((x - (sh.w as f32 - w) / 2.0).abs() < 1.0);
-        assert_eq!(y, sh.ui.pt(139.0));
-        assert_eq!(h, sh.ui.pt(sh.quicksearch.m().field), "the empty Golden Gate field shows no Assistant Suggestions, only the field");
+        assert_eq!(y, sh.ui.pt(139.0 * k));
+        assert_eq!(h, sh.ui.pt(sh.quicksearch.m().field * k), "the empty Golden Gate field shows no Assistant Suggestions, only the field");
+    }
+
+    #[test]
+    fn golden_gate_card_grows_with_a_wide_screen_and_the_bifrost_does_not() {
+        let mut sh = shell();
+        unlock(&mut sh);
+        sh.desk = Some(crate::shell::desk::Desk::new());
+        open(&mut sh, 2000.0);
+        sh.quicksearch.resize(sh.ui.pt(520.0) * 4.0);
+        assert_eq!(sh.quicksearch.k(&sh.ui), MAC_K_MAX.min(0.37 * sh.quicksearch.screen_w / sh.ui.pt(520.0)));
+        assert!(sh.quicksearch.k(&sh.ui) > 1.0, "a screen four card widths wide enlarges the card");
+        sh.quicksearch.resize(sh.ui.pt(520.0));
+        assert_eq!(sh.quicksearch.k(&sh.ui), 1.0, "a narrow screen keeps the point size");
+        sh.quicksearch.mac = false;
+        sh.quicksearch.resize(sh.ui.pt(520.0) * 4.0);
+        assert_eq!(sh.quicksearch.k(&sh.ui), 1.0, "the bifrost layout never scales");
+    }
+
+    #[test]
+    fn golden_gate_results_have_chips_two_line_rows_and_filter_by_kind() {
+        let mut sh = shell();
+        unlock(&mut sh);
+        sh.desk = Some(crate::shell::desk::Desk::new());
+        let t = open(&mut sh, 2000.0);
+        assert!(sh.quicksearch.chip_rects(&sh.ui, sh.w).is_empty(), "no chips before anything is typed");
+        type_text(&mut sh, "se", t);
+        let qs = &sh.quicksearch;
+        assert!(!qs.chips.is_empty(), "one chip per kind of result");
+        assert!(qs.chips.iter().all(|(title, _)| !NOT_A_KIND.contains(title)), "the best match and the actions are not kinds");
+        assert!(qs.sections.iter().all(|sec| sec.subs.len() == sec.rows.len()));
+        assert!(qs.sections[0].subs[0].is_some(), "the top row has a second line");
+        // the rows start under the chips, as drawn, and are the Golden Gate row height tall
+        let chips = qs.chip_rects(&sh.ui, sh.w);
+        assert_eq!(chips.len(), qs.chips.len());
+        let rows = qs.row_rects(&sh.ui, sh.w);
+        assert!(rows[0].1 .1 >= chips[0].1 + chips[0].3, "the first row is under the chips");
+        assert_eq!(rows[0].1 .3, qs.px(&sh.ui, qs.m().row));
+        let (cx, cy, cw, ch) = chips[0];
+        assert_eq!(qs.hit(&sh.ui, sh.w, sh.h, cx + cw / 2.0, cy + ch / 2.0), Target::Chip(0));
+        let title = qs.chips[0].0;
+        let (x, y) = (cx + cw / 2.0, cy + ch / 2.0);
+        // a tap on the chip narrows the list to that kind
+        sh.quicksearch.down(&sh.ui, sh.w, sh.h, (x, y), t + 10.0, 0.0);
+        assert_eq!(sh.quicksearch.up(&sh.ui, sh.w, sh.h, x, y, t + 40.0), None);
+        assert_eq!(sh.quicksearch.chip, Some(title));
+        assert_eq!(sh.quicksearch.sections.len(), 1, "one kind of result");
+        // the same chip again shows every kind
+        sh.quicksearch.down(&sh.ui, sh.w, sh.h, (x, y), t + 100.0, 0.0);
+        sh.quicksearch.up(&sh.ui, sh.w, sh.h, x, y, t + 130.0);
+        assert_eq!(sh.quicksearch.chip, None);
+        assert!(sh.quicksearch.sections.len() >= 1);
+    }
+
+    #[test]
+    fn golden_gate_card_is_drawn_with_chips_and_symbols_without_panicking() {
+        let mut sh = shell();
+        unlock(&mut sh);
+        sh.desk = Some(crate::shell::desk::Desk::new());
+        let t = open(&mut sh, 2000.0);
+        type_text(&mut sh, "wi", t);
+        let (w, h) = (sh.w as usize, sh.h as usize);
+        let mut px = vec![0u32; w * h];
+        let mut s = Surface { w, h, stride: w, px: &mut px, y0: 0 };
+        sh.quicksearch.draw(&mut s, &sh.ui, sh.w, sh.h, t + 5000.0);
+        let (cx, cy, cw, _) = sh.quicksearch.card(&sh.ui, sh.w);
+        assert!(px.iter().any(|&p| p >> 24 != 0), "something was drawn over {cx} {cy} {cw}");
     }
 
     #[test]
@@ -2620,13 +3031,19 @@ mod tests {
 /// fades in with `alpha`; the blur shape is declared only once it is fully opaque, so it never pops mid-fade.
 pub(super) fn mac_glass(s: &mut Surface, x: f32, y: f32, w: f32, h: f32, r: f32, alpha: u32) {
     use bifrost_ui::material_request::ShellSurface;
-    let req = ShellSurface::Search.request((x, y, w, h), r);
-    let fill = if alpha == 255 {
-        super::control_center::request_shell_material(req)
-    } else if bifrost_render::appearance::reduce_transparency() {
+    // The field and the results card are one material: the presenter's blur under the search tint, which lets the
+    // desktop show through (the menus' tint is nearly opaque); solid with Reduce Transparency.
+    let fill = if bifrost_render::appearance::reduce_transparency() {
         MENU_SOLID.now()
     } else {
-        bifrost_render::glass::tint(MENU_TINT.now())
+        if alpha == 255 && bifrost_render::glass::gpu() {
+            bifrost_render::glass::push(super::control_center::shell_glass_rect(&ShellSurface::Search.request((x, y, w, h), r)));
+        }
+        if bifrost_render::glass::gpu() {
+            bifrost_render::glass::tint(SEARCH_TINT.now())
+        } else {
+            SEARCH_TINT.now()
+        }
     };
     s.fill_rrect(x, y, w, h, r, scale(fill, alpha));
 }
@@ -2727,7 +3144,7 @@ mod file_actions_tests {
         let u = ui();
         let mut q = QuickSearch::new(&u, 800.0, 1.0);
         let file = Hit::File { path: PathBuf::from("/home/me/a.txt"), name: "a.txt".into() };
-        let section = |u: &Ui| Section { header: u.text("Files", 20.0, Weight::Semibold, WHITE), rows: vec![(file.clone(), u.text("a.txt", 13.0, Weight::Regular, WHITE))] };
+        let section = |u: &Ui| Section { header: u.text("Files", 20.0, Weight::Semibold, WHITE), rows: vec![(file.clone(), u.text("a.txt", 13.0, Weight::Regular, WHITE))], subs: vec![None] };
         q.sections = vec![section(&u)];
         assert_eq!(q.key(&u, 800, Out::Text(" ".into()), 0.0), None, "no row selected: the space is typed");
         assert_eq!(q.query(), " ");

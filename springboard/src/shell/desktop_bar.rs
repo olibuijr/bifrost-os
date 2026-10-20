@@ -1034,7 +1034,10 @@ impl Shell {
             let w=w.min(width.saturating_sub(x));let h=h.min(height.saturating_sub(y));
             if w>0&&h>0 {
                 let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}
-                frames.push(crate::bare::wayland::ChromeFrame{id:8,x:x as i32,y:y as i32,width:w,height:h,pixels:data,input:None});
+                // the surface spans the veil so a click anywhere closes the grid, but only the capsule and the panel are opaque
+                let mask=self.overview.grid.overlay_mask(self,(x,y,w,h));
+                let mut image=Image{w,h,px:data};image.apply_mask(&mask);
+                frames.push(crate::bare::wayland::ChromeFrame{id:8,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px,input:None});
             }
         }
         // Overview: id 9, an overlay surface above every window that takes the keyboard while it is open,
