@@ -1072,7 +1072,7 @@ impl Shell {
     }
 
     /// The windows of other clients the window server lists, once each: the native and direct apps' windows, then the
-    /// Linux apps' (Mission Control gives each a tile).
+    /// Linux apps' (Overview gives each a tile).
     #[cfg(feature = "desktop-wayland")]
     pub(super) fn mission_foreign_windows(&self) -> Vec<(u32, String)> {
         let Some(d) = self.desk.as_ref() else { return Vec::new() };

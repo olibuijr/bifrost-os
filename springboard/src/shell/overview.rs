@@ -222,7 +222,7 @@ pub(super) struct Overview {
     start: f64,
     closing: Option<f64>,
     chosen: Option<AppId>,
-    /// a window of another client the person picked: it is activated when Mission Control has closed
+    /// a window of another client the person picked: it is activated when Overview has closed
     chosen_foreign: Option<u32>,
     /// every window's minimized flag from before Overview hid them
     saved: Vec<(AppId, bool)>,
@@ -629,7 +629,7 @@ impl Overview {
         true
     }
 
-    /// Leaves Mission Control for tile `i` (none: for no window): a desk window is opened, a window of another client is
+    /// Leaves Overview for tile `i` (none: for no window): a desk window is opened, a window of another client is
     /// activated.
     fn pick(&mut self, sh: &mut Shell, i: Option<usize>, t: f64) {
         match i.and_then(|i| self.tiles.get(i)).map(|tile| tile.key) {
@@ -958,7 +958,7 @@ impl Shell {
         }
     }
 
-    /// Mission Control is open: asks for fresh pictures of the windows of other clients, at most 5 times a second each.
+    /// Overview is open: asks for fresh pictures of the windows of other clients, at most 5 times a second each.
     pub(super) fn overview_refresh_shots(&mut self, t: f64) {
         if !self.overview.open || self.overview.closing.is_some() || !self.shots.available() {
             return;
@@ -968,7 +968,7 @@ impl Shell {
         self.overview = ov;
     }
 
-    /// Whether Mission Control is open with a tile for a window of another client (it then wakes to refresh the tiles).
+    /// Whether Overview is open with a tile for a window of another client (it then wakes to refresh the tiles).
     pub(super) fn overview_wants_shots(&self) -> bool {
         self.overview.open && self.overview.closing.is_none() && self.shots.available() && self.overview.has_foreign_tiles()
     }
@@ -1483,7 +1483,7 @@ mod tests {
 
     // ---- windows of other clients: tiles from window captures ----------------------------------------------------------
 
-    /// Mission Control for a desk with `n` windows and the windows `foreign` of other clients, window capture offered.
+    /// Overview for a desk with `n` windows and the windows `foreign` of other clients, window capture offered.
     #[cfg(feature = "desktop-wayland")]
     fn desk_with_foreign(n: usize, foreign: &[(u32, &str)]) -> Shell {
         let mut sh = desk_with(n, 1920, 1080, 1.0);
@@ -1626,7 +1626,7 @@ mod tests {
         assert!(sh.overview.open);
         sh.overview_toggle(2000.0);
         settle(&mut sh);
-        assert!(!sh.overview.open, "Mission Control closed");
+        assert!(!sh.overview.open, "Overview closed");
         assert_eq!(sh.desk.as_ref().unwrap().front().map(|w| w.app), Some(front), "the same window is in front");
         assert_eq!(sh.screen, crate::shell::Screen::App(front.parent()), "and has the focus");
         assert!(sh.take_raise_front(), "the shell raises it above the windows of other clients");
@@ -1654,7 +1654,7 @@ mod tests {
         assert!(sh.overview_event(Event::Down(cx, cy), 2000.0).is_some());
         assert!(sh.overview_event(Event::Up(cx, cy), 2010.0).is_some());
         settle(&mut sh);
-        assert!(!sh.overview.open, "Mission Control closed");
+        assert!(!sh.overview.open, "Overview closed");
         assert_eq!(sh.take_native_activations(), vec![7], "the window server is asked to raise and focus window 7");
     }
 

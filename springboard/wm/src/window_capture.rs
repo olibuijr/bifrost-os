@@ -1,10 +1,10 @@
 //! `bifrost_window_capture_v1` (protocol/bifrost-window-capture-v1.xml, docs/window-server.md "Window capture"): the
-//! shell asks for one window's own pixels, scaled down, for Mission Control tiles, the Dock's thumbnails of minimized
+//! shell asks for one window's own pixels, scaled down, for Overview tiles, the Dock's thumbnails of minimized
 //! windows and window screenshots.
 //!
 //! - **Protocol.** A private protocol rather than ext-image-copy-capture with the foreign-toplevel source: Smithay 0.7
 //!   has no image-capture-source or image-copy-capture support for toplevels, the standard session takes the buffer
-//!   size from the compositor (a full-size window per Mission Control tile) with no size hint from the client, and a
+//!   size from the compositor (a full-size window per Overview tile) with no size hint from the client, and a
 //!   standard handle (ext-foreign-toplevel-list) cannot be matched with the wlr handles the shell already holds. Here the
 //!   request names the window by surface (the shell's own toplevels) or by wlr foreign-toplevel handle (any client's),
 //!   and carries the buffer, whose size is the largest picture wanted.

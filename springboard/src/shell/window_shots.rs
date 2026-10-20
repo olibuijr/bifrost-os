@@ -1,12 +1,12 @@
 //! Pictures of windows the window server composes (`bifrost_window_capture_v1`, docs/window-server.md "Window capture"):
-//! Mission Control tiles for other clients' windows, the Dock's thumbnails of minimized windows and window screenshots.
+//! Overview tiles for other clients' windows, the Dock's thumbnails of minimized windows and window screenshots.
 //!
 //! The shell only sees the pixels of the windows it draws itself; a window of another Wayland client (every store app
 //! on the direct path, every Linux app) is composed by the window server. This model holds what the shell asked for and
 //! got: the newest picture of each window, which requests are in flight, and when each window was last asked about, so
 //! a consumer's cadence is a number it passes in rather than a timer of its own:
 //!
-//! - Mission Control refreshes the tiles it shows at most [`MISSION_REFRESH_MS`] apart (5 a second) while it is open.
+//! - Overview refreshes the tiles it shows at most [`MISSION_REFRESH_MS`] apart (5 a second) while it is open.
 //! - The Dock asks once, when a window is minimized (`request_now`).
 //! - A window screenshot asks once for the full picture (`request_now`).
 //!
@@ -21,7 +21,7 @@
 use crate::gfx::Image;
 use std::collections::HashMap;
 
-/// Mission Control refreshes a tile at most this often while it is open: 5 times a second.
+/// Overview refreshes a tile at most this often while it is open: 5 times a second.
 pub const MISSION_REFRESH_MS: f64 = 200.0;
 /// A window that failed to capture is not asked about again for this long.
 pub const RETRY_AFTER_FAIL_MS: f64 = 5_000.0;
@@ -262,7 +262,7 @@ impl Shell {
         }
     }
 
-    /// Housekeeping of the pictures: requests nobody answered are given up, Mission Control refreshes its tiles (at most 5
+    /// Housekeeping of the pictures: requests nobody answered are given up, Overview refreshes its tiles (at most 5
     /// a second), and the pictures of windows that closed are freed.
     pub(super) fn shots_tick(&mut self, t: f64) {
         self.shots.expire(t);
@@ -273,7 +273,7 @@ impl Shell {
         }
     }
 
-    /// When the loop must wake for the pictures: while Mission Control shows windows of other clients, to refresh them.
+    /// When the loop must wake for the pictures: while Overview shows windows of other clients, to refresh them.
     pub(super) fn shots_wake(&self, t: f64) -> Option<f64> {
         self.overview_wants_shots().then_some(t + MISSION_REFRESH_MS)
     }

@@ -174,7 +174,7 @@ mod screenrec_wl;
 pub mod capture;
 /// Where a screenshot comes from (the window server's composed screen), where it is saved, and its overlays' surfaces.
 mod capture_flow;
-/// Pictures of the windows the window server composes (Mission Control, the Dock's thumbnails, window screenshots).
+/// Pictures of the windows the window server composes (Overview, the Dock's thumbnails, window screenshots).
 pub mod window_shots;
 pub mod screentime;
 pub mod login;
