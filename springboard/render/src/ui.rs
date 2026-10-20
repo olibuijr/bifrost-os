@@ -43,6 +43,9 @@ pub const MENU_SHORTCUT: u32 = SECONDARY;
 pub const MENU_SOLID: Pair = Pair::new(pack(28, 28, 30, 255), pack(246, 246, 246, 255));
 /// The dock's glass tint (premultiplied, as `rgba` makes it).
 pub const DOCK_TINT: Pair = Pair::new(crate::gfx::pack(15, 15, 17, 150), crate::gfx::pack(120, 120, 121, 150));
+/// The thin line between the Dock's sections (kept | recents | minimised windows and the Trash): light over the dark
+/// glass, dark over the light one (premultiplied, as `rgba` makes it).
+pub const DOCK_DIVIDER: Pair = Pair::new(crate::gfx::pack(100, 100, 100, 100), crate::gfx::pack(0, 0, 0, 70));
 /// The sidebar column.
 pub const SIDEBAR_BG: Pair = Pair::new(pack(20, 20, 22, 255), pack(235, 235, 235, 255));
 /// The detail pane behind the cards.

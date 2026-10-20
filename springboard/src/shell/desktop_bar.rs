@@ -650,6 +650,8 @@ impl Shell {
         if let Some(((x,y,w,h),_))=self.assistant.desk_overlay(&self.ui,self.w){v.push((x as i32,y as i32,w as i32,h as i32));}
         // the Quick Look card floats over the windows: the GPU presenter keeps its region (cleared again once it closes)
         if let Some((x,y,w,h))=self.quick_look_rect(){v.push((x as i32,y as i32,w as i32,h as i32));}
+        // the Cmd+Tab strip floats over the windows the same way (cleared again once it closes)
+        if let Some((x,y,w,h))=self.cmdtab_rect(){v.push((x as i32,y as i32,w as i32,h as i32));}
         if self.perf.enabled||self.perf_drawn{let (x,y,w,h)=self.perf_rect();let g=self.ui.pt(2.) as i32;v.push((x as i32-g,y as i32-g,w as i32+2*g,h as i32+2*g));}
         Some(v)
     }
@@ -1016,6 +1018,14 @@ impl Shell {
             let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}
             let mut image=Image{w,h,px:data};image.apply_mask(&mask);
             frames.push(crate::bare::wayland::ChromeFrame{id:7,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px,input:None});
+        }
+        // The Cmd+Tab strip: id 13, an overlay surface above every window, listed only while it is open. It takes neither
+        // the pointer (an empty input region, as the sweep's id 10) nor the keyboard (never exclusive): the modifier release
+        // that commits the switch comes from the shell's own keyboard reader, so the strip must not pull the keys away.
+        if let Some(((x,y,w,h),mask))=self.cmdtab_overlay() {
+            let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}
+            let mut image=Image{w,h,px:data};image.apply_mask(&mask);
+            frames.push(crate::bare::wayland::ChromeFrame{id:13,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px,input:Some([0,0,0,0])});
         }
         // The Apps grid: id 8, an overlay surface above every window that takes the keyboard while it is
         // open. It spans the veil only, so the menu bar and the Dock stay their own surfaces and stay usable. It is

@@ -402,6 +402,25 @@ fn write_open_native(path:&std::path::Path,ids:&[String]) {
     if std::fs::write(&tmp,text).and_then(|_|std::fs::rename(&tmp,path)).is_err(){eprintln!("BifrOSt: could not save open windows");}
 }
 
+/// The Cmd+Tab strip in points: the icons, the gap between them, the padding round them, the room for the selected
+/// name under the icons and the capsule's corner radius.
+const CMDTAB_ICON_PT: f32 = 72.0;
+const CMDTAB_GAP_PT: f32 = 14.0;
+const CMDTAB_PAD_PT: f32 = 18.0;
+const CMDTAB_LABEL_PT: f32 = 26.0;
+const CMDTAB_RADIUS_PT: f32 = 34.0;
+
+/// The Cmd+Tab strip placed on a screen, in px (`Shell::cmdtab_layout`).
+struct CmdtabLayout {
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    icon: usize,
+    gap: f32,
+    pad: f32,
+}
+
 /// Geometry in px, derived from the shell's scale and size.
 #[derive(Clone, Copy)]
 pub struct Metrics {
@@ -1861,16 +1880,50 @@ impl Shell {
         self.dirty = true;
     }
 
+    /// True while the Cmd+Tab strip is open.
+    pub(super) fn cmdtab_open(&self) -> bool {
+        self.desk.as_ref().is_some_and(|d| d.cmdtab.is_some())
+    }
+
+    /// Where the Cmd+Tab strip sits on a `sw` by `sh` screen: the capsule's rectangle and the size of its parts, in px.
+    /// Centred; with many windows the icons shrink so the strip stays inside 90% of the width. None while it is closed.
+    fn cmdtab_layout(&self, sw: f32, sh: f32) -> Option<CmdtabLayout> {
+        let order = &self.desk.as_ref()?.cmdtab.as_ref()?.0;
+        let ui = &self.ui;
+        let (gap, pad) = (ui.pt(CMDTAB_GAP_PT), ui.pt(CMDTAB_PAD_PT));
+        let n = order.len().max(1) as f32;
+        let icon = ui.pt(CMDTAB_ICON_PT).min(((sw * 0.9 - 2.0 * pad - (n - 1.0) * gap) / n).floor()).max(1.0);
+        let (w, h) = (n * icon + (n - 1.0) * gap + 2.0 * pad, icon + 2.0 * pad + ui.pt(CMDTAB_LABEL_PT));
+        let (x, y) = (((sw - w) / 2.0).round(), ((sh - h) / 2.0).round());
+        Some(CmdtabLayout { x, y, w, h, icon: icon as usize, gap, pad })
+    }
+
+    /// The strip's rectangle on the screen in px (x, y, w, h), clipped to the screen; None while it is closed. On the
+    /// desktop the strip is its own overlay surface above the windows (`desktop_chrome_frames`, id 13) and a region the
+    /// GPU presenter keeps (`desk_regions_now`): drawn only into the desktop frame it would sit under the windows.
+    #[cfg(feature = "desktop-wayland")]
+    pub(super) fn cmdtab_rect(&self) -> Option<(usize, usize, usize, usize)> {
+        let l = self.cmdtab_layout(self.w as f32, self.h as f32)?;
+        let (x, y) = (l.x.max(0.0) as usize, l.y.max(0.0) as usize);
+        let w = (l.w.ceil() as usize).min((self.w as usize).saturating_sub(x));
+        let h = (l.h.ceil() as usize).min((self.h as usize).saturating_sub(y));
+        (w > 0 && h > 0).then_some((x, y, w, h))
+    }
+
+    /// The strip as an overlay surface: its rectangle and the alpha mask of its rounded ends.
+    #[cfg(feature = "desktop-wayland")]
+    pub(super) fn cmdtab_overlay(&self) -> Option<((usize, usize, usize, usize), Vec<u8>)> {
+        let (x, y, w, h) = self.cmdtab_rect()?;
+        Some(((x, y, w, h), crate::gfx::rrect_mask(w, h, self.ui.pt(CMDTAB_RADIUS_PT))))
+    }
+
     /// The Cmd+Tab strip: a glass capsule of app icons, the selection on a plate with its name below.
     fn draw_cmdtab(&self, s: &mut Surface) {
         let Some((order, sel)) = self.desk.as_ref().and_then(|d| d.cmdtab.as_ref()) else { return };
+        let Some(CmdtabLayout { x, y, w, h, icon, gap, pad }) = self.cmdtab_layout(s.w as f32, s.h as f32) else { return };
         let ui = &self.ui;
-        let (icon, gap, pad) = (ui.pt(72.0) as usize, ui.pt(14.0), ui.pt(18.0));
-        let n = order.len() as f32;
-        let (w, h) = (n * icon as f32 + (n - 1.0) * gap + 2.0 * pad, icon as f32 + 2.0 * pad + ui.pt(26.0));
-        let (x, y) = (((s.w as f32 - w) / 2.0).round(), ((s.h as f32 - h) / 2.0).round());
-        s.fill_rrect(x, y, w, h, ui.pt(34.0), MENU_TINT.now());
-        s.stroke_rrect(x, y, w, h, ui.pt(34.0), ui.pt(1.0).max(1.0), SEPARATOR_C.now());
+        s.fill_rrect(x, y, w, h, ui.pt(CMDTAB_RADIUS_PT), MENU_TINT.now());
+        s.stroke_rrect(x, y, w, h, ui.pt(CMDTAB_RADIUS_PT), ui.pt(1.0).max(1.0), SEPARATOR_C.now());
         for (k, app) in order.iter().enumerate() {
             let ix = x + pad + k as f32 * (icon as f32 + gap);
             let Some(i) = apps().iter().position(|a| a.id == *app) else { continue };
@@ -2920,12 +2973,14 @@ impl Shell {
         // dividers: pinned | recents | minimized windows and the Trash
         for k in self.dock_seps(&list) {
             let (a, b) = (slid[k], slid[k + 1]);
+            // a hairline of the Dock's own divider colour: the separator grey vanished into the dark glass
+            let t = ui.pt(1.0).round().max(1.0);
             if a.y == b.y {
-                let h = (a.h as f32 * 0.6).round() as usize;
-                s.fill_rect(((a.x + a.w + b.x) / 2).max(0) as usize, (a.y + (a.h - h as i32) / 2).max(0) as usize, 1, h, SEPARATOR_C.now());
+                let h = (a.h as f32 * 0.6).round();
+                s.fill_rrect((((a.x + a.w + b.x) / 2) as f32 - t / 2.0).round().max(0.0), a.y as f32 + (a.h as f32 - h) / 2.0, t, h, 0.0, super::ui::DOCK_DIVIDER.now());
             } else {
-                let w = (a.w as f32 * 0.6).round() as usize;
-                s.fill_rect((a.x + (a.w - w as i32) / 2).max(0) as usize, ((a.y + a.h + b.y) / 2).max(0) as usize, w, 1, SEPARATOR_C.now());
+                let w = (a.w as f32 * 0.6).round();
+                s.fill_rrect(a.x as f32 + (a.w as f32 - w) / 2.0, (((a.y + a.h + b.y) / 2) as f32 - t / 2.0).round().max(0.0), w, t, 0.0, super::ui::DOCK_DIVIDER.now());
             }
         }
         let desk = self.desk.as_ref().unwrap();

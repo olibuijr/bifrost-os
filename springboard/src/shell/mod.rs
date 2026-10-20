@@ -4425,9 +4425,9 @@ impl Shell {
                 if std::mem::replace(&mut self.overview.was_visible, overview_now) != overview_now {
                     damage.all();
                 }
-                // the same for the two panels: they slide, so the glass shapes of the frames before the last one sit at
+                // the same for the two panels and the Cmd+Tab strip: the panels slide, so the glass shapes of the frames before the last one sit at
                 // other positions than the shapes of the last frame, and a panel that closes must leave none of them (OV1)
-                let panels_now = self.center_active() || self.cc_active();
+                let panels_now = self.center_active() || self.cc_active() || self.cmdtab_open();
                 if panel_visibility_changed(&mut self.panels_were_open, panels_now) {
                     damage.all();
                 }
