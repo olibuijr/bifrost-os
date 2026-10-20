@@ -244,6 +244,14 @@ class FirmwareHook(Base):
         for state in ("system-prepared", "system-probation", "prepared", "probation"):
             self.assertEqual(self.build(state=state), both, state)
 
+    def test_the_probation_boot_keeps_firmware_the_recorded_list_does_not_name(self):
+        # a renamed versioned file (GPU GuC/DMC) is not in last boot's list; the probation image must still carry it
+        for state in ("system-restoring", "restoring", "probation"):
+            self.assertIn("i915/renamed_2.bin", self.build(state=state, kernel="7.1.0"), state)
+
+    def test_a_stamp_with_a_trailing_newline_prunes_the_same(self):
+        self.assertEqual(self.build(stamp="7.1.0 20260101-1\n", kernel="7.1.0"), ["i915/keep_1.bin"])
+
     def test_a_new_kernel_or_firmware_package_keeps_all_firmware(self):
         both = ["i915/keep_1.bin", "i915/renamed_2.bin"]
         self.assertEqual(self.build(kernel="7.2.0"), both)
