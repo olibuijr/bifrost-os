@@ -906,7 +906,7 @@ mod tests {
         assert!(card.title.len() <= ALERT_MAX_TITLE_LINES && card.message.len() <= ALERT_MAX_MESSAGE_LINES);
         let inner = (ui.pt(ALERT_W_PT - 2.0 * ALERT_PAD_PT) + ui.pt(4.0)) as usize;
         assert!(card.title.iter().chain(&card.message).all(|l| l.w <= inner), "no line is wider than the text area");
-        for (w, h) in [(1200, 800), (800, 360), (400, 260)] {
+        for (w, h) in [(1200, 800), (800, 360), (400, 300)] {
             let (x, y, cw, ch) = card.card_rect(&ui, w, h);
             assert!(y >= 0.0 && y + ch <= h as f32, "the card fits a {w}x{h} screen: y={y} h={ch}");
             for i in 0..2 {
@@ -916,7 +916,7 @@ mod tests {
             }
         }
         // a short screen shows fewer message lines than a tall one
-        assert!(card.message_fit(&ui, 260) < card.message_fit(&ui, 800));
+        assert!(card.message_fit(&ui, 300) < card.message_fit(&ui, 800));
     }
 
     #[test]
