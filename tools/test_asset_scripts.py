@@ -215,6 +215,42 @@ class SeedData(Base):
         self.assertTrue(os.path.exists(os.path.join(self.data, ".system-assets")))
 
 
+class FirmwareHook(Base):
+    HOOK = os.path.join(ROOT, "packaging", "arch", "initcpio", "install", "bifrost-firmware")
+
+    def build(self, state="accepted", stamp="7.1.0 20260101-1", kernel=None, firmware="20260101-1"):
+        store = os.path.join(self.tmp, "store")
+        shutil.rmtree(store, True)
+        root = os.path.join(self.tmp, "buildroot")
+        shutil.rmtree(root, True)
+        write_tree(root, ["usr/lib/firmware/i915/keep_1.bin", "usr/lib/firmware/i915/renamed_2.bin"], text="x")
+        write_tree(store, ["firmware"], text="i915/keep_1.bin\n")
+        write_tree(store, ["state"], text=state)
+        if stamp is not None:
+            write_tree(store, ["firmware-stamp"], text=stamp)
+        env = {**os.environ, "BIFROST_RECOVERY_DIR": store, "BIFROST_FIRMWARE_VERSION": firmware, "BUILDROOT": root}
+        env.pop("KERNELVERSION", None)
+        if kernel:
+            env["KERNELVERSION"] = kernel
+        r = subprocess.run(["bash", "-c", f"source '{self.HOOK}'; build"], env=env, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return tree(os.path.join(root, "usr", "lib", "firmware"))
+
+    def test_a_matching_stamp_prunes_to_the_recorded_list(self):
+        self.assertEqual(self.build(kernel="7.1.0"), ["i915/keep_1.bin"])
+
+    def test_an_update_in_flight_keeps_all_firmware(self):
+        both = ["i915/keep_1.bin", "i915/renamed_2.bin"]
+        for state in ("system-prepared", "system-probation", "prepared", "probation"):
+            self.assertEqual(self.build(state=state), both, state)
+
+    def test_a_new_kernel_or_firmware_package_keeps_all_firmware(self):
+        both = ["i915/keep_1.bin", "i915/renamed_2.bin"]
+        self.assertEqual(self.build(kernel="7.2.0"), both)
+        self.assertEqual(self.build(firmware="20260301-1"), both)
+        self.assertEqual(self.build(stamp=None), both, "a list without a stamp is not trusted")
+
+
 class PublishStaging(unittest.TestCase):
     def load(self):
         spec = importlib.util.spec_from_file_location("pc_publish", os.path.join(HERE, "pc-publish.py"))
@@ -257,6 +293,17 @@ class PackagingWiring(unittest.TestCase):
     def test_the_scriptlet_prunes_and_the_guard_may_overwrite(self):
         self.assertIn("prune-stale-assets", self.read("packaging", "arch", "springboard.install"))
         self.assertIn("/usr/share/springboard/system-assets/*", self.read("packaging", "arch", "recovery", "guard.rs"))
+
+    def test_the_scriptlet_never_restarts_privd_under_a_running_update(self):
+        script = self.read("packaging", "arch", "springboard.install")
+        lines = [l for l in script.splitlines() if "restart bifrost-privd.service" in l]
+        # the direct restart (no update running) and the deferred try-restart
+        self.assertEqual(len(lines), 2, lines)
+        self.assertEqual(sum("try-restart" in l for l in lines), 1)
+        self.assertIn("systemd-run", script, "the update's cgroup is left alone: the restart waits in its own unit")
+        self.assertIn("[b]ifrost-update-guard (install|rollback)", script)
+        path = os.path.join(ROOT, "packaging", "arch", "springboard.install")
+        self.assertEqual(subprocess.run(["bash", "-n", path], capture_output=True).returncode, 0)
 
     def test_seeding_failures_do_not_gate_the_session_unit(self):
         unit = self.read("packaging", "arch", "springboard.service")
