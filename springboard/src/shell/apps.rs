@@ -154,10 +154,24 @@ fn intern(s: &str) -> &'static str {
 }
 
 
-/// A built-in app's drawn icon at `size` px (`None` for an id that is not a built-in, or a built-in whose icon is a
-/// packaged asset rather than drawn). Settings rows use it when `apphost::icon_image` finds no installed package.
+/// A built-in app's icon at `size` px: the one it draws, else its packaged `icons/<id>.raw` (Deildu, Photos and Files
+/// ship as assets), shaped like the Dock's tile. `None` for an id that is not a built-in or whose asset is missing.
+/// Settings rows use it when `apphost::icon_image` finds no installed package.
 pub fn builtin_icon(id: &str, size: usize) -> Option<Image> {
-    APPS.iter().find(|a| a.icon == id).and_then(|a| a.icon_image).map(|draw| draw(size))
+    let app = APPS.iter().find(|a| a.icon == id)?;
+    match app.icon_image {
+        Some(draw) => Some(draw(size)),
+        None => crate::first_frame_cache::cached_icon(id, size).or_else(|| packaged_icon(&apphost::root(), id, size)).map(|mut flat| {
+            flat.apply_mask(&crate::gfx::squircle_mask(size));
+            flat
+        }),
+    }
+}
+
+/// The packaged asset `<dir>/icons/<id>.raw` resized to `size` px.
+fn packaged_icon(dir: &std::path::Path, id: &str, size: usize) -> Option<Image> {
+    let bytes = std::fs::read(dir.join("icons").join(format!("{id}.raw"))).ok()?;
+    Image::from_raw(&bytes).map(|i| i.resized(size, size))
 }
 
 /// The icon of every app in `list` decoded at `size` px (`apphost::icon_image`, None when the app has no
@@ -181,6 +195,27 @@ mod tests {
         assert_eq!(icons.len(), APPS.len());
         assert!(icons.iter().all(Option::is_none));
         assert!(decode_icons(&[], 64).is_empty());
+    }
+
+    #[test]
+    fn a_packaged_builtin_icon_is_read_from_the_icons_directory() {
+        let dir = std::env::temp_dir().join(format!("apps-icons-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("icons")).unwrap();
+        let mut raw = b"RIMG".to_vec();
+        raw.extend_from_slice(&2u32.to_le_bytes());
+        raw.extend_from_slice(&2u32.to_le_bytes());
+        raw.extend(std::iter::repeat(0xffu8).take(2 * 2 * 4));
+        std::fs::write(dir.join("icons/bifrost.photos.raw"), raw).unwrap();
+        let img = packaged_icon(&dir, "bifrost.photos", 8).expect("the asset decodes");
+        assert_eq!((img.w, img.h, img.px.len()), (8, 8, 64));
+        assert!(packaged_icon(&dir, "bifrost.files", 8).is_none(), "no asset, no icon");
+        let _ = std::fs::remove_dir_all(&dir);
+        // the built-ins that ship as assets are the ones without a drawn icon
+        for id in ["is.olibuijr.deildu", "bifrost.photos", "bifrost.files"] {
+            assert!(APPS.iter().any(|a| a.icon == id && a.icon_image.is_none()), "{id} ships as an asset");
+        }
+        assert!(builtin_icon("is.example.nothing", 32).is_none());
     }
 
     #[test]

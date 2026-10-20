@@ -733,7 +733,7 @@
         sh.arrange_tick(1000.+desk::ARRANGE_DWELL_MS);
         assert_eq!(sh.desktop_menu,Some(Menu::Arrange));
         let texts=sh.menu_row_texts(Menu::Arrange);
-        for want in ["Fill","Centre","Return to Previous Size","Enter Full Screen"] {
+        for want in ["Fill","Center","Return to Previous Size","Enter Full Screen"] {
             assert!(texts.iter().any(|t|t.trim()==want),"{want} is in {texts:?}");
         }
         let (px,py,pw,ph)=sh.desktop_popup_rect().unwrap();

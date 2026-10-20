@@ -4569,10 +4569,10 @@ mod tests {
         tap_row(&mut st, &ui, &mut prefs, "Battery");
         tap_row(&mut st, &ui, &mut prefs, "Energy");
         assert_eq!(st.page(), PageId::Energy);
-        assert_eq!(tap_row(&mut st, &ui, &mut prefs, "15 minutes"), vec![Effect::SystemSleepAfter(15)]);
+        assert_eq!(pick(&mut st, &ui, &mut prefs, "Sleep After", 3), vec![Effect::SystemSleepAfter(15)]);
         assert_eq!(prefs.get("system_sleep_minutes"), Some("15"));
         assert_eq!(crate::bare::sleep::system_sleep_after(prefs.get("system_sleep_minutes")), Some(900_000.0));
-        assert_eq!(tap_row(&mut st, &ui, &mut prefs, "Never"), vec![Effect::SystemSleepAfter(0)]);
+        assert_eq!(pick(&mut st, &ui, &mut prefs, "Sleep After", 6), vec![Effect::SystemSleepAfter(0)]);
         assert_eq!(crate::bare::sleep::system_sleep_after(prefs.get("system_sleep_minutes")), None);
     }
 

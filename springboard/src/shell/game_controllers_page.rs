@@ -174,7 +174,7 @@ pub fn dpad_name(x: i8, y: i8) -> &'static str {
         (-1, 1) => "Down Left",
         (-1, 0) => "Left",
         (-1, -1) => "Up Left",
-        _ => "Centre",
+        _ => "Center",
     }
 }
 
@@ -341,7 +341,7 @@ mod tests {
         assert_eq!(battery_text(&Battery::from_percent(72, BatteryState::Discharging)), "72%");
         assert_eq!(battery_text(&Battery::from_percent(40, BatteryState::Charging)), "40% (Charging)");
         assert_eq!(battery_text(&Battery::unknown()), "");
-        assert_eq!(dpad_name(0, 0), "Centre");
+        assert_eq!(dpad_name(0, 0), "Center");
         assert_eq!(dpad_name(1, -1), "Up Right");
         assert_eq!(dpad_name(-1, 1), "Down Left");
     }
@@ -395,7 +395,7 @@ mod tests {
         assert_eq!(rows[0], ("Battery", "Not Available".to_string()));
         assert_eq!(rows[1], ("Pressed", "South".to_string()));
         assert_eq!(rows[2], ("Left Stick", "0.00, 0.00".to_string()));
-        assert_eq!(rows[5], ("Direction Pad", "Centre".to_string()));
+        assert_eq!(rows[5], ("Direction Pad", "Center".to_string()));
         assert!(live_rows_for(&[], 1).is_empty());
     }
 }

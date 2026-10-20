@@ -119,7 +119,7 @@ impl Status {
             Status::NoMatch => "Fingerprint not recognised. Try again or use your password",
             Status::RetryScan => "Could not read the fingerprint. Touch the sensor again",
             Status::SwipeTooShort => "Swipe was too short. Swipe the whole finger over the sensor",
-            Status::FingerNotCentered => "Centre your finger on the sensor",
+            Status::FingerNotCentered => "Center your finger on the sensor",
             Status::RemoveAndRetry => "Lift your finger, then touch the sensor again",
             Status::Disconnected => "The fingerprint reader was disconnected. Use your password",
             Status::UnknownError => "The fingerprint reader failed. Use your password",
