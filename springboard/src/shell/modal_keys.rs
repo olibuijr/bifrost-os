@@ -1,6 +1,6 @@
 //! Keys for the system alerts. An alert is modal over the whole screen and, on the desktop, a surface of its own that
 //! holds the keyboard (`desktop_chrome_frames`, id 15), so the keys come to the shell and must not reach the app in
-//! front: Esc answers the way the alert's cancel button does, Return presses its bold button, every other key is used up.
+//! front: Esc answers the way the alert's cancel button does, Return presses its bold button unless that would grant a permission (a key never grants), every other key is used up.
 //! The alerts handle touches in `Shell::modal_event`; a key is turned into the touch on the button it stands for, so
 //! there is one path for answering an alert and a key never does what a tap could not.
 
@@ -21,27 +21,34 @@ pub(super) enum Card {
 impl Shell {
     /// The card alert on top, or None when none is up or another modal sits above it (that one takes its own keys).
     pub(super) fn top_card_alert(&self) -> Option<Card> {
-        // modals that come before the cards in `modal_event` and read their keys elsewhere (`hw_type`)
-        let above = self.auth_showing()
+        // in `Shell::modal_event`'s order: these come before the notification alert and read their keys elsewhere (`hw_type`)
+        let above_notify = self.auth_showing()
             || self.volume_showing()
             || self.access_showing()
             || self.package_showing()
             || self.net_auth_showing()
             || self.usb_showing()
             || self.fw_showing()
-            || self.compose_showing()
+            || self.share.is_some()
+            || self.share_prompt.is_some();
+        if above_notify {
+            return None;
+        }
+        if self.notify.ask.is_some() {
+            return Some(Card::Notify);
+        }
+        // these come after the notification alert and before the other cards
+        let above_cards = self.compose_showing()
             || self.power_menu.is_some()
             || self.keyboard_viewer.is_some()
             || self.help_viewer.is_some()
             || self.char_viewer.is_some()
             || self.a11y_panel.is_some()
             || self.print_showing();
-        if above {
+        if above_cards {
             return None;
         }
-        if self.notify.ask.is_some() {
-            Some(Card::Notify)
-        } else if self.crash_alert.is_some() {
+        if self.crash_alert.is_some() {
             Some(Card::Crash)
         } else if self.launch_alert.is_some() {
             Some(Card::Launch)
@@ -82,10 +89,17 @@ impl Shell {
         }
     }
 
-    /// Esc (`cancel`) or Return answers the card alert on top as a tap on its button would. Always consumes the key.
+    /// True once, after a key answered a card alert: the key loop then ends the repeat of the held key.
+    pub fn take_key_repeat_cancel(&mut self) -> bool {
+        std::mem::take(&mut self.key_repeat_cancel)
+    }
+
+    /// Esc (`cancel`) or Return answers the card alert on top as a tap on its button would; Return answers only an alert
+    /// whose bold button a key may press (`key_button`: never a permission). Always consumes the key.
     pub(super) fn card_alert_key(&mut self, cancel: bool, t: f64) -> Vec<Effect> {
         let Some((x, y)) = self.card_alert_key_point(cancel) else { return vec![] };
         self.last_input = t;
+        self.key_repeat_cancel = true;
         let mut fx = self.modal_event(Event::Down(x, y)).unwrap_or_default();
         fx.extend(self.modal_event(Event::Up(x, y)).unwrap_or_default());
         self.dirty = true;
@@ -111,18 +125,41 @@ mod tests {
     }
 
     #[test]
-    fn escape_answers_the_alert_with_dont_allow_and_return_with_the_bold_button() {
+    fn escape_answers_the_alert_with_dont_allow_and_return_never_grants() {
         let mut sh = shell_with_alert();
         assert!(sh.card_alert_up() && sh.shell_takes_typing());
         sh.hw_shortcut(Shortcut::Back, 1.0);
         assert!(sh.notify.ask.is_none(), "Escape answers the alert");
         assert!(sh.notify.store().is_asked(AppId::Files) && sh.notify.store().is_muted(AppId::Files), "as Don't Allow");
         assert!(!sh.card_alert_up());
+        assert!(sh.take_key_repeat_cancel(), "a held key stops repeating into the app that comes back");
+        assert!(!sh.take_key_repeat_cancel(), "once");
 
+        // a Return meant for the app behind must not give the permission: it is used up and the alert stays
         let mut sh = shell_with_alert();
-        sh.hw_type(Out::Enter, 1.0);
-        assert!(sh.notify.ask.is_none(), "Return answers the alert");
-        assert!(sh.notify.store().is_asked(AppId::Files) && !sh.notify.store().is_muted(AppId::Files), "with the bold Allow");
+        assert!(sh.hw_type(Out::Enter, 1.0).is_empty());
+        assert!(sh.notify.ask.is_some(), "Return does not answer the alert");
+        assert!(!sh.notify.store().is_asked(AppId::Files) && !sh.take_key_repeat_cancel());
+    }
+
+    #[test]
+    fn a_terminal_chord_and_paste_are_used_up_and_escape_answers_under_secure_entry() {
+        use crate::shell::hwkeys::TermKey;
+        let mut sh = shell_with_alert();
+        sh.screen = Screen::App(AppId::Terminal);
+        sh.terminal_ui.secure = true;
+        assert!(sh.hw_shortcut(Shortcut::Term(TermKey::Copy), 1.0).is_empty());
+        assert!(sh.hw_shortcut(Shortcut::Paste, 1.0).is_empty());
+        assert!(sh.notify.ask.is_some(), "neither answers the alert");
+        sh.hw_shortcut(Shortcut::Back, 2.0);
+        assert!(sh.notify.ask.is_none(), "Escape reaches the alert although the Terminal has Secure Keyboard Entry on");
+    }
+
+    #[test]
+    fn the_notification_alert_is_on_top_of_the_other_modals_as_in_modal_event() {
+        let mut sh = shell_with_alert();
+        sh.power_menu = Some(crate::shell::power_menu::PowerMenu::new(&sh.ui));
+        assert_eq!(sh.top_card_alert(), Some(super::Card::Notify), "modal_event asks the notification alert before the power menu");
     }
 
     #[test]
@@ -159,7 +196,7 @@ mod tests {
         let f = frames.iter().find(|f| f.id == MODAL_CHROME_ID).expect("the alert is a surface above the windows");
         assert_eq!((f.x, f.y, f.width, f.height), (0, 0, w, h), "it spans the screen, veil included, so it is modal over the apps");
         assert_eq!(f.input, None, "it takes the pointer over its whole surface: a click outside the card goes nowhere");
-        let (bx, by) = sh.notify.ask.as_ref().unwrap().key_button(&sh.ui, sh.w, sh.h, false).unwrap();
+        let (bx, by) = sh.notify.ask.as_ref().unwrap().key_button(&sh.ui, sh.w, sh.h, true).unwrap();
         assert!(bx >= 0.0 && by >= 0.0 && (bx as usize) < f.width && (by as usize) < f.height, "the card is inside the surface");
         assert!(f.pixels[0] >> 24 != 0, "the veil covers the corner");
         assert!(f.pixels[by as usize * w + bx as usize] != f.pixels[0], "and the card is on it");

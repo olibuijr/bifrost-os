@@ -116,9 +116,10 @@ impl Sheet {
         Some(self.card.button_centre(ui, w, h, i))
     }
 
-    /// The centre of the button a key presses: Esc is Don't Allow, Return the bold Allow.
+    /// The centre of the button a key presses: Esc is Don't Allow. Return presses nothing: a key never grants, because
+    /// the alert appears on its own while the person types into an app and a stray Return must not allow notifications.
     pub fn key_button(&self, ui: &Ui, w: i32, h: i32, cancel: bool) -> Option<(f32, f32)> {
-        self.button(ui, w, h, if cancel { Button::DontAllow } else { Button::Allow })
+        if cancel { self.button(ui, w, h, Button::DontAllow) } else { None }
     }
 
     /// The person pressed `button` at `now`. Returns whether the notifications are allowed, or None when the question

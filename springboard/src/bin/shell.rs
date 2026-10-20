@@ -1121,6 +1121,10 @@ fn run() -> std::io::Result<()> {
         if let Some(letter) = key_repeat.accent_hold(t, shell.accent_popup_ready()) {
             effects.extend(shell.accent_hold(letter, t));
         }
+        // a held key that answered a card alert does not repeat into the app that is in front again
+        if shell.take_key_repeat_cancel() {
+            key_repeat.cancel();
+        }
         for out in key_repeat.due(t) {
             effects.extend(shell.hw_type(out, t));
         }

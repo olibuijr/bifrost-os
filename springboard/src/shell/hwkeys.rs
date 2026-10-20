@@ -655,6 +655,11 @@ impl KeyRepeat {
         self.held = out.filter(|o| *o != Out::Named("Escape")).map(|o| (code, o, t + self.delay_ms));
     }
 
+    /// Ends the repeat in progress, whatever key it is (a card alert took the held key).
+    pub fn cancel(&mut self) {
+        self.held = None;
+    }
+
     pub fn release(&mut self, code: u16) {
         if self.held.as_ref().is_some_and(|h| h.0 == code) {
             self.held = None;
@@ -910,7 +915,7 @@ impl Shell {
         if self.access_showing() || self.usb_showing() || self.fw_showing() {
             return vec![];
         }
-        // a system alert holds the keyboard: Return presses its bold button, every other key is used up (the app behind
+        // a system alert holds the keyboard: Return presses its bold button when a key may (never a permission), every other key is used up (the app behind
         // it gets none)
         if self.card_alert_up() {
             return if matches!(out, Out::Enter) { self.card_alert_key(false, t) } else { vec![] };
@@ -940,6 +945,10 @@ impl Shell {
         // the character viewer takes the typing for its search, unless a Search field or the assistant panel is open
         if self.char_viewer.is_some() && !self.quicksearch.is_shown() && !self.assistant.is_shown() {
             return self.char_viewer_key(out);
+        }
+        // any other sheet or panel on the overlay (id 15) holds the keyboard: typing is used up, not sent to the app behind
+        if self.modal_layer.is_some() {
+            return vec![];
         }
         // the login window opens on a tick; the shell may not have drawn since the lock, so open it for this key
         if self.screen == Screen::Lock {
@@ -1146,9 +1155,13 @@ impl Shell {
             return vec![];
         }
         let in_terminal = matches!(self.screen, Screen::App(AppId::Terminal | AppId::External(_)));
+        // a card alert holds the keyboard: the terminal's own keys and Paste are used up, not sent to the app behind it
+        if self.card_alert_up() && matches!(sc, Shortcut::Term(_) | Shortcut::Paste) {
+            return vec![];
+        }
         // Secure Keyboard Entry: while the Terminal is in front, only its own keys run; the shell's shortcuts
-        // (switcher, search, input source, Home, Back, window keys) never see them.
-        if self.screen == Screen::App(AppId::Terminal) && self.terminal_ui.secure && !matches!(sc, Shortcut::Term(_) | Shortcut::Paste | Shortcut::Lock | Shortcut::ForceQuit) {
+        // (switcher, search, input source, Home, Back, window keys) never see them. Escape still answers a card alert.
+        if self.screen == Screen::App(AppId::Terminal) && self.terminal_ui.secure && !(matches!(sc, Shortcut::Back) && self.card_alert_up()) && !matches!(sc, Shortcut::Term(_) | Shortcut::Paste | Shortcut::Lock | Shortcut::ForceQuit) {
             return vec![];
         }
         let fx = match sc {

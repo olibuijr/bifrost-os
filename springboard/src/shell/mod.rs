@@ -791,6 +791,9 @@ pub struct Shell {
     shot_layer: Option<capture_flow::Layer>,
     /// The system sheets and alerts as a surface of their own above the windows on the desktop (id 15)
     modal_layer: Option<capture_flow::Layer>,
+    /// A key answered a card alert: the key still held must not repeat into the app that comes back to the front
+    /// (the key loop takes it with `take_key_repeat_cancel`).
+    key_repeat_cancel: bool,
     /// A folder that pictures go to instead of the account's Desktop (the tests set it).
     shot_dir: Option<PathBuf>,
     /// The pictures saved since the screenshot service last looked, in order (`services/screenshot.rs`).
@@ -1249,6 +1252,7 @@ impl Shell {
             capture_layer: None,
             shot_layer: None,
             modal_layer: None,
+            key_repeat_cancel: false,
             shot_dir: None,
             shot_saved: Vec::new(),
             rec: None,

@@ -499,6 +499,8 @@ const ALERT_W_PT: f32 = 259.0;
 pub struct AlertCard {
     /// The title, wrapped to the card's width: a long one takes more lines and the card grows, it is never clipped.
     title: Vec<Image>,
+    /// The height of one title line, measured once when the card is built (an empty title takes one line of this height).
+    title_line_h: f32,
     message: Vec<Image>,
     buttons: Vec<Image>,
     /// `showsSuppressionButton`-style checkbox above the buttons: its label and whether it is checked
@@ -527,8 +529,11 @@ impl AlertCard {
     /// do not fit the standard width.
     pub fn new_wide(ui: &Ui, title: &str, message: &str, buttons: Vec<Image>, width_pt: f32) -> Self {
         let width_pt = width_pt.max(ALERT_W_PT);
+        let title: Vec<Image> = ui.wrap(title, MAC_TITLE3_PT, Weight::Semibold, ui.pt(width_pt - 2.0 * ALERT_PAD_PT)).iter().map(|l| ui.text(l, MAC_TITLE3_PT, Weight::Semibold, WHITE)).collect();
+        let title_line_h = title.iter().map(|l| l.h).max().unwrap_or_else(|| ui.text("A", MAC_TITLE3_PT, Weight::Semibold, WHITE).h) as f32;
         AlertCard {
-            title: ui.wrap(title, MAC_TITLE3_PT, Weight::Semibold, ui.pt(width_pt - 2.0 * ALERT_PAD_PT)).iter().map(|l| ui.text(l, MAC_TITLE3_PT, Weight::Semibold, WHITE)).collect(),
+            title,
+            title_line_h,
             message: ui.wrap(message, MAC_BODY_PT, Weight::Regular, ui.pt(width_pt - 2.0 * ALERT_PAD_PT)).iter().map(|l| ui.text(l, MAC_BODY_PT, Weight::Regular, WHITE)).collect(),
             buttons,
             check: None,
@@ -572,9 +577,8 @@ impl AlertCard {
     }
 
     /// Height of the title block: its wrapped lines (a title with no text still takes one line, as an empty one always did).
-    fn title_height(&self, ui: &Ui) -> f32 {
-        let line = self.title.iter().map(|l| l.h).max().unwrap_or_else(|| ui.text("A", MAC_TITLE3_PT, Weight::Semibold, WHITE).h) as f32;
-        line * self.title.len().max(1) as f32
+    fn title_height(&self) -> f32 {
+        self.title_line_h * self.title.len().max(1) as f32
     }
 
     /// The card (x, y, w, h) on a w by h screen, for hit tests and for sizing the surface that carries it.
@@ -585,7 +589,7 @@ impl AlertCard {
     /// The card (x, y, w, h), centred on screen.
     fn card(&self, ui: &Ui, w: i32, h: i32) -> (f32, f32, f32, f32) {
         let cw = ui.pt(self.width_pt);
-        let ch = ui.pt(ALERT_PAD_PT + 2.0) + self.title_height(ui) + ui.pt(8.0) + ui.pt(17.0) * self.message.len() as f32 + ui.pt(ALERT_PAD_PT) + ui.pt(ALERT_BTN_H_PT) + ui.pt(ALERT_PAD_PT)
+        let ch = ui.pt(ALERT_PAD_PT + 2.0) + self.title_height() + ui.pt(8.0) + ui.pt(17.0) * self.message.len() as f32 + ui.pt(ALERT_PAD_PT) + ui.pt(ALERT_BTN_H_PT) + ui.pt(ALERT_PAD_PT)
             + if self.check.is_some() { ui.pt(ALERT_CHECK_H_PT + ALERT_CHECK_GAP_PT) } else { 0.0 };
         (((w as f32 - cw) / 2.0).round(), ((h as f32 - ch) / 2.0).round(), cw, ch)
     }
@@ -619,7 +623,7 @@ impl AlertCard {
         let (x, y, cw, ch) = card;
         s.fill_rrect(x, y, cw, ch, ui.pt(ALERT_RADIUS_PT), CARD_BG.now());
         let (lx, mut ty) = (x + ui.pt(ALERT_PAD_PT), y + ui.pt(ALERT_PAD_PT + 2.0));
-        let line_h = self.title_height(ui) / self.title.len().max(1) as f32;
+        let line_h = self.title_line_h;
         for line in &self.title {
             s.blit_colored(line, lx as i32, ty as i32, LABEL.now(), 255);
             ty += line_h;
