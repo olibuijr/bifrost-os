@@ -19,6 +19,10 @@ ALSA plug-in with `/etc/alsa/conf.d/50-bifrost.conf`. The shell and the media pl
 Still open:
 - The control loop runs with `NoObjects`: the object tree of `audio/server/src/objects.rs` is not yet served over the
   socket, so property get, set and listen are limited to what `ServerCore` handles itself.
+  `AppState` (`audio/server/src/apps.rs`) serves the system object, the processes and each device's name, uid, transport,
+  manufacturer, nominal rate, available rates, buffer size and range, clock domain, running state, levels and DSP plan.
+  A client adds an IO procedure with the buffer size it reads from the device, so a device without `BUFFER_FRAMES` cannot
+  play (host test: `audio/server/tests/hal_default_output.rs`).
 - Taps are a registry (`audio/server/src/tap.rs`) that the mixer does not call yet.
 - MIDI (2026-10-19, unbuilt and unrun): `bifrost-midid` now has a client socket (`bifrost_midi::wire` and `broker`, the SDK's
   `midi_client`), rawmidi output for hardware destinations, thru connections and hotplug notifications, and ships with

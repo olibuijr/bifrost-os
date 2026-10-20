@@ -487,6 +487,7 @@ dependencies = [
  "bifrost-audio-alsa",
  "bifrost-audio-driver",
  "bifrost-audio-engine",
+ "bifrost-audio-hal",
  "bifrost-audio-policy",
  "bifrost-audio-shm",
  "bifrost-audio-toolbox",
@@ -4433,9 +4434,11 @@ name = "springboard"
 version = "0.10.10"
 dependencies = [
  "bifrost-assistant-client",
+ "bifrost-audio-driver",
  "bifrost-audio-hal",
  "bifrost-audio-toolbox",
  "bifrost-audio-types",
+ "bifrost-audiod",
  "bifrost-chrome",
  "bifrost-core",
  "bifrost-proto",

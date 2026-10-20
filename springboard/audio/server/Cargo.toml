@@ -17,3 +17,6 @@ bifrost-audio-toolbox = { path = "../toolbox" }
 bifrost-audio-policy = { path = "../policy" }
 bifrost-audio-engine = { path = "../engine" }
 libc = "0.2"
+
+[dev-dependencies]
+bifrost-audio-hal = { path = "../hal" }

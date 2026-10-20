@@ -7,7 +7,7 @@
 //! Device lifecycle: a device starts when its first IO procedure starts running and stops `idle_stop` (2 s) after
 //! the last one stopped. With no running device the loop blocks in `poll` with no timeout: no wakeups when idle.
 
-use crate::apps::{plan_text, AppState};
+use crate::apps::{device_rate, initial_quantum, plan_text, AppState};
 use crate::client::{recv_msg, send_msg, Conn, HELLO_TIMEOUT, MAX_STALLED};
 use crate::dsp::{Plan, Stages};
 use crate::io::{
@@ -136,20 +136,21 @@ fn err(e: AudioError) -> Handled {
     plain(Reply::Error(e))
 }
 
+/// The error of a request that `AppState` published the object of but not the property, after the object tree behind
+/// `ObjectApi` had its turn. That tree knows none of the published objects (`NoObjects` says `UnknownObject` for
+/// everything), so its answer must not turn "this device has no such property" into "no such device".
+fn after_fallthrough<T>(published: bool, r: Result<T, AudioError>) -> Result<T, AudioError> {
+    match r {
+        Err(AudioError::UnknownObject) if published => Err(AudioError::UnknownProperty),
+        other => other,
+    }
+}
+
 /// What a refused stream is told: the session category does not allow it, or another session has the audio.
 fn denied(d: Denied) -> AudioError {
     match d {
         Denied::Category(_) => AudioError::PermissionDenied,
         Denied::Interrupted => AudioError::Hogged,
-    }
-}
-
-/// The rate a device is opened at: 48 kHz when it supports it, else its lowest.
-fn device_rate(desc: &DeviceDesc) -> f64 {
-    if desc.rates.iter().any(|r| 48_000.0 >= r.0 && 48_000.0 <= r.1) {
-        48_000.0
-    } else {
-        desc.rates.first().map(|r| r.0).unwrap_or(48_000.0)
     }
 }
 
@@ -213,7 +214,7 @@ impl ServerCore {
     }
 
     fn host(driver: usize, desc: DeviceDesc) -> DeviceHost {
-        let q = DEFAULT_QUANTUM.clamp(desc.buffer_frames_range.0.max(MIN_QUANTUM), desc.buffer_frames_range.1.min(MAX_QUANTUM));
+        let q = initial_quantum(&desc);
         DeviceHost { driver, desc, shared: Shared::new(q), thread: None, manual: None, abort: None, stopping: None, running: false, idle_since: None, levels_seen: [0; 2] }
     }
 
@@ -299,7 +300,8 @@ impl ServerCore {
                         Err(e) => return err(e),
                     }
                 }
-                match self.objects.get(object, address) {
+                let published = self.apps.owns(object);
+                match after_fallthrough(published, self.objects.get(object, address)) {
                     Ok(v) => plain(Reply::Value(v)),
                     Err(e) => err(e),
                 }
@@ -316,7 +318,8 @@ impl ServerCore {
                         Err(e) => return err(e),
                     }
                 }
-                match self.objects.set(client, policy, object, address, value) {
+                let published = self.apps.owns(object);
+                match after_fallthrough(published, self.objects.set(client, policy, object, address, value)) {
                     Ok(()) => plain(Reply::Done),
                     Err(e) => err(e),
                 }
@@ -329,7 +332,8 @@ impl ServerCore {
                         Err(e) => return err(e),
                     }
                 }
-                match self.objects.listen(client, object, address) {
+                let published = self.apps.owns(object);
+                match after_fallthrough(published, self.objects.listen(client, object, address)) {
                     Ok(()) => plain(Reply::Done),
                     Err(e) => err(e),
                 }
@@ -342,7 +346,8 @@ impl ServerCore {
                         Err(e) => return err(e),
                     }
                 }
-                match self.objects.unlisten(client, object, address) {
+                let published = self.apps.owns(object);
+                match after_fallthrough(published, self.objects.unlisten(client, object, address)) {
                     Ok(()) => plain(Reply::Done),
                     Err(e) => err(e),
                 }
@@ -361,7 +366,14 @@ impl ServerCore {
                     Err(e) => err(e),
                 }
             }
-            Request::AddIoProc(r) => self.add_io_proc(client, r),
+            Request::AddIoProc(r) => {
+                let device = r.device;
+                let h = self.add_io_proc(client, r);
+                if let Reply::Error(e) = &h.reply {
+                    log("client", &format!("client {client}: add io proc on device {} refused: {e:?}", device.0));
+                }
+                h
+            }
             Request::RemoveIoProc { id } => match self.owned_slot(client, id) {
                 Ok(_) => {
                     self.remove_slot(id);
@@ -385,6 +397,7 @@ impl ServerCore {
                             plain(Reply::Done)
                         }
                         Err(e) => {
+                            log("client", &format!("client {client}: start io proc {id} on device {} failed: {e:?}", self.device_id(dev).0));
                             self.slots[&id].slot.running.store(false, Ordering::Release);
                             err(e)
                         }
@@ -485,7 +498,7 @@ impl ServerCore {
     }
 
     /// The graph quantum is the smallest buffer any running client asked for (default 256), within the device's range.
-    fn recompute_quantum(&self, dev: usize) {
+    fn recompute_quantum(&mut self, dev: usize) {
         let d = &self.devices[dev];
         let want = self
             .slots
@@ -498,6 +511,9 @@ impl ServerCore {
         // never below what the sustained-xrun fallback raised the device to
         let q = q.max(d.shared.fallback_floor.load(Ordering::Acquire));
         d.shared.quantum.store(q, Ordering::Release);
+        // the device's `BUFFER_FRAMES` property is the quantum it runs at
+        let id = self.device_id(dev);
+        self.apps.publish_buffer_frames(id, q);
     }
 
     fn start_device(&mut self, idx: usize) -> Result<(), AudioError> {
