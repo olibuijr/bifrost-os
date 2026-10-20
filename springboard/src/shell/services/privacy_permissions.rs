@@ -113,16 +113,21 @@ pub fn wants_prompt(method: &str, params: &Json, reply: &Json) -> Option<Kind> {
     }
 }
 
-/// Queues a sheet for an app's request. A repeat of a request already waiting is not queued twice, and the queue
-/// holds at most [`MAX_QUEUED_PROMPTS`].
-pub fn queue_prompt(app_id: &str, app_name: &str, kind: Kind, purpose: &str) {
+/// Queues a sheet for an app's request. A repeat of a request already waiting (same app, kind and purpose: for a USB
+/// device the purpose is the device) is not queued twice, and the queue holds at most [`MAX_QUEUED_PROMPTS`]. Returns
+/// whether the request is now waiting for an answer, which is false only when the queue is full.
+pub fn queue_prompt(app_id: &str, app_name: &str, kind: Kind, purpose: &str) -> bool {
     PROMPTS.with(|q| {
         let mut q = q.borrow_mut();
-        if q.iter().any(|p| p.app_id == app_id && p.kind == kind) || q.len() >= MAX_QUEUED_PROMPTS {
-            return;
+        if q.iter().any(|p| p.app_id == app_id && p.kind == kind && p.purpose == purpose) {
+            return true;
+        }
+        if q.len() >= MAX_QUEUED_PROMPTS {
+            return false;
         }
         q.push_back(Prompt { app_id: app_id.to_string(), app_name: app_name.to_string(), kind, purpose: purpose.to_string() });
-    });
+        true
+    })
 }
 
 /// Whether the person still has to answer this request. A request answered since it was queued is dropped.
@@ -710,6 +715,22 @@ mod tests {
         assert!(take_prompt().is_none(), "the repeat was not queued twice");
         decide(&p, true);
         assert_eq!(location_status(id), AuthorizationStatus::AuthorizedWhenInUse);
+    }
+
+    #[test]
+    fn two_usb_devices_of_one_app_each_get_a_sheet_and_a_full_queue_says_so() {
+        let id = "is.example.usbtwo";
+        assert!(queue_prompt(id, "Dev", Kind::Usb, "1-1"));
+        assert!(queue_prompt(id, "Dev", Kind::Usb, "1-2"), "another device is another request");
+        assert!(queue_prompt(id, "Dev", Kind::Usb, "1-1"), "the same device waits once");
+        let mine = || PROMPTS.with(|q| q.borrow().iter().filter(|p| p.app_id == id).count());
+        assert_eq!(mine(), 2);
+        let mut n = 0;
+        while queue_prompt(&format!("is.example.fill{n}"), "Fill", Kind::Location, "") {
+            n += 1;
+            assert!(n <= MAX_QUEUED_PROMPTS, "the queue must refuse at its limit");
+        }
+        PROMPTS.with(|q| q.borrow_mut().clear());
     }
 
     #[test]
