@@ -8,12 +8,9 @@
 //!   standard handle (ext-foreign-toplevel-list) cannot be matched with the wlr handles the shell already holds. Here the
 //!   request names the window by surface (the shell's own toplevels) or by wlr foreign-toplevel handle (any client's),
 //!   and carries the buffer, whose size is the largest picture wanted.
-//! - **Who may ask.** The shell only. The global is hidden from every other client (`GlobalDispatch::can_view`), and
-//!   a request from a client that is not the shell is answered `failed(denied)` anyway. The shell is the client whose
-//!   `SO_PEERCRED` uid (cached in `ClientState`, because a global filter must not query the Wayland backend) is root
-//!   while the window server runs as the session's account, which is how `/usr/lib/bifrost/session` starts them; apps
-//!   are the account's. `BIFROST_WM_SHELL_UID=<uid>` names the shell's uid instead, for a development session where
-//!   both run as one user (every client of that uid, apps included, may then capture: development only).
+//! - **Who may ask.** The shell only. The global is a capture global: it is visible only to privileged clients, the ones
+//!   that connected through the privileged socket (`privileged.rs`), and a request from any other client is answered
+//!   `failed(denied)` anyway. The shell runs as root and the socket is root's, so an app cannot reach it.
 //! - **On demand, scaled in the renderer.** A request renders the window alone into a texture of the fitted size
 //!   (`capture::capture_window`, GLES; the Vulkan scanout answers `failed(unsupported)`), never per frame.
 //! - **No work when nothing changed.** Every commit of a window's surface tree advances its content serial; a request
@@ -71,13 +68,11 @@ use self::protocol::{
     bifrost_window_capture_manager_v1::{self, BifrostWindowCaptureManagerV1},
 };
 use crate::{
+    privileged::{is_privileged, PrivilegedOnly},
     session_protocols::write_shm_sized,
-    state::{ClientState, WmState},
+    state::WmState,
     wm::WindowId,
 };
-
-/// The environment variable that names the shell's uid (see the module comment).
-pub const SHELL_UID_ENV: &str = "BIFROST_WM_SHELL_UID";
 
 /// The largest side of the snapshot taken when a window is minimized.
 pub const SNAPSHOT_BOUND: (i32, i32) = (640, 400);
@@ -85,42 +80,6 @@ pub const SNAPSHOT_BOUND: (i32, i32) = (640, 400);
 // ---------------------------------------------------------------------------------------------------------------------
 // Pure logic (host-tested)
 // ---------------------------------------------------------------------------------------------------------------------
-
-/// Which clients are the shell.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
-pub struct ShellPolicy {
-    /// The uid `BIFROST_WM_SHELL_UID` names, if it is set to a number.
-    pub configured: Option<u32>,
-    /// The uid the window server runs as (`None`: unknown).
-    pub own: Option<u32>,
-}
-
-impl ShellPolicy {
-    /// The policy of this process: the configured uid from the environment, and the uid of `/proc/self`.
-    pub fn from_env() -> ShellPolicy {
-        ShellPolicy {
-            configured: Self::parse(std::env::var(SHELL_UID_ENV).ok().as_deref()),
-            own: crate::text_input::own_uid(),
-        }
-    }
-
-    /// A configured uid: a plain decimal number. Unset, empty and anything else is no configuration (a typo never
-    /// opens the global to more clients: without a configuration only root is the shell).
-    pub fn parse(value: Option<&str>) -> Option<u32> {
-        value.map(str::trim).filter(|v| !v.is_empty()).and_then(|v| v.parse().ok())
-    }
-
-    /// Whether a client with `client_uid` (`None`: its credentials could not be read, or it is not a socket client)
-    /// is the shell. With a configured uid that uid is; otherwise root is, provided the window server itself is not
-    /// root (when both are root the uid tells nothing, so nobody is the shell).
-    pub fn is_shell(&self, client_uid: Option<u32>) -> bool {
-        let Some(uid) = client_uid else { return false };
-        match self.configured {
-            Some(shell) => uid == shell,
-            None => uid == 0 && self.own.is_some_and(|own| own != 0),
-        }
-    }
-}
 
 /// The picture size for a window of `src` (width, height) fitted into `bound`: the aspect kept, never scaled up,
 /// each side at least 1. `None` when either size is empty.
@@ -205,14 +164,9 @@ pub struct Snapshot {
 pub struct WindowCapture {
     serials: HashMap<WindowId, u32>,
     snapshots: HashMap<WindowId, Snapshot>,
-    pub policy: ShellPolicy,
 }
 
 impl WindowCapture {
-    pub fn new() -> Self {
-        WindowCapture { policy: ShellPolicy::from_env(), ..Default::default() }
-    }
-
     /// The content serial of window `id`: 1 until it commits again.
     pub fn serial(&self, id: WindowId) -> u32 {
         self.serials.get(&id).copied().unwrap_or(1)
@@ -282,27 +236,18 @@ impl BufferShape {
 // The global
 // ---------------------------------------------------------------------------------------------------------------------
 
-/// The global's data: the policy that decides who sees it.
-#[derive(Clone, Copy)]
-pub struct ShellOnly(pub ShellPolicy);
-
 pub fn init(dh: &DisplayHandle) -> GlobalId {
-    dh.create_global::<WmState, BifrostWindowCaptureManagerV1, ShellOnly>(1, ShellOnly(ShellPolicy::from_env()))
+    dh.create_global::<WmState, BifrostWindowCaptureManagerV1, PrivilegedOnly>(1, PrivilegedOnly)
 }
 
-/// The peer uid cached when the client connected.
-fn client_uid(client: &Client) -> Option<u32> {
-    client.get_data::<ClientState>().and_then(|data| data.peer_uid)
-}
-
-impl GlobalDispatch<BifrostWindowCaptureManagerV1, ShellOnly> for WmState {
-    fn bind(_: &mut Self, _: &DisplayHandle, _: &Client, resource: New<BifrostWindowCaptureManagerV1>, _: &ShellOnly, init: &mut DataInit<'_, Self>) {
+impl GlobalDispatch<BifrostWindowCaptureManagerV1, PrivilegedOnly> for WmState {
+    fn bind(_: &mut Self, _: &DisplayHandle, _: &Client, resource: New<BifrostWindowCaptureManagerV1>, _: &PrivilegedOnly, init: &mut DataInit<'_, Self>) {
         init.init(resource, ());
     }
 
-    /// Only the shell sees the global; the registry of every other client does not list it, and a bind to it is refused.
-    fn can_view(client: Client, shell: &ShellOnly) -> bool {
-        shell.0.is_shell(client_uid(&client))
+    /// Only privileged clients see the global; every other client's registry does not list it, and a bind is refused.
+    fn can_view(client: Client, _: &PrivilegedOnly) -> bool {
+        is_privileged(&client)
     }
 }
 
@@ -324,7 +269,7 @@ impl Dispatch<BifrostWindowCaptureManagerV1, ()> for WmState {
         };
         let frame = init.init(frame, ());
         // the global is hidden from other clients; a client that got hold of it anyway is refused here
-        if !state.window_capture.policy.is_shell(client_uid(client)) {
+        if !is_privileged(client) {
             frame.failed(Failure::Denied as u32);
             return;
         }
@@ -576,39 +521,6 @@ mod tests {
     #[test]
     fn a_short_source_gives_an_empty_picture_not_a_panic() {
         assert_eq!(downscale_rgba(&[1, 2, 3], 2, 2, 1, 1), vec![0, 0, 0, 0]);
-    }
-
-    #[test]
-    fn only_root_is_the_shell_while_the_window_server_runs_as_the_account() {
-        let policy = ShellPolicy { configured: None, own: Some(1000) };
-        assert!(policy.is_shell(Some(0)), "the shell runs as root");
-        assert!(!policy.is_shell(Some(1000)), "an app runs as the account");
-        assert!(!policy.is_shell(Some(1001)));
-        assert!(!policy.is_shell(None), "unreadable credentials (and XWayland) fail closed");
-    }
-
-    #[test]
-    fn nobody_is_the_shell_when_the_uid_tells_nothing() {
-        assert!(!ShellPolicy { configured: None, own: Some(0) }.is_shell(Some(0)), "both root: no distinction");
-        assert!(!ShellPolicy { configured: None, own: None }.is_shell(Some(0)), "own uid unknown fails closed");
-    }
-
-    #[test]
-    fn a_configured_uid_replaces_the_root_rule() {
-        let policy = ShellPolicy { configured: Some(1000), own: Some(1000) };
-        assert!(policy.is_shell(Some(1000)));
-        assert!(!policy.is_shell(Some(0)), "root is not special once a uid is named");
-        assert!(!policy.is_shell(None));
-    }
-
-    #[test]
-    fn the_configured_uid_is_a_plain_number_or_nothing() {
-        assert_eq!(ShellPolicy::parse(Some("1000")), Some(1000));
-        assert_eq!(ShellPolicy::parse(Some(" 42\n")), Some(42));
-        assert_eq!(ShellPolicy::parse(Some("")), None);
-        assert_eq!(ShellPolicy::parse(Some("root")), None, "a typo never widens access");
-        assert_eq!(ShellPolicy::parse(Some("-1")), None);
-        assert_eq!(ShellPolicy::parse(None), None);
     }
 
     #[test]

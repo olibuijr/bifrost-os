@@ -78,6 +78,7 @@ use smithay::{
 };
 
 use crate::{
+    privileged::{is_privileged, PrivilegedOnly},
     state::WmState,
     wm::{Rect, WindowId},
 };
@@ -326,11 +327,11 @@ impl SessionState {
     /// capture sources. Cursor shapes and xdg-activation come from Smithay.
     pub fn new(dh: &DisplayHandle) -> Self {
         dh.create_global::<WmState, ZwlrForeignToplevelManagerV1, ()>(3, ());
-        dh.create_global::<WmState, ZwlrScreencopyManagerV1, ()>(3, ());
+        dh.create_global::<WmState, ZwlrScreencopyManagerV1, PrivilegedOnly>(3, PrivilegedOnly);
         dh.create_global::<WmState, ZwlrOutputManagerV1, ()>(4, ());
         dh.create_global::<WmState, ZwlrOutputPowerManagerV1, ()>(1, ());
-        dh.create_global::<WmState, ExtImageCopyCaptureManagerV1, ()>(1, ());
-        dh.create_global::<WmState, ExtOutputImageCaptureSourceManagerV1, ()>(1, ());
+        dh.create_global::<WmState, ExtImageCopyCaptureManagerV1, PrivilegedOnly>(1, PrivilegedOnly);
+        dh.create_global::<WmState, ExtOutputImageCaptureSourceManagerV1, PrivilegedOnly>(1, PrivilegedOnly);
         SessionState {
             hooks: SessionHooks::default(),
             cursor: None,
@@ -920,9 +921,14 @@ impl Dispatch<ZwlrOutputPowerV1, PowerData> for WmState {
 // zwlr_screencopy_manager_v1 and frames
 // ---------------------------------------------------------------------------------------------------------------------
 
-impl GlobalDispatch<ZwlrScreencopyManagerV1, ()> for WmState {
-    fn bind(_state: &mut Self, _dh: &DisplayHandle, _client: &Client, resource: New<ZwlrScreencopyManagerV1>, _data: &(), data_init: &mut DataInit<'_, Self>) {
+impl GlobalDispatch<ZwlrScreencopyManagerV1, PrivilegedOnly> for WmState {
+    fn bind(_state: &mut Self, _dh: &DisplayHandle, _client: &Client, resource: New<ZwlrScreencopyManagerV1>, _data: &PrivilegedOnly, data_init: &mut DataInit<'_, Self>) {
         data_init.init(resource, ());
+    }
+
+    /// A capture global: only privileged clients (the shell and its helpers) see it.
+    fn can_view(client: Client, _data: &PrivilegedOnly) -> bool {
+        is_privileged(&client)
     }
 }
 
@@ -981,9 +987,14 @@ impl Dispatch<ZwlrScreencopyFrameV1, FrameData> for WmState {
 // ext-image-copy-capture-v1: sources, sessions and frames
 // ---------------------------------------------------------------------------------------------------------------------
 
-impl GlobalDispatch<ExtOutputImageCaptureSourceManagerV1, ()> for WmState {
-    fn bind(_state: &mut Self, _dh: &DisplayHandle, _client: &Client, resource: New<ExtOutputImageCaptureSourceManagerV1>, _data: &(), data_init: &mut DataInit<'_, Self>) {
+impl GlobalDispatch<ExtOutputImageCaptureSourceManagerV1, PrivilegedOnly> for WmState {
+    fn bind(_state: &mut Self, _dh: &DisplayHandle, _client: &Client, resource: New<ExtOutputImageCaptureSourceManagerV1>, _data: &PrivilegedOnly, data_init: &mut DataInit<'_, Self>) {
         data_init.init(resource, ());
+    }
+
+    /// A capture global: only privileged clients (the shell and its helpers) see it.
+    fn can_view(client: Client, _data: &PrivilegedOnly) -> bool {
+        is_privileged(&client)
     }
 }
 
@@ -1000,9 +1011,14 @@ impl Dispatch<ExtImageCaptureSourceV1, String> for WmState {
     fn request(_state: &mut Self, _client: &Client, _resource: &ExtImageCaptureSourceV1, _request: ext_image_capture_source_v1::Request, _data: &String, _dh: &DisplayHandle, _data_init: &mut DataInit<'_, Self>) {}
 }
 
-impl GlobalDispatch<ExtImageCopyCaptureManagerV1, ()> for WmState {
-    fn bind(_state: &mut Self, _dh: &DisplayHandle, _client: &Client, resource: New<ExtImageCopyCaptureManagerV1>, _data: &(), data_init: &mut DataInit<'_, Self>) {
+impl GlobalDispatch<ExtImageCopyCaptureManagerV1, PrivilegedOnly> for WmState {
+    fn bind(_state: &mut Self, _dh: &DisplayHandle, _client: &Client, resource: New<ExtImageCopyCaptureManagerV1>, _data: &PrivilegedOnly, data_init: &mut DataInit<'_, Self>) {
         data_init.init(resource, ());
+    }
+
+    /// A capture global: only privileged clients (the shell and its helpers) see it.
+    fn can_view(client: Client, _data: &PrivilegedOnly) -> bool {
+        is_privileged(&client)
     }
 }
 

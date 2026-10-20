@@ -1,13 +1,13 @@
-//! End to end: `bifrost_window_capture_v1` on the headless window server.
+//! End to end: the capture globals are for privileged clients only, and `bifrost_window_capture_v1` on the headless
+//! window server.
 //!
-//! - A client that is not the shell does not see the global at all (the test client runs as the same non-root user as
-//!   the window server, which is how an app looks to the window server).
-//! - With the shell's uid named (`BIFROST_WM_SHELL_UID`, the development rule) the client binds it, captures its own
-//!   toplevel scaled into a smaller buffer, hears `unchanged` for a picture it already holds and `ready` again after
-//!   the window committed new content.
+//! - A client that connected through the ordinary socket (an app) sees none of the capture globals: window capture,
+//!   wlr-screencopy, ext-image-copy-capture and its output capture source.
+//! - A client that connected through the privileged socket (the shell and its helpers) sees all of them, binds window
+//!   capture, captures its own toplevel scaled into a smaller buffer, hears `unchanged` for a picture it already
+//!   holds and `ready` again after the window committed new content, and can capture a minimized window.
 //!
-//! One test function: the shell rule is read from the environment when the window server starts, so the two parts run in
-//! order inside one process.
+//! One test function: the privileged socket is named by the environment when the window server starts.
 
 use std::{io::Write, os::fd::AsFd, os::unix::fs::{FileExt, MetadataExt}, os::unix::net::UnixStream, path::PathBuf, time::Duration};
 
@@ -105,10 +105,22 @@ fn connect(socket: &str) -> Connection {
     Connection::from_socket(UnixStream::connect(dir.join(socket)).expect("connect")).expect("connection")
 }
 
-fn lists_capture_global(socket: &str) -> bool {
-    let conn = connect(socket);
-    let (globals, _queue) = registry_queue_init::<Client>(&conn).expect("registry");
-    globals.contents().with_list(|list| list.iter().any(|g| g.interface == "bifrost_window_capture_manager_v1"))
+/// Every global that can read pixels of the screen or of a window.
+const CAPTURE_GLOBALS: [&str; 4] = [
+    "bifrost_window_capture_manager_v1",
+    "zwlr_screencopy_manager_v1",
+    "ext_image_copy_capture_manager_v1",
+    "ext_output_image_capture_source_manager_v1",
+];
+
+/// The capture globals the registry of `conn` lists.
+fn listed_capture_globals(conn: &Connection) -> Vec<String> {
+    let (globals, _queue) = registry_queue_init::<Client>(conn).expect("registry");
+    globals.contents().with_list(|list| list.iter().filter(|g| CAPTURE_GLOBALS.contains(&g.interface.as_str())).map(|g| g.interface.clone()).collect())
+}
+
+fn connect_path(path: &std::path::Path) -> Connection {
+    Connection::from_socket(UnixStream::connect(path).expect("connect to the privileged socket")).expect("connection")
 }
 
 fn roundtrips(queue: &mut wayland_client::EventQueue<Client>, client: &mut Client, n: usize) {
@@ -119,19 +131,29 @@ fn roundtrips(queue: &mut wayland_client::EventQueue<Client>, client: &mut Clien
 }
 
 #[test]
-fn only_the_shell_sees_the_global_and_a_capture_fits_the_window_into_the_buffer() {
-    // part 1: an app (same user, not root) does not see the global
-    let apps = Compositor::start("wayland-bfwm-wcap-app", 800, 600).expect("headless compositor");
-    assert!(!lists_capture_global(&apps.socket), "a client that is not the shell must not see bifrost_window_capture_manager_v1");
-    drop(apps);
+fn only_privileged_clients_see_the_capture_globals_and_a_capture_fits_the_window_into_the_buffer() {
+    let dir = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from).expect("XDG_RUNTIME_DIR");
+    let privileged = dir.join("bfwm-wcap-privileged");
+    std::env::set_var("BIFROST_WM_PRIVILEGED_SOCKET", &privileged);
+    let wm = Compositor::start("wayland-bfwm-wcap", 800, 600).expect("headless compositor");
 
-    // part 2: the shell is named by uid, as in a development session where both run as one user
-    let own = std::fs::metadata("/proc/self").expect("/proc/self").uid();
-    std::env::set_var("BIFROST_WM_SHELL_UID", own.to_string());
-    let wm = Compositor::start("wayland-bfwm-wcap-shell", 800, 600).expect("headless compositor");
-    assert!(lists_capture_global(&wm.socket), "the shell sees the global");
+    // an app (the ordinary socket) sees none of the capture globals
+    let app_conn = connect(&wm.socket);
+    assert_eq!(listed_capture_globals(&app_conn), Vec::<String>::new(), "an ordinary client must not see any capture global");
+    // the privileged socket is the owner's alone
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(&privileged).expect("the privileged socket exists").permissions().mode();
+        assert_eq!(mode & 0o077, 0, "no access for group or others: {mode:o}");
+    }
+    // the shell (the privileged socket) sees every one of them
+    let conn = connect_path(&privileged);
+    let mut seen = listed_capture_globals(&conn);
+    seen.sort();
+    let mut want: Vec<String> = CAPTURE_GLOBALS.iter().map(|s| s.to_string()).collect();
+    want.sort();
+    assert_eq!(seen, want, "a privileged client sees all the capture globals");
 
-    let conn = connect(&wm.socket);
     let (globals, mut queue) = registry_queue_init::<Client>(&conn).expect("registry");
     let qh = queue.handle();
     let compositor: wl_compositor::WlCompositor = globals.bind(&qh, 1..=6, ()).expect("wl_compositor");
@@ -220,5 +242,5 @@ fn only_the_shell_sees_the_global_and_a_capture_fits_the_window_into_the_buffer(
     roundtrips(&mut queue, &mut client, 4);
     assert_eq!(wm.run(|state, _| (state.hidden.len(), state.window_capture.tracked())), (0, 0), "nothing is kept for a closed window");
 
-    std::env::remove_var("BIFROST_WM_SHELL_UID");
+    std::env::remove_var("BIFROST_WM_PRIVILEGED_SOCKET");
 }
