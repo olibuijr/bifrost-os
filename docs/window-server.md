@@ -527,6 +527,15 @@ thing: `placement` is fill, left, right, top, bottom, the four corners, centre (
 one path, used by the request and by the Ctrl+Super arrow keys, and it now also configures the client to the new size
 (the keys used to move the frame only). Outside the Wayland session the shell tiles by itself (`Desk::tile`).
 
+`bifrost_window_level_v1` version 4 adds `set_origin(surface, x, y)` (E2E second pass, MC4). The shell destroys the toplevel of
+a window it hides (Overview hides every window, a minimize hides one) and creates a new one when the window returns, and
+the window server cascaded that toplevel like a new window: a window dragged to 1065,524 came back at 681,240. A window
+the window server has placed before (it reported a `frame`, `Desk::placed`) now sends `set_origin` with its own position
+(`WindowFrame::origin`, `desk::origin_hint`) before its first commit; like the level it belongs to the surface and applies
+on the next map only. `Wm::map_at` takes the origin, keeps it on screen by the rule a drag follows (`keep_on_screen`: `KEEP_VISIBLE` px stay inside the area, so a window dragged partly off an edge returns there) and skips the cascade; a window never
+placed (a new one) or opened again after a close (`Desk::close` forgets it) still cascades. A zoomed or tiled window comes
+back at its frame but the window server forgets the frame it would un-zoom to.
+
 Not done: the full-screen window does not get a desktop of its own that the switch keys step to (`spaces.rs` is a model
 that nothing drives yet), and a full-screen window shows no title bar when the pointer reaches the top, so it is left with
 the menu bar's Window menu or Ctrl+Cmd+F.

@@ -249,6 +249,20 @@ mod tests {
     }
 
     #[test]
+    fn a_banner_shows_the_decoded_sender_and_subject_never_the_encoded_words() {
+        let header = "From: =?UTF-8?Q?=C3=81sr=C3=BAn_Au=C3=B0ur?= <asrun@example.is>\r\nSubject: =?utf-8?Q?Au=C3=B0ur?= =?utf-8?Q?_N=C3=BAtt_skj=C3=B6l?=\r\nMessage-ID: <9@example.is>\r\n\r\n";
+        let mut b = Baseline::default();
+        let none = HashSet::new();
+        b.apply("work", &[listed(5, false, "old")], &none);
+        let notices = b.apply("work", &[Listed { uid: 9, flags: Flags::empty(), header: header.into() }], &none);
+        assert_eq!(notices.len(), 1);
+        let banner = notification(&notices[0]);
+        assert_eq!(banner.subtitle, "Ásrún Auður");
+        assert_eq!(banner.body, "Auður Nútt skjöl");
+        assert!(!banner.subtitle.contains("=?") && !banner.body.contains("=?"));
+    }
+
+    #[test]
     fn the_first_check_only_sets_the_baseline_and_later_ones_announce_unread_arrivals() {
         let mut b = Baseline::default();
         let none = HashSet::new();

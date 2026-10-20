@@ -1791,10 +1791,9 @@ impl MailWindow {
     }
 
     fn notify(&self, ctx: &Ctx, notice: &Notice) {
-        let who = notice.from.split('<').next().unwrap_or("").trim().trim_matches('"');
-        let who = if who.is_empty() { notice.from.as_str() } else { who };
-        let id = format!("mail-{}-{}", notice.account, notice.uid);
-        let request = Request::new(&id, "New Mail").subtitle(who).body(&notice.subject).thread(&notice.account);
+        // the banner is the background check's too: the decoded sender and subject of the notice, never the raw header
+        let b = crate::background::notification(notice);
+        let request = Request::new(&b.id, &b.title).subtitle(&b.subtitle).body(&b.body).thread(&b.thread);
         let _ = usernotif::add(ctx, request);
     }
 

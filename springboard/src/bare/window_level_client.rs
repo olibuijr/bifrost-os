@@ -29,10 +29,13 @@ pub mod protocol {
 }
 
 /// The newest protocol version the shell binds: 2 adds `frame`, the window server's frame of each of the shell's
-/// toplevels (the shell keeps its window rectangles from it); 3 adds `tile`, the shell's request to place one.
-pub const VERSION: u32 = 3;
+/// toplevels (the shell keeps its window rectangles from it); 3 adds `tile`, the shell's request to place one; 4 adds
+/// `set_origin`, where a toplevel maps again after the shell destroyed it while the window was hidden.
+pub const VERSION: u32 = 4;
 /// The version that introduced `tile`; a manager bound at an older version is never sent one.
 pub const TILE_SINCE: u32 = 3;
+/// The version that introduced `set_origin`; a manager bound at an older version is never sent one.
+pub const ORIGIN_SINCE: u32 = 4;
 
 /// The wire value of a placement in `bifrost_window_level_v1` `tile` (the `placement` enum).
 pub fn placement_wire(p: Placement) -> u32 {
@@ -76,6 +79,13 @@ mod tests {
         let xml = include_str!("../../wm/protocol/bifrost-window-level-v1.xml");
         assert!(xml.contains(&format!("<request name=\"tile\" since=\"{TILE_SINCE}\">")));
         assert!(TILE_SINCE <= VERSION);
+    }
+
+    #[test]
+    fn the_shell_asks_for_the_origin_request_the_protocol_declares() {
+        let xml = include_str!("../../wm/protocol/bifrost-window-level-v1.xml");
+        assert!(xml.contains(&format!("<request name=\"set_origin\" since=\"{ORIGIN_SINCE}\">")));
+        assert!(ORIGIN_SINCE <= VERSION);
     }
 
     #[test]
