@@ -58,7 +58,7 @@ package_bifrost_files() {
   # The system services bifrostd supervises (docs/services.md "System services"): the audio (media player), network and
   # update services are part of the OS, not store apps. The package owns /usr/lib/bifrost/services/<id>/ (a path no earlier
   # install has a file at, so pacman finds no conflict) with the manifest from springboard/system/<dir> and the executable
-  # the manifest names. bifrostd reads it read-only; a store-installed copy wins only with a newer manifest version.
+  # the manifest names. bifrostd reads it read-only; a packaged id always wins, a store-installed copy never overrides it.
   # Sockets stay <root>/run/<id>.sock. PC_SVC_AUDIOD / PC_SVC_NETD / PC_SVC_UPDATED override the binary paths; they default
   # to the directory of the shell binary, where `cargo build -p audiod -p netd -p updated` puts them.
   local spec sdir sbin svar sbinpath sid sexec smanifest
@@ -147,7 +147,7 @@ package_bifrost_files() {
   if [[ -f $here/keys/bifrost-repo.gpg ]]; then
     install -Dm644 "$here/keys/bifrost-repo.gpg" "$pkgdir/usr/share/bifrost/keys/bifrost-repo.gpg"
   fi
-  install -Dm755 "$here/prune-stale-assets""$pkgdir/usr/lib/springboard/prune-stale-assets"
+  install -Dm755 "$here/prune-stale-assets" "$pkgdir/usr/lib/springboard/prune-stale-assets"
   install -Dm644 "$here/../assets-allowlist.txt" "$pkgdir/usr/lib/springboard/assets-allowlist.txt"
   # boot speed: the initrd mounts the fstab subvolumes, and seatd starts without waiting for local-fs.target
   install -Dm644 "$here/initcpio/install/bifrost-mounts" "$pkgdir/usr/lib/initcpio/install/bifrost-mounts"
