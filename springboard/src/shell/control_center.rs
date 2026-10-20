@@ -1713,6 +1713,25 @@ mod tests {
         assert!((cc.glyph_scale(Tile::Wifi, 1700.0) - 1.0).abs() < 1e-6);
     }
 
+    /// E2E CC2: Bluetooth is always a module (Unavailable without a controller), and without a backlight the Display
+    /// module is a capsule that flips the appearance.
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn the_desktop_panel_lists_bluetooth_and_a_display_capsule_without_the_hardware() {
+        use crate::bare::bluetooth::State;
+        let mut sh = super::super::tests::desktop_shell();
+        sh.info.bt.state = State::Unavailable;
+        sh.cc.backlight = false;
+        let tiles = sh.cc_desk_tiles();
+        let find = |t: Tile| tiles.iter().find(|(k, _)| *k == t).map(|&(_, r)| r);
+        assert!(find(Tile::Bluetooth).is_some(), "Bluetooth is listed with no controller");
+        let display = find(Tile::Brightness).expect("a Display capsule stands in for the slider");
+        assert!((display.2 - sh.ui.pt(DK_COL_PT)).abs() < 0.5, "a capsule, not a full-width slider");
+        sh.cc.backlight = true;
+        let slider = sh.cc_desk_tiles().into_iter().find(|(k, _)| *k == Tile::Brightness).map(|(_, r)| r).unwrap();
+        assert!(slider.2 > display.2 * 1.5, "with a backlight it is the full-width slider");
+    }
+
     #[test]
     fn cluster_sits_at_the_top_right_like_the_bifrost() {
         let sh = shell();
@@ -1966,8 +1985,10 @@ mod tests {
 // Measured in pt: modules 139 wide in two columns 12 apart, 15 from the right
 // edge; capsule rows 62 high, 14 apart; an icon disc of 36 in each capsule;
 // full-width Display and Sound sliders with an 18 pt radius. Only modules the
-// PC can really drive are laid out: Wi-Fi (with an adapter), Bluetooth (with a
-// controller), Focus, Display (with a backlight) and Sound.
+// PC can really drive are laid out: Wi-Fi (with an adapter), Bluetooth (reads
+// Unavailable without a controller), Focus, Display (a brightness slider with a
+// backlight, else a capsule that flips Light and Dark), Sound and, while a
+// player has a session, Now Playing.
 
 const DK_COL_PT: f32 = 139.0;
 const DK_COL_GAP_PT: f32 = 12.0;
@@ -2112,6 +2133,17 @@ impl Shell {
         }
     }
 
+    /// The Display module without a backlight: switches the appearance between Light and Dark (Settings > Appearance
+    /// keeps the choice; `appearance_tick` fades to it).
+    fn toggle_appearance(&mut self) {
+        use bifrost_render::appearance::{publish_mode, target_is_light, Mode};
+        let to = if target_is_light() { Mode::Dark } else { Mode::Light };
+        match self.set_appearance(to.key()) {
+            Ok(()) => publish_mode(to),
+            Err(e) => eprintln!("springboard: settings.ini: {e}"),
+        }
+    }
+
     fn desk_wifi(&self) -> Option<(bool, Option<String>)> {
         let n = self.info.desktop_network.as_ref()?;
         n.wifi_available.then(|| (n.wifi_on, n.ssid.clone()))
@@ -2127,10 +2159,13 @@ impl Shell {
         if self.desk_wifi().is_some() {
             capsules.push(Tile::Wifi);
         }
-        if self.info.bt.state != crate::bare::bluetooth::State::Unavailable {
-            capsules.push(Tile::Bluetooth);
-        }
+        // Bluetooth is always listed: without a controller it reads "Unavailable" and does nothing
+        capsules.push(Tile::Bluetooth);
         capsules.push(Tile::Focus);
+        // Display: a brightness slider when a backlight exists, else a capsule that flips Light and Dark
+        if !self.cc.backlight {
+            capsules.push(Tile::Brightness);
+        }
         let mut out = vec![];
         for row in capsules.chunks(2) {
             for (i, &tile) in row.iter().enumerate() {
@@ -2278,7 +2313,7 @@ impl Shell {
                     self.dirty = true;
                     vec![]
                 }
-                Some((tile @ (Tile::Brightness | Tile::Volume), r)) => {
+                Some((tile @ (Tile::Brightness | Tile::Volume), r)) if tile == Tile::Volume || self.cc.backlight => {
                     self.cc.touch = Some(Touch::Slider(tile));
                     self.desk_slider_at(tile, r, x)
                 }
@@ -2311,9 +2346,16 @@ impl Shell {
                 {
                     self.activate_tile(tile, t)
                 }
+                // a Bluetooth module with no controller has nothing to switch
+                Some(Touch::Tile(Tile::Bluetooth)) if self.info.bt.state == crate::bare::bluetooth::State::Unavailable => vec![],
                 Some(Touch::Tile(tile)) if at(x, y).map(|a| a.0) == Some(tile) => {
                     self.cc.start_toggle_bounce(tile, t);
                     match tile {
+                        // no backlight: the Display module flips the appearance between Light and Dark
+                        Tile::Brightness => {
+                            self.toggle_appearance();
+                            vec![]
+                        }
                         Tile::Wifi => {
                             let on = !self.desk_wifi().is_some_and(|w| w.0);
                             if let Some(n) = self.info.desktop_network.as_mut() {
@@ -2351,7 +2393,7 @@ impl Shell {
         for (tile, (x, y, w, h)) in self.cc_desk_tiles() {
             let y = y - lift;
             match tile {
-                Tile::Brightness | Tile::Volume => {
+                Tile::Brightness | Tile::Volume if tile == Tile::Volume || self.cc.backlight => {
                     desk_glass(s, ShellSurface::ControlCentre, (x, y, w, h), ui.pt(DK_SLIDER_R_PT), alpha);
                     let name = if tile == Tile::Brightness { "Display" } else { "Sound" };
                     self.label(name, MAC_HEADLINE_PT, Weight::Semibold, label, |im| s.blit(im, (x + ui.pt(DK_PAD_PT + 4.0)) as i32, (y + ui.pt(10.0)) as i32, 255, alpha));
@@ -2388,7 +2430,13 @@ impl Shell {
                         }
                         Tile::Bluetooth => {
                             let on = self.info.bt.on();
-                            (on, "Bluetooth", if on { "On" } else { "Off" }.into())
+                            let sub = if self.info.bt.state == crate::bare::bluetooth::State::Unavailable { "Unavailable" } else if on { "On" } else { "Off" };
+                            (on, "Bluetooth", sub.into())
+                        }
+                        // no backlight: the module is the appearance switch; it reads lit while the scheme is Dark
+                        Tile::Brightness => {
+                            let light = bifrost_render::appearance::target_is_light();
+                            (!light, "Display", if light { "Light" } else { "Dark" }.into())
                         }
                         // the subtitle names the Focus mode that is on
                         _ => (self.dnd(), "Focus", self.notify.active_mode().map_or_else(|| "Off".to_string(), |m| m.name)),
@@ -2400,12 +2448,15 @@ impl Shell {
                         disc = over(disc, rgba(128, 128, 128, 60));
                     }
                     s.fill_rrect(dx, dy, d, d, d / 2.0, a(disc));
-                    let ink = a(if on { WHITE } else { label });
+                    // a module with nothing behind it is drawn quiet
+                    let no_bt = tile == Tile::Bluetooth && self.info.bt.state == crate::bare::bluetooth::State::Unavailable;
+                    let ink = a(if on { WHITE } else if no_bt { LABEL_2.now() } else { label });
                     let (cx, cy) = (dx + d / 2.0, dy + d / 2.0);
                     let k = self.cc.glyph_scale(tile, t);
                     match tile {
                         Tile::Wifi => status::draw_wifi(s, cx - ui.pt(9.0) * k, cy - ui.pt(5.0) * k, ui.pt(9.0) * k, ink),
                         Tile::Bluetooth => draw_bluetooth(s, cx, cy, ui.s * 0.8 * k, ink),
+                        Tile::Brightness => draw_sun(s, cx, cy, ui.s * 0.9 * k, ink),
                         _ => {
                             let radius = d * 0.3 * k;
                             let moon = super::glyphs::disc((cx, cy), radius);

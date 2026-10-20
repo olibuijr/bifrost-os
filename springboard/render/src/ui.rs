@@ -25,6 +25,9 @@ pub const BAR_TEXT: u32 = WHITE;
 pub const BAR_TEXT_SHADOW: u32 = pack(0, 0, 0, 255);
 /// Alpha of the bar text shadow (0..255).
 pub const BAR_TEXT_SHADOW_ALPHA: u32 = 90;
+/// The Weather card in the Notification Center column: a blue plate laid over the glass (the same in Light and Dark,
+/// white text on it).
+pub const NC_WEATHER_TINT: u32 = pack(52, 108, 190, 225);
 /// Over a light wallpaper the bar's titles and status items are near-black (85%), with a faint light halo.
 pub const BAR_TEXT_ON_LIGHT: u32 = pack(0, 0, 0, 255);
 pub const BAR_TEXT_ON_LIGHT_ALPHA: u32 = 217;
