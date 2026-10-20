@@ -3365,8 +3365,17 @@ mod tests {
         assert_eq!(holes.len(), 2, "the lights and the one control inside the band");
         assert_eq!(holes[1], [330, 15, 96, 48], "control bounds scale from points to window px");
         assert!(holes[0][0] == 0 && holes[0][2] > 0, "the lights are not a drag area");
-        let (title, none) = zone_of(&w, &m, &[node(220.0, 10.0)], false);
-        assert_eq!((title, none.len()), (m.title, 0), "a normal window drags from its title bar only");
+        // a normal window drags from its title bar, except over the three lights: a press there must reach the button
+        // (the window-move threshold used to swallow a press on the green one)
+        let (title, lights) = zone_of(&w, &m, &[node(220.0, 10.0)], false);
+        assert_eq!(title, m.title, "a normal window drags from its title bar only");
+        assert_eq!(lights.len(), 1, "the one hole is the traffic lights; the toolbar controls of a normal window are not holes");
+        let hole = lights[0];
+        for i in 0..3 {
+            let l = w.light_rect(&m, i);
+            let (x, y) = (l.x - w.r.x, l.y - w.r.y);
+            assert!(x >= hole[0] && x + l.w <= hole[0] + hole[2] && y >= hole[1] && y + l.h <= hole[1] + hole[3], "light {i} at {x},{y} is inside the hole {hole:?}");
+        }
     }
 
     fn kit_node(role: bifrost_proto::Role, label: &str, x: f32, y: f32, w: f32, h: f32) -> bifrost_proto::Node {
