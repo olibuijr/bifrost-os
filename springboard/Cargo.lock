@@ -644,7 +644,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-daw"
-version = "0.5.5"
+version = "0.5.6"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -904,7 +904,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-podcasts"
-version = "1.13.4"
+version = "1.13.5"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -1057,7 +1057,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-videoplayer"
-version = "0.2.6"
+version = "0.2.7"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -1076,7 +1076,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-voicememos"
-version = "1.10.4"
+version = "1.10.5"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -4431,7 +4431,7 @@ dependencies = [
 
 [[package]]
 name = "springboard"
-version = "0.10.10"
+version = "0.10.11"
 dependencies = [
  "bifrost-assistant-client",
  "bifrost-audio-driver",
