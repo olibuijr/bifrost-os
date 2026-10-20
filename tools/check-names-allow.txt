@@ -20,3 +20,5 @@ springboard/apps/reminders-desktop/src/organize.rs:apple:the fruit, a keyword in
 springboard/sdk/src/indexed_entity.rs:hide_in_spotlight:existing public API name retained for search-index parity
 springboard/ui/src/lib.rs:spotlight_tool:existing public module path retained for search-tool parity
 tools/bifrost.py:\b(macos|ipados)\b:stable reference-data selectors in the parity CLI
+springboard/src/shell/contactcontainers.rs:This Mac-like:a made-up container name in a rename test
+tools/parity/os_inventory.py:About This Mac:the reference feature name, as parity data

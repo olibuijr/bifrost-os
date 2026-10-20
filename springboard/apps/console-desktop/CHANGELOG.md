@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.2
+
+- The live row is named This Computer (it said a platform name). Hang Diagnostics and Spin Reports have icons.
+
 ## 1.9.1
 
 - BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.

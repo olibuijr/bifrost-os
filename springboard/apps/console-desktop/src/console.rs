@@ -416,14 +416,14 @@ impl Console {
     // --- the sidebar ---
 
     pub fn sidebar(&self) -> SourceList {
-        let mut items = vec![SidebarItem::header("Live"), SidebarItem::row(ROW_LIVE, "This Mac").with_symbol("desktopcomputer")];
+        let mut items = vec![SidebarItem::header("Live"), SidebarItem::row(ROW_LIVE, "This Computer").with_symbol("desktopcomputer")];
         items.push(SidebarItem::header("Reports"));
         items.push(SidebarItem::row(ROW_CRASH, "Crash Reports").with_symbol("xmark.circle.fill"));
-        items.push(SidebarItem::row(ROW_HANG, "Hang Diagnostics").with_symbol("exclamationmark.triangle"));
+        items.push(SidebarItem::row(ROW_HANG, "Hang Diagnostics").with_symbol("pause.fill"));
         items.push(SidebarItem::row(ROW_DAILY, "Daily Summary").with_symbol("calendar"));
         items.push(SidebarItem::row(ROW_SIGNPOST, "Signposts").with_symbol("clock"));
         items.push(SidebarItem::row(ROW_KERNEL, "Kernel Reports").with_symbol("flag"));
-        items.push(SidebarItem::row(ROW_SPIN, "Spin Reports").with_symbol("arrow.triangle.2.circlepath"));
+        items.push(SidebarItem::row(ROW_SPIN, "Spin Reports").with_symbol("arrow.clockwise"));
         items.push(SidebarItem::row(ROW_SECURITY, "Security Events").with_symbol("info.circle"));
         // the section appears once a search is saved, so the default sidebar is unchanged
         if !self.saved.is_empty() {
