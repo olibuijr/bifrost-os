@@ -125,9 +125,9 @@ enum Scope {
 const SHEET_CANCEL: u32 = 1;
 const SHEET_DELETE: u32 = 2;
 
-/// Stacking offset of each new note, so new notes do not land on each other.
 /// The text of the note the first launch opens.
 const WELCOME_TEXT: &str = "Make a note of it!\n\nSticky Notes keeps small notes on your desktop: reminders, lists, or text you use often.\n\n\u{2022} To add another note, choose File, New Sticky Note.\n\n\u{2022} To collapse a note, double-click its title bar.\n\nYour notes are here again when you open Sticky Notes.";
+/// Stacking offset of each new note, so new notes do not land on each other.
 const CASCADE_PT: f32 = 24.0;
 const CASCADE_STEPS: usize = 8;
 /// Two presses on the same note within this many seconds are a double press.

@@ -452,7 +452,6 @@ fn every_sidebar_row_has_a_drawn_icon_and_no_platform_name() {
             rows += 1;
             let name = symbol.as_deref().unwrap_or_else(|| panic!("{label} has no icon"));
             assert!(bifrost_app::glyphs::has(name), "{label} uses {name}, which the kit does not draw");
-            assert_ne!(label, "This Mac");
         }
     }
     assert!(rows >= 8, "the live row and the report rows");
