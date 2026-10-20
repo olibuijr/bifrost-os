@@ -154,11 +154,11 @@ mod tests {
     fn deeply_nested_multiparts_are_cut_off_not_followed() {
         let mut raw = String::new();
         for i in 0..5000 {
-            raw.push_str(&format!("Content-Type: multipart/mixed; boundary=b{i}\r\n\r\n--b{i}\r\n"));
+            raw.push_str(&format!("Content-Type: multipart/mixed; boundary=b{i}_\r\n\r\n--b{i}_\r\n"));
         }
         raw.push_str("Content-Type: text/plain\r\n\r\ndeep\r\n");
         for i in (0..5000).rev() {
-            raw.push_str(&format!("--b{i}--\r\n"));
+            raw.push_str(&format!("--b{i}_--\r\n"));
         }
         assert_eq!(readable(&raw), "");
         assert!(attachments(&raw).is_empty());
