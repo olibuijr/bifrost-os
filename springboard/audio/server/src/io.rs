@@ -268,6 +268,11 @@ pub struct Shared {
     /// Event counters the real-time thread bumps instead of logging (a log line allocates and writes to a pipe);
     /// a normal-priority thread drains them once a second (`spawn_event_logger`).
     pub ev_device_xruns: AtomicU64,
+    /// Xruns inside the first `STARTUP_CYCLES` cycles after a start (counted apart: they do not feed the fallback).
+    pub ev_startup_xruns: AtomicU64,
+    /// Frames the xruns lost, and the cycle (since the start) of the latest one, for the log line.
+    pub ev_xrun_lost: AtomicU64,
+    pub ev_xrun_cycle: AtomicU64,
     pub ev_late_cycles: AtomicU64,
     pub ev_restarts: AtomicU64,
     /// Number of sustained-xrun fallbacks, and the quantum the last one raised to.
@@ -293,6 +298,9 @@ impl Shared {
             restarts: AtomicU64::new(0),
             fallback_floor: AtomicU32::new(0),
             ev_device_xruns: AtomicU64::new(0),
+            ev_startup_xruns: AtomicU64::new(0),
+            ev_xrun_lost: AtomicU64::new(0),
+            ev_xrun_cycle: AtomicU64::new(0),
             ev_late_cycles: AtomicU64::new(0),
             ev_restarts: AtomicU64::new(0),
             ev_fallbacks: AtomicU64::new(0),
@@ -337,6 +345,10 @@ pub struct RunnerConfig {
     pub wait: WaitPolicy,
 }
 
+/// Cycles after a start in which an xrun is reported as a start-up xrun (about 43 ms at 256 frames): the first cycles
+/// run cold code and the hardware pointer may not move yet, and nothing audible has been queued by a client then.
+pub const STARTUP_CYCLES: u64 = 8;
+
 #[derive(Clone, Copy)]
 struct SlotState {
     id: u32,
@@ -358,6 +370,9 @@ pub struct CycleReport {
     /// Clients triggered this cycle.
     pub triggered: u32,
     pub device_xrun: bool,
+    /// The device xrun'd inside the first `STARTUP_CYCLES` cycles after the start: counted (`Shared::xruns`,
+    /// `ev_startup_xruns`) but not a `device_xrun`, so the first cycles of a cold stream never trigger the fallback.
+    pub startup_xrun: bool,
     /// The driver restarted the stream during this cycle: the timeline was re-anchored on its new zero timestamp.
     pub restarted: bool,
     /// The driver-clock time at which the next cycle starts.
@@ -459,6 +474,19 @@ impl DeviceRunner {
         self.io.host_time_of(self.timeline_frames).unwrap_or_else(|| self.next_ns())
     }
 
+    /// Books one xrun of `lost` frames: always in `xruns`, then as a start-up xrun inside the first `STARTUP_CYCLES`
+    /// cycles of a start and as a device xrun after that. Counters only (real-time safe).
+    fn note_xrun(&self, lost: u32, report: &mut CycleReport) {
+        self.shared.xruns.fetch_add(1, Ordering::Relaxed);
+        self.shared.ev_xrun_lost.fetch_add(lost as u64, Ordering::Relaxed);
+        self.shared.ev_xrun_cycle.store(self.cycle, Ordering::Relaxed);
+        if self.cycle < STARTUP_CYCLES {
+            report.startup_xrun = true;
+        } else {
+            report.device_xrun = true;
+        }
+    }
+
     /// Tells every client of the device that the server overloaded (delivered as `Reply::Overload`).
     pub fn notify_overload(&self) {
         for s in self.snapshot.iter() {
@@ -558,9 +586,8 @@ impl DeviceRunner {
         if dev_in > 0
             && self.snapshot.iter().any(|s| s.input_channels > 0 && s.running.load(Ordering::Acquire))
         {
-            if self.io.read_input(want, &mut self.in_buf).is_err() {
-                self.shared.xruns.fetch_add(1, Ordering::Relaxed);
-                report.device_xrun = true;
+            if let Err(x) = self.io.read_input(want, &mut self.in_buf) {
+                self.note_xrun(x.frames_lost, &mut report);
             }
             // the device's input stages, then the level tap sees what the clients get
             self.dsp.input.process(&mut self.in_buf.buffers, q);
@@ -672,9 +699,10 @@ impl DeviceRunner {
             self.dsp.output.process(&mut self.master.buffers, q);
             self.shared.level_out.write(&self.master.buffers, q);
         }
-        if self.cfg.out_channels > 0 && self.io.write_mix(want, &self.master).is_err() {
-            self.shared.xruns.fetch_add(1, Ordering::Relaxed);
-            report.device_xrun = true;
+        if self.cfg.out_channels > 0 {
+            if let Err(x) = self.io.write_mix(want, &self.master) {
+                self.note_xrun(x.frames_lost, &mut report);
+            }
         }
 
         self.cycle += 1;
@@ -699,6 +727,8 @@ impl DeviceRunner {
 #[derive(Default, Clone, Copy, PartialEq, Eq, Debug)]
 pub struct EventMark {
     device_xruns: u64,
+    startup_xruns: u64,
+    xrun_lost: u64,
     late_cycles: u64,
     restarts: u64,
     fallbacks: u64,
@@ -709,13 +739,20 @@ pub struct EventMark {
 pub fn drain_events(name: &str, shared: &Shared, mark: &mut EventMark) -> Vec<(&'static str, String)> {
     let now = EventMark {
         device_xruns: shared.ev_device_xruns.load(Ordering::Relaxed),
+        startup_xruns: shared.ev_startup_xruns.load(Ordering::Relaxed),
+        xrun_lost: shared.ev_xrun_lost.load(Ordering::Relaxed),
         late_cycles: shared.ev_late_cycles.load(Ordering::Relaxed),
         restarts: shared.ev_restarts.load(Ordering::Relaxed),
         fallbacks: shared.ev_fallbacks.load(Ordering::Relaxed),
     };
     let mut out = Vec::new();
+    let at = shared.ev_xrun_cycle.load(Ordering::Relaxed);
+    let lost = now.xrun_lost - mark.xrun_lost;
+    if now.startup_xruns > mark.startup_xruns {
+        out.push(("xrun", format!("{name}: {} start-up xrun(s) in the first {STARTUP_CYCLES} cycles, {lost} frame(s) lost, last at cycle {at}", now.startup_xruns - mark.startup_xruns)));
+    }
     if now.device_xruns > mark.device_xruns {
-        out.push(("xrun", format!("{name}: {} device xrun(s)", now.device_xruns - mark.device_xruns)));
+        out.push(("xrun", format!("{name}: {} device xrun(s), {lost} frame(s) lost, last at cycle {at}", now.device_xruns - mark.device_xruns)));
     }
     if now.restarts > mark.restarts {
         out.push(("driver", format!("{name}: {} stream restart(s), timeline re-anchored", now.restarts - mark.restarts)));
@@ -801,14 +838,20 @@ pub fn spawn_io_thread_tuned(mut runner: DeviceRunner, name: String, tuning: cra
         if let Err(e) = set_realtime(0, IO_PRIORITY, 1024) {
             log("io", &format!("{name}: no real-time priority ({e}); running at normal priority"));
         }
+        // Everything that can take a moment (the log line, the logger thread, the timer) happens before the PCM
+        // starts: from `runner.start()` the hardware plays the prefill, and the first cycle must follow at once.
+        let timer = bifrost_audio_alsa::CycleTimer::new().ok();
+        log("io", &format!("{name}: starting at quantum {}", runner.quantum()));
+        spawn_event_logger(name.clone(), runner.shared.clone());
         let start = match runner.start() {
             Ok(t) => t,
             Err(e) => {
                 log("driver", &format!("{name}: start failed: {e:?}"));
+                // ends the logger thread started above
+                runner.shared.stop.store(true, Ordering::Release);
                 return;
             }
         };
-        let timer = bifrost_audio_alsa::CycleTimer::new().ok();
         // The driver's clock is CLOCK_MONOTONIC_RAW for the ALSA driver; the offset covers drivers whose clock
         // has another origin.
         let offset = now_raw_ns() as i64 - start as i64;
@@ -816,8 +859,6 @@ pub fn spawn_io_thread_tuned(mut runner: DeviceRunner, name: String, tuning: cra
         let mut jitter = rt::JitterTracker::new();
         let mut policy = rt::FallbackPolicy::new();
         let mut margin = rt::DEFAULT_MARGIN_NS;
-        log("io", &format!("{name}: started at quantum {}", runner.quantum()));
-        spawn_event_logger(name.clone(), runner.shared.clone());
         while !runner.shared.stop.load(Ordering::Acquire) {
             let period_ns = runner.quantum() as u64 * 1_000_000_000 / runner.cfg.rate.max(1) as u64;
             // A target far ahead (a bad DLL extrapolation, a quantum change) never parks the thread: resync to now.
@@ -839,6 +880,9 @@ pub fn spawn_io_thread_tuned(mut runner: DeviceRunner, name: String, tuning: cra
             // Counters only: the real-time thread must not allocate or write to stderr.
             if rep.device_xrun {
                 runner.shared.ev_device_xruns.fetch_add(1, Ordering::Relaxed);
+            }
+            if rep.startup_xrun {
+                runner.shared.ev_startup_xruns.fetch_add(1, Ordering::Relaxed);
             }
             if rep.restarted {
                 runner.shared.ev_restarts.fetch_add(1, Ordering::Relaxed);
@@ -1153,13 +1197,53 @@ mod tests {
     fn a_device_xrun_is_counted_and_the_cycle_continues() {
         let mut r = rig(256);
         let a = r.add(1, 0, 2, 256);
+        // past the start-up cycles, where an xrun is a device xrun
+        for _ in 0..STARTUP_CYCLES {
+            Rig::play(&a, 256, &[0.5, 0.5]);
+            let rep = r.step();
+            assert!(!rep.device_xrun && !rep.startup_xrun);
+        }
         Rig::play(&a, 256, &[0.5, 0.5]);
         r.h.inject_xrun(UID, 128);
         let rep = r.step();
-        assert!(rep.device_xrun);
+        assert!(rep.device_xrun && !rep.startup_xrun);
         assert_eq!(r.shared.xruns.load(Ordering::Relaxed), 1);
+        assert_eq!(r.shared.ev_xrun_lost.load(Ordering::Relaxed), 128);
+        assert_eq!(r.shared.ev_xrun_cycle.load(Ordering::Relaxed), STARTUP_CYCLES);
         Rig::play(&a, 256, &[0.5, 0.5]);
         assert!(!r.step().device_xrun);
+    }
+
+    #[test]
+    fn an_xrun_in_the_first_cycles_is_a_startup_xrun_and_stays_out_of_the_fallback_count() {
+        let mut r = rig(256);
+        let a = r.add(1, 0, 2, 256);
+        Rig::play(&a, 256, &[0.5, 0.5]);
+        r.h.inject_xrun(UID, 128);
+        let rep = r.step();
+        assert!(rep.startup_xrun && !rep.device_xrun, "{rep:?}");
+        // still counted in the total and named in the log, apart from device xruns
+        assert_eq!(r.shared.xruns.load(Ordering::Relaxed), 1);
+        assert_eq!(r.shared.ev_device_xruns.load(Ordering::Relaxed), 0);
+        r.shared.ev_startup_xruns.fetch_add(1, Ordering::Relaxed);
+        let lines = drain_events("dev", &r.shared, &mut EventMark::default());
+        assert_eq!(lines.len(), 1);
+        assert!(lines[0].1.contains("start-up xrun") && lines[0].1.contains("128 frame(s) lost") && lines[0].1.contains("cycle 0"), "{}", lines[0].1);
+    }
+
+    #[test]
+    fn a_primed_start_runs_clean_from_the_first_cycle() {
+        // The device is primed with silence at the start (the driver's prefill) and the client's first quantum is
+        // queued before cycle 0: no xrun, no late client over the start-up window and well past it.
+        let mut r = rig(256);
+        let a = r.add(1, 0, 2, 256);
+        for i in 0..(3 * STARTUP_CYCLES) {
+            Rig::play(&a, 256, &[0.25, 0.25]);
+            let rep = r.step();
+            assert!(!rep.device_xrun && !rep.startup_xrun && rep.late == 0, "cycle {i}: {rep:?}");
+        }
+        assert_eq!(r.shared.xruns.load(Ordering::Relaxed), 0);
+        assert_eq!(a.missed_total.load(Ordering::Relaxed), 0);
     }
 
     #[test]
