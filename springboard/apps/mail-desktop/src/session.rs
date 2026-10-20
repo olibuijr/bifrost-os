@@ -339,7 +339,7 @@ impl<S: Read + Write> Session<S> {
             folded = response_after(folded, n)?;
             let bytes = self.lines.read_bytes(n)?;
             line.truncate(at);
-            line.push_str(&literal_text(&bytes));
+            push_literal(&mut line, &bytes);
             let rest = self.lines.read_line()?;
             line.push_str(&rest);
         }
@@ -381,20 +381,26 @@ fn literal_marker(line: &str) -> Option<(usize, usize)> {
 /// A literal as a quoted IMAP string. UTF-8 stays as it is; any other bytes are read as ISO-8859-1, one char per byte,
 /// so the message text keeps every byte and the body decoder can still find the bytes again.
 pub fn literal_text(bytes: &[u8]) -> String {
-    let text: String = match std::str::from_utf8(bytes) {
-        Ok(s) => s.to_string(),
-        Err(_) => bytes.iter().map(|&b| b as char).collect(),
-    };
-    let mut out = String::with_capacity(text.len() + 2);
+    let mut out = String::with_capacity(bytes.len() + 2);
+    push_literal(&mut out, bytes);
+    out
+}
+
+/// Appends the quoted form of a literal (see [`literal_text`]) to `out`, with no copy of the text in between.
+fn push_literal(out: &mut String, bytes: &[u8]) {
+    out.reserve(bytes.len() + 2);
     out.push('"');
-    for c in text.chars() {
+    let mut quote = |c: char| {
         if c == '"' || c == '\\' {
             out.push('\\');
         }
         out.push(c);
+    };
+    match std::str::from_utf8(bytes) {
+        Ok(text) => text.chars().for_each(&mut quote),
+        Err(_) => bytes.iter().for_each(|&b| quote(b as char)),
     }
     out.push('"');
-    out
 }
 
 fn listed(line: &str) -> Option<Listed> {

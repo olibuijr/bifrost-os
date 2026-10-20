@@ -29,6 +29,10 @@ pub const INBOX: &str = "INBOX";
 /// Most message texts kept at once. Past this the lowest UID values (the oldest mail) are dropped; a dropped text is
 /// asked for again when its message is opened.
 pub const MAX_CACHED_BODIES: usize = 64;
+
+/// Most bytes the cached texts and their decoded attachments may hold together. The open message and the one that
+/// just arrived stay even when they alone are larger.
+pub const MAX_CACHED_BYTES: usize = 96 * 1024 * 1024;
 /// One line of the list: a message, in the threaded view how many messages its conversation holds, and how far it is
 /// indented under the conversation's first message (0 when flat).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1183,13 +1187,23 @@ impl Mail {
         }
     }
 
-    /// Keeps at most [`MAX_CACHED_BODIES`] texts: the open message and `keep` stay, the lowest UID values go first.
+    /// The bytes the cached texts and attachments hold.
+    fn cached_bytes(&self) -> usize {
+        let texts: usize = self.bodies.values().map(String::len).sum();
+        let files: usize = self.attachments.values().flatten().map(|a| a.bytes.len()).sum();
+        texts + files
+    }
+
+    /// Keeps at most [`MAX_CACHED_BODIES`] texts and [`MAX_CACHED_BYTES`] bytes: the open message and `keep` stay, the
+    /// lowest UID values go first.
     fn trim_bodies(&mut self, keep: u32) {
-        while self.bodies.len() > MAX_CACHED_BODIES {
+        let mut bytes = self.cached_bytes();
+        while self.bodies.len() > MAX_CACHED_BODIES || bytes > MAX_CACHED_BYTES {
             let victim = self.bodies.keys().copied().filter(|&u| u != keep && Some(u) != self.open).min();
             let Some(victim) = victim else { break };
-            self.bodies.remove(&victim);
-            self.attachments.remove(&victim);
+            let text = self.bodies.remove(&victim).map_or(0, |t| t.len());
+            let files: usize = self.attachments.remove(&victim).map_or(0, |list| list.iter().map(|a| a.bytes.len()).sum());
+            bytes = bytes.saturating_sub(text + files);
         }
     }
 
@@ -2332,6 +2346,21 @@ mod tests {
         assert!(!mail.open_message(3));
         mail.body_arrived("other", INBOX, 4, "not shown".into());
         assert!(!mail.bodies.contains_key(&4));
+    }
+
+    #[test]
+    fn the_text_cache_is_bounded_by_bytes_too() {
+        let mut mail = Mail::new(vec![account("work")]);
+        let rows: Vec<Listed> = (1..=4).map(|u| listed(u, "x")).collect();
+        mail.apply_listing("work", INBOX, vec![], rows);
+        assert!(mail.open_message(1));
+        let big = "x".repeat(MAX_CACHED_BYTES / 2 + 1);
+        for uid in 1..=4 {
+            mail.body_arrived("work", INBOX, uid, big.clone());
+        }
+        assert!(mail.cached_bytes() <= MAX_CACHED_BYTES + big.len(), "at most the open and the newest text beyond the cap");
+        assert!(mail.bodies.contains_key(&1) && mail.bodies.contains_key(&4), "the open and the newest text stay");
+        assert!(!mail.bodies.contains_key(&2));
     }
 
     #[test]

@@ -277,6 +277,10 @@ pub fn export(transport: &dyn Transport, account: &Account, password: &str, mail
 /// Most messages one export reads.
 pub const EXPORT_LIMIT: usize = 5000;
 
+/// Most bytes of message text one export holds in memory. A mailbox past it is refused rather than read until memory
+/// runs out.
+pub const EXPORT_MAX_BYTES: usize = 256 * 1024 * 1024;
+
 fn fetch_all(transport: &dyn Transport, account: &Account, password: &str, mailbox: &str) -> Result<Vec<String>, String> {
     let mut session = session::connect(transport, accounts::incoming(account)?)?;
     session.login(&account.username, password)?;
@@ -284,8 +288,14 @@ fn fetch_all(transport: &dyn Transport, account: &Account, password: &str, mailb
     let uids = session.uids()?;
     let start = uids.len().saturating_sub(EXPORT_LIMIT);
     let mut messages = Vec::with_capacity(uids.len() - start);
+    let mut total = 0usize;
     for uid in &uids[start..] {
-        messages.push(session.message(*uid)?);
+        let message = session.message(*uid)?;
+        total = total.saturating_add(message.len());
+        if total > EXPORT_MAX_BYTES {
+            return Err(format!("{mailbox} is too large to export in one file (over {} MB)", EXPORT_MAX_BYTES / (1024 * 1024)));
+        }
+        messages.push(message);
     }
     session.logout();
     Ok(messages)
