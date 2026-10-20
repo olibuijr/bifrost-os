@@ -237,13 +237,16 @@ impl Draft {
         if !self.reply_to.is_empty() {
             out.push_str(&format!("Reply-To: {}\r\n", self.reply_to.join(", ")));
         }
-        out.push_str(&format!("Subject: {}\r\n", encode_subject(&self.subject)));
+        out.push_str(&format!("Subject: {}\r\n", encode_subject(&header_text(&self.subject))));
         out.push_str(self.priority.headers());
+        let message_id = header_token(message_id);
+        let message_id = message_id.as_str();
         out.push_str(&format!("Message-ID: {message_id}\r\n"));
         if let Some(parent) = &self.in_reply_to {
+            let parent = header_token(parent);
             out.push_str(&format!("In-Reply-To: {parent}\r\n"));
-            let mut refs = self.references.clone();
-            if !refs.contains(parent) {
+            let mut refs: Vec<String> = self.references.iter().map(|r| header_token(r)).filter(|r| !r.is_empty()).collect();
+            if !refs.contains(&parent) {
                 refs.push(parent.clone());
             }
             out.push_str(&format!("References: {}\r\n", refs.join(" ")));
@@ -298,14 +301,26 @@ impl Draft {
     }
 }
 
-/// The body with every line ended by CRLF, the last line included.
+/// The body with every line ended by CRLF, the last line included. A lone CR counts as a line end too, so no bare CR
+/// reaches the wire.
 fn crlf_lines(body: &str) -> String {
     let mut out = String::with_capacity(body.len() + 2);
-    for line in body.split('\n') {
-        out.push_str(line.strip_suffix('\r').unwrap_or(line));
+    for line in body.replace("\r\n", "\n").replace('\r', "\n").split('\n') {
+        out.push_str(line);
         out.push_str("\r\n");
     }
     out
+}
+
+/// Header text on one line: every control character (CR and LF included) becomes a space, so a value cannot end its
+/// header and start another.
+fn header_text(text: &str) -> String {
+    text.chars().map(|c| if c.is_control() { ' ' } else { c }).collect()
+}
+
+/// A header token (a message id): all whitespace and control characters removed.
+fn header_token(text: &str) -> String {
+    text.chars().filter(|c| !c.is_whitespace() && !c.is_control()).collect()
 }
 
 /// The parts of a `multipart/alternative` body: the plain text, then the HTML. Both end in CRLF.
@@ -587,6 +602,27 @@ mod tests {
     use super::*;
 
     const RAW: &str = "Message-ID: <abc@mail.example>\r\nIn-Reply-To: <root@mail.example>\r\nReferences: <root@mail.example>\r\n <mid@x>\r\nSubject: =?UTF-8?B?RnVuZHVyIMOhIG1vcmd1bg==?=\r\nFrom: Ana <ana@example.com>\r\n\r\nbody <nope@x>";
+
+    #[test]
+    fn a_subject_cannot_start_another_header() {
+        let mut draft = Draft::default();
+        draft.from = "me@example.com".into();
+        draft.to = vec!["bo@example.com".into()];
+        draft.subject = "x\nBcc: evil@example.com y \u{e9}".into();
+        draft.in_reply_to = Some("<a@x>\r\nBcc: evil@example.com".into());
+        draft.references = vec!["<r@x>\nX-Evil: 1".into()];
+        let out = draft.render("<id@x>", 0).unwrap();
+        let head = out.split("\r\n\r\n").next().unwrap();
+        assert!(head.lines().all(|l| !l.starts_with("Bcc:") && !l.starts_with("X-Evil:")), "{head}");
+        assert!(head.contains("Subject: x Bcc: evil@example.com y "));
+        assert!(head.contains("In-Reply-To: <a@x>Bcc:evil@example.com\r\n"));
+    }
+
+    #[test]
+    fn a_bare_cr_in_a_body_becomes_a_line_end() {
+        assert_eq!(crlf_lines("a\rb\r\nc\nd"), "a\r\nb\r\nc\r\nd\r\n");
+        assert!(!crlf_lines("x\r.\rQUIT").contains("\r."));
+    }
 
     #[test]
     fn the_priority_comes_from_x_priority_then_importance() {

@@ -272,8 +272,9 @@ pub struct MailWindow {
     next_poll: f64,
     /// Poll rounds run so far (see [`IDLE_CHECK_ROUNDS`]).
     poll_round: u32,
-    /// Accounts with an inbox watcher started. A watcher runs for the rest of the run, or until its server has no IDLE.
-    watching: HashSet<String>,
+    /// Accounts with an inbox watcher started, each with the flag that stops it. A watcher runs until its server has no
+    /// IDLE, the account is removed or its settings change (see `stop_watcher`).
+    watching: HashMap<String, Arc<std::sync::atomic::AtomicBool>>,
     /// Accounts whose watcher is connected and waiting in IDLE.
     live: HashSet<String>,
     pub w: u32,
@@ -574,8 +575,9 @@ impl MailWindow {
         let prefs_path = ctx.data_dir.join(prefs::FILE);
         let queue_path = ctx.data_dir.join(schedule::FILE);
         mail.use_prefs(prefs::load(&prefs_path));
-        mail.queue = schedule::load(&queue_path);
-        if let Some(e) = load_error.or(import_error) {
+        let (queue, queue_note) = schedule::load_checked(&queue_path);
+        mail.queue = queue;
+        if let Some(e) = load_error.or(import_error).or(queue_note) {
             mail.status = e;
         }
         let legacy: HashMap<String, String> = imports.into_iter().map(|i| (i.account.id, i.legacy_id)).collect();
@@ -591,7 +593,7 @@ impl MailWindow {
             seq: 0,
             next_poll: 0.0,
             poll_round: 0,
-            watching: HashSet::new(),
+            watching: HashMap::new(),
             live: HashSet::new(),
             w: 0,
             h: 0,
@@ -722,6 +724,14 @@ impl MailWindow {
             },
             Pending::Add { account, password, old } => match passwords::decode_password(result) {
                 Ok(_) => self.account_saved(ctx, account, Some(password), old),
+                Err(KeyError::DuplicateItem) if self.password_shared(&account) => {
+                    // Another account keeps its password in this item: replacing it would change that account's login too
+                    self.mail.status = format!(
+                        "Another account already uses {} on {}. Its saved password is kept; change it in that account's settings",
+                        account.username,
+                        account.password_site()
+                    );
+                }
                 Err(KeyError::DuplicateItem) => {
                     let request = passwords::update(ctx, &account.password_site(), &account.username, &password);
                     self.pending.insert(request, Pending::Replace { account, password, old });
@@ -1646,7 +1656,7 @@ impl MailWindow {
                     let count = listing.messages.len();
                     self.note(format!("{}: {mailbox} read, {count} message{}", self.account_name(&account), if count == 1 { "" } else { "s" }));
                     self.mail.drafts_mailbox = listing.drafts.clone();
-                    let notices = self.mail.apply_listing(&account, &mailbox, listing.mailboxes, listing.messages);
+                    let notices = self.mail.apply_listing_of(&account, &mailbox, listing.uid_validity, listing.mailboxes, listing.messages);
                     // a message a rule moves or reads raises no notification
                     let quiet = self.apply_rules_to_arrivals();
                     for notice in notices {
@@ -1759,7 +1769,10 @@ impl MailWindow {
                     self.save_queue_file();
                 } else if let Some(mut queued) = flight {
                     queued.attempts += 1;
-                    if queued.attempts >= schedule::MAX_ATTEMPTS {
+                    if crate::submit::is_unconfirmed(&e) {
+                        // it may have been delivered: sending it again could reach the recipients twice
+                        self.mail.status = format!("A queued message was taken off the outbox because delivery is unknown. {e}");
+                    } else if queued.attempts >= schedule::MAX_ATTEMPTS {
                         self.mail.status = format!("A queued message could not be sent and was dropped: {e}");
                     } else {
                         queued.due = now_unix() + schedule::RETRY_SECS;
@@ -1815,11 +1828,12 @@ impl MailWindow {
             }
             Some(old) => match accounts::update(account.clone()) {
                 Ok(()) => {
-                    if account.password_site() != old.password_site() || account.username != old.username {
+                    if (account.password_site() != old.password_site() || account.username != old.username) && !self.password_shared(&old) {
                         let request = passwords::remove(ctx, &old.password_site(), &old.username);
                         self.pending.insert(request, Pending::Forget);
                     }
                     let id = account.id.clone();
+                    self.stop_watcher(&id);
                     self.mail.replace_account(account, password);
                     self.mail.close_sheet();
                     self.mail.status = "Account saved".into();
@@ -1838,13 +1852,29 @@ impl MailWindow {
     fn refresh(&mut self, index: usize, mailbox: &str) {
         let Some(account) = self.mail.accounts.get(index).cloned() else { return };
         let Some(password) = self.mail.password(&account).map(str::to_string) else { return };
-        if self.watching.insert(account.id.clone()) {
-            sync::watch(self.transport.clone(), account.clone(), password.clone(), self.tx.clone(), self.wake_clone());
+        if !self.watching.contains_key(&account.id) {
+            let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
+            self.watching.insert(account.id.clone(), cancel.clone());
+            sync::watch(self.transport.clone(), account.clone(), password.clone(), self.tx.clone(), self.wake_clone(), cancel);
         }
         let transport = self.transport.clone();
         let mailbox = mailbox.to_string();
         self.jobs += 1;
         sync::spawn(self.tx.clone(), self.wake_clone(), move || sync::list(transport.as_ref(), &account, &password, &mailbox));
+    }
+
+    /// True when another account in the shared list uses the Passwords item of `account`. When the list cannot be
+    /// read the answer is yes, so nothing is removed or replaced on a guess.
+    fn password_shared(&self, account: &Account) -> bool {
+        accounts::load_all().map_or(true, |all| accounts::shares_password(&all, account))
+    }
+
+    /// Stops the inbox watcher of an account, which holds the old server and password. The next refresh starts a new one.
+    fn stop_watcher(&mut self, id: &str) {
+        if let Some(cancel) = self.watching.remove(id) {
+            cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        self.live.remove(id);
     }
 
     fn refresh_account(&mut self, id: &str) {
@@ -2715,11 +2745,13 @@ impl MailWindow {
             self.mail.status = e;
             return;
         }
-        let request = passwords::remove(ctx, &account.password_site(), &account.username);
-        self.pending.insert(request, Pending::Forget);
+        // the item stays when another account (an alias, a calendar or contacts account) uses the same login
+        if !self.password_shared(&account) {
+            let request = passwords::remove(ctx, &account.password_site(), &account.username);
+            self.pending.insert(request, Pending::Forget);
+        }
         self.mail.forget_account(id);
-        self.watching.remove(id);
-        self.live.remove(id);
+        self.stop_watcher(id);
         self.mail.queue.outbox.retain(|q| q.account != id);
         self.mail.queue.reminders.retain(|r| r.account != id);
         self.save_queue_file();

@@ -128,6 +128,45 @@ pub mod script {
             Ok(())
         }
     }
+
+    /// A connection that stalls (a read timeout) wherever the script has a gap (`None`).
+    pub struct Stalling {
+        chunks: std::collections::VecDeque<Option<Vec<u8>>>,
+        pub output: Vec<u8>,
+    }
+
+    impl Stalling {
+        pub fn new(chunks: Vec<Option<&str>>) -> Self {
+            Stalling { chunks: chunks.into_iter().map(|c| c.map(|t| t.as_bytes().to_vec())).collect(), output: Vec::new() }
+        }
+
+        pub fn sent(&self) -> String {
+            String::from_utf8_lossy(&self.output).into_owned()
+        }
+    }
+
+    impl Read for Stalling {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            match self.chunks.pop_front() {
+                None => Ok(0),
+                Some(None) => Err(io::Error::new(io::ErrorKind::TimedOut, "timed out")),
+                Some(Some(bytes)) => {
+                    buf[..bytes.len()].copy_from_slice(&bytes);
+                    Ok(bytes.len())
+                }
+            }
+        }
+    }
+
+    impl Write for Stalling {
+        fn write(&mut self, data: &[u8]) -> io::Result<usize> {
+            self.output.extend_from_slice(data);
+            Ok(data.len())
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
 }
 
 #[cfg(test)]

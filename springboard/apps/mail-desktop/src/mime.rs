@@ -2,7 +2,7 @@
 //! [`crate::body::attachments`] would list are cut out of the MIME tree; everything else (headers, text and HTML
 //! alternatives, nested multiparts) stays as it was.
 
-use crate::body::{boundary, content_type, file_name, is_file_part, split_head, split_parts};
+use crate::body::{take_part, MAX_DEPTH, MAX_PARTS, boundary, content_type, file_name, is_file_part, split_head, split_parts};
 use crate::message::parse_headers;
 
 /// The result of cutting the files out of one message.
@@ -27,7 +27,7 @@ fn cut(raw: &str) -> (&str, &str) {
 /// shows what was there. A multipart left with no part gets one empty text part, so it stays valid.
 pub fn strip_attachments(raw: &str) -> Stripped {
     let mut removed = 0;
-    let text = match strip_entity(raw, &mut removed) {
+    let text = match strip_entity(raw, &mut removed, 0, &mut { MAX_PARTS }) {
         Some(text) => text,
         // the whole message is one file: keep its headers and give it an empty text body
         None => {
@@ -60,14 +60,21 @@ fn removed_note(file: &str) -> String {
 }
 
 /// One entity (a message or a part) without its files. None when the entity is itself a file.
-fn strip_entity(entity: &str, removed: &mut usize) -> Option<String> {
+///
+/// An entity nested deeper than `MAX_DEPTH`, or past the part budget, is treated as a file and cut out, so a hostile
+/// tree is neither followed nor kept.
+fn strip_entity(entity: &str, removed: &mut usize, depth: usize, budget: &mut usize) -> Option<String> {
+    if depth > MAX_DEPTH || !take_part(budget) {
+        *removed += 1;
+        return None;
+    }
     let (head, body) = cut(entity);
     let headers = parse_headers(head);
     let kind = content_type(&headers);
     if let (true, Some(delim)) = (kind.starts_with("multipart/"), boundary(&headers)) {
         let mut kept: Vec<String> = Vec::new();
         for part in split_parts(body, &delim) {
-            match strip_entity(part, removed) {
+            match strip_entity(part, removed, depth + 1, budget) {
                 Some(text) => kept.push(text),
                 None => kept.push(removed_note(part)),
             }
@@ -141,6 +148,22 @@ mod tests {
         assert_eq!(readable(&out.raw), "plain text");
         assert!(out.raw.contains("<p>html</p>"));
         assert!(out.raw.contains("[Attachment removed: a.png]") && out.raw.contains("[Attachment removed: n.txt]"));
+    }
+
+    #[test]
+    fn deeply_nested_multiparts_are_cut_off_not_followed() {
+        let mut raw = String::new();
+        for i in 0..5000 {
+            raw.push_str(&format!("Content-Type: multipart/mixed; boundary=b{i}_\r\n\r\n--b{i}_\r\n"));
+        }
+        raw.push_str("Content-Type: text/plain\r\n\r\ndeep\r\n");
+        for i in (0..5000).rev() {
+            raw.push_str(&format!("--b{i}_--\r\n"));
+        }
+        assert_eq!(readable(&raw), "");
+        assert!(attachments(&raw).is_empty());
+        let out = strip_attachments(&raw);
+        assert!(out.removed >= 1);
     }
 
     #[test]

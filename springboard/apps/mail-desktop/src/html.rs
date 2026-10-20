@@ -25,6 +25,25 @@ const BLOCK: &[&str] = &[
     "dd", "br",
 ];
 
+/// The longest tag, in bytes, that is parsed. A longer run of attributes is not a tag and is shown as text, so a
+/// hostile body cannot make every `<` rescan the rest of the input.
+const MAX_TAG_BYTES: usize = 4096;
+
+/// The most input, in bytes, that `sanitize` and `to_text` read. The rest of a larger body is ignored.
+const MAX_HTML_BYTES: usize = 4 * 1024 * 1024;
+
+/// `s` cut to at most `max` bytes, on a character boundary.
+fn clamp(s: &str, max: usize) -> &str {
+    if s.len() <= max {
+        return s;
+    }
+    let mut end = max;
+    while !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    &s[..end]
+}
+
 /// The result of sanitizing a body: safe HTML, and how many remote images were left out of it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Sanitized {
@@ -42,6 +61,7 @@ pub fn sanitize(html: &str, allow_remote_images: bool) -> Sanitized {
 /// their `data:image/...;base64,` URIs. An image that refers to `cid:ID` takes that URI when it is listed, and is
 /// dropped otherwise.
 pub fn sanitize_with_parts(html: &str, allow_remote_images: bool, cids: &[(String, String)]) -> Sanitized {
+    let html = clamp(html, MAX_HTML_BYTES);
     let lower = html.to_ascii_lowercase();
     let mut out = String::with_capacity(html.len());
     let mut blocked = 0;
@@ -116,6 +136,7 @@ pub fn sanitize_with_parts(html: &str, allow_remote_images: bool, cids: &[(Strin
 /// The plain text of an HTML body: tags and dropped elements are removed, line breaks follow block elements,
 /// entities are decoded and runs of blank space are collapsed.
 pub fn to_text(html: &str) -> String {
+    let html = clamp(html, MAX_HTML_BYTES);
     let lower = html.to_ascii_lowercase();
     let mut out = String::with_capacity(html.len());
     let mut i = 0;
@@ -247,7 +268,11 @@ fn skip_element(lower: &str, from: usize, name: &str) -> usize {
 }
 
 /// Parses the tag that starts with `<` at `start`. Returns `None` when the text there is not a tag.
+///
+/// Parsing is linear: a tag is at most `MAX_TAG_BYTES` long, and a `<` where an attribute name or an unquoted value
+/// should start ends the attempt, so an unfinished tag never swallows the tags that follow it.
 fn parse_tag(src: &str, start: usize) -> Option<Tag> {
+    let src = clamp(src, start.saturating_add(MAX_TAG_BYTES));
     let b = src.as_bytes();
     let mut p = start + 1;
     let closing = b.get(p) == Some(&b'/');
@@ -273,8 +298,11 @@ fn parse_tag(src: &str, start: usize) -> Option<Tag> {
         if b[p] == b'>' {
             return Some(Tag { name, closing, attrs, end: p + 1 });
         }
+        if b[p] == b'<' {
+            return None;
+        }
         let key_start = p;
-        while p < b.len() && !b[p].is_ascii_whitespace() && !matches!(b[p], b'=' | b'>' | b'/') {
+        while p < b.len() && !b[p].is_ascii_whitespace() && !matches!(b[p], b'=' | b'>' | b'/' | b'<') {
             p += 1;
         }
         if p == key_start {
@@ -301,6 +329,9 @@ fn parse_tag(src: &str, start: usize) -> Option<Tag> {
             } else {
                 let vs = q;
                 while q < b.len() && !b[q].is_ascii_whitespace() && b[q] != b'>' {
+                    if b[q] == b'<' {
+                        return None;
+                    }
                     q += 1;
                 }
                 value = src[vs..q].to_string();
@@ -359,6 +390,26 @@ mod tests {
 
     fn clean(html: &str) -> String {
         sanitize(html, false).html
+    }
+
+    #[test]
+    fn unfinished_tags_are_linear_and_keep_the_text() {
+        let hostile = "<a ".repeat(200_000);
+        let start = std::time::Instant::now();
+        let _ = to_text(&hostile);
+        let _ = sanitize(&hostile, false);
+        let quoted = "<a b=\"x ".repeat(100_000);
+        let _ = to_text(&quoted);
+        assert!(start.elapsed().as_secs() < 5);
+        assert_eq!(to_text("<a <b>hi</b>"), "<a hi");
+        assert_eq!(clean("<a href=<b>x"), "&lt;a href=<b>x");
+    }
+
+    #[test]
+    fn a_tag_longer_than_the_cap_is_text() {
+        let long = format!("<p {}>x", "a ".repeat(MAX_TAG_BYTES));
+        assert!(to_text(&long).starts_with("<p"));
+        assert_eq!(to_text("<p>é</p>"), "é");
     }
 
     #[test]

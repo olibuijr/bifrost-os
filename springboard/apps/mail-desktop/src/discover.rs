@@ -22,6 +22,21 @@ const FILE_LIMIT: usize = 256 * 1024;
 pub trait Fetch {
     /// The body of a 200 reply, or None for any failure.
     fn get(&self, url: &str) -> Option<String>;
+
+    /// Like [`Fetch::get`], and also the address the body really came from after any redirects. The default is for
+    /// fetchers that never redirect.
+    fn get_from(&self, url: &str) -> Option<(String, String)> {
+        self.get(url).map(|body| (body, url.to_string()))
+    }
+}
+
+/// The host of an address, lower case, or None when there is none.
+fn url_host(url: &str) -> Option<String> {
+    let rest = url.split_once("://").map_or(url, |(_, r)| r);
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
+    let host = authority.rsplit_once('@').map_or(authority, |(_, h)| h);
+    let host = host.rsplit_once(':').filter(|(_, p)| p.bytes().all(|b| b.is_ascii_digit())).map_or(host, |(h, _)| h);
+    (!host.is_empty()).then(|| host.to_ascii_lowercase())
 }
 
 /// The DNS questions discovery asks.
@@ -98,16 +113,23 @@ pub fn discover(email: &str, fetch: &dyn Fetch, lookup: &dyn Lookup) -> Result<F
         if imap.is_some() && smtp.is_some() {
             break;
         }
-        let Some(xml) = fetch.get(&url) else { continue };
+        let Some((xml, from)) = fetch.get_from(&url) else { continue };
+        // The file is trusted only when it came from the address's own domain (a redirect that leaves it does not
+        // count) and names a server in that domain. Anything else is shown to the person before the password is sent.
+        let vouched = url_host(&from).is_some_and(|h| in_domain(&h, &domain));
         let config = autoconfig::parse(&xml, email);
         if imap.is_none() {
             if let Some(server) = config.imap {
-                imap = Some(Part { server, trusted: true });
+                let trusted = vouched && in_domain(&server.host, &domain);
+                imap = Some(Part { server, trusted });
                 username = config.username;
             }
         }
         if smtp.is_none() {
-            smtp = config.smtp.map(|server| Part { server, trusted: true });
+            smtp = config.smtp.map(|server| {
+                let trusted = vouched && in_domain(&server.host, &domain);
+                Part { server, trusted }
+            });
         }
     }
 
@@ -169,8 +191,13 @@ impl HttpFetch {
 
 impl Fetch for HttpFetch {
     fn get(&self, url: &str) -> Option<String> {
+        self.get_from(url).map(|(body, _)| body)
+    }
+
+    fn get_from(&self, url: &str) -> Option<(String, String)> {
         let reply = self.client.get(url, None, FILE_LIMIT).ok()?;
-        (reply.status == 200).then(|| String::from_utf8_lossy(&reply.body).into_owned())
+        let from = if reply.url.is_empty() { url.to_string() } else { reply.url.clone() };
+        (reply.status == 200).then(|| (String::from_utf8_lossy(&reply.body).into_owned(), from))
     }
 }
 
@@ -347,6 +374,43 @@ mod tests {
         let found = discover("ana@example.net", &fake, &fake).unwrap();
         assert_eq!(found.imap.host, "imap.host.example.org");
         assert!(!found.trusted, "the person confirms it before the password goes there");
+    }
+
+    #[test]
+    fn an_autoconfig_server_outside_the_domain_is_not_trusted() {
+        let mut fake = Fake::default();
+        let off = FILE.replace("mail.example.net", "mail.example.org");
+        fake.files.insert("https://autoconfig.example.net/mail/config-v1.1.xml?emailaddress=ana@example.net".into(), off);
+        let found = discover("ana@example.net", &fake, &fake).unwrap();
+        assert_eq!(found.imap.host, "mail.example.org");
+        assert!(!found.trusted, "the person confirms it before the password goes there");
+    }
+
+    /// A fetcher that answers every address from another domain, as after a redirect.
+    struct Redirected;
+
+    impl Fetch for Redirected {
+        fn get(&self, _: &str) -> Option<String> {
+            Some(FILE.to_string())
+        }
+        fn get_from(&self, _: &str) -> Option<(String, String)> {
+            Some((FILE.to_string(), "https://config.example.org/config.xml".to_string()))
+        }
+    }
+
+    #[test]
+    fn a_file_reached_through_a_cross_domain_redirect_is_not_trusted() {
+        let none = Fake::default();
+        let found = discover("ana@example.net", &Redirected, &none).unwrap();
+        assert_eq!(found.imap.host, "mail.example.net");
+        assert!(!found.trusted);
+    }
+
+    #[test]
+    fn the_host_of_an_address_is_read() {
+        assert_eq!(url_host("https://Autoconfig.Example.net:443/a?b=c").as_deref(), Some("autoconfig.example.net"));
+        assert_eq!(url_host("https://example.net@evil.org/x").as_deref(), Some("evil.org"));
+        assert_eq!(url_host("https://"), None);
     }
 
     #[test]

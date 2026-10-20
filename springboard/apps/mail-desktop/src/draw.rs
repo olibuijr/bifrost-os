@@ -978,7 +978,7 @@ impl MailWindow {
 
         // remote content stays blocked until the person loads it for this message or Mail Settings allows it
         if loaded && self.remote_memo.map(|(m, _)| m) != Some(uid) {
-            let blocked = self.mail.bodies.get(&uid).map_or(0, |raw| crate::html::sanitize(raw, false).remote_images_blocked);
+            let blocked = self.mail.bodies.get(&uid).map_or(0, |raw| crate::body::remote_images(raw));
             self.remote_memo = Some((uid, blocked));
         }
         let blocked = self.remote_memo.filter(|(m, _)| *m == uid).map_or(0, |(_, n)| n);

@@ -211,6 +211,13 @@ pub fn parse_search(untagged: &str) -> Option<Vec<u32>> {
     rest.split_whitespace().map(|n| n.parse().ok()).collect()
 }
 
+/// The UIDVALIDITY value of an untagged `OK [UIDVALIDITY n]` line (the answer to SELECT). When it changes, the UID values
+/// of the mailbox start over and the ones seen before mean nothing.
+pub fn parse_uid_validity(untagged: &str) -> Option<u32> {
+    let rest = untagged.split_once("[UIDVALIDITY ")?.1;
+    rest.split(']').next()?.trim().parse().ok()
+}
+
 /// True for an untagged `n EXISTS` (the mailbox holds a message it did not hold before): the signal IDLE waits for.
 pub fn is_new_message(untagged: &str) -> bool {
     let mut parts = untagged.split_whitespace();
@@ -291,6 +298,13 @@ pub const IDLE_DONE: &str = "DONE\r\n";
 mod tests {
     use super::*;
     use crate::flags::Flag;
+
+    #[test]
+    fn uidvalidity_is_read_from_the_select_answer() {
+        assert_eq!(parse_uid_validity("OK [UIDVALIDITY 3857529045] UIDs valid"), Some(3857529045));
+        assert_eq!(parse_uid_validity("OK [UIDNEXT 4392] Predicted next UID"), None);
+        assert_eq!(parse_uid_validity("OK [UIDVALIDITY x]"), None);
+    }
 
     #[test]
     fn literal_size_reads_the_announced_count() {

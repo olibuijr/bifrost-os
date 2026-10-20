@@ -29,6 +29,10 @@ pub const INBOX: &str = "INBOX";
 /// Most message texts kept at once. Past this the lowest UID values (the oldest mail) are dropped; a dropped text is
 /// asked for again when its message is opened.
 pub const MAX_CACHED_BODIES: usize = 64;
+
+/// Most bytes the cached texts and their decoded attachments may hold together. The open message and the one that
+/// just arrived stay even when they alone are larger.
+pub const MAX_CACHED_BYTES: usize = 96 * 1024 * 1024;
 /// One line of the list: a message, in the threaded view how many messages its conversation holds, and how far it is
 /// indented under the conversation's first message (0 when flat).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -786,6 +790,28 @@ pub fn arrivals(seen: Option<u32>, listed: &[Listed]) -> Vec<&Listed> {
     }
 }
 
+/// What is known of an inbox between listings: the highest UID seen and the UIDVALIDITY it belongs to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Mark {
+    pub uid: u32,
+    pub validity: Option<u32>,
+}
+
+/// Takes one inbox listing against what was known (`old`). Returns the UID to compare arrivals with (None: nothing in
+/// this listing is new) and the mark after the listing.
+///
+/// A listing with a different UIDVALIDITY than before starts the mark over without announcing anything: the server has
+/// renumbered the mailbox, so the old UIDs say nothing. An empty inbox sets the mark to 0, so the first message that
+/// arrives later is new.
+pub fn advance(old: Option<Mark>, validity: Option<u32>, listed: &[Listed]) -> (Option<u32>, Mark) {
+    let top = listed.iter().map(|m| m.uid).max().unwrap_or(0);
+    let renumbered = old.is_some_and(|o| matches!((o.validity, validity), (Some(a), Some(b)) if a != b));
+    match old {
+        Some(o) if !renumbered => (Some(o.uid), Mark { uid: o.uid.max(top), validity: validity.or(o.validity) }),
+        _ => (None, Mark { uid: top, validity }),
+    }
+}
+
 /// Listed messages as rows, the newest (highest UID) first.
 fn newest_first(messages: Vec<Listed>) -> Vec<Row> {
     let mut rows: Vec<Row> = messages.into_iter().map(|m| Row { uid: m.uid, flags: m.flags, summary: Summary::from_headers(&m.header) }).collect();
@@ -811,6 +837,8 @@ pub struct Mail {
     pub passwords: HashMap<String, String>,
     /// The highest inbox UID seen per account id. Absent until the first inbox listing of the account.
     pub baseline: HashMap<String, u32>,
+    /// The UIDVALIDITY each baseline belongs to, for the accounts whose server gave one.
+    pub validity: HashMap<String, u32>,
     pub sheet: Option<Sheet>,
     /// Set when a compose was made into the sheet slot (open_draft, a failed send, Undo Send). The app moves it into a
     /// compose window of its own (see `compose_windows`).
@@ -894,6 +922,7 @@ impl Mail {
             bodies: HashMap::new(),
             passwords: HashMap::new(),
             baseline: HashMap::new(),
+            validity: HashMap::new(),
             sheet: None,
             fresh_compose: false,
             remote_loaded: HashSet::new(),
@@ -993,10 +1022,16 @@ impl Mail {
     /// Takes the result of a listing. Returns the notices for new inbox messages. The rows change only when the listing
     /// is for the shown account and mailbox.
     pub fn apply_listing(&mut self, account_id: &str, mailbox: &str, mailboxes: Vec<String>, messages: Vec<Listed>) -> Vec<Notice> {
+        self.apply_listing_of(account_id, mailbox, None, mailboxes, messages)
+    }
+
+    /// Like [`Mail::apply_listing`], with the UIDVALIDITY the server gave for the mailbox.
+    pub fn apply_listing_of(&mut self, account_id: &str, mailbox: &str, validity: Option<u32>, mailboxes: Vec<String>, messages: Vec<Listed>) -> Vec<Notice> {
         let mut notices = Vec::new();
         self.arrived.clear();
         if mailbox.eq_ignore_ascii_case(INBOX) {
-            let seen = self.baseline.get(account_id).copied();
+            let old = self.baseline.get(account_id).map(|&uid| Mark { uid, validity: self.validity.get(account_id).copied() });
+            let (seen, mark) = advance(old, validity, &messages);
             for m in arrivals(seen, &messages) {
                 let summary = Summary::from_headers(&m.header);
                 self.arrived.push((account_id.to_string(), Row { uid: m.uid, flags: m.flags, summary: summary.clone() }));
@@ -1005,10 +1040,11 @@ impl Mail {
                 }
                 notices.push(Notice { account: account_id.to_string(), uid: m.uid, from: summary.from.clone(), subject: summary.subject.clone() });
             }
-            if let Some(top) = messages.iter().map(|m| m.uid).max() {
-                let entry = self.baseline.entry(account_id.to_string()).or_insert(top);
-                *entry = (*entry).max(top);
-            }
+            self.baseline.insert(account_id.to_string(), mark.uid);
+            match mark.validity {
+                Some(v) => self.validity.insert(account_id.to_string(), v),
+                None => self.validity.remove(account_id),
+            };
         }
         let shown = self.current().is_some_and(|a| a.id == account_id) && self.mailbox == mailbox;
         if shown {
@@ -1183,13 +1219,23 @@ impl Mail {
         }
     }
 
-    /// Keeps at most [`MAX_CACHED_BODIES`] texts: the open message and `keep` stay, the lowest UID values go first.
+    /// The bytes the cached texts and attachments hold.
+    fn cached_bytes(&self) -> usize {
+        let texts: usize = self.bodies.values().map(String::len).sum();
+        let files: usize = self.attachments.values().flatten().map(|a| a.bytes.len()).sum();
+        texts + files
+    }
+
+    /// Keeps at most [`MAX_CACHED_BODIES`] texts and [`MAX_CACHED_BYTES`] bytes: the open message and `keep` stay, the
+    /// lowest UID values go first.
     fn trim_bodies(&mut self, keep: u32) {
-        while self.bodies.len() > MAX_CACHED_BODIES {
+        let mut bytes = self.cached_bytes();
+        while self.bodies.len() > MAX_CACHED_BODIES || bytes > MAX_CACHED_BYTES {
             let victim = self.bodies.keys().copied().filter(|&u| u != keep && Some(u) != self.open).min();
             let Some(victim) = victim else { break };
-            self.bodies.remove(&victim);
-            self.attachments.remove(&victim);
+            let text = self.bodies.remove(&victim).map_or(0, |t| t.len());
+            let files: usize = self.attachments.remove(&victim).map_or(0, |list| list.iter().map(|a| a.bytes.len()).sum());
+            bytes = bytes.saturating_sub(text + files);
         }
     }
 
@@ -1959,6 +2005,7 @@ impl Mail {
         self.accounts.remove(index);
         self.passwords.remove(id);
         self.baseline.remove(id);
+        self.validity.remove(id);
         self.prefs.signatures.remove(id);
         self.prefs.aliases.remove(id);
         self.prefs.favorites.retain(|f| f.account != id);
@@ -2303,6 +2350,28 @@ mod tests {
     }
 
     #[test]
+    fn an_empty_inbox_sets_the_baseline_so_the_first_message_is_new() {
+        let mut mail = Mail::new(vec![account("work")]);
+        assert!(mail.apply_listing("work", INBOX, vec![], vec![]).is_empty());
+        assert_eq!(mail.baseline.get("work"), Some(&0));
+        let notices = mail.apply_listing("work", INBOX, vec![], vec![listed(1, "first")]);
+        assert_eq!(notices.len(), 1);
+    }
+
+    #[test]
+    fn a_new_uidvalidity_starts_the_baseline_over() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.apply_listing_of("work", INBOX, Some(7), vec![], vec![listed(40, "old")]);
+        assert_eq!(mail.baseline.get("work"), Some(&40));
+        // the server renumbered the mailbox: nothing is announced for the messages already there, and the baseline is low again
+        let notices = mail.apply_listing_of("work", INBOX, Some(8), vec![], vec![listed(1, "a"), listed(2, "b")]);
+        assert!(notices.is_empty());
+        assert_eq!((mail.baseline.get("work"), mail.validity.get("work")), (Some(&2), Some(&8)));
+        let notices = mail.apply_listing_of("work", INBOX, Some(8), vec![], vec![listed(1, "a"), listed(2, "b"), listed(3, "c")]);
+        assert_eq!(notices.len(), 1, "mail after the renumbering is announced");
+    }
+
+    #[test]
     fn later_listings_notify_for_newer_inbox_messages_only() {
         let mut mail = Mail::new(vec![account("work")]);
         mail.apply_listing("work", INBOX, vec![], vec![listed(9, "old")]);
@@ -2332,6 +2401,21 @@ mod tests {
         assert!(!mail.open_message(3));
         mail.body_arrived("other", INBOX, 4, "not shown".into());
         assert!(!mail.bodies.contains_key(&4));
+    }
+
+    #[test]
+    fn the_text_cache_is_bounded_by_bytes_too() {
+        let mut mail = Mail::new(vec![account("work")]);
+        let rows: Vec<Listed> = (1..=4).map(|u| listed(u, "x")).collect();
+        mail.apply_listing("work", INBOX, vec![], rows);
+        assert!(mail.open_message(1));
+        let big = "x".repeat(MAX_CACHED_BYTES / 2 + 1);
+        for uid in 1..=4 {
+            mail.body_arrived("work", INBOX, uid, big.clone());
+        }
+        assert!(mail.cached_bytes() <= MAX_CACHED_BYTES + big.len(), "at most the open and the newest text beyond the cap");
+        assert!(mail.bodies.contains_key(&1) && mail.bodies.contains_key(&4), "the open and the newest text stay");
+        assert!(!mail.bodies.contains_key(&2));
     }
 
     #[test]

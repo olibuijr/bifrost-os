@@ -9,6 +9,27 @@ use crate::line::{response_after, Lines};
 use crate::transport;
 use springboard::deildu::http::{Stream, Transport};
 use std::io::{self, Read, Write};
+use std::time::{Duration, Instant};
+
+/// How long one IDLE lasts before it is ended and started again. RFC 2177 lets a server drop a client that idles for
+/// 30 minutes or more, so the client renews well before that.
+pub const IDLE_REFRESH: Duration = Duration::from_secs(25 * 60);
+
+/// How an IDLE ended.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Idle {
+    /// The mailbox reported a new message.
+    NewMail,
+    /// The renewal time came; nothing happened. The caller starts IDLE again.
+    Refresh,
+    /// The caller asked to stop.
+    Cancelled,
+}
+
+/// True for the errors a socket read timeout gives.
+fn is_timeout(e: &io::Error) -> bool {
+    matches!(e.kind(), io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock)
+}
 
 /// Newest messages a mailbox listing reads headers for.
 pub const LIST_LIMIT: usize = 50;
@@ -31,6 +52,8 @@ struct Exchange {
 pub struct Session<S: Read + Write> {
     lines: Lines<S>,
     tag: u32,
+    /// The UIDVALIDITY the server gave for the mailbox last selected.
+    uid_validity: Option<u32>,
 }
 
 impl<S: Read + Write> Session<S> {
@@ -41,7 +64,7 @@ impl<S: Read + Write> Session<S> {
         if !(greeting.starts_with("* OK") || greeting.starts_with("* PREAUTH")) {
             return Err(format!("the server did not greet: {greeting}"));
         }
-        Ok(Session { lines, tag: 0 })
+        Ok(Session { lines, tag: 0, uid_validity: None })
     }
 
     pub fn login(&mut self, user: &str, password: &str) -> Result<(), String> {
@@ -55,7 +78,14 @@ impl<S: Read + Write> Session<S> {
     }
 
     pub fn select(&mut self, mailbox: &str) -> Result<(), String> {
-        self.run(&imap::select(mailbox)).map(|_| ())
+        let untagged = self.run(&imap::select(mailbox))?;
+        self.uid_validity = untagged.iter().find_map(|line| imap::parse_uid_validity(line));
+        Ok(())
+    }
+
+    /// The UIDVALIDITY of the mailbox last selected, when the server said.
+    pub fn uid_validity(&self) -> Option<u32> {
+        self.uid_validity
     }
 
     /// The UID values of every message in the selected mailbox, in the server's order (ascending for most servers).
@@ -199,6 +229,14 @@ impl<S: Read + Write> Session<S> {
     /// Waits in IDLE (RFC 2177) until the selected mailbox reports a new message, then ends IDLE. Other untagged
     /// updates (flags, expunges, keep-alives) keep it waiting. A `BYE` or a refused IDLE is an error.
     pub fn idle(&mut self) -> Result<(), String> {
+        self.idle_until(Duration::MAX, &|| false).map(|_| ())
+    }
+
+    /// Like [`Session::idle`], for a connection that idles for a long time. The socket's read timeout only means that
+    /// nothing has happened yet, so it keeps waiting. IDLE ends when a message arrives, after `refresh` (so the caller
+    /// can start it again before the server drops the connection), or when `cancelled` says so; `cancelled` is asked
+    /// each time the read times out.
+    pub fn idle_until(&mut self, refresh: Duration, cancelled: &dyn Fn() -> bool) -> Result<Idle, String> {
         self.tag += 1;
         let tag = imap::tag(self.tag);
         self.lines.send(&imap::command(&tag, &imap::idle())).map_err(io_text)?;
@@ -210,27 +248,56 @@ impl<S: Read + Write> Session<S> {
                 _ => {}
             }
         }
+        let started = Instant::now();
+        let mut outcome = Idle::Refresh;
         loop {
-            let line = self.response_line()?;
+            let first = match self.lines.read_line() {
+                Ok(line) => line,
+                Err(e) if is_timeout(&e) => {
+                    if cancelled() {
+                        outcome = Idle::Cancelled;
+                        break;
+                    }
+                    if started.elapsed() >= refresh {
+                        break;
+                    }
+                    continue;
+                }
+                Err(e) => return Err(io_text(e)),
+            };
+            let line = self.finish_line(first).map_err(io_text)?;
             if let Reply::Untagged(rest) = imap::parse_line(&line) {
                 if rest.starts_with("BYE") {
                     return Err(rest);
                 }
                 if imap::is_new_message(&rest) {
+                    outcome = Idle::NewMail;
                     break;
                 }
             }
         }
         self.lines.send(imap::IDLE_DONE).map_err(io_text)?;
+        let mut stalls = 0;
         loop {
-            let line = self.response_line()?;
-            if let Reply::Tagged { tag: got, status, text } = imap::parse_line(&line) {
-                if got == tag {
+            let first = match self.lines.read_line() {
+                Ok(line) => line,
+                // the server may take a moment to answer DONE
+                Err(e) if is_timeout(&e) && stalls < 3 => {
+                    stalls += 1;
+                    continue;
+                }
+                Err(e) => return Err(io_text(e)),
+            };
+            let line = self.finish_line(first).map_err(io_text)?;
+            match imap::parse_line(&line) {
+                Reply::Tagged { tag: got, status, text } if got == tag => {
                     return match status {
-                        Status::Ok => Ok(()),
+                        Status::Ok => Ok(outcome),
                         _ => Err(text),
                     };
                 }
+                Reply::Untagged(rest) if imap::is_new_message(&rest) && outcome == Idle::Refresh => outcome = Idle::NewMail,
+                _ => {}
             }
         }
     }
@@ -270,14 +337,19 @@ impl<S: Read + Write> Session<S> {
     /// One response line with its literals folded in. A line ending in `{n}` is followed by n bytes and then the rest
     /// of the response on the next line; the bytes become a quoted string at the marker.
     fn response_line(&mut self) -> Result<String, String> {
-        let mut line = self.lines.read_line().map_err(io_text)?;
+        let first = self.lines.read_line().map_err(io_text)?;
+        self.finish_line(first).map_err(io_text)
+    }
+
+    /// Folds the literals that follow `line`, the first line of a response, into it.
+    fn finish_line(&mut self, mut line: String) -> io::Result<String> {
         let mut folded = 0;
         while let Some((at, n)) = literal_marker(&line) {
-            folded = response_after(folded, n).map_err(io_text)?;
-            let bytes = self.lines.read_bytes(n).map_err(io_text)?;
+            folded = response_after(folded, n)?;
+            let bytes = self.lines.read_bytes(n)?;
             line.truncate(at);
-            line.push_str(&literal_text(&bytes));
-            let rest = self.lines.read_line().map_err(io_text)?;
+            push_literal(&mut line, &bytes);
+            let rest = self.lines.read_line()?;
             line.push_str(&rest);
         }
         Ok(line)
@@ -288,9 +360,9 @@ impl Session<Box<dyn Stream>> {
     /// Upgrades a plain connection with STARTTLS (RFC 3501 section 6.2.1). The greeting has already been read.
     pub fn starttls(mut self, transport: &dyn Transport, host: &str) -> Result<Self, String> {
         self.run("STARTTLS")?;
-        let Session { lines, tag } = self;
+        let Session { lines, tag, uid_validity } = self;
         let secure = transport.upgrade(host, lines.into_inner()).map_err(io_text)?;
-        Ok(Session { lines: Lines::new(secure), tag })
+        Ok(Session { lines: Lines::new(secure), tag, uid_validity })
     }
 }
 
@@ -318,20 +390,26 @@ fn literal_marker(line: &str) -> Option<(usize, usize)> {
 /// A literal as a quoted IMAP string. UTF-8 stays as it is; any other bytes are read as ISO-8859-1, one char per byte,
 /// so the message text keeps every byte and the body decoder can still find the bytes again.
 pub fn literal_text(bytes: &[u8]) -> String {
-    let text: String = match std::str::from_utf8(bytes) {
-        Ok(s) => s.to_string(),
-        Err(_) => bytes.iter().map(|&b| b as char).collect(),
-    };
-    let mut out = String::with_capacity(text.len() + 2);
+    let mut out = String::with_capacity(bytes.len() + 2);
+    push_literal(&mut out, bytes);
+    out
+}
+
+/// Appends the quoted form of a literal (see [`literal_text`]) to `out`, with no copy of the text in between.
+fn push_literal(out: &mut String, bytes: &[u8]) {
+    out.reserve(bytes.len() + 2);
     out.push('"');
-    for c in text.chars() {
+    let mut quote = |c: char| {
         if c == '"' || c == '\\' {
             out.push('\\');
         }
         out.push(c);
+    };
+    match std::str::from_utf8(bytes) {
+        Ok(text) => text.chars().for_each(&mut quote),
+        Err(_) => bytes.iter().for_each(|&b| quote(b as char)),
     }
     out.push('"');
-    out
 }
 
 fn listed(line: &str) -> Option<Listed> {
@@ -366,7 +444,7 @@ fn io_text(e: io::Error) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::line::script::Script;
+    use crate::line::script::{Script, Stalling};
     use crate::line::MAX_LITERAL;
 
     fn session(script: &str) -> Session<Script> {
@@ -462,6 +540,32 @@ mod tests {
         let sent = s.lines.into_inner().sent();
         assert!(sent.starts_with("A001 IDLE\r\n"));
         assert!(sent.ends_with("DONE\r\n"));
+    }
+
+    fn stalling(chunks: Vec<Option<&str>>) -> Session<Stalling> {
+        let mut all = vec![Some("* OK ready\r\n")];
+        all.extend(chunks);
+        Session::open(Stalling::new(all)).unwrap()
+    }
+
+    #[test]
+    fn a_read_timeout_does_not_end_idle() {
+        let mut s = stalling(vec![Some("+ idling\r\n"), None, None, Some("* 4 EXISTS\r\n"), Some("A001 OK done\r\n")]);
+        assert_eq!(s.idle_until(IDLE_REFRESH, &|| false).unwrap(), Idle::NewMail);
+        assert!(s.lines.into_inner().sent().ends_with("DONE\r\n"));
+    }
+
+    #[test]
+    fn idle_is_renewed_when_its_time_is_up() {
+        let mut s = stalling(vec![Some("+ idling\r\n"), None, Some("A001 OK done\r\n")]);
+        assert_eq!(s.idle_until(Duration::ZERO, &|| false).unwrap(), Idle::Refresh);
+    }
+
+    #[test]
+    fn idle_stops_when_cancelled() {
+        let mut s = stalling(vec![Some("+ idling\r\n"), None, Some("A001 OK done\r\n")]);
+        assert_eq!(s.idle_until(IDLE_REFRESH, &|| true).unwrap(), Idle::Cancelled);
+        assert!(s.lines.into_inner().sent().ends_with("DONE\r\n"));
     }
 
     #[test]

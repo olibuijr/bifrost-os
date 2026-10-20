@@ -18,15 +18,16 @@ pub fn safe_name(name: &str) -> String {
 }
 
 /// Writes every file into `dir`, creating the folder. A name already used in this message gets its position in front
-/// (`2-name`). Returns how many files were written.
+/// (`2-name`), and more in front of that when that name is taken too. Returns how many files were written.
 pub fn save_all(dir: &Path, files: &[Attachment]) -> Result<usize, String> {
     std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     let mut used = HashSet::new();
     for (index, file) in files.iter().enumerate() {
         let mut name = safe_name(&file.name);
-        if !used.insert(name.clone()) {
-            name = format!("{}-{name}", index + 1);
-            used.insert(name.clone());
+        let mut prefix = index + 1;
+        while !used.insert(name.clone()) {
+            name = format!("{prefix}-{}", safe_name(&file.name));
+            prefix += 1;
         }
         std::fs::write(dir.join(&name), &file.bytes).map_err(|e| format!("{name}: {e}"))?;
     }
@@ -100,6 +101,18 @@ mod tests {
         assert_eq!(size_text(12), "12 B");
         assert_eq!(size_text(2048), "2 KB");
         assert_eq!(size_text(3 * 1024 * 1024), "3.0 MB");
+    }
+
+    #[test]
+    fn a_name_that_collides_with_a_renamed_one_does_not_overwrite_it() {
+        let dir = std::env::temp_dir().join(format!("bifrost-mail-att-clash-{}", std::process::id()));
+        let file = |name: &str, body: &[u8]| Attachment { name: name.into(), mime: "text/plain".into(), bytes: body.to_vec() };
+        let files = vec![file("a", b"one"), file("3-a", b"two"), file("a", b"three")];
+        assert_eq!(save_all(&dir, &files), Ok(3));
+        assert_eq!(std::fs::read(dir.join("a")).unwrap(), b"one".to_vec());
+        assert_eq!(std::fs::read(dir.join("3-a")).unwrap(), b"two".to_vec());
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 3, "three files, none overwritten");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

@@ -8,11 +8,49 @@ use crate::message::parse_headers;
 
 /// The readable text of a raw message. Empty when the message has no text part.
 pub fn readable(raw: &str) -> String {
-    match text_part(raw) {
+    match text_part(raw, 0, &mut { MAX_PARTS }) {
         Some(Part { html: true, text }) => html::to_text(&text),
         Some(Part { html: false, text }) => text,
         None => String::new(),
     }
+}
+
+/// How deep multipart entities are followed. A message nested deeper is hostile; the deeper parts are not read.
+pub(crate) const MAX_DEPTH: usize = 12;
+
+/// How many entities of one message are visited, so a wide and deep tree cannot multiply the work.
+pub(crate) const MAX_PARTS: usize = 2000;
+
+/// Takes one entity from `budget`; false when the budget is spent.
+pub(crate) fn take_part(budget: &mut usize) -> bool {
+    if *budget == 0 {
+        return false;
+    }
+    *budget -= 1;
+    true
+}
+
+/// How many remote images the HTML part of a raw message would load, counted on the decoded HTML alone (not on the
+/// headers, boundaries and encoded attachments around it). Zero when the message has no HTML part.
+pub fn remote_images(raw: &str) -> usize {
+    match html_part(raw, 0, &mut { MAX_PARTS }) {
+        Some(text) => html::sanitize(&text, false).remote_images_blocked,
+        None => 0,
+    }
+}
+
+/// The decoded text of the first text/html part of an entity, nested multipart entities included.
+fn html_part(raw: &str, depth: usize, budget: &mut usize) -> Option<String> {
+    if depth > MAX_DEPTH || !take_part(budget) {
+        return None;
+    }
+    let (head, body) = split_head(raw);
+    let headers = parse_headers(head);
+    let kind = content_type(&headers);
+    if let Some(boundary) = kind.strip_prefix("multipart/").and(boundary(&headers)) {
+        return split_parts(body, &boundary).into_iter().find_map(|p| html_part(p, depth + 1, budget));
+    }
+    (kind == "text/html").then(|| decode_body(&headers, body, param(&headers, "charset").as_deref()))
 }
 
 struct Part {
@@ -33,18 +71,21 @@ pub struct Attachment {
 /// (see [`readable`]), not attachments.
 pub fn attachments(raw: &str) -> Vec<Attachment> {
     let mut out = Vec::new();
-    collect_attachments(raw, &mut out);
+    collect_attachments(raw, &mut out, 0, &mut { MAX_PARTS });
     out
 }
 
-fn collect_attachments(raw: &str, out: &mut Vec<Attachment>) {
+fn collect_attachments(raw: &str, out: &mut Vec<Attachment>, depth: usize, budget: &mut usize) {
+    if depth > MAX_DEPTH || !take_part(budget) {
+        return;
+    }
     let (head, body) = split_head(raw);
     let headers = parse_headers(head);
     let kind = content_type(&headers);
     if kind.starts_with("multipart/") {
         if let Some(boundary) = boundary(&headers) {
             for part in split_parts(body, &boundary) {
-                collect_attachments(part, out);
+                collect_attachments(part, out, depth + 1, budget);
             }
         }
         return;
@@ -87,12 +128,16 @@ fn part_bytes(headers: &[(String, String)], body: &str) -> Vec<u8> {
 
 /// The best text part of one entity: a text/plain part, else a text/html part. Multipart entities are searched in
 /// order, nested ones included.
-fn text_part(raw: &str) -> Option<Part> {
+fn text_part(raw: &str, depth: usize, budget: &mut usize) -> Option<Part> {
+    if depth > MAX_DEPTH || !take_part(budget) {
+        return None;
+    }
     let (head, body) = split_head(raw);
     let headers = parse_headers(head);
     let kind = content_type(&headers);
     if let Some(boundary) = kind.strip_prefix("multipart/").and(boundary(&headers)) {
-        let parts: Vec<Part> = split_parts(body, &boundary).into_iter().filter_map(text_part).collect();
+        let parts: Vec<Part> =
+            split_parts(body, &boundary).into_iter().filter_map(|p| text_part(p, depth + 1, budget)).collect();
         let plain = parts.iter().position(|p| !p.html);
         return match plain {
             Some(i) => parts.into_iter().nth(i),
@@ -212,6 +257,17 @@ pub fn quoted_printable(text: &str) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn remote_images_are_counted_in_the_decoded_html_part() {
+        let html = "<p>hi</p><img src=\"https://t.example/a.png\"><img src=\"http://t.example/b.png\">";
+        let encoded = crate::codec::base64_encode(html.as_bytes());
+        let raw = format!(
+            "Content-Type: multipart/alternative; boundary=B\r\n\r\n--B\r\nContent-Type: text/plain\r\n\r\nhi\r\n--B\r\nContent-Type: text/html\r\nContent-Transfer-Encoding: base64\r\n\r\n{encoded}\r\n--B--\r\n"
+        );
+        assert_eq!(remote_images(&raw), 2);
+        assert_eq!(remote_images("Subject: x\r\n\r\nno html\r\n"), 0);
+    }
 
     #[test]
     fn a_plain_message_is_its_body() {

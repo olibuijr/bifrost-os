@@ -17,7 +17,7 @@ use crate::flags::Flag;
 use crate::message::Summary;
 use crate::mute;
 use crate::session::Listed;
-use crate::state::{arrivals, Notice, INBOX};
+use crate::state::{advance, arrivals, Mark, Notice, INBOX};
 use crate::sync::{self, Event};
 use bifrost_app::background_tasks::Request;
 use bifrost_app::controls::internet_accounts::Account;
@@ -45,20 +45,38 @@ pub fn next_request(now_unix: u64) -> Request {
     Request::refresh(TASK).earliest(now_unix + EVERY_SECS).network()
 }
 
-/// The highest UID announced for each account.
+/// The highest UID announced for each account, with the UIDVALIDITY it belongs to when the server gave one.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct Baseline(BTreeMap<String, u32>);
+pub struct Baseline(BTreeMap<String, u32>, BTreeMap<String, u32>);
 
 impl Baseline {
-    /// Reads the file: one `account TAB uid` line each. A missing file is an empty baseline, and a bad line is skipped.
+    /// Reads the file: one `account TAB uid` line each, with a third `TAB uidvalidity` when it is known. A missing file
+    /// is an empty baseline, and a bad line is skipped.
     pub fn load(path: &Path) -> Baseline {
         let text = std::fs::read_to_string(path).unwrap_or_default();
-        Baseline(text.lines().filter_map(|l| l.split_once('\t')).filter_map(|(id, uid)| Some((id.to_string(), uid.trim().parse().ok()?))).collect())
+        let mut baseline = Baseline::default();
+        for line in text.lines() {
+            let mut fields = line.split('\t');
+            let (Some(id), Some(uid)) = (fields.next(), fields.next().and_then(|u| u.trim().parse::<u32>().ok())) else { continue };
+            baseline.0.insert(id.to_string(), uid);
+            if let Some(validity) = fields.next().and_then(|v| v.trim().parse::<u32>().ok()) {
+                baseline.1.insert(id.to_string(), validity);
+            }
+        }
+        baseline
     }
 
     /// Writes the file.
     pub fn save(&self, path: &Path) -> Result<(), String> {
-        let text: String = self.0.iter().filter(|(id, _)| !id.contains(['\t', '\r', '\n'])).map(|(id, uid)| format!("{id}\t{uid}\n")).collect();
+        let text: String = self
+            .0
+            .iter()
+            .filter(|(id, _)| !id.contains(['\t', '\r', '\n']))
+            .map(|(id, uid)| match self.1.get(id) {
+                Some(validity) => format!("{id}\t{uid}\t{validity}\n"),
+                None => format!("{id}\t{uid}\n"),
+            })
+            .collect();
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
         }
@@ -72,7 +90,15 @@ impl Baseline {
     /// Takes one inbox listing of `account`: the notices for the unread messages newer than the baseline, and the
     /// baseline moves up to the newest UID listed. With no baseline yet the listing only sets it.
     pub fn apply(&mut self, account: &str, listed: &[Listed], muted: &HashSet<String>) -> Vec<Notice> {
-        let notices = arrivals(self.get(account), listed)
+        self.apply_validity(account, None, listed, muted)
+    }
+
+    /// Like [`Baseline::apply`], with the UIDVALIDITY of the listed mailbox. A different one than the baseline's starts
+    /// the baseline over, and an empty inbox sets it to 0 (see [`advance`]).
+    pub fn apply_validity(&mut self, account: &str, validity: Option<u32>, listed: &[Listed], muted: &HashSet<String>) -> Vec<Notice> {
+        let old = self.get(account).map(|uid| Mark { uid, validity: self.1.get(account).copied() });
+        let (seen, mark) = advance(old, validity, listed);
+        let notices = arrivals(seen, listed)
             .into_iter()
             .filter(|m| !m.flags.contains(Flag::Seen))
             .filter_map(|m| {
@@ -80,10 +106,11 @@ impl Baseline {
                 (!muted.contains(&mute::key(&summary))).then(|| Notice { account: account.to_string(), uid: m.uid, from: summary.from, subject: summary.subject })
             })
             .collect();
-        if let Some(top) = listed.iter().map(|m| m.uid).max() {
-            let entry = self.0.entry(account.to_string()).or_insert(top);
-            *entry = (*entry).max(top);
-        }
+        self.0.insert(account.to_string(), mark.uid);
+        match mark.validity {
+            Some(v) => self.1.insert(account.to_string(), v),
+            None => self.1.remove(account),
+        };
         notices
     }
 }
@@ -157,7 +184,7 @@ impl Check {
             if let Event::Listed { account, mailbox, result } = event {
                 self.jobs = self.jobs.saturating_sub(1);
                 match result {
-                    Ok(listing) if mailbox.eq_ignore_ascii_case(INBOX) => notices.extend(self.baseline.apply(&account, &listing.messages, &self.muted)),
+                    Ok(listing) if mailbox.eq_ignore_ascii_case(INBOX) => notices.extend(self.baseline.apply_validity(&account, listing.uid_validity, &listing.messages, &self.muted)),
                     Ok(_) => {}
                     Err(e) => self.problems.push(format!("{account}: {e}")),
                 }
@@ -368,16 +395,32 @@ mod tests {
         // home's listing arrives: the first one sets the baseline
         c.expect_job();
         c.asked.remove(&2);
-        c.inject(Event::Listed { account: "home".into(), mailbox: "INBOX".into(), result: Ok(Listing { mailboxes: vec![], drafts: None, messages: vec![listed(3, false, "first")] }) });
+        c.inject(Event::Listed { account: "home".into(), mailbox: "INBOX".into(), result: Ok(Listing { mailboxes: vec![], uid_validity: None, drafts: None, messages: vec![listed(3, false, "first")] }) });
         assert!(c.poll().is_empty());
         assert!(c.finished(0.0));
         // a later check in the same process sees a newer message
         c.expect_job();
-        c.inject(Event::Listed { account: "home".into(), mailbox: "INBOX".into(), result: Ok(Listing { mailboxes: vec![], drafts: None, messages: vec![listed(4, false, "Boð"), listed(3, false, "first")] }) });
+        c.inject(Event::Listed { account: "home".into(), mailbox: "INBOX".into(), result: Ok(Listing { mailboxes: vec![], uid_validity: None, drafts: None, messages: vec![listed(4, false, "Boð"), listed(3, false, "first")] }) });
         let notices = c.poll();
         assert_eq!(notices.len(), 1);
         assert_eq!(notification(&notices[0]), Banner { id: "mail-home-4".into(), title: "New Mail".into(), subtitle: "Gunna".into(), body: "Boð".into(), thread: "home".into() });
         assert_eq!(c.baseline().get("home"), Some(4));
+    }
+
+    #[test]
+    fn the_baseline_follows_uidvalidity_and_starts_on_an_empty_inbox() {
+        let mut b = Baseline::default();
+        assert!(b.apply_validity("home", Some(5), &[], &Default::default()).is_empty());
+        assert_eq!(b.get("home"), Some(0), "an empty inbox still has a baseline");
+        assert_eq!(b.apply_validity("home", Some(5), &[listed(1, false, "first")], &Default::default()).len(), 1);
+        // renumbered: the messages already there are not announced
+        assert!(b.apply_validity("home", Some(6), &[listed(1, false, "a"), listed(2, false, "b")], &Default::default()).is_empty());
+        assert_eq!(b.get("home"), Some(2));
+        let dir = std::env::temp_dir().join(format!("bifrost-mail-baseline-{}", std::process::id()));
+        let path = dir.join("baseline.txt");
+        b.save(&path).unwrap();
+        assert_eq!(Baseline::load(&path), b, "the validity is kept in the file");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

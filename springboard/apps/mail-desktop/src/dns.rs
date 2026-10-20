@@ -1,12 +1,14 @@
 //! Minimal DNS queries for mail autoconfiguration: the SRV records of RFC 6186, MX records and address checks, over UDP.
 //! The shell's own resolver (`springboard::deildu::dns`) answers A records only, so Mail keeps this small client for the
-//! other record types. Name servers come from `/etc/resolv.conf`, then the shell's list (the default gateway and public
-//! resolvers).
+//! other record types. Name servers come from `/etc/resolv.conf`, then the default gateway when there are none. A public
+//! resolver is never asked on Mail's own: the names of a person's mail domain are not sent to a third party unless the
+//! system's own configuration says so.
 
-use std::io;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
-use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::io::{self, Read, Write};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream, UdpSocket};
+use std::sync::atomic::{AtomicU16, Ordering};
+use std::sync::Mutex;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 pub const TYPE_A: u16 = 1;
 pub const TYPE_MX: u16 = 15;
@@ -15,6 +17,8 @@ pub const TYPE_SRV: u16 = 33;
 
 /// How long one name server gets to answer.
 const TIMEOUT: Duration = Duration::from_secs(2);
+/// How long the servers count as out of reach after none of them answered in time.
+const DOWN_FOR: Duration = Duration::from_secs(20);
 /// Compression pointers followed in one name before the message is called malformed.
 const MAX_JUMPS: usize = 16;
 
@@ -177,39 +181,55 @@ pub fn nameservers(resolv_conf: &str) -> Vec<IpAddr> {
 /// A resolver over UDP with the servers it asks, in order.
 pub struct Resolver {
     servers: Vec<SocketAddr>,
-    /// Set when no server answered a query: later queries fail at once, so a machine without a network does not make the
-    /// person wait for every record of the discovery.
-    unreachable: AtomicBool,
+    /// When every server last failed to answer in time: until [`DOWN_FOR`] has passed, later queries fail at once, so a
+    /// machine without a network does not make the person wait for every record of the discovery. A server that answers
+    /// with an error (SERVFAIL, REFUSED) does not count: it is up, and other questions may work.
+    down_since: Mutex<Option<Instant>>,
 }
 
 impl Resolver {
     pub fn new(servers: Vec<SocketAddr>) -> Resolver {
-        Resolver { servers, unreachable: AtomicBool::new(false) }
+        Resolver { servers, down_since: Mutex::new(None) }
     }
 
-    /// The resolver of this computer: `/etc/resolv.conf`, then the shell's gateway and public servers.
+    /// The resolver of this computer: the servers of `/etc/resolv.conf`, or, when it lists none, the default gateway.
+    /// The shell's public resolvers are not used.
     pub fn system() -> Resolver {
         let mut ips = std::fs::read_to_string("/etc/resolv.conf").map(|t| nameservers(&t)).unwrap_or_default();
-        for ip in springboard::deildu::dns::servers() {
-            let ip = IpAddr::V4(ip);
-            if !ips.contains(&ip) {
-                ips.push(ip);
-            }
+        if ips.is_empty() {
+            ips = springboard::deildu::dns::servers().into_iter().filter(|ip| crate::transport::is_local(*ip)).map(IpAddr::V4).collect();
         }
         Resolver::new(ips.into_iter().map(|ip| SocketAddr::new(ip, 53)).collect())
     }
 
+    /// True while the servers are counted as out of reach.
+    pub fn is_down(&self) -> bool {
+        let mut down = self.down_since.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        match *down {
+            Some(since) if since.elapsed() < DOWN_FOR => true,
+            Some(_) => {
+                *down = None;
+                false
+            }
+            None => false,
+        }
+    }
+
     /// The records of `qtype` for `name`. An empty list when the name has none; an error when no server answered.
     pub fn lookup(&self, name: &str, qtype: u16) -> io::Result<Vec<Record>> {
-        if self.unreachable.load(Ordering::Relaxed) {
+        if self.is_down() {
             return Err(io::Error::other("no name server answered"));
         }
+        let mut silent = true;
         for server in &self.servers {
-            if let Ok(records) = ask(*server, name, qtype) {
-                return Ok(records);
+            match ask(*server, name, qtype) {
+                Ok(records) => return Ok(records),
+                Err(e) => silent &= is_silence(&e),
             }
         }
-        self.unreachable.store(true, Ordering::Relaxed);
+        if silent {
+            *self.down_since.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Instant::now());
+        }
         Err(io::Error::other("no name server answered"))
     }
 
@@ -229,7 +249,18 @@ impl Resolver {
 
 static NEXT_ID: AtomicU16 = AtomicU16::new(0);
 
+/// True for the errors of a server that said nothing: a timeout, or a refused connection.
+fn is_silence(e: &io::Error) -> bool {
+    matches!(e.kind(), io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock | io::ErrorKind::ConnectionRefused)
+}
+
+/// A transaction id the operating system's random source chose, so a forged reply has to guess it. The clock mix is only
+/// the fallback when the source cannot be read.
 fn transaction_id() -> u16 {
+    let mut bytes = [0u8; 2];
+    if std::fs::File::open("/dev/urandom").and_then(|mut f| f.read_exact(&mut bytes)).is_ok() {
+        return u16::from_be_bytes(bytes);
+    }
     let nanos = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.subsec_nanos());
     (nanos ^ std::process::id()) as u16 ^ NEXT_ID.fetch_add(0x9e37, Ordering::Relaxed)
 }
@@ -243,7 +274,27 @@ fn ask(server: SocketAddr, name: &str, qtype: u16) -> io::Result<Vec<Record>> {
     sock.send(&query(id, name, qtype))?;
     let mut buf = [0u8; 4096];
     let n = sock.recv(&mut buf)?;
+    // the reply was cut to fit one datagram (the TC bit): ask again over TCP, which carries all of it
+    if n > 2 && buf[2] & 0x02 != 0 {
+        return ask_tcp(server, name, qtype, id);
+    }
     parse(&buf[..n], id).ok_or_else(|| io::Error::other("bad reply"))
+}
+
+/// Asks one server over TCP (RFC 7766): each message is preceded by its length in two bytes.
+fn ask_tcp(server: SocketAddr, name: &str, qtype: u16, id: u16) -> io::Result<Vec<Record>> {
+    let mut stream = TcpStream::connect_timeout(&server, TIMEOUT)?;
+    stream.set_read_timeout(Some(TIMEOUT))?;
+    stream.set_write_timeout(Some(TIMEOUT))?;
+    let q = query(id, name, qtype);
+    let mut out = (q.len() as u16).to_be_bytes().to_vec();
+    out.extend(q);
+    stream.write_all(&out)?;
+    let mut len = [0u8; 2];
+    stream.read_exact(&mut len)?;
+    let mut msg = vec![0u8; u16::from_be_bytes(len) as usize];
+    stream.read_exact(&mut msg)?;
+    parse(&msg, id).ok_or_else(|| io::Error::other("bad reply"))
 }
 
 #[cfg(test)]
@@ -364,6 +415,35 @@ mod tests {
     }
 
     #[test]
+    fn a_server_failure_does_not_disable_the_later_lookups() {
+        let server = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let addr = server.local_addr().unwrap();
+        let t = std::thread::spawn(move || {
+            let mut buf = [0u8; 512];
+            let (n, from) = server.recv_from(&mut buf).unwrap();
+            let mut answer = buf[..n].to_vec();
+            answer[2] = 0x81;
+            answer[3] = 0x82; // SERVFAIL
+            server.send_to(&answer, from).unwrap();
+        });
+        let resolver = Resolver::new(vec![addr]);
+        assert!(resolver.lookup("_imaps._tcp.example.net", TYPE_SRV).is_err());
+        t.join().unwrap();
+        assert!(!resolver.is_down(), "a server that answered with an error is up");
+    }
+
+    #[test]
+    fn the_down_state_ends_after_a_while() {
+        let resolver = Resolver::new(vec![]);
+        assert!(resolver.lookup("example.net", TYPE_A).is_err());
+        assert!(resolver.is_down());
+        // Instant cannot go back before boot: right after start-up there is nothing to age.
+        let Some(past) = Instant::now().checked_sub(DOWN_FOR + Duration::from_secs(1)) else { return };
+        *resolver.down_since.lock().unwrap() = Some(past);
+        assert!(!resolver.is_down(), "the servers are tried again");
+    }
+
+    #[test]
     fn a_resolver_asks_a_server_over_udp_and_gives_up_when_none_answers() {
         let server = UdpSocket::bind("127.0.0.1:0").unwrap();
         let addr = server.local_addr().unwrap();
@@ -382,7 +462,7 @@ mod tests {
 
         let none = Resolver::new(vec![]);
         assert!(none.lookup("example.net", TYPE_A).is_err());
-        assert!(none.unreachable.load(Ordering::Relaxed), "after a failure the later lookups fail at once");
+        assert!(none.is_down(), "after a silent failure the later lookups fail at once");
         assert!(none.resolves("10.1.2.3"), "an address needs no lookup");
     }
 }
