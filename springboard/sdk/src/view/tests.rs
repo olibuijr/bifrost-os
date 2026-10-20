@@ -990,7 +990,15 @@ fn the_standard_text_keys_act_in_a_focused_field() {
 #[test]
 fn the_standard_commands_reach_the_focused_field_through_the_responder_chain() {
     let _turn = bifrost_render::clipboard::tests::exclusive();
-    let (mut w, id) = focused_field("one two");
+    // The field sits inside a stack, as in an app: when the field is the window's root view it is always on the chain, focused
+    // or not, so the "nothing focused" check at the end would still reach it.
+    let ui = ui();
+    let mut tf = TextField::new("Name", "name");
+    tf.set_text("one two");
+    let id = tf.id();
+    let mut w: Window<Model> = Window::new(Stack::vstack(4.0, vec![Box::new(tf)]), 4);
+    w.layout(&ui, rect(0.0, 0.0, 200.0, ROW_PT));
+    w.make_first_responder(Some(id));
     let mut m = Model::default();
     assert!(w.send(action_for(Command::SelectAll), &mut m).is_some(), "Select All is taken by the field");
     assert_eq!(field_state(&w, id), ("one two".into(), 0, 7));

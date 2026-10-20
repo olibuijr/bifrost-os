@@ -442,7 +442,9 @@ mod tests {
     #[test]
     fn to_text_decodes_named_and_numeric_entities() {
         assert_eq!(to_text("<p>&bull; Sale &#8226; 20&percnt; off &hellip; &euro;5 &#x2713; caf&eacute;</p>"), "\u{2022} Sale \u{2022} 20% off \u{2026} \u{20ac}5 \u{2713} caf\u{e9}");
-        assert_eq!(to_text("<p>Ap&#243;tekarinn &amp; &Thorn;&oacute;r</p>"), "Ap\u{f3}tekarinn & \u{de}\u{f3}r");
+        assert_eq!(to_text("<p>Ap&#243;tekarinn &amp; &THORN;&oacute;r</p>"), "Ap\u{f3}tekarinn & \u{de}\u{f3}r");
+        // names are case-sensitive and the standard has THORN and thorn only: "Thorn" is no reference and stays as written
+        assert_eq!(to_text("<p>&Thorn; &thorn;</p>"), "&Thorn; \u{fe}");
         assert_eq!(to_text("<p>&unknown; &amp</p>"), "&unknown; &");
     }
 

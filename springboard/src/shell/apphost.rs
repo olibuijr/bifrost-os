@@ -3073,7 +3073,9 @@ mod extra_window_frame_tests {
         sh.dirty = true;
         sh.draw_desk_windows(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, 1000.0);
         let frames = sh.take_wayland_windows();
-        let at = |app: AppId| frames.iter().position(|f| Some(f.id) == desk::win_id(app));
+        // an app that is not installed has no catalogue entry, so its main window has no id of its own: the desk draws it as 0
+        let id_of = |app: AppId| desk::win_id(app).unwrap_or(0);
+        let at = |app: AppId| frames.iter().position(|f| f.id == id_of(app));
         let (parent, window) = (at(main).expect("the app's own window is drawn"), at(extra).expect("a frame is drawn for the second window"));
         assert!(window > parent, "the second window is above its app's window");
         assert!(frames[window].pixels.as_ref().is_some_and(|p| p.iter().any(|&c| c == FILL)), "with the app's pixels in it");
@@ -3084,8 +3086,8 @@ mod extra_window_frame_tests {
         sh.dirty = true;
         sh.draw_desk_windows(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, 2000.0);
         let after = sh.take_wayland_windows();
-        assert!(after.iter().all(|f| Some(f.id) != desk::win_id(extra)), "no frame for the closed window");
-        assert!(after.iter().any(|f| Some(f.id) == desk::win_id(main)), "the app's own window stays");
+        assert!(after.iter().all(|f| f.id != id_of(extra)), "no frame for the closed window");
+        assert!(after.iter().any(|f| f.id == id_of(main)), "the app's own window stays");
         if let Some(v) = saved { std::env::set_var("SPRINGBOARD_WAYLAND", v) } else { std::env::remove_var("SPRINGBOARD_WAYLAND") };
     }
 }
