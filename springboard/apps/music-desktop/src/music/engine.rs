@@ -99,7 +99,10 @@ pub struct AudioPlayer {
 }
 
 impl AudioPlayer {
-    pub fn new(client: Client) -> Self {
+    /// The player of `client`. An unarmed client (the shell's lazy one) never connects, so the player arms it: an
+    /// app that plays sound is the reason the service has to run.
+    pub fn new(mut client: Client) -> Self {
+        client.arm();
         AudioPlayer { client }
     }
 
@@ -130,8 +133,29 @@ impl AudioPlayer {
         }
     }
 
-    pub fn play_queue(&mut self, tracks: Vec<Track>, start: usize, shuffle: bool, seed: u64) {
-        self.client.play_queue(tracks.iter().map(Track::to_wire).collect(), start as u32, shuffle, seed);
+    /// Whether the connection to the audio service is up.
+    pub fn connected(&self) -> bool {
+        self.client.connected()
+    }
+
+    /// Why a command cannot be sent: the service socket and what the last connection attempt said.
+    pub fn unreachable(&self) -> String {
+        match self.client.last_error() {
+            Some(why) => format!("the audio service is not reachable ({why})"),
+            None => format!("the audio service is not reachable at {}", self.client.path().display()),
+        }
+    }
+
+    /// Replaces the queue and plays `start`. Errs with the cause when the command could not be sent.
+    pub fn play_queue(&mut self, tracks: Vec<Track>, start: usize, shuffle: bool, seed: u64) -> Result<(), String> {
+        if !self.client.connected() {
+            self.client.retry_now();
+        }
+        if self.client.play_queue(tracks.iter().map(Track::to_wire).collect(), start as u32, shuffle, seed) {
+            Ok(())
+        } else {
+            Err(self.unreachable())
+        }
     }
 
     pub fn pause(&mut self) {
@@ -150,8 +174,15 @@ impl AudioPlayer {
         self.client.prev();
     }
 
-    pub fn jump_to(&mut self, index: usize) {
-        self.client.send(wire::Cmd::JumpTo(index as u32));
+    pub fn jump_to(&mut self, index: usize) -> Result<(), String> {
+        if !self.client.connected() {
+            self.client.retry_now();
+        }
+        if self.client.send(wire::Cmd::JumpTo(index as u32)) {
+            Ok(())
+        } else {
+            Err(self.unreachable())
+        }
     }
 
     pub fn seek_ms(&mut self, ms: f64) {

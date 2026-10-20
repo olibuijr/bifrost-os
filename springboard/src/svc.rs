@@ -61,17 +61,45 @@ pub mod audio {
         connects: u32,
         /// false until `arm`: a lazy client does not connect, and so does not start the service (socket activation)
         armed: bool,
+        /// why the last connection attempt failed; cleared when one succeeds
+        last_error: Option<String>,
     }
 
     impl Client {
         pub fn new(path: PathBuf) -> Self {
-            Client { path, stream: None, rx: Vec::new(), tx: Vec::new(), received: idle(), received_at: 0.0, clock: 0.0, view: idle(), recording: None, done: Vec::new(), route: None, route_events: Vec::new(), version: None, retry_at: 0.0, backoff: RETRY_MIN_MS, connects: 0, armed: true }
+            Client { path, stream: None, rx: Vec::new(), tx: Vec::new(), received: idle(), received_at: 0.0, clock: 0.0, view: idle(), recording: None, done: Vec::new(), route: None, route_events: Vec::new(), version: None, retry_at: 0.0, backoff: RETRY_MIN_MS, connects: 0, armed: true, last_error: None }
         }
 
         /// The client of the service under the shell data dir `root`. It connects lazily: nothing is sent to the
         /// service (so bifrostd does not start it) until `arm`.
         pub fn for_root(root: &Path) -> Self {
             Client { armed: false, ..Self::new(socket_path(root)) }
+        }
+
+        /// The client of an app: connects at once (the service is socket-activated, so connecting starts it). The app
+        /// sandbox has no shell to arm it, so `for_root` would never connect there.
+        pub fn for_app(root: &Path) -> Self {
+            Self::new(socket_path(root))
+        }
+
+        /// The service socket this client connects to.
+        pub fn path(&self) -> &Path {
+            &self.path
+        }
+
+        /// Why the last connection attempt failed (`None` when it has not failed since the last success).
+        pub fn last_error(&self) -> Option<&str> {
+            self.last_error.as_deref()
+        }
+
+        /// Tries the connection now instead of at the next scheduled retry; true when it connected.
+        pub fn retry_now(&mut self) -> bool {
+            if self.stream.is_some() {
+                return true;
+            }
+            self.retry_at = 0.0;
+            self.tick(self.clock);
+            self.stream.is_some()
         }
 
         /// Allows the connection. The shell arms its client once the first desktop frame is drawn, so the audio
@@ -193,16 +221,19 @@ pub mod audio {
                 c.backoff = (c.backoff * 2.0).min(RETRY_MAX_MS);
             };
             if !self.path.exists() {
+                self.last_error = Some(format!("{} does not exist", self.path.display()));
                 self.retry_at = now + RETRY_MIN_MS * 3.0;
                 return false;
             }
             let s = match UnixStream::connect(&self.path).and_then(|s| s.set_nonblocking(true).map(|_| s)) {
                 Ok(s) => s,
-                Err(_) => {
+                Err(e) => {
+                    self.last_error = Some(format!("{}: {e}", self.path.display()));
                     schedule(self);
                     return false;
                 }
             };
+            self.last_error = None;
             self.stream = Some(s);
             self.rx.clear();
             self.tx.clear();

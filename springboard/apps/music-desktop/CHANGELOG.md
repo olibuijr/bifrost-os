@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.13.4 — 2026-10-20
+
+- Radio plays again. The app's audio service client was created lazily and never connected, so a station or a song
+  was sent to nobody. The player now connects on start and tries again when a command is sent.
+- A command the audio service cannot take is logged to stderr with its cause and shown as a short message at the
+  foot of the Radio list; the tuned station's second line shows the stream's own error. The title "Radio (Offline)"
+  now states why the station list could not be fetched.
+
 ## 1.13.3 — 2026-10-20
 
 - Nothing else changed: this release only rewords the notes for the new app icon.

@@ -44,7 +44,12 @@ impl Music {
     pub fn title(&self) -> String {
         match self.page() {
             Page::Root => match self.tab {
-                Tab::Radio if self.radio.error.is_some() && !self.radio.stations().is_empty() => "Radio (Offline)".into(),
+                Tab::Radio if self.radio.error.is_some() && !self.radio.stations().is_empty() => {
+                    // the reason, short: the first line of the fetch error, cut to what a title can hold
+                    let why = self.radio.error.as_deref().unwrap_or_default().lines().next().unwrap_or_default();
+                    let why: String = why.chars().take(48).collect();
+                    if why.is_empty() { "Radio (Offline)".into() } else { format!("Radio (Offline: {why})") }
+                }
                 Tab::Playlists => "Playlists".into(),
                 Tab::Songs => self.scope.label().into(),
                 t => TABS.iter().find(|e| e.0 == t).map_or("", |e| e.1).into(),

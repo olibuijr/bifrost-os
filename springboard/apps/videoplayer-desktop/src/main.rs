@@ -88,7 +88,7 @@ impl VideoPlayerApp {
             movie: None,
             held: None,
             pending,
-            audio: audio::Client::for_root(&shell_dir()),
+            audio: audio::Client::for_app(&shell_dir()),
             take: Recorder::new(true),
             take_path: None,
             screen: Recorder::new(false),

@@ -21,7 +21,7 @@ pub struct Player {
 
 impl Player {
     pub fn new(root: &Path, cache: PathBuf, plugins: PathBuf) -> Self {
-        Player { client: Client::for_root(root), cache, plugins, queued: None, next_id: 1 }
+        Player { client: Client::for_app(root), cache, plugins, queued: None, next_id: 1 }
     }
 
     /// Drive the service connection; call once per loop turn.

@@ -408,7 +408,7 @@ impl Podcasts {
             loading: Vec::new(),
             downloading: None,
             progress: None,
-            audio: audio::Client::for_root(shell_dir),
+            audio: audio::Client::for_app(shell_dir),
             playing: None,
             playing_path: None,
             started: false,
