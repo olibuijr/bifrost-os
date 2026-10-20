@@ -12,7 +12,7 @@ use crate::client::{recv_msg, send_msg, Conn, HELLO_TIMEOUT, MAX_STALLED};
 use crate::dsp::{Plan, Stages};
 use crate::io::{
     log, set_realtime, ClientSlot, DeviceRunner, RunnerConfig, Shared, WaitPolicy, CLIENT_PRIORITY, DEFAULT_QUANTUM,
-    MAX_CH, MAX_QUANTUM, MIN_QUANTUM,
+    MAX_CH, MAX_CLIENTS, MAX_QUANTUM, MIN_QUANTUM,
 };
 use bifrost_audio_driver::{DeviceDesc, Driver, DriverEvent, IoConfig};
 use bifrost_audio_policy::dsp::DspManager;
@@ -117,6 +117,25 @@ struct ClientRec {
     policy: bool,
     uid: u32,
     pid: i32,
+    /// Threads of this client the server raised to real-time (`PromoteThread`), capped by `MAX_PROMOTED`.
+    promoted: Vec<i32>,
+}
+
+/// IO procedures one connection may hold (each is a pinned shared-memory region).
+pub const MAX_SLOTS_PER_CLIENT: usize = 8;
+/// IO procedures across all clients.
+pub const MAX_SLOTS_TOTAL: usize = 128;
+/// Real-time threads one connection may have, and all connections together.
+pub const MAX_PROMOTED: usize = 8;
+pub const MAX_PROMOTED_TOTAL: usize = 64;
+/// Open connections; further ones are closed at accept.
+pub const MAX_CONNECTIONS: usize = 64;
+/// The longest client name kept (and logged).
+const MAX_NAME: usize = 128;
+
+/// A client-claimed name made safe to log: control characters dropped, length capped.
+fn clean_name(name: &str) -> String {
+    name.chars().filter(|c| !c.is_control()).take(MAX_NAME).collect()
 }
 
 struct SlotRec {
@@ -250,7 +269,7 @@ impl ServerCore {
     }
 
     pub fn add_client(&mut self, id: u32, pid: i32, uid: u32) {
-        self.clients.insert(id, ClientRec { name: None, policy: false, uid, pid });
+        self.clients.insert(id, ClientRec { name: None, policy: false, uid, pid, promoted: Vec::new() });
     }
 
     /// A connection closed: its IO procedures go with it.
@@ -285,6 +304,7 @@ impl ServerCore {
                 if policy && c.uid != 0 && c.uid != server_uid {
                     return err(AudioError::PermissionDenied);
                 }
+                let name = clean_name(&name);
                 log("client", &format!("client {client}: {name} (pid {}, policy {policy})", c.pid));
                 let pid = c.pid;
                 c.name = Some(name.clone());
@@ -423,6 +443,9 @@ impl ServerCore {
                 if tid <= 0 || !std::path::Path::new(&format!("/proc/{pid}/task/{tid}")).exists() {
                     return err(AudioError::PermissionDenied);
                 }
+                if !self.reserve_promotion(client, tid) {
+                    return err(AudioError::PermissionDenied);
+                }
                 match set_realtime(tid, CLIENT_PRIORITY, 1024) {
                     Ok(()) => plain(Reply::Done),
                     Err(e) if e.raw_os_error() == Some(libc::EPERM) => err(AudioError::PermissionDenied),
@@ -433,6 +456,26 @@ impl ServerCore {
                 }
             }
         }
+    }
+
+    /// Counts a real-time thread against the client's budget and the server's. A thread already promoted is free;
+    /// threads that have ended no longer count.
+    fn reserve_promotion(&mut self, client: u32, tid: i32) -> bool {
+        for c in self.clients.values_mut() {
+            let pid = c.pid;
+            c.promoted.retain(|t| std::path::Path::new(&format!("/proc/{pid}/task/{t}")).exists());
+        }
+        let total: usize = self.clients.values().map(|c| c.promoted.len()).sum();
+        let Some(c) = self.clients.get_mut(&client) else { return false };
+        if c.promoted.contains(&tid) {
+            return true;
+        }
+        if c.promoted.len() >= MAX_PROMOTED || total >= MAX_PROMOTED_TOTAL {
+            log("client", &format!("client {client}: real-time thread budget used up"));
+            return false;
+        }
+        c.promoted.push(tid);
+        true
     }
 
     fn owned_slot(&self, client: u32, id: u32) -> Result<SlotView, AudioError> {
@@ -459,6 +502,13 @@ impl ServerCore {
             || r.buffer_frames > range.1.min(MAX_QUANTUM * 2)
         {
             return err(AudioError::BadValue);
+        }
+        // Every slot pins a shared-memory region: bound them per client, per device and in all.
+        let mine = self.slots.values().filter(|s| s.slot.owner == client).count();
+        let on_device = self.slots.values().filter(|s| s.device == dev).count();
+        if mine >= MAX_SLOTS_PER_CLIENT || on_device >= MAX_CLIENTS || self.slots.len() >= MAX_SLOTS_TOTAL {
+            log("client", &format!("client {client}: io proc refused, too many ({mine} of its own, {on_device} on device {dev})"));
+            return err(AudioError::PermissionDenied);
         }
         if let Err(e) = self.check_session(client, r.output_channels > 0, r.input_channels > 0) {
             return err(e);
@@ -988,7 +1038,13 @@ pub fn serve(core: &mut ServerCore, listener: &OwnedFd, stop: &AtomicBool, wake:
                     break;
                 }
                 // SAFETY: a fresh descriptor from accept4.
-                let c = Conn::new(unsafe { OwnedFd::from_raw_fd(fd) }, next_id);
+                let owned = unsafe { OwnedFd::from_raw_fd(fd) };
+                if conns.len() >= MAX_CONNECTIONS {
+                    // too many open connections: close this one at once (dropping the descriptor)
+                    log("client", "connection refused: too many clients");
+                    continue;
+                }
+                let c = Conn::new(owned, next_id);
                 next_id += 1;
                 core.add_client(c.id, c.pid, c.uid);
                 conns.push(c);
@@ -1147,6 +1203,32 @@ mod tests {
         assert_eq!(c.apps().get(sys, PropertyAddress::global(bifrost_audio_types::props::DEFAULT_OUTPUT)), Ok(PropertyValue::Object(ObjectId(0))));
         assert_eq!(c.handle(1, proc_req(256)).reply, Reply::Error(AudioError::DeviceGone));
         assert_eq!(c.handle(1, Request::StartIoProc { id: a }).reply, Reply::Error(AudioError::DeviceGone));
+    }
+
+    #[test]
+    fn one_client_cannot_hold_more_io_procs_than_the_cap() {
+        let (mut c, _) = core();
+        hello(&mut c, 1, false);
+        for _ in 0..MAX_SLOTS_PER_CLIENT {
+            add(&mut c, 1, 256);
+        }
+        assert_eq!(c.handle(1, proc_req(256)).reply, Reply::Error(AudioError::PermissionDenied));
+        // another connection is not affected by the first one's count
+        hello(&mut c, 2, false);
+        add(&mut c, 2, 256);
+    }
+
+    #[test]
+    fn a_promoted_thread_counts_once_and_the_client_name_is_logged_clean() {
+        let (mut c, _) = core();
+        hello(&mut c, 1, false);
+        // SAFETY: gettid takes no arguments.
+        let tid = unsafe { libc::syscall(libc::SYS_gettid) } as i32;
+        assert!(c.reserve_promotion(1, tid));
+        assert!(c.reserve_promotion(1, tid));
+        assert_eq!(c.clients[&1].promoted, vec![tid]);
+        assert_eq!(clean_name("a\nb\u{1b}[31mc"), "ab[31mc");
+        assert_eq!(clean_name(&"x".repeat(1000)).len(), 128);
     }
 
     #[test]
