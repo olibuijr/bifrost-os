@@ -884,7 +884,8 @@ impl Shell {
         let Some(menu)=self.desktop_menu else{return;};if matches!(menu,Menu::Dock|Menu::Document){return;}
         // a context menu stays open when the pointer crosses the bar; only a bar menu follows the pointer to a neighbour
         if y<self.desktop_bar_height() as f32&&!matches!(menu,Menu::Context|Menu::Arrange) {
-            if let Some(b)=self.menu_buttons().into_iter().find(|(_,l,w,_)|x>=*l&&x<*l+*w) {if b.0!=menu&&b.0!=Menu::ControlCenter{self.desktop_menu=Some(b.0);self.desktop_menu_row=None;self.help_reset();self.dirty=true;}}
+            // the Recent Items submenu sits under the System bar item: crossing that item is not a move to another menu
+            if let Some(b)=self.menu_buttons().into_iter().find(|(_,l,w,_)|x>=*l&&x<*l+*w) {let here=if menu==Menu::Recent{Menu::System}else{menu};if b.0!=here&&b.0!=Menu::ControlCenter{self.desktop_menu=Some(b.0);self.desktop_menu_row=None;self.help_reset();self.dirty=true;}}
             return;
         }
         let row=self.desktop_popup_rect().and_then(|(l,t,w,h)|if x>=l as f32&&x<(l+w) as f32&&y>=t as f32&&y<(t+h) as f32{self.menu_row_at(menu,y-t as f32)}else{None}).filter(|i|self.menu_rows(menu).get(*i).is_some_and(|r|r.action.is_some()));

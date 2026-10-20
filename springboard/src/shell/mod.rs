@@ -3170,6 +3170,12 @@ impl Shell {
         self.shield = None;
         self.screentime.flush();
         self.assistive_touch.dismiss();
+        // a Force Quit, About or Log Out card does not outlive the lock (its keys would otherwise act at the login window)
+        #[cfg(feature = "desktop-wayland")]
+        {
+            self.utility = None;
+            self.utility_dirty = true;
+        }
         self.screen_on = false;
         self.screen = Screen::Lock;
         self.lock_pad = None;

@@ -1,6 +1,6 @@
 //! Compositor key bindings: Super+Space opens the search panel, Ctrl+Up and F3 Overview, F4 the Apps grid,
 //! Alt+Tab cycles the focus, Alt+F4 closes the focused window, Ctrl+Super+arrows tile it and Ctrl+Super+F toggles full
-//! screen. The shell only gets keys while one of its surfaces has focus, so the compositor takes these chords before any
+//! screen, Alt+Super+Esc the Force Quit window and Shift+Super+Q the Log Out card. The shell only gets keys while one of its surfaces has focus, so the compositor takes these chords before any
 //! client sees them. Super+A is deliberately not bound: Cmd+A is Select All and belongs to the app (the app list
 //! launcher it used to start was a leftover of the old window manager).
 //!
@@ -17,6 +17,10 @@ pub mod keysym {
     pub const SPACE: u32 = 0x0020;
     pub const F: u32 = 0x0066;
     pub const TAB: u32 = 0xff09;
+    pub const ESCAPE: u32 = 0xff1b;
+    /// `q`; with Shift held the modified keysym is the capital.
+    pub const Q: u32 = 0x0071;
+    pub const Q_SHIFTED: u32 = 0x0051;
     pub const F3: u32 = 0xffc0;
     pub const F4: u32 = 0xffc1;
     pub const LEFT: u32 = 0xff51;
@@ -34,6 +38,10 @@ pub const QUICKSEARCH_LINE: &[u8] = b"quicksearch\n";
 pub const OVERVIEW_LINE: &[u8] = b"overview\n";
 /// The line sent to the shell for the Apps grid.
 pub const APPGRID_LINE: &[u8] = b"appgrid\n";
+/// The line sent to the shell for the Force Quit window.
+pub const FORCEQUIT_LINE: &[u8] = b"forcequit\n";
+/// The line sent to the shell for the Log Out card.
+pub const LOGOUT_LINE: &[u8] = b"logout\n";
 
 /// The modifier keys held with a chord.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -65,6 +73,11 @@ pub enum Action {
     Tile(Arrow),
     /// Ctrl+Super+F: the focused window goes full screen, or leaves it.
     FullScreen,
+    /// Alt+Super+Esc: the Force Quit window, sends `forcequit` to the shell control socket. The shell gets no key while a
+    /// hung app has the focus, so the compositor must take the chord.
+    ForceQuit,
+    /// Shift+Super+Q: the Log Out card, sends `logout` to the shell control socket.
+    LogOut,
 }
 
 /// The action a chord is bound to. The modifiers must match exactly: Super+Shift+Space is not the search panel.
@@ -74,6 +87,8 @@ pub fn action(sym: u32, mods: Mods) -> Option<Action> {
     let alt_only = mods == Mods { alt: true, ..none };
     let ctrl_only = mods == Mods { ctrl: true, ..none };
     let ctrl_super = mods == Mods { logo: true, ctrl: true, ..none };
+    let alt_super = mods == Mods { logo: true, alt: true, ..none };
+    let shift_super = mods == Mods { logo: true, shift: true, ..none };
     match sym {
         keysym::SPACE if super_only => Some(Action::QuickSearch),
         keysym::UP if ctrl_only => Some(Action::MissionControl),
@@ -82,6 +97,9 @@ pub fn action(sym: u32, mods: Mods) -> Option<Action> {
         keysym::TAB if alt_only => Some(Action::NextWindow),
         keysym::F4 if alt_only => Some(Action::CloseWindow),
         keysym::F if ctrl_super => Some(Action::FullScreen),
+        keysym::ESCAPE if alt_super => Some(Action::ForceQuit),
+        // Shift makes the modified keysym the capital; accept the lower case too in case a layout reports the base symbol
+        keysym::Q | keysym::Q_SHIFTED if shift_super => Some(Action::LogOut),
         keysym::LEFT if ctrl_super => Some(Action::Tile(Arrow::Left)),
         keysym::RIGHT if ctrl_super => Some(Action::Tile(Arrow::Right)),
         keysym::UP if ctrl_super => Some(Action::Tile(Arrow::Up)),
@@ -126,6 +144,8 @@ impl WmState {
             Action::QuickSearch => tell_shell(QUICKSEARCH_LINE),
             Action::MissionControl => tell_shell(OVERVIEW_LINE),
             Action::AppGrid => tell_shell(APPGRID_LINE),
+            Action::ForceQuit => tell_shell(FORCEQUIT_LINE),
+            Action::LogOut => tell_shell(LOGOUT_LINE),
             Action::NextWindow => {
                 let shown: Vec<WindowId> = self.wm.stack().into_iter().filter(|id| self.wm.visible(*id)).collect();
                 if let Some(id) = next_window(&shown) {
@@ -212,6 +232,29 @@ mod tests {
     }
 
     #[test]
+    fn alt_super_escape_is_force_quit() {
+        let alt_super = Mods { logo: true, alt: true, ..Mods::default() };
+        assert_eq!(action(keysym::ESCAPE, alt_super), Some(Action::ForceQuit));
+        assert_eq!(action(keysym::ESCAPE, Mods::default()), None, "a plain Esc is the app's");
+        assert_eq!(action(keysym::ESCAPE, SUPER), None);
+        assert_eq!(action(keysym::ESCAPE, ALT), None);
+        assert_eq!(action(keysym::ESCAPE, Mods { ctrl: true, ..alt_super }), None);
+        assert_eq!(FORCEQUIT_LINE, b"forcequit\n");
+    }
+
+    #[test]
+    fn shift_super_q_is_log_out_and_ctrl_super_q_is_not() {
+        let shift_super = Mods { logo: true, shift: true, ..Mods::default() };
+        // with Shift held the modified keysym is the capital Q
+        assert_eq!(action(keysym::Q_SHIFTED, shift_super), Some(Action::LogOut));
+        assert_eq!(action(keysym::Q, shift_super), Some(Action::LogOut));
+        assert_eq!(action(keysym::Q, SUPER), None, "Cmd+Q quits the app, it is not a log out");
+        assert_eq!(action(keysym::Q_SHIFTED, Mods { ctrl: true, ..shift_super }), None);
+        assert_eq!(action(keysym::Q, CTRL_SUPER), None, "Ctrl+Cmd+Q is the lock, the shell's own chord");
+        assert_eq!(LOGOUT_LINE, b"logout\n");
+    }
+
+    #[test]
     fn extra_or_missing_modifiers_do_not_match() {
         assert_eq!(action(keysym::SPACE, Mods { shift: true, ..SUPER }), None);
         assert_eq!(action(keysym::SPACE, Mods::default()), None);
@@ -251,7 +294,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let sock = dir.join("c.sock");
         let listener = UnixListener::bind(&sock).unwrap();
-        for line in [QUICKSEARCH_LINE, OVERVIEW_LINE, APPGRID_LINE] {
+        for line in [QUICKSEARCH_LINE, OVERVIEW_LINE, APPGRID_LINE, FORCEQUIT_LINE, LOGOUT_LINE] {
             send_line(&sock, line).unwrap();
             let (mut conn, _) = listener.accept().unwrap();
             let mut got = Vec::new();

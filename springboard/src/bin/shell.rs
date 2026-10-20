@@ -858,6 +858,16 @@ fn run() -> std::io::Result<()> {
                         effects.extend(shell.hw_shortcut(springboard::shell::hwkeys::Shortcut::QuickSearch, t));
                         b"ok\n".to_vec()
                     }
+                    // the window server takes Option+Cmd+Esc and Shift+Cmd+Q (the shell gets no key while a hung app has the
+                    // focus); the same guards as the hardware chords: desktop only, never over the login window
+                    Ok(Request::ForceQuit) => {
+                        effects.extend(shell.hw_shortcut(springboard::shell::hwkeys::Shortcut::ForceQuit, t));
+                        b"ok\n".to_vec()
+                    }
+                    Ok(Request::LogOut) => {
+                        effects.extend(shell.hw_shortcut(springboard::shell::hwkeys::Shortcut::LogOut, t));
+                        b"ok\n".to_vec()
+                    }
                     Ok(Request::Overview) => {
                         shell.overview_toggle(t);
                         b"ok\n".to_vec()

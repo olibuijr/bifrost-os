@@ -295,7 +295,8 @@ impl UtilityWindow {
         let began = self.pressed.take();
         let was_drag = self.drag.take().is_some();
         let at = self.part_at(ui, sw, sh, x, y);
-        if at.is_none() && !was_drag {
+        // a release outside the card still ends a press that began on it, so the desktop gets no Up without its Down
+        if at.is_none() && !was_drag && began.is_none() {
             return (false, Outcome::Nothing);
         }
         let outcome = match (began, at) {
@@ -505,6 +506,10 @@ impl Shell {
     /// Keys while the card is up: Esc, Return and (for Force Quit) the arrows. A release of one of them is used up too.
     /// None for any other key, which falls through to the desktop.
     pub(super) fn utility_key(&mut self, code: u16, down: bool, t: f64) -> Option<Vec<Effect>> {
+        // never over the login window: Return there submits the password, it does not run the card's action
+        if self.is_locked() {
+            return None;
+        }
         let w = self.utility.as_mut()?;
         let takes = matches!(code, 1 | 28 | 96) || (w.kind == Kind::ForceQuit && matches!(code, 103 | 108));
         if !takes {
@@ -773,6 +778,18 @@ mod tests {
         assert_eq!(w.up(ui, 1280, 800, x, y).1, Outcome::Close);
     }
 
+    #[test]
+    fn a_release_off_the_card_ends_the_press_that_began_on_it() {
+        let sh = crate::shell::tests::shell();
+        let ui = &sh.ui;
+        let mut w = UtilityWindow::new(Kind::About);
+        let l = w.layout(ui, 1280, 800);
+        let (x, y) = ((l.close.x + l.close.w / 2) as f32, (l.close.y + l.close.h / 2) as f32);
+        assert!(w.down(ui, 1280, 800, x, y));
+        assert_eq!(w.up(ui, 1280, 800, 2., 2.), (true, Outcome::Nothing), "no Up goes to the desktop without its Down");
+        assert_eq!(w.up(ui, 1280, 800, 2., 2.), (false, Outcome::Nothing), "a release that began elsewhere is not the card's");
+    }
+
     #[cfg(feature = "desktop-wayland")]
     mod shell {
         use super::*;
@@ -833,6 +850,25 @@ mod tests {
             let _ = sh.hw_shortcut(hwkeys::Shortcut::LogOut, 3.);
             assert_eq!(sh.utility.as_ref().map(|w| w.kind), Some(Kind::LogOut));
             assert!(!sh.is_locked(), "Log Out asks first");
+        }
+
+        #[test]
+        fn a_card_does_not_survive_the_lock_and_takes_no_key_at_the_login_window() {
+            let mut sh = desktop();
+            sh.utility_open(Kind::LogOut);
+            let _ = sh.lock_screen();
+            assert!(sh.utility.is_none(), "every lock path drops the card");
+            assert!(sh.is_locked());
+            // a card forced up behind the lock still gets no key: Return there is the password's
+            sh.utility = Some(UtilityWindow::new(Kind::LogOut));
+            assert!(sh.utility_key(28, true, 2.).is_none(), "Return reaches the login window");
+            assert!(sh.utility_key(1, true, 2.).is_none());
+            assert!(sh.utility.is_some() && sh.is_locked(), "nothing ran");
+            // and the chords do not open one over the login window
+            sh.utility = None;
+            let _ = sh.hw_shortcut(hwkeys::Shortcut::ForceQuit, 3.);
+            let _ = sh.hw_shortcut(hwkeys::Shortcut::LogOut, 3.);
+            assert!(sh.utility.is_none());
         }
 
         #[test]
