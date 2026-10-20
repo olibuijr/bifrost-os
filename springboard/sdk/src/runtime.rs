@@ -837,6 +837,10 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                     a.bold = flags & BOLD_TEXT != 0;
                     kit::appearance::publish(a);
                     kit::appearance::jump_to(flags & LIGHT != 0);
+                    // the user's accent colour: switches, checkmarks and the default button follow it
+                    if let Some(accent) = kit::appearance::Accent::from_wire((flags & ACCENT_MASK) >> ACCENT_SHIFT) {
+                        kit::appearance::set_accent(accent);
+                    }
                     let vibrant = flags & VIBRANCY != 0 && flags & REDUCE_TRANSPARENCY == 0;
                     crate::widgets::set_vibrancy(vibrant, flags & MATERIALS != 0);
                     if !vibrant {

@@ -486,6 +486,19 @@ fn smart_list_tiles_can_be_hidden_and_a_pinned_list_gets_a_tile() {
 }
 
 #[test]
+fn a_tile_name_wider_than_the_tile_wraps_instead_of_being_cut() {
+    use bifrost_app::kit::ui::{Weight, MAC_BODY_PT, SPACE_M};
+    let (app, ui, path) = app("tile-labels");
+    let room = ui.pt(app.tile_rect(&ui, 0).w) - ui.pt(2.0 * SPACE_M);
+    let lines = Reminders::tile_label_lines(&ui, "Recently Deleted", room);
+    assert_eq!(lines, ["Recently", "Deleted"], "two whole lines, no ellipsis");
+    assert!(lines.iter().all(|l| ui.measure(l, MAC_BODY_PT, Weight::Semibold) <= room));
+    assert_eq!(Reminders::tile_label_lines(&ui, "Today", room), ["Today"]);
+    assert_eq!(Reminders::tile_label_lines(&ui, "Scheduled", room), ["Scheduled"]);
+    cleanup(&path);
+}
+
+#[test]
 fn only_eight_lists_can_be_pinned() {
     let (mut app, ui, path) = app("pin-cap");
     let mut next = app.data.clone();

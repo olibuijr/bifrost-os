@@ -1046,8 +1046,10 @@ impl super::Shell {
 
     /// Draws the panel's content over the popup background (`draw_desktop_popup` drew the material).
     pub(super) fn draw_doc_panel(&self, s: &mut crate::gfx::Surface, x: usize, y: usize, _w: usize, _h: usize) {
-        use super::ui::{Weight, DETAIL_BG, FIELD_BG, LABEL, LINK, MAC_BODY_PT, MAC_HEADLINE_PT, SECONDARY, SELECTION, SEPARATOR_C, SPACE_S, TINT, WHITE};
+        use super::ui::{Weight, DETAIL_BG, FIELD_BG, LABEL, LINK, MAC_BODY_PT, MAC_HEADLINE_PT, SECONDARY, SELECTION, SEPARATOR_C, SPACE_S, WHITE};
         let Some(p) = self.doc_panel.as_ref() else { return };
+        // the focus rings and the default button follow the user's accent colour; the back control stays a link
+        let accent = bifrost_render::appearance::accent_now();
         let l = p.layout();
         let ui = &self.ui;
         let (ox, oy) = (x as f32, y as f32);
@@ -1067,7 +1069,7 @@ impl super::Shell {
             let (fx, fy, fw, fh) = px(f);
             // the focused field: content background and the focus ring in the tint
             s.fill_rrect(fx, fy, fw, fh, radius, DETAIL_BG.now());
-            s.stroke_rrect(fx, fy, fw, fh, radius, ui.pt(1.0), TINT);
+            s.stroke_rrect(fx, fy, fw, fh, radius, ui.pt(1.0), accent);
             let shown = format!("{}|", p.name);
             text(s, f, SPACE_S, &shown, MAC_BODY_PT, Weight::Regular, LABEL.now());
         }
@@ -1096,7 +1098,7 @@ impl super::Shell {
         if let Some(name) = &p.creating {
             let r = R { x: l.list.x + 4.0, y: l.list.y, w: l.list.w - 8.0, h: l.row_h };
             let (rx, ry, rw, rh) = px(&r);
-            s.stroke_rrect(rx, ry + ui.pt(2.0), rw, rh - ui.pt(4.0), radius, ui.pt(1.0), TINT);
+            s.stroke_rrect(rx, ry + ui.pt(2.0), rw, rh - ui.pt(4.0), radius, ui.pt(1.0), accent);
             text(s, &r, SPACE_S, &format!("{name}|"), MAC_BODY_PT, Weight::Regular, LABEL.now());
         }
         for (row, e) in p.entries.iter().enumerate().skip(p.top).take(VISIBLE_ROWS - offset) {
@@ -1127,7 +1129,7 @@ impl super::Shell {
         self.label("Cancel", MAC_BODY_PT, Weight::Regular, LABEL.now(), |im| s.blit(im, (cx + (cw - im.w as f32) / 2.0) as i32, (cy + (ch - im.h as f32) / 2.0) as i32, 255, 255));
         let (bx, by, bw, bh) = px(&l.ok);
         let enabled = p.can_confirm();
-        s.fill_rrect(bx, by, bw, bh, radius, if enabled { TINT } else { FIELD_BG.now() });
+        s.fill_rrect(bx, by, bw, bh, radius, if enabled { accent } else { FIELD_BG.now() });
         let ok = if p.kind == Kind::Save { "Save" } else { "Open" };
         self.label(ok, MAC_BODY_PT, Weight::Regular, if enabled { WHITE } else { SECONDARY }, |im| s.blit(im, (bx + (bw - im.w as f32) / 2.0) as i32, (by + (bh - im.h as f32) / 2.0) as i32, 255, 255));
     }

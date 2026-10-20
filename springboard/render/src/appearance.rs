@@ -483,6 +483,16 @@ impl Accent {
         Accent::ALL.into_iter().find(|a| a.key() == s).unwrap_or(Accent::Blue)
     }
 
+    /// The value `ToApp::Appearance` carries for this accent: its position in `ALL` plus one (0 means "not sent").
+    pub fn to_wire(self) -> u32 {
+        Accent::ALL.iter().position(|a| *a == self).map_or(0, |i| i as u32 + 1)
+    }
+
+    /// The accent a wire value names; `None` for 0 (an older shell) and for values past the list.
+    pub fn from_wire(n: u32) -> Option<Accent> {
+        (n as usize).checked_sub(1).and_then(|i| Accent::ALL.get(i).copied())
+    }
+
     /// (dark, light) colour of the accent.
     pub fn colours(self) -> (u32, u32) {
         use crate::gfx::pack;
@@ -556,6 +566,15 @@ mod scheme_tests {
             assert_eq!(Accent::parse(a.key()), a);
         }
         assert_eq!(Accent::parse("nonsense"), Accent::Blue);
+    }
+
+    #[test]
+    fn accents_round_trip_over_the_wire_and_zero_means_not_sent() {
+        for a in Accent::ALL {
+            assert_eq!(Accent::from_wire(a.to_wire()), Some(a));
+        }
+        assert_eq!(Accent::from_wire(0), None);
+        assert_eq!(Accent::from_wire(Accent::ALL.len() as u32 + 1), None);
     }
 
     #[test]

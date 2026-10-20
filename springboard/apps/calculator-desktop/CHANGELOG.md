@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.13.2 — 2026-10-20
+
+- Scientific: a function key (square root, cube root, logarithms, trigonometry) pressed right after a result now applies to the shown value instead of starting a new expression.
+- Scientific: the cube-root key is drawn as a small 3 before the square root sign; it no longer shows a missing-glyph box.
+
 ## 1.13.1
 
 - BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.

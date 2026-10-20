@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.23.2 — 2026-10-20
+
+- A first line typed as a title no longer shows the Markdown marker: "Shopping list" appears in the title style with no "#" in front of it. The note file keeps its Markdown.
+- The note list row (title, first line of text, date) now updates while you type, half a second after the last key, instead of waiting until the note is closed or refocused. A new note with nothing typed yet reads New Note.
+
 ## 1.23.1
 
 - BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.

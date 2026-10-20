@@ -1484,7 +1484,7 @@ impl AppStore {
                 let text_w = cw - ui.pt(32.0);
                 let title = ui.fit(&a.name, 24.0, text_w);
                 self.put(s, ui, &title, 24.0, Weight::Bold, WHITE, false, x0 + ui.pt(16.0), y + ui.pt(236.0));
-                for (k, line) in ui.wrap(&a.summary, 17.0, Weight::Regular, text_w).into_iter().take(2).enumerate() {
+                for (k, line) in wrap_clamped(ui, &a.summary, 17.0, Weight::Regular, text_w, 2).into_iter().enumerate() {
                     self.put(s, ui, &line, 17.0, Weight::Regular, light, false, x0 + ui.pt(16.0), y + ui.pt(268.0 + 20.0 * k as f32));
                 }
                 s.fill_rect((x0 + ui.pt(16.0)) as usize, (y + ui.pt(325.0)) as usize, text_w as usize, 1, shade(light, 0.6));
@@ -1795,6 +1795,27 @@ impl AppStore {
     }
 }
 
+/// `text` wrapped to at most `max_lines` lines of `w` px. When it does not fit, the last line ends at a whole word
+/// with an ellipsis, so a description is never cut in the middle of a sentence without saying so.
+fn wrap_clamped(ui: &Ui, text: &str, pt: f32, weight: Weight, w: f32, max_lines: usize) -> Vec<String> {
+    let mut lines = ui.wrap(text, pt, weight, w);
+    if lines.len() <= max_lines || max_lines == 0 {
+        return lines;
+    }
+    lines.truncate(max_lines);
+    let last = lines.pop().unwrap_or_default();
+    let mut words: Vec<&str> = last.split_whitespace().collect();
+    loop {
+        let kept = words.join(" ");
+        let candidate = format!("{}\u{2026}", kept.trim_end_matches([',', ';', ':', '-', '\u{2013}']));
+        if words.is_empty() || ui.measure(&candidate, pt, weight) <= w {
+            lines.push(candidate);
+            return lines;
+        }
+        words.pop();
+    }
+}
+
 /// Each note wrapped on its own, bulleted, so notes stay separate lines.
 fn wrap_notes(ui: &Ui, notes: &[String], w: f32) -> Vec<String> {
     notes.iter().flat_map(|n| ui.wrap(&format!("\u{2022} {n}"), 17.0, Weight::Regular, w)).collect()
@@ -1895,6 +1916,22 @@ mod tests {
     use crate::shell::store::api::parse_catalog;
 
     const SUM: &str = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+
+    #[test]
+    fn a_description_that_does_not_fit_ends_in_an_ellipsis_at_a_word() {
+        let ui = crate::shell::tests::ui();
+        let text = "A Browser-style browser powered by Servo, with a separate BifrOSt profile";
+        let w = ui.measure("A Browser-style browser powered by", 17.0, Weight::Regular) + 4.0;
+        let lines = wrap_clamped(&ui, text, 17.0, Weight::Regular, w, 2);
+        assert_eq!(lines.len(), 2);
+        assert!(lines[1].ends_with('\u{2026}'), "{lines:?}");
+        assert!(ui.measure(&lines[1], 17.0, Weight::Regular) <= w);
+        let kept = lines[1].trim_end_matches('\u{2026}');
+        assert!(text.contains(kept) && !kept.ends_with(' '), "cut at a word boundary: {kept:?}");
+        let all = wrap_clamped(&ui, text, 17.0, Weight::Regular, w, 4);
+        assert!(!all.last().unwrap().ends_with('\u{2026}'), "text that fits is untouched");
+        assert_eq!(all.join(" "), text);
+    }
 
     #[test]
     fn a_package_for_another_sdk_protocol_shows_needs_update_not_get_or_open() {

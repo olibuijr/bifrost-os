@@ -1601,6 +1601,7 @@ pub fn appearance_flags() -> u32 {
     [(a11y::increase_contrast(), INCREASE_CONTRAST), (a11y::reduce_transparency(), REDUCE_TRANSPARENCY), (a11y::button_shapes(), SHOW_BORDERS), (a11y::bold_text(), BOLD_TEXT), (bifrost_render::appearance::target_is_light(), LIGHT), (vibrancy_available(), VIBRANCY), (vibrancy_available(), MATERIALS)]
         .into_iter()
         .fold(0, |f, (on, bit)| if on { f | bit } else { f })
+        | (bifrost_render::appearance::accent().to_wire() << ACCENT_SHIFT)
 }
 
 /// Behind-window vibrancy works only when the GPU presenter blurs the desktop under windows, and not with Reduce
@@ -2376,6 +2377,18 @@ mod tests {
         assert_ne!(appearance_flags() & LIGHT, 0, "light scheme sends the LIGHT bit");
         bifrost_render::appearance::jump_to(false);
         assert_eq!(appearance_flags() & LIGHT, 0, "dark scheme clears it");
+    }
+
+    #[test]
+    fn the_accent_colour_rides_in_the_appearance_flags() {
+        use bifrost_proto::appearance::{ACCENT_MASK, ACCENT_SHIFT};
+        use bifrost_render::appearance::{accent, set_accent, Accent};
+        let keep = accent();
+        for a in Accent::ALL {
+            set_accent(a);
+            assert_eq!(Accent::from_wire((appearance_flags() & ACCENT_MASK) >> ACCENT_SHIFT), Some(a));
+        }
+        set_accent(keep);
     }
 
     #[test]

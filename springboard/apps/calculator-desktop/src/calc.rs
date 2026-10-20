@@ -184,7 +184,7 @@ const SCI_KEYS: [SciDef; SCI_COLS * SCI_ROWS] = [
     two("10ˣ", SciKey::Func("exp10"), "2ˣ", SciKey::Text("2^")),
     one("1/x", SciKey::Postfix("^-1")),
     one("√x", SciKey::Func("√")),
-    one("∛x", SciKey::Func("∛")),
+    one("³√x", SciKey::Func("cbrt")),
     two("ʸ√x", SciKey::Postfix("^(1/"), "ˣ√y", SciKey::Postfix(" rootx ")),
     two("ln", SciKey::Func("ln"), "logy", SciKey::Postfix(" logy ")),
     two("log10", SciKey::Func("log"), "log2", SciKey::Func("log2")),
@@ -1429,6 +1429,8 @@ impl Calculator {
             "ˣ√y" => Some(("√y", "x", true)),
             "10ˣ" => Some(("10", "x", false)),
             "ʸ√x" => Some(("√x", "y", true)),
+            // The cube-root sign U+221B is in no bundled face, so the key is a small 3 before the square root.
+            "³√x" => Some(("√x", "3", true)),
             _ => None,
         };
         if let Some((base, power, leading)) = exponent {

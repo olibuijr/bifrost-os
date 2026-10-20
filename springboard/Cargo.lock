@@ -526,7 +526,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-browser"
-version = "0.17.1"
+version = "0.17.2"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -537,7 +537,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-calculator"
-version = "1.13.1"
+version = "1.13.2"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -577,7 +577,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-clock"
-version = "1.5.2"
+version = "1.5.3"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -709,7 +709,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-games"
-version = "1.6.5"
+version = "1.6.6"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -855,7 +855,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-music"
-version = "1.13.2"
+version = "1.13.3"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -864,7 +864,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-news"
-version = "1.6.5"
+version = "1.6.6"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -873,7 +873,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-notes"
-version = "1.23.1"
+version = "1.23.2"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -903,7 +903,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-podcasts"
-version = "1.13.2"
+version = "1.13.3"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -929,7 +929,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-reminders"
-version = "1.19.1"
+version = "1.19.2"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -1075,7 +1075,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-voicememos"
-version = "1.10.2"
+version = "1.10.3"
 dependencies = [
  "bifrost-app",
  "bifrost-core",

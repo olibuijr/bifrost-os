@@ -222,6 +222,13 @@ impl Sci {
                 }
             }
             SciKey::Func(name) => {
+                if let Some(value) = self.result {
+                    // A function key after a result applies to the shown value, like the basic keypad's
+                    // unary keys; the new calculation is finished at once and goes to the history.
+                    self.result = None;
+                    self.expr = format!("{name}({})", Self::literal(value));
+                    return self.press(SciKey::Equals);
+                }
                 self.begin(false);
                 self.expr.push_str(name);
                 self.expr.push('(');
@@ -308,7 +315,7 @@ impl Sci {
                     if popped == '(' {
                         let name_start = self
                             .expr
-                            .rfind(|c: char| !(c.is_ascii_alphanumeric() || c == '√' || c == '∛'))
+                            .rfind(|c: char| !(c.is_ascii_alphanumeric() || c == '√'))
                             .map(|i| i + self.expr[i..].chars().next().map_or(1, char::len_utf8))
                             .unwrap_or(0);
                         if is_function(&self.expr[name_start..]) {
@@ -402,11 +409,42 @@ mod tests {
         assert_eq!(run("2+3=7"), "7");
         let mut s = Sci::default();
         keys(&mut s, "2+3=");
+        s.press(SciKey::Clear);
         s.press(SciKey::Func("sqrt"));
         assert_eq!(s.display(), "sqrt(");
         s.press(SciKey::Digit(9));
         s.press(SciKey::Close);
         assert_eq!(s.press(SciKey::Equals).unwrap().result, "3");
+    }
+
+    #[test]
+    fn a_function_key_after_a_result_applies_to_the_shown_value() {
+        let mut s = Sci::default();
+        keys(&mut s, "6*6=");
+        assert_eq!(s.display(), "36");
+        let entry = s.press(SciKey::Func("√")).unwrap();
+        assert_eq!(s.display(), "6");
+        assert_eq!(entry.result, "6");
+        assert_eq!(entry.expression, "√(36)");
+        // and it chains on the new result
+        s.press(SciKey::Func("sqrt"));
+        assert_eq!(s.display(), "2.44948974");
+        let mut c = Sci::default();
+        keys(&mut c, "27=");
+        c.press(SciKey::Func("cbrt"));
+        assert_eq!(c.display(), "3");
+        c.press(SciKey::Op('+'));
+        keys(&mut c, "1=");
+        assert_eq!(c.display(), "4");
+        // a domain error reads Error
+        let mut n = Sci::default();
+        keys(&mut n, "0-4=");
+        n.press(SciKey::Func("√"));
+        assert_eq!(n.display(), "Error");
+        // with no result the key still opens a call
+        let mut f = Sci::default();
+        f.press(SciKey::Func("sin"));
+        assert_eq!(f.display(), "sin(");
     }
 
     #[test]
