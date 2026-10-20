@@ -148,11 +148,31 @@ fn a_closed_service_drops_the_connection_and_clears_what_was_shown() {
 fn the_client_reconnects_and_counts_the_new_connection_when_the_service_returns() {
     let dir = tempfile::tempdir().unwrap();
     let mut s = session(dir.path());
+    // the connection held for a while: a service that goes away and comes back is found again at once
+    s.client.tick(6000.0);
     drop(s.server);
     s.client.pump();
     assert!(!s.client.connected());
-    s.client.tick(2.0);
+    s.client.tick(6002.0);
     assert!(s.client.connected(), "the socket still exists, so the client reconnects on its next tick");
     assert_eq!(s.client.connects(), 2);
     let _server = accept_handshake(&s.listener);
+}
+
+#[test]
+fn a_service_that_closes_the_connection_at_once_is_not_reconnected_in_a_loop() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut s = session(dir.path());
+    // closed before it held: the next attempt waits a second, not the next tick
+    drop(s.server);
+    s.client.pump();
+    assert!(!s.client.connected());
+    for at in [2.0, 500.0, 1000.0] {
+        s.client.tick(at);
+        assert!(!s.client.connected(), "no reconnect at {at} ms");
+    }
+    assert_eq!(s.client.connects(), 1);
+    s.client.tick(1001.0);
+    assert!(s.client.connected(), "after the wait it tries again");
+    assert_eq!(s.client.connects(), 2);
 }

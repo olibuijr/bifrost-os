@@ -17,7 +17,11 @@ pub mod audio {
 
     pub const SERVICE_ID: &str = "is.olibuijr.audio";
     const RETRY_MIN_MS: f64 = 1000.0;
-    const RETRY_MAX_MS: f64 = 15_000.0;
+    const RETRY_MAX_MS: f64 = 30_000.0;
+    /// A connection that ends sooner than this after it was made did not work: the service accepted and closed again (a
+    /// socket-activated service that cannot start does exactly that). It counts as a failed attempt, so the next one waits
+    /// its backoff (1 s, 2 s, 4 s, up to 30 s) instead of reconnecting in a tight loop.
+    const STABLE_MS: f64 = 5000.0;
 
     /// The microphone meter, from the last `Record` event.
     #[derive(Clone, Debug, PartialEq)]
@@ -57,6 +61,8 @@ pub mod audio {
         version: Option<String>,
         retry_at: f64,
         backoff: f64,
+        /// when the connection now up was made (the `now` of `tick`), to tell a connection that held from one that did not
+        connected_at: Option<f64>,
         /// bumped on every (re)connect, so a caller can resend what it set (volume, mute)
         connects: u32,
         /// false until `arm`: a lazy client does not connect, and so does not start the service (socket activation)
@@ -67,7 +73,7 @@ pub mod audio {
 
     impl Client {
         pub fn new(path: PathBuf) -> Self {
-            Client { path, stream: None, rx: Vec::new(), tx: Vec::new(), received: idle(), received_at: 0.0, clock: 0.0, view: idle(), recording: None, done: Vec::new(), route: None, route_events: Vec::new(), version: None, retry_at: 0.0, backoff: RETRY_MIN_MS, connects: 0, armed: true, last_error: None }
+            Client { path, stream: None, rx: Vec::new(), tx: Vec::new(), received: idle(), received_at: 0.0, clock: 0.0, view: idle(), recording: None, done: Vec::new(), route: None, route_events: Vec::new(), version: None, retry_at: 0.0, backoff: RETRY_MIN_MS, connected_at: None, connects: 0, armed: true, last_error: None }
         }
 
         /// The client of the service under the shell data dir `root`. It connects lazily: nothing is sent to the
@@ -237,7 +243,8 @@ pub mod audio {
             self.stream = Some(s);
             self.rx.clear();
             self.tx.clear();
-            self.backoff = RETRY_MIN_MS;
+            // the backoff is not forgiven yet: only a connection that holds (`drop_connection`) earns that
+            self.connected_at = Some(now);
             self.connects = self.connects.wrapping_add(1);
             self.queue(&Cmd::Ping);
             self.queue(&Cmd::Subscribe);
@@ -245,6 +252,7 @@ pub mod audio {
         }
 
         fn drop_connection(&mut self) {
+            let lived = self.connected_at.take().map(|at| self.clock - at);
             self.stream = None;
             self.rx.clear();
             self.tx.clear();
@@ -252,7 +260,23 @@ pub mod audio {
             self.view = idle();
             self.recording = None;
             self.version = None;
-            self.retry_at = 0.0;
+            self.schedule_after_drop(lived);
+        }
+
+        /// Sets the next reconnect after a connection ended. One that held (a service restarted under a client that had
+        /// been talking to it) reconnects at once and starts the backoff over. One that ended within `STABLE_MS` of being
+        /// made was refused by the service: the next attempt waits the backoff, which doubles each time.
+        fn schedule_after_drop(&mut self, lived: Option<f64>) {
+            match lived {
+                Some(ms) if ms < STABLE_MS => {
+                    self.retry_at = self.clock + self.backoff;
+                    self.backoff = (self.backoff * 2.0).min(RETRY_MAX_MS);
+                }
+                _ => {
+                    self.retry_at = 0.0;
+                    self.backoff = RETRY_MIN_MS;
+                }
+            }
         }
 
         fn queue(&mut self, cmd: &Cmd) {
@@ -474,11 +498,59 @@ pub mod audio {
             assert!(c.snapshot().position_ms >= 1500.0 - 1.0);
             assert!(c.toggle());
             assert_eq!(Cmd::decode(&read_frame(&mut srv).unwrap()), Ok(Cmd::Toggle));
+            // the connection held for a while, so a service that restarts is found again at once
+            c.tick(6000.0);
             drop(srv);
             assert!(pump_until(&mut c) && !c.connected() && c.snapshot().track.is_none());
             assert!(!c.send(Cmd::Play));
-            assert!(c.tick(2000.0) && c.connected() && c.connects() == 2);
+            assert!(c.tick(6001.0) && c.connected() && c.connects() == 2);
             let _ = std::fs::remove_dir_all(&dir);
+        }
+
+        /// A service that accepts the connection and closes it again (a socket-activated service that cannot start) must
+        /// not be reconnected in a loop: each failed connection doubles the wait, up to the cap.
+        #[test]
+        fn a_service_that_accepts_and_closes_is_retried_with_a_growing_backoff() {
+            let dir = std::env::temp_dir().join(format!("svc-audio-flap-{}", std::process::id()));
+            std::fs::create_dir_all(dir.join("run")).unwrap();
+            let sock = socket_path(&dir);
+            let _ = std::fs::remove_file(&sock);
+            let l = UnixListener::bind(&sock).unwrap();
+            let mut c = Client::for_root(&dir);
+            c.arm();
+            let mut now = 0.0;
+            // each connection is closed at once; the waits are 1 s, 2 s, 4 s, 8 s
+            for wait in [1000.0, 2000.0, 4000.0, 8000.0] {
+                assert!(c.tick(now) && c.connected(), "connected at {now}");
+                let (srv, _) = l.accept().unwrap();
+                drop(srv);
+                assert!(pump_until(&mut c) && !c.connected());
+                assert!(!c.tick(now + wait - 1.0) && !c.connected(), "still waiting {wait} ms after the close");
+                assert_eq!(c.next_wake(now + wait - 1.0), Some(now + wait), "the loop sleeps until then");
+                now += wait;
+            }
+            // a connection that holds earns the short wait back
+            assert!(c.tick(now) && c.connected());
+            let (srv, _) = l.accept().unwrap();
+            c.tick(now + STABLE_MS + 1.0);
+            drop(srv);
+            assert!(pump_until(&mut c) && !c.connected());
+            assert!(c.tick(now + STABLE_MS + 2.0) && c.connected(), "after a connection that held, at once");
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+
+        #[test]
+        fn the_backoff_doubles_to_the_cap_and_a_held_connection_resets_it() {
+            let mut c = Client::new(PathBuf::from("/nonexistent/audio.sock"));
+            c.clock = 100.0;
+            let mut waits = Vec::new();
+            for _ in 0..8 {
+                c.schedule_after_drop(Some(0.0));
+                waits.push(c.retry_at - 100.0);
+            }
+            assert_eq!(waits, [1000.0, 2000.0, 4000.0, 8000.0, 16_000.0, 30_000.0, 30_000.0, 30_000.0]);
+            c.schedule_after_drop(Some(STABLE_MS));
+            assert_eq!((c.retry_at, c.backoff), (0.0, RETRY_MIN_MS));
         }
     }
 }
