@@ -26,7 +26,7 @@ Matrix entries (not edited here, the lead closes them): `path:/usr/bin/open` (cl
 | `-W -n -g -j -F -f -h -s --arch --env --stdin --stdout --stderr --args` | refused with "option X is not supported yet" | |
 | file operand opened with its default app, or any file passed to `-a`/`-e` | refused with a message | needs a shell open-file request |
 
-Protocol: one line per connection to `127.0.0.1:7777` (`SPRINGBOARD_CONTROL_PORT` overrides it), answer `ok` or
+Protocol: one line per connection to the Unix socket `/run/bifrost/shell-control.sock` (`SPRINGBOARD_CONTROL_SOCKET` overrides it), answer `ok` or
 `error: <why>`. Same channel as `packaging/arch/wayland/open-url`. Request lines are capped at 510 bytes and refuse line breaks.
 
 Still needs Midget checking: `open -a`, `open -e`, `open -R` on a file, `open https://...` and folder operands against a

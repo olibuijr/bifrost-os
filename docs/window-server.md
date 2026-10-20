@@ -46,7 +46,7 @@ would make a root process the server for every untrusted app, so it stays out.
 | Window list | `zwlr_foreign_toplevel_manager_v1` (dock, app switcher) | phase 3 |
 | Output modes | `wlr-output-management` via `wlr-randr` (`video-arg`, `session-env`) | phase 3; the compositor picks the fastest native mode itself |
 | Screenshots | `wlr-screencopy` via `grim` (`bifrost-apps --screenshot`) | done: readback in `wm/src/capture.rs` (see Screen capture) |
-| Keys | Super+Space (search panel via control port), Ctrl+Up and F3 (Mission Control via control port), F4 (Apps grid via control port), Alt+Tab, Alt+F4, Ctrl+Super+arrows | done: `wm/src/keybindings.rs` (see Key bindings) |
+| Keys | Super+Space (search panel via control socket), Ctrl+Up and F3 (Mission Control via control socket), F4 (Apps grid via control socket), Alt+Tab, Alt+F4, Ctrl+Super+arrows | done: `wm/src/keybindings.rs` (see Key bindings) |
 | X11 apps | XWayland | phase 4 |
 | Backend | DRM/KMS, libinput, libseat | phase 3 (phase 1 runs nested for development) |
 
@@ -260,9 +260,9 @@ desktop a lone Cmd does nothing (`HwKeys::set_desktop`), so such a chord no long
 
 | Chord | Action |
 |---|---|
-| Super+Space | sends `quicksearch` to the shell control port (127.0.0.1:7777) |
-| Ctrl+Up, F3 | sends `overview` to the shell control port (Mission Control opens or closes) |
-| F4 | sends `appgrid` to the shell control port (the Apps grid opens or closes) |
+| Super+Space | sends `quicksearch` to the shell control socket (`/run/bifrost/shell-control.sock`, `keybindings::CONTROL_SOCKET`) |
+| Ctrl+Up, F3 | sends `overview` to the shell control socket (Mission Control opens or closes) |
+| F4 | sends `appgrid` to the shell control socket (the Apps grid opens or closes) |
 | Alt+Tab | focuses the lowest shown window, so repeated presses walk the stack |
 | Alt+F4 | closes the focused toplevel |
 | Ctrl+Super+Left / Right | tiles to a half |

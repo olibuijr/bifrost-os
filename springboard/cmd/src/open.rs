@@ -11,8 +11,8 @@
 use crate::control;
 use std::path::{Path, PathBuf};
 
-/// The control port (see `control::port`).
-pub use crate::control::port;
+/// The shell's control socket (see `control::socket`).
+pub use crate::control::socket;
 
 /// The Files app, which shows folders (`-R` and folder operands).
 pub const FILES_APP: &str = "is.olibuijr.files.desktop";
@@ -205,9 +205,9 @@ pub fn reply_result(text: &str) -> Result<(), String> {
     }
 }
 
-/// Sends one request to the shell on `127.0.0.1:port` and returns its answer.
-pub fn send(req: &Request, port: u16) -> Result<(), String> {
-    let answer = control::request(&req.line(), port)?;
+/// Sends one request to the shell's control socket and returns its answer.
+pub fn send(req: &Request, socket: &Path) -> Result<(), String> {
+    let answer = control::request(&req.line(), socket)?;
     reply_result(&String::from_utf8_lossy(&answer))
 }
 
@@ -321,8 +321,11 @@ mod tests {
 
     #[test]
     fn send_writes_the_line_and_reads_the_answer() {
-        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
-        let port = listener.local_addr().unwrap().port();
+        let dir = std::env::temp_dir().join(format!("bifrost-open-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let sock = dir.join("c.sock");
+        let listener = std::os::unix::net::UnixListener::bind(&sock).unwrap();
         let server = std::thread::spawn(move || {
             let (mut conn, _) = listener.accept().unwrap();
             let mut buf = [0u8; 512];
@@ -330,7 +333,7 @@ mod tests {
             conn.write_all(b"ok\n").unwrap();
             String::from_utf8_lossy(&buf[..n]).into_owned()
         });
-        send(&Request::OpenApp("is.olibuijr.notes.desktop".into()), port).unwrap();
+        send(&Request::OpenApp("is.olibuijr.notes.desktop".into()), &sock).unwrap();
         assert_eq!(server.join().unwrap(), "open-app is.olibuijr.notes.desktop\n");
     }
 }

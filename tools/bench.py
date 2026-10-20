@@ -145,7 +145,7 @@ import json, os, pathlib, socket, subprocess, sys, time
 N, DEADLINE = json.loads(sys.argv[1]), time.time() + 50
 APPS = sorted(d.name for d in pathlib.Path("/var/lib/springboard/apps").iterdir() if d.is_dir())[:N]
 def ctl(line):
-    s = socket.create_connection(("127.0.0.1", 7777), 5); s.settimeout(5)
+    s = socket.socket(socket.AF_UNIX); s.settimeout(5); s.connect("/run/bifrost/shell-control.sock")
     s.sendall((line + "\n").encode()); d = b""
     try:
         while True:

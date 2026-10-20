@@ -17,10 +17,10 @@ fn main() {
         Ok(requests) => requests,
         Err(e) => die("open", &e, 1),
     };
-    let port = open::port();
+    let socket = open::socket();
     let mut failed = false;
     for request in &requests {
-        if let Err(e) = open::send(request, port) {
+        if let Err(e) = open::send(request, &socket) {
             eprintln!("open: {e}");
             failed = true;
         }

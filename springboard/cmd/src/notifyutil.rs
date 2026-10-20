@@ -134,14 +134,14 @@ pub trait Bus {
     fn pause(&mut self, ms: u64);
 }
 
-/// The shell's control socket, on its port.
+/// The shell's control socket.
 pub struct Control {
-    pub port: u16,
+    pub socket: std::path::PathBuf,
 }
 
 impl Bus for Control {
     fn ask(&mut self, line: &str) -> Result<Json, String> {
-        let answer = bifrost_cmd_request(line, self.port)?;
+        let answer = bifrost_cmd_request(line, &self.socket)?;
         parse_answer(&answer)
     }
 
@@ -150,8 +150,8 @@ impl Bus for Control {
     }
 }
 
-fn bifrost_cmd_request(line: &str, port: u16) -> Result<String, String> {
-    let bytes = crate::control::request(line, port)?;
+fn bifrost_cmd_request(line: &str, socket: &std::path::Path) -> Result<String, String> {
+    let bytes = crate::control::request(line, socket)?;
     String::from_utf8(bytes).map_err(|_| "the desktop answered with something that is not text".to_string())
 }
 

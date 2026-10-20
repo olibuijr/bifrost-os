@@ -10,7 +10,7 @@ fn main() {
         Ok(opts) => opts,
         Err(e) => die("notifyutil", &format!("{e}\n{}", notifyutil::USAGE), 1),
     };
-    let mut bus = Control { port: control::port() };
+    let mut bus = Control { socket: control::socket() };
     let mut out = std::io::stdout();
     if let Err(e) = notifyutil::run(&mut bus, &opts, &mut out) {
         die("notifyutil", &e, 1);

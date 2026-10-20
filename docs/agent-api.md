@@ -22,7 +22,7 @@ Shell roles: `page`, `toggle`, `slider`, `choice`, `text`, `menu`, `item`, `app`
 `menu-item`, `window`, `progress-indicator`.
 
 ## Commands
-Shell control socket (127.0.0.1:7777) and `tools/midget.py`:
+Shell control socket (`/run/bifrost/shell-control.sock`, a Unix socket for root and the installed account) and `tools/midget.py`:
 
 ```
 midget.py ax [prefix]      list the map (tab separated: address role name value enabled)
@@ -32,9 +32,9 @@ The listing has eight tab-separated columns: address, role, name, value, enabled
 reader that takes the first five keeps working). `shell/accessibility/tree.rs` builds them. An app declares its hierarchy and
 checked state through `ControlsTree` / `NodeExt`; with no tree every app node is a root.
 
-The control port also takes `ax actions ELEMENT` (the custom action names of an element, for example a window's `Zoom`) and
+The control socket also takes `ax actions ELEMENT` (the custom action names of an element, for example a window's `Zoom`) and
 `ax action ELEMENT :: NAME` (run one). `midget.py` has no wrapper for these yet; send them with `bifrost pc midget ssh` and the
-text control port, or use `press` for the default action.
+text control socket, or use `press` for the default action.
 `press` answers `ok <address>`, or `error:` with `no element`, `is ambiguous: a b c`, `is disabled`, `cannot be pressed yet`.
 A Settings press is exactly the tap path (sidebar row, then each row down the page stack); a menu press is `run_menu_action`;
 an app press is a tap at the node's centre sent to the app process.

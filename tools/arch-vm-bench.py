@@ -52,8 +52,11 @@ def main():
         return run(ssh_prefix + [command], timeout=45).strip()
 
     def control(line):
-        body = f'exec 3<>/dev/tcp/127.0.0.1/7777; printf "%s\\n" "$1" >&3; timeout 3 cat <&3'
-        return run(ssh_prefix + [f"bash -c {shlex.quote(body)} _ {shlex.quote(line)}"], timeout=10).strip()
+        # the shell's control socket is a Unix socket for root; the guest python reads the line from argv
+        body = ("import socket,sys; s=socket.socket(socket.AF_UNIX); s.settimeout(3); s.connect('/run/bifrost/shell-control.sock'); "
+                "s.sendall((sys.argv[1] + chr(10)).encode()); d=b''\n"
+                "while True:\n c=s.recv(65536)\n if not c: break\n d+=c\nprint(d.decode(errors='replace'),end='')")
+        return run(ssh_prefix + [f"python3 -c {shlex.quote(body)} {shlex.quote(line)}"], timeout=10).strip()
 
     def qmp(*args):
         return run([sys.executable, str(TOOLS / "arch-vm-qmp.py"), str(qmp_socket), str(a.width), str(a.height), *map(str, args)], timeout=40)

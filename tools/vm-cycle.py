@@ -307,8 +307,8 @@ def main():
 
 
 def control(line, timeout=15):
-    """One line to the shell's control socket (127.0.0.1:7777) over ssh; the reply text."""
-    script = ("import socket; s=socket.create_connection(('127.0.0.1',7777),5); s.settimeout(10); s.sendall(" + repr((line + "\n").encode()) + "); "
+    """One line to the shell's control socket (/run/bifrost/shell-control.sock, a Unix socket for root) over ssh; the reply text."""
+    script = ("import socket; s=socket.socket(socket.AF_UNIX); s.settimeout(10); s.connect('/run/bifrost/shell-control.sock'); s.sendall(" + repr((line + "\n").encode()) + "); "
               "d=b''\nwhile True:\n c=s.recv(65536)\n if not c: break\n d+=c\nprint(d.decode(),end='')")
     return ssh("python3 -c " + shlex.quote(script), timeout)
 
@@ -607,9 +607,10 @@ def to_netboot(timings_key):
 
 
 def midget_shot(name):
-    """The installed shell's own frame through its control port (bash /dev/tcp over ssh)."""
-    script = "exec 3<>/dev/tcp/127.0.0.1/7777; echo 'shot 1' >&3; timeout 20 cat <&3"
-    r = subprocess.run(SSH + [f"bash -c {json.dumps(script)}"], capture_output=True, timeout=40)
+    """The installed shell's own frame through its control socket (AF_UNIX over ssh, as root)."""
+    script = ("import socket,sys; s=socket.socket(socket.AF_UNIX); s.settimeout(20); s.connect('/run/bifrost/shell-control.sock'); s.sendall(b'shot 1\\n'); d=b''\n"
+              "while True:\n c=s.recv(65536)\n if not c: break\n d+=c\nsys.stdout.buffer.write(d)")
+    r = subprocess.run(SSH + ["python3 -c " + shlex.quote(script)], capture_output=True, timeout=40)
     blob = r.stdout
     if blob[:4] == b"RIMG":
         import struct

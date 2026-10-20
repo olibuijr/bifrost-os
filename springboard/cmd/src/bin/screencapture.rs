@@ -14,7 +14,7 @@ fn main() {
         Ok(Parsed::Run(options)) => options,
         Err(e) => die("screencapture", &e, 1),
     };
-    if let Err(e) = screencapture::run(&options, control::port()) {
+    if let Err(e) = screencapture::run(&options, &control::socket()) {
         die("screencapture", &e, 1);
     }
 }
