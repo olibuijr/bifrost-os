@@ -2,8 +2,8 @@
 //! message back (Message > Remind Me). Both are kept in a JSON file in the app's data directory, so a restart does not
 //! lose them. Times are Unix seconds.
 
-use crate::prefs::{read_json, write_json};
-use bifrost_core::json::Json;
+use crate::prefs::write_json;
+use bifrost_core::json::{self, Json};
 use std::path::Path;
 
 /// File name in the app's data directory.
@@ -214,9 +214,40 @@ impl Queue {
     }
 }
 
-/// Reads the queue file. A missing or damaged file is an empty queue.
+/// Reads the queue file. A missing file is an empty queue; a damaged one is kept aside (see [`load_checked`]).
 pub fn load(path: &Path) -> Queue {
-    read_json(path).map_or_else(Queue::default, |j| Queue::from_json(&j))
+    load_checked(path).0
+}
+
+/// Reads the queue file, and says what happened to a file that could not be read. A missing file is an empty queue with
+/// nothing to say. A file that cannot be read or parsed is renamed to `<name>.bad` (`.bad-2`, ... when that exists), so
+/// the next save does not overwrite the messages in it, and the queue starts empty with a note for the person.
+pub fn load_checked(path: &Path) -> (Queue, Option<String>) {
+    let text = match std::fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return (Queue::default(), None),
+        Err(e) => return (Queue::default(), set_aside(path, &e.to_string())),
+    };
+    match json::parse(&text) {
+        Ok(j) => (Queue::from_json(&j), None),
+        Err(e) => (Queue::default(), set_aside(path, &format!("{e:?}"))),
+    }
+}
+
+/// Renames a damaged queue file out of the way and describes it for the status line.
+fn set_aside(path: &Path, why: &str) -> Option<String> {
+    let name = path.file_name()?.to_string_lossy().into_owned();
+    let mut aside = path.with_file_name(format!("{name}.bad"));
+    let mut n = 2;
+    while aside.exists() {
+        aside = path.with_file_name(format!("{name}.bad-{n}"));
+        n += 1;
+    }
+    let kept = std::fs::rename(path, &aside).map(|()| aside.display().to_string());
+    Some(match kept {
+        Ok(kept) => format!("The outbox file was damaged and could not be read. It was kept as {kept}"),
+        Err(e) => format!("The outbox file was damaged ({why}) and could not be set aside: {e}"),
+    })
 }
 
 /// Writes the queue file.
@@ -301,6 +332,25 @@ mod tests {
         let mut back = load(&path);
         assert_eq!(back, queue);
         assert!(back.new_id() > id);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_damaged_queue_file_is_kept_aside_not_overwritten() {
+        let dir = std::env::temp_dir().join(format!("bifrost-mail-queue-bad-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(FILE);
+        assert_eq!(load_checked(&path), (Queue::default(), None), "a missing file is not an error");
+        std::fs::write(&path, "{ not json").unwrap();
+        let (queue, note) = load_checked(&path);
+        assert_eq!(queue, Queue::default());
+        assert!(note.unwrap().contains(".bad"));
+        assert!(!path.exists());
+        assert_eq!(std::fs::read_to_string(dir.join(format!("{FILE}.bad"))).unwrap(), "{ not json");
+        // a second damaged file does not replace the first
+        std::fs::write(&path, "[ also bad").unwrap();
+        let _ = load_checked(&path);
+        assert_eq!(std::fs::read_to_string(dir.join(format!("{FILE}.bad-2"))).unwrap(), "[ also bad");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

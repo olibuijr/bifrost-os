@@ -575,8 +575,9 @@ impl MailWindow {
         let prefs_path = ctx.data_dir.join(prefs::FILE);
         let queue_path = ctx.data_dir.join(schedule::FILE);
         mail.use_prefs(prefs::load(&prefs_path));
-        mail.queue = schedule::load(&queue_path);
-        if let Some(e) = load_error.or(import_error) {
+        let (queue, queue_note) = schedule::load_checked(&queue_path);
+        mail.queue = queue;
+        if let Some(e) = load_error.or(import_error).or(queue_note) {
             mail.status = e;
         }
         let legacy: HashMap<String, String> = imports.into_iter().map(|i| (i.account.id, i.legacy_id)).collect();
