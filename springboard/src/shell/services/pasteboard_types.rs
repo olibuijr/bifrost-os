@@ -265,11 +265,10 @@ impl Pasteboards {
         if name == GENERAL {
             let grouped: Vec<Vec<(String, Vec<u8>)>> =
                 items.iter().map(|it| it.reps.iter().map(|r| (r.uti.clone(), r.data.clone())).collect()).collect();
-            let flat: Vec<(String, Vec<u8>)> = grouped.iter().flatten().cloned().collect();
             if let Some(text) = shell_pasteboard::set_items(grouped) {
                 clipboard::set_text(&text);
             }
-            shell_pasteboard::offer_wayland(&flat);
+            // the next pass of `pasteboard_sync` offers the items to the window server
             return Ok(shell_pasteboard::snapshot().0);
         }
         if !self.boards.contains_key(name) {

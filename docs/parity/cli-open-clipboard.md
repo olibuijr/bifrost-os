@@ -37,7 +37,7 @@ live shell.
 - `-pboard general` only. `ruler`, `find` and `font` are refused: the shell's pasteboard service holds named boards,
   and the command line cannot reach it yet.
 - Data goes through `wl-copy` and `wl-paste`, the Wayland selection that the shell already offers typed items on
-  (`src/shell/pasteboard.rs`, `offer_wayland`). Empty input to `pbcopy` clears the board.
+  (`src/shell/pasteboard_sync.rs`, over the window server's data-control globals). Empty input to `pbcopy` clears the board.
 - `pbcopy` picks the type from the input header: `{\rtf` gives `text/rtf`, `%!PS-Adobe` gives
   `application/postscript`, anything else is plain UTF-8 text.
 - `pbpaste -Prefer txt|ascii|rtf|ps` tries the preferred type first and the others after it, as the man page says.

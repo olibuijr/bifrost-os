@@ -113,6 +113,8 @@ pub struct WmState {
     pub session: crate::session_protocols::SessionState,
     /// Text input, input method and virtual keyboard (`text_input.rs`).
     pub text_input: crate::text_input::TextInputProtocols,
+    /// Clipboard control for the shell and the user's tools (`data_control.rs`).
+    pub data_control: crate::data_control::DataControl,
 }
 
 impl WmState {
@@ -209,6 +211,7 @@ impl WmState {
             xwayland: crate::xwayland::XWaylandState::new(&dh),
             session,
             text_input: crate::text_input::TextInputProtocols::new(&dh),
+            data_control: crate::data_control::DataControl::new(&dh),
             dh,
         }
     }

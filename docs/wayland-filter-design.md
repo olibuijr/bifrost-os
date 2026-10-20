@@ -66,7 +66,8 @@ the SDK path (already has no socket).
 | Sandbox escape helper | `wp_security_context_v1` | Only the compositor may mark a connection sandboxed; the app must never create one |
 
 Deny-by-default: the allowlist below is the only set of globals the child may
-see.
+see. The data-control globals are offered on the raw socket to the shell and to the session user's own tools
+(`wm/src/data_control.rs`, `docs/window-server.md` "Clipboard control"); that is why the proxy must never list them.
 
 ## Approach: client-side proxy
 

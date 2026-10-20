@@ -354,6 +354,21 @@ XRGB8888 or ARGB8888 buffer. Without a hook the request is answered `failed`.
   treats a refused probe frame (the Vulkan renderer) as "cannot record" and starts nothing.
 - Tests: `capture_size`/`clamp_region` unit tests, and `tests/capture.rs` (headless, red scene reads back `[255,0,0,255]`).
 
+## Clipboard control (data control)
+
+The seat's clipboard (`wl_data_device`) lets only the keyboard-focused client set the selection, so `wl-copy`, `wl-paste` and the
+shell, which has no focused surface for every copy, could neither set nor read it (`wl-paste --list-types` said "Nothing is
+copied" after a copy in an app). `wm/src/data_control.rs` offers `zwlr_data_control_manager_v1` and `ext_data_control_manager_v1`
+(Smithay keeps the selection) to:
+
+- the shell, which connected through the privileged socket and owns the selection (`src/shell/pasteboard_wl.rs`, see
+  "NSPasteboard rich types" in `docs/bifrost-ui.md`);
+- programs that run as the window server's own user or as root: `wl-copy`, `wl-paste`, a terminal, `pbcopy`, `pbpaste`.
+
+A sandboxed app never sees the globals: the sandbox proxy does not forward them (`docs/wayland-filter-design.md`). Any program of
+the session's user can read the clipboard through them, as on other desktops. `BIFROST_WM_DATA_CONTROL=off` removes both
+globals. Tests: the policy in `wm/src/data_control.rs`.
+
 ## Privileged socket and capture globals
 
 Screen capture used to be open to every client: any app could bind `zwlr_screencopy_manager_v1` and read the whole screen, and

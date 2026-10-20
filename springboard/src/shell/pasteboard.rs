@@ -1,5 +1,6 @@
 //! Rich pasteboard (`NativePasteboard`) on the shell side: items keyed by UTType id, mapped to MIME types for the Wayland
-//! clipboard. The plain-text clipboard path (`clipboard::set_text`) stays the carrier for text.
+//! clipboard. The plain-text clipboard path (`clipboard::set_text`) stays the carrier for text inside the shell;
+//! `pasteboard_sync` keeps the two and the window server's selection one clipboard.
 
 use std::sync::Mutex;
 
@@ -12,6 +13,9 @@ static STATE: Mutex<State> = Mutex::new((0, Vec::new(), Vec::new()));
 /// The state is process-wide, so the tests that write and read it take turns.
 #[cfg(test)]
 pub(crate) static TURN: Mutex<()> = Mutex::new(());
+
+/// The plain-text type.
+pub const PLAIN_TEXT: &str = "public.utf8-plain-text";
 
 /// UTType id to MIME type (`public.utf8-plain-text` to `text/plain;charset=utf-8`, and so on).
 pub fn mime_for(uti: &str) -> &str {
@@ -27,7 +31,7 @@ pub fn mime_for(uti: &str) -> &str {
 }
 
 /// The text to publish on the plain clipboard: the plain-text item, else the file URLs, else the HTML source.
-fn plain_text_of(items: &[(String, Vec<u8>)]) -> Option<String> {
+pub fn text_of(items: &[(String, Vec<u8>)]) -> Option<String> {
     ["public.utf8-plain-text", "public.file-url", "public.html"]
         .iter()
         .find_map(|t| items.iter().find(|(k, _)| k == t))
@@ -38,7 +42,7 @@ fn plain_text_of(items: &[(String, Vec<u8>)]) -> Option<String> {
 /// plain clipboard: the plain-text item, else the file URLs, else the HTML source. Every entry is its own item; use
 /// [`set_items`] to keep the representations of one copy together.
 pub fn set(items: Vec<(String, Vec<u8>)>) -> Option<String> {
-    let text = plain_text_of(&items);
+    let text = text_of(&items);
     let lens = vec![1; items.len()];
     let mut s = STATE.lock().unwrap_or_else(|e| e.into_inner());
     s.0 = s.0.wrapping_add(1);
@@ -53,7 +57,7 @@ pub fn set_items(items: Vec<Vec<(String, Vec<u8>)>>) -> Option<String> {
     let items: Vec<Vec<(String, Vec<u8>)>> = items.into_iter().filter(|i| !i.is_empty()).collect();
     let lens: Vec<usize> = items.iter().map(Vec::len).collect();
     let flat: Vec<(String, Vec<u8>)> = items.into_iter().flatten().collect();
-    let text = plain_text_of(&flat);
+    let text = text_of(&flat);
     let mut s = STATE.lock().unwrap_or_else(|e| e.into_inner());
     s.0 = s.0.wrapping_add(1);
     s.1 = flat;
@@ -61,18 +65,29 @@ pub fn set_items(items: Vec<Vec<(String, Vec<u8>)>>) -> Option<String> {
     text
 }
 
-/// Offers the typed items to external Wayland clients: one `wl-copy` per MIME type would replace the last, so the
-/// richest type is offered with `--type` (png, html, rtf, uri-list); plain text stays on the shared clipboard path.
-/// Best effort: a missing `wl-copy` is ignored. Gap: a multi-MIME data source needs the presenter's data device.
-pub fn offer_wayland(items: &[(String, Vec<u8>)]) {
-    use std::io::Write;
-    let pick = ["public.png", "public.html", "public.rtf", "public.file-url"].iter().find_map(|t| items.iter().find(|(k, _)| k == t));
-    let Some((uti, data)) = pick else { return };
-    let child = std::process::Command::new("wl-copy").args(["--type", mime_for(uti)]).stdin(std::process::Stdio::piped()).spawn();
-    if let Ok(mut c) = child {
-        if let Some(mut i) = c.stdin.take() { let _ = i.write_all(data); }
-        std::thread::spawn(move || { let _ = c.wait(); });
+/// The change count alone, without copying the items (a polling reader checks this first).
+pub fn count() -> u32 {
+    STATE.lock().unwrap_or_else(|e| e.into_inner()).0
+}
+
+/// The text on the board right now (see [`text_of`]).
+pub fn text() -> Option<String> {
+    text_of(&STATE.lock().unwrap_or_else(|e| e.into_inner()).1)
+}
+
+/// Replaces the board with one plain-text item (an empty `text` empties it) and bumps the change count: what the shell
+/// does for a copy made in one of its own fields, or by an app that sent only text.
+pub fn set_plain(text: &str) -> u32 {
+    let mut s = STATE.lock().unwrap_or_else(|e| e.into_inner());
+    s.0 = s.0.wrapping_add(1);
+    if text.is_empty() {
+        s.1.clear();
+        s.2.clear();
+    } else {
+        s.1 = vec![(PLAIN_TEXT.to_string(), text.as_bytes().to_vec())];
+        s.2 = vec![1];
     }
+    s.0
 }
 
 /// The change count and items now on the pasteboard.
@@ -106,6 +121,28 @@ mod tests {
 
     fn rep(uti: &str, data: &str) -> (String, Vec<u8>) {
         (uti.to_string(), data.as_bytes().to_vec())
+    }
+
+    #[test]
+    fn a_plain_write_is_one_text_item_and_an_empty_one_clears_the_board() {
+        let _turn = TURN.lock().unwrap_or_else(|e| e.into_inner());
+        set(vec![rep("public.png", "x"), rep("public.html", "<i>y</i>")]);
+        let before = count();
+        assert_eq!(set_plain("hello there"), before.wrapping_add(1));
+        assert_eq!(snapshot_items().1, vec![vec![rep(PLAIN_TEXT, "hello there")]]);
+        assert_eq!(text().as_deref(), Some("hello there"));
+        set_plain("");
+        assert!(snapshot().1.is_empty() && snapshot_items().1.is_empty());
+        assert_eq!(text(), None);
+        assert_eq!(count(), snapshot().0);
+    }
+
+    #[test]
+    fn text_comes_from_the_plain_item_then_file_urls_then_html() {
+        assert_eq!(text_of(&[rep("public.html", "<b>"), rep("public.file-url", "file:///a"), rep(PLAIN_TEXT, "t")]).as_deref(), Some("t"));
+        assert_eq!(text_of(&[rep("public.html", "<b>"), rep("public.file-url", "file:///a")]).as_deref(), Some("file:///a"));
+        assert_eq!(text_of(&[rep("public.html", "<b>")]).as_deref(), Some("<b>"));
+        assert_eq!(text_of(&[rep("public.png", "x")]), None);
     }
 
     #[test]

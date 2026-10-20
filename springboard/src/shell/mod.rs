@@ -2,6 +2,10 @@
 //! built-in apps, driven by plain touch/key events and drawn into a Surface.
 
 pub mod pasteboard;
+pub mod pasteboard_sync;
+/// The shell's window server clipboard client (wlr data control, privileged socket).
+#[cfg(feature = "desktop-wayland")]
+mod pasteboard_wl;
 pub mod pasteboard_transfer;
 pub mod battery;
 pub mod bell;
@@ -5376,7 +5380,7 @@ fn draw_zoom(transition: Option<&Image>, s: &mut Surface, rect: Rect, r: f32, al
 impl Shell {
     /// Fds to poll (the pty, Deildu's and Files' job pipes); call `pump` when one is readable.
     pub fn poll_fds(&self) -> Vec<std::ffi::c_int> {
-        self.term.iter().map(|t| t.fd()).chain(self.deildu.iter().flat_map(|d| d.fds())).chain(self.photos.iter().flat_map(|p| p.fds())).chain(self.files.iter().flat_map(|f| f.fds())).chain([self.audio.fd()]).chain([if self.desk_active(){desktop_network::fd()}else{-1}]).chain(self.store.iter().flat_map(|n| n.fds())).chain(self.ext_fds()).chain(keyboard::poll_fd()).collect()
+        self.term.iter().map(|t| t.fd()).chain(self.deildu.iter().flat_map(|d| d.fds())).chain(self.photos.iter().flat_map(|p| p.fds())).chain(self.files.iter().flat_map(|f| f.fds())).chain([self.audio.fd()]).chain([if self.desk_active(){desktop_network::fd()}else{-1}]).chain(self.store.iter().flat_map(|n| n.fds())).chain(self.ext_fds()).chain((pasteboard_sync::poll_fd() >= 0).then(pasteboard_sync::poll_fd)).chain(keyboard::poll_fd()).collect()
     }
 
     /// `poll_fds` without the audio-service client's always-present fd.
