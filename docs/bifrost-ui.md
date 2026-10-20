@@ -5446,7 +5446,11 @@ The `dynamic_pager` and `deleted_helper` daemon rows (`docs/parity-matrix/os/dae
 - **Swap.** `springboard/bifrostd/src/pager.rs`. At boot `bifrost-zram.service` runs `bifrostd zram-setup`: a zram swap of
   half the RAM (at most 8 GiB, priority 100). While bifrostd runs, PSI (`/proc/pressure/memory`, `avg10`) and
   `/proc/meminfo` decide: under warning or critical pressure with less than 25 % of swap free, one 1 GiB file
-  `/var/lib/bifrost/swap/swapN` is added (priority -2). After 10 minutes of normal pressure the newest file that holds
+  `/var/cache/bifrost/swap/swapN` is added (priority -2). The directory is on the `@cache` subvolume, which no snapshot
+  covers and which is not the compressed copy-on-write root: the file is created empty, marked `chattr +C`, then
+  preallocated (btrfs refuses swap otherwise), and only when 1 GiB plus a 2 GiB reserve is free. A failed creation backs
+  off 10 minutes, doubling; a definite refusal (or four failures in a row) switches disk swap off until bifrostd
+  restarts and zram carries on. After 10 minutes of normal pressure the newest file that holds
   no pages is removed. Decisions are pure (`decide`), tested with fixed inputs.
 - **Level.** `/run/bifrost/memory-pressure` holds `normal`, `warn` or `critical`. Apps read it with
   `bifrost_app::memory_pressure::published()`, or subscribe with `DispatchSource::memory_pressure`, which uses the
