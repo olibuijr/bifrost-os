@@ -6,12 +6,15 @@ Documentation=file:///usr/share/doc/bifrost/privd-protocol.md
 ConditionPathExists=/var/lib/springboard/screen-sharing/wayvnc.conf
 ConditionPathExists=/var/lib/springboard/screen-sharing/rsa_key.pem
 ConditionPathExists=/var/lib/springboard/screen-sharing/users
+# The server runs as the account that signs in, never as root: privd writes this drop-in (User=<account>) and hands that
+# account the key, the configuration and the lockout directory. Without it the unit does not start.
+ConditionPathExists=/etc/systemd/system/bifrost-wayvnc.service.d/10-user.conf
 After=springboard.service network.target
 
 [Service]
 Type=simple
 # There is no systemd user manager on BifrOSt (the session is started by springboard.service), so this is a system
-# unit. It joins the desktop's Wayland socket (the XDG_RUNTIME_DIR and WAYLAND_DISPLAY of /run/bifrost/user/session.json).
+# unit; User= comes from the drop-in above. It joins the desktop's Wayland socket (the XDG_RUNTIME_DIR and WAYLAND_DISPLAY of /run/bifrost/user/session.json).
 Environment=XDG_RUNTIME_DIR=/run/bifrost/user
 Environment=WAYLAND_DISPLAY=wayland-0
 # The address (this computer's local-network address), the port, enable_auth, enable_pam (PAM service "wayvnc",
@@ -22,7 +25,13 @@ Restart=on-failure
 RestartSec=3
 ProtectHome=true
 PrivateTmp=true
-NoNewPrivileges=true
+ProtectSystem=strict
+# the Wayland runtime directory (wayvnc's control socket) and the sign-in lockout counters (pam_faillock dir= in pam-bifrost-wayvnc)
+ReadWritePaths=-/run/bifrost/user -/var/lib/springboard/screen-sharing/faillock
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+# No NoNewPrivileges=: pam_unix checks the account's password through the unix_chkpwd helper, which a process that is not
+# root can reach only by gaining privileges on exec. With no capabilities and a read-only system this is the account's own reach.
 StandardOutput=journal
 StandardError=journal
 

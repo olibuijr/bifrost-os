@@ -285,9 +285,9 @@ fn store_install(p: &Json) -> Result<Json, PErr> {
 }
 
 #[cfg(target_arch = "x86_64")]
-const O_NOFOLLOW: i32 = 0o400000;
+pub(super) const O_NOFOLLOW: i32 = 0o400000;
 #[cfg(not(target_arch = "x86_64"))]
-const O_NOFOLLOW: i32 = 0o100000;
+pub(super) const O_NOFOLLOW: i32 = 0o100000;
 
 /// Writes `text` to `file` without following a symlink at the final component (root writes here).
 /// The Storage policy file that bifrostd's purge reads (`purge::POLICY_PATH`, in the bifrostd crate).

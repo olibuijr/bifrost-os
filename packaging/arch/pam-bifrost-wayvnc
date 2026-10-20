@@ -1,10 +1,11 @@
 #%PAM-1.0
 # Used only by wayvnc (Screen Sharing, bifrost-wayvnc.service): a viewer signs in with an account name and password.
 # Only the one account Settings > Sharing > Screen Sharing names may sign in; that file is written by bifrost-privd.
-# A missing or empty file refuses everyone (onerr=fail).
+# A missing or empty file refuses everyone (onerr=fail). The server runs as that account, not root, so the lockout counters
+# live in a directory it owns (privd creates it) instead of /var/lib/faillock.
 auth     required                    pam_listfile.so item=user sense=allow onerr=fail file=/var/lib/springboard/screen-sharing/users
-auth     required                    pam_faillock.so preauth deny=5 unlock_time=300 dir=/var/lib/faillock
+auth     required                    pam_faillock.so preauth deny=5 unlock_time=300 dir=/var/lib/springboard/screen-sharing/faillock
 auth     [success=1 default=bad]     pam_unix.so
-auth     [default=die]               pam_faillock.so authfail deny=5 unlock_time=300 dir=/var/lib/faillock
-auth     sufficient                  pam_faillock.so authsucc dir=/var/lib/faillock
+auth     [default=die]               pam_faillock.so authfail deny=5 unlock_time=300 dir=/var/lib/springboard/screen-sharing/faillock
+auth     sufficient                  pam_faillock.so authsucc dir=/var/lib/springboard/screen-sharing/faillock
 account  required                    pam_unix.so
