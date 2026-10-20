@@ -437,7 +437,9 @@ mod tests {
         let resolver = Resolver::new(vec![]);
         assert!(resolver.lookup("example.net", TYPE_A).is_err());
         assert!(resolver.is_down());
-        *resolver.down_since.lock().unwrap() = Some(Instant::now() - DOWN_FOR - Duration::from_secs(1));
+        // Instant cannot go back before boot: right after start-up there is nothing to age.
+        let Some(past) = Instant::now().checked_sub(DOWN_FOR + Duration::from_secs(1)) else { return };
+        *resolver.down_since.lock().unwrap() = Some(past);
         assert!(!resolver.is_down(), "the servers are tried again");
     }
 

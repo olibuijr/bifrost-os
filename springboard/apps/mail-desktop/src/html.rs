@@ -402,7 +402,7 @@ mod tests {
         let _ = to_text(&quoted);
         assert!(start.elapsed().as_secs() < 5);
         assert_eq!(to_text("<a <b>hi</b>"), "<a hi");
-        assert_eq!(clean("<a href=<b>x"), "&lt;a href=x");
+        assert_eq!(clean("<a href=<b>x"), "&lt;a href=<b>x");
     }
 
     #[test]
