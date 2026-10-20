@@ -1,4 +1,4 @@
-//! Compositor key bindings: Super+Space opens the search panel, Ctrl+Up and F3 Mission Control, F4 the Apps grid,
+//! Compositor key bindings: Super+Space opens the search panel, Ctrl+Up and F3 Overview, F4 the Apps grid,
 //! Alt+Tab cycles the focus, Alt+F4 closes the focused window, Ctrl+Super+arrows tile it and Ctrl+Super+F toggles full
 //! screen. The shell only gets keys while one of its surfaces has focus, so the compositor takes these chords before any
 //! client sees them. Super+A is deliberately not bound: Cmd+A is Select All and belongs to the app (the app list
@@ -29,7 +29,7 @@ pub mod keysym {
 pub const CONTROL_ADDR: &str = "127.0.0.1:7777";
 /// The line sent to the shell for the search panel.
 pub const QUICKSEARCH_LINE: &[u8] = b"quicksearch\n";
-/// The line sent to the shell for Mission Control.
+/// The line sent to the shell for Overview.
 pub const OVERVIEW_LINE: &[u8] = b"overview\n";
 /// The line sent to the shell for the Apps grid.
 pub const APPGRID_LINE: &[u8] = b"appgrid\n";
@@ -52,7 +52,7 @@ impl From<&ModifiersState> for Mods {
 pub enum Action {
     /// Super+Space: sends `quicksearch` to the shell control port.
     QuickSearch,
-    /// Ctrl+Up and F3: Mission Control, sends `overview` to the shell control port.
+    /// Ctrl+Up and F3: Overview, sends `overview` to the shell control port.
     MissionControl,
     /// F4: the Apps grid, sends `appgrid` to the shell control port.
     AppGrid,

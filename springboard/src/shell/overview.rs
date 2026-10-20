@@ -331,7 +331,7 @@ impl Overview {
         self.open || self.slide.is_some() || self.grid.visible()
     }
 
-    /// The overlay surface Mission Control is exported as on the window server (x, y, w, h px): the veil between the menu
+    /// The overlay surface Overview is exported as on the window server (x, y, w, h px): the veil between the menu
     /// bar and the Dock, above every window. Listed only while Overview is open, which includes its enter and leave
     /// animations (`open` turns false in `finish`, the frame the windows come back), so closing removes the surface.
     #[allow(dead_code)] // the window-server export is the desktop-wayland build's
@@ -782,7 +782,7 @@ impl Shell {
         (m.w > 0 && bottom > top).then(|| (0, top as usize, m.w as usize, (bottom - top) as usize))
     }
 
-    /// The pointer moved over the veil without a button while Mission Control is open: the tile under it is highlighted. True
+    /// The pointer moved over the veil without a button while Overview is open: the tile under it is highlighted. True
     /// when the point is on the veil (the surface under it must not see the pointer); the menu bar and the Dock are not.
     pub fn overview_hover(&mut self, x: f32, y: f32) -> bool {
         if !self.desk_active() || self.is_locked() || !self.overview.open || self.overview.closing.is_some() {
@@ -998,7 +998,7 @@ impl Shell {
     }
 
     /// Wheel or two-finger scroll while the Apps grid is open pages through it (`dx`, `dy` positive: the next page, so the
-    /// wheel turned down or a swipe to the left); while Mission Control is open the wheel is swallowed (nothing under the
+    /// wheel turned down or a swipe to the left); while Overview is open the wheel is swallowed (nothing under the
     /// veil scrolls). True when it was taken.
     pub fn overview_scroll(&mut self, dx: f32, dy: f32, t: f64) -> bool {
         if !self.desk_active() || self.is_locked() {
@@ -1065,7 +1065,7 @@ mod tests {
         assert!(mid(&t[0]) > 0.0);
     }
 
-    /// Ctrl+Up and F3 open Mission Control on the desktop, the same chord closes it, and Esc closes it too. The Apps grid
+    /// Ctrl+Up and F3 open Overview on the desktop, the same chord closes it, and Esc closes it too. The Apps grid
     /// takes only its navigation keys, so a letter reaches `hw_type`.
     #[test]
     fn ctrl_up_and_f3_toggle_mission_control_on_the_desktop() {
@@ -1088,7 +1088,7 @@ mod tests {
         assert!(!sh.hw_overview_key(29, true, KeyMods { ctrl: true, cmd: false, shift: false }, false, 2100.0), "a modifier press passes");
     }
 
-    /// Mission Control belongs to the desktop: the tablet form never opens it, and Alt or Cmd chords are not its keys.
+    /// Overview belongs to the desktop: the tablet form never opens it, and Alt or Cmd chords are not its keys.
     #[test]
     fn mission_control_keys_do_nothing_on_a_tablet_or_with_alt() {
         let mut sh = crate::shell::tests::shell();
@@ -1098,11 +1098,11 @@ mod tests {
         sh.screen_on = true;
         sh.screen = crate::shell::Screen::Home;
         assert!(!sh.hw_overview_key(KEY_UP, true, KeyMods { ctrl: true, cmd: false, shift: false }, true, 1000.0), "Ctrl+Alt+Up is the screen reader's");
-        assert!(!sh.hw_overview_key(KEY_F3, true, KeyMods { ctrl: false, cmd: true, shift: false }, false, 1000.0), "Cmd+F3 is not Mission Control");
+        assert!(!sh.hw_overview_key(KEY_F3, true, KeyMods { ctrl: false, cmd: true, shift: false }, false, 1000.0), "Cmd+F3 is not Overview");
         assert!(!sh.overview.open);
     }
 
-    // ---- Mission Control as an overlay surface (E2E round 3, MC1) ----
+    // ---- Overview as an overlay surface (E2E round 3, MC1) ----
 
     const NO_MODS: KeyMods = KeyMods { ctrl: false, cmd: false, shift: false };
     const APPS_FOR_TILES: [AppId; 6] = [AppId::Settings, AppId::AppStore, AppId::Terminal, AppId::Deildu, AppId::Photos, AppId::Magnifier];
@@ -1184,7 +1184,7 @@ mod tests {
         assert!(!sh.overview.grid.visible());
         assert!(!sh.hw_overview_key(KEY_F4, true, KeyMods { ctrl: true, ..NO_MODS }, false, 3000.0), "Ctrl+F4 is not the grid's");
         assert!(!sh.hw_overview_key(KEY_F4, true, NO_MODS, true, 3000.0), "Alt+F4 closes a window");
-        // Mission Control is modal: a letter is used up, a modifier passes, Esc closes it
+        // Overview is modal: a letter is used up, a modifier passes, Esc closes it
         assert!(sh.hw_overview_key(KEY_F3, true, NO_MODS, false, 4000.0));
         assert!(sh.overview.open);
         assert!(sh.hw_overview_key(30, true, NO_MODS, false, 4100.0), "a letter does not reach the app under it");
@@ -1255,7 +1255,7 @@ mod tests {
         sh.desktop_chrome_frames(&pixels, w, h).iter().map(|f| f.id).collect()
     }
 
-    /// Mission Control is chrome surface 9 (above the windows) only while it is open.
+    /// Overview is chrome surface 9 (above the windows) only while it is open.
     #[cfg(feature = "desktop-wayland")]
     #[test]
     fn the_surface_is_listed_only_while_mission_control_is_open() {
@@ -1265,7 +1265,7 @@ mod tests {
         sh.overview_toggle(1000.0);
         let pixels = vec![0u32; w * h];
         let frames = sh.desktop_chrome_frames(&pixels, w, h);
-        let f = frames.iter().find(|f| f.id == 9).expect("the open Mission Control is a chrome surface above the windows");
+        let f = frames.iter().find(|f| f.id == 9).expect("the open Overview is a chrome surface above the windows");
         assert_eq!(f.pixels.len(), f.width * f.height);
         assert_eq!((f.x, f.y as usize, f.width), (0, sh.desktop_bar_height(), w), "the full width under the menu bar");
         assert!(f.y as usize + f.height <= h - sh.desk_metrics().dock_bottom.max(0) as usize, "and above the Dock");
@@ -1293,7 +1293,7 @@ mod tests {
         let frames = sh.desktop_chrome_frames(&pixels, w, h);
         let f = frames.iter().find(|f| f.id == 10).expect("the sweep is a surface above the windows");
         assert_eq!(f.input, Some([0, 0, 0, 0]), "an empty input region: the pointer reaches what is below");
-        assert!(!frames.iter().any(|f| f.id == 9), "it is not Mission Control");
+        assert!(!frames.iter().any(|f| f.id == 9), "it is not Overview");
         settle(&mut sh);
         assert!(!frame_ids(&sh).contains(&10), "gone when the sweep ends");
     }

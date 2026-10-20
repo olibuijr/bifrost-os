@@ -13,7 +13,7 @@
 //!   trace on|off                 -> "ok" (log every input event)
 //!   lock                         -> "ok" (menu > Lock Screen)
 //!   quicksearch                    -> "ok" (opens Search, as Cmd+Space; the compositor's Super+Space binding)
-//!   overview                       -> "ok" (Mission Control: opens it, or closes it when open; the compositor's Ctrl+Up and F3 bindings)
+//!   overview                       -> "ok" (Overview: opens it, or closes it when open; the compositor's Ctrl+Up and F3 bindings)
 //!   appgrid                        -> "ok" (the Apps grid: opens it, or closes it when open; the compositor's F4 binding)
 //!   image-attach ro|rw <path>      -> "ok <loop device> <folder>" (binds a disk image and mounts it, `shell::disk_image`)
 //!   image-detach <device|folder>   -> "ok <loop device>" (unmounts a disk image and releases its loop device)
@@ -79,7 +79,7 @@ pub enum Request {
     Perf,
     Trace(bool),
     QuickSearch,
-    /// `overview`: Mission Control opens or closes (Ctrl+Up, F3)
+    /// `overview`: Overview opens or closes (Ctrl+Up, F3)
     Overview,
     /// `appgrid`: the Apps grid opens or closes (F4)
     AppGrid,
@@ -360,7 +360,7 @@ mod tests {
         assert!(parse("lock now").is_err());
         assert_eq!(parse("overview"), Ok(Request::Overview));
         assert!(parse("overview now").is_err());
-        assert!(!allowed_while_locked(&Request::Overview), "Mission Control waits for a login");
+        assert!(!allowed_while_locked(&Request::Overview), "Overview waits for a login");
         assert_eq!(parse("appgrid"), Ok(Request::AppGrid));
         assert!(parse("appgrid now").is_err());
         assert!(!allowed_while_locked(&Request::AppGrid), "the Apps grid waits for a login");

@@ -614,7 +614,7 @@ fn set_chrome_input(compositor:Option<&wl_compositor::WlCompositor>,surface:&wl_
                 let l=self.state.layer.as_ref().unwrap().get_layer_surface(&s,None,if frame.id==0 {layer::Layer::Top}else{layer::Layer::Overlay},"bifrost-desktop-chrome".into(),&qh,frame.id);
                 l.set_size(frame.width as u32,frame.height as u32);Self::place_chrome(&l,&frame,screen);
                 if frame.input.is_some() {Self::set_chrome_input(self.state.compositor.as_ref(),&s,frame.input,&qh);}
-                // id 3 is Search, id 6 the assistant panel, id 8 the Apps grid, id 9 Mission Control and id 11 the screenshot session
+                // id 3 is Search, id 6 the assistant panel, id 8 the Apps grid, id 9 Overview and id 11 the screenshot session
                 // (Space and Escape are its keys): they take the keyboard from the window in front while open
                 l.set_keyboard_interactivity(if frame.id==3 || frame.id==6 || frame.id==8 || frame.id==9 || frame.id==11 {surface::KeyboardInteractivity::Exclusive} else {surface::KeyboardInteractivity::None});s.commit();
                 let mut pending=Damage::new(frame.width,frame.height);pending.all();

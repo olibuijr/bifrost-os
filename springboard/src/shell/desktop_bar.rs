@@ -980,7 +980,7 @@ impl Shell {
             let mut image=Image{w,h,px:data};image.apply_mask(&mask);
             frames.push(crate::bare::wayland::ChromeFrame{id:7,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px,input:None});
         }
-        // The Apps grid (Launchpad): id 8, an overlay surface above every window that takes the keyboard while it is
+        // The Apps grid: id 8, an overlay surface above every window that takes the keyboard while it is
         // open. It spans the veil only, so the menu bar and the Dock stay their own surfaces and stay usable. It is
         // listed only while the grid is open: the frame it closes in drops the surface (E2E L1, OV1).
         if let Some((x,y,w,h))=self.overview.grid.overlay_rect(self) {
@@ -990,7 +990,7 @@ impl Shell {
                 frames.push(crate::bare::wayland::ChromeFrame{id:8,x:x as i32,y:y as i32,width:w,height:h,pixels:data,input:None});
             }
         }
-        // Mission Control (Overview): id 9, an overlay surface above every window that takes the keyboard while it is open,
+        // Overview: id 9, an overlay surface above every window that takes the keyboard while it is open,
         // on the same rectangle as the Apps grid (the menu bar and the Dock stay their own surfaces). Listed only while
         // Overview is open or animating; the frame it ends in drops the surface. A desktop switch's sweep is id 10: the same
         // rectangle with an empty input region, so it takes neither the pointer nor the keyboard.
