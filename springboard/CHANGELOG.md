@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.10.9 — 2026-10-20
+
+Fixes from the E2E run of 2026-10-20 (docs/e2e/2026-10-20-system-settings-apps.md).
+
 - Screen recordings (Shift+Cmd+5 > Record Screen or Record Selection, `screencapture -v`) now show what is on the screen:
   the wallpaper, every window, the menu bar and the Dock. Before, they recorded the shell's own frame, which holds only the
   menu bar and the Dock on black. A worker reads the window server's composed output through its screencopy protocol, cropped
@@ -11,11 +15,6 @@
   notification says why. The red recording indicator now stays in the menu bar for the whole recording, also over a full-screen
   window; a recording ends when the screen locks. The movie is saved in the Desktop folder of your account (Options > Save To)
   and belongs to you, not to root.
-
-## 0.10.9 — 2026-10-20
-
-Fixes from the E2E run of 2026-10-20 (docs/e2e/2026-10-20-system-settings-apps.md).
-
 - Keyboard: Cmd+A selects all in the front app, and a Cmd shortcut an app uses no longer sends every window to the
   Dock (a lone Cmd press does nothing on the desktop; on a tablet it is still Home). Cmd+Space opens Spotlight over
   any app.
