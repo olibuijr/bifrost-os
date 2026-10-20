@@ -112,7 +112,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
    "status": "partial",
-   "note": "Built 2026-10-17: the desktop panes have App Intents that open them from Search: open-wallpaper, open-dock (Home Screen & Dock), open-menu-bar, open-screen-saver, open-lock-screen, open-spotlight and open-hot-corners.",
+   "note": "Built 2026-10-17: the desktop panes have App Intents that open them from Search: open-wallpaper, open-dock (Home Screen & Dock), open-menu-bar, open-screen-saver, open-lock-screen, open-search and open-hot-corners.",
    "rea": [],
    "ready": true,
    "checks": [

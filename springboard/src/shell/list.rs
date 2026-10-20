@@ -1773,7 +1773,7 @@ mod tests {
         assert_eq!(headline_case("USB DEVICES"), "USB Devices");
         assert_eq!(headline_case("IPV4"), "IPv4");
         assert_eq!(headline_case("is.example.chat"), "is.example.chat", "a name with lower-case letters is left alone");
-        assert_eq!(headline_case("My iPhone"), "My iPhone");
+        assert_eq!(headline_case("My eReader"), "My eReader");
         assert_eq!(headline_case(""), "");
     }
 

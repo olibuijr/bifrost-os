@@ -194,7 +194,7 @@ pub struct Options {
     pub game_mode: GamePref,
     /// the one-time Game Mode notice has been posted (it is posted again only after settings.ini is reset)
     pub game_notice_shown: bool,
-    /// Settings > Spotlight: the categories Search lists and the folders it leaves out (its own keys, `spotlight_scope`)
+    /// Settings > Search: the categories Search lists and the folders it leaves out (its own keys, `spotlight_scope`)
     pub spotlight: super::spotlight_scope::Scope,
     /// Settings > Backup: the disk backups go to (its mount point); empty keeps them in the data folder
     pub backup_destination: String,

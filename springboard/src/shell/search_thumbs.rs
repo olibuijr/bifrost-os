@@ -1,4 +1,4 @@
-//! Thumbnails for the file rows of Spotlight: a file found by name shows a picture of its content in place of the
+//! Thumbnails for the file rows of Search: a file found by name shows a picture of its content in place of the
 //! Files icon, drawn by the system thumbnail providers (`crate::thumbs`) and shared with Files and the preview panel
 //! through the same disk cache.
 //!
