@@ -1821,8 +1821,11 @@ finally:
 
 
 def qa_tap(st, centre):
-    ax, ay = abs_pointer(centre[0], centre[1], st["size"])
-    return run(SSH + ["python3 -c " + shlex.quote(uinput_pointer_script([(ax, ay)]))], 30).returncode == 0
+    """A tap at panel pixel `centre` through the installer's input FIFO (`down X Y`, `up X Y`). The installer reads its
+    pointer devices when it starts, so a temporary uinput pointer made later is never seen (2026-10-20); the FIFO is the
+    installer's own lab hook and takes panel pixels, the space the state file's button rects are in."""
+    x, y = centre
+    return qa_keys([f"down {x} {y}", f"up {x} {y}"]).returncode == 0
 
 
 def fifo_key_lines(seq):
@@ -1890,6 +1893,7 @@ def cmd_qa_install(args):
         lines = [f"# qa-install {stamp}: {result}", "", "| time | +s | step | screenshot |", "|---|---|---|---|"]
         for t, dt, msg, shot in rows:
             lines.append(f"| {t} | {dt:.0f} | {msg} | {shot or ''} |")
+        logdir.mkdir(parents=True, exist_ok=True)
         (logdir / "report.md").write_text("\n".join(lines) + "\n")
 
     def snap(label):
@@ -1993,7 +1997,9 @@ def cmd_qa_install(args):
         if fid not in s["fields"]:
             return fail(f"no {fid} field on Account")
         qa_tap(s, rect_centre(s["fields"][fid][0]))
-        time.sleep(0.4)
+        # the installer drains the FIFO when its frame loop wakes (up to a second when idle): typing sent too soon after
+        # the tap reached the field before the focus moved, and Verify lost its first keys (2026-10-20)
+        time.sleep(1.0)
         if not qa_type(text, secret, layout):
             return fail(f"could not type the {fid} field")
         s = qa_state() or s
@@ -2001,7 +2007,21 @@ def cmd_qa_install(args):
     c = find_button(s, "next")
     if not c or not qa_tap(s, c):
         return fail("Continue is not available on Account (fields rejected?)")
-    s = screen("look", 8) or screen("disk", 60)
+    s = screen("look", 8) or screen("disk", 30)
+    if not s:
+        # Continue stays disabled while the two passwords differ: type both again, slower, once
+        s = qa_state() or {}
+        for fid in ("password", "verify"):
+            if fid in s.get("fields", {}):
+                qa_tap(s, rect_centre(s["fields"][fid][0]))
+                time.sleep(1.5)
+                qa_type(password, True, layout)
+                time.sleep(1.0)
+        step("passwords typed again", snap("account-retry"))
+        c = find_button(s, "next") if s else None
+        if not c or not qa_tap(s, c):
+            return fail("Continue is not available on Account after typing the passwords again")
+        s = screen("look", 8) or screen("disk", 60)
     if s and s["screen"] == "look":
         step("Look screen", snap("look"))
         qa_tap(s, find_button(s, "next") or (0, 0))
