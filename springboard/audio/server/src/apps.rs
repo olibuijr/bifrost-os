@@ -15,6 +15,7 @@
 //! Single-threaded: everything here runs on the control thread. The audio thread only sees the results (the session gain
 //! of a stream, the DSP plan in the device's mailbox, the level tap it writes).
 
+use crate::io::log;
 use crate::objects::ObjectTree;
 use bifrost_audio_driver::transport::Transport;
 use bifrost_audio_driver::DeviceDesc;
@@ -63,6 +64,51 @@ pub fn plan_text(a: &Assignment) -> String {
         .join("\n")
 }
 
+/// The default-device selectors, in the order of `AppState::pinned`.
+const DEFAULT_ROLES: [bifrost_audio_types::FourCC; 3] = [props::DEFAULT_OUTPUT, props::DEFAULT_INPUT, props::DEFAULT_SOUND_EFFECTS];
+
+/// What the choice of a default device knows about a device.
+#[derive(Clone, Debug)]
+struct Candidate {
+    uid: String,
+    name: String,
+    transport: String,
+    output: bool,
+    input: bool,
+}
+
+impl Candidate {
+    fn of(desc: &DeviceDesc) -> Candidate {
+        Candidate { uid: desc.uid.clone(), name: desc.name.clone(), transport: desc.transport.clone(), output: desc.output_channels > 0, input: desc.input_channels > 0 }
+    }
+
+    /// Lower is better; `None` when the device is never a default (virtual loopback and null devices).
+    fn rank(&self) -> Option<u32> {
+        match self.transport.as_str() {
+            "virtual" => None,
+            "hdmi" => {
+                // a connected sink gives the device its monitor's name; a bare port keeps the generic PCM name
+                let generic = self.name.to_ascii_lowercase();
+                Some(if generic.starts_with("hdmi") || generic.starts_with("displayport") { 2 } else { 1 })
+            }
+            _ => Some(0),
+        }
+    }
+}
+
+/// The index of the default playback (`output`) or capture device among `candidates`: the best rank, then the first.
+fn pick_default(candidates: &[Candidate], output: bool) -> Option<usize> {
+    candidates
+        .iter()
+        .enumerate()
+        .filter(|(_, c)| if output { c.output } else { c.input })
+        // a capture default is never an HDMI port
+        .filter(|(_, c)| output || c.transport != "hdmi")
+        .filter_map(|(i, c)| c.rank().map(|r| (r, i)))
+        .min()
+        .map(|(_, i)| i)
+}
+
 /// The session an application declared, as the properties show it.
 #[derive(Clone, Copy, Debug, Default)]
 struct Declared {
@@ -82,6 +128,10 @@ pub struct AppState {
     pids: HashMap<i32, (String, u32)>,
     declared: HashMap<String, Declared>,
     devices: Vec<ObjectId>,
+    /// What the default-device choice looks at, per published device (same order as `devices`).
+    candidates: Vec<Candidate>,
+    /// Roles whose default a policy client set: the server's own choice no longer replaces them.
+    pinned: [bool; 3],
     /// (device, output) -> whether the last published level was silence
     quiet: HashMap<(ObjectId, bool), bool>,
 }
@@ -107,7 +157,39 @@ impl AppState {
             pids: HashMap::new(),
             declared: HashMap::new(),
             devices: Vec::new(),
+            candidates: Vec::new(),
+            pinned: [false; 3],
             quiet: HashMap::new(),
+        }
+        .with_default_properties()
+    }
+
+    /// The system object carries the default device of each role. Until a device is chosen they read 0, which the HAL
+    /// client reports as "no default device"; the server chooses (`choose_defaults`) when no policy process does.
+    fn with_default_properties(mut self) -> AppState {
+        for role in DEFAULT_ROLES {
+            self.tree.define(SYSTEM_OBJECT, g(role), PropertyValue::Object(ObjectId(0))).expect("the system object carries the default devices");
+        }
+        self
+    }
+
+    /// Chooses the default device of every role the policy has not set: the first real playback device (HDMI and
+    /// DisplayPort outputs only after the others, those with a monitor name before those without) and the first real
+    /// capture device. The loopback and null devices are never a default. The sound-effects role follows the output.
+    fn choose_defaults(&mut self) {
+        let output = pick_default(&self.candidates, true);
+        let input = pick_default(&self.candidates, false);
+        for (slot, (selector, choice)) in [(props::DEFAULT_OUTPUT, output), (props::DEFAULT_INPUT, input), (props::DEFAULT_SOUND_EFFECTS, output)].into_iter().enumerate() {
+            if self.pinned[slot] {
+                continue;
+            }
+            let Some(index) = choice else { continue };
+            let id = self.devices[index];
+            if self.tree.get(SYSTEM_OBJECT, g(selector)) != Ok(PropertyValue::Object(id)) {
+                let c = &self.candidates[index];
+                log("default", &format!("{} is now {} ({}, {})", props::lookup(selector).map_or("default", |d| d.name), c.uid, c.name, c.transport));
+                let _ = self.tree.update(SYSTEM_OBJECT, g(selector), PropertyValue::Object(id));
+            }
         }
     }
 
@@ -158,7 +240,9 @@ impl AppState {
             let _ = t.define(id, PropertyAddress::scoped(props::DSP_LATENCY, scope), PropertyValue::U32(0));
         }
         self.devices.push(id);
+        self.candidates.push(Candidate::of(desc));
         let _ = self.tree.update(SYSTEM_OBJECT, g(props::DEVICES), PropertyValue::Objects(self.devices.clone()));
+        self.choose_defaults();
     }
 
     /// A device started or stopped.
@@ -343,6 +427,11 @@ impl AppState {
     pub fn set(&mut self, client: u32, policy: bool, object: ObjectId, address: PropertyAddress, value: PropertyValue) -> Result<Vec<Action>, AudioError> {
         if self.tree.class(object)? != Class::Process {
             self.tree.set(object, address, value)?;
+            if object == SYSTEM_OBJECT {
+                if let Some(slot) = DEFAULT_ROLES.iter().position(|r| *r == address.selector) {
+                    self.pinned[slot] = true;
+                }
+            }
             return Ok(Vec::new());
         }
         // the property must exist at this address before anything else is judged
@@ -589,6 +678,45 @@ mod tests {
         a.publish_level(d, true, &[&silence], 48_000);
         assert!(a.drain_changes().is_empty(), "silence after silence wakes nobody");
         assert_eq!(a.level(d, true).map(|m| m.seq), Some(3), "it was measured all the same");
+    }
+
+    fn default_of(a: &AppState, selector: bifrost_audio_types::FourCC) -> PropertyValue {
+        a.get(SYSTEM_OBJECT, g(selector)).unwrap()
+    }
+
+    #[test]
+    fn the_default_output_is_the_first_real_playback_device_and_never_the_loopback() {
+        let mut a = AppState::new();
+        assert_eq!(default_of(&a, props::DEFAULT_OUTPUT), PropertyValue::Object(ObjectId(0)), "nothing chosen before a device exists");
+        let mut lo = dev("loopback:out", "virtual", 2, 0);
+        lo.name = "Loopback".into();
+        a.add_device(ObjectId(1000), &lo);
+        assert_eq!(default_of(&a, props::DEFAULT_OUTPUT), PropertyValue::Object(ObjectId(0)), "the loopback is never a default");
+        let mut hdmi = dev("alsa:PCH:3", "hdmi", 2, 0);
+        hdmi.name = "HDMI 0".into();
+        a.add_device(ObjectId(1001), &hdmi);
+        assert_eq!(default_of(&a, props::DEFAULT_OUTPUT), PropertyValue::Object(ObjectId(1001)), "an HDMI port when nothing else plays");
+        let mut mon = dev("alsa:PCH:7", "hdmi", 2, 0);
+        mon.name = "DELL U2720Q".into();
+        a.add_device(ObjectId(1002), &mon);
+        assert_eq!(default_of(&a, props::DEFAULT_OUTPUT), PropertyValue::Object(ObjectId(1002)), "a port with a monitor before a bare one");
+        a.add_device(ObjectId(1003), &dev("alsa:PCH:0", "pci", 2, 2));
+        assert_eq!(default_of(&a, props::DEFAULT_OUTPUT), PropertyValue::Object(ObjectId(1003)), "the analog output before any HDMI");
+        assert_eq!(default_of(&a, props::DEFAULT_SOUND_EFFECTS), PropertyValue::Object(ObjectId(1003)));
+        assert_eq!(default_of(&a, props::DEFAULT_INPUT), PropertyValue::Object(ObjectId(1003)));
+        a.add_device(ObjectId(1004), &dev("alsa:PCH:2", "pci", 2, 0));
+        assert_eq!(default_of(&a, props::DEFAULT_OUTPUT), PropertyValue::Object(ObjectId(1003)), "the first of equals stays");
+    }
+
+    #[test]
+    fn a_default_the_policy_set_is_kept_when_more_devices_appear() {
+        let mut a = AppState::new();
+        a.add_device(ObjectId(1000), &dev("alsa:PCH:0", "pci", 2, 0));
+        a.add_device(ObjectId(1001), &dev("usb:1", "usb", 2, 0));
+        a.set(1, true, SYSTEM_OBJECT, g(props::DEFAULT_OUTPUT), PropertyValue::Object(ObjectId(1001))).unwrap();
+        a.add_device(ObjectId(1002), &dev("alsa:PCH:2", "pci", 2, 0));
+        assert_eq!(default_of(&a, props::DEFAULT_OUTPUT), PropertyValue::Object(ObjectId(1001)));
+        assert_eq!(default_of(&a, props::DEFAULT_SOUND_EFFECTS), PropertyValue::Object(ObjectId(1000)), "the other roles keep following the server");
     }
 
     #[test]
