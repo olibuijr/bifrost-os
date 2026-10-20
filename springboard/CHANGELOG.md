@@ -2,8 +2,12 @@
 
 ## Unreleased
 
+## 0.10.13 — 2026-10-20
+
 - Settings and the player no longer invent a volume before the person sets one (a fresh install stays silent until the
   volume is turned up). Both now take `media::volume::DEFAULT_LEVEL`, so a Settings save no longer persists 0.7.
+- The installer waits for its interface font at start (up to 15 s) instead of exiting while the medium is still
+  being updated, and names the file when it gives up.
 
 ## 0.10.12 — 2026-10-20
 
