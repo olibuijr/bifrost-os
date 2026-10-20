@@ -364,6 +364,30 @@ pub enum Pick {
     Resolution(usize),
 }
 
+impl Pick {
+    /// The same pick with `k` as its choice, for a pop-up row's menu. None for a pick that is not a single choice among
+    /// listed values.
+    pub fn with_choice(self, k: usize) -> Option<Pick> {
+        Some(match self {
+            Pick::AllowAppsFrom(_) => Pick::AllowAppsFrom(k),
+            Pick::MouseSecondary(_) => Pick::MouseSecondary(k),
+            Pick::TrackpadSecondary(_) => Pick::TrackpadSecondary(k),
+            Pick::GameMode(_) => Pick::GameMode(k),
+            Pick::DockPosition(_) => Pick::DockPosition(k),
+            Pick::MinimizeEffect(_) => Pick::MinimizeEffect(k),
+            Pick::ScreenSaverModule(_) => Pick::ScreenSaverModule(k),
+            Pick::ScreenSaverStart(_) => Pick::ScreenSaverStart(k),
+            Pick::ScreenSaverOption(n, _) => Pick::ScreenSaverOption(n, k),
+            _ => return None,
+        })
+    }
+}
+
+/// The labels of a list of choices as a pop-up row or a segmented row takes them.
+pub fn choice_labels<S: AsRef<str>>(labels: &[S]) -> Vec<String> {
+    labels.iter().map(|l| l.as_ref().to_string()).collect()
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Slider {
     /// Keyboard > Key Repeat > Delay Until Repeat (`options::repeat_delay_from_slider`)
@@ -1022,8 +1046,10 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                 vec![
                     Group::new(vec![Item::new("About").glyph(Glyph::About).link(PageId::About), Item::new("Software Update").glyph(Glyph::Update).badge(usize::from(m.update_badge)).link(PageId::SoftwareUpdate)]),
                     Group::new(vec![Item::new("Nearby Share").glyph(Glyph::Nearby).link(PageId::Nearby)]),
-                    Group::new(GAME_MODES.iter().enumerate().map(|(i, (l, p))| Item::new(*l).check(*p == o.game_mode, Action::Pick(Pick::GameMode(i)))).collect())
-                        .header("GAME MODE")
+                    Group::new(vec![{
+                        let now = GAME_MODES.iter().position(|(_, p)| *p == o.game_mode).unwrap_or(0);
+                        Item::new("Game Mode").popup(GAME_MODES.iter().map(|(l, _)| l.to_string()).collect(), now, Action::Pick(Pick::GameMode(now)))
+                    }])
                         .footer("Automatic gives a full-screen game the whole processor while it is in front, and lets go a few seconds after the game leaves the front."),
                     Group::new(vec![Item::new("Storage").glyph(Glyph::Storage).link(PageId::Storage), Item::new("Startup Disk").glyph(Glyph::Storage).link(PageId::StartupDisk), Item::new("Background App Refresh").glyph(Glyph::Refresh).link(PageId::BackgroundRefresh)]),
                     Group::new(vec![
@@ -1159,7 +1185,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
             vec![
                 Group::new(vec![Item::slider(Ends::Speed, speed_slider(o.trackpad_speed), Action::Slider(Slider::TrackpadSpeed))]).header("TRACKING SPEED"),
                 Group::new(vec![Item::new("Tap to Click").switch(o.tap_to_click, Action::Toggle(Toggle::TapToClick))]).footer("A light tap on the trackpad clicks."),
-                Group::new(TRACKPAD_SECONDARY.iter().enumerate().map(|(i, l)| Item::new(*l).check(i == o.trackpad_secondary, Action::Pick(Pick::TrackpadSecondary(i)))).collect()).header("SECONDARY CLICK"),
+                Group::new(vec![Item::new("Secondary Click").popup(choice_labels(&TRACKPAD_SECONDARY), o.trackpad_secondary, Action::Pick(Pick::TrackpadSecondary(o.trackpad_secondary)))]),
                 Group::new(vec![Item::new("Natural Scrolling").switch(o.natural_scroll, Action::Toggle(Toggle::NaturalScroll))]).footer("The content moves with your fingers, as it does on a touch screen."),
                 Group::new(vec![
                     Item::new("Four & Five Finger Swipe").value(on_off(o.four_finger)).link(PageId::Gestures),
@@ -1618,6 +1644,11 @@ pub fn chosen(row: &Action, index: usize) -> Option<Action> {
             let choice = *super::services::privacy_permissions::LocationAccess::ALL.get(index)?;
             Some(Action::Location(super::location_page::Edit::Access { app: app.clone(), choice }))
         }
+        // a value choice among listed values: the pick with the chosen index
+        Action::Pick(pick) => pick.with_choice(index).map(Action::Pick),
+        // Screen Time's Day or Week switch: segment 1 is the week
+        Action::ScreenTime(super::screentime::page::StEdit::Range(_)) => (index < 2).then(|| Action::ScreenTime(super::screentime::page::StEdit::Range(index == 1))),
+        Action::Assistant(super::assistant_page::Edit::Backend(_)) => super::assistant::Backend::ALL.get(index).map(|b| Action::Assistant(super::assistant_page::Edit::Backend(*b))),
         _ => None,
     }
 }
@@ -1715,16 +1746,19 @@ fn dictionaries() -> Vec<&'static str> {
 /// Desktop & Dock (desktop profile only): the same dock state the bar's Dock menu edits.
 pub fn desktop_dock_page(m: &Model<'_>, d: &DeskPrefs) -> Spec {
     let positions = [("Bottom", Position::Bottom), ("Left", Position::Left), ("Right", Position::Right)];
+    let position = positions.iter().position(|(_, p)| *p == m.dock.position).unwrap_or(0);
+    let minimize = d.minimize_effect.min(MINIMIZE_EFFECTS.len() - 1);
     Spec { id: PageId::HomeScreen, title: "Desktop & Dock".into(), large: false, groups: vec![
-        Group::new(positions.iter().enumerate().map(|(i, (l, p))| Item::new(*l).check(*p == m.dock.position, Action::Pick(Pick::DockPosition(i)))).collect())
-            .header("POSITION ON SCREEN"),
         Group::new(vec![Item::slider(Ends::TextSize, (m.dock.size - 32.) / 48., Action::Slider(Slider::DockSize))]).header("SIZE"),
         Group::new(vec![
             Item::new("Magnification").switch(d.magnify, Action::Toggle(Toggle::DockMagnify)),
             Item::slider(Ends::TextSize, d.magnify_size, Action::Slider(Slider::DockMagnify)),
         ]).footer("Icons under the pointer grow. The slider sets how large they get."),
-        Group::new(MINIMIZE_EFFECTS.iter().enumerate().map(|(i, l)| Item::new(*l).check(i == d.minimize_effect, Action::Pick(Pick::MinimizeEffect(i)))).collect())
-            .header("MINIMIZE WINDOWS USING"),
+        // value choices are pop-up buttons on their rows
+        Group::new(vec![
+            Item::new("Position on Screen").popup(positions.iter().map(|(l, _)| l.to_string()).collect(), position, Action::Pick(Pick::DockPosition(position))),
+            Item::new("Minimize Windows Using").popup(choice_labels(&MINIMIZE_EFFECTS), minimize, Action::Pick(Pick::MinimizeEffect(minimize))),
+        ]),
         Group::new(vec![
             Item::new("Automatically Hide and Show").switch(m.dock.autohide, Action::Toggle(Toggle::DockAutohide)),
             Item::new("Show Suggested and Recent Apps").switch(m.opts.dock_recents, Action::Toggle(Toggle::DockRecents)),
@@ -1890,8 +1924,7 @@ pub fn font_pick_page(m: &Model<'_>, role: FontRole) -> Spec {
 /// values saved for it) and Start After. A switch is an on or off option; a choice option is a list of checks.
 pub fn screen_saver_page(o: &Options, sheet: &bifrost_ui::screensaver::ConfigureSheet) -> Spec {
     let mut groups = vec![
-        Group::new(super::screensaver::SAVERS.iter().enumerate().map(|(i, l)| Item::new(*l).check(i == o.screensaver_module, Action::Pick(Pick::ScreenSaverModule(i)))).collect())
-            .header("SCREEN SAVER"),
+        Group::new(vec![Item::new("Screen Saver").popup(choice_labels(&super::screensaver::SAVERS), o.screensaver_module.min(super::screensaver::SAVERS.len() - 1), Action::Pick(Pick::ScreenSaverModule(o.screensaver_module)))]),
         Group::new(vec![Item::new("Preview").tint(Tint::Blue).action(Action::Pick(Pick::ScreenSaverPreview))])
             .footer("Shows the screen saver full screen. Touch the screen or press a key to return."),
     ];
@@ -1901,17 +1934,16 @@ pub fn screen_saver_page(o: &Options, sheet: &bifrost_ui::screensaver::Configure
             groups.push(Group::new(vec![Item::new(&title).switch(sheet.bool_or(key, false), Action::Toggle(Toggle::SaverOption(n)))]));
         } else if let Some(choices) = sheet.choices(key) {
             let current = sheet.choice_of(key).unwrap_or("");
-            let rows = choices
-                .iter()
-                .enumerate()
-                .map(|(c, name)| Item::new(&super::screensaver::choice_title(name)).check(name == current, Action::Pick(Pick::ScreenSaverOption(n, c))))
-                .collect();
-            groups.push(Group::new(rows).header(&title.to_uppercase()));
+            let now = choices.iter().position(|name| name == current).unwrap_or(0);
+            let titles: Vec<String> = choices.iter().map(|name| super::screensaver::choice_title(name)).collect();
+            groups.push(Group::new(vec![Item::new(&title).popup(titles, now, Action::Pick(Pick::ScreenSaverOption(n, now)))]));
         }
     }
     groups.push(
-        Group::new(super::screensaver::START_AFTER.iter().enumerate().map(|(i, (l, min))| Item::new(*l).check(*min == o.screensaver_minutes, Action::Pick(Pick::ScreenSaverStart(i)))).collect())
-            .header("START AFTER")
+        Group::new(vec![{
+            let now = super::screensaver::START_AFTER.iter().position(|(_, min)| *min == o.screensaver_minutes).unwrap_or(0);
+            Item::new("Start After").popup(super::screensaver::START_AFTER.iter().map(|(l, _)| l.to_string()).collect(), now, Action::Pick(Pick::ScreenSaverStart(now)))
+        }])
             .footer("The screen saver starts once the computer has been idle for this long. The display still turns off at the Auto-Lock time. A hot corner can start it at once (Desktop & Dock > Hot Corners)."),
     );
     Spec { id: PageId::ScreenSaver, title: "Screen Saver".into(), large: false, groups }
@@ -2108,6 +2140,55 @@ mod tests {
 
     fn model<'a>(info: &'a Info, opts: &'a Options) -> Model<'a> {
         Model { info, opts, a11y: &A11Y_DEFAULT, airplane: false, haptics: false, wifi_on: true, brightness: 0.5, wallpaper: "Lake Day".into(), detail: "WIFI-5G", now: 1_000_000, update_badge: false, dock: DockPrefs::default(), defaults: &[], login_items: &[], login_pending: &[], firewall: &[], ext: &crate::shell::login_items_page::NO_EXTENSIONS, fonts: &NO_FONTS, refresh: RefreshChoice::Max, resolution: None, sound: &crate::shell::sound_page::NO_SOUND, sharing: None, printers: None, users: &NO_USERS, account: "" }
+    }
+
+    /// The row labelled `label` anywhere on the spec.
+    fn popup_row<'a>(spec: &'a Spec, label: &str) -> &'a Item {
+        spec.groups.iter().flat_map(|g| &g.items).find(|i| i.label == label).unwrap_or_else(|| panic!("no row {label:?}"))
+    }
+
+    #[test]
+    fn value_choices_are_pop_up_rows_that_send_the_same_picks() {
+        let (info, opts) = (info(), Options::default());
+        let m = model(&info, &opts);
+        // Desktop & Dock: position and minimise effect
+        let dock = desktop_dock_page(&m, &DeskPrefs::default());
+        let position = popup_row(&dock, "Position on Screen");
+        assert_eq!(position.accessory, Accessory::Popup);
+        assert_eq!(position.popup.as_ref().map(|p| (p.choices.clone(), p.selected)), Some((vec!["Bottom".to_string(), "Left".into(), "Right".into()], 0)));
+        assert_eq!(chosen(&position.action, 2), Some(Action::Pick(Pick::DockPosition(2))), "the menu's choice replaces the index");
+        let minimize = popup_row(&dock, "Minimize Windows Using");
+        assert_eq!(minimize.popup.as_ref().map(|p| p.choices.len()), Some(MINIMIZE_EFFECTS.len()));
+        assert_eq!(chosen(&minimize.action, 1), Some(Action::Pick(Pick::MinimizeEffect(1))));
+        assert!(dock.groups.iter().all(|g| g.items.iter().all(|i| !matches!(i.accessory, Accessory::Check(_)))), "no checklist left on the page");
+        // General: Game Mode
+        let general = spec(PageId::General, &m);
+        let game = popup_row(&general, "Game Mode");
+        assert_eq!(game.accessory, Accessory::Popup);
+        assert_eq!(chosen(&game.action, 1), Some(Action::Pick(Pick::GameMode(1))));
+        // Trackpad: secondary click
+        let trackpad = spec(PageId::Trackpad, &m);
+        let secondary = popup_row(&trackpad, "Secondary Click");
+        assert_eq!(secondary.popup.as_ref().map(|p| p.choices.len()), Some(TRACKPAD_SECONDARY.len()));
+        assert_eq!(chosen(&secondary.action, 1), Some(Action::Pick(Pick::TrackpadSecondary(1))));
+        // Screen Saver: kind and Start After; a choice option of the saver keeps its option number
+        let saver = screen_saver_page(&opts, &Default::default());
+        assert_eq!(popup_row(&saver, "Screen Saver").popup.as_ref().map(|p| p.choices.clone()), Some(super::super::screensaver::SAVERS.iter().map(|s| s.to_string()).collect()));
+        let start = popup_row(&saver, "Start After");
+        assert_eq!(chosen(&start.action, 3), Some(Action::Pick(Pick::ScreenSaverStart(3))));
+        assert_eq!(chosen(&Action::Pick(Pick::ScreenSaverOption(2, 0)), 1), Some(Action::Pick(Pick::ScreenSaverOption(2, 1))));
+        // a pick that is not a value choice has no menu
+        assert_eq!(chosen(&Action::Pick(Pick::ScreenSaverPreview), 1), None);
+        assert_eq!(chosen(&Action::Pick(Pick::Remap(0, 0)), 1), None);
+    }
+
+    #[test]
+    fn the_screen_time_day_and_week_switch_is_a_segmented_control() {
+        use super::super::screentime::page::StEdit;
+        let row = Item::new("Range").segmented(vec!["Day".into(), "Week".into()], 1, Action::ScreenTime(StEdit::Range(true)));
+        assert_eq!(chosen(&row.action, 0), Some(Action::ScreenTime(StEdit::Range(false))));
+        assert_eq!(chosen(&row.action, 1), Some(Action::ScreenTime(StEdit::Range(true))));
+        assert_eq!(chosen(&row.action, 2), None);
     }
 
     #[test]

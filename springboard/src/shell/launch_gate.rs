@@ -184,8 +184,10 @@ pub fn groups(setting: Setting, blocked: Option<&(PathBuf, String)>) -> Vec<Grou
         );
     }
     out.push(
-        Group::new(SETTINGS.iter().enumerate().map(|(i, (label, s))| Item::new(*label).check(*s == setting, Action::Pick(Pick::AllowAppsFrom(i)))).collect())
-            .header("ALLOW APPS FROM")
+        Group::new(vec![{
+            let now = SETTINGS.iter().position(|(_, s)| *s == setting).unwrap_or(0);
+            Item::new("Allow Apps From").popup(SETTINGS.iter().map(|(label, _)| label.to_string()).collect(), now, Action::Pick(Pick::AllowAppsFrom(now)))
+        }])
             .footer("Programs downloaded from the internet or received in a message are checked against this when you open them from Files."),
     );
     out

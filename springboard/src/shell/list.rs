@@ -6,7 +6,7 @@
 use super::battery::Graph;
 use super::icons::{self, Icon, BLUE, RED};
 use super::pages::{Action, PageId};
-use super::ui::{home_zone, Ui, Weight, AVATAR_BG, AVATAR_FG, CARD_BG, DETAIL_BG, LABEL, LABEL_2, ROW_PRESSED, SECONDARY, SEPARATOR_C, WHITE, MAC_BODY_PT, MATERIAL_MENU, MENU_HIGHLIGHT, MENU_RADIUS_PT};
+use super::ui::{home_zone, Ui, Weight, AVATAR_BG, AVATAR_FG, CARD_BG, DETAIL_BG, LABEL, LABEL_2, ROW_PRESSED, SECONDARY, SEPARATOR_C, WHITE, MAC_BODY_PT, MAC_HEADLINE_PT, MAC_TITLE3_PT, MATERIAL_MENU, MENU_HIGHLIGHT, MENU_RADIUS_PT};
 use super::controls::{self, draw_slider, draw_switch, switch_progress, KNOB_PT, SWITCH_H_PT, SWITCH_MS, SWITCH_W_PT};
 use crate::deildu::scroll::Scroller;
 use crate::gfx::{pack, Image, Surface};
@@ -21,7 +21,9 @@ pub const BAR_ROW_PT: f32 = 76.0;
 pub const CHART_ROW_PT: f32 = 230.0;
 /// Space above a group; a header sits inside a taller one.
 pub const GROUP_GAP_PT: f32 = 11.0;
-const HEADER_PT: f32 = 22.0;
+const HEADER_PT: f32 = 26.0;
+/// A row label wraps onto at most this many lines before its last one ends with an ellipsis.
+const LABEL_LINES: usize = 2;
 const FOOTER_LINE_PT: f32 = 18.0;
 const FOOTER_GAP_PT: f32 = 8.0;
 pub const RADIUS_PT: f32 = 13.0;
@@ -58,6 +60,8 @@ pub enum Accessory {
     Wifi { secure: bool, bars: u8 },
     /// a trailing pop-up button: the chosen label and up/down chevrons (the row's `popup` holds the choices)
     Popup,
+    /// a segmented control across the row (the row's `segments` holds the choices); the row has no label of its own
+    Segmented,
 }
 
 /// A trailing pop-up button's choices and the one chosen. Tapping the row opens a menu of the choices under the row;
@@ -126,12 +130,14 @@ pub struct Item {
     pub app_icon: Option<String>,
     /// the pop-up button's choices (set with `popup`, drawn by `Accessory::Popup`)
     pub popup: Option<Popup>,
+    /// the segmented control's choices (set with `segmented`, drawn by `Accessory::Segmented`)
+    pub segments: Option<Popup>,
 }
 
 impl Item {
     /// A plain row with a label.
     pub fn new(label: impl Into<String>) -> Self {
-        Item { icon: None, glyph: None, label: label.into(), value: String::new(), accessory: Accessory::None, body: Body::Row, action: Action::None, tint: Tint::Plain, leading_check: false, badge: 0, app_icon: None, popup: None }
+        Item { icon: None, glyph: None, label: label.into(), value: String::new(), accessory: Accessory::None, body: Body::Row, action: Action::None, tint: Tint::Plain, leading_check: false, badge: 0, app_icon: None, popup: None, segments: None }
     }
 
     pub fn icon(mut self, icon: Icon) -> Self {
@@ -178,6 +184,15 @@ impl Item {
     pub fn popup(mut self, choices: Vec<String>, selected: usize, action: Action) -> Self {
         self.accessory = Accessory::Popup;
         self.popup = Some(Popup { choices, selected });
+        self.action = action;
+        self
+    }
+
+    /// A segmented control across the row for a view switch (Day or Week): `choices[selected]` is filled. The row's action is
+    /// sent with the tapped segment's index (see `pages::chosen`). The row's label is for the screen reader only.
+    pub fn segmented(mut self, choices: Vec<String>, selected: usize, action: Action) -> Self {
+        self.accessory = Accessory::Segmented;
+        self.segments = Some(Popup { choices, selected });
         self.action = action;
         self
     }
@@ -267,6 +282,8 @@ pub enum Hit {
     Slider(usize, usize),
     /// a choice in the open pop-up menu (its index)
     Choice(usize),
+    /// a segment of a segmented row: group, item, segment
+    Segment(usize, usize, usize),
     /// a touch outside the open pop-up menu: it closes
     Dismiss,
 }
@@ -280,7 +297,8 @@ struct RowGeom {
 }
 
 struct RowImages {
-    label: Image,
+    /// the label's lines: one, or a wrapped second line when it would run under the trailing control
+    label: Vec<Image>,
     value: Option<Image>,
     /// the leading app icon at the icon token, when the app has one installed
     icon: Option<Image>,
@@ -330,6 +348,76 @@ fn leading_x(ui: &Ui, margin: f32, item: &Item, sidebar: bool) -> (f32, f32) {
 fn popup_layout(ui: &Ui, right: f32, label_w: f32) -> (f32, f32) {
     let label_left = right - ui.pt(POPUP_CHEV_PT + POPUP_GAP_PT) - label_w;
     (right - ui.pt(POPUP_CHEV_PT / 2.0), label_left)
+}
+
+/// A group header in headline case. Specs write headers in capitals ("DOCK POSITION"); the page shows them as title-case
+/// headlines ("Dock Position"). A word with a lower-case letter in it (a device name, "v1.2") is left as written, and so
+/// are the acronyms in `ACRONYMS`.
+pub fn headline_case(text: &str) -> String {
+    const ACRONYMS: [&str; 28] = ["TV", "OS", "ID", "IP", "UI", "PC", "USB", "HID", "DNS", "VPN", "DHCP", "URL", "SSID", "VLAN", "LAN", "GPU", "CPU", "RAM", "SSD", "HDD", "PDF", "API", "TLS", "SSH", "NTP", "HDR", "LED", "PIN"];
+    const SMALL: [&str; 15] = ["A", "AN", "AND", "AS", "AT", "BUT", "BY", "FOR", "FROM", "IN", "IS", "OF", "ON", "OR", "TO"];
+    let mut out = String::with_capacity(text.len());
+    for (n, word) in text.split(' ').enumerate() {
+        if n > 0 {
+            out.push(' ');
+        }
+        let letters = word.chars().filter(|c| c.is_alphabetic()).count();
+        if letters == 0 || word.chars().any(char::is_lowercase) {
+            out.push_str(word);
+        } else if word == "IPV4" || word == "IPV6" {
+            out.push_str(&word.replace("IPV", "IPv"));
+        } else if ACRONYMS.contains(&word) {
+            out.push_str(word);
+        } else if n > 0 && SMALL.contains(&word) {
+            out.push_str(&word.to_lowercase());
+        } else {
+            // each part of a hyphenated word starts with a capital: "Double-Click"
+            let mut start = true;
+            for c in word.chars() {
+                if start {
+                    out.extend(c.to_uppercase());
+                } else {
+                    out.extend(c.to_lowercase());
+                }
+                start = c == '-';
+            }
+        }
+    }
+    out
+}
+
+/// The lines a row label takes in `width` px: the label wrapped onto at most `LABEL_LINES` lines, the last ending in an
+/// ellipsis when the text is still longer. A label never runs under the trailing control. `wrap` off (a sidebar row) keeps
+/// it to one line.
+fn label_lines(ui: &Ui, text: &str, width: f32, wrap: bool) -> Vec<String> {
+    let width = width.max(0.0);
+    let mut lines = if wrap { ui.wrap(text, MAC_BODY_PT, Weight::Regular, width) } else { vec![text.to_string()] };
+    let limit = if wrap { LABEL_LINES } else { 1 };
+    if lines.len() > limit {
+        // the rest of the text joins the last line, which `fit` then ends with an ellipsis
+        let tail = lines.split_off(limit - 1).join(" ");
+        lines.push(tail);
+    }
+    if lines.is_empty() {
+        lines.push(String::new());
+    }
+    lines.iter().map(|l| ui.fit(l, MAC_BODY_PT, width)).collect()
+}
+
+/// The width in px a row's trailing control takes from its label: the chevron, switch, check, detail button or network
+/// icons, and the badge, with the gap before them. A pop-up button is counted by its own label (`popup_layout`) and a
+/// segmented row has no label.
+fn accessory_room(ui: &Ui, item: &Item, chevron_w: f32, check_w: f32, badge_w: f32) -> f32 {
+    let control = match item.accessory {
+        Accessory::None | Accessory::Popup | Accessory::Segmented => 0.0,
+        Accessory::Chevron => chevron_w + ui.pt(6.0),
+        Accessory::Switch(_) => ui.pt(SWITCH_W_PT + 12.0),
+        Accessory::Check(_) => check_w + ui.pt(8.0),
+        Accessory::Info => ui.pt(22.0 + 16.0),
+        Accessory::Wifi { secure, .. } => ui.pt(12.0) * 1.42 + ui.pt(10.0) + if secure { ui.pt(9.0 + 10.0) } else { 0.0 },
+    };
+    let badge = if item.badge > 0 { badge_w + ui.pt(8.0) } else { 0.0 };
+    control + badge + if control + badge > 0.0 { ui.pt(8.0) } else { 0.0 }
 }
 
 pub struct ListPage {
@@ -384,6 +472,8 @@ impl Pane {
 
 /// The card at the top of a detail page: a large icon, the page's name and a line about it.
 struct Header {
+    /// one row (icon at the left, title and description beside it) instead of the centred hero
+    compact: bool,
     icon: Icon,
     title: Image,
     lines: Vec<Image>,
@@ -392,18 +482,14 @@ struct Header {
     h: f32,
 }
 
-/// The icon and description a first-level page shows in its header card.
-fn header_for(id: PageId) -> Option<(Icon, &'static str)> {
+/// What a first-level page opens with, and how. Only General has the large centred hero (a category page: its rows are
+/// all links). Notifications and Screen Time open with one compact card (icon, title and description in one row); every
+/// other pane starts at its first group under the toolbar title, as the reference panes do. The bool is `compact`.
+fn header_for(id: PageId) -> Option<(Icon, &'static str, bool)> {
     Some(match id {
-        PageId::General => (Icon::General, "Manage your overall setup and preferences, such as software updates, language and more."),
-        PageId::Display => (Icon::Display, "Adjust your display, its brightness, appearance and text size."),
-        PageId::Notifications => (Icon::Notifications, "Choose how and when apps can notify you."),
-        PageId::Sounds => (Icon::Sounds, "Set the volume and the sounds this computer plays."),
-        PageId::Focus => (Icon::Focus, "Silence notifications while you work."),
-        PageId::ScreenTime => (Icon::ScreenTime, "See how you use your computer and set limits."),
-        PageId::ControlCentre => (Icon::ControlCentre, "Choose which controls appear in Control Centre."),
-        PageId::Sharing => (Icon::Wifi, "Choose how this computer shares with nearby devices and whether your other devices can pick up its work."),
-        PageId::LockScreen => (Icon::Passcode, "Choose when the screen locks after a while and what it asks for before it opens again."),
+        PageId::General => (Icon::General, "Manage your overall setup and preferences, such as software updates, language and more.", false),
+        PageId::Notifications => (Icon::Notifications, "Choose how and when apps can notify you.", true),
+        PageId::ScreenTime => (Icon::ScreenTime, "See how you use your computer and set limits.", true),
         _ => return None,
     })
 }
@@ -521,6 +607,8 @@ fn lerp8(a: u32, b: u32, t: u32) -> u32 {
 /// The navigation bar: an inline title and, below the root, "‹ Previous".
 pub struct NavBar {
     title: Image,
+    /// the title as text, to draw it again in the toolbar's own style
+    title_text: String,
     back: Option<(Image, Image)>,
     nav_pt: f32,
     status_pt: f32,
@@ -532,6 +620,7 @@ impl NavBar {
     pub fn new(ui: &Ui, title: &str, back: Option<&str>) -> Self {
         NavBar {
             title: ui.text(title, 17.0, Weight::Semibold, WHITE),
+            title_text: title.to_string(),
             back: back.map(|b| (ui.text("‹", 30.0, Weight::Medium, BLUE), ui.text(&ui.fit(b, 17.0, ui.pt(160.0)), 17.0, Weight::Regular, BLUE))),
             nav_pt: NAV_PT,
             status_pt: STATUS_PT,
@@ -539,9 +628,13 @@ impl NavBar {
         }
     }
 
-    /// Draws back and forward as one pill (the desktop toolbar).
-    pub fn pill(mut self, on: bool) -> Self {
+    /// Draws back and forward as one pill (the desktop toolbar). The title then sits left-aligned beside the pill in the
+    /// title 3 style, not centred in the bar.
+    pub fn pill(mut self, ui: &Ui, on: bool) -> Self {
         self.pill = on;
+        if on {
+            self.title = ui.text(&self.title_text, MAC_TITLE3_PT, Weight::Semibold, WHITE);
+        }
         self
     }
 
@@ -604,7 +697,8 @@ impl NavBar {
         }
         let ta = (title_alpha * 255.0) as u32;
         if ta > 0 {
-            s.blit_colored(&self.title, w / 2 - self.title.w as i32 / 2, (mid - self.title.h as f32 / 2.0) as i32, LABEL.now(), ta);
+            let x = if self.pill { ui.pt(bifrost_ui::prefs_layout::toolbar_title_x()) as i32 } else { w / 2 - self.title.w as i32 / 2 };
+            s.blit_colored(&self.title, x, (mid - self.title.h as f32 / 2.0) as i32, LABEL.now(), ta);
         }
     }
 }
@@ -637,6 +731,9 @@ impl ListPage {
         let mut headers = vec![];
         let mut footers = vec![];
         let mut images = vec![];
+        let chevron = controls::chevron(ui);
+        // rendered white and tinted with the accent colour when drawn, so it follows the user's accent
+        let check = ui.text("✓", 17.0, Weight::Semibold, WHITE);
         let mut y = nav_bottom + if spec.large && !pane.sidebar { ui.pt(LARGE_TITLE_PT) } else { 0.0 };
         // the root page's capsule under its large title; in the sidebar the field sits under the traffic lights
         let search_y = if pane.sidebar { Some(ui.pt(bifrost_ui::prefs_layout::m::SEARCH_Y)) } else { (spec.large && spec.id == PageId::Root).then_some(y) };
@@ -655,15 +752,26 @@ impl ListPage {
                 card_lines: ["Local account".to_string(), account.username].iter().map(|l| ui.text(l, super::ui::MAC_CALLOUT_PT, Weight::Regular, SECONDARY)).collect(),
             }
         });
-        let header = (pane.header && !pane.sidebar).then(|| header_for(spec.id)).flatten().map(|(icon, desc)| {
+        let header = (pane.header && !pane.sidebar).then(|| header_for(spec.id)).flatten().map(|(icon, desc, compact)| {
+            use bifrost_ui::prefs_layout::m as pm;
             let hy = y + ui.pt(12.0);
-            let h = ui.pt(bifrost_ui::prefs_layout::m::HEADER_H);
+            if compact {
+                let text_w = cw - ui.pt(pm::HEADER_COMPACT_TEXT_X + 2.0 * pm::HEADER_COMPACT_PAD);
+                let title = ui.text(&spec.title, MAC_BODY_PT, Weight::Regular, WHITE);
+                let lines: Vec<Image> = ui.wrap(desc, MAC_BODY_PT, Weight::Regular, text_w).iter().map(|l| ui.text(l, MAC_BODY_PT, Weight::Regular, SECONDARY)).collect();
+                let text_h = title.h as f32 + lines.iter().map(|l| l.h as f32).sum::<f32>();
+                let h = (text_h + ui.pt(2.0 * pm::HEADER_COMPACT_PAD)).max(ui.pt(pm::HEADER_COMPACT_ICON + 2.0 * pm::HEADER_COMPACT_PAD));
+                y = hy + h;
+                return Header { compact, icon, title, lines, y: hy, h };
+            }
+            let h = ui.pt(pm::HEADER_H);
             y = hy + h;
-            Header { icon, title: ui.text(&spec.title, super::ui::MAC_TITLE1_PT, Weight::Bold, WHITE), lines: ui.wrap(desc, super::ui::MAC_BODY_PT, Weight::Regular, cw - ui.pt(40.0)).iter().map(|l| ui.text(l, super::ui::MAC_BODY_PT, Weight::Regular, SECONDARY)).collect(), y: hy, h }
+            Header { compact, icon, title: ui.text(&spec.title, super::ui::MAC_TITLE1_PT, Weight::Bold, WHITE), lines: ui.wrap(desc, super::ui::MAC_BODY_PT, Weight::Regular, cw - ui.pt(40.0)).iter().map(|l| ui.text(l, super::ui::MAC_BODY_PT, Weight::Regular, SECONDARY)).collect(), y: hy, h }
         });
         for (g, group) in spec.groups.iter().enumerate() {
             y += ui.pt(if !pane.sidebar { GROUP_GAP_PT } else if g == 0 { 0.0 } else { SIDEBAR_GROUP_GAP_PT });
-            headers.push(group.header.as_ref().map(|hd| ui.text(hd, 13.0, Weight::Regular, SECONDARY)));
+            // a headline above its card: title case, headline weight, in the label colour (drawn with `blit_colored`)
+            headers.push(group.header.as_ref().map(|hd| ui.text(&headline_case(hd), MAC_HEADLINE_PT, Weight::Semibold, WHITE)));
             if group.header.is_some() {
                 y += ui.pt(HEADER_PT);
             }
@@ -683,14 +791,16 @@ impl ListPage {
                     let chosen = p.choices.get(p.selected).map_or("", String::as_str);
                     ui.text(&ui.fit(chosen, MAC_BODY_PT, value_w), MAC_BODY_PT, Weight::Regular, WHITE)
                 });
-                let value_room = value_img.as_ref().map_or(0.0, |v| v.w as f32 + ui.pt(8.0) + if matches!(item.accessory, Accessory::Chevron) { ui.pt(20.0) } else { 0.0 })
-                    + popup_img.as_ref().map_or(0.0, |p| p.w as f32 + ui.pt(POPUP_CHEV_PT + POPUP_GAP_PT));
+                let value_room = value_img.as_ref().map_or(0.0, |v| v.w as f32 + ui.pt(8.0)) + popup_img.as_ref().map_or(0.0, |p| p.w as f32 + ui.pt(POPUP_CHEV_PT + POPUP_GAP_PT));
+                let badge_w = if item.badge > 0 { super::notify::list::badge_image(ui, item.badge).w as f32 } else { 0.0 };
+                let accessory = if pane.sidebar { 0.0 } else { accessory_room(ui, item, chevron.w as f32, check.w as f32, badge_w) };
                 let (icon_pt, _, gap_pt) = row_icon(pane.sidebar);
-                let label_w = cw - ui.pt(2.0 * TEXT_INSET_PT) - if has_leading(item) { ui.pt(icon_pt + gap_pt) } else { 0.0 } - value_room;
+                // the label stops before the value and the trailing control and wraps instead of running under them
+                let label_w = cw - ui.pt(2.0 * TEXT_INSET_PT) - if has_leading(item) { ui.pt(icon_pt + gap_pt) } else { 0.0 } - value_room - accessory;
                 // the app's icon at the icon token; a built-in app has none and leaves the slot blank
                 let icon_img = item.app_icon.as_ref().filter(|_| has_leading(item)).and_then(|id| super::apphost::icon_image(id, ui.pt(icon_pt).round() as usize));
                 images.push(RowImages {
-                    label: ui.text(&ui.fit(&item.label, MAC_BODY_PT, label_w), MAC_BODY_PT, if pane.sidebar { Weight::Regular } else { Weight::Regular }, color),
+                    label: label_lines(ui, &item.label, label_w, !pane.sidebar).iter().map(|l| ui.text(l, MAC_BODY_PT, Weight::Regular, color)).collect(),
                     value: value_img,
                     icon: icon_img,
                     popup: popup_img,
@@ -710,10 +820,9 @@ impl ListPage {
         let flipped = vec![-1e9; rows.len()];
         ListPage {
             title_large: (spec.large && !pane.sidebar).then(|| ui.text(&spec.title, super::ui::MAC_LARGE_TITLE_PT, Weight::Bold, WHITE)),
-            nav: NavBar::new(ui, &spec.title, back).height(pane.nav_pt).status(pane.status_pt).pill(pane.status_pt == 0.0 && !pane.sidebar),
-            chevron: controls::chevron(ui),
-            // rendered white and tinted with the accent colour when drawn, so it follows the user's accent
-            check: ui.text("✓", 17.0, Weight::Semibold, WHITE),
+            nav: NavBar::new(ui, &spec.title, back).height(pane.nav_pt).status(pane.status_pt).pill(ui, pane.status_pt == 0.0 && !pane.sidebar),
+            chevron,
+            check,
             spec,
             w,
             h,
@@ -801,6 +910,24 @@ impl ListPage {
         for (j, item) in self.spec.groups[g].items.iter_mut().enumerate() {
             if let Accessory::Check(_) = item.accessory {
                 item.accessory = Accessory::Check(j == i);
+            }
+        }
+    }
+
+    /// Shows `k` as the chosen one of row (g, i)'s pop-up button or segmented control, after the choice was made.
+    pub fn set_choice(&mut self, ui: &Ui, g: usize, i: usize, k: usize) {
+        self.gen = next_gen();
+        let row = self.row_index(g, i);
+        let item = &mut self.spec.groups[g].items[i];
+        if let Some(seg) = &mut item.segments {
+            seg.selected = k.min(seg.choices.len().saturating_sub(1));
+        }
+        if let Some(pop) = &mut item.popup {
+            pop.selected = k.min(pop.choices.len().saturating_sub(1));
+            let chosen = pop.choices.get(pop.selected).cloned().unwrap_or_default();
+            let value_w = (self.w as f32 - 2.0 * self.margin) * 0.5;
+            if self.images[row].popup.is_some() {
+                self.images[row].popup = Some(ui.text(&ui.fit(&chosen, MAC_BODY_PT, value_w), MAC_BODY_PT, Weight::Regular, WHITE));
             }
         }
     }
@@ -911,7 +1038,14 @@ impl ListPage {
         }
         let cy = y + self.scroll.offset();
         let r = self.rows.iter().find(|r| cy >= r.y && cy < r.y + r.h)?;
-        Some(match self.item(r.g, r.i).body {
+        let item = self.item(r.g, r.i);
+        if let Some(seg) = item.segments.as_ref().filter(|_| item.accessory == Accessory::Segmented) {
+            // a touch on the segmented row chooses the segment under it; the track's rim goes to the nearest one
+            let (tx, _, tw, _) = self.segment_track(ui, (m, 0.0, self.w as f32 - 2.0 * m, 0.0));
+            let k = (((x - tx) / (tw / seg.choices.len().max(1) as f32)).floor().max(0.0) as usize).min(seg.choices.len().saturating_sub(1));
+            return Some(Hit::Segment(r.g, r.i, k));
+        }
+        Some(match item.body {
             Body::Slider { .. } => Hit::Slider(r.g, r.i),
             _ => Hit::Row(r.g, r.i),
         })
@@ -971,8 +1105,8 @@ impl ListPage {
     /// How far the bar has faded in: 0 transparent over the content, 1 solid.
     fn bar_alpha(&self, ui: &Ui) -> f32 {
         let o = self.draw_offset();
-        if let Some(h) = &self.header {
-            // the card scrolls under the toolbar; the bar and its inline title fade in as it leaves
+        if let Some(h) = self.header.as_ref().filter(|h| !h.compact) {
+            // the hero scrolls under the toolbar; the bar and its inline title fade in as it leaves
             return ((o - (h.y + h.h - ui.pt(40.0))) / ui.pt(16.0)).clamp(0.0, 1.0);
         }
         if self.spec.large {
@@ -991,7 +1125,7 @@ impl ListPage {
             let (gy, gh) = self.group_rects[g];
             let gy = gy + dy;
             if let Some(hd) = &self.headers[g] {
-                s.blit(hd, text_x as i32, (gy - ui.pt(HEADER_PT) + ui.pt(2.0)) as i32, 255, 255);
+                s.blit_colored(hd, text_x as i32, (gy - ui.pt(HEADER_PT) + ui.pt(6.0)) as i32, LABEL.now(), 255);
             }
             if gy + gh >= 0.0 && gy < self.h as f32 {
                 if self.sidebar.is_none() {
@@ -1010,15 +1144,30 @@ impl ListPage {
         if let Some(h) = &self.header {
             let hy = h.y + dy;
             if hy + h.h >= 0.0 && hy < self.h as f32 {
+                use bifrost_ui::prefs_layout::m as pm;
                 s.fill_rrect(m, hy, cw, h.h, ui.pt(RADIUS_PT), CARD_BG.now());
-                let side = ui.pt(bifrost_ui::prefs_layout::m::HEADER_ICON);
-                icons::tile_sized(s, ui, h.icon, m + (cw - side) / 2.0, hy + ui.pt(24.0), bifrost_ui::prefs_layout::m::HEADER_ICON);
-                let mut ty = hy + ui.pt(24.0) + side + ui.pt(8.0);
-                s.blit_colored(&h.title, (m + (cw - h.title.w as f32) / 2.0) as i32, ty as i32, LABEL.now(), 255);
-                ty += h.title.h as f32 + ui.pt(2.0);
-                for line in &h.lines {
-                    s.blit(line, (m + (cw - line.w as f32) / 2.0) as i32, ty as i32, 255, 255);
-                    ty += line.h as f32;
+                if h.compact {
+                    // icon at the left, the title and the description in one column beside it
+                    let pad = ui.pt(pm::HEADER_COMPACT_PAD);
+                    icons::tile_sized(s, ui, h.icon, m + ui.pt(pm::HEADER_COMPACT_ICON_X), hy + pad, pm::HEADER_COMPACT_ICON);
+                    let tx = (m + ui.pt(pm::HEADER_COMPACT_TEXT_X)) as i32;
+                    let mut ty = hy + pad;
+                    s.blit_colored(&h.title, tx, ty as i32, LABEL.now(), 255);
+                    ty += h.title.h as f32;
+                    for line in &h.lines {
+                        s.blit(line, tx, ty as i32, 255, 255);
+                        ty += line.h as f32;
+                    }
+                } else {
+                    let side = ui.pt(pm::HEADER_ICON);
+                    icons::tile_sized(s, ui, h.icon, m + (cw - side) / 2.0, hy + ui.pt(24.0), pm::HEADER_ICON);
+                    let mut ty = hy + ui.pt(24.0) + side + ui.pt(8.0);
+                    s.blit_colored(&h.title, (m + (cw - h.title.w as f32) / 2.0) as i32, ty as i32, LABEL.now(), 255);
+                    ty += h.title.h as f32 + ui.pt(2.0);
+                    for line in &h.lines {
+                        s.blit(line, (m + (cw - line.w as f32) / 2.0) as i32, ty as i32, 255, 255);
+                        ty += line.h as f32;
+                    }
                 }
             }
         }
@@ -1038,7 +1187,7 @@ impl ListPage {
         if alpha > 0.0 {
             blur_strip(s, self.nav_bottom(ui) as usize, ui.pt(10.0) as usize);
         }
-        self.nav.draw(s, ui, self.w, alpha, if self.spec.large || self.header.is_some() { alpha } else { 1.0 });
+        self.nav.draw(s, ui, self.w, alpha, if self.spec.large || self.header.as_ref().is_some_and(|h| !h.compact) { alpha } else { 1.0 });
     }
 
     /// The open pop-up menu: a translucent rounded card, a checkmark on the chosen item and the highlighted item filled.
@@ -1148,12 +1297,18 @@ impl ListPage {
                     s.blit_colored(&self.check, lx as i32, (mid - self.check.h as f32 / 2.0) as i32, bifrost_render::appearance::accent_now(), 255);
                     lx += ui.pt(26.0);
                 }
-                let label = &self.images[k].label;
-                // plain labels are white images drawn in the scheme's label colour; the selected sidebar row stays white
-                if item.tint == Tint::Plain && !selected {
-                    s.blit_colored(label, lx as i32, (mid - label.h as f32 / 2.0) as i32, LABEL.now(), 255);
-                } else {
-                    s.blit(label, lx as i32, (mid - label.h as f32 / 2.0) as i32, 255, 255);
+                // a label of two lines is centred on the row as a block
+                let labels = &self.images[k].label;
+                let block: f32 = labels.iter().map(|l| l.h as f32).sum();
+                let mut ly = mid - block / 2.0;
+                for label in labels.iter().filter(|_| item.accessory != Accessory::Segmented) {
+                    // plain labels are white images drawn in the scheme's label colour; the selected sidebar row stays white
+                    if item.tint == Tint::Plain && !selected {
+                        s.blit_colored(label, lx as i32, ly as i32, LABEL.now(), 255);
+                    } else {
+                        s.blit(label, lx as i32, ly as i32, 255, 255);
+                    }
+                    ly += label.h as f32;
                 }
                 let mut right = m + cw - ui.pt(TEXT_INSET_PT);
                 match item.accessory {
@@ -1189,6 +1344,11 @@ impl ListPage {
                         }
                         right = label_left;
                     }
+                    Accessory::Segmented => {
+                        if let Some(seg) = &item.segments {
+                            self.draw_segments(s, ui, (m, ry, cw, rh), seg);
+                        }
+                    }
                     Accessory::Info => {
                         icons::info(s, ui, right - ui.pt(11.0), mid);
                         right -= ui.pt(22.0 + 16.0);
@@ -1217,6 +1377,36 @@ impl ListPage {
         if i + 1 < n && self.sidebar.is_none() {
             let sep_x = if matches!(item.body, Body::Row) { lx } else { m + ui.pt(TEXT_INSET_PT) };
             s.fill_rrect(sep_x, ry + rh - 1.0, m + cw - sep_x, 1.0, 0.0, SEPARATOR_C.now());
+        }
+    }
+
+    /// A segmented row's track in px: the card's width less the inset on each side, `SEGMENT_H` tall, centred on the row.
+    fn segment_track(&self, ui: &Ui, row: (f32, f32, f32, f32)) -> (f32, f32, f32, f32) {
+        use bifrost_ui::prefs_layout::m as pm;
+        let (x, y, w, h) = row;
+        let (inset, th) = (ui.pt(pm::SEGMENT_INSET), ui.pt(pm::SEGMENT_H));
+        (x + inset, y + (h - th) / 2.0, (w - 2.0 * inset).max(0.0), th)
+    }
+
+    /// The segmented control: a grey track with the chosen segment filled in the accent colour, a label in each.
+    fn draw_segments(&self, s: &mut Surface, ui: &Ui, row: (f32, f32, f32, f32), seg: &Popup) {
+        let (tx, ty, tw, th) = self.segment_track(ui, row);
+        let n = seg.choices.len().max(1);
+        let sw = tw / n as f32;
+        s.fill_rrect(tx, ty, tw, th, ui.pt(7.0), ROW_PRESSED.now());
+        for (k, choice) in seg.choices.iter().enumerate() {
+            let on = k == seg.selected;
+            let x = tx + sw * k as f32;
+            if on {
+                s.fill_rrect(x, ty, sw, th, ui.pt(7.0), bifrost_render::appearance::accent_now());
+            }
+            let img = ui.text(&ui.fit(choice, MAC_BODY_PT, sw - ui.pt(8.0)), MAC_BODY_PT, Weight::Regular, WHITE);
+            let (ix, iy) = ((x + (sw - img.w as f32) / 2.0) as i32, (ty + (th - img.h as f32) / 2.0) as i32);
+            if on {
+                s.blit(&img, ix, iy, 255, 255);
+            } else {
+                s.blit_colored(&img, ix, iy, LABEL.now(), 255);
+            }
         }
     }
 
@@ -1560,5 +1750,141 @@ mod tests {
         let (rx, ry, rw, rh) = page.row_rect(&ui, 0, 2);
         let row = (ry + rh / 2.0) as usize;
         assert!(b[row * 1200 + (rx + rw - ui.pt(30.0)) as usize..row * 1200 + (rx + rw) as usize].iter().any(|&p| p == bifrost_render::appearance::accent_now()), "a check in the accent colour on the chosen row");
+    }
+    #[test]
+    fn group_headers_are_title_case_headlines() {
+        assert_eq!(headline_case("DOCK POSITION"), "Dock Position");
+        assert_eq!(headline_case("NOTIFICATION STYLE"), "Notification Style");
+        assert_eq!(headline_case("ALLOW APPS FROM"), "Allow Apps from", "a small word inside a header stays low");
+        assert_eq!(headline_case("ON"), "On", "the first word always starts with a capital");
+        assert_eq!(headline_case("DOUBLE-CLICK SPEED"), "Double-Click Speed");
+        assert_eq!(headline_case("WHAT'S NEW IN 1.2"), "What's New in 1.2");
+        assert_eq!(headline_case("USB DEVICES"), "USB Devices");
+        assert_eq!(headline_case("IPV4"), "IPv4");
+        assert_eq!(headline_case("is.example.chat"), "is.example.chat", "a name with lower-case letters is left alone");
+        assert_eq!(headline_case("My iPhone"), "My iPhone");
+        assert_eq!(headline_case(""), "");
+    }
+
+    #[test]
+    fn a_row_label_wraps_or_ends_in_an_ellipsis_before_the_trailing_control() {
+        let ui = ui();
+        assert_eq!(label_lines(&ui, "Short", 400.0, true), ["Short"]);
+        assert_eq!(label_lines(&ui, "", 400.0, true), [""]);
+        let long = "word ".repeat(60);
+        let wrapped = label_lines(&ui, &long, 300.0, true);
+        assert_eq!(wrapped.len(), LABEL_LINES, "never more lines than the row has room for");
+        assert!(wrapped[1].ends_with('\u{2026}'), "the last line ends with an ellipsis when the text is still longer");
+        assert_eq!(label_lines(&ui, &long, 300.0, false).len(), 1, "a sidebar label keeps to one line");
+        // the example from the E2E run: a label that fits on two lines wraps and loses nothing
+        let two = label_lines(&ui, "When Switching to an Application, Switch to a Desktop with Open Windows", ui.measure("When Switching to an Application, Switch to a", MAC_BODY_PT, Weight::Regular) + 4.0, true);
+        assert_eq!(two.len(), 2);
+        assert!(!two[1].ends_with('\u{2026}'));
+        assert_eq!(two.join(" "), "When Switching to an Application, Switch to a Desktop with Open Windows");
+    }
+
+    #[test]
+    fn a_long_label_stops_before_its_switch() {
+        let ui = ui();
+        let label = "When Switching to an Application, Switch to a Desktop with Open Windows";
+        let spec = Spec { id: PageId::Root, title: "T".into(), large: false, groups: vec![Group::new(vec![Item::new(label).switch(true, Action::Toggle(Toggle::Airplane)), Item::new("Short").switch(true, Action::Toggle(Toggle::Airplane))])] };
+        let page = ListPage::new(&ui, spec, 700, 1920, Some("Back"));
+        // what the row leaves for the label: the card less both insets, the switch and the gap before it
+        let room = 700.0 - 2.0 * ui.pt(MARGIN_PT) - 2.0 * ui.pt(TEXT_INSET_PT) - ui.pt(SWITCH_W_PT + 12.0) - ui.pt(8.0);
+        assert_eq!(page.images[0].label.len(), 2, "the long label wraps onto a second line");
+        for img in &page.images[0].label {
+            assert!(img.w as f32 <= room + 2.0, "a line {} px wide runs under the switch ({room} px left)", img.w);
+        }
+        assert_eq!(page.images[1].label.len(), 1, "a short label stays on one line");
+        // both lines are inside the 49 pt row
+        let total: f32 = page.images[0].label.iter().map(|l| l.h as f32).sum();
+        assert!(total <= ui.pt(ROW_PT), "two lines of {total} px fit the {} px row", ui.pt(ROW_PT));
+    }
+
+    #[test]
+    fn a_segmented_row_chooses_the_segment_under_the_touch() {
+        let ui = ui();
+        let row = Item::new("Range").segmented(vec!["Day".into(), "Week".into()], 0, Action::Pick(crate::shell::pages::Pick::AutoLock(0)));
+        let spec = Spec { id: PageId::AutoLock, title: "T".into(), large: false, groups: vec![Group::new(vec![row])] };
+        let mut page = ListPage::new(&ui, spec, 1200, 1920, Some("Back"));
+        let (x, y, w, h) = page.row_rect(&ui, 0, 0);
+        assert_eq!(page.hit(&ui, x + w * 0.25, y + h / 2.0), Some(Hit::Segment(0, 0, 0)));
+        assert_eq!(page.hit(&ui, x + w * 0.75, y + h / 2.0), Some(Hit::Segment(0, 0, 1)));
+        assert_eq!(page.hit(&ui, x + 1.0, y + h / 2.0), Some(Hit::Segment(0, 0, 0)), "the rim goes to the nearest segment");
+        assert_eq!(page.hit(&ui, x + w - 1.0, y + h / 2.0), Some(Hit::Segment(0, 0, 1)));
+        let accent = bifrost_render::appearance::accent_now();
+        let filled = |page: &ListPage, left: bool| {
+            let mut b = buf();
+            draw(page, &ui, &mut b, None, 0.0);
+            let row = (y + h / 2.0) as usize;
+            let (lo, hi) = if left { (x + w * 0.1, x + w * 0.4) } else { (x + w * 0.6, x + w * 0.9) };
+            (lo as usize..hi as usize).any(|px| b[row * 1200 + px] == accent)
+        };
+        assert!(filled(&page, true) && !filled(&page, false), "the chosen segment is filled in the accent");
+        page.set_choice(&ui, 0, 0, 1);
+        assert_eq!(page.item(0, 0).segments.as_ref().map(|p| p.selected), Some(1));
+        assert!(filled(&page, false) && !filled(&page, true), "the fill follows the choice");
+    }
+
+    #[test]
+    fn a_choice_updates_the_pop_up_button_on_its_row() {
+        let ui = ui();
+        let choices = vec!["Never".to_string(), "Ask".to_string(), "Always".to_string()];
+        let spec = Spec { id: PageId::AutoLock, title: "T".into(), large: false, groups: vec![Group::new(vec![Item::new("Access").popup(choices, 0, Action::Pick(crate::shell::pages::Pick::AutoLock(0)))])] };
+        let mut page = ListPage::new(&ui, spec, 1200, 1920, Some("Back"));
+        let before = page.images[0].popup.as_ref().map(|p| p.w);
+        page.set_choice(&ui, 0, 0, 2);
+        assert_eq!(page.item(0, 0).popup.as_ref().map(|p| p.selected), Some(2));
+        assert_ne!(page.images[0].popup.as_ref().map(|p| p.w), before, "\"Always\" is wider than \"Never\"");
+        page.set_choice(&ui, 0, 0, 9);
+        assert_eq!(page.item(0, 0).popup.as_ref().map(|p| p.selected), Some(2), "an index past the list stays on the last choice");
+    }
+
+    #[test]
+    fn only_general_opens_with_the_hero_and_two_panes_with_the_compact_card() {
+        use crate::shell::pages::PageId as P;
+        assert!(matches!(header_for(P::General), Some((_, _, false))), "General: the large centred hero");
+        assert!(matches!(header_for(P::Notifications), Some((_, _, true))), "Notifications: one compact card");
+        assert!(matches!(header_for(P::ScreenTime), Some((_, _, true))));
+        for id in [P::Display, P::Sounds, P::Focus, P::ControlCentre, P::Sharing, P::LockScreen, P::HomeScreen, P::Wifi] {
+            assert!(header_for(id).is_none(), "{id:?} starts at its first group");
+        }
+        let ui = ui();
+        let desk = Pane { margin_pt: bifrost_ui::prefs_layout::m::DETAIL_MARGIN, nav_pt: 52.0, sidebar: false, status_pt: 0.0, header: true };
+        let page_of = |id: PageId| {
+            let spec = Spec { id, title: "Pane".into(), large: false, groups: vec![Group::new(vec![Item::new("Row")])] };
+            ListPage::in_pane(&ui, spec, 1200, 1920, None, desk)
+        };
+        let (hero, compact) = (page_of(P::General), page_of(P::Notifications));
+        assert!(!hero.header.as_ref().expect("hero").compact);
+        let card = compact.header.as_ref().expect("card");
+        assert!(card.compact && card.h < hero.header.as_ref().unwrap().h, "the compact card is shorter than the hero");
+        assert!(card.h >= ui.pt(bifrost_ui::prefs_layout::m::HEADER_COMPACT_ICON), "and holds its icon");
+        assert!(page_of(P::Display).header.is_none());
+    }
+
+    #[test]
+    fn the_pane_title_sits_left_beside_the_pill_not_in_the_middle() {
+        let ui = ui();
+        let desk = Pane { margin_pt: bifrost_ui::prefs_layout::m::DETAIL_MARGIN, nav_pt: 52.0, sidebar: false, status_pt: 0.0, header: false };
+        let spec = Spec { id: PageId::Focus, title: "Focus".into(), large: false, groups: vec![Group::new(vec![Item::new("Row")])] };
+        let page = ListPage::in_pane(&ui, spec, 1200, 1920, None, desk);
+        let mut b = buf();
+        draw(&page, &ui, &mut b, None, 0.0);
+        let mid = ui.pt(52.0 / 2.0) as usize;
+        let inked = |from: usize, to: usize| (mid - 6..mid + 6).any(|row| b[row * 1200 + from..row * 1200 + to].iter().any(|&p| p != 0));
+        let x = ui.pt(bifrost_ui::prefs_layout::toolbar_title_x()) as usize;
+        assert!(inked(x, x + ui.pt(40.0) as usize), "the title starts right of the pill");
+        assert!(!inked(560, 640), "nothing in the middle of the bar");
+    }
+
+    #[test]
+    fn group_headers_draw_in_headline_weight_above_their_card() {
+        let ui = ui();
+        let spec = Spec { id: PageId::Root, title: "T".into(), large: false, groups: vec![Group::new(vec![Item::new("Row")]).header("DOCK POSITION")] };
+        let page = ListPage::new(&ui, spec, 1200, 1920, Some("Back"));
+        assert_eq!(page.spec().groups[0].header.as_deref(), Some("DOCK POSITION"), "the spec keeps what it wrote");
+        let hd = page.headers[0].as_ref().expect("header image");
+        assert_eq!(hd.w as f32, ui.text("Dock Position", MAC_HEADLINE_PT, Weight::Semibold, WHITE).w as f32, "rendered as a title-case headline");
     }
 }

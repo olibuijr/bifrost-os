@@ -53,11 +53,7 @@ pub fn spec(s: &AssistantSettings, apps: &[(String, String)]) -> Spec {
         Group::new(vec![Item::new("Assistant").switch(s.enabled, Action::Assistant(Edit::Enabled(!s.enabled)))])
             .footer("Cmd+Shift+A opens the assistant over the desktop. While it is off, that shortcut opens this page and nothing is sent."),
         Group::new(vec![Item::new("Shortcut").value(s.chord.label())]).footer("Switch the shortcut off or back on in Keyboard Shortcuts."),
-        Group::new(vec![
-            Item::new(Backend::Off.label()).check(s.backend == Backend::Off, Action::Assistant(Edit::Backend(Backend::Off))),
-            Item::new(Backend::Anthropic.label()).check(s.backend == Backend::Anthropic, Action::Assistant(Edit::Backend(Backend::Anthropic))),
-        ])
-        .header("BACKEND")
+        Group::new(vec![Item::new("Backend").popup(Backend::ALL.iter().map(|b| b.label().to_string()).collect(), Backend::ALL.iter().position(|b| *b == s.backend).unwrap_or(0), Action::Assistant(Edit::Backend(s.backend)))])
         .footer("Anthropic API sends each question, and the actions of the apps you allow, to api.anthropic.com. Its key is read from the keychain item is.olibuijr.assistant."),
         Group::new(vec![Item::new("Keep Conversation History").switch(s.history, Action::Assistant(Edit::History(!s.history)))])
             .footer("Off: each question stands alone and nothing is kept. On: earlier turns are kept here and sent with new questions."),
@@ -101,10 +97,11 @@ mod tests {
         assert_eq!(s.title, "Assistant");
         assert_eq!(switch_on(&s.groups[0].items[0]), Some(false));
         assert_eq!(s.groups[1].items[0].value, "Cmd+Shift+A");
-        let backend = &s.groups[2].items;
-        assert_eq!(backend[0].label, "Off");
-        assert_eq!(backend[0].accessory, Accessory::Check(true), "Off is the chosen backend");
-        assert_eq!(backend[1].accessory, Accessory::Check(false));
+        let backend = &s.groups[2].items[0];
+        assert_eq!(backend.label, "Backend");
+        assert_eq!(backend.accessory, Accessory::Popup, "the backend is a pop-up button on its row");
+        let pop = backend.popup.as_ref().expect("choices");
+        assert_eq!((pop.choices.as_slice(), pop.selected), (["Off".to_string(), "Anthropic API".to_string()].as_slice(), 0), "Off is the chosen backend");
         assert_eq!(switch_on(&s.groups[3].items[0]), Some(false), "history is off");
         assert_eq!(switch_on(&s.groups[4].items[0]), Some(false), "answers are not spoken");
     }
@@ -132,7 +129,10 @@ mod tests {
     fn the_switches_carry_the_change_they_make() {
         let s = spec(&AssistantSettings { enabled: true, history: true, backend: Backend::Anthropic, ..AssistantSettings::default() }, &[]);
         assert_eq!(s.groups[0].items[0].action, Action::Assistant(Edit::Enabled(false)));
-        assert_eq!(s.groups[2].items[1].action, Action::Assistant(Edit::Backend(Backend::Anthropic)));
+        assert_eq!(s.groups[2].items[0].action, Action::Assistant(Edit::Backend(Backend::Anthropic)));
+        assert_eq!(s.groups[2].items[0].popup.as_ref().map(|p| p.selected), Some(1));
+        assert_eq!(crate::shell::pages::chosen(&s.groups[2].items[0].action, 0), Some(Action::Assistant(Edit::Backend(Backend::Off))), "choosing a backend sends it");
+        assert_eq!(crate::shell::pages::chosen(&s.groups[2].items[0].action, 2), None, "an index past the list is refused");
         assert_eq!(s.groups[3].items[0].action, Action::Assistant(Edit::History(false)));
         assert_eq!(s.groups[4].items[0].action, Action::Assistant(Edit::Speak(true)));
     }

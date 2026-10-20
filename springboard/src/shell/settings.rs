@@ -808,7 +808,7 @@ impl Settings {
         let title = spec.title.clone();
         // a page opened with no back target is a first-level page: it gets the header card
         let pane = Pane { header: back.is_none(), ..self.pane() };
-        Entry { id, nav: NavBar::new(ui, &title, back).height(pane.nav_pt).status(pane.status_pt).pill(pane.status_pt == 0.0 && !pane.sidebar), title, view: View::List(ListPage::in_pane(ui, spec, self.w, self.h, back, pane)) }
+        Entry { id, nav: NavBar::new(ui, &title, back).height(pane.nav_pt).status(pane.status_pt).pill(ui, pane.status_pt == 0.0 && !pane.sidebar), title, view: View::List(ListPage::in_pane(ui, spec, self.w, self.h, back, pane)) }
     }
 
     /// Settings > Passwords: a tap on a login asks for the passcode when one is set, then shows the password; Copy,
@@ -2566,6 +2566,8 @@ impl Settings {
                 }
                 return vec![];
             }
+            // a segment of a segmented row chooses like a pop-up's choice does
+            Hit::Segment(g, i, k) => (g, i, Some(k)),
             Hit::Slider(..) => return vec![],
         };
         let Some(page) = self.list() else { return vec![] };
@@ -2577,13 +2579,23 @@ impl Settings {
             }
             return vec![];
         }
+        if choice.is_none() && item.segments.is_some() {
+            // a segmented row is chosen by its segments (`Hit::Segment`), never as a whole
+            return vec![];
+        }
         if !item.tappable() {
             return vec![];
         }
         // a choice sends the row's action with the chosen index
         let action = match choice {
             Some(k) => match super::pages::chosen(&item.action, k) {
-                Some(action) => action,
+                Some(action) => {
+                    // the button or the segment shows the new choice at once
+                    if let Some(p) = self.list_mut() {
+                        p.set_choice(ui, g, i, k);
+                    }
+                    action
+                }
                 None => return vec![],
             },
             None => item.action.clone(),
