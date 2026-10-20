@@ -143,6 +143,28 @@ pub fn app_has_entitlement(app_id: &str, entitlement: &str) -> bool {
     super::apphost::installed().iter().find(|a| a.manifest.id == app_id).is_some_and(|a| entitlement_held(app_id, &a.manifest.kind, &a.manifest.entitlements, entitlement))
 }
 
+/// Whether an app of this `kind` is a first-party system app (`is.olibuijr.*`, `kind = "system-app"`), the apps that manage the
+/// machine (Disk Utility, Bluetooth File Exchange). The same rule as [`entitlement_held`], without a named entitlement.
+pub fn system_app_held(app_id: &str, kind: &str) -> bool {
+    app_id.starts_with("is.olibuijr.") && kind == super::kinds::SYSTEM_APP
+}
+
+/// Lets a call through only for the shell itself (an empty app id) or an installed first-party system app. The services
+/// that change the machine (firewall rules, the radios) or describe its disks answer no other app: a sandboxed store app
+/// has no business opening a port, joining a network or listing volumes. Every other app gets an error naming the service.
+pub fn require_system_app(app_id: &str, service: &str) -> Result<(), String> {
+    if app_id.is_empty() || super::apphost::installed().iter().find(|a| a.manifest.id == app_id).is_some_and(|a| system_app_held(app_id, &a.manifest.kind)) {
+        return Ok(());
+    }
+    Err(format!("{service}: only system apps may use this service"))
+}
+
+/// Whether the installed app `app_id` may hear the broadcast events of `service`. Most services broadcast to every
+/// app; the ones that expose the machine itself (`disks`, `wifi`, `bluetooth`, `app_firewall`) tell only system apps.
+pub fn may_hear(service: &str, app_id: &str, kind: &str) -> bool {
+    !matches!(service, "disks" | "wifi" | "bluetooth" | "app_firewall") || system_app_held(app_id, kind)
+}
+
 /// The process id of the running installed app `app_id`, when it runs as a child of the shell.
 pub fn app_pid(shell: &Shell, app_id: &str) -> Option<u32> {
     let slot = super::apphost::slot_of(app_id)?;
@@ -271,10 +293,38 @@ impl Shell {
             let m = bifrost_proto::ToApp::ServiceEvent { service: service.to_string(), event: e.event.clone(), body: e.body.encode() };
             for slot in 0..self.ext.len() {
                 let id = apps.get(slot).map(|a| a.manifest.id.as_str());
-                if e.app.is_none() || e.app.as_deref() == id {
+                let hears = e.app.is_some() || apps.get(slot).is_some_and(|a| may_hear(service, &a.manifest.id, &a.manifest.kind));
+                if hears && (e.app.is_none() || e.app.as_deref() == id) {
                     self.ext_send(slot, &m);
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod gate_tests {
+    use super::*;
+
+    #[test]
+    fn only_first_party_system_apps_hold_the_system_gate() {
+        assert!(system_app_held("is.olibuijr.diskutil.desktop", "system-app"));
+        assert!(!system_app_held("is.olibuijr.notes.desktop", "app"), "a first-party store app is not a system app");
+        assert!(!system_app_held("is.example.evil", "system-app"), "a third-party package cannot declare itself one");
+    }
+
+    #[test]
+    fn the_shell_passes_the_gate_and_an_unknown_app_does_not() {
+        assert!(require_system_app("", "wifi").is_ok(), "the shell's own calls carry no app id");
+        assert!(require_system_app("is.example.evil", "wifi").unwrap_err().contains("only system apps"));
+    }
+
+    #[test]
+    fn machine_services_broadcast_only_to_system_apps() {
+        for service in ["disks", "wifi", "bluetooth", "app_firewall"] {
+            assert!(may_hear(service, "is.olibuijr.diskutil.desktop", "system-app"), "{service}");
+            assert!(!may_hear(service, "is.example.evil", "app"), "{service}");
+        }
+        assert!(may_hear("network", "is.example.evil", "app"), "other services still broadcast to everyone");
     }
 }

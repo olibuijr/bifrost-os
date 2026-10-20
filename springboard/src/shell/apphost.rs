@@ -269,6 +269,10 @@ pub(super) fn unquote(s: &str) -> String {
     s.trim().trim_matches('"').trim_matches('\'').to_string()
 }
 
+/// The directory of an entry whose package is gone. It never exists, so a reader that joins a file name onto an app's
+/// directory finds nothing, instead of a file of the same name in the shell's working directory.
+const REMOVED_DIR: &str = "/nonexistent/bifrost-removed-app";
+
 /// An app found under `<root>/apps/<id>/current/`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Installed {
@@ -278,6 +282,19 @@ pub struct Installed {
 }
 
 impl Installed {
+    /// Whether the package is gone: the entry only keeps its slot (see `merge_installed`).
+    pub fn is_removed(&self) -> bool {
+        self.dir == Path::new(REMOVED_DIR)
+    }
+    /// This entry after its package was uninstalled: the id, name and window class stay (a running instance and its
+    /// windows still resolve), everything that grants anything goes.
+    fn removed(&self) -> Installed {
+        let m = &self.manifest;
+        Installed {
+            manifest: Manifest { id: m.id.clone(), name: m.name.clone(), version: m.version.clone(), wayland_app_id: m.wayland_app_id.clone(), ..Manifest::default() },
+            dir: PathBuf::from(REMOVED_DIR),
+        }
+    }
     pub fn exec_path(&self) -> PathBuf {
         self.dir.join(&self.manifest.exec)
     }
@@ -361,17 +378,37 @@ pub fn register(root: &Path) {
 /// `[[imported_types]]`), so `uttype` lookups, Open With and the share menu see them. An app whose declarations
 /// conflict is left out and reported on stderr; the others still register (`register_manifests`).
 fn sync_app_types(apps: &[Installed]) {
-    let texts: Vec<(&str, String)> = apps.iter().filter_map(|a| std::fs::read_to_string(a.dir.join("manifest.toml")).ok().map(|t| (a.manifest.id.as_str(), t))).collect();
+    let texts: Vec<(&str, String)> = apps.iter().filter(|a| !a.is_removed()).filter_map(|a| std::fs::read_to_string(a.dir.join("manifest.toml")).ok().map(|t| (a.manifest.id.as_str(), t))).collect();
     let refs: Vec<&str> = texts.iter().map(|(_, t)| t.as_str()).collect();
     for (i, e) in bifrost_ui::uttype_declarations::register_manifests(&refs) {
         eprintln!("springboard: app {} declares document types that were not registered: {e:?}", texts[i].0);
     }
 }
+/// How many installed apps the registry holds. A slot is a `u8` on the wire and in the window table, and the Dock and
+/// the app grid list the first 200; a package beyond the limit is not listed or launchable, and the shell says so (`merge_installed`).
+pub const MAX_INSTALLED: usize = 200;
+static IGNORED_REPORTED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// Merges a scan into the registry, keeping every slot where it was (a slot is an app's identity for its windows and
+/// processes). An app whose package is gone from disk and from the scan keeps its slot as a removed entry: no
+/// permissions, entitlements, services or handlers, and `ext_open` refuses to start it, so the checks that look an
+/// app up by id stop trusting a manifest that no longer exists. Installing it again fills the same slot.
 pub(super) fn merge_installed(old: &[Installed], scanned: Vec<Installed>) -> Vec<Installed> {
-    let mut all = old.to_vec();
+    let mut all: Vec<Installed> = old
+        .iter()
+        .map(|a| {
+            let gone = !a.is_removed() && !scanned.iter().any(|s| s.manifest.id == a.manifest.id) && !a.dir.join("manifest.toml").exists();
+            if gone { a.removed() } else { a.clone() }
+        })
+        .collect();
+    let mut ignored = 0usize;
     for app in scanned {
         if let Some(existing) = all.iter_mut().find(|a| a.manifest.id == app.manifest.id) { *existing = app; }
-        else if all.len() < 200 { all.push(app); }
+        else if all.len() < MAX_INSTALLED { all.push(app); }
+        else { ignored += 1; }
+    }
+    if IGNORED_REPORTED.swap(ignored, std::sync::atomic::Ordering::Relaxed) != ignored && ignored > 0 {
+        bifrost_core::log::shell_logger("apphost").error(format!("{ignored} installed app(s) are not listed: the shell holds at most {MAX_INSTALLED}"));
     }
     all
 }
@@ -430,6 +467,23 @@ fn remember_incompatible(id: &str, exec: &Path) {
 /// True when this exact binary was already found incompatible with the shell's SDK protocol.
 pub(super) fn is_known_incompatible(id: &str, exec: &Path) -> bool {
     INCOMPATIBLE.lock().map(|g| g.iter().any(|(i, e)| i == id && e == exec)).unwrap_or(false)
+}
+
+/// Whether an app's request to open a web link goes through: the app must be in front, and the previous link it opened
+/// must be at least a second old (`last` records `t`, the shell clock in ms, when it passes).
+fn open_url_allowed(in_front: bool, last: &mut Option<f64>, t: f64) -> bool {
+    if !in_front || last.is_some_and(|l| t >= l && t - l < 1000.) {
+        return false;
+    }
+    *last = Some(t);
+    true
+}
+
+/// Seals a buffer the app sent against shrinking, then checks it holds at least `bytes`. The order matters: the length
+/// of a file the app can still truncate says nothing, because it can shrink between the check and the seal and leave the
+/// shell with a mapping that runs past the end of the file (SIGBUS on the first blit). After the seal the length can only grow.
+fn sealed_len_at_least(f: &sys::Owned, bytes: usize) -> bool {
+    sys::seal_shrink(f).is_ok() && sys::shm_len(f).is_ok_and(|n| n >= bytes)
 }
 
 /// The slot of an installed app by manifest id.
@@ -568,6 +622,8 @@ pub struct AppHost {
     /// Guided Access requests (`ToShell::GuidedAccessRequest`: start with restrictions, or end), oldest first, taken by the shell each tick.
     pub guided_requests: Vec<(bool, Vec<bifrost_proto::GuidedRestriction>)>,
     last_notification: Option<f64>,
+    /// When the app last opened a web link (`ToShell::OpenUrl`), so a burst of requests opens one page.
+    last_open_url: Option<f64>,
     /// `ToShell::SuddenTermination`: the app allows being killed with no Quit round trip.
     pub sudden: bool,
     /// `ToShell::Activity`: the union of the app's live `ActivityOptions`; a user-initiated or latency-critical
@@ -720,6 +776,7 @@ impl AppHost {
             custom_rotors: Vec::new(),
             guided_requests: Vec::new(),
             last_notification: None,
+            last_open_url: None,
             badge: String::new(),
             tile: Default::default(),
             dock_menu: Vec::new(),
@@ -1121,7 +1178,7 @@ impl AppHost {
                 if fds.len() == 2 && w > 0 && h > 0 && w <= 8192 && h <= 8192 {
                     // IPC-1: a memfd shorter than the claim would SIGBUS the shell on the first blit, and one the app can
                     // still shrink could do the same later: require the size and seal against shrinking first.
-                    let safe = fds.iter().all(|f| sys::shm_len(f).is_ok_and(|n| n >= bytes) && sys::seal_shrink(f).is_ok());
+                    let safe = fds.iter().all(|f| sealed_len_at_least(f, bytes));
                     let maps: Vec<Buf> = if safe { fds.iter().filter_map(|f| Map::new(f, bytes).ok()).map(|map| Buf { map }).collect() } else { Vec::new() };
                     if maps.len() == 2 {
                         self.bufs = maps;
@@ -1316,7 +1373,7 @@ impl AppHost {
         if fds.len() != 2 || w == 0 || h == 0 || w > 8192 || h > 8192 || !self.window_open(id) {
             return;
         }
-        let safe = fds.iter().all(|f| sys::shm_len(f).is_ok_and(|n| n >= bytes) && sys::seal_shrink(f).is_ok());
+        let safe = fds.iter().all(|f| sealed_len_at_least(f, bytes));
         if !safe {
             return;
         }
@@ -1822,6 +1879,10 @@ impl Shell {
         }
         let registered = installed();
         let Some(app) = registered.get(slot) else { return };
+        // an uninstalled app keeps its slot but has nothing to start
+        if app.is_removed() {
+            return;
+        }
         // An app that speaks another SDK protocol is started once and then left alone until its binary changes
         // (a new installed version has a new path): no respawn loop, and the window keeps saying why.
         if is_known_incompatible(&app.manifest.id, &app.exec_path()) {
@@ -2365,7 +2426,9 @@ impl Shell {
                         };
                         h.send(&ToApp::KeychainReply { request, status, value });
                     }
-                    ToShell::OpenUrl { url } => open_url=Some(url),
+                    // a link opens the Browser and takes focus: only the app in front (the one the person is using) may ask,
+                    // and not more than once a second
+                    ToShell::OpenUrl { url } if open_url_allowed(fg == Some(slot as u8), &mut h.last_open_url, t) => open_url=Some(url),
                     ToShell::PlaySystemSound { name } => queue_system_sound(name),
                     r @ ToShell::Share { .. } if fg == Some(slot as u8) => rich_msgs.push((slot as u8, r)),
                     r @ (ToShell::DragBegin { .. } | ToShell::DragRegister { .. } | ToShell::DragReply { .. } | ToShell::DragPerformed { .. } | ToShell::DragCancel { .. }) => rich_msgs.push((slot as u8, r)),
@@ -2730,6 +2793,26 @@ mod tests {
         host.handle(ToShell::Buffers{w:8,h:6,generation:2},vec![sys::shm_create("resize-c",192).unwrap(),sys::shm_create("resize-d",192).unwrap()],&mut pumped);
         host.handle(ToShell::Frame{buf:0,damage:vec![[0,0,8,6]]},vec![],&mut pumped);
         assert_eq!(host.frame().map(|(_,w,h)|(w,h)),Some((8,6)));
+    }
+
+    #[test]
+    fn a_web_link_comes_only_from_the_app_in_front_once_a_second() {
+        let mut last = None;
+        assert!(!open_url_allowed(false, &mut last, 0.), "a background app cannot open a page");
+        assert_eq!(last, None, "a refused request does not start the wait");
+        assert!(open_url_allowed(true, &mut last, 5000.));
+        assert!(!open_url_allowed(true, &mut last, 5500.), "a second request within a second is dropped");
+        assert!(open_url_allowed(true, &mut last, 6000.));
+    }
+
+    #[test]
+    fn a_buffer_is_sealed_before_its_size_is_trusted() {
+        let fd = sys::shm_create("seal-order", 4096).unwrap();
+        assert!(sealed_len_at_least(&fd, 4096));
+        assert!(sys::shm_resize(&fd, 0).is_err(), "the check sealed it: the app can no longer shrink it under the mapping");
+        let short = sys::shm_create("seal-short", 64).unwrap();
+        assert!(!sealed_len_at_least(&short, 4096), "a file shorter than the claim is refused");
+        assert!(sys::shm_resize(&short, 0).is_err(), "and it stays sealed");
     }
 
     #[test]
@@ -3190,6 +3273,30 @@ mod registry_update_tests {
         assert_eq!(current[1].manifest.version,"2");
         assert_eq!(old[0].manifest.version,"1");
         assert_eq!(merge_installed(&current,current.clone()),current);
+    }
+
+    #[test]
+    fn an_uninstalled_app_keeps_its_slot_but_loses_its_permissions() {
+        let app=|id:&str| Installed {manifest:Manifest{id:id.into(),name:id.into(),exec:"app".into(),permissions:vec!["accessibility".into(),"storage".into()],..Manifest::default()},dir:PathBuf::from(format!("/nowhere/{id}"))};
+        let old=vec![app("a"),app("b"),app("c")];
+        let now=merge_installed(&old,vec![app("a"),app("c")]);
+        assert_eq!(now.iter().map(|a|a.manifest.id.as_str()).collect::<Vec<_>>(),vec!["a","b","c"],"the slots do not move");
+        assert!(now[1].is_removed() && now[1].manifest.permissions.is_empty() && now[1].manifest.exec.is_empty());
+        assert_eq!(now[1].manifest.name,"b");
+        assert!(!now[0].is_removed() && !now[2].is_removed());
+        // installing it again fills the same slot
+        let back=merge_installed(&now,vec![app("a"),app("b"),app("c")]);
+        assert!(!back[1].is_removed() && back[1].manifest.permissions.len()==2);
+        // an entry that is already removed stays removed and is stable
+        assert_eq!(merge_installed(&now,vec![app("a"),app("c")]),now);
+    }
+
+    #[test]
+    fn packages_beyond_the_limit_are_not_added() {
+        let app=|i:usize| Installed {manifest:Manifest{id:format!("app{i}"),exec:"app".into(),..Manifest::default()},dir:PathBuf::from(format!("/nowhere/{i}"))};
+        let scanned:Vec<Installed>=(0..MAX_INSTALLED+3).map(app).collect();
+        let all=merge_installed(&[],scanned);
+        assert_eq!(all.len(),MAX_INSTALLED);
     }
 }
 

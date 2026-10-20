@@ -37,6 +37,9 @@ thread_local! {
     static PROMPTS: RefCell<VecDeque<Prompt>> = RefCell::new(VecDeque::new());
     /// Apps whose location grant is Allow Once: they lose it when the app quits (see `expire_once`).
     static ONCE: RefCell<BTreeSet<String>> = RefCell::new(BTreeSet::new());
+    /// Apps the person allowed to post input events and install event taps (the `events` service). Only Settings
+    /// writes it; a manifest permission alone never grants it.
+    static ACCESSIBILITY: RefCell<BTreeSet<String>> = RefCell::new(BTreeSet::new());
 }
 
 /// The answer to a location request: Allow Once (until the app quits), Allow While Using App, or Don't Allow.
@@ -110,16 +113,21 @@ pub fn wants_prompt(method: &str, params: &Json, reply: &Json) -> Option<Kind> {
     }
 }
 
-/// Queues a sheet for an app's request. A repeat of a request already waiting is not queued twice, and the queue
-/// holds at most [`MAX_QUEUED_PROMPTS`].
-pub fn queue_prompt(app_id: &str, app_name: &str, kind: Kind, purpose: &str) {
+/// Queues a sheet for an app's request. A repeat of a request already waiting (same app, kind and purpose: for a USB
+/// device the purpose is the device) is not queued twice, and the queue holds at most [`MAX_QUEUED_PROMPTS`]. Returns
+/// whether the request is now waiting for an answer, which is false only when the queue is full.
+pub fn queue_prompt(app_id: &str, app_name: &str, kind: Kind, purpose: &str) -> bool {
     PROMPTS.with(|q| {
         let mut q = q.borrow_mut();
-        if q.iter().any(|p| p.app_id == app_id && p.kind == kind) || q.len() >= MAX_QUEUED_PROMPTS {
-            return;
+        if q.iter().any(|p| p.app_id == app_id && p.kind == kind && p.purpose == purpose) {
+            return true;
+        }
+        if q.len() >= MAX_QUEUED_PROMPTS {
+            return false;
         }
         q.push_back(Prompt { app_id: app_id.to_string(), app_name: app_name.to_string(), kind, purpose: purpose.to_string() });
-    });
+        true
+    })
 }
 
 /// Whether the person still has to answer this request. A request answered since it was queued is dropped.
@@ -406,6 +414,10 @@ pub struct Row {
     pub calendars: bool,
     /// How many USB or raw HID devices the app holds a grant for.
     pub usb: usize,
+    /// Whether the app's manifest asks to control the computer (`accessibility`); only such apps are listed.
+    pub accessibility_asked: bool,
+    /// Whether the person allowed the app to control the computer (post input events, watch input).
+    pub accessibility: bool,
 }
 
 /// The installed apps, in the order the shell lists them.
@@ -420,6 +432,8 @@ pub fn rows() -> Vec<Row> {
             contacts: contacts_allowed(&a.manifest.id),
             calendars: super::calendar::allowed(&a.manifest.id),
             usb: super::usb_access::grant_count(&a.manifest.id),
+            accessibility_asked: a.manifest.permissions.iter().any(|p| p == "accessibility"),
+            accessibility: accessibility_allowed(&a.manifest.id),
         })
         .collect()
 }
@@ -442,6 +456,34 @@ pub fn set_contacts_by_user(app_id: &str, allowed: bool) -> bool {
 pub fn set_calendars_by_user(app_id: &str, allowed: bool) -> bool {
     super::calendar::change_by_user(app_id, allowed);
     super::calendar::allowed(app_id)
+}
+
+/// Whether the person allowed the app to control the computer through the `events` service.
+pub fn accessibility_allowed(app_id: &str) -> bool {
+    ACCESSIBILITY.with(|a| a.borrow().contains(app_id))
+}
+
+/// Records the person's answer for an app (a Settings switch or a saved grant) without checking the manifest.
+fn set_accessibility(app_id: &str, allowed: bool) {
+    ACCESSIBILITY.with(|a| {
+        let mut a = a.borrow_mut();
+        if allowed {
+            a.insert(app_id.to_string());
+        } else {
+            a.remove(app_id);
+        }
+    });
+    mark_grants_dirty();
+}
+
+/// The person's Settings switch for an app's control of the computer. Only an app whose manifest asks for the
+/// `accessibility` permission can be allowed. Returns whether the app is now allowed.
+pub fn set_accessibility_by_user(app_id: &str, allowed: bool) -> bool {
+    if allowed && !super::app_has_permission(app_id, "accessibility") {
+        return false;
+    }
+    set_accessibility(app_id, allowed);
+    accessibility_allowed(app_id)
 }
 
 pub struct PrivacyPermissions;
@@ -676,6 +718,22 @@ mod tests {
     }
 
     #[test]
+    fn two_usb_devices_of_one_app_each_get_a_sheet_and_a_full_queue_says_so() {
+        let id = "is.example.usbtwo";
+        assert!(queue_prompt(id, "Dev", Kind::Usb, "1-1"));
+        assert!(queue_prompt(id, "Dev", Kind::Usb, "1-2"), "another device is another request");
+        assert!(queue_prompt(id, "Dev", Kind::Usb, "1-1"), "the same device waits once");
+        let mine = || PROMPTS.with(|q| q.borrow().iter().filter(|p| p.app_id == id).count());
+        assert_eq!(mine(), 2);
+        let mut n = 0;
+        while queue_prompt(&format!("is.example.fill{n}"), "Fill", Kind::Location, "") {
+            n += 1;
+            assert!(n <= MAX_QUEUED_PROMPTS, "the queue must refuse at its limit");
+        }
+        PROMPTS.with(|q| q.borrow_mut().clear());
+    }
+
+    #[test]
     fn a_media_sheet_that_is_denied_writes_denied() {
         let id = "is.example.mic";
         queue_prompt(id, "Voice", Kind::Media(Media::Audio), "");
@@ -763,6 +821,11 @@ pub fn render_grants() -> String {
             Cal::NotDetermined | Cal::Restricted => {}
         }
     }
+    ACCESSIBILITY.with(|a| {
+        for app in a.borrow().iter() {
+            out.push_str(&format!("accessibility\t{app}\tallow\n"));
+        }
+    });
     // Location answers. An Allow Once grant lasts only while its app runs, so it is not saved.
     let once: std::collections::BTreeSet<String> = ONCE.with(|o| o.borrow().clone());
     for (app, status) in location_asked() {
@@ -823,6 +886,7 @@ pub fn apply_grants(text: &str) {
             ["calendars", app, "deny"] => {
                 super::calendar::answer_prompt(app, false, false);
             }
+            ["accessibility", app, "allow"] => set_accessibility(app, true),
             ["location", app, status] => {
                 let status = match *status {
                     "denied" => AuthorizationStatus::Denied,
@@ -885,6 +949,21 @@ mod grants_tests {
         decide(&prompt, true);
         assert!(!still_asked(&prompt));
         assert!(super::super::calendar::allowed(app));
+    }
+
+    #[test]
+    fn accessibility_is_off_until_the_person_allows_it_and_survives_a_restart() {
+        let app = "is.example.grants.ax";
+        assert!(!accessibility_allowed(app), "a manifest alone grants nothing");
+        assert!(!set_accessibility_by_user(app, true), "an app that does not declare the permission cannot be allowed");
+        set_accessibility(app, true);
+        let text = render_grants();
+        assert!(text.contains(&format!("accessibility\t{app}\tallow\n")), "{text}");
+        set_accessibility(app, false);
+        assert!(!accessibility_allowed(app));
+        apply_grants(&text);
+        assert!(accessibility_allowed(app));
+        set_accessibility(app, false);
     }
 
     #[test]

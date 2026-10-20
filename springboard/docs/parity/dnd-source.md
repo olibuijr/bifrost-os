@@ -25,7 +25,9 @@ Matrix rows are not edited here (the lead closes them). Candidates for closure: 
 
 - Read grant for a dragged path (`proto` `ToShell::DocGrantPath { request, path }`, tag 0x11b; `sdk` `Ctx::grant_path`;
   `src/shell/docpanel.rs` `Broker::drag_grant`). The app must hold the `documents` permission. The path must lie under the
-  account's home, and symlinks and folders outside are refused (`Denied`). The reply is `DocGranted` with the descriptor, as for
+  account's home, and symlinks and folders outside are refused (`Denied`). An app with only `documents` can be granted just
+  paths it already holds a grant for (open or save panel, drop, share); an app with `storage` (Files) already has the home
+  bound read-write, so it is not held to that list. The reply is `DocGranted` with the descriptor, as for
   an open panel. The grant is recorded for the app and the shell releases it when the drag ends.
 - Files begins a session with its items: on a drag past the slop it asks for a grant per item (`Files::drag_out_ask`); once all
   are granted it calls `dnd::begin` with `Payload::File` items (`drag_out_settle`). Until then the drag is the in-window one.

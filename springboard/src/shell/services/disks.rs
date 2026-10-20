@@ -183,6 +183,9 @@ impl SystemService for Disks {
     }
 
     fn call(&mut self, _shell: &mut Shell, app_id: &str, method: &str, params: &Json, _t: f64) -> Result<Json, String> {
+        // volumes, labels and mount points are information the sandbox hides, and a claim locks a disk against Disk
+        // Utility: the service answers system apps only
+        super::require_system_app(app_id, disk_wire::SERVICE)?;
         if !self.primed {
             self.rescan();
         }
@@ -195,6 +198,13 @@ impl SystemService for Disks {
         }
         self.next_scan = t + SCAN_EVERY_MS;
         let events = self.rescan();
+        // a claim does not outlive its app: a quit app would otherwise lock the disk against Disk Utility until restart
+        for owner in self.session.claim_owners() {
+            let running = crate::shell::apphost::slot_of(&owner).is_some_and(|slot| matches!(shell.ext.get(slot), Some(Some(_))));
+            if !running {
+                self.session.release_owner(&owner);
+            }
+        }
         let now = crate::bare::sys::wall_time().0;
         for disk in std::mem::take(&mut self.arrivals) {
             let label = if disk.model.is_empty() { disk.bsd_name.clone() } else { disk.model.clone() };

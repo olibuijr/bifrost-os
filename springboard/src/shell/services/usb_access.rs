@@ -652,12 +652,16 @@ impl UsbAccessService {
                 let live = Self::live(hid);
                 let offered = candidates_for(&filters, &live, &|k| Self::granted(app, k));
                 let count = offered.len();
-                // one sheet per request; the others wait for the next one, and a device is asked about once per run
-                let next = offered.into_iter().find(|c| ASKED.with(|a| a.borrow_mut().insert((app.to_string(), c.key.clone()))));
-                let asked = next.is_some();
-                if let Some(c) = next {
-                    privacy_permissions::queue_prompt(app, app_name, Kind::Usb, &c.key);
-                }
+                // one sheet per request; the others wait for the next one, and a device is asked about once per run. A
+                // device counts as asked only once its sheet is waiting: a full queue leaves it to a later request.
+                let next = offered.into_iter().find(|c| !ASKED.with(|a| a.borrow().contains(&(app.to_string(), c.key.clone()))));
+                let asked = match next {
+                    Some(c) if privacy_permissions::queue_prompt(app, app_name, Kind::Usb, &c.key) => {
+                        ASKED.with(|a| a.borrow_mut().insert((app.to_string(), c.key.clone())));
+                        true
+                    }
+                    _ => false,
+                };
                 Ok(obj(vec![("offered", num(count as f64)), ("asked", Json::Bool(asked)), ("limit", num(MAX_CANDIDATES as f64))]))
             }
             "revoke" => {

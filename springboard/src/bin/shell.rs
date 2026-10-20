@@ -922,8 +922,12 @@ fn run() -> std::io::Result<()> {
         }
         // real touches arrive in panel coordinates and are turned into the
         // frame's; synthetic ones already name frame pixels
-        // input posted by apps through the events service enters here, after the taps have seen it
+        // input posted by apps through the events service enters here, after the taps have seen it. While a system
+        // sheet or alert is up it is dropped: a permission, security or launch sheet is answered by the person only.
         for posted in shell.take_posted_input() {
+            if shell.modal_up() {
+                continue;
+            }
             use springboard::shell::services::event_services::Posted;
             match posted {
                 Posted::Key(code, down) => events.push(input::Event::Key { code, down }),

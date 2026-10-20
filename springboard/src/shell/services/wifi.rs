@@ -212,7 +212,9 @@ impl SystemService for WifiService {
         "wifi"
     }
 
-    fn call(&mut self, shell: &mut Shell, _app_id: &str, method: &str, params: &Json, _t: f64) -> Result<Json, String> {
+    fn call(&mut self, shell: &mut Shell, app_id: &str, method: &str, params: &Json, _t: f64) -> Result<Json, String> {
+        // joining, forgetting and hosting networks, and the scan list of nearby access points, are for system apps
+        super::require_system_app(app_id, "wifi")?;
         let net = shell.info.desktop_network.as_ref();
         match method {
             "interfaces" => Ok(with_phy(interfaces_json(net), crate::net::wifi_phy::read)),

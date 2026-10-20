@@ -111,6 +111,16 @@ impl Session {
         self.claims.unclaim(bsd_name, owner).map_err(claim_refusal)
     }
 
+    /// The owners that hold a claim.
+    pub fn claim_owners(&self) -> Vec<String> {
+        self.claims.owners()
+    }
+
+    /// Drops every claim `owner` holds: the owner quit without releasing them.
+    pub fn release_owner(&mut self, owner: &str) -> usize {
+        self.claims.release_owner(owner)
+    }
+
     /// Plans an unmount of the named disk. Fails with `NoDisk` when the last snapshot does not have it.
     pub fn unmount(&self, bsd_name: &str, owner: &str) -> Result<Vec<Command>, Refusal> {
         let disk = self.require(bsd_name)?;

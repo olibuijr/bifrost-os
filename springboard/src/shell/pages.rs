@@ -170,6 +170,8 @@ pub enum Toggle {
     Contacts(usize),
     /// Settings › App Permissions › Calendars: the n-th installed app may use the calendar
     Calendars(usize),
+    /// Settings › App Permissions › Accessibility: the n-th installed app may post input events and watch input
+    Accessibility(usize),
     /// Settings > Screen Saver: flips the n-th (on or off) option of the chosen saver
     SaverOption(usize),
     /// Settings › App Permissions › USB and HID devices: takes back every device the n-th installed app may use
@@ -1814,6 +1816,17 @@ pub fn permissions_page(rows: &[Row]) -> Spec {
             .collect()
     };
     groups.push(Group::new(calendars).header("CALENDARS").footer("Apps that may use your calendar. A switch is on only when you allow it."));
+    // Accessibility (after Calendars, so the indexes above stay the same): the apps that ask to control the computer. A
+    // manifest alone grants nothing; the switch is off until the person turns it on, and it lets the app post input
+    // and watch what is typed in other apps.
+    let controllers: Vec<Item> = rows
+        .iter()
+        .enumerate()
+        .filter(|(_, r)| r.accessibility_asked)
+        .map(|(i, r)| Item::new(r.name.as_str()).app_icon(r.app_id.as_str()).switch(r.accessibility, Action::Toggle(Toggle::Accessibility(i))))
+        .collect();
+    let controllers = if controllers.is_empty() { vec![Item::new("No apps ask to control this computer")] } else { controllers };
+    groups.push(Group::new(controllers).header("ACCESSIBILITY").footer("Apps that may control this computer and see what you type in other apps. A switch is on only when you allow it."));
     Spec { id: PageId::PrivacyPermissions, title: "App Permissions".into(), large: false, groups }
 }
 
@@ -2293,9 +2306,13 @@ mod tests {
     fn app_permissions_lists_each_media_type_with_one_switch_per_app() {
         use bifrost_ui::capture_access::CaptureAccess;
         use bifrost_ui::location_auth::AuthorizationStatus;
-        let rows = vec![Row { app_id: "is.example.a".into(), name: "Alpha".into(), access: CaptureAccess::default(), location: AuthorizationStatus::AuthorizedWhenInUse, contacts: false, calendars: true, usb: 2 }];
+        let rows = vec![Row { app_id: "is.example.a".into(), name: "Alpha".into(), access: CaptureAccess::default(), location: AuthorizationStatus::AuthorizedWhenInUse, contacts: false, calendars: true, usb: 2, accessibility_asked: true, accessibility: false }];
         let s = permissions_page(&rows);
-        assert_eq!(s.groups.len(), 7, "camera, microphone, screen recording, location, contacts, devices, calendars");
+        assert_eq!(s.groups.len(), 8, "camera, microphone, screen recording, location, contacts, devices, calendars, accessibility");
+        assert_eq!(s.groups[7].header.as_deref(), Some("ACCESSIBILITY"));
+        assert_eq!(s.groups[7].items[0].accessory, Accessory::Switch(false), "a manifest alone does not turn control on");
+        assert_eq!(s.groups[7].items[0].action, Action::Toggle(Toggle::Accessibility(0)));
+        assert_eq!(permissions_page(&[]).groups[7].items[0].label, "No apps ask to control this computer");
         assert_eq!(s.groups[6].header.as_deref(), Some("CALENDARS"));
         assert_eq!(s.groups[6].items[0].accessory, Accessory::Switch(true), "an app the person let use the calendar is on");
         assert_eq!(s.groups[6].items[0].action, Action::Toggle(Toggle::Calendars(0)));

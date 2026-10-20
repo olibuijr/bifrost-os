@@ -873,7 +873,11 @@ impl Broker {
     }
 
     /// A read grant for `path` (absolute, under the home) for a drag `app_id` begins: the file items of the drag carry it,
-    /// and the shell releases it when the drag ends (`dnd`). Paths outside the home are `Denied`, as are symlinks.
+    /// and the shell releases it when the drag ends (`dnd`). Paths outside the home are `Denied`, as are symlinks, and
+    /// so is every path the person did not hand to a `documents`-only app: only a file or folder it already holds a grant
+    /// for (chosen in an open or save panel, dropped or shared onto it) can be granted again, so it cannot name its way
+    /// to the rest of the home folder. An app that holds `storage` already has the whole home bound read-write, so a
+    /// descriptor gives it nothing new and the grant-list requirement is skipped for it (Files drags what it browses).
     fn drag_grant(&mut self, app_id: &str, request: u32, path: &str) -> (ToApp, Option<std::fs::File>) {
         let refuse = |code| (ToApp::DocError { request, code }, None);
         let Ok(rel) = Path::new(path).strip_prefix(self.opener.home()) else { return refuse(DocErrorCode::Denied) };
@@ -881,6 +885,9 @@ impl Broker {
             return refuse(DocErrorCode::Denied);
         }
         let rel = rel.to_path_buf();
+        if !super::services::app_has_permission(app_id, "storage") && !self.grants.of_app(app_id).any(|g| g.path == rel) {
+            return refuse(DocErrorCode::Denied);
+        }
         let f = match self.opener.open_any(&rel, DocMode::Read) {
             Ok(f) => f,
             Err(code) => return refuse(code),
@@ -1427,6 +1434,29 @@ pub(crate) mod tests {
         let mut s = String::new();
         (&*f).read_to_string(&mut s).unwrap();
         assert_eq!(s, "b.txt", "the app reads the chosen file through the descriptor");
+        ALLOW.with(|a| a.set(false));
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn a_path_grant_is_only_for_a_file_the_person_already_gave_the_app() {
+        ALLOW.with(|a| a.set(true));
+        let (d, mut sh, peer) = shell_with_app("e2e-pathgrant");
+        let (chosen, other) = (d.join("home/Documents/b.txt"), d.join("home/Documents/A.md"));
+        // nothing was chosen yet: the shell hands out no descriptor for a named path
+        ask(&peer, &mut sh, ToShell::DocGrantPath { request: 1, path: chosen.to_string_lossy().into_owned() });
+        assert!(matches!(replies(&peer)[..], [(ToApp::DocError { request: 1, code: DocErrorCode::Denied }, None)]));
+        ask(&peer, &mut sh, ToShell::DocOpen { request: 3, mode: DocMode::Read, title: String::new(), filters: vec!["public.text".into()] });
+        for code in [108, 108, 28] {
+            sh.hw_menu_key(code, true, 3.0);
+        }
+        let got = replies(&peer);
+        assert!(matches!(got[..], [(ToApp::DocGranted { request: 3, .. }, Some(_))]), "{got:?}");
+        // the file the person chose can go into a drag; any other file of the home folder still cannot
+        ask(&peer, &mut sh, ToShell::DocGrantPath { request: 4, path: chosen.to_string_lossy().into_owned() });
+        assert!(matches!(replies(&peer)[..], [(ToApp::DocGranted { request: 4, mode: DocMode::Read, .. }, Some(_))]));
+        ask(&peer, &mut sh, ToShell::DocGrantPath { request: 5, path: other.to_string_lossy().into_owned() });
+        assert!(matches!(replies(&peer)[..], [(ToApp::DocError { request: 5, code: DocErrorCode::Denied }, None)]));
         ALLOW.with(|a| a.set(false));
         fs::remove_dir_all(&d).unwrap();
     }

@@ -136,7 +136,8 @@ pub struct Policy {
     /// `keychain`: may store secrets with the shell (`ToShell::Keychain`); it binds nothing.
     pub keychain: bool,
     /// `accessibility`: may post input events and install event taps through the shell's `events` service. It binds
-    /// nothing here; the service checks the manifest on every call.
+    /// nothing here; the service checks the manifest and the person's Settings switch (`privacy_permissions::
+    /// accessibility_allowed`) on every call, so declaring it grants nothing by itself.
     pub accessibility: bool,
     /// `display-config`: may ask the shell's `display` service for a different display mode. Checked by the service.
     pub display_config: bool,

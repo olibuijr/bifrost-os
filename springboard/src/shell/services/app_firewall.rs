@@ -225,7 +225,9 @@ impl SystemService for AppFirewall {
         SERVICE
     }
 
-    fn call(&mut self, _shell: &mut Shell, _app_id: &str, method: &str, params: &Json, _t: f64) -> Result<Json, String> {
+    fn call(&mut self, _shell: &mut Shell, app_id: &str, method: &str, params: &Json, _t: f64) -> Result<Json, String> {
+        // the rules go to the system firewall as root: only the shell (its own sheets) and system apps may change them
+        super::require_system_app(app_id, SERVICE)?;
         self.handle(method, params)
     }
 
