@@ -5,6 +5,7 @@ use bifrost_app::kit::ui::{MAC_TITLE3_PT};
 use springboard::shell::glyphs::{disc, either, paint, ring, segment};
 use bifrost_app::kit::ui::{Weight, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_LARGE_TITLE_PT, MAC_SUBHEAD_PT, WHITE};
 use bifrost_app::kit::ui::{CARD_BG, DESTRUCTIVE, FIELD_BG, LABEL, LABEL_2, LINK, SEPARATOR_C, TRACK_C};
+use bifrost_app::kit::ui::system::CONTROL_ACCENT;
 
 /// Points: the empty-state message's top, the time wheel's colon and hour columns, the Undo label's room.
 const EMPTY_TOP_PT: f32 = 100.0;
@@ -93,7 +94,7 @@ impl Reminders {
     fn toggle(&mut self, s: &mut Surface, ui: &Ui, (x, y, w, h): (f32, f32, f32, f32), on: bool) {
         let (tw, th) = (ui.pt(51.0), ui.pt(31.0));
         let (tx, ty) = (x + w - tw - ui.pt(SPACE_L), y + (h - th) / 2.0);
-        s.fill_rrect(tx, ty, tw, th, 1.0e4, if on { LINK } else { TRACK_C.now() });
+        s.fill_rrect(tx, ty, tw, th, 1.0e4, if on { CONTROL_ACCENT.now() } else { TRACK_C.now() });
         let knob = th - ui.pt(SPACE_XS);
         let kx = if on { tx + tw - knob - ui.pt(SPACE_XXS) } else { tx + ui.pt(SPACE_XXS) };
         // compliance-allow: COL-03 the switch knob is white in both schemes (the NativeSwitch knob), not a background

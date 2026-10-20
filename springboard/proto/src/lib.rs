@@ -657,6 +657,11 @@ pub mod appearance {
     /// The shell decodes every `MaterialKind` and `MaterialState`. Without it an app sends only `Sidebar` and
     /// `Titlebar` with the default state (`MaterialKind::legacy`), which every shell with `VIBRANCY` decodes.
     pub const MATERIALS: u32 = 64;
+    /// Bits 8 to 11: the user's accent colour (Settings > Appearance), as `Accent::to_wire` (the position in
+    /// `Accent::ALL` plus one). Zero means the shell did not say, and the app keeps the system blue. Controls tinted
+    /// by the accent (switches, checkmarks, the default button) follow it; links stay blue.
+    pub const ACCENT_SHIFT: u32 = 8;
+    pub const ACCENT_MASK: u32 = 0xF << ACCENT_SHIFT;
 }
 
 /// The material model is shared with the shell and the window server (`bifrost_ui::visual_effect`): one kind, state,

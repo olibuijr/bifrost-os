@@ -444,6 +444,7 @@ swatches, letterbox, blur bases, plus the legacy gaps below).
 | unemphasizedSelectedContentBackgroundColor | `UNEMPHASIZED_SELECTED_CONTENT_BACKGROUND` | `SIDEBAR_PLATE` |
 | controlAccentColor | `CONTROL_ACCENT` | new (Dark 10,132,255; Light 0,122,255); follows Settings > Appearance > Accent colour (`Pair::following_accent`) |
 | linkColor, systemBlue | `LINK`, `SYSTEM_BLUE` | Dark 10,132,255; Light 0,122,255; fixed, the accent does not change links |
+| The accent reaching an app process | `ToApp::Appearance` flags, bits 8 to 11 (`appearance::ACCENT_SHIFT`, `ACCENT_MASK`; `Accent::to_wire`) | The shell sends the accent with the other appearance flags and the SDK runtime calls `appearance::set_accent`, so `CONTROL_ACCENT.now()`, `appearance::accent_now()` and `SELECTION` follow the user's accent in apps too (0 from an older shell keeps blue). Controls tinted by the accent use `accent_now()`: list checkmarks, switches, the default button of sheets and the save panel, focus rings. Text links keep `LINK`. Apps that draw their own switch use `CONTROL_ACCENT.now()` (Reminders does); other hand-drawn blue controls are not converted yet. |
 | systemRed ... systemGray (13 colours incl. mint, cyan, indigo, brown) | `SYSTEM_RED` ... `SYSTEM_GRAY` | Apple's Light and Dark values |
 | windowFrameColor, findHighlightColor, shadowColor | `WINDOW_FRAME`, `FIND_HIGHLIGHT`, `SHADOW` | new (findHighlight is a design approximation, confirm on Midget) |
 

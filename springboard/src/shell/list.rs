@@ -712,7 +712,8 @@ impl ListPage {
             title_large: (spec.large && !pane.sidebar).then(|| ui.text(&spec.title, super::ui::MAC_LARGE_TITLE_PT, Weight::Bold, WHITE)),
             nav: NavBar::new(ui, &spec.title, back).height(pane.nav_pt).status(pane.status_pt).pill(pane.status_pt == 0.0 && !pane.sidebar),
             chevron: controls::chevron(ui),
-            check: ui.text("✓", 17.0, Weight::Semibold, BLUE),
+            // rendered white and tinted with the accent colour when drawn, so it follows the user's accent
+            check: ui.text("✓", 17.0, Weight::Semibold, WHITE),
             spec,
             w,
             h,
@@ -1058,7 +1059,7 @@ impl ListPage {
                 s.fill_rrect(x + ui.pt(4.0), ty, w - ui.pt(8.0), ui.pt(h), ui.pt(5.0), MENU_HIGHLIGHT);
             }
             if item.checked {
-                s.blit(&self.check, (x + ui.pt(8.0)) as i32, (mid - self.check.h as f32 / 2.0) as i32, 255, 255);
+                s.blit_colored(&self.check, (x + ui.pt(8.0)) as i32, (mid - self.check.h as f32 / 2.0) as i32, bifrost_render::appearance::accent_now(), 255);
             }
             let label = &p.labels[k];
             if picked {
@@ -1144,7 +1145,7 @@ impl ListPage {
                     }
                 }
                 if item.leading_check {
-                    s.blit(&self.check, lx as i32, (mid - self.check.h as f32 / 2.0) as i32, 255, 255);
+                    s.blit_colored(&self.check, lx as i32, (mid - self.check.h as f32 / 2.0) as i32, bifrost_render::appearance::accent_now(), 255);
                     lx += ui.pt(26.0);
                 }
                 let label = &self.images[k].label;
@@ -1170,7 +1171,7 @@ impl ListPage {
                     }
                     Accessory::Check(on) => {
                         if on {
-                            s.blit(&self.check, (right - self.check.w as f32) as i32, (mid - self.check.h as f32 / 2.0) as i32, 255, 255);
+                            s.blit_colored(&self.check, (right - self.check.w as f32) as i32, (mid - self.check.h as f32 / 2.0) as i32, bifrost_render::appearance::accent_now(), 255);
                         }
                         right -= self.check.w as f32 + ui.pt(8.0);
                     }
@@ -1558,6 +1559,6 @@ mod tests {
         draw(&page, &ui, &mut b, None, 0.0);
         let (rx, ry, rw, rh) = page.row_rect(&ui, 0, 2);
         let row = (ry + rh / 2.0) as usize;
-        assert!(b[row * 1200 + (rx + rw - ui.pt(30.0)) as usize..row * 1200 + (rx + rw) as usize].iter().any(|&p| p == BLUE), "a blue check on the chosen row");
+        assert!(b[row * 1200 + (rx + rw - ui.pt(30.0)) as usize..row * 1200 + (rx + rw) as usize].iter().any(|&p| p == bifrost_render::appearance::accent_now()), "a check in the accent colour on the chosen row");
     }
 }

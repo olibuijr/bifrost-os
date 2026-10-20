@@ -579,7 +579,7 @@ pub fn source_list(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, list: &SourceList,
                 } else if let Some(name) = symbol {
                     let g = SIDEBAR_GLYPH_PT;
                     // accent glyph, or the secondary grey for a neutral row (Files's Locations)
-                    let tint = if *neutral { LABEL_2.now() } else { TINT };
+                    let tint = if *neutral { LABEL_2.now() } else { crate::kit::appearance::accent_now() };
                     glyph(s, ui, name, Rect { x: text_x, y: plate.y + (plate.h - g) / 2.0, w: g, h: g }, if *enabled { tint } else { LABEL_3.now() });
                     text_x += g + SPACE_S;
                 }
@@ -620,7 +620,7 @@ pub fn search_field(s: &mut dyn Canvas, ui: &Ui, field: &TextField, bounds: Rect
     let r = h / 2.0;
     if focused {
         let o = 3.0;
-        s.fill_rrect(RectF::new(ui.pt(x - o), ui.pt(y - o), ui.pt(w + 2.0 * o), ui.pt(h + 2.0 * o)), ui.pt(r + o), TINT);
+        s.fill_rrect(RectF::new(ui.pt(x - o), ui.pt(y - o), ui.pt(w + 2.0 * o), ui.pt(h + 2.0 * o)), ui.pt(r + o), crate::kit::appearance::accent_now());
         s.fill_rrect(RectF::new(ui.pt(x - 1.0), ui.pt(y - 1.0), ui.pt(w + 2.0), ui.pt(h + 2.0)), ui.pt(r + 1.0), DETAIL_BG.now());
     }
     s.fill_rrect(RectF::new(ui.pt(x), ui.pt(y), ui.pt(w), ui.pt(h)), ui.pt(r), FIELD_BG.now());
@@ -772,7 +772,7 @@ pub fn text_field(
 ) {
     let Rect { x, y, w, h } = bounds;
     bifrost_ui::ax::record(bifrost_ui::Role::TextField, placeholder, field, bounds, true);
-    s.fill_rrect(RectF::new(ui.pt(x), ui.pt(y), ui.pt(w), ui.pt(h)), ui.pt(6.), if focused { TINT } else { FIELD_BG.now() });
+    s.fill_rrect(RectF::new(ui.pt(x), ui.pt(y), ui.pt(w), ui.pt(h)), ui.pt(6.), if focused { crate::kit::appearance::accent_now() } else { FIELD_BG.now() });
     if focused {
         s.fill_rrect(RectF::new(ui.pt(x + 1.), ui.pt(y + 1.), ui.pt(w - 2.), ui.pt(h - 2.)), ui.pt(5.), FIELD_BG.now());
     }
@@ -1123,7 +1123,10 @@ pub fn translation_popover(s: &mut dyn Canvas, ui: &Ui, presenter: &crate::trans
 /// 45% strength outside the control (`bifrost_ui::sheet::focus_ring_rect`).
 pub fn focus_ring(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, radius: f32) {
     let (r, rad) = bifrost_ui::sheet::focus_ring_rect(bounds, radius);
-    let c = crate::kit::pack(4, 59, 115, 115); // systemBlue at ~45%, premultiplied
+    // the accent at ~45% (115 of 255), premultiplied: systemBlue by default
+    let accent = crate::kit::appearance::accent_now();
+    let part = |shift: u32| (((accent >> shift) & 255) * 115 / 255) as u8;
+    let c = crate::kit::pack(part(0), part(8), part(16), 115);
     s.stroke_rrect(RectF::new(ui.pt(r.x), ui.pt(r.y), ui.pt(r.w), ui.pt(r.h)), ui.pt(rad), ui.pt(bifrost_ui::sheet::FOCUS_RING_PT), c);
 }
 
@@ -1133,7 +1136,7 @@ fn sheet_button(s: &mut dyn Canvas, ui: &Ui, r: Rect, b: &bifrost_ui::sheet::She
     use bifrost_ui::sheet::ButtonRole;
     bifrost_ui::ax::record(bifrost_ui::Role::Button, &b.title, if b.role == ButtonRole::Default { "default" } else { "" }, r, true);
     let default = b.role == ButtonRole::Default;
-    let fill = if default { TINT } else if pressed { CONTROL_PRESSED.now() } else { FIELD_BG.now() };
+    let fill = if default { crate::kit::appearance::accent_now() } else if pressed { CONTROL_PRESSED.now() } else { FIELD_BG.now() };
     s.fill_rrect(RectF::new(ui.pt(r.x), ui.pt(r.y), ui.pt(r.w), ui.pt(r.h)), ui.pt(6.), fill);
     if !default {
         s.stroke_rrect(RectF::new(ui.pt(r.x), ui.pt(r.y), ui.pt(r.w), ui.pt(r.h)), ui.pt(6.), ui.pt(1.0).max(1.0), HAIRLINE_C.now());
@@ -1703,7 +1706,7 @@ mod tests {
         assert!(content.w > 0.0 && content.y >= 28.0);
         assert!(a[290 * w + 10] != 0, "the parent is dimmed");
         let btn = sh.layout(parent, 28.0, 1.0).buttons[0].1;
-        assert_eq!(a[(btn.y + 11.0) as usize * w + (btn.x + 3.0) as usize], TINT, "default button is filled with the accent");
+        assert_eq!(a[(btn.y + 11.0) as usize * w + (btn.x + 3.0) as usize], crate::kit::appearance::accent_now(), "default button is filled with the accent");
         let mut b = vec![0u32; w * h];
         sheet(&mut Surface { w, h, stride: w, px: &mut b, y0: 0 }, &ui, parent, 28.0, &sh, 0.0, None);
         assert_eq!(b[(btn.y + 11.0) as usize * w + (btn.x + 3.0) as usize], 0, "at progress 0 nothing is drawn");
