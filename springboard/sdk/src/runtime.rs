@@ -805,6 +805,11 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                         app.resume(c);
                     }
                     need_frame = true;
+                    // the board changed while the app was in the background and only the count arrived: ask for the contents
+                    // (the shell also sends them to the app in front on its own; this covers a message that was dropped)
+                    if crate::pasteboard::take_stale() {
+                        let _ = chan.send(&ToShell::PasteboardRead.encode(), &[]);
+                    }
                 }
                 ToApp::Suspend => {
                     active = false;
@@ -871,6 +876,17 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                     }
                 }
                 ToApp::Pasteboard { change_count, items } => crate::pasteboard::mirror(change_count, items),
+                // the board changed and this app is not in front: only the count is known, the contents follow when it is
+                ToApp::PasteboardChanged { change_count } => crate::pasteboard::note_changed(change_count),
+                // items too large for a packet arrive in a descriptor; the text fields read the plain-text item
+                ToApp::PasteboardBlob { change_count, types } => {
+                    if let Some(items) = fds.pop().and_then(|fd| crate::proto::pbblob::read(&fd, &types).ok()) {
+                        let text = springboard::shell::pasteboard::text_of(&items).unwrap_or_default();
+                        crate::pasteboard::mirror(change_count, items);
+                        kit::clipboard::set_text(&text);
+                        clip_seen = kit::clipboard::text();
+                    }
+                }
                 // the shell's input source: the kana (Romaji) flag the text input reads (`compose_method`)
                 ToApp::InputSource { japanese } => bifrost_ui::compose_method::set_japanese_source(japanese),
                 ToApp::Clipboard { text } => {
@@ -1068,7 +1084,7 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
         let now_clip = kit::clipboard::text();
         if now_clip != clip_seen {
             clip_seen = now_clip.clone();
-            let _ = chan.send(&ToShell::SetClipboard { text: now_clip.unwrap_or_default() }.encode(), &[]);
+            send_message(&chan, &ToShell::SetClipboard { text: now_clip.unwrap_or_default() });
         }
     }
 }
@@ -1103,8 +1119,26 @@ fn reconfigure(c: &mut Ctx, cfg: Configure) {
 /// (frames and their buffers) must come after the requests that name it, so callers flush before they send those.
 fn flush_out(chan: &Channel, ctx: &Ctx) {
     for m in ctx.take_sent() {
-        let _ = chan.send(&m.encode(), &[]);
+        send_message(chan, &m);
     }
+}
+
+/// Sends `m` to the shell. A pasteboard write or clipboard text that does not fit a packet goes through a descriptor
+/// (`ToShell::PasteboardBlob`) instead of being cut or dropped; one over the blob limits is not sent at all, so the
+/// shell's clipboard keeps what it had rather than getting a shortened or empty copy.
+fn send_message(chan: &Channel, m: &ToShell) {
+    match m {
+        ToShell::PasteboardSet { items } if !crate::proto::pbblob::fits_inline(items) => send_blob(chan, items),
+        ToShell::SetClipboard { text } if text.len() > crate::proto::MAX_INLINE_TEXT => send_blob(chan, &[(crate::pasteboard::STRING.to_string(), text.clone().into_bytes())]),
+        _ => {
+            let _ = chan.send(&m.encode(), &[]);
+        }
+    }
+}
+
+fn send_blob(chan: &Channel, items: &[(String, Vec<u8>)]) {
+    let Ok((fd, types)) = crate::proto::pbblob::write(items) else { return };
+    let _ = chan.send(&ToShell::PasteboardBlob { types }.encode(), &[fd.0]);
 }
 
 fn alloc(chan: &Channel, w: u32, h: u32, generation: u32) -> Option<[Slot; 2]> {

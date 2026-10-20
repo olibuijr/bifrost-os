@@ -2259,8 +2259,30 @@ never snapshots "Loading…".
 `public.file-url`); `springboard::shell::pasteboard::mime_for` maps them to MIME (`text/plain;charset=utf-8`, `text/html`,
 `text/rtf`, `image/png`, `text/uri-list`). Wire: `ToShell::PasteboardSet` (0x190) and `ToApp::Pasteboard` (0x190), at most
 16 items. `Ctx::pasteboard_string` / `set_pasteboard_string` keep working. The shell pushes `ToApp::Pasteboard` (the typed
-items) and `ToApp::Clipboard` (the text, which the apps' text fields read) to every app that has not seen the board's change
-count (`AppHost::sync_pasteboard`); the writer is not sent its own write.
+items) and `ToApp::Clipboard` (the text, which the apps' text fields read) only to the app in front, when it has not seen the
+board's change count (`AppHost::sync_pasteboard`, so also when an app comes to the front); every other app gets
+`ToApp::PasteboardChanged { change_count }` (0x192) and reads the board as empty until it is in front (the SDK then asks with
+`ToShell::PasteboardRead`, 0x193, if the push was lost; `NativePasteboard::request_contents`). The writer is not sent its own
+write, text-only writes included. Writes (`SetClipboard`, `PasteboardSet`) are taken from the app in front and for 1.5 s after
+it left; an app in the background cannot replace the clipboard. Gap: the contents still reach the app in front without a
+paste gesture (old apps expect the push); per-app write rate limits are not enforced beyond one effective write per pass.
+
+**Large items** do not fit the 16 KiB packet and are never cut or dropped silently: they travel in a memfd
+(`proto/src/pbblob.rs`, `ToShell::PasteboardBlob` / `ToApp::PasteboardBlob`, tag 0x191, the descriptor as SCM_RIGHTS, the
+message holds each item's type and length; 32 MiB per item, 64 MiB per write, at most 16 items). The SDK picks the form: a
+`PasteboardSet` or `SetClipboard` that does not fit goes as a blob; one over the limits is not sent, so the clipboard keeps
+its contents. The shell does the same for the app in front. Apps built before the blob messages ignore `ToApp::PasteboardBlob`
+and `ToApp::PasteboardChanged` (unknown tags are skipped); a shell without them refuses an app that sends one (needs a
+matching `min_shell`).
+
+**Concealed copies**: an item that carries the marker type `org.nspasteboard.ConcealedType` (`pasteboard::CONCEALED`,
+`NativePasteboard::write_concealed_string`) holds a secret. The shell strips the marker, keeps the text in memory only
+(`clipboard::set_text_volatile`, the old `clipboard.txt` is removed), offers it to Wayland programs together with
+`x-kde-passwordManagerHint`, and clears pasteboard, clipboard and selection 45 seconds after the copy when nothing else was
+copied (`pasteboard::expired`, `Board::pass_at`). `org.nspasteboard.TransientType` is the same without the timer. The Passwords
+app copies this way and no longer touches the plain-text clipboard. A selection another program sets with the password-manager
+hint is imported as concealed (usable in the shell's fields, kept off disk, cleared on the timer). When the program that
+set the selection clears it, and the pasteboard still holds what it set, the pasteboard is cleared too.
 
 **One clipboard** (`src/shell/pasteboard_sync.rs`, run from `Shell::ext_tick`): the shell-wide text clipboard
 (`clipboard::set_text`, what the shell's own fields copy), the typed pasteboard and the window server's selection are kept
@@ -2270,7 +2292,9 @@ The shell owns the selection through `zwlr_data_control_v1` (`pasteboard_wl.rs`,
 `wm/src/data_control.rs` offers the global to the shell and to unsandboxed programs of the session's user: a client in another mount namespace, which a sandboxed native app always is, is refused and uses the ordinary focused data device) and
 offers text as `text/plain;charset=utf-8`, `text/plain`, `UTF8_STRING`, `TEXT` and `STRING`, beside `text/html`, `text/rtf`
 (and `application/rtf`), `image/png`, `image/jpeg` and `text/uri-list`. From another program's selection it reads one text
-type and each rich type (32 MiB at most per type, 1.5 s per type). Gaps: `STRING` carries UTF-8 (X clients that expect
+type and each rich type (32 MiB at most per type and 48 MiB together, all types read at once under one 1.5 s deadline;
+selections that follow each other faster than 250 ms are coalesced). The connection is restarted with a backoff (0.5 s to 30 s)
+after an error or a panic, and the newest offer is made again on the new connection. Gaps: `STRING` carries UTF-8 (X clients that expect
 Latin-1 see the bytes unconverted); the primary (middle-click) selection is not shared; a type with no MIME form (a private
 UTType) stays inside BifrOSt; images are not imported into the shell's own text fields.
 

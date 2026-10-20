@@ -14,7 +14,8 @@ use bifrost_app::keychain::Error as KeychainError;
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
 use bifrost_app::controls::Rect;
 use bifrost_app::kit::ui::{self, Weight};
-use bifrost_app::kit::{clipboard, Damage, Surface};
+use bifrost_app::kit::{Damage, Surface};
+use bifrost_app::pasteboard::NativePasteboard;
 use bifrost_app::passwords::{kind_of, name_of, Kind};
 use bifrost_app::{keychain_groups, passwords, widgets, App, Ctx, Input, KeyInput, TouchKind};
 use bifrost_core::json::Json;
@@ -175,6 +176,14 @@ impl PasswordsApp {
 }
 
 /// Seconds since the Unix epoch, for one-time codes (0 if the clock is before the epoch).
+/// Puts a password on the pasteboard as a concealed copy: the shell keeps it in memory only, hands it to the app in front
+/// and not to apps in the background, marks it for other programs so clipboard managers leave it out, and clears it after
+/// 45 seconds when nothing else was copied. The password is never put on the plain-text clipboard (that copy would be kept
+/// on disk and shown to every app).
+fn copy_secret(ctx: &Ctx, password: &str) {
+    NativePasteboard::general().write_concealed_string(ctx, password);
+}
+
 fn unix_now() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
@@ -313,7 +322,7 @@ impl App for PasswordsApp {
                     }
                     Some("Copy") => match &self.revealed {
                         Some(p) => {
-                            clipboard::set_text(p);
+                            copy_secret(ctx, p);
                             self.status = "Copied.".into();
                         }
                         None => {
@@ -374,7 +383,7 @@ impl App for PasswordsApp {
             },
             Pending::Copy => match passwords::decode_password(result) {
                 Ok(p) => {
-                    clipboard::set_text(&p);
+                    copy_secret(ctx, &p);
                     self.status = "Copied.".into();
                 }
                 Err(e) => self.status = format!("Could not copy: {e}"),

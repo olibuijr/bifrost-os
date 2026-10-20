@@ -10,10 +10,11 @@
 //!
 //! `tick` runs once per shell pass (`Shell::ext_tick`):
 //!
-//! 0. Concealed contents (a password) older than their lifetime are cleared.
 //! 1. A change of the shell clipboard that the pasteboard does not show yet (a copy in a shell field, an app that sent
 //!    only text) becomes a plain-text pasteboard item. It is made before an import is looked at: when both happened since
 //!    the last pass, the local copy wins and the import is dropped, so a copy is never lost to an older selection.
+//!    Concealed contents (a password) older than their lifetime are cleared right after (a newer copy ends the lifetime
+//!    instead).
 //! 2. A selection another program set since the last pass is imported: its text and rich types become the pasteboard,
 //!    its text the shell clipboard. It is not offered back (the program keeps serving it). A selection that carries the
 //!    password-manager hint is imported as concealed (kept in memory, cleared on a timer). When the program clears its
@@ -21,7 +22,8 @@
 //! 3. A pasteboard whose change count differs from the one last offered is offered to the window server as the selection,
 //!    in every MIME type that stands for it ([`offers`]), with the password-manager hint when the contents are private.
 //!
-//! The apps follow the pasteboard's change count on their own (`AppHost::sync_pasteboard`).
+//! The apps follow the pasteboard's change count on their own (`Shell::ext_sync_pasteboard`): the app in front gets the
+//! contents, the others only the count.
 //!
 //! The window server side is a data-control client (`pasteboard_wl.rs`, a [`Transport`]): the shell connects through the
 //! privileged socket, where the window server lets it set the selection without a keyboard-focused surface. Nothing
@@ -234,7 +236,7 @@ impl<T: Transport> Board<T> {
         self.seen_rev = rev;
         let now = clipboard::text();
         // an image copy (Photos) moves the revision with no text: leave the pasteboard as it is rather than
-        // emptying it (the image itself is not offered yet, see docs/bifrost-ui.md "NSPasteboard rich types")
+        // emptying it (the image itself is not offered yet, see docs/bifrost-ui.md "rich types")
         let image_only = now.is_none() && clipboard::global().as_ref().is_some_and(|c| c.image().is_some());
         if !image_only && pasteboard::text() != now {
             pasteboard::set_plain(now.as_deref().unwrap_or(""));
