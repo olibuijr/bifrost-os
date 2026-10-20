@@ -182,18 +182,15 @@ Coordinates are original panel pixels. `tools/midget.py` sends each line over SS
 The `[bifrost]` repository is signed with a release key; the root-run `bifrost-update-guard` installs whatever it serves, so the
 signature is the only thing between a tampered mirror and root on every machine. Two phases:
 
-1. **Phase 1 (now).** `tools/pc-publish.py` signs every package (`makepkg --sign`) and the database (`repo-add --sign`) when
-   `BIFROST_REPO_SIGN_KEY` names a key in the GnuPG home `BIFROST_REPO_GNUPGHOME` (default `out/lab/gnupg`, never in git); the `.sig`
-   files are published next to the files. With no key configured it still publishes, unsigned, with a loud warning; a configured
-   key that cannot sign stops the publish. The public key (`packaging/arch/keys/bifrost-repo.gpg`, see the README there) is
-   shipped by `springboard-shell` at `/usr/share/bifrost/keys/` and imported and locally signed into pacman's keyring by its
-   scriptlet (`bifrost_repo_key` in `springboard.install`); the installer imports it from the live medium (`tools/build-iso.sh`
-   copies it there) before the first sync. New installs write `SigLevel = Optional TrustedOnly` for `[bifrost]`
-   (`BIFROST_REPO_SIG_LEVEL` in `installer/plan.rs`): unsigned files are still accepted, but a signature from a key the machine
-   does not trust is refused. Machines installed before this keep their old `Optional TrustAll` line until phase 2.
-2. **Phase 2 (once every machine holds the key and the repository is signed).** Change `BIFROST_REPO_SIG_LEVEL` to
-   `Required DatabaseRequired`, and have the update path rewrite the `[bifrost]` section of existing machines' `pacman.conf`.
-   Do not switch before the lab (Midget) and every public install has received a package that carries the key.
+`tools/pc-publish.py` signs every package (`makepkg --sign`) and the database (`repo-add --sign`) with the key named by
+`BIFROST_REPO_SIGN_KEY` (the fingerprint is kept in `out/lab/repo-sign-key.fpr`) in the GnuPG home `BIFROST_REPO_GNUPGHOME`
+(default `out/lab/gnupg`, never in git); the `.sig` files are published next to the files. The public key
+(`packaging/arch/keys/bifrost-repo.gpg`, see the README there) is shipped by `springboard-shell` at `/usr/share/bifrost/keys/`
+and imported and locally signed into pacman's keyring by its scriptlet (`bifrost_repo_key` in `springboard.install`); the
+installer imports it from the live medium (`tools/build-iso.sh` copies it there) before the first sync. Installs write
+`SigLevel = Required DatabaseRequired` for `[bifrost]` (`BIFROST_REPO_SIG_LEVEL` in `installer/plan.rs`): an unsigned package or
+database, or one signed by a key the machine does not trust, is refused. There was no unsigned installed base to migrate (the
+only installed machine, Midget, had the key imported and its `pacman.conf` switched by hand on 2026-10-20).
 
 ## 7. CLI tools (`tools/`)
 

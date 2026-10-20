@@ -313,10 +313,9 @@ fn strip_repo_section(conf: &str, name: &str) -> String {
 }
 
 /// Signature policy for the `[bifrost]` update repository (docs/installer-and-boot.md, "Package signing").
-/// Phase 1: signatures are optional (the repository may still be unsigned) but a signature that is present must come from a
-/// trusted key, which the installer and the `springboard-shell` scriptlet import from `packaging/arch/keys`.
-/// Phase 2 (every machine holds the key and the repository is signed): change this to `Required DatabaseRequired`.
-const BIFROST_REPO_SIG_LEVEL: &str = "Optional TrustedOnly";
+/// Every package and the database must carry a signature from the repository key, which the installer and the
+/// `springboard-shell` scriptlet import from `packaging/arch/keys` (there is no unsigned installed base to migrate).
+const BIFROST_REPO_SIG_LEVEL: &str = "Required DatabaseRequired";
 /// The public repository key on the live medium (tools/build-iso.sh copies it from `packaging/arch/keys`) and in the target.
 const REPO_KEY_LIVE: &str = "/usr/share/bifrost/keys/bifrost-repo.gpg";
 const REPO_KEY_TARGET: &str = "/usr/share/bifrost/keys/bifrost-repo.gpg";
@@ -1440,7 +1439,7 @@ mod tests {
     #[test]
     fn the_update_repository_trusts_only_known_keys() {
         let s = bifrost_repo_section("https://repo.example/arch/$arch");
-        assert_eq!(s, "[bifrost]\nSigLevel = Optional TrustedOnly\nServer = https://repo.example/arch/$arch\n");
+        assert_eq!(s, "[bifrost]\nSigLevel = Required DatabaseRequired\nServer = https://repo.example/arch/$arch\n");
         assert!(!s.contains("TrustAll"), "no unknown signing key is trusted");
         assert!(IMPORT_REPO_KEY_SH.contains("pacman-key --add") && IMPORT_REPO_KEY_SH.contains("--lsign-key"));
     }

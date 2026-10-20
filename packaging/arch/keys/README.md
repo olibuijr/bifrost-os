@@ -31,5 +31,6 @@ warning.
   scriptlet imports it into pacman's keyring and signs it locally (`pacman-key --add`, `--lsign-key`).
 - The installer reads it from the live medium at the same path (`tools/build-iso.sh` copies this directory there) and imports
   it into the target before the first `pacman -Sy`.
-- The installed `[bifrost]` repository uses `SigLevel = Optional TrustedOnly` (phase 1). When every machine holds the key,
-  switch the installer to `Required DatabaseRequired` (phase 2, `docs/installer-and-boot.md`, "Package signing").
+- The installed `[bifrost]` repository uses `SigLevel = Required DatabaseRequired`: an unsigned or untrusted package or
+  database is refused. Publishing therefore needs the key: `BIFROST_REPO_SIGN_KEY` is the fingerprint kept in
+  `out/lab/repo-sign-key.fpr`.
