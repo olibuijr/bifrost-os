@@ -4,11 +4,16 @@
 
 pub mod accounts;
 pub mod attachments;
+pub mod autoconfig;
 pub mod background;
 pub mod body;
 pub mod category;
 pub mod codec;
 pub mod compose_windows;
+pub mod discover;
+pub mod dns;
+pub mod entities;
+mod entities_table;
 pub mod draw;
 pub mod export;
 pub mod mute;

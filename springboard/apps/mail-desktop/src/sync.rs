@@ -2,6 +2,7 @@
 //! back. A byte written to the wake pipe tells the window's loop to read the channel, so nothing waits on a network call.
 
 use crate::accounts;
+use crate::discover::{self, Found, HttpFetch, SystemLookup};
 use crate::flags::{Flag, FlagColor, Flags};
 use crate::state::INBOX;
 use bifrost_app::controls::internet_accounts::Account;
@@ -79,6 +80,8 @@ pub enum Event {
     Watch { account: String, live: bool },
     /// The server reported a new message in the inbox (from IDLE). The window lists the inbox again.
     Arrived { account: String },
+    /// The servers found for the address typed in Add Account (see [`crate::discover`]).
+    Discovered { email: String, result: Result<Found, String> },
 }
 
 impl Event {
@@ -102,6 +105,13 @@ pub fn spawn(tx: Sender<Event>, wake: Option<UnixStream>, work: impl FnOnce() ->
             }
         }
     });
+}
+
+/// Looks up the servers of the mail domain of `email` (Add Account). Nothing secret is sent: the address goes to the
+/// domain's own autoconfig host and its domain to the name servers; the password is not known to this job.
+pub fn discover(transport: Arc<dyn Transport>, email: &str) -> Event {
+    let result = discover::discover(email, &HttpFetch::new(transport), &SystemLookup::new());
+    Event::Discovered { email: email.to_string(), result }
 }
 
 /// The mailboxes of `account` and the newest messages of `mailbox`.

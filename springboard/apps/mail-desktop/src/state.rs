@@ -2,6 +2,7 @@
 //! the sheets (account setup and compose) and the arrival baseline for new-mail notices. Nothing here touches the
 //! network, the passwords or the window; `window.rs` runs the jobs and feeds their results in.
 
+use crate::discover::Found as Discovered;
 use crate::body::Attachment;
 use crate::category::{self, Category};
 use crate::findbar::FindBar;
@@ -122,6 +123,25 @@ impl Filter {
 /// The IMAP ports that start TLS at once; the other standard ports start with STARTTLS.
 const IMAP_TLS_PORT: u16 = 993;
 const SMTP_TLS_PORT: u16 = 465;
+/// The yes or no field of Add Account that shows the server fields.
+pub const MANUAL: &str = "Configure Manually";
+/// The fields Configure Manually adds to Add Account, after it.
+const MANUAL_LABELS: [&str; 5] = ["User name", "Incoming server", "Incoming port", "Outgoing server", "Outgoing port"];
+
+/// The server fields of Add Account, filled from `found` when there is a result of discovery.
+fn manual_fields(found: Option<&Discovered>) -> Vec<Field> {
+    let (user, imap, smtp) = match found {
+        Some(f) => (f.username.clone().unwrap_or_default(), accounts_server(&Some(f.imap.clone())), accounts_server(&Some(f.smtp.clone()))),
+        None => (String::new(), (String::new(), IMAP_TLS_PORT.to_string()), (String::new(), "587".to_string())),
+    };
+    vec![
+        Field::new("User name", "Same as the email when empty", &user),
+        Field::new("Incoming server", "imap.<domain> when empty", &imap.0),
+        Field::new("Incoming port", "", &imap.1),
+        Field::new("Outgoing server", "smtp.<domain> when empty", &smtp.0),
+        Field::new("Outgoing port", "", &smtp.1),
+    ]
+}
 
 /// One message in the list: what the list and the reader need, from its header block.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -304,6 +324,17 @@ impl Form {
 
     pub fn value(&self, label: &str) -> &str {
         self.fields.iter().find(|f| f.label == label).map_or("", |f| f.value.as_str())
+    }
+
+    /// Turns the yes or no field at `index` the other way. False when that field is not one.
+    pub fn flip(&mut self, index: usize) -> bool {
+        match self.fields.get_mut(index) {
+            Some(field) if field.choice => {
+                field.value = if is_yes(&field.value) { "no".to_string() } else { "yes".to_string() };
+                true
+            }
+            _ => false,
+        }
     }
 }
 
@@ -789,6 +820,8 @@ pub struct Mail {
     /// The sheet slot was closed on purpose (sent, saved or discarded), so its compose window closes without a question.
     pub sheet_done: bool,
     pub status: String,
+    /// Add Account is looking up the servers of the address: the sheet takes no second submit until the answer is here.
+    pub discovering: bool,
     /// The search text as applied. Empty shows every message.
     pub search: String,
     /// The threaded view: the list groups conversations together.
@@ -866,6 +899,7 @@ impl Mail {
             remote_loaded: HashSet::new(),
             sheet_done: false,
             status: String::new(),
+            discovering: false,
             search: String::new(),
             threaded: false,
             attachments: HashMap::new(),
@@ -1159,18 +1193,41 @@ impl Mail {
         }
     }
 
+    /// Add Account: a name, an address and a password. The servers are looked up from the address (see
+    /// [`crate::discover`]); Configure Manually shows their fields for the person to fill in.
     pub fn open_setup(&mut self) {
-        let hint_email = "name@example.com";
+        self.discovering = false;
+        self.status.clear();
         self.sheet = Some(Sheet::Setup(Form::new(vec![
             Field::new("Name", "Shown in the sidebar", ""),
-            Field::new("Email", hint_email, ""),
-            Field::new("User name", "Same as the email when empty", ""),
+            Field::new("Email", "name@example.com", ""),
             Field { secret: true, ..Field::new("Password", "Stored in Passwords", "") },
-            Field::new("Incoming server", "imap.<domain> when empty", ""),
-            Field::new("Incoming port", "", &IMAP_TLS_PORT.to_string()),
-            Field::new("Outgoing server", "smtp.<domain> when empty", ""),
-            Field::new("Outgoing port", "", "587"),
+            Field::yes_no(MANUAL, false),
         ])));
+    }
+
+    /// Makes the server fields of the Add Account sheet match its Configure Manually field: shown (empty) when it says
+    /// yes, gone when it says no.
+    pub fn sync_manual(&mut self) {
+        let Some(Sheet::Setup(form)) = &mut self.sheet else { return };
+        let on = is_yes(form.value(MANUAL));
+        let shown = form.fields.iter().any(|f| f.label == "Incoming server");
+        if on && !shown {
+            form.fields.extend(manual_fields(None));
+        } else if !on && shown {
+            form.fields.retain(|f| !MANUAL_LABELS.contains(&f.label));
+            form.focus = form.focus.min(form.fields.len().saturating_sub(1));
+        }
+    }
+
+    /// Shows the server fields, filled from what discovery found (or empty).
+    pub fn show_manual(&mut self, found: Option<&Discovered>) {
+        let Some(Sheet::Setup(form)) = &mut self.sheet else { return };
+        form.fields.retain(|f| !MANUAL_LABELS.contains(&f.label));
+        form.fields.extend(manual_fields(found));
+        if let Some(choice) = form.fields.iter_mut().find(|f| f.label == MANUAL) {
+            choice.value = "yes".to_string();
+        }
     }
 
     /// A compose sheet: empty for a new message, or the reply to `reply`, with the original's sender as recipient.
@@ -1853,6 +1910,12 @@ impl Mail {
     /// the domain's `imap.` and `smtp.` names and the standard ports. `taken` is the whole shared list, so the new id
     /// is unique among every account.
     pub fn account_from_form(&self, form: &Form, taken: &[Account]) -> Result<(Account, String), String> {
+        self.account_from_form_found(form, taken, None)
+    }
+
+    /// [`Self::account_from_form`] with the servers discovery found: they stand in for the `imap.` and `smtp.` guesses
+    /// wherever the form leaves a server field empty.
+    pub fn account_from_form_found(&self, form: &Form, taken: &[Account], found: Option<&Discovered>) -> Result<(Account, String), String> {
         let email = form.value("Email").trim().to_string();
         if !shared::valid_address(&email) {
             return Err("Enter an email address, for example name@example.com".into());
@@ -1861,7 +1924,7 @@ impl Mail {
         if password.is_empty() {
             return Err("Enter the password for this account".into());
         }
-        let account = build_account(form, &account_id(&email, taken))?;
+        let account = build_account(form, &account_id(&email, taken), found)?;
         Ok((account, password))
     }
 
@@ -1869,7 +1932,7 @@ impl Mail {
     /// servers. The password is returned when one was typed; it is required when the user name or the incoming server
     /// changed, because Passwords keeps it under those.
     pub fn edited_account(&self, form: &Form, old: &Account) -> Result<(Account, Option<String>), String> {
-        let mut account = build_account(form, &old.id)?;
+        let mut account = build_account(form, &old.id, None)?;
         account.services = old.services.clone();
         let password = form.value("Password").to_string();
         let moved = account.password_site() != old.password_site() || account.username != old.username;
@@ -1988,9 +2051,9 @@ pub fn within_limits(files: Vec<Attachment>) -> Vec<Attachment> {
     kept
 }
 
-/// Builds the mail account a setup form describes, with `id`. Hosts and ports fall back to the domain's `imap.` and `smtp.`
-/// names and the standard ports.
-fn build_account(form: &Form, id: &str) -> Result<Account, String> {
+/// Builds the mail account a setup form describes, with `id`. A server field the form leaves empty takes the server
+/// `found` has, or else the domain's `imap.` or `smtp.` name and the standard port.
+fn build_account(form: &Form, id: &str, found: Option<&Discovered>) -> Result<Account, String> {
     let email = form.value("Email").trim().to_string();
     if !shared::valid_address(&email) {
         return Err("Enter an email address, for example name@example.com".into());
@@ -2000,20 +2063,30 @@ fn build_account(form: &Form, id: &str) -> Result<Account, String> {
         "" => email.clone(),
         name => name.to_string(),
     };
-    let username = match form.value("User name").trim() {
-        "" => email.clone(),
-        user => user.to_string(),
+    let username = match (form.value("User name").trim(), found.and_then(|f| f.username.as_deref())) {
+        ("", None) => email.clone(),
+        ("", Some(login)) => login.to_string(),
+        (user, _) => user.to_string(),
     };
-    let imap_port = port(form.value("Incoming port"), IMAP_TLS_PORT)?;
-    let smtp_port = port(form.value("Outgoing port"), 587)?;
-    let imap_host = host(form.value("Incoming server"), &format!("imap.{domain}"));
-    let smtp_host = host(form.value("Outgoing server"), &format!("smtp.{domain}"));
+    let imap_default = found.map_or_else(|| Server { host: format!("imap.{domain}"), port: IMAP_TLS_PORT, security: Security::Tls }, |f| f.imap.clone());
+    let smtp_default = found.map_or_else(|| Server { host: format!("smtp.{domain}"), port: 587, security: Security::StartTls }, |f| f.smtp.clone());
     let mut account = Account::new(Kind::Mail, id, &name, &username);
     account.email = email;
-    account.imap = Some(Server { host: imap_host, port: imap_port, security: security(imap_port, IMAP_TLS_PORT) });
-    account.smtp = Some(Server { host: smtp_host, port: smtp_port, security: security(smtp_port, SMTP_TLS_PORT) });
+    account.imap = Some(server_of(form, "Incoming", imap_default, IMAP_TLS_PORT)?);
+    account.smtp = Some(server_of(form, "Outgoing", smtp_default, SMTP_TLS_PORT)?);
     account.validate().map_err(|e| e.to_string())?;
     Ok(account)
+}
+
+/// The `which` ("Incoming" or "Outgoing") server of a setup form: what is typed, and `default` for what is not. A typed
+/// port that differs from the default picks its encryption by the usual port (`tls_port` starts TLS at once, the others
+/// start with STARTTLS).
+fn server_of(form: &Form, which: &str, default: Server, tls_port: u16) -> Result<Server, String> {
+    let typed = form.value(&format!("{which} port")).trim().to_string();
+    let port = port(&typed, default.port)?;
+    let host = host(form.value(&format!("{which} server")), &default.host);
+    let security = if port == default.port { default.security } else { security(port, tls_port) };
+    Ok(Server { host, port, security })
 }
 
 /// The message with the account's signature after it, set off by the `-- ` line mail programs recognise. No signature
@@ -2140,6 +2213,8 @@ mod tests {
     impl Mail {
         fn sheet_form_for_test(mut self) -> Form {
             self.open_setup();
+            // the tests set the server fields too
+            self.show_manual(None);
             match self.sheet {
                 Some(Sheet::Setup(form)) => form,
                 _ => unreachable!(),
@@ -2438,6 +2513,99 @@ mod tests {
         assert_eq!(account.imap, Some(Server { host: "imap.example.com".into(), port: 993, security: Security::Tls }));
         assert_eq!(account.smtp, Some(Server { host: "smtp.example.com".into(), port: 587, security: Security::StartTls }));
         assert_eq!(account.password_site(), "imap.example.com");
+    }
+
+    fn found() -> Discovered {
+        Discovered {
+            imap: Server { host: "mail.example.com".into(), port: 993, security: Security::Tls },
+            smtp: Server { host: "mail.example.com".into(), port: 587, security: Security::StartTls },
+            username: Some("ana".into()),
+            trusted: true,
+        }
+    }
+
+    #[test]
+    fn add_account_asks_for_a_name_an_address_and_a_password_only() {
+        let mut mail = Mail::new(vec![]);
+        mail.open_setup();
+        let labels: Vec<&str> = mail.sheet.as_ref().unwrap().form().fields.iter().map(|f| f.label).collect();
+        assert_eq!(labels, ["Name", "Email", "Password", "Configure Manually"]);
+        assert!(!is_yes(mail.sheet.as_ref().unwrap().form().value(MANUAL)));
+    }
+
+    #[test]
+    fn configure_manually_shows_and_hides_the_server_fields() {
+        let mut mail = Mail::new(vec![]);
+        mail.open_setup();
+        let at = mail.sheet.as_ref().unwrap().form().fields.iter().position(|f| f.label == MANUAL).unwrap();
+        assert!(mail.sheet.as_mut().unwrap().form_mut().flip(at));
+        mail.sync_manual();
+        let form = mail.sheet.as_ref().unwrap().form().clone();
+        let labels: Vec<&str> = form.fields.iter().map(|f| f.label).collect();
+        assert_eq!(labels, ["Name", "Email", "Password", "Configure Manually", "User name", "Incoming server", "Incoming port", "Outgoing server", "Outgoing port"]);
+        assert_eq!((form.value("Incoming port"), form.value("Outgoing port")), ("993", "587"));
+        // typed values stay while the fields are shown, and a second sync changes nothing
+        mail.sheet.as_mut().unwrap().form_mut().fields[5].value = "mail.example.com".into();
+        mail.sync_manual();
+        assert_eq!(mail.sheet.as_ref().unwrap().form().value("Incoming server"), "mail.example.com");
+        mail.sheet.as_mut().unwrap().form_mut().focus = 8;
+        assert!(mail.sheet.as_mut().unwrap().form_mut().flip(at));
+        mail.sync_manual();
+        let form = mail.sheet.as_ref().unwrap().form();
+        assert_eq!(form.fields.len(), 4);
+        assert_eq!(form.focus, 3, "the focus does not point past the fields");
+    }
+
+    #[test]
+    fn only_a_yes_or_no_field_flips() {
+        let mut form = Form::new(vec![Field::new("Name", "", "x"), Field::yes_no("Choice", false)]);
+        assert!(!form.flip(0) && !form.flip(9));
+        assert!(form.flip(1) && form.value("Choice") == "yes");
+        assert!(form.flip(1) && form.value("Choice") == "no");
+    }
+
+    #[test]
+    fn found_servers_fill_the_form_when_it_leaves_them_empty() {
+        let mail = Mail::new(vec![]);
+        let mut form = setup(&[("Email", "ana@example.com"), ("Password", "secret")]);
+        form.fields.retain(|f| f.label != "Incoming port" && f.label != "Outgoing port");
+        let (account, password) = mail.account_from_form_found(&form, &[], Some(&found())).unwrap();
+        assert_eq!(password, "secret");
+        assert_eq!(account.username, "ana");
+        assert_eq!(account.imap, Some(Server { host: "mail.example.com".into(), port: 993, security: Security::Tls }));
+        assert_eq!(account.smtp, Some(Server { host: "mail.example.com".into(), port: 587, security: Security::StartTls }));
+        // without a result the old guess stands
+        let (guessed, _) = mail.account_from_form(&form, &[]).unwrap();
+        assert_eq!(guessed.imap.map(|s| s.host), Some("imap.example.com".to_string()));
+        assert_eq!(guessed.username, "ana@example.com");
+    }
+
+    #[test]
+    fn what_is_typed_wins_over_what_was_found() {
+        let mail = Mail::new(vec![]);
+        let form = setup(&[
+            ("Email", "ana@example.com"),
+            ("Password", "p"),
+            ("User name", "ana2"),
+            ("Incoming server", "other.example.com"),
+            ("Incoming port", "143"),
+            ("Outgoing port", "465"),
+        ]);
+        let (account, _) = mail.account_from_form_found(&form, &[], Some(&found())).unwrap();
+        assert_eq!(account.username, "ana2");
+        assert_eq!(account.imap, Some(Server { host: "other.example.com".into(), port: 143, security: Security::StartTls }));
+        assert_eq!(account.smtp, Some(Server { host: "mail.example.com".into(), port: 465, security: Security::Tls }));
+    }
+
+    #[test]
+    fn showing_the_found_servers_prefills_the_manual_fields() {
+        let mut mail = Mail::new(vec![]);
+        mail.open_setup();
+        mail.show_manual(Some(&found()));
+        let form = mail.sheet.as_ref().unwrap().form();
+        assert_eq!(form.value(MANUAL), "yes");
+        assert_eq!((form.value("User name"), form.value("Incoming server"), form.value("Incoming port")), ("ana", "mail.example.com", "993"));
+        assert_eq!((form.value("Outgoing server"), form.value("Outgoing port")), ("mail.example.com", "587"));
     }
 
     #[test]

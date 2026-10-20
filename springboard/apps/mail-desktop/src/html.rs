@@ -312,19 +312,35 @@ fn parse_tag(src: &str, start: usize) -> Option<Tag> {
 }
 
 fn decode_entities(s: &str) -> String {
-    s.replace("&nbsp;", " ")
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&quot;", "\"")
-        .replace("&#39;", "'")
-        .replace("&#x27;", "'")
-        .replace("&amp;", "&")
+    crate::entities::decode(s)
+}
+
+/// Characters that take no room and have no shape: senders pad the preview line of a mail with them. A font draws them as
+/// empty boxes, so the text view drops them.
+fn is_invisible(c: char) -> bool {
+    matches!(c, '\u{ad}' | '\u{34f}' | '\u{61c}' | '\u{180e}' | '\u{200b}'..='\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2060}'..='\u{2064}' | '\u{2066}'..='\u{206f}' | '\u{feff}')
+}
+
+/// `line` without its invisible characters. A joiner (U+200C, U+200D) between two visible characters stays: it changes how
+/// the letters around it join.
+fn strip_invisible(line: &str) -> String {
+    let chars: Vec<char> = line.chars().collect();
+    let visible = |c: Option<&char>| c.is_some_and(|c| !c.is_whitespace() && !is_invisible(*c));
+    chars
+        .iter()
+        .enumerate()
+        .filter(|&(i, &c)| {
+            !is_invisible(c) || (matches!(c, '\u{200c}' | '\u{200d}') && visible(i.checked_sub(1).and_then(|j| chars.get(j))) && visible(chars.get(i + 1)))
+        })
+        .map(|(_, &c)| c)
+        .collect()
 }
 
 /// Collapses runs of blanks inside each line, keeps at most one blank line in a row and trims the ends.
 fn tidy(s: &str) -> String {
     let mut lines: Vec<String> = Vec::new();
     for line in s.lines() {
+        let line = strip_invisible(line);
         let l = line.split_whitespace().collect::<Vec<_>>().join(" ");
         if l.is_empty() && lines.last().map_or(true, |p| p.is_empty()) {
             continue;
@@ -421,6 +437,22 @@ mod tests {
         assert_eq!(text, "One & two\nThree four");
         assert_eq!(to_text("a<br>b"), "a\nb");
         assert_eq!(to_text("&lt;b&gt; &amp;lt;"), "<b> &lt;");
+    }
+
+    #[test]
+    fn to_text_decodes_named_and_numeric_entities() {
+        assert_eq!(to_text("<p>&bull; Sale &#8226; 20&percnt; off &hellip; &euro;5 &#x2713; caf&eacute;</p>"), "\u{2022} Sale \u{2022} 20% off \u{2026} \u{20ac}5 \u{2713} caf\u{e9}");
+        assert_eq!(to_text("<p>Ap&#243;tekarinn &amp; &Thorn;&oacute;r</p>"), "Ap\u{f3}tekarinn & \u{de}\u{f3}r");
+        assert_eq!(to_text("<p>&unknown; &amp</p>"), "&unknown; &");
+    }
+
+    #[test]
+    fn the_padding_senders_put_in_the_preview_line_is_dropped() {
+        // hair spaces collapse like any space; zero-width characters leave nothing behind
+        assert_eq!(to_text("<div>Hello&#8202;&#8202;&nbsp;&zwnj;&#847;&shy;&#65279; world</div>"), "Hello world");
+        assert_eq!(to_text("<div>&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;</div><p>Body</p>"), "Body");
+        // a joiner between two letters is part of the word
+        assert_eq!(to_text("<p>a&zwj;b</p>"), "a\u{200d}b");
     }
 
     #[test]

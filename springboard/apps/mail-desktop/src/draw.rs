@@ -397,6 +397,8 @@ pub fn sheet_layout(ui: &Ui, w: f32, h: f32, sheet: &Sheet, choices: usize) -> S
     let (note_h, files) = match sheet {
         Sheet::Rules(_, names) => (0.0, names.len()),
         Sheet::Compose(c) => (if c.signature.trim().is_empty() { 0.0 } else { ui.pt(NOTE_PT) }, c.attachments.len()),
+        // Add Account: two lines for the progress of the lookup and what it found
+        Sheet::Setup(_) => (2.0 * ui.pt(NOTE_PT), 0),
         _ => (0.0, 0),
     };
     let choices = match sheet {
@@ -1285,6 +1287,18 @@ impl MailWindow {
             let more = if compose.signature.lines().count() > 1 { " ..." } else { "" };
             let text = fit(ui, &format!("-- {first}{more}"), MAC_FOOTNOTE_PT, Weight::Regular, note[2]);
             put_mid(s, &mut self.labels, ui, &text, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_3.now(), note[0], note[1] + note[3] / 2.0);
+        }
+        if let (Sheet::Setup(_), Some(note)) = (sheet, l.note) {
+            // the progress of the lookup or what it found, else what Add Account does with the address
+            let (text, color) = if self.mail.status.is_empty() {
+                ("Mail finds the servers from your address. Configure Manually lets you enter them.".to_string(), LABEL_3.now())
+            } else {
+                (self.mail.status.clone(), LABEL_2.now())
+            };
+            let line_h = note[3] / 2.0;
+            for (k, line) in wrap(ui, &text, note[2], MAC_FOOTNOTE_PT, Weight::Regular).iter().take(2).enumerate() {
+                put_mid(s, &mut self.labels, ui, line, MAC_FOOTNOTE_PT, Weight::Regular, color, note[0], note[1] + line_h * (k as f32 + 0.5));
+            }
         }
         if let Sheet::Compose(compose) = sheet {
             for (file, (row, remove)) in compose.attachments.iter().zip(&l.files) {

@@ -14,7 +14,19 @@ use std::sync::{Arc, OnceLock, RwLock};
 /// The keyboard system package's emoji font (`is.olibuijr.keyboard`), tried before `PATHS`.
 pub const PACKAGE_FONT: &str = "/data/local/springboard/apps/is.olibuijr.keyboard/current/assets/NotoColorEmoji.ttf";
 
-/// Font files tried after the package font; each is loaded lazily. The system
+/// Emoji fonts of a PC (Arch Linux), tried after the package font: the copy the system assets package carries, then the
+/// one the `noto-fonts-emoji` packages install (a CBDT build, SIL OFL 1.1). Tests do not search them, so what they
+/// check does not depend on the fonts of the machine they run on.
+#[cfg(not(any(test, feature = "testkit")))]
+pub const HOST_PATHS: [&str; 3] = [
+    "/usr/share/springboard/system-assets/NotoColorEmoji.ttf",
+    "/usr/share/fonts/noto/NotoColorEmoji.ttf",
+    "/usr/share/fonts/google-noto-emoji/NotoColorEmoji.ttf",
+];
+#[cfg(any(test, feature = "testkit"))]
+pub const HOST_PATHS: [&str; 0] = [];
+
+/// Font files tried after the host paths; each is loaded lazily. The system
 /// `/system/fonts/NotoColorEmoji.ttf` is COLRv1 (no CBDT tables): it fails to parse and is skipped.
 pub const PATHS: [&str; 2] = ["/system/fonts/NotoColorEmoji.ttf", "/system/fonts/NotoColorEmojiFlags.ttf"];
 
@@ -273,9 +285,14 @@ impl Face {
     }
 }
 
-/// Font files in search order: the package font first, then the `/system` paths.
+/// Font files in search order: the package font first, then the PC's own emoji fonts, then the `/system` paths.
 pub fn search_paths(package_font: &Path) -> Vec<PathBuf> {
-    std::iter::once(package_font.to_path_buf()).chain(PATHS.iter().map(PathBuf::from)).collect()
+    search_paths_in(package_font, &HOST_PATHS)
+}
+
+/// [`search_paths`] with the PC font locations given.
+pub fn search_paths_in(package_font: &Path, host: &[&str]) -> Vec<PathBuf> {
+    std::iter::once(package_font.to_path_buf()).chain(host.iter().chain(PATHS.iter()).map(PathBuf::from)).collect()
 }
 
 /// Parses every readable CBDT font among `paths`, in order.
@@ -345,7 +362,8 @@ pub fn is_emoji_char(c: char) -> bool {
 /// UI font already covers (those stay text).
 pub fn segments<'a>(text: &'a str, has_glyph: &dyn Fn(char) -> bool) -> Vec<(&'a str, bool)> {
     let mut out: Vec<(&str, bool)> = vec![];
-    if !available() || !text.chars().any(|c| is_emoji_char(c) && c as u32 > 0x7F) {
+    // the cheap scan first: the font file is read when a text has an emoji, not by the first text of every process
+    if !text.chars().any(|c| is_emoji_char(c) && c as u32 > 0x7F) || !available() {
         return vec![(text, false)];
     }
     let chars: Vec<(usize, char)> = text.char_indices().collect();
@@ -671,6 +689,29 @@ pub(crate) mod tests {
         std::fs::write(&font, b"not a font").unwrap();
         assert!(load_faces(&search_paths(&font)).is_empty());
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn the_pcs_own_emoji_fonts_come_after_the_package_font_and_before_the_system_paths() {
+        let paths = search_paths_in(Path::new("/pkg/NotoColorEmoji.ttf"), &["/host/a.ttf", "/host/b.ttf"]);
+        let expected: Vec<PathBuf> = ["/pkg/NotoColorEmoji.ttf", "/host/a.ttf", "/host/b.ttf"].iter().chain(PATHS.iter()).map(PathBuf::from).collect();
+        assert_eq!(paths, expected);
+        // a font that exists is found there, whatever the earlier paths hold
+        let dir = std::env::temp_dir().join(format!("system-pkgs-emoji-host-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let font = dir.join("NotoColorEmoji.ttf");
+        std::fs::write(&font, synthetic()).unwrap();
+        let host = font.to_string_lossy().into_owned();
+        let faces = load_faces(&search_paths_in(Path::new("/missing/package.ttf"), &["/missing/host.ttf", &host]));
+        assert_eq!(faces.len(), 1);
+        assert!(faces[0].cluster_glyph("\u{1F600}").is_some());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_text_without_emoji_never_reads_the_font() {
+        // no emoji character: the answer comes before the font is looked for
+        assert_eq!(segments("plain text, \u{e1}\u{f0}", &|_| false), [("plain text, \u{e1}\u{f0}", false)]);
     }
 
     #[test]
