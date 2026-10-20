@@ -432,6 +432,16 @@ pub(super) fn is_known_incompatible(id: &str, exec: &Path) -> bool {
     INCOMPATIBLE.lock().map(|g| g.iter().any(|(i, e)| i == id && e == exec)).unwrap_or(false)
 }
 
+/// Whether an app's request to open a web link goes through: the app must be in front, and the previous link it opened
+/// must be at least a second old (`last` records `t`, the shell clock in ms, when it passes).
+fn open_url_allowed(in_front: bool, last: &mut Option<f64>, t: f64) -> bool {
+    if !in_front || last.is_some_and(|l| t >= l && t - l < 1000.) {
+        return false;
+    }
+    *last = Some(t);
+    true
+}
+
 /// Seals a buffer the app sent against shrinking, then checks it holds at least `bytes`. The order matters: the length
 /// of a file the app can still truncate says nothing, because it can shrink between the check and the seal and leave the
 /// shell with a mapping that runs past the end of the file (SIGBUS on the first blit). After the seal the length can only grow.
@@ -575,6 +585,8 @@ pub struct AppHost {
     /// Guided Access requests (`ToShell::GuidedAccessRequest`: start with restrictions, or end), oldest first, taken by the shell each tick.
     pub guided_requests: Vec<(bool, Vec<bifrost_proto::GuidedRestriction>)>,
     last_notification: Option<f64>,
+    /// When the app last opened a web link (`ToShell::OpenUrl`), so a burst of requests opens one page.
+    last_open_url: Option<f64>,
     /// `ToShell::SuddenTermination`: the app allows being killed with no Quit round trip.
     pub sudden: bool,
     /// `ToShell::Activity`: the union of the app's live `ActivityOptions`; a user-initiated or latency-critical
@@ -715,6 +727,7 @@ impl AppHost {
             custom_rotors: Vec::new(),
             guided_requests: Vec::new(),
             last_notification: None,
+            last_open_url: None,
             badge: String::new(),
             tile: Default::default(),
             dock_menu: Vec::new(),
@@ -2353,7 +2366,9 @@ impl Shell {
                         };
                         h.send(&ToApp::KeychainReply { request, status, value });
                     }
-                    ToShell::OpenUrl { url } => open_url=Some(url),
+                    // a link opens the Browser and takes focus: only the app in front (the one the person is using) may ask,
+                    // and not more than once a second
+                    ToShell::OpenUrl { url } if open_url_allowed(fg == Some(slot as u8), &mut h.last_open_url, t) => open_url=Some(url),
                     ToShell::PlaySystemSound { name } => queue_system_sound(name),
                     r @ ToShell::Share { .. } if fg == Some(slot as u8) => rich_msgs.push((slot as u8, r)),
                     r @ (ToShell::DragBegin { .. } | ToShell::DragRegister { .. } | ToShell::DragReply { .. } | ToShell::DragPerformed { .. } | ToShell::DragCancel { .. }) => rich_msgs.push((slot as u8, r)),
@@ -2718,6 +2733,16 @@ mod tests {
         host.handle(ToShell::Buffers{w:8,h:6,generation:2},vec![sys::shm_create("resize-c",192).unwrap(),sys::shm_create("resize-d",192).unwrap()],&mut pumped);
         host.handle(ToShell::Frame{buf:0,damage:vec![[0,0,8,6]]},vec![],&mut pumped);
         assert_eq!(host.frame().map(|(_,w,h)|(w,h)),Some((8,6)));
+    }
+
+    #[test]
+    fn a_web_link_comes_only_from_the_app_in_front_once_a_second() {
+        let mut last = None;
+        assert!(!open_url_allowed(false, &mut last, 0.), "a background app cannot open a page");
+        assert_eq!(last, None, "a refused request does not start the wait");
+        assert!(open_url_allowed(true, &mut last, 5000.));
+        assert!(!open_url_allowed(true, &mut last, 5500.), "a second request within a second is dropped");
+        assert!(open_url_allowed(true, &mut last, 6000.));
     }
 
     #[test]
