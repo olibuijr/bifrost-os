@@ -9,7 +9,7 @@
 use super::control_center::Frost;
 use super::prefs::Prefs;
 use super::ui::{Ui, Weight, WHITE};
-use super::weather::data::Summary;
+use super::weather::data::{Hour, Store, Summary};
 use super::widgets::{self, battery, calendar, clock, deildu, photos, terminal, weather, wifi, Kind, SMALL_PT};
 use super::Info;
 use crate::deildu::scroll::Scroller;
@@ -170,9 +170,12 @@ pub struct Today {
     mono: Font<'static>,
     deildu_dir: PathBuf,
     thumbs_dir: PathBuf,
-    weather_dir: PathBuf,
+    /// the shell's data root; the Weather package's folder under it is found on each refresh (`weather::data_dir_in`)
+    weather_root: PathBuf,
     /// the Weather app's saved summary, None until it has run
     weather: Option<Summary>,
+    /// the next hours of the summary's place, empty when none were saved or they are stale
+    weather_hours: Vec<Hour>,
     last_refresh: f64,
     /// Smart Stack: the shown member and the finger's vertical pull (px)
     stack: usize,
@@ -209,8 +212,9 @@ impl Today {
             mono: Font::parse(mono).expect("mono font"),
             deildu_dir: crate::deildu::data_dir(),
             thumbs_dir: photos::thumbs_dir().into(),
-            weather_dir: super::weather::data_path().into(),
+            weather_root: super::apphost::root(),
             weather: None,
+            weather_hours: Vec::new(),
             last_refresh: f64::NEG_INFINITY,
             stack: 0,
             stack_dy: 0.0,
@@ -221,7 +225,7 @@ impl Today {
     /// title from `<dir>/today.ini`; saves there from now on.
     pub fn load(&mut self, dir: &str) {
         self.prefs = Prefs::load(format!("{dir}/{PREFS_FILE}"));
-        self.weather_dir = PathBuf::from(dir).join("appdata/is.olibuijr.weather");
+        self.weather_root = PathBuf::from(dir);
         self.read_prefs();
     }
 
@@ -310,6 +314,27 @@ impl Today {
         self.weather.as_ref()
     }
 
+    /// The next hours at the summary's place, the current hour first; empty when the Weather service has saved none.
+    pub fn weather_hours(&self) -> &[Hour] {
+        &self.weather_hours
+    }
+
+    /// Sets the summary and hours directly (tests, previews).
+    #[cfg(test)]
+    pub(crate) fn set_weather(&mut self, summary: Option<Summary>, hours: Vec<Hour>) {
+        self.weather = summary;
+        self.weather_hours = hours;
+    }
+
+    /// Reads the summary and its hours the Weather service saved, from the installed package's folder.
+    fn load_weather(&mut self) -> bool {
+        let dir = super::weather::data_dir_in(&self.weather_root);
+        let (before, before_hours) = (self.weather.clone(), std::mem::take(&mut self.weather_hours));
+        self.weather = Summary::load(&dir);
+        self.weather_hours = self.weather.as_ref().map(|s| Store::new(&dir).load_glance(&s.place)).unwrap_or_default();
+        before != self.weather || before_hours != self.weather_hours
+    }
+
     pub fn played(&self) -> Option<&deildu::Played> {
         self.played.as_ref()
     }
@@ -354,9 +379,7 @@ impl Today {
     /// Re-renders every tile whose data changed; true if any did.
     pub fn refresh(&mut self, ui: &Ui, src: &Sources, t: f64) -> bool {
         self.last_refresh = t;
-        let before = self.weather.clone();
-        self.weather = Summary::load(&self.weather_dir);
-        let mut changed = before != self.weather;
+        let mut changed = self.load_weather();
         let weather_now = self.weather.clone();
         let mut update = |kind: Kind, key: String, tiles: &mut HashMap<Kind, Image>, keys: &mut HashMap<Kind, String>, render: &mut dyn FnMut() -> Option<Image>| {
             if keys.get(&kind) == Some(&key) {
@@ -1091,5 +1114,33 @@ pub(crate) mod tests {
         t.moved(cx, cy + 40.0, 210.0);
         t.draw(&mut Surface { w: W as usize, h: H as usize, stride: W as usize, px: &mut buf, y0: 0 }, &l, -(W as f32));
         assert!(describe(&t).starts_with("today_editing=true"));
+    }
+
+    /// E2E NC2: the PC Weather package saves under its own id, and the card's summary and hours come from there;
+    /// with nothing saved (or another place's hours) there is no summary and no hours, never invented ones.
+    #[test]
+    fn the_weather_card_reads_the_installed_packages_summary_and_hours() {
+        use crate::shell::weather::data::{Hour, Store, Summary, Units};
+        let root = std::env::temp_dir().join(format!("bifrost-today-weather-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let (_, mut t) = today();
+        t.weather_root = root.clone();
+        assert!(!t.load_weather(), "nothing saved: nothing to show");
+        assert!(t.weather().is_none() && t.weather_hours().is_empty());
+        let dir = root.join("appdata").join(crate::shell::weather::APP_IDS[0]);
+        let store = Store::new(&dir);
+        let sum = Summary { place: "Reykjav\u{ed}k".into(), temp: 6.0, code: 3, day: true, max: 8.0, min: 2.0, units: Units::Celsius };
+        store.save_summary(&sum);
+        assert!(t.load_weather());
+        assert_eq!(t.weather(), Some(&sum), "the summary is read from the .desktop package's folder");
+        assert!(t.weather_hours().is_empty(), "a summary alone has no hours");
+        store.save_glance("Oslo", &[Hour::basic("14", 5.0, 3, true)]);
+        assert!(t.weather_hours().is_empty() && !t.load_weather(), "hours of another place are not shown");
+        store.save_glance(&sum.place, &[Hour::basic("14", 5.0, 3, true), Hour::basic("15", 4.0, 61, true)]);
+        assert!(t.load_weather());
+        let labels: Vec<&str> = t.weather_hours().iter().map(|h| h.label.as_str()).collect();
+        assert_eq!(labels, ["14", "15"]);
+        assert!(!t.load_weather(), "unchanged data is not a change");
+        let _ = std::fs::remove_dir_all(&root);
     }
 }
