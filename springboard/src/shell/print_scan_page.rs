@@ -29,9 +29,13 @@ pub struct View {
 }
 
 impl View {
+    /// Reads the printers and the scanners. Always returns a view: a read that panics or runs too long is an error
+    /// on the page, never a page left on "Loading…".
     pub fn load() -> View {
-        let v = View::from_result(Client::local().printers().map_err(|e| e.to_string()))
-            .with_scanners(scanner::list().map_err(|e| e.to_string()));
+        let printers = std::panic::catch_unwind(|| Client::local().printers().map_err(|e| e.to_string()))
+            .unwrap_or_else(|_| Err("the printer list could not be read".to_string()));
+        let scanners = bounded(SCAN_WAIT, || scanner::list().map_err(|e| e.to_string()));
+        let v = View::from_result(printers).with_scanners(scanners);
         // the page says it plainly; the reason goes to the log
         if let Some(e) = &v.error {
             bifrost_core::log::shell_logger("print").notice(format!("printing service unavailable: {e}"));
@@ -59,6 +63,18 @@ impl View {
         }
         self
     }
+}
+
+/// How long the page waits for `scanimage -L` (it can sit on a network scan) before it shows the page without scanners.
+const SCAN_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Runs `read` on its own thread and waits at most `wait` for the answer; a read that is slower or panics is an error.
+fn bounded<T: Send + 'static>(wait: std::time::Duration, read: impl FnOnce() -> Result<T, String> + Send + 'static) -> Result<T, String> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = tx.send(read());
+    });
+    rx.recv_timeout(wait).unwrap_or_else(|_| Err("the read took too long".to_string()))
 }
 
 /// The state a printer's row shows.
@@ -229,6 +245,45 @@ mod tests {
         let g = groups(&View::from_result(Ok(vec![])));
         assert_eq!(g[0].items[0].label, "No Printers");
         assert_eq!(g[1].items[0].action, Action::PrintScan(Edit::Add));
+    }
+
+    fn labels(spec: &Spec) -> Vec<String> {
+        spec.groups.iter().flat_map(|g| g.items.iter().map(|i| format!("{} {}", i.label, i.value))).collect()
+    }
+
+    #[test]
+    fn an_empty_list_shows_no_printers_and_the_add_row_never_loading() {
+        let v = View::from_result(Ok(vec![]));
+        let spec = spec(Some(&v));
+        let all = labels(&spec);
+        assert!(all.iter().any(|l| l.starts_with("No Printers")), "{all:?}");
+        assert!(all.iter().any(|l| l.starts_with("Add Printer")), "{all:?}");
+        assert!(!all.iter().any(|l| l.contains("Loading")), "{all:?}");
+    }
+
+    #[test]
+    fn an_error_shows_the_plain_message_never_loading() {
+        let v = View::from_result(Err("printing service refused the request (IPP status 0x0500)".into()));
+        let spec = spec(Some(&v));
+        assert!(!labels(&spec).iter().any(|l| l.contains("Loading")));
+        assert_eq!(spec.groups[0].footer.as_deref(), Some(NOT_RUNNING));
+    }
+
+    #[test]
+    fn only_before_the_first_read_lands_the_page_says_loading() {
+        assert!(labels(&spec(None)).iter().any(|l| l.contains("Loading")));
+    }
+
+    #[test]
+    fn a_slow_or_panicking_read_is_an_error_not_a_wait_forever() {
+        let slow = bounded(std::time::Duration::from_millis(20), || {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            Ok::<u8, String>(1)
+        });
+        assert!(slow.is_err());
+        let panics = bounded(std::time::Duration::from_secs(2), || -> Result<u8, String> { panic!("boom") });
+        assert!(panics.is_err());
+        assert_eq!(bounded(std::time::Duration::from_secs(2), || Ok::<u8, String>(3)), Ok(3));
     }
 
     #[test]

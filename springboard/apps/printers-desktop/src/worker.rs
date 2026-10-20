@@ -271,6 +271,18 @@ mod tests {
     }
 
     #[test]
+    fn a_scheduler_with_no_printers_lists_an_empty_set_not_an_error() {
+        // fresh install: no default, no printers, no pools: each list operation answers client-error-not-found
+        let sent = Rc::new(RefCell::new(Vec::new()));
+        let replies = vec![reply(ipp::STATUS_NOT_FOUND, 1, vec![]), reply(ipp::STATUS_NOT_FOUND, 2, vec![]), reply(ipp::STATUS_NOT_FOUND, 3, vec![])];
+        let mut client = Client::new(Canned { replies: replies.into(), sent });
+        match handle(&mut client, Request::List { printer: None }) {
+            Reply::Listed { printers, jobs, .. } => assert!(printers.is_empty() && jobs.is_empty()),
+            other => panic!("expected an empty listing, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn an_address_the_scheduler_does_not_take_is_refused_before_any_request() {
         let sent = Rc::new(RefCell::new(Vec::new()));
         let mut client = Client::new(Canned { replies: VecDeque::new(), sent: sent.clone() });
