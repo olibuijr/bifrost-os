@@ -122,12 +122,16 @@ struct ClientRec {
 }
 
 /// IO procedures one connection may hold (each is a pinned shared-memory region).
-pub const MAX_SLOTS_PER_CLIENT: usize = 8;
+/// The PulseAudio-protocol compat daemon is a multiplexing client: it holds one connection and adds one
+/// IO procedure per desktop-app stream, so the cap must fit a busy desktop (many tabs, music, a call).
+pub const MAX_SLOTS_PER_CLIENT: usize = 32;
 /// IO procedures across all clients.
 pub const MAX_SLOTS_TOTAL: usize = 128;
-/// Real-time threads one connection may have, and all connections together.
-pub const MAX_PROMOTED: usize = 8;
-pub const MAX_PROMOTED_TOTAL: usize = 64;
+/// Real-time threads one connection may have, and all connections together. Each IO procedure has its own
+/// IO thread that joins the workgroup, so the per-connection cap follows `MAX_SLOTS_PER_CLIENT` (the compat
+/// daemon multiplexes many streams over one connection) and the total follows `MAX_SLOTS_TOTAL`.
+pub const MAX_PROMOTED: usize = 32;
+pub const MAX_PROMOTED_TOTAL: usize = 128;
 /// Open connections; further ones are closed at accept.
 pub const MAX_CONNECTIONS: usize = 64;
 /// The longest client name kept (and logged).
@@ -1234,6 +1238,16 @@ mod tests {
         // another connection is not affected by the first one's count
         hello(&mut c, 2, false);
         add(&mut c, 2, 256);
+    }
+
+    #[test]
+    fn a_multiplexing_client_fits_and_every_io_thread_can_be_promoted() {
+        // The compat daemon holds one connection with an IO procedure (and IO thread) per desktop stream.
+        assert!(MAX_SLOTS_PER_CLIENT >= 32);
+        assert!(MAX_PROMOTED >= MAX_SLOTS_PER_CLIENT);
+        // Four busy clients still fit under the global bounds.
+        assert!(MAX_SLOTS_TOTAL >= 4 * MAX_SLOTS_PER_CLIENT);
+        assert!(MAX_PROMOTED_TOTAL >= 4 * MAX_PROMOTED);
     }
 
     #[test]
