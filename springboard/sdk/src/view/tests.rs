@@ -883,9 +883,6 @@ fn window_undo_titles_follow_the_action_name() {
 
 // ---- The standard text-editing keys in a focused field ----
 
-/// The tests that read the shared clipboard take turns (it is one per process outside the render crate's own tests).
-static CLIPBOARD_TURN: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
 fn key_chord(w: &mut Window<Model>, m: &mut Model, key: u32, mods: u32) {
     w.event(&ViewEvent::Key(KeyInput::chord(key, mods)), m);
 }
@@ -901,7 +898,7 @@ fn field_state(w: &Window<Model>, id: u64) -> (String, usize, usize) {
 /// Down 108, Home 102, End 107, Page Up 104, Page Down 109.
 #[test]
 fn the_standard_text_keys_act_in_a_focused_field() {
-    let _turn = CLIPBOARD_TURN.lock().unwrap_or_else(|e| e.into_inner());
+    let _turn = bifrost_render::clipboard::tests::exclusive();
     use crate::proto::{CHORD_ALT, CHORD_CTRL, CHORD_META, CHORD_SHIFT};
     let (mut w, id) = focused_field("hello big world");
     let mut m = Model::default();
@@ -992,7 +989,7 @@ fn the_standard_text_keys_act_in_a_focused_field() {
 /// become) go down the responder chain to the focused field.
 #[test]
 fn the_standard_commands_reach_the_focused_field_through_the_responder_chain() {
-    let _turn = CLIPBOARD_TURN.lock().unwrap_or_else(|e| e.into_inner());
+    let _turn = bifrost_render::clipboard::tests::exclusive();
     let (mut w, id) = focused_field("one two");
     let mut m = Model::default();
     assert!(w.send(action_for(Command::SelectAll), &mut m).is_some(), "Select All is taken by the field");

@@ -33,3 +33,5 @@ path = "src/bin/bifrost-log.rs"
 
 [dev-dependencies]
 tempfile = "3"
+# the test lock of the process-wide clipboard: tests that read it take turns and start it empty
+bifrost-render = { path = "../render", features = ["testkit"] }

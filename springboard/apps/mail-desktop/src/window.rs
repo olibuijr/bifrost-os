@@ -3013,8 +3013,13 @@ impl MailWindow {
     }
 
     /// True when the field that takes typed text is not for typing: the From picker (a tap changes it) and the activity list.
+    /// Which standard editing commands can act right now, for the Edit menu: see `edit_enabled`.
+    pub fn edit_enabled(&self) -> (bool, bool, bool, bool) {
+        edit_enabled(&self.mail)
+    }
+
     fn focus_is_picker(&self) -> bool {
-        self.mail.sheet.as_ref().map(Sheet::form).is_some_and(|form| form.fields.get(form.focus).is_some_and(|f| f.label == "From" || f.label == "Activity" || f.choice))
+        picker_focused(&self.mail)
     }
 
     fn form_mut(&mut self) -> Option<&mut crate::state::Form> {
@@ -3172,6 +3177,24 @@ fn read_file(file: &mut std::fs::File, size: u64, limit: usize) -> Result<Vec<u8
     Ok(bytes)
 }
 
+/// True when the open sheet's focused field is a picker (From, Activity or a choice): it takes no typed text.
+fn picker_focused(mail: &Mail) -> bool {
+    mail.sheet.as_ref().map(Sheet::form).is_some_and(|form| form.fields.get(form.focus).is_some_and(|f| f.label == "From" || f.label == "Activity" || f.choice))
+}
+
+/// Which standard editing commands can act right now, for the Edit menu: `(select_all, copy, cut, paste)`. Select All needs
+/// a sheet's text field with text in it; Copy and Cut need a selection in a field that is not secret; Paste needs a field
+/// that takes typed text, or the find bar of an open message.
+fn edit_enabled(mail: &Mail) -> (bool, bool, bool, bool) {
+    let Some(form) = mail.sheet.as_ref().map(Sheet::form) else {
+        return (false, false, false, mail.open.is_some() && mail.find.is_some());
+    };
+    let typed = !picker_focused(mail);
+    let has_text = typed && form.fields.get(form.focus).is_some_and(|f| !f.value.is_empty());
+    let selected = typed && form.selected_text().is_some();
+    (has_text, selected, selected, typed)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3183,6 +3206,30 @@ mod tests {
         assert_eq!(menu_index(MENU_MOVE_BASE + 99, MENU_MOVE_BASE), None);
         assert_eq!(menu_index(MENU_REPLY, MENU_MOVE_BASE), None);
         assert_eq!(menu_index(MENU_COPY_BASE + 3, MENU_MOVE_BASE), None, "the next range is not this one");
+    }
+
+    #[test]
+    fn the_edit_commands_are_enabled_only_while_they_can_act() {
+        fn form(mail: &mut Mail) -> &mut crate::state::Form {
+            match mail.sheet.as_mut() {
+                Some(Sheet::Setup(form)) => form,
+                _ => panic!("no setup sheet"),
+            }
+        }
+        let mut mail = Mail::new(Vec::new());
+        assert_eq!(edit_enabled(&mail), (false, false, false, false), "no sheet: nothing to edit");
+        mail.open_setup();
+        form(&mut mail).focus_on(0);
+        assert_eq!(edit_enabled(&mail), (false, false, false, true), "an empty field takes a paste and nothing else");
+        form(&mut mail).type_text("Ana");
+        assert_eq!(edit_enabled(&mail), (true, false, false, true), "text to select, nothing selected yet");
+        form(&mut mail).select_all();
+        assert_eq!(edit_enabled(&mail), (true, true, true, true), "a selection can be copied and cut");
+        // a password is never copied or cut
+        form(&mut mail).focus_on(3);
+        form(&mut mail).type_text("hunter2");
+        form(&mut mail).select_all();
+        assert_eq!(edit_enabled(&mail), (true, false, false, true), "a secret field gives nothing up");
     }
 
     #[test]

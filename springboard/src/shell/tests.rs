@@ -2961,6 +2961,8 @@
         assert_eq!(pressed(&mut keys,&[125,42],44),Some(Shortcut::Redo),"Shift+Cmd+Z");
         // Ctrl+A is Select All as a shortcut; the binary withholds it from an SDK app, which gets the chord (the line start)
         assert_eq!(pressed(&mut keys,&[29],30),Some(Shortcut::SelectAll));
+        // Ctrl+Y is still Redo in the table, and the binary withholds it from an SDK app the same way, where it is the yank
+        assert_eq!(pressed(&mut keys,&[29],21),Some(Shortcut::Redo));
         assert!(sh.sdk_app_front());
         assert!(sh.hw_chord(30,CHORD_CTRL));
         assert_eq!(sent(),vec![ToApp::Key(KeyInput::chord(30,CHORD_CTRL))]);
@@ -2977,6 +2979,23 @@
         assert_eq!(sent(),vec![ToApp::Key(KeyInput::chord(106,CHORD_ALT))]);
         assert!(sh.hw_nav(102,0),"Home alone, too");
         assert_eq!(sent(),vec![ToApp::Key(KeyInput::chord(102,0))]);
+        // Search open over the app: it takes the typing, so Delete and Option+Backspace never reach the hidden document
+        assert!(!sh.shell_takes_typing());
+        sh.open_quicksearch_hw(10.0);
+        let h=sh.h as i32;
+        sh.quicksearch.tick(&sh.ui,h,12_000.0);
+        assert!(sh.quicksearch.is_shown() && sh.shell_takes_typing());
+        assert!(sh.sdk_app_front() && sh.ext_text_focused());
+        assert!(!sh.hw_nav(111,0),"forward Delete stays with Search");
+        assert!(!sh.hw_chord(14,CHORD_ALT),"Option+Backspace stays with Search");
+        assert!(!sh.hw_chord(30,CHORD_CTRL),"Ctrl+A stays with Search");
+        assert!(sent().is_empty(),"nothing reached the app behind Search");
+        sh.quicksearch.hide();
+        let h=sh.h as i32;
+        sh.quicksearch.tick(&sh.ui,h,24_000.0);
+        assert!(!sh.shell_takes_typing());
+        assert!(sh.hw_nav(111,0),"with Search closed the field takes it again");
+        let _=sent();
         // the shell's own screens take none of it
         sh.screen=Screen::Home;
         assert!(!sh.sdk_app_front());

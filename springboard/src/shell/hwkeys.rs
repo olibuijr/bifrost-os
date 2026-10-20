@@ -819,6 +819,37 @@ impl Shell {
         self.overview_key(code, down, mods, t)
     }
 
+    /// True while a layer of the shell itself takes the typing (`hw_type` serves it before any app): the sheets for
+    /// authentication, volumes, packages and network login (and the access, USB and firewall prompts, which swallow keys),
+    /// the Apps grid, an open or save panel, the compose sheet, the character viewer, the help viewer, Search and the
+    /// assistant. The app behind such a layer must not get the keys as chords, and the layer's own field gets them.
+    pub fn shell_takes_typing(&self) -> bool {
+        self.auth_showing()
+            || self.volume_showing()
+            || self.package_showing()
+            || self.net_auth_showing()
+            || self.access_showing()
+            || self.usb_showing()
+            || self.fw_showing()
+            || self.overview.grid.visible()
+            || self.doc_panel_open()
+            || self.compose_showing()
+            || self.char_viewer.is_some()
+            || self.quicksearch.is_shown()
+            || self.assistant.is_shown()
+            || self.help_viewer.is_some()
+    }
+
+    #[cfg(feature = "desktop-wayland")]
+    fn doc_panel_open(&self) -> bool {
+        self.doc_panel.is_some()
+    }
+
+    #[cfg(not(feature = "desktop-wayland"))]
+    fn doc_panel_open(&self) -> bool {
+        false
+    }
+
     /// Types a physical-keyboard key into the terminal, a hosted app's text field or the focused
     /// native text field of the app on screen (Search, Browser, Settings, Files, Deildu); elsewhere it is ignored. The effects are the field's (a Wi-Fi join, say).
     /// A Ctrl or Cmd chord the shell did not take goes to the external app in front. False when
@@ -827,6 +858,10 @@ impl Shell {
         // Option+Cmd+D (KEY_D): Automatically Hide and Show for the dock
         if code == 32 && mods == (CHORD_META | CHORD_ALT) && self.dock_toggle_autohide() {
             return true;
+        }
+        // a shell layer that takes the typing keeps its keys from the app behind it
+        if self.shell_takes_typing() {
+            return false;
         }
         if !self.screen_on || !matches!(self.screen, Screen::App(AppId::External(_))) {
             return false;
@@ -838,7 +873,7 @@ impl Shell {
     /// or any SDK app with a text field focused (it reported the field's caret), gets it as a chord on the evdev key. False
     /// when the app in front is not one (or no app is), so the key goes on as an ordinary arrow.
     pub fn hw_nav(&mut self, code: u16, mods: u32) -> bool {
-        if !self.screen_on {
+        if !self.screen_on || self.shell_takes_typing() {
             return false;
         }
         let Screen::App(AppId::External(slot)) = self.screen else { return false };

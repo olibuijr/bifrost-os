@@ -135,8 +135,8 @@ pub fn named_key(name: &str) -> Option<u32> {
         "Escape" => KEY_ESC,
         "Tab" => KEY_TAB,
         "Up" => 103,
-        "Left" => 105,
-        "Right" => 106,
+        "Left" | "ShiftLeft" => 105,
+        "Right" | "ShiftRight" => 106,
         "Down" => 108,
         _ => return None,
     })
@@ -311,6 +311,13 @@ mod input_method_tests {
     #[test]
     fn backspace_without_known_text_is_a_key() {
         assert_eq!(outs_for(&field("", 0, 0), &Out::Backspace), vec![ImOut::Key(KEY_BACKSPACE)]);
+    }
+
+    #[test]
+    fn shift_with_an_arrow_moves_the_caret_for_an_input_method_as_the_plain_arrow_does() {
+        assert_eq!(named_key("ShiftLeft"), named_key("Left"));
+        assert_eq!(named_key("ShiftRight"), named_key("Right"));
+        assert!(named_key("ShiftLeft").is_some());
     }
 
     #[test]

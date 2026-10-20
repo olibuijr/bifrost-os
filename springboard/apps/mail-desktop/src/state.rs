@@ -368,9 +368,16 @@ impl Compose {
         }
         let before = self.message().chars().count();
         self.styles.resize(before, Style::default());
+        // a change over the selected message (typing, a paste) replaces all of it: none of the old runs' styles survive
+        let replacing = self.form.selected();
+        let old = replacing.then(|| self.message().to_string());
         change(&mut self.form);
         let after = self.message().chars().count();
-        if after > before {
+        if old.is_some_and(|old| old != self.message()) {
+            let typing = self.typing;
+            self.styles.clear();
+            self.styles.extend(std::iter::repeat(typing).take(after));
+        } else if after > before {
             let typing = self.typing;
             self.styles.extend(std::iter::repeat(typing).take(after - before));
         } else {
@@ -3187,6 +3194,23 @@ mod tests {
         compose.edit(|form| form.type_text("é"));
         assert_eq!(compose.styles.len(), 4, "styles count characters, not bytes");
         assert!(!compose.styles[3].bold && compose.styles[3].italic);
+    }
+
+    #[test]
+    fn typing_over_the_selected_message_starts_with_the_style_being_typed_in_not_the_old_runs() {
+        let mut compose = message_compose("");
+        compose.toggle_bold();
+        compose.edit(|form| form.type_text("abc"));
+        assert!(compose.styles.iter().all(|s| s.bold));
+        compose.toggle_bold();
+        compose.edit(|form| {
+            form.select_all();
+        });
+        assert_eq!(compose.styles.len(), 3, "selecting changes no style");
+        assert!(compose.styles.iter().all(|s| s.bold));
+        compose.edit(|form| form.type_text("wxyz"));
+        assert_eq!(compose.message(), "wxyz");
+        assert_eq!(compose.styles, vec![Style::default(); 4], "no bold carries over from the replaced text");
     }
 
     #[test]

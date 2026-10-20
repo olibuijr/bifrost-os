@@ -113,7 +113,9 @@ impl App for MailApp {
 
     fn commands(&self, _ctx: &Ctx) -> Commands {
         // the fields of a sheet take the standard editing commands; the keyboard sends them as commands when the app says it takes them
-        Commands::default().with(Command::Paste, true).with(Command::SelectAll, true).with(Command::Copy, true).with(Command::Cut, true)
+        // each one enabled only while it can act (HIG: disable what cannot)
+        let (select_all, copy, cut, paste) = self.window.as_ref().map_or((false, false, false, false), |mail| mail.edit_enabled());
+        Commands::default().with(Command::Paste, paste).with(Command::SelectAll, select_all).with(Command::Copy, copy).with(Command::Cut, cut)
     }
 
     fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
