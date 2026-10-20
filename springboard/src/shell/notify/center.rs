@@ -9,7 +9,7 @@ use super::super::control_center::Frost;
 use super::super::services::widgets_timeline::{self, Listing, Row};
 use super::super::gestures::{ease_out_quartic, progress, Drag, SPRING_MS};
 use super::super::ui::{centred, Weight, WHITE};
-use super::super::{apps, AppId, Effect, Event, Screen, Shell};
+use super::super::{apphost, apps, AppId, Effect, Event, Screen, Shell, IN_DOCK};
 use bifrost_ui::material_request::ShellSurface;
 use bifrost_ui::widget_kind::Family;
 use super::list::{Hit, ListView, Mode, Slide, CARD_W_PT};
@@ -74,11 +74,15 @@ pub struct Center {
     /// the unix second from which the column's widget text is redrawn: live date text changes, and a toggle waits for
     /// its app (`widgets_timeline::next_refresh`)
     refresh_due: i64,
+    /// the apps' icons at the column's card size, rendered when the column opens
+    icons: Vec<(AppId, Option<Image>)>,
+    /// the icon of an app that provides a widget row (by package id); None when the app has none
+    widget_icons: Vec<(String, Option<Image>)>,
 }
 
 impl Default for Center {
     fn default() -> Self {
-        Center { state: State::Hidden, touch: None, revealed: None, backdrop: None, list: None, list_key: (u32::MAX, 0), scroll: Scroller::new(), title: None, empty: None, desk_press: None, editing: false, configuring: None, refresh_due: 0 }
+        Center { state: State::Hidden, touch: None, revealed: None, backdrop: None, list: None, list_key: (u32::MAX, 0), scroll: Scroller::new(), title: None, empty: None, desk_press: None, editing: false, configuring: None, refresh_due: 0, icons: Vec::new(), widget_icons: Vec::new() }
     }
 }
 
@@ -434,9 +438,13 @@ impl Shell {
 // more; the card's disc clears that app, the title's clears all, a click on a
 // card opens its app, a click elsewhere closes the column.
 //
-// Widget area (services/widgets_timeline.rs): under the title, one row per widget entry or live activity on screen,
-// 58 pt (Small), 77 pt (Medium) or 96 pt (Large) high by the family the person chose, 10 apart, above the
-// notification cards, stacked by `bifrost_ui::widget_column::flow`. An entry's buttons and toggles sit at the row's
+// The column is 0.245 of the screen wide (never under 342 pt). Order, top to bottom: the title, the notification cards
+// (app icon, name, title, body), a row of Calendar and Weather cards, the widget rows, and the Edit Widgets capsule
+// with a round close button beside it.
+//
+// Widget area (services/widgets_timeline.rs): under the cards, one row per widget entry or live activity on screen,
+// 58 pt (Small), 77 pt (Medium) or 96 pt (Large) high by the family the person chose, 10 apart,
+// stacked by `bifrost_ui::widget_column::flow`. An entry's buttons and toggles sit at the row's
 // trailing edge; a tap runs the app's intent over its control socket.
 
 const NC_WIDGET_PT: f32 = 58.0;
@@ -455,7 +463,21 @@ const NC_DONE_PT: f32 = 64.0;
 const NC_DISC_PT: f32 = 24.0;
 const NC_CHIP_W_PT: f32 = 56.0;
 const NC_CHIP_GAP_PT: f32 = 6.0;
+/// the column never gets narrower than the measured 342 pt, and is this share of the screen width on a wide screen
+/// (the reference column is 0.245 of its screen)
 const NC_W_PT: f32 = 342.0;
+const NC_W_FRAC: f32 = 0.245;
+/// the app icon on a notification card, and the one on a widget row, with the gap before the text
+const NC_ICON_PT: f32 = 40.0;
+const NC_ROW_ICON_PT: f32 = 32.0;
+const NC_ICON_GAP_PT: f32 = 10.0;
+/// a Calendar or Weather card under the notifications
+const NC_INFO_PT: f32 = 104.0;
+/// the Edit Widgets capsule's width and the gap to the round close button beside it (the button is NC_EDIT_PT wide)
+const NC_EDIT_W_PT: f32 = 104.0;
+const NC_EDIT_GAP_PT: f32 = 8.0;
+/// the radius of the weather glyph at the top right of the Weather card
+const NC_WEATHER_GLYPH_R_PT: f32 = 14.0;
 const NC_RIGHT_PT: f32 = 18.0;
 const NC_TOP_GAP_PT: f32 = 6.0;
 const NC_TITLE_PT: f32 = 32.0;
@@ -476,6 +498,10 @@ enum DeskHit {
     Close(usize),
     /// the Edit Widgets capsule at the foot of the column
     EditWidgets,
+    /// the round close button beside it: puts the column away
+    CloseCenter,
+    /// the Calendar or Weather card under the notifications
+    Info(InfoCard),
     /// the gallery's Done
     Done,
     /// the gallery row's add or remove disc (index into the gallery listing)
@@ -490,6 +516,23 @@ enum DeskHit {
     Widget(usize),
     /// a button or toggle on a widget row (row index into `center_widget_rects`, button index)
     Action(usize, usize),
+}
+
+/// The cards the column shows from what the shell already has: today's date, and the Weather app's saved place.
+#[derive(Clone, Copy, PartialEq)]
+enum InfoCard {
+    Calendar,
+    Weather,
+}
+
+impl InfoCard {
+    /// The package ids of the app a tap on the card opens, the PC package first and the bare (tablet) id as the fallback.
+    fn app_ids(self) -> [&'static str; 2] {
+        match self {
+            InfoCard::Calendar => [super::super::services::calendar::STORE_APP, "is.olibuijr.calendar"],
+            InfoCard::Weather => ["is.olibuijr.weather.desktop", "is.olibuijr.weather"],
+        }
+    }
 }
 
 /// One gallery row: (index in the listing, row rect, add/remove disc, the size chips the widget supports with the size
@@ -508,19 +551,65 @@ fn within((x, y, w, h): R4, px: f32, py: f32) -> bool {
 }
 
 impl Shell {
+    /// The column's width: the reference's share of the screen, never narrower than the measured width.
+    fn center_w(&self) -> f32 {
+        (self.w as f32 * NC_W_FRAC).max(self.ui.pt(NC_W_PT))
+    }
+
+    /// Where the content under the notification cards starts: under the last card (and its stack edge), or under the
+    /// title when there are none.
+    fn center_flow_top(&self) -> f32 {
+        let (title, _, cards) = self.center_desk_layout();
+        let groups = self.visible_groups(Mode::Center);
+        match cards.last() {
+            Some(&(i, r, _)) => {
+                let stack = if groups.get(i).is_some_and(|g| g.items.len() > 1) { self.ui.pt(NC_STACK_PT) } else { 0.0 };
+                r.1 + r.3 + stack + self.ui.pt(NC_GAP_PT)
+            }
+            None => title.1 + title.3,
+        }
+    }
+
+    /// The Calendar and, with a saved forecast, Weather cards: one row under the notifications, sharing the width.
+    fn center_info_rects(&self) -> Vec<(InfoCard, R4)> {
+        let ui = &self.ui;
+        let (w, gap) = (self.center_w(), ui.pt(NC_GAP_PT));
+        let x = self.w as f32 - ui.pt(NC_RIGHT_PT) - w;
+        let (y, h) = (self.center_flow_top(), ui.pt(NC_INFO_PT));
+        // the cards must end above the Edit Widgets capsule's slot, or the capsule would overlap them and win the tap
+        if y + h + ui.pt(NC_EDIT_TOP_PT) + ui.pt(NC_EDIT_PT) > self.h as f32 - ui.pt(NC_BOTTOM_PT) {
+            return vec![];
+        }
+        let mut kinds = vec![InfoCard::Calendar];
+        if self.today.weather().is_some() {
+            kinds.push(InfoCard::Weather);
+        }
+        let cw = (w - gap * (kinds.len() - 1) as f32) / kinds.len() as f32;
+        kinds.into_iter().enumerate().map(|(i, k)| (k, (x + i as f32 * (cw + gap), y, cw, h))).collect()
+    }
+
+    /// Where the column's content ends: the lowest edge of the title, cards, info cards and widget rows.
+    fn center_content_end(&self) -> f32 {
+        let (title, _, cards) = self.center_desk_layout();
+        let groups = self.visible_groups(Mode::Center);
+        let stack = |i: usize| if groups.get(i).is_some_and(|g| g.items.len() > 1) { self.ui.pt(NC_STACK_PT) } else { 0.0 };
+        let below = |r: &R4| r.1 + r.3;
+        let cards = cards.iter().map(|&(i, r, _)| below(&r) + stack(i));
+        let info = self.center_info_rects().into_iter().map(|(_, r)| below(&r));
+        let widgets = self.center_widget_rects().into_iter().map(|(r, _)| below(&r));
+        cards.chain(info).chain(widgets).fold(below(&title), f32::max)
+    }
+
     /// Title row, then (group index, card rect, close rect) for the cards that fit.
     fn center_desk_layout(&self) -> (R4, R4, Vec<(usize, R4, R4)>) {
         let ui = &self.ui;
-        let w = ui.pt(NC_W_PT);
+        let w = self.center_w();
         let x = self.w as f32 - ui.pt(NC_RIGHT_PT) - w;
         let mut y = self.desktop_bar_height() as f32 + ui.pt(NC_TOP_GAP_PT);
         let title = (x, y, w, ui.pt(NC_TITLE_PT));
         let c = ui.pt(NC_CLOSE_PT);
         let clear = (x + w - c, y + (ui.pt(NC_TITLE_PT) - c) / 2.0, c, c);
         y += ui.pt(NC_TITLE_PT);
-        if let Some((r, _)) = self.center_widget_rects().last() {
-            y = r.1 + r.3 + ui.pt(NC_GAP_PT);
-        }
         let mut cards = vec![];
         for (i, g) in self.visible_groups(Mode::Center).iter().enumerate() {
             let h = ui.pt(NC_CARD_PT);
@@ -538,9 +627,9 @@ impl Shell {
     /// (`services::widgets_timeline::rows`), in the order the shell has them, as many as fit above the dock.
     fn center_widget_rects(&self) -> Vec<(R4, Row)> {
         let ui = &self.ui;
-        let w = ui.pt(NC_W_PT);
+        let w = self.center_w();
         let x = self.w as f32 - ui.pt(NC_RIGHT_PT) - w;
-        let top = self.desktop_bar_height() as f32 + ui.pt(NC_TOP_GAP_PT) + ui.pt(NC_TITLE_PT);
+        let top = self.center_info_rects().last().map_or_else(|| self.center_flow_top(), |(_, r)| r.1 + r.3 + ui.pt(NC_GAP_PT));
         let rows = widgets_timeline::rows(self.notify.now());
         // each row is as tall as its family; the column keeps the leading rows that end above the dock
         let heights: Vec<f32> = rows
@@ -564,25 +653,30 @@ impl Shell {
         (0..count).map(|j| (x + w - pad - (count - j) as f32 * cw - (count - 1 - j) as f32 * gap, y + (h - ch) / 2.0, cw, ch)).collect()
     }
 
-    /// The Edit Widgets capsule: the column's width, just under the last widget or notification (under the title when
-    /// the column is empty), and never lower than the room kept free above the dock.
-    fn center_edit_rect(&self) -> R4 {
+    /// The Edit Widgets capsule and the round close button beside it, as a pair centred in the column just under the
+    /// last widget or notification (under the title when the column is empty), never lower than the room kept free
+    /// above the dock.
+    fn center_edit_rects(&self) -> (R4, R4) {
         let ui = &self.ui;
-        let w = ui.pt(NC_W_PT);
+        let w = self.center_w();
         let x = self.w as f32 - ui.pt(NC_RIGHT_PT) - w;
-        let (title, _, cards) = self.center_desk_layout();
-        let widgets = self.center_widget_rects();
-        let below = |r: &R4| r.1 + r.3;
-        let end = widgets.iter().map(|(r, _)| below(r)).chain(cards.iter().map(|(_, r, _)| below(r))).fold(below(&title), f32::max);
         let h = ui.pt(NC_EDIT_PT);
+        let (cw, gap) = (ui.pt(NC_EDIT_W_PT), ui.pt(NC_EDIT_GAP_PT));
+        let left = x + (w - (cw + gap + h)) / 2.0;
         let floor = self.h as f32 - ui.pt(NC_BOTTOM_PT) - h;
-        (x, edit_capsule_y(end, ui.pt(NC_EDIT_TOP_PT), floor), w, h)
+        let y = edit_capsule_y(self.center_content_end(), ui.pt(NC_EDIT_TOP_PT), floor);
+        ((left, y, cw, h), (left + cw + gap, y, h, h))
+    }
+
+    /// The Edit Widgets capsule.
+    fn center_edit_rect(&self) -> R4 {
+        self.center_edit_rects().0
     }
 
     /// The gallery's title row (with Done at its trailing end), then one row per widget in the listing that fits.
     fn center_gallery_layout(&self) -> (R4, R4, Vec<GalleryRow>) {
         let ui = &self.ui;
-        let w = ui.pt(NC_W_PT);
+        let w = self.center_w();
         let x = self.w as f32 - ui.pt(NC_RIGHT_PT) - w;
         let top = self.desktop_bar_height() as f32 + ui.pt(NC_TOP_GAP_PT);
         let title = (x, top, w, ui.pt(NC_TITLE_PT));
@@ -631,12 +725,8 @@ impl Shell {
             .unwrap_or(t.1 + t.3);
             return Some((t.0, t.1, t.2, bottom - t.1));
         }
-        let (t, _, cards) = self.center_desk_layout();
-        let bottom = cards
-            .last()
-            .map(|c| c.1 .1 + c.1 .3 + self.ui.pt(NC_STACK_PT))
-            .or_else(|| self.center_widget_rects().last().map(|(r, _)| r.1 + r.3))
-            .unwrap_or(t.1 + t.3);
+        let (t, _, _) = self.center_desk_layout();
+        let bottom = self.center_content_end();
         // the Edit Widgets capsule is part of the column too
         let edit = self.center_edit_rect();
         Some((t.0, t.1, t.2, bottom.max(edit.1 + edit.3) - t.1))
@@ -674,8 +764,15 @@ impl Shell {
         if let Some(i) = widgets.iter().position(|(r, _)| within(*r, x, y)) {
             return Some(DeskHit::Widget(i));
         }
-        if within(self.center_edit_rect(), x, y) {
+        if let Some((k, _)) = self.center_info_rects().into_iter().find(|(_, r)| within(*r, x, y)) {
+            return Some(DeskHit::Info(k));
+        }
+        let (edit, close) = self.center_edit_rects();
+        if within(edit, x, y) {
             return Some(DeskHit::EditWidgets);
+        }
+        if within(close, x, y) {
+            return Some(DeskHit::CloseCenter);
         }
         let (_, clear, cards) = self.center_desk_layout();
         if within(clear, x, y) {
@@ -688,7 +785,7 @@ impl Shell {
     /// The option rows of the widget being configured: (option index, row rect), as many as fit above the dock.
     fn center_options_layout(&self) -> Vec<(usize, R4)> {
         let ui = &self.ui;
-        let w = ui.pt(NC_W_PT);
+        let w = self.center_w();
         let x = self.w as f32 - ui.pt(NC_RIGHT_PT) - w;
         let mut y = self.desktop_bar_height() as f32 + ui.pt(NC_TOP_GAP_PT) + ui.pt(NC_TITLE_PT);
         let mut rows = vec![];
@@ -735,7 +832,8 @@ impl Shell {
         let Some((_, row)) = self.center_widget_rects().into_iter().nth(i) else { return };
         let Some((app, kind)) = row.widget else { return };
         let link = widgets_timeline::link(&app, &kind).map(|l| l.to_url());
-        let Some(def) = apps::apps().iter().find(|a| a.icon == app.as_str()).map(|a| a.id) else { return };
+        let def = apps::apps().iter().find(|a| a.icon == app.as_str()).map(|a| a.id).or_else(|| apphost::slot_of(&app).map(|slot| AppId::External(slot as u8)));
+        let Some(def) = def else { return };
         self.notify.center.hide();
         self.desk_open_or_start(def, t);
         if let (AppId::External(slot), Some(url)) = (def, link) {
@@ -779,6 +877,9 @@ impl Shell {
         c.editing = false;
         c.configuring = None;
         c.refresh_due = 0;
+        // icons are looked up again: an app may have been installed since the column last opened
+        c.icons.clear();
+        c.widget_icons.clear();
         c.settle(0.0, true, t);
         self.dirty = true;
     }
@@ -813,6 +914,14 @@ impl Shell {
                             self.open_from_notification(app, t);
                         }
                         DeskHit::EditWidgets => self.notify.center.editing = true,
+                        // the same close as a click outside the column, so the live-glass overlay goes the usual way
+                        DeskHit::CloseCenter => self.notify.center.settle(1.0, false, t),
+                        DeskHit::Info(card) => {
+                            if let Some(slot) = card.app_ids().iter().find_map(|id| apphost::slot_of(id)) {
+                                self.notify.center.hide();
+                                self.desk_open_or_start(AppId::External(slot as u8), t);
+                            }
+                        }
                         DeskHit::Done => {
                             if self.notify.center.configuring.is_some() {
                                 self.notify.center.configuring = None;
@@ -847,9 +956,43 @@ impl Shell {
         vec![]
     }
 
+    /// The app's icon at the column's card size, rendered once per opening: a built-in's from the dock or the grid, an
+    /// installed package's from its package; None (no icon drawn) when the app has none.
+    fn desk_notification_icon(&mut self, app: AppId) {
+        if self.notify.center.icons.iter().any(|(a, _)| *a == app) {
+            return;
+        }
+        let d = self.ui.pt(NC_ICON_PT).round() as usize;
+        let img = match app {
+            AppId::External(slot) => apphost::installed().get(slot as usize).and_then(|a| apphost::icon_image(&a.manifest.id, d)),
+            _ => apps().iter().position(|a| a.id == app).map(|i| {
+                let src = if i < IN_DOCK { &self.dock[i].icon } else { &self.grid[i - IN_DOCK].icon };
+                src.resized(d, d)
+            }),
+        };
+        self.notify.center.icons.push((app, img));
+    }
+
+    /// The icon of the app behind a widget row (its package id): a built-in's, else an installed package's.
+    fn desk_widget_icon(&mut self, id: &str) {
+        if self.notify.center.widget_icons.iter().any(|(k, _)| k == id) {
+            return;
+        }
+        let d = self.ui.pt(NC_ROW_ICON_PT).round() as usize;
+        let built = apps()
+            .iter()
+            .position(|a| a.icon == id)
+            .map(|i| {
+                let src = if i < IN_DOCK { &self.dock[i].icon } else { &self.grid[i - IN_DOCK].icon };
+                src.resized(d, d)
+            })
+            .or_else(|| apphost::icon_image(id, d));
+        self.notify.center.widget_icons.push((id.to_string(), built));
+    }
+
     fn draw_desk_center(&mut self, s: &mut Surface, t: f64) {
         use super::super::control_center::desk_glass;
-        use super::super::ui::{FIELD_BG, LABEL, LABEL_2, LINK, MAC_BODY_PT, MAC_HEADLINE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT, BAR_TEXT, BAR_TEXT_SHADOW, BAR_TEXT_SHADOW_ALPHA};
+        use super::super::ui::{FIELD_BG, LABEL, LABEL_2, LINK, MAC_BODY_PT, MAC_HEADLINE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT, BAR_TEXT, BAR_TEXT_SHADOW, BAR_TEXT_SHADOW_ALPHA, MAC_DISPLAY_PT, NC_QUIET_ALPHA, NC_WEATHER_TINT, SYSTEM_RED};
         let c = &self.notify.center;
         let p = c.progress(t).clamp(0.0, 1.0);
         if let Some((x, y, w, h)) = self.center_desk_rect().filter(|_| bifrost_render::glass::gpu()) {
@@ -863,6 +1006,15 @@ impl Shell {
         }
         if self.notify.center.editing {
             return self.draw_desk_gallery(s, p);
+        }
+        // the icons of the apps on screen are built first (they need the shell), then drawn from the cache
+        let shown: Vec<AppId> = self.visible_groups(Mode::Center).iter().map(|g| g.app).collect();
+        for app in shown {
+            self.desk_notification_icon(app);
+        }
+        let row_apps: Vec<String> = self.center_widget_rects().into_iter().filter_map(|(_, row)| row.widget.map(|w| w.0)).collect();
+        for id in row_apps {
+            self.desk_widget_icon(&id);
         }
         let alpha = (p * 255.0) as u32;
         let ui = &self.ui;
@@ -882,16 +1034,89 @@ impl Shell {
                 }
             }
         };
-        // the title sits on the wallpaper like the menu bar's text: white with a soft shadow
-        let name = if groups.is_empty() { "No Notifications" } else { "Notification Center" };
-        let tm = ui.text(name, MAC_TITLE3_PT, Weight::Bold, WHITE);
+        // the title sits on the wallpaper like the menu bar's text: white with a soft shadow. With nothing to show it
+        // is a quiet line instead of a heading, and there is no clear button.
+        let quiet = groups.is_empty();
+        let tm = if quiet { ui.text("No Notifications", MAC_BODY_PT, Weight::Regular, WHITE) } else { ui.text("Notification Center", MAC_TITLE3_PT, Weight::Bold, WHITE) };
+        let ink_alpha = if quiet { alpha * NC_QUIET_ALPHA / 255 } else { alpha };
         let ty = (title.1 + (title.3 - tm.h as f32) / 2.0) as i32;
-        s.blit_colored(&tm, (title.0 + slide) as i32, ty + ui.pt(0.5).max(1.0) as i32, BAR_TEXT_SHADOW, BAR_TEXT_SHADOW_ALPHA * alpha / 255);
-        s.blit_colored(&tm, (title.0 + slide) as i32, ty, BAR_TEXT, alpha);
-        if !groups.is_empty() {
+        s.blit_colored(&tm, (title.0 + slide) as i32, ty + ui.pt(0.5).max(1.0) as i32, BAR_TEXT_SHADOW, BAR_TEXT_SHADOW_ALPHA * ink_alpha / 255);
+        s.blit_colored(&tm, (title.0 + slide) as i32, ty, BAR_TEXT, ink_alpha);
+        if !quiet {
             disc(s, clear, FIELD_BG.now(), label);
         }
         let pad = ui.pt(NC_PAD_PT);
+        // notification cards: the app's icon, then its name and age, the title and the body
+        for (i, (x, y, w, h), close) in cards {
+            let g = &groups[i];
+            let x = x + slide;
+            let r = ui.pt(NC_CARD_R_PT);
+            if g.items.len() > 1 {
+                let inset = ui.pt(10.0);
+                desk_glass(s, ShellSurface::NotificationPanel, (x + inset, y + h - r, w - 2.0 * inset, r + ui.pt(NC_STACK_PT)), r, alpha);
+            }
+            desk_glass(s, ShellSurface::NotificationPanel, (x, y, w, h), r, alpha);
+            let n = g.latest();
+            let app = match g.app {
+                AppId::External(slot) => apphost::installed().get(slot as usize).map_or_else(String::new, |a| a.manifest.name.clone()),
+                other => apps().iter().find(|a| a.id == other).map_or_else(String::new, |a| a.name.to_string()),
+            };
+            let tx = x + pad + ui.pt(NC_ICON_PT) + ui.pt(NC_ICON_GAP_PT);
+            if let Some(icon) = self.notify.center.icons.iter().find(|(a, _)| *a == g.app).and_then(|(_, i)| i.as_ref()) {
+                s.blit(icon, (x + pad) as i32, (y + (h - icon.h as f32) / 2.0) as i32, 255, alpha);
+            }
+            let room = x + w - tx - pad - ui.pt(NC_CLOSE_PT);
+            let more = if g.items.len() > 1 { format!("{app} \u{b7} {} more", g.items.len() - 1) } else { app.clone() };
+            let head = ui.text(&ui.fit(&more, MAC_SUBHEAD_PT, room - ui.pt(60.0)), MAC_SUBHEAD_PT, Weight::Regular, secondary);
+            let age = ui.text(&super::store::age_text(n.time, now), MAC_SUBHEAD_PT, Weight::Regular, secondary);
+            let t1 = ui.text(&ui.fit(&n.title, MAC_HEADLINE_PT, room), MAC_HEADLINE_PT, Weight::Semibold, label);
+            let t2 = ui.text(&ui.fit(&n.body, MAC_BODY_PT, x + w - tx - pad), MAC_BODY_PT, Weight::Regular, label);
+            let mut ly = y + (h - (head.h + t1.h + t2.h) as f32) / 2.0;
+            s.blit(&head, tx as i32, ly as i32, 255, alpha);
+            s.blit(&age, (x + w - pad - ui.pt(NC_CLOSE_PT) - ui.pt(6.0) - age.w as f32) as i32, ly as i32, 255, alpha);
+            ly += head.h as f32;
+            s.blit(&t1, tx as i32, ly as i32, 255, alpha);
+            ly += t1.h as f32;
+            s.blit(&t2, tx as i32, ly as i32, 255, alpha);
+            disc(s, close, FIELD_BG.now(), label);
+        }
+        // Calendar and Weather: glass cards with the date, and the Weather app's saved place on a blue plate
+        for (card, (x, y, w, h)) in self.center_info_rects() {
+            let x = x + slide;
+            let r = ui.pt(NC_CARD_R_PT);
+            desk_glass(s, ShellSurface::NotificationPanel, (x, y, w, h), r, alpha);
+            match card {
+                InfoCard::Calendar => {
+                    let region = bifrost_ui::region::current();
+                    let day = bifrost_ui::region::day_name(&region, self.info.wday).to_uppercase();
+                    let month = bifrost_ui::region::month_name(&region, self.info.mon);
+                    // the weekday is red like the calendar's today marker, the one red besides destructive actions
+                    let wd = ui.text(&day, MAC_SUBHEAD_PT, Weight::Semibold, SYSTEM_RED);
+                    let num = ui.text(&self.info.mday.to_string(), MAC_DISPLAY_PT, Weight::Regular, label);
+                    let mo = ui.text(month, MAC_SUBHEAD_PT, Weight::Regular, secondary);
+                    s.blit(&wd, (x + pad) as i32, (y + pad) as i32, 255, alpha);
+                    s.blit(&num, (x + pad) as i32, (y + pad + wd.h as f32) as i32, 255, alpha);
+                    s.blit(&mo, (x + pad) as i32, (y + h - pad - mo.h as f32) as i32, 255, alpha);
+                }
+                InfoCard::Weather => {
+                    let Some(sum) = self.today.weather() else { continue };
+                    s.fill_rrect(x, y, w, h, r, crate::gfx::scale(NC_WEATHER_TINT, alpha));
+                    let glyph_r = ui.pt(NC_WEATHER_GLYPH_R_PT);
+                    super::super::weather::glyph::draw(s, sum.sky(), sum.day, (x + w - pad - glyph_r, y + pad + glyph_r), glyph_r);
+                    let room = w - 2.0 * pad - 2.0 * glyph_r - ui.pt(NC_CHIP_GAP_PT);
+                    let place = ui.text(&ui.fit(&sum.place, MAC_HEADLINE_PT, room), MAC_HEADLINE_PT, Weight::Semibold, WHITE);
+                    let temp = ui.text(&sum.units.degrees(sum.temp), MAC_DISPLAY_PT, Weight::Regular, WHITE);
+                    let sky = ui.text(sum.sky().label(), MAC_SUBHEAD_PT, Weight::Medium, WHITE);
+                    let hl = ui.text(&format!("H:{}  L:{}", sum.units.degrees(sum.max), sum.units.degrees(sum.min)), MAC_SUBHEAD_PT, Weight::Regular, WHITE);
+                    s.blit(&place, (x + pad) as i32, (y + pad) as i32, 255, alpha);
+                    s.blit(&temp, (x + pad) as i32, (y + pad + place.h as f32) as i32, 255, alpha);
+                    s.blit(&sky, (x + pad) as i32, (y + h - pad - sky.h as f32 - hl.h as f32) as i32, 255, alpha);
+                    s.blit(&hl, (x + pad) as i32, (y + h - pad - hl.h as f32) as i32, 255, alpha * 200 / 255);
+                }
+            }
+        }
+        // widget rows: the providing app's icon, then its title and value; the entry's buttons at the trailing edge
+        let icon_d = ui.pt(NC_ROW_ICON_PT);
         for ((x, y, w, h), row) in self.center_widget_rects() {
             let rects = self.center_action_rects((x, y, w, h), row.buttons.len());
             let x = x + slide;
@@ -913,44 +1138,26 @@ impl Shell {
                 Some(first) => x - slide + w - first.0 + ui.pt(NC_CHIP_GAP_PT),
                 None => 0.0,
             };
-            let room = w - 2.0 * pad - buttons_room;
+            let icon = row.widget.as_ref().and_then(|(app, _)| self.notify.center.widget_icons.iter().find(|(k, _)| k == app)).and_then(|(_, i)| i.as_ref());
+            let mut tx = x + pad;
+            if let Some(icon) = icon {
+                s.blit(icon, tx as i32, (y + (h - icon.h as f32) / 2.0) as i32, 255, alpha);
+                tx += icon_d + ui.pt(NC_ICON_GAP_PT);
+            }
+            let room = x + w - pad - buttons_room - tx;
             let head = ui.text(&ui.fit(&row.title, MAC_SUBHEAD_PT, room), MAC_SUBHEAD_PT, Weight::Regular, secondary);
             let value = ui.text(&ui.fit(&row.text, MAC_HEADLINE_PT, room), MAC_HEADLINE_PT, Weight::Semibold, label);
             let ly = y + (h - (head.h + value.h) as f32) / 2.0;
-            s.blit(&head, (x + pad) as i32, ly as i32, 255, alpha);
-            s.blit(&value, (x + pad) as i32, (ly + head.h as f32) as i32, 255, alpha);
+            s.blit(&head, tx as i32, ly as i32, 255, alpha);
+            s.blit(&value, tx as i32, (ly + head.h as f32) as i32, 255, alpha);
         }
-        for (i, (x, y, w, h), close) in cards {
-            let g = &groups[i];
-            let x = x + slide;
-            let r = ui.pt(NC_CARD_R_PT);
-            if g.items.len() > 1 {
-                let inset = ui.pt(10.0);
-                desk_glass(s, ShellSurface::NotificationPanel, (x + inset, y + h - r, w - 2.0 * inset, r + ui.pt(NC_STACK_PT)), r, alpha);
-            }
-            desk_glass(s, ShellSurface::NotificationPanel, (x, y, w, h), r, alpha);
-            let n = g.latest();
-            let app = apps().iter().find(|a| a.id == g.app).map_or("", |a| a.name);
-            let room = w - 2.0 * pad - ui.pt(NC_CLOSE_PT);
-            let more = if g.items.len() > 1 { format!("{app} \u{b7} {} more", g.items.len() - 1) } else { app.to_string() };
-            let head = ui.text(&ui.fit(&more, MAC_SUBHEAD_PT, room - ui.pt(60.0)), MAC_SUBHEAD_PT, Weight::Regular, secondary);
-            let age = ui.text(&super::store::age_text(n.time, now), MAC_SUBHEAD_PT, Weight::Regular, secondary);
-            let t1 = ui.text(&ui.fit(&n.title, MAC_HEADLINE_PT, room), MAC_HEADLINE_PT, Weight::Semibold, label);
-            let t2 = ui.text(&ui.fit(&n.body, MAC_BODY_PT, w - 2.0 * pad), MAC_BODY_PT, Weight::Regular, label);
-            let mut ly = y + (h - (head.h + t1.h + t2.h) as f32) / 2.0;
-            s.blit(&head, (x + pad) as i32, ly as i32, 255, alpha);
-            s.blit(&age, (x + w - pad - ui.pt(NC_CLOSE_PT) - ui.pt(6.0) - age.w as f32) as i32, ly as i32, 255, alpha);
-            ly += head.h as f32;
-            s.blit(&t1, (x + pad) as i32, ly as i32, 255, alpha);
-            ly += t1.h as f32;
-            s.blit(&t2, (x + pad) as i32, ly as i32, 255, alpha);
-            disc(s, close, FIELD_BG.now(), label);
-        }
-        // Edit Widgets: a glass capsule with a link-coloured label, at the foot of the column above the dock
-        let (ex, ey, ew, eh) = self.center_edit_rect();
+        // Edit Widgets: a small glass capsule with a quiet label and a round close button beside it
+        let ((ex, ey, ew, eh), close) = self.center_edit_rects();
         desk_glass(s, ShellSurface::NotificationPanel, (ex + slide, ey, ew, eh), eh / 2.0, alpha);
-        let et = ui.text("Edit Widgets", MAC_SUBHEAD_PT, Weight::Semibold, LINK);
+        let et = ui.text("Edit Widgets", MAC_SUBHEAD_PT, Weight::Semibold, label);
         s.blit(&et, (ex + slide + (ew - et.w as f32) / 2.0) as i32, (ey + (eh - et.h as f32) / 2.0) as i32, 255, alpha);
+        desk_glass(s, ShellSurface::NotificationPanel, (close.0 + slide, close.1, close.2, close.3), close.3 / 2.0, alpha);
+        disc(s, close, 0, label);
     }
 
     /// The Edit Widgets gallery in the column's place: the title with Done, then a row per widget with a disc that adds
@@ -1077,5 +1284,41 @@ mod edit_capsule_tests {
         assert_eq!(super::edit_capsule_y(200.0, 12.0, 900.0), 212.0, "just under the last row");
         assert_eq!(super::edit_capsule_y(895.0, 12.0, 900.0), 900.0, "a full column keeps it above the dock");
         assert_eq!(super::edit_capsule_y(0.0, 0.0, 0.0), 0.0);
+    }
+
+    /// E2E NC2 review: the Calendar and Weather cards open the PC packages (".desktop" ids), the bare id only as a
+    /// fallback, so a tap is never dead on the desktop.
+    #[test]
+    fn the_info_cards_open_the_desktop_packages_first() {
+        use super::InfoCard;
+        assert_eq!(InfoCard::Calendar.app_ids()[0], "is.olibuijr.calendar.desktop");
+        assert_eq!(InfoCard::Weather.app_ids()[0], "is.olibuijr.weather.desktop");
+        assert_eq!(InfoCard::Weather.app_ids()[1], "is.olibuijr.weather");
+    }
+}
+
+#[cfg(all(test, feature = "desktop-wayland"))]
+mod column_tests {
+    use super::*;
+
+    /// E2E NC2: the column takes the reference's share of the screen, the date card sits under the title, and the
+    /// Edit Widgets capsule has its round close button beside it, both inside the column.
+    #[test]
+    fn the_column_follows_the_screen_width_and_pairs_edit_widgets_with_a_close_button() {
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.screen = crate::shell::Screen::Home;
+        let w = sh.center_w();
+        assert!(w >= sh.ui.pt(NC_W_PT), "never narrower than the measured width");
+        assert!(w >= sh.w as f32 * NC_W_FRAC - 0.5, "at least the reference share of the screen");
+        let x = sh.w as f32 - sh.ui.pt(NC_RIGHT_PT) - w;
+        let (title, _, _) = sh.center_desk_layout();
+        let info = sh.center_info_rects();
+        let (kind, date) = info.first().copied().expect("the date card is always there");
+        assert!(kind == InfoCard::Calendar && date.1 >= title.1 + title.3, "under the title");
+        let (cap, close) = sh.center_edit_rects();
+        assert!(cap.1 == close.1 && close.0 >= cap.0 + cap.2, "the close button is beside the capsule");
+        assert!(cap.0 >= x && close.0 + close.2 <= x + w, "both inside the column");
+        assert!(matches!(sh.center_desk_hit(close.0 + close.2 / 2.0, close.1 + close.3 / 2.0), Some(DeskHit::CloseCenter)));
+        assert!(matches!(sh.center_desk_hit(cap.0 + cap.2 / 2.0, cap.1 + cap.3 / 2.0), Some(DeskHit::EditWidgets)));
     }
 }

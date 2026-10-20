@@ -305,6 +305,11 @@ impl Today {
         true
     }
 
+    /// The Weather app's saved summary (the first place), refreshed with the tiles; None until the app has run.
+    pub fn weather(&self) -> Option<&Summary> {
+        self.weather.as_ref()
+    }
+
     pub fn played(&self) -> Option<&deildu::Played> {
         self.played.as_ref()
     }

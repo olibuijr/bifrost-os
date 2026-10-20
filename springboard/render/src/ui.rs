@@ -25,6 +25,11 @@ pub const BAR_TEXT: u32 = WHITE;
 pub const BAR_TEXT_SHADOW: u32 = pack(0, 0, 0, 255);
 /// Alpha of the bar text shadow (0..255).
 pub const BAR_TEXT_SHADOW_ALPHA: u32 = 90;
+/// The Weather card in the Notification Center column: a blue plate laid over the glass (the same in Light and Dark,
+/// white text on it).
+pub const NC_WEATHER_TINT: u32 = pack(52, 108, 190, 225);
+/// The quiet "No Notifications" line sits at this share (0..255) of the bar text's strength.
+pub const NC_QUIET_ALPHA: u32 = 190;
 /// Over a light wallpaper the bar's titles and status items are near-black (85%), with a faint light halo.
 pub const BAR_TEXT_ON_LIGHT: u32 = pack(0, 0, 0, 255);
 pub const BAR_TEXT_ON_LIGHT_ALPHA: u32 = 217;
@@ -215,6 +220,8 @@ pub const MAC_SUBHEAD_PT: f32 = 11.0;
 pub const MAC_FOOTNOTE_PT: f32 = 10.0;
 pub const MAC_CAPTION1_PT: f32 = 10.0;
 pub const MAC_CAPTION2_PT: f32 = 10.0;
+/// A single large figure on a glass card (the date number, the temperature): twice the large title.
+pub const MAC_DISPLAY_PT: f32 = MAC_LARGE_TITLE_PT * 2.0;
 /// Golden Gate group headers and footers use the footnote style.
 pub const MAC_GROUP_HEADER_PT: f32 = MAC_FOOTNOTE_PT;
 /// Spacing scale in points (4-pt grid): padding, gaps and offsets. Use `ui.pt(SPACE_L)`, never `ui.pt(16.0)`.
@@ -740,6 +747,7 @@ mod tests {
             assert_eq!(actual, hig);
         }
         assert_eq!(MAC_GROUP_HEADER_PT, MAC_FOOTNOTE_PT);
+        assert_eq!(MAC_DISPLAY_PT, 52.0);
         // the Golden Gate scale is non-increasing (caption 1 and 2 share a size)
         let scale = [MAC_LARGE_TITLE_PT, MAC_TITLE1_PT, MAC_TITLE2_PT, MAC_TITLE3_PT, MAC_HEADLINE_PT, MAC_CALLOUT_PT, MAC_SUBHEAD_PT, MAC_FOOTNOTE_PT, MAC_CAPTION1_PT];
         assert!(scale.windows(2).all(|w| w[0] >= w[1]));
