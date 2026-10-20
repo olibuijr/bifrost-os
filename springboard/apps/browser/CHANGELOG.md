@@ -1,6 +1,10 @@
+## 0.17.2 — 2026-10-20
+
+- Nothing else changed: this release only rewords the notes for the start page.
+
 ## 0.17.1 — 2026-10-20
 
-- The built-in start page uses the system font (no bundled web font).
+- The built-in start page is set in the system font.
 
 ## 0.17.0 — 2026-10-19
 

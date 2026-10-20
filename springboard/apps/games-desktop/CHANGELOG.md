@@ -1,8 +1,12 @@
+# Changelog
+
+## 1.6.6 — 2026-10-20
+
+- Nothing else changed: this release only rewords the notes for the new app icon.
+
 ## 1.6.5 — 2026-10-19
 
-- A new app icon drawn for BifrOSt (tools/make-icons.py).
-
-# Changelog
+- The app has a new icon.
 
 ## 1.6.4 — 2026-10-14
 
