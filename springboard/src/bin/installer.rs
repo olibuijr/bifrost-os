@@ -79,7 +79,10 @@ fn run() -> std::io::Result<()> {
     // the live medium keeps its assets in the legacy directory; BIFROST_ASSETS still overrides (bifrost_core::system_assets)
     let assets = bifrost_core::system_assets::root_string();
     let branding = std::env::var("BIFROST_BRANDING").unwrap_or_else(|_| "/usr/share/bifrost/installer".into());
-    let font = Font::parse(sys::map_file(&format!("{assets}/SFUI.ttf"))?).ok_or_else(|| std::io::Error::other("bad font"))?;
+    // the lab sync may be replacing the asset directory as the service starts: wait for the font, which the installer
+    // cannot start without (the wallpapers and branding images are optional and load with `.ok()`)
+    let font_bytes = wait_for_asset(&format!("{assets}/SFUI.ttf"), ASSET_WAIT_STEP, ASSET_WAIT_DEADLINE)?;
+    let font = Font::parse(font_bytes).ok_or_else(|| std::io::Error::other("bad font"))?;
     let wayland = std::env::var_os("SPRINGBOARD_WAYLAND").is_some();
     #[cfg(feature = "desktop-wayland")]
     let opened = if wayland { kms::Display::wayland() } else { kms::Display::open_best(8000) };
@@ -277,6 +280,36 @@ fn run() -> std::io::Result<()> {
     }
 }
 
+/// How often, and for how long, the installer waits for a file it cannot start without (see `wait_for_asset`).
+#[cfg(target_os = "linux")]
+const ASSET_WAIT_STEP: std::time::Duration = std::time::Duration::from_millis(100);
+#[cfg(target_os = "linux")]
+const ASSET_WAIT_DEADLINE: std::time::Duration = std::time::Duration::from_secs(15);
+
+/// Maps `path`, polling every `step` until it exists and can be read, or `deadline` passes. The first wait is logged
+/// once. After the deadline the error is returned with the path in its message.
+#[cfg(target_os = "linux")]
+fn wait_for_asset(path: &str, step: std::time::Duration, deadline: std::time::Duration) -> std::io::Result<&'static [u8]> {
+    use springboard::bare::sys;
+    let start = std::time::Instant::now();
+    let mut logged = false;
+    loop {
+        match sys::map_file(path) {
+            Ok(bytes) => return Ok(bytes),
+            Err(e) if start.elapsed() >= deadline => {
+                return Err(std::io::Error::new(e.kind(), format!("{path}: {e}")));
+            }
+            Err(e) => {
+                if !logged {
+                    eprintln!("bifrost-installer: waiting for {path} ({e})");
+                    logged = true;
+                }
+                std::thread::sleep(step);
+            }
+        }
+    }
+}
+
 /// The screens (premultiplied, transparent where nothing is drawn) over the background.
 #[cfg(target_os = "linux")]
 fn compose(bg: &[u32], ov: &[u32], out: &mut [u32]) {
@@ -291,5 +324,47 @@ fn compose(bg: &[u32], ov: &[u32], out: &mut [u32]) {
                 ch(0) | ch(8) | ch(16) | 0xff00_0000
             }
         };
+    }
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod tests {
+    use super::wait_for_asset;
+    use std::time::{Duration, Instant};
+
+    /// A fresh directory under the system temp dir, unique per test run.
+    fn temp_dir(tag: &str) -> std::path::PathBuf {
+        let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let dir = std::env::temp_dir().join(format!("bifrost-installer-{tag}-{}-{nanos}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn wait_for_asset_finds_a_file_that_appears_late() {
+        let dir = temp_dir("late");
+        let path = dir.join("SFUI.ttf");
+        let writer = {
+            let path = path.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(150));
+                std::fs::write(&path, b"font bytes").unwrap();
+            })
+        };
+        let bytes = wait_for_asset(path.to_str().unwrap(), Duration::from_millis(10), Duration::from_secs(5)).unwrap();
+        assert_eq!(bytes, b"font bytes");
+        writer.join().unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn wait_for_asset_fails_after_the_deadline_naming_the_path() {
+        let dir = temp_dir("missing");
+        let path = dir.join("SFUI.ttf");
+        let started = Instant::now();
+        let err = wait_for_asset(path.to_str().unwrap(), Duration::from_millis(10), Duration::from_millis(100)).unwrap_err();
+        assert!(started.elapsed() >= Duration::from_millis(100), "returned before the deadline");
+        assert!(err.to_string().contains(path.to_str().unwrap()), "error does not name the path: {err}");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
