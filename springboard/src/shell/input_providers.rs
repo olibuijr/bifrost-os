@@ -81,8 +81,8 @@ pub fn key_for(out: &Out) -> Option<(String, KeyCombo)> {
         Out::Named("Tab") => named(Key::Tab),
         Out::Named("Up") => named(Key::Up),
         Out::Named("Down") => named(Key::Down),
-        Out::Named("Left") => named(Key::Left),
-        Out::Named("Right") => named(Key::Right),
+        Out::Named("Left" | "ShiftLeft") => named(Key::Left),
+        Out::Named("Right" | "ShiftRight") => named(Key::Right),
         _ => None,
     }
 }
@@ -367,6 +367,8 @@ mod tests {
         assert_eq!(key_for(&Out::Enter).unwrap().1.key, Key::Return);
         assert_eq!(key_for(&Out::Named("Escape")).unwrap().1.key, Key::Escape);
         assert_eq!(key_for(&Out::Named("Down")).unwrap().1.key, Key::Down);
+        assert_eq!(key_for(&Out::Named("ShiftLeft")).unwrap().1.key, Key::Left, "Shift with an arrow still moves the caret");
+        assert_eq!(key_for(&Out::Named("ShiftRight")).unwrap().1.key, Key::Right);
         assert!(key_for(&Out::Named("Paste")).is_none());
         assert!(key_for(&Out::Text(String::new())).is_none());
         assert!(key_for(&Out::Hide).is_none());

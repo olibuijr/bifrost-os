@@ -223,6 +223,29 @@ impl TextField {
             }
             Out::Named("Left") => self.caret = if start < end { start } else { edit::prev_boundary(&self.text, self.caret) },
             Out::Named("Right") => self.caret = if start < end { end } else { edit::next_boundary(&self.text, self.caret) },
+            // Home, End, Option and Cmd with the arrows, Shift with all of them: the hardware keyboard's movement keys
+            Out::Named(name @ ("Home" | "End" | "WordLeft" | "WordRight")) => self.caret = self.move_target(name),
+            Out::Named(name @ ("ShiftHome" | "ShiftEnd" | "ShiftWordLeft" | "ShiftWordRight" | "ShiftLeft" | "ShiftRight")) => {
+                let from = self.anchor.unwrap_or(self.caret);
+                self.caret = self.move_target(name);
+                self.anchor = Some(from);
+            }
+            // Delete (forward), Option+Backspace and Option+Delete (a word), Cmd+Backspace (everything before the caret)
+            Out::Named(name @ ("DeleteForward" | "DeleteWord" | "DeleteWordForward" | "DeleteLine")) => {
+                let range = if start < end {
+                    (start, end)
+                } else {
+                    match *name {
+                        "DeleteForward" => (self.caret, edit::next_boundary(&self.text, self.caret)),
+                        "DeleteWord" => (self.move_target("WordLeft"), self.caret),
+                        "DeleteWordForward" => (self.caret, self.move_target("WordRight")),
+                        _ => (0, self.caret),
+                    }
+                };
+                if range.0 < range.1 {
+                    self.edit_with_undo(ui, |f, ui| f.replace(ui, range, ""));
+                }
+            }
             Out::Enter => return true,
             // hardware-keyboard shortcuts (Ctrl/Cmd + C, X, V, A, Z, Shift+Z)
             Out::Named("Copy") => edit::apply(Action::Copy, self, ui),
@@ -233,12 +256,29 @@ impl TextField {
             Out::Named("Redo") => self.swap_history(true),
             Out::Hide | Out::Named(_) => {}
         }
-        // Select All and Copy leave the selection standing for the next shortcut
-        if !matches!(out, Out::Named("SelectAll" | "Copy")) {
+        // Select All and Copy leave the selection standing for the next shortcut, and so do the keys that extend it
+        if !matches!(out, Out::Named("SelectAll" | "Copy" | "ShiftHome" | "ShiftEnd" | "ShiftWordLeft" | "ShiftWordRight" | "ShiftLeft" | "ShiftRight")) {
             self.anchor = None;
         }
         self.render(ui);
         false
+    }
+
+    /// The char index a movement key takes the caret to: the ends of the text, the previous or next word (a secure field is
+    /// one word, so its text gives nothing away), or the previous or next character.
+    fn move_target(&self, name: &str) -> usize {
+        let n = self.len();
+        match name {
+            "Home" | "ShiftHome" => 0,
+            "End" | "ShiftEnd" => n,
+            "WordLeft" | "ShiftWordLeft" if self.secure => 0,
+            "WordRight" | "ShiftWordRight" if self.secure => n,
+            "WordLeft" | "ShiftWordLeft" => edit::word_start_before(&self.text, self.caret),
+            "WordRight" | "ShiftWordRight" => edit::word_end_after(&self.text, self.caret),
+            "ShiftLeft" => edit::prev_boundary(&self.text, self.caret),
+            "ShiftRight" => edit::next_boundary(&self.text, self.caret),
+            _ => self.caret,
+        }
     }
 
     /// Undo (or, with `redo`, Redo): restores the saved text and keeps the
@@ -888,6 +928,76 @@ mod tests {
     /// A field with room for a sentence.
     fn wide(ui: &Ui) -> TextField {
         TextField::new(ui, "Name", 17.0, false, 40)
+    }
+
+    /// The hardware keyboard's movement and delete keys in a shell field: Home and End, words, Shift to extend, the word and line
+    /// deletes and the forward delete.
+    #[test]
+    fn home_end_word_keys_shift_selection_and_the_word_deletes_edit_a_shell_field() {
+        let ui = ui();
+        let mut f = wide(&ui);
+        let key = |f: &mut TextField, name: &'static str| {
+            f.edit(&ui, &Out::Named(name), 0.0);
+        };
+        f.set_text(&ui, "hello big world");
+        assert_eq!(f.caret(), 15);
+        key(&mut f, "Home");
+        assert_eq!((f.caret(), f.selection()), (0, (0, 0)));
+        key(&mut f, "End");
+        assert_eq!(f.caret(), 15);
+        key(&mut f, "WordLeft");
+        assert_eq!(f.caret(), 10, "Option+Left goes to the start of the word before the caret");
+        key(&mut f, "WordLeft");
+        assert_eq!(f.caret(), 6);
+        key(&mut f, "WordRight");
+        assert_eq!(f.caret(), 9, "Option+Right goes to the end of the next word");
+        // Shift extends from where the caret was, whichever key moves it
+        key(&mut f, "ShiftWordRight");
+        assert_eq!(f.selection(), (9, 15));
+        key(&mut f, "ShiftHome");
+        assert_eq!(f.selection(), (0, 9), "the anchor stays at 9 and the caret goes to the start");
+        key(&mut f, "ShiftRight");
+        assert_eq!(f.selection(), (1, 9));
+        key(&mut f, "ShiftLeft");
+        key(&mut f, "ShiftLeft");
+        assert_eq!(f.selection(), (0, 9), "stopped at the start");
+        key(&mut f, "ShiftEnd");
+        assert_eq!(f.selection(), (9, 15));
+        // a plain move ends the selection
+        key(&mut f, "Home");
+        assert_eq!(f.selection(), (0, 0));
+        // deleting: the selection first, else a character, a word or the line before the caret
+        f.set_text(&ui, "hello big world");
+        key(&mut f, "DeleteWord");
+        assert_eq!(f.text(), "hello big ", "Option+Backspace takes the last word");
+        key(&mut f, "DeleteLine");
+        assert_eq!((f.text(), f.caret()), ("", 0), "Cmd+Backspace takes everything before the caret");
+        f.set_text(&ui, "hello big world");
+        key(&mut f, "Home");
+        key(&mut f, "DeleteForward");
+        assert_eq!(f.text(), "ello big world", "Delete takes the character after the caret");
+        key(&mut f, "DeleteWordForward");
+        assert_eq!(f.text(), " big world", "Option+Delete takes the word after the caret");
+        key(&mut f, "End");
+        key(&mut f, "DeleteForward");
+        assert_eq!(f.text(), " big world", "nothing after the caret");
+        f.select(&ui, (1, 4));
+        key(&mut f, "DeleteWord");
+        assert_eq!(f.text(), "  world", "with a selection every delete key deletes the selection");
+        // the delete is one undo step
+        f.edit(&ui, &Out::Named("Undo"), 1.0);
+        assert_eq!(f.text(), " big world");
+    }
+
+    #[test]
+    fn a_secure_field_moves_by_word_to_its_ends_and_never_shows_its_word_breaks() {
+        let ui = ui();
+        let mut f = TextField::new(&ui, "Password", 17.0, true, 40);
+        f.set_text(&ui, "two words");
+        f.edit(&ui, &Out::Named("WordLeft"), 0.0);
+        assert_eq!(f.caret(), 0, "the whole password is one word");
+        f.edit(&ui, &Out::Named("WordRight"), 0.0);
+        assert_eq!(f.caret(), 9);
     }
 
     fn tap_at(f: &mut TextField, ui: &Ui, x: f32, t: f64) -> bool {

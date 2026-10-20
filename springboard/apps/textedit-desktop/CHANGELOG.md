@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.12.1 - 2026-10-20
+
+- Select All, Copy, Cut, Paste, Undo and Redo work from the keyboard (Cmd+A, C, X, V, Z and Shift+Cmd+Z); the shell used to
+  drop them before they reached the app.
+- Option+Backspace deletes the word before the caret, Cmd+Backspace everything back to the start of the line, and
+  Option+Delete the word after it. Delete (Fn+Delete) deletes the character after the caret.
+- Page Up and Page Down move the caret a window of lines, and extend the selection with Shift.
+- Ctrl+A and Ctrl+E go to the start and end of the line, Ctrl+K deletes to the end of the paragraph, Ctrl+D and Ctrl+H delete
+  forward and back, and Ctrl+F, B, N and P move by character and line.
+
 ## 1.12.0 - 2026-10-20
 
 - Clicking in the text now places the caret where you click, drag selects, double-click selects a word and triple-click a

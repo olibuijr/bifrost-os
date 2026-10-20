@@ -191,22 +191,97 @@ pub fn split_last_recipient(value: &str) -> (&str, &str) {
 pub struct Form {
     pub fields: Vec<Field>,
     pub focus: usize,
+    /// The field whose whole text is selected (Edit > Select All); it counts only while that field has the focus.
+    /// Typing, Backspace or Cut replaces or removes the text.
+    selection: Option<usize>,
 }
 
 impl Form {
     pub fn new(fields: Vec<Field>) -> Form {
-        Form { fields, focus: 0 }
+        Form { fields, focus: 0, selection: None }
     }
 
+    /// True while the focused field's whole text is selected.
+    pub fn selected(&self) -> bool {
+        self.selection == Some(self.focus) && self.fields.get(self.focus).is_some_and(|f| !f.value.is_empty())
+    }
+
+    /// Edit > Select All: selects the whole text of the focused field. A field that takes no typed text has none to select.
+    pub fn select_all(&mut self) -> bool {
+        match self.fields.get(self.focus) {
+            Some(field) if !field.choice && !field.value.is_empty() => {
+                self.selection = Some(self.focus);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// The selected text, for Copy; None when nothing is selected. A secret field (a password) never gives its text up.
+    pub fn selected_text(&self) -> Option<&str> {
+        self.selected().then(|| &self.fields[self.focus]).filter(|f| !f.secret).map(|f| f.value.as_str())
+    }
+
+    /// Edit > Cut: removes the selected text and returns it; None, and nothing is cut, when nothing is selected or the
+    /// field is secret.
+    pub fn cut(&mut self) -> Option<String> {
+        if self.selected_text().is_none() {
+            return None;
+        }
+        self.selection = None;
+        Some(std::mem::take(&mut self.fields[self.focus].value))
+    }
+
+    /// A press in the field, or any other move of the caret, ends the selection.
+    pub fn deselect(&mut self) {
+        self.selection = None;
+    }
+
+    /// Typed or pasted text. It replaces the selection when there is one.
     pub fn type_text(&mut self, text: &str) {
+        let replace = self.selected();
+        self.selection = None;
         if let Some(field) = self.fields.get_mut(self.focus) {
+            if replace {
+                field.value.clear();
+            }
             field.value.push_str(text);
         }
     }
 
     pub fn backspace(&mut self) {
+        let replace = self.selected();
+        self.selection = None;
         if let Some(field) = self.fields.get_mut(self.focus) {
-            field.value.pop();
+            if replace {
+                field.value.clear();
+            } else {
+                field.value.pop();
+            }
+        }
+    }
+
+    /// Option+Backspace: the word before the caret (the end of the text), with the blanks after it; the selection when there is one.
+    pub fn delete_word(&mut self) {
+        let replace = self.selected();
+        self.selection = None;
+        if let Some(field) = self.fields.get_mut(self.focus) {
+            if replace {
+                field.value.clear();
+                return;
+            }
+            let kept = field.value.trim_end().trim_end_matches(|c: char| c.is_alphanumeric() || c == '_').len();
+            // punctuation stands for a word of its own
+            let kept = if kept == field.value.trim_end().len() { field.value.trim_end().trim_end_matches(|c: char| !c.is_alphanumeric() && !c.is_whitespace()).len() } else { kept };
+            field.value.truncate(kept);
+        }
+    }
+
+    /// Cmd+Backspace: everything before the caret, which is all of the field's text (the caret stays at its end).
+    pub fn delete_to_start(&mut self) {
+        self.selection = None;
+        if let Some(field) = self.fields.get_mut(self.focus) {
+            field.value.clear();
         }
     }
 
@@ -214,11 +289,15 @@ impl Form {
     pub fn next_field(&mut self) {
         if !self.fields.is_empty() {
             self.focus = (self.focus + 1) % self.fields.len();
+            self.selection = None;
         }
     }
 
     pub fn focus_on(&mut self, index: usize) {
         if index < self.fields.len() {
+            if index != self.focus {
+                self.selection = None;
+            }
             self.focus = index;
         }
     }
@@ -289,9 +368,16 @@ impl Compose {
         }
         let before = self.message().chars().count();
         self.styles.resize(before, Style::default());
+        // a change over the selected message (typing, a paste) replaces all of it: none of the old runs' styles survive
+        let replacing = self.form.selected();
+        let old = replacing.then(|| self.message().to_string());
         change(&mut self.form);
         let after = self.message().chars().count();
-        if after > before {
+        if old.is_some_and(|old| old != self.message()) {
+            let typing = self.typing;
+            self.styles.clear();
+            self.styles.extend(std::iter::repeat(typing).take(after));
+        } else if after > before {
             let typing = self.typing;
             self.styles.extend(std::iter::repeat(typing).take(after - before));
         } else {
@@ -2061,6 +2147,78 @@ mod tests {
         }
     }
 
+    /// Select All in an Add Account field: the old text is selected as a whole, and typing, Backspace or Cut replaces or removes it
+    /// (the report: Cmd+A did nothing, so the old text stayed when the field was retyped).
+    #[test]
+    fn select_all_makes_typing_backspace_and_cut_act_on_the_whole_field() {
+        let mut form = setup(&[]);
+        let at = form.fields.iter().position(|f| !f.choice && !f.secret).expect("a text field");
+        form.focus_on(at);
+        assert!(!form.select_all(), "an empty field has nothing to select");
+        form.fields[at].value = "imap.old.example".into();
+        assert!(!form.selected());
+        assert!(form.select_all());
+        assert!(form.selected());
+        assert_eq!(form.selected_text(), Some("imap.old.example"));
+        form.type_text("mail.example.com");
+        assert_eq!(form.fields[at].value, "mail.example.com", "typing replaces the selection");
+        assert!(!form.selected());
+        form.type_text("!");
+        assert_eq!(form.fields[at].value, "mail.example.com!", "the next typing appends");
+        // Backspace removes the selection, not one character
+        form.select_all();
+        form.backspace();
+        assert_eq!(form.fields[at].value, "");
+        // Cut takes the text out and hands it over; nothing selected, nothing cut
+        form.fields[at].value = "secret words".into();
+        assert_eq!(form.cut(), None);
+        form.select_all();
+        assert_eq!(form.cut().as_deref(), Some("secret words"));
+        assert_eq!(form.fields[at].value, "");
+        // moving to another field ends the selection, and it does not come back with the focus
+        form.fields[at].value = "abc".into();
+        form.select_all();
+        form.next_field();
+        form.focus_on(at);
+        assert!(!form.selected());
+        form.select_all();
+        form.deselect();
+        assert!(!form.selected(), "a press in the field puts the caret at the end");
+    }
+
+    #[test]
+    fn a_password_is_selected_and_replaced_but_never_copied_or_cut() {
+        let mut form = setup(&[]);
+        let at = form.fields.iter().position(|f| f.secret).expect("a password field");
+        form.focus_on(at);
+        form.fields[at].value = "hunter2".into();
+        assert!(form.select_all());
+        assert_eq!(form.selected_text(), None, "Copy has nothing to copy");
+        assert_eq!(form.cut(), None, "Cut is refused");
+        assert_eq!(form.fields[at].value, "hunter2");
+        form.type_text("new");
+        assert_eq!(form.fields[at].value, "new", "typing still replaces the selected password");
+    }
+
+    #[test]
+    fn option_backspace_deletes_a_word_and_cmd_backspace_the_field() {
+        let mut form = setup(&[]);
+        let at = form.fields.iter().position(|f| !f.choice && !f.secret).expect("a text field");
+        form.focus_on(at);
+        for (before, after) in [("smtp.example.com", "smtp.example."), ("hello world  ", "hello "), ("abc.", "abc"), ("abc", ""), ("", ""), ("a b", "a ")] {
+            form.fields[at].value = before.into();
+            form.delete_word();
+            assert_eq!(form.fields[at].value, after, "Option+Backspace on {before:?}");
+        }
+        form.fields[at].value = "one two".into();
+        form.select_all();
+        form.delete_word();
+        assert_eq!(form.fields[at].value, "", "with a selection it deletes the selection");
+        form.fields[at].value = "one two".into();
+        form.delete_to_start();
+        assert_eq!(form.fields[at].value, "", "Cmd+Backspace clears everything before the caret");
+    }
+
     #[test]
     fn the_first_listing_only_sets_the_baseline() {
         let mut mail = Mail::new(vec![account("work")]);
@@ -3036,6 +3194,23 @@ mod tests {
         compose.edit(|form| form.type_text("é"));
         assert_eq!(compose.styles.len(), 4, "styles count characters, not bytes");
         assert!(!compose.styles[3].bold && compose.styles[3].italic);
+    }
+
+    #[test]
+    fn typing_over_the_selected_message_starts_with_the_style_being_typed_in_not_the_old_runs() {
+        let mut compose = message_compose("");
+        compose.toggle_bold();
+        compose.edit(|form| form.type_text("abc"));
+        assert!(compose.styles.iter().all(|s| s.bold));
+        compose.toggle_bold();
+        compose.edit(|form| {
+            form.select_all();
+        });
+        assert_eq!(compose.styles.len(), 3, "selecting changes no style");
+        assert!(compose.styles.iter().all(|s| s.bold));
+        compose.edit(|form| form.type_text("wxyz"));
+        assert_eq!(compose.message(), "wxyz");
+        assert_eq!(compose.styles, vec![Style::default(); 4], "no bold carries over from the replaced text");
     }
 
     #[test]

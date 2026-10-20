@@ -156,6 +156,8 @@ pub fn command_named(name: &str) -> Option<EditCommand> {
         "move_line_end" => MoveLineEnd,
         "move_document_start" => MoveDocumentStart,
         "move_document_end" => MoveDocumentEnd,
+        "move_page_up" => MovePageUp,
+        "move_page_down" => MovePageDown,
         "delete_backward" => DeleteBackward,
         "delete_forward" => DeleteForward,
         "delete_word_backward" => DeleteWordBackward,

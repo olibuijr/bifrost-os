@@ -1214,8 +1214,8 @@ impl Shell {
             Out::Named("Escape") => KEY_ESC,
             Out::Named("Up") => KEY_UP,
             Out::Named("Down") => KEY_DOWN,
-            Out::Named("Left") => KEY_LEFT,
-            Out::Named("Right") => KEY_RIGHT,
+            Out::Named("Left" | "ShiftLeft") => KEY_LEFT,
+            Out::Named("Right" | "ShiftRight") => KEY_RIGHT,
             _ => return true,
         };
         self.overview_key(code, true, KeyMods::default(), t);

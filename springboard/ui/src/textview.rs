@@ -12,7 +12,7 @@
 use std::ops::Range;
 use std::rc::Rc;
 
-use crate::text::TextEditor;
+use crate::text::{EditCommand, TextEditor};
 use crate::textfind::{Options as FindOptions, TextFinder};
 use crate::textmetrics::{CharTable, FontMetrics, GlyphSource};
 use crate::typeset::{Typesetter, TypesetterOptions};
@@ -243,6 +243,38 @@ impl TextView {
         self.editor.buf.move_char(right, extend);
         self.goal_x = None;
         self.scroll_to_caret(measure);
+    }
+
+    /// Runs an editing command over the wrapped text and scrolls the caret into view. Up, Down, Page Up and Page Down
+    /// move by visual line (a page is the viewport's height less one line, at least one line) and, as in a field, go to
+    /// the start or end of the text when there is no line left; every other command is the editor's. True when the text or
+    /// the selection changed. Cut, copy and paste need the pasteboard and are the caller's (`text::key_action`).
+    pub fn perform(&mut self, cmd: EditCommand, extend: bool, measure: &dyn Fn(&str) -> f32) -> bool {
+        let before = (self.editor.buf.anchor(), self.editor.buf.caret(), self.editor.buf.len());
+        match cmd {
+            EditCommand::MoveUp | EditCommand::MoveDown | EditCommand::MovePageUp | EditCommand::MovePageDown => {
+                let down = matches!(cmd, EditCommand::MoveDown | EditCommand::MovePageDown);
+                let page = matches!(cmd, EditCommand::MovePageUp | EditCommand::MovePageDown);
+                let steps = if page { ((self.viewport / self.line_height) as usize).saturating_sub(1).max(1) } else { 1 };
+                let mut at_edge = false;
+                for _ in 0..steps {
+                    if !self.move_vertical(down, extend, measure) {
+                        at_edge = true;
+                        break;
+                    }
+                }
+                if at_edge {
+                    let end = if down { self.text().len() } else { 0 };
+                    self.place_caret(end, extend);
+                }
+            }
+            _ => {
+                self.goal_x = None;
+                self.editor.perform(cmd, extend);
+            }
+        }
+        self.scroll_to_caret(measure);
+        before != (self.editor.buf.anchor(), self.editor.buf.caret(), self.editor.buf.len())
     }
 
     /// Types `s` over the selection, through the compose method (an apostrophe and a letter open the accent list).
@@ -476,6 +508,33 @@ mod tests {
         assert!(v.move_vertical(false, false, &m));
         assert_eq!(v.editor.buf.caret(), 0);
         assert!(!v.move_vertical(false, false, &m));
+    }
+
+    #[test]
+    fn page_keys_move_a_viewport_of_visual_lines_and_the_ends_go_to_the_text_ends() {
+        use crate::text::EditCommand::*;
+        // three lines of 20 points in a 60 point viewport: a page is two lines
+        let mut v = TextView::new("aa bb cc dd ee", 50.0, 20.0, 60.0);
+        v.place_caret(0, false);
+        assert!(v.perform(MovePageDown, false, &m));
+        assert_eq!(v.editor.buf.caret(), 12, "two lines down");
+        assert!(v.perform(MovePageDown, false, &m));
+        assert_eq!(v.editor.buf.caret(), 14, "no line left: the end of the text");
+        assert!(v.perform(MovePageUp, true, &m));
+        assert_eq!(v.editor.buf.selection(), 2..14, "shift+page up extends two lines up");
+        assert!(v.perform(MovePageUp, true, &m));
+        assert_eq!(v.editor.buf.selection(), 0..14, "no line left: it extends to the start");
+        // Up and Down on the first and last visual lines go to the ends of the text
+        v.place_caret(3, false);
+        assert!(v.perform(MoveUp, false, &m));
+        assert_eq!(v.editor.buf.caret(), 0);
+        v.place_caret(12, false);
+        assert!(v.perform(MoveDown, true, &m));
+        assert_eq!(v.editor.buf.selection(), 12..14);
+        // other commands are the editor's
+        v.place_caret(14, false);
+        assert!(v.perform(DeleteWordBackward, false, &m));
+        assert_eq!(v.text(), "aa bb cc dd ");
     }
 
     #[test]

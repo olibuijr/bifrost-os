@@ -34,7 +34,7 @@ use bifrost_app::passwords::{self, Error as KeyError};
 use bifrost_app::text_services;
 use bifrost_app::usernotif::{self, Request};
 use bifrost_app::{AppMenu, AppMenuItem, Ctx, DocumentEvent, KeyInput, OpenOptions, TouchKind};
-use bifrost_app::proto::{DocErrorCode, DocMode, CHORD_CTRL, CHORD_META};
+use bifrost_app::proto::{DocErrorCode, DocMode, CHORD_ALT, CHORD_CTRL, CHORD_META};
 use bifrost_core::json::Json;
 use springboard::deildu::http::Transport;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -172,6 +172,11 @@ const KEY_UP: u32 = 38;
 const KEY_DOWN: u32 = 40;
 /// evdev V, for the paste chord.
 const KEY_V: u32 = 47;
+/// The evdev codes of the other keys the editing chords name: A, C, X and Backspace.
+const KEY_A: u32 = 30;
+const KEY_C: u32 = 46;
+const KEY_X: u32 = 45;
+const KEY_BACKSPACE_CHORD: u32 = 14;
 
 /// What the window is waiting for from Passwords (the passwords group, through `service_reply`).
 enum Pending {
@@ -850,7 +855,7 @@ impl MailWindow {
 
     pub fn key(&mut self, ctx: &Ctx, k: KeyInput) -> bool {
         if let Some((key, mods)) = k.as_chord() {
-            return key == KEY_V && mods & (CHORD_CTRL | CHORD_META) != 0 && self.paste();
+            return self.chord(key, mods);
         }
         if self.mail.sheet.is_none() {
             return self.find_key(k);
@@ -960,6 +965,80 @@ impl MailWindow {
         let (origin, line_h, area) = self.reader_metrics;
         let position = origin + span.line as f32 * line_h;
         self.reader_scroll.jump_to((position - area / 3.0).max(0.0));
+    }
+
+    /// A chord for the field of the open sheet: Cmd or Ctrl with V, C or X, Cmd+A (select all), Option or Ctrl with Backspace
+    /// (the word before the caret) and Cmd+Backspace (everything before it). The shell sends Select All, Copy, Cut and Paste as
+    /// commands when it can (`Mail::commands`); the chords are what arrives when it cannot.
+    fn chord(&mut self, key: u32, mods: u32) -> bool {
+        let primary = mods & (CHORD_CTRL | CHORD_META) != 0;
+        if key == KEY_V && primary {
+            return self.paste();
+        }
+        if self.mail.sheet.is_none() {
+            return false;
+        }
+        if key == KEY_A && mods & CHORD_META != 0 {
+            return self.select_all();
+        }
+        if key == KEY_C && primary {
+            return self.copy();
+        }
+        if key == KEY_X && primary {
+            return self.cut();
+        }
+        if key == KEY_BACKSPACE_CHORD && mods & (CHORD_ALT | CHORD_CTRL) != 0 {
+            return self.edit_field(|form| form.delete_word());
+        }
+        if key == KEY_BACKSPACE_CHORD && mods & CHORD_META != 0 {
+            return self.edit_field(|form| form.delete_to_start());
+        }
+        false
+    }
+
+    /// An edit of the sheet's focused field that is not typing; false for the From picker, which takes no text.
+    fn edit_field(&mut self, change: impl FnOnce(&mut crate::state::Form)) -> bool {
+        if self.mail.sheet.is_none() || self.focus_is_picker() {
+            return false;
+        }
+        self.edit_form(change);
+        self.mail.sync_recipient_field();
+        self.dirty = true;
+        true
+    }
+
+    /// Edit > Select All in the open sheet: the whole text of the focused field is selected, so typing, Backspace or Paste
+    /// replaces it (an Add Account form retyped from the start). False when no field with text has the focus.
+    pub fn select_all(&mut self) -> bool {
+        if self.focus_is_picker() {
+            return false;
+        }
+        let done = self.form_mut().is_some_and(|form| form.select_all());
+        self.dirty |= done;
+        done
+    }
+
+    /// Edit > Copy: the selected text of the focused field goes on the clipboard. A password is never copied. Nothing changes
+    /// on screen, so the window needs no frame.
+    pub fn copy(&mut self) -> bool {
+        if let Some(text) = self.form_mut().and_then(|form| form.selected_text().map(str::to_string)) {
+            clipboard::set_text(&text);
+        }
+        false
+    }
+
+    /// Edit > Cut: the selected text of the focused field goes on the clipboard and leaves the field.
+    pub fn cut(&mut self) -> bool {
+        if self.focus_is_picker() {
+            return false;
+        }
+        let mut cut = None;
+        self.edit_form(|form| cut = form.cut());
+        let Some(text) = cut else { return false };
+        clipboard::set_text(&text);
+        self.mail.sync_recipient_field();
+        self.dirty = true;
+        true
     }
 
     pub fn paste(&mut self) -> bool {
@@ -2934,8 +3013,13 @@ impl MailWindow {
     }
 
     /// True when the field that takes typed text is not for typing: the From picker (a tap changes it) and the activity list.
+    /// Which standard editing commands can act right now, for the Edit menu: see `edit_enabled`.
+    pub fn edit_enabled(&self) -> (bool, bool, bool, bool) {
+        edit_enabled(&self.mail)
+    }
+
     fn focus_is_picker(&self) -> bool {
-        self.mail.sheet.as_ref().map(Sheet::form).is_some_and(|form| form.fields.get(form.focus).is_some_and(|f| f.label == "From" || f.label == "Activity" || f.choice))
+        picker_focused(&self.mail)
     }
 
     fn form_mut(&mut self) -> Option<&mut crate::state::Form> {
@@ -3039,6 +3123,7 @@ impl MailWindow {
                     .map_or((false, false), |f| (f.label == "From", f.choice));
                 if let Some(form) = self.form_mut() {
                     form.focus_on(index);
+                    form.deselect();
                 }
                 self.mail.sync_recipient_field();
                 if choice {
@@ -3092,6 +3177,24 @@ fn read_file(file: &mut std::fs::File, size: u64, limit: usize) -> Result<Vec<u8
     Ok(bytes)
 }
 
+/// True when the open sheet's focused field is a picker (From, Activity or a choice): it takes no typed text.
+fn picker_focused(mail: &Mail) -> bool {
+    mail.sheet.as_ref().map(Sheet::form).is_some_and(|form| form.fields.get(form.focus).is_some_and(|f| f.label == "From" || f.label == "Activity" || f.choice))
+}
+
+/// Which standard editing commands can act right now, for the Edit menu: `(select_all, copy, cut, paste)`. Select All needs
+/// a sheet's text field with text in it; Copy and Cut need a selection in a field that is not secret; Paste needs a field
+/// that takes typed text, or the find bar of an open message.
+fn edit_enabled(mail: &Mail) -> (bool, bool, bool, bool) {
+    let Some(form) = mail.sheet.as_ref().map(Sheet::form) else {
+        return (false, false, false, mail.open.is_some() && mail.find.is_some());
+    };
+    let typed = !picker_focused(mail);
+    let has_text = typed && form.fields.get(form.focus).is_some_and(|f| !f.value.is_empty());
+    let selected = typed && form.selected_text().is_some();
+    (has_text, selected, selected, typed)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3103,6 +3206,30 @@ mod tests {
         assert_eq!(menu_index(MENU_MOVE_BASE + 99, MENU_MOVE_BASE), None);
         assert_eq!(menu_index(MENU_REPLY, MENU_MOVE_BASE), None);
         assert_eq!(menu_index(MENU_COPY_BASE + 3, MENU_MOVE_BASE), None, "the next range is not this one");
+    }
+
+    #[test]
+    fn the_edit_commands_are_enabled_only_while_they_can_act() {
+        fn form(mail: &mut Mail) -> &mut crate::state::Form {
+            match mail.sheet.as_mut() {
+                Some(Sheet::Setup(form)) => form,
+                _ => panic!("no setup sheet"),
+            }
+        }
+        let mut mail = Mail::new(Vec::new());
+        assert_eq!(edit_enabled(&mail), (false, false, false, false), "no sheet: nothing to edit");
+        mail.open_setup();
+        form(&mut mail).focus_on(0);
+        assert_eq!(edit_enabled(&mail), (false, false, false, true), "an empty field takes a paste and nothing else");
+        form(&mut mail).type_text("Ana");
+        assert_eq!(edit_enabled(&mail), (true, false, false, true), "text to select, nothing selected yet");
+        form(&mut mail).select_all();
+        assert_eq!(edit_enabled(&mail), (true, true, true, true), "a selection can be copied and cut");
+        // a password is never copied or cut
+        form(&mut mail).focus_on(3);
+        form(&mut mail).type_text("hunter2");
+        form(&mut mail).select_all();
+        assert_eq!(edit_enabled(&mail), (true, false, false, true), "a secret field gives nothing up");
     }
 
     #[test]

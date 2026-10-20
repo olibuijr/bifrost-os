@@ -545,9 +545,11 @@ impl HwKeys {
     /// The CHORD_* bits of a Ctrl or Cmd chord over a letter, digit or punctuation key. None when
     /// no Ctrl or Meta is held, or the key is not one a chord can name.
     pub fn chord_mods(&self, code: u16) -> Option<u32> {
-        // Backspace, Up and Down are chord keys too: Cmd+Backspace deletes in the apps, Cmd+Up goes to the enclosing
-        // folder in Files and Cmd+Down opens the item (neither arrow types anything while Cmd is held)
-        if self.ctrl == 0 && self.meta == 0 || (!matches!(code, KEY_BACKSPACE | KEY_UP | KEY_DOWN) && !TEXT_KEYS.iter().any(|k| k.0 == code)) {
+        // Backspace, forward Delete, Up and Down are chord keys too: Cmd+Backspace deletes in the apps, Cmd+Up goes to the
+        // enclosing folder in Files and Cmd+Down opens the item (neither arrow types anything while Cmd is held).
+        // Option+Backspace and Option+Delete are chords as well (they delete a word); AltGr alone types.
+        let option_delete = matches!(code, KEY_BACKSPACE | KEY_DELETE) && self.alt > self.altgr;
+        if self.ctrl == 0 && self.meta == 0 && !option_delete || (!matches!(code, KEY_BACKSPACE | KEY_DELETE | KEY_UP | KEY_DOWN) && !TEXT_KEYS.iter().any(|k| k.0 == code)) {
             return None;
         }
         let mut mods = 0;
@@ -559,18 +561,43 @@ impl HwKeys {
         Some(mods)
     }
 
-    /// The CHORD_* bits of a navigation key (an arrow, Home or End) that goes to a text editor in front (the manifest's
-    /// `edit_keys`): every modifier held is named, so the editor can extend the selection (Shift), move by word (Alt or Ctrl)
-    /// and by line (Cmd). Home and End go even with no modifier, as `Some(0)`, since the apps never got them otherwise; an
-    /// arrow with none held is `None` (it types as before). None for any other key.
+    /// The CHORD_* bits of a navigation key (an arrow, Home, End, Page Up, Page Down or forward Delete) that goes to a text
+    /// editor in front (the manifest's `edit_keys`, or an SDK app with a text field focused): every modifier held is named, so
+    /// the editor can extend the selection (Shift), move by word (Alt or Ctrl) and by line (Cmd). The keys that are not
+    /// arrows go even with no modifier, as `Some(0)`, since the apps never got them otherwise; an arrow with none held is
+    /// `None` (it types as before). None for any other key.
     pub fn nav_mods(&self, code: u16) -> Option<u32> {
-        let ends = matches!(code, KEY_HOME | KEY_END);
+        let ends = matches!(code, KEY_HOME | KEY_END | KEY_PAGEUP | KEY_PAGEDOWN | KEY_DELETE);
         if !ends && !matches!(code, KEY_LEFT | KEY_RIGHT | KEY_UP | KEY_DOWN) {
             return None;
         }
         let held = [(self.ctrl > 0, CHORD_CTRL), (self.shift > 0, CHORD_SHIFT), (self.alt > self.altgr, CHORD_ALT), (self.meta > 0, CHORD_META)];
         let mods = held.iter().filter(|(on, _)| *on).fold(0u32, |all, (_, bit)| all | *bit);
         (mods != 0 || ends).then_some(mods)
+    }
+
+    /// The movement and delete keys of a shell text field that `typed` leaves out, because a modifier is held or because they type
+    /// nothing: Home and End; Option or Ctrl with Left and Right (by word); Cmd with Left and Right (the ends); Shift with any of
+    /// them (extend the selection) and with the plain arrows; forward Delete; Option or Ctrl with Backspace and Delete (a word);
+    /// Cmd+Backspace (everything before the caret). The field reads them as `Out::Named`. None for any other key.
+    pub fn field_edit(&self, code: u16) -> Option<Out> {
+        let (shift, word, line) = (self.shift > 0, self.ctrl > 0 || self.alt > self.altgr, self.meta > 0);
+        let pick = |plain: &'static str, extend: &'static str| Out::Named(if shift { extend } else { plain });
+        Some(match code {
+            KEY_HOME => pick("Home", "ShiftHome"),
+            KEY_END => pick("End", "ShiftEnd"),
+            KEY_LEFT if line => pick("Home", "ShiftHome"),
+            KEY_RIGHT if line => pick("End", "ShiftEnd"),
+            KEY_LEFT if word => pick("WordLeft", "ShiftWordLeft"),
+            KEY_RIGHT if word => pick("WordRight", "ShiftWordRight"),
+            KEY_LEFT if shift => Out::Named("ShiftLeft"),
+            KEY_RIGHT if shift => Out::Named("ShiftRight"),
+            KEY_DELETE if word => Out::Named("DeleteWordForward"),
+            KEY_DELETE => Out::Named("DeleteForward"),
+            KEY_BACKSPACE if line => Out::Named("DeleteLine"),
+            KEY_BACKSPACE if word => Out::Named("DeleteWord"),
+            _ => return None,
+        })
     }
 
     /// What a key-down types into a text control or the terminal: characters, Backspace, Enter
@@ -792,6 +819,37 @@ impl Shell {
         self.overview_key(code, down, mods, t)
     }
 
+    /// True while a layer of the shell itself takes the typing (`hw_type` serves it before any app): the sheets for
+    /// authentication, volumes, packages and network login (and the access, USB and firewall prompts, which swallow keys),
+    /// the Apps grid, an open or save panel, the compose sheet, the character viewer, the help viewer, Search and the
+    /// assistant. The app behind such a layer must not get the keys as chords, and the layer's own field gets them.
+    pub fn shell_takes_typing(&self) -> bool {
+        self.auth_showing()
+            || self.volume_showing()
+            || self.package_showing()
+            || self.net_auth_showing()
+            || self.access_showing()
+            || self.usb_showing()
+            || self.fw_showing()
+            || self.overview.grid.visible()
+            || self.doc_panel_open()
+            || self.compose_showing()
+            || self.char_viewer.is_some()
+            || self.quicksearch.is_shown()
+            || self.assistant.is_shown()
+            || self.help_viewer.is_some()
+    }
+
+    #[cfg(feature = "desktop-wayland")]
+    fn doc_panel_open(&self) -> bool {
+        self.doc_panel.is_some()
+    }
+
+    #[cfg(not(feature = "desktop-wayland"))]
+    fn doc_panel_open(&self) -> bool {
+        false
+    }
+
     /// Types a physical-keyboard key into the terminal, a hosted app's text field or the focused
     /// native text field of the app on screen (Search, Browser, Settings, Files, Deildu); elsewhere it is ignored. The effects are the field's (a Wi-Fi join, say).
     /// A Ctrl or Cmd chord the shell did not take goes to the external app in front. False when
@@ -801,21 +859,25 @@ impl Shell {
         if code == 32 && mods == (CHORD_META | CHORD_ALT) && self.dock_toggle_autohide() {
             return true;
         }
+        // a shell layer that takes the typing keeps its keys from the app behind it
+        if self.shell_takes_typing() {
+            return false;
+        }
         if !self.screen_on || !matches!(self.screen, Screen::App(AppId::External(_))) {
             return false;
         }
         self.ext_chord(u32::from(code), mods)
     }
 
-    /// A navigation key with its modifiers (`HwKeys::nav_mods`) for a text editor in front: the app that declares `edit_keys`
-    /// gets it as a chord on the evdev key. False when the app in front is not one (or no app is), so the key goes on as an
-    /// ordinary arrow.
+    /// A navigation key with its modifiers (`HwKeys::nav_mods`) for a text editor in front: the app that declares `edit_keys`,
+    /// or any SDK app with a text field focused (it reported the field's caret), gets it as a chord on the evdev key. False
+    /// when the app in front is not one (or no app is), so the key goes on as an ordinary arrow.
     pub fn hw_nav(&mut self, code: u16, mods: u32) -> bool {
-        if !self.screen_on {
+        if !self.screen_on || self.shell_takes_typing() {
             return false;
         }
         let Screen::App(AppId::External(slot)) = self.screen else { return false };
-        let takes = super::apphost::installed().get(slot as usize).is_some_and(|a| a.manifest.edit_keys);
+        let takes = super::apphost::installed().get(slot as usize).is_some_and(|a| a.manifest.edit_keys) || self.ext_text_focused();
         takes && self.ext_chord(u32::from(code), mods)
     }
 
@@ -1209,7 +1271,9 @@ impl Shell {
                 self.type_out(Out::Named("Paste"), t);
                 vec![]
             }
-            sc if !in_terminal => sc.out().map_or(vec![], |out| self.hw_type(out, t)),
+            // an SDK app takes the editing shortcuts too (Cmd+A, C, X, V, Z): `hw_type` hands them to its focused view as the
+            // standard commands, once an open sheet or panel of the shell has had its say
+            sc if !in_terminal || matches!(self.screen, Screen::App(AppId::External(_))) => sc.out().map_or(vec![], |out| self.hw_type(out, t)),
             _ => vec![],
         };
         self.dirty = true;
@@ -1309,8 +1373,49 @@ mod tests {
         assert_eq!(k.chord_mods(14), Some(CHORD_META), "Cmd+Backspace");
         assert_eq!(k.chord_mods(KEY_UP), Some(CHORD_META), "Cmd+Up");
         assert_eq!(k.chord_mods(KEY_DOWN), Some(CHORD_META), "Cmd+Down");
+        assert_eq!(k.chord_mods(KEY_DELETE), Some(CHORD_META), "Cmd+Delete");
         assert_eq!(k.chord_mods(KEY_LEFT), None, "the other arrows are not chord keys");
+        k.key(KEY_LEFTMETA, false);
+        assert_eq!(k.chord_mods(KEY_BACKSPACE), None, "plain Backspace types");
+        k.key(KEY_LEFTALT, true);
+        assert_eq!(k.chord_mods(KEY_BACKSPACE), Some(CHORD_ALT), "Option+Backspace deletes a word");
+        assert_eq!(k.chord_mods(KEY_DELETE), Some(CHORD_ALT), "Option+Delete deletes a word forward");
+        assert_eq!(k.chord_mods(49), None, "Option and a letter type (AltGr and the layout's third level)");
+        k.key(KEY_LEFTALT, false);
+        k.key(KEY_RIGHTALT, true);
+        assert_eq!(k.chord_mods(KEY_BACKSPACE), None, "AltGr alone is not Option");
+        k.key(KEY_RIGHTALT, false);
         // Cmd+Space is Search: the shell takes shortcuts before it asks for a chord
+    }
+
+    #[test]
+    fn a_shell_field_reads_the_movement_and_delete_keys() {
+        let mut k = HwKeys::default();
+        assert_eq!(k.field_edit(KEY_HOME), Some(Out::Named("Home")));
+        assert_eq!(k.field_edit(KEY_END), Some(Out::Named("End")));
+        assert_eq!(k.field_edit(KEY_DELETE), Some(Out::Named("DeleteForward")));
+        assert_eq!(k.field_edit(KEY_LEFT), None, "a plain arrow is `typed`");
+        assert_eq!(k.field_edit(KEY_BACKSPACE), None, "so is a plain Backspace");
+        assert_eq!(k.field_edit(49), None);
+        k.key(KEY_LEFTSHIFT, true);
+        assert_eq!(k.field_edit(KEY_LEFT), Some(Out::Named("ShiftLeft")));
+        assert_eq!(k.field_edit(KEY_RIGHT), Some(Out::Named("ShiftRight")));
+        assert_eq!(k.field_edit(KEY_HOME), Some(Out::Named("ShiftHome")));
+        k.key(KEY_LEFTALT, true);
+        assert_eq!(k.field_edit(KEY_LEFT), Some(Out::Named("ShiftWordLeft")), "Shift+Option+Left");
+        k.key(KEY_LEFTSHIFT, false);
+        assert_eq!(k.field_edit(KEY_LEFT), Some(Out::Named("WordLeft")), "Option+Left");
+        assert_eq!(k.field_edit(KEY_RIGHT), Some(Out::Named("WordRight")));
+        assert_eq!(k.field_edit(KEY_BACKSPACE), Some(Out::Named("DeleteWord")), "Option+Backspace");
+        assert_eq!(k.field_edit(KEY_DELETE), Some(Out::Named("DeleteWordForward")), "Option+Delete");
+        k.key(KEY_LEFTALT, false);
+        k.key(KEY_LEFTMETA, true);
+        assert_eq!(k.field_edit(KEY_LEFT), Some(Out::Named("Home")), "Cmd+Left");
+        assert_eq!(k.field_edit(KEY_RIGHT), Some(Out::Named("End")), "Cmd+Right");
+        assert_eq!(k.field_edit(KEY_BACKSPACE), Some(Out::Named("DeleteLine")), "Cmd+Backspace");
+        k.key(KEY_LEFTMETA, false);
+        k.key(KEY_RIGHTALT, true);
+        assert_eq!(k.field_edit(KEY_LEFT), None, "AltGr is not Option");
     }
 
     #[test]
@@ -1319,6 +1424,9 @@ mod tests {
         assert_eq!(k.nav_mods(KEY_LEFT), None, "a plain arrow types as before");
         assert_eq!(k.nav_mods(KEY_HOME), Some(0), "Home and End go to an editor alone");
         assert_eq!(k.nav_mods(KEY_END), Some(0));
+        assert_eq!(k.nav_mods(KEY_PAGEUP), Some(0), "Page Up, Page Down and forward Delete go to an editor alone too");
+        assert_eq!(k.nav_mods(KEY_PAGEDOWN), Some(0));
+        assert_eq!(k.nav_mods(KEY_DELETE), Some(0));
         assert_eq!(k.nav_mods(49), None, "other keys are not navigation keys");
         k.key(KEY_LEFTSHIFT, true);
         assert_eq!(k.nav_mods(KEY_LEFT), Some(CHORD_SHIFT));

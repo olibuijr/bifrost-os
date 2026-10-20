@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.15.6 — 2026-10-20
+
+- The Edit menu shows Select All, Copy, Cut and Paste enabled only while they can act: Select All with text in a sheet's field,
+  Copy and Cut with a selection in a field that is not a password, Paste in a field that takes typed text (or the find bar).
+- Typing or pasting over a selected message body no longer keeps the bold, italic, underline or colour of the text it replaces.
+
+## 0.15.5 — 2026-10-20
+
+- Select All (Cmd+A) in a sheet's field selects the field's whole text, and typing, Paste or Backspace replaces it, so an Add
+  Account form can be retyped from the start. Copy and Cut take the selected text to the clipboard (a password is never
+  copied or cut). Option+Backspace deletes the last word of the field and Cmd+Backspace the whole text.
+
 ## 0.15.4 — 2026-10-20
 
 - With no account the Favorites rows, Inbox included, are greyed and do nothing; they come alive once an account is added.

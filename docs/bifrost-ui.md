@@ -566,7 +566,7 @@ key. They also win over the shell's window chords: while the app in front publis
 app's Close Tab) or Cmd+M, the shell does not close or minimize the window with it (`Shell::app_owns_chord`, checked in
 `bin/shell.rs` before `hw_shortcut`). Publish the item disabled and without a key when it has nothing to do (the
 Browser's last tab) and the shell closes the window again. Shift+Cmd+W always closes the window, and the File menu's
-Close Window shows it while the app owns Cmd+W. Cmd+Y is not Redo (Ctrl+Y is), so an app can use it. Limits: 8 menus, 48 items each, titles cut
+Close Window shows it while the app owns Cmd+W. Cmd+Y is not Redo, so an app can use it. In the shell's own fields Ctrl+Y redoes; in an SDK app the shell leaves it to the app, where the text engine reads it as the yank (Ctrl+K then Ctrl+Y puts the killed text back) and redo is Shift+Cmd+Z. Limits: 8 menus, 48 items each, titles cut
 to 64 characters, and the whole message fits one 16 KiB packet (extra items and menus are dropped, never split).
 Gaps against AppKit, recorded: submenus are drawn flat (a header row with indented children, not a flyout), a checked
 item shows a check mark glyph in its title, there are no item icons, tooltips, `representedObject`, alternate
@@ -1108,6 +1108,32 @@ Model (`springboard/ui/src/text.rs`, `bifrost_ui::text`, no dependencies):
   `perform(EditCommand, extend)` and `handle_key(KeyCombo)` use `text::binding`: the emacs set every Cocoa field has
   (ctrl-A / E line start / end, F / B / N / P, D, H, K, Y, T, O), option-arrows by word, cmd-arrows by line / document,
   option-backspace, cmd-backspace, cmd-A / Z / shift-Z.
+- The standard text keys (`text::binding`, `text::key_action`; Shift extends the selection of every movement; the tests in
+  `ui/src/text.rs` run the whole table over the engine, the field and the Text Editor's own page):
+
+  | Keys | Does |
+  |---|---|
+  | Left, Right, Up, Down | by character; by line (a single line goes to its start or end) |
+  | Home, End, Cmd+Left, Cmd+Right, Ctrl+A, Ctrl+E | line start, line end |
+  | Cmd+Up, Cmd+Down, Cmd+Home, Cmd+End | document start, document end |
+  | Option+Left, Option+Right, Ctrl+Left, Ctrl+Right | word back, word forward |
+  | Page Up, Page Down | a page of lines up or down (`TextView::perform` knows its height; a field goes to its ends) |
+  | Backspace, Ctrl+H; Delete (Fn+Delete), Ctrl+D | delete back; delete forward |
+  | Option+Backspace; Option+Delete | delete the word back; the word forward |
+  | Cmd+Backspace; Ctrl+K | delete to the line start; kill to the end of the paragraph |
+  | Cmd+A, Cmd+C, Cmd+X, Cmd+V, Cmd+Z, Shift+Cmd+Z | select all, copy, cut, paste (own undo step), undo, redo; Ctrl+C / X / V / Z are the same |
+  | double click, triple click, drag | select a word, select the paragraph, grow the selection from the press by that unit |
+
+  How a key gets to a field: Cmd+A / C / X / V / Z are shell shortcuts; for an SDK app in front the shell sends them as
+  `Input::Command` (the app's own enabled menu item on the chord first, the chord itself when the app did not report the
+  command in `App::commands`), after a sheet or panel of the shell has had its say (`Shell::hw_shortcut` -> `hw_type` ->
+  `ext_type_out`). Ctrl+A reaches the app as a chord, because it is the line start there. The movement and delete keys with
+  a modifier, and Home, End, Page Up, Page Down and forward Delete, are chords too (`HwKeys::nav_mods`, `chord_mods`); they
+  go to an app that declares `edit_keys` and to any SDK app with a text field focused (it has reported a caret). The shell's
+  own fields (`shell/textfield.rs`) are separate and read the same keys as `Out::Named` names from `HwKeys::field_edit`
+  (`Home`, `End`, `WordLeft`, `WordRight`, `Shift...` to extend, `DeleteWord`, `DeleteWordForward`, `DeleteLine`,
+  `DeleteForward`) next to Cmd+A, C, X, V, Z; a secure field treats its text as one word. Shift+click needs the modifiers on
+  the pointer events, which the app protocol does not carry yet, so it is not in the SDK field or the Text Editor.
 - Terminals send keys, they do not edit: `terminal_keys` (`springboard/ui/src/terminal_keys.rs`, `bifrost_ui::terminal_keys`,
   no dependencies) maps chords to the bytes the pty expects, so the hardware keyboard, the on-screen Ctrl key and
   `term send_keys` agree. `control_byte` (Ctrl+A 1 through Ctrl+Z 26, Space/@ NUL, brackets, `^`, `_`), `alt_bytes`

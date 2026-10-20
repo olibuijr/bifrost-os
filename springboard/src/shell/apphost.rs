@@ -9,7 +9,7 @@
 use super::app_window_table::WindowTable;
 use crate::gfx::{Damage, Surface};
 use bifrost_proto::sys::{self, Channel, Map, Recv};
-use bifrost_proto::{Configure, KeyInput, ToApp, ToShell, TouchKind, WindowInput, CHORD_CTRL, CHORD_SHIFT, SDK_VERSION};
+use bifrost_proto::{Configure, KeyInput, ToApp, ToShell, TouchKind, WindowInput, CHORD_SHIFT, SDK_VERSION};
 use std::os::unix::process::{CommandExt, ExitStatusExt};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -1644,6 +1644,31 @@ pub fn vibrancy_available() -> bool {
     bifrost_render::glass::gpu() && !super::accessibility::reduce_transparency()
 }
 
+/// A standard editing shortcut: the command, and the key equivalent it has on the keyboard (evdev key, its letter and the
+/// CHORD_* bits of Cmd with it).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct EditShortcut {
+    command: bifrost_proto::Command,
+    key: u32,
+    letter: char,
+    mods: u32,
+}
+
+/// The editing command a shortcut's `Out` names (`Shortcut::out`).
+fn edit_command_of(name: &str) -> Option<EditShortcut> {
+    use bifrost_proto::{Command as C, CHORD_META};
+    let (command, key, letter, mods) = match name {
+        "Copy" => (C::Copy, 46, 'c', CHORD_META),
+        "Cut" => (C::Cut, 45, 'x', CHORD_META),
+        "Paste" => (C::Paste, 47, 'v', CHORD_META),
+        "SelectAll" => (C::SelectAll, 30, 'a', CHORD_META),
+        "Undo" => (C::Undo, 44, 'z', CHORD_META),
+        "Redo" => (C::Redo, 44, 'z', CHORD_META | CHORD_SHIFT),
+        _ => return None,
+    };
+    Some(EditShortcut { command, key, letter, mods })
+}
+
 impl Shell {
     pub(super) fn ext_cfg(&self) -> Configure {
         let (w, h) = self.ext_fg.and_then(|i| self.desk_app_size(super::AppId::External(i))).unwrap_or((self.w, self.h));
@@ -1962,6 +1987,13 @@ impl Shell {
                 }
             }
         }
+        // Cmd+A, C, X, V, Z (and the Ctrl forms): the standard editing command, as the Edit menu would send it
+        if let Out::Named(name) = out {
+            if let Some(edit) = edit_command_of(name) {
+                self.ext_edit_command(edit);
+                return;
+            }
+        }
         let key = match out {
             Out::Text(s) => KeyInput::Text(s),
             Out::Backspace => KeyInput::Code(8),
@@ -1972,9 +2004,6 @@ impl Shell {
             Out::Named("Up") => KeyInput::Code(38),
             Out::Named("Right") => KeyInput::Code(39),
             Out::Named("Down") => KeyInput::Code(40),
-            // Ctrl+Z and Ctrl+Shift+Z, as the keyboard sends them to an external app
-            Out::Named("Undo") => KeyInput::chord(44, CHORD_CTRL),
-            Out::Named("Redo") => KeyInput::chord(44, CHORD_CTRL | CHORD_SHIFT),
             // Back in an external app: the app closes what it has open
             Out::Named("Escape") => KeyInput::Code(1),
             _ => return,
@@ -1982,6 +2011,26 @@ impl Shell {
         if let Some(Some(h)) = self.ext_fg.and_then(|n| self.ext.get_mut(n as usize)) {
             h.key(key);
         }
+    }
+
+    /// A standard editing shortcut for the foreground app. The app's own enabled menu item on the chord wins
+    /// (`performKeyEquivalent:`); otherwise the app gets the standard command (`Input::Command`) when it reported that it
+    /// takes it, and the chord itself when it did not, so an app that reads chords still hears it.
+    fn ext_edit_command(&mut self, edit: EditShortcut) {
+        self.sync_key_windows();
+        let Some(Some(h)) = self.ext_fg.and_then(|n| self.ext.get_mut(n as usize)) else { return };
+        if let Some(id) = super::desktop_bar::app_menu_chord(&h.app_menus, edit.letter, edit.mods) {
+            h.input(WindowInput::MenuAction(id));
+        } else if h.commands.supports(edit.command) {
+            h.input(WindowInput::Command(edit.command));
+        } else {
+            h.key(KeyInput::chord(edit.key, edit.mods));
+        }
+    }
+
+    /// True when an SDK app is the screen in front (its window takes the keys).
+    pub fn sdk_app_front(&self) -> bool {
+        matches!(self.screen, Screen::App(AppId::External(_)))
     }
 
     /// The foreground app's field traits to the keyboard: the return key label (`ReturnKeyType::basic`). Secure and

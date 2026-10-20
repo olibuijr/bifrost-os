@@ -9,11 +9,18 @@ pub enum Key {
     Escape,
     Tab,
     Space,
+    /// The key above Return (backspace).
     Delete,
+    /// The forward-delete key (Fn+Delete on a laptop keyboard).
+    ForwardDelete,
     Left,
     Right,
     Up,
     Down,
+    Home,
+    End,
+    PageUp,
+    PageDown,
     F(u8),
 }
 
@@ -62,6 +69,30 @@ impl KeyCombo {
         }
         Some(c)
     }
+
+    /// The combination a chord names, from the evdev code of the key and the modifiers held (`ctrl`, `shift`, `alt`,
+    /// `cmd`): a letter, a digit, Space, Backspace, forward Delete, the four arrows, Home, End, Page Up and Page Down.
+    /// `None` for any other key. The physical key is named, whatever the layout types.
+    pub fn from_evdev(code: u32, ctrl: bool, shift: bool, alt: bool, cmd: bool) -> Option<KeyCombo> {
+        const ROWS: [(u32, &str); 3] = [(16, "qwertyuiop"), (30, "asdfghjkl"), (44, "zxcvbnm")];
+        let key = match code {
+            14 => Key::Delete,
+            111 => Key::ForwardDelete,
+            57 => Key::Space,
+            102 => Key::Home,
+            103 => Key::Up,
+            104 => Key::PageUp,
+            105 => Key::Left,
+            106 => Key::Right,
+            107 => Key::End,
+            108 => Key::Down,
+            109 => Key::PageDown,
+            2..=10 => Key::Char(char::from(b'1' + (code - 2) as u8)),
+            11 => Key::Char('0'),
+            _ => Key::Char(ROWS.iter().find_map(|(start, chars)| code.checked_sub(*start).and_then(|i| chars.chars().nth(i as usize)))?),
+        };
+        Some(KeyCombo { cmd, ctrl, alt, shift, key })
+    }
 }
 
 fn parse_key(t: &str) -> Option<Key> {
@@ -72,6 +103,11 @@ fn parse_key(t: &str) -> Option<Key> {
         "tab" => Key::Tab,
         "space" => Key::Space,
         "delete" | "backspace" => Key::Delete,
+        "forwarddelete" | "forward_delete" => Key::ForwardDelete,
+        "home" => Key::Home,
+        "end" => Key::End,
+        "pageup" | "page_up" => Key::PageUp,
+        "pagedown" | "page_down" => Key::PageDown,
         "left" => Key::Left,
         "right" => Key::Right,
         "up" => Key::Up,
@@ -103,10 +139,15 @@ impl fmt::Display for KeyCombo {
             Key::Tab => f.write_str("⇥"),
             Key::Space => f.write_str("Space"),
             Key::Delete => f.write_str("⌫"),
+            Key::ForwardDelete => f.write_str("⌦"),
             Key::Left => f.write_str("←"),
             Key::Right => f.write_str("→"),
             Key::Up => f.write_str("↑"),
             Key::Down => f.write_str("↓"),
+            Key::Home => f.write_str("↖"),
+            Key::End => f.write_str("↘"),
+            Key::PageUp => f.write_str("⇞"),
+            Key::PageDown => f.write_str("⇟"),
             Key::F(n) => write!(f, "F{n}"),
         }
     }
@@ -159,6 +200,21 @@ mod tests {
         assert_eq!(KeyCombo::parse("cmd+,").unwrap().key, Key::Char(','));
         assert_eq!(KeyCombo::parse("cmd++").unwrap().key, Key::Char('+'));
         assert_eq!(KeyCombo::parse("+"), Some(KeyCombo::new(Key::Char('+'))), "a bare plus is the plus key");
+    }
+
+    #[test]
+    fn evdev_chords_name_letters_digits_and_the_editing_keys() {
+        let c = |code, ctrl, shift, alt, cmd| KeyCombo::from_evdev(code, ctrl, shift, alt, cmd);
+        assert_eq!(c(30, false, false, false, true), KeyCombo::parse("cmd+a"));
+        assert_eq!(c(44, false, true, false, true), KeyCombo::parse("cmd+shift+z"));
+        assert_eq!(c(2, true, false, false, false), KeyCombo::parse("ctrl+1"));
+        assert_eq!(c(11, false, false, false, false), KeyCombo::parse("0"));
+        assert_eq!(c(14, false, false, true, false), KeyCombo::parse("alt+backspace"));
+        assert_eq!(c(111, false, false, false, false), KeyCombo::parse("forwarddelete"));
+        assert_eq!(c(105, false, true, true, false), KeyCombo::parse("alt+shift+left"));
+        assert_eq!(c(102, false, false, false, true), KeyCombo::parse("cmd+home"));
+        assert_eq!(c(109, false, true, false, false), KeyCombo::parse("shift+pagedown"));
+        assert_eq!(c(1, false, false, false, false), None, "Escape is not an editing key");
     }
 
     #[test]

@@ -43,6 +43,33 @@ fn is_word(c: char) -> bool {
     c.is_alphanumeric() || c == '_' || c == '\''
 }
 
+/// The char index where the word before `i` starts: the characters that are not part of a word are skipped, then the word.
+pub fn word_start_before(text: &str, i: usize) -> usize {
+    let chars: Vec<char> = text.chars().collect();
+    let mut k = i.min(chars.len());
+    while k > 0 && !is_word(chars[k - 1]) {
+        k -= 1;
+    }
+    while k > 0 && is_word(chars[k - 1]) {
+        k -= 1;
+    }
+    k
+}
+
+/// The char index where the word after `i` ends: the characters that are not part of a word are skipped, then the word.
+pub fn word_end_after(text: &str, i: usize) -> usize {
+    let chars: Vec<char> = text.chars().collect();
+    let n = chars.len();
+    let mut k = i.min(n);
+    while k < n && !is_word(chars[k]) {
+        k += 1;
+    }
+    while k < n && is_word(chars[k]) {
+        k += 1;
+    }
+    k
+}
+
 /// The word holding char `i` of `text`: the run of letters, digits, `_`
 /// and apostrophes around it; on any other char just that char, and the
 /// caret itself past the end.

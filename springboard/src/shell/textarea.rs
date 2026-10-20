@@ -903,12 +903,12 @@ impl TextArea {
                 self.replace_range(ui, range, "", t, true);
                 true
             }
-            Out::Named("Left") => {
+            Out::Named("Left" | "ShiftLeft") => {
                 self.caret = self.selection().map_or_else(|| super::edit::prev_boundary(&self.text, self.caret), |r| r.start);
                 self.anchor = None;
                 false
             }
-            Out::Named("Right") => {
+            Out::Named("Right" | "ShiftRight") => {
                 self.caret = self.selection().map_or_else(|| super::edit::next_boundary(&self.text, self.caret), |r| r.end);
                 self.anchor = None;
                 false
@@ -1177,6 +1177,17 @@ mod tests {
             let ink: f32 = l.adv.iter().take(l.text.trim_end().chars().count()).sum();
             assert!(ink <= 300.0, "{:?} fits", l.text);
         }
+    }
+
+    #[test]
+    fn shift_with_an_arrow_moves_the_caret_like_the_plain_arrow() {
+        let ui = ui();
+        let mut ta = area(&ui, 400.0);
+        typed(&mut ta, &ui, "abc", 0.0);
+        ta.edit(&ui, &Out::Named("ShiftLeft"), 1.0);
+        assert_eq!(ta.caret(), 2);
+        ta.edit(&ui, &Out::Named("ShiftRight"), 2.0);
+        assert_eq!(ta.caret(), 3);
     }
 
     #[test]
