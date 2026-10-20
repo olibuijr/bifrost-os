@@ -630,10 +630,16 @@ impl Shell {
     }
 
     /// The manifest id of the installed app whose window is in front, if one is.
+    #[cfg(feature = "desktop-wayland")]
     fn foreign_front_app_id(&self) -> Option<String> {
         let d = self.desk.as_ref()?;
         let win = d.native_windows.iter().find(|w| w.active)?;
         super::apphost::installed().iter().find(|a| a.manifest.wayland_app_id == win.app_id).map(|a| a.manifest.id.clone())
+    }
+    /// Without the desktop there are no foreign windows, so no installed app is in front.
+    #[cfg(not(feature = "desktop-wayland"))]
+    fn foreign_front_app_id(&self) -> Option<String> {
+        None
     }
 
     /// A touch while the viewer is up. A release on a control acts; a drag in the page scrolls it.
