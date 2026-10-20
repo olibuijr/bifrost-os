@@ -269,6 +269,10 @@ pub(super) fn unquote(s: &str) -> String {
     s.trim().trim_matches('"').trim_matches('\'').to_string()
 }
 
+/// The directory of an entry whose package is gone. It never exists, so a reader that joins a file name onto an app's
+/// directory finds nothing, instead of a file of the same name in the shell's working directory.
+const REMOVED_DIR: &str = "/nonexistent/bifrost-removed-app";
+
 /// An app found under `<root>/apps/<id>/current/`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Installed {
@@ -278,6 +282,19 @@ pub struct Installed {
 }
 
 impl Installed {
+    /// Whether the package is gone: the entry only keeps its slot (see `merge_installed`).
+    pub fn is_removed(&self) -> bool {
+        self.dir == Path::new(REMOVED_DIR)
+    }
+    /// This entry after its package was uninstalled: the id, name and window class stay (a running instance and its
+    /// windows still resolve), everything that grants anything goes.
+    fn removed(&self) -> Installed {
+        let m = &self.manifest;
+        Installed {
+            manifest: Manifest { id: m.id.clone(), name: m.name.clone(), version: m.version.clone(), wayland_app_id: m.wayland_app_id.clone(), ..Manifest::default() },
+            dir: PathBuf::from(REMOVED_DIR),
+        }
+    }
     pub fn exec_path(&self) -> PathBuf {
         self.dir.join(&self.manifest.exec)
     }
@@ -361,17 +378,37 @@ pub fn register(root: &Path) {
 /// `[[imported_types]]`), so `uttype` lookups, Open With and the share menu see them. An app whose declarations
 /// conflict is left out and reported on stderr; the others still register (`register_manifests`).
 fn sync_app_types(apps: &[Installed]) {
-    let texts: Vec<(&str, String)> = apps.iter().filter_map(|a| std::fs::read_to_string(a.dir.join("manifest.toml")).ok().map(|t| (a.manifest.id.as_str(), t))).collect();
+    let texts: Vec<(&str, String)> = apps.iter().filter(|a| !a.is_removed()).filter_map(|a| std::fs::read_to_string(a.dir.join("manifest.toml")).ok().map(|t| (a.manifest.id.as_str(), t))).collect();
     let refs: Vec<&str> = texts.iter().map(|(_, t)| t.as_str()).collect();
     for (i, e) in bifrost_ui::uttype_declarations::register_manifests(&refs) {
         eprintln!("springboard: app {} declares document types that were not registered: {e:?}", texts[i].0);
     }
 }
+/// How many installed apps the registry holds. A slot is a `u8` on the wire and in the window table, and the Dock and
+/// Launchpad list the first 200; a package beyond the limit is not listed or launchable, and the shell says so (`merge_installed`).
+pub const MAX_INSTALLED: usize = 200;
+static IGNORED_REPORTED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// Merges a scan into the registry, keeping every slot where it was (a slot is an app's identity for its windows and
+/// processes). An app whose package is gone from disk and from the scan keeps its slot as a removed entry: no
+/// permissions, entitlements, services or handlers, and `ext_open` refuses to start it, so the checks that look an
+/// app up by id stop trusting a manifest that no longer exists. Installing it again fills the same slot.
 pub(super) fn merge_installed(old: &[Installed], scanned: Vec<Installed>) -> Vec<Installed> {
-    let mut all = old.to_vec();
+    let mut all: Vec<Installed> = old
+        .iter()
+        .map(|a| {
+            let gone = !a.is_removed() && !scanned.iter().any(|s| s.manifest.id == a.manifest.id) && !a.dir.join("manifest.toml").exists();
+            if gone { a.removed() } else { a.clone() }
+        })
+        .collect();
+    let mut ignored = 0usize;
     for app in scanned {
         if let Some(existing) = all.iter_mut().find(|a| a.manifest.id == app.manifest.id) { *existing = app; }
-        else if all.len() < 200 { all.push(app); }
+        else if all.len() < MAX_INSTALLED { all.push(app); }
+        else { ignored += 1; }
+    }
+    if IGNORED_REPORTED.swap(ignored, std::sync::atomic::Ordering::Relaxed) != ignored && ignored > 0 {
+        bifrost_core::log::shell_logger("apphost").error(format!("{ignored} installed app(s) are not listed: the shell holds at most {MAX_INSTALLED}"));
     }
     all
 }
@@ -1830,6 +1867,10 @@ impl Shell {
         }
         let registered = installed();
         let Some(app) = registered.get(slot) else { return };
+        // an uninstalled app keeps its slot but has nothing to start
+        if app.is_removed() {
+            return;
+        }
         // An app that speaks another SDK protocol is started once and then left alone until its binary changes
         // (a new installed version has a new path): no respawn loop, and the window keeps saying why.
         if is_known_incompatible(&app.manifest.id, &app.exec_path()) {
@@ -3197,6 +3238,30 @@ mod registry_update_tests {
         assert_eq!(current[1].manifest.version,"2");
         assert_eq!(old[0].manifest.version,"1");
         assert_eq!(merge_installed(&current,current.clone()),current);
+    }
+
+    #[test]
+    fn an_uninstalled_app_keeps_its_slot_but_loses_its_permissions() {
+        let app=|id:&str| Installed {manifest:Manifest{id:id.into(),name:id.into(),exec:"app".into(),permissions:vec!["accessibility".into(),"storage".into()],..Manifest::default()},dir:PathBuf::from(format!("/nowhere/{id}"))};
+        let old=vec![app("a"),app("b"),app("c")];
+        let now=merge_installed(&old,vec![app("a"),app("c")]);
+        assert_eq!(now.iter().map(|a|a.manifest.id.as_str()).collect::<Vec<_>>(),vec!["a","b","c"],"the slots do not move");
+        assert!(now[1].is_removed() && now[1].manifest.permissions.is_empty() && now[1].manifest.exec.is_empty());
+        assert_eq!(now[1].manifest.name,"b");
+        assert!(!now[0].is_removed() && !now[2].is_removed());
+        // installing it again fills the same slot
+        let back=merge_installed(&now,vec![app("a"),app("b"),app("c")]);
+        assert!(!back[1].is_removed() && back[1].manifest.permissions.len()==2);
+        // an entry that is already removed stays removed and is stable
+        assert_eq!(merge_installed(&now,vec![app("a"),app("c")]),now);
+    }
+
+    #[test]
+    fn packages_beyond_the_limit_are_not_added() {
+        let app=|i:usize| Installed {manifest:Manifest{id:format!("app{i}"),exec:"app".into(),..Manifest::default()},dir:PathBuf::from(format!("/nowhere/{i}"))};
+        let scanned:Vec<Installed>=(0..MAX_INSTALLED+3).map(app).collect();
+        let all=merge_installed(&[],scanned);
+        assert_eq!(all.len(),MAX_INSTALLED);
     }
 }
 

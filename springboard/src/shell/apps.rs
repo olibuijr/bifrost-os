@@ -97,7 +97,7 @@ pub fn apps() -> &'static [AppDef] {
     let browser_slot = desktop.then(|| apphost::slot_of("is.olibuijr.browser.desktop")).flatten();
     let browser_index=APPS.iter().position(|a|a.id==AppId::Browser).unwrap();
     let browser_id=browser_slot.map(|i|AppId::External(i as u8)).unwrap_or(AppId::Browser);
-    let expected = APPS.len() + installed.len().min(200) - usize::from(files_slot.is_some()) - usize::from(browser_slot.is_some());
+    let expected = APPS.len() + installed.len().min(apphost::MAX_INSTALLED) - usize::from(files_slot.is_some()) - usize::from(browser_slot.is_some());
     let files_index = APPS.iter().position(|a| a.id == AppId::Files).unwrap();
     let files_id = files_slot.map(|i| AppId::External(i as u8)).unwrap_or(AppId::Files);
     if let Ok(g) = ALL.read() {
@@ -134,7 +134,7 @@ pub(super) fn build_list(installed: &[apphost::Installed]) -> Vec<AppDef> {
         let a = &installed[slot];
         v[browser_index] = AppDef { id: AppId::External(slot as u8), name: intern(&a.manifest.name), icon: intern(&a.manifest.id), icon_image: None };
     }
-    for (i, a) in installed.iter().enumerate().take(200) {
+    for (i, a) in installed.iter().enumerate().take(apphost::MAX_INSTALLED) {
         if files_slot == Some(i) || browser_slot == Some(i) { continue; }
         v.push(AppDef { id: AppId::External(i as u8), name: intern(&a.manifest.name), icon: intern(&a.manifest.id), icon_image: None });
     }
