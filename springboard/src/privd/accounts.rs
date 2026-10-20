@@ -412,6 +412,10 @@ fn service_set(p: &Json) -> Result<Json, PErr> {
         // never start the server without its account, key and a current local-network address
         screen_sharing_prepare()?;
     }
+    if !on && id == "screen_sharing" {
+        // off means off the network too: a start by hand finds the loopback address
+        screen_sharing_write_loopback();
+    }
     let mut argv = vec!["systemctl", if on { "enable" } else { "disable" }, "--now"];
     argv.extend_from_slice(units);
     run(&strs(&argv), None).map(|_| obj(vec![]))
@@ -425,14 +429,52 @@ fn screen_sharing_write_config() -> Result<(), PErr> {
     super::methods::write_nofollow(ss::CONF, &ss::config_text(&address, ss::PORT, ss::KEY)).map_err(|e| PErr::internal(e.to_string()))
 }
 
-/// What must exist before the server starts: the account that may sign in and the key. The address is refreshed.
+/// While Screen Sharing is off the configuration names the loopback address (best effort; nothing to do before the first setup).
+fn screen_sharing_write_loopback() {
+    use super::screen_sharing as ss;
+    if std::path::Path::new(ss::CONF).is_file() {
+        let _ = super::methods::write_nofollow(ss::CONF, &ss::config_text(ss::LOOPBACK, ss::PORT, ss::KEY));
+    }
+}
+
+/// Hands the key, the configuration and the lockout directory to `user` and writes the drop-in that makes the server run
+/// as that account (the server never runs as root). The directory must be a real root-owned one first, so a link planted
+/// by a user cannot make root give away another file. Files are opened without following links.
+fn screen_sharing_hand_over(user: &str) -> Result<(), PErr> {
+    use super::screen_sharing as ss;
+    use std::os::unix::fs::{fchown, MetadataExt, OpenOptionsExt, PermissionsExt};
+    if !valid_user(user) {
+        return Err(PErr::bad("invalid account name"));
+    }
+    let (users, _) = db();
+    let who = users.iter().find(|u| u.name == user && is_human(u)).ok_or_else(|| PErr::bad("not a person's account"))?;
+    let meta = std::fs::symlink_metadata(ss::DIR).map_err(|e| PErr::internal(format!("{}: {e}", ss::DIR)))?;
+    if !ss::dir_trusted(meta.is_dir(), meta.uid(), meta.mode()) {
+        return Err(PErr::internal(format!("{} must be a directory owned by root that nobody else writes", ss::DIR)));
+    }
+    std::fs::create_dir_all(ss::FAILLOCK_DIR).map_err(|e| PErr::internal(e.to_string()))?;
+    for (path, mode) in [(ss::KEY, 0o600), (ss::CONF, 0o600), (ss::FAILLOCK_DIR, 0o700)] {
+        let f = std::fs::OpenOptions::new().read(true).custom_flags(super::methods::O_NOFOLLOW).open(path).map_err(|e| PErr::internal(format!("{path}: {e}")))?;
+        fchown(&f, Some(who.uid), Some(who.gid)).map_err(|e| PErr::internal(format!("{path}: {e}")))?;
+        f.set_permissions(std::fs::Permissions::from_mode(mode)).map_err(|e| PErr::internal(format!("{path}: {e}")))?;
+    }
+    std::fs::create_dir_all(ss::DROPIN_DIR).map_err(|e| PErr::internal(e.to_string()))?;
+    super::methods::write_nofollow(ss::DROPIN, &ss::unit_dropin_text(user)).map_err(|e| PErr::internal(e.to_string()))?;
+    std::fs::set_permissions(ss::DROPIN, std::fs::Permissions::from_mode(0o644)).map_err(|e| PErr::internal(e.to_string()))?;
+    run(&strs(&["systemctl", "daemon-reload"]), None)
+}
+
+/// What must exist before the server starts: the account that may sign in and the key. The address is refreshed and the
+/// account gets what the server reads.
 fn screen_sharing_prepare() -> Result<(), PErr> {
     use super::screen_sharing as ss;
-    let ready = std::fs::read_to_string(ss::USERS).ok().and_then(|t| ss::user_from(&t)).is_some() && std::path::Path::new(ss::KEY).is_file();
-    if !ready {
+    let user = std::fs::read_to_string(ss::USERS).ok().and_then(|t| ss::user_from(&t));
+    let ready = user.is_some() && std::path::Path::new(ss::KEY).is_file();
+    let Some(user) = user.filter(|_| ready) else {
         return Err(PErr::bad("choose the account for Screen Sharing first"));
-    }
-    screen_sharing_write_config()
+    };
+    screen_sharing_write_config()?;
+    screen_sharing_hand_over(&user)
 }
 
 /// `screen_sharing.configure {user}`: the account whose password lets a viewer in. The first call makes this computer's
@@ -458,6 +500,7 @@ fn screen_sharing_configure(p: &Json) -> Result<Json, PErr> {
         std::fs::set_permissions(ss::USERS, std::fs::Permissions::from_mode(0o644)).map_err(|e| PErr::internal(e.to_string()))?;
     }
     screen_sharing_write_config()?;
+    screen_sharing_hand_over(user)?;
     // a running server keeps the account it started with: restart it only when it is running
     let _ = run(&strs(&["systemctl", "try-restart", "bifrost-wayvnc.service"]), None);
     Ok(obj(vec![("user", s(user))]))

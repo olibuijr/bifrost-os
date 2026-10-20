@@ -86,5 +86,67 @@ class PublicRepoExport(unittest.TestCase):
                 pub.publish_public_repo(clean_source, site)
 
 
+class RepositorySigning(unittest.TestCase):
+    def test_no_key_means_unsigned_with_a_loud_warning(self):
+        self.assertIsNone(pub.signing_config({}))
+        self.assertIsNone(pub.signing_config({"BIFROST_REPO_SIGN_KEY": "  "}))
+        self.assertEqual(pub.signing_args(None), [])
+        self.assertEqual(pub.signing_env(None), {})
+        self.assertIn("UNSIGNED", pub.unsigned_warning())
+
+    def test_a_key_signs_with_its_own_gnupg_home_under_out_lab(self):
+        cfg = pub.signing_config({"BIFROST_REPO_SIGN_KEY": "ABCD1234"})
+        self.assertEqual(pub.signing_args(cfg), ["--sign", "--key", "ABCD1234"])
+        self.assertTrue(cfg["gnupghome"].endswith("out/lab/gnupg"))
+        self.assertEqual(pub.signing_env(cfg), {"GNUPGHOME": cfg["gnupghome"]})
+        other = pub.signing_config({"BIFROST_REPO_SIGN_KEY": "K", "BIFROST_REPO_GNUPGHOME": "/srv/keys"})
+        self.assertEqual(other["gnupghome"], "/srv/keys")
+
+    def test_a_configured_key_that_is_missing_stops_the_publish(self):
+        cfg = pub.signing_config({"BIFROST_REPO_SIGN_KEY": "ABCD1234"})
+        missing = mock.Mock(return_value=mock.Mock(returncode=2))
+        with self.assertRaises(SystemExit):
+            pub.check_signing_key(cfg, runner=missing)
+        pub.check_signing_key(cfg, runner=mock.Mock(return_value=mock.Mock(returncode=0)))
+
+    def test_signatures_are_exported_next_to_what_they_sign(self):
+        with tempfile.TemporaryDirectory() as d:
+            source = os.path.join(d, "repo")
+            os.makedirs(source)
+            name = "springboard-shell-1.2.3.123-1-x86_64.pkg.tar.zst"
+            for fname, data in ((name, b"package"), (name + ".sig", b"psig"), ("bifrost.db.tar.zst", b"db"),
+                                ("bifrost.db.tar.zst.sig", b"dbsig")):
+                with open(os.path.join(source, fname), "wb") as f:
+                    f.write(data)
+            os.symlink("bifrost.db.tar.zst", os.path.join(source, "bifrost.db"))
+            os.symlink("bifrost.db.tar.zst.sig", os.path.join(source, "bifrost.db.sig"))
+            repo_dir, files = pub.publish_public_repo(source, os.path.join(d, "site"))
+            self.assertEqual(files[-1], "bifrost.db", "the ordinary database URL is still replaced last")
+            for fname in (name + ".sig", "bifrost.db.tar.zst.sig", "bifrost.db.sig"):
+                self.assertIn(fname, files)
+                self.assertTrue(os.path.isfile(os.path.join(repo_dir, fname)), fname)
+            with open(os.path.join(repo_dir, "bifrost.db.sig"), "rb") as f:
+                self.assertEqual(f.read(), b"dbsig")
+
+    def test_an_unsigned_database_removes_the_stale_database_signature(self):
+        with tempfile.TemporaryDirectory() as d:
+            source = os.path.join(d, "repo")
+            os.makedirs(source)
+            with open(os.path.join(source, "springboard-shell-1.2.4.1-1-x86_64.pkg.tar.zst"), "wb") as f:
+                f.write(b"package")
+            with open(os.path.join(source, "bifrost.db.tar.zst"), "wb") as f:
+                f.write(b"db")
+            os.symlink("bifrost.db.tar.zst", os.path.join(source, "bifrost.db"))
+            site = os.path.join(d, "site")
+            repo_dir = os.path.join(site, "arch", "x86_64")
+            os.makedirs(repo_dir)
+            for stale in ("bifrost.db.sig", "bifrost.db.tar.zst.sig"):
+                with open(os.path.join(repo_dir, stale), "wb") as f:
+                    f.write(b"old")
+            pub.publish_public_repo(source, site)
+            self.assertFalse(os.path.exists(os.path.join(repo_dir, "bifrost.db.sig")))
+            self.assertFalse(os.path.exists(os.path.join(repo_dir, "bifrost.db.tar.zst.sig")))
+
+
 if __name__ == "__main__":
     unittest.main()

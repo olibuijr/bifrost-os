@@ -1,6 +1,9 @@
-//! `bifrost-mcp --serve`: the system service (bifrost-mcp.service, on by default). Agents connect over
+//! `bifrost-mcp --serve`: the system service (bifrost-mcp.service). It runs on lab installs only (the unit needs the
+//! marker /etc/bifrost/lab-install); a public install never starts it. Agents connect over
 //! - MCP Streamable HTTP at http://<machine>:7420/mcp (POST JSON-RPC, JSON replies, keep-alive), with
-//!   `Authorization: Bearer <token>` from /var/lib/bifrost-mcp/token (made on first start; required on every TCP request, local agents use the unix socket);
+//!   `Authorization: Bearer <token>` from /var/lib/bifrost-mcp/token (made on first start; required on every TCP request, local agents use the unix socket).
+//!   It listens on loopback unless BIFROST_MCP_LISTEN says otherwise (reach it with ssh forwarding), and a peer outside
+//!   loopback and BIFROST_MCP_ALLOW (default: the private ranges) is dropped before it can send a byte;
 //! - a Unix socket, /run/bifrost-mcp.sock (newline-delimited JSON-RPC, like stdio), for agents on the machine:
 //!   root and the desktop account's group.
 //! All sessions share one context behind a lock, so input from several agents is applied in order.
@@ -9,7 +12,7 @@
 use crate::tools::Ctx;
 use std::fs::OpenOptions;
 use std::io::{self, BufRead, BufReader, Read, Write};
-use std::net::{TcpListener, TcpStream};
+use std::net::{IpAddr, Ipv4Addr, TcpListener, TcpStream};
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -26,12 +29,55 @@ const HEADER_LIMIT: usize = 16 << 10;
 const MAX_HEADERS: usize = 100;
 /// Open HTTP connections; more are answered 503.
 const MAX_HTTP_SESSIONS: usize = 32;
+/// Where the HTTP side listens unless BIFROST_MCP_LISTEN names another address: loopback only (ssh forwarding reaches it).
+const DEFAULT_LISTEN: &str = "127.0.0.1";
+/// The peers accepted from outside loopback unless BIFROST_MCP_ALLOW names others: the private IPv4 ranges (a lab network).
+const DEFAULT_ALLOW: &str = "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,169.254.0.0/16";
 /// Deadline for the whole request head of a connection that has not presented a token yet.
 const PRE_AUTH_TIMEOUT: Duration = Duration::from_secs(10);
 /// Read timeout for a connection that has authenticated (keep-alive agents).
 const SESSION_TIMEOUT: Duration = Duration::from_secs(300);
 
 type Shared = Arc<Mutex<Ctx>>;
+
+/// An IPv4 network: address and prefix length.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Net4 {
+    addr: u32,
+    bits: u8,
+}
+
+impl Net4 {
+    /// `a.b.c.d/n` (a bare address is a /32).
+    fn parse(s: &str) -> Option<Net4> {
+        let (a, n) = s.trim().split_once('/').map_or((s.trim(), "32"), |(a, n)| (a, n));
+        let bits: u8 = n.parse().ok().filter(|b| *b <= 32)?;
+        Some(Net4 { addr: u32::from(a.parse::<Ipv4Addr>().ok()?), bits })
+    }
+
+    fn contains(&self, ip: Ipv4Addr) -> bool {
+        let mask = if self.bits == 0 { 0 } else { u32::MAX << (32 - self.bits as u32) };
+        u32::from(ip) & mask == self.addr & mask
+    }
+}
+
+/// The networks of a comma-separated list; entries that do not parse are dropped (so a typo narrows access, never widens it).
+fn parse_allow(spec: &str) -> Vec<Net4> {
+    spec.split(',').filter(|e| !e.trim().is_empty()).filter_map(Net4::parse).collect()
+}
+
+/// Whether a TCP peer may talk to the server at all: loopback always (the token is still required), an IPv4 peer inside
+/// one of `allow`, nothing else.
+fn peer_allowed(ip: IpAddr, allow: &[Net4]) -> bool {
+    if ip.is_loopback() {
+        return true;
+    }
+    let v4 = match ip {
+        IpAddr::V4(v4) => Some(v4),
+        IpAddr::V6(v6) => v6.to_ipv4_mapped(),
+    };
+    v4.is_some_and(|v4| allow.iter().any(|n| n.contains(v4)))
+}
 
 static OPEN_HTTP: AtomicUsize = AtomicUsize::new(0);
 
@@ -78,7 +124,8 @@ pub fn run(ctx: Ctx) {
     let ctx: Shared = Arc::new(Mutex::new(ctx));
     let token = Arc::new(token());
     let port: u16 = std::env::var("BIFROST_MCP_PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(7420);
-    let addr = std::env::var("BIFROST_MCP_LISTEN").unwrap_or_else(|_| "0.0.0.0".into());
+    let addr = std::env::var("BIFROST_MCP_LISTEN").ok().filter(|a| !a.trim().is_empty()).unwrap_or_else(|| DEFAULT_LISTEN.into());
+    let allow = Arc::new(parse_allow(&std::env::var("BIFROST_MCP_ALLOW").ok().filter(|a| !a.trim().is_empty()).unwrap_or_else(|| DEFAULT_ALLOW.into())));
     let _ = std::fs::remove_file(SOCKET);
     match UnixListener::bind(SOCKET) {
         Ok(l) => {
@@ -102,6 +149,10 @@ pub fn run(ctx: Ctx) {
     });
     eprintln!("bifrost-mcp {} serving http://{addr}:{port}/mcp and {SOCKET}", env!("CARGO_PKG_VERSION"));
     for s in l.incoming().flatten() {
+        // outside the lab's ranges nothing is read from the peer: it never reaches the token check
+        if !s.peer_addr().is_ok_and(|p| peer_allowed(p.ip(), &allow)) {
+            continue;
+        }
         match Slot::acquire() {
             Some(slot) => {
                 let (ctx, token) = (ctx.clone(), token.clone());
@@ -452,6 +503,38 @@ mod tests {
         assert!(Slot::acquire().is_none());
         held.pop();
         assert!(Slot::acquire().is_some());
+    }
+
+    #[test]
+    fn the_server_listens_on_loopback_unless_told_otherwise() {
+        assert_eq!(DEFAULT_LISTEN, "127.0.0.1");
+        assert_ne!(DEFAULT_LISTEN, "0.0.0.0");
+    }
+
+    #[test]
+    fn networks_parse_and_match_by_prefix() {
+        let n = Net4::parse("192.168.0.0/16").unwrap();
+        assert!(n.contains("192.168.20.140".parse().unwrap()));
+        assert!(!n.contains("192.169.0.1".parse().unwrap()));
+        let one = Net4::parse("10.99.0.200").unwrap();
+        assert!(one.contains("10.99.0.200".parse().unwrap()) && !one.contains("10.99.0.201".parse().unwrap()));
+        assert!(Net4::parse("0.0.0.0/0").unwrap().contains("8.8.8.8".parse().unwrap()));
+        assert!(Net4::parse("10.0.0.0/33").is_none() && Net4::parse("nope").is_none() && Net4::parse("1.2.3/8").is_none());
+        assert!(parse_allow("bogus, ,10.0.0.0/8").len() == 1, "a bad entry is dropped, never widened");
+        assert!(parse_allow("").is_empty());
+    }
+
+    #[test]
+    fn only_loopback_and_the_private_ranges_reach_the_server() {
+        let allow = parse_allow(DEFAULT_ALLOW);
+        for ok in ["127.0.0.1", "::1", "10.99.0.1", "192.168.20.140", "172.16.5.5", "169.254.1.1", "::ffff:192.168.1.12"] {
+            assert!(peer_allowed(ok.parse().unwrap(), &allow), "{ok}");
+        }
+        for bad in ["8.8.8.8", "172.32.0.1", "11.0.0.1", "2001:db8::1", "::ffff:8.8.8.8"] {
+            assert!(!peer_allowed(bad.parse().unwrap(), &allow), "{bad}");
+        }
+        assert!(peer_allowed("127.0.0.1".parse().unwrap(), &[]), "loopback needs no allow entry");
+        assert!(!peer_allowed("192.168.1.12".parse().unwrap(), &[]), "an empty allow list lets nobody in from the network");
     }
 
     #[test]

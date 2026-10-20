@@ -9,6 +9,10 @@ Packages and the pacman database are also exported to ~/Projects/bifrost-site/si
 served at https://bifrost.olibuijr.com/arch/$arch (override the site root with BIFROST_PUBLIC_SITE).
 Installed systems use that repository from /etc/pacman.conf. Version = Cargo version + epoch seconds,
 so every publish is newer than the last.
+Signing (docs/installer-and-boot.md, "Package signing"): with BIFROST_REPO_SIGN_KEY set (a key id or fingerprint in the GnuPG
+home BIFROST_REPO_GNUPGHOME, default out/lab/gnupg, which is never in git) every package and the repository database are
+signed (makepkg --sign, repo-add --sign) and the .sig files are published next to them. Without a key the publish still
+works, unsigned, with a loud warning; a configured key that cannot sign stops the publish.
 The package carries only BifrOSt's own and openly licensed files: tools/check-package-licenses.py inspects it
 before it enters the repo, and a failing package is deleted and the publish stops.
 The system assets (UI fonts, app icons, wallpapers) ship in it too, at /usr/share/springboard/system-assets: they are
@@ -26,6 +30,7 @@ PUBLIC_SITE = os.path.abspath(os.path.expanduser(os.environ.get(
 ASSETS_SRC = os.path.join(REPO, "springboard/assets")
 _h, _, _p = os.environ.get("BIFROST_REPO_BIND", "192.168.1.12:8079").partition(":")
 BIND = (_h, int(_p or 8079))
+DEFAULT_GNUPGHOME = os.path.join(REPO, "out/lab/gnupg")
 
 
 def run(cmd, **kw):
@@ -33,6 +38,42 @@ def run(cmd, **kw):
     if r.returncode:
         sys.exit(f"failed: {' '.join(map(str, cmd))}")
     return r
+
+
+def signing_config(env=None):
+    """The repository signing setup from the environment, or None when no key is configured:
+    {"key": id, "gnupghome": dir}. The key lives in a GnuPG home under out/lab (BIFROST_REPO_GNUPGHOME overrides), never in git."""
+    env = os.environ if env is None else env
+    key = env.get("BIFROST_REPO_SIGN_KEY", "").strip()
+    if not key:
+        return None
+    home = os.path.abspath(os.path.expanduser(env.get("BIFROST_REPO_GNUPGHOME", "") or DEFAULT_GNUPGHOME))
+    return {"key": key, "gnupghome": home}
+
+
+def signing_env(cfg):
+    """Environment additions that make gpg (and so makepkg and repo-add) use the signing key's home."""
+    return {"GNUPGHOME": cfg["gnupghome"]} if cfg else {}
+
+
+def signing_args(cfg):
+    """Extra arguments for makepkg and repo-add (both take --sign --key); empty when unsigned."""
+    return ["--sign", "--key", cfg["key"]] if cfg else []
+
+
+def check_signing_key(cfg, runner=subprocess.run):
+    """Stop early when a configured key is not usable, instead of publishing unsigned by accident."""
+    r = runner(["gpg", "--batch", "--list-secret-keys", cfg["key"]], env={**os.environ, **signing_env(cfg)},
+               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if r.returncode:
+        sys.exit(f"pc-publish: BIFROST_REPO_SIGN_KEY={cfg['key']} has no secret key in {cfg['gnupghome']}; "
+                 "create it (packaging/arch/keys/README.md) or unset BIFROST_REPO_SIGN_KEY to publish unsigned")
+
+
+def unsigned_warning():
+    return ("pc-publish: WARNING: BIFROST_REPO_SIGN_KEY is not set; the packages and the repository database are published "
+            "UNSIGNED. Installed systems only trust a signed repository once the key is generated and shipped "
+            "(packaging/arch/keys/README.md).")
 
 
 def license_status(package):
@@ -119,9 +160,22 @@ def publish_public_repo(source_dir, site_dir=PUBLIC_SITE):
         name = os.path.basename(package)
         _atomic_repo_copy(package, os.path.join(repo_dir, name), immutable=True)
         published.append(name)
-    # Keep the compressed target available before replacing pacman's ordinary database URL.
-    for name, source in (("bifrost.db.tar.zst", db_tar), ("bifrost.db", db)):
+        sig = package + ".sig"
+        if os.path.lexists(sig):
+            _atomic_repo_copy(_contained_path(source_root, sig), os.path.join(repo_dir, name + ".sig"), immutable=True)
+            published.append(name + ".sig")
+    # Keep the compressed target available before replacing pacman's ordinary database URL. The database signatures go
+    # just before their database; a stale one from an earlier signed publish is removed when this database is unsigned.
+    db_sig = db_tar + ".sig"
+    signed_db = os.path.lexists(db_sig)
+    for name, source, sig_name in (("bifrost.db.tar.zst", db_tar, "bifrost.db.tar.zst.sig"), ("bifrost.db", db, "bifrost.db.sig")):
         source = _contained_path(source_root, source)
+        dest_sig = os.path.join(repo_dir, sig_name)
+        if signed_db:
+            _atomic_repo_copy(_contained_path(source_root, db_sig), dest_sig)
+            published.append(sig_name)
+        elif os.path.lexists(dest_sig):
+            os.unlink(dest_sig)
         _atomic_repo_copy(source, os.path.join(repo_dir, name))
         published.append(name)
     return repo_dir, published
@@ -165,6 +219,11 @@ def main():
     a = ap.parse_args()
     prof = "release" if a.release else "fast"
     t0 = time.time()
+    sign = signing_config()
+    if sign:
+        check_signing_key(sign)
+    else:
+        print(unsigned_warning(), file=sys.stderr)
     # the 8079 mirror must hold every package the new springboard-shell depends on, or Midget's update 404s and rolls back
     if not a.skip_mirror_sync:
         try:
@@ -213,30 +272,43 @@ def main():
     for f in ("fast/PKGBUILD", "fast/springboard.install"):
         shutil.copy(os.path.join(src, f), work)
     assets_env = stage_system_assets(work)
-    env = {**os.environ, **assets_env, "PC_VER": ver, "PC_PKGSRC": src, "PC_BIN": binpath, "PC_BOOTWEAVE": bootweave, "PC_PORTAL": portal, "PC_PRIVD": privd, "PC_MCP": mcp, "PC_BIFROSTD": bifrostd, "PC_AUDIOD": audiod, "PC_SVC_AUDIOD": svc_audiod, "PC_SVC_NETD": svc_netd, "PC_SVC_UPDATED": svc_updated, "PC_AUDIO_BENCH": audio_bench, "PC_MIDID": midid, "PC_ALSA_PLUGIN": alsa_plugin, "PC_CMD_DIR": tdir, **wm_env, "PC_GUARD": os.path.join(REPO,"out/bifrost-update-guard-publish"), "PKGDEST": POOL, "BUILDDIR": work + "/b", "SRCDEST": work + "/s", "PKGEXT": ".pkg.tar.zst"}
-    run(["makepkg", "-f", "--nodeps", "--skipinteg", "--nocheck"], cwd=work, env=env, stdout=subprocess.DEVNULL)
+    env = {**os.environ, **assets_env, "PC_VER": ver, "PC_PKGSRC": src, "PC_BIN": binpath, "PC_BOOTWEAVE": bootweave, "PC_PORTAL": portal, "PC_PRIVD": privd, "PC_MCP": mcp, "PC_BIFROSTD": bifrostd, "PC_AUDIOD": audiod, "PC_SVC_AUDIOD": svc_audiod, "PC_SVC_NETD": svc_netd, "PC_SVC_UPDATED": svc_updated, "PC_AUDIO_BENCH": audio_bench, "PC_MIDID": midid, "PC_ALSA_PLUGIN": alsa_plugin, "PC_CMD_DIR": tdir, **wm_env, "PC_GUARD": os.path.join(REPO,"out/bifrost-update-guard-publish"), "PKGDEST": POOL, "BUILDDIR": work + "/b", "SRCDEST": work + "/s", "PKGEXT": ".pkg.tar.zst", **signing_env(sign)}
+    run(["makepkg", "-f", "--nodeps", "--skipinteg", "--nocheck", *signing_args(sign)], cwd=work, env=env, stdout=subprocess.DEVNULL)
     pkg = sorted(glob.glob(os.path.join(POOL, f"springboard-shell-{ver}-1-x86_64.pkg.tar.zst")))[-1]
     # licence guard: the package may carry only BifrOSt's own and openly licensed files. A failing package is deleted
     # before it reaches the repo database or the public export.
     if license_status(pkg):
         os.unlink(pkg)
+        if os.path.exists(pkg + ".sig"):
+            os.unlink(pkg + ".sig")
         sys.exit(f"refusing to publish {os.path.basename(pkg)}: the licence guard failed (see above); the package was deleted")
     # packages built before the guard existed may hold such files too: drop them, so the public export cannot offer them again
     for old in sorted(glob.glob(os.path.join(POOL, "springboard-shell-*.pkg.tar.zst"))):
         if old != pkg and license_status(old) == 1:
             print(f"removed {os.path.basename(old)}: it holds files BifrOSt may not redistribute", file=sys.stderr)
             os.unlink(old)
+            if os.path.exists(old + ".sig"):
+                os.unlink(old + ".sig")
     # keep the last 3 packages
     olds = sorted(glob.glob(os.path.join(POOL, "springboard-shell-*.pkg.tar.zst")), key=os.path.getmtime)[:-3]
     for o in olds:
         os.unlink(o)
-    run(["repo-add", "-q", "-R", os.path.join(POOL, "bifrost.db.tar.zst"), pkg], stdout=subprocess.DEVNULL)
+        if os.path.exists(o + ".sig"):
+            os.unlink(o + ".sig")
+    # an unsigned run must not leave the database signature of an older run next to the new database
+    if not sign:
+        for stale in ("bifrost.db.tar.zst.sig", "bifrost.db.sig"):
+            if os.path.lexists(os.path.join(POOL, stale)):
+                os.unlink(os.path.join(POOL, stale))
+    run(["repo-add", "-q", *signing_args(sign), "-R", os.path.join(POOL, "bifrost.db.tar.zst"), pkg],
+        env={**os.environ, **signing_env(sign)}, stdout=subprocess.DEVNULL)
     public_dir, public_files = publish_public_repo(POOL)
     pid = None if a.no_serve else serve()
     print(f"build {built_at - t0:.1f}s; package/publish {time.time() - built_at:.1f}s")
     print(f"published springboard-shell {ver} ({os.path.getsize(pkg) // 1024} KiB, {prof}) in {time.time() - t0:.0f}s"
           + (f"; repo served at http://{BIND[0]}:{BIND[1]}/bifrost/x86_64 (pid {pid})" if pid else "")
-          + f"; public repo exported to {public_dir} ({len(public_files)} files)")
+          + f"; public repo exported to {public_dir} ({len(public_files)} files)"
+          + (f"; signed with {sign['key']}" if sign else "; UNSIGNED"))
 
 
 if __name__ == "__main__":

@@ -49,6 +49,8 @@ package_bifrost_files() {
     install -Dm755 "$PC_LOG" "$pkgdir/usr/bin/bifrost-log"
   fi
   install -Dm644 "$here/bifrost-mcp.service" "$pkgdir/usr/lib/systemd/system/bifrost-mcp.service"
+  # lab machines only (the scriptlet copies it to /etc/bifrost/mcp.env next to the lab-install marker)
+  install -Dm644 "$here/mcp-lab.env" "$pkgdir/usr/share/bifrost/mcp-lab.env"
   # socket-activated services (docs/boot-architecture.md "Services on demand"): the supervisor, the target it runs
   # under, and the trigger that starts the target on the first desktop frame
   install -Dm755 "$PC_BIFROSTD" "$pkgdir/usr/bin/bifrostd"
@@ -56,7 +58,7 @@ package_bifrost_files() {
   # The system services bifrostd supervises (docs/services.md "System services"): the audio (media player), network and
   # update services are part of the OS, not store apps. The package owns /usr/lib/bifrost/services/<id>/ (a path no earlier
   # install has a file at, so pacman finds no conflict) with the manifest from springboard/system/<dir> and the executable
-  # the manifest names. bifrostd reads it read-only; a store-installed copy wins only with a newer manifest version.
+  # the manifest names. bifrostd reads it read-only; a packaged id always wins, a store-installed copy never overrides it.
   # Sockets stay <root>/run/<id>.sock. PC_SVC_AUDIOD / PC_SVC_NETD / PC_SVC_UPDATED override the binary paths; they default
   # to the directory of the shell binary, where `cargo build -p audiod -p netd -p updated` puts them.
   local spec sdir sbin svar sbinpath sid sexec smanifest
@@ -139,6 +141,11 @@ package_bifrost_files() {
     cp -r --no-preserve=mode,ownership "$PC_SYSTEM_ASSETS"/. "$pkgdir/usr/share/springboard/system-assets"/
     find "$pkgdir/usr/share/springboard/system-assets" -type d -exec chmod 755 {} +
     find "$pkgdir/usr/share/springboard/system-assets" -type f -exec chmod 644 {} +
+  fi
+  # public key that signs this repository (packaging/arch/keys/README.md); the scriptlet imports it into pacman's keyring.
+  # Absent until the key is generated: the package then ships none and the repository stays unsigned.
+  if [[ -f $here/keys/bifrost-repo.gpg ]]; then
+    install -Dm644 "$here/keys/bifrost-repo.gpg" "$pkgdir/usr/share/bifrost/keys/bifrost-repo.gpg"
   fi
   install -Dm755 "$here/prune-stale-assets" "$pkgdir/usr/lib/springboard/prune-stale-assets"
   install -Dm644 "$here/../assets-allowlist.txt" "$pkgdir/usr/lib/springboard/assets-allowlist.txt"

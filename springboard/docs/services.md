@@ -22,13 +22,14 @@ to talk to.
 
 `bifrostd` supervises the package-provided services next to the store-installed ones (`bifrostd::scan_with`):
 - The package directory is read-only, one directory per id, named after the manifest `id`, with the `exec` inside it.
-- A store-installed `<root>/apps/<id>/current` wins only when its manifest `version` is **newer** (numeric, component by
-  component). An older or equal store copy loses, so a stale install from the tablet era (0.1.0) never shadows the OS.
-  When the store copy later wins, the usual health-checked swap applies.
+- A packaged id always wins: a store-installed `<root>/apps/<id>/current` with the same id is ignored whatever its version,
+  so a catalogue entry cannot replace a system service's binary. The OS updates its services through the package.
 - Sockets stay `<root>/run/<id>.sock`, so clients (`bifrost_app::system_audio`, `bifrost-audio`, the Settings and
   Software Update tools) and the app sandbox bind (`src/bare/app_policy.rs`) are unchanged.
-- Who a service runs as is the manifest field `user`: empty or `root` (the default; network and update need it), `session`
-  (the user logged in to the desktop), or a system user name. `is.olibuijr.audio` is `user = "session"`: it decodes internet
+- Who a service runs as is the manifest field `user`. Nothing runs as root by default: empty means `session` (the user logged
+  in to the desktop). Only a packaged manifest may say `root` (network and update do, by name) or a system user name; a
+  store-installed service may only be `session`, and one that names anything else is neither bound nor started
+  (`effective_user` in `bifrostd/src/lib.rs`). `is.olibuijr.audio` is `user = "session"`: it decodes internet
   radio streams and user files, so a decoder bug must not be remote-to-root.
 - `bifrostd` runs as root and drops privileges for a `user` service in `pre_exec`: `setgroups` (the user's primary and
   supplementary groups from `/etc/group`, so audio-device access is kept), `setgid`, `setuid`, then

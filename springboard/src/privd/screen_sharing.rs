@@ -8,7 +8,11 @@
 //! - `rsa_private_key_file`: the RSA-AES security type, with a key generated once on this computer (`KEY`), so the
 //!   password and the screen are encrypted on the wire;
 //! - `address` is this computer's local-network address, not `0.0.0.0` and not a public interface;
-//! - the unit is not enabled until Settings turns Screen Sharing on, and it needs these files to start at all.
+//! - the unit is not enabled until Settings turns Screen Sharing on, and it needs these files to start at all;
+//! - while it is off the configuration is rewritten to the loopback address, so even a manual start is not on the network;
+//! - the server runs as the account that may sign in, never as root: privd hands that account the key, the configuration
+//!   and the lockout directory, and writes a unit drop-in naming it (`unit_dropin_text`). Only the signed-in account's own
+//!   password can be checked by a non-root process, which is why the account that signs in is the account that runs it.
 use std::net::Ipv4Addr;
 
 /// Root-owned state of the feature. The directory is readable so Settings can show the account; the key is not.
@@ -19,6 +23,13 @@ pub const CONF: &str = "/var/lib/springboard/screen-sharing/wayvnc.conf";
 pub const KEY: &str = "/var/lib/springboard/screen-sharing/rsa_key.pem";
 /// The one account name that may sign in, one line (`pam_listfile item=user`).
 pub const USERS: &str = "/var/lib/springboard/screen-sharing/users";
+/// The sign-in lockout counters (`pam_faillock dir=`), written by the server's own user, which cannot write `/var/lib/faillock`.
+pub const FAILLOCK_DIR: &str = "/var/lib/springboard/screen-sharing/faillock";
+/// The drop-in that gives `bifrost-wayvnc.service` its `User=`; the unit does not start without it.
+pub const DROPIN_DIR: &str = "/etc/systemd/system/bifrost-wayvnc.service.d";
+pub const DROPIN: &str = "/etc/systemd/system/bifrost-wayvnc.service.d/10-user.conf";
+/// The address the server is bound to while Screen Sharing is off.
+pub const LOOPBACK: &str = "127.0.0.1";
 /// The VNC port.
 pub const PORT: u16 = 5900;
 /// Bits of the generated RSA key.
@@ -34,6 +45,17 @@ pub fn config_text(address: &str, port: u16, key_file: &str) -> String {
          enable_pam=true\n\
          rsa_private_key_file={key_file}\n"
     )
+}
+
+/// The drop-in text that makes the server run as `user`.
+pub fn unit_dropin_text(user: &str) -> String {
+    format!("# Written by bifrost-privd (screen_sharing.configure); changes are overwritten.\n[Service]\nUser={user}\n")
+}
+
+/// Whether the feature directory may be trusted before files in it are handed to a user: a real directory (not a
+/// link), owned by root, writable by nobody else.
+pub fn dir_trusted(is_dir: bool, uid: u32, mode: u32) -> bool {
+    is_dir && uid == 0 && mode & 0o022 == 0
 }
 
 /// The allow list `pam_listfile` reads: the one account that may sign in.
@@ -90,6 +112,35 @@ mod tests {
         assert!(c.contains("enable_auth=true\n") && c.contains("enable_pam=true\n"));
         assert!(c.contains(&format!("rsa_private_key_file={KEY}\n")));
         assert!(!c.contains("enable_auth=false") && !c.contains("0.0.0.0") && !c.contains("relax_encryption"));
+    }
+
+    #[test]
+    fn the_server_runs_as_the_account_and_is_loopback_while_off() {
+        assert_eq!(unit_dropin_text("olof"), "# Written by bifrost-privd (screen_sharing.configure); changes are overwritten.\n[Service]\nUser=olof\n");
+        assert!(!unit_dropin_text("olof").contains("User=root"));
+        let off = config_text(LOOPBACK, PORT, KEY);
+        assert!(off.contains("address=127.0.0.1\n") && off.contains("enable_auth=true\n"));
+        assert!(!valid_address(LOOPBACK), "loopback is for the off state only, never a sharing address");
+        assert!(FAILLOCK_DIR.starts_with(DIR));
+    }
+
+    #[test]
+    fn the_unit_and_the_pam_service_match_the_runtime_files() {
+        let unit = include_str!("../../../packaging/arch/bifrost-wayvnc.service");
+        assert!(unit.contains(&format!("ConditionPathExists={DROPIN}")), "no start without the User= drop-in");
+        assert!(!unit.lines().any(|l| l.trim() == "User=root"));
+        assert!(unit.contains("ProtectSystem=strict") && unit.contains("CapabilityBoundingSet=\n"));
+        assert!(unit.contains(FAILLOCK_DIR), "the lockout directory is writable for the sandboxed server");
+        let pam = include_str!("../../../packaging/arch/pam-bifrost-wayvnc");
+        assert!(pam.contains(&format!("dir={FAILLOCK_DIR}")) && !pam.contains("dir=/var/lib/faillock"));
+    }
+
+    #[test]
+    fn files_are_handed_over_only_from_a_root_owned_directory_nobody_else_writes() {
+        assert!(dir_trusted(true, 0, 0o755));
+        assert!(!dir_trusted(false, 0, 0o755), "a link or a file");
+        assert!(!dir_trusted(true, 1000, 0o755), "owned by a user: it could swap a file for a link");
+        assert!(!dir_trusted(true, 0, 0o775) && !dir_trusted(true, 0, 0o757));
     }
 
     #[test]

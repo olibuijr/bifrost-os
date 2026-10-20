@@ -3,8 +3,15 @@
 //! At boot `bifrostd zram-setup` (run by `bifrost-zram.service`) puts a zram swap device of half the RAM (at most
 //! 8 GiB) at priority 100. While the service runs, [`Pager::tick`] reads `/proc/meminfo`, `/proc/pressure/memory`
 //! (PSI) and `/proc/swaps`; under pressure with less than 25 % of swap free it adds one 1 GiB swap file in
-//! `/var/lib/bifrost/swap` (priority -2, so zram is used first). After 10 minutes of normal pressure it removes the
-//! newest swap file that holds no pages. The level (`normal`, `warn`, `critical`) is written to
+//! `/var/cache/bifrost/swap` (priority -2, so zram is used first). After 10 minutes of normal pressure it removes the
+//! newest swap file that holds no pages.
+//!
+//! The swap directory is on the `@cache` subvolume (`BTRFS_LAYOUT` in the installer), which is never snapshotted: an
+//! active swap file would make `btrfs subvolume snapshot @system` fail, and the root subvolume is compressed and
+//! copy-on-write, which btrfs refuses for swap. A file is created empty, marked `chattr +C` (no copy-on-write, so no
+//! compression) before any data is written, then preallocated. Creation needs free space for the file plus a reserve. A
+//! failure backs off (10 minutes, doubling); a failure that cannot get better (the filesystem refuses the file for swap)
+//! switches disk swap off until bifrostd restarts, and zram carries on alone. The level (`normal`, `warn`, `critical`) is written to
 //! `/run/bifrost/memory-pressure` for the shell and tools; apps keep their in-process `DispatchSource` source.
 //!
 //! The decisions are pure ([`decide`], [`classify`], the parsers) so they can be tested with fixed inputs. The
@@ -17,12 +24,19 @@ use std::process::Command;
 pub const GIB: u64 = 1 << 30;
 /// zram is never larger than this, whatever the RAM.
 pub const ZRAM_MAX: u64 = 8 * GIB;
-pub const SWAP_DIR: &str = "/var/lib/bifrost/swap";
+pub const SWAP_DIR: &str = "/var/cache/bifrost/swap";
 pub const SWAP_FILE_BYTES: u64 = GIB;
 /// Swap files bifrostd may hold at once (8 GiB of disk swap).
 pub const MAX_SWAP_FILES: usize = 8;
 /// Free swap below this share (percent of swap total) under pressure adds a file.
 pub const LOW_SWAP_PCT: u64 = 25;
+/// Free disk space that must remain after a swap file is created.
+pub const SPACE_RESERVE: u64 = 2 * GIB;
+/// Seconds to wait after the first failed creation; it doubles with each failure, up to [`CREATE_BACKOFF_MAX`].
+pub const CREATE_BACKOFF_FIRST: u64 = 600;
+pub const CREATE_BACKOFF_MAX: u64 = 6 * 3600;
+/// Failures in a row after which disk swap is given up for this run of bifrostd.
+pub const MAX_CREATE_FAILURES: u32 = 4;
 /// Seconds of normal pressure before an unused swap file is removed.
 pub const CALM_FOR: u64 = 600;
 /// Where the level is published (the `/run/bifrost` directory is created by privd's RuntimeDirectory).
@@ -167,6 +181,41 @@ pub struct State {
     pub calm_since: Option<u64>,
     /// the swap files this pager created (absolute paths, in creation order)
     pub files: Vec<String>,
+    /// no new swap file before this time (unix seconds) after a failed creation
+    pub create_blocked_until: u64,
+    /// creations that failed in a row
+    pub create_failures: u32,
+    /// disk swap is given up (a definite failure, or too many in a row); zram carries on
+    pub swap_disabled: bool,
+}
+
+/// The wait before the next creation after `failures` failures in a row: 10 minutes, doubling, at most 6 hours.
+pub fn create_backoff(failures: u32) -> u64 {
+    CREATE_BACKOFF_FIRST.saturating_mul(1u64 << failures.saturating_sub(1).min(10)).min(CREATE_BACKOFF_MAX)
+}
+
+/// Why a swap file could not be made. `definite` means retrying cannot help (the filesystem refuses the file for swap).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SwapError {
+    pub msg: String,
+    pub definite: bool,
+}
+
+impl std::fmt::Display for SwapError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.msg)
+    }
+}
+
+impl State {
+    /// Records a failed creation at `now`: back off, or give up when the failure was definite or too many came in a row.
+    pub fn creation_failed(&mut self, e: &SwapError, now: u64) {
+        self.create_failures = self.create_failures.saturating_add(1);
+        self.create_blocked_until = now.saturating_add(create_backoff(self.create_failures));
+        if e.definite || self.create_failures >= MAX_CREATE_FAILURES {
+            self.swap_disabled = true;
+        }
+    }
 }
 
 /// What the effects layer must do.
@@ -207,7 +256,8 @@ pub fn decide(m: &Meminfo, psi: Psi, swaps: &[SwapDev], st: &State, now: u64) ->
     } else {
         next.calm_since = None;
         let free_pct = if m.swap_total == 0 { 0 } else { m.swap_free.saturating_mul(100) / m.swap_total };
-        if (m.swap_total == 0 || free_pct < LOW_SWAP_PCT) && st.files.len() < MAX_SWAP_FILES {
+        let allowed = !st.swap_disabled && now >= st.create_blocked_until;
+        if allowed && (m.swap_total == 0 || free_pct < LOW_SWAP_PCT) && st.files.len() < MAX_SWAP_FILES {
             let path = next_path(&st.files);
             next.files.push(path.clone());
             acts.push(Action::CreateSwapFile(path));
@@ -227,14 +277,59 @@ fn run(args: &[&str]) -> Result<(), String> {
     }
 }
 
+/// Free bytes for an unprivileged writer on the filesystem holding `dir`, from the output of `stat -f -c "%a %S" dir`
+/// (free blocks, block size).
+pub fn parse_free_bytes(text: &str) -> Option<u64> {
+    let mut it = text.split_whitespace();
+    let blocks: u64 = it.next()?.parse().ok()?;
+    let size: u64 = it.next()?.parse().ok()?;
+    Some(blocks.saturating_mul(size))
+}
+
+/// Whether a swap file of `need` bytes fits in `free` bytes and leaves [`SPACE_RESERVE`].
+pub fn has_room(free: u64, need: u64) -> bool {
+    free >= need.saturating_add(SPACE_RESERVE)
+}
+
+/// The output of `stat -f -c <format> dir`.
+fn stat_fs(dir: &str, format: &str) -> Option<String> {
+    let out = Command::new("stat").args(["-f", "-c", format, dir]).output().ok()?;
+    out.status.success().then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+fn transient(msg: String) -> SwapError {
+    SwapError { msg, definite: false }
+}
+
+fn definite(msg: String) -> SwapError {
+    SwapError { msg, definite: true }
+}
+
 /// Creates, formats and enables one swap file of [`SWAP_FILE_BYTES`] at `path` with priority -2.
-pub fn create_swap_file(path: &str) -> Result<(), String> {
-    fs::create_dir_all(SWAP_DIR).map_err(|e| format!("{SWAP_DIR}: {e}"))?;
+///
+/// The file is made empty and marked no-copy-on-write before it gets any data (btrfs honours the flag only on an empty
+/// file), then preallocated. On btrfs a refusal of the flag, or of `swapon`, is definite. Anything left behind by a
+/// failure is the caller's to remove.
+pub fn create_swap_file(path: &str) -> Result<(), SwapError> {
+    use std::os::unix::fs::OpenOptionsExt;
+    fs::create_dir_all(SWAP_DIR).map_err(|e| transient(format!("{SWAP_DIR}: {e}")))?;
+    let free = stat_fs(SWAP_DIR, "%a %S").and_then(|t| parse_free_bytes(&t)).ok_or_else(|| transient(format!("{SWAP_DIR}: cannot read the free space")))?;
+    if !has_room(free, SWAP_FILE_BYTES) {
+        return Err(transient(format!("not enough free space for a swap file ({} MiB free)", free >> 20)));
+    }
+    let on_btrfs = stat_fs(SWAP_DIR, "%T").is_some_and(|t| t == "btrfs");
+    let _ = fs::remove_file(path);
+    fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(path).map_err(|e| transient(format!("{path}: {e}")))?;
+    // an ordinary filesystem may not know the flag; on btrfs the file cannot be swap without it
+    if let Err(e) = run(&["chattr", "+C", path]) {
+        if on_btrfs {
+            return Err(definite(format!("no-copy-on-write flag: {e}")));
+        }
+    }
     let size = SWAP_FILE_BYTES.to_string();
-    run(&["fallocate", "-l", size.as_str(), path])?;
-    run(&["chmod", "600", path])?;
-    run(&["mkswap", path])?;
-    run(&["swapon", "-p", "-2", path])
+    run(&["fallocate", "-l", size.as_str(), path]).map_err(transient)?;
+    run(&["mkswap", path]).map_err(transient)?;
+    run(&["swapon", "-p", "-2", path]).map_err(|e| SwapError { definite: on_btrfs, msg: e })
 }
 
 /// Disables and deletes a swap file. The file stays if it cannot be disabled.
@@ -307,8 +402,9 @@ impl Pager {
         Pager { state: State { files: existing_files(), ..State::default() }, level_path: PathBuf::from(LEVEL_PATH) }
     }
 
-    /// Samples the system, decides and carries out the actions. A failed creation is forgotten (the file is removed),
-    /// and a failed removal keeps the file in the state so it is retried after the next calm spell.
+    /// Samples the system, decides and carries out the actions. A failed creation is forgotten (the file is removed)
+    /// and backs creation off, or switches disk swap off when it cannot succeed; a failed removal keeps the file in the
+    /// state so it is retried after the next calm spell.
     pub fn tick(&mut self, now: u64) {
         let Some((m, p, s)) = sample() else { return };
         let (acts, next) = decide(&m, p, &s, &self.state, now);
@@ -316,10 +412,18 @@ impl Pager {
         for a in acts {
             match a {
                 Action::CreateSwapFile(path) => {
-                    if let Err(e) = create_swap_file(&path) {
-                        eprintln!("bifrostd: swap file {path}: {e}");
-                        self.state.files.retain(|f| *f != path);
-                        let _ = fs::remove_file(&path);
+                    match create_swap_file(&path) {
+                        Ok(()) => self.state.create_failures = 0,
+                        Err(e) => {
+                            self.state.files.retain(|f| *f != path);
+                            let _ = fs::remove_file(&path);
+                            self.state.creation_failed(&e, now);
+                            if self.state.swap_disabled {
+                                eprintln!("bifrostd: swap file {path}: {e}; disk swap is off until bifrostd restarts (zram carries on)");
+                            } else {
+                                eprintln!("bifrostd: swap file {path}: {e}; next try in {} s", create_backoff(self.state.create_failures));
+                            }
+                        }
                     }
                 }
                 Action::RemoveSwapFile(path) => {
@@ -438,16 +542,66 @@ mod tests {
         assert!(matches!(a[1], Action::CreateSwapFile(_)));
 
         // the file limit stops creation
-        let full = State { level: Level::Warning, files: (1..=MAX_SWAP_FILES).map(|i| format!("{SWAP_DIR}/swap{i}")).collect(), calm_since: None };
+        let full = State { level: Level::Warning, files: (1..=MAX_SWAP_FILES).map(|i| format!("{SWAP_DIR}/swap{i}")).collect(), ..State::default() };
         let (a, _) = decide(&mem(0), psi(12.0, 0.0), &[], &full, 100);
         assert!(a.is_empty(), "already at {MAX_SWAP_FILES} files, level unchanged");
+    }
+
+    #[test]
+    fn the_swap_directory_is_off_the_snapshotted_compressed_root() {
+        assert_eq!(SWAP_DIR, "/var/cache/bifrost/swap", "@cache, not @system");
+        assert!(!SWAP_DIR.starts_with("/var/lib"));
+    }
+
+    #[test]
+    fn free_space_is_read_from_stat_and_must_leave_a_reserve() {
+        assert_eq!(parse_free_bytes("262144 4096\n"), Some(GIB));
+        assert_eq!(parse_free_bytes("x 4096"), None);
+        assert_eq!(parse_free_bytes(""), None);
+        assert!(!has_room(2 * GIB, GIB), "the reserve is kept");
+        assert!(has_room(GIB + SPACE_RESERVE, GIB));
+    }
+
+    #[test]
+    fn creation_backs_off_and_a_definite_failure_ends_disk_swap() {
+        assert_eq!(create_backoff(1), 600);
+        assert_eq!(create_backoff(2), 1200);
+        assert_eq!(create_backoff(3), 2400);
+        assert_eq!(create_backoff(40), CREATE_BACKOFF_MAX);
+
+        let mem = Meminfo { total: 16 * GIB, available: GIB, swap_total: 4 * GIB, swap_free: 0 };
+        let mut st = State::default();
+        st.creation_failed(&transient("no space".into()), 1000);
+        assert!(!st.swap_disabled);
+        assert_eq!(st.create_blocked_until, 1600);
+        // while blocked, pressure creates nothing, and the level is still published
+        let (a, _) = decide(&mem, psi(12.0, 0.0), &[], &st, 1500);
+        assert_eq!(a, vec![Action::Publish(Level::Warning)]);
+        // after the wait it tries again
+        let (a, _) = decide(&mem, psi(12.0, 0.0), &[], &st, 1600);
+        assert!(a.iter().any(|x| matches!(x, Action::CreateSwapFile(_))));
+
+        // a definite failure gives up at once
+        let mut st = State::default();
+        st.creation_failed(&definite("swapon: Invalid argument".into()), 1000);
+        assert!(st.swap_disabled);
+        let (a, _) = decide(&mem, psi(12.0, 0.0), &[], &st, u64::MAX / 2);
+        assert!(!a.iter().any(|x| matches!(x, Action::CreateSwapFile(_))), "no retry after a definite failure");
+
+        // repeated transient failures give up too
+        let mut st = State::default();
+        for i in 0..MAX_CREATE_FAILURES {
+            assert!(!st.swap_disabled, "failure {i}");
+            st.creation_failed(&transient("busy".into()), 1000);
+        }
+        assert!(st.swap_disabled);
     }
 
     #[test]
     fn calm_pressure_removes_an_unused_file_after_ten_minutes() {
         let path1 = format!("{SWAP_DIR}/swap1");
         let path2 = format!("{SWAP_DIR}/swap2");
-        let held = State { level: Level::Normal, calm_since: None, files: vec![path1.clone(), path2.clone()] };
+        let held = State { level: Level::Normal, files: vec![path1.clone(), path2.clone()], ..State::default() };
         let mem = Meminfo { total: 16 * GIB, available: 8 * GIB, swap_total: 0, swap_free: 0 };
         let swaps = vec![swap(&path1, 0), swap(&path2, 4096)];
 
@@ -474,7 +628,7 @@ mod tests {
     #[test]
     fn a_file_with_pages_in_it_is_never_removed() {
         let path1 = format!("{SWAP_DIR}/swap1");
-        let st = State { level: Level::Normal, calm_since: Some(0), files: vec![path1.clone()] };
+        let st = State { level: Level::Normal, calm_since: Some(0), files: vec![path1.clone()], ..State::default() };
         let mem = Meminfo { total: GIB, available: GIB, swap_total: GIB, swap_free: 0 };
         let (a, s) = decide(&mem, psi(0.0, 0.0), &[swap(&path1, 1)], &st, CALM_FOR * 3);
         assert!(a.is_empty());

@@ -68,6 +68,11 @@ if [ "$T2" = 1 ]; then
   : > "$PROFILE/bifrost-t2"
   sed -i 's/^MODULES=(.*/MODULES=(t2bce_core t2bce_dma t2bce_vhci hid_appletb_kbd applespi virtio_gpu virtio_pci)/' "$AIROOT/etc/mkinitcpio.conf.d/archiso.conf"
 fi
+# The public key that signs the update repository (packaging/arch/keys/README.md): the installer imports it into the target
+# before the first pacman sync. Absent until the key is generated; the installer then logs a warning.
+if [ -f packaging/arch/keys/bifrost-repo.gpg ]; then
+  install -Dm644 packaging/arch/keys/bifrost-repo.gpg "$AIROOT/usr/share/bifrost/keys/bifrost-repo.gpg"
+fi
 # An installed release has no network route. Package the complete system dependency closure and default apps into the
 # live image before mkarchiso; the bundler verifies every package, app and hash and fails closed on a missing input.
 BIFROST_ISO_T2="$T2" python3 tools/bundle-iso-offline.py --dest "$AIROOT/usr/share/bifrost/offline"

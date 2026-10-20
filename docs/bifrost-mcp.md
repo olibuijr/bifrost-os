@@ -5,13 +5,23 @@ It is one Rust binary (`springboard/mcp`) speaking MCP over stdio (JSON-RPC 2.0,
 on the machine and reached over a single ssh channel. Every call is a local syscall on Midget; nothing spawns a
 helper process except `exec`.
 
-## System service (on by default)
+## System service (lab installs only)
 
-`bifrost-mcp.service` (enabled by the package and the installer) runs `bifrost-mcp --serve`:
+`bifrost-mcp.service` runs `bifrost-mcp --serve`. It is remote root exec for agents, so it exists only on lab machines:
 
+- The unit has `ConditionPathExists=/etc/bifrost/lab-install`. The lab installer (the ISO that carries `/etc/bifrost/lab.token`)
+  writes that marker; the `springboard-shell` scriptlet (`bifrost_mcp_policy`) enables and restarts the server where it exists
+  and stops and disables it everywhere else. A machine the lab installer set up before the marker existed (it has
+  `/etc/ssh/sshd_config.d/05-lab.conf`, written by no other path) gets the marker from the scriptlet on its next update, so
+  Midget keeps it. A public install never runs it and has no `/run/bifrost-mcp.sock`.
 - MCP Streamable HTTP at `http://<machine>:7420/mcp` (POST JSON-RPC, JSON replies, keep-alive; no server stream).
   Remote clients send `Authorization: Bearer <token>`; the token is made on first start in
   `/var/lib/bifrost-mcp/token` (0600). Every TCP request needs the token, loopback too (a sandboxed app with network could otherwise reach it); agents on the machine use the unix socket. Round trip from Titan: 1.2 ms for `observe`.
+- It listens on `127.0.0.1` unless `BIFROST_MCP_LISTEN` says otherwise (reach it with `ssh -L 7420:127.0.0.1:7420`). The lab
+  file `/etc/bifrost/mcp.env` (from `packaging/arch/mcp-lab.env`) sets `0.0.0.0` so the lab tools reach the VLAN, lab-NIC and
+  Wi-Fi addresses, together with `BIFROST_MCP_ALLOW` (default and lab value: the private IPv4 ranges): a peer outside loopback
+  and those ranges is dropped before it can send a byte. The traffic is still plain HTTP on a trusted lab network; narrow
+  `BIFROST_MCP_ALLOW` to the lab ranges or set `BIFROST_MCP_LISTEN=127.0.0.1` for forwarding only.
 - `/run/bifrost-mcp.sock` (root and the desktop account's group): newline-delimited JSON-RPC, for agents on the machine.
 - All sessions share one context behind a lock, so input from several agents is applied in order.
 
