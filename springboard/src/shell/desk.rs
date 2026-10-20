@@ -525,6 +525,13 @@ pub fn outer_px(app: AppId, m: &Metrics, (w, h): (f32, f32)) -> (i32, i32) {
     ((w * m.pt).round() as i32, (h * m.pt).round() as i32 + title_of(app, m))
 }
 
+/// The outer px size of an extra window from the size its app asked for in points: never under the window minimum, so
+/// an app cannot open a window with no width (a zero-width toplevel is a protocol error for the window server).
+fn extra_window_px(app: AppId, (w, h): (f32, f32), k: f32, m: &Metrics) -> (i32, i32) {
+    let (min_w, min_h, _, _) = size_range(app, m);
+    (((w * k) as i32).max(min_w), ((h * k) as i32 + m.title).max(min_h))
+}
+
 /// The outer size range (px) a window of `app` may be resized within: `(min_w, min_h, max_w, max_h)`.
 fn size_range(app: AppId, m: &Metrics) -> (i32, i32, i32, i32) {
     let lim = size_limits(app);
@@ -741,7 +748,9 @@ impl Desk {
         if on {
             // a zoomed window keeps the frame from before the zoom as its way back, and returns zoomed
             if w.maximized {
-                self.full_from_zoom.push(w.app);
+                if !self.full_from_zoom.contains(&w.app) {
+                    self.full_from_zoom.push(w.app);
+                }
             } else {
                 w.restore = w.r;
             }
@@ -816,6 +825,8 @@ impl Desk {
         self.placed.remove(&w.app);
         self.release_app_buffers(w.app);
         self.collapsed.remove(&w.app);
+        // a window closed while full screen from a zoom must not leave its way back for the window opened next
+        self.full_from_zoom.retain(|a| *a != w.app);
         w.app
     }
 
@@ -1255,8 +1266,8 @@ impl Shell {
     pub fn wayland_window_event(&mut self, ev: crate::bare::wayland::WindowEvent) {
         use crate::bare::wayland::WindowEvent;
         let id = match ev { WindowEvent::Focus(id) | WindowEvent::Close(id) | WindowEvent::Resize(id,_,_) | WindowEvent::Maximized(id,_) | WindowEvent::Frame(id,..) | WindowEvent::Fullscreen(id,_) => id };
-        // a frame is reported for every toplevel of the shell, an app's extra windows (flagged ids) included
-        let app = if matches!(ev, WindowEvent::Frame(..) | WindowEvent::Fullscreen(..)) { frame_app(id) } else { apps().get(id.saturating_sub(1) as usize).map(|a| a.id) };
+        // every event is reported for every toplevel of the shell, an app's extra windows (flagged ids) included
+        let app = frame_app(id);
         let Some(app) = app else { return };
         let Some(i) = self.desk.as_ref().and_then(|d| d.index_of(app)) else { return };
         match ev {
@@ -2104,7 +2115,7 @@ impl Shell {
                 let Ok(id16) = u16::try_from(id) else { continue };
                 // the table's size is in points; the desk window is outer px (body plus title bar)
                 let (w, h) = sizes.iter().find(|s| s.0 == id).map_or((480.0, 560.0), |s| (s.1, s.2));
-                let size = ((w * k) as i32, (h * k) as i32 + m.title);
+                let size = extra_window_px(AppId::ExternalWindow(slot, id16), (w, h), k, &m);
                 if let Some(d) = self.desk.as_mut() {
                     let i = d.open(&m, AppId::ExternalWindow(slot, id16), size);
                     self.desk_layout(i);
@@ -3433,6 +3444,35 @@ mod tests {
 
     fn metrics() -> Metrics {
         Metrics { w: 1920, h: 1080, title: 30, menubar: 28, min_w: 320, min_h: 220, edge: 6, light: 12, light_gap: 8, light_x: 12, dock_bottom: 100, pt: 1.0 }
+    }
+
+    #[test]
+    fn closing_a_full_screen_window_forgets_that_it_came_from_a_zoom() {
+        let m = metrics();
+        let app = AppId::ExternalWindow(0, 4);
+        let mut d = Desk::new();
+        let i = d.open(&m, app, (500, 400));
+        d.toggle_zoom(&m, i);
+        assert!(d.wins[i].maximized);
+        assert!(d.set_full_screen(&m, i, true));
+        assert_eq!(d.full_from_zoom, vec![app]);
+        d.close(i);
+        assert!(d.full_from_zoom.is_empty(), "the entry goes with the window");
+        let i = d.open(&m, app, (500, 400));
+        let before = d.wins[i].r;
+        assert!(d.set_full_screen(&m, i, true));
+        assert!(d.set_full_screen(&m, i, false));
+        assert!(!d.wins[i].maximized, "the new window returns to its own frame, not a zoom");
+        assert_eq!(d.wins[i].r, before);
+    }
+
+    #[test]
+    fn an_extra_window_is_never_opened_under_the_window_minimum() {
+        let m = metrics();
+        let app = AppId::ExternalWindow(0, 4);
+        assert_eq!(extra_window_px(app, (0.1, 0.1), 1.0, &m), (m.min_w, m.min_h + m.title));
+        assert_eq!(extra_window_px(app, (f32::NAN, -5.0), 1.0, &m), (m.min_w, m.min_h + m.title));
+        assert_eq!(extra_window_px(app, (600.0, 400.0), 1.5, &m), (900, 600 + m.title));
     }
 
     #[test]
