@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.3
+
+- Fix: a printing service with no printers set up shows the empty list ("No printers") instead of "printing service refused the request (IPP status 0x0406)"; an empty job queue is an empty list too.
+
 ## 0.7.2
 
 - BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.

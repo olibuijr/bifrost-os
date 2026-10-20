@@ -648,11 +648,15 @@ impl<T: Transport> Client<T> {
         let default = self.default_printer()?;
         let req = base(op::CUPS_GET_PRINTERS)
             .with(group::OPERATION, "requested-attributes", keywords(PRINTER_ATTRIBUTES));
-        let resp = self.exchange(req)?;
-        let mut printers: Vec<Printer> = resp
-            .groups_with(group::PRINTER)
-            .filter_map(|g| Printer::from_group(g, default.as_deref() == g.text("printer-name")))
-            .collect();
+        // a scheduler with no queues answers client-error-not-found: that is an empty list, not a failure
+        let mut printers: Vec<Printer> = match self.exchange(req) {
+            Ok(resp) => resp
+                .groups_with(group::PRINTER)
+                .filter_map(|g| Printer::from_group(g, default.as_deref() == g.text("printer-name")))
+                .collect(),
+            Err(CupsError::Status(s)) if s == ipp::STATUS_NOT_FOUND => Vec::new(),
+            Err(e) => return Err(e),
+        };
         // pools: a scheduler that lists them with the printers already has them; the rest are added here
         for pool in self.classes(default.as_deref())? {
             match printers.iter_mut().find(|p| p.name == pool.name) {
@@ -720,8 +724,12 @@ impl<T: Transport> Client<T> {
             .with(group::OPERATION, "printer-uri", vec![Value::uri(&target(printer)?)])
             .with(group::OPERATION, "which-jobs", vec![Value::keyword("not-completed")])
             .with(group::OPERATION, "requested-attributes", keywords(JOB_ATTRIBUTES));
-        let resp = self.exchange(req)?;
-        Ok(resp.groups_with(group::JOB).filter_map(Job::from_group).collect())
+        match self.exchange(req) {
+            Ok(resp) => Ok(resp.groups_with(group::JOB).filter_map(Job::from_group).collect()),
+            // an empty queue answers client-error-not-found
+            Err(CupsError::Status(s)) if s == ipp::STATUS_NOT_FOUND => Ok(Vec::new()),
+            Err(e) => Err(e),
+        }
     }
 
     pub fn cancel_job(&mut self, printer: &str, job_id: i32) -> Result<(), CupsError> {
@@ -893,6 +901,32 @@ mod tests {
         assert_eq!(printers[1].state, PrinterState::Stopped);
         assert!(!printers[1].accepting_jobs);
         assert_eq!(printers[1].uri, "ipp://localhost/printers/Lab");
+    }
+
+    #[test]
+    fn a_not_found_reply_to_get_printers_is_an_empty_list() {
+        // fresh install: no default, no printers, no classes: every list operation answers 0x0406
+        let canned = Canned::new(vec![
+            reply(ipp::STATUS_NOT_FOUND, 1, vec![]),
+            reply(ipp::STATUS_NOT_FOUND, 2, vec![]),
+            reply(ipp::STATUS_NOT_FOUND, 3, vec![]),
+        ]);
+        let mut client = Client::new(canned);
+        assert_eq!(client.printers().unwrap(), Vec::<Printer>::new());
+    }
+
+    #[test]
+    fn a_not_found_reply_to_get_jobs_is_an_empty_queue() {
+        let mut client = Client::new(Canned::new(vec![reply(ipp::STATUS_NOT_FOUND, 1, vec![])]));
+        assert_eq!(client.jobs("Lab").unwrap(), Vec::<Job>::new());
+    }
+
+    #[test]
+    fn not_found_stays_an_error_for_a_named_printer() {
+        let mut client = Client::new(Canned::new(vec![reply(ipp::STATUS_NOT_FOUND, 1, vec![])]));
+        assert_eq!(client.set_default("Lab"), Err(CupsError::Status(ipp::STATUS_NOT_FOUND)));
+        let mut client = Client::new(Canned::new(vec![reply(ipp::STATUS_NOT_FOUND, 1, vec![])]));
+        assert!(client.get_printer_attributes("Lab").is_err());
     }
 
     #[test]
