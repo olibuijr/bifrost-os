@@ -840,7 +840,7 @@ pub fn wait_until(timer: Option<&bifrost_audio_alsa::CycleTimer>, arm: u64, stop
 
 /// Runs `runner` on its own SCHED_FIFO thread until `shared.stop` is set; then stops the hardware.
 pub fn spawn_io_thread(runner: DeviceRunner, name: String) -> std::io::Result<std::thread::JoinHandle<()>> {
-    spawn_io_thread_tuned(runner, name, crate::rt::Tuning::default())
+    spawn_io_thread_tuned(runner, name, crate::rt::Tuning::default(), None)
 }
 
 /// As `spawn_io_thread`, with the driver thread's CPU set (away from the sound IRQ) from `rt::device_started`.
@@ -849,7 +849,15 @@ pub fn spawn_io_thread(runner: DeviceRunner, name: String) -> std::io::Result<st
 /// the driver's DLL when it has locked), then spins to the exact start. The margin is the measured p99 wake-up
 /// lateness (`rt::JitterTracker`). Sustained xruns double the quantum and post an overload notice
 /// (`rt::FallbackPolicy`).
-pub fn spawn_io_thread_tuned(mut runner: DeviceRunner, name: String, tuning: crate::rt::Tuning) -> std::io::Result<std::thread::JoinHandle<()>> {
+///
+/// `started` (when given) receives whether the hardware started, once `runner.start()` has returned: the caller
+/// learns of a failed start instead of marking the device running.
+pub fn spawn_io_thread_tuned(
+    mut runner: DeviceRunner,
+    name: String,
+    tuning: crate::rt::Tuning,
+    started: Option<std::sync::mpsc::Sender<bool>>,
+) -> std::io::Result<std::thread::JoinHandle<()>> {
     use crate::rt;
     std::thread::Builder::new().name(name.clone()).spawn(move || {
         rt::set_timer_slack_1ns();
@@ -865,9 +873,17 @@ pub fn spawn_io_thread_tuned(mut runner: DeviceRunner, name: String, tuning: cra
         log("io", &format!("{name}: starting at quantum {}", runner.quantum()));
         spawn_event_logger(name.clone(), runner.shared.clone());
         let start = match runner.start() {
-            Ok(t) => t,
+            Ok(t) => {
+                if let Some(tx) = &started {
+                    let _ = tx.send(true);
+                }
+                t
+            }
             Err(e) => {
                 log("driver", &format!("{name}: start failed: {e:?}"));
+                if let Some(tx) = &started {
+                    let _ = tx.send(false);
+                }
                 // ends the logger thread started above
                 runner.shared.stop.store(true, Ordering::Release);
                 return;
@@ -1209,6 +1225,17 @@ mod tests {
         assert!((w[256] - g(0)).abs() < 1e-6);
         assert!((w[511] - g(255)).abs() < 1e-5);
         assert!(w[511] > 0.5);
+    }
+
+    #[test]
+    fn the_io_thread_reports_that_the_hardware_started() {
+        let r = rig(256);
+        let shared = r.shared.clone();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let h = spawn_io_thread_tuned(r.runner, "audio-io-test".into(), crate::rt::Tuning::default(), Some(tx)).unwrap();
+        assert_eq!(rx.recv_timeout(std::time::Duration::from_secs(3)), Ok(true));
+        shared.stop.store(true, Ordering::Release);
+        h.join().unwrap();
     }
 
     #[test]

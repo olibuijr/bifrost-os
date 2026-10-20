@@ -605,10 +605,24 @@ impl ServerCore {
         shared.stop.store(false, Ordering::Release);
         if self.cfg.spawn_threads {
             let tuning = crate::rt::device_started();
-            let h = crate::io::spawn_io_thread_tuned(runner, format!("audio-io-{idx}"), tuning).map_err(|_| {
+            let (tx, rx) = std::sync::mpsc::channel();
+            let h = crate::io::spawn_io_thread_tuned(runner, format!("audio-io-{idx}"), tuning, Some(tx)).map_err(|_| {
                 crate::rt::device_stopped();
                 AudioError::Io
             })?;
+            // The thread starts the hardware (prepare, prefill, start); a failure there must reach the caller.
+            match rx.recv_timeout(START_WAIT) {
+                Ok(false) | Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                    let _ = h.join();
+                    crate::rt::device_stopped();
+                    log("io", &format!("device {} failed to start", desc.uid));
+                    return Err(AudioError::Io);
+                }
+                Ok(true) => {}
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                    log("io", &format!("device {} is slow to start; carrying on", desc.uid));
+                }
+            }
             self.devices[idx].thread = Some(h);
             self.devices[idx].abort = abort;
         } else {
@@ -992,6 +1006,9 @@ fn send_reply(fd: RawFd, reply: &Reply, fds: &[RawFd]) -> bool {
     }
     false
 }
+
+/// How long a start request waits for the IO thread to report that the hardware started.
+const START_WAIT: Duration = Duration::from_secs(3);
 
 /// How long the control loop waits for a device's IO thread to end before it detaches it.
 const STOP_WAIT: Duration = Duration::from_millis(500);
