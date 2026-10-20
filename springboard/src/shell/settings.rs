@@ -808,7 +808,7 @@ impl Settings {
         let title = spec.title.clone();
         // a page opened with no back target is a first-level page: it gets the header card
         let pane = Pane { header: back.is_none(), ..self.pane() };
-        Entry { id, nav: NavBar::new(ui, &title, back).height(pane.nav_pt).status(pane.status_pt).pill(pane.status_pt == 0.0 && !pane.sidebar), title, view: View::List(ListPage::in_pane(ui, spec, self.w, self.h, back, pane)) }
+        Entry { id, nav: NavBar::new(ui, &title, back).height(pane.nav_pt).status(pane.status_pt).pill(ui, pane.status_pt == 0.0 && !pane.sidebar), title, view: View::List(ListPage::in_pane(ui, spec, self.w, self.h, back, pane)) }
     }
 
     /// Settings > Passwords: a tap on a login asks for the passcode when one is set, then shows the password; Copy,
@@ -2566,6 +2566,8 @@ impl Settings {
                 }
                 return vec![];
             }
+            // a segment of a segmented row chooses like a pop-up's choice does
+            Hit::Segment(g, i, k) => (g, i, Some(k)),
             Hit::Slider(..) => return vec![],
         };
         let Some(page) = self.list() else { return vec![] };
@@ -2577,13 +2579,23 @@ impl Settings {
             }
             return vec![];
         }
+        if choice.is_none() && item.segments.is_some() {
+            // a segmented row is chosen by its segments (`Hit::Segment`), never as a whole
+            return vec![];
+        }
         if !item.tappable() {
             return vec![];
         }
         // a choice sends the row's action with the chosen index
         let action = match choice {
             Some(k) => match super::pages::chosen(&item.action, k) {
-                Some(action) => action,
+                Some(action) => {
+                    // the button or the segment shows the new choice at once
+                    if let Some(p) = self.list_mut() {
+                        p.set_choice(ui, g, i, k);
+                    }
+                    action
+                }
                 None => return vec![],
             },
             None => item.action.clone(),
@@ -3858,6 +3870,14 @@ mod tests {
         fx
     }
 
+    /// Chooses the `k`th choice of the pop-up row labelled `label`: taps the row to open its menu, then picks from the menu.
+    fn pick(st: &mut Settings, ui: &Ui, prefs: &mut Prefs, label: &str, k: usize) -> Vec<Effect> {
+        tap_row(st, ui, prefs, label);
+        let fx = st.activate(ui, prefs, Hit::Choice(k), 0.0);
+        settle(st, ui);
+        fx
+    }
+
     fn settle(st: &mut Settings, ui: &Ui) {
         st.tick(ui, 1e9);
         // the pages' reads run on worker threads (see `settings_load`): wait for them, as a frame would
@@ -4561,7 +4581,7 @@ mod tests {
         st.set_data_dir(&dir);
         tap_row(&mut st, &ui, &mut prefs, "Privacy");
         assert!(st.row_centre(&ui, "Open Anyway").is_none(), "nothing waits");
-        assert!(st.row_centre(&ui, "Anywhere").is_some());
+        assert!(st.row_centre(&ui, "Allow Apps From").is_some());
         back(&mut st, &ui, &mut prefs);
         super::super::launch_gate::write_blocked(&dir, &prog, "\"tool\" cannot be opened because its developer cannot be identified.");
         tap_row(&mut st, &ui, &mut prefs, "Privacy");
@@ -4570,7 +4590,7 @@ mod tests {
         let remembered = std::fs::read_to_string(dir.join("launch_overrides.txt")).unwrap();
         assert!(remembered.starts_with(&format!("{}\t", prog.display())), "{remembered:?}");
         // the setting persists and the check follows the tap
-        assert_eq!(tap_row(&mut st, &ui, &mut prefs, "Anywhere"), vec![]);
+        assert_eq!(pick(&mut st, &ui, &mut prefs, "Allow Apps From", 2), vec![]);
         assert_eq!(prefs.get("allow_apps_from"), Some("anywhere"));
         assert_eq!(super::super::launch_gate::load_policy(&prefs, &dir).setting(), bifrost_core::launch_policy::Setting::Anywhere);
         let _ = std::fs::remove_dir_all(&dir);
@@ -4658,9 +4678,10 @@ mod tests {
         let (mut st, mut prefs) = settings(&ui, &info());
         tap_row(&mut st, &ui, &mut prefs, "Screen Saver");
         assert_eq!(st.page(), PageId::ScreenSaver);
-        assert_eq!(tap_row(&mut st, &ui, &mut prefs, "Colours"), vec![]);
+        assert_eq!(pick(&mut st, &ui, &mut prefs, "Screen Saver", 1), vec![]);
         assert_eq!(prefs.get("screensaver_module"), Some("1"));
-        assert_eq!(tap_row(&mut st, &ui, &mut prefs, "10 minutes"), vec![]);
+        let ten = super::super::screensaver::START_AFTER.iter().position(|(_, min)| *min == 10).unwrap();
+        assert_eq!(pick(&mut st, &ui, &mut prefs, "Start After", ten), vec![]);
         assert_eq!(prefs.get("screensaver_minutes"), Some("10"));
         assert!(!st.take_screensaver_preview());
         tap_row(&mut st, &ui, &mut prefs, "Preview");
@@ -4676,12 +4697,12 @@ mod tests {
         // Clock is the first saver: its switch and its choices are on the page
         tap_row(&mut st, &ui, &mut prefs, "Show Date");
         assert_eq!(prefs.get("ScreenSaver.Clock.show_date"), Some("false"));
-        tap_row(&mut st, &ui, &mut prefs, "30 seconds");
+        pick(&mut st, &ui, &mut prefs, "Move Every", 0);
         assert_eq!(prefs.get("ScreenSaver.Clock.move_every"), Some("30s"));
         assert_eq!(prefs.get("ScreenSaver.Colours.speed"), None, "another saver's keys are untouched");
         // the next saver shows its own options
-        tap_row(&mut st, &ui, &mut prefs, "Colours");
-        tap_row(&mut st, &ui, &mut prefs, "Fast");
+        pick(&mut st, &ui, &mut prefs, "Screen Saver", 1);
+        pick(&mut st, &ui, &mut prefs, "Colour Change", 2);
         assert_eq!(prefs.get("ScreenSaver.Colours.speed"), Some("fast"));
         assert_eq!(prefs.get("ScreenSaver.Clock.move_every"), Some("30s"));
     }

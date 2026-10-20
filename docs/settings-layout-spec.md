@@ -70,6 +70,25 @@ selection plate 9, icon tile 5, search fields are capsules). Small legacy contro
 gap in code is 13 pt (`m::SIDEBAR_GROUP_GAP`), not the 18 pt first read off the capture.
 
 
+## Pane style (E2E findings ST5, ST6, ST7; measured from `Settings-Notifications`, `-Desktop-Dock`, `-Focus`, `-General`, `-Screen-Time`, `-Lock-Screen`, `-Sound`)
+
+Shared helpers in `springboard/src/shell/list.rs`; the tokens are in `prefs_layout::m` (and `prefs_layout::toolbar_title_x`).
+
+| Item | Rule | Code |
+|---|---|---|
+| Pane title | left-aligned in the toolbar, `TOOLBAR_TITLE_GAP` (12 pt) right of the back and forward pill, title 3 (15 pt) semibold; never centred. A pane with the hero hides it until the hero scrolls away | `NavBar::pill(ui, on)`, `NavBar::draw` |
+| Group header | title-case headline above its card: 13 pt semibold (`MAC_HEADLINE_PT`) in the label colour. Specs still write capitals ("DOCK POSITION"); `headline_case` turns them into "Dock Position" at render time (acronyms such as USB and IPv4 kept, small words lower) | `headline_case`, `ListPage::in_pane` |
+| Group footer | unchanged: grey, under the card | |
+| Header card, hero | only **General** (a category page whose rows are all links): 166 pt card, 49 pt icon, 22 pt bold title and description centred. The toolbar title fades in as it scrolls away | `header_for`, `m::HEADER_*` |
+| Header card, compact | **Notifications** and **Screen Time** (both carry a description in the reference): one row, 27 pt icon tile 11 pt from the left, title and description in a column starting 48 pt from the card edge, 12 pt padding; the toolbar title stays | `m::HEADER_COMPACT_*` |
+| No header | every other pane (Display, Sound, Focus, Lock Screen, Desktop & Dock, Control Centre, Sharing, ...) starts at its first group under the toolbar title | `header_for` returns `None` |
+| Value choice | a pop-up button on the row: the label at the left, the chosen value and the up and down chevrons at the right; tapping opens a menu of the choices over the button. The stored pref keys and `Pick` actions are unchanged: the row's action carries the current index and `pages::chosen` swaps in the one picked (`Pick::with_choice`). Used for dock position and minimise effect, screen saver kind, move interval, clock size and start after, game mode, mouse and trackpad secondary click, allow apps from, assistant backend | `Item::popup`, `pages::chosen` |
+| View switch | a segmented control across the row (`SEGMENT_H` 28 pt, `SEGMENT_INSET` 11 pt from the card edge, the chosen segment filled in the accent): Screen Time Day and Week. A tap picks the segment under it (`Hit::Segment`) | `Item::segmented`, `ListPage::draw_segments` |
+| List of many choices | a page that is only a list of choices (Auto-Lock, Language, Region, Fonts, ...) keeps check rows; the pop-up is for one value among a few | |
+| Row label | stops before the value and the trailing control (chevron, switch, check, detail button, network icons, badge) and wraps onto a second line; a third line is cut with an ellipsis. Rows stay 49 pt | `label_lines`, `accessory_room` |
+
+Open: Alert Sound (Sound) and the Hot Corners lists are still check lists; the reference uses pop-up buttons for both.
+
 ## Shell chrome (measured from the Golden Gate desktop captures)
 
 Sources in `goldengate_refimages/`: `Finder-Menu`, `Desktop`, `Spotlight-Search-v2`, `Finder-Control-Center`,

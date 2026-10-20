@@ -51,14 +51,11 @@ pub fn groups(o: &Options) -> Vec<Group> {
         Group::new(vec![Item::slider(Ends::Speed, speed_slider(o.mouse_scroll), Action::Slider(Slider::MouseScroll))]).header("SCROLLING SPEED"),
         Group::new(vec![Item::slider(Ends::Speed, double_click_slider(o.double_click_ms), Action::Slider(Slider::MouseDoubleClick))]).header("DOUBLE-CLICK SPEED"),
         Group::new(vec![Item::new("Natural Scrolling").switch(o.natural_scroll, Action::Toggle(Toggle::NaturalScroll))]).footer("The content moves with the wheel, as it does on a touch screen."),
-        Group::new(
-            SECONDARY_BUTTON
-                .iter()
-                .enumerate()
-                .map(|(i, l)| Item::new(*l).check(i == secondary_index(o.swap_buttons), Action::Pick(Pick::MouseSecondary(i))))
-                .collect(),
-        )
-        .header("SECONDARY CLICK"),
+        Group::new(vec![Item::new("Secondary Click").popup(
+            SECONDARY_BUTTON.iter().map(|l| l.to_string()).collect(),
+            secondary_index(o.swap_buttons),
+            Action::Pick(Pick::MouseSecondary(secondary_index(o.swap_buttons))),
+        )]),
     ]
 }
 
@@ -95,23 +92,26 @@ mod tests {
     fn page_lists_the_mouse_rows_and_none_of_the_trackpad_ones() {
         let gs = groups(&Options::default());
         let l = labels(&gs);
-        for want in ["Pointer Acceleration", "Natural Scrolling", "Click on Right Side", "Click on Left Side"] {
+        for want in ["Pointer Acceleration", "Natural Scrolling", "Secondary Click"] {
             assert!(l.iter().any(|x| x == want), "{want} missing in {l:?}");
         }
+        let secondary = gs[5].items[0].popup.as_ref().expect("a pop-up button");
+        assert_eq!(secondary.choices, ["Click on Right Side", "Click on Left Side"]);
         assert!(!l.iter().any(|x| x == "Tap to Click" || x.contains("Two Fingers") || x.contains("Corner")), "{l:?}");
         let headers: Vec<_> = gs.iter().filter_map(|g| g.header.clone()).collect();
-        assert_eq!(headers, ["TRACKING SPEED", "SCROLLING SPEED", "DOUBLE-CLICK SPEED", "SECONDARY CLICK"]);
+        assert_eq!(headers, ["TRACKING SPEED", "SCROLLING SPEED", "DOUBLE-CLICK SPEED"]);
     }
 
     #[test]
     fn rows_reflect_the_options() {
         let o = Options { swap_buttons: true, mouse_accel: false, double_click_ms: 900, ..Options::default() };
         let gs = groups(&o);
-        assert_eq!(gs[5].items[0].accessory, crate::shell::list::Accessory::Check(false));
-        assert_eq!(gs[5].items[1].accessory, crate::shell::list::Accessory::Check(true));
+        assert_eq!(gs[5].items[0].accessory, crate::shell::list::Accessory::Popup);
+        assert_eq!(gs[5].items[0].popup.as_ref().map(|p| p.selected), Some(1), "swapped buttons: Click on Left Side");
         assert_eq!(gs[1].items[0].accessory, crate::shell::list::Accessory::Switch(false));
         assert_eq!(gs[3].items[0].action, Action::Slider(Slider::MouseDoubleClick));
-        assert_eq!(gs[5].items[1].action, Action::Pick(Pick::MouseSecondary(1)));
+        assert_eq!(gs[5].items[0].action, Action::Pick(Pick::MouseSecondary(1)));
+        assert_eq!(crate::shell::pages::chosen(&gs[5].items[0].action, 0), Some(Action::Pick(Pick::MouseSecondary(0))), "the menu's choice replaces the index");
     }
 
     #[test]

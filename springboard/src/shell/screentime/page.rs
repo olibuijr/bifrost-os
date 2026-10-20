@@ -118,7 +118,8 @@ pub fn spec(id: PageId, v: &View) -> Spec {
             let sum = shown(v);
             let mut groups = vec![
                 Group::new(vec![Item::chart(chart(v))]),
-                Group::new(vec![Item::new("Day").check(!v.weekly, Action::ScreenTime(StEdit::Range(false))), Item::new("Week").check(v.weekly, Action::ScreenTime(StEdit::Range(true)))]),
+                // a view switch is a segmented control; its segments send Range(false) and Range(true) (`pages::chosen`)
+                Group::new(vec![Item::new("Range").segmented(vec!["Day".into(), "Week".into()], usize::from(v.weekly), Action::ScreenTime(StEdit::Range(v.weekly)))]),
             ];
             let ranked = sum.ranked();
             let rows = if ranked.is_empty() {
@@ -197,6 +198,19 @@ mod tests {
     }
 
     #[test]
+    fn day_and_week_are_one_segmented_control() {
+        let (d, cfg) = (days(Day::default()), Config::memory());
+        for weekly in [false, true] {
+            let s = spec(PageId::ScreenTime, &view(&d, &cfg, weekly, false));
+            assert_eq!(s.groups[1].items.len(), 1, "one row, not a checklist");
+            let row = &s.groups[1].items[0];
+            assert_eq!(row.accessory, Accessory::Segmented);
+            let seg = row.segments.as_ref().expect("segments");
+            assert_eq!((seg.choices.clone(), seg.selected), (vec!["Day".to_string(), "Week".to_string()], usize::from(weekly)));
+        }
+    }
+
+    #[test]
     fn content_and_privacy_is_an_honest_placeholder() {
         let (d, cfg) = (days(Day::default()), Config::memory());
         let s = spec(PageId::ScreenTime, &view(&d, &cfg, false, false));
@@ -215,7 +229,7 @@ mod tests {
         w[6].1.secs.insert("files".into(), 120);
         let s = spec(PageId::ScreenTime, &view(&w, &cfg, true, false));
         assert_eq!(s.groups[2].items[0].value, "3m");
-        assert_eq!(s.groups[1].items[1].accessory, Accessory::Check(true));
+        assert_eq!(s.groups[1].items[0].segments.as_ref().map(|p| p.selected), Some(1));
     }
 
     #[test]

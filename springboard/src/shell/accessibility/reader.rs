@@ -186,6 +186,12 @@ pub fn page_elements(spec: &Spec, rect: &dyn Fn(usize, usize) -> Option<Rect>) -
                     value = p.clone();
                 }
             }
+            // a segmented control is read with the chosen segment as its value
+            if item.accessory == Accessory::Segmented {
+                if let Some(p) = item.segments.as_ref().and_then(|p| p.choices.get(p.selected)) {
+                    value = p.clone();
+                }
+            }
             let enabled = item.tappable() || role == "text";
             map.add("settings", role, &item.label, &value, enabled, rect(g, i), "");
         }

@@ -31,6 +31,17 @@ pub mod m {
     pub const HEADER_Y: f32 = 64.0;
     pub const HEADER_H: f32 = 166.0;
     pub const HEADER_ICON: f32 = 49.0;
+    /// The compact header card (icon, title and description in one row): icon tile, its inset and the text column's left edge
+    /// inside the card, and the padding above and below the text.
+    pub const HEADER_COMPACT_ICON: f32 = 27.0;
+    pub const HEADER_COMPACT_ICON_X: f32 = 11.0;
+    pub const HEADER_COMPACT_TEXT_X: f32 = 48.0;
+    pub const HEADER_COMPACT_PAD: f32 = 12.0;
+    /// The pane title in the toolbar starts this far to the right of the back and forward pill.
+    pub const TOOLBAR_TITLE_GAP: f32 = 12.0;
+    /// A segmented control inside a row: its height, and the inset from the card edge.
+    pub const SEGMENT_H: f32 = 28.0;
+    pub const SEGMENT_INSET: f32 = 11.0;
     pub const CARD_GAP: f32 = 11.0;
     pub const ROW_H: f32 = 49.0;
     pub const ROW_ICON: f32 = 23.0;
@@ -104,9 +115,21 @@ pub fn separator(row: Rect, last: bool, has_icon: bool) -> Option<(f32, f32)> {
     Some((x0, row.x + row.w))
 }
 
+/// Where the pane title starts in the toolbar: right of the back and forward pill, never centred.
+pub fn toolbar_title_x() -> f32 {
+    m::TOOLBAR_X + m::TOOLBAR_PILL_W + m::TOOLBAR_TITLE_GAP
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_toolbar_title_starts_after_the_pill() {
+        // measured: the pill ends at 81 pt and the title starts about 12 pt after it
+        assert_eq!(toolbar_title_x(), 93.0);
+        assert!(toolbar_title_x() > m::TOOLBAR_X + m::TOOLBAR_PILL_W);
+    }
 
     #[test]
     fn frame_matches_the_reference_at_full_size() {

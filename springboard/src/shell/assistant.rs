@@ -45,6 +45,9 @@ pub enum Backend {
 }
 
 impl Backend {
+    /// Every backend, in the order the Settings pop-up lists them.
+    pub const ALL: [Backend; 2] = [Backend::Off, Backend::Anthropic];
+
     pub fn key(self) -> &'static str {
         match self {
             Backend::Off => "off",
