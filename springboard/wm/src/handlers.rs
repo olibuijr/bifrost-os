@@ -43,6 +43,10 @@ use crate::{
     wm::{Edges, Rect},
 };
 
+/// Whether a layer surface may take the keyboard exclusively: not while a session lock is held, and only a privileged
+/// client (the shell). Everyone else keeps the ordinary on-demand focus.
+pub fn exclusive_keyboard_allowed(locked: bool, privileged: bool) -> bool { !locked && privileged }
+
 /// A resize in progress: the frame `wm` asked for and the edges that move, applied when the client commits.
 #[derive(Default)]
 pub struct ResizeTarget(pub RefCell<Option<(Edges, Rect)>>);
@@ -176,7 +180,10 @@ impl WmState {
         let ki = with_states(surface, |states| {
             states.cached_state.get::<LayerSurfaceCachedState>().current().keyboard_interactivity
         });
-        if ki == KeyboardInteractivity::Exclusive {
+        // an exclusive grab takes the keyboard from every window and from the lock screen: only the shell may hold one,
+        // and never while the session is locked (a sandboxed app must not receive the password being typed)
+        let privileged = surface.client().is_some_and(|client| crate::privileged::is_privileged(&client));
+        if ki == KeyboardInteractivity::Exclusive && exclusive_keyboard_allowed(self.locked, privileged) {
             let serial = smithay::utils::SERIAL_COUNTER.next_serial();
             if let Some(keyboard) = self.seat.get_keyboard() {
                 if keyboard.current_focus().as_ref() != Some(surface) {
@@ -529,3 +536,16 @@ delegate_data_device!(WmState);
 delegate_output!(WmState);
 delegate_xdg_shell!(WmState);
 delegate_layer_shell!(WmState);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_the_shell_takes_the_keyboard_exclusively_and_never_under_a_lock() {
+        assert!(exclusive_keyboard_allowed(false, true));
+        assert!(!exclusive_keyboard_allowed(false, false), "an app's overlay must not capture every keystroke");
+        assert!(!exclusive_keyboard_allowed(true, true), "the lock surface keeps the keyboard");
+        assert!(!exclusive_keyboard_allowed(true, false));
+    }
+}
