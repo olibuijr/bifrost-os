@@ -648,6 +648,7 @@ impl Shell {
     }
     pub(super) fn draw_desktop_popup(&self,s:&mut Surface) {
         let Some((x,y,w,h))=self.desktop_popup_rect() else{return;};let menu=self.desktop_menu.unwrap();
+        if menu==Menu::Document{self.draw_doc_dim(s);}
         if bifrost_render::glass::gpu()&&bifrost_render::appearance::reduce_transparency() {
             let r=self.ui.pt(MENU_RADIUS_PT);
             s.fill_rect(x,y,w,h,0);super::desk::soft_shadow(s,&self.ui,x as f32,y as f32,w as f32,h as f32,r);s.fill_rrect(x as f32,y as f32,w as f32,h as f32,r,MENU_SOLID.now());
