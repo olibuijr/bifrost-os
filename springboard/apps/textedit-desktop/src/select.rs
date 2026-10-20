@@ -4,7 +4,7 @@
 //! cells and the layout, so the rules are tested without a window.
 
 use crate::layout::{Layout, Measure};
-use crate::text::{is_break, Cell};
+use crate::text::{is_break, next_cluster, prev_cluster, Cell};
 use crate::view::Geometry;
 use std::ops::Range;
 
@@ -187,11 +187,11 @@ pub fn target(nav: Nav, mods: NavMods, cells: &[Cell], layout: &Layout, head: us
         Nav::Left if mods.line => layout.line_start(head),
         Nav::Left if mods.word => word_left(cells, head),
         Nav::Left if collapse => sel.start,
-        Nav::Left => head.saturating_sub(1),
+        Nav::Left => prev_cluster(cells, head),
         Nav::Right if mods.line => layout.line_end(cells, head),
         Nav::Right if mods.word => word_right(cells, head),
         Nav::Right if collapse => sel.end,
-        Nav::Right => (head + 1).min(cells.len()),
+        Nav::Right => next_cluster(cells, head),
         Nav::Up if mods.line => 0,
         Nav::Down if mods.line => cells.len(),
         // the first line has nothing above it: Up goes to the start of the text, and Down on the last line to its end
@@ -271,14 +271,14 @@ pub enum DeleteKey {
 pub fn delete_range(key: DeleteKey, cells: &[Cell], layout: &Layout, head: usize) -> Option<Range<usize>> {
     let head = head.min(cells.len());
     let range = match key {
-        DeleteKey::Back => head.saturating_sub(1)..head,
-        DeleteKey::Forward => head..(head + 1).min(cells.len()),
+        DeleteKey::Back => prev_cluster(cells, head)..head,
+        DeleteKey::Forward => head..next_cluster(cells, head),
         DeleteKey::WordBack => word_left(cells, head)..head,
         DeleteKey::WordForward => head..word_right(cells, head),
         DeleteKey::ToLineStart => {
             let start = layout.line_start(head);
             if start == head {
-                head.saturating_sub(1)..head
+                prev_cluster(cells, head)..head
             } else {
                 start..head
             }
@@ -286,7 +286,7 @@ pub fn delete_range(key: DeleteKey, cells: &[Cell], layout: &Layout, head: usize
         DeleteKey::ToLineEnd => {
             let end = cells[head..].iter().position(|c| c.ch == '\n' || is_break(c.ch)).map_or(cells.len(), |i| head + i);
             if end == head {
-                head..(head + 1).min(cells.len())
+                head..next_cluster(cells, head)
             } else {
                 head..end
             }
