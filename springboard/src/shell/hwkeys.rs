@@ -1,7 +1,7 @@
 //! Hardware-keyboard shortcuts: tracks the modifier keys from evdev key
 //! events and turns chords into shell actions. Cmd/Meta+Space opens
 //! Search, Ctrl+Space switches the input source, Alt/Meta/Ctrl+Tab the app switcher, Esc is Back, Meta alone is
-//! Home, and Ctrl+C/V/X/A/Z are the clipboard and undo, which text controls
+//! Home (a tablet's hardware keyboard only; on the desktop a lone Cmd does nothing), and Ctrl+C/V/X/A/Z are the clipboard and undo, which text controls
 //! take as `Out::Named`.
 
 use super::keyboard::Out;
@@ -251,6 +251,8 @@ pub struct HwKeys {
     meta: u8,
     /// Meta went down and nothing else has been pressed since
     meta_alone: bool,
+    /// The desktop form factor: a lone Cmd press does nothing (it is the Home key of a tablet only), see `set_desktop`
+    desktop: bool,
     /// The installed keyboard layout: what a key types
     text: Keyboard,
     /// Sticky Keys: the latches, tapped on modifier presses and taken by the next non-modifier press
@@ -270,7 +272,24 @@ impl HwKeys {
         let on = sticky.enabled();
         sticky.set_enabled(false);
         sticky.set_enabled(on);
-        *self = Self { text: Keyboard::new(layout), sticky, ..Self::default() };
+        let desktop = self.desktop;
+        *self = Self { text: Keyboard::new(layout), sticky, desktop, ..Self::default() };
+    }
+
+    /// Chooses the form factor behaviour of a lone Cmd (Super) press. On a tablet it is the Home key (the default here, so the
+    /// hardware keyboard of a tablet keeps it); on the desktop it does nothing, because the Cmd key is a modifier first and a
+    /// chord the front app takes (Cmd+A in a text field, Cmd+Space) must never send the windows to the Dock.
+    pub fn set_desktop(&mut self, desktop: bool) {
+        self.desktop = desktop;
+        if desktop {
+            self.meta_alone = false;
+        }
+    }
+
+    /// A non-modifier key went down that never reached `key_front` (a switch, an event tap or the app in front took it) while
+    /// Cmd was held: the Cmd release that follows is the end of a chord, not a lone press.
+    pub fn cancel_lone_meta(&mut self) {
+        self.meta_alone = false;
     }
 
     /// Turns Sticky Keys on or off. Turning it off releases every latch and any modifier a sticky key still holds.
@@ -327,6 +346,21 @@ impl HwKeys {
         self.shift > 0
     }
 
+    /// True while a Ctrl key is held.
+    pub fn ctrl_held(&self) -> bool {
+        self.ctrl > 0
+    }
+
+    /// True while a Meta (Cmd) key is held.
+    pub fn meta_held(&self) -> bool {
+        self.meta > 0
+    }
+
+    /// True while an Alt key is held.
+    pub fn alt_held(&self) -> bool {
+        self.alt > 0
+    }
+
     /// True while any Ctrl, Alt or Meta key is held (the app switcher commits when the last one is released).
     pub fn mods_held(&self) -> bool {
         self.ctrl + self.alt + self.meta > 0
@@ -373,7 +407,7 @@ impl HwKeys {
             *n = if down { n.saturating_add(1) } else { n.saturating_sub(1) };
             if matches!(code, KEY_LEFTMETA | KEY_RIGHTMETA) {
                 if down {
-                    self.meta_alone = self.meta == 1 && self.ctrl + self.shift + self.alt == 0;
+                    self.meta_alone = !self.desktop && self.meta == 1 && self.ctrl + self.shift + self.alt == 0;
                 } else if self.meta == 0 && std::mem::take(&mut self.meta_alone) {
                     return Some(Shortcut::Home);
                 }
@@ -701,6 +735,25 @@ impl Shell {
         used
     }
 
+    /// Mission Control from the keyboard while the shell has the keys: F3 and Ctrl+Up open or close it (the window server binds the
+    /// same chords for the times an app holds the keyboard, `wm/src/keybindings.rs`), and while Mission Control or the Apps grid is open
+    /// its own keys (Esc, Return, Tab, the arrows) are taken here and nothing else is typed. True when the key was used. Modifier,
+    /// volume and brightness keys always pass.
+    pub fn hw_overview_key(&mut self, code: u16, down: bool, mods: super::overview::KeyMods, alt: bool, t: f64) -> bool {
+        const PASS: [u16; 14] = [29, 42, 54, 56, 97, 100, 125, 126, 114, 115, 116, 143, 224, 225];
+        if !down || !self.screen_on || alt || PASS.contains(&code) {
+            return false;
+        }
+        // the Apps grid takes only its navigation keys: letters go on to `hw_type`, which types them into its search field
+        let grid_key = self.overview.grid.visible() && matches!(code, KEY_ESC | KEY_BACKSPACE | KEY_ENTER | KEY_UP | KEY_LEFT | KEY_RIGHT | KEY_DOWN);
+        let open = self.overview.open || grid_key;
+        let bound = !mods.cmd && !mods.shift && (code == super::overview::KEY_F3 && !mods.ctrl || code == super::overview::KEY_UP && mods.ctrl);
+        if !(open || bound) {
+            return false;
+        }
+        self.overview_key(code, down, mods, t)
+    }
+
     /// Types a physical-keyboard key into the terminal, a hosted app's text field or the focused
     /// native text field of the app on screen (Search, Browser, Settings, Files, Deildu); elsewhere it is ignored. The effects are the field's (a Wi-Fi join, say).
     /// A Ctrl or Cmd chord the shell did not take goes to the external app in front. False when
@@ -719,6 +772,12 @@ impl Shell {
     pub fn hw_type(&mut self, out: Out, t: f64) -> Vec<Effect> {
         if !self.screen_on {
             return vec![];
+        }
+        // the Apps grid, while it is open, takes the typing for its search field
+        if let Out::Text(text) = &out {
+            if self.overview_type(text) {
+                return vec![];
+            }
         }
         // the password sheet of an app's local authentication takes the typing before anything else
         if self.auth_showing() {
@@ -1058,6 +1117,8 @@ impl Shell {
             // Escape hides the character viewer first, before it goes Back
             Shortcut::Back if self.char_viewer_escape() => vec![],
             Shortcut::Back => self.hw_back(t),
+            // a lone Cmd is not Home on the desktop (a stray release must never send the windows to the Dock)
+            Shortcut::Home if self.form.is_desktop() => vec![],
             Shortcut::Home => self.assistive_action(super::assistive_touch::Action::Home, t),
             Shortcut::Term(k) => self.terminal_hw_key(k, t),
             Shortcut::Photo(c) => self.photo_command(c, t),
@@ -1276,6 +1337,52 @@ mod tests {
         k.key(KEY_LEFTSHIFT, true);
         k.key(KEY_LEFTMETA, true);
         assert_eq!(k.key(KEY_LEFTMETA, false), None);
+    }
+
+    /// On the desktop the Cmd key is a modifier only: a lone press and release is not Home, so a chord the window server
+    /// or the front app consumes (whose letter the shell never sees) cannot send the windows to the Dock.
+    #[test]
+    fn on_the_desktop_a_lone_cmd_does_nothing() {
+        let mut k = HwKeys::default();
+        k.set_desktop(true);
+        assert_eq!(k.key(KEY_LEFTMETA, true), None);
+        assert_eq!(k.key(KEY_LEFTMETA, false), None, "no Home on the desktop");
+        assert_eq!(k.key(KEY_RIGHTMETA, true), None);
+        assert_eq!(k.key(KEY_RIGHTMETA, false), None);
+        // the other shortcuts are unchanged
+        assert_eq!(chord(&mut k, &[], KEY_ESC), Some(Shortcut::Back));
+        assert_eq!(chord(&mut k, &[KEY_LEFTMETA], KEY_SPACE), Some(Shortcut::QuickSearch));
+        // reset keeps the form factor
+        k.reset();
+        k.key(KEY_LEFTMETA, true);
+        assert_eq!(k.key(KEY_LEFTMETA, false), None);
+        // and a tablet keeps its Home key
+        k.set_desktop(false);
+        k.key(KEY_LEFTMETA, true);
+        assert_eq!(k.key(KEY_LEFTMETA, false), Some(Shortcut::Home));
+    }
+
+    /// A chord whose letter the shell never receives (the window server took it, or an event tap or Switch Control used it up)
+    /// leaves only the Cmd press and release; `cancel_lone_meta` and the letter reaching `key` both end the lone-press claim.
+    #[test]
+    fn a_chord_the_app_consumes_is_never_a_lone_cmd() {
+        for desktop in [false, true] {
+            let mut k = HwKeys::default();
+            k.set_desktop(desktop);
+            // the letter reached the key path (an app-owned chord such as Cmd+A in a text field)
+            k.key(KEY_LEFTMETA, true);
+            k.key(KEY_A, true);
+            k.key(KEY_A, false);
+            assert_eq!(k.key(KEY_LEFTMETA, false), None, "Cmd+A is a chord (desktop {desktop})");
+            // the letter was used up before it got here
+            k.key(KEY_LEFTMETA, true);
+            k.cancel_lone_meta();
+            assert_eq!(k.key(KEY_LEFTMETA, false), None, "a consumed key cancels the lone press (desktop {desktop})");
+            // a second Cmd press starts afresh: on a tablet it is Home again
+            k.key(KEY_LEFTMETA, true);
+            let up = k.key(KEY_LEFTMETA, false);
+            assert_eq!(up, if desktop { None } else { Some(Shortcut::Home) });
+        }
     }
 
     #[test]

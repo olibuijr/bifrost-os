@@ -1935,10 +1935,13 @@ impl Shell {
     pub(super) fn open_quicksearch_hw(&mut self, t: f64) {
         if self.quicksearch.active() {
             self.quicksearch.hide();
+            // the glass the panel declared goes with it: repaint everything so no edge of the capsule is left on the desktop
+            self.force_full_redraw();
             self.dirty = true;
             return;
         }
-        if self.screen != Screen::Home && !self.desk_active() {
+        // locked, off or on the lock screen: no Search. On the desktop it opens over any app, whatever the screen is.
+        if !self.screen_on || self.is_locked() || (self.screen != Screen::Home && !self.desk_active() && !self.form.is_desktop()) {
             return;
         }
         let range = self.ui.pt(REVEAL_PT);
@@ -2644,6 +2647,31 @@ mod desktop_tests {
         assert!(sh.quicksearch.is_shown(), "Search opens over an app");
         sh.hw_type(Out::Text("cl".into()), 2100.0);
         assert_eq!(sh.quicksearch.query(), "cl");
+    }
+
+    /// Cmd+Space opens Search over an app the shell does not draw (an external window in front), and a second press closes it.
+    #[test]
+    fn cmd_space_opens_and_closes_quicksearch_over_an_external_app() {
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.screen = Screen::App(AppId::External(3));
+        sh.hw_shortcut(Shortcut::QuickSearch, 1000.0);
+        sh.quicksearch_tick(2000.0);
+        assert!(sh.quicksearch.is_shown(), "Search opens over an external app");
+        sh.hw_shortcut(Shortcut::QuickSearch, 3000.0);
+        assert!(!sh.quicksearch.active(), "the same chord closes it");
+    }
+
+    /// The Cmd release that ends the chord is not Home on the desktop: Search stays open and the app stays in front.
+    #[test]
+    fn a_lone_cmd_does_not_close_search_or_go_home_on_the_desktop() {
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.screen = Screen::App(AppId::Settings);
+        sh.hw_shortcut(Shortcut::QuickSearch, 1000.0);
+        sh.quicksearch_tick(2000.0);
+        assert!(sh.quicksearch.is_shown());
+        sh.hw_shortcut(Shortcut::Home, 2100.0);
+        assert!(sh.quicksearch.is_shown(), "Home from a stray Cmd release does not hide Search");
+        assert_eq!(sh.screen, Screen::App(AppId::Settings), "and the windows stay where they are");
     }
 }
 

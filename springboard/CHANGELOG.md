@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Keyboard: Cmd+A (Select All) reaches the front app again. The window server no longer binds Super+A to the app menu launcher, which also swallowed the chord and showed a cream "Applications:" box. A lone Cmd press no longer goes Home on the desktop (it stays the Home key of a tablet), so a chord the window server or the app takes never sends every window to the Dock, and Cmd+Space keeps Spotlight open.
+- Mission Control opens with Ctrl+Up and F3 (the window server binds them, so it works with any app in front); Esc, Return, Tab and the arrows work inside it, and typing goes to the Apps grid's search field.
+
 ## 0.10.8 — 2026-10-20
 
 - System Update now updates the system's own assets (UI fonts, app icons, wallpapers). They ship in the update package

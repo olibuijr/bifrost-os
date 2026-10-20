@@ -809,6 +809,7 @@ impl Shell {
             ov.open_now(self, t);
         }
         self.overview = ov;
+        self.dirty = true;
     }
 
     pub fn appgrid_toggle(&mut self, t: f64) {
@@ -952,5 +953,42 @@ mod tests {
         let right = t.iter().map(|r| r.x + r.w).fold(f32::MIN, f32::max);
         assert!(((left + right) / 2.0 - 800.0).abs() < 1.0);
         assert!(mid(&t[0]) > 0.0);
+    }
+
+    /// Ctrl+Up and F3 open Mission Control on the desktop, the same chord closes it, and Esc closes it too. The Apps grid
+    /// takes only its navigation keys, so a letter reaches `hw_type`.
+    #[test]
+    fn ctrl_up_and_f3_toggle_mission_control_on_the_desktop() {
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.screen_on = true;
+        sh.screen = crate::shell::Screen::Home;
+        assert!(!sh.hw_overview_key(KEY_UP, true, KeyMods { ctrl: false, cmd: false, shift: false }, false, 1000.0), "a plain Up is the app's");
+        assert!(!sh.overview.open);
+        assert!(sh.hw_overview_key(KEY_UP, true, KeyMods { ctrl: true, cmd: false, shift: false }, false, 1000.0), "Ctrl+Up opens it");
+        assert!(sh.overview.open);
+        assert!(!sh.hw_overview_key(KEY_UP, false, KeyMods { ctrl: true, cmd: false, shift: false }, false, 1100.0), "the release passes");
+        assert!(sh.hw_overview_key(KEY_F3, true, KeyMods { ctrl: false, cmd: false, shift: false }, false, 2000.0), "F3 closes it");
+        assert!(sh.overview.closing.is_some() || !sh.overview.open);
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.screen_on = true;
+        sh.screen = crate::shell::Screen::Home;
+        assert!(sh.hw_overview_key(KEY_F3, true, KeyMods { ctrl: false, cmd: false, shift: false }, false, 1000.0), "F3 opens it");
+        assert!(sh.overview.open);
+        assert!(sh.hw_overview_key(KEY_ESC, true, KeyMods { ctrl: false, cmd: false, shift: false }, false, 2000.0), "Esc is taken while it is open");
+        assert!(!sh.hw_overview_key(29, true, KeyMods { ctrl: true, cmd: false, shift: false }, false, 2100.0), "a modifier press passes");
+    }
+
+    /// Mission Control belongs to the desktop: the tablet form never opens it, and Alt or Cmd chords are not its keys.
+    #[test]
+    fn mission_control_keys_do_nothing_on_a_tablet_or_with_alt() {
+        let mut sh = crate::shell::tests::shell();
+        sh.screen_on = true;
+        assert!(!sh.hw_overview_key(KEY_F3, true, KeyMods { ctrl: false, cmd: false, shift: false }, false, 1000.0));
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.screen_on = true;
+        sh.screen = crate::shell::Screen::Home;
+        assert!(!sh.hw_overview_key(KEY_UP, true, KeyMods { ctrl: true, cmd: false, shift: false }, true, 1000.0), "Ctrl+Alt+Up is the screen reader's");
+        assert!(!sh.hw_overview_key(KEY_F3, true, KeyMods { ctrl: false, cmd: true, shift: false }, false, 1000.0), "Cmd+F3 is not Mission Control");
+        assert!(!sh.overview.open);
     }
 }

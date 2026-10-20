@@ -18,7 +18,7 @@ xdg-shell toplevel, its existing BifrOSt titlebar and layout, and its own releas
 SHM buffers. Native Linux apps share the compositor, input focus and window
 stack. The compositor supports XWayland for X11 clients. Applications is the
 last dock button. The compositor owns the key chords (`docs/window-server.md`, "Key bindings"): Super+Space opens
-the search panel, Super+A runs `bifrost-apps` (the installed `.desktop` application menu). `bifrost-apps firefox` opens Firefox. The app launcher forwards only the session
+the search panel, Ctrl+Up and F3 open Mission Control (Super+A is not bound: Cmd+A is Select All). `bifrost-apps firefox` opens Firefox. The app launcher forwards only the session
 variables it needs and drops root privileges before invoking the application.
 
 BifrOSt locks through `ext-session-lock-v1`, which blocks external app input and
