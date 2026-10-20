@@ -916,6 +916,70 @@
         assert!(sh.desk.as_ref().unwrap().wins.is_empty());
     }
 
+    /// The pixels of the app in front are not by themselves a reason to draw the whole desktop, and the same state an app
+    /// sends again is no reason at all.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn an_external_apps_pixels_ask_for_a_window_frame_and_its_repeated_state_for_none() {
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        let peer=fixture_app(&mut sh);
+        let m=sh.desk_metrics();
+        sh.desk.as_mut().unwrap().open(&m,AppId::External(0),(600,400));
+        sh.screen=Screen::App(AppId::External(0));
+        // the first tick settles the foreground change
+        sh.ext_tick(1.0);
+        let a=bifrost_proto::sys::shm_create("quiet-a",48).unwrap();
+        let b=bifrost_proto::sys::shm_create("quiet-b",48).unwrap();
+        peer.send(&bifrost_proto::ToShell::Buffers{w:4,h:3,generation:1}.encode(),&[a.0,b.0]).unwrap();
+        sh.ext_tick(2.0);
+        sh.dirty=false;sh.ext_frame=false;
+        // pixels alone
+        peer.send(&bifrost_proto::ToShell::Frame{buf:0,damage:vec![[0,0,4,3]]}.encode(),&[]).unwrap();
+        sh.ext_tick(3.0);
+        assert!(sh.ext_frame,"the new pixels ask for a frame");
+        assert!(!sh.dirty,"and for nothing else: no whole desktop frame");
+        assert!(sh.frame_reason().contains("ext-frame"),"the trace names the cause: {}",sh.frame_reason());
+        // the same undo titles twice: the first changes what the menus show, the second nothing
+        let titles=bifrost_proto::ToShell::UndoTitles{undo:"Undo Typing".into(),redo:String::new()};
+        sh.dirty=false;sh.ext_frame=false;
+        peer.send(&titles.encode(),&[]).unwrap();
+        sh.ext_tick(4.0);
+        assert!(sh.dirty,"a changed title is drawn by the shell");
+        sh.dirty=false;sh.ext_frame=false;
+        peer.send(&titles.encode(),&[]).unwrap();
+        sh.ext_tick(5.0);
+        assert!(!sh.dirty&&!sh.ext_frame,"identical state costs no frame");
+    }
+
+    /// New pixels from the app in front redraw the windows and nothing else: the shell's own surface is not touched and
+    /// reports no damage.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn a_frame_for_an_apps_pixels_alone_draws_no_shell_surface() {
+        let saved=std::env::var_os("SPRINGBOARD_WAYLAND");std::env::set_var("SPRINGBOARD_WAYLAND","1");
+        let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;sh.drawn=Drawn::App;
+        let (w,h)=(sh.w as usize,sh.h as usize);
+        let mut pixels=vec![0;w*h];
+        // the first frame draws the desktop whole (it is what sets desk_drawn)
+        sh.draw(&mut Surface{w,h,stride:w,px:&mut pixels,y0:0},0.);
+        assert!(sh.desk_drawn);
+        let before=pixels.clone();
+        sh.ext_frame=true;
+        assert!(sh.needs_frame(),"the pixels ask for a frame");
+        let damage=sh.draw(&mut Surface{w,h,stride:w,px:&mut pixels,y0:0},1.);
+        // (a colour fade of the appearance is process-wide state another test may be running: that frame is a full one)
+        if !bifrost_render::appearance::fading() {
+            assert!(damage.is_empty(),"no damage on the shell's own surface");
+            assert!(pixels==before,"nothing of it was drawn");
+        }
+        assert!(!sh.ext_frame,"the frame settled it");
+        // another cause pending: the ordinary frame
+        sh.ext_frame=true;sh.dirty=true;
+        sh.draw(&mut Surface{w,h,stride:w,px:&mut pixels,y0:0},2.);
+        assert!(!sh.ext_frame);
+        if let Some(v)=saved {std::env::set_var("SPRINGBOARD_WAYLAND",v)} else {std::env::remove_var("SPRINGBOARD_WAYLAND")};
+    }
+
     /// One tile per app: a key kept in the Dock twice, or an app with two windows, never makes a second tile.
     #[cfg(feature="desktop-wayland")]
     #[test]
@@ -1419,6 +1483,40 @@
         let damage=sh.draw(&mut Surface{w,h,stride:w,px:&mut pixels,y0:0},1000.);
         assert!(!damage.is_all());assert!(damage.pixels()<=w*band,"nothing below the bar is repainted");
         assert!(pixels[..w*band]==expected[..w*band],"the bar's rows equal a desktop repaint of them");
+        if let Some(v)=saved {std::env::set_var("SPRINGBOARD_WAYLAND",v)} else {std::env::remove_var("SPRINGBOARD_WAYLAND")};
+    }
+
+    /// A window that windows in front cover keeps no cache entry on purpose; that must not make every partial desktop
+    /// frame (the bar-only repaint of the once-a-second readings) fall back to a whole desktop frame.
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn a_covered_window_does_not_stop_the_partial_frames() {
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        let m=sh.desk_metrics();
+        sh.desk.as_mut().unwrap().open(&m,AppId::Settings,(600,400));
+        let id=desk::win_id(AppId::Settings).unwrap();
+        assert!(!sh.retain_wayland_windows(),"a window that was never drawn needs a full desktop frame");
+        sh.desk.as_mut().unwrap().hidden_ids.push(id);
+        assert!(sh.retain_wayland_windows(),"one the last frame skipped because it is covered does not");
+        assert_eq!(sh.take_wayland_windows().len(),1,"its frame is still published, without pixels");
+    }
+
+    /// A new reading changes one label: the frame reports that label's rectangle as damage, not the bar's whole width.
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn a_bar_only_frame_reports_damage_for_the_changed_items_alone() {
+        let saved=std::env::var_os("SPRINGBOARD_WAYLAND");std::env::set_var("SPRINGBOARD_WAYLAND","1");
+        let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;sh.drawn=Drawn::App;
+        let (w,h)=(sh.w as usize,sh.h as usize);
+        let mut pixels=vec![0;w*h];
+        sh.draw(&mut Surface{w,h,stride:w,px:&mut pixels,y0:0},0.);
+        let band=sh.desktop_bar_height().min(h);
+        sh.bar_only=true;
+        sh.bar_rects=vec![(w as i32/2,0,100,band as i32)];
+        let damage=sh.draw(&mut Surface{w,h,stride:w,px:&mut pixels,y0:0},1000.);
+        assert!(!damage.is_all());
+        assert_eq!(damage.pixels(),100*band,"only the changed item's rectangle");
+        assert!(sh.bar_rects.is_empty(),"the rectangles belong to one frame");
         if let Some(v)=saved {std::env::set_var("SPRINGBOARD_WAYLAND",v)} else {std::env::remove_var("SPRINGBOARD_WAYLAND")};
     }
 

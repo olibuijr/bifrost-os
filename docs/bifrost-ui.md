@@ -2884,7 +2884,13 @@ Tests: `restoration::tests` (`restorable_state_round_trips_through_a_relaunch`, 
 - Apps with `draws_canvas() == true` are drawn through `draw_canvas`; consecutive `Move`s of one touch in a drain
   batch are delivered as the last one; `DistNotify`, workspace replies and events only ask for a frame when someone
   listens; the controls/menus/titles comparison runs only on turns where something happened.
-- `BIFROST_FRAME_STATS=1` turns on the once-a-second "app frames" line in the shell log.
+- Identical repaints are not sent (`paint_slot`): an app that reports its whole surface as damage (it keeps no damage of
+  its own) is compared with the buffer the shell shows, and only the rows that differ go out as the frame's damage;
+  none that differ, no `Frame` message at all, so the shell draws nothing for a repaint that changed no pixel. Apps that
+  report partial damage are trusted as before. Measured so far on the host only (`paint_slot` tests); the device number is
+  the shell's frame count with the app idle (`docs/build-performance.md`, "Idle redraw on the device").
+- `BIFROST_FRAME_STATS=1` turns on the once-a-second "app frames" line in the shell log (with the count of repaints that
+  were identical to the screen and not sent).
 - `View::wants_tick` (scroll fling, indeterminate progress) feeds `Window::next_wake` (SDK-6).
 - Not done yet: SDK-8 to SDK-13, SDK-15, SDK-17 (the retained view kit and the direct path are kept for the
   layer-backed rebuild in `docs/graphics-architecture.md`; none of them has an app caller today).

@@ -450,11 +450,22 @@ pub const KEYBOARD_APP_ID: &str = "is.olibuijr.keyboard";
 /// What `pump` saw that the shell must act on besides the frame.
 #[derive(Debug, Default, PartialEq)]
 pub struct Pumped {
-    /// a new frame is ready to blit
+    /// something the desk shows changed: a new frame is ready to blit, or the app changed what the shell draws for it
     pub frame: bool,
     pub requests: Vec<ToShell>,
     /// the app exited or its socket closed during this pump
     pub died: bool,
+    /// `frame` was asked for by more than pixels: a title, menus, a window's size or level, commands. The shell draws
+    /// those itself, so they cost a whole desktop frame; pixels alone only republish the windows.
+    pub chrome: bool,
+}
+
+impl Pumped {
+    /// Something the shell draws changed (not just the app's pixels).
+    fn chrome(&mut self) {
+        self.frame = true;
+        self.chrome = true;
+    }
 }
 
 struct Buf {
@@ -1086,7 +1097,7 @@ impl AppHost {
                 }
             }
             ToShell::Controls(nodes) => self.controls=nodes,
-            ToShell::AppMenus(menus) => {if self.app_menus!=menus {self.app_menus=menus;out.frame=true;}},
+            ToShell::AppMenus(menus) => {if self.app_menus!=menus {self.app_menus=menus;out.chrome();}},
             ToShell::ControlsTree(tree) => self.controls_tree=tree,
             ToShell::AxText(list) => self.ax_text=list,
             ToShell::AxMeta(list) => self.ax_meta=list,
@@ -1139,13 +1150,13 @@ impl AppHost {
             ToShell::WindowLevel(level) => {
                 if self.window_level != level {
                     self.window_level = level;
-                    out.frame = true;
+                    out.chrome();
                 }
             }
             ToShell::WindowLevelOf { id, level } => {
                 // the main window (id 0) has its own level; an unknown extra window is ignored
                 if self.windows.set_floating(&self.id, id, level == bifrost_proto::WindowLevel::Floating) {
-                    out.frame = true;
+                    out.chrome();
                 }
             }
             ToShell::InputAccessory(items) => self.accessory = items.into_iter().take(bifrost_proto::MAX_ACCESSORY_ITEMS).collect(),
@@ -1159,37 +1170,44 @@ impl AppHost {
                     }
                     self.windows.set_title_double_click(&self.id, id, flags & bifrost_proto::window_flags::TITLE_DOUBLE_CLICK != 0);
                 }
-                out.frame = true;
+                out.chrome();
             }
             ToShell::WindowMove { window, x, y } => {
                 // an unknown window is ignored; the desk applies the position on its next sync
                 if self.windows.request_position(&self.id, window, x, y) {
-                    out.frame = true;
+                    out.chrome();
                 }
             }
             ToShell::WindowCollapse { window, collapsed } => {
                 if self.windows.set_collapsed(&self.id, window, collapsed) {
-                    out.frame = true;
+                    out.chrome();
                 }
             }
             ToShell::WindowClose { id } => {
                 self.windows.close(&self.id, id);
                 self.window_bufs.remove(&id);
-                out.frame = true;
+                out.chrome();
             }
+            // the same title or size again changes nothing the desk draws: no frame
             ToShell::WindowTitle { id, title } => {
-                self.windows.retitle(&self.id, id, &title);
-                out.frame = true;
+                let same = self.windows.of_app(&self.id).iter().any(|x| x.id == id && x.title == title);
+                if !same {
+                    self.windows.retitle(&self.id, id, &title);
+                    out.chrome();
+                }
             }
             ToShell::WindowResize { id, w, h } => {
-                let _ = self.windows.resize(&self.id, id, w, h);
-                out.frame = true;
+                let same = self.windows.of_app(&self.id).iter().any(|x| x.id == id && x.w == w && x.h == h);
+                if !same {
+                    let _ = self.windows.resize(&self.id, id, w, h);
+                    out.chrome();
+                }
             }
             ToShell::WindowBuffers { id, w, h, generation } => self.window_buffers(id, w, h, generation, fds),
             ToShell::WindowFrame { id, buf, damage } => self.window_frame_arrived(id, buf, damage, out),
-            ToShell::Materials(list) => {if self.materials!=list {self.materials=list;out.frame=true;}},
-            ToShell::Commands(commands) => {if self.commands!=commands {self.commands=commands;out.frame=true;}},
-            ToShell::UndoTitles { undo, redo } => {if self.undo_titles!=(undo.clone(),redo.clone()) {self.undo_titles=(undo,redo);out.frame=true;}},
+            ToShell::Materials(list) => {if self.materials!=list {self.materials=list;out.chrome();}},
+            ToShell::Commands(commands) => {if self.commands!=commands {self.commands=commands;out.chrome();}},
+            ToShell::UndoTitles { undo, redo } => {if self.undo_titles!=(undo.clone(),redo.clone()) {self.undo_titles=(undo,redo);out.chrome();}},
             ToShell::Log { text } => bifrost_core::log::shell_logger("apphost").info(format!("app {}: {text}", self.id)),
             ToShell::PointerInterest { mask } => self.pointer_interest = mask,
             other => out.requests.push(other),
@@ -2084,8 +2102,14 @@ impl Shell {
             if h.take_fallback() {
                 fell_back.push(slot as u8);
             }
-            if (p.frame || p.died) && fg == Some(slot as u8) {
-                self.dirty = true;
+            if fg == Some(slot as u8) {
+                if p.died || p.chrome {
+                    // the app went, or changed something the shell draws (a title, its menus, a window's size)
+                    self.dirty = true;
+                } else if p.frame {
+                    // new pixels alone: the desktop republishes the windows, nothing else is drawn again
+                    self.ext_frame = true;
+                }
             }
             for r in p.requests {
                 match r {
@@ -2664,6 +2688,38 @@ mod window_table_tests {
         assert_eq!((one.title.as_str(), one.w, one.h), ("Ada L.", 320.0, 240.0));
         host.handle(ToShell::WindowClose { id: 2 }, Vec::new(), &mut out);
         assert_eq!(ids(&host), vec![1]);
+    }
+
+    /// The state an app sends again unchanged is free: it asks the shell for no frame at all. Pixels alone ask for a
+    /// frame of windows (`frame`), not for the shell to draw anything itself (`chrome`).
+    #[test]
+    fn identical_state_asks_for_no_frame_and_pixels_alone_are_no_chrome_change() {
+        let (mut host, _peer) = fixture_host();
+        let titles = || ToShell::UndoTitles { undo: "Undo Typing".into(), redo: String::new() };
+        let mut first = Pumped::default();
+        host.handle(titles(), Vec::new(), &mut first);
+        assert!(first.frame && first.chrome, "new titles are something the shell draws");
+        let mut again = Pumped::default();
+        host.handle(titles(), Vec::new(), &mut again);
+        assert_eq!(again, Pumped::default(), "the same titles again cost nothing");
+        host.handle(ToShell::Materials(Vec::new()), Vec::new(), &mut again);
+        host.handle(ToShell::Commands(host.commands), Vec::new(), &mut again);
+        assert_eq!(again, Pumped::default(), "nor do the same materials and commands");
+        host.handle(ToShell::WindowOpen { id: 1, title: "Ada".into(), w: 480.0, h: 560.0, position: None, flags: 0 }, Vec::new(), &mut again);
+        assert!(again.chrome, "a window opening is drawn by the shell");
+        let mut same = Pumped::default();
+        host.handle(ToShell::WindowTitle { id: 1, title: "Ada".into() }, Vec::new(), &mut same);
+        host.handle(ToShell::WindowResize { id: 1, w: 480.0, h: 560.0 }, Vec::new(), &mut same);
+        assert_eq!(same, Pumped::default(), "the same title and size again cost nothing");
+        host.handle(ToShell::WindowTitle { id: 1, title: "Ada L.".into() }, Vec::new(), &mut same);
+        assert!(same.frame && same.chrome, "a new title is drawn");
+        // pixels
+        let set = |n: &str| vec![sys::shm_create(n, 48).unwrap(), sys::shm_create(n, 48).unwrap()];
+        let mut pixels = Pumped::default();
+        host.handle(ToShell::Buffers { w: 4, h: 3, generation: 1 }, set("quiet-pixels"), &mut pixels);
+        host.handle(ToShell::Frame { buf: 0, damage: vec![[0, 0, 4, 3]] }, Vec::new(), &mut pixels);
+        assert!(pixels.frame, "new pixels are a frame");
+        assert!(!pixels.chrome, "and only a frame of windows");
     }
 
     #[test]

@@ -91,6 +91,35 @@ fn bench_frame_menu_open() {
     report("menu_open", frame_ms(WARM, RUNS, |k| paint(&mut sh, &mut buf, 1e9 + k as f64 * 16.0)));
 }
 
+/// The frame an external app's new pixels ask for on a settled desktop: the windows are republished and nothing else is
+/// drawn (`Shell::draw`, the windows-only path). It must cost a fraction of `bench_frame_desktop_idle`; this is the frame
+/// an idle app that repaints every vblank costs the shell.
+#[cfg(feature = "desktop-wayland")]
+#[test]
+#[ignore]
+fn bench_frame_ext_pixels() {
+    let saved = std::env::var_os("SPRINGBOARD_WAYLAND");
+    std::env::set_var("SPRINGBOARD_WAYLAND", "1");
+    let mut sh = desktop(Some(AppId::Settings));
+    sh.screen = Screen::Home;
+    sh.anim = None;
+    let mut buf = vec![0u32; W * H];
+    // one whole frame first: the windows-only frame follows a drawn desktop
+    paint(&mut sh, &mut buf, 1e9);
+    report(
+        "ext_pixels",
+        frame_ms(WARM, RUNS, |k| {
+            sh.ext_frame = true;
+            sh.draw(&mut Surface { w: W, h: H, stride: W, px: &mut buf, y0: 0 }, 1e9 + 16.0 + k as f64 * 16.0);
+        }),
+    );
+    if let Some(v) = saved {
+        std::env::set_var("SPRINGBOARD_WAYLAND", v)
+    } else {
+        std::env::remove_var("SPRINGBOARD_WAYLAND")
+    };
+}
+
 /// A Settings window dragged by its title bar: each timed frame is one pointer move (the event) plus the repaint.
 #[cfg(feature = "desktop-wayland")]
 #[test]

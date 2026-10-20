@@ -105,7 +105,7 @@ Equal-area Files reshape 1200x825 → 1100x900 was visually checked after update
 
 ## Frame-time regression tests (host)
 
-Five desktop scenes are timed on the host at 1920x1080 (Files at 1200x1920, the window body), each as a forced repaint
+Six desktop scenes are timed on the host at 1920x1080 (Files at 1200x1920, the window body), each as a forced repaint
 of the whole shell or of the Files page. Every scene prints `BENCH frame_<scene>_median` and `BENCH frame_<scene>_p95`
 in ms, and its test fails when the 95th-percentile frame is over **16.7 ms** (one 60 Hz frame):
 
@@ -114,6 +114,7 @@ in ms, and its test fails when the 95th-percentile frame is over **16.7 ms** (on
 | Desktop idle | `bench_frame_desktop_idle` | desktop, no windows |
 | Settings open | `bench_frame_settings_open` | Settings window open |
 | Window menu open | `bench_frame_menu_open` | Window menu popup open over the desktop |
+| External app pixels | `bench_frame_ext_pixels` | The frame an app's new pixels ask for: the windows only, no bar, Dock or wallpaper |
 | Window drag | `bench_frame_window_drag` | Settings dragged by its title bar; each frame is one pointer move plus the repaint |
 | Files, 5,000 items | `bench_frame_files_5k` | Files folder page with 5,000 rows (`springboard/src/files/bench.rs`) |
 
@@ -135,6 +136,27 @@ Other benches: `bench_ui_*` (kit widgets, `bifrost-ui`), `bench_files_*` (`bifro
 `tools/bench.py --midget` measures the device against `docs/budgets.toml` (idle CPU and wakeups, PSS, threads, sizes, RAM),
 `--midget --graphics` adds the window-server suite (`tools/graphics_bench.py`), `--audio` the audio latency bench
 (`bifrost pc audio-bench`, [audio-latency.md](audio-latency.md)), and `--history` prints `docs/perf-history.jsonl`.
+
+### Idle redraw on the device (Midget, `top` and the frame trace)
+
+An idle desktop must cost almost nothing, with an app in front too. Measure it with the app doing what it does when it
+does nothing (Music on its Radio page, a station selected, playback failing is the worst case seen):
+
+1. Turn the shell's frame trace on (`bifrost pc midget trace on`; off again with `trace off`) and read the shell log for
+   10 s with no input: `springboard: frame draw N present N damage N% gap N why <cause>`.
+2. Count the `springboard: frame` lines of those 10 s in the shell log (`bifrost pc log`, filtered to the window of time).
+   An idle desktop draws a frame once a second at most, for a changed CPU or RAM reading
+   (`why ...:bar-reading`), and the clock once a minute. More than that names its cause in `why`: `ext-frame` is the app in
+   front sending pixels, `dirty` is a full desktop frame asked for by something else, `bar-reading` and `perf-hud` are the
+   partial frames.
+3. Read `top -b -n 2 -d 5` for the second sample: the shell (`springboard`), the app and `bifrost-wm`. Idle, the shell
+   is under 5% and the app under 5%; `BIFROST_FRAME_STATS=1` in the app's environment adds a line a second with the app's
+   frames, the repaints it did not send because they equalled the screen, and (Music) which source asked for the repaint.
+4. `slow frame ... damage=0%` lines mean a whole desktop frame came out unchanged: the work that was wasted is the
+   `draw=` figure.
+
+Host check of the same paths: `bench_frame_ext_pixels` (above) and `cargo test --lib --features desktop-wayland
+a_frame_for_an_apps_pixels_alone_draws_no_shell_surface identical_state a_bar_only_frame` in `springboard/`.
 
 These run the same drawing code as the shell, but on the host CPU, not on the lab PC's Intel GPU. A pass here does not
 prove the Midget frame time: check the device numbers with `tools/bench.py --midget --graphics`.
