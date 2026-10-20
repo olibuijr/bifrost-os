@@ -17,11 +17,14 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 const POLL: Duration = Duration::from_secs(1);
 struct WirelessDiagnostics {
     state: Diagnostics,
+    /// The poller, paused while the window is not visible. None under the compliance harness.
+    poller: Option<std::sync::Arc<source::Poller>>,
 }
 
 impl WirelessDiagnostics {
     fn new() -> WirelessDiagnostics {
         let mut state = Diagnostics::new();
+        let mut poller = None;
         if bifrost_app::testing::pinned() {
             // Under the compliance harness the radio is a fixed fixture, applied before the first frame: the snapshot
             // never depends on the host's Wi-Fi interfaces or on how many polls came back in time.
@@ -29,9 +32,9 @@ impl WirelessDiagnostics {
                 state.apply_reading(reading);
             }
         } else {
-            source::spawn_poller(POLL, &state.readings);
+            poller = Some(source::Poller::start(POLL, &state.readings));
         }
-        WirelessDiagnostics { state }
+        WirelessDiagnostics { state, poller }
     }
 
     /// Takes every reading the poller sent since the last frame, and the scan's answer if it has come back.
@@ -88,6 +91,19 @@ impl App for WirelessDiagnostics {
             // a published control (accessibility, `bifrost pc midget tap-window`): the same action as a click
             Input::Activate(id) => self.activate(id as u32),
             _ => false,
+        }
+    }
+
+    /// The window is hidden or minimised: no more `iw` runs until it is shown again.
+    fn suspend(&mut self, _ctx: &Ctx) {
+        if let Some(poller) = &self.poller {
+            poller.pause();
+        }
+    }
+
+    fn resume(&mut self, _ctx: &Ctx) {
+        if let Some(poller) = &self.poller {
+            poller.resume();
         }
     }
 
