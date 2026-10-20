@@ -10,18 +10,19 @@ use bifrost_app::controls::Rect;
 use bifrost_app::document::item;
 use bifrost_app::kit::canvas::{Canvas, ImageRef, RectF};
 use bifrost_app::kit::ui::{
-    Ui, Weight, BLACK, CONTENT_BG, DESTRUCTIVE, DETAIL_BG, FIELD_BG, LABEL, LABEL_3, LINK, MAC_BODY_PT, MAC_FOOTNOTE_PT, SELECTION,
-    SEGMENT_ON, SEPARATOR_C,
+    Ui, Weight, BLACK, CONTENT_BG, DESTRUCTIVE, DETAIL_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, LINK, MAC_BODY_PT, MAC_FOOTNOTE_PT,
+    SELECTION, SEGMENT_ON, SEPARATOR_C,
 };
+use bifrost_app::glyphs::glyph;
 use bifrost_app::kit::{pack, Image};
 use bifrost_app::layout::{traffic_lights_trailing, MARGIN_PT, READABLE_MAX_PT, UNIFIED_BAR_PT};
 use bifrost_app::controls::prefs_layout::m;
 
-/// Height of the format bar under the toolbar, and of the tab ruler under it.
-pub const FORMAT_H: f32 = 36.0;
+/// Height of the format bar under the title row (a toolbar capsule and a little air), and of the tab ruler under it.
+pub const FORMAT_H: f32 = 44.0;
 pub const RULER_H: f32 = 22.0;
-/// Size of a colour swatch button.
-const SWATCH: f32 = 18.0;
+/// Size of the proxy icon in front of the document's name in the title row.
+const PROXY_ICON_PT: f32 = 16.0;
 /// Height of the find bar, when it is open.
 pub const FIND_H: f32 = 36.0;
 /// Height of the word count row at the bottom.
@@ -172,6 +173,9 @@ pub enum Action {
     EncodingToggle(u8),
     /// Format > Text > Writing Direction: right to left (true) or left to right (false)
     Direction(bool),
+    /// The format bar's style pop-up (0 Regular, 1 Bold, 2 Italic, 3 Bold Italic) and size pop-up (index into `SIZES`)
+    FontStyle(u8),
+    Size(u8),
 }
 
 /// The first menu id of Text Editor's own items. Ids are stable: they are the values a menu sends back.
@@ -291,6 +295,8 @@ impl Action {
             Action::ShowEncodings => MENU_BASE + 0xcc,
             Action::EncodingsDone => MENU_BASE + 0xcd,
             Action::EncodingToggle(i) => MENU_BASE + 0xe0 + i as u32,
+            Action::FontStyle(i) => MENU_BASE + 0xee + i as u32,
+            Action::Size(i) => MENU_BASE + 0xf2 + i as u32,
         })
     }
 
@@ -408,6 +414,8 @@ impl Action {
             0xe0..=0xe6 => Action::EncodingToggle((offset - 0xe0) as u8),
             0xe7 => Action::Direction(false),
             0xe8 => Action::Direction(true),
+            0xee..=0xf1 => Action::FontStyle((offset - 0xee) as u8),
+            0xf2..=0xfa => Action::Size((offset - 0xf2) as u8),
             _ => return None,
         })
     }
@@ -441,8 +449,6 @@ pub struct Button {
     pub active: bool,
     pub enabled: bool,
     pub weight: Weight,
-    /// A colour swatch instead of a label: the colour it fills with.
-    pub swatch: Option<u32>,
 }
 
 /// Which text field has the keyboard.
@@ -453,14 +459,12 @@ pub enum Focus {
     Replace,
 }
 
-/// What the chrome shows about the document and the find bar.
+/// What the format bar shows about the document: the style at the caret (or of the first selected character), the
+/// paragraph's alignment, and whether it is rich text (a plain text document has no formatting to change).
 pub struct Status {
     pub style: Style,
     pub align: Align,
     pub rich: bool,
-    pub can_undo: bool,
-    pub can_redo: bool,
-    pub find_open: bool,
 }
 
 /// The window's regions in points.
@@ -476,6 +480,8 @@ pub struct Geometry {
     pub ruler_top: f32,
     pub ruler_h: f32,
     pub find_top: f32,
+    /// Whether the find bar is open: its fields take presses only then (they sit where the page starts otherwise).
+    pub find_open: bool,
     /// The column of text: its left edge and width, centred and never wider than the readable width.
     pub text_x: f32,
     pub text_w: f32,
@@ -511,6 +517,7 @@ pub fn geometry_with(width: f32, height: f32, find_open: bool, ruler: bool, wrap
         ruler_top,
         ruler_h,
         find_top,
+        find_open,
         text_x,
         text_w,
         find_field: Rect { x: x0, y: row_y, w: FIELD_W, h: BUTTON_H },
@@ -595,19 +602,7 @@ pub fn family_name(font: u8) -> &'static str {
 
 fn label_button(ui: &Ui, label: &str, action: Option<Action>, weight: Weight) -> Button {
     let width = ui.measure(label, MAC_BODY_PT, weight) / ui.s + 2.0 * BUTTON_PAD;
-    Button { rect: Rect { x: 0.0, y: 0.0, w: width, h: BUTTON_H }, label: label.to_string(), action, active: false, enabled: true, weight, swatch: None }
-}
-
-fn swatch_button(color: u32, action: Action) -> Button {
-    Button {
-        rect: Rect { x: 0.0, y: 0.0, w: SWATCH + 6.0, h: BUTTON_H },
-        label: String::new(),
-        action: Some(action),
-        active: false,
-        enabled: true,
-        weight: Weight::Regular,
-        swatch: Some(color),
-    }
+    Button { rect: Rect { x: 0.0, y: 0.0, w: width, h: BUTTON_H }, label: label.to_string(), action, active: false, enabled: true, weight }
 }
 
 /// The fill of a text colour: the window's label colour for the default, the palette colour otherwise.
@@ -641,76 +636,6 @@ fn place_row(buttons: &mut [Button], groups: &[usize], mut x: f32, y: f32) -> f3
     x
 }
 
-/// The toolbar's buttons, in the unified title row beside the traffic lights.
-pub fn toolbar(ui: &Ui, status: &Status) -> Vec<Button> {
-    let weight = Weight::Regular;
-    let mut buttons = vec![
-        label_button(ui, "New", Some(Action::Document(item::NEW)), weight),
-        label_button(ui, "Open", Some(Action::Document(item::OPEN)), weight),
-        label_button(ui, "Save", Some(Action::Document(item::SAVE)), weight),
-        label_button(ui, "Undo", Some(Action::Undo), weight),
-        label_button(ui, "Redo", Some(Action::Redo), weight),
-        label_button(ui, "Find", Some(Action::Find), weight),
-        label_button(ui, "Print", Some(Action::Print), weight),
-    ];
-    buttons[3].enabled = status.can_undo;
-    buttons[4].enabled = status.can_redo;
-    buttons[5].active = status.find_open;
-    let groups: [usize; 4] = [3, 2, 1, 1];
-    place_row(&mut buttons, &groups, traffic_lights_trailing() + BAR_GAP, (UNIFIED_BAR_PT - BUTTON_H) / 2.0);
-    buttons
-}
-
-/// The format bar's buttons: character style, size, colour, alignment, line spacing, lists and the text mode. A plain
-/// text document has only the mode switch enabled.
-pub fn format_bar(ui: &Ui, status: &Status, geom: &Geometry) -> Vec<Button> {
-    let weight = Weight::Regular;
-    let spacing_next = (status.style.spacing + 1) % SPACINGS.len() as u8;
-    let mut buttons = vec![
-        label_button(ui, "B", Some(Action::Bold), Weight::Bold),
-        label_button(ui, "I", Some(Action::Italic), weight),
-        label_button(ui, "U", Some(Action::Underline), weight),
-        label_button(ui, "A-", Some(Action::Smaller), weight),
-        label_button(ui, &format!("{:.0} pt", status.style.size), None, weight),
-        label_button(ui, "A+", Some(Action::Bigger), weight),
-    ];
-    let swatches = COLORS.len();
-    for i in 0..swatches {
-        let mut b = swatch_button(text_color(i as u8), Action::Color(i as u8));
-        b.active = status.style.color as usize == i;
-        buttons.push(b);
-    }
-    buttons.extend([
-        label_button(ui, "Left", Some(Action::Align(Align::Left)), weight),
-        label_button(ui, "Center", Some(Action::Align(Align::Center)), weight),
-        label_button(ui, "Right", Some(Action::Align(Align::Right)), weight),
-        label_button(ui, "Justify", Some(Action::Align(Align::Justified)), weight),
-        label_button(ui, &format!("Spacing {}", spacing_label(status.style.spacing)), Some(Action::Spacing(spacing_next)), weight),
-        label_button(ui, "Bullets", Some(Action::List(ListKind::Bullet)), weight),
-        label_button(ui, "Numbers", Some(Action::List(ListKind::Numbered)), weight),
-        label_button(ui, if status.rich { "Rich Text" } else { "Plain Text" }, Some(if status.rich { Action::MakePlain } else { Action::MakeRich }), weight),
-    ]);
-    let n = buttons.len();
-    for b in &mut buttons[..n - 1] {
-        b.enabled = status.rich;
-    }
-    buttons[0].active = status.style.bold;
-    buttons[1].active = status.style.italic;
-    buttons[2].active = status.style.underline;
-    let a = 6 + swatches;
-    for b in &mut buttons[a..a + 4] {
-        if let Some(Action::Align(al)) = b.action {
-            b.active = al == status.align;
-        }
-    }
-    buttons[a + 5].active = status.style.list == ListKind::Bullet;
-    buttons[a + 6].active = status.style.list == ListKind::Numbered;
-    let groups = [3, 3, swatches, 4, 1, 2, 1];
-    let y = geom.format_top + (FORMAT_H - BUTTON_H) / 2.0;
-    place_row(&mut buttons, &groups, BAR_GAP + 4.0, y);
-    buttons
-}
-
 /// The label of a line spacing multiple: "1.0", "1.15"...
 pub fn spacing_label(index: u8) -> String {
     let m = SPACINGS.get(index as usize).copied().unwrap_or(1.0);
@@ -735,8 +660,12 @@ pub fn find_buttons(ui: &Ui, geom: &Geometry) -> Vec<Button> {
     buttons
 }
 
-/// The button or field under a point, in points.
+/// The find bar's button or field under a point, in points. The find bar takes presses only while it is open: its
+/// fields are laid out where the page starts when it is closed, and must not take the presses meant for the text.
 pub fn hit(buttons: &[Button], geom: &Geometry, x: f32, y: f32) -> Option<Hit> {
+    if !geom.find_open {
+        return None;
+    }
     if let Some(b) = buttons.iter().find(|b| b.rect.contains(x, y)) {
         return Some(Hit::Button(b.clone()));
     }
@@ -775,7 +704,7 @@ fn image_id(img: &Image) -> u64 {
 }
 
 /// Draws a rendered image with its top-left at `(x, y)` device pixels.
-fn blit(c: &mut dyn Canvas, img: &Image, x: f32, y: f32) {
+pub fn blit(c: &mut dyn Canvas, img: &Image, x: f32, y: f32) {
     c.image(ImageRef { id: image_id(img), image: img }, RectF::new(x.floor(), y.floor(), img.w as f32, img.h as f32), 1.0);
 }
 
@@ -796,11 +725,29 @@ fn text_at(c: &mut dyn Canvas, ui: &Ui, text: &str, pt: f32, weight: Weight, col
     width
 }
 
-/// Draws the whole window background and the toolbar band.
+/// Draws the whole window background and the hairline under the format bar. The title row above it has none: the title
+/// and the format bar are one unified toolbar.
 pub fn draw_bar(c: &mut dyn Canvas, ui: &Ui, geom: &Geometry) {
     c.fill_rect(RectF::new(0.0, 0.0, ui.pt(geom.width).ceil(), ui.pt(geom.height).ceil()), DETAIL_BG.now());
-    let sep = ui.pt(UNIFIED_BAR_PT).floor() - 1.0;
+    let sep = ui.pt(geom.ruler_top).floor() - 1.0;
     c.fill_rect(RectF::new(0.0, sep.max(0.0), ui.pt(geom.width).ceil(), 1.0), SEPARATOR_C.now());
+}
+
+/// Draws the document's name in the title row, centred between the traffic lights and the window's right edge, with the
+/// proxy icon in front of it. `title` is the window title (the name, and "Edited" while there are unsaved changes).
+pub fn draw_title(c: &mut dyn Canvas, ui: &Ui, geom: &Geometry, title: &str) {
+    if title.is_empty() {
+        return;
+    }
+    // the title keeps clear of the traffic lights on both sides, so it stays centred
+    let room = (geom.width - 2.0 * (traffic_lights_trailing() + BAR_GAP) - PROXY_ICON_PT - BAR_GAP).max(0.0);
+    let shown = ui.fit(title, MAC_BODY_PT, ui.pt(room));
+    let img = ui.text(&shown, MAC_BODY_PT, Weight::Semibold, LABEL.now());
+    let text_w = img.w as f32 / ui.s;
+    let x0 = (geom.width - (PROXY_ICON_PT + BAR_GAP + text_w)) / 2.0;
+    let mid = UNIFIED_BAR_PT / 2.0;
+    glyph(c, ui, "doc", Rect { x: x0, y: mid - PROXY_ICON_PT / 2.0, w: PROXY_ICON_PT, h: PROXY_ICON_PT }, LABEL_2.now());
+    blit(c, &img, ui.pt(x0 + PROXY_ICON_PT + BAR_GAP).floor(), (ui.pt(mid) - img.h as f32 / 2.0).floor());
 }
 
 /// Draws a button: its plate when active, and its label centred.
@@ -808,12 +755,6 @@ pub fn draw_button(c: &mut dyn Canvas, ui: &Ui, b: &Button) {
     let r = to_px(ui, b.rect);
     if b.active {
         c.fill_rrect(r, ui.pt(CONTROL_RADIUS), SEGMENT_ON.now());
-    }
-    if let Some(fill) = b.swatch {
-        let side = ui.pt(SWATCH);
-        let sw = RectF::new(r.x + (r.w - side) / 2.0, r.y + (r.h - side) / 2.0, side, side);
-        c.fill_rrect(sw, side / 2.0, if b.enabled { fill } else { LABEL_3.now() });
-        return;
     }
     let color = if b.enabled { LABEL.now() } else { LABEL_3.now() };
     let img = ui.text(&b.label, MAC_BODY_PT, b.weight, color);
@@ -1339,6 +1280,10 @@ mod tests {
             Action::ShowEncodings,
             Action::EncodingsDone,
             Action::EncodingToggle(6),
+            Action::FontStyle(0),
+            Action::FontStyle(3),
+            Action::Size(0),
+            Action::Size(8),
         ];
         let mut ids: Vec<u32> = all.iter().filter_map(|a| a.id()).collect();
         ids.sort_unstable();
@@ -1367,6 +1312,28 @@ mod tests {
     fn a_closed_find_bar_takes_no_room() {
         assert_eq!(geometry(800.0, 600.0, false, false).body_top, UNIFIED_BAR_PT + FORMAT_H);
         assert_eq!(geometry(800.0, 600.0, false, true).body_top, UNIFIED_BAR_PT + FORMAT_H + RULER_H);
+    }
+
+    #[test]
+    fn a_closed_find_bar_takes_no_presses_from_the_page() {
+        // the find fields are laid out where the first line of the page is while the bar is closed: a press on that line
+        // must reach the text (it once set the keyboard focus to a hidden field, so clicks never moved the caret)
+        let closed = geometry(1200.0, 780.0, false, false);
+        let (x, y) = (closed.find_field.x + 5.0, closed.find_field.y + 5.0);
+        assert!(closed.find_field.contains(x, y) && y >= closed.body_top, "the hidden field overlaps the page");
+        assert_eq!(hit(&[], &closed, x, y), None);
+        assert_eq!(hit(&[], &closed, closed.replace_field.x + 5.0, closed.replace_field.y + 5.0), None);
+        let open = geometry(1200.0, 780.0, true, false);
+        assert_eq!(hit(&[], &open, open.find_field.x + 5.0, open.find_field.y + 5.0), Some(Hit::Field(Focus::Find)));
+        assert_eq!(hit(&[], &open, open.replace_field.x + 5.0, open.replace_field.y + 5.0), Some(Hit::Field(Focus::Replace)));
+    }
+
+    #[test]
+    fn the_format_bar_is_a_capsule_tall_and_the_page_starts_below_it() {
+        let g = geometry(900.0, 700.0, false, false);
+        assert!(FORMAT_H >= bifrost_app::widgets::CAPSULE_PT, "the toolbar capsules fit the bar");
+        assert_eq!(g.ruler_top, UNIFIED_BAR_PT + FORMAT_H);
+        assert_eq!(g.body_top, g.ruler_top, "no ruler and no find bar");
     }
 
     #[test]
