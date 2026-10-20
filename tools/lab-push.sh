@@ -50,8 +50,8 @@ bg.jpg /usr/share/bifrost/installer/bg.jpg 644
 Godafoss_1080.mp4 /usr/share/bifrost/video/Godafoss_1080.mp4 644
 Svartifoss_1080.mp4 /usr/share/bifrost/video/Svartifoss_1080.mp4 644
 M
-# the packed assets (tools/pack.py): UI fonts, font library, stills and icons, so lab installs get the current
-# set rather than the live medium's (the installer then prunes what the set no longer has). Only the redistributable
+# the packed assets (tools/pack.py): UI fonts, font library, stills and icons, so a lab medium's installer UI has the current
+# set (an installed system gets its assets from the package, system-assets). Only the redistributable
 # files (packaging/assets-allowlist.txt) are staged and served: a stray vendor file in springboard/assets stays here.
 python3 tools/stage-assets.py --replace springboard/assets "$SYNC/assets"
 (cd "$SYNC/assets" && find . -type f -printf '%P\n' | grep -v '[][ ]') |

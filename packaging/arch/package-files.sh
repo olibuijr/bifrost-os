@@ -103,6 +103,18 @@ package_bifrost_files() {
   # same-uid processes (Term, apps) must not be able to ptrace the shell, which holds the session token
   install -Dm644 "$here/sysctl-bifrost.conf" "$pkgdir/usr/lib/sysctl.d/60-bifrost.conf"
   install -Dm755 "$here/seed-data" "$pkgdir/usr/lib/springboard/seed-data"
+  # System assets (UI fonts, app icons, wallpapers): the package owns /usr/share/springboard/system-assets, a path no
+  # earlier install has a file at, so an update can change them and pacman finds no conflict. PC_SYSTEM_ASSETS is the
+  # tree tools/stage-assets.py staged (only files packaging/assets-allowlist.txt names). The scriptlet removes the old
+  # unowned copies in /usr/share/springboard/assets with the helper and the allowlist installed here.
+  if [[ -n ${PC_SYSTEM_ASSETS:-} && -d ${PC_SYSTEM_ASSETS} ]]; then
+    install -d -m755 "$pkgdir/usr/share/springboard/system-assets"
+    cp -r --no-preserve=mode,ownership "$PC_SYSTEM_ASSETS"/. "$pkgdir/usr/share/springboard/system-assets"/
+    find "$pkgdir/usr/share/springboard/system-assets" -type d -exec chmod 755 {} +
+    find "$pkgdir/usr/share/springboard/system-assets" -type f -exec chmod 644 {} +
+  fi
+  install -Dm755 "$here/prune-stale-assets" "$pkgdir/usr/lib/springboard/prune-stale-assets"
+  install -Dm644 "$here/../assets-allowlist.txt" "$pkgdir/usr/lib/springboard/assets-allowlist.txt"
   # boot speed: the initrd mounts the fstab subvolumes, and seatd starts without waiting for local-fs.target
   install -Dm644 "$here/initcpio/install/bifrost-mounts" "$pkgdir/usr/lib/initcpio/install/bifrost-mounts"
   install -Dm644 "$here/initcpio/hooks/bifrost-mounts" "$pkgdir/usr/lib/initcpio/hooks/bifrost-mounts"

@@ -1,0 +1,80 @@
+#!/bin/sh
+# Removes the unowned asset files an older install left in /usr/share/springboard/assets, once the package brings
+# /usr/share/springboard/system-assets (docs/installer-and-boot.md, "System assets"). springboard.install runs it on
+# every install and upgrade; it is idempotent and logs every file it removes.
+#
+# usage: prune-stale-assets [ASSETS [SYSTEM [ALLOWLIST]]]
+#   ASSETS     the unowned directory      (default /usr/share/springboard/assets)
+#   SYSTEM     the package-owned directory (default /usr/share/springboard/system-assets)
+#   ALLOWLIST  packaging/assets-allowlist.txt as installed (default /usr/lib/springboard/assets-allowlist.txt)
+# PRUNE_OWNER_CMD replaces `pacman -Qo`: it is run (through xargs, so with many files at once) and must print
+# "FILE is owned by PACKAGE VERSION" for each file a package owns, as pacman does (run with LC_ALL=C).
+#
+# A file is removed when no package owns it and either the package-owned directory has the same relative path (the
+# package's copy supersedes it) or the allowlist does not name it (a stray or vendor-derived file). A file a package
+# owns is never touched; an allowlisted file without a counterpart stays. Nothing happens until SYSTEM holds files, so
+# a machine whose package predates system-assets keeps its assets.
+set -u
+assets=${1:-/usr/share/springboard/assets}
+system=${2:-/usr/share/springboard/system-assets}
+allow=${3:-/usr/lib/springboard/assets-allowlist.txt}
+owner=${PRUNE_OWNER_CMD:-pacman -Qo}
+
+[ -d "$assets" ] || exit 0
+[ -n "$(ls -A "$system" 2>/dev/null)" ] || exit 0
+
+patterns=$(mktemp) || exit 0
+list=$(mktemp) || { rm -f "$patterns"; exit 0; }
+owned=$(mktemp) || { rm -f "$patterns" "$list"; exit 0; }
+trap 'rm -f "$patterns" "$list" "$owned"' EXIT
+
+# globs of the allowlist: `#` starts a comment, blank lines are dropped
+if [ -r "$allow" ]; then
+    sed -e 's/#.*//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' "$allow" | grep -v '^$' > "$patterns"
+    have_allowlist=1
+else
+    : > "$patterns"
+    have_allowlist=0
+    echo "springboard assets: no allowlist at $allow; removing only files the package supersedes"
+fi
+
+slashes() { printf '%s' "$1" | tr -cd / | wc -c; }
+
+# `*` and `?` stay inside one path segment (as in tools/stage-assets.py): the glob must match and have as many
+# slashes as the path
+allowed() {
+    n=$(slashes "$1")
+    while IFS= read -r pat; do
+        # shellcheck disable=SC2254
+        case $1 in $pat) [ "$(slashes "$pat")" = "$n" ] && return 0 ;; esac
+    done < "$patterns"
+    return 1
+}
+
+find "$assets" \( -type f -o -type l \) -print > "$list"
+# the files a package owns, asked once (one pacman -Qo per file would read the package database hundreds of times)
+# shellcheck disable=SC2086
+LC_ALL=C xargs -r -d '\n' $owner < "$list" 2>/dev/null | sed -n 's/ is owned by .*$//p' > "$owned" || true
+removed=0
+while IFS= read -r f; do
+    rel=${f#"$assets"/}
+    if grep -qxF -- "$f" "$owned"; then
+        continue
+    fi
+    if [ -e "$system/$rel" ] || [ -L "$system/$rel" ]; then
+        reason="superseded by system-assets"
+    elif [ "$have_allowlist" = 1 ] && ! allowed "$rel"; then
+        reason="not on the allowlist"
+    else
+        continue
+    fi
+    if rm -f -- "$f"; then
+        echo "springboard assets: removed $f ($reason)"
+        removed=$((removed + 1))
+    fi
+done < "$list"
+
+# directories the removals emptied
+find "$assets" -mindepth 1 -type d -empty -delete 2>/dev/null
+[ "$removed" -eq 0 ] || echo "springboard assets: removed $removed unowned files from $assets"
+exit 0

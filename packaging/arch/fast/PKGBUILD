@@ -1,6 +1,8 @@
 # Maintainer: Olafur Bui Olafsson <olibuijr@olibuijr.com>
-# The update package: the shell binary, its unit and seed script built by `tools/pc-publish.py` (no assets, no cargo here:
-# the binary is prebuilt, which is what makes a publish a few seconds). Assets ship with the installer / their own package.
+# The update package: the shell binary, its unit and seed script built by `tools/pc-publish.py` (no cargo here: the
+# binary is prebuilt, which is what makes a publish a few seconds). The system assets (fonts, app icons, wallpapers) ship
+# too, at the package-owned /usr/share/springboard/system-assets: pc-publish stages them with tools/stage-assets.py
+# (only what packaging/assets-allowlist.txt names) and hands the tree over as PC_SYSTEM_ASSETS; package-files.sh installs it.
 pkgname=springboard-shell
 pkgver=${PC_VER:?set by tools/pc-publish.py}
 pkgrel=1
