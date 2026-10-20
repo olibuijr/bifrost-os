@@ -1,5 +1,10 @@
-//! The Apps grid (F4, or the dock's Apps icon): every app on a paged grid with a search field, page dots,
-//! swipe or scroll between pages, press-and-hold then drag to reorder, Esc to close.
+//! The Apps grid (F4, or the dock's Apps icon): a capsule header that is also the search field, and under it a
+//! floating glass panel with category chips and every app on a paged 7 column grid, page dots, swipe or scroll
+//! between pages, press-and-hold then drag to reorder, Esc or a click outside to close. The wallpaper and the
+//! windows stay visible around the panel (the exported surface is masked to the capsule and the panel).
+//!
+//! Categories come from each installed app's manifest (`category`); the built-in apps and the few manifests whose
+//! category does not say where they belong are mapped in one table below (`CHIPS`, `chip_for_manifest`).
 //!
 //! The order is kept in the preference `appgrid.order` (comma separated icon ids). Search filters by name and
 //! turns reordering off while a query is typed. Motion uses `bifrost_render::motion` (`Kind::OverviewEnter` for
@@ -8,18 +13,43 @@
 use super::control_center::desk_glass;
 use bifrost_ui::material_request::ShellSurface;
 use super::overview::{KeyMods, KEY_BACKSPACE, KEY_DOWN, KEY_ENTER, KEY_ESC, KEY_LEFT, KEY_RIGHT, KEY_UP};
-use super::ui::{Weight, FIELD_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_SUBHEAD_PT, SIDEBAR_PLATE, WHITE};
-use super::{apps, Effect, Event, Shell};
-use crate::gfx::{rgba, scale, Image, Surface};
+use super::ui::{Weight, FIELD_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_CALLOUT_PT, MAC_LARGE_TITLE_PT, SIDEBAR_PLATE, WHITE};
+use super::{apphost, apps, AppDef, AppId, Effect, Event, Shell};
+use crate::gfx::{scale, Image, Surface};
 use bifrost_render::motion::{self, Curve, Kind};
 use std::collections::HashMap;
 
 const ORDER_PREF: &str = "appgrid.order";
-const ICON_PT: f32 = 80.0;
-const CELL_W_PT: f32 = 136.0;
-const LABEL_H_PT: f32 = 34.0;
-const SEARCH_W_PT: f32 = 300.0;
-const SEARCH_H_PT: f32 = 30.0;
+/// Columns of the grid (the reference's Applications panel).
+const COLS: usize = 7;
+const MAX_ROWS: usize = 6;
+/// The capsule header: 0.37 of the screen wide (at least `CAP_MIN_PT`), `CAP_H_PT` tall, its top at 0.158 of the screen's
+/// height (never closer than `CAP_TOP_MIN_PT` to the menu bar).
+const CAP_W_FRACTION: f32 = 0.37;
+const CAP_MIN_PT: f32 = 320.0;
+const CAP_H_PT: f32 = 84.0;
+const CAP_TOP_FRACTION: f32 = 0.158;
+const CAP_TOP_MIN_PT: f32 = 24.0;
+/// The glass panel: 0.6 of the screen wide, 0.59 of its height, `PANEL_GAP_PT` under the capsule.
+const PANEL_W_FRACTION: f32 = 0.6;
+const PANEL_H_FRACTION: f32 = 0.59;
+const PANEL_GAP_PT: f32 = 12.0;
+const PANEL_R_PT: f32 = 28.0;
+const PANEL_PAD_PT: f32 = 16.0;
+/// Chip row: height, gap between chips, text padding, and the gap under the row.
+const CHIP_H_PT: f32 = 28.0;
+const CHIP_GAP_PT: f32 = 8.0;
+const CHIP_PAD_PT: f32 = 14.0;
+const CHIP_MAX_GAP_PT: f32 = 24.0;
+const CHIPS_BELOW_PT: f32 = 18.0;
+/// An icon is this fraction of its cell's width (at most `ICON_MAX_PT`); the name sits `LABEL_BLOCK_PT` under it.
+const ICON_FRACTION: f32 = 0.54;
+const ICON_MAX_PT: f32 = 80.0;
+const LABEL_BLOCK_PT: f32 = 42.0;
+/// Room kept under the grid for the page dots, and the bottom edge's distance from the Dock.
+const DOTS_BLOCK_PT: f32 = 26.0;
+const DOCK_CLEAR_PT: f32 = 20.0;
+const MORE_DOT_PT: f32 = 4.0;
 const DOT_PT: f32 = 7.0;
 const DOT_GAP_PT: f32 = 14.0;
 const SLOP_PT: f32 = 8.0;
@@ -31,11 +61,98 @@ const EDGE_FRACTION: f32 = 0.06;
 const EDGE_REPEAT_MS: f64 = 700.0;
 const MAX_QUERY: usize = 64;
 
-/// Columns and rows that fit `w` x `h` for cells of `cell_w` x `cell_h`.
-pub(super) fn grid_dims(w: f32, h: f32, cell_w: f32, cell_h: f32) -> (usize, usize) {
-    let cols = ((w * 0.84 / cell_w.max(1.0)).floor() as usize).clamp(3, 9);
-    let rows = ((h / cell_h.max(1.0)).floor() as usize).clamp(1, 6);
-    (cols, rows)
+/// Rows of `cell_h` that fit `avail` px of height.
+pub(super) fn grid_rows(avail: f32, cell_h: f32) -> usize {
+    ((avail / cell_h.max(1.0)).floor() as usize).clamp(1, MAX_ROWS)
+}
+
+/// The category chips, in the order they are shown. An app belongs to exactly one.
+const CHIPS: [&str; 7] = ["Utilities", "Productivity & Finance", "Creativity", "Information & Reading", "Social", "Entertainment", "Other"];
+const OTHER_CHIP: usize = 6;
+
+/// Manifest `category` values and the chip each one is under.
+const MANIFEST_CHIP: &[(&str, usize)] = &[
+    ("Utilities", 0),
+    ("Productivity", 1),
+    ("Finance", 1),
+    ("Photo & Video", 2),
+    ("Graphics & Design", 2),
+    ("Creativity", 2),
+    ("Books", 3),
+    ("Reference", 3),
+    ("Travel", 3),
+    ("News", 3),
+    ("Social", 4),
+    ("Entertainment", 5),
+    ("Music", 5),
+    ("Games", 5),
+];
+
+/// Apps whose manifest category (a work category) is not where people look for them: by app id.
+const ID_CHIP: &[(&str, usize)] = &[("is.olibuijr.messages.desktop", 4), ("is.olibuijr.facetime.desktop", 4)];
+
+/// The chip of an installed app from its manifest id and `category`.
+pub(super) fn chip_for_manifest(id: &str, category: &str) -> usize {
+    if let Some(&(_, c)) = ID_CHIP.iter().find(|(i, _)| *i == id) {
+        return c;
+    }
+    MANIFEST_CHIP.iter().find(|(c, _)| c.eq_ignore_ascii_case(category.trim())).map_or(OTHER_CHIP, |&(_, c)| c)
+}
+
+/// The chip of a built-in app.
+pub(super) fn builtin_chip(id: AppId) -> usize {
+    match id {
+        AppId::Settings | AppId::Terminal | AppId::Files | AppId::Magnifier | AppId::AppStore => 0,
+        AppId::Photos | AppId::Camera => 2,
+        AppId::Browser => 3,
+        AppId::Deildu => 5,
+        _ => OTHER_CHIP,
+    }
+}
+
+fn chip_of(def: &AppDef) -> usize {
+    match def.id {
+        AppId::External(slot) => apphost::installed().get(slot as usize).map_or(OTHER_CHIP, |a| chip_for_manifest(&a.manifest.id, &a.manifest.category)),
+        id => builtin_chip(id),
+    }
+}
+
+/// The chips that have at least one app, in display order, given each app's chip.
+pub(super) fn present_chips(app_chips: impl Iterator<Item = usize>) -> Vec<usize> {
+    let mut seen = [false; CHIPS.len()];
+    for c in app_chips {
+        seen[c.min(OTHER_CHIP)] = true;
+    }
+    (0..CHIPS.len()).filter(|&c| seen[c]).collect()
+}
+
+/// Chip rectangles (x, y, w, h) from their text widths: natural width plus padding, spread over `inner` px with at most
+/// `max_gap` between them and centred from `x`; when they do not fit, the padding shrinks (down to `min_pad`) first.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn chip_rects(text_w: &[f32], x: f32, y: f32, inner: f32, h: f32, pad: f32, min_pad: f32, gap: f32, max_gap: f32) -> Vec<(f32, f32, f32, f32)> {
+    let n = text_w.len();
+    if n == 0 {
+        return vec![];
+    }
+    let sum: f32 = text_w.iter().sum();
+    let gaps = gap * (n - 1) as f32;
+    let mut pad = pad;
+    let need = sum + 2.0 * pad * n as f32 + gaps;
+    if need > inner {
+        pad = (pad - (need - inner) / (2.0 * n as f32)).max(min_pad);
+    }
+    let natural = sum + 2.0 * pad * n as f32;
+    let gap = if n > 1 { ((inner - natural) / (n - 1) as f32).clamp(gap.min(max_gap), max_gap) } else { 0.0 };
+    let total = natural + gap * (n - 1) as f32;
+    let mut cx = x + ((inner - total) / 2.0).max(0.0);
+    text_w
+        .iter()
+        .map(|w| {
+            let r = (cx, y, w + 2.0 * pad, h);
+            cx += w + 2.0 * pad + gap;
+            r
+        })
+        .collect()
 }
 
 /// `apps` (icon id, name) in the saved order, unknown ids after the saved ones in catalogue order; a query keeps
@@ -59,8 +176,6 @@ pub(super) fn reorder(order: &mut Vec<String>, id: &str, before: &str) {
 }
 
 struct Lay {
-    w: f32,
-    h: f32,
     pt: f32,
     cols: usize,
     rows: usize,
@@ -69,11 +184,41 @@ struct Lay {
     icon: usize,
     x0: f32,
     y0: f32,
+    /// the capsule header, which is also the search field
     search: (f32, f32, f32, f32),
+    /// the glass panel under it (x, y, w, h) and its corner radius
+    panel: (f32, f32, f32, f32),
+    panel_r: f32,
+    /// the chips present, as (chip index, rectangle)
+    chips: Vec<(usize, (f32, f32, f32, f32))>,
     dots_y: f32,
 }
 
 impl Lay {
+    /// Pages sit side by side, one panel width apart.
+    fn page_w(&self) -> f32 {
+        self.panel.2
+    }
+    fn in_panel(&self, x: f32, y: f32) -> bool {
+        let (px, py, pw, ph) = self.panel;
+        x >= px && x < px + pw && y >= py && y < py + ph
+    }
+    fn in_search(&self, x: f32, y: f32) -> bool {
+        let (sx, sy, sw, sh) = self.search;
+        x >= sx && x < sx + sw && y >= sy && y < sy + sh
+    }
+    /// The "..." button at the capsule's right end.
+    fn more(&self) -> (f32, f32, f32, f32) {
+        let (sx, sy, sw, sh) = self.search;
+        (sx + sw - sh * 1.1, sy, sh * 1.1, sh)
+    }
+    fn in_more(&self, x: f32, y: f32) -> bool {
+        let (mx, my, mw, mh) = self.more();
+        x >= mx && x < mx + mw && y >= my && y < my + mh
+    }
+    fn chip_at(&self, x: f32, y: f32) -> Option<usize> {
+        self.chips.iter().find(|(_, (cx, cy, cw, ch))| x >= *cx && x < cx + cw && y >= *cy && y < cy + ch).map(|(c, _)| *c)
+    }
     fn per_page(&self) -> usize {
         self.cols * self.rows
     }
@@ -111,6 +256,8 @@ pub(super) struct AppGrid {
     start: f64,
     closing: Option<f64>,
     query: String,
+    /// the category chip the grid is filtered to (an index into `CHIPS`)
+    chip: Option<usize>,
     page: usize,
     order: Vec<String>,
     loaded: bool,
@@ -164,23 +311,46 @@ impl AppGrid {
         let m = sh.desk_metrics();
         let pt = m.pt;
         let (w, h) = (m.w as f32, m.h as f32);
-        let icon = (ICON_PT * pt) as usize;
-        let (cell_w, cell_h) = (CELL_W_PT * pt, icon as f32 + LABEL_H_PT * pt + 22.0 * pt);
-        let search_w = (SEARCH_W_PT * pt).min(w * 0.8);
-        let search_h = SEARCH_H_PT * pt;
-        let search = ((w - search_w) / 2.0, m.menubar as f32 + 24.0 * pt, search_w, search_h);
-        let top = search.1 + search_h + 36.0 * pt;
-        let bottom = h - if sh.dock_is_visible() { m.dock_bottom as f32 } else { 16.0 * pt } - 52.0 * pt;
-        let (cols, rows) = grid_dims(w, (bottom - top).max(cell_h), cell_w, cell_h);
-        let gw = cols as f32 * cell_w;
-        let gh = rows as f32 * cell_h;
-        let x0 = (w - gw) / 2.0;
-        let y0 = top + ((bottom - top - gh) / 2.0).max(0.0);
-        Lay { w, h, pt, cols, rows, cell_w, cell_h, icon, x0, y0, search, dots_y: y0 + gh + 22.0 * pt }
+        let menubar = m.menubar as f32;
+        // the capsule: 0.37 of the width, centred, in the reference's place down the screen
+        let cap_w = (w * CAP_W_FRACTION).max(CAP_MIN_PT * pt).min(w * 0.9);
+        let cap_h = CAP_H_PT * pt;
+        let cap_y = (h * CAP_TOP_FRACTION).max(menubar + CAP_TOP_MIN_PT * pt);
+        let search = ((w - cap_w) / 2.0, cap_y, cap_w, cap_h);
+        // the panel: 0.6 of the width under it, ending above the Dock; room for seven readable columns at least
+        let pw = (w * PANEL_W_FRACTION).max(COLS as f32 * 72.0 * pt).min(w * 0.96);
+        let py = cap_y + cap_h + PANEL_GAP_PT * pt;
+        let dock = if sh.dock_is_visible() { m.dock_bottom as f32 } else { 16.0 * pt };
+        let limit = h - dock - DOCK_CLEAR_PT * pt;
+        let ph = (h * PANEL_H_FRACTION).min(limit - py).max(160.0 * pt);
+        let panel = ((w - pw) / 2.0, py, pw, ph);
+        let pad = PANEL_PAD_PT * pt;
+        let inner = pw - 2.0 * pad;
+        let cell_w = inner / COLS as f32;
+        let icon = ((cell_w * ICON_FRACTION).min(ICON_MAX_PT * pt)) as usize;
+        let cell_h = icon as f32 + LABEL_BLOCK_PT * pt;
+        // chips across the top, their widths from the text
+        let present = present_chips(apps().iter().map(chip_of));
+        let widths: Vec<f32> = present.iter().map(|&c| sh.label(CHIPS[c], MAC_BODY_PT, Weight::Regular, WHITE, |im| im.w as f32)).collect();
+        let chip_y = py + pad;
+        let chip_h = CHIP_H_PT * pt;
+        let rects = chip_rects(&widths, panel.0 + pad, chip_y, inner, chip_h, CHIP_PAD_PT * pt, 4.0 * pt, CHIP_GAP_PT * pt, CHIP_MAX_GAP_PT * pt);
+        let chips = present.into_iter().zip(rects).collect();
+        let top = chip_y + chip_h + CHIPS_BELOW_PT * pt;
+        let bottom = py + ph - DOTS_BLOCK_PT * pt;
+        let rows = grid_rows(bottom - top, cell_h);
+        let (x0, y0) = (panel.0 + pad, top);
+        let dots_y = py + ph - DOTS_BLOCK_PT * pt * 0.5 - DOT_PT * pt / 2.0;
+        Lay { pt, cols: COLS, rows, cell_w, cell_h, icon, x0, y0, search, panel, panel_r: PANEL_R_PT * pt, chips, dots_y }
     }
 
     fn arranged(&self) -> Vec<usize> {
-        arrange(&catalogue(), &self.order, &self.query)
+        let mut list = arrange(&catalogue(), &self.order, &self.query);
+        if let Some(chip) = self.chip {
+            let all = apps();
+            list.retain(|&i| all.get(i).is_some_and(|a| chip_of(a) == chip));
+        }
+        list
     }
 
     fn pages(&self, lay: &Lay, n: usize) -> usize {
@@ -196,6 +366,7 @@ impl AppGrid {
         self.start = t;
         self.closing = None;
         self.query.clear();
+        self.chip = None;
         self.page = 0;
         self.swipe_dx = 0.0;
         self.settle = None;
@@ -267,7 +438,7 @@ impl AppGrid {
             self.scroll_acc -= step * if fwd { 1.0 } else { -1.0 };
             let next = if fwd { (self.page + 1).min(n - 1) } else { self.page.saturating_sub(1) };
             if next != self.page {
-                let from = self.offset(t) + if fwd { lay.w } else { -lay.w };
+                let from = self.offset(t) + if fwd { lay.page_w() } else { -lay.page_w() };
                 self.set_page(next, n, from, t);
             }
         }
@@ -283,6 +454,9 @@ impl AppGrid {
         match code {
             KEY_ESC => self.close(sh, t),
             KEY_BACKSPACE => {
+                if self.query.is_empty() {
+                    self.chip = None;
+                }
                 self.query.pop();
                 self.page = 0;
                 self.selected = None;
@@ -304,7 +478,7 @@ impl AppGrid {
                 self.selected = Some(if first { cur } else { next });
                 let page = self.selected.unwrap_or(0) / lay.per_page().max(1);
                 if page != self.page {
-                    let dir = if page > self.page { lay.w } else { -lay.w };
+                    let dir = if page > self.page { lay.page_w() } else { -lay.page_w() };
                     let from = self.offset(t) + dir;
                     let pages = self.pages(&lay, n);
                     self.set_page(page, pages, from, t);
@@ -337,12 +511,13 @@ impl AppGrid {
                 if self.lifted.is_some() {
                     self.lifted = self.lifted.map(|(i, _, _)| (i, x, y));
                     // dwelling at a side edge turns the page, one per repeat interval
-                    let edge = lay.w * EDGE_FRACTION;
+                    let (px, _, pw, _) = lay.panel;
+                    let edge = pw * EDGE_FRACTION;
                     if t - self.edge_at > EDGE_REPEAT_MS {
-                        let next = if x < edge && self.page > 0 { Some(self.page - 1) } else if x > lay.w - edge && self.page + 1 < pages { Some(self.page + 1) } else { None };
+                        let next = if x < px + edge && self.page > 0 { Some(self.page - 1) } else if x > px + pw - edge && self.page + 1 < pages { Some(self.page + 1) } else { None };
                         if let Some(n) = next {
                             self.edge_at = t;
-                            let from = if n > self.page { lay.w } else { -lay.w };
+                            let from = if n > self.page { lay.page_w() } else { -lay.page_w() };
                             self.set_page(n, pages, from, t);
                         }
                     }
@@ -379,10 +554,10 @@ impl AppGrid {
                     }
                 } else if p.swiping {
                     let off = self.swipe_dx;
-                    let turn = off.abs() > lay.w * 0.15 || p.vel.abs() > FLICK;
+                    let turn = off.abs() > lay.page_w() * 0.15 || p.vel.abs() > FLICK;
                     let toward_next = off < 0.0 || p.vel < -FLICK;
                     let next = if !turn { self.page } else if toward_next { (self.page + 1).min(pages - 1) } else { self.page.saturating_sub(1) };
-                    let from = if next > self.page { off + lay.w } else if next < self.page { off - lay.w } else { off };
+                    let from = if next > self.page { off + lay.page_w() } else if next < self.page { off - lay.page_w() } else { off };
                     self.set_page(next, pages, from, t);
                 } else if (x - p.x0).abs() <= slop && (y - p.y0).abs() <= slop {
                     if let (Some(item), Some(k)) = (p.item, lay.slot_at(x, y)) {
@@ -392,9 +567,20 @@ impl AppGrid {
                             }
                         }
                     } else if let Some(d) = p.dot.filter(|_| self.dot_at(&lay, pages, x, y) == p.dot) {
-                        let from = (d as f32 - self.page as f32) * lay.w;
+                        let from = (d as f32 - self.page as f32) * lay.page_w();
                         self.set_page(d, pages, from, t);
-                    } else if !self.in_search(&lay, x, y) {
+                    } else if let Some(c) = lay.chip_at(x, y) {
+                        // a chip filters to its category; the same chip again shows every app
+                        self.chip = if self.chip == Some(c) { None } else { Some(c) };
+                        self.page = 0;
+                        self.selected = None;
+                    } else if lay.in_more(x, y) {
+                        // the "..." button clears the search and the category
+                        self.query.clear();
+                        self.chip = None;
+                        self.page = 0;
+                        self.selected = None;
+                    } else if !lay.in_search(x, y) && !lay.in_panel(x, y) {
                         self.close(sh, t);
                     }
                 }
@@ -405,9 +591,24 @@ impl AppGrid {
         Some(vec![])
     }
 
-    fn in_search(&self, lay: &Lay, x: f32, y: f32) -> bool {
-        let (sx, sy, sw, sh) = lay.search;
-        x >= sx && x < sx + sw && y >= sy && y < sy + sh
+    /// The alpha mask of the exported surface, which spans `(ox, oy, w, h)` px of the screen: opaque on the capsule and the
+    /// panel (rounded as drawn), clear everywhere else so the wallpaper and the windows show around them.
+    #[allow(dead_code)] // the window-server export is the desktop-wayland build's
+    pub(super) fn overlay_mask(&self, sh: &Shell, (ox, oy, w, h): (usize, usize, usize, usize)) -> Vec<u8> {
+        let lay = self.lay(sh);
+        let mut mask = vec![0u8; w * h];
+        for ((x, y, rw, rh), r) in [(lay.search, lay.search.3 / 2.0), (lay.panel, lay.panel_r)] {
+            let (rx, ry) = (x.floor() as i64 - ox as i64, y.floor() as i64 - oy as i64);
+            let (rw, rh) = (rw.ceil() as usize, rh.ceil() as usize);
+            for (i, a) in crate::gfx::rrect_mask(rw, rh, r).into_iter().enumerate() {
+                let (mx, my) = (rx + (i % rw.max(1)) as i64, ry + (i / rw.max(1)) as i64);
+                if mx >= 0 && my >= 0 && (mx as usize) < w && (my as usize) < h {
+                    let at = my as usize * w + mx as usize;
+                    mask[at] = mask[at].max(a);
+                }
+            }
+        }
+        mask
     }
 
     fn dot_at(&self, lay: &Lay, pages: usize, x: f32, y: f32) -> Option<usize> {
@@ -415,7 +616,7 @@ impl AppGrid {
             return None;
         }
         let step = (DOT_PT + DOT_GAP_PT) * lay.pt;
-        let x0 = (lay.w - step * pages as f32 + DOT_GAP_PT * lay.pt) / 2.0;
+        let x0 = lay.panel.0 + (lay.panel.2 - step * pages as f32 + DOT_GAP_PT * lay.pt) / 2.0;
         let i = ((x - x0) / step).floor();
         (i >= 0.0 && (i as usize) < pages).then_some(i as usize)
     }
@@ -474,23 +675,57 @@ impl AppGrid {
         };
         let a = (255.0 * p) as u32;
         let ui = &sh.ui;
-        let m = sh.desk_metrics();
-        let veil_h = lay.h - m.menubar as f32 - if sh.dock_is_visible() { m.dock_bottom as f32 } else { 0.0 };
-        desk_glass(s, ShellSurface::AppGridVeil, (0.0, m.menubar as f32, lay.w, veil_h.max(1.0)), 0.0, (235.0 * p) as u32);
-        s.fill_rrect(0.0, m.menubar as f32, lay.w, veil_h.max(1.0), 0.0, rgba(0, 0, 0, (50.0 * p) as u8));
-        // search field: a capsule
-        let (sx, sy, sw, shh) = lay.search;
-        s.fill_rrect(sx, sy, sw, shh, shh / 2.0, scale(FIELD_BG.now(), a));
-        let text_x = sx + shh * 0.9;
-        if self.query.is_empty() {
-            sh.label("Search", MAC_BODY_PT, Weight::Regular, WHITE, |im| s.blit_colored(im, text_x as i32, (sy + (shh - im.h as f32) / 2.0) as i32, LABEL_2.now(), a));
-        } else {
+        // the capsule header: glass like the Search field, the store glyph, the query (or its placeholder) and "..."
+        let (sx, sy, _, shh) = lay.search;
+        desk_glass(s, ShellSurface::Search, lay.search, shh / 2.0, a);
+        let glyph = (shh * 0.34) as usize;
+        let mut text_x = sx + shh * 0.62;
+        if let Some(store) = apps().iter().position(|d| d.id == AppId::AppStore) {
+            if self.ensure_icon(sh, store, glyph) {
+                if let Some(img) = self.icons.get(&(store, glyph)) {
+                    s.blit(img, text_x as i32, (sy + (shh - glyph as f32) / 2.0) as i32, 255, a);
+                }
+            }
+        }
+        text_x += glyph as f32 + shh * 0.2;
+        // the chosen category sits in the field as a token, as the query would
+        if let Some(c) = self.chip {
+            let pad = ui.pt(10.0);
+            let w = sh.label(CHIPS[c], MAC_LARGE_TITLE_PT, Weight::Regular, WHITE, |im| {
+                let th = im.h as f32 + pad;
+                s.fill_rrect(text_x, sy + (shh - th) / 2.0, im.w as f32 + 2.0 * pad, th, ui.pt(8.0), scale(SIDEBAR_PLATE.now(), a));
+                s.blit_colored(im, (text_x + pad) as i32, (sy + (shh - im.h as f32) / 2.0) as i32, LABEL.now(), a);
+                im.w as f32 + 2.0 * pad
+            });
+            text_x += w + ui.pt(6.0);
+        }
+        if self.query.is_empty() && self.chip.is_none() {
+            sh.label("Applications", MAC_LARGE_TITLE_PT, Weight::Regular, WHITE, |im| s.blit_colored(im, text_x as i32, (sy + (shh - im.h as f32) / 2.0) as i32, LABEL_2.now(), a));
+        } else if !self.query.is_empty() {
             let q = self.query.clone();
-            let w = sh.label(&q, MAC_BODY_PT, Weight::Regular, WHITE, |im| {
+            let w = sh.label(&q, MAC_LARGE_TITLE_PT, Weight::Regular, WHITE, |im| {
                 s.blit_colored(im, text_x as i32, (sy + (shh - im.h as f32) / 2.0) as i32, LABEL.now(), a);
                 im.w as f32
             });
-            s.fill_rect((text_x + w + ui.pt(1.0)) as usize, (sy + shh * 0.22) as usize, ui.pt(1.0).max(1.0) as usize, (shh * 0.56) as usize, scale(LABEL.now(), a));
+            text_x += w;
+        }
+        if !self.query.is_empty() || self.chip.is_some() {
+            s.fill_rect((text_x + ui.pt(1.0)) as usize, (sy + shh * 0.28) as usize, ui.pt(1.0).max(1.0) as usize, (shh * 0.44) as usize, scale(LABEL.now(), a));
+        }
+        // "..." at the right end: three dots, clears the search and the category
+        let (mx, my, mw, mh) = lay.more();
+        let dot = MORE_DOT_PT * lay.pt;
+        for i in 0..3 {
+            let dx = mx + mw / 2.0 + (i as f32 - 1.0) * dot * 2.4 - dot / 2.0;
+            s.fill_rrect(dx, my + (mh - dot) / 2.0, dot, dot, dot / 2.0, scale(LABEL_2.now(), a));
+        }
+        // the panel: the same material as the field, with the category chips across its top
+        desk_glass(s, ShellSurface::AppGridVeil, lay.panel, lay.panel_r, a);
+        for &(c, (cx, cy, cw, ch)) in &lay.chips {
+            let on = self.chip == Some(c);
+            let plate = if on { scale(SIDEBAR_PLATE.now(), a) } else { scale(FIELD_BG.now(), a * 110 / 255) };
+            s.fill_rrect(cx, cy, cw, ch, ch / 2.0, plate);
+            sh.label(CHIPS[c], MAC_BODY_PT, Weight::Regular, WHITE, |im| s.blit_colored(im, (cx + (cw - im.w as f32) / 2.0) as i32, (cy + (ch - im.h as f32) / 2.0) as i32, LABEL.now(), a));
         }
         // pages: the current one and its neighbours while they slide
         let list = self.arranged();
@@ -502,10 +737,11 @@ impl AppGrid {
         let lifted = self.lifted.map(|l| l.0);
         let hover_slot = self.lifted.and_then(|(_, x, y)| lay.slot_at(x, y));
         for pg in self.page.saturating_sub(1)..(self.page + 2).min(pages) {
-            let dx = (pg as f32 - self.page as f32) * lay.w + off;
-            if dx > lay.w || dx < -lay.w {
+            let dx = (pg as f32 - self.page as f32) * lay.page_w() + off;
+            if dx > lay.page_w() || dx < -lay.page_w() {
                 continue;
             }
+            let (px, _, pw, _) = lay.panel;
             for k in 0..per {
                 let i = pg * per + k;
                 let Some(&app) = list.get(i) else { break };
@@ -514,6 +750,10 @@ impl AppGrid {
                 }
                 let (cx, cy) = lay.cell(k, dx);
                 let (cx, cy) = (cx, cy + rise);
+                // a page sliding in or out is clipped to the panel: cells wholly outside are not drawn
+                if cx + lay.cell_w <= px || cx >= px + pw {
+                    continue;
+                }
                 if self.selected == Some(i) || (pg == self.page && hover_slot == Some(k) && lifted.is_some()) {
                     s.fill_rrect(cx + lay.pt * 6.0, cy - lay.pt * 4.0, lay.cell_w - lay.pt * 12.0, lay.cell_h - lay.pt * 6.0, ui.pt(16.0), scale(SIDEBAR_PLATE.now(), a));
                 }
@@ -529,7 +769,7 @@ impl AppGrid {
         // page dots
         if pages > 1 {
             let step = (DOT_PT + DOT_GAP_PT) * lay.pt;
-            let x0 = (lay.w - step * pages as f32 + DOT_GAP_PT * lay.pt) / 2.0;
+            let x0 = lay.panel.0 + (lay.panel.2 - step * pages as f32 + DOT_GAP_PT * lay.pt) / 2.0;
             let d = DOT_PT * lay.pt;
             for pg in 0..pages {
                 let c = if pg == self.page { LABEL.now() } else { LABEL_3.now() };
@@ -538,7 +778,7 @@ impl AppGrid {
         }
         if list.is_empty() {
             let msg = format!("No results for \u{201c}{}\u{201d}", self.query);
-            sh.label(&msg, MAC_BODY_PT, Weight::Regular, WHITE, |im| s.blit_colored(im, ((lay.w - im.w as f32) / 2.0) as i32, (lay.y0 + lay.cell_h) as i32, LABEL_2.now(), a));
+            sh.label(&msg, MAC_BODY_PT, Weight::Regular, WHITE, |im| s.blit_colored(im, (lay.panel.0 + (lay.panel.2 - im.w as f32) / 2.0) as i32, (lay.y0 + lay.cell_h) as i32, LABEL_2.now(), a));
         }
         p < 1.0 || self.closing.is_some() || self.settle.is_some_and(|(_, st)| prog(Kind::PanelReveal, Curve::EaseOut, st, t) < 1.0) || self.lifted.is_some()
     }
@@ -557,12 +797,12 @@ impl AppGrid {
         // shorten with an ellipsis until it fits the cell
         let mut chars: Vec<char> = name.chars().collect();
         let mut text = name.to_string();
-        while chars.len() > 1 && sh.label(&text, MAC_SUBHEAD_PT, Weight::Regular, WHITE, |im| im.w as f32) > max_w {
+        while chars.len() > 1 && sh.label(&text, MAC_CALLOUT_PT, Weight::Regular, WHITE, |im| im.w as f32) > max_w {
             chars.pop();
             text = format!("{}\u{2026}", chars.iter().collect::<String>().trim_end());
         }
         let ly = cy + size as f32 + 8.0 * lay.pt;
-        sh.label(&text, MAC_SUBHEAD_PT, Weight::Regular, WHITE, |im| s.blit_colored(im, (cx + (lay.cell_w - im.w as f32) / 2.0) as i32, ly as i32, LABEL.now(), alpha));
+        sh.label(&text, MAC_CALLOUT_PT, Weight::Regular, WHITE, |im| s.blit_colored(im, (cx + (lay.cell_w - im.w as f32) / 2.0) as i32, ly as i32, LABEL.now(), alpha));
     }
 }
 
@@ -575,10 +815,48 @@ mod tests {
     }
 
     #[test]
-    fn grid_fits_the_screen_whatever_its_size() {
-        let (c, r) = grid_dims(1920.0, 600.0, 200.0, 180.0);
-        assert!(c >= 3 && c <= 9 && r >= 1 && r <= 6);
-        assert_eq!(grid_dims(100.0, 10.0, 200.0, 180.0), (3, 1), "tiny screens keep a usable grid");
+    fn grid_rows_fit_the_panel_whatever_its_size() {
+        assert_eq!(grid_rows(600.0, 150.0), 4);
+        assert_eq!(grid_rows(10_000.0, 150.0), MAX_ROWS);
+        assert_eq!(grid_rows(10.0, 150.0), 1, "a tiny panel keeps one row");
+    }
+
+    #[test]
+    fn manifest_categories_map_to_the_chips_and_unknown_ones_are_other() {
+        assert_eq!(CHIPS[chip_for_manifest("is.olibuijr.calculator.desktop", "Utilities")], "Utilities");
+        assert_eq!(CHIPS[chip_for_manifest("x", "Productivity")], "Productivity & Finance");
+        assert_eq!(CHIPS[chip_for_manifest("x", " photo & video ")], "Creativity");
+        assert_eq!(CHIPS[chip_for_manifest("x", "Music")], "Entertainment");
+        assert_eq!(CHIPS[chip_for_manifest("x", "Books")], "Information & Reading");
+        assert_eq!(CHIPS[chip_for_manifest("x", "Something new")], "Other");
+        assert_eq!(CHIPS[chip_for_manifest("is.olibuijr.messages.desktop", "Productivity")], "Social", "the id table wins over the category");
+        assert!(MANIFEST_CHIP.iter().chain(ID_CHIP).all(|&(_, c)| c < CHIPS.len()));
+        assert_eq!(CHIPS[OTHER_CHIP], "Other");
+        assert_eq!(CHIPS[builtin_chip(AppId::Settings)], "Utilities");
+        assert_eq!(CHIPS[builtin_chip(AppId::Photos)], "Creativity");
+    }
+
+    #[test]
+    fn only_chips_with_apps_are_shown_in_order() {
+        assert_eq!(present_chips([5usize, 0, 5, 2].into_iter()), vec![0, 2, 5]);
+        assert!(present_chips(std::iter::empty()).is_empty());
+    }
+
+    #[test]
+    fn chips_are_centred_spread_and_shrink_to_fit() {
+        let widths = [60.0, 100.0, 80.0];
+        let r = chip_rects(&widths, 10.0, 5.0, 500.0, 28.0, 14.0, 4.0, 8.0, 24.0);
+        assert_eq!(r.len(), 3);
+        assert!(r.windows(2).all(|p| p[1].0 >= p[0].0 + p[0].2 + 8.0 - 0.01), "no overlap, at least the gap apart");
+        assert!(r.windows(2).all(|p| p[1].0 - (p[0].0 + p[0].2) <= 24.0 + 0.01), "never spread past the maximum gap");
+        let (left, right) = (r[0].0 - 10.0, 510.0 - (r[2].0 + r[2].2));
+        assert!((left - right).abs() < 0.01, "centred in the row");
+        assert_eq!((r[0].1, r[0].3), (5.0, 28.0));
+        // too wide for the row: the padding gives way, the chips still do not overlap or leave the row
+        let wide = chip_rects(&[200.0, 200.0, 200.0], 0.0, 0.0, 640.0, 28.0, 14.0, 4.0, 8.0, 24.0);
+        assert!(wide[0].0 >= 0.0 && wide[2].0 + wide[2].2 <= 640.0 + 0.01, "{wide:?}");
+        assert!(wide.windows(2).all(|p| p[1].0 >= p[0].0 + p[0].2));
+        assert!(chip_rects(&[], 0.0, 0.0, 100.0, 28.0, 14.0, 4.0, 8.0, 24.0).is_empty());
     }
 
     #[test]
@@ -610,6 +888,7 @@ mod tests {
 /// The Apps grid as an overlay surface above the windows, and how it closes (E2E L1, L3, OV1).
 #[cfg(all(test, feature = "desktop-wayland"))]
 mod overlay_tests {
+    use super::chip_of;
     use crate::gfx::Surface;
     use crate::shell::hwkeys::Shortcut;
     use crate::shell::tests::desktop_shell;
@@ -695,5 +974,48 @@ mod overlay_tests {
         assert!(sh.overview_event(Event::Up(cx, cy), 3.1).is_some());
         finish(&mut sh);
         assert!(!sh.overview.grid.visible(), "one click outside the icons closes the grid");
+    }
+
+    #[test]
+    fn the_surface_is_clear_around_the_capsule_and_the_panel_and_the_panel_is_seven_wide() {
+        let sh = open_grid();
+        let (x, y, w, h) = sh.overview_veil_rect().expect("room for the veil");
+        let mask = sh.overview.grid.overlay_mask(&sh, (x, y, w, h));
+        assert_eq!(mask.len(), w * h);
+        let lay = sh.overview.grid.lay(&sh);
+        let at = |px: f32, py: f32| mask[(py as usize - y) * w + px as usize - x];
+        assert_eq!(at(x as f32 + 2.0, y as f32 + 2.0), 0, "the wallpaper shows at the veil's corner");
+        let (px, py, pw, ph) = lay.panel;
+        assert_eq!(at(px + pw / 2.0, py + ph / 2.0), 255, "the panel is opaque");
+        let (sx, sy, sw, sh_) = lay.search;
+        assert_eq!(at(sx + sw / 2.0, sy + sh_ / 2.0), 255, "so is the capsule");
+        assert_eq!(at(sx + sw / 2.0, (sy + sh_ + py) / 2.0), 0, "and the gap between them is clear");
+        assert_eq!(at(px + pw + 4.0, py + ph / 2.0), 0, "and the sides of the panel");
+        assert_eq!(lay.cols, 7);
+        assert!(pw < w as f32 * 0.7 && ph < sh.h as f32 * 0.7, "a floating panel, not a full screen page");
+        assert!(sw > pw * 0.5 && sw < pw, "the capsule is narrower than the panel (0.37 of the screen against 0.6)");
+    }
+
+    #[test]
+    fn a_chip_filters_to_its_category_and_the_panel_is_not_a_click_outside() {
+        let mut sh = open_grid();
+        let lay = sh.overview.grid.lay(&sh);
+        let (chip, (cx, cy, cw, ch)) = lay.chips[0];
+        let (x, y) = (cx + cw / 2.0, cy + ch / 2.0);
+        assert!(sh.overview_event(Event::Down(x, y), 2.0).is_some());
+        assert!(sh.overview_event(Event::Up(x, y), 2.1).is_some());
+        assert_eq!(sh.overview.grid.chip, Some(chip));
+        let list = sh.overview.grid.arranged();
+        assert!(!list.is_empty() && list.iter().all(|&i| chip_of(&crate::shell::apps()[i]) == chip), "only that category's apps remain");
+        // an empty spot of the panel keeps it open
+        let (px, py, pw, ph) = lay.panel;
+        let (ex, ey) = (px + pw - 3.0, py + ph - 3.0);
+        assert!(sh.overview_event(Event::Down(ex, ey), 3.0).is_some());
+        assert!(sh.overview_event(Event::Up(ex, ey), 3.1).is_some());
+        assert!(sh.overview.grid.visible() && !sh.overview.grid.closing(), "a click on the panel does not close the grid");
+        // the same chip again shows every app
+        assert!(sh.overview_event(Event::Down(x, y), 4.0).is_some());
+        assert!(sh.overview_event(Event::Up(x, y), 4.1).is_some());
+        assert_eq!(sh.overview.grid.chip, None);
     }
 }
