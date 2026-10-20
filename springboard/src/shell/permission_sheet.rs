@@ -312,7 +312,15 @@ mod tests {
     fn a_key_never_grants_a_permission() {
         let ui = crate::shell::tests::ui();
         for (n, kind) in [("loc", Kind::Location), ("cam", Kind::Media(Media::Video)), ("usb", Kind::Usb), ("con", Kind::Contacts)] {
-            let sheet = Sheet::new(&ui, request(&format!("is.example.sheet.key.{n}"), "Maps", kind), 0).unwrap();
+            let id = format!("is.example.sheet.key.{n}");
+            // A device request names a device key (its purpose) and is only queued while that device is connected, so the
+            // queue would drop it here: the sheet is built from the request directly, as the shell does once it has taken it.
+            let prompt = if kind == Kind::Usb {
+                Prompt { app_id: id, app_name: "Maps".into(), kind, purpose: "0403:6001:A1".into() }
+            } else {
+                request(&id, "Maps", kind)
+            };
+            let sheet = Sheet::new(&ui, prompt, 0).unwrap();
             assert_eq!(sheet.key_button(&ui, 1200, 1920, false), None, "Return presses no button");
             let (x, y) = sheet.key_button(&ui, 1200, 1920, true).expect("Escape presses Don't Allow");
             assert_eq!(sheet.hit(&ui, 1200, 1920, x, y), Some(Button::DontAllow));

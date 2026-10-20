@@ -200,6 +200,26 @@ fn spawn_load() -> Receiver<(Report, Extras)> {
     rx
 }
 
+/// The fixed system profile the pinned (test) run shows instead of reading the machine.
+fn fixture() -> (Report, Extras) {
+    let mut report = Report::default();
+    report.firmware.vendor = "Example Computers".into();
+    report.firmware.product = "Example Desktop 1".into();
+    report.firmware.chassis = "Desktop".into();
+    report.firmware.bios = "Example Firmware 1.0".into();
+    report.firmware.serial = "EX0000001".into();
+    report.cpu.model = "Example Processor".into();
+    report.cpu.vendor = "Example".into();
+    report.cpu.logical = 8;
+    report.cpu.mhz = 3000.0;
+    report.memory_bytes = 16 << 30;
+    report.os_name = "BifrOSt".into();
+    report.os_version = "1.0".into();
+    report.kernel = "6.0.0-example".into();
+    let extras = Extras { hostname: "example".into(), uptime_secs: 3600, boot_volume: "/dev/example1 (ext4)".into(), boot_mode: "UEFI".into(), locale: "en_US.UTF-8".into(), ..Extras::default() };
+    (report, extras)
+}
+
 pub struct SysInfo {
     pub report: Report,
     pub selected: Category,
@@ -310,6 +330,13 @@ impl SysInfo {
             return false;
         }
         self.started = true;
+        if bifrost_app::testing::pinned() {
+            // Under the compliance harness the profile is a fixed fixture, applied at once: the first frame never shows
+            // the progress sheet and never carries the facts of the machine that runs the test.
+            let (report, extras) = fixture();
+            self.apply(report, extras);
+            return true;
+        }
         self.load = Some(Loading { rx: spawn_load(), t: 0.0 });
         true
     }

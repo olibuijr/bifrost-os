@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.3
+
+- Fix: under the compliance harness (pinned clock) the app shows a fixed system profile at once instead of reading the machine, so its snapshot no longer varies with the host or with timing.
+
 ## 0.9.2
 
 - Fix: the toolbar starts after the traffic lights instead of under them (the SDK toolbar now keeps clear of the window controls).

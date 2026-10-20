@@ -33,6 +33,29 @@ pub struct ScanOutcome {
     pub cached: bool,
 }
 
+/// The readings a pinned (test) run shows instead of the machine's radio, oldest first: one connected link whose signal
+/// drifts a little, so the chart and the connection card are the same on every run and on every host.
+pub fn fixture_readings() -> Vec<Reading> {
+    const SIGNALS: [i32; 8] = [-60, -58, -57, -57, -55, -54, -54, -53];
+    SIGNALS
+        .iter()
+        .map(|&dbm| Reading {
+            ifaces: vec![Iface { name: "wlan0".into(), quality: Some(60), level_dbm: Some(dbm), noise_dbm: Some(-92) }],
+            iface: "wlan0".into(),
+            link: Link {
+                connected: true,
+                ssid: "Example Network".into(),
+                bssid: "02:00:00:00:00:01".into(),
+                freq_mhz: Some(5180),
+                signal_dbm: Some(dbm),
+                rx_mbps: Some(866.7),
+                tx_mbps: Some(780.0),
+            },
+            note: None,
+        })
+        .collect()
+}
+
 /// Runs `iw` with `args` and returns its standard output, or a message for the user.
 pub fn run_iw(args: &[&str]) -> Result<String, String> {
     let out = Command::new("iw").args(args).output().map_err(|e| format!("iw could not run: {e}"))?;

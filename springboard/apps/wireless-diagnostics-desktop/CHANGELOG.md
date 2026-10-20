@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.5
+
+- Fix: under the compliance harness (pinned clock) the app shows a fixed Wi-Fi link and signal history instead of polling the host radio, so its snapshot no longer varies from run to run.
+
 ## 0.1.4
 
 - Fix: the toolbar starts after the traffic lights instead of under them (the SDK toolbar now keeps clear of the window controls).
