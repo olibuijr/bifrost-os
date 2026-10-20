@@ -142,7 +142,24 @@ pub fn grant(policy: &mut Policy, path: &Path, identity: &Identity) {
 
 /// Remembers the program that was blocked last, with the sentence the alert showed.
 pub fn write_blocked(dir: &Path, path: &Path, sentence: &str) {
-    let _ = std::fs::write(dir.join(BLOCKED_FILE), format!("{}\n{}\n", path.to_string_lossy().replace('\n', " "), sentence.replace('\n', " ")));
+    write_blocked_hashed(dir, path, sentence, None);
+}
+
+/// Like `write_blocked`, and keeps the hash of the code that was assessed: Open Anyway then lifts the block only for that
+/// code, not for whatever the file has become by the time it is chosen.
+pub fn write_blocked_hashed(dir: &Path, path: &Path, sentence: &str, hash: Option<&str>) {
+    let mut text = format!("{}\n{}\n", path.to_string_lossy().replace('\n', " "), sentence.replace('\n', " "));
+    if let Some(hash) = hash.filter(|h| h.bytes().all(|b| b.is_ascii_hexdigit())) {
+        text.push_str(hash);
+        text.push('\n');
+    }
+    let _ = std::fs::write(dir.join(BLOCKED_FILE), text);
+}
+
+/// The hash of the code that was blocked last, when the alert recorded it.
+pub fn read_blocked_hash(dir: &Path) -> Option<String> {
+    let text = std::fs::read_to_string(dir.join(BLOCKED_FILE)).ok()?;
+    text.lines().nth(2).map(str::trim).filter(|h| !h.is_empty()).map(str::to_string)
 }
 
 /// The program that was blocked last and the sentence, if one is waiting for Open Anyway.
@@ -163,6 +180,11 @@ pub fn clear_blocked(dir: &Path) {
 pub fn open_anyway(dir: &Path, prefs: &Prefs) -> bool {
     let Some((path, _)) = read_blocked(dir) else { return false };
     let Ok(identity) = identity_of(&path) else { return false };
+    // the file was replaced after the alert: it is another program, and the block stays until it is opened (and refused) again
+    if read_blocked_hash(dir).is_some_and(|assessed| identity.code_directory_hash.as_deref() != Some(assessed.as_str())) {
+        clear_blocked(dir);
+        return false;
+    }
     let mut policy = load_policy(prefs, dir);
     grant(&mut policy, &path, &identity);
     if save_overrides(&policy, dir).is_err() {
