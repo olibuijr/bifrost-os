@@ -343,6 +343,12 @@ XRGB8888 or ARGB8888 buffer. Without a hook the request is answered `failed`.
 - `overlay_cursor` paints the pointer on DRM; the headless output has no pointer image. ext-image-copy-capture cursor
   options are not read yet.
 - The Vulkan scanout (`BIFROST_WM_RENDERER=vulkan`) has no readback, so captures fail there.
+- Clients: `grim` through `bifrost-apps --screenshot` for screenshots, and the shell's recorder for screen recordings
+  (`src/shell/screenrec_wl.rs`): its own thread and connection, one probe frame, then a frame per interval into a pool of
+  reused shm buffers (XRGB8888, which ffmpeg reads as `bgr0`). Each copy renders the scene again and reads it back on the
+  window server's thread, so the recorder asks for at most 30 frames a second. `copy_with_damage` is answered like `copy`,
+  with no damage event and no wait, and there is no dma-buf format yet; both are gaps for a cheaper capture. The recorder
+  treats a refused probe frame (the Vulkan renderer) as "cannot record" and starts nothing.
 - Tests: `capture_size`/`clamp_region` unit tests, and `tests/capture.rs` (headless, red scene reads back `[255,0,0,255]`).
 
 ## Text input, input method and virtual keyboard

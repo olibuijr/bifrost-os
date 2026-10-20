@@ -27,7 +27,8 @@ Written by a code-only agent: nothing was built or run. The lead builds and chec
 | Floating thumbnail: drag and mark up | thumbnail corner, click to mark up | `shell/screenshot.rs` (`Overlay`, `bounds`, `draw_at`), `shell/capture_flow.rs` (`shot_layer`), `shell/desktop_bar.rs` (`desktop_chrome_frames`, id 9) | Bottom right; an own overlay surface above the windows, removed from the screen when it has slid away (about 5 s); a drag of more than 6 pt moves the thumbnail, a click opens Markup. Gap: dragging the file out into another app is not built | Nothing left on screen afterwards; drag feel |
 | `screencapture -i` | selection mode | `bare/control.rs` (`Request::Capture`), `bin/shell.rs`, `cmd/src/screencapture.rs` | Sends `capture select`; the shell opens the session and replies `ok` | End to end on Midget; the CLI returns before the capture is taken |
 | `screencapture -w` | window mode | same | Sends `capture window` | Same as above |
-| `screencapture -v` (video) | `-v -V -G -g -k` | not built | Still refused with a message | Blocked: see Gaps |
+| Record Screen and Record Selection | toolbar Record buttons, `screencapture -v -V` | `shell/screenrec.rs` (`recording_begin`, `plan_source`, `Session::start_composed`), `shell/screenrec_composed.rs` (pacing, cropping, encoder feed, owner), `shell/screenrec_wl.rs` (screencopy client), `shell/desktop_bar.rs` (`Menu::Recording`), `shell/desk.rs` (`desk_bar_hidden`) | Under the window server a worker thread reads the composed output (wallpaper, windows, menu bar, Dock) through `wlr-screencopy` into a pool of reused shm buffers, cropped to the selection (any output size and scale), at the display rate up to 30 frames a second; ffmpeg reads the buffers as they are (`bgr0`), the built-in writer is the fallback encoder. The shell's frame loop only looks at the worker every 100 ms. Frames are dropped, never waited for, when no buffer is free, the encoder is behind or a deadline passed; the dropped count is logged when the recording ends and shown by `rec status`; the movie keeps real time by repeating the frame that ends a gap. The red recording indicator stays in the menu bar for the whole recording (the bar does not hide over a full-screen window while recording). The recording ends when the screen locks. The file goes to the folder pictures go to (Desktop of the account, `pick_home`) and belongs to the account (ffmpeg runs as the account, or the file is chowned), not to root. If the composed output cannot be read (no screencopy global, the Vulkan renderer, a refused frame) nothing starts and a notification says so; the shell's own frame is never recorded under the window server. Without a window server (tablet, test fixtures) the shell's own frames are recorded as before | The movie shows wallpaper and windows; the indicator; the Vulkan renderer refuses with a message; owner of the file on the Desktop; dropped count under load |
+| `screencapture -v` (video) | `-v -V -G -g -k` | `cmd/src/screencapture.rs`, `bare/control.rs` (`rec start`) | `-v` and `-V` start and stop the same recording through the control port (`-G -g -k` still refused) | Same checks as the Record buttons |
 
 ## Migrations and deletions
 
@@ -37,6 +38,12 @@ Written by a code-only agent: nothing was built or run. The lead builds and chec
   picture is still the shell's own frame. The capture session and the thumbnail are chrome surfaces 8 and 9. The
   countdown now runs on the shell's millisecond clock (it counted milliseconds as seconds).
 
+- Recording (2026-10-20): `Shell::recording_start` took the shell's own frames, which under the window server hold only the
+  menu bar and the Dock on black. It now records the composed output through a screencopy client (`shell/screenrec_wl.rs`,
+  own thread and connection) and keeps the shell-frame path only for a shell without a window server. `ffmpeg_args` takes the
+  input pixel format (`rgba` for shell frames, `bgr0` for screencopy buffers). `Session::start` is unchanged for
+  `services/screen_stream.rs`; `start_owned` and `start_composed` are new. `recording_dir` is `capture_dir` (one folder for
+  pictures and recordings).
 - `take_screenshot` is now `take_capture(region, pointer)` plus `save_capture`. The chord, the toolbar and the control port
   share one save path. The old body moved into `save_capture` unchanged.
 - The thumbnail's tap and drag share `shot_touch`. A drag is no longer treated as a tap.
@@ -44,9 +51,13 @@ Written by a code-only agent: nothing was built or run. The lead builds and chec
 
 ## Gaps
 
-- **Recording (`-v`, `-V`, Shift-Cmd-5 Record) is not built.** The tree has no video encoder and no PipeWire or screen
-  recording path: `springboard/src` has only still-image encoders (`pngenc`, `cg/imageio`). Recording needs a new
-  pipeline (frame source, H.264 or similar encoder, MOV container) and is a separate task.
+- **Recording gaps.** The window server answers screencopy with shm buffers only (no dma-buf) and treats
+  `copy_with_damage` as a plain copy, so each frame makes the window server draw the scene again and read it back; the
+  recorder is therefore capped at 30 frames a second (`COMPOSED_MAX_FPS`). A damage-driven, dma-buf capture needs the window
+  server's screencopy to be extended first. The pointer is drawn only when Options > Show Pointer is on and the DRM backend
+  paints it. System audio is not recorded (microphone only, as before). Any local client that can reach the window server
+  socket can still bind screencopy: the window server does not yet limit the global to the session's account. The control
+  port's `rec start` takes a caller-named file, written as the account.
 - `apps/screenshot-desktop` (`bifrost-screenshot`) is a window-less model crate with its own `Options`, `Target`, `Mode`
   and file naming. The shell cannot import it (crate graph), so it duplicates `shell/capture.rs`. The lead should decide
   whether to delete the app's model or make it the owner of the naming. Not changed here.
@@ -71,12 +82,15 @@ Written by a code-only agent: nothing was built or run. The lead builds and chec
 
 Unit tests are in `shell/capture.rs`, `shell/screenshot.rs` (the thumbnail drag), `shell/hwkeys.rs` (the chord),
 `shell/kb_input.rs` (bindings cover every switchable shortcut), `bare/control.rs` (parse), and
-`cmd/src/screencapture.rs` (options, interactive requests). None were run, per the round rules.
+`cmd/src/screencapture.rs` (options, interactive requests), and for recording in `shell/screenrec_composed.rs` (timeline
+pacing, deadlines, crop at any output size and scale, pixel conversion, fallback decision and messages, file owner and
+folders, the encoder over a gap) and `shell/tests.rs` (the indicator and the menu bar over a full-screen window). None were
+run, per the round rules.
 
 ## Matrix entries (for the lead; not edited here)
 
 - `os/apps` `path:/System/Applications/Utilities/Screenshot.app`: partial (toolbar, selection, window, screen, timer, pointer,
-  thumbnail drag). Recording missing.
-- `os/cli` `path:/usr/sbin/screencapture`: partial (`-i`, `-w`, `-c`, `-R`, `-T`, `-x`). `-v` and the other options missing.
+  thumbnail drag, composed-screen recording).
+- `os/cli` `path:/usr/sbin/screencapture`: partial (`-i`, `-w`, `-c`, `-R`, `-T`, `-x`). `-v` and `-V` record the composed screen; the other options missing.
 - `data/screencapturekit.json` single-frame screenshot entry: the toolbar is app-facing only through the shell. No SDK
   call takes a capture yet.
