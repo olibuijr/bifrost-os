@@ -21,8 +21,16 @@ struct WirelessDiagnostics {
 
 impl WirelessDiagnostics {
     fn new() -> WirelessDiagnostics {
-        let state = Diagnostics::new();
-        source::spawn_poller(POLL, &state.readings);
+        let mut state = Diagnostics::new();
+        if bifrost_app::testing::pinned() {
+            // Under the compliance harness the radio is a fixed fixture, applied before the first frame: the snapshot
+            // never depends on the host's Wi-Fi interfaces or on how many polls came back in time.
+            for reading in source::fixture_readings() {
+                state.apply_reading(reading);
+            }
+        } else {
+            source::spawn_poller(POLL, &state.readings);
+        }
         WirelessDiagnostics { state }
     }
 
