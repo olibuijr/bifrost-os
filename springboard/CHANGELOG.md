@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Sound plays on the default output: opening a stream on the device the audio server chose no longer fails with
+  "add the IO procedure: UnknownObject". The server now publishes each device's buffer size, sample rate, available rates
+  and buffer range (the client library reads the buffer size before it adds its IO procedure), and a property a device does
+  not carry is reported as a missing property, not a missing device. A failed open names the device and the step in the log
+  on both sides, and Music's error says why the output could not open instead of "audio server is not reachable".
+
 ## 0.10.10 — 2026-10-20
 
 - Security: apps can no longer control the desktop through the shell's control port. The shell used to listen on TCP
