@@ -43,6 +43,7 @@ use smithay::{
 
 use self::protocol::bifrost_window_level_manager_v1::{self, BifrostWindowLevelManagerV1};
 use crate::{
+    privileged::is_privileged,
     state::WmState,
     wm::{Level, Rect, WindowId},
 };
@@ -55,6 +56,33 @@ pub const FRAME_SINCE: u32 = 2;
 pub const TILE_SINCE: u32 = 3;
 /// The version that introduced `set_origin`.
 pub const ORIGIN_SINCE: u32 = 4;
+
+/// Most managers one client may keep bound: each one is a reporter that `report_frames` walks, so a client that binds in
+/// a loop would otherwise make every frame report cost more. The shell binds once.
+pub const MAX_MANAGERS_PER_CLIENT: usize = 4;
+
+/// What a request of the manager asks for, for the policy below.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LevelRequest {
+    /// `set_level` to this level.
+    SetLevel(Level),
+    /// `set_origin`: where the toplevel maps (the window model keeps at least part of it on the usable area).
+    SetOrigin,
+    /// `tile`: a placement of a mapped toplevel.
+    Tile,
+}
+
+/// Which requests a client may make. Every request names a surface of the requesting client only (a client holds no
+/// other client's `wl_surface`), so the policy is about what a window may do to the desktop: an ordinary client may drop
+/// its windows to the normal level and say where a window maps (`wm::map_at` keeps it on the usable area), but only a
+/// privileged client (the shell) may raise a window to the floating level, which stays above every normal window and
+/// could cover the menu bar, the Dock or another app's permission dialog, or have the window server place it.
+pub fn request_allowed(privileged: bool, request: LevelRequest) -> bool {
+    match request {
+        LevelRequest::SetLevel(Level::Normal) | LevelRequest::SetOrigin => true,
+        LevelRequest::SetLevel(_) | LevelRequest::Tile => privileged,
+    }
+}
 
 pub fn init(dh: &DisplayHandle) -> GlobalId {
     dh.create_global::<WmState, BifrostWindowLevelManagerV1, ()>(VERSION, ())
@@ -84,6 +112,11 @@ impl FrameReports {
 
     pub fn is_empty(&self) -> bool {
         self.reporters.is_empty()
+    }
+
+    /// How many live managers the client of `manager` already has registered.
+    pub fn managers_of_client(&self, manager: &BifrostWindowLevelManagerV1) -> usize {
+        self.reporters.iter().filter(|r| r.manager.is_alive() && r.manager.id().same_client_as(&manager.id())).count()
     }
 
     /// Sends each manager the frames that changed since it was last told, for its own client's toplevels only (a
@@ -133,6 +166,10 @@ pub fn from_wire(v: u32) -> Option<Level> {
 impl GlobalDispatch<BifrostWindowLevelManagerV1, ()> for WmState {
     fn bind(state: &mut Self, _: &DisplayHandle, _: &Client, resource: New<BifrostWindowLevelManagerV1>, _: &(), init: &mut DataInit<'_, Self>) {
         let manager = init.init(resource, ());
+        // past the cap the object still works for requests but is never sent frames
+        if state.frame_reports.managers_of_client(&manager) >= MAX_MANAGERS_PER_CLIENT {
+            return;
+        }
         state.frame_reports.add(manager);
         // a client that binds after its windows mapped hears their frames now
         state.report_frames();
@@ -142,19 +179,23 @@ impl GlobalDispatch<BifrostWindowLevelManagerV1, ()> for WmState {
 impl Dispatch<BifrostWindowLevelManagerV1, ()> for WmState {
     fn request(
         state: &mut Self,
-        _: &Client,
+        client: &Client,
         manager: &BifrostWindowLevelManagerV1,
         request: bifrost_window_level_manager_v1::Request,
         _: &(),
         _: &DisplayHandle,
         _: &mut DataInit<'_, Self>,
     ) {
+        let privileged = is_privileged(client);
         match request {
             bifrost_window_level_manager_v1::Request::SetLevel { surface, level } => {
                 let Some(level) = from_wire(level) else {
                     manager.post_error(bifrost_window_level_manager_v1::Error::InvalidLevel, "unknown window level");
                     return;
                 };
+                if !request_allowed(privileged, LevelRequest::SetLevel(level)) {
+                    return;
+                }
                 with_states(&surface, |s| {
                     s.data_map.insert_if_missing_threadsafe(|| Mutex::new(Level::Normal));
                     if let Some(l) = s.data_map.get::<Mutex<Level>>() {
@@ -164,6 +205,9 @@ impl Dispatch<BifrostWindowLevelManagerV1, ()> for WmState {
                 state.set_window_level(&surface, level);
             }
             bifrost_window_level_manager_v1::Request::SetOrigin { surface, x, y } => {
+                if !request_allowed(privileged, LevelRequest::SetOrigin) {
+                    return;
+                }
                 with_states(&surface, |s| {
                     s.data_map.insert_if_missing_threadsafe(|| Mutex::new(None::<(i32, i32)>));
                     if let Some(o) = s.data_map.get::<Mutex<Option<(i32, i32)>>>() {
@@ -176,6 +220,9 @@ impl Dispatch<BifrostWindowLevelManagerV1, ()> for WmState {
                     manager.post_error(bifrost_window_level_manager_v1::Error::InvalidPlacement, "unknown window placement");
                     return;
                 };
+                if !request_allowed(privileged, LevelRequest::Tile) {
+                    return;
+                }
                 state.place_surface(&surface, placement);
             }
             _ => {}
@@ -232,6 +279,26 @@ mod tests {
             assert!(xml.contains(&format!("<entry name=\"{name}\" value=\"{value}\"")), "{name} = {value}");
             assert!(crate::tiling::placement_from_wire(value).is_some());
         }
+    }
+
+    #[test]
+    fn an_ordinary_client_may_not_float_or_tile_but_may_drop_to_normal() {
+        assert!(!request_allowed(false, LevelRequest::SetLevel(Level::Floating)));
+        assert!(!request_allowed(false, LevelRequest::Tile));
+        assert!(request_allowed(false, LevelRequest::SetLevel(Level::Normal)));
+        assert!(request_allowed(false, LevelRequest::SetOrigin));
+    }
+
+    #[test]
+    fn the_shell_may_make_every_request() {
+        for request in [LevelRequest::SetLevel(Level::Normal), LevelRequest::SetLevel(Level::Floating), LevelRequest::SetOrigin, LevelRequest::Tile] {
+            assert!(request_allowed(true, request), "{request:?}");
+        }
+    }
+
+    #[test]
+    fn the_manager_cap_leaves_room_for_the_shell_and_stops_a_loop() {
+        assert!(MAX_MANAGERS_PER_CLIENT >= 1 && MAX_MANAGERS_PER_CLIENT <= 8);
     }
 
     #[test]

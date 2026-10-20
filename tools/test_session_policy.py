@@ -65,6 +65,16 @@ class SessionScript(unittest.TestCase):
     def test_display_refresh_starts_with_the_window_server(self):
         self.assertIn("/usr/lib/bifrost/display-refresh", self.text)
 
+    def test_display_refresh_uses_the_privileged_socket_as_root(self):
+        # the output manager is privileged-only: the ordinary socket lists no output manager for wlr-randr
+        line = next(l for l in self.text.splitlines() if "/usr/lib/bifrost/display-refresh" in l and not l.lstrip().startswith("#"))
+        self.assertIn('WAYLAND_DISPLAY="$priv_socket"', line)
+        self.assertNotIn("as_user", line)
+
+    def test_video_arg_uses_the_privileged_socket(self):
+        with open(os.path.join(os.path.dirname(POLICY), "video-arg")) as f:
+            self.assertIn("WAYLAND_DISPLAY='/run/bifrost/wm-privileged'", f.read())
+
 
 class WmExitAction(unittest.TestCase):
     def setUp(self):

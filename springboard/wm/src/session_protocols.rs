@@ -15,7 +15,7 @@
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use smithay::{
@@ -67,7 +67,7 @@ use smithay::{
             Client, DataInit, Dispatch, DisplayHandle, GlobalDispatch, New, Resource, WEnum,
         },
     },
-    utils::{Transform, SERIAL_COUNTER},
+    utils::{Serial, Transform, SERIAL_COUNTER},
     wayland::{
         compositor::with_states,
         cursor_shape::CursorShapeManagerState,
@@ -207,6 +207,35 @@ pub fn buffer_fits(size: (i32, i32), stride: i32, want: (i32, i32)) -> bool { si
 /// An activation token raises its window when it carries a serial from a recent input event.
 pub fn activation_allowed(has_serial: bool, age: Duration) -> bool { has_serial && age <= ACTIVATION_WINDOW }
 
+/// How many input serials the window server remembers for activation tokens (a click or key press is one each).
+pub const INPUT_SERIAL_RING: usize = 64;
+
+/// One input event the window server delivered: its serial, when, and the client it went to (the client with the
+/// pointer or touch focus for a button or touch, with the keyboard focus for a key).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InputSerial<C> {
+    pub serial: Serial,
+    pub at: Instant,
+    pub client: Option<C>,
+}
+
+/// Remembers `entry` in `ring`, dropping the oldest past [`INPUT_SERIAL_RING`].
+pub fn push_input_serial<C>(ring: &mut Vec<InputSerial<C>>, entry: InputSerial<C>) {
+    if ring.len() >= INPUT_SERIAL_RING {
+        ring.remove(0);
+    }
+    ring.push(entry);
+}
+
+/// Whether `serial`, supplied by `requester` for an activation token, is the serial of a real input event that went to
+/// `requester` within [`ACTIVATION_WINDOW`] of `now`. A serial the window server never issued for an input event
+/// (a made-up number), one that went to another client (the user typing in another app) or an old one is refused.
+pub fn input_serial_valid<C: PartialEq>(ring: &[InputSerial<C>], serial: Serial, requester: &C, now: Instant) -> bool {
+    ring.iter().any(|e| {
+        e.serial == serial && e.client.as_ref() == Some(requester) && now.saturating_duration_since(e.at) <= ACTIVATION_WINDOW
+    })
+}
+
 /// Splits a timestamp into the `tv_sec_hi`, `tv_sec_lo`, `tv_nsec` triple the capture protocols send.
 pub fn stamp(d: Duration) -> (u32, u32, u32) {
     let secs = d.as_secs();
@@ -308,6 +337,9 @@ pub struct SessionState {
     pub cursor: Option<CursorImageStatus>,
     pub cursor_shape: CursorShapeManagerState,
     pub activation: XdgActivationState,
+    /// Serials of the last input events and the clients they went to: what an activation token's serial is checked
+    /// against (`input_serial_valid`).
+    input_serials: Vec<InputSerial<ClientId>>,
 
     foreign_managers: Vec<ZwlrForeignToplevelManagerV1>,
     /// The last snapshot the foreign-toplevel list announced.
@@ -326,10 +358,12 @@ impl SessionState {
     /// Registers the globals: foreign toplevels, screencopy, output management and power, and the image copy
     /// capture sources. Cursor shapes and xdg-activation come from Smithay.
     pub fn new(dh: &DisplayHandle) -> Self {
-        dh.create_global::<WmState, ZwlrForeignToplevelManagerV1, ()>(3, ());
+        // Window list, output management and output power act on the whole desktop (they list every window's title,
+        // close or hide any window, change the mode or rotation, blank the display): privileged clients only.
+        dh.create_global::<WmState, ZwlrForeignToplevelManagerV1, PrivilegedOnly>(3, PrivilegedOnly);
         dh.create_global::<WmState, ZwlrScreencopyManagerV1, PrivilegedOnly>(3, PrivilegedOnly);
-        dh.create_global::<WmState, ZwlrOutputManagerV1, ()>(4, ());
-        dh.create_global::<WmState, ZwlrOutputPowerManagerV1, ()>(1, ());
+        dh.create_global::<WmState, ZwlrOutputManagerV1, PrivilegedOnly>(4, PrivilegedOnly);
+        dh.create_global::<WmState, ZwlrOutputPowerManagerV1, PrivilegedOnly>(1, PrivilegedOnly);
         dh.create_global::<WmState, ExtImageCopyCaptureManagerV1, PrivilegedOnly>(1, PrivilegedOnly);
         dh.create_global::<WmState, ExtOutputImageCaptureSourceManagerV1, PrivilegedOnly>(1, PrivilegedOnly);
         SessionState {
@@ -337,6 +371,7 @@ impl SessionState {
             cursor: None,
             cursor_shape: CursorShapeManagerState::new::<WmState>(dh),
             activation: XdgActivationState::new::<WmState>(dh),
+            input_serials: Vec::new(),
             foreign_managers: Vec::new(),
             toplevels: Vec::new(),
             names: HashMap::new(),
@@ -486,6 +521,48 @@ impl WmState {
 
     /// Looks up a live output by name.
     pub fn output_named(&self, name: &str) -> Option<Output> { self.space.outputs().find(|o| o.name() == name).cloned() }
+
+    /// Remembers an input event's serial and the client of `focus`, the surface it went to.
+    pub fn note_input_serial(&mut self, serial: Serial, focus: Option<&WlSurface>) {
+        let client = focus.and_then(|s| s.client()).map(|c| c.id());
+        push_input_serial(&mut self.session.input_serials, InputSerial { serial, at: Instant::now(), client });
+    }
+
+    /// Remembers the serial of a button event: it went to the surface with the pointer focus.
+    pub fn note_pointer_serial(&mut self, serial: Serial) {
+        let focus = self.seat.get_pointer().and_then(|p| p.current_focus());
+        self.note_input_serial(serial, focus.as_ref());
+    }
+
+    /// Remembers the serial of a key event: it went to the surface with the keyboard focus.
+    pub fn note_keyboard_serial(&mut self, serial: Serial) {
+        let focus = self.seat.get_keyboard().and_then(|k| k.current_focus());
+        self.note_input_serial(serial, focus.as_ref());
+    }
+
+    /// Whether a client's activation token carries a serial it may use: the serial of a recent button, key or touch
+    /// event that went to that client, or the serial of the focus it holds now (the enter event of its keyboard or
+    /// pointer focus). The shell and its helpers (privileged) are trusted to hold a serial at all.
+    fn activation_serial_ok(&self, data: &XdgActivationTokenData) -> bool {
+        let Some((serial, _seat)) = &data.serial else { return false };
+        let Some(client_id) = &data.client_id else { return false };
+        // the requesting surface is one of the requester's own objects, so its client is the requester
+        let privileged = data.surface.as_ref().and_then(|s| s.client()).is_some_and(|c| c.id() == *client_id && is_privileged(&c));
+        if privileged {
+            return true;
+        }
+        if input_serial_valid(&self.session.input_serials, *serial, client_id, Instant::now()) {
+            return true;
+        }
+        // a focus serial counts while the client still holds that focus
+        let holds = |focus: Option<WlSurface>, enter: Option<Serial>| {
+            enter == Some(*serial) && focus.and_then(|s| s.client()).is_some_and(|c| c.id() == *client_id)
+        };
+        let keyboard = self.seat.get_keyboard();
+        let pointer = self.seat.get_pointer();
+        keyboard.as_ref().is_some_and(|k| holds(k.current_focus(), k.last_enter()))
+            || pointer.as_ref().is_some_and(|p| holds(p.current_focus(), p.last_enter()))
+    }
 
     /// Runs an xdg-activation request: a token with a recent serial raises and focuses the window.
     pub fn activate_surface(&mut self, surface: &WlSurface, has_serial: bool, age: Duration) {
@@ -697,11 +774,16 @@ fn publish_all_to(session: &mut SessionState, dh: &DisplayHandle, manager: &Zwlr
 // zwlr_foreign_toplevel_manager_v1 and handles
 // ---------------------------------------------------------------------------------------------------------------------
 
-impl GlobalDispatch<ZwlrForeignToplevelManagerV1, ()> for WmState {
-    fn bind(state: &mut Self, dh: &DisplayHandle, _client: &Client, resource: New<ZwlrForeignToplevelManagerV1>, _data: &(), data_init: &mut DataInit<'_, Self>) {
+impl GlobalDispatch<ZwlrForeignToplevelManagerV1, PrivilegedOnly> for WmState {
+    fn bind(state: &mut Self, dh: &DisplayHandle, _client: &Client, resource: New<ZwlrForeignToplevelManagerV1>, _data: &PrivilegedOnly, data_init: &mut DataInit<'_, Self>) {
         let manager = data_init.init(resource, ());
         state.session.foreign_managers.push(manager.clone());
         publish_all_to(&mut state.session, dh, &manager);
+    }
+
+    /// Titles of every window and control over them: the shell and the lab tools (privileged socket) only.
+    fn can_view(client: Client, _data: &PrivilegedOnly) -> bool {
+        is_privileged(&client)
     }
 }
 
@@ -770,11 +852,16 @@ impl Dispatch<ZwlrForeignToplevelHandleV1, WindowId> for WmState {
 // zwlr_output_manager_v1, heads, modes and configurations
 // ---------------------------------------------------------------------------------------------------------------------
 
-impl GlobalDispatch<ZwlrOutputManagerV1, ()> for WmState {
-    fn bind(state: &mut Self, _dh: &DisplayHandle, _client: &Client, resource: New<ZwlrOutputManagerV1>, _data: &(), data_init: &mut DataInit<'_, Self>) {
+impl GlobalDispatch<ZwlrOutputManagerV1, PrivilegedOnly> for WmState {
+    fn bind(state: &mut Self, _dh: &DisplayHandle, _client: &Client, resource: New<ZwlrOutputManagerV1>, _data: &PrivilegedOnly, data_init: &mut DataInit<'_, Self>) {
         let manager = data_init.init(resource, ());
         state.session.out_managers.push(manager);
         state.publish_outputs();
+    }
+
+    /// Mode and rotation changes: privileged clients only.
+    fn can_view(client: Client, _data: &PrivilegedOnly) -> bool {
+        is_privileged(&client)
     }
 }
 
@@ -879,9 +966,14 @@ impl Dispatch<ZwlrOutputConfigurationHeadV1, HeadWantRef> for WmState {
 // zwlr_output_power_manager_v1 and zwlr_output_power_v1
 // ---------------------------------------------------------------------------------------------------------------------
 
-impl GlobalDispatch<ZwlrOutputPowerManagerV1, ()> for WmState {
-    fn bind(_state: &mut Self, _dh: &DisplayHandle, _client: &Client, resource: New<ZwlrOutputPowerManagerV1>, _data: &(), data_init: &mut DataInit<'_, Self>) {
+impl GlobalDispatch<ZwlrOutputPowerManagerV1, PrivilegedOnly> for WmState {
+    fn bind(_state: &mut Self, _dh: &DisplayHandle, _client: &Client, resource: New<ZwlrOutputPowerManagerV1>, _data: &PrivilegedOnly, data_init: &mut DataInit<'_, Self>) {
         data_init.init(resource, ());
+    }
+
+    /// Blanking the display: privileged clients only.
+    fn can_view(client: Client, _data: &PrivilegedOnly) -> bool {
+        is_privileged(&client)
     }
 }
 
@@ -1101,6 +1193,12 @@ impl Dispatch<ExtImageCopyCaptureFrameV1, FrameData> for WmState {
 impl XdgActivationHandler for WmState {
     fn activation_state(&mut self) -> &mut XdgActivationState { &mut self.session.activation }
 
+    /// A client's token is kept only when its serial is a real, recent input (or focus) serial of that client: a made-up
+    /// serial gives a token that no window can be activated with.
+    fn token_created(&mut self, _token: XdgActivationToken, data: XdgActivationTokenData) -> bool {
+        self.activation_serial_ok(&data)
+    }
+
     fn request_activation(&mut self, token: XdgActivationToken, data: XdgActivationTokenData, surface: WlSurface) {
         self.activate_surface(&surface, data.serial.is_some(), data.timestamp.elapsed());
         self.session.activation.remove_token(&token);
@@ -1259,6 +1357,41 @@ mod tests {
         assert!(buffer_fits((1920, 1080), 7680, (1920, 1080)));
         assert!(!buffer_fits((1920, 1080), 7680 + 64, (1920, 1080)), "padded rows are refused");
         assert!(!buffer_fits((1280, 720), 7680, (1920, 1080)));
+    }
+
+    fn entry(serial: u32, client: Option<u8>, at: Instant) -> InputSerial<u8> {
+        InputSerial { serial: Serial::from(serial), at, client }
+    }
+
+    #[test]
+    fn an_activation_serial_must_be_a_real_recent_input_of_the_requesting_client() {
+        let now = Instant::now();
+        let ring = vec![entry(10, Some(1), now), entry(11, Some(2), now), entry(12, None, now)];
+        assert!(input_serial_valid(&ring, Serial::from(10), &1, now), "the client's own click");
+        assert!(!input_serial_valid(&ring, Serial::from(11), &1, now), "an input that went to another client");
+        assert!(!input_serial_valid(&ring, Serial::from(12), &1, now), "an input nobody received");
+        assert!(!input_serial_valid(&ring, Serial::from(1), &1, now), "a made-up serial");
+        assert!(!input_serial_valid::<u8>(&[], Serial::from(10), &1, now), "no input at all");
+    }
+
+    #[test]
+    fn an_old_input_serial_no_longer_activates() {
+        let at = Instant::now();
+        let ring = vec![entry(10, Some(1), at)];
+        assert!(input_serial_valid(&ring, Serial::from(10), &1, at + ACTIVATION_WINDOW));
+        assert!(!input_serial_valid(&ring, Serial::from(10), &1, at + ACTIVATION_WINDOW + Duration::from_millis(1)));
+    }
+
+    #[test]
+    fn the_input_serial_ring_forgets_the_oldest_entry() {
+        let now = Instant::now();
+        let mut ring = Vec::new();
+        for n in 0..(INPUT_SERIAL_RING as u32 + 5) {
+            push_input_serial(&mut ring, entry(n, Some(1), now));
+        }
+        assert_eq!(ring.len(), INPUT_SERIAL_RING);
+        assert!(!input_serial_valid(&ring, Serial::from(0), &1, now));
+        assert!(input_serial_valid(&ring, Serial::from(INPUT_SERIAL_RING as u32 + 4), &1, now));
     }
 
     #[test]

@@ -105,8 +105,12 @@ fn connect(socket: &str) -> Connection {
     Connection::from_socket(UnixStream::connect(dir.join(socket)).expect("connect")).expect("connection")
 }
 
-/// Every global that can read pixels of the screen or of a window.
-const CAPTURE_GLOBALS: [&str; 4] = [
+/// Every global that can read pixels of the screen or of a window, or act on every window or on the display (the
+/// window list, output management, output power).
+const CAPTURE_GLOBALS: [&str; 7] = [
+    "zwlr_foreign_toplevel_manager_v1",
+    "zwlr_output_manager_v1",
+    "zwlr_output_power_manager_v1",
     "bifrost_window_capture_manager_v1",
     "zwlr_screencopy_manager_v1",
     "ext_image_copy_capture_manager_v1",

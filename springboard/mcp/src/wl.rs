@@ -119,10 +119,22 @@ pub struct Wl {
     t0: Instant,
 }
 
+/// Where the session script puts the window server's privileged socket.
+const PRIVILEGED_SOCKET: &str = "/run/bifrost/wm-privileged";
+
+/// The window server's privileged socket (root only; this binary runs as root), where the window list, output
+/// management and screen capture globals are listed. `BIFROST_WM_PRIVILEGED` names it, else the session default.
+/// `None` when it cannot be opened (a development session): the caller falls back to the ordinary socket.
+fn connect_privileged() -> Option<Connection> {
+    let path = std::env::var("BIFROST_WM_PRIVILEGED").ok().filter(|p| p.starts_with('/')).unwrap_or_else(|| PRIVILEGED_SOCKET.into());
+    let stream = std::os::unix::net::UnixStream::connect(path).ok()?;
+    Connection::from_socket(stream).ok()
+}
+
 impl Wl {
     /// Connects to `$WAYLAND_DISPLAY` in `$XDG_RUNTIME_DIR` (set by the caller from the session file).
     pub fn connect() -> Result<Wl, String> {
-        let conn = Connection::connect_to_env().map_err(|e| format!("wayland: {e}"))?;
+        let conn = connect_privileged().map_or_else(|| Connection::connect_to_env().map_err(|e| format!("wayland: {e}")), Ok)?;
         let mut queue = conn.new_event_queue();
         let qh = queue.handle();
         let reg = conn.display().get_registry(&qh, ());
