@@ -22,7 +22,8 @@ use crate::rules::{self, Action};
 use crate::schedule::{self, Queued, Reminder};
 use crate::search::Query;
 use crate::spelling;
-use crate::state::{is_multiline, is_yes, Compose, Filter, Mail, Notice, Prompt, PromptKind, Sheet, SortKey, ARCHIVE_NAMES, INBOX, JUNK_NAMES, TRASH_NAMES};
+use crate::discover::Found;
+use crate::state::{is_multiline, is_yes, Compose, Filter, Mail, Notice, Prompt, PromptKind, Sheet, SortKey, ARCHIVE_NAMES, INBOX, JUNK_NAMES, MANUAL, TRASH_NAMES};
 use crate::sync::{self, Change, Event};
 use crate::transport;
 use bifrost_app::calendar;
@@ -881,6 +882,12 @@ impl MailWindow {
                 let text: String = s.chars().filter(|c| !c.is_control() || (*c == '\n' && multiline)).collect();
                 if !picker {
                     self.edit_form(|form| form.type_text(&text));
+                } else if text == " " {
+                    // Space turns a yes or no field, as a click does
+                    if let Some(form) = self.form_mut() {
+                        form.flip(form.focus);
+                    }
+                    self.mail.sync_manual();
                 }
             }
             KeyInput::Code(KEY_RETURN) if multiline && !picker => self.edit_form(|form| form.type_text("\n")),
@@ -1622,6 +1629,7 @@ impl MailWindow {
                 }
                 self.mail.status = "Connection checked. Mailbox > Show Activity has the details".into();
             }
+            Event::Discovered { email, result } => self.discovered(ctx, email, result),
             Event::DraftSaved { key, raw, result, .. } => self.draft_saved(key, raw, result),
             Event::Sent { id, result, .. } => self.sent(id, result),
             Event::Exported { mailbox, result, .. } => match result {
@@ -2387,23 +2395,7 @@ impl MailWindow {
     /// Runs the sheet's primary action: add the account, or send the message.
     fn submit(&mut self, ctx: &Ctx) {
         match self.mail.sheet.clone() {
-            Some(Sheet::Setup(form)) => {
-                let taken = match accounts::load_all() {
-                    Ok(all) => all,
-                    Err(e) => {
-                        self.mail.status = e;
-                        return;
-                    }
-                };
-                match self.mail.account_from_form(&form, &taken) {
-                    Ok((account, password)) => {
-                        let request = passwords::save(ctx, &account.password_site(), &account.username, &password);
-                        self.pending.insert(request, Pending::Add { account, password, old: None });
-                        self.mail.status = "Saving the password".into();
-                    }
-                    Err(e) => self.mail.status = e,
-                }
-            }
+            Some(Sheet::Setup(form)) => self.submit_setup(ctx, &form, None),
             Some(Sheet::Compose(compose)) => self.send(&compose),
             Some(Sheet::Mailbox(sheet)) => match self.mail.new_mailbox_name(&sheet.form, sheet.rename_from.as_deref()) {
                 Ok(name) => {
@@ -2432,6 +2424,71 @@ impl MailWindow {
             Some(Sheet::Question(compose)) => self.save_question(&compose),
             Some(Sheet::Rules(..)) => self.mail.close_sheet(),
             None => {}
+        }
+    }
+
+    /// Add Account's primary action. With Configure Manually off, the servers are looked up from the address first; the
+    /// answer returns as `Event::Discovered` and calls this again with what was found. With it on, the form is used as
+    /// it stands. Only the address goes out in the lookup; the password stays here.
+    fn submit_setup(&mut self, ctx: &Ctx, form: &crate::state::Form, found: Option<&Found>) {
+        if self.mail.discovering {
+            return;
+        }
+        // what can be checked without the network is checked first
+        if let Err(e) = self.mail.account_from_form_found(form, &[], found) {
+            self.mail.status = e;
+            return;
+        }
+        if found.is_none() && !is_yes(form.value(MANUAL)) {
+            let email = form.value("Email").trim().to_string();
+            let domain = email.rsplit_once('@').map_or("", |(_, d)| d).to_string();
+            self.mail.discovering = true;
+            self.mail.status = format!("Looking up the mail servers for {domain}...");
+            self.jobs += 1;
+            let transport = self.transport.clone();
+            sync::spawn(self.tx.clone(), self.wake_clone(), move || sync::discover(transport, &email));
+            return;
+        }
+        let taken = match accounts::load_all() {
+            Ok(all) => all,
+            Err(e) => {
+                self.mail.status = e;
+                return;
+            }
+        };
+        match self.mail.account_from_form_found(form, &taken, found) {
+            Ok((account, password)) => {
+                let request = passwords::save(ctx, &account.password_site(), &account.username, &password);
+                self.pending.insert(request, Pending::Add { account, password, old: None });
+                self.mail.status = "Saving the password".into();
+            }
+            Err(e) => self.mail.status = e,
+        }
+    }
+
+    /// The servers of the address typed in Add Account have been looked up. Servers the address's own domain vouches for
+    /// are used at once; any others, and a failed lookup, show the server fields so the person decides.
+    fn discovered(&mut self, ctx: &Ctx, email: String, result: Result<Found, String>) {
+        self.mail.discovering = false;
+        let Some(Sheet::Setup(form)) = self.mail.sheet.clone() else { return };
+        if form.value("Email").trim() != email {
+            self.mail.status.clear();
+            return;
+        }
+        match result {
+            Ok(found) if found.trusted => {
+                self.note(format!("Add Account: found {} and {} for {email}", found.imap.host, found.smtp.host));
+                self.submit_setup(ctx, &form, Some(&found));
+            }
+            Ok(found) => {
+                let domain = email.rsplit_once('@').map_or("", |(_, d)| d);
+                self.mail.status = format!("The servers found for {domain} are not on {domain}. Check them, then choose Add Account");
+                self.mail.show_manual(Some(&found));
+            }
+            Err(e) => {
+                self.mail.status = format!("{e}. Enter the servers below, or check the address");
+                self.mail.show_manual(None);
+            }
         }
     }
 
@@ -3043,9 +3100,11 @@ impl MailWindow {
                 self.mail.sync_recipient_field();
                 if choice {
                     // a yes or no field flips with each click
-                    if let Some(field) = self.form_mut().and_then(|form| form.fields.get_mut(index)) {
-                        field.value = if is_yes(&field.value) { "no".to_string() } else { "yes".to_string() };
+                    if let Some(form) = self.form_mut() {
+                        form.flip(index);
                     }
+                    // Configure Manually shows or hides the server fields
+                    self.mail.sync_manual();
                 }
                 if from_picker {
                     let choices = self.mail.from_choices();
