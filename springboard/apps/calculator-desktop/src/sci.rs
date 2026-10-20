@@ -409,7 +409,7 @@ mod tests {
         assert_eq!(run("2+3=7"), "7");
         let mut s = Sci::default();
         keys(&mut s, "2+3=");
-        s.press(SciKey::Digit(9));
+        s.press(SciKey::Clear);
         s.press(SciKey::Func("sqrt"));
         assert_eq!(s.display(), "sqrt(");
         s.press(SciKey::Digit(9));
