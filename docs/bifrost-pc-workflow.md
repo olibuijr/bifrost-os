@@ -427,8 +427,15 @@ since 0.4.47 `open-folder ID /absolute/folder` (see Show in Files above).
 **Who may use it.** The shell's control socket is a Unix socket at `/run/bifrost/shell-control.sock` (mode 0600, owned by the installed account), not a TCP port. The kernel reports each peer's uid (`SO_PEERCRED`); only root and the account the window server runs as are served, any other uid is refused and logged once. Sandboxed apps mount a fresh `/run` and cannot see the path. `SPRINGBOARD_CONTROL_SOCKET` (an absolute path) overrides the path for emulators and tests. Lab tools reach it over ssh as root: `tools/midget.py` runs a one-line `python3` with `AF_UNIX` on the
 remote side (`control_script`), and `bifrost pc midget control|state|tap-window|ax|press|wait` all go through it. Nothing listens on
 TCP 7777 any more, also not on lab builds. The one-line protocol is unchanged. A process of the account that runs outside the
-sandbox (a Linux app such as a browser, or a terminal) can still use the socket, as it can already drive the session; the lock screen
-policy (`allowed_while_locked`) still applies to every peer.
+sandbox (a Linux app such as a browser, or a terminal) can still use the socket for what the account's own command-line tools
+need (`screencapture`, `hdiutil`, `open`, `notifyutil` and the window server's key bindings): screenshots, recordings, image
+mounts, opening things, the notification bus and the state requests. Requests that inject input (`tap`, `swipe`, `down|move|up`,
+`doubletap`, `context`, `hover`, `key`), read the element map or press elements (`ax ...`), drive the terminal (`term ...`) or
+log input (`trace`) are served to root (the lab tools, `bifrost-mcp`) and to the shell's own uid only; the account gets
+`error: permission denied` for them (`privileged_only` in `bare/control.rs`). Screenshots stay open to the account
+deliberately: an unsandboxed program of the account is trusted as it is for the clipboard. The lock screen policy
+(`allowed_while_locked`) still applies to every peer. A client has 2 s in all to send its line; reading happens on helper
+threads, so a stalled client never holds the shell's frame loop.
 
 Adding a method to an app: implement `App::rpc_methods` (names) and `App::rpc(ctx, data_dir,
 method, params)` (dispatch) in the app's host crate, calling shared code in the app crate. Keep

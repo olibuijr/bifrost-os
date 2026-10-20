@@ -3,7 +3,9 @@
 //! local process, sandboxed apps included, which share the host network. The kernel reports the uid of each peer
 //! (`SO_PEERCRED`); only root (lab tools over ssh, `bifrost-mcp`), the shell's own uid and the account the window server
 //! runs as are served, everyone else is refused and logged once per uid. The sandbox mounts a fresh `/run`, so apps do not
-//! even see the path.
+//! even see the path. The account is served the requests its command-line tools and the window server's key bindings need;
+//! input injection, the element map, terminal control and input tracing are root's and the shell user's only
+//! (`privileged_only`). Clients are read on helper threads with a 2 s deadline, so none can stall the shell's frame loop.
 //! One request per connection, a single text line:
 //!   shot [scale]                 -> "RIMG" w h + premultiplied RGBA, downscaled
 //!   tap x y                      -> "ok"
@@ -24,12 +26,14 @@
 //!   image-detach <device|folder>   -> "ok <loop device>" (unmounts a disk image and releases its loop device)
 
 use std::collections::HashSet;
-use std::io::{self, BufRead, BufReader, Read, Write};
+use std::io::{self, Read, Write};
 use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
-use std::time::Duration;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 /// Where the shell listens.
 pub const SOCKET: &str = "/run/bifrost/shell-control.sock";
@@ -337,11 +341,57 @@ pub fn double_tap(x: f32, y: f32) -> Vec<(f64, u8, f32, f32)> {
     vec![(0.0, 0, x, y), (40.0, 2, x, y), (140.0, 0, x, y), (180.0, 2, x, y)]
 }
 
+/// A request read from an admitted peer: its connection (the answer goes back on it) and the parsed line.
+pub type Incoming = (UnixStream, Result<Request, String>);
+
+/// How long a peer has, in all, to send its request line. A slow or silent client costs a helper thread this long and the
+/// shell nothing: its frame loop never reads from a client.
+pub const REQUEST_WITHIN: Duration = Duration::from_secs(2);
+/// Connections read at once; further ones are dropped until a slot frees (a flood from the account cannot grow threads).
+const MAX_READING: usize = 16;
+/// How long an answer may take to be written to a client that does not read it.
+const REPLY_WITHIN: Duration = Duration::from_secs(5);
+
+/// Whether a request puts input into the session, drives a terminal, reads the element map or logs input events. These are
+/// the lab tools' (root over ssh, `bifrost-mcp`) and the shell user's; the desktop account's ordinary programs and the
+/// window server's key bindings send none of them. Screenshots, recordings, image mounts, opening things and the
+/// notification bus stay open to the account, because the `screencapture`, `hdiutil`, `open` and `notifyutil` tools it runs
+/// speak to this socket: an unsandboxed program of the account is as trusted here as it is for the clipboard. Sandboxed
+/// apps cannot even see the path.
+pub fn privileged_only(r: &Request) -> bool {
+    matches!(
+        r,
+        Request::Tap(..)
+            | Request::Context(..)
+            | Request::Hover(..)
+            | Request::Swipe { .. }
+            | Request::Touch(..)
+            | Request::DoubleTap(..)
+            | Request::Key(_)
+            | Request::AxList(_)
+            | Request::AxPress(_)
+            | Request::AxActions(_)
+            | Request::AxAction(..)
+            | Request::Term(..)
+            | Request::Trace(_)
+    )
+}
+
+/// Whether a peer with `uid` may send `r`: root and the shell's own uid may send anything, any other admitted uid (the
+/// desktop account) everything but `privileged_only` requests.
+pub fn request_permitted(uid: u32, own: u32, r: &Request) -> bool {
+    uid == 0 || uid == own || !privileged_only(r)
+}
+
+/// The shell's end of the control socket. A helper thread accepts and reads: the frame loop polls `fd()` and takes a
+/// finished request with `accept()`, so a client that connects and sends nothing (or dribbles bytes) can never stall it.
 pub struct Server {
-    listener: UnixListener,
-    allowed: Vec<u32>,
+    /// Read end of a socket pair; the helper writes one byte per request waiting in `inbox`.
+    wake: UnixStream,
+    inbox: Mutex<Receiver<Incoming>>,
     /// uids already logged as refused, so a busy local process cannot flood the journal
-    refused: Mutex<HashSet<u32>>,
+    #[cfg_attr(not(test), allow(dead_code))]
+    refused: Arc<Mutex<HashSet<u32>>>,
 }
 
 /// Binds `path` as a socket with `SOCKET_MODE`, owned by `owner` (uid, gid) when given.
@@ -374,6 +424,103 @@ pub fn bind_at(path: &Path, owner: Option<(u32, u32)>) -> io::Result<UnixListene
     made
 }
 
+/// Checks one connection's peer credentials: the peer's uid when it may be served. A refused uid is logged the first time only.
+fn admit(allowed: &[u32], refused: &Mutex<HashSet<u32>>, stream: &UnixStream) -> Option<u32> {
+    match crate::privd::server::peer(stream) {
+        Ok((_, uid)) if peer_allowed(uid, allowed) => Some(uid),
+        Ok((pid, uid)) => {
+            if refused.lock().is_ok_and(|mut seen| seen.insert(uid)) {
+                eprintln!("springboard: control socket: refused uid {uid} (pid {pid})");
+            }
+            None
+        }
+        Err(e) => {
+            eprintln!("springboard: control socket: no peer credentials: {e}");
+            None
+        }
+    }
+}
+
+/// Reads one request line from `stream` within `total` (all of it, not per read: a client sending a byte at a time gets no
+/// extra time). Up to `MAX_LINE` bytes; the line ends at a newline or at the end of the stream.
+fn read_line_within(stream: &UnixStream, total: Duration) -> Option<String> {
+    let deadline = Instant::now() + total;
+    let mut line = Vec::new();
+    let mut chunk = [0u8; 512];
+    loop {
+        let left = deadline.checked_duration_since(Instant::now()).filter(|d| !d.is_zero())?;
+        stream.set_read_timeout(Some(left)).ok()?;
+        match (&*stream).read(&mut chunk) {
+            Ok(0) => break,
+            Ok(n) => {
+                line.extend_from_slice(&chunk[..n]);
+                if let Some(end) = line.iter().position(|b| *b == b'\n') {
+                    line.truncate(end + 1);
+                    break;
+                }
+                if line.len() as u64 >= MAX_LINE {
+                    line.truncate(MAX_LINE as usize);
+                    break;
+                }
+            }
+            Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
+            Err(_) => return None,
+        }
+    }
+    String::from_utf8(line).ok()
+}
+
+/// Parses a request line and applies the peer's tier to it.
+fn judge(line: &str, uid: u32, own: u32) -> Result<Request, String> {
+    let request = parse(line)?;
+    if request_permitted(uid, own, &request) {
+        Ok(request)
+    } else {
+        Err("permission denied: this request is for root and the shell's own user".to_string())
+    }
+}
+
+/// The helper thread: accepts, admits by peer uid, and reads each client on a thread of its own with a hard deadline.
+fn accept_loop(listener: UnixListener, allowed: Vec<u32>, own: u32, refused: Arc<Mutex<HashSet<u32>>>, tx: Sender<Incoming>, wake: UnixStream) {
+    let reading = Arc::new(AtomicUsize::new(0));
+    loop {
+        let stream = match listener.accept() {
+            Ok((stream, _)) => stream,
+            Err(e) => {
+                if e.kind() != io::ErrorKind::Interrupted {
+                    // a persistent error must not spin the thread
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+                continue;
+            }
+        };
+        let Some(uid) = admit(&allowed, &refused, &stream) else { continue };
+        if reading.fetch_add(1, Ordering::AcqRel) >= MAX_READING {
+            reading.fetch_sub(1, Ordering::AcqRel);
+            continue;
+        }
+        let Ok(wake) = wake.try_clone() else {
+            reading.fetch_sub(1, Ordering::AcqRel);
+            continue;
+        };
+        let (tx, reading_done) = (tx.clone(), Arc::clone(&reading));
+        let spawned = std::thread::Builder::new().name("control-read".into()).spawn(move || {
+            let line = read_line_within(&stream, REQUEST_WITHIN);
+            reading_done.fetch_sub(1, Ordering::AcqRel);
+            let Some(line) = line else { return };
+            if stream.set_write_timeout(Some(REPLY_WITHIN)).is_err() {
+                return;
+            }
+            if tx.send((stream, judge(&line, uid, own))).is_ok() {
+                let _ = (&wake).write_all(&[1]);
+            }
+        });
+        if spawned.is_err() {
+            reading.fetch_sub(1, Ordering::AcqRel);
+        }
+    }
+}
+
 impl Server {
     pub fn bind() -> io::Result<Self> {
         // SAFETY: geteuid has no preconditions.
@@ -382,54 +529,44 @@ impl Server {
         // as root the socket belongs to the account the window server runs as; root connects whatever the mode
         let owner = if own == 0 { account.as_ref().map(|(uid, gid, _)| (*uid, *gid)) } else { None };
         let listener = bind_at(&socket_path(), owner)?;
-        listener.set_nonblocking(true)?;
-        Ok(Server { listener, allowed: allowed_uids(own, account.map(|(uid, ..)| uid)), refused: Mutex::new(HashSet::new()) })
+        Self::serve(listener, allowed_uids(own, account.map(|(uid, ..)| uid)), own)
     }
 
+    /// Serves `listener` (blocking) from a helper thread to the peers in `allowed`; `own` is the shell's uid.
+    fn serve(listener: UnixListener, allowed: Vec<u32>, own: u32) -> io::Result<Self> {
+        let (wake, helper_wake) = UnixStream::pair()?;
+        wake.set_nonblocking(true)?;
+        helper_wake.set_nonblocking(true)?;
+        let (tx, rx) = channel();
+        let refused = Arc::new(Mutex::new(HashSet::new()));
+        let shared = Arc::clone(&refused);
+        std::thread::Builder::new().name("control-accept".into()).spawn(move || accept_loop(listener, allowed, own, shared, tx, helper_wake))?;
+        Ok(Server { wake, inbox: Mutex::new(rx), refused })
+    }
+
+    /// The descriptor the frame loop polls: readable while a finished request waits for `accept`.
     pub fn fd(&self) -> std::ffi::c_int {
         use std::os::fd::AsRawFd;
-        self.listener.as_raw_fd()
+        self.wake.as_raw_fd()
     }
 
-    /// Checks one connection's peer credentials: `true` to serve it. A refused uid is logged the first time only.
-    fn admit(&self, stream: &UnixStream) -> bool {
-        match crate::privd::server::peer(stream) {
-            Ok((_, uid)) if peer_allowed(uid, &self.allowed) => true,
-            Ok((pid, uid)) => {
-                if self.refused.lock().is_ok_and(|mut seen| seen.insert(uid)) {
-                    eprintln!("springboard: control socket: refused uid {uid} (pid {pid})");
-                }
-                false
-            }
-            Err(e) => {
-                eprintln!("springboard: control socket: no peer credentials: {e}");
-                false
-            }
-        }
-    }
-
-    /// Accepts one pending connection from an allowed peer and reads its request line. Refused peers are dropped
-    /// without a read.
-    pub fn accept(&self) -> Option<(UnixStream, Result<Request, String>)> {
-        // a few refused connections must not hide an allowed one queued behind them
-        for _ in 0..8 {
-            let (stream, _) = self.listener.accept().ok()?;
-            if !self.admit(&stream) {
-                continue;
-            }
-            stream.set_nonblocking(false).ok()?;
-            stream.set_read_timeout(Some(Duration::from_secs(2))).ok()?;
-            stream.set_write_timeout(Some(Duration::from_secs(5))).ok()?;
-            let mut line = String::new();
-            BufReader::new((&stream).take(MAX_LINE)).read_line(&mut line).ok()?;
-            return Some((stream, parse(&line)));
-        }
-        None
+    /// Takes one finished request, if any. Never blocks and never reads from a client: the helper threads did that.
+    pub fn accept(&self) -> Option<Incoming> {
+        let mut byte = [0u8; 1];
+        let _ = (&self.wake).read(&mut byte);
+        self.inbox.lock().ok()?.try_recv().ok()
     }
 }
 
-pub fn reply(mut stream: UnixStream, body: &[u8]) {
-    let _ = stream.write_all(body);
+/// Writes `body` to the client and closes the connection. The write runs on its own thread with a deadline, so a client
+/// that never reads its answer (a screenshot is megabytes) cannot hold the frame loop.
+pub fn reply(stream: UnixStream, body: &[u8]) {
+    let body = body.to_vec();
+    let _ = std::thread::Builder::new().name("control-reply".into()).spawn(move || {
+        let mut stream = stream;
+        let _ = stream.set_write_timeout(Some(REPLY_WITHIN));
+        let _ = stream.write_all(&body);
+    });
 }
 
 #[cfg(test)]
@@ -536,11 +673,10 @@ mod tests {
             let dir = scratch(if served { "served" } else { "refused" });
             let path = dir.join("c.sock");
             let listener = bind_at(&path, None).unwrap();
-            listener.set_nonblocking(true).unwrap();
-            let server = Server { listener, allowed, refused: Mutex::new(HashSet::new()) };
+            let server = Server::serve(listener, allowed, own).unwrap();
             let mut client = UnixStream::connect(&path).unwrap();
             client.write_all(b"version\n").unwrap();
-            let got = server.accept();
+            let got = take(&server, if served { Duration::from_secs(3) } else { Duration::from_millis(300) });
             let mut answer = String::new();
             if served {
                 let (stream, req) = got.expect("an allowed peer is served");
@@ -560,6 +696,76 @@ mod tests {
                 assert!(server.refused.lock().unwrap().contains(&own), "the refused uid is remembered for the one-time log");
             }
             let _ = std::fs::remove_dir_all(&dir);
+        }
+    }
+
+    /// Waits up to `within` for the server to hand over a request (the helper threads read the clients).
+    fn take(server: &Server, within: Duration) -> Option<Incoming> {
+        let until = Instant::now() + within;
+        while Instant::now() < until {
+            if let Some(got) = server.accept() {
+                return Some(got);
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        None
+    }
+
+    #[test]
+    fn a_client_that_sends_nothing_does_not_hold_up_the_next_one() {
+        // SAFETY: geteuid has no preconditions.
+        let own = unsafe { geteuid() };
+        let dir = scratch("stalled");
+        let path = dir.join("c.sock");
+        let server = Server::serve(bind_at(&path, None).unwrap(), vec![own], own).unwrap();
+        let silent = UnixStream::connect(&path).unwrap();
+        let started = Instant::now();
+        assert!(server.accept().is_none(), "nothing is ready, and asking does not wait for the silent client");
+        assert!(started.elapsed() < Duration::from_millis(200), "the frame loop's call returns at once");
+        let mut quick = UnixStream::connect(&path).unwrap();
+        quick.write_all(b"ready\n").unwrap();
+        let (_, req) = take(&server, Duration::from_secs(1)).expect("the second client is served while the first is silent");
+        assert_eq!(req, Ok(Request::Ready));
+        drop(silent);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_request_line_has_one_deadline_however_it_is_dribbled() {
+        let (server_end, mut client) = UnixStream::pair().unwrap();
+        let writer = std::thread::spawn(move || {
+            for _ in 0..20 {
+                if client.write_all(b"s").is_err() {
+                    return;
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+        });
+        let started = Instant::now();
+        assert_eq!(read_line_within(&server_end, Duration::from_millis(300)), None, "a line that never ends is dropped");
+        assert!(started.elapsed() < Duration::from_millis(800), "at the deadline, not after every byte's own timeout");
+        drop(server_end);
+        let _ = writer.join();
+        let (end, mut c) = UnixStream::pair().unwrap();
+        c.write_all(b"version\nmore").unwrap();
+        assert_eq!(read_line_within(&end, Duration::from_secs(1)).as_deref(), Some("version\n"), "the line ends at the newline");
+    }
+
+    #[test]
+    fn input_terminal_and_element_requests_are_for_root_and_the_shell_user_only() {
+        let (own, account) = (1000, 1001);
+        for line in ["tap 1 2", "swipe 1 2 3 4", "down 1 2", "key power", "doubletap 1 2", "ax list", "ax press Save", "trace on"] {
+            let request = parse(line).unwrap_or_else(|e| panic!("{line}: {e}"));
+            assert!(privileged_only(&request), "{line} is privileged");
+            assert!(request_permitted(0, own, &request), "root may send {line}");
+            assert!(request_permitted(own, own, &request), "the shell's user may send {line}");
+            assert!(judge(&format!("{line}\n"), account, own).is_err(), "the account may not send {line}");
+        }
+        // the window server's key bindings and the account's command-line tools keep working
+        for line in ["shot 1", "state", "version", "ready", "quicksearch", "overview", "appgrid", "forcequit", "logout", "lock", "open-url https://example.com", "image-attach ro /tmp/a.iso"] {
+            let request = parse(line).unwrap_or_else(|e| panic!("{line}: {e}"));
+            assert!(!privileged_only(&request), "{line} stays open to the account");
+            assert!(judge(&format!("{line}\n"), account, own).is_ok(), "the account may send {line}");
         }
     }
 
