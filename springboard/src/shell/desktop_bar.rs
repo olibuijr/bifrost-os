@@ -1083,7 +1083,7 @@ impl Shell {
             let mut image=Image{w,h,px:data};image.apply_mask(&mask);
             frames.push(crate::bare::wayland::ChromeFrame{id:7,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px,input:None});
         }
-        // The system menu's card (Force Quit, About, Log Out): an overlay surface above every window, like Quick Look. It takes the
+        // The system menu's card (Force Quit, About, Log Out): an overlay surface above every window, like the file preview. It takes the
         // pointer over its whole card; its keys come from the shell's own keyboard reader.
         if let Some(((x,y,w,h),mask))=self.utility_overlay() {
             let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}
