@@ -622,9 +622,14 @@ impl Display {
 fn place_chrome(l:&surface::ZwlrLayerSurfaceV1,frame:&ChromeFrame,screen:(u32,u32)) {
     match frame.id {
         0 => {l.set_anchor(surface::Anchor::Top|surface::Anchor::Left|surface::Anchor::Right);l.set_margin(frame.y,0,0,0);l.set_exclusive_zone(frame.height as i32+frame.y.max(0));}
-        2 if screen.1>0 => {
-            let bottom=(screen.1 as i32-frame.y-frame.height as i32).max(0);
-            l.set_anchor(surface::Anchor::Bottom);l.set_margin(0,0,bottom,0);l.set_exclusive_zone(frame.height as i32+bottom);
+        2 if screen.0>0&&screen.1>0 => {
+            let (edge,m,zone)=dock_placement(frame.x,frame.y,frame.width,frame.height,screen);
+            l.set_anchor(match edge {
+                DockEdge::Bottom=>surface::Anchor::Bottom,
+                DockEdge::Left=>surface::Anchor::Left|surface::Anchor::Top|surface::Anchor::Bottom,
+                DockEdge::Right=>surface::Anchor::Right|surface::Anchor::Top|surface::Anchor::Bottom,
+            });
+            l.set_margin(m[0],m[1],m[2],m[3]);l.set_exclusive_zone(zone);
         }
         // -1: placed from the screen's corner, not pushed below the menu bar's or the Dock's exclusive zone
         _ => {l.set_anchor(surface::Anchor::Top|surface::Anchor::Left);l.set_margin(frame.y,0,0,frame.x);l.set_exclusive_zone(-1);}
@@ -1272,6 +1277,29 @@ fn gpu_pool_step(busy: &[bool], need_frame: bool, idle_secs: f32) -> PoolStep {
 fn pool_trim_in_ms(n: usize, spare_busy: bool, idle_secs: f32) -> Option<i32> {
     (n > GPU_POOL_MIN && !spare_busy).then(|| ((GPU_POOL_IDLE_SECS - idle_secs).max(0.0) * 1000.0).ceil() as i32 + 1)
 }
+/// The screen edge the Dock (chrome id 2) sits on, read from its rectangle: a tall narrow capsule is a side Dock.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum DockEdge {Bottom,Left,Right}
+/// Where the Dock goes: its edge, the layer-surface margins (top, right, bottom, left) and the exclusive zone. A side Dock
+/// is anchored to three edges (the side plus top and bottom) so its zone counts, and the margins put it at its own y:
+/// with both opposite edges anchored and a fixed size the surface is centred in what the margins leave, so the margins
+/// are the gap above and below it. The zone is the Dock's own width plus its gap to the edge.
+fn dock_placement(x:i32,y:i32,width:usize,height:usize,screen:(u32,u32))->(DockEdge,[i32;4],i32) {
+    let (w,h)=(width as i32,height as i32);let (sw,sh)=(screen.0 as i32,screen.1 as i32);
+    if h>w {
+        let (top,bottom)=(y.max(0),(sh-y-h).max(0));
+        if x+w/2<sw/2 {
+            let left=x.max(0);
+            (DockEdge::Left,[top,0,bottom,left],w+left)
+        } else {
+            let right=(sw-x-w).max(0);
+            (DockEdge::Right,[top,right,bottom,0],w+right)
+        }
+    } else {
+        let bottom=(sh-y-h).max(0);
+        (DockEdge::Bottom,[0,0,bottom,0],h+bottom)
+    }
+}
 // Keep quiet windows single-buffered. A pending update may allocate one spare
 // while the compositor owns the first; never write into an in-flight buffer.
 fn window_buffer_count(count:usize, available:bool, dirty:bool) -> usize {
@@ -1279,6 +1307,20 @@ fn window_buffer_count(count:usize, available:bool, dirty:bool) -> usize {
 }
 #[cfg(test)]
 mod tests {
+    use super::{dock_placement,DockEdge};
+    #[test]
+    fn the_dock_is_anchored_to_its_own_edge() {
+        let screen=(1920,1080);
+        // bottom: a wide capsule a margin above the edge
+        assert_eq!(dock_placement(500,1000,900,70,screen),(DockEdge::Bottom,[0,0,10,0],80));
+        // left: a tall capsule at x=12, centred below the menu bar
+        assert_eq!(dock_placement(12,200,70,600,screen),(DockEdge::Left,[200,0,280,12],82));
+        // right: the zone is the width plus the gap to the right edge
+        assert_eq!(dock_placement(1838,200,70,600,screen),(DockEdge::Right,[200,12,280,0],82));
+        // a hidden side Dock (a thin strip) keeps its side
+        assert_eq!(dock_placement(0,30,3,1050,screen).0,DockEdge::Left);
+        assert_eq!(dock_placement(1917,30,3,1050,screen).0,DockEdge::Right);
+    }
     #[test]
     fn a_frame_dropped_for_want_of_a_buffer_is_redrawn_on_the_next_release() {
         let mut s = super::Starved::default();
