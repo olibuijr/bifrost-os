@@ -27,6 +27,27 @@ Keyboard, clipboard and Mail, from the owner's reports and the Mail test with a 
 - Overview: closing it leaves every window where it was. The windows' toplevels are re-created when Overview ends, and
   the window server placed them at the cascade; `bifrost_window_level_v1` version 4 adds `set_origin`, so the shell
   hands each window its own place back. A banner that arrives while Overview is open waits until it closes.
+- Review fixes (`docs/reviews/2026-10-20-integration-review.md`, 126 findings from ten reviewers; 101 fixed, 26 in part):
+  - Window server: the session lock, foreign-toplevel, output management and output power are privileged-only; the input
+    method and virtual keyboard refuse sandboxed apps; a layer surface cannot take the keyboard from the lock screen or
+    crash the server with a huge exclusive zone; chords are inert while locked; xdg-activation needs a real input serial;
+    window levels other than normal are the shell's. Admission uses a pidfd where the kernel has one.
+  - Root file operations: screenshots are written without following links and owned by the person; downloaded programs
+    run as the person in a sandbox, never as root; the low-space purge never follows links.
+  - Apps and services: accessibility only after the person grants it, and never against the shell's sheets; document
+    grants only for files the person chose; firewall, Wi-Fi, Bluetooth and disks need an entitlement; sealed shared
+    memory; a second USB request waits its turn; notification and background web-page requests are limited.
+  - Clipboard: the contents go to the app in front only (others get a change count), background apps cannot write it,
+    concealed copies (Passwords) are never stored or broadcast and clear themselves, large items travel out of band
+    instead of being cut at 16 KB, and the bridge thread no longer spins or panics on bad input.
+  - Updates and recovery: packages and the repository database are signed and installs require signatures; a store
+    service cannot replace a system one; the remote agent service runs only on lab installs, with a token; the rollback
+    image is kept during probation; a failed download no longer forces recovery; restores are transactional.
+  - Keyboard and alerts: secure fields never copy, a repeating Return never answers an alert, Return never runs a
+    downloaded program, sheets act only on a press and release on the button.
+  - Audio, Mail, Settings and apps: the real-time thread cannot be made to spin; idle wake-ups removed; Mail's parsers
+    are linear and depth-bounded, IDLE stays idle, accounts no longer share keychain items; blocking work moved off the
+    UI thread in Print & Scan, Disk Utility and Printers; bounded caches and parsers in Maps and Fonts.
 - Mail 0.16.0: Add Account finds the servers from the address (autoconfig file, RFC 6186 service records, the mail
   exchanger); RFC 2047 headers decoded; HTML character references decoded; colour emoji.
 
