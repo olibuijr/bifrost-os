@@ -3850,6 +3850,40 @@ mod tests {
         }
     }
 
+    /// A window the window server placed asks its toplevel to map where it is (`origin`); a new one asks nothing.
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn the_frames_of_placed_windows_carry_their_origin_and_new_windows_do_not() {
+        let mut sh = crate::shell::tests::desktop_shell();
+        let m = sh.desk_metrics();
+        let (placed, fresh) = (AppId::Settings, AppId::AppStore);
+        {
+            let d = sh.desk.as_mut().unwrap();
+            d.wins.clear();
+            d.open(&m, placed, (600, 400));
+            d.open(&m, fresh, (600, 400));
+        }
+        // the window server reported where the person dragged the first window
+        let id = win_id(placed).unwrap();
+        sh.wayland_window_event(crate::bare::wayland::WindowEvent::Frame(id, 1065, 524, 600, 400));
+        let rect = |sh: &Shell, app| sh.desk.as_ref().unwrap().wins.iter().find(|w| w.app == app).map(|w| w.r).unwrap();
+        assert_eq!((rect(&sh, placed).x, rect(&sh, placed).y), (1065, 524), "the shell follows the reported frame");
+        let frames: Vec<_> = [placed, fresh].iter().map(|&app| {
+            let r = rect(&sh, app);
+            crate::bare::wayland::WindowFrame { id: win_id(app).unwrap(), title: "", x: r.x, y: r.y, width: r.w as usize, height: r.h as usize, pixels: None, damage: crate::gfx::Damage::new(1, 1), maximized: false, fullscreen: false, title_height: 0, drag_height: 0, no_drag: Vec::new(), floating: false, fx: bifrost_render::glass::Fx::IDENTITY, opaque: true, origin: None }
+        }).collect();
+        sh.desk.as_mut().unwrap().frames = frames;
+        let out = sh.take_wayland_windows();
+        let of = |app| out.iter().find(|f| Some(f.id) == win_id(app)).unwrap();
+        assert_eq!(of(placed).origin, Some((1065, 524)));
+        assert_eq!(of(fresh).origin, None, "a window the window server never placed is cascaded by it");
+        // closing forgets the place: the window opened again is a new one
+        let d = sh.desk.as_mut().unwrap();
+        let i = d.index_of(placed).unwrap();
+        d.close(i);
+        assert!(!d.placed.contains(&placed));
+    }
+
     #[test]
     fn a_floating_extra_window_stays_above_the_normal_windows_of_the_desk() {
         let m = metrics();

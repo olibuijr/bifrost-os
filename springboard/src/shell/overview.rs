@@ -1509,32 +1509,6 @@ mod tests {
         assert!(d.placed.contains(&AppId::AppStore));
     }
 
-    #[cfg(feature = "desktop-wayland")]
-    #[test]
-    fn the_toplevel_of_a_window_that_overview_hid_is_created_at_the_rect_the_window_server_reported() {
-        use super::super::desk::win_id;
-        let mut sh = desk_with(2, 1920, 1080, 1.0);
-        // the window server reports where each window is (the person dragged them there)
-        for (app, x, y) in [(AppId::Settings, 1065, 524), (AppId::AppStore, 737, 336)] {
-            let id = win_id(app).unwrap();
-            sh.wayland_window_event(crate::bare::wayland::WindowEvent::Frame(id, x, y, 800, 500));
-        }
-        let before = rects_of(&sh);
-        sh.overview_toggle(1000.0);
-        sh.overview_toggle(2000.0);
-        settle(&mut sh);
-        assert_eq!(rects_of(&sh), before);
-        let (w, h) = (sh.w as usize, sh.h as usize);
-        let mut px = vec![0u32; w * h];
-        sh.draw_desk_windows(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, 3000.0);
-        let frames = sh.take_wayland_windows();
-        for (app, x, y) in [(AppId::Settings, 1065, 524), (AppId::AppStore, 737, 336)] {
-            let f = frames.iter().find(|f| Some(f.id) == win_id(app)).expect("the window is back in the frames");
-            assert_eq!(f.origin, Some((x, y)), "{app:?} maps at its own place");
-            assert_eq!((f.x, f.y), (x, y));
-        }
-    }
-
     #[test]
     fn the_layout_scales_with_the_area_it_is_given() {
         let sizes = [(900.0, 600.0), (700.0, 500.0), (1100.0, 640.0), (500.0, 500.0)];
