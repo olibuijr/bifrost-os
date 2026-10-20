@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+## 0.10.14 — 2026-10-20
+
+Fixes from the second Midget E2E pass (`docs/e2e/2026-10-20-second-pass.md`).
+
+- Cmd+Tab: the app strip is its own overlay surface (chrome id 13) above every window while Cmd is held; before, it
+  was drawn under the app windows and never seen. The Dock divider before the minimised windows is visible, and
+  Overview's desktop thumbnail shows the wallpaper with the windows' frames.
+- System menu: Force Quit... (Option+Cmd+Esc) with the running apps, Log Out user... (Shift+Cmd+Q) with a
+  confirmation, Recent Items as a submenu, and About This Computer as its own small window with a readable model name
+  and processor (chrome id 14 for these cards). Running apps no longer add a letter to the menu bar.
+- Apps grid: a floating glass panel under a capsule header with category chips and a 7-column grid. Search: a
+  wider field, glass results with filter chips, real pane and shortcut icons, two-line rows.
+- Notification Center: wider panel, "Notification Center" heading, app icons on notifications, Calendar and Weather
+  cards, a capsule Edit Widgets button. Control Centre adds Bluetooth and Display modules.
+- Settings: title-case group headers above the cards, pane titles beside the back and forward buttons, pop-up
+  buttons and segmented controls instead of checklists, labels that wrap before their control, own tiles for every
+  pane, app icons in Notifications, a Wi-Fi row, Energy instead of Battery on a computer without a battery, a plain
+  Print & Scan message (and `cups.socket` enabled by the package), click wording on the desktop, one spelling of
+  Control Center.
+- Viewer starts again: an old `screen` permission in a store manifest is ignored instead of refusing the launch, and
+  a refused launch now tells the person why. Disk Utility lists the disks and partitions through the shell's disks
+  service (`volumes`) instead of needing udisks2.
+- Maps tiles load and its toolbar symbols draw; Sticky Notes opens a first note; Fonts drops the stray "Off" row;
+  Console says "This Computer" (and the names guard now catches "This Mac"); Mail keeps its title clear of the window
+  buttons and gains a mailbox sidebar and symbol toolbar; Messages moves its search field below the window buttons;
+  Notes and Voice Memos no longer list Documents, Library and tmp as folders.
+
 ## 0.10.13 — 2026-10-20
 
 - Settings and the player no longer invent a volume before the person sets one (a fresh install stays silent until the

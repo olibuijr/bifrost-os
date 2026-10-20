@@ -799,7 +799,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-mail"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -4431,7 +4431,7 @@ dependencies = [
 
 [[package]]
 name = "springboard"
-version = "0.10.13"
+version = "0.10.14"
 dependencies = [
  "bifrost-assistant-client",
  "bifrost-audio-driver",
