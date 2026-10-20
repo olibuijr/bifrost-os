@@ -76,8 +76,18 @@ impl CompositorHandler for WmState {
             }
             if let Some(window) = self.window_for_surface(&root) {
                 window.on_commit();
+                if let Some(id) = WmState::known_id(&window) {
+                    self.window_capture.touch(id);
+                }
                 self.settle(&window);
                 self.sync_toplevels();
+            } else if let Some(window) = self.hidden_for_surface(&root) {
+                // a minimized window keeps its content current (a capture of it shows the last commit); it is not
+                // placed or settled, which would map it
+                window.on_commit();
+                if let Some(id) = WmState::known_id(&window) {
+                    self.window_capture.touch(id);
+                }
             }
             self.place_pending(&root);
         }
@@ -320,15 +330,24 @@ impl XdgShellHandler for WmState {
         let Some(window) = self.window_for_surface(surface.wl_surface()) else { return };
         let Some(id) = WmState::known_id(&window) else { return };
         self.wm.minimize(id);
-        self.space.unmap_elem(&window);
+        self.hide_window(id, &window);
         self.focus(None, smithay::utils::SERIAL_COUNTER.next_serial());
     }
 
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
         self.pending.retain(|w| w.toplevel().is_some_and(|t| t != &surface));
+        // a window closed while minimized is held hidden: free it with what capture kept for it
+        if let Some(window) = self.hidden_for_surface(surface.wl_surface()) {
+            if let Some(id) = WmState::known_id(&window) {
+                self.wm.unmap(id);
+                self.forget_window(id, &window);
+            }
+            self.focus(None, smithay::utils::SERIAL_COUNTER.next_serial());
+        }
         if let Some(window) = self.window_for_surface(surface.wl_surface()) {
             if let Some(id) = WmState::known_id(&window) {
                 self.wm.unmap(id);
+                self.forget_window(id, &window);
             }
             self.space.unmap_elem(&window);
             self.focus(None, smithay::utils::SERIAL_COUNTER.next_serial());

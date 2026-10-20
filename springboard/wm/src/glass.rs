@@ -254,6 +254,19 @@ impl Glass {
         out
     }
 
+    /// One element per plate for a one-off render (a window capture): fresh elements that touch none of the scanout's
+    /// cached ones, so a capture cannot disturb the frame cache. Empty when the plate shader did not compile.
+    pub fn plates_once(&self, plates: &[Plate]) -> Vec<PixelShaderElement> {
+        let Some(program) = &self.plate else { return Vec::new() };
+        plates
+            .iter()
+            .map(|p| {
+                let uniforms = vec![Uniform::new("color", p.color), Uniform::new("radius", p.radius)];
+                PixelShaderElement::new(program.clone(), p.rect, None, 1.0, uniforms, Kind::Unspecified)
+            })
+            .collect()
+    }
+
     /// Forgets the plates that were not asked for since the last call (a surface that went away or lost a region).
     pub fn retain_plates(&mut self) {
         let seen = std::mem::take(&mut self.plates_seen);

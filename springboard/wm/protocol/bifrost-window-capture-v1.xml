@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<protocol name="bifrost_window_capture_v1">
+  <copyright>
+    Copyright 2026 BifrOSt. Private protocol of the BifrOSt window server (docs/window-server.md, "Window capture").
+  </copyright>
+
+  <interface name="bifrost_window_capture_manager_v1" version="1">
+    <description summary="capture one window's own pixels">
+      Lets the shell take a scaled-down picture of one toplevel, for Mission Control tiles, the Dock's thumbnails of
+      minimized windows and window screenshots. A picture shows the window alone (its surface tree, material regions
+      as flat plates) on a transparent ground: nothing that overlaps the window on the screen is in it, and a window
+      the window server holds minimized can still be captured.
+
+      This global is offered to the shell only. The window server hides it from every other client (it is not listed
+      in their registry) and refuses a request from one that bound it anyway with `failed(denied)`.
+
+      A capture is on demand and one-shot: the request carries the buffer to fill and the answer is one event on the
+      frame object. The window server fits the window into the buffer, keeping its aspect and never scaling it up, so
+      the buffer's size is the largest picture wanted. The picture is written from the buffer's top-left corner,
+      `width` by `height` pixels, rows `stride` bytes apart; the rest of the buffer is not touched.
+    </description>
+
+    <request name="destroy" type="destructor"/>
+
+    <request name="capture_surface">
+      <description summary="capture the toplevel of a surface">
+        Captures the toplevel whose root surface is `surface`: a window of the requesting client. `buffer` is a
+        wl_shm buffer in argb8888 or xrgb8888 (argb8888 keeps the transparent corners); its premultiplied pixels are
+        in the shm convention. `since` is the serial of the last picture the client holds of this window at this
+        buffer size, or 0 for none: when the window has not changed since, `unchanged` is sent and nothing is drawn.
+      </description>
+      <arg name="frame" type="new_id" interface="bifrost_window_capture_frame_v1"/>
+      <arg name="surface" type="object" interface="wl_surface"/>
+      <arg name="buffer" type="object" interface="wl_buffer"/>
+      <arg name="since" type="uint"/>
+    </request>
+
+    <request name="capture_toplevel">
+      <description summary="capture a toplevel of any client">
+        Captures the window of a foreign toplevel handle the requesting client holds (wlr-foreign-toplevel): the
+        way to name a window of another client, whose surface the shell never sees. Otherwise as `capture_surface`.
+      </description>
+      <arg name="frame" type="new_id" interface="bifrost_window_capture_frame_v1"/>
+      <arg name="toplevel" type="object" interface="zwlr_foreign_toplevel_handle_v1"/>
+      <arg name="buffer" type="object" interface="wl_buffer"/>
+      <arg name="since" type="uint"/>
+    </request>
+  </interface>
+
+  <interface name="bifrost_window_capture_frame_v1" version="1">
+    <description summary="the answer to one capture request">
+      Exactly one of `ready`, `unchanged` and `failed` is sent, once, right after the request that created the
+      object. The object stays valid until it is destroyed.
+    </description>
+
+    <request name="destroy" type="destructor"/>
+
+    <event name="ready">
+      <description summary="the picture is in the buffer">
+        The window, scaled to `width` by `height` pixels, is in the top-left corner of the buffer. `serial` names
+        this picture: pass it as `since` to ask whether the window changed after it.
+      </description>
+      <arg name="width" type="uint"/>
+      <arg name="height" type="uint"/>
+      <arg name="serial" type="uint"/>
+    </event>
+
+    <event name="unchanged">
+      <description summary="the window did not change since the picture the client holds">
+        The window has not committed new content since `serial`; the buffer was not written.
+      </description>
+      <arg name="serial" type="uint"/>
+    </event>
+
+    <event name="failed">
+      <description summary="no picture">
+        The buffer was not written.
+      </description>
+      <arg name="reason" type="uint" summary="a reason value"/>
+    </event>
+
+    <enum name="reason">
+      <entry name="unsupported" value="0" summary="the window server has no renderer that can capture a window"/>
+      <entry name="gone" value="1" summary="no such window, or it has no content"/>
+      <entry name="bad_buffer" value="2" summary="not a wl_shm buffer in argb8888 or xrgb8888, or its rows are short"/>
+      <entry name="denied" value="3" summary="the requesting client is not the shell"/>
+      <entry name="empty" value="4" summary="the window has no size"/>
+    </enum>
+  </interface>
+</protocol>
