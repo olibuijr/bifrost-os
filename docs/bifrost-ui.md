@@ -2294,6 +2294,8 @@ copies stay inside BifrOSt until multi-MIME sources land; file representations t
 - **Submission**: `cups::Client::print_document_with` over IPP (not `lp`). Copies, media, orientation and page range are
   job-template attributes. Margins are not, because the document is already laid out inside them. `Destination::Pdf` is Save as PDF
   and works without a scheduler.
+  The client reaches the scheduler through `cups::Endpoint::detect()`: `$CUPS_SERVER` (a socket path or `host[:port]`), else the
+  socket `/run/cups/cups.sock` when it exists (what `cups.socket` activation provides), else `localhost:631`.
 - **Errors**: `PrintError::NoCups` (the scheduler cannot be reached, any I/O or HTTP failure), `NoPrinter` (no name and no default),
   `Failed(String)`. `print::available()` is a 200 ms connect to the local scheduler port.
 - **Printer capabilities** (NSPrinter): `Client::get_printer_attributes(name)` returns `printer_caps::PrinterCapabilities`: `papers` (PWG self-describing names with sizes, `PaperSize::ppd_name()` = PMPaperGetPPDPaperName), `default_paper`, `duplex`, `color_modes`, `status` (state, reasons, message; `statusForTable`), `page_size_for_paper(name)` (`pageSize(forPaper:)`). Printers omitting attributes fall back to Letter/A4, one-sided, auto colour. Not yet done: `deviceDescription`, `isKey(_:inTable:)`, `languageLevel`, the print panel using the lists.

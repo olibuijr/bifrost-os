@@ -1,19 +1,24 @@
-//! Printer management over the CUPS scheduler's IPP interface (`ipp://localhost:631`).
+//! Printer management over the CUPS scheduler's IPP interface (its socket `/run/cups/cups.sock`, or `localhost:631`).
 //!
 //! [`Client`] builds the operations with [`crate::ipp`] and reads back [`Printer`] and [`Job`] models: list printers
 //! and the default, list queue jobs, pause and resume a queue, cancel a job, set the default, add a driverless
 //! (IPP Everywhere) printer, delete a printer, and submit a document with Print-Job. The wire is behind the
-//! [`Transport`] trait; [`HttpTransport`] speaks HTTP/1.1 to the scheduler, and the tests use a canned transport, so
-//! no test touches the network.
+//! [`Transport`] trait; [`HttpTransport`] speaks HTTP/1.1 to the scheduler through the [`Endpoint`] that
+//! [`Endpoint::detect`] picks (`CUPS_SERVER`, else the scheduler's Unix socket, else TCP), and the tests use a canned
+//! transport, so no test needs a real scheduler.
 
 use crate::ipp::{self, group, op, Group, IppError, Request, Response, Value};
 use std::fmt;
 use std::io::{Read, Write};
-use std::net::TcpStream;
+use std::net::{TcpStream, ToSocketAddrs};
+use std::os::unix::net::UnixStream;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 pub const DEFAULT_HOST: &str = "localhost";
 pub const DEFAULT_PORT: u16 = 631;
+/// Where a socket-activated scheduler (`cups.socket`) listens; it has no TCP listener unless the admin adds one.
+pub const DEFAULT_SOCKET: &str = "/run/cups/cups.sock";
 const TIMEOUT: Duration = Duration::from_secs(10);
 
 /// The attributes a printer listing asks for.
@@ -105,29 +110,168 @@ pub trait Transport {
     fn send(&mut self, body: &[u8]) -> Result<Vec<u8>, CupsError>;
 }
 
+/// Where the scheduler is reached: its Unix socket or a TCP host and port.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Endpoint {
+    Unix(PathBuf),
+    Tcp { host: String, port: u16 },
+}
+
+impl Endpoint {
+    /// `localhost:631`.
+    pub fn local_tcp() -> Endpoint {
+        Endpoint::Tcp { host: DEFAULT_HOST.to_string(), port: DEFAULT_PORT }
+    }
+
+    /// The endpoint for this machine: `$CUPS_SERVER` when set, else [`DEFAULT_SOCKET`] when it exists, else TCP.
+    pub fn detect() -> Endpoint {
+        Endpoint::choose(std::env::var("CUPS_SERVER").ok().as_deref(), Path::new(DEFAULT_SOCKET))
+    }
+
+    /// The choice behind [`Endpoint::detect`], with the environment value and the socket path passed in.
+    /// `server` is a socket path (`/run/cups/cups.sock`) or `host[:port]`; an empty value counts as unset.
+    pub fn choose(server: Option<&str>, socket: &Path) -> Endpoint {
+        if let Some(endpoint) = server.and_then(parse_server) {
+            return endpoint;
+        }
+        if socket.exists() {
+            Endpoint::Unix(socket.to_path_buf())
+        } else {
+            Endpoint::local_tcp()
+        }
+    }
+
+    /// The `Host` header value. The scheduler ignores it on its socket, so that is `localhost`.
+    fn host_header(&self) -> String {
+        match self {
+            Endpoint::Unix(_) => DEFAULT_HOST.to_string(),
+            Endpoint::Tcp { host, port } if host.contains(':') => format!("[{host}]:{port}"),
+            Endpoint::Tcp { host, port } => format!("{host}:{port}"),
+        }
+    }
+
+    fn connect(&self) -> std::io::Result<Stream> {
+        let stream = match self {
+            Endpoint::Unix(path) => Stream::Unix(UnixStream::connect(path)?),
+            Endpoint::Tcp { host, port } => Stream::Tcp(TcpStream::connect((host.as_str(), *port))?),
+        };
+        stream.set_timeouts(TIMEOUT)?;
+        Ok(stream)
+    }
+
+    /// True when something accepts a connection there (a short probe for an "is printing available" check).
+    pub fn reachable(&self) -> bool {
+        match self {
+            Endpoint::Unix(path) => UnixStream::connect(path).is_ok(),
+            Endpoint::Tcp { host, port } => (host.as_str(), *port)
+                .to_socket_addrs()
+                .map(|mut addrs| addrs.any(|a| TcpStream::connect_timeout(&a, Duration::from_millis(200)).is_ok()))
+                .unwrap_or(false),
+        }
+    }
+}
+
+/// Reads a `CUPS_SERVER` value: the first entry of a comma list, as a socket path or `host[:port]`
+/// (`[::1]:631` for an IPv6 address). Anything after a `/` that follows the host is dropped; `@LOCAL`-style names
+/// and an empty value are `None`.
+fn parse_server(value: &str) -> Option<Endpoint> {
+    let first = value.split(',').next().unwrap_or("").trim();
+    if first.is_empty() || first.starts_with('@') {
+        return None;
+    }
+    if first.starts_with('/') {
+        return Some(Endpoint::Unix(PathBuf::from(first)));
+    }
+    let (host, port_text) = match first.strip_prefix('[') {
+        Some(inner) => {
+            let (host, rest) = inner.split_once(']')?;
+            (host, rest.strip_prefix(':'))
+        }
+        None => match first.split_once(':') {
+            Some((host, port)) => (host, Some(port)),
+            None => (first, None),
+        },
+    };
+    let host = host.split('/').next().unwrap_or("");
+    if host.is_empty() {
+        return None;
+    }
+    let port = port_text.and_then(|p| p.split('/').next()).and_then(|p| p.parse::<u16>().ok()).unwrap_or(DEFAULT_PORT);
+    Some(Endpoint::Tcp { host: host.to_string(), port })
+}
+
+/// One connection to the scheduler, over either kind of endpoint.
+enum Stream {
+    Unix(UnixStream),
+    Tcp(TcpStream),
+}
+
+impl Stream {
+    fn set_timeouts(&self, timeout: Duration) -> std::io::Result<()> {
+        match self {
+            Stream::Unix(s) => {
+                s.set_read_timeout(Some(timeout))?;
+                s.set_write_timeout(Some(timeout))
+            }
+            Stream::Tcp(s) => {
+                s.set_read_timeout(Some(timeout))?;
+                s.set_write_timeout(Some(timeout))
+            }
+        }
+    }
+}
+
+impl Read for Stream {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        match self {
+            Stream::Unix(s) => s.read(buf),
+            Stream::Tcp(s) => s.read(buf),
+        }
+    }
+}
+
+impl Write for Stream {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        match self {
+            Stream::Unix(s) => s.write(buf),
+            Stream::Tcp(s) => s.write(buf),
+        }
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        match self {
+            Stream::Unix(s) => s.flush(),
+            Stream::Tcp(s) => s.flush(),
+        }
+    }
+}
+
 /// HTTP/1.1 POST of `application/ipp` to the scheduler (path `/`; the printer is named in `printer-uri`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HttpTransport {
-    pub host: String,
-    pub port: u16,
+    pub endpoint: Endpoint,
+}
+
+impl HttpTransport {
+    pub fn new(endpoint: Endpoint) -> HttpTransport {
+        HttpTransport { endpoint }
+    }
 }
 
 impl Default for HttpTransport {
+    /// The scheduler of this machine: see [`Endpoint::detect`].
     fn default() -> Self {
-        HttpTransport { host: DEFAULT_HOST.to_string(), port: DEFAULT_PORT }
+        HttpTransport { endpoint: Endpoint::detect() }
     }
 }
 
 impl Transport for HttpTransport {
     fn send(&mut self, body: &[u8]) -> Result<Vec<u8>, CupsError> {
         let io = |e: std::io::Error| CupsError::Io(e.to_string());
-        let mut stream = TcpStream::connect((self.host.as_str(), self.port)).map_err(io)?;
-        stream.set_read_timeout(Some(TIMEOUT)).map_err(io)?;
-        stream.set_write_timeout(Some(TIMEOUT)).map_err(io)?;
+        let mut stream = self.endpoint.connect().map_err(io)?;
         let head = format!(
-            "POST / HTTP/1.1\r\nHost: {}:{}\r\nContent-Type: application/ipp\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-            self.host,
-            self.port,
+            "POST / HTTP/1.1\r\nHost: {}\r\nContent-Type: application/ipp\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            self.endpoint.host_header(),
             body.len()
         );
         stream.write_all(head.as_bytes()).map_err(io)?;
@@ -1036,5 +1180,116 @@ mod tests {
         assert!(caps.supports_duplex());
         assert_eq!(caps.status.state, PrinterState::Idle);
         assert!(client.get_printer_attributes("bad name").is_err());
+    }
+
+    /// A fresh directory under the system temp dir for one test.
+    fn temp_dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("bifrost-cups-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn cups_server_socket_path_is_used() {
+        let missing = Path::new("/nonexistent/cups.sock");
+        assert_eq!(Endpoint::choose(Some("/run/other.sock"), missing), Endpoint::Unix(PathBuf::from("/run/other.sock")));
+    }
+
+    #[test]
+    fn cups_server_host_and_port_is_used() {
+        let missing = Path::new("/nonexistent/cups.sock");
+        let tcp = |host: &str, port: u16| Endpoint::Tcp { host: host.to_string(), port };
+        assert_eq!(Endpoint::choose(Some("print.lan:8631"), missing), tcp("print.lan", 8631));
+        assert_eq!(Endpoint::choose(Some("print.lan"), missing), tcp("print.lan", DEFAULT_PORT));
+        assert_eq!(Endpoint::choose(Some("print.lan:631/version=1.1,other"), missing), tcp("print.lan", 631));
+        assert_eq!(Endpoint::choose(Some("[::1]:632"), missing), tcp("::1", 632));
+        assert_eq!(Endpoint::choose(Some("host:junk"), missing), tcp("host", DEFAULT_PORT));
+    }
+
+    #[test]
+    fn cups_server_wins_over_a_present_socket() {
+        let dir = temp_dir("env-wins");
+        let socket = dir.join("cups.sock");
+        std::fs::write(&socket, b"").unwrap();
+        assert_eq!(Endpoint::choose(Some("print.lan:631"), &socket), Endpoint::Tcp { host: "print.lan".into(), port: 631 });
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_present_socket_is_the_default() {
+        let dir = temp_dir("socket-present");
+        let socket = dir.join("cups.sock");
+        std::fs::write(&socket, b"").unwrap();
+        assert_eq!(Endpoint::choose(None, &socket), Endpoint::Unix(socket.clone()));
+        // An empty or local-only value counts as unset.
+        assert_eq!(Endpoint::choose(Some("  "), &socket), Endpoint::Unix(socket.clone()));
+        assert_eq!(Endpoint::choose(Some("@LOCAL"), &socket), Endpoint::Unix(socket));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn without_a_socket_the_default_is_local_tcp() {
+        let dir = temp_dir("socket-absent");
+        let socket = dir.join("cups.sock");
+        assert_eq!(Endpoint::choose(None, &socket), Endpoint::Tcp { host: "localhost".into(), port: 631 });
+        assert_eq!(Endpoint::local_tcp(), Endpoint::choose(Some(""), &socket));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn host_header_names_localhost_on_the_socket_and_the_address_on_tcp() {
+        assert_eq!(Endpoint::Unix(PathBuf::from("/run/cups/cups.sock")).host_header(), "localhost");
+        assert_eq!(Endpoint::local_tcp().host_header(), "localhost:631");
+        assert_eq!(Endpoint::Tcp { host: "::1".into(), port: 631 }.host_header(), "[::1]:631");
+    }
+
+    #[test]
+    fn a_missing_socket_is_unreachable() {
+        assert!(!Endpoint::Unix(PathBuf::from("/nonexistent/cups.sock")).reachable());
+    }
+
+    #[test]
+    fn http_transport_talks_ipp_over_a_unix_socket() {
+        use std::os::unix::net::UnixListener;
+        let dir = temp_dir("serve");
+        let socket = dir.join("cups.sock");
+        let listener = UnixListener::bind(&socket).unwrap();
+        let server = std::thread::spawn(move || {
+            let (mut conn, _) = listener.accept().unwrap();
+            let mut request = Vec::new();
+            let mut chunk = [0u8; 512];
+            // Read the head, then as many body bytes as Content-Length announces.
+            loop {
+                let n = conn.read(&mut chunk).unwrap();
+                assert!(n > 0, "closed before the request ended");
+                request.extend_from_slice(&chunk[..n]);
+                if let Some(split) = find(&request, b"\r\n\r\n") {
+                    let head = String::from_utf8_lossy(&request[..split]).to_string();
+                    let length: usize = head
+                        .lines()
+                        .find_map(|l| header_value(l, "content-length"))
+                        .and_then(|v| v.parse().ok())
+                        .unwrap();
+                    if request.len() >= split + 4 + length {
+                        break;
+                    }
+                }
+            }
+            conn.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: application/ipp\r\nContent-Length: 4\r\n\r\nPONG").unwrap();
+            request
+        });
+        let mut transport = HttpTransport::new(Endpoint::Unix(socket));
+        assert_eq!(transport.send(b"PING"), Ok(b"PONG".to_vec()));
+        let request = server.join().unwrap();
+        assert!(request.starts_with(b"POST / HTTP/1.1\r\nHost: localhost\r\n"));
+        assert!(request.ends_with(b"PING"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn sending_to_a_missing_socket_is_an_io_error() {
+        let mut transport = HttpTransport::new(Endpoint::Unix(PathBuf::from("/nonexistent/cups.sock")));
+        assert!(matches!(transport.send(b"x"), Err(CupsError::Io(_))));
     }
 }
