@@ -146,7 +146,7 @@ Smithay handles protocols, the DRM/KMS backend, libinput and libseat; rendering 
   scrolling, key repeat; input goes straight to the focused surface.
 - Session features (done, `docs/window-server.md`): foreign-toplevel list, screencopy and ext-image-copy-capture (GLES
   readback for DRM and headless, none on the Vulkan scanout), cursor shapes, xdg-activation, idle/power, session lock,
-  compositor key bindings (`keybindings.rs`: Super+Space, Super+A, Alt+Tab, Alt+F4, Ctrl+Super+arrows), server-side
+  compositor key bindings (`keybindings.rs`: Super+Space, Ctrl+Up and F3, Alt+Tab, Alt+F4, Ctrl+Super+arrows), server-side
   decorations for third-party apps, XWayland, material recipes (`bifrost_material_v1`). Output management is open: one
   connector is driven today.
 

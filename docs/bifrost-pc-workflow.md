@@ -243,7 +243,7 @@ swapped to the body size while it draws or takes a touch (`Shell::with_size`), t
 that is copied in. Touches are translated to window-local coordinates and go through `app_touch_single`. The go-home swipe is off.
 The installed session runs the window server `bifrost-wm` (`springboard/wm`, labwc is gone) with the menu bar, dock and panels as
 separate chrome clients (`springboard/chrome`); the shell keeps the app model, Settings and the control port. The compositor owns
-the global shortcuts (`springboard/wm/src/keybindings.rs`): Super+Space opens the search panel, Super+A the app list, Alt+Tab
+the global shortcuts (`springboard/wm/src/keybindings.rs`): Super+Space opens the search panel, Ctrl+Up and F3 Mission Control, Alt+Tab
 cycles focus, Alt+F4 closes the focused window, Ctrl+Super+arrows tile, maximize or centre it. Window chrome, the dock and
 the menu bar are described in [desktop-chrome.md](desktop-chrome.md). The Terminal runs `/bin/bash -l` and shows no on-screen
 keyboard on a desktop.

@@ -13,6 +13,7 @@
 //!   trace on|off                 -> "ok" (log every input event)
 //!   lock                         -> "ok" (menu > Lock Screen)
 //!   quicksearch                    -> "ok" (opens Search, as Cmd+Space; the compositor's Super+Space binding)
+//!   overview                       -> "ok" (Mission Control: opens it, or closes it when open; the compositor's Ctrl+Up and F3 bindings)
 //!   image-attach ro|rw <path>      -> "ok <loop device> <folder>" (binds a disk image and mounts it, `shell::disk_image`)
 //!   image-detach <device|folder>   -> "ok <loop device>" (unmounts a disk image and releases its loop device)
 
@@ -77,6 +78,8 @@ pub enum Request {
     Perf,
     Trace(bool),
     QuickSearch,
+    /// `overview`: Mission Control opens or closes (Ctrl+Up, F3)
+    Overview,
     Lock,
     /// `term <verb> key=value ...` (values percent-encoded): Term agent control, see `shell/terminal/control.rs`.
     Term(String, Vec<(String, String)>),
@@ -235,6 +238,7 @@ pub fn parse(line: &str) -> Result<Request, String> {
         Some("perf") => Ok(Request::Perf),
         Some("trace") => Ok(Request::Trace(w.get(1) == Some(&"on"))),
         Some("quicksearch") => Ok(Request::QuickSearch),
+        Some("overview") if w.len() == 1 => Ok(Request::Overview),
         Some("lock") if w.len() == 1 => Ok(Request::Lock),
         c => Err(format!("unknown command {c:?}")),
     }
@@ -350,6 +354,9 @@ mod tests {
         assert!(parse("ready now").is_ok());
         assert_eq!(parse("lock"), Ok(Request::Lock));
         assert!(parse("lock now").is_err());
+        assert_eq!(parse("overview"), Ok(Request::Overview));
+        assert!(parse("overview now").is_err());
+        assert!(!allowed_while_locked(&Request::Overview), "Mission Control waits for a login");
     }
 
     #[test]

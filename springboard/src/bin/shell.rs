@@ -456,6 +456,8 @@ fn run() -> std::io::Result<()> {
     let mut power_key = PowerKey::default();
     let mut hw_keys = springboard::shell::hwkeys::HwKeys::default();
     hw_keys.set_layout(springboard::installer::keymaps::configured_layout());
+    // a lone Cmd press is the Home key of a tablet only; on the desktop it does nothing
+    hw_keys.set_desktop(bifrost_ui::form_factor::FormFactor::current().is_desktop());
     // the input source the hardware layout last followed; the configured layout holds until it changes
     let mut seen_source = springboard::shell::kb_layouts::active();
     // text inputs in this process compose kana while the Japanese source is on (`compose_method::type_text`)
@@ -852,6 +854,10 @@ fn run() -> std::io::Result<()> {
                         effects.extend(shell.hw_shortcut(springboard::shell::hwkeys::Shortcut::QuickSearch, t));
                         b"ok\n".to_vec()
                     }
+                    Ok(Request::Overview) => {
+                        shell.overview_toggle(t);
+                        b"ok\n".to_vec()
+                    }
                     Ok(Request::Lock) => {
                         effects.extend(shell.lock_screen());
                         b"ok\n".to_vec()
@@ -957,11 +963,19 @@ fn run() -> std::io::Result<()> {
                 input::Event::Key { code, down } => {
                     // Switch Control: while it is on, the switch keys step the panel and are used up here; any other key goes on
                     if let Some(fx) = shell.switch_control_key(code, down, t) {
+                        if down {
+                            hw_keys.cancel_lone_meta();
+                        }
                         effects.extend(fx);
                         continue;
                     }
                     // session event taps see the key first and may drop or replace it
-                    let Some(code) = shell.tap_key(code, down) else { continue };
+                    let Some(code) = shell.tap_key(code, down) else {
+                        if down {
+                            hw_keys.cancel_lone_meta();
+                        }
+                        continue;
+                    };
                     // Settings > Keyboard: modifier keys remapped, the repeat timing, and the shortcuts switched off
                     let kp = springboard::shell::kb_input::get();
                     // Settings > Accessibility > Sticky Keys: the key path follows the saved switch
@@ -978,6 +992,11 @@ fn run() -> std::io::Result<()> {
                     }
                     if !down && !hw_keys.mods_held() {
                         shell.cmdtab_release(t);
+                    }
+                    // Mission Control: F3 and Ctrl+Up open or close it, and while it is open it takes its own keys
+                    if shell.hw_overview_key(code, down, springboard::shell::overview::KeyMods { ctrl: hw_keys.ctrl_held(), cmd: hw_keys.meta_held(), shift: hw_keys.shift_held() }, hw_keys.alt_held(), t) {
+                        key_repeat.press(code, None, t);
+                        continue;
                     }
                     // key equivalents go to the app in front first: an app whose menus take the chord (the Browser's Close Tab on Cmd+W, an
                     // app's own Quit on Cmd+Q) gets it from `hw_chord` below, and the shell closes, minimizes or quits itself only when the app does not
