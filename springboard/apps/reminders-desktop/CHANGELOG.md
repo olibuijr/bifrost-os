@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.19.2 — 2026-10-20
+
+- The Recently Deleted tile in the sidebar shows its whole name: a name wider than the tile wraps to a second line instead of ending in an ellipsis. The tiles are a little taller to make room.
+
 ## 1.19.1
 
 - BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.

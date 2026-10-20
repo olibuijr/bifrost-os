@@ -17,7 +17,7 @@ use bifrost_app::kit::ui::{SPACE_L, SPACE_XS, SPACE_XXS};
 const SIDE_PT: f32 = 250.0;
 const SIDE_FOLD_PT: f32 = 600.0;
 /// Smart-list tiles: height, gap and the sidebar's side inset (points).
-const TILE_H: f32 = 56.0;
+const TILE_H: f32 = 68.0;
 const TILE_GAP: f32 = 8.0;
 const SIDE_INSET: f32 = 10.0;
 /// The Add List row at the sidebar's bottom (points).
@@ -370,6 +370,21 @@ impl Reminders {
         self.data.lists.get((id - LIST_ROW) as usize).map(|l| Target::List(l.id))
     }
 
+    /// A tile name as one or two lines no wider than `max_px`: whole words, cut with an ellipsis only when a single
+    /// word does not fit.
+    pub(super) fn tile_label_lines(ui: &Ui, label: &str, max_px: f32) -> Vec<String> {
+        let mut lines = if ui.measure(label, MAC_BODY_PT, Weight::Semibold) <= max_px {
+            vec![label.to_string()]
+        } else {
+            ui.wrap(label, MAC_BODY_PT, Weight::Semibold, max_px)
+        };
+        if lines.len() > 2 {
+            let rest = lines.split_off(1).join(" ");
+            lines.push(rest);
+        }
+        lines.iter().map(|l| ui.fit(l, MAC_BODY_PT, max_px)).collect()
+    }
+
     /// The sidebar: the smart-list tiles in their colours (count top right, name bottom left, the selected one
     /// outlined), My Lists, and Add List at the bottom.
     fn draw_sidebar(&mut self, s: &mut Surface, ui: &Ui) {
@@ -392,8 +407,13 @@ impl Reminders {
                 Tile::List(id) => self.list_glyph(s, ui, id, glyph_at, colour),
             }
             self.right(s, ui, &count.to_string(), MAC_TITLE2_PT, Weight::Bold, WHITE, x + w - ui.pt(SPACE_M), y + ui.pt(SPACE_S));
-            let label = ui.fit(&label, MAC_BODY_PT, w - ui.pt(2.0 * SPACE_M));
-            self.text(s, ui, &label, MAC_BODY_PT, Weight::Semibold, WHITE, x + ui.pt(SPACE_M), y + h - ui.pt(SPACE_XL + 2.0));
+            // the name sits at the tile's bottom left; one that is wider than the tile (Recently Deleted) wraps to a
+            // second line above it instead of being cut off
+            let lines = Self::tile_label_lines(ui, &label, w - ui.pt(2.0 * SPACE_M));
+            for (k, line) in lines.iter().rev().enumerate() {
+                let line_y = y + h - ui.pt(SPACE_XL + 2.0) - k as f32 * ui.pt(MAC_BODY_PT * 1.25);
+                self.text(s, ui, line, MAC_BODY_PT, Weight::Semibold, WHITE, x + ui.pt(SPACE_M), line_y);
+            }
         }
         widgets::source_list(s, ui, self.lists_bounds(ui), &self.lists_source(), 0.0, None);
         // the tiles' column above My Lists keeps the sidebar colour (source_list painted only its bounds)
