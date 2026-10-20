@@ -244,9 +244,36 @@ pub(super) struct Overview {
     pub(super) grid: AppGrid,
     /// a press that began on the menu bar or the Dock fell through, so its release must too (the Dock acts on release)
     pass_up: bool,
+    /// the window that had the focus when Overview opened: a window of another client that was active, else the desk's
+    /// front window. Leaving without choosing a tile gives the focus back to it, not to whatever the window server
+    /// finds when the overlay goes
+    foreign_before: Option<u32>,
+    front_before: Option<AppId>,
     /// whether the last desktop frame had Overview or the Apps grid on screen: a change repaints the frame, so the
     /// overlay surface the grid is exported as appears and goes in step with it
     pub(super) was_visible: bool,
+}
+
+/// Who gets the focus when Overview is left without a choice.
+#[derive(Debug, PartialEq, Eq)]
+enum Focus {
+    /// a window of another client, by the window server's id
+    Foreign(u32),
+    /// a window of the desk
+    App(AppId),
+    /// nobody in particular: the desk's front window takes it
+    Refocus,
+}
+
+/// The window that had the focus before Overview opened, when it is still there: `before` is the foreign window that
+/// was active and the desk's front window, `foreign` the windows of other clients now, `shown` says whether a desk
+/// window is on screen.
+fn leave_focus(before: (Option<u32>, Option<AppId>), foreign: &[(u32, String)], shown: impl Fn(AppId) -> bool) -> Focus {
+    match before {
+        (Some(id), _) if foreign.iter().any(|(w, _)| *w == id) => Focus::Foreign(id),
+        (_, Some(app)) if shown(app) => Focus::App(app),
+        _ => Focus::Refocus,
+    }
 }
 
 fn dur(kind: Kind) -> f32 {
@@ -410,8 +437,11 @@ impl Overview {
         if self.open {
             return;
         }
+        let foreign = sh.foreign_front_window();
         let Some(d) = sh.desk.as_mut() else { return };
         self.spaces.sync(&d.wins);
+        self.foreign_before = foreign;
+        self.front_before = d.front().map(|w| w.app);
         self.saved = d.wins.iter().map(|w| (w.app, w.minimized)).collect();
         for w in d.wins.iter_mut() {
             w.minimized = true;
@@ -483,10 +513,15 @@ impl Overview {
             }
             self.spaces.apply(&mut d.wins);
         }
+        let before = (self.foreign_before.take(), self.front_before.take());
         match (self.chosen_foreign.take(), self.chosen.take()) {
             (Some(id), _) => sh.desk_activate_foreign(id),
             (None, Some(app)) => sh.desk_open(app, t),
-            (None, None) => sh.desk_refocus(),
+            (None, None) => match leave_focus(before, &sh.mission_foreign_windows(), |app| sh.desk.as_ref().is_some_and(|d| d.index_of(app).is_some_and(|i| !d.wins[i].minimized))) {
+                Focus::Foreign(id) => sh.desk_activate_foreign(id),
+                Focus::App(app) => sh.desk_open(app, t),
+                Focus::Refocus => sh.desk_refocus(),
+            },
         }
         self.sources.clear();
         self.scaled.clear();
@@ -1568,6 +1603,45 @@ mod tests {
         let picture = draw(&mut sh);
         assert_ne!(plate[cy * w + cx], picture[cy2 * w + cx2], "the picture is drawn where the plate was");
         assert_eq!(picture[cy2 * w + cx2] & 255, 250, "the window's own red, not the plate");
+    }
+
+    #[test]
+    fn leaving_without_a_choice_gives_the_focus_back_to_the_window_that_had_it() {
+        let gone = |_: AppId| false;
+        let there = |_: AppId| true;
+        let others = vec![(7u32, "Files".to_string())];
+        assert_eq!(leave_focus((Some(7), Some(AppId::Settings)), &others, there), Focus::Foreign(7), "a focused window of another client first");
+        assert_eq!(leave_focus((Some(9), Some(AppId::Settings)), &others, there), Focus::App(AppId::Settings), "it closed meanwhile: the desk's front window");
+        assert_eq!(leave_focus((None, Some(AppId::Settings)), &others, there), Focus::App(AppId::Settings));
+        assert_eq!(leave_focus((None, Some(AppId::Settings)), &others, gone), Focus::Refocus, "that window is gone or hidden");
+        assert_eq!(leave_focus((None, None), &others, there), Focus::Refocus, "an empty desk has nobody to return to");
+    }
+
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn closing_mission_control_keeps_the_window_that_was_in_front() {
+        let mut sh = desk_with_foreign(2, &[(7, "Notes")]);
+        let front = sh.desk.as_ref().unwrap().front().map(|w| w.app).expect("a window is in front");
+        sh.overview_toggle(1000.0);
+        assert!(sh.overview.open);
+        sh.overview_toggle(2000.0);
+        settle(&mut sh);
+        assert!(!sh.overview.open, "Mission Control closed");
+        assert_eq!(sh.desk.as_ref().unwrap().front().map(|w| w.app), Some(front), "the same window is in front");
+        assert_eq!(sh.screen, crate::shell::Screen::App(front.parent()), "and has the focus");
+        assert!(sh.take_raise_front(), "the shell raises it above the windows of other clients");
+        assert!(sh.take_native_activations().is_empty(), "the window of another client is not the one raised");
+    }
+
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn closing_mission_control_returns_to_the_window_of_another_client_that_was_active() {
+        let mut sh = desk_with_foreign(1, &[(7, "Notes")]);
+        sh.desk.as_mut().unwrap().native_windows[0].active = true;
+        sh.overview_toggle(1000.0);
+        sh.overview_toggle(2000.0);
+        settle(&mut sh);
+        assert_eq!(sh.take_native_activations(), vec![7], "the window server is asked to focus it again");
     }
 
     #[cfg(feature = "desktop-wayland")]

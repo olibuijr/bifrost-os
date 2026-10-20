@@ -1082,6 +1082,15 @@ impl Shell {
     #[cfg(not(feature = "desktop-wayland"))]
     pub(super) fn mission_foreign_windows(&self) -> Vec<(u32, String)> { Vec::new() }
 
+    /// The window of another client the window server reports as active (the one with the focus), if any.
+    #[cfg(feature = "desktop-wayland")]
+    pub(super) fn foreign_front_window(&self) -> Option<u32> {
+        let d = self.desk.as_ref()?;
+        d.native_windows.iter().chain(d.linux_apps.iter().flat_map(|a| a.windows.iter())).find(|w| w.active).map(|w| w.id)
+    }
+    #[cfg(not(feature = "desktop-wayland"))]
+    pub(super) fn foreign_front_window(&self) -> Option<u32> { None }
+
     /// Activates window `id` of another client: the window server raises and focuses it.
     pub(super) fn desk_activate_foreign(&mut self, id: u32) {
         #[cfg(feature = "desktop-wayland")]
