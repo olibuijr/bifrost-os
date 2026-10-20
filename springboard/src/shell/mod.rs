@@ -926,6 +926,12 @@ pub struct Shell {
     battery_checked: f64,
     dirty: bool,
     perf_only: bool,
+    /// the only reason for the next frame is a CPU or RAM reading that changed what the menu bar shows: the frame repaints
+    /// the bar's rows and nothing else (`note_metrics_frame`, the draw's bar-only path)
+    #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+    bar_only: bool,
+    /// a reading changed the bar's text this tick; settled into `dirty` and `bar_only` at the end of the tick
+    metrics_changed: bool,
     /// Overview, the Apps grid and the desktops (see `overview.rs`)
     overview: overview::Overview,
     desktop_menu:Option<desktop_bar::Menu>,
@@ -1299,6 +1305,8 @@ impl Shell {
             voice_fx: Vec::new(),
             dirty: true,
             perf_only: false,
+            bar_only: false,
+            metrics_changed: false,
             overview:Default::default(),
             desktop_menu:None,defaults:None,recent_list:recent_items::new(),recent_dir:None,desktop_context:None,
             #[cfg(feature = "desktop-wayland")]
@@ -2503,6 +2511,7 @@ impl Shell {
             && !self.quicksearch.active() && ambient_only(&self.info, &info);
         if !quiet {
             self.perf_only = false;
+            self.bar_only = false;
         }
         self.info = info;
         self.today_stale = true;
@@ -3211,6 +3220,7 @@ impl Shell {
         }
         self.last_input = t;
         self.dirty = true;
+        self.bar_only = false;
         // a touch or key ends a screen saver and is not passed on (the display power key still sleeps)
         if ev != Event::Power && self.saver_wake(t) {
             return vec![];
@@ -3726,7 +3736,9 @@ impl Shell {
         let before = key(&self.desktop_metrics);
         self.metrics_sampler.sample(&mut self.desktop_metrics, menu);
         if key(&self.desktop_metrics) != before {
-            self.dirty = true; // redraw only when the shown text changed
+            // redraw only when the shown text changed, and then only the bar if nothing else asks for a frame
+            // (`note_metrics_frame`, at the end of the tick)
+            self.metrics_changed = true;
         }
     }
 
@@ -3754,7 +3766,19 @@ impl Shell {
         fx.extend(self.voice_click_tick(t));
         fx.extend(self.gated_clicks().into_iter().map(Effect::KeyClick));
         fx.extend(self.bell_tick(t));
+        self.note_metrics_frame();
         fx
+    }
+
+    /// Settles a CPU or RAM reading that changed the bar's text. When nothing else asked for a frame this tick, the frame
+    /// repaints the bar's rows alone (a full desktop frame costs ten milliseconds to change one label); otherwise it is the
+    /// ordinary frame.
+    fn note_metrics_frame(&mut self) {
+        if std::mem::take(&mut self.metrics_changed) {
+            self.bar_only = !self.dirty;
+            self.perf_only = false;
+            self.dirty = true;
+        }
     }
 
     /// Settles the terminal bell: the Alert Sound at the alert volume, or a flash of the terminal while sound is muted
@@ -4144,6 +4168,19 @@ impl Shell {
             self.draw_desktop_background(&mut s.rows(top,bottom));
             self.draw_perf(&mut s.rows(top,bottom));
             damage.add(0,top as i32,s.w as i32,(bottom-top) as i32);
+            self.damage=damage; self.rows=rows;
+            return &self.damage;
+        }
+        // a changed CPU or RAM reading repaints the menu bar's rows alone, under the conditions of the performance band above
+        #[cfg(feature = "desktop-wayland")]
+        if std::mem::take(&mut self.bar_only) && std::env::var_os("SPRINGBOARD_WAYLAND").is_some()
+            && self.desk_active() && !self.is_locked() && self.anim.is_none()
+            && self.desktop_menu.is_none() && !self.cc_active() && !self.center_active() && !self.overlay_visible() && !self.quick_look.is_visible()
+            && !self.overview_active()
+            && self.desk_drawn && self.retain_wayland_windows() {
+            let bottom=self.desktop_bar_height().min(s.h);
+            self.draw_desktop_background(&mut s.rows(0,bottom));
+            damage.add(0,0,s.w as i32,bottom as i32);
             self.damage=damage; self.rows=rows;
             return &self.damage;
         }
@@ -5012,6 +5049,7 @@ impl Shell {
     /// Repaints everything on the next `draw` (after the GPU path drew frames the CPU did not see).
     pub fn force_full_redraw(&mut self) {
         self.perf_only = false;
+        self.bar_only = false;
         self.desk_regions = None;
         self.drawn = Drawn::Nothing;
         self.desk_drawn = false;

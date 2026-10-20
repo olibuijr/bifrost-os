@@ -1387,6 +1387,41 @@
         sh.wayland_foreign_windows(vec![]);assert!(!sh.dirty);
     }
 
+    /// An idle second used to cost a whole desktop frame whenever the CPU or RAM reading changed the bar's text.
+    #[test]
+    fn a_changed_reading_alone_asks_for_a_bar_only_frame_and_anything_else_for_a_full_one() {
+        let mut sh=shell();
+        sh.dirty=false;sh.bar_only=false;sh.metrics_changed=true;
+        sh.note_metrics_frame();
+        assert!(sh.dirty&&sh.bar_only,"nothing else wanted a frame: only the bar's rows");
+        assert!(!sh.metrics_changed,"the reading is settled");
+        sh.dirty=true;sh.bar_only=false;sh.metrics_changed=true;
+        sh.note_metrics_frame();
+        assert!(sh.dirty&&!sh.bar_only,"something else is dirty: the ordinary frame");
+        sh.dirty=false;sh.bar_only=false;sh.metrics_changed=false;
+        sh.note_metrics_frame();
+        assert!(!sh.dirty&&!sh.bar_only,"no new reading, no frame");
+    }
+
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn a_bar_only_frame_repaints_only_the_menu_bar_band() {
+        let saved=std::env::var_os("SPRINGBOARD_WAYLAND");std::env::set_var("SPRINGBOARD_WAYLAND","1");
+        let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;sh.drawn=Drawn::App;
+        let mut pixels=vec![0;sh.w as usize*sh.h as usize];
+        let (w,h)=(sh.w as usize,sh.h as usize);
+        // a bar-only repaint always follows a full desktop frame (it is what sets desk_drawn)
+        sh.draw(&mut Surface{w,h,stride:w,px:&mut pixels,y0:0},0.);
+        let band=sh.desktop_bar_height().min(h);
+        let mut expected=pixels.clone();
+        sh.draw_desktop_background(&mut Surface{w,h,stride:w,px:&mut expected,y0:0}.rows(0,band));
+        sh.bar_only=true;
+        let damage=sh.draw(&mut Surface{w,h,stride:w,px:&mut pixels,y0:0},1000.);
+        assert!(!damage.is_all());assert!(damage.pixels()<=w*band,"nothing below the bar is repainted");
+        assert!(pixels[..w*band]==expected[..w*band],"the bar's rows equal a desktop repaint of them");
+        if let Some(v)=saved {std::env::set_var("SPRINGBOARD_WAYLAND",v)} else {std::env::remove_var("SPRINGBOARD_WAYLAND")};
+    }
+
     #[cfg(feature = "desktop-wayland")]
     #[test]
     fn review_performance_overlay_repaints_only_its_desktop_band() {
