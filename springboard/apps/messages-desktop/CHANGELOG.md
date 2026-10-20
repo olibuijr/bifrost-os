@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.2 — 2026-10-20
+
+- The search field has its own row under the window buttons instead of sitting beneath them.
+- "Loading saved accounts..." ends as soon as the saved accounts are known, and progress text (Loading, Signing in, Sending) is grey; only a real problem is red.
+
 ## 0.7.1
 
 - BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.

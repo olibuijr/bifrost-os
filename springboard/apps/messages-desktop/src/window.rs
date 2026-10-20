@@ -412,19 +412,23 @@ impl MessagesWindow {
     pub fn service_reply(&mut self, ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
         let Some(pending) = self.pending.remove(&request) else { return false };
         match pending {
-            Pending::Accounts => match passwords::decode_list(result) {
-                Some(rows) => match accounts::from_rows(&rows).into_iter().next() {
-                    Some(account) => {
-                        let request = passwords::fill(ctx, &accounts::service(&account.homeserver), &account.user);
-                        self.pending.insert(request, Pending::Password(account));
+            Pending::Accounts => {
+                // the list has answered, so "Loading saved accounts..." is over whatever it held
+                self.model.status.clear();
+                match passwords::decode_list(result) {
+                    Some(rows) => match accounts::from_rows(&rows).into_iter().next() {
+                        Some(account) => {
+                            let request = passwords::fill(ctx, &accounts::service(&account.homeserver), &account.user);
+                            self.pending.insert(request, Pending::Password(account));
+                        }
+                        None => self.model.sign_in = Some(SignIn::default()),
+                    },
+                    None => {
+                        self.model.status = "Passwords could not list the saved accounts".into();
+                        self.model.sign_in = Some(SignIn::default());
                     }
-                    None => self.model.sign_in = Some(SignIn::default()),
-                },
-                None => {
-                    self.model.status = "Passwords could not list the saved accounts".into();
-                    self.model.sign_in = Some(SignIn::default());
                 }
-            },
+            }
             Pending::Password(account) => match passwords::decode_password(result) {
                 Ok(password) => self.start_sign_in(ctx, account.homeserver, account.user, password, false),
                 Err(e) => {

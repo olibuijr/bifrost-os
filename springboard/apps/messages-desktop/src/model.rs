@@ -561,6 +561,12 @@ impl Messages {
         !self.user_id.is_empty()
     }
 
+    /// True when the status line says something is under way ("Loading saved accounts...", "Sending..."), not that
+    /// something went wrong: the header shows progress in the secondary colour, and only a problem in red.
+    pub fn status_is_progress(&self) -> bool {
+        self.status.ends_with("...") && !self.status.contains(':')
+    }
+
     pub fn selected_room(&self) -> Option<&Room> {
         let id = self.selected.as_deref()?;
         self.rooms.iter().find(|r| r.id == id)
@@ -1068,6 +1074,19 @@ mod tests {
 
     fn sync(rooms: Vec<RoomUpdate>) -> Sync {
         Sync { next_batch: "n".into(), rooms, ..Sync::default() }
+    }
+
+    #[test]
+    fn progress_is_told_from_a_problem_by_its_status_line() {
+        let mut m = Messages::default();
+        for line in ["Loading saved accounts...", "Signing in...", "Sending..."] {
+            m.status = line.into();
+            assert!(m.status_is_progress(), "{line}");
+        }
+        for line in ["", "Sync problem: timed out...", "Not sent: no network", "Passwords could not list the saved accounts"] {
+            m.status = line.into();
+            assert!(!m.status_is_progress(), "{line}");
+        }
     }
 
     fn signed_in() -> Messages {
