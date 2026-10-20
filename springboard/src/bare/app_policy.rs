@@ -117,7 +117,7 @@ pub const SYSTEM_MONITOR_ENTITLEMENT: &str = "system-monitor";
 
 /// First-party app identities allowed to declare capture device permissions.
 pub const CAMERA_APP_ID: &str = "is.olibuijr.photobooth.desktop";
-pub const SCREEN_APP_ID: &str = "is.olibuijr.colormeter.desktop";
+pub const SCREEN_APP_ID: &str = crate::shell::services::display_services::SCREEN_CAPTURE_APP_ID;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Policy {
@@ -218,6 +218,11 @@ impl Policy {
                 "audio" => p.audio = true,
                 "camera" if id == CAMERA_APP_ID => p.camera = true,
                 "screen" if id == SCREEN_APP_ID => p.screen = true,
+                // Older store packages (the Viewer before 0.11.10) still declare `screen` to use the screenshot
+                // service. The shell takes pictures itself now and grants capture to no other app, so the entry is
+                // ignored and the app still starts.
+                "screen" => bifrost_core::log::shell_logger("apphost")
+                    .notice(format!("{id}: the screen permission is ignored (screenshots go through the shell)")),
                 "notifications" => p.notifications = true,
                 "documents" => p.documents = true,
                 "keychain" => p.keychain = true,
@@ -678,8 +683,10 @@ mod tests {
     fn isolation_permissions_fail_closed() {
         assert!(Policy::from_permissions("example", &["system-update".into()]).is_err());
         assert!(Policy::from_permissions("example", &["camera".into()]).is_err());
-        assert!(Policy::from_permissions("example", &["screen".into()]).is_err());
-        assert!(Policy::from_permissions(CAMERA_APP_ID, &["screen".into()]).is_err());
+        // a legacy `screen` entry no longer bricks the app, and it grants nothing
+        let legacy = Policy::from_permissions("example", &["storage".into(), "screen".into()]).unwrap();
+        assert!(legacy.storage && !legacy.screen && !legacy.holds("screen"));
+        assert!(!Policy::from_permissions(CAMERA_APP_ID, &["screen".into()]).unwrap().screen);
         assert!(Policy::from_permissions(SCREEN_APP_ID, &["camera".into()]).is_err());
         let camera = Policy::from_permissions(CAMERA_APP_ID, &["camera".into()]).unwrap();
         assert!(camera.camera && !camera.screen);

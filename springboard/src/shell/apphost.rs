@@ -1728,7 +1728,8 @@ impl Shell {
             }
             Err(e) => {
                 bifrost_core::log::shell_logger("apphost").error(format!("cannot start {}: {e}", app.manifest.id));
-                self.launch_failed(slot);
+                // the person is told which app and why (a package that asks for a permission this system does not offer)
+                self.launch_failed_because(slot, launch_failure_reason(&e));
                 // never leave an empty (black) window behind a launch that failed
                 #[cfg(feature = "desktop-wayland")]
                 self.desk_close_app(AppId::External(slot as u8));
@@ -1739,9 +1740,14 @@ impl Shell {
     /// An installed app did not start (the spawn failed, or it exited before saying hello): the user gets an alert
     /// from the app, and the app's Dock launch bounce stops instead of running out its timeout.
     pub(super) fn launch_failed(&mut self, slot: usize) {
+        self.launch_failed_because(slot, None);
+    }
+
+    /// [`Shell::launch_failed`] with the reason, when the shell knows it (see [`launch_failure_reason`]).
+    pub(super) fn launch_failed_because(&mut self, slot: usize, reason: Option<String>) {
         let registered = installed();
         let Some(app) = registered.get(slot) else { return };
-        let (title, body) = launch_failure_text(&app.manifest.name);
+        let (title, body) = launch_failure_text_for(&app.manifest.name, reason.as_deref());
         let time = self.notify.now();
         self.notify(super::notify::Notification::new(AppId::External(slot as u8), title, body, time));
         if let Some(k) = super::apps().iter().position(|a| a.id == AppId::External(slot as u8)) {
@@ -2848,9 +2854,40 @@ mod registry_update_tests {
 
 /// The alert title and body for an app that did not start, pure: an empty name reads as "The app".
 pub fn launch_failure_text(name: &str) -> (String, String) {
+    launch_failure_text_for(name, None)
+}
+
+/// [`launch_failure_text`] with the reason the shell refused the start, when it has one: the body then says why
+/// instead of asking for another try (which would fail the same way).
+pub fn launch_failure_text_for(name: &str, reason: Option<&str>) -> (String, String) {
     let name = name.trim();
     let name = if name.is_empty() { "The app" } else { name };
-    (format!("{name} could not be opened"), "It stopped before it finished starting. Try opening it again.".to_string())
+    let body = match reason.map(str::trim).filter(|r| !r.is_empty()) {
+        Some(reason) => reason.to_string(),
+        None => "It stopped before it finished starting. Try opening it again.".to_string(),
+    };
+    (format!("{name} could not be opened"), body)
+}
+
+/// Why the shell refused to start an app, in words for the person, for the one refusal that is the package's doing:
+/// its manifest names a permission this system does not offer. Any other error gets the generic text.
+#[cfg(feature = "desktop-wayland")]
+fn launch_failure_reason(e: &std::io::Error) -> Option<String> {
+    match crate::bare::app_policy::PolicyError::of(e) {
+        Some(crate::bare::app_policy::PolicyError::UnsupportedPermission(name)) => Some(unsupported_permission_text(name)),
+        _ => None,
+    }
+}
+
+#[cfg(not(feature = "desktop-wayland"))]
+fn launch_failure_reason(_e: &std::io::Error) -> Option<String> {
+    None
+}
+
+/// The body of the alert for a package that asks for a permission this system does not offer.
+#[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+fn unsupported_permission_text(permission: &str) -> String {
+    format!("It asks for a permission this system does not offer (\"{permission}\"). Update the app from the App Store.")
 }
 
 /// A dock badge as shown: control characters removed, trimmed, at most four characters
@@ -2880,6 +2917,15 @@ mod badge_tests {
         assert_eq!(title, "Notes could not be opened");
         assert!(body.contains("Try opening it again"));
         assert_eq!(crate::shell::apphost::launch_failure_text("").0, "The app could not be opened");
+    }
+
+    #[test]
+    fn a_refused_permission_is_named_in_the_alert() {
+        let body = crate::shell::apphost::unsupported_permission_text("teleport");
+        let (title, shown) = crate::shell::apphost::launch_failure_text_for("Notes", Some(&body));
+        assert_eq!(title, "Notes could not be opened");
+        assert!(shown.contains("\"teleport\"") && !shown.contains("Try opening it again"));
+        assert!(crate::shell::apphost::launch_failure_text_for("Notes", Some("  ")).1.contains("Try opening it again"));
     }
 }
 
