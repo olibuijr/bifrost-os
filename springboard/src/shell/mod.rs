@@ -165,6 +165,8 @@ pub mod screenshot;
 pub mod screenrec;
 /// The screenshot toolbar's capture session: Shift-Cmd-5 and `screencapture -i -w` (see `capture.rs`).
 pub mod capture;
+/// Where a screenshot comes from (the window server's composed screen), where it is saved, and its overlays' surfaces.
+mod capture_flow;
 pub mod screentime;
 pub mod login;
 pub mod passcode;
@@ -751,6 +753,13 @@ pub struct Shell {
     shot_tap: bool,
     /// The screenshot toolbar's capture session, open while it is on screen.
     capture: Option<capture::Session>,
+    /// A capture waiting for the window server's composed screen (`capture_flow`).
+    grab: Option<capture_flow::Grab>,
+    /// The capture session and the thumbnail as surfaces of their own above the windows (the desktop; `capture_flow`).
+    capture_layer: Option<capture_flow::Layer>,
+    shot_layer: Option<capture_flow::Layer>,
+    /// A folder that pictures go to instead of the account's Desktop (the tests set it).
+    shot_dir: Option<PathBuf>,
     /// The pictures saved since the screenshot service last looked, in order (`services/screenshot.rs`).
     pub(crate) shot_saved: Vec<PathBuf>,
     /// the screen recording in progress (the toolbar's Record buttons, `rec start`, `screencapture -v`)
@@ -1168,6 +1177,10 @@ impl Shell {
             markup_load: None,
             shot_tap: false,
             capture: None,
+            grab: None,
+            capture_layer: None,
+            shot_layer: None,
+            shot_dir: None,
             shot_saved: Vec::new(),
             rec: None,
             capture_prefs: capture::Prefs::default(),
@@ -2252,7 +2265,10 @@ impl Shell {
         }
         // a running countdown redraws once a second and captures when it ends
         if let Some((_, cd)) = self.capture.as_ref().and_then(|c| c.pending) {
-            let w = if cd.done(t) { t } else { (t + 1.0).min(cd.end()) };
+            let w = if cd.done(t) { t } else { (t + 1000.0).min(cd.end()) };
+            due.add(Some(w));
+        }
+        if let Some(w) = self.grab_wake(t) {
             due.add(Some(w));
         }
         if self.screen_on && self.screen == Screen::App(AppId::Files) {
@@ -3854,6 +3870,8 @@ impl Shell {
         if self.capture.as_ref().is_some_and(|c| c.due(t)) {
             self.finish_capture(t);
         }
+        // a capture waiting for the window server's picture
+        self.grab_tick(t);
         if self.capture.is_some() {
             self.dirty = true;
         }
@@ -4372,14 +4390,35 @@ impl Shell {
         if self.captions_drawn {
             self.captions.draw(s, &self.ui, self.w, self.h, t);
         }
+        // On the desktop the thumbnail and the capture session are surfaces of their own above the windows
+        // (`desktop_chrome_frames`, ids 9 and 8): drawn into this frame, which sits under the windows, they showed through
+        // only where nothing covered them and were never cleared again. Elsewhere they are drawn over the frame.
+        let on_desk = self.overlays_on_desk();
         if let Some(o) = &self.shot {
             damage.all();
-            o.draw(s, t);
+            if on_desk {
+                self.shot_layer = capture_flow::shot_layer(o, t);
+            } else {
+                o.draw(s, t);
+            }
+        } else if self.shot_layer.take().is_some() {
+            // its surface goes away with the next export: a full frame makes sure there is one
+            damage.all();
+        }
+        let dock = self.capture_dock();
+        if let Some(c) = self.capture.as_mut() {
+            c.dock = dock;
         }
         if let Some(c) = &self.capture {
             damage.all();
             let frames = self.capture_frames();
-            c.draw(s, &self.ui, &frames, self.w as i32, self.h as i32, t);
+            if on_desk {
+                self.capture_layer = capture_flow::capture_layer(c, &self.ui, &frames, self.w as i32, self.h as i32, t);
+            } else {
+                c.draw(s, &self.ui, &frames, self.w as i32, self.h as i32, t);
+            }
+        } else if self.capture_layer.take().is_some() {
+            damage.all();
         }
         if let Some(m) = &self.markup {
             damage.all();
@@ -5517,48 +5556,7 @@ impl Shell {
 
     fn take_screenshot(&mut self, t: f64) {
         let whole = crate::layout::Rect { x: 0, y: 0, w: self.w as i32, h: self.h as i32 };
-        self.take_capture(whole, None, t);
-    }
-
-    /// Captures `region` of the screen (the whole screen when it is all of it), draws the pointer into it when `pointer`
-    /// names where it is, and saves it with the capture animation. The frame is drawn without the toolbar or the old
-    /// thumbnail.
-    fn take_capture(&mut self, region: crate::layout::Rect, pointer: Option<(f32, f32)>, t: f64) {
-        self.shot = None;
-        // the toolbar is set aside while the frame is drawn, so it stays out of the picture
-        let open = self.capture.take();
-        let full = self.capture_frame(t);
-        self.capture = open;
-        let whole = region.x == 0 && region.y == 0 && region.w as usize == full.w && region.h as usize == full.h;
-        let mut img = if whole { full } else { full.crop(region.x as usize, region.y as usize, region.w as usize, region.h as usize) };
-        if let Some((x, y)) = pointer {
-            capture::draw_pointer(&mut img, x - region.x as f32, y - region.y as f32, self.ui.s);
-        }
-        self.save_capture(img, t);
-    }
-
-    /// Saves a captured picture to Photos and starts the thumbnail's animation over it.
-    fn save_capture(&mut self, img: Image, t: f64) {
-        let (unix, offset) = self.wall_now(t);
-        let name = screenshot::file_name(&photos::library::civil(unix, offset));
-        let dir = self.photo_dirs.first().cloned().unwrap_or_else(|| self.data_dir.join("Pictures"));
-        let bytes = screenshot::encode(&img);
-        let path = dir.join(&name);
-        self.shot_saved.push(path.clone());
-        let photo = photos::library::Photo { path: path.clone(), mtime: unix, size: bytes.len() as u64 };
-        crate::bare::sys::spawn_named("photo-save", move || {
-            crate::gfx::affinity::background_thread();
-            if let Err(e) = screenshot::write(&dir, &name, &bytes, unix) {
-                eprintln!("springboard: screenshot: {e}");
-            }
-        });
-        if self.photos.is_none() {
-            self.ensure_photos();
-        }
-        if let Some(p) = &mut self.photos {
-            p.add_photo(&self.ui, photo, img.clone());
-        }
-        self.shot = Some(Overlay::new(img, path, self.ui.s, t));
+        self.begin_capture(whole, None, None, t);
     }
 
     /// The windows on the desk that a window capture can pick, back to front, as layout rectangles.
@@ -5582,8 +5580,7 @@ impl Shell {
         };
         let mut session = capture::Session::with_prefs(self.capture_prefs);
         session.pick = pick;
-        self.capture = Some(session);
-        self.dirty = true;
+        self.capture_open(session);
         Ok(())
     }
 
@@ -5592,7 +5589,10 @@ impl Shell {
     fn capture_touch(&mut self, ev: Event, t: f64) -> Vec<Effect> {
         let (w, h, s) = (self.w as i32, self.h as i32, self.ui.s);
         let frames = self.capture_frames();
+        // the toolbar keeps clear of the Dock as it is now (it can move or hide while the session is open)
+        let dock = self.capture_dock();
         let Some(sess) = self.capture.as_mut() else { return vec![] };
+        sess.dock = dock;
         if sess.pending.is_some() {
             // the countdown runs; the screen waits for it
             return vec![];
@@ -5653,7 +5653,7 @@ impl Shell {
             return;
         }
         let pointer = sess.prefs.pointer.then_some(sess.at);
-        self.take_capture(region, pointer, t);
+        self.begin_capture(region, pointer, sess.window, t);
     }
 
     /// A touch on the screenshot thumbnail; true when it was consumed. A tap opens the capture in Photos (not from the

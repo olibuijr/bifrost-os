@@ -951,6 +951,13 @@ impl Shell {
             let mut image=Image{w,h,px:data};image.apply_mask(&mask);
             frames.push(crate::bare::wayland::ChromeFrame{id:7,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px,input:None});
         }
+        // the screenshot toolbar's session (id 8, the whole screen) and the capture thumbnail (id 9): overlay surfaces above
+        // the windows, drawn on their own ground so nothing of them is left behind (E2E SC3)
+        for (id,layer) in [(8,&self.capture_layer),(9,&self.shot_layer)] {
+            if let Some(l)=layer {
+                if l.image.w>0&&l.image.h>0 {frames.push(crate::bare::wayland::ChromeFrame{id,x:l.x,y:l.y,width:l.image.w,height:l.image.h,pixels:l.image.px.clone(),input:l.input});}
+            }
+        }
         frames
     }
 }

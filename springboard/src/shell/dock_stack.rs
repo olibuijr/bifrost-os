@@ -21,10 +21,19 @@ const MAX_SCAN: usize = 2048;
 /// The account's home folder: the installed account's home, else `$HOME`, else `/root` (the shell runs as root).
 pub(super) fn home_dir() -> PathBuf {
     #[cfg(feature = "desktop-wayland")]
-    if let Ok(account) = crate::bare::app_policy::Account::installed() {
-        return account.home;
-    }
-    std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| "/root".into())
+    let account = crate::bare::app_policy::Account::installed().ok().map(|a| a.home);
+    #[cfg(not(feature = "desktop-wayland"))]
+    let account = None;
+    pick_home(account, std::env::var_os("HOME").map(PathBuf::from))
+}
+
+/// The home folder from its sources, best first: the installed account's, else `$HOME` when it is set and not empty,
+/// else `/root`. A shell without `$HOME` (the session service does not set it) still finds the account's folders.
+pub(super) fn pick_home(account: Option<PathBuf>, env: Option<PathBuf>) -> PathBuf {
+    account
+        .filter(|p| !p.as_os_str().is_empty())
+        .or_else(|| env.filter(|p| !p.as_os_str().is_empty()))
+        .unwrap_or_else(|| "/root".into())
 }
 
 /// The account's Downloads folder.
@@ -93,6 +102,15 @@ pub(super) fn draw_stack(s: &mut Surface, r: &Rect, files: &[String]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_home_comes_from_the_account_before_the_environment() {
+        let p = |s: &str| Some(PathBuf::from(s));
+        assert_eq!(pick_home(p("/home/ola"), p("/root")), PathBuf::from("/home/ola"), "the account wins");
+        assert_eq!(pick_home(None, p("/home/x")), PathBuf::from("/home/x"));
+        assert_eq!(pick_home(None, None), PathBuf::from("/root"), "no HOME at all is not the filesystem root");
+        assert_eq!(pick_home(p(""), p("")), PathBuf::from("/root"), "empty values count as unset");
+    }
 
     #[test]
     fn the_stack_entry_is_not_a_minimized_window() {
