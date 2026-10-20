@@ -2180,19 +2180,15 @@ impl About {
     fn read(dir: &str) -> Self {
         let first = |path: &str| std::fs::read_to_string(path).map(|s| s.trim_end_matches('\0').trim().to_string()).unwrap_or_default();
         let hostname = first("/proc/sys/kernel/hostname");
-        let cores = std::fs::read_to_string("/proc/cpuinfo").map(|c| c.lines().filter(|l| l.starts_with("processor")).count()).unwrap_or(0);
+        // physical cores, not the logical processors: the i7-6700T is 4 cores and 8 threads
+        let cores = std::fs::read_to_string("/proc/cpuinfo").map(|c| springboard::shell::device_name::physical_cores(&c)).unwrap_or(0);
         let soc = std::fs::read_to_string("/proc/cpuinfo").ok().and_then(|c| c.lines().find_map(|l| l.strip_prefix("model name").and_then(|r| r.split_once(':')).map(|(_, v)| v.trim().to_string()))).unwrap_or_default();
         // the processor as a person says it, not the firmware's string with its marks and clock speed
         let soc = springboard::shell::device_name::chip_name(&soc);
         let serial = [first("/sys/class/dmi/id/product_serial"), first("/sys/firmware/devicetree/base/serial-number")].into_iter().find(|s| !s.is_empty()).unwrap_or_default();
         About {
             name: if hostname.is_empty() || hostname == "localhost" { "BifrOSt PC".into() } else { hostname },
-            cpu: match (soc.is_empty(), cores) {
-                (true, 0) => String::new(),
-                (true, n) => format!("{n} cores"),
-                (false, 0) => soc,
-                (false, n) => format!("{soc}, {n} cores"),
-            },
+            cpu: springboard::shell::device_name::chip_line(&soc, cores),
             serial,
             media: [count_files(&format!("{dir}/Music")), count_files(&format!("{dir}/Videos")), count_files(&format!("{dir}/Pictures"))],
         }

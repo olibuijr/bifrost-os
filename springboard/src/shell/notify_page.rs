@@ -254,7 +254,7 @@ pub fn app_spec(p: &NotifyPrefs, name: &str) -> Spec {
         groups.push(
             Group::new(vec![
                 Item::new("Lock Screen").check(n.lock_screen, f(AppField::LockScreen)),
-                Item::new("Notification Centre").check(n.center, f(AppField::Center)),
+                Item::new("Notification Center").check(n.center, f(AppField::Center)),
             ])
             .header("ALERTS"),
         );

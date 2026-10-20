@@ -102,7 +102,7 @@ pub fn arrange_lines(full: bool, others: bool) -> Vec<ArrangeLine> {
     }
     let mut v = vec![
         Item("Fill", Arrange::Tile(Tile::Fill)),
-        Item("Centre", Arrange::Tile(Tile::Center)),
+        Item("Center", Arrange::Tile(Tile::Center)),
         Item("Return to Previous Size", Arrange::Previous),
         Separator,
         Header("Move & Resize"),

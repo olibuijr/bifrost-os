@@ -113,6 +113,42 @@ pub fn chip_name(raw: &str) -> String {
     words.join(" ")
 }
 
+/// The physical cores in a `/proc/cpuinfo` text: the unique (physical id, core id) pairs, so the two hardware threads of
+/// a hyper-threaded core count once. A processor list without core ids (the ARM layout, where every processor is a
+/// core) counts its processors. 0 when the text lists none.
+pub fn physical_cores(cpuinfo: &str) -> usize {
+    let mut cores: Vec<(&str, &str)> = Vec::new();
+    let mut processors = 0;
+    for block in cpuinfo.split("\n\n") {
+        let field = |name: &str| block.lines().find_map(|l| l.split_once(':').filter(|(k, _)| k.trim() == name).map(|(_, v)| v.trim()));
+        if field("processor").is_some() {
+            processors += 1;
+        }
+        if let Some(core) = field("core id") {
+            let pair = (field("physical id").unwrap_or("0"), core);
+            if !cores.contains(&pair) {
+                cores.push(pair);
+            }
+        }
+    }
+    if cores.is_empty() { processors } else { cores.len() }
+}
+
+/// About's processor line: the chip's name and its core count ("Intel Core i7-6700T, 4 cores"). Either part is left out
+/// when it is unknown (`soc` empty, `cores` 0).
+pub fn chip_line(soc: &str, cores: usize) -> String {
+    let count = match cores {
+        0 => String::new(),
+        1 => "1 core".to_string(),
+        n => format!("{n} cores"),
+    };
+    match (soc.is_empty(), count.is_empty()) {
+        (_, true) => soc.to_string(),
+        (true, false) => count,
+        (false, false) => format!("{soc}, {count}"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -185,5 +221,40 @@ mod tests {
         assert_eq!(d.board_name, "", "a missing file is empty");
         assert_eq!(model_name(&d).as_deref(), Some("ThinkCentre M900"));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The i7-6700T of the Midget lab machine: four cores, two hardware threads each (eight processors).
+    fn skylake_cpuinfo() -> String {
+        (0..8).map(|n| format!("processor\t: {n}\nvendor_id\t: GenuineIntel\nmodel name\t: Intel(R) Core(TM) i7-6700T CPU @ 2.80GHz\nphysical id\t: 0\nsiblings\t: 8\ncore id\t\t: {}\ncpu cores\t: 4\n\n", n % 4)).collect()
+    }
+
+    #[test]
+    fn hardware_threads_are_not_counted_as_cores() {
+        assert_eq!(physical_cores(&skylake_cpuinfo()), 4, "8 processors, 4 cores");
+    }
+
+    #[test]
+    fn cores_are_unique_per_socket_and_core_id() {
+        let two_sockets: String = (0..4).map(|n| format!("processor\t: {n}\nphysical id\t: {}\ncore id\t\t: {}\n\n", n / 2, n % 2)).collect();
+        assert_eq!(physical_cores(&two_sockets), 4, "core 0 of each socket is its own core");
+        let no_socket: String = (0..4).map(|n| format!("processor\t: {n}\ncore id\t\t: {}\n\n", n % 2)).collect();
+        assert_eq!(physical_cores(&no_socket), 2, "a missing physical id is socket 0");
+    }
+
+    #[test]
+    fn a_layout_without_core_ids_counts_processors_and_nothing_counts_zero() {
+        let arm: String = (0..8).map(|n| format!("processor\t: {n}\nBogoMIPS\t: 38.40\n\n")).collect();
+        assert_eq!(physical_cores(&arm), 8);
+        assert_eq!(physical_cores(""), 0);
+        assert_eq!(physical_cores("model name\t: Mystery\n"), 0);
+    }
+
+    #[test]
+    fn the_chip_line_names_the_chip_and_the_cores_it_knows() {
+        assert_eq!(chip_line("Intel Core i7-6700T", 4), "Intel Core i7-6700T, 4 cores");
+        assert_eq!(chip_line("Intel Core i7-6700T", 0), "Intel Core i7-6700T", "no count when unknown");
+        assert_eq!(chip_line("", 4), "4 cores");
+        assert_eq!(chip_line("Tiny", 1), "Tiny, 1 core");
+        assert_eq!(chip_line("", 0), "");
     }
 }

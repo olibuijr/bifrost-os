@@ -373,6 +373,8 @@ impl Pick {
             Pick::MouseSecondary(_) => Pick::MouseSecondary(k),
             Pick::TrackpadSecondary(_) => Pick::TrackpadSecondary(k),
             Pick::GameMode(_) => Pick::GameMode(k),
+            Pick::SystemSleep(_) => Pick::SystemSleep(k),
+            Pick::PowerMode(_) => Pick::PowerMode(k),
             Pick::DockPosition(_) => Pick::DockPosition(k),
             Pick::MinimizeEffect(_) => Pick::MinimizeEffect(k),
             Pick::ScreenSaverModule(_) => Pick::ScreenSaverModule(k),
@@ -1098,7 +1100,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
             "Focus",
             false,
             vec![Group::new(vec![Item::new("Do Not Disturb").icon(Icon::Focus).switch(o.dnd, Action::Toggle(Toggle::Dnd))])
-                .footer("Silences notification banners and keeps the screen asleep. Notifications remain in Notification Centre and on app badges. Alarms and timers still ring.")],
+                .footer("Silences notification banners and keeps the screen asleep. Notifications remain in Notification Center and on app badges. Alarms and timers still ring.")],
         ),
         PageId::General => {
             page(
@@ -1456,7 +1458,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
         PageId::Energy => page(
             "Energy",
             false,
-            vec![Group::new(SYSTEM_SLEEP.iter().enumerate().map(|(i, (l, mi))| Item::new(*l).check(*mi == o.system_sleep_min, Action::Pick(Pick::SystemSleep(i)))).collect())
+            vec![Group::new(vec![system_sleep_row(o)])
                 .header("PUT THE COMPUTER TO SLEEP WHEN THE DISPLAY IS OFF")
                 .footer("Turning the display off or locking the screen never sleeps the computer by itself; this timeout starts once the display is off. The change takes effect at once.")]
                 .into_iter()
@@ -1467,8 +1469,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                     vec![
                         Group::new(vec![Item::new("Low Power Mode").switch(o.low_power, Action::Toggle(Toggle::LowPower))])
                             .footer("Caps the brightness at 50%, locks the screen after 30 seconds and limits animations to 30 frames a second until you turn it off."),
-                        Group::new(POWER_MODES.iter().enumerate().map(|(i, (l, p))| Item::new(*l).check(*p == o.power_profile, Action::Pick(Pick::PowerMode(i)))).collect())
-                            .header("POWER MODE")
+                        Group::new(vec![power_mode_row(o)])
                             .footer(&format!(
                                 "In effect: {}. Low Power Mode caps the clock speeds to save energy.",
                                 if info.power_profile.is_empty() { "Balanced" } else { &info.power_profile }
@@ -1498,8 +1499,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                 Group::new(vec![Item::new("Battery Percentage").switch(o.battery_percent, Action::Toggle(Toggle::BatteryPercent))]),
                 Group::new(vec![Item::new("Low Power Mode").switch(o.low_power, Action::Toggle(Toggle::LowPower))])
                     .footer("Caps the brightness at 50%, locks the screen after 30 seconds and limits animations to 30 frames a second until you turn it off."),
-                Group::new(POWER_MODES.iter().enumerate().map(|(i, (l, p))| Item::new(*l).check(*p == o.power_profile, Action::Pick(Pick::PowerMode(i)))).collect())
-                    .header("POWER MODE")
+                Group::new(vec![power_mode_row(o)])
                     .footer(&format!(
                         "In effect: {}. Automatic runs Performance while charging and Battery Saver at 30% or less; Low Power Mode always means Battery Saver, which caps the clock speeds to save energy.",
                         if info.power_profile.is_empty() { "Balanced" } else { &info.power_profile }
@@ -1717,6 +1717,18 @@ pub fn shortcut_label(features: &[Feature]) -> String {
         [one] => one.name().into(),
         many => format!("{} Features", many.len()),
     }
+}
+
+/// Energy: how long the display stays off before the computer sleeps, one pop-up row over `SYSTEM_SLEEP`.
+fn system_sleep_row(o: &Options) -> Item {
+    let now = SYSTEM_SLEEP.iter().position(|(_, m)| *m == o.system_sleep_min).unwrap_or(SYSTEM_SLEEP.len() - 1);
+    Item::new("Sleep After").popup(SYSTEM_SLEEP.iter().map(|(l, _)| l.to_string()).collect(), now, Action::Pick(Pick::SystemSleep(now)))
+}
+
+/// Energy and Battery: Automatic, Performance, Balanced or Battery Saver, one pop-up row over `POWER_MODES`.
+fn power_mode_row(o: &Options) -> Item {
+    let now = POWER_MODES.iter().position(|(_, p)| *p == o.power_profile).unwrap_or(0);
+    Item::new("Power Mode").popup(POWER_MODES.iter().map(|(l, _)| l.to_string()).collect(), now, Action::Pick(Pick::PowerMode(now)))
 }
 
 /// The setting a pop-up row sends for its `choice` index: the row's action with the choice in place of its own.
@@ -2434,12 +2446,15 @@ mod tests {
         assert!(root_labels(&desktop_info(true, false), Desktop).iter().any(|l| l == "Battery"), "a desktop with a battery keeps it");
         assert!(!root_labels(&desktop_info(true, false), Desktop).iter().any(|l| l == "Energy"));
         assert!(has_battery(&Info::default()), "a machine that is not a desktop always has the pane");
-        // the power modes moved with it: Energy carries Low Power Mode and the POWER MODE rows
+        // the power modes moved with it: Energy carries Low Power Mode and the Power Mode pop-up
         let (info, opts) = (desktop_info(false, false), Options::default());
         let energy = spec(PageId::Energy, &model(&info, &opts));
         let items: Vec<&str> = energy.groups.iter().flat_map(|g| g.items.iter().map(|i| i.label.as_str())).collect();
         assert!(items.contains(&"Low Power Mode"), "Energy has Low Power Mode: {items:?}");
-        assert!(["Automatic", "Performance", "Balanced", "Battery Saver"].iter().all(|l| items.contains(l)), "Energy has the power modes: {items:?}");
+        let mode = popup_row(&energy, "Power Mode");
+        assert_eq!(mode.accessory, Accessory::Popup, "the power modes are one pop-up row");
+        assert_eq!(mode.popup.as_ref().map(|p| p.choices.clone()), Some(vec!["Automatic".to_string(), "Performance".into(), "Balanced".into(), "Battery Saver".into()]));
+        assert_eq!(chosen(&mode.action, 3), Some(Action::Pick(Pick::PowerMode(3))), "the menu's choice replaces the index");
         // a computer with a battery keeps them in Battery, not in Energy
         let with = spec(PageId::Energy, &model(&desktop_info(true, false), &opts));
         assert!(!with.groups.iter().any(|g| g.items.iter().any(|i| i.label == "Low Power Mode")));
@@ -2852,9 +2867,12 @@ mod tests {
         assert_eq!(d.groups[3].items[1].accessory, Accessory::Switch(true));
         let e_opts = Options { system_sleep_min: 15, ..Options::default() };
         let e = spec(PageId::Energy, &Model { opts: &e_opts, ..model(&info, &opts) });
-        assert_eq!(e.groups[0].items.len(), SYSTEM_SLEEP.len());
-        assert_eq!(e.groups[0].items[3].accessory, Accessory::Check(true));
-        assert_eq!(e.groups[0].items[6].accessory, Accessory::Check(false));
+        assert_eq!(e.groups[0].items.len(), 1, "the sleep time is one pop-up row");
+        assert_eq!(e.groups[0].items[0].accessory, Accessory::Popup);
+        let sleep = e.groups[0].items[0].popup.as_ref().expect("the sleep time choices");
+        assert_eq!(sleep.choices.len(), SYSTEM_SLEEP.len());
+        assert_eq!(sleep.selected, 3, "15 minutes");
+        assert_eq!(chosen(&e.groups[0].items[0].action, 6), Some(Action::Pick(Pick::SystemSleep(6))));
         let saver_opts = Options { screensaver_module: 1, screensaver_minutes: 5, ..Options::default() };
         let ss = spec(PageId::ScreenSaver, &Model { opts: &saver_opts, ..model(&info, &opts) });
         // Colours has its own Speed choice group between Preview and Start After
