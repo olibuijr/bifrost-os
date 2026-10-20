@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.5
+
+- Fix: the toolbar starts after the traffic lights instead of under them (the SDK toolbar now keeps clear of the window controls).
+
 ## 0.1.4 — 2026-10-14
 
 - Mark the fixed test-window dimensions as a geometry fixture; production geometry is configured by the host.

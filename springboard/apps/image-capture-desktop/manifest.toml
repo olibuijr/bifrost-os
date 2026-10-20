@@ -1,6 +1,6 @@
 id = "is.olibuijr.imagecapture.desktop"
 name = "Image Capture"
-version = "0.1.1"
+version = "0.1.2"
 exec = "bifrost-image-capture"
 icon = "icon.png"
 min_shell = "0.6.5"

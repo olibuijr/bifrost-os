@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.8
+
+- The toolbar start comes from the SDK (`widgets::toolbar_lead_pt`) instead of a local sum.
+
 ## 0.7.7
 
 - Fix: the disks show. The app's sandbox has no `/sys`, so the sidebar was empty ("No disks were found."); it now asks

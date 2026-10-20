@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.4
+
+- Fix: the toolbar starts after the traffic lights instead of under them (the SDK toolbar now keeps clear of the window controls).
+
 ## 0.7.3
 
 - Fix: a printing service with no printers set up shows the empty list ("No printers") instead of "printing service refused the request (IPP status 0x0406)"; an empty job queue is an empty list too.

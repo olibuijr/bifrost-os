@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.11
+
+- Fix: with the sidebar hidden or no document open, the toolbar starts after the traffic lights instead of under them.
+
 ## 0.11.10
 
 - Fix: the Viewer starts again. It no longer declares the `screen` permission (the shell refuses it for every app but

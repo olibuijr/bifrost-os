@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.3
+
+- The toolbar is laid out in the pane's window position, so the SDK traffic-light inset leaves it where it is.
+
 ## 0.1.2
 
 - Added the SDK and design compliance test harness.

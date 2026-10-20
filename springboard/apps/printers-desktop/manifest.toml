@@ -1,6 +1,6 @@
 id = "is.olibuijr.printers.desktop"
 name = "Print Center"
-version = "0.7.3"
+version = "0.7.4"
 exec = "bifrost-printers"
 icon = "icon.png"
 min_shell = "0.6.5"

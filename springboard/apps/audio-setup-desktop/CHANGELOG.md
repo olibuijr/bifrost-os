@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.7
+
+- Fix: the toolbar starts after the traffic lights instead of under them (the SDK toolbar now keeps clear of the window controls).
+
 ## 0.1.6 — 2026-10-14
 
 - Include the 180 x 180 waveform app icon in the source package.
