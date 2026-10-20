@@ -12,10 +12,10 @@ use super::appgrid::AppGrid;
 use super::control_center::desk_glass;
 use bifrost_ui::material_request::ShellSurface;
 use super::desk::Metrics;
-use super::ui::{Weight, CARD_BG, FIELD_BG, LABEL, LABEL_2, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, SELECTION, TINT, WHITE};
+use super::ui::{Weight, CARD_BG, FIELD_BG, LABEL, LABEL_2, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, SELECTION, TINT, WHITE, WINDOW_FRAME_BLURRED};
 use super::window_shots::{self, Source};
 use super::{apps, AppId, Effect, Event, Shell};
-use crate::gfx::{rgba, Image, Surface};
+use crate::gfx::{pack, rgba, Image, Surface, View};
 use bifrost_render::motion::{self, Curve, Kind};
 use std::collections::{HashMap, HashSet};
 
@@ -235,6 +235,8 @@ pub(super) struct Overview {
     /// a desktop switch in flight: direction (+1 forward) and start time
     slide: Option<(i32, f64)>,
     sources: HashMap<TileKey, Image>,
+    /// the wallpaper reduced to a desktop thumbnail of the strip, by thumbnail size and the wallpaper it was made from
+    wall: Option<(WallKey, Image)>,
     scaled: HashMap<(TileKey, usize, usize), Image>,
     /// the captured windows of other clients, scaled to their tiles, by window, size and picture serial
     fscaled: HashMap<(u32, usize, usize, u32), Image>,
@@ -274,6 +276,37 @@ fn leave_focus(before: (Option<u32>, Option<AppId>), foreign: &[(u32, String)], 
         (_, Some(app)) if shown(app) => Focus::App(app),
         _ => Focus::Refocus,
     }
+}
+
+/// Thumbnail size, wallpaper width, height and address: what a cached desktop thumbnail was made from.
+type WallKey = (usize, usize, usize, usize, usize);
+
+/// The whole wallpaper reduced to `w` by `h` px (opaque), each pixel the mean of a 3 by 3 spread of source samples so
+/// fine detail does not shimmer. None when there is no wallpaper to reduce.
+fn wallpaper_thumb(wp: View, w: usize, h: usize) -> Option<Image> {
+    if w == 0 || h == 0 || wp.w == 0 || wp.h == 0 || wp.px.len() < wp.w * wp.h {
+        return None;
+    }
+    const N: usize = 3;
+    let at = |t: usize, n: usize, k: usize, src: usize| (((t * N + k) * src) / (n * N)).min(src - 1);
+    let mut px = Vec::with_capacity(w * h);
+    for ty in 0..h {
+        for tx in 0..w {
+            let (mut r, mut g, mut b) = (0u32, 0u32, 0u32);
+            for ky in 0..N {
+                let row = at(ty, h, ky, wp.h) * wp.w;
+                for kx in 0..N {
+                    let p = wp.px[row + at(tx, w, kx, wp.w)];
+                    r += p & 0xff;
+                    g += (p >> 8) & 0xff;
+                    b += (p >> 16) & 0xff;
+                }
+            }
+            let n = (N * N) as u32;
+            px.push(pack((r / n) as u8, (g / n) as u8, (b / n) as u8, 255));
+        }
+    }
+    Some(Image { w, h, px })
 }
 
 fn dur(kind: Kind) -> f32 {
@@ -447,6 +480,8 @@ impl Overview {
             w.minimized = true;
         }
         self.open = true;
+        // the wallpaper may have moved on (a live look) since the thumbnail was made
+        self.wall = None;
         self.start = t;
         self.closing = None;
         self.chosen = None;
@@ -716,6 +751,18 @@ impl Overview {
         self.scaled.get(&(app, w, h))
     }
 
+    /// Makes the desktop thumbnail of the strip, `thumb` px, from the wallpaper the desktop shows now; kept until the
+    /// size or the wallpaper changes.
+    fn ensure_wall(&mut self, sh: &Shell, thumb: (f32, f32)) {
+        let (w, h) = (thumb.0.round().max(1.0) as usize, thumb.1.round().max(1.0) as usize);
+        let wp = sh.wallpaper_frame();
+        let key = (w, h, wp.w, wp.h, wp.px.as_ptr() as usize);
+        if self.wall.as_ref().is_some_and(|(k, _)| *k == key) {
+            return;
+        }
+        self.wall = wallpaper_thumb(wp, w, h).map(|img| (key, img));
+    }
+
     /// Draws everything; true while something animates (the caller keeps the frames coming).
     fn draw(&mut self, sh: &Shell, s: &mut Surface, t: f64) -> bool {
         let mut animating = false;
@@ -748,15 +795,20 @@ impl Overview {
             (Some(d), Some(Target::Desk(i))) if d.moved => Some(i),
             _ => None,
         };
+        self.ensure_wall(sh, g.thumb);
         for (i, r) in rects.iter().enumerate() {
             let y = r.y + slide_y;
             let rad = ui.pt(8.0);
-            s.fill_rrect(r.x, y, r.w, r.h, rad, crate::gfx::scale(CARD_BG.now(), alpha));
+            // the desktop's picture: the wallpaper with each window's frame on it
+            match &self.wall {
+                Some((_, img)) => super::switcher::draw_scaled(s, img, crate::layout::Rect { x: r.x.round() as i32, y: y.round() as i32, w: img.w as i32, h: img.h as i32 }, rad, alpha),
+                None => s.fill_rrect(r.x, y, r.w, r.h, rad, crate::gfx::scale(CARD_BG.now(), alpha)),
+            }
             for a in self.spaces.windows_on(i, &wins) {
                 if let Some(w) = wins.iter().find(|w| w.app == a) {
                     let k = r.w / g.w.max(1.0);
                     let wr = FRect { x: r.x + w.r.x as f32 * k, y: y + w.r.y as f32 * k, w: (w.r.w as f32 * k).max(2.0), h: (w.r.h as f32 * k).max(2.0) };
-                    s.fill_rrect(wr.x, wr.y, wr.w.min(r.x + r.w - wr.x).max(1.0), wr.h.min(y + r.h - wr.y).max(1.0), ui.pt(1.5), crate::gfx::scale(FIELD_BG.now(), alpha));
+                    s.fill_rrect(wr.x, wr.y, wr.w.min(r.x + r.w - wr.x).max(1.0), wr.h.min(y + r.h - wr.y).max(1.0), ui.pt(1.5), crate::gfx::scale(WINDOW_FRAME_BLURRED.now(), alpha));
                 }
             }
             if i == cur {
@@ -1204,6 +1256,18 @@ impl Shell {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The desktop thumbnail is the wallpaper reduced, not a plate: each half keeps its colour, and no wallpaper gives none.
+    #[test]
+    fn the_desktop_thumbnail_is_the_wallpaper_reduced() {
+        let (red, blue) = (crate::gfx::pack(200, 0, 0, 255), crate::gfx::pack(0, 0, 200, 255));
+        let px: Vec<u32> = (0..8 * 4).map(|i| if i % 8 < 4 { red } else { blue }).collect();
+        let img = wallpaper_thumb(View { w: 8, h: 4, px: &px }, 2, 1).expect("a thumbnail");
+        assert_eq!((img.w, img.h, img.px.len()), (2, 1, 2));
+        assert_eq!(img.px, vec![red, blue], "each half of the picture keeps its colour, fully opaque");
+        assert!(wallpaper_thumb(View { w: 0, h: 0, px: &[] }, 2, 1).is_none());
+        assert!(wallpaper_thumb(View { w: 8, h: 4, px: &px }, 0, 1).is_none());
+    }
 
     fn area() -> FRect {
         FRect { x: 0.0, y: 0.0, w: 1600.0, h: 800.0 }
