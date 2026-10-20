@@ -67,7 +67,7 @@ pub fn polygon_verbs(pts: &[(f32, f32)]) -> Vec<PathVerb> {
 }
 
 /// Every name `glyph` draws, for galleries and tests.
-pub const NAMES: [&str; 62] = [
+pub const NAMES: [&str; 70] = [
     "chevron.left", "chevron.right", "sidebar.left", "square.grid.2x2", "list.bullet", "rectangle.split.3x1",
     "magnifyingglass", "xmark.circle.fill", "folder", "folder.badge.plus", "checkmark.circle", "clock",
     "menubar.dock.rectangle", "doc", "arrow.down.circle", "house", "desktopcomputer", "internaldrive", "trash", "tag",
@@ -77,6 +77,7 @@ pub const NAMES: [&str; 62] = [
     "square.and.pencil", "antenna.radiowaves.left.and.right", "mic", "music.note.list", "opticaldisc", "radio",
     "calculator", "cloud.sun", "ellipsis.circle", "info.circle", "flag", "calendar",
     "arrow.clockwise", "xmark", "rectangle.grid.1x2", "chevron.up", "text.alignleft", "square.on.square",
+    "bold", "italic", "underline", "strikethrough", "text.aligncenter", "text.alignright", "text.justify", "list.number",
 ];
 
 /// True when `name` has a drawing.
@@ -147,6 +148,12 @@ pub fn glyph(s: &mut dyn Canvas, ui: &Ui, name: &str, bounds: Rect, color: u32) 
     let numeral = |s: &mut dyn Canvas, text: &str| {
         let img = ui.text(text, (side * 0.3 / ui.pt(1.0)).max(5.0), crate::kit::Weight::Semibold, color);
         let (cx, cy) = p(0.5, 0.54);
+        blit(s, &img, cx as i32 - img.w as i32 / 2, cy as i32 - img.h as i32 / 2);
+    };
+    // a large letter in the middle of the glyph box (the character-style symbols)
+    let letter = |s: &mut dyn Canvas, text: &str, weight: crate::kit::Weight| {
+        let img = ui.text(text, (side * 0.66 / ui.pt(1.0)).max(5.0), weight, color);
+        let (cx, cy) = p(0.5, 0.52);
         blit(s, &img, cx as i32 - img.w as i32 / 2, cy as i32 - img.h as i32 / 2);
     };
     let folder = [(0.08, 0.22), (0.38, 0.22), (0.46, 0.32), (0.92, 0.32), (0.92, 0.80), (0.08, 0.80)];
@@ -446,6 +453,46 @@ pub fn glyph(s: &mut dyn Canvas, ui: &Ui, name: &str, bounds: Rect, color: u32) 
         "square.on.square" => {
             rbox(s, 0.1, 0.34, 0.56, 0.56, 0.1);
             poly(s, &[(0.34, 0.34), (0.34, 0.1), (0.9, 0.1), (0.9, 0.66), (0.66, 0.66)], false);
+        }
+        // the Text Editor's format bar: character styles, alignments and the numbered list
+        "bold" => letter(s, "B", crate::kit::Weight::Bold),
+        "italic" => {
+            poly(s, &[(0.42, 0.84), (0.6, 0.16)], false);
+            poly(s, &[(0.5, 0.16), (0.74, 0.16)], false);
+            poly(s, &[(0.26, 0.84), (0.5, 0.84)], false);
+        }
+        "underline" => {
+            poly(s, &[(0.28, 0.1), (0.28, 0.46)], false);
+            arcd(s, 0.5, 0.46, 0.22, 0.0, PI);
+            poly(s, &[(0.72, 0.46), (0.72, 0.1)], false);
+            poly(s, &[(0.2, 0.9), (0.8, 0.9)], false);
+        }
+        "strikethrough" => {
+            letter(s, "S", crate::kit::Weight::Regular);
+            poly(s, &[(0.1, 0.52), (0.9, 0.52)], false);
+        }
+        "text.aligncenter" => {
+            poly(s, &[(0.14, 0.26), (0.86, 0.26)], false);
+            poly(s, &[(0.14, 0.5), (0.86, 0.5)], false);
+            poly(s, &[(0.28, 0.74), (0.72, 0.74)], false);
+        }
+        "text.alignright" => {
+            poly(s, &[(0.14, 0.26), (0.86, 0.26)], false);
+            poly(s, &[(0.14, 0.5), (0.86, 0.5)], false);
+            poly(s, &[(0.4, 0.74), (0.86, 0.74)], false);
+        }
+        "text.justify" => {
+            for v in [0.26, 0.5, 0.74] {
+                poly(s, &[(0.14, v), (0.86, v)], false);
+            }
+        }
+        "list.number" => {
+            for (k, v) in [0.26, 0.5, 0.74].into_iter().enumerate() {
+                let img = ui.text(&(k + 1).to_string(), (side * 0.26 / ui.pt(1.0)).max(5.0), crate::kit::Weight::Semibold, color);
+                let (cx, cy) = p(0.16, v);
+                blit(s, &img, cx as i32 - img.w as i32 / 2, cy as i32 - img.h as i32 / 2);
+                poly(s, &[(0.36, v), (0.9, v)], false);
+            }
         }
         "checklist" => {
             for v in [0.22, 0.5, 0.78] {
