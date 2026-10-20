@@ -199,6 +199,21 @@ class SeedData(Base):
         self.assertEqual(self.read("wallpapers/mine.raw"), "mine")
         self.assertEqual(self.read("fonts/Installed.ttf"), "mine")
 
+    def test_a_failure_never_blocks_the_session_and_is_retried(self):
+        write_tree(self.system, ["a.raw", "icons/b.raw"], text="new")
+        # a directory sits where the file is expected, so replacing it fails
+        os.makedirs(os.path.join(self.data, "a.raw", "keep"))
+        r = self.seed()
+        self.assertEqual(r.returncode, 0, "seeding is best effort")
+        self.assertIn("cannot replace a.raw", r.stderr)
+        self.assertEqual(self.read("icons/b.raw"), "new", "the other files are still copied")
+        self.assertFalse(os.path.exists(os.path.join(self.data, ".system-assets")), "no stamp after a failure, so the next start retries")
+        self.assertFalse(os.path.exists(os.path.join(self.data, ".seeded")))
+        shutil.rmtree(os.path.join(self.data, "a.raw"))
+        self.assertEqual(self.seed().returncode, 0)
+        self.assertEqual(self.read("a.raw"), "new")
+        self.assertTrue(os.path.exists(os.path.join(self.data, ".system-assets")))
+
 
 class PublishStaging(unittest.TestCase):
     def load(self):
@@ -242,6 +257,10 @@ class PackagingWiring(unittest.TestCase):
     def test_the_scriptlet_prunes_and_the_guard_may_overwrite(self):
         self.assertIn("prune-stale-assets", self.read("packaging", "arch", "springboard.install"))
         self.assertIn("/usr/share/springboard/system-assets/*", self.read("packaging", "arch", "recovery", "guard.rs"))
+
+    def test_seeding_failures_do_not_gate_the_session_unit(self):
+        unit = self.read("packaging", "arch", "springboard.service")
+        self.assertIn("ExecStartPre=-/usr/lib/springboard/seed-data", unit)
 
     def test_the_helpers_are_executable(self):
         for name in ("prune-stale-assets", "seed-data"):
