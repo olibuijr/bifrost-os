@@ -9,6 +9,8 @@ pub mod body;
 pub mod category;
 pub mod codec;
 pub mod compose_windows;
+pub mod entities;
+mod entities_table;
 pub mod draw;
 pub mod export;
 pub mod mute;
