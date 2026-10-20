@@ -152,6 +152,10 @@ does nothing (Music on its Radio page, a station selected, playback failing is t
 3. Read `top -b -n 2 -d 5` for the second sample: the shell (`springboard`), the app and `bifrost-wm`. Idle, the shell
    is under 5% and the app under 5%; `BIFROST_FRAME_STATS=1` in the app's environment adds a line a second with the app's
    frames, the repaints it did not send because they equalled the screen, and (Music) which source asked for the repaint.
+   The app host tick (`Shell::ext_tick`) runs every tick, so nothing in it may mark the desktop dirty unless something
+   changed: `desk_sync_extra_windows` marks it only when a window opened, closed, moved, collapsed or changed level, or the
+   front window changed the screen (it used to mark it on every tick, which made every idle tick a whole desktop frame and
+   kept the bar-only frame from ever being chosen).
 4. `slow frame ... damage=0%` lines mean a whole desktop frame came out unchanged: the work that was wasted is the
    `draw=` figure.
 

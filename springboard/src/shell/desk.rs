@@ -625,11 +625,16 @@ impl Desk {
     }
 
     /// Sets the apps whose windows float and moves their windows after the normal ones; each band keeps its order.
-    pub(super) fn sync_levels(&mut self, floating: Vec<AppId>) {
+    pub(super) fn sync_levels(&mut self, floating: Vec<AppId>) -> bool {
         self.floating = floating;
         let list = std::mem::take(&mut self.floating);
-        self.wins.sort_by_key(|w| list.contains(&w.app));
+        // true when the stack moved: a settled desktop asks for no frame
+        let moved = self.wins.windows(2).any(|p| list.contains(&p[0].app) && !list.contains(&p[1].app));
+        if moved {
+            self.wins.sort_by_key(|w| list.contains(&w.app));
+        }
         self.floating = list;
+        moved
     }
 
     /// The frontmost visible window hit at (x, y).
@@ -1960,6 +1965,8 @@ impl Shell {
                 _ => None,
             }).collect()
         });
+        // this runs every tick: only a change to the desk asks for a frame (a settled desktop draws nothing)
+        let mut changed = !orphans.is_empty();
         for (s, id) in orphans {
             self.desk_drop_extra_window(s, id);
         }
@@ -1971,6 +1978,7 @@ impl Shell {
                 _ => None,
             }).collect()
         });
+        changed |= !ghosts.is_empty();
         for s in ghosts {
             self.desk_close_app(AppId::External(s));
         }
@@ -1996,8 +2004,9 @@ impl Shell {
         // a window that changed its level moves within the stack even when the table's windows did not change
         let floating = self.floating_apps();
         if let Some(d) = self.desk.as_mut() {
-            d.sync_levels(floating);
+            changed |= d.sync_levels(floating);
         }
+        changed |= !plan.is_empty();
         let m = self.desk_metrics();
         for (slot, open, close, sizes) in plan {
             for id in &close {
@@ -2029,21 +2038,38 @@ impl Shell {
         }
         for (slot, id, pending, collapsed) in asks {
             if let Ok(id16) = u16::try_from(id) {
-                self.ext_window_place(AppId::ExternalWindow(slot, id16), pending, collapsed);
+                changed |= self.ext_window_place(AppId::ExternalWindow(slot, id16), pending, collapsed);
             }
         }
-        self.desk_refocus();
-        self.dirty = true;
+        if changed {
+            self.desk_refocus();
+            self.dirty = true;
+        } else if !self.is_locked() {
+            // the front window decides the screen on every tick; only a different answer is something to draw
+            let screen = match self.desk.as_ref().and_then(|d| d.front()).map(|w| w.app) {
+                Some(app) => Screen::App(app.parent()),
+                None => Screen::Home,
+            };
+            if screen != self.screen {
+                self.screen = screen;
+                self.dirty = true;
+            }
+        }
     }
 
     /// Applies the placement and collapse the table asks for to one extra window's desk window. A requested position is
     /// clamped to the visible area (points, relative to the work area) and the window moves there.
-    pub(super) fn ext_window_place(&mut self, app: AppId, pending: Option<(f32, f32)>, collapsed: bool) {
+    pub(super) fn ext_window_place(&mut self, app: AppId, pending: Option<(f32, f32)>, collapsed: bool) -> bool {
+        let Some(d) = self.desk.as_ref() else { return false };
+        let Some(i) = d.index_of(app) else { return false };
+        // nothing asked and nothing to change (the common case, once per window per tick): no layout work, no frame
+        if pending.is_none() && d.is_collapsed(app) == collapsed {
+            return false;
+        }
         let m = self.desk_metrics();
         let k = self.ui.pt(1.0) as f32;
         let a = Desk::area(&m);
-        let Some(d) = self.desk.as_mut() else { return };
-        let Some(i) = d.index_of(app) else { return };
+        let Some(d) = self.desk.as_mut() else { return false };
         if let Some((x, y)) = pending {
             let win_w = d.wins[i].r.w as f32 / k;
             if let Some((cx, cy)) = super::app_window_table::clamp_to_screen(x, y, a.w as f32 / k, a.h as f32 / k, win_w) {
@@ -2055,6 +2081,7 @@ impl Shell {
             self.desk_layout(i);
         }
         self.dirty = true;
+        true
     }
 
     /// A drag of an extra window ended: its app is told where the window is now (`WindowMoved`), in points relative to the
