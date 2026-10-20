@@ -8,12 +8,19 @@
 //! out of that picture and puts it on a transparent ground with its drop shadow. Without a window server (the tablet, the
 //! test fixtures) the picture is the shell's own frame, as before.
 //!
+//! A window capture asks the window server for the window's own picture first (`window_shots`, `bifrost_window_capture_v1`):
+//! the window alone, so a window that overlaps it on the screen is not in the picture. It is put on a transparent ground
+//! with its shadow. When the window server cannot give it (no capture global, a window of another client the shell holds
+//! no rectangle for, a refusal, no answer in `WINDOW_SHOT_TIMEOUT_MS`) the capture falls back to the cut from the composed
+//! screen described above.
+//!
 //! The capture session and the thumbnail are surfaces of their own above the windows (chrome ids 11 and 12, exported by
 //! `desktop_chrome_frames`); drawing them into the shell's frame, which sits under the windows, left stale pieces on screen.
 //! Pictures go to the Desktop of the session's account (Options > Save To), written for that account.
 
 use super::capture::{self, Session};
 use super::screenshot::{self, Overlay};
+use super::window_shots::{Done, Source};
 use super::{photos, Shell};
 use crate::gfx::{Image, Surface};
 use crate::layout::Rect;
@@ -30,6 +37,8 @@ pub const SETTLE_MS: f64 = 250.0;
 pub const GRAB_TIMEOUT_MS: f64 = 15_000.0;
 /// How often the shell looks for the grabber's answer.
 const POLL_MS: f64 = 30.0;
+/// A window picture that has not come after this long is given up for the composed-screen cut.
+pub const WINDOW_SHOT_TIMEOUT_MS: f64 = 2_000.0;
 
 /// A surface of the shell's own that sits above the windows: its place on the screen and its pixels (premultiplied), and
 /// the part of it that takes the pointer (None: all of it; an empty rectangle: none of it).
@@ -52,6 +61,18 @@ pub(super) struct Grab {
     due: f64,
     /// when it started and where its answer comes
     started: Option<(f64, Receiver<Option<Image>>)>,
+}
+
+/// A window screenshot waiting for the window's own picture, with the composed-screen capture it falls back to.
+pub(super) struct WindowGrab {
+    /// the capture request the answer is for
+    token: u64,
+    /// the window on the desk, in the shell's pixels (its picture is that big at most)
+    win: Rect,
+    /// when to give up and take the fallback (the shell's clock, ms)
+    deadline: f64,
+    /// the composed-screen capture to run instead
+    fallback: Grab,
 }
 
 /// What a waiting grab does next.
@@ -81,10 +102,15 @@ pub fn phase(due: f64, started: Option<f64>, t: f64) -> Phase {
 fn spawn_grab() -> Receiver<Option<Image>> {
     let (tx, rx) = channel();
     crate::bare::sys::spawn_named("screen-grab", move || {
-        let png = Command::new(GRAB_TOOL)
-            .arg("--screenshot")
-            .stdin(Stdio::null())
-            .stderr(Stdio::null())
+        // the grabber runs as the account and cannot open the privileged socket, which is where the window server lists
+        // its screen capture global: the shell connects for it and hands the descriptor down
+        let fd = crate::bare::privileged::helper_fd();
+        let mut grab = Command::new(GRAB_TOOL);
+        grab.arg("--screenshot").stdin(Stdio::null()).stderr(Stdio::null());
+        if let Some(fd) = fd.as_ref() {
+            crate::bare::privileged::give_to(&mut grab, fd);
+        }
+        let png = grab
             .output()
             .ok()
             .filter(|o| o.status.success())
@@ -150,6 +176,35 @@ impl Shell {
     /// Starts a capture of `region`. With a window server the shell takes its overlays off the screen and asks it for the
     /// composed picture a moment later (`grab_tick`); without one the picture is the shell's own frame.
     pub(super) fn begin_capture(&mut self, region: Rect, pointer: Option<(f32, f32)>, window: Option<Rect>, t: f64) {
+        // a window of the desk is asked for its own picture first; the composed screen is the fallback
+        if let Some(win) = window.filter(|_| self.overlays_on_desk()) {
+            if let Some(source) = self.window_shot_source(win) {
+                if let Some(token) = self.shots.request_now(source, (win.w.max(1) as u32, win.h.max(1) as u32), t) {
+                    self.shot = None;
+                    self.capture = None;
+                    let fallback = Grab { region, pointer, window, due: t + SETTLE_MS, started: None };
+                    self.window_grab = Some(WindowGrab { token, win, deadline: t + WINDOW_SHOT_TIMEOUT_MS, fallback });
+                    self.dirty = true;
+                    return;
+                }
+            }
+        }
+        self.begin_composed_capture(region, pointer, window, t);
+    }
+
+    /// The desk window drawn at `win` (not minimized), as a source of pictures; `None` for a rectangle that is no window of
+    /// the desk (a window of another client has none here) or when window capture is not offered.
+    fn window_shot_source(&self, win: Rect) -> Option<Source> {
+        if !self.shots.available() {
+            return None;
+        }
+        let d = self.desk.as_ref()?;
+        let w = d.wins.iter().find(|w| !w.minimized && w.r.x == win.x && w.r.y == win.y && w.r.w == win.w && w.r.h == win.h)?;
+        Some(Source::Surface(super::desk::win_id(w.app)?))
+    }
+
+    /// The capture from the composed screen (or the shell's own frame without a window server).
+    fn begin_composed_capture(&mut self, region: Rect, pointer: Option<(f32, f32)>, window: Option<Rect>, t: f64) {
         if !(self.overlays_on_desk() && Path::new(GRAB_TOOL).exists()) {
             self.take_capture(region, pointer, t);
             return;
@@ -160,9 +215,42 @@ impl Shell {
         self.dirty = true;
     }
 
+    /// The answer to a window capture request: a window screenshot waiting for it is made from the window's own picture,
+    /// or falls back to the composed screen when there is none.
+    pub(super) fn window_grab_answer(&mut self, token: u64, source: Option<Source>, done: Done, t: f64) {
+        if self.window_grab.as_ref().map(|g| g.token) != Some(token) {
+            return;
+        }
+        let Some(g) = self.window_grab.take() else { return };
+        let body = source.filter(|_| done == Done::Fresh).and_then(|s| self.shots.shot(s)).map(|s| s.image.clone());
+        match body {
+            Some(body) => self.finish_window_grab(&g, &body, t),
+            None => self.window_grab_fallback(g, t),
+        }
+    }
+
+    /// Makes the screenshot from the window's own picture: on a transparent ground with its shadow.
+    fn finish_window_grab(&mut self, g: &WindowGrab, body: &Image, t: f64) {
+        let pad = (capture::SHADOW_PT * self.ui.s).round() as i32;
+        // a window that fills the screen's width (maximized) has square corners
+        let radius = if g.win.w >= self.w { 0.0 } else { self.ui.pt(bifrost_ui::prefs_layout::m::WINDOW_RADIUS) };
+        self.save_capture(capture::window_picture(&self.ui, body, radius, pad), true, t);
+    }
+
+    /// The window server gave no picture of the window: the cut from the composed screen is taken instead.
+    fn window_grab_fallback(&mut self, g: WindowGrab, t: f64) {
+        let Grab { region, pointer, window, .. } = g.fallback;
+        self.begin_composed_capture(region, pointer, window, t);
+    }
+
     /// Moves a waiting grab along: starts the grabber when the overlays are off the screen, and saves the picture when it
     /// arrives. A grab that fails is reported, not replaced by a picture that would not show the screen.
     pub(super) fn grab_tick(&mut self, t: f64) {
+        if self.window_grab.as_ref().is_some_and(|g| t >= g.deadline) {
+            if let Some(g) = self.window_grab.take() {
+                self.window_grab_fallback(g, t);
+            }
+        }
         let Some(g) = self.grab.as_mut() else { return };
         match phase(g.due, g.started.as_ref().map(|(at, _)| *at), t) {
             Phase::Settling => {}
@@ -191,6 +279,9 @@ impl Shell {
 
     /// When a waiting grab needs the loop again (ms): when its settling time ends, then often until the answer comes.
     pub(super) fn grab_wake(&self, t: f64) -> Option<f64> {
+        if let Some(w) = self.window_grab.as_ref() {
+            return Some(w.deadline.max(t));
+        }
         let g = self.grab.as_ref()?;
         Some(match g.started {
             None => g.due.max(t),
@@ -288,6 +379,85 @@ mod tests {
         assert_eq!(phase(1250.0, Some(1250.0), 1300.0), Phase::Waiting);
         assert_eq!(phase(1250.0, Some(1250.0), 1250.0 + GRAB_TIMEOUT_MS), Phase::Waiting);
         assert_eq!(phase(1250.0, Some(1250.0), 1251.0 + GRAB_TIMEOUT_MS), Phase::TimedOut);
+    }
+
+    /// A desk with two windows and window capture on: the window screenshot asks for the window's own picture, is made from
+    /// it when it comes, and falls back to the composed screen when it does not.
+    #[cfg(feature = "desktop-wayland")]
+    fn desk_with_capture() -> (Shell, Rect, crate::shell::AppId) {
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.anim = None;
+        sh.screen = crate::shell::Screen::Home;
+        sh.shots.set_available(true);
+        // pictures go to a folder of the test's own, never to the person's Desktop
+        sh.shot_dir = Some(std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/target/test-capture-flow-window")));
+        let app = crate::shell::AppId::Settings;
+        sh.desk_open(app, 100.0);
+        let r = sh.desk.as_ref().unwrap().wins.iter().find(|w| w.app == app).map(|w| w.r).expect("the window is open");
+        (sh, Rect { x: r.x, y: r.y, w: r.w, h: r.h }, app)
+    }
+
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn a_window_screenshot_asks_for_the_windows_own_picture_and_is_made_from_it() {
+        let (mut sh, win, app) = desk_with_capture();
+        sh.begin_capture(win, None, Some(win), 1000.0);
+        let reqs = sh.take_capture_requests();
+        let id = crate::shell::desk::win_id(app).unwrap();
+        assert_eq!(reqs.len(), 1, "one request for the window");
+        assert_eq!(reqs[0].source, Source::Surface(id));
+        assert_eq!(reqs[0].max, (win.w as u32, win.h as u32), "the full picture of the window");
+        assert!(sh.window_grab.is_some() && sh.grab.is_none(), "the composed screen is not asked yet");
+        let body = Image { w: 40, h: 30, px: vec![crate::gfx::pack(10, 20, 30, 255); 40 * 30] };
+        sh.window_capture_results(vec![(reqs[0].token, crate::shell::window_shots::Outcome::Ready { image: body, serial: 3 })], 1100.0);
+        assert!(sh.window_grab.is_none() && sh.grab.is_none(), "answered: nothing is left waiting");
+        let shot = sh.shot.as_ref().expect("the screenshot was taken and its thumbnail animation started");
+        let _ = shot;
+    }
+
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn a_refused_window_picture_falls_back_to_the_composed_screen() {
+        let (mut sh, win, _) = desk_with_capture();
+        sh.begin_capture(win, None, Some(win), 1000.0);
+        let reqs = sh.take_capture_requests();
+        sh.window_capture_results(vec![(reqs[0].token, crate::shell::window_shots::Outcome::Failed)], 1050.0);
+        assert!(sh.window_grab.is_none());
+        // without the grab tool the fallback is the shell's own frame, saved at once; with it, a composed grab is waiting
+        assert!(sh.grab.is_some() || sh.shot.is_some(), "the fallback ran");
+    }
+
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn a_window_picture_that_never_comes_falls_back_after_the_timeout() {
+        let (mut sh, win, _) = desk_with_capture();
+        sh.begin_capture(win, None, Some(win), 1000.0);
+        sh.take_capture_requests();
+        sh.grab_tick(1000.0 + WINDOW_SHOT_TIMEOUT_MS - 1.0);
+        assert!(sh.window_grab.is_some(), "still waiting");
+        assert_eq!(sh.grab_wake(1500.0), Some(1000.0 + WINDOW_SHOT_TIMEOUT_MS), "the loop wakes for the deadline");
+        sh.grab_tick(1000.0 + WINDOW_SHOT_TIMEOUT_MS);
+        assert!(sh.window_grab.is_none(), "given up");
+        assert!(sh.grab.is_some() || sh.shot.is_some(), "the fallback ran");
+    }
+
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn without_window_capture_a_window_screenshot_uses_the_composed_screen_as_before() {
+        let (mut sh, win, _) = desk_with_capture();
+        sh.shots.set_available(false);
+        sh.begin_capture(win, None, Some(win), 1000.0);
+        assert!(sh.take_capture_requests().is_empty() && sh.window_grab.is_none());
+        assert!(sh.grab.is_some() || sh.shot.is_some());
+    }
+
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn a_rectangle_that_is_no_window_of_the_desk_is_not_asked_for() {
+        let (mut sh, win, _) = desk_with_capture();
+        let elsewhere = Rect { x: win.x + 1, ..win };
+        sh.begin_capture(elsewhere, None, Some(elsewhere), 1000.0);
+        assert!(sh.take_capture_requests().is_empty(), "no request for a rectangle the desk does not know");
     }
 
     #[test]

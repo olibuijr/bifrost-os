@@ -65,7 +65,7 @@ impl Trust {
 }
 
 /// The uid this process runs as, read from the owner of `/proc/self`.
-fn own_uid() -> Option<u32> {
+pub(crate) fn own_uid() -> Option<u32> {
     use std::os::unix::fs::MetadataExt;
     std::fs::metadata("/proc/self").ok().map(|m| m.uid())
 }

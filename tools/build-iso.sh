@@ -130,6 +130,7 @@ strip --strip-debug "$AIROOT/usr/bin/springboard" "$AIROOT/usr/bin/bifrost-insta
 install -Dm644 packaging/arch/springboard.service "$AIROOT/usr/lib/systemd/system/springboard.service"
 install -Dm755 packaging/arch/wayland/session "$AIROOT/usr/lib/bifrost/session"
 install -Dm755 packaging/arch/wayland/session-env "$AIROOT/usr/lib/bifrost/session-env"
+install -Dm755 packaging/arch/wayland/privileged-socket "$AIROOT/usr/lib/bifrost/privileged-socket"
 install -Dm755 packaging/arch/wayland/open-url "$AIROOT/usr/bin/bifrost-open-url"
 install -Dm644 packaging/arch/wayland/bifrost-browser.desktop "$AIROOT/usr/share/applications/bifrost-browser.desktop"
 install -Dm644 packaging/arch/wayland/mimeapps.list "$AIROOT/etc/xdg/mimeapps.list"
@@ -175,6 +176,7 @@ perm = {
     "/usr/bin/springboard": "0:0:755",
     "/usr/lib/bifrost/session": "0:0:755",
     "/usr/lib/bifrost/session-env": "0:0:755",
+    "/usr/lib/bifrost/privileged-socket": "0:0:755",
     "/usr/bin/bifrost-bootweave": "0:0:755",
     "/usr/bin/bifrost-apps": "0:0:755",
     "/usr/bin/bifrost-open-url": "0:0:755",

@@ -24,10 +24,19 @@ as_user() {
         env HOME="$(getent passwd "$account" | cut -d: -f6)" USER="$account" LOGNAME="$account" "$@"
 }
 runtime=/run/bifrost/user
+# The privileged socket (docs/window-server.md): root's, mode 0600, made by /usr/lib/bifrost/privileged-socket, which hands the
+# listening descriptor to the window server. Only the shell (root) and the helpers it starts connect through it; the screen
+# and window capture globals are visible to those clients alone.
+priv_socket=/run/bifrost/wm-privileged
+as_user_priv() {
+    /usr/lib/bifrost/privileged-socket "$priv_socket" -- \
+        setpriv --reuid="$uid" --regid="$(id -g "$account")" --init-groups \
+        env HOME="$(getent passwd "$account" | cut -d: -f6)" USER="$account" LOGNAME="$account" "$@"
+}
 install -d -m700 -o "$uid" -g "$(id -g "$account")" "$runtime"
 # A dedicated session runtime is safe to clean after systemd stops the old
 # cgroup. A stale socket must not satisfy the compositor readiness check.
-rm -f "$runtime"/wayland-* "$runtime"/session.json "$runtime"/shell-ready "$runtime"/bus
+rm -f "$runtime"/wayland-* "$runtime"/session.json "$runtime"/shell-ready "$runtime"/bus "$priv_socket"
 usermod -aG seat,video,render,input "$account"
 systemctl start seatd.service
 cleanup() {
@@ -35,6 +44,7 @@ cleanup() {
     [[ -n ${shell_pid:-} ]] && kill "$shell_pid" 2>/dev/null || true
     [[ -n ${compositor_pid:-} ]] && kill "$compositor_pid" 2>/dev/null || true
     [[ -n ${bus_pid:-} ]] && kill "$bus_pid" 2>/dev/null || true
+    rm -f "$priv_socket"
     wait 2>/dev/null || true
 }
 # A stop requested by systemd (reboot, shutdown, restart) is deliberate, not a crash: do not let it count toward the
@@ -82,7 +92,7 @@ if ! session_words_set MESA_LOADER_DRIVER_OVERRIDE ${wm_env[@]+"${wm_env[@]}"}; 
 fi
 # bifrost-wm owns the screen, so it shows the loader's frame and does the boot fade, not the shell
 start_wm() {
-    as_user env XDG_RUNTIME_DIR="$runtime" LIBSEAT_BACKEND=seatd MALLOC_ARENA_MAX=2 MALLOC_TRIM_THRESHOLD_=131072 MALLOC_TOP_PAD_=65536 ${fade:+BIFROST_BOOT_FADE=1} \
+    as_user_priv env XDG_RUNTIME_DIR="$runtime" LIBSEAT_BACKEND=seatd MALLOC_ARENA_MAX=2 MALLOC_TRIM_THRESHOLD_=131072 MALLOC_TOP_PAD_=65536 ${fade:+BIFROST_BOOT_FADE=1} \
         ${mesa_auto:+MESA_LOADER_DRIVER_OVERRIDE=$mesa_auto} ${wm_flags[@]+"${wm_flags[@]}"} ${wm_env[@]+"${wm_env[@]}"} \
         /usr/bin/bifrost-wm --drm --socket wayland-0 1>&2 &
     compositor_pid=$!
@@ -139,7 +149,7 @@ if [[ -n "$shell_version" && "$(cat "$stamp" 2>/dev/null || true)" != "$shell_ve
 fi
 mark shell-launch
 launch_shell() {
-    env XDG_RUNTIME_DIR="$runtime" WAYLAND_DISPLAY=wayland-0 SPRINGBOARD_WAYLAND=1 \
+    env XDG_RUNTIME_DIR="$runtime" WAYLAND_DISPLAY=wayland-0 BIFROST_WM_PRIVILEGED="$priv_socket" SPRINGBOARD_WAYLAND=1 \
         ${wm_flags[@]+"${wm_flags[@]}"} "$client" &
     shell_pid=$!
 }

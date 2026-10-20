@@ -38,6 +38,16 @@ else:
     path = Path('/usr/share/applications') / (app+'.desktop')
     if not path.is_file(): sys.exit(f'Application not installed: {app}')
     cmd = ['gio','launch',str(path)]
+if sys.argv[1:] == ["--screenshot"] and os.geteuid() == 0 and 'WAYLAND_SOCKET' not in os.environ:
+    # Screen capture is listed only on the window server's privileged socket (root's, mode 0600), which grim cannot open as
+    # the account. Root connects and hands grim the connected descriptor; the shell does the same when it starts this tool.
+    try:
+        link = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        link.connect('/run/bifrost/wm-privileged')
+        link.set_inheritable(True)
+        os.environ['WAYLAND_SOCKET'] = str(link.fileno())
+    except OSError:
+        pass
 if os.geteuid() == 0:
     cmd = ['runuser','-u',account,'--','env',*env,*cmd]
 else:

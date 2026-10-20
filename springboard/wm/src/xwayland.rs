@@ -133,6 +133,7 @@ impl WmState {
         let Some(window) = self.window_for_x11(surface) else { return };
         if let Some(id) = WmState::known_id(&window) {
             self.wm.unmap(id);
+            self.forget_window(id, &window);
         }
         self.space.unmap_elem(&window);
         self.focus(None, SERIAL_COUNTER.next_serial());

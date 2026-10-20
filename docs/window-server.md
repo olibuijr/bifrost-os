@@ -23,6 +23,8 @@ would make a root process the server for every untrusted app, so it stays out.
   with alpha on top. The compositor blurs what is behind the region every frame it is damaged.
 - Rounded material shapes and the BifrOSt glass styles come through the private `bifrost_material_v1` protocol (see
   Materials); the standard protocol carries rectangles only.
+- Screen and window capture are for the shell alone: the capture globals are visible only to clients that connected through
+  a second, root-only socket (see "Privileged socket and capture globals").
 - Accepted Wayland sockets cache their Linux `SO_PEERCRED` uid in `ClientState`. The input-method and virtual-keyboard
   global filters use that cached uid: Wayland invokes the filters while holding its backend lock, so querying
   `Client::get_credentials` from a filter re-enters the lock and deadlocks client dispatch. Missing cached credentials
@@ -343,6 +345,7 @@ XRGB8888 or ARGB8888 buffer. Without a hook the request is answered `failed`.
 - `overlay_cursor` paints the pointer on DRM; the headless output has no pointer image. ext-image-copy-capture cursor
   options are not read yet.
 - The Vulkan scanout (`BIFROST_WM_RENDERER=vulkan`) has no readback, so captures fail there.
+- The capture globals are listed to privileged clients only (see "Privileged socket and capture globals").
 - Clients: `grim` through `bifrost-apps --screenshot` for screenshots, and the shell's recorder for screen recordings
   (`src/shell/screenrec_wl.rs`): its own thread and connection, one probe frame, then a frame per interval into a pool of
   reused shm buffers (XRGB8888, which ffmpeg reads as `bgr0`). Each copy renders the scene again and reads it back on the
@@ -350,6 +353,78 @@ XRGB8888 or ARGB8888 buffer. Without a hook the request is answered `failed`.
   with no damage event and no wait, and there is no dma-buf format yet; both are gaps for a cheaper capture. The recorder
   treats a refused probe frame (the Vulkan renderer) as "cannot record" and starts nothing.
 - Tests: `capture_size`/`clamp_region` unit tests, and `tests/capture.rs` (headless, red scene reads back `[255,0,0,255]`).
+
+## Privileged socket and capture globals
+
+Screen capture used to be open to every client: any app could bind `zwlr_screencopy_manager_v1` and read the whole screen, and
+a uid cannot tell the shell from an app because the window server and the apps both run as the session's account (the shell is
+the one root process). Now the capture globals are visible to privileged clients only: `zwlr_screencopy_manager_v1`,
+`ext_image_copy_capture_manager_v1`, `ext_output_image_capture_source_manager_v1` and `bifrost_window_capture_manager_v1`. An
+ordinary client's registry does not list them and a bind is refused (`GlobalDispatch::can_view`, `privileged.rs`).
+
+- **The socket.** `bifrost-wm` listens on a second socket, `/run/bifrost/wm-privileged`: owned by root, mode 0600, in a
+  directory the account cannot write to. A client that connected through it is privileged (`ClientState::privileged`, set when the
+  connection is accepted); the ordinary `wayland-0` stays as it was, for apps and the chrome clients.
+- **Who makes it.** The window server runs as the account and cannot make a root-owned file, so the session script starts it
+  through `/usr/lib/bifrost/privileged-socket PATH -- COMMAND`, which binds the socket as root, sets the mode and passes the
+  listening descriptor down in `BIFROST_WM_PRIVILEGED_FD`. The account could remove or replace the path only if it owned the
+  directory; replacing it would not give it the window server's listener. For development (no session script) the window server
+  binds `BIFROST_WM_PRIVILEGED_SOCKET=/absolute/path` itself at mode 0600; every process of that user can then open it, so it is
+  for development only. A descriptor or path that does not parse gives no privileged socket at all, never a more open one.
+- **The shell.** It runs as root and names the socket in `BIFROST_WM_PRIVILEGED` (set by the session script); its Wayland
+  connection (`bare/privileged.rs`, `connect`) and the screen recorder's worker (`screenrec_wl.rs`) use it, and fall back to
+  `WAYLAND_DISPLAY` when it is unset or cannot be opened (then no capture global is listed and every capture consumer keeps its
+  fallback). `WAYLAND_DISPLAY` stays `wayland-0` for the shell's environment, which the apps it starts inherit.
+- **Helpers.** The screenshot tool (`/usr/bin/bifrost-apps --screenshot`, `grim` run as the account) cannot open the socket. The
+  shell connects for it and passes the connected descriptor down in `WAYLAND_SOCKET` (`capture_flow.rs`, `privileged::give_to`),
+  which the Wayland client library uses in place of `WAYLAND_DISPLAY`; run by root without it (the lab tooling), the script
+  connects itself. The recording worker is a thread of the shell and connects on its own.
+- **Not covered.** The foreign-toplevel list (titles and app ids, and requests to close, minimize or activate a window) and the
+  output-management globals are still offered to every client; they carry no pixels. Windows of XWayland clients are not on this
+  socket, and an X11 client could read the screen through X itself, which XWayland does not isolate.
+- **Tests.** `wm/tests/window_capture.rs` (an ordinary client sees none of the four capture globals, a privileged one sees all
+  four, and the socket file is owner-only), `privileged::tests` (the environment parsing and the mode), `bare/privileged.rs` tests
+  (the helper descriptor reaches a child in `WAYLAND_SOCKET`).
+
+## Window capture
+
+The shell cannot see the pixels of windows owned by other Wayland clients (every store app on the direct path, Linux apps).
+Three features need them: Mission Control tiles, the Dock's thumbnails of minimized windows and window screenshots (which cut a
+window out of the composed screen, so a window overlapping it showed in the picture). `bifrost_window_capture_v1`
+(`wm/protocol/bifrost-window-capture-v1.xml`, `wm/src/window_capture.rs`; client `bare/window_capture_client.rs`, state
+`shell/window_shots.rs`) gives the shell one window's own pixels, scaled down, on request.
+
+- **Why a private protocol.** The standard route (ext-image-copy-capture with an ext-foreign-toplevel-image-capture-source) was
+  checked first: Smithay 0.7 has `ext-foreign-toplevel-list` but no image-capture-source or image-copy-capture support, the
+  standard session takes the buffer size from the compositor (a full-size window for every small tile; there is no size hint from
+  the client), and an ext toplevel handle cannot be matched with the wlr handles the shell already holds for those windows. The
+  private request names the window by `wl_surface` (the shell's own toplevels) or by `zwlr_foreign_toplevel_handle_v1` (any
+  client's), and carries the buffer, whose size is the largest picture wanted. The window server fits the window into it, keeping
+  its aspect and never scaling up, writes it from the buffer's top-left corner and answers on a frame object: `ready(width,
+  height, serial)`, `unchanged(serial)` or `failed(reason)`. The output capture (screenshots of the whole screen, recordings) stays
+  on wlr-screencopy and ext-image-copy-capture.
+- **Access.** Privileged clients only (above). A request from any other client is also answered `failed(denied)`.
+- **Performance.** A request renders the window alone into a texture of the fitted size (`capture::capture_window`, GLES; on the
+  Vulkan scanout `failed(unsupported)`), once, never per frame. Every commit of a window's surface tree advances its content
+  serial (`WindowCapture::touch`); a request that quotes the serial the shell already holds is answered `unchanged` and draws
+  nothing. The shell rate-limits: Mission Control refreshes the tiles it shows at most 5 times a second while it is open, the Dock
+  asks once when a window is minimized, a screenshot asks once (`window_shots`).
+- **Minimized windows.** A minimized toplevel leaves the space but stays in `WmState::hidden` (it used to be dropped there, which
+  also left nothing to show again), keeps receiving commits and its content serial, and can be captured; a snapshot (at most
+  640x400) is rendered when it is hidden and answers if the client dropped its buffer. The window is shown again by the
+  foreign-toplevel `unset_minimized` or `activate`, xdg-activation, or `apply_frames`. Closing it frees the window, its serial
+  and its snapshot.
+- **What a picture shows.** The window's surface tree (subsurfaces and popups) on a transparent ground, premultiplied. Its material
+  regions are flat plates (the recipe's inactive plate) because a blur of the desktop has nothing to blur in a picture of one
+  window.
+- **Tests.** `wm/tests/window_capture.rs` (headless: scaled capture into a smaller buffer, the untouched rest of the buffer,
+  `unchanged`, a new serial after a commit, a 1x1 buffer, capture of a minimized window, everything freed on close),
+  `window_capture::tests` (fit and aspect, serial arithmetic, box filter, buffer shape, failure values, state freeing),
+  `capture::tests` (material plates), and in the shell `window_shots::tests`, `overview::tests`, `desk::tests`,
+  `capture_flow::tests`.
+- **Not done.** Window mode of the screenshot toolbar picks windows by the rectangles the desk holds, so a window of another client
+  cannot be picked in it yet (the window server's `frame` event reports only a client's own toplevels). Windows that the
+  Vulkan scanout composes cannot be captured. Not run on Midget.
 
 ## Text input, input method and virtual keyboard
 

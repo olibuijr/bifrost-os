@@ -187,7 +187,8 @@ struct Capturer {
 
 impl Capturer {
     fn connect() -> Result<Capturer, Unavailable> {
-        let conn = Connection::connect_to_env().map_err(|e| Unavailable::NoConnection(e.to_string()))?;
+        // the privileged socket: the screen capture global is listed to the shell's connections only
+        let conn = crate::bare::privileged::connect().map_err(|e| Unavailable::NoConnection(e.to_string()))?;
         let mut queue = conn.new_event_queue::<State>();
         let qh = queue.handle();
         let reg = conn.display().get_registry(&qh, ());

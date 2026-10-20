@@ -40,6 +40,7 @@ use crate::{
     },
     session_protocols::CaptureSpec,
     state::WmState,
+    window_capture::WindowCaptureSpec,
 };
 
 /// The desktop colour where nothing is drawn (the wallpaper is a background layer surface).
@@ -120,6 +121,19 @@ impl Headless {
         }
     }
 
+    /// A window capture (`SessionHooks::capture_window`): the window alone at `spec.size` as RGBA rows over a
+    /// transparent ground, `None` for an unknown window or a failure.
+    pub fn capture_window(&mut self, state: &WmState, spec: &WindowCaptureSpec) -> Option<Vec<u8>> {
+        let window = state.window_any(spec.id)?;
+        match crate::capture::capture_window(&mut self.renderer, &self.glass, state, &window, spec.size) {
+            Ok(px) => Some(px),
+            Err(e) => {
+                eprintln!("bifrost-wm: window capture: {e}");
+                None
+            }
+        }
+    }
+
     pub fn screenshot(&mut self, path: &Path) -> Result<(), Box<dyn Error>> {
         let (w, h) = self.size;
         let px = self.pixels()?;
@@ -159,6 +173,8 @@ impl Compositor {
                 state.dirty = false;
                 let b = backend.clone();
                 state.session.hooks.capture = Some(Box::new(move |state, spec| b.borrow_mut().capture(state, spec, CLEAR)));
+                let b = backend.clone();
+                state.session.hooks.capture_window = Some(Box::new(move |state, spec| b.borrow_mut().capture_window(state, spec)));
                 let b = backend.clone();
                 event_loop.handle().insert_source(rx, move |event, _, state| {
                     if let ChannelEvent::Msg(cmd) = event {

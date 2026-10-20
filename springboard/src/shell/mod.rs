@@ -174,6 +174,8 @@ mod screenrec_wl;
 pub mod capture;
 /// Where a screenshot comes from (the window server's composed screen), where it is saved, and its overlays' surfaces.
 mod capture_flow;
+/// Pictures of the windows the window server composes (Mission Control, the Dock's thumbnails, window screenshots).
+pub mod window_shots;
 pub mod screentime;
 pub mod login;
 pub mod passcode;
@@ -767,6 +769,12 @@ pub struct Shell {
     shot_tap: bool,
     /// The screenshot toolbar's capture session, open while it is on screen.
     capture: Option<capture::Session>,
+    /// The pictures of windows the window server composes and the requests for them (`window_shots`).
+    shots: window_shots::WindowShots,
+    /// When `shots` last dropped the pictures of windows that closed (ms).
+    shots_gc: f64,
+    /// A window screenshot waiting for the window's own picture, with the composed-screen capture it falls back to.
+    window_grab: Option<capture_flow::WindowGrab>,
     /// A capture waiting for the window server's composed screen (`capture_flow`).
     grab: Option<capture_flow::Grab>,
     /// The capture session and the thumbnail as surfaces of their own above the windows (the desktop; `capture_flow`).
@@ -1200,6 +1208,9 @@ impl Shell {
             markup_load: None,
             shot_tap: false,
             capture: None,
+            shots: Default::default(),
+            shots_gc: 0.0,
+            window_grab: None,
             grab: None,
             capture_layer: None,
             shot_layer: None,
@@ -2301,6 +2312,9 @@ impl Shell {
             due.add(Some(w));
         }
         if let Some(w) = self.grab_wake(t) {
+            due.add(Some(w));
+        }
+        if let Some(w) = self.shots_wake(t) {
             due.add(Some(w));
         }
         if self.screen_on && self.screen == Screen::App(AppId::Files) {
@@ -3921,6 +3935,7 @@ impl Shell {
         }
         // a capture waiting for the window server's picture
         self.grab_tick(t);
+        self.shots_tick(t);
         if self.capture.is_some() {
             self.dirty = true;
         }

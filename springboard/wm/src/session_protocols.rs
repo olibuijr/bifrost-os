@@ -78,6 +78,7 @@ use smithay::{
 };
 
 use crate::{
+    privileged::{is_privileged, PrivilegedOnly},
     state::WmState,
     wm::{Rect, WindowId},
 };
@@ -230,6 +231,9 @@ pub struct SessionHooks {
     pub set_transform: Option<Box<dyn FnMut(&str, Transform) -> bool>>,
     /// Turns an output on or off (DPMS). Returns whether it took.
     pub set_power: Option<Box<dyn FnMut(&str, bool) -> bool>>,
+    /// Renders one window alone, scaled to `spec.size`, as RGBA rows (premultiplied, transparent ground): the picture
+    /// behind `bifrost_window_capture_v1` (`window_capture.rs`). `None` when the renderer cannot (the Vulkan scanout).
+    pub capture_window: Option<Box<dyn FnMut(&mut WmState, &crate::window_capture::WindowCaptureSpec) -> Option<Vec<u8>>>>,
 }
 
 /// One capture the backend is asked for.
@@ -323,11 +327,11 @@ impl SessionState {
     /// capture sources. Cursor shapes and xdg-activation come from Smithay.
     pub fn new(dh: &DisplayHandle) -> Self {
         dh.create_global::<WmState, ZwlrForeignToplevelManagerV1, ()>(3, ());
-        dh.create_global::<WmState, ZwlrScreencopyManagerV1, ()>(3, ());
+        dh.create_global::<WmState, ZwlrScreencopyManagerV1, PrivilegedOnly>(3, PrivilegedOnly);
         dh.create_global::<WmState, ZwlrOutputManagerV1, ()>(4, ());
         dh.create_global::<WmState, ZwlrOutputPowerManagerV1, ()>(1, ());
-        dh.create_global::<WmState, ExtImageCopyCaptureManagerV1, ()>(1, ());
-        dh.create_global::<WmState, ExtOutputImageCaptureSourceManagerV1, ()>(1, ());
+        dh.create_global::<WmState, ExtImageCopyCaptureManagerV1, PrivilegedOnly>(1, PrivilegedOnly);
+        dh.create_global::<WmState, ExtOutputImageCaptureSourceManagerV1, PrivilegedOnly>(1, PrivilegedOnly);
         SessionState {
             hooks: SessionHooks::default(),
             cursor: None,
@@ -488,7 +492,8 @@ impl WmState {
         if !activation_allowed(has_serial, age) {
             return;
         }
-        let Some(window) = self.window_for_surface(surface) else { return };
+        // a minimized window is not in the space: activation shows it again
+        let Some(window) = self.window_for_surface(surface).or_else(|| self.hidden_for_surface(surface)) else { return };
         let Some(id) = WmState::known_id(&window) else { return };
         self.wm.restore(id);
         self.apply_frames();
@@ -554,8 +559,26 @@ pub fn crop_rgba(frame_px: &[u8], frame: (i32, i32), region: Rect) -> Option<(Re
 /// This is the one audited raw write into a client pool: the slice covers only the buffer's own rows, and its end is
 /// checked against the pool length first.
 fn write_shm(buffer: &WlBuffer, pixels: &[u8]) -> Result<(), &'static str> {
+    write_shm_region(buffer, pixels, None)
+}
+
+/// `write_shm` for a picture of `width` by `height` pixels written from the top-left corner of a buffer at least that
+/// large (a window picture is fitted into the buffer the shell sent, so it can be smaller). The rest is not touched.
+pub(crate) fn write_shm_sized(buffer: &WlBuffer, pixels: &[u8], width: i32, height: i32) -> Result<(), &'static str> {
+    if width <= 0 || height <= 0 {
+        return Err("empty picture");
+    }
+    write_shm_region(buffer, pixels, Some((width as usize, height as usize)))
+}
+
+/// The one audited write into a client pool: `region` is the picture's size (`None`: the whole buffer).
+fn write_shm_region(buffer: &WlBuffer, pixels: &[u8], region: Option<(usize, usize)>) -> Result<(), &'static str> {
     with_buffer_contents_mut(buffer, |ptr, len, d: BufferData| {
-        let (w, h) = (d.width.max(0) as usize, d.height.max(0) as usize);
+        let (bw, bh) = (d.width.max(0) as usize, d.height.max(0) as usize);
+        let (w, h) = region.unwrap_or((bw, bh));
+        if w > bw || h > bh {
+            return Err("picture is larger than the buffer");
+        }
         let (stride, offset) = (d.stride.max(0) as usize, d.offset.max(0) as usize);
         let need = if h == 0 { 0 } else { stride * (h - 1) + w * 4 };
         if offset.checked_add(need).map_or(true, |end| end > len) {
@@ -700,6 +723,15 @@ impl Dispatch<ZwlrForeignToplevelHandleV1, WindowId> for WmState {
         use zwlr_foreign_toplevel_handle_v1::Request as R;
         let id = *id;
         let serial = SERIAL_COUNTER.next_serial();
+        // showing a minimized window again needs no window from the space: `apply_frames` maps the one held hidden
+        if matches!(request, R::UnsetMinimized | R::Activate { .. }) {
+            if state.window_any(id).is_some() {
+                state.wm.restore(id);
+                state.apply_frames();
+                state.focus(Some(id), serial);
+            }
+            return;
+        }
         let Some(window) = state.window(id) else { return };
         match request {
             R::SetMaximized | R::UnsetMaximized => {
@@ -712,13 +744,8 @@ impl Dispatch<ZwlrForeignToplevelHandleV1, WindowId> for WmState {
             }
             R::SetMinimized => {
                 state.wm.minimize(id);
-                state.space.unmap_elem(&window);
+                state.hide_window(id, &window);
                 state.focus(None, serial);
-            }
-            R::UnsetMinimized | R::Activate { .. } => {
-                state.wm.restore(id);
-                state.apply_frames();
-                state.focus(Some(id), serial);
             }
             R::Close => {
                 if let Some(t) = window.toplevel() {
@@ -894,9 +921,14 @@ impl Dispatch<ZwlrOutputPowerV1, PowerData> for WmState {
 // zwlr_screencopy_manager_v1 and frames
 // ---------------------------------------------------------------------------------------------------------------------
 
-impl GlobalDispatch<ZwlrScreencopyManagerV1, ()> for WmState {
-    fn bind(_state: &mut Self, _dh: &DisplayHandle, _client: &Client, resource: New<ZwlrScreencopyManagerV1>, _data: &(), data_init: &mut DataInit<'_, Self>) {
+impl GlobalDispatch<ZwlrScreencopyManagerV1, PrivilegedOnly> for WmState {
+    fn bind(_state: &mut Self, _dh: &DisplayHandle, _client: &Client, resource: New<ZwlrScreencopyManagerV1>, _data: &PrivilegedOnly, data_init: &mut DataInit<'_, Self>) {
         data_init.init(resource, ());
+    }
+
+    /// A capture global: only privileged clients (the shell and its helpers) see it.
+    fn can_view(client: Client, _data: &PrivilegedOnly) -> bool {
+        is_privileged(&client)
     }
 }
 
@@ -955,9 +987,14 @@ impl Dispatch<ZwlrScreencopyFrameV1, FrameData> for WmState {
 // ext-image-copy-capture-v1: sources, sessions and frames
 // ---------------------------------------------------------------------------------------------------------------------
 
-impl GlobalDispatch<ExtOutputImageCaptureSourceManagerV1, ()> for WmState {
-    fn bind(_state: &mut Self, _dh: &DisplayHandle, _client: &Client, resource: New<ExtOutputImageCaptureSourceManagerV1>, _data: &(), data_init: &mut DataInit<'_, Self>) {
+impl GlobalDispatch<ExtOutputImageCaptureSourceManagerV1, PrivilegedOnly> for WmState {
+    fn bind(_state: &mut Self, _dh: &DisplayHandle, _client: &Client, resource: New<ExtOutputImageCaptureSourceManagerV1>, _data: &PrivilegedOnly, data_init: &mut DataInit<'_, Self>) {
         data_init.init(resource, ());
+    }
+
+    /// A capture global: only privileged clients (the shell and its helpers) see it.
+    fn can_view(client: Client, _data: &PrivilegedOnly) -> bool {
+        is_privileged(&client)
     }
 }
 
@@ -974,9 +1011,14 @@ impl Dispatch<ExtImageCaptureSourceV1, String> for WmState {
     fn request(_state: &mut Self, _client: &Client, _resource: &ExtImageCaptureSourceV1, _request: ext_image_capture_source_v1::Request, _data: &String, _dh: &DisplayHandle, _data_init: &mut DataInit<'_, Self>) {}
 }
 
-impl GlobalDispatch<ExtImageCopyCaptureManagerV1, ()> for WmState {
-    fn bind(_state: &mut Self, _dh: &DisplayHandle, _client: &Client, resource: New<ExtImageCopyCaptureManagerV1>, _data: &(), data_init: &mut DataInit<'_, Self>) {
+impl GlobalDispatch<ExtImageCopyCaptureManagerV1, PrivilegedOnly> for WmState {
+    fn bind(_state: &mut Self, _dh: &DisplayHandle, _client: &Client, resource: New<ExtImageCopyCaptureManagerV1>, _data: &PrivilegedOnly, data_init: &mut DataInit<'_, Self>) {
         data_init.init(resource, ());
+    }
+
+    /// A capture global: only privileged clients (the shell and its helpers) see it.
+    fn can_view(client: Client, _data: &PrivilegedOnly) -> bool {
+        is_privileged(&client)
     }
 }
 

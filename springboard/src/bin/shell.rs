@@ -651,6 +651,10 @@ fn run() -> std::io::Result<()> {
             for batch in disp.wayland_input_method_batches() { shell.input_method_batch(batch, t); }
             if let Some(windows)=disp.wayland_foreign_windows() { shell.wayland_foreign_windows(windows); }
             for ev in disp.wayland_window_events() { shell.wayland_window_event(ev); }
+            // window capture (privileged socket only): whether it is offered, and the pictures the window server sent
+            shell.set_window_capture(disp.wayland_window_capture_ready());
+            let shots = disp.wayland_capture_results();
+            if !shots.is_empty() { shell.window_capture_results(shots, t); }
         }
         touch.read(&mut events);
         keys.read(&mut events);
@@ -1140,6 +1144,15 @@ fn run() -> std::io::Result<()> {
         effects.extend(shell.tick(vt));
         #[cfg(feature = "desktop-wayland")]
         effects.extend(shell.take_native_activations().into_iter().map(Effect::ActivateForeign));
+        // pictures of windows asked for this round go out before the frames are published, while the window server still has
+        // a window that is being minimized or closed
+        #[cfg(feature = "desktop-wayland")]
+        {
+            let requests = shell.take_capture_requests();
+            if !requests.is_empty() {
+                if let Err(e) = disp.wayland_capture_windows(requests) { eprintln!("window capture: {e}"); }
+            }
+        }
         // the keyboard's output for a focused Wayland client's field goes through the window server's input method
         #[cfg(feature = "desktop-wayland")]
         {

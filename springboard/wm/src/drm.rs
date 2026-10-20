@@ -39,7 +39,7 @@ use smithay::{
     utils::{DeviceFd, Transform},
 };
 
-use crate::{scene::SceneElement, session_protocols::{CaptureSpec, ModeInfo}, state::WmState};
+use crate::{scene::SceneElement, session_protocols::{CaptureSpec, ModeInfo}, state::WmState, window_capture::WindowCaptureSpec};
 
 pub(crate) const CLEAR: [f32; 4] = [0.06, 0.06, 0.08, 1.0];
 const SUPPORTED: &[Fourcc] = &[Fourcc::Argb8888, Fourcc::Xrgb8888, Fourcc::Abgr8888, Fourcc::Xbgr8888];
@@ -145,6 +145,8 @@ pub fn run(socket: Option<&str>, command: &[String]) -> Result<(), Box<dyn Error
     state.session.hooks.set_transform = Some(Box::new(move |name: &str, t: Transform| hook.borrow_mut().set_transform(name, t)));
     let hook = b.clone();
     state.session.hooks.capture = Some(Box::new(move |state, spec| hook.borrow_mut().capture(state, spec)));
+    let hook = b.clone();
+    state.session.hooks.capture_window = Some(Box::new(move |state, spec| hook.borrow_mut().capture_window(state, spec)));
     let backend = b;
 
     // input
@@ -454,6 +456,22 @@ impl Drm {
             v.forget_buffers(&gone);
         }
         self.render(state);
+    }
+
+    /// A window capture (`SessionHooks::capture_window`): one window alone at `spec.size`, RGBA over a transparent
+    /// ground. The Vulkan scanout has no GLES renderer to draw it with, so the request fails there (`unsupported`).
+    fn capture_window(&mut self, state: &WmState, spec: &WindowCaptureSpec) -> Option<Vec<u8>> {
+        if self.vulkan.is_some() {
+            return None;
+        }
+        let window = state.window_any(spec.id)?;
+        match crate::capture::capture_window(&mut self.renderer, &self.glass, state, &window, spec.size) {
+            Ok(px) => Some(px),
+            Err(e) => {
+                eprintln!("bifrost-wm: window capture: {e}");
+                None
+            }
+        }
     }
 
     /// A capture (`SessionHooks::capture`): the scene as RGBA rows, with the pointer when asked. Not served on the Vulkan

@@ -20,6 +20,7 @@ pub mod lock;
 pub mod material_filter;
 pub mod material_kind;
 pub mod output_layout;
+pub mod privileged;
 pub mod render_server;
 #[cfg(feature = "nested")]
 pub mod nested;
@@ -35,6 +36,7 @@ pub mod text_input;
 pub mod tiling;
 pub mod transform;
 pub mod touch;
+pub mod window_capture;
 pub mod window_level;
 pub mod wm;
 #[cfg(feature = "xwayland")]

@@ -32,7 +32,7 @@ use crate::wm::{Level, Rect, WindowId, Wm};
 
 /// Capture the Linux Unix-socket peer uid before registering the client with Wayland.
 /// Global visibility filters run inside Wayland backend dispatch and must not call back into its credential lock.
-fn peer_uid(stream: &UnixStream) -> Option<u32> {
+pub(crate) fn peer_uid(stream: &UnixStream) -> Option<u32> {
     smithay::reexports::rustix::net::sockopt::socket_peercred(stream).ok().map(|credentials| credentials.uid.as_raw())
 }
 
@@ -73,6 +73,12 @@ pub struct WmState {
     pub bifrost_window_level: smithay::reexports::wayland_server::backend::GlobalId,
     /// The clients that bound it and the frame each was last told for its toplevels (`report_frames`).
     pub frame_reports: crate::window_level::FrameReports,
+    /// `bifrost_window_capture_v1` (the shell captures one window's pixels; shell only, `window_capture.rs`).
+    pub bifrost_window_capture: smithay::reexports::wayland_server::backend::GlobalId,
+    /// Content serials and snapshots for window capture.
+    pub window_capture: crate::window_capture::WindowCapture,
+    /// Minimized toplevels: out of the space, but still held so they can be captured and shown again.
+    pub hidden: Vec<Window>,
     /// The appearance materials follow: Dark unless `BIFROST_WM_APPEARANCE=light`.
     pub material_dark: bool,
     pub lock_state: smithay::wayland::session_lock::SessionLockManagerState,
@@ -136,6 +142,8 @@ impl WmState {
                 }
             })
             .expect("socket source");
+        // the root-only socket the shell and its capture helpers connect through (the capture globals are theirs alone)
+        crate::privileged::start(&handle);
         handle
             .insert_source(Generic::new(display, Interest::READ, Mode::Level), |_, display, state| {
                 // SAFETY: the display is never dropped while the loop runs.
@@ -174,6 +182,9 @@ impl WmState {
             bifrost_material: crate::bifrost_material::init(&dh),
             bifrost_window_level: crate::window_level::init(&dh),
             frame_reports: Default::default(),
+            bifrost_window_capture: crate::window_capture::init(&dh),
+            window_capture: Default::default(),
+            hidden: Vec::new(),
             material_dark: std::env::var("BIFROST_WM_APPEARANCE").map(|v| v != "light").unwrap_or(true),
             lock_state: smithay::wayland::session_lock::SessionLockManagerState::new::<WmState, _>(&dh, |_| true),
             locked: false,
@@ -279,10 +290,14 @@ impl WmState {
     /// Moves every mapped window to the frame `wm` holds for it, in `wm` stacking order.
     pub fn apply_frames(&mut self) {
         for id in self.wm.stack() {
-            let Some(window) = self.window(id) else { continue };
+            // a minimized window is not in the space but is still held (`hidden`), so it can come back
+            let Some(window) = self.window_any(id) else { continue };
             match self.wm.rect(id).filter(|_| self.wm.visible(id)) {
-                Some(r) => self.space.map_element(window, (r.x, r.y), false),
-                None => self.space.unmap_elem(&window),
+                Some(r) => {
+                    self.unhide(id, &window);
+                    self.space.map_element(window, (r.x, r.y), false)
+                }
+                None => self.keep_hidden(&window),
             }
         }
         self.report_frames();
@@ -388,6 +403,8 @@ pub struct ClientState {
     pub compositor_state: CompositorClientState,
     /// Cached from SO_PEERCRED on accept; filters must not query the Wayland backend while dispatching globals.
     pub peer_uid: Option<u32>,
+    /// The client connected through the privileged socket (`privileged.rs`): the capture globals are visible to it.
+    pub privileged: bool,
 }
 
 impl ClientData for ClientState {

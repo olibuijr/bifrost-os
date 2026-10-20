@@ -267,6 +267,13 @@ enum Grab {
 
 #[cfg(feature = "desktop-wayland")]
 pub(super) struct LinuxDockApp { pub(super) app_id:String, pub(super) windows:Vec<crate::bare::wayland::ForeignWindow>, icon:Image }
+#[cfg(all(test, feature = "desktop-wayland"))]
+impl LinuxDockApp {
+    /// A Linux app entry with the given windows, for tests that need windows of other clients.
+    pub(super) fn for_test(app_id: &str, windows: Vec<crate::bare::wayland::ForeignWindow>) -> Self {
+        LinuxDockApp { app_id: app_id.into(), windows, icon: Image::new(1, 1) }
+    }
+}
 
 #[cfg(feature = "desktop-wayland")]
 struct CachedWindow {
@@ -881,6 +888,10 @@ pub(super) struct DockIconKey {
     pub size: usize,
 }
 
+/// The largest picture asked of the window server for a minimized window's Dock thumbnail: twice the biggest the slot
+/// gets when the Dock magnifies, so it stays sharp.
+const DOCK_SHOT_BOUND: (u32, u32) = (256, 256);
+
 /// The frame of a minimised window's Dock thumbnail inside its square `slot`: the window's aspect (`w` / `h`, clamped
 /// so a very wide or tall window still reads), fitted to the slot and centred on it.
 pub(super) fn thumbnail_frame(slot: Rect, window_w: i32, window_h: i32) -> Rect {
@@ -1047,6 +1058,38 @@ impl Shell {
             frames
         }).unwrap_or_default()
     }
+    /// A window is being minimized: asks the window server once for its picture, which its Dock slot shows in the
+    /// thumbnail frame. Without the capture global nothing is asked and the slot keeps the app icon in its frame.
+    pub(super) fn dock_shot(&mut self, app: AppId, t: f64) {
+        let Some(id) = win_id(app) else { return };
+        self.shots.request_now(super::window_shots::Source::Surface(id), DOCK_SHOT_BOUND, t);
+    }
+
+    /// The picture a minimized window's Dock slot shows, when the window server gave one.
+    pub(super) fn dock_picture(&self, app: AppId) -> Option<&Image> {
+        let shot = self.shots.shot(super::window_shots::Source::Surface(win_id(app)?))?;
+        (shot.image.w > 0 && shot.image.h > 0).then_some(&shot.image)
+    }
+
+    /// The windows of other clients the window server lists, once each: the native and direct apps' windows, then the
+    /// Linux apps' (Mission Control gives each a tile).
+    #[cfg(feature = "desktop-wayland")]
+    pub(super) fn mission_foreign_windows(&self) -> Vec<(u32, String)> {
+        let Some(d) = self.desk.as_ref() else { return Vec::new() };
+        let mut seen = std::collections::HashSet::new();
+        d.native_windows.iter().chain(d.linux_apps.iter().flat_map(|a| a.windows.iter())).filter(|w| seen.insert(w.id)).map(|w| (w.id, w.title.clone())).collect()
+    }
+    #[cfg(not(feature = "desktop-wayland"))]
+    pub(super) fn mission_foreign_windows(&self) -> Vec<(u32, String)> { Vec::new() }
+
+    /// Activates window `id` of another client: the window server raises and focuses it.
+    pub(super) fn desk_activate_foreign(&mut self, id: u32) {
+        #[cfg(feature = "desktop-wayland")]
+        if let Some(d) = self.desk.as_mut() { d.activate.push(id); }
+        let _ = id;
+        self.dirty = true;
+    }
+
     #[cfg(feature = "desktop-wayland")]
     pub fn take_native_activations(&mut self) -> Vec<u32> {
         self.desk.as_mut().map(|d|std::mem::take(&mut d.activate)).unwrap_or_default()
@@ -1495,6 +1538,8 @@ impl Shell {
         let Some(app) = self.desk.as_ref().and_then(|d| d.wins.get(i)).map(|w| w.app) else { return };
         // the effect starts while the window is still mapped; the draw loop keeps it up until the effect ends
         self.desk_fx_start(app, FxCall::Minimize, t);
+        // its Dock thumbnail: one picture, asked for while the window server still has it on screen
+        self.dock_shot(app, t);
         if let Some(d) = self.desk.as_mut() { d.wins[i].minimized = true; }
         self.desk_refocus();
     }
@@ -1791,6 +1836,11 @@ impl Shell {
 
     /// Hides every window and shows the desktop.
     pub(super) fn desk_show_desktop(&mut self) {
+        let t = self.last_input;
+        let shown: Vec<AppId> = self.desk.as_ref().map(|d| d.wins.iter().filter(|w| !w.minimized).map(|w| w.app).collect()).unwrap_or_default();
+        for app in shown {
+            self.dock_shot(app, t);
+        }
         if let Some(d) = &mut self.desk {
             for w in &mut d.wins {
                 w.minimized = true;
@@ -2800,7 +2850,7 @@ impl Shell {
             if i == super::dock_stack::DOCK_STACK { super::dock_stack::draw_stack(s, r, &desk.stack_files); continue; }
             if let Some(wi) = super::desktop_dock::dock_min_index(i) {
                 // a minimized window, to the right of the last divider: a thumbnail frame at the window's aspect with
-                // its app's icon in it and a small badge of the app (no window pixels are kept while it is minimized)
+                // the window's own picture in it (a capture taken as it was minimized) or, without one, its app's icon, and a small badge of the app
                 if let Some(win) = desk.wins.get(wi) {
                     let frame = thumbnail_frame(*r, win.r.w, win.r.h);
                     let (fx, fy, fw, fh) = (frame.x as f32, frame.y as f32, frame.w as f32, frame.h as f32);
@@ -2808,13 +2858,22 @@ impl Shell {
                     s.fill_rrect(fx, fy, fw, fh, radius, SEPARATOR_C.now());
                     let hair = ui.pt(1.0).max(1.0);
                     s.fill_rrect(fx + hair, fy + hair, (fw - 2.0 * hair).max(1.0), (fh - 2.0 * hair).max(1.0), (radius - hair).max(0.0), FIELD_BG.now());
+                    // the window's own picture fills the frame when the window server gave one; else the app's icon is in it
+                    let picture = self.dock_picture(win.app);
+                    if let Some(img) = picture {
+                        let inset = hair.round() as i32;
+                        let inner = Rect { x: frame.x + inset, y: frame.y + inset, w: (frame.w - 2 * inset).max(1), h: (frame.h - 2 * inset).max(1) };
+                        super::switcher::draw_scaled(s, img, inner, (radius - hair).max(0.0), 255);
+                    }
                     if let Some(ai) = apps().iter().position(|a| a.id == win.app) {
                         let base = &self.base_icons[ai];
                         let key = |size: usize| DockIconKey { owner: DockIconOwner::App(ai), generation: self.icon_rebuilds, size };
-                        let body = ((frame.w.min(frame.h) as f32) * 0.6).round().max(1.0) as usize;
-                        desk.with_scaled_icon(key(body), base, body, body, |icon| {
-                            s.blit(icon, frame.x + (frame.w - body as i32) / 2, frame.y + (frame.h - body as i32) / 2, 255, 255);
-                        });
+                        if picture.is_none() {
+                            let body = ((frame.w.min(frame.h) as f32) * 0.6).round().max(1.0) as usize;
+                            desk.with_scaled_icon(key(body), base, body, body, |icon| {
+                                s.blit(icon, frame.x + (frame.w - body as i32) / 2, frame.y + (frame.h - body as i32) / 2, 255, 255);
+                            });
+                        }
                         let badge = ((r.w as f32) * MINIMIZED_BADGE_K).round().max(1.0) as usize;
                         desk.with_scaled_icon(key(badge), base, badge, badge, |icon| {
                             s.blit(icon, frame.x + frame.w - badge as i32 + badge as i32 / 4, frame.y + frame.h - badge as i32 + badge as i32 / 4, 255, 255);
@@ -3173,6 +3232,103 @@ mod tests {
         #[cfg(feature = "desktop-wayland")]
         assert!(d.body_cache.is_empty());
         assert!(d.icon_cache.borrow().is_empty());
+    }
+
+    /// A desktop shell with window capture offered and Settings open; its window index.
+    #[cfg(feature = "desktop-wayland")]
+    fn desk_with_one_window() -> (Shell, usize) {
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.anim = None;
+        sh.screen = crate::shell::Screen::Home;
+        sh.shots.set_available(true);
+        sh.desk_open(AppId::Settings, 100.0);
+        let i = sh.desk.as_ref().unwrap().index_of(AppId::Settings).expect("the window is open");
+        (sh, i)
+    }
+
+    /// The centre pixel of the minimized window's thumbnail frame in the Dock, as the Dock draws it at `t` ms.
+    #[cfg(feature = "desktop-wayland")]
+    fn minimized_slot_centre(sh: &Shell, wi: usize, t: f64) -> u32 {
+        let m = sh.desk_metrics();
+        let (list, bar0, rects0) = sh.desk_dock(&m);
+        let (_, slid) = sh.dock_slid(bar0, &rects0, t / 1000.0);
+        let rects = sh.dock_magnified(&slid, t / 1000.0);
+        let k = list.iter().position(|&e| super::desktop_dock::dock_min_index(e) == Some(wi)).expect("the minimized window has a slot");
+        let win = &sh.desk.as_ref().unwrap().wins[wi];
+        let frame = thumbnail_frame(rects[k], win.r.w, win.r.h);
+        let (w, h) = (m.w as usize, m.h as usize);
+        let mut px = vec![0u32; w * h];
+        sh.draw_desk_dock(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, &m, t);
+        px[(frame.y + frame.h / 2) as usize * w + (frame.x + frame.w / 2) as usize]
+    }
+
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn minimizing_a_window_asks_once_for_its_picture() {
+        let (mut sh, i) = desk_with_one_window();
+        sh.desk_minimize_window(i, 200.0);
+        let reqs = sh.take_capture_requests();
+        let id = win_id(AppId::Settings).unwrap();
+        assert_eq!(reqs.len(), 1, "one request");
+        assert_eq!(reqs[0].source, super::window_shots::Source::Surface(id), "named by the shell's own window");
+        assert_eq!(reqs[0].max, DOCK_SHOT_BOUND);
+        assert_eq!(reqs[0].since, 0, "a whole picture, not an unchanged answer");
+        assert!(sh.take_capture_requests().is_empty(), "and no more while it stays minimized");
+        sh.shots_tick(1000.0);
+        sh.shots_tick(3000.0);
+        assert!(sh.take_capture_requests().is_empty(), "the Dock never refreshes it");
+    }
+
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn the_minimized_slot_shows_the_windows_picture_inside_the_thumbnail_frame() {
+        let (mut sh, i) = desk_with_one_window();
+        sh.desk_minimize_window(i, 200.0);
+        // the fallback first: the icon in the frame, no picture
+        assert!(sh.dock_picture(AppId::Settings).is_none());
+        let icon_centre = minimized_slot_centre(&sh, i, 5000.0);
+        let token = sh.take_capture_requests()[0].token;
+        let red = crate::gfx::pack(250, 10, 10, 255);
+        sh.window_capture_results(vec![(token, super::window_shots::Outcome::Ready { image: Image { w: 64, h: 40, px: vec![red; 64 * 40] }, serial: 1 })], 300.0);
+        assert!(sh.dock_picture(AppId::Settings).is_some());
+        let picture_centre = minimized_slot_centre(&sh, i, 5000.0);
+        assert_ne!(picture_centre, icon_centre, "the slot no longer shows the icon");
+        assert_eq!(picture_centre >> 16 & 255, 250, "it shows the window's own pixels");
+    }
+
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn a_failed_capture_leaves_the_icon_in_the_frame() {
+        let (mut sh, i) = desk_with_one_window();
+        sh.desk_minimize_window(i, 200.0);
+        let before = minimized_slot_centre(&sh, i, 5000.0);
+        let token = sh.take_capture_requests()[0].token;
+        sh.window_capture_results(vec![(token, super::window_shots::Outcome::Failed)], 300.0);
+        assert!(sh.dock_picture(AppId::Settings).is_none());
+        assert_eq!(minimized_slot_centre(&sh, i, 5000.0), before, "the same icon-in-frame slot as without window capture");
+    }
+
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn without_window_capture_minimizing_asks_for_nothing() {
+        let (mut sh, i) = desk_with_one_window();
+        sh.shots.set_available(false);
+        sh.desk_minimize_window(i, 200.0);
+        assert!(sh.take_capture_requests().is_empty());
+        assert!(sh.dock_picture(AppId::Settings).is_none());
+    }
+
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn a_closed_windows_picture_is_freed() {
+        let (mut sh, i) = desk_with_one_window();
+        sh.desk_minimize_window(i, 200.0);
+        let token = sh.take_capture_requests()[0].token;
+        sh.window_capture_results(vec![(token, super::window_shots::Outcome::Ready { image: Image { w: 8, h: 8, px: vec![0xff00_0000; 64] }, serial: 1 })], 300.0);
+        assert_eq!(sh.shots.held(), 1);
+        sh.desk.as_mut().unwrap().close(i);
+        sh.shots_tick(10_000.0);
+        assert_eq!(sh.shots.held(), 0, "nothing is kept for a window that is gone");
     }
 
     #[test]

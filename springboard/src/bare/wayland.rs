@@ -76,6 +76,8 @@ use crate::shell::accessibility::zoom::{self as zoom_model, Mode, ScreenZoom};
 use bifrost_render::glass::Rect as Glass;
 use super::material_client::{args as material_args, protocol::{bifrost_material_manager_v1 as mat_manager, bifrost_material_surface_v1 as mat_surface}};
 use super::window_level_client::protocol::bifrost_window_level_manager_v1 as lvl_manager;
+use super::window_capture_client::protocol::{bifrost_window_capture_manager_v1 as cap_manager, bifrost_window_capture_frame_v1 as cap_frame};
+use crate::shell::window_shots::{Outcome as ShotOutcome, Request as ShotRequest, Source as ShotSource};
 /// The presenter's key for the desktop background (and the lock surface, which shares its drawables).
 const GPU_BG: u32 = u32::MAX;
 /// A dma-buf `wl_buffer` around one presenter drawable.
@@ -93,6 +95,11 @@ fn transient<T>(r: Result<T, wayland_client::backend::WaylandError>) -> io::Resu
     }
 }
 struct Slot { buffer: wl_buffer::WlBuffer, map: memmap2::MmapMut, busy: bool, damage: Damage }
+/// A window capture in flight (`bifrost_window_capture_v1`): the buffer the window server fills and the frame object that
+/// answers. The buffer is as large as the biggest picture wanted; the picture comes back in its top-left corner.
+struct CapJob { buffer:wl_buffer::WlBuffer, frame:cap_frame::BifrostWindowCaptureFrameV1, map:memmap2::MmapMut, stride:usize }
+/// At most this many captures are out at once.
+const MAX_CAPTURES_IN_FLIGHT: usize = 64;
 #[derive(Default)]
 struct State {
     /// The window server's output management (mode requests from the shell), its first head, the last serial it sent,
@@ -100,6 +107,8 @@ struct State {
     output_manager:Option<om_manager::ZwlrOutputManagerV1>, output_head:Option<om_head::ZwlrOutputHeadV1>, output_serial:u32, output_busy:bool,
     bg_manager:Option<bg_manager::ExtBackgroundEffectManagerV1>, bg_blur:bool, mat_manager:Option<mat_manager::BifrostMaterialManagerV1>, level_mgr:Option<lvl_manager::BifrostWindowLevelManagerV1>,
     foreign_manager:Option<foreign_manager::ZwlrForeignToplevelManagerV1>, foreign:Vec<Foreign>, foreign_dirty:bool,
+    /// window capture (the global is listed on the privileged socket only): the manager, the requests in flight by token, the answers
+    cap_mgr:Option<cap_manager::BifrostWindowCaptureManagerV1>, cap_jobs:HashMap<u64,CapJob>, cap_results:Vec<(u64,ShotOutcome)>,
     cursor_manager: Option<cursor_manager::WpCursorShapeManagerV1>, cursor_device: Option<cursor_device::WpCursorShapeDeviceV1>, pointer: Option<wl_pointer::WlPointer>, cursor_serial:u32,
     /// the seat's touch device (bound when the seat reports touch) and the fingers on it
     touch: Option<wl_touch::WlTouch>, fingers: touch_model::Translator,
@@ -170,7 +179,7 @@ fn gpu_buffers(state:&State, infos:&[BufferInfo], qh:&QueueHandle<State>) -> io:
 }
 impl Display {
     pub fn open() -> io::Result<Self> {
-        let conn = Connection::connect_to_env().map_err(err)?;
+        let conn = super::privileged::connect().map_err(err)?;
         let mut queue = conn.new_event_queue(); let qh = queue.handle();
         let mut state = State::default();
         conn.display().get_registry(&qh, ());
@@ -300,6 +309,41 @@ impl Display {
         if !std::mem::take(&mut self.state.foreign_dirty) { return None; }
         Some(self.state.foreign.iter().filter(|w| !w.info.app_id.is_empty()).map(|w| w.info.clone()).collect())
     }
+    /// Whether the window server offers window capture to this connection (the privileged socket).
+    pub fn window_capture_ready(&self) -> bool { self.state.cap_mgr.is_some() }
+    /// Sends window captures. A request that cannot be sent (the window is gone, no shared memory) is answered `Failed` at
+    /// once, so the consumer falls back; the answers come back through `capture_results`.
+    pub fn capture_windows(&mut self,reqs:Vec<ShotRequest>) -> io::Result<()> {
+        let qh=self.queue.handle();
+        for r in reqs {
+            if self.send_capture(&qh,&r).is_none() { self.state.cap_results.push((r.token,ShotOutcome::Failed)); }
+        }
+        transient(self.conn.flush())
+    }
+    fn send_capture(&mut self,qh:&QueueHandle<State>,r:&ShotRequest) -> Option<()> {
+        if self.state.cap_jobs.len()>=MAX_CAPTURES_IN_FLIGHT { return None; }
+        let mgr=self.state.cap_mgr.clone()?;
+        let shm=self.state.shm.clone()?;
+        // the window is named first: no buffer is made for one that is gone
+        let surface=match r.source { ShotSource::Surface(id)=>Some(self.state.windows.get(&id)?.surface.clone()), ShotSource::Foreign(_)=>None };
+        let handle=match r.source { ShotSource::Foreign(id)=>Some(self.state.foreign.iter().find(|f|f.info.id==id)?.handle.clone()), ShotSource::Surface(_)=>None };
+        let (w,h)=r.max;
+        let len=super::window_capture_client::buffer_len(w,h)?;
+        let file=tempfile::tempfile().ok()?; file.set_len(len as u64).ok()?;
+        let map=unsafe{memmap2::MmapMut::map_mut(&file)}.ok()?;
+        let pool=shm.create_pool(file.as_fd(),len as i32,qh,());
+        let buffer=pool.create_buffer(0,w as i32,h as i32,w as i32*4,wl_shm::Format::Argb8888,qh,());
+        pool.destroy();
+        let frame=match (surface,handle) {
+            (Some(s),_)=>mgr.capture_surface(&s,&buffer,r.since,qh,r.token),
+            (_,Some(t))=>mgr.capture_toplevel(&t,&buffer,r.since,qh,r.token),
+            _=>{ buffer.destroy(); return None; }
+        };
+        self.state.cap_jobs.insert(r.token,CapJob{buffer,frame,map,stride:w as usize*4});
+        Some(())
+    }
+    /// The answers to window captures since the last call: (token, outcome).
+    pub fn capture_results(&mut self) -> Vec<(u64,ShotOutcome)> { std::mem::take(&mut self.state.cap_results) }
     pub fn activate_foreign(&mut self,id:u32) -> io::Result<()> {
         if let (Some(w),Some(seat))=(self.state.foreign.iter().find(|w|w.info.id==id),self.state.seat.as_ref()) { w.handle.unset_minimized(); w.handle.activate(seat); transient(self.conn.flush())?; }
         Ok(())
@@ -860,6 +904,7 @@ impl Dispatch<wl_registry::WlRegistry, ()> for State {
         if let wl_registry::Event::Global { name,interface,version } = e { match interface.as_str() {
             "bifrost_material_manager_v1" => s.mat_manager=Some(reg.bind(name,1,q,())),
             "bifrost_window_level_manager_v1" => s.level_mgr=Some(reg.bind(name,version.min(super::window_level_client::VERSION),q,())),
+            "bifrost_window_capture_manager_v1" => s.cap_mgr=Some(reg.bind(name,version.min(super::window_capture_client::VERSION),q,())),
             "ext_background_effect_manager_v1" => s.bg_manager=Some(reg.bind(name,1,q,())),
             "zwlr_foreign_toplevel_manager_v1" => s.foreign_manager=Some(reg.bind(name,version.min(3),q,())),
             "ext_idle_notifier_v1" => s.idle_notifier=Some(reg.bind(name,version.min(2),q,())),
@@ -1417,6 +1462,24 @@ impl Dispatch<im::ZwpInputMethodV2,()> for State {
 }
 impl Dispatch<mat_manager::BifrostMaterialManagerV1,()> for State {
     fn event(_:&mut Self,_:&mat_manager::BifrostMaterialManagerV1,_:mat_manager::Event,_:&(),_:&Connection,_:&QueueHandle<Self>) {}
+}
+impl Dispatch<cap_manager::BifrostWindowCaptureManagerV1,()> for State {
+    fn event(_:&mut Self,_:&cap_manager::BifrostWindowCaptureManagerV1,_:cap_manager::Event,_:&(),_:&Connection,_:&QueueHandle<Self>) {}
+}
+impl Dispatch<cap_frame::BifrostWindowCaptureFrameV1,u64> for State {
+    fn event(s:&mut Self,_:&cap_frame::BifrostWindowCaptureFrameV1,e:cap_frame::Event,token:&u64,_:&Connection,_:&QueueHandle<Self>) {
+        let outcome=match e {
+            cap_frame::Event::Ready{width,height,serial}=>{
+                let picture=s.cap_jobs.get(token).and_then(|j|super::window_capture_client::read_picture(&j.map,j.stride,width as usize,height as usize));
+                match picture { Some(px)=>ShotOutcome::Ready{image:crate::gfx::Image{w:width as usize,h:height as usize,px},serial}, None=>ShotOutcome::Failed }
+            }
+            cap_frame::Event::Unchanged{serial}=>ShotOutcome::Unchanged{serial},
+            cap_frame::Event::Failed{..}=>ShotOutcome::Failed,
+            _=>return,
+        };
+        if let Some(job)=s.cap_jobs.remove(token) { job.buffer.destroy(); job.frame.destroy(); }
+        s.cap_results.push((*token,outcome));
+    }
 }
 impl Dispatch<lvl_manager::BifrostWindowLevelManagerV1,()> for State {
     fn event(s:&mut Self,_:&lvl_manager::BifrostWindowLevelManagerV1,e:lvl_manager::Event,_:&(),_:&Connection,_:&QueueHandle<Self>) {
