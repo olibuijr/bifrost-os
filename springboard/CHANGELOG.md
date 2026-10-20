@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.10.8 — 2026-10-20
+
+- System Update now updates the system's own assets (UI fonts, app icons, wallpapers). They ship in the update package
+  at /usr/share/springboard/system-assets, so every update can change them; before, they were copied once from the
+  install medium and no update could replace them.
+- The update removes the copies an older install left in /usr/share/springboard/assets that the package now replaces
+  or that are not BifrOSt's own (logged to /var/log/bifrost-assets.log), and the Dock and Launchpad pick up the new
+  icons. Wallpapers, fonts and files you added stay.
+- The installer no longer copies the install medium's assets onto the new system; the package brings them.
+
 ## 0.10.7 — 2026-10-20
 
 - BifrOSt now ships and loads only its own and openly licensed files. The reference assets that were packaged under
