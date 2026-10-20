@@ -805,6 +805,10 @@ impl Weather {
     fn save_summary(&mut self) {
         if let Some(s) = self.summary() {
             self.store.save_summary(&s);
+            // the next hours go beside it, for Notification Center's Weather card
+            if let Some(f) = self.forecasts.get(&self.place().key()) {
+                self.store.save_glance(&s.place, f.glance());
+            }
             self.summary_changed = true;
         }
     }

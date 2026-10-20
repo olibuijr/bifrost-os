@@ -35,6 +35,12 @@ const LOCATIONS_FILE: &str = "locations.tsv";
 const SETTINGS_FILE: &str = "settings.txt";
 const WATCHLIST_FILE: &str = "watchlist.txt";
 pub const SUMMARY_FILE: &str = "summary.txt";
+/// The next hours of the summary's place, written beside it for Notification Center's Weather card.
+pub const GLANCE_FILE: &str = "glance.txt";
+/// How many upcoming hours the glance keeps.
+pub const GLANCE_HOURS: usize = 6;
+/// A glance older than this is not shown: its hour labels would no longer match the clock.
+pub const GLANCE_MAX_AGE_S: u64 = 3 * 3600;
 /// How many past years the "average high for this date" looks at.
 pub const AVERAGE_YEARS: i32 = 10;
 /// The fewest past years that make an average worth showing.
@@ -335,6 +341,11 @@ pub struct Forecast {
 }
 
 impl Forecast {
+    /// The next hours the glance keeps, starting with the current one.
+    pub fn glance(&self) -> &[Hour] {
+        &self.hours[..self.hours.len().min(GLANCE_HOURS)]
+    }
+
     pub fn summary(&self, place: &str, units: Units) -> Summary {
         let today = self.days.first();
         Summary {
@@ -579,6 +590,30 @@ impl Summary {
     }
 }
 
+fn glance_text(place: &str, hours: &[Hour]) -> String {
+    let mut text = format!("{}\n", place.replace(['\t', '\n'], " "));
+    for h in hours {
+        text.push_str(&format!("{}\t{}\t{}\t{}\n", h.label.replace(['\t', '\n'], " "), h.temp, h.code, h.day as u8));
+    }
+    text
+}
+
+fn parse_glance(text: &str, place: &str) -> Vec<Hour> {
+    let mut lines = text.lines();
+    if lines.next() != Some(place.replace(['\t', '\n'], " ").as_str()) {
+        return Vec::new();
+    }
+    lines
+        .filter_map(|l| {
+            let mut f = l.split('\t');
+            let label = f.next()?;
+            let (temp, code, day) = (f.next()?.parse::<f64>().ok()?, f.next()?.parse::<u8>().ok()?, f.next()?.parse::<u8>().ok()?);
+            Some(Hour::basic(label, temp, code, day != 0))
+        })
+        .take(GLANCE_HOURS)
+        .collect()
+}
+
 /// One watchlist row as the quote endpoint reports it.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Quote {
@@ -709,6 +744,23 @@ impl Store {
         self.write(SUMMARY_FILE, &s.to_line());
     }
 
+    /// Saves the next `hours` of `place` beside the summary: the place on the first line (so a glance of another
+    /// place is never shown under this summary), then one tab-separated hour per line.
+    pub fn save_glance(&self, place: &str, hours: &[Hour]) {
+        self.write(GLANCE_FILE, &glance_text(place, hours));
+    }
+
+    /// The saved glance for `place`: empty when there is none, when it is for another place, or when it is older
+    /// than `GLANCE_MAX_AGE_S`.
+    pub fn load_glance(&self, place: &str) -> Vec<Hour> {
+        let path = self.dir.join(GLANCE_FILE);
+        let age = std::fs::metadata(&path).and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).map_or(u64::MAX, |d| d.as_secs());
+        if age > GLANCE_MAX_AGE_S {
+            return Vec::new();
+        }
+        parse_glance(&self.read(GLANCE_FILE), place)
+    }
+
     fn forecast_file(loc: &Location) -> String {
         format!("forecast-{}.json", loc.key())
     }
@@ -799,6 +851,7 @@ pub fn refresh_summary(store: &Store, net: &dyn Fetch, max_age_s: u64) -> io::Re
     };
     let summary = forecast.summary(&loc.name, units);
     store.save_summary(&summary);
+    store.save_glance(&summary.place, forecast.glance());
     Ok(summary)
 }
 
@@ -1048,6 +1101,42 @@ mod tests {
         // a zero age limit always asks the network, and a failed ask keeps the saved summary
         assert!(refresh_summary(&st, &Canned("{}".into()), 0).is_err());
         assert_eq!(Summary::load(&dir), Some(fresh));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_glance_round_trips_for_its_place_only() {
+        let dir = std::env::temp_dir().join(format!("bifrost-glance-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let st = Store::new(&dir);
+        let f = parse_forecast(FORECAST).unwrap();
+        assert_eq!(f.glance().len(), 2, "the hours the forecast has, up to the limit");
+        assert!(st.load_glance("Oslo").is_empty(), "nothing saved, nothing shown");
+        st.save_glance("Oslo", f.glance());
+        let back = st.load_glance("Oslo");
+        let basics = |hs: &[Hour]| hs.iter().map(|h| (h.label.clone(), h.temp, h.code, h.day)).collect::<Vec<_>>();
+        assert_eq!(basics(&back), basics(f.glance()));
+        assert!(back[0].day && !back[1].day);
+        assert!(st.load_glance("Bergen").is_empty(), "another place's hours are never shown");
+        // a glance older than the limit is dropped
+        let old = std::time::SystemTime::now() - std::time::Duration::from_secs(GLANCE_MAX_AGE_S + 60);
+        std::fs::File::options().write(true).open(dir.join(GLANCE_FILE)).unwrap().set_modified(old).unwrap();
+        assert!(st.load_glance("Oslo").is_empty(), "stale hours are not shown");
+        // a damaged line is skipped, not invented
+        assert_eq!(parse_glance("Oslo\n13\t7\t61\t1\nbad\n14\tx\t3\t1\n", "Oslo").len(), 1);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn refresh_summary_saves_the_glance_beside_the_summary() {
+        let dir = std::env::temp_dir().join(format!("bifrost-glance-refresh-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let st = Store::new(&dir);
+        st.save_locations(&[Location { name: "Oslo".into(), region: "Norway".into(), lat: 59.91, lon: 10.75 }]);
+        let sum = refresh_summary(&st, &Canned(FORECAST.into()), 900).unwrap();
+        let hours = st.load_glance(&sum.place);
+        assert_eq!(hours.iter().map(|h| h.label.as_str()).collect::<Vec<_>>(), ["13", "18"]);
+        assert_eq!(hours[0].temp, 7.0);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

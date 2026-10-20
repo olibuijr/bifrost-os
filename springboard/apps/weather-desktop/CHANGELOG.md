@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.8.3
+
+- The next hours of the selected place are saved beside the summary (`glance.txt`), so Notification Center's Weather card shows the place, the temperature, the condition and the coming hours.
+
 ## 1.8.2
 
 - The forecast toolbar no longer has a Stocks button (Weather keeps its own controls; the watchlist page stays in the code, unreachable from the toolbar).

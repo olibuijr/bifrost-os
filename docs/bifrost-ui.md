@@ -5562,7 +5562,12 @@ properties and deleting notes or events from a script are refused by the apps fo
   (`is.olibuijr.calendar.desktop`, `is.olibuijr.weather.desktop`), the bare tablet id as the fallback. The weekday and month on
   the date card follow the region (`bifrost_ui::region::day_name`, `month_name`; English and Icelandic). The date and the
   temperature use `MAC_DISPLAY_PT` (twice the large title). The cards are left out when they would leave no room for the
-  Edit Widgets capsule above the dock.
+  Edit Widgets capsule above the dock. The Weather card reads the summary the Weather service saved in the installed package's
+  data folder (`appdata/<package id>`, found by `shell::weather::data_dir_in`: the `.desktop` package first, the bare id as the
+  fallback) and, from `glance.txt` beside it, the next hours of that place. With hours the row grows (132 pt) and the card
+  widens to show a strip of hour, condition glyph and temperature; hours of another place or older than three hours are not
+  shown, and with no saved summary there is no Weather card. The Weather app (1.8.3) and the shell's hourly refresh both write
+  the glance.
 - Control Centre (`shell/control_center.rs`, desktop): Bluetooth is always a module (it reads Unavailable and takes no pressed
   state without a controller); Display is a brightness slider when a backlight exists, otherwise a capsule that flips the
   appearance between Light and Dark. From Auto a tap picks a fixed Light or Dark; Auto is chosen again in Settings >

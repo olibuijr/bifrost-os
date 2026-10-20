@@ -473,6 +473,12 @@ const NC_ROW_ICON_PT: f32 = 32.0;
 const NC_ICON_GAP_PT: f32 = 10.0;
 /// a Calendar or Weather card under the notifications
 const NC_INFO_PT: f32 = 104.0;
+/// the row's height when the Weather card also shows the next hours, and the Calendar card's share of the row then
+const NC_INFO_HOURS_PT: f32 = 132.0;
+const NC_CAL_SHARE: f32 = 0.34;
+/// the narrowest column of the Weather card's hour strip, and the radius of an hour's glyph
+const NC_HOUR_COL_PT: f32 = 38.0;
+const NC_HOUR_GLYPH_R_PT: f32 = 8.0;
 /// the Edit Widgets capsule's width and the gap to the round close button beside it (the button is NC_EDIT_PT wide)
 const NC_EDIT_W_PT: f32 = 104.0;
 const NC_EDIT_GAP_PT: f32 = 8.0;
@@ -575,10 +581,18 @@ impl Shell {
         let ui = &self.ui;
         let (w, gap) = (self.center_w(), ui.pt(NC_GAP_PT));
         let x = self.w as f32 - ui.pt(NC_RIGHT_PT) - w;
-        let (y, h) = (self.center_flow_top(), ui.pt(NC_INFO_PT));
+        let y = self.center_flow_top();
         // the cards must end above the Edit Widgets capsule's slot, or the capsule would overlap them and win the tap
-        if y + h + ui.pt(NC_EDIT_TOP_PT) + ui.pt(NC_EDIT_PT) > self.h as f32 - ui.pt(NC_BOTTOM_PT) {
+        let fits = |h: f32| y + h + ui.pt(NC_EDIT_TOP_PT) + ui.pt(NC_EDIT_PT) <= self.h as f32 - ui.pt(NC_BOTTOM_PT);
+        // the Weather card grows to carry the next hours when the Weather service saved them and the room allows
+        let hours = self.today.weather().is_some() && !self.today.weather_hours().is_empty() && fits(ui.pt(NC_INFO_HOURS_PT));
+        let h = ui.pt(if hours { NC_INFO_HOURS_PT } else { NC_INFO_PT });
+        if !fits(h) {
             return vec![];
+        }
+        if hours {
+            let cal = (w - gap) * NC_CAL_SHARE;
+            return vec![(InfoCard::Calendar, (x, y, cal, h)), (InfoCard::Weather, (x + cal + gap, y, w - gap - cal, h))];
         }
         let mut kinds = vec![InfoCard::Calendar];
         if self.today.weather().is_some() {
@@ -992,7 +1006,7 @@ impl Shell {
 
     fn draw_desk_center(&mut self, s: &mut Surface, t: f64) {
         use super::super::control_center::desk_glass;
-        use super::super::ui::{FIELD_BG, LABEL, LABEL_2, LINK, MAC_BODY_PT, MAC_HEADLINE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT, BAR_TEXT, BAR_TEXT_SHADOW, BAR_TEXT_SHADOW_ALPHA, MAC_DISPLAY_PT, NC_QUIET_ALPHA, NC_WEATHER_TINT, SYSTEM_RED};
+        use super::super::ui::{FIELD_BG, LABEL, LABEL_2, LINK, MAC_BODY_PT, MAC_HEADLINE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT, BAR_TEXT, BAR_TEXT_SHADOW, BAR_TEXT_SHADOW_ALPHA, MAC_DISPLAY_PT, MAC_FOOTNOTE_PT, MAC_LARGE_TITLE_PT, NC_QUIET_ALPHA, NC_WEATHER_TINT, SYSTEM_RED};
         let c = &self.notify.center;
         let p = c.progress(t).clamp(0.0, 1.0);
         if let Some((x, y, w, h)) = self.center_desk_rect().filter(|_| bifrost_render::glass::gpu()) {
@@ -1105,13 +1119,36 @@ impl Shell {
                     super::super::weather::glyph::draw(s, sum.sky(), sum.day, (x + w - pad - glyph_r, y + pad + glyph_r), glyph_r);
                     let room = w - 2.0 * pad - 2.0 * glyph_r - ui.pt(NC_CHIP_GAP_PT);
                     let place = ui.text(&ui.fit(&sum.place, MAC_HEADLINE_PT, room), MAC_HEADLINE_PT, Weight::Semibold, WHITE);
-                    let temp = ui.text(&sum.units.degrees(sum.temp), MAC_DISPLAY_PT, Weight::Regular, WHITE);
                     let sky = ui.text(sum.sky().label(), MAC_SUBHEAD_PT, Weight::Medium, WHITE);
-                    let hl = ui.text(&format!("H:{}  L:{}", sum.units.degrees(sum.max), sum.units.degrees(sum.min)), MAC_SUBHEAD_PT, Weight::Regular, WHITE);
                     s.blit(&place, (x + pad) as i32, (y + pad) as i32, 255, alpha);
-                    s.blit(&temp, (x + pad) as i32, (y + pad + place.h as f32) as i32, 255, alpha);
-                    s.blit(&sky, (x + pad) as i32, (y + h - pad - sky.h as f32 - hl.h as f32) as i32, 255, alpha);
-                    s.blit(&hl, (x + pad) as i32, (y + h - pad - hl.h as f32) as i32, 255, alpha * 200 / 255);
+                    let hours = self.today.weather_hours();
+                    if h > ui.pt(NC_INFO_PT) + 1.0 && !hours.is_empty() {
+                        // with the next hours: the temperature and condition on one line, the hour strip along the foot
+                        let temp = ui.text(&sum.units.degrees(sum.temp), MAC_LARGE_TITLE_PT, Weight::Regular, WHITE);
+                        let ty = y + pad + place.h as f32;
+                        s.blit(&temp, (x + pad) as i32, ty as i32, 255, alpha);
+                        s.blit(&sky, (x + w - pad - sky.w as f32) as i32, (ty + temp.h as f32 - sky.h as f32) as i32, 255, alpha);
+                        let n = hours.len().min(((w - 2.0 * pad) / ui.pt(NC_HOUR_COL_PT)).floor().max(1.0) as usize);
+                        let col = (w - 2.0 * pad) / n as f32;
+                        let gr = ui.pt(NC_HOUR_GLYPH_R_PT);
+                        for (i, hour) in hours.iter().take(n).enumerate() {
+                            let cx = x + pad + (i as f32 + 0.5) * col;
+                            let name = if i == 0 { "Now".to_string() } else { hour.label.clone() };
+                            let label = ui.text(&name, MAC_FOOTNOTE_PT, Weight::Regular, WHITE);
+                            let deg = ui.text(&sum.units.degrees(hour.temp), MAC_SUBHEAD_PT, Weight::Semibold, WHITE);
+                            let deg_y = y + h - pad - deg.h as f32;
+                            let glyph_y = deg_y - ui.pt(3.0) - gr;
+                            s.blit(&label, (cx - label.w as f32 / 2.0) as i32, (glyph_y - gr - ui.pt(3.0) - label.h as f32) as i32, 255, alpha * 200 / 255);
+                            super::super::weather::glyph::draw(s, super::super::weather::data::Sky::from_code(hour.code), hour.day, (cx, glyph_y), gr);
+                            s.blit(&deg, (cx - deg.w as f32 / 2.0) as i32, deg_y as i32, 255, alpha);
+                        }
+                    } else {
+                        let temp = ui.text(&sum.units.degrees(sum.temp), MAC_DISPLAY_PT, Weight::Regular, WHITE);
+                        let hl = ui.text(&format!("H:{}  L:{}", sum.units.degrees(sum.max), sum.units.degrees(sum.min)), MAC_SUBHEAD_PT, Weight::Regular, WHITE);
+                        s.blit(&temp, (x + pad) as i32, (y + pad + place.h as f32) as i32, 255, alpha);
+                        s.blit(&sky, (x + pad) as i32, (y + h - pad - sky.h as f32 - hl.h as f32) as i32, 255, alpha);
+                        s.blit(&hl, (x + pad) as i32, (y + h - pad - hl.h as f32) as i32, 255, alpha * 200 / 255);
+                    }
                 }
             }
         }
@@ -1320,5 +1357,35 @@ mod column_tests {
         assert!(cap.0 >= x && close.0 + close.2 <= x + w, "both inside the column");
         assert!(matches!(sh.center_desk_hit(close.0 + close.2 / 2.0, close.1 + close.3 / 2.0), Some(DeskHit::CloseCenter)));
         assert!(matches!(sh.center_desk_hit(cap.0 + cap.2 / 2.0, cap.1 + cap.3 / 2.0), Some(DeskHit::EditWidgets)));
+    }
+
+    /// E2E NC2 rest: the Weather card shows only what the Weather service saved. With a summary alone it shares the
+    /// row with the date card; with the next hours the row grows and the card widens to carry them; with no summary
+    /// there is no card at all.
+    #[test]
+    fn the_weather_card_appears_only_with_saved_data_and_grows_for_the_hours() {
+        use crate::shell::weather::data::{Hour, Summary, Units};
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.screen = crate::shell::Screen::Home;
+        let sum = Summary { place: "Reykjav\u{ed}k".into(), temp: 6.0, code: 3, day: true, max: 8.0, min: 2.0, units: Units::Celsius };
+        sh.today.set_weather(None, Vec::new());
+        assert!(sh.center_info_rects().iter().all(|(k, _)| *k == InfoCard::Calendar), "no saved data, no Weather card");
+        // hours without a summary are never drawn on their own
+        sh.today.set_weather(None, vec![Hour::basic("14", 5.0, 3, true)]);
+        assert!(sh.center_info_rects().iter().all(|(k, _)| *k == InfoCard::Calendar));
+        sh.today.set_weather(Some(sum.clone()), Vec::new());
+        let plain = sh.center_info_rects();
+        assert_eq!(plain.len(), 2);
+        assert!((plain[0].1 .2 - plain[1].1 .2).abs() < 0.5, "equal shares without hours");
+        assert!((plain[0].1 .3 - sh.ui.pt(NC_INFO_PT)).abs() < 0.5);
+        let hours = (0..6).map(|i| Hour::basic(&format!("{}", 14 + i), 5.0 - i as f64, 3, true)).collect();
+        sh.today.set_weather(Some(sum), hours);
+        let tall = sh.center_info_rects();
+        let (cal, wx) = (tall[0], tall[1]);
+        assert!(cal.0 == InfoCard::Calendar && wx.0 == InfoCard::Weather);
+        assert!(wx.1 .3 > plain[1].1 .3 && wx.1 .2 > cal.1 .2, "the Weather card is taller and the wider of the two");
+        let (x, w) = (sh.w as f32 - sh.ui.pt(NC_RIGHT_PT) - sh.center_w(), sh.center_w());
+        assert!(cal.1 .0 >= x - 0.5 && wx.1 .0 + wx.1 .2 <= x + w + 0.5, "both inside the column");
+        assert!(wx.1 .2 >= sh.ui.pt(NC_HOUR_COL_PT) * 3.0, "room for several hours");
     }
 }
