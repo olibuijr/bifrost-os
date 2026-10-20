@@ -17,6 +17,9 @@ use std::ops::Range;
 
 const ZWJ: char = '\u{200d}';
 
+/// How many lines Page Up and Page Down move in a buffer that does not know how tall its view is.
+pub const PAGE_LINES: usize = 10;
+
 fn is_regional_indicator(c: char) -> bool {
     ('\u{1f1e6}'..='\u{1f1ff}').contains(&c)
 }
@@ -416,6 +419,17 @@ impl TextBuffer {
         self.move_to(pos, extend);
         self.goal_col = Some(col);
     }
+    /// A page up or down: `lines` paragraph lines, keeping the column, stopping at the first or last line (where it goes to
+    /// the start or the end of the text, as the arrows do).
+    pub fn move_page(&mut self, down: bool, extend: bool, lines: usize) {
+        for _ in 0..lines.max(1) {
+            let before = self.head;
+            self.move_vertical(down, extend);
+            if self.head == before {
+                break;
+            }
+        }
+    }
     /// The offset `col` graphemes into the line starting at `start`, or the line's end.
     fn at_column(&self, start: usize, col: usize) -> usize {
         let end = line_end(&self.text, start);
@@ -718,6 +732,10 @@ pub enum EditCommand {
     MoveLineEnd,
     MoveDocumentStart,
     MoveDocumentEnd,
+    /// Page Up: up by a page of lines (`PAGE_LINES` for a view that does not know its height).
+    MovePageUp,
+    /// Page Down: down by a page of lines.
+    MovePageDown,
     DeleteBackward,
     DeleteForward,
     DeleteWordBackward,
@@ -735,6 +753,25 @@ pub enum EditCommand {
 /// The command a key combo means in a text field, and whether it extends the selection (shift). Golden Gate defaults plus
 /// the emacs bindings every Cocoa text field has: ctrl-A/E line start/end, ctrl-F/B/N/P, ctrl-D, ctrl-H, ctrl-K, ctrl-Y,
 /// ctrl-T, ctrl-O. `cmd` is the primary modifier (Super).
+///
+/// The whole table (Shift extends the selection for every movement):
+///
+/// | Keys | Command |
+/// |---|---|
+/// | Left, Right, Up, Down | by character, by line (a single line goes to its start or end) |
+/// | Home, End, Cmd+Left, Cmd+Right, Ctrl+A, Ctrl+E | line start, line end |
+/// | Cmd+Up, Cmd+Down, Cmd+Home, Cmd+End, Ctrl+Home, Ctrl+End | document start, document end |
+/// | Option+Left, Option+Right, Ctrl+Left, Ctrl+Right | word back, word forward |
+/// | Page Up, Page Down | a page up, a page down |
+/// | Backspace, Ctrl+H | delete back |
+/// | Delete (Fn+Delete), Ctrl+D | delete forward |
+/// | Option+Backspace, Ctrl+Backspace | delete the word back |
+/// | Option+Delete, Ctrl+Delete | delete the word forward |
+/// | Cmd+Backspace | delete to the line start |
+/// | Ctrl+K, Ctrl+Y, Ctrl+T, Ctrl+O | kill to the line end, yank, transpose, open line |
+/// | Cmd+A, Cmd+Z, Shift+Cmd+Z | select all, undo, redo |
+///
+/// Copy, cut and paste are the pasteboard's: see [`key_action`].
 pub fn binding(k: KeyCombo) -> Option<(EditCommand, bool)> {
     use EditCommand::*;
     let ext = k.shift;
@@ -742,8 +779,8 @@ pub fn binding(k: KeyCombo) -> Option<(EditCommand, bool)> {
         match k.key {
             Key::Left => MoveLineStart,
             Key::Right => MoveLineEnd,
-            Key::Up => MoveDocumentStart,
-            Key::Down => MoveDocumentEnd,
+            Key::Up | Key::Home | Key::PageUp => MoveDocumentStart,
+            Key::Down | Key::End | Key::PageDown => MoveDocumentEnd,
             Key::Delete => DeleteToLineStart,
             Key::Char(c) if c.eq_ignore_ascii_case(&'a') && !k.shift => return Some((SelectAll, false)),
             Key::Char(c) if c.eq_ignore_ascii_case(&'z') => return Some(if k.shift { (Redo, false) } else { (Undo, false) }),
@@ -754,6 +791,7 @@ pub fn binding(k: KeyCombo) -> Option<(EditCommand, bool)> {
             Key::Left => MoveWordLeft,
             Key::Right => MoveWordRight,
             Key::Delete => DeleteWordBackward,
+            Key::ForwardDelete => DeleteWordForward,
             _ => return None,
         }
     } else if k.ctrl {
@@ -773,6 +811,12 @@ pub fn binding(k: KeyCombo) -> Option<(EditCommand, bool)> {
                 'o' => OpenLine,
                 _ => return None,
             },
+            Key::Left => MoveWordLeft,
+            Key::Right => MoveWordRight,
+            Key::Home => MoveDocumentStart,
+            Key::End => MoveDocumentEnd,
+            Key::Delete => DeleteWordBackward,
+            Key::ForwardDelete => DeleteWordForward,
             _ => return None,
         }
     } else {
@@ -781,11 +825,80 @@ pub fn binding(k: KeyCombo) -> Option<(EditCommand, bool)> {
             Key::Right => MoveRight,
             Key::Up => MoveUp,
             Key::Down => MoveDown,
+            Key::Home => MoveLineStart,
+            Key::End => MoveLineEnd,
+            Key::PageUp => MovePageUp,
+            Key::PageDown => MovePageDown,
             Key::Delete => DeleteBackward,
+            Key::ForwardDelete => DeleteForward,
             _ => return None,
         }
     };
     Some((cmd, ext))
+}
+
+/// What a key combo does in a text control: an editing command (and whether it extends the selection), or one of the
+/// three pasteboard commands, which the control runs against the pasteboard.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum KeyAction {
+    Edit(EditCommand, bool),
+    Cut,
+    Copy,
+    Paste,
+}
+
+/// The action a key combo means in a text control. The pasteboard chords are Cmd+C, Cmd+X and Cmd+V, and Ctrl+C, Ctrl+X
+/// and Ctrl+V as well (the Ctrl form is the desktop's alias of the Cmd one, and the shell turns both into commands before
+/// they reach an app). Ctrl+Z is Undo and Ctrl+Shift+Z Redo for the same reason. Everything else is [`binding`]'s, so Ctrl+A
+/// is the line start, Ctrl+Y the yank and Cmd+A select all.
+pub fn key_action(k: KeyCombo) -> Option<KeyAction> {
+    if (k.cmd || k.ctrl) && !k.alt {
+        if let Key::Char(c) = k.key {
+            match c.to_ascii_lowercase() {
+                'c' if !k.shift => return Some(KeyAction::Copy),
+                'x' if !k.shift => return Some(KeyAction::Cut),
+                'v' if !k.shift => return Some(KeyAction::Paste),
+                'z' if k.ctrl && !k.cmd => return Some(KeyAction::Edit(if k.shift { EditCommand::Redo } else { EditCommand::Undo }, false)),
+                _ => {}
+            }
+        }
+    }
+    binding(k).map(|(c, extend)| KeyAction::Edit(c, extend))
+}
+
+/// The selection (anchor, caret) of a drag that began on `origin` (the word or paragraph a double or triple click selected)
+/// and is now over `unit` (the word or paragraph under the pointer): their union, anchored at the far end of `origin`
+/// so the selection grows by whole words or paragraphs in either direction.
+pub fn extend_unit(origin: Range<usize>, unit: Range<usize>) -> (usize, usize) {
+    if unit.start < origin.start {
+        (origin.end, unit.start)
+    } else {
+        (origin.start, unit.end.max(origin.end))
+    }
+}
+
+/// Counts consecutive presses of a pointer on one spot: one for a single click, two for a double click (select a word),
+/// three for a triple click (select the paragraph). A press restarts at one when it comes too late or lands too far from
+/// the last. Times are milliseconds on any steady clock; positions are points.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ClickCounter {
+    last: Option<(f64, f32, f32)>,
+    count: u8,
+}
+
+impl ClickCounter {
+    /// Two presses within this many milliseconds are a multiple click.
+    pub const INTERVAL_MS: f64 = 450.0;
+    /// ... and within this many points of each other.
+    pub const SLOP_PT: f32 = 6.0;
+
+    /// A press at (`x`, `y`) at time `t`: the click count, 1 to 3 (a fourth click starts over at one).
+    pub fn press(&mut self, t: f64, x: f32, y: f32) -> u8 {
+        let near = self.last.is_some_and(|(lt, lx, ly)| t - lt >= 0.0 && t - lt <= Self::INTERVAL_MS && (x - lx).abs() <= Self::SLOP_PT && (y - ly).abs() <= Self::SLOP_PT);
+        self.count = if near && self.count < 3 { self.count + 1 } else { 1 };
+        self.last = Some((t, x, y));
+        self.count
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -966,6 +1079,25 @@ impl TextEditor {
         }
         self.record(e, "Typing", Kind::Typing)
     }
+    /// Pastes `text` over the selection as an undo step of its own ("Paste"), so one undo takes the whole paste back and
+    /// not the typing before it. True when the text changed.
+    pub fn paste_text(&mut self, text: &str) -> bool {
+        self.end_composition();
+        let e = self.buf.insert_text(text);
+        self.record(e, "Paste", Kind::Other)
+    }
+    /// Cuts the selection as an undo step of its own ("Cut") and returns it for the pasteboard; `None`, and nothing
+    /// changes, when nothing is selected.
+    pub fn cut_selection(&mut self) -> Option<String> {
+        self.end_composition();
+        if !self.buf.has_selection() || self.buf.has_marked_text() {
+            return None;
+        }
+        let cut = self.buf.selected_text().to_string();
+        let e = self.buf.insert_text("");
+        self.record(e, "Cut", Kind::Other);
+        Some(cut)
+    }
     /// `setMarkedText:selectedRange:replacementRange:`.
     pub fn set_marked_text(&mut self, text: &str, sel_start: usize, sel_len: usize, replacement: Option<Range<usize>>) {
         self.drop_composition();
@@ -1012,7 +1144,7 @@ impl TextEditor {
         };
         let edit = match cmd {
             MoveLeft | MoveRight | MoveUp | MoveDown | MoveWordLeft | MoveWordRight | MoveLineStart | MoveLineEnd
-            | MoveDocumentStart | MoveDocumentEnd | SelectAll => {
+            | MoveDocumentStart | MoveDocumentEnd | MovePageUp | MovePageDown | SelectAll => {
                 self.end_typing();
                 match cmd {
                     MoveLeft => self.buf.move_char(false, extend),
@@ -1025,6 +1157,8 @@ impl TextEditor {
                     MoveLineEnd => self.buf.move_line(true, extend),
                     MoveDocumentStart => self.buf.move_document(false, extend),
                     MoveDocumentEnd => self.buf.move_document(true, extend),
+                    MovePageUp => self.buf.move_page(false, extend, PAGE_LINES),
+                    MovePageDown => self.buf.move_page(true, extend, PAGE_LINES),
                     _ => self.buf.select_all(),
                 }
                 return before != (self.buf.anchor(), self.buf.caret(), self.buf.len());
@@ -1502,6 +1636,225 @@ mod tests {
         assert_eq!(b.text(), "bye world", "an edit that no longer fits is ignored");
     }
 
+    /// Runs a key chord against an editor the way a text control does: editing commands on the editor, the pasteboard
+    /// commands against `clip`.
+    fn press(ed: &mut TextEditor, keys: &str, clip: &mut String) {
+        let combo = KeyCombo::parse(keys).unwrap_or_else(|| panic!("{keys}: not a chord"));
+        match key_action(combo).unwrap_or_else(|| panic!("{keys}: no action")) {
+            KeyAction::Edit(cmd, extend) => {
+                ed.perform(cmd, extend);
+            }
+            KeyAction::Copy => *clip = ed.buf.selected_text().to_string(),
+            KeyAction::Cut => {
+                if let Some(cut) = ed.cut_selection() {
+                    *clip = cut;
+                }
+            }
+            KeyAction::Paste => {
+                let text = clip.clone();
+                ed.paste_text(&text);
+            }
+        }
+    }
+
+    /// Every standard text key: the text, the selection (anchor, caret) before, the chord, and the text and selection after.
+    /// The text is two lines: "one two three" (bytes 0 to 13), a newline at 13, and "four five six" (14 to 27).
+    #[test]
+    fn the_standard_text_keys_act_on_text_caret_and_selection() {
+        const T: &str = "one two three\nfour five six";
+        #[rustfmt::skip]
+        let table: &[(&str, &str, (usize, usize), &str, &str, (usize, usize))] = &[
+            // characters
+            ("left", T, (5, 5), "left", T, (4, 4)),
+            ("shift+left", T, (5, 5), "shift+left", T, (5, 4)),
+            ("right", T, (5, 5), "right", T, (6, 6)),
+            ("shift+right", T, (5, 5), "shift+right", T, (5, 6)),
+            ("right collapses a selection to its end", T, (2, 6), "right", T, (6, 6)),
+            ("left collapses a selection to its start", T, (6, 2), "left", T, (2, 2)),
+            // lines
+            ("home", T, (18, 18), "home", T, (14, 14)),
+            ("shift+home", T, (18, 18), "shift+home", T, (18, 14)),
+            ("end", T, (16, 16), "end", T, (27, 27)),
+            ("shift+end", T, (16, 16), "shift+end", T, (16, 27)),
+            ("end on the first line stops before the newline", T, (4, 4), "end", T, (13, 13)),
+            ("cmd+left", T, (18, 18), "cmd+left", T, (14, 14)),
+            ("cmd+right", T, (4, 4), "cmd+right", T, (13, 13)),
+            ("shift+cmd+left", T, (18, 18), "shift+cmd+left", T, (18, 14)),
+            ("shift+cmd+right", T, (4, 4), "shift+cmd+right", T, (4, 13)),
+            ("ctrl+a is the line start", T, (16, 16), "ctrl+a", T, (14, 14)),
+            ("ctrl+e is the line end", T, (16, 16), "ctrl+e", T, (27, 27)),
+            ("shift+ctrl+e extends to the line end", T, (16, 16), "shift+ctrl+e", T, (16, 27)),
+            // the document
+            ("cmd+up", T, (16, 16), "cmd+up", T, (0, 0)),
+            ("cmd+down", T, (16, 16), "cmd+down", T, (27, 27)),
+            ("shift+cmd+up", T, (16, 16), "shift+cmd+up", T, (16, 0)),
+            ("shift+cmd+down", T, (16, 16), "shift+cmd+down", T, (16, 27)),
+            ("cmd+home", T, (16, 16), "cmd+home", T, (0, 0)),
+            ("cmd+end", T, (16, 16), "cmd+end", T, (27, 27)),
+            ("ctrl+home", T, (16, 16), "ctrl+home", T, (0, 0)),
+            // words
+            ("alt+left", T, (9, 9), "alt+left", T, (8, 8)),
+            ("alt+right", T, (4, 4), "alt+right", T, (7, 7)),
+            ("shift+alt+left", T, (13, 13), "shift+alt+left", T, (13, 8)),
+            ("shift+alt+right", T, (0, 0), "shift+alt+right", T, (0, 3)),
+            ("ctrl+left is the word too", T, (9, 9), "ctrl+left", T, (8, 8)),
+            ("ctrl+right is the word too", T, (4, 4), "ctrl+right", T, (7, 7)),
+            // lines up and down, pages
+            ("up keeps the column", T, (16, 16), "up", T, (2, 2)),
+            ("down keeps the column", T, (5, 5), "down", T, (19, 19)),
+            ("up on the first line goes to the start", T, (5, 5), "up", T, (0, 0)),
+            ("down on the last line goes to the end", T, (16, 16), "down", T, (27, 27)),
+            ("shift+up", T, (16, 16), "shift+up", T, (16, 2)),
+            ("shift+down", T, (5, 5), "shift+down", T, (5, 19)),
+            ("page up", T, (16, 16), "pageup", T, (0, 0)),
+            ("page down", T, (5, 5), "pagedown", T, (27, 27)),
+            ("shift+page up", T, (16, 16), "shift+pageup", T, (16, 0)),
+            ("shift+page down", T, (5, 5), "shift+pagedown", T, (5, 27)),
+            // deleting
+            ("backspace", T, (5, 5), "backspace", "one wo three\nfour five six", (4, 4)),
+            ("backspace over a selection", T, (4, 7), "backspace", "one  three\nfour five six", (4, 4)),
+            ("ctrl+h is backspace", T, (5, 5), "ctrl+h", "one wo three\nfour five six", (4, 4)),
+            ("forward delete", T, (4, 4), "forwarddelete", "one wo three\nfour five six", (4, 4)),
+            ("ctrl+d is forward delete", T, (4, 4), "ctrl+d", "one wo three\nfour five six", (4, 4)),
+            ("forward delete at the end does nothing", T, (27, 27), "forwarddelete", T, (27, 27)),
+            ("backspace at the start does nothing", T, (0, 0), "backspace", T, (0, 0)),
+            ("option+backspace deletes the word back", T, (7, 7), "alt+backspace", "one  three\nfour five six", (4, 4)),
+            ("ctrl+backspace deletes the word back", T, (7, 7), "ctrl+backspace", "one  three\nfour five six", (4, 4)),
+            ("option+forward delete deletes the word forward", T, (4, 4), "alt+forwarddelete", "one  three\nfour five six", (4, 4)),
+            ("ctrl+forward delete deletes the word forward", T, (4, 4), "ctrl+forwarddelete", "one  three\nfour five six", (4, 4)),
+            ("cmd+backspace deletes to the line start", T, (20, 20), "cmd+backspace", "one two three\nive six", (14, 14)),
+            ("cmd+backspace at a line start joins the lines", T, (14, 14), "cmd+backspace", "one two threefour five six", (13, 13)),
+            ("ctrl+k kills to the line end", T, (4, 4), "ctrl+k", "one \nfour five six", (4, 4)),
+            ("ctrl+k at the line end kills the newline", T, (13, 13), "ctrl+k", "one two threefour five six", (13, 13)),
+            // select all
+            ("cmd+a", T, (3, 3), "cmd+a", T, (0, 27)),
+            ("cmd+a again", T, (0, 27), "cmd+a", T, (0, 27)),
+        ];
+        for (label, text, (anchor, head), keys, want_text, (want_anchor, want_head)) in table {
+            let mut ed = TextEditor::with_text(text, 20);
+            ed.buf.set_selection(*anchor, *head);
+            press(&mut ed, keys, &mut String::new());
+            assert_eq!(ed.buf.text(), *want_text, "{label} ({keys}): text");
+            assert_eq!((ed.buf.anchor(), ed.buf.caret()), (*want_anchor, *want_head), "{label} ({keys}): selection");
+        }
+    }
+
+    #[test]
+    fn copy_cut_and_paste_go_through_the_pasteboard_and_are_undoable() {
+        let mut ed = TextEditor::with_text("one two three", 20);
+        let mut clip = String::new();
+        ed.buf.set_selection(0, 4);
+        press(&mut ed, "cmd+c", &mut clip);
+        assert_eq!((clip.as_str(), ed.buf.text()), ("one ", "one two three"), "copy leaves the text");
+        clip.clear();
+        press(&mut ed, "cmd+x", &mut clip);
+        assert_eq!((clip.as_str(), ed.buf.text(), ed.buf.caret()), ("one ", "two three", 0), "cut takes the selection");
+        press(&mut ed, "cmd+z", &mut clip);
+        assert_eq!((ed.buf.text(), ed.buf.selection()), ("one two three", 0..4), "undo puts the cut back and selects it again");
+        press(&mut ed, "shift+cmd+z", &mut clip);
+        assert_eq!(ed.buf.text(), "two three", "redo cuts again");
+        ed.buf.set_selection(3, 3);
+        clip = "XY".into();
+        press(&mut ed, "cmd+v", &mut clip);
+        assert_eq!((ed.buf.text(), ed.buf.caret()), ("twoXY three", 5), "paste at the caret");
+        press(&mut ed, "cmd+z", &mut clip);
+        assert_eq!((ed.buf.text(), ed.buf.caret()), ("two three", 3), "undo takes the paste back");
+        ed.buf.set_selection(0, 3);
+        press(&mut ed, "cmd+v", &mut clip);
+        assert_eq!(ed.buf.text(), "XY three", "paste replaces the selection");
+        press(&mut ed, "ctrl+z", &mut clip);
+        assert_eq!(ed.buf.text(), "two three", "ctrl+z undoes too");
+        press(&mut ed, "ctrl+shift+z", &mut clip);
+        assert_eq!(ed.buf.text(), "XY three", "ctrl+shift+z redoes");
+        press(&mut ed, "cmd+c", &mut clip);
+        assert_eq!(clip, "", "copy with nothing selected copies the empty selection");
+    }
+
+    #[test]
+    fn copying_cutting_and_deleting_are_undoable_steps_and_typing_replaces_a_selection() {
+        let mut ed = TextEditor::with_text("hello world", 20);
+        ed.buf.set_selection(6, 11);
+        assert!(ed.type_text("there"));
+        assert_eq!(ed.buf.text(), "hello there", "typing replaces the selection");
+        assert!(ed.undo());
+        assert_eq!(ed.buf.text(), "hello world");
+        let mut clip = String::new();
+        ed.buf.set_selection(0, 6);
+        press(&mut ed, "backspace", &mut clip);
+        assert_eq!(ed.buf.text(), "world");
+        press(&mut ed, "cmd+z", &mut clip);
+        assert_eq!(ed.buf.text(), "hello world", "a delete is one undo step");
+        ed.buf.set_selection(6, 6);
+        press(&mut ed, "alt+backspace", &mut clip);
+        assert_eq!(ed.buf.text(), "world");
+        press(&mut ed, "cmd+z", &mut clip);
+        assert_eq!(ed.buf.text(), "hello world", "a word delete is one undo step");
+    }
+
+    #[test]
+    fn a_single_line_goes_to_its_ends_on_up_and_down() {
+        let mut ed = TextEditor::with_text("hello", 20);
+        ed.buf.set_selection(2, 2);
+        press(&mut ed, "up", &mut String::new());
+        assert_eq!(ed.buf.caret(), 0);
+        ed.buf.set_selection(2, 2);
+        press(&mut ed, "down", &mut String::new());
+        assert_eq!(ed.buf.caret(), 5);
+        ed.buf.set_selection(2, 2);
+        press(&mut ed, "shift+up", &mut String::new());
+        assert_eq!((ed.buf.anchor(), ed.buf.caret()), (2, 0));
+    }
+
+    #[test]
+    fn key_actions_name_the_pasteboard_chords_and_leave_the_rest_to_the_binding() {
+        let act = |s: &str| key_action(KeyCombo::parse(s).unwrap());
+        assert_eq!(act("cmd+c"), Some(KeyAction::Copy));
+        assert_eq!(act("cmd+x"), Some(KeyAction::Cut));
+        assert_eq!(act("cmd+v"), Some(KeyAction::Paste));
+        assert_eq!(act("ctrl+c"), Some(KeyAction::Copy));
+        assert_eq!(act("ctrl+x"), Some(KeyAction::Cut));
+        assert_eq!(act("ctrl+v"), Some(KeyAction::Paste));
+        assert_eq!(act("alt+cmd+c"), None, "Option+Cmd+C is the app's");
+        assert_eq!(act("shift+cmd+c"), None, "Shift+Cmd+C is the app's");
+        assert_eq!(act("ctrl+z"), Some(KeyAction::Edit(EditCommand::Undo, false)));
+        assert_eq!(act("ctrl+shift+z"), Some(KeyAction::Edit(EditCommand::Redo, false)));
+        assert_eq!(act("ctrl+y"), Some(KeyAction::Edit(EditCommand::Yank, false)), "Ctrl+Y is the yank");
+        assert_eq!(act("cmd+z"), Some(KeyAction::Edit(EditCommand::Undo, false)));
+        assert_eq!(act("cmd+a"), Some(KeyAction::Edit(EditCommand::SelectAll, false)));
+        assert_eq!(act("ctrl+a"), Some(KeyAction::Edit(EditCommand::MoveLineStart, false)), "Ctrl+A is the line start, not select all");
+        assert_eq!(act("a"), None, "a plain letter is text");
+    }
+
+    #[test]
+    fn dragging_after_a_double_click_grows_by_whole_units() {
+        // the press selected "two" (4..7); the pointer moves over "three" (8..13), then back over "one" (0..3)
+        assert_eq!(extend_unit(4..7, 8..13), (4, 13));
+        assert_eq!(extend_unit(4..7, 0..3), (7, 0));
+        assert_eq!(extend_unit(4..7, 4..7), (4, 7));
+    }
+
+    #[test]
+    fn a_double_click_selects_a_word_and_a_triple_click_the_paragraph() {
+        let mut clicks = ClickCounter::default();
+        assert_eq!(clicks.press(1000.0, 10.0, 10.0), 1);
+        assert_eq!(clicks.press(1200.0, 11.0, 10.0), 2, "close in time and place");
+        assert_eq!(clicks.press(1400.0, 11.0, 10.0), 3);
+        assert_eq!(clicks.press(1600.0, 11.0, 10.0), 1, "a fourth click starts over");
+        assert_eq!(clicks.press(2600.0, 11.0, 10.0), 1, "too late");
+        assert_eq!(clicks.press(2700.0, 60.0, 10.0), 1, "too far away");
+        let mut b = at("one two three\nfour five six", 0);
+        b.select_word_at(5);
+        assert_eq!(b.selected_text(), "two", "a double click selects the word");
+        b.select_line_at(5);
+        assert_eq!(b.selected_text(), "one two three", "a triple click selects the paragraph");
+        b.select_line_at(20);
+        assert_eq!(b.selected_text(), "four five six");
+        // dragging from the word end keeps the anchor: the selection grows from where the press began
+        b.set_selection(4, 4);
+        b.set_selection(b.anchor(), 13);
+        assert_eq!(b.selected_text(), "two three");
+    }
+
     #[test]
     fn bindings_cover_the_emacs_and_mac_keys() {
         use EditCommand::*;
@@ -1532,6 +1885,13 @@ mod tests {
         assert_eq!(binding(combo(Key::Delete)), Some((DeleteBackward, false)));
         assert_eq!(binding(combo(Key::Char('a'))), None, "plain letters are text, not commands");
         assert_eq!(binding(KeyCombo { shift: true, ..combo(Key::Left) }), Some((MoveLeft, true)));
+        assert_eq!(binding(combo(Key::Home)), Some((MoveLineStart, false)));
+        assert_eq!(binding(KeyCombo { shift: true, ..combo(Key::End) }), Some((MoveLineEnd, true)));
+        assert_eq!(binding(combo(Key::PageUp)), Some((MovePageUp, false)));
+        assert_eq!(binding(KeyCombo { shift: true, ..combo(Key::PageDown) }), Some((MovePageDown, true)));
+        assert_eq!(binding(combo(Key::ForwardDelete)), Some((DeleteForward, false)));
+        assert_eq!(binding(KeyCombo { alt: true, ..combo(Key::ForwardDelete) }), Some((DeleteWordForward, false)));
+        assert_eq!(binding(KeyCombo { cmd: true, ..combo(Key::Home) }), Some((MoveDocumentStart, false)));
     }
 
     #[test]
