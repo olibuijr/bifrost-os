@@ -10,6 +10,7 @@ pub use bifrost_ui::{Command, Commands, Node, Role, Rect as UiRect};
 pub const SDK_VERSION: u32 = 2;
 /// Largest packet either side sends (damage lists and text are clamped to it).
 pub mod sys;
+pub mod pbblob;
 pub mod svc;
 pub mod rich;
 pub mod extras;
@@ -502,6 +503,14 @@ pub enum ToApp {
     Clipboard { text: String },
     /// Rich pasteboard contents (`NativePasteboard`): the change count and every (UTType id, bytes) item.
     Pasteboard { change_count: u32, items: Vec<(String, Vec<u8>)> },
+    /// The pasteboard changed, and this app is not the one in front: only the change count is sent, never the contents
+    /// (an app in the background cannot read what was copied). The contents follow when the app comes to the front, or when
+    /// it asks with `ToShell::PasteboardRead`. An app built before this message ignores it. Tag 0x192.
+    PasteboardChanged { change_count: u32 },
+    /// The pasteboard of `Pasteboard`, for items too large for a packet (`pbblob`): one file descriptor follows as
+    /// SCM_RIGHTS, holding the items' bytes one after the other; `types` gives each item's type and length. The text for the
+    /// app's text fields is the plain-text item. An app built before this message ignores it. Tag 0x191.
+    PasteboardBlob { change_count: u32, types: Vec<(String, u32)> },
     /// System appearance settings (`appearance::*` bits), sent on start and whenever they change. Apps built before
     /// this message ignore it; bits an app does not know are ignored too.
     Appearance { flags: u32 },
@@ -777,6 +786,12 @@ pub enum ToShell {
     SetClipboard { text: String },
     /// `NativePasteboard.clearContents` + `setData` for every (UTType id, bytes) item, atomically.
     PasteboardSet { items: Vec<(String, Vec<u8>)> },
+    /// `PasteboardSet` for items too large for a packet (`pbblob`): one file descriptor follows as SCM_RIGHTS, holding the
+    /// items' bytes one after the other; `types` gives each item's type and length. Tag 0x191.
+    PasteboardBlob { types: Vec<(String, u32)> },
+    /// Asks for the pasteboard's contents (`ToApp::Pasteboard` or `ToApp::PasteboardBlob`). The shell answers an app in
+    /// front, and ignores one in the background. Tag 0x193.
+    PasteboardRead,
     Commands(Commands),
     /// The Edit menu titles of the undo manager (`undoMenuItemTitle`, `redoMenuItemTitle`): "Undo Typing", "Redo Move".
     /// An empty string means the plain "Undo" or "Redo". Tag 0x220.
@@ -1063,6 +1078,10 @@ mod tag {
     pub const CONTROLS_TREE: u32 = 0x11a;
     pub const PASTEBOARD: u32 = 0x190;
     pub const PASTEBOARD_SET: u32 = 0x190;
+    /// Both directions (`ToApp::PasteboardBlob`, `ToShell::PasteboardBlob`).
+    pub const PASTEBOARD_BLOB: u32 = 0x191;
+    pub const PASTEBOARD_CHANGED: u32 = 0x192;
+    pub const PASTEBOARD_READ: u32 = 0x193;
     pub const DOCUMENT_STATE: u32 = 0x180;
     pub const DOC_SAVE_GRANT: u32 = 0x181;
     pub const DOC_GRANT_PATH: u32 = 0x11b;
@@ -1134,26 +1153,73 @@ fn bytes_(b: &mut Vec<u8>, v: &[u8]) {
 /// Longest pasteboard type, in bytes.
 const MAX_PB_TYPE: usize = 128;
 
+/// The pasteboard type that marks a copy as a secret (a password): the shell does not write it to disk, does not hand it to
+/// background apps, offers it to other programs only with the password-manager hint, and clears it after
+/// [`PB_CONCEALED_SECS`]. It carries no data; the sender adds it beside the item's real types.
+pub const PB_CONCEALED: &str = "org.nspasteboard.ConcealedType";
+/// The pasteboard type that marks a copy as short-lived: the shell does not write it to disk and tells other programs not to
+/// keep it (the password-manager hint), but does not clear it on a timer.
+pub const PB_TRANSIENT: &str = "org.nspasteboard.TransientType";
+/// How long a concealed copy stays on the pasteboard, in seconds, before the shell clears it (when nothing else was copied).
+pub const PB_CONCEALED_SECS: u64 = 45;
+
+/// Whether `t` is one of the marker types (they carry no data and are not given to apps as items).
+pub fn is_pb_marker(t: &str) -> bool {
+    t == PB_CONCEALED || t == PB_TRANSIENT
+}
+
+/// Whether `t` is acceptable as a pasteboard type: no control characters (a NUL would end a C string in the window server
+/// client). An unacceptable item is left out of a write, on both the sending and the receiving side.
+pub fn valid_pb_type(t: &str) -> bool {
+    !t.chars().any(char::is_control)
+}
+
+/// `t` cut to [`MAX_PB_TYPE`] bytes on a character boundary.
+fn cut_type(t: &str) -> &str {
+    let mut n = t.len().min(MAX_PB_TYPE);
+    while !t.is_char_boundary(n) {
+        n -= 1;
+    }
+    &t[..n]
+}
+
+/// The largest payload one of `count` items may have to ride in a packet: its share of the room left for payloads.
+fn inline_item_limit(count: usize) -> usize {
+    (MAX_PACKET - 4096) / count.clamp(1, 16)
+}
+
 /// Pasteboard items: at most 16. An item whose payload does not fit its share of the packet is left out whole
 /// (never cut, so no receiver ever sees a shortened payload under the full type); types are cut on a char boundary.
+/// A sender with a larger item uses `pbblob` instead (`ToShell::PasteboardBlob`, `ToApp::PasteboardBlob`). An item whose
+/// type has a control character is left out.
 fn items_(b: &mut Vec<u8>, items: &[(String, Vec<u8>)]) {
     let items = &items[..items.len().min(16)];
-    let per = (MAX_PACKET - 4096) / items.len().max(1);
-    let kept: Vec<&(String, Vec<u8>)> = items.iter().filter(|(_, d)| d.len() <= per).collect();
+    let per = inline_item_limit(items.len());
+    let kept: Vec<&(String, Vec<u8>)> = items.iter().filter(|(t, d)| d.len() <= per && valid_pb_type(t)).collect();
     u32_(b, kept.len() as u32);
     for (t, d) in kept {
-        let mut n = t.len().min(MAX_PB_TYPE);
-        while !t.is_char_boundary(n) {
-            n -= 1;
-        }
-        str_(b, &t[..n]);
+        str_(b, cut_type(t));
         u32_(b, d.len() as u32);
         b.extend_from_slice(d);
     }
 }
 
+/// The type and length of each item of a blob message (the bytes ride in the descriptor).
+fn layout_(b: &mut Vec<u8>, types: &[(String, u32)]) {
+    let types = &types[..types.len().min(pbblob::MAX_ITEMS)];
+    u32_(b, types.len() as u32);
+    for (t, n) in types {
+        str_(b, cut_type(t));
+        u32_(b, *n);
+    }
+}
+
+/// The longest text one message carries (`SetClipboard`, `Clipboard`): longer text is cut by `str_`, so a sender with more
+/// uses `PasteboardBlob` instead and never sends the cut text.
+pub const MAX_INLINE_TEXT: usize = MAX_PACKET - 64;
+
 fn str_(b: &mut Vec<u8>, s: &str) {
-    let max = MAX_PACKET - 64;
+    let max = MAX_INLINE_TEXT;
     let mut n = s.len().min(max);
     while !s.is_char_boundary(n) {
         n -= 1;
@@ -1275,8 +1341,29 @@ impl<'a> Reader<'a> {
                 return Err(DecodeError::BadValue);
             }
             let l = self.u32()? as usize;
-            v.push((t, self.take(l)?.to_vec()));
+            let data = self.take(l)?.to_vec();
+            // a type with a control character cannot be offered to other programs: the item is dropped, not the message
+            if valid_pb_type(&t) {
+                v.push((t, data));
+            }
         }
+        Ok(v)
+    }
+    /// The layout of a blob message: at most 16 types of at most 128 bytes, the lengths within the blob limits.
+    fn layout(&mut self) -> Result<Vec<(String, u32)>, DecodeError> {
+        let n = self.u32()? as usize;
+        if n > pbblob::MAX_ITEMS {
+            return Err(DecodeError::BadValue);
+        }
+        let mut v = Vec::with_capacity(n);
+        for _ in 0..n {
+            let t = self.str()?;
+            if t.len() > MAX_PB_TYPE || !valid_pb_type(&t) {
+                return Err(DecodeError::BadValue);
+            }
+            v.push((t, self.u32()?));
+        }
+        pbblob::check(&v).map_err(|_| DecodeError::BadValue)?;
         Ok(v)
     }
     fn str(&mut self) -> Result<String, DecodeError> {
@@ -1469,6 +1556,15 @@ impl ToApp {
                 u32_(&mut b, *change_count);
                 items_(&mut b, items);
             }
+            ToApp::PasteboardChanged { change_count } => {
+                u32_(&mut b, tag::PASTEBOARD_CHANGED);
+                u32_(&mut b, *change_count);
+            }
+            ToApp::PasteboardBlob { change_count, types } => {
+                u32_(&mut b, tag::PASTEBOARD_BLOB);
+                u32_(&mut b, *change_count);
+                layout_(&mut b, types);
+            }
             ToApp::Clipboard { text } => {
                 u32_(&mut b, tag::CLIPBOARD);
                 str_(&mut b, text);
@@ -1638,6 +1734,8 @@ impl ToApp {
             tag::QUIT => ToApp::Quit,
             tag::OPEN => ToApp::Open { url: r.str()? },
             tag::PASTEBOARD => ToApp::Pasteboard { change_count: r.u32()?, items: r.items()? },
+            tag::PASTEBOARD_CHANGED => ToApp::PasteboardChanged { change_count: r.u32()? },
+            tag::PASTEBOARD_BLOB => ToApp::PasteboardBlob { change_count: r.u32()?, types: r.layout()? },
             tag::CLIPBOARD => ToApp::Clipboard { text: r.str()? },
             tag::APPEARANCE => ToApp::Appearance { flags: r.u32()? },
             tag::KEYBOARD_CONFIG => {
@@ -1984,6 +2082,11 @@ impl ToShell {
                 u32_(&mut b, tag::PASTEBOARD_SET);
                 items_(&mut b, items);
             }
+            ToShell::PasteboardBlob { types } => {
+                u32_(&mut b, tag::PASTEBOARD_BLOB);
+                layout_(&mut b, types);
+            }
+            ToShell::PasteboardRead => u32_(&mut b, tag::PASTEBOARD_READ),
             ToShell::SetClipboard { text } => {
                 u32_(&mut b, tag::SET_CLIPBOARD);
                 str_(&mut b, text);
@@ -2193,6 +2296,8 @@ impl ToShell {
             tag::NOTIFY => ToShell::Notify { title: r.str()?, body: r.str()? },
             tag::LOG => ToShell::Log { text: r.str()? },
             tag::PASTEBOARD_SET => ToShell::PasteboardSet { items: r.items()? },
+            tag::PASTEBOARD_BLOB => ToShell::PasteboardBlob { types: r.layout()? },
+            tag::PASTEBOARD_READ => ToShell::PasteboardRead,
             tag::SET_CLIPBOARD => ToShell::SetClipboard { text: r.str()? },
             tag::DOC_OPEN => {
                 let request = r.u32()?;
@@ -2932,6 +3037,51 @@ mod material_tests {
         str_(&mut p, &"t".repeat(129));
         u32_(&mut p, 0);
         assert_eq!(ToShell::decode(&p), Err(DecodeError::BadValue));
+    }
+
+    #[test]
+    fn pasteboard_blob_messages_round_trip_and_refuse_bad_layouts() {
+        let types = vec![("public.png".to_string(), 100_000u32), ("public.utf8-plain-text".to_string(), 2)];
+        let a = ToApp::PasteboardBlob { change_count: 9, types: types.clone() };
+        assert_eq!(ToApp::decode(&a.encode()), Ok(a));
+        let s = ToShell::PasteboardBlob { types: types.clone() };
+        assert_eq!(ToShell::decode(&s.encode()), Ok(s));
+        let c = ToApp::PasteboardChanged { change_count: 4 };
+        assert_eq!(ToApp::decode(&c.encode()), Ok(c));
+        assert_eq!(ToShell::decode(&ToShell::PasteboardRead.encode()), Ok(ToShell::PasteboardRead));
+        // a layout over the blob limits, with a control character, or with too many items is refused
+        for bad in [
+            vec![("t".to_string(), (pbblob::MAX_ITEM + 1) as u32)],
+            vec![("t\0".to_string(), 1)],
+            vec![("t".to_string(), 1); pbblob::MAX_ITEMS + 1],
+        ] {
+            let mut p = Vec::new();
+            u32_(&mut p, tag::PASTEBOARD_BLOB);
+            u32_(&mut p, bad.len() as u32);
+            for (t, n) in &bad {
+                str_(&mut p, t);
+                u32_(&mut p, *n);
+            }
+            assert_eq!(ToShell::decode(&p), Err(DecodeError::BadValue));
+        }
+    }
+
+    #[test]
+    fn a_pasteboard_type_with_a_control_character_is_left_out() {
+        let m = ToShell::PasteboardSet { items: vec![("\0/x".into(), b"a".to_vec()), ("public.utf8-plain-text".into(), b"ok".to_vec())] };
+        // the sender leaves it out ...
+        assert_eq!(ToShell::decode(&m.encode()), Ok(ToShell::PasteboardSet { items: vec![("public.utf8-plain-text".into(), b"ok".to_vec())] }));
+        // ... and so does the receiver, whatever a hostile sender put on the wire
+        let mut p = Vec::new();
+        u32_(&mut p, tag::PASTEBOARD_SET);
+        u32_(&mut p, 2);
+        str_(&mut p, "a\u{7}/b");
+        u32_(&mut p, 1);
+        p.push(1);
+        str_(&mut p, "public.png");
+        u32_(&mut p, 1);
+        p.push(2);
+        assert_eq!(ToShell::decode(&p), Ok(ToShell::PasteboardSet { items: vec![("public.png".into(), vec![2])] }));
     }
 
     #[test]

@@ -530,6 +530,8 @@ pub struct Pumped {
     /// `frame` was asked for by more than pixels: a title, menus, a window's size or level, commands. The shell draws
     /// those itself, so they cost a whole desktop frame; pixels alone only republish the windows.
     pub chrome: bool,
+    /// A pasteboard blob was already read in this pump: the rest are dropped unread (one read costs up to 64 MiB).
+    blob_read: bool,
 }
 
 impl Pumped {
@@ -561,6 +563,8 @@ const MAX_BACKLOG: usize = 256;
 const MAX_PUMP: usize = 256;
 /// How long (ms) an app may leave its socket full before it is killed.
 const STALL_MS: f64 = 5000.0;
+/// How long (ms) after an app left the front its clipboard writes are still taken (a copy followed by a quick switch).
+const PB_WRITE_GRACE_MS: f64 = 1500.0;
 
 /// How long after a wheel event the drag emulated for it can still arrive, in ms.
 const WHEEL_DRAG_MS: f64 = 250.0;
@@ -575,6 +579,18 @@ pub struct AppHost {
     input_japanese: Option<bool>,
     /// The pasteboard change count the app last received (`ToApp::Pasteboard`); `None` until the first sync.
     pb_sent: Option<u32>,
+    /// The pasteboard change count the app was told about without its contents (`ToApp::PasteboardChanged`, sent while the
+    /// app is not in front); `None` until then.
+    pb_noted: Option<u32>,
+    /// The last time (monotonic ms) the app was the one in front; a clipboard write is taken from the app in front, and for
+    /// `PB_WRITE_GRACE_MS` after it left (a copy and a quick switch).
+    fg_seen_ms: f64,
+    /// Whether a clipboard write from the app would be taken in this pass (set by the shell before each pump). A large write
+    /// is read from its descriptor only when it would be: an app that may not write costs the shell nothing.
+    pb_may_write: bool,
+    /// The out-of-band copy of the board built for the change count (kept while the socket is full, so a retry does not copy
+    /// the board again).
+    pb_blob: Option<(u32, sys::Owned, bifrost_proto::pbblob::Layout)>,
     child: Option<Child>,
     chan: Channel,
     bufs: Vec<Buf>,
@@ -747,6 +763,10 @@ impl AppHost {
             appearance_sent: u32::MAX,
             input_japanese: None,
             pb_sent: None,
+            pb_noted: None,
+            fg_seen_ms: f64::NEG_INFINITY,
+            pb_may_write: false,
+            pb_blob: None,
             child,
             chan,
             bufs: Vec::new(),
@@ -870,27 +890,86 @@ impl AppHost {
     /// Gives the app the shell's pasteboard when its change count differs from what the app last received (and on first
     /// contact, unless the board is empty): the typed items as `ToApp::Pasteboard`, and the text as `ToApp::Clipboard`, which is
     /// what the app's text fields and `Ctx::pasteboard_string` read. An empty text clears the app's.
+    ///
+    /// Items that do not fit a packet go out of band (`ToApp::PasteboardBlob`, a memfd): the app's text is then the
+    /// plain-text item, so no cut text is ever sent. A board that cannot be sent at all (a descriptor could not be made, the
+    /// socket is full) is tried again on the next pass. Only the app in front is given the contents
+    /// (`AppHost::notify_pasteboard` tells the others the count).
     pub fn sync_pasteboard(&mut self, count: u32, items: &[(String, Vec<u8>)]) {
         let first = self.pb_sent.is_none();
         if self.pb_sent == Some(count) {
             return;
         }
-        self.pb_sent = Some(count);
         if first && items.is_empty() {
+            self.pb_sent = Some(count);
             return;
         }
-        self.send(&ToApp::Pasteboard { change_count: count, items: items.to_vec() });
-        self.send(&ToApp::Clipboard { text: super::pasteboard::text_of(items).unwrap_or_default() });
+        if bifrost_proto::pbblob::fits_inline(items) {
+            self.pb_sent = Some(count);
+            self.send(&ToApp::Pasteboard { change_count: count, items: items.to_vec() });
+            self.send(&ToApp::Clipboard { text: super::pasteboard::text_of(items).unwrap_or_default() });
+            return;
+        }
+        // the blob goes out behind everything queued (it bypasses the backlog, so it must not overtake an older board)
+        self.flush();
+        if !self.running() || !self.backlog.is_empty() {
+            return;
+        }
+        if !matches!(&self.pb_blob, Some((c, _, _)) if *c == count) {
+            self.pb_blob = None;
+            match bifrost_proto::pbblob::write(items) {
+                Ok((fd, types)) => self.pb_blob = Some((count, fd, types)),
+                Err(e) => {
+                    // too large to hand over: the app keeps what it had, and is not asked again for this change
+                    eprintln!("springboard: app {} was not given the pasteboard: {e}", self.id);
+                    self.pb_sent = Some(count);
+                    return;
+                }
+            }
+        }
+        let Some((_, fd, types)) = &self.pb_blob else { return };
+        let (raw, msg) = (fd.0, ToApp::PasteboardBlob { change_count: count, types: types.clone() });
+        if self.send_fd(&msg, raw) {
+            self.pb_sent = Some(count);
+            self.pb_blob = None;
+        }
     }
 
-    /// The change count the app last received.
+    /// Tells an app that is not in front that the pasteboard changed, without the contents (`ToApp::PasteboardChanged`).
+    pub fn notify_pasteboard(&mut self, count: u32) {
+        if self.pb_noted == Some(count) || self.pb_sent == Some(count) {
+            return;
+        }
+        self.pb_noted = Some(count);
+        self.send(&ToApp::PasteboardChanged { change_count: count });
+    }
+
+    /// The app asked for the pasteboard (`ToShell::PasteboardRead`): it is given the contents again on the next pass.
+    fn pasteboard_wanted(&mut self) {
+        self.pb_sent = None;
+        self.pb_noted = None;
+    }
+
+    /// The change count the app last received (with or without the contents).
     fn pb_known(&self) -> Option<u32> {
         self.pb_sent
+    }
+
+    /// Whether the app has been told about the board at `count`, with or without the contents.
+    fn pb_told(&self, count: u32) -> bool {
+        self.pb_sent == Some(count) || self.pb_noted == Some(count)
     }
 
     /// Records that the app already has the board at `count` (it made the change itself), so it is not sent back.
     pub fn pasteboard_known(&mut self, count: u32) {
         self.pb_sent = Some(count);
+        self.pb_noted = Some(count);
+    }
+
+    /// Whether a clipboard write from the app is taken at `now` (monotonic ms): only the app in front writes, or one that
+    /// was in front a moment ago.
+    fn may_write_clipboard(&self, in_front: bool, now: f64) -> bool {
+        in_front || now - self.fg_seen_ms <= PB_WRITE_GRACE_MS
     }
 
     /// True when the installed binary is no longer the one this process runs (the app was updated while open), so
@@ -917,6 +996,8 @@ impl AppHost {
             ToApp::Touch { kind: TouchKind::Move, .. } => true,
             // a frame of only moved and stationary touches is superseded by the next one
             ToApp::Touches(ev) => ev.droppable(),
+            // the next change count supersedes this one
+            ToApp::PasteboardChanged { .. } => true,
             _ => false,
         };
         self.queue(m.encode(), droppable);
@@ -998,17 +1079,26 @@ impl AppHost {
     /// descriptor; the shell's copy closes when `file` is dropped.
     pub fn send_file(&mut self, m: &ToApp, file: &std::fs::File) {
         use std::os::fd::AsRawFd;
+        self.send_fd(m, file.as_raw_fd());
+    }
+
+    /// Sends `m` with the descriptor `fd` (SCM_RIGHTS), without ever blocking the shell thread. True when it was sent; a full
+    /// socket drops the message (the stall timer kills an app that never reads) and the caller may try again later.
+    fn send_fd(&mut self, m: &ToApp, fd: sys::Fd) -> bool {
         if !self.running() {
-            return;
+            return false;
         }
-        match self.chan.try_send(&m.encode(), &[file.as_raw_fd()]) {
-            Ok(()) => {}
-            // the app is not reading: this grant is dropped rather than blocking the shell (the stall timer kills it)
+        match self.chan.try_send(&m.encode(), &[fd]) {
+            Ok(()) => true,
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                 self.blocked_since.get_or_insert_with(sys::now_ms);
                 self.stalled();
+                false
             }
-            Err(_) => self.reap(),
+            Err(_) => {
+                self.reap();
+                false
+            }
         }
     }
 
@@ -1335,6 +1425,19 @@ impl AppHost {
             ToShell::UndoTitles { undo, redo } => {if self.undo_titles!=(undo.clone(),redo.clone()) {self.undo_titles=(undo,redo);out.chrome();}},
             ToShell::Log { text } => bifrost_core::log::shell_logger("apphost").info(format!("app {}: {text}", self.id)),
             ToShell::PointerInterest { mask } => self.pointer_interest = mask,
+            // a pasteboard write too large for a packet: the descriptor holds the bytes. It becomes an ordinary write; one
+            // that cannot be read (no descriptor, a layout over the limits, a file shorter than it claims) is dropped
+            // The read allocates up to 64 MiB, so it happens only for an app whose write would be taken (`pb_may_write`, the same
+            // gate as `ext_tick`'s) and once per pump; any other blob is dropped unread with its descriptor.
+            ToShell::PasteboardBlob { .. } if !self.pb_may_write || out.blob_read => {}
+            ToShell::PasteboardBlob { types } => {
+                out.blob_read = true;
+                match fds.first().map(|fd| bifrost_proto::pbblob::read(fd, &types)) {
+                    Some(Ok(items)) => out.requests.push(ToShell::PasteboardSet { items }),
+                    Some(Err(e)) => eprintln!("springboard: app {} sent a pasteboard write that could not be read: {e}", self.id),
+                    None => eprintln!("springboard: app {} sent a pasteboard write without its descriptor", self.id),
+                }
+            }
             other => out.requests.push(other),
         }
     }
@@ -1989,21 +2092,35 @@ impl Shell {
         }
     }
 
-    /// Gives every running app the pasteboard it has not seen; `written` is the app that made the newest typed write and the
-    /// change count that write gave (that app has the board already).
-    pub(super) fn ext_sync_pasteboard(&mut self, written: Option<(usize, u32)>) {
-        if let Some((slot, count)) = written {
+    /// Tells the running apps about the pasteboard they have not seen; `written` lists the apps that made the newest writes
+    /// and the change count each write gave (those apps have the board already). The app in front is given the contents
+    /// (`ToApp::Pasteboard` or the blob form, and the text); every other app only hears that the board changed
+    /// (`ToApp::PasteboardChanged`), so an app in the background never reads what was copied. One copy of the contents is
+    /// made, for the one app in front.
+    pub(super) fn ext_sync_pasteboard(&mut self, written: &[(usize, u32)]) {
+        for &(slot, count) in written {
             if let Some(h) = self.ext.get_mut(slot).and_then(Option::as_mut) {
                 h.pasteboard_known(count);
             }
         }
         let count = super::pasteboard::count();
-        if self.ext.iter().flatten().all(|h| h.pb_known() == Some(count)) {
+        let front = self.ext_fg.map(usize::from);
+        let stale = |slot: usize, h: &AppHost| if Some(slot) == front { h.pb_known() != Some(count) } else { !h.pb_told(count) };
+        if !self.ext.iter().enumerate().any(|(slot, h)| h.as_ref().is_some_and(|h| stale(slot, h))) {
             return;
         }
-        let (count, items) = super::pasteboard::snapshot();
-        for h in self.ext.iter_mut().flatten() {
-            h.sync_pasteboard(count, &items);
+        let mut contents = None;
+        for (slot, h) in self.ext.iter_mut().enumerate() {
+            let Some(h) = h else { continue };
+            if !stale(slot, h) {
+                continue;
+            }
+            if Some(slot) == front {
+                let (count, items) = contents.get_or_insert_with(super::pasteboard::snapshot);
+                h.sync_pasteboard(*count, items);
+            } else {
+                h.notify_pasteboard(count);
+            }
         }
     }
 
@@ -2319,8 +2436,12 @@ impl Shell {
         let cfg = self.ext_cfg();
         let appearance = appearance_flags();
         let japanese = super::kb_layouts::active() == super::kb_layouts::Layout::Japanese;
-        let mut clip = None;
-        let mut pb_from: Option<usize> = None;
+        // the newest clipboard text an app asked for, and whether it must stay off the disk (a secret)
+        let mut clip: Option<(String, bool)> = None;
+        // the apps that wrote the pasteboard in this pass, and the apps that sent only text
+        let mut pb_from: Vec<usize> = Vec::new();
+        let mut clip_from: Vec<usize> = Vec::new();
+        let mut pb_reads: Vec<usize> = Vec::new();
         let mut context=None;
         let mut open_url=None;
         let mut badge_changed=false;
@@ -2337,6 +2458,10 @@ impl Shell {
         let mut fell_back = Vec::new();
         for (slot, h) in self.ext.iter_mut().enumerate() {
             let Some(h) = h else { continue };
+            if fg == Some(slot as u8) {
+                h.fg_seen_ms = now;
+            }
+            h.pb_may_write = h.may_write_clipboard(fg == Some(slot as u8), now);
             h.sync_appearance(appearance);
             h.sync_input_source(japanese);
             if fg == Some(slot as u8) && h.running() && h.size() != (cfg.w as usize, cfg.h as usize) {
@@ -2371,8 +2496,19 @@ impl Shell {
                     ToShell::ContextMenu{x,y,items} if fg==Some(slot as u8)=>{if x.is_finite()&&y.is_finite()&&!items.is_empty()&&items.len()<=32 {context=Some((slot as u8,x,y,items));}},
                     ToShell::WantsKeyboard { on } if fg == Some(slot as u8) => kb = Some(on),
                     ToShell::InputTraits(t) if fg == Some(slot as u8) => traits = Some(t),
-                    ToShell::SetClipboard { text } => clip = Some(text),
-                    ToShell::PasteboardSet { items } => { if let Some(t) = super::pasteboard::set(items) { clip = Some(t); } pb_from = Some(slot); }
+                    // only the app in front (or one that was a moment ago) writes the clipboard: an app in the background cannot
+                    // replace what the user copied
+                    ToShell::SetClipboard { text } if h.may_write_clipboard(fg == Some(slot as u8), now) => {
+                        clip = Some((text, false));
+                        clip_from.push(slot);
+                    }
+                    ToShell::PasteboardSet { items } if h.may_write_clipboard(fg == Some(slot as u8), now) => {
+                        // the marker types make the copy a secret: kept in memory only, and cleared on a timer
+                        let (text, kind) = super::pasteboard::set_marked(items, now);
+                        clip = Some((text.unwrap_or_default(), kind.is_private()));
+                        pb_from.push(slot);
+                    }
+                    ToShell::PasteboardRead if fg == Some(slot as u8) => pb_reads.push(slot),
                     #[cfg(feature="desktop-wayland")]
                     ToShell::RemoteSharing { on } => {
                         static BUSY: std::sync::atomic::AtomicBool=std::sync::atomic::AtomicBool::new(false);
@@ -2476,15 +2612,27 @@ impl Shell {
         for notification in notifications { self.notify(notification); }
         if let Some(url)=open_url{if let Err(e)=self.desktop_open_url(&url,t){eprintln!("BifrOSt web link: {e}");}}
         if let Some((slot,x,y,items))=context {if let Some(d)=&self.desk {if let Some(i)=d.index_of(super::AppId::External(slot)){let b=d.wins[i].body(&self.desk_metrics());self.desktop_context=Some(super::desktop_bar::ContextMenu{slot,x:x+b.x as f32,y:y+b.y as f32,items});self.desktop_menu=Some(super::desktop_bar::Menu::Context);#[cfg(feature="desktop-wayland")] {self.desktop_menu_row=None;}self.dirty=true;}}}
-        if let Some(text) = clip {
-            super::clipboard::set_text(&text);
+        if let Some((text, private)) = clip {
+            if private {
+                super::clipboard::set_text_volatile(&text);
+            } else {
+                super::clipboard::set_text(&text);
+            }
+        }
+        // an app that asked for the pasteboard (it is in front) is given it again on this pass
+        for slot in pb_reads {
+            if let Some(h) = self.ext.get_mut(slot).and_then(Option::as_mut) {
+                h.pasteboard_wanted();
+            }
         }
         // one clipboard for the shell's fields, the apps and the window server's selection (`pasteboard_sync`): the pass
         // folds a copy in a shell field, an app's text and another program's selection into the pasteboard and offers it;
         // the writer of the newest typed write has that board already
-        let written = pb_from.map(|slot| (slot, super::pasteboard::count()));
+        let mut written: Vec<(usize, u32)> = pb_from.into_iter().map(|slot| (slot, super::pasteboard::count())).collect();
         super::pasteboard_sync::tick();
-        self.ext_sync_pasteboard(written);
+        // an app that sent only text has the board as it was after the pass (the text is the board's item)
+        written.extend(clip_from.into_iter().map(|slot| (slot, super::pasteboard::count())));
+        self.ext_sync_pasteboard(&written);
         if let Some(on) = kb {
             self.ext_set_keyboard(on, t);
         }
@@ -2668,6 +2816,131 @@ mod tests {
         host.sync_pasteboard(5, &[("public.png".to_string(), vec![1])]);
         assert!(matches!(next(&peer), Some(ToApp::Pasteboard { change_count: 5, .. })));
         assert_eq!(next(&peer), Some(ToApp::Clipboard { text: String::new() }), "a board without text clears the app's text");
+    }
+
+    #[test]
+    fn a_large_pasteboard_reaches_the_app_in_front_through_a_descriptor_and_is_never_cut() {
+        let (channel, peer) = sys::socketpair_pair().unwrap();
+        let cfg = Configure { w: 4, h: 3, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
+        let mut host = AppHost::with_channel("fixture", channel, None, cfg);
+        let big = vec![("public.png".to_string(), vec![9u8; 200_000]), ("public.utf8-plain-text".to_string(), b"a picture".to_vec())];
+        host.sync_pasteboard(5, &big);
+        let (packet, mut fds) = match peer.recv(false).unwrap() {
+            sys::Recv::Packet(p, fds) => (p, fds),
+            _ => panic!("nothing sent"),
+        };
+        let Ok(ToApp::PasteboardBlob { change_count, types }) = ToApp::decode(&packet) else { panic!("a blob message") };
+        assert_eq!(change_count, 5);
+        let fd = fds.pop().expect("the descriptor travels with the message");
+        assert_eq!(bifrost_proto::pbblob::read(&fd, &types).unwrap(), big, "every byte of every item");
+        assert!(matches!(peer.recv(false).unwrap(), sys::Recv::Empty), "no cut text follows");
+        host.sync_pasteboard(5, &big);
+        assert!(matches!(peer.recv(false).unwrap(), sys::Recv::Empty), "unchanged: nothing sent");
+    }
+
+    #[test]
+    fn an_app_in_the_background_hears_the_count_and_never_the_contents() {
+        let (channel, peer) = sys::socketpair_pair().unwrap();
+        let cfg = Configure { w: 4, h: 3, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
+        let mut host = AppHost::with_channel("fixture", channel, None, cfg);
+        let next = |peer: &Channel| match peer.recv(false).unwrap() {
+            sys::Recv::Packet(p, _) => Some(ToApp::decode(&p).unwrap()),
+            _ => None,
+        };
+        host.notify_pasteboard(8);
+        assert_eq!(next(&peer), Some(ToApp::PasteboardChanged { change_count: 8 }));
+        host.notify_pasteboard(8);
+        assert_eq!(next(&peer), None, "once per change");
+        // coming to the front: the contents follow, and a board the app wrote itself needs no message at all
+        host.sync_pasteboard(8, &[("public.utf8-plain-text".to_string(), b"copied elsewhere".to_vec())]);
+        assert!(matches!(next(&peer), Some(ToApp::Pasteboard { change_count: 8, .. })));
+        assert!(matches!(next(&peer), Some(ToApp::Clipboard { .. })));
+        host.pasteboard_known(9);
+        host.notify_pasteboard(9);
+        assert_eq!(next(&peer), None, "the writer is not told about its own copy");
+        // asking for the board again resets what the app is known to have
+        host.pasteboard_wanted();
+        host.sync_pasteboard(9, &[("public.utf8-plain-text".to_string(), b"again".to_vec())]);
+        assert!(matches!(next(&peer), Some(ToApp::Pasteboard { change_count: 9, .. })));
+    }
+
+    #[test]
+    fn only_an_app_in_front_or_just_left_may_write_the_clipboard() {
+        let (channel, _peer) = sys::socketpair_pair().unwrap();
+        let cfg = Configure { w: 4, h: 3, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
+        let mut host = AppHost::with_channel("fixture", channel, None, cfg);
+        assert!(host.may_write_clipboard(true, 1e6));
+        assert!(!host.may_write_clipboard(false, 1e6), "an app that was never in front cannot");
+        host.fg_seen_ms = 1e6;
+        assert!(host.may_write_clipboard(false, 1e6 + PB_WRITE_GRACE_MS), "a copy and a quick switch still land");
+        assert!(!host.may_write_clipboard(false, 1e6 + PB_WRITE_GRACE_MS + 1.0));
+    }
+
+    #[test]
+    fn a_pasteboard_write_through_a_descriptor_becomes_an_ordinary_write_and_a_bad_one_is_dropped() {
+        let (channel, _peer) = sys::socketpair_pair().unwrap();
+        let cfg = Configure { w: 4, h: 3, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
+        let mut host = AppHost::with_channel("fixture", channel, None, cfg);
+        host.pb_may_write = true;
+        let items = vec![("public.png".to_string(), vec![3u8; 100_000]), ("org.nspasteboard.ConcealedType".to_string(), Vec::new())];
+        let (fd, types) = bifrost_proto::pbblob::write(&items).unwrap();
+        let mut pumped = Pumped::default();
+        host.handle(ToShell::PasteboardBlob { types: types.clone() }, vec![fd], &mut pumped);
+        assert_eq!(pumped.requests, vec![ToShell::PasteboardSet { items }]);
+        // no descriptor, or one shorter than the layout says: nothing is written
+        let mut none = Pumped::default();
+        host.handle(ToShell::PasteboardBlob { types }, vec![], &mut none);
+        assert!(none.requests.is_empty());
+        let (short, _) = bifrost_proto::pbblob::write(&[("t".to_string(), vec![1u8; 4])]).unwrap();
+        host.handle(ToShell::PasteboardBlob { types: vec![("t".to_string(), 4000)] }, vec![short], &mut none);
+        assert!(none.requests.is_empty());
+    }
+
+    #[test]
+    fn a_background_apps_blob_is_not_read_and_only_one_blob_is_read_per_pump() {
+        let (channel, _peer) = sys::socketpair_pair().unwrap();
+        let cfg = Configure { w: 4, h: 3, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
+        let mut host = AppHost::with_channel("fixture", channel, None, cfg);
+        let items = vec![("public.png".to_string(), vec![3u8; 100_000])];
+        // an app that may not write: the descriptor is dropped unread, no request, no allocation for its layout
+        let (fd, types) = bifrost_proto::pbblob::write(&items).unwrap();
+        let mut pumped = Pumped::default();
+        host.handle(ToShell::PasteboardBlob { types }, vec![fd], &mut pumped);
+        assert!(pumped.requests.is_empty());
+        assert!(!pumped.blob_read);
+        // an app that may write: the first blob of a pump is read, the next ones are dropped
+        host.pb_may_write = true;
+        for _ in 0..3 {
+            let (fd, types) = bifrost_proto::pbblob::write(&items).unwrap();
+            host.handle(ToShell::PasteboardBlob { types }, vec![fd], &mut pumped);
+        }
+        assert_eq!(pumped.requests, vec![ToShell::PasteboardSet { items }]);
+    }
+
+    #[test]
+    fn a_blob_waits_for_the_backlog_and_a_full_socket_does_not_copy_the_board_again() {
+        let (channel, peer) = sys::socketpair_pair().unwrap();
+        let cfg = Configure { w: 4, h: 3, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
+        let mut host = AppHost::with_channel("fixture", channel, None, cfg);
+        let board = vec![("public.png".to_string(), vec![5u8; 100_000])];
+        // fill the socket until it refuses
+        for _ in 0..100_000 {
+            if host.chan.try_send(&[0u8; 4000], &[]).is_err() {
+                break;
+            }
+        }
+        host.sync_pasteboard(3, &board);
+        assert_eq!(host.pb_known(), None, "the socket was full: nothing was sent");
+        let first = host.pb_blob.as_ref().map(|(c, fd, _)| (*c, fd.0)).expect("the copy is kept for the retry");
+        host.sync_pasteboard(3, &board);
+        assert_eq!(host.pb_blob.as_ref().map(|(c, fd, _)| (*c, fd.0)), Some(first), "the same descriptor, not another copy");
+        // a queued older message is ahead of the blob: nothing is built while the backlog is not empty
+        host.pb_blob = None;
+        host.backlog.push_back(vec![0u8; 8]);
+        host.sync_pasteboard(4, &board);
+        assert!(host.pb_blob.is_none());
+        assert_eq!(host.pb_known(), None);
+        drop(peer);
     }
 
     #[test]

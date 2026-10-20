@@ -22,7 +22,7 @@ use crate::proto::ToShell;
 use crate::transfer::{self, Representations, Transferable};
 use crate::Ctx;
 use bifrost_ui::uttype;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -31,6 +31,12 @@ pub const HTML: &str = "public.html";
 pub const RTF: &str = "public.rtf";
 pub const PNG: &str = "public.png";
 pub const FILE_URL: &str = "public.file-url";
+/// The marker type of a secret (a password): an item that carries it is kept in memory only, goes to the app in front but
+/// not to the apps in the background, is offered to other programs only with the password-manager hint, and is cleared by
+/// the shell after 45 seconds. The marker holds no data; [`NativePasteboard::write_concealed_string`] adds it.
+pub use crate::proto::PB_CONCEALED as CONCEALED;
+/// The marker type of a short-lived copy: kept in memory only and flagged so other programs do not keep it.
+pub use crate::proto::PB_TRANSIENT as TRANSIENT;
 
 /// Names of the system pasteboards.
 pub const GENERAL: &str = "bifrost general";
@@ -50,6 +56,8 @@ struct State {
 
 thread_local! {
     static BOARDS: RefCell<HashMap<String, State>> = RefCell::new(HashMap::new());
+    /// Set while the general board changed in the background and only its change count arrived.
+    static STALE: Cell<bool> = const { Cell::new(false) };
 }
 
 fn with<R>(name: &str, f: impl FnOnce(&mut State) -> R) -> R {
@@ -66,6 +74,7 @@ fn finish(items: Vec<PasteboardItem>) {
 /// Applies the shell's `ToApp::Pasteboard` (the general board; the flat list becomes one item). The echo of this
 /// process's own `declare_types` keeps its promises; any other change ends them.
 pub(crate) fn mirror(change_count: u32, items: Vec<(String, Vec<u8>)>) {
+    STALE.with(|s| s.set(false));
     let old = with(GENERAL, |s| {
         if s.declared_at == Some(change_count) {
             return Vec::new();
@@ -76,6 +85,21 @@ pub(crate) fn mirror(change_count: u32, items: Vec<(String, Vec<u8>)>) {
         std::mem::replace(&mut s.items, fresh)
     });
     finish(old);
+}
+
+/// Applies the shell's `ToApp::PasteboardChanged`: the general board changed while this app is not in front, so its
+/// contents are not known here. The board reads as empty with the new change count until the contents arrive (when the app
+/// comes to the front), and [`take_stale`] says that they are still to come.
+pub(crate) fn note_changed(change_count: u32) {
+    mirror(change_count, Vec::new());
+    STALE.with(|s| s.set(true));
+}
+
+/// True once after [`note_changed`] when the contents have not arrived since. The runtime does not ask the shell on its own
+/// (the shell pushes the contents to the app in front); this is for tests and for a caller that decides to ask.
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn take_stale() -> bool {
+    STALE.with(|s| s.replace(false))
 }
 
 /// A named pasteboard. Get it with [`NativePasteboard::general`] or [`NativePasteboard::named`].
@@ -122,6 +146,24 @@ impl NativePasteboard {
             flat
         });
         ctx.send_to_shell(ToShell::PasteboardSet { items });
+    }
+    /// Writes `text` as a secret: one item holding the string and the [`CONCEALED`] marker, in one change step. The shell
+    /// keeps it off the disk, hands it only to the app in front, and clears it after 45 seconds when nothing else was
+    /// copied. Returns the new change count. Use it for passwords and one-time codes; the app's own text clipboard is not
+    /// touched (setting it too would copy the secret as plain text).
+    pub fn write_concealed_string(&self, ctx: &Ctx, text: &str) -> u32 {
+        let mut item = PasteboardItem::new();
+        item.set_string(text, STRING);
+        item.set_data(&[], CONCEALED);
+        self.replace_items(ctx, vec![item])
+    }
+    /// Asks the shell for the board's contents (`ToShell::PasteboardRead`). The shell answers an app in front with
+    /// `ToApp::Pasteboard` (or the descriptor form) and ignores one in the background. Only the general board lives in the
+    /// shell.
+    pub fn request_contents(&self, ctx: &Ctx) {
+        if self.is_general() {
+            ctx.send_to_shell(ToShell::PasteboardRead);
+        }
     }
     /// Empties the board and steps its change count; the dropped items are returned for finishing.
     fn empty(&self) -> (u32, Vec<PasteboardItem>) {
@@ -512,5 +554,37 @@ mod tests {
         assert_eq!(pb.clear_contents(&ctx), 1);
         pb.clear_contents(&ctx);
         assert_eq!(provider.0.get(), 1);
+    }
+
+    #[test]
+    fn a_concealed_write_is_one_step_with_the_marker_and_the_text() {
+        let ctx = ctx();
+        let pb = NativePasteboard::general();
+        pb.write_concealed_string(&ctx, "hunter2");
+        let sent = ctx.take_sent();
+        let Some(ToShell::PasteboardSet { items }) = sent.last() else { panic!("a write was sent") };
+        assert_eq!(items, &vec![(STRING.to_string(), b"hunter2".to_vec()), (CONCEALED.to_string(), Vec::new())]);
+        assert_eq!(pb.string().as_deref(), Some("hunter2"), "the app itself can still read it");
+    }
+
+    #[test]
+    fn a_change_noted_in_the_background_reads_as_an_empty_board_and_asks_for_the_contents_once() {
+        let ctx = ctx();
+        let pb = NativePasteboard::general();
+        mirror(40, vec![(PNG.into(), vec![1])]);
+        assert_eq!(pb.types(), [PNG]);
+        note_changed(41);
+        assert_eq!(pb.change_count(), 41);
+        assert!(pb.types().is_empty(), "the contents are not known in the background");
+        assert!(take_stale());
+        assert!(!take_stale(), "asked once");
+        // the contents arriving ends the wait
+        note_changed(42);
+        mirror(42, vec![(STRING.into(), b"x".to_vec())]);
+        assert!(!take_stale());
+        pb.request_contents(&ctx);
+        assert!(matches!(ctx.take_sent().last(), Some(ToShell::PasteboardRead)));
+        NativePasteboard::named("t-local").request_contents(&ctx);
+        assert!(ctx.take_sent().is_empty(), "only the general board lives in the shell");
     }
 }

@@ -56,6 +56,20 @@ impl Clipboard {
         }
     }
 
+    /// Replaces the contents with `text` (empty clears the clipboard) in memory only: a secret that must not reach the
+    /// disk. The text saved earlier is removed too, so it cannot come back after a restart in place of the secret.
+    pub fn set_text_volatile(&mut self, text: &str) {
+        self.image = None;
+        self.rev = self.rev.wrapping_add(1);
+        self.text = (!text.is_empty()).then(|| text.to_string());
+        if let Some(path) = &self.path {
+            match std::fs::remove_file(path) {
+                Err(e) if e.kind() != io::ErrorKind::NotFound => eprintln!("springboard: clipboard: {e}"),
+                _ => {}
+            }
+        }
+    }
+
     /// Replaces the contents with an image; the persisted text is removed.
     pub fn set_image(&mut self, image: Image) {
         self.image = Some(image);
@@ -154,9 +168,33 @@ pub fn set_text(text: &str) {
     }
 }
 
+/// Puts `text` on the shared clipboard without saving it (a secret; see [`Clipboard::set_text_volatile`]).
+pub fn set_text_volatile(text: &str) {
+    if let Some(c) = global().as_mut() {
+        c.set_text_volatile(text);
+    }
+}
+
 #[cfg(any(test, feature = "testkit"))]
 pub mod tests {
     use super::*;
+
+    #[test]
+    fn a_volatile_copy_never_reaches_the_disk() {
+        let path = scratch("v/clipboard.txt");
+        let mut c = Clipboard::load(&path);
+        c.set_text("older copy");
+        assert!(path.exists());
+        let rev = c.rev;
+        c.set_text_volatile("s3cret");
+        assert_eq!(c.text(), Some("s3cret"));
+        assert_ne!(c.rev, rev, "readers see a change");
+        assert!(!path.exists(), "the file holding the earlier copy is gone and the secret was not written");
+        c.set_text("plain again");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "plain again");
+        c.set_text_volatile("");
+        assert!(!c.has_text());
+    }
 
     /// Serialises tests that use the shared clipboard and starts them empty.
     pub fn exclusive() -> MutexGuard<'static, ()> {

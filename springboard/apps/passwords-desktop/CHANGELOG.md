@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.8
+
+- Documentation only: the doc comment of the one-time-code clock helper is back above it.
+
+## 0.2.7
+
+- Copied passwords are concealed: the shell keeps them in memory (never in `clipboard.txt`), gives them only to the app in
+  front, marks them so other programs and clipboard managers leave them out, and clears them 45 seconds after the copy
+  when nothing else was copied. They are no longer put on the plain-text clipboard.
+
 ## 0.2.6
 
 - BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.
