@@ -932,6 +932,14 @@ pub struct Shell {
     bar_only: bool,
     /// a reading changed the bar's text this tick; settled into `dirty` and `bar_only` at the end of the tick
     metrics_changed: bool,
+    /// The menu bar items a reading changed (and the ones that moved with them), as (x, y, w, h) in screen px: a
+    /// bar-only frame reports damage for these rectangles alone. Empty means "the whole bar band".
+    bar_rects: Vec<(i32, i32, i32, i32)>,
+    /// The foreground external app sent new pixels (and nothing else the shell draws) since the last frame. It is kept
+    /// apart from `dirty`: when `dirty` is not also set, the frame only republishes the desktop's windows
+    /// (`draw_desk_windows`) and leaves the shell's own surface, the bar and the Dock alone; any other cause is the
+    /// ordinary frame, which draws the windows as well.
+    ext_frame: bool,
     /// Overview, the Apps grid and the desktops (see `overview.rs`)
     overview: overview::Overview,
     desktop_menu:Option<desktop_bar::Menu>,
@@ -1307,6 +1315,8 @@ impl Shell {
             perf_only: false,
             bar_only: false,
             metrics_changed: false,
+            bar_rects: Vec::new(),
+            ext_frame: false,
             overview:Default::default(),
             desktop_menu:None,defaults:None,recent_list:recent_items::new(),recent_dir:None,desktop_context:None,
             #[cfg(feature = "desktop-wayland")]
@@ -1395,7 +1405,7 @@ impl Shell {
     pub fn needs_frame(&self) -> bool {
         let files = self.screen == Screen::App(AppId::Files) && self.files.as_ref().is_some_and(Files::animating);
         let desk_anim = self.desk_active() && self.desk_animating(0.0);
-        self.screen_on && (self.dirty || bifrost_render::appearance::fading() || self.anim.is_some() || self.turning() || self.pager.animating() || self.cc.animating() || self.switcher.animating() || self.keyboard.animating() || self.quicksearch.animating() || self.notify.animating() || self.lock_pager.animating() || self.today.animating() || self.home_animating() || files || desk_anim)
+        self.screen_on && (self.dirty || self.ext_frame || bifrost_render::appearance::fading() || self.anim.is_some() || self.turning() || self.pager.animating() || self.cc.animating() || self.switcher.animating() || self.keyboard.animating() || self.quicksearch.animating() || self.notify.animating() || self.lock_pager.animating() || self.today.animating() || self.home_animating() || files || desk_anim)
     }
 
     /// Why `needs_frame` holds, for the frame trace: the first condition that does ("-" when none).
@@ -1404,7 +1414,11 @@ impl Shell {
         let desk_anim = self.desk_active() && self.desk_animating(0.0);
         let reasons = [
             (!self.screen_on, "screen-off"),
-            (self.dirty, "dirty"),
+            // the partial frames name what asked for them; "dirty" is an ordinary full frame
+            (self.dirty && self.bar_only, "bar-reading"),
+            (self.dirty && self.perf_only, "perf-hud"),
+            (self.dirty && !self.bar_only && !self.perf_only, "dirty"),
+            (self.ext_frame, "ext-frame"),
             (self.anim.is_some(), "anim"),
             (self.turning(), "turn"),
             (self.pager.animating(), "pager"),
@@ -3734,12 +3748,39 @@ impl Shell {
         self.desktop_metrics_at = t;
         let key = |m: &desktop_metrics::Snapshot| if menu { m.shown() } else { m.bar_key() };
         let before = key(&self.desktop_metrics);
+        let bar_before = self.bar_layout();
         self.metrics_sampler.sample(&mut self.desktop_metrics, menu);
         if key(&self.desktop_metrics) != before {
             // redraw only when the shown text changed, and then only the bar if nothing else asks for a frame
             // (`note_metrics_frame`, at the end of the tick)
             self.metrics_changed = true;
+            // and of the bar, only the items whose label or place changed
+            let rects = self.changed_bar_items(&bar_before);
+            self.bar_rects.extend(rects);
         }
+    }
+
+    /// The menu bar's items as laid out now (menu, left, width, label), to tell which ones a new reading changed.
+    #[cfg(feature = "desktop-wayland")]
+    fn bar_layout(&self) -> Vec<(desktop_bar::Menu, f32, f32, String)> {
+        self.menu_buttons()
+    }
+
+    /// Without the desktop there is no bar.
+    #[cfg(not(feature = "desktop-wayland"))]
+    fn bar_layout(&self) -> Vec<(desktop_bar::Menu, f32, f32, String)> {
+        Vec::new()
+    }
+
+    /// The rectangles (screen px, the full bar height) of the bar items that differ from `before`.
+    #[cfg(feature = "desktop-wayland")]
+    fn changed_bar_items(&self, before: &[(desktop_bar::Menu, f32, f32, String)]) -> Vec<(i32, i32, i32, i32)> {
+        desktop_bar::changed_bar_rects(before, &self.menu_buttons(), self.w, self.desktop_bar_height() as i32, self.ui.pt(6.) as i32)
+    }
+
+    #[cfg(not(feature = "desktop-wayland"))]
+    fn changed_bar_items(&self, _before: &[(desktop_bar::Menu, f32, f32, String)]) -> Vec<(i32, i32, i32, i32)> {
+        Vec::new()
     }
 
     pub fn tick(&mut self, t: f64) -> Vec<Effect> {
@@ -3776,6 +3817,10 @@ impl Shell {
     fn note_metrics_frame(&mut self) {
         if std::mem::take(&mut self.metrics_changed) {
             self.bar_only = !self.dirty;
+            if !self.bar_only {
+                // the ordinary frame repaints the whole bar
+                self.bar_rects.clear();
+            }
             self.perf_only = false;
             self.dirty = true;
         }
@@ -4141,11 +4186,25 @@ impl Shell {
         self.refresh_icon_style();
         // the audio service connects only once the desktop has been drawn (lazy; socket activation starts it then)
         self.audio.arm();
-        let was_dirty = std::mem::replace(&mut self.dirty, false);
+        let mut was_dirty = std::mem::replace(&mut self.dirty, false);
+        // new pixels from the foreground app: on a settled desktop that is a frame of windows alone; anywhere else, or with
+        // another cause pending, it is the ordinary frame (which draws the windows too)
+        let ext = std::mem::take(&mut self.ext_frame);
+        let ext_windows = ext && !was_dirty && self.ext_windows_only_ok(t);
+        if ext && !ext_windows {
+            was_dirty = true;
+        }
         let mut damage = std::mem::take(&mut self.damage);
         let mut rows = std::mem::take(&mut self.rows);
         damage.clear();
+        // the items a reading changed, for the bar-only frame below (any other frame repaints the whole bar)
+        #[cfg_attr(not(feature = "desktop-wayland"), allow(unused_variables))]
+        let bar_rects = std::mem::take(&mut self.bar_rects);
         if self.desk_active() && self.desk_drawn && !was_dirty && !self.desk_animating(t) {
+            // the shell's own surface is unchanged; the windows are separate surfaces for the presenter
+            if ext_windows {
+                self.draw_desk_windows(s, t);
+            }
             self.damage = damage;
             self.rows = rows;
             return &self.damage;
@@ -4161,7 +4220,7 @@ impl Shell {
         if std::mem::take(&mut self.perf_only) && std::env::var_os("SPRINGBOARD_WAYLAND").is_some()
             && self.desk_active() && !self.is_locked() && self.anim.is_none()
             && self.desktop_menu.is_none() && !self.cc_active() && !self.center_active() && !self.overlay_visible() && !self.quick_look.is_visible()
-            && self.desk_drawn && self.retain_wayland_windows() {
+            && self.desk_drawn && self.windows_ready(s, ext, t) {
             let (_,y,_,h)=self.perf_rect();
             let top=y.floor().max(0.) as usize;
             let bottom=((y+h).ceil() as usize+1).min(s.h);
@@ -4177,10 +4236,15 @@ impl Shell {
             && self.desk_active() && !self.is_locked() && self.anim.is_none()
             && self.desktop_menu.is_none() && !self.cc_active() && !self.center_active() && !self.overlay_visible() && !self.quick_look.is_visible()
             && !self.overview_active()
-            && self.desk_drawn && self.retain_wayland_windows() {
+            && self.desk_drawn && self.windows_ready(s, ext, t) {
             let bottom=self.desktop_bar_height().min(s.h);
             self.draw_desktop_background(&mut s.rows(0,bottom));
-            damage.add(0,0,s.w as i32,bottom as i32);
+            // the band is redrawn whole (it is cheap and deterministic); only the items that changed are damage
+            if bar_rects.is_empty() {
+                damage.add(0,0,s.w as i32,bottom as i32);
+            } else {
+                for (x,_,w,_) in bar_rects {damage.add(x,0,w,bottom as i32);}
+            }
             self.damage=damage; self.rows=rows;
             return &self.damage;
         }

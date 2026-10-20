@@ -236,6 +236,36 @@ fn top_app_rows(apps:&[super::desktop_metrics::AppUsage],header:&str,key:impl Fn
     if sorted.is_empty() {return Vec::new();}
     let mut rows=vec![Row::label(header)];rows.extend(sorted.into_iter().take(5).map(|a|Row::label(format!("{}: {}",a.id,show(key(a))))));rows
 }
+/// The screen rectangles (x, y, w, h; the bar's full `height`, `pad` px more on each side, kept inside `[0, width]`) of
+/// the bar items that differ between two layouts: an item whose label or place changed (old and new place both), one
+/// that appeared or went. A reading that changes only the CPU label returns that label's rectangle, not the bar.
+#[cfg(feature = "desktop-wayland")]
+pub(super) fn changed_bar_rects(before:&[(Menu,f32,f32,String)],after:&[(Menu,f32,f32,String)],width:i32,height:i32,pad:i32)->Vec<(i32,i32,i32,i32)> {
+    let width=width.max(0);
+    let span=|left:f32,w:f32|->(i32,i32) {(((left.floor() as i32)-pad).clamp(0,width),(((left+w).ceil() as i32)+pad).clamp(0,width))};
+    let mut spans:Vec<(i32,i32)>=Vec::new();
+    for item in after {
+        match before.iter().find(|b|b.0==item.0) {
+            Some(old) if old.1==item.1&&old.2==item.2&&old.3==item.3=>{}
+            Some(old)=>{spans.push(span(old.1,old.2));spans.push(span(item.1,item.2));}
+            None=>spans.push(span(item.1,item.2)),
+        }
+    }
+    for old in before {
+        if !after.iter().any(|a|a.0==old.0) {spans.push(span(old.1,old.2));}
+    }
+    spans.retain(|s|s.1>s.0);
+    spans.sort();
+    // overlapping or touching spans are one rectangle
+    let mut merged:Vec<(i32,i32)>=Vec::new();
+    for s in spans {
+        if let Some(last)=merged.last_mut() {
+            if s.0<=last.1 {last.1=last.1.max(s.1);continue;}
+        }
+        merged.push(s);
+    }
+    merged.into_iter().map(|(a,b)|(a,0,b-a,height)).collect()
+}
 impl Shell {
     /// The Window menu's name for an open window: an extra window's title from its app's table, else the app's name.
     pub(super) fn window_menu_name(&self, app: super::AppId) -> String {
@@ -1575,5 +1605,49 @@ mod context_menu_shell_tests {
         sh.desktop_menu_hover(x as f32 + 12., 4.);
         assert_eq!(sh.desktop_menu, Some(Menu::Context), "crossing the bar keeps the context menu");
         assert_eq!(sh.menu_row_of(Menu::Context), None);
+    }
+}
+
+/// Which bar items a new reading repaints: the changed label's rectangle and what moved with it, not the whole bar.
+#[cfg(all(test, feature = "desktop-wayland"))]
+mod changed_bar_item_tests {
+    use super::{changed_bar_rects, Menu};
+
+    fn item(menu: Menu, left: f32, width: f32, label: &str) -> (Menu, f32, f32, String) {
+        (menu, left, width, label.to_string())
+    }
+
+    #[test]
+    fn the_same_layout_changes_nothing() {
+        let bar = vec![item(Menu::App, 40., 80., "Music"), item(Menu::Cpu, 1900., 70., "CPU 3%")];
+        assert!(changed_bar_rects(&bar, &bar, 2560, 44, 8).is_empty());
+    }
+
+    #[test]
+    fn a_new_cpu_label_of_the_same_width_damages_only_that_label() {
+        let before = vec![item(Menu::App, 40., 80., "Music"), item(Menu::Cpu, 1900., 70., "CPU 3%"), item(Menu::Memory, 1970., 70., "RAM 40%")];
+        let after = vec![item(Menu::App, 40., 80., "Music"), item(Menu::Cpu, 1900., 70., "CPU 4%"), item(Menu::Memory, 1970., 70., "RAM 40%")];
+        // the label's span, 8 px more on each side
+        let rects = changed_bar_rects(&before, &after, 2560, 44, 8);
+        assert_eq!(rects, vec![(1892, 0, 86, 44)]);
+        let pixels: i32 = rects.iter().map(|r| r.2 * r.3).sum();
+        assert!(pixels < 2560 * 44 / 10, "far less than the bar: {pixels}");
+    }
+
+    #[test]
+    fn a_wider_label_also_damages_the_item_that_moved_with_it() {
+        let before = vec![item(Menu::Cpu, 1900., 70., "CPU 9%"), item(Menu::Memory, 1970., 70., "RAM 9%")];
+        // RAM grew by 10 px, so CPU moved left by 10 and both changed
+        let after = vec![item(Menu::Cpu, 1890., 70., "CPU 9%"), item(Menu::Memory, 1960., 80., "RAM 10%")];
+        let rects = changed_bar_rects(&before, &after, 2560, 44, 0);
+        assert_eq!(rects, vec![(1890, 0, 150, 44)]);
+    }
+
+    #[test]
+    fn items_that_appeared_or_went_and_the_screen_edges_are_handled() {
+        let before = vec![item(Menu::App, 0., 50., "A")];
+        let after = vec![item(Menu::Cpu, 2540., 40., "CPU 1%")];
+        let rects = changed_bar_rects(&before, &after, 2560, 44, 8);
+        assert_eq!(rects, vec![(0, 0, 58, 44), (2532, 0, 28, 44)], "a gone item and a new one, clipped to the screen");
     }
 }

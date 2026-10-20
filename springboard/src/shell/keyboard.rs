@@ -225,7 +225,7 @@ impl Service {
             return;
         }
         let Some(host) = self.host.as_mut() else { return };
-        let Pumped { frame, requests, died } = host.pump();
+        let Pumped { frame, requests, died, .. } = host.pump();
         if frame {
             self.dirty = true;
         }

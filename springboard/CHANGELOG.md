@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Performance: an idle desktop with an app in front no longer redraws itself about 65 times a second. New pixels from
+  the app in front republish the window alone (the bar, the Dock and the wallpaper are not drawn again) and an app title,
+  size or menu sent again unchanged is free. A repaint that draws the pixels already on screen is not sent by the app
+  SDK at all, and a full repaint that changed a little is sent as that little. The once-a-second CPU and RAM reading
+  repaints only the changed items of the menu bar (a covered window used to force a whole desktop frame, which is why the
+  22 ms frames with 0% damage continued). The frame trace (`why`) names the cause: `ext-frame`, `bar-reading`,
+  `perf-hud` or `dirty`.
+- Audio clients (Music, Podcasts, Voice Memos, Video Player, the shell) wait 1 s, 2 s, 4 s, up to 30 s before
+  reconnecting to a media service that accepts a connection and closes it again, instead of reconnecting in a loop.
+
 ## 0.10.10 — 2026-10-20
 
 - Security: apps can no longer control the desktop through the shell's control port. The shell used to listen on TCP

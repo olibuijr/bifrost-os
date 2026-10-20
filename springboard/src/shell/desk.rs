@@ -359,6 +359,10 @@ pub struct Desk {
     pub(super) raise_front: bool,
     #[cfg(feature = "desktop-wayland")]
     window_cache: std::collections::HashMap<u32, CachedWindow>,
+    /// the windows the last desktop frame did not draw because windows in front cover them completely: they keep no cache
+    /// entry (they repaint in full once uncovered), and `retain_wayland_windows` must not take that for a missing frame
+    #[cfg(feature = "desktop-wayland")]
+    pub(super) hidden_ids: Vec<u32>,
     /// a built-in window whose body may be reused this frame (only the key state moved; see `draw_window`)
     reuse_body: Option<AppId>,
     #[cfg(feature = "desktop-wayland")]
@@ -960,6 +964,33 @@ fn frame_title(id: u32) -> &'static str {
 
 impl Shell {
     #[cfg(feature = "desktop-wayland")]
+    /// Gets the windows' frames ready for a partial desktop frame: drawn afresh when an external app sent pixels (`ext`),
+    /// else kept as the last frame left them. False when only a full desktop frame can do it.
+    pub(super) fn windows_ready(&mut self, s: &mut Surface, ext: bool, t: f64) -> bool {
+        if ext {
+            self.draw_desk_windows(s, t);
+            true
+        } else {
+            self.retain_wayland_windows()
+        }
+    }
+
+    /// Whether a frame for an external app's new pixels may draw the windows alone: the settled desktop on the window
+    /// server's path (the conditions of the bar-only frame), nothing animating and nothing floating over the windows.
+    #[cfg(feature = "desktop-wayland")]
+    pub(super) fn ext_windows_only_ok(&self, t: f64) -> bool {
+        std::env::var_os("SPRINGBOARD_WAYLAND").is_some()
+            && self.desk_active() && self.desk_drawn && !self.is_locked() && self.anim.is_none()
+            && self.desktop_menu.is_none() && !self.cc_active() && !self.center_active() && !self.overlay_visible() && !self.quick_look.is_visible()
+            && !self.overview_active() && !self.desk_animating(t)
+    }
+
+    #[cfg(not(feature = "desktop-wayland"))]
+    pub(super) fn ext_windows_only_ok(&self, _t: f64) -> bool {
+        false
+    }
+
+    #[cfg(feature = "desktop-wayland")]
     pub(super) fn retain_wayland_windows(&mut self) -> bool {
         let m=self.desk_metrics();
         let title_height=m.title;
@@ -969,7 +1000,8 @@ impl Shell {
         let mut frames=Vec::new();
         for w in desk.wins.iter().filter(|w|!w.minimized && !desk.unmapped.contains(&w.app)) {
             let Some(id)=win_id(w.app) else{return false};
-            if !desk.window_cache.contains_key(&id) {return false;}
+            // a covered window has no cache entry by design (see `hidden_ids`); anything else without one needs a full draw
+            if !desk.window_cache.contains_key(&id) && !desk.hidden_ids.contains(&id) {return false;}
             frames.push(crate::bare::wayland::WindowFrame {id,title:frame_title(id),x:w.r.x,y:w.r.y,width:w.r.w as usize,height:w.r.h as usize,pixels:None,damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize),maximized:w.maximized,fullscreen:w.full,title_height,drag_height:0,no_drag:Vec::new(),floating:false,fx:bifrost_render::glass::Fx::IDENTITY,opaque:!matches!(w.app,AppId::External(_))});
             let controls=match w.app {AppId::External(slot)=>ext.get(slot as usize).and_then(Option::as_ref).map_or(&[][..],|h|&h.controls[..]),_=>&[][..]};
             let (dh,nd)=drag_zone(w,&m,controls);
@@ -2483,8 +2515,18 @@ impl Shell {
 
     /// The wallpaper, the windows back to front, the menu bar and the dock.
     pub(super) fn draw_desk(&mut self, s: &mut Surface, t: f64) {
-        let m = self.desk_metrics();
         self.draw_wallpaper_layer(s);
+        self.draw_desk_windows(s, t);
+        self.draw_desk_chrome(s, t);
+    }
+
+    /// The desktop's windows, back to front. On the window server's path each window becomes a frame for the presenter
+    /// (`Desk::frames`) and `s` is not touched; a frame that only an external app's new pixels asked for runs just this
+    /// (`Shell::draw`, the windows-only path), so the bar, the Dock and the wallpaper are not drawn again.
+    pub(super) fn draw_desk_windows(&mut self, s: &mut Surface, t: f64) {
+        let m = self.desk_metrics();
+        #[cfg(feature = "desktop-wayland")]
+        if let Some(d) = self.desk.as_mut() { d.hidden_ids.clear(); }
         // windows are read by index, so a frame copies no window list
         let count = self.desk.as_ref().map_or(0, |d| d.wins.len());
         // a window that is minimizing stays drawn until its effect ends
@@ -2550,6 +2592,7 @@ impl Shell {
                 if hidden[i] {
                     // a window in front covers it: its surface keeps the last pixels presented, and its cache is
                     // dropped so that it repaints in full once it is uncovered
+                    self.desk.as_mut().unwrap().hidden_ids.push(id);
                     self.desk.as_mut().unwrap().frames.push(crate::bare::wayland::WindowFrame {
                         id, title: frame_title(id), x:w.r.x, y:w.r.y,
                         width:w.r.w as usize, height:w.r.h as usize, pixels:None,
@@ -2679,6 +2722,11 @@ impl Shell {
                 for f in &mut d.frames { f.fx = fx.fx(f.id, now_s, shift); }
             }
         }
+    }
+
+    /// What the shell itself draws over the desktop: the bar, the Dock, menus, the keyboard, Quick Look and the HUD.
+    fn draw_desk_chrome(&mut self, s: &mut Surface, t: f64) {
+        let m = self.desk_metrics();
         self.draw_app_status(s);
         self.draw_desk_dock(s, &m, t);
         // a tablet's on-screen keyboard sits over the desktop, above the windows and the dock
