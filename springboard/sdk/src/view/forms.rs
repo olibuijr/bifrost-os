@@ -12,8 +12,8 @@ use crate::widgets::{self, MENU_PAD_PT, MENU_ROW_PT, MENU_SEPARATOR_PT};
 use bifrost_render::ui::{MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_GROUP_HEADER_PT, SPACE_L, SPACE_M, SPACE_S, SPACE_XL, SPACE_XXS};
 use bifrost_ui::menu::{Menu, MenuItem};
 use bifrost_ui::prefs_layout::m;
-use bifrost_ui::keys::{Key, KeyCombo};
-use bifrost_ui::text::{binding, EditCommand, TextBuffer, TextEditor};
+use bifrost_ui::keys::KeyCombo;
+use bifrost_ui::text::{extend_unit, key_action, ClickCounter, EditCommand, KeyAction, TextBuffer, TextEditor};
 use bifrost_ui::{values, Command, Node, Rect, Role};
 use std::f32::consts::PI;
 
@@ -336,16 +336,17 @@ const FIELD_INSET_PT: f32 = 12.0;
 /// How many edits a field remembers.
 const FIELD_UNDO_LEVELS: usize = 100;
 
-/// evdev code of a letter key to the letter (the chords the editing bindings use).
-fn evdev_letter(key: u32) -> Option<char> {
-    const ROWS: [(u32, &str); 3] = [(16, "qwertyuiop"), (30, "asdfghjkl"), (44, "zxcvbnm")];
-    ROWS.iter().find_map(|(start, chars)| key.checked_sub(*start).and_then(|i| chars.chars().nth(i as usize)))
+/// The `KeyCombo` a chord means, for `text::key_action`: a letter, a digit, Backspace, forward Delete, an arrow, Home, End,
+/// Page Up or Page Down, with the modifiers held. None for any other key.
+pub(crate) fn chord_combo(key: u32, mods: u32) -> Option<KeyCombo> {
+    use crate::proto::{CHORD_ALT, CHORD_CTRL, CHORD_META, CHORD_SHIFT};
+    KeyCombo::from_evdev(key, mods & CHORD_CTRL != 0, mods & CHORD_SHIFT != 0, mods & CHORD_ALT != 0, mods & CHORD_META != 0)
 }
 
-/// The `KeyCombo` a chord means, for `text::binding`.
-fn chord_combo(key: u32, mods: u32) -> Option<KeyCombo> {
-    use crate::proto::{CHORD_ALT, CHORD_CTRL, CHORD_META, CHORD_SHIFT};
-    Some(KeyCombo { cmd: mods & CHORD_META != 0, ctrl: mods & CHORD_CTRL != 0, alt: mods & CHORD_ALT != 0, shift: mods & CHORD_SHIFT != 0, key: Key::Char(evdev_letter(key)?) })
+/// Milliseconds on a steady clock, for counting clicks (the view events carry no time).
+fn now_ms() -> f64 {
+    static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+    START.get_or_init(std::time::Instant::now).elapsed().as_secs_f64() * 1000.0
 }
 
 /// A single-line text field (`NativeTextField` editable) over `bifrost_ui::text::TextEditor`: caret and selection placed by
@@ -368,6 +369,12 @@ pub struct TextField {
     marks: Vec<(usize, f32)>,
     /// a drag selection is in progress
     dragging: bool,
+    /// consecutive presses: a double click selects a word, a triple click the whole line
+    clicks: ClickCounter,
+    /// what the press that began the drag selected (a word for a double click, everything for a triple click), and the
+    /// click count of that press
+    drag_origin: std::ops::Range<usize>,
+    drag_unit: u8,
     /// `accessibilityTitle` and `accessibilityHelp`
     ax_title: String,
     ax_help: String,
@@ -384,6 +391,9 @@ impl TextField {
             start: 0,
             marks: Vec::new(),
             dragging: false,
+            clicks: ClickCounter::default(),
+            drag_origin: 0..0,
+            drag_unit: 1,
             ax_title: String::new(),
             ax_help: String::new(),
         }
@@ -463,14 +473,19 @@ impl TextField {
     }
     fn handle_key(&mut self, k: &KeyInput) -> bool {
         if let Some((key, mods)) = k.as_chord() {
-            let Some((cmd, ext)) = chord_combo(key, mods).and_then(binding) else {
+            let Some(action) = chord_combo(key, mods).and_then(key_action) else {
                 self.editor.end_composition();
                 return false;
             };
-            return match cmd {
-                EditCommand::Undo => self.perform("undo"),
-                EditCommand::Redo => self.perform("redo"),
-                c => self.run(c, ext),
+            return match action {
+                KeyAction::Edit(EditCommand::Undo, _) => self.perform("undo"),
+                KeyAction::Edit(EditCommand::Redo, _) => self.perform("redo"),
+                // a single line takes no line breaks
+                KeyAction::Edit(EditCommand::OpenLine, _) => false,
+                KeyAction::Edit(c, ext) => self.run(c, ext),
+                KeyAction::Cut => self.perform("cut"),
+                KeyAction::Copy => self.perform("copy"),
+                KeyAction::Paste => self.perform("paste"),
             };
         }
         match k {
@@ -487,6 +502,9 @@ impl TextField {
             KeyInput::Code(46) => self.run(EditCommand::DeleteForward, false),
             KeyInput::Code(37) => self.run(EditCommand::MoveLeft, false),
             KeyInput::Code(39) => self.run(EditCommand::MoveRight, false),
+            // a single line has no line above or below: Up goes to the start of the text, Down to the end
+            KeyInput::Code(38) => self.run(EditCommand::MoveUp, false),
+            KeyInput::Code(40) => self.run(EditCommand::MoveDown, false),
             KeyInput::Code(36) => self.run(EditCommand::MoveLineStart, false),
             KeyInput::Code(35) => self.run(EditCommand::MoveLineEnd, false),
             _ => {
@@ -591,14 +609,21 @@ impl View for TextField {
             return false;
         }
         match ev {
-            ViewEvent::Pointer(Event::Down(px, _)) => {
+            ViewEvent::Pointer(Event::Down(px, py)) => {
                 let before = self.text().to_string();
                 self.editor.end_composition();
                 if self.editor.buf.has_marked_text() {
                     self.editor.unmark_text(true);
                 }
                 let at = self.byte_at(px - self.base.frame.x - FIELD_INSET_PT);
-                self.editor.buf.set_selection(at, at);
+                // a double click selects the word under the pointer, a triple click the whole line
+                self.drag_unit = self.clicks.press(now_ms(), *px, *py);
+                match self.drag_unit {
+                    2 => self.editor.buf.select_word_at(at),
+                    3 => self.editor.buf.select_line_at(at),
+                    _ => self.editor.buf.set_selection(at, at),
+                }
+                self.drag_origin = self.editor.buf.selection();
                 self.dragging = true;
                 self.edited(&before);
                 true
@@ -606,8 +631,23 @@ impl View for TextField {
             ViewEvent::Pointer(Event::Move(px, _)) => {
                 if self.dragging {
                     let at = self.byte_at(px - self.base.frame.x - FIELD_INSET_PT);
-                    let anchor = self.editor.buf.anchor();
-                    self.editor.buf.set_selection(anchor, at);
+                    match self.drag_unit {
+                        1 => {
+                            let anchor = self.editor.buf.anchor();
+                            self.editor.buf.set_selection(anchor, at);
+                        }
+                        unit => {
+                            // by whole words (or the whole line) from where the press began
+                            let mut probe = self.editor.buf.clone();
+                            if unit == 2 {
+                                probe.select_word_at(at);
+                            } else {
+                                probe.select_line_at(at);
+                            }
+                            let (anchor, head) = extend_unit(self.drag_origin.clone(), probe.selection());
+                            self.editor.buf.set_selection(anchor, head);
+                        }
+                    }
                 }
                 self.base.dirty = true;
                 true
@@ -628,13 +668,14 @@ impl View for TextField {
         let before = self.text().to_string();
         match cmd {
             Command::Cut => {
-                clipboard::set_text(self.editor.buf.selected_text());
-                self.editor.perform(EditCommand::DeleteBackward, false);
+                if let Some(cut) = self.editor.cut_selection() {
+                    clipboard::set_text(&cut);
+                }
             }
             Command::Copy => clipboard::set_text(self.editor.buf.selected_text()),
             Command::Paste => {
                 let clip = Self::single_line(&clipboard::text().unwrap_or_default());
-                self.editor.insert_text(&clip);
+                self.editor.paste_text(&clip);
             }
             Command::SelectAll => {
                 self.editor.perform(EditCommand::SelectAll, false);

@@ -880,3 +880,164 @@ fn window_undo_titles_follow_the_action_name() {
     w.send("undo", &mut m);
     assert_eq!(w.undo_titles(), ("Undo".to_string(), "Redo Increment".to_string()));
 }
+
+// ---- The standard text-editing keys in a focused field ----
+
+/// The tests that read the shared clipboard take turns (it is one per process outside the render crate's own tests).
+static CLIPBOARD_TURN: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn key_chord(w: &mut Window<Model>, m: &mut Model, key: u32, mods: u32) {
+    w.event(&ViewEvent::Key(KeyInput::chord(key, mods)), m);
+}
+
+fn field_state(w: &Window<Model>, id: u64) -> (String, usize, usize) {
+    let t = w.view::<TextField>(id).unwrap();
+    (t.text().to_string(), t.model().anchor(), t.model().caret())
+}
+
+/// Every standard text key reaches a focused field the way the shell delivers it: the Cmd and Ctrl letters as chords, the
+/// movement and delete keys as chords with the modifiers held (Home, End, Page Up, Page Down and forward Delete with none).
+/// evdev codes: A 30, C 46, X 45, V 47, Z 44, E 18, K 37, D 32, H 35, Y 21, Backspace 14, Delete 111, Left 105, Right 106, Up 103,
+/// Down 108, Home 102, End 107, Page Up 104, Page Down 109.
+#[test]
+fn the_standard_text_keys_act_in_a_focused_field() {
+    let _turn = CLIPBOARD_TURN.lock().unwrap_or_else(|e| e.into_inner());
+    use crate::proto::{CHORD_ALT, CHORD_CTRL, CHORD_META, CHORD_SHIFT};
+    let (mut w, id) = focused_field("hello big world");
+    let mut m = Model::default();
+    let mut press = |w: &mut Window<Model>, key: u32, mods: u32| key_chord(w, &mut m, key, mods);
+    assert_eq!(field_state(&w, id), ("hello big world".into(), 15, 15));
+    // Cmd+A selects everything; Cmd+C copies it; typing replaces the selection; Cmd+Z brings the text back
+    press(&mut w, 30, CHORD_META);
+    assert_eq!(field_state(&w, id), ("hello big world".into(), 0, 15), "Cmd+A");
+    press(&mut w, 46, CHORD_META);
+    assert_eq!(crate::kit::clipboard::text().as_deref(), Some("hello big world"), "Cmd+C reaches the clipboard");
+    key(&mut w, &mut Model::default(), text("X"));
+    assert_eq!(field_state(&w, id).0, "X", "typing replaces the selection");
+    press(&mut w, 44, CHORD_META);
+    assert_eq!(field_state(&w, id).0, "hello big world", "Cmd+Z");
+    // Cmd+X cuts, Cmd+V pastes it back, Cmd+Z takes the paste back, Shift+Cmd+Z puts it again
+    press(&mut w, 30, CHORD_META);
+    press(&mut w, 45, CHORD_META);
+    assert_eq!(field_state(&w, id).0, "", "Cmd+X");
+    assert_eq!(crate::kit::clipboard::text().as_deref(), Some("hello big world"), "Cmd+X reaches the clipboard");
+    press(&mut w, 47, CHORD_META);
+    assert_eq!(field_state(&w, id), ("hello big world".into(), 15, 15), "Cmd+V");
+    press(&mut w, 44, CHORD_META);
+    assert_eq!(field_state(&w, id).0, "", "undo takes the paste back");
+    press(&mut w, 44, CHORD_META | CHORD_SHIFT);
+    assert_eq!(field_state(&w, id).0, "hello big world", "Shift+Cmd+Z");
+    // Home and End, with Shift; Option+arrows by word; Page Up and Page Down on one line
+    press(&mut w, 102, 0);
+    assert_eq!(field_state(&w, id), ("hello big world".into(), 0, 0), "Home");
+    press(&mut w, 107, 0);
+    assert_eq!(field_state(&w, id).2, 15, "End");
+    press(&mut w, 102, CHORD_SHIFT);
+    assert_eq!(field_state(&w, id), ("hello big world".into(), 15, 0), "Shift+Home");
+    press(&mut w, 106, CHORD_ALT);
+    assert_eq!((field_state(&w, id).1, field_state(&w, id).2), (5, 5), "Option+Right, from a selection, to the end of the first word");
+    press(&mut w, 106, CHORD_ALT | CHORD_SHIFT);
+    assert_eq!((field_state(&w, id).1, field_state(&w, id).2), (5, 9), "Shift+Option+Right");
+    press(&mut w, 105, CHORD_ALT);
+    assert_eq!(field_state(&w, id).2, 6, "Option+Left, from the end of \"big\", to its start");
+    press(&mut w, 104, 0);
+    assert_eq!(field_state(&w, id).2, 0, "Page Up on one line goes to its start");
+    press(&mut w, 109, CHORD_SHIFT);
+    assert_eq!((field_state(&w, id).1, field_state(&w, id).2), (0, 15), "Shift+Page Down");
+    press(&mut w, 103, CHORD_META);
+    assert_eq!(field_state(&w, id).2, 0, "Cmd+Up goes to the start");
+    press(&mut w, 108, CHORD_META);
+    assert_eq!(field_state(&w, id).2, 15, "Cmd+Down goes to the end");
+    // Up and Down, plain and with Shift, go to the start and the end of a single line
+    key(&mut w, &mut Model::default(), KeyInput::Code(38));
+    assert_eq!(field_state(&w, id).2, 0, "Up");
+    key(&mut w, &mut Model::default(), KeyInput::Code(40));
+    assert_eq!(field_state(&w, id).2, 15, "Down");
+    press(&mut w, 103, CHORD_SHIFT);
+    assert_eq!((field_state(&w, id).1, field_state(&w, id).2), (15, 0), "Shift+Up");
+    // deleting: Option+Backspace a word, Cmd+Backspace to the start, Delete forward, Option+Delete a word forward
+    press(&mut w, 107, 0);
+    press(&mut w, 14, CHORD_ALT);
+    assert_eq!(field_state(&w, id), ("hello big ".into(), 10, 10), "Option+Backspace");
+    press(&mut w, 14, CHORD_META);
+    assert_eq!(field_state(&w, id), ("".into(), 0, 0), "Cmd+Backspace");
+    press(&mut w, 47, CHORD_META);
+    press(&mut w, 102, 0);
+    press(&mut w, 111, 0);
+    assert_eq!(field_state(&w, id), ("ello big world".into(), 0, 0), "Delete, the forward delete key");
+    press(&mut w, 111, CHORD_ALT);
+    assert_eq!(field_state(&w, id), (" big world".into(), 0, 0), "Option+Delete deletes a word forward");
+    // the Ctrl keys: A and E line start and end, K kills to the end, Y yanks, D deletes forward, H backspaces
+    press(&mut w, 18, CHORD_CTRL);
+    assert_eq!(field_state(&w, id).2, 10, "Ctrl+E");
+    press(&mut w, 35, CHORD_CTRL);
+    assert_eq!(field_state(&w, id).0, " big worl", "Ctrl+H");
+    press(&mut w, 30, CHORD_CTRL);
+    assert_eq!(field_state(&w, id).2, 0, "Ctrl+A is the line start, not select all");
+    press(&mut w, 32, CHORD_CTRL);
+    assert_eq!(field_state(&w, id).0, "big worl", "Ctrl+D");
+    press(&mut w, 37, CHORD_CTRL);
+    assert_eq!(field_state(&w, id).0, "", "Ctrl+K");
+    press(&mut w, 21, CHORD_CTRL);
+    assert_eq!(field_state(&w, id).0, "big worl", "Ctrl+Y");
+    // Ctrl+C, Ctrl+X and Ctrl+V are the same commands as the Cmd ones
+    press(&mut w, 30, CHORD_META);
+    press(&mut w, 45, CHORD_CTRL);
+    assert_eq!((field_state(&w, id).0.as_str(), crate::kit::clipboard::text().as_deref()), ("", Some("big worl")), "Ctrl+X");
+    press(&mut w, 47, CHORD_CTRL);
+    assert_eq!(field_state(&w, id).0, "big worl", "Ctrl+V");
+}
+
+/// The same keys, from the shell's side of the protocol: the menu's commands (`Input::Command`, which Cmd+A, C, X, V and Z
+/// become) go down the responder chain to the focused field.
+#[test]
+fn the_standard_commands_reach_the_focused_field_through_the_responder_chain() {
+    let _turn = CLIPBOARD_TURN.lock().unwrap_or_else(|e| e.into_inner());
+    let (mut w, id) = focused_field("one two");
+    let mut m = Model::default();
+    assert!(w.send(action_for(Command::SelectAll), &mut m).is_some(), "Select All is taken by the field");
+    assert_eq!(field_state(&w, id), ("one two".into(), 0, 7));
+    assert!(w.send(action_for(Command::Copy), &mut m).is_some());
+    assert_eq!(crate::kit::clipboard::text().as_deref(), Some("one two"));
+    assert!(w.send(action_for(Command::Cut), &mut m).is_some());
+    assert_eq!(field_state(&w, id).0, "");
+    assert!(w.send(action_for(Command::Paste), &mut m).is_some());
+    assert_eq!(field_state(&w, id).0, "one two");
+    assert!(w.send(action_for(Command::Undo), &mut m).is_some());
+    assert_eq!(field_state(&w, id).0, "");
+    assert!(w.send(action_for(Command::Redo), &mut m).is_some());
+    assert_eq!(field_state(&w, id).0, "one two");
+    // the app reports what its focused field takes, which is what the shell's Edit menu and shortcuts check
+    let commands = w.commands(&m);
+    assert!(commands.supports(Command::SelectAll) && commands.supports(Command::Paste) && commands.supports(Command::Undo));
+    w.make_first_responder(None);
+    assert!(!w.commands(&m).supports(Command::SelectAll), "with no field focused there is nothing to select");
+}
+
+/// A double click selects the word under the pointer, a triple click the whole line, and a drag after a double click grows by words.
+#[test]
+fn double_and_triple_clicks_select_a_word_and_the_line_in_a_field() {
+    let ui = ui();
+    let mut tf = TextField::new("Name", "name");
+    tf.set_text("hello big world");
+    let id = tf.id();
+    let mut w: Window<Model> = Window::new(tf, 4);
+    w.layout(&ui, rect(0.0, 0.0, 300.0, ROW_PT));
+    let mut m = Model::default();
+    let mut px = Vec::new();
+    let mut s = surface(&mut px, 300, 40);
+    w.make_first_responder(Some(id));
+    w.draw(&mut s, &ui);
+    // the x of the "big" in the field: past "hello " from the text origin (the inset is 12 points)
+    let x = 12.0 + ui.measure("hello b", bifrost_render::ui::MAC_BODY_PT, bifrost_render::ui::Weight::Regular) / ui.s;
+    let press = |w: &mut Window<Model>, m: &mut Model| {
+        w.event(&ViewEvent::Pointer(Event::Down(x, 10.0)), m);
+        w.event(&ViewEvent::Pointer(Event::Up(x, 10.0)), m);
+    };
+    press(&mut w, &mut m);
+    assert_eq!(w.view::<TextField>(id).unwrap().model().selected_text(), "", "one click places the caret");
+    press(&mut w, &mut m);
+    assert_eq!(w.view::<TextField>(id).unwrap().model().selected_text(), "big", "a double click selects the word");
+    press(&mut w, &mut m);
+    assert_eq!(w.view::<TextField>(id).unwrap().model().selected_text(), "hello big world", "a triple click selects the line");
+}
