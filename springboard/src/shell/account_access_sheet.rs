@@ -61,6 +61,11 @@ impl super::Shell {
         self.drawn = Drawn::Nothing;
     }
 
+    /// Whether a release at (x, y) ends a press that went down on the same button of the sheet.
+    pub(super) fn access_press_lands(&self, press: Option<(f32, f32)>, x: f32, y: f32) -> bool {
+        super::press_lands(press, (x, y), |px, py| self.access_sheet.as_ref().and_then(|a| a.card.hit(&self.ui, self.w, self.h, px, py)))
+    }
+
     /// A touch on the sheet: a button answers it, anything else is ignored.
     pub(super) fn access_touch(&mut self, x: f32, y: f32, up: bool, t: f64) {
         if up {

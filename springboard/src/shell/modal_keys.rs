@@ -142,6 +142,30 @@ mod tests {
         assert!(!sh.notify.store().is_asked(AppId::Files) && !sh.take_key_repeat_cancel());
     }
 
+    /// A sheet's button answers only a press that went down on it while the sheet was up, then came up on it.
+    #[test]
+    fn a_release_alone_or_over_another_spot_answers_nothing() {
+        use crate::shell::Event;
+        let mut sh = shell_with_alert();
+        let (bx, by) = sh.notify.ask.as_ref().unwrap().key_button(&sh.ui, sh.w, sh.h, true).unwrap();
+        // the press began on the app beneath, before the alert: only the release reaches the alert
+        sh.modal_event(Event::Up(bx, by));
+        assert!(sh.notify.ask.is_some(), "a bare release answers nothing");
+        // the press went down away from the button and came up on it
+        sh.modal_event(Event::Down(1.0, 1.0));
+        sh.modal_event(Event::Up(bx, by));
+        assert!(sh.notify.ask.is_some(), "a press that began off the button answers nothing");
+        // the press is used up by its release: a second release has no press behind it
+        sh.modal_event(Event::Down(bx, by));
+        sh.modal_event(Event::Move(1.0, 1.0));
+        sh.modal_event(Event::Up(1.0, 1.0));
+        sh.modal_event(Event::Up(bx, by));
+        assert!(sh.notify.ask.is_some(), "a release of a press that ended elsewhere is not a click");
+        sh.modal_event(Event::Down(bx, by));
+        sh.modal_event(Event::Up(bx, by));
+        assert!(sh.notify.ask.is_none(), "press and release on the button answer it");
+    }
+
     #[test]
     fn a_terminal_chord_and_paste_are_used_up_and_escape_answers_under_secure_entry() {
         use crate::shell::hwkeys::TermKey;

@@ -253,6 +253,11 @@ impl super::Shell {
         }
     }
 
+    /// Whether a release at (x, y) ends a press that went down on the same button of the sheet.
+    pub(super) fn usb_press_lands(&self, press: Option<(f32, f32)>, x: f32, y: f32) -> bool {
+        super::press_lands(press, (x, y), |px, py| self.usb_sheet.as_ref().and_then(|s| s.hit(&self.ui, self.w, self.h, px, py)))
+    }
+
     /// A touch on the sheet: a button answers it, anything else is ignored.
     pub(super) fn usb_touch(&mut self, x: f32, y: f32, up: bool) {
         if up {
