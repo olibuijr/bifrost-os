@@ -628,6 +628,21 @@
         assert_eq!((moved.x,moved.y),(321,123),"the extra window is where the window server put it");
     }
 
+    /// An app's extra window reports Focus with a flagged id; the screen stays on the app that opened it (hardware keys and
+    /// input providers match `Screen::App(AppId::External(_))`, never the extra-window variant).
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn focus_for_an_extra_window_keeps_the_screen_on_its_parent_app() {
+        use crate::bare::wayland::WindowEvent;
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        let m=sh.desk_metrics();
+        sh.desk.as_mut().unwrap().open(&m,AppId::External(0),(600,400));
+        let extra=AppId::ExternalWindow(0,4);
+        sh.desk.as_mut().unwrap().open(&m,extra,(600,400));
+        sh.wayland_window_event(WindowEvent::Focus(desk::win_id(extra).unwrap()));
+        assert_eq!(sh.screen,Screen::App(AppId::External(0)),"the parent app keeps the screen");
+    }
+
     /// E2E W2: green on Music made the window 2560x1440 but left it at its old origin, so it ran off the right and
     /// bottom, and the Dock stayed over it. The window server puts the toplevel on the whole output and says so
     /// (`xdg_toplevel` full-screen state); the shell's window then fills the output at 0,0 whatever size that is, the
