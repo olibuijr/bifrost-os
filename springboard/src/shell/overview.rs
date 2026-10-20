@@ -1095,10 +1095,40 @@ impl Shell {
         }
     }
 
+    /// Search and the assistant panel take the keyboard exclusively, as Overview and the Apps grid do: opening one of
+    /// the latter closes the former, so two never fight over the keys.
+    fn dismiss_text_surfaces(&mut self) {
+        if self.quicksearch.active() {
+            self.quicksearch.hide();
+            self.force_full_redraw();
+        }
+        if self.assistant.is_shown() {
+            self.assistant_hide();
+        }
+    }
+
+    /// Search or the assistant opens: Overview and the Apps grid close first (an exclusive-keyboard surface is only
+    /// one at a time).
+    pub(super) fn overview_dismiss(&mut self, t: f64) {
+        if !self.desk_active() || !(self.overview.open || self.overview.grid.visible()) {
+            return;
+        }
+        let mut ov = std::mem::take(&mut self.overview);
+        if ov.open {
+            ov.close(self, None, t);
+        }
+        if ov.grid.visible() && !ov.grid.closing() {
+            ov.grid.close(self, t);
+        }
+        self.overview = ov;
+        self.dirty = true;
+    }
+
     pub fn overview_toggle(&mut self, t: f64) {
         if !self.desk_active() || self.is_locked() {
             return;
         }
+        self.dismiss_text_surfaces();
         let mut ov = std::mem::take(&mut self.overview);
         if ov.grid.visible() {
             ov.grid.close(self, t);
@@ -1117,6 +1147,7 @@ impl Shell {
         if !self.desk_active() || self.is_locked() {
             return;
         }
+        self.dismiss_text_surfaces();
         let mut ov = std::mem::take(&mut self.overview);
         if ov.open {
             ov.close(self, None, t);
@@ -1390,6 +1421,28 @@ mod tests {
         let d = sh.desk.as_mut().unwrap();
         let i = d.index_of(app).expect("the window is open");
         d.move_to(&m, i, x, y);
+    }
+
+    /// Search, the assistant, Overview and the Apps grid each take the keyboard exclusively: opening one closes the other.
+    #[test]
+    fn search_and_overview_never_hold_the_keyboard_together() {
+        let mut sh = desk_with(2, 1920, 1080, 1.0);
+        sh.overview_toggle(1000.0);
+        assert!(sh.overview.open);
+        sh.open_quicksearch_hw(2000.0);
+        assert!(sh.quicksearch.active(), "Search opens");
+        settle(&mut sh);
+        assert!(!sh.overview.open, "and Overview closed first");
+        // the other way round: the grid hides Search
+        sh.appgrid_toggle(3000.0);
+        assert!(sh.overview.grid.visible());
+        assert!(!sh.quicksearch.active(), "the grid closed Search");
+        // the assistant closes under Overview too
+        settle(&mut sh);
+        sh.assistant.open();
+        sh.overview_toggle(4000.0);
+        assert!(!sh.assistant.is_shown(), "Overview closed the assistant");
+        assert!(sh.overview.open);
     }
 
     #[test]

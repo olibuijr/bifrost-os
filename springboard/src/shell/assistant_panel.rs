@@ -402,6 +402,7 @@ impl Shell {
         if !settings.enabled {
             return self.open_settings_page("Assistant", t);
         }
+        self.overview_dismiss(t);
         self.assistant.open();
         self.dirty = true;
         vec![]

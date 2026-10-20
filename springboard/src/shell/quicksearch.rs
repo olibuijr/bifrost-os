@@ -2443,6 +2443,7 @@ impl Shell {
 
     /// Starts the pull: icons and cached titles are refreshed first.
     fn quicksearch_open(&mut self, y0: f32, y: f32, t: f64, range: f32) {
+        self.overview_dismiss(t);
         self.request_index_extensions();
         self.quicksearch.set_mac(&self.ui, self.desk_active());
         let dock_top = self.quicksearch_dock_top();
