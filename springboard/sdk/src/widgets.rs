@@ -438,10 +438,45 @@ pub fn capsule(s: &mut dyn Canvas, ui: &Ui, bounds: Rect) {
 /// Width a pull-down toolbar item (`ToolbarItem::menu`) adds for its chevron, in points.
 pub const TOOLBAR_MENU_CHEVRON_PT: f32 = 14.0;
 
+/// The x, in points, where the first toolbar item starts in a full-size-content window: right of the traffic lights the
+/// shell draws over the window's top left, plus the standard toolbar gap. `toolbar_layout` (and so `toolbar`) applies
+/// it to any bar that starts further left, so an app need not compute it; call this when it positions other controls
+/// (a title, a search field) in the same row.
+pub fn toolbar_lead_pt() -> f32 {
+    crate::layout::traffic_lights_trailing() + TOOLBAR_GAP_PT
+}
+
+/// `bounds` (points) moved clear of the traffic lights: a toolbar row that begins left of `toolbar_lead_pt` and meets the
+/// lights' rows starts at `toolbar_lead_pt` instead and loses that much width. A bar below or above the lights' band,
+/// or one that already starts clear of them (a content toolbar beside a sidebar), is returned unchanged.
+pub fn clear_of_traffic_lights(bounds: Rect) -> Rect {
+    let lead = toolbar_lead_pt();
+    let (top, bottom) = crate::layout::traffic_lights_band();
+    if bounds.x >= lead || bounds.y >= bottom || bounds.y + bounds.h <= top {
+        return bounds;
+    }
+    Rect { x: lead, w: (bounds.w - (lead - bounds.x)).max(0.0), ..bounds }
+}
+
+/// `clear_of_traffic_lights` for bounds relative to a pane whose left edge is `origin_x` points from the window's.
+pub fn clear_of_traffic_lights_in(bounds: Rect, origin_x: f32) -> Rect {
+    let moved = clear_of_traffic_lights(Rect { x: bounds.x + origin_x, ..bounds });
+    Rect { x: moved.x - origin_x, ..moved }
+}
+
 /// Where `toolbar` puts each item in `bounds` (points), without drawing: the NativeToolbar item frames. Uses exactly the
 /// widths `toolbar` draws with (glyph buttons `CAPSULE_PT`, titled buttons their label plus padding, pull-down items
 /// a chevron more), so apps hit-test with `ToolbarLayout::hit` and anchor menus with `menu_anchor`.
 pub fn toolbar_layout(ui: &Ui, bounds: Rect, bar: &Toolbar) -> ToolbarLayout {
+    toolbar_layout_in(ui, bounds, bar, 0.0)
+}
+
+/// `toolbar_layout` for a bar in a pane that draws in its own coordinates: `bounds` are relative to the pane, whose left
+/// edge is `origin_x` points from the window's left edge. The traffic-light inset is judged in window coordinates, so a
+/// pane to the right of a sidebar (`origin_x` at its edge) is left where it is.
+pub fn toolbar_layout_in(ui: &Ui, bounds: Rect, bar: &Toolbar, origin_x: f32) -> ToolbarLayout {
+    // a bar that starts at the window's left edge begins right of the traffic lights (`clear_of_traffic_lights`)
+    let bounds = clear_of_traffic_lights_in(bounds, origin_x);
     let h = CAPSULE_PT.min(bounds.h);
     let inner = Rect { x: bounds.x, y: bounds.y + (bounds.h - h) / 2.0, w: bounds.w, h };
     let width = |it: &bifrost_ui::nav::ToolbarItem| {
@@ -457,9 +492,15 @@ pub fn toolbar_layout(ui: &Ui, bounds: Rect, bar: &Toolbar) -> ToolbarLayout {
 /// their own capsule. `Custom` slots are only laid out; the app draws them at the returned rectangles. Buttons that
 /// do not fit move behind a `»` button. The band behind the bar is `toolbar_band`. `pressed` is the id being pressed.
 pub fn toolbar(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, bar: &Toolbar, pressed: Option<u32>) -> ToolbarLayout {
+    toolbar_in(s, ui, bounds, bar, pressed, 0.0)
+}
+
+/// `toolbar` for a bar in a pane that draws in its own coordinates (`toolbar_layout_in`): `origin_x` is the pane's left
+/// edge in points from the window's left edge.
+pub fn toolbar_in(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, bar: &Toolbar, pressed: Option<u32>, origin_x: f32) -> ToolbarLayout {
     // the buttons are the bar's children in the accessibility tree (`ax::begin_group`)
     bifrost_ui::ax::begin_group(bifrost_ui::Role::List, "Toolbar", bounds);
-    let placed = toolbar_layout(ui, bounds, bar);
+    let placed = toolbar_layout_in(ui, bounds, bar, origin_x);
     for (_, r) in &placed.groups {
         capsule(s, ui, *r);
         outline_if_borders(s, ui, *r, r.h / 2.0);
@@ -1491,9 +1532,9 @@ mod tests {
     #[test]
     fn a_narrow_window_puts_buttons_behind_the_overflow_button_and_pressed_buttons_darken() {
         let ui = test_ui();
-        let (w, h) = (200usize, 80usize);
+        let (w, h) = (320usize, 80usize);
         let mut px = vec![0u32; w * h];
-        let placed = toolbar(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, &ui, Rect { x: 0.0, y: 0.0, w: 200.0, h: 40.0 }, &bar(), Some(1));
+        let placed = toolbar(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, &ui, Rect { x: 100.0, y: 0.0, w: 200.0, h: 40.0 }, &bar(), Some(1));
         assert!(!placed.overflow.is_empty() && placed.overflow_button.is_some());
         let first = placed.visible[0].1;
         assert_eq!(px[(first.y + 4.0) as usize * w + (first.x + first.w / 2.0) as usize], ROW_PRESSED.now(), "the pressed button has a plate");
@@ -1625,14 +1666,62 @@ mod tests {
         use bifrost_ui::nav::ToolbarItem;
         let ui = test_ui();
         let t = Toolbar::new(vec![ToolbarItem::icon(1, "Add", "plus"), ToolbarItem::menu(2, "Sort", Some("arrow.up.arrow.down")), ToolbarItem::flexible_space(), ToolbarItem::button(3, "Share").centered()]);
-        let band = Rect { x: 0.0, y: 0.0, w: 600.0, h: 52.0 };
+        let band = Rect { x: 100.0, y: 0.0, w: 500.0, h: 52.0 };
         let (w, h) = (600usize, 60usize);
         let mut px = vec![0u32; w * h];
         let drawn = toolbar(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, &ui, band, &t, None);
         assert_eq!(toolbar_layout(&ui, band, &t), drawn);
         assert_eq!(drawn.rect_of(2).unwrap().w, CAPSULE_PT + TOOLBAR_MENU_CHEVRON_PT);
         let share = drawn.rect_of(3).unwrap();
-        assert!(((share.x + share.w / 2.0) - 300.0).abs() < 0.5, "centred: {share:?}");
+        assert!(((share.x + share.w / 2.0) - 350.0).abs() < 0.5, "centred: {share:?}");
+    }
+
+    #[test]
+    fn a_toolbar_laid_out_from_the_window_edge_starts_right_of_the_traffic_lights_at_every_scale() {
+        use bifrost_ui::nav::ToolbarItem;
+        use bifrost_ui::prefs_layout::Frame;
+        let t = Toolbar::new(vec![ToolbarItem::button(1, "Pause"), ToolbarItem::button(2, "Hold")]);
+        let full = Rect { x: 0.0, y: 0.0, w: 600.0, h: crate::layout::UNIFIED_BAR_PT };
+        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/SFUI.ttf")).unwrap().into_boxed_slice());
+        for scale in [1.0f32, 1.5625, 2.0] {
+            let ui = Ui::new(crate::kit::Font::parse(data).unwrap(), scale);
+            let placed = toolbar_layout(&ui, full, &t);
+            let first = placed.rect_of(1).unwrap();
+            // the right edge of the last light in window pixels, as the shell places it (a 14 pt disc centred on its column)
+            let d = (14.0 * scale).round() as i32;
+            let (cx, _) = Frame::traffic_light(2);
+            let lights_right = (cx * scale).round() as i32 - d / 2 + d;
+            let first_px = ui.pt(first.x) as i32;
+            assert!(first_px > lights_right, "scale {scale}: first item at {first_px} px, lights end at {lights_right} px");
+            assert_eq!(first.x, toolbar_lead_pt(), "the inset is the same number of points at every scale");
+            assert!(first.x - crate::layout::traffic_lights_trailing() >= TOOLBAR_GAP_PT, "the standard gap follows the lights");
+        }
+    }
+
+    #[test]
+    fn the_inset_only_applies_to_a_bar_that_meets_the_lights() {
+        let lead = toolbar_lead_pt();
+        let bar = crate::layout::UNIFIED_BAR_PT;
+        // from the edge: moved right, narrower by the same amount
+        let moved = clear_of_traffic_lights(Rect { x: 0.0, y: 0.0, w: 600.0, h: bar });
+        assert_eq!((moved.x, moved.w, moved.y, moved.h), (lead, 600.0 - lead, 0.0, bar));
+        // a capsule-height row inside the bar still meets the lights
+        assert_eq!(clear_of_traffic_lights(Rect { x: 16.0, y: 8.0, w: 400.0, h: CAPSULE_PT }).x, lead);
+        // a content toolbar that starts at a sidebar's edge, or already clear of the lights, is unchanged
+        let beside = Rect { x: 232.0, y: 0.0, w: 400.0, h: bar };
+        assert_eq!(clear_of_traffic_lights(beside), beside);
+        let own = Rect { x: lead, y: 0.0, w: 400.0, h: bar };
+        assert_eq!(clear_of_traffic_lights(own), own);
+        // a second bar lower in the window is not under the lights
+        let low = Rect { x: 0.0, y: bar, w: 600.0, h: 44.0 };
+        assert_eq!(clear_of_traffic_lights(low), low);
+        // a pane's own coordinates are judged in the window's: right of a sidebar it is left alone, at the edge it moves
+        let pane = Rect { x: 12.0, y: 0.0, w: 400.0, h: bar };
+        assert_eq!(clear_of_traffic_lights_in(pane, 200.0), pane);
+        assert_eq!(clear_of_traffic_lights_in(pane, 0.0).x, lead);
+        assert_eq!(clear_of_traffic_lights_in(Rect { x: 0.0, ..pane }, 40.0).x, lead - 40.0);
+        // a window narrower than the lights leaves no negative width
+        assert_eq!(clear_of_traffic_lights(Rect { x: 0.0, y: 0.0, w: 20.0, h: bar }).w, 0.0);
     }
 
     #[test]

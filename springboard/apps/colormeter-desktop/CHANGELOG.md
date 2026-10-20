@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.5
+
+- Fix: the toolbar starts after the traffic lights instead of under them (the SDK toolbar now keeps clear of the window controls).
+
 ## 0.5.4
 
 - BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.

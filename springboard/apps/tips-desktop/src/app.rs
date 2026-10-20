@@ -309,7 +309,7 @@ impl Tips {
             Some((Target::Bar(id), _, _)) => Some(id),
             _ => None,
         };
-        widgets::toolbar(s, ui, self.bar_bounds(ui), &self.bar_items(), pressed);
+        widgets::toolbar_in(s, ui, self.bar_bounds(ui), &self.bar_items(), pressed, self.side_px(ui) / ui.pt(1.0));
     }
 
     fn draw_list(&mut self, s: &mut Surface, ui: &Ui) {

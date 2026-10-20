@@ -1552,7 +1552,7 @@ impl Window {
                 _ => None,
             }
         });
-        widgets::toolbar(d, ui, self.bar_bounds(), &self.bar(), pressed);
+        widgets::toolbar_in(d, ui, self.bar_bounds(), &self.bar(), pressed, self.side_pt());
     }
 
     fn draw_plates(&mut self, s: &mut Surface, ui: &Ui) {
@@ -1712,6 +1712,19 @@ mod tests {
 
     fn find(w: &Window, ui: &Ui, label: &str) -> Btn {
         w.buttons(ui).into_iter().find(|b| b.label == label).unwrap_or_else(|| panic!("no control named {label}"))
+    }
+
+    #[test]
+    fn the_drawn_toolbar_sits_where_clicks_land_with_the_sidebar_shown() {
+        let (w, ui, _) = window("bar-drawn", 1200, 780);
+        assert!(w.side_pt() > 0.0, "the 1200 pt window shows the sidebar");
+        let drawn = widgets::toolbar_layout_in(&ui, w.bar_bounds(), &w.bar(), w.side_pt());
+        let hit = w.bar_layout(&ui);
+        assert_eq!(drawn.visible.len(), hit.visible.len());
+        for ((id, d), (hid, h)) in drawn.visible.iter().zip(hit.visible.iter()) {
+            assert_eq!(id, hid);
+            assert!((d.x - h.x).abs() < 0.01 && (d.w - h.w).abs() < 0.01, "item {id} drawn at {} but hit-tested at {}", d.x, h.x);
+        }
     }
 
     #[test]

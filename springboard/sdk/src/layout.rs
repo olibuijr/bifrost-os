@@ -49,7 +49,17 @@ pub const READABLE_MAX_PT: f32 = 720.0;
 /// as in Settings). Returns the x, in points, where the app's own controls may start to the right of them.
 pub fn traffic_lights_trailing() -> f32 {
     use bifrost_ui::prefs_layout::m;
-    m::TRAFFIC_X0 + 2.0 * m::TRAFFIC_PITCH + 7.0 + 8.0
+    m::TRAFFIC_X0 + 2.0 * m::TRAFFIC_PITCH + TRAFFIC_LIGHT_RADIUS_PT + 8.0
+}
+
+/// Radius of a traffic light the shell draws over a full-size-content window, in points (the lights are 14 pt).
+pub const TRAFFIC_LIGHT_RADIUS_PT: f32 = 7.0;
+
+/// The y, in points, of the lights' top and bottom edges in a full-size-content window. A bar whose rows lie wholly
+/// above or below this band does not meet the lights.
+pub fn traffic_lights_band() -> (f32, f32) {
+    use bifrost_ui::prefs_layout::m;
+    (m::TRAFFIC_Y - TRAFFIC_LIGHT_RADIUS_PT, m::TRAFFIC_Y + TRAFFIC_LIGHT_RADIUS_PT)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

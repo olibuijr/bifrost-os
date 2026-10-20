@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2
+
+- Fix: the toolbar starts after the traffic lights instead of under them (the SDK toolbar now keeps clear of the window controls).
+
 ## 0.1.1 — 2026-10-14
 
 - Move disk and scanner requests to a serial utility dispatch queue, with replies waking the app on the main queue; remove in-flight polling, enable sudden termination, and remove the fixed initial window size.
