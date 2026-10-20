@@ -194,7 +194,7 @@ mod tests {
 
     #[cfg(feature = "desktop-wayland")]
     #[test]
-    fn the_system_menu_lists_launches_newest_first_and_clear_menu_empties_it() {
+    fn the_recent_items_submenu_lists_launches_newest_first_and_clear_menu_empties_it() {
         use super::super::desktop_bar::{Action, Menu};
         let mut sh = crate::shell::tests::shell();
         sh.desk = Some(crate::shell::desk::Desk::new());
@@ -202,16 +202,22 @@ mod tests {
         sh.anim = None;
         sh.desk_open(AppId::Terminal, 0.);
         sh.desk_open(AppId::Settings, 0.);
-        let rows = sh.menu_row_texts(Menu::System);
-        let at = rows.iter().position(|t| t == "Recent Items").expect("the Recent Items header is in the system menu");
-        assert_eq!(rows[at..at + 4].to_vec(), vec!["Recent Items", "Settings", "Term", "Clear Menu"]);
+        // the system menu holds one row for them, which opens the submenu
+        let system = sh.menu_row_texts(Menu::System);
+        assert!(system.iter().any(|t| t == "Recent Items"), "{system:?}");
+        assert!(!system.iter().any(|t| t == "Clear Menu" || t == "Settings"), "the entries are not inline rows: {system:?}");
+        // the submenu: a way back, then the entries newest first, then Clear Menu
+        let rows = sh.menu_row_texts(Menu::Recent);
+        let at = rows.iter().position(|t| t == "Settings").expect("the newest launch is listed");
+        assert_eq!(rows[at..at + 4].to_vec(), vec!["Settings", "Term", "", "Clear Menu"]);
+        assert_eq!(rows[0], "Recent Items", "the first row leads back to the system menu");
         // Choosing the second entry opens Term again, which moves it to the front.
         let _ = sh.run_menu_action(Action::Recent(1), 0.);
-        let rows = sh.menu_row_texts(Menu::System);
-        assert_eq!(rows[at..at + 4].to_vec(), vec!["Recent Items", "Term", "Settings", "Clear Menu"]);
+        let rows = sh.menu_row_texts(Menu::Recent);
+        assert_eq!(rows[at..at + 4].to_vec(), vec!["Term", "Settings", "", "Clear Menu"]);
         let _ = sh.run_menu_action(Action::ClearRecent, 0.);
-        let rows = sh.menu_row_texts(Menu::System);
-        assert_eq!(rows[at..at + 2].to_vec(), vec!["Recent Items", "Clear Menu"]);
+        let rows = sh.menu_row_texts(Menu::Recent);
+        assert_eq!(rows[2..].to_vec(), vec!["No Recent Items", "", "Clear Menu"]);
         assert!(sh.recent_app_at(0).is_none());
     }
 

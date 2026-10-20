@@ -244,6 +244,9 @@ pub const TRAFFIC_INACTIVE_C: Pair = Pair::new(pack(88, 88, 92, 255), pack(205, 
 pub const TRAFFIC_RIM: u32 = pack(0, 0, 0, 60);
 /// The close, minimise and zoom glyphs shown while the pointer is over the traffic lights.
 pub const TRAFFIC_GLYPH: u32 = pack(0, 0, 0, 190);
+/// The computer picture of the About This Computer window: the display's bezel and the stand under it.
+pub const ABOUT_BEZEL: u32 = pack(44, 44, 46, 255);
+pub const ABOUT_STAND: u32 = pack(142, 142, 147, 255);
 /// Desktop window corner radius, in pt.
 pub const WINDOW_RADIUS_PT: f32 = 17.0; // = prefs_layout::m::WINDOW_RADIUS (owner decision 2026-10-09)
 /// Desktop menu and popup corner radius, in pt.

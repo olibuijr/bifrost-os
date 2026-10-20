@@ -25,6 +25,8 @@ fn status_icon_lift(battery:bool,ethernet:bool)->f32 {if battery{0.}else if ethe
 #[derive(Clone,Copy,PartialEq,Eq,Debug)] pub(super) enum Menu {
     /// the leading system menu (the menu equivalent), drawn as the BifrOSt mark
     System,
+    /// the system menu's Recent Items submenu: it opens in place of the system menu, under the same bar item
+    Recent,
     App,File,Edit,View,Window,Help,Network,Power,
     /// Photos' Image menu: shown on the bar only while Photos is in front
     Image,
@@ -55,12 +57,32 @@ fn status_icon_lift(battery:bool,ethernet:bool)->f32 {if battery{0.}else if ethe
     /// the window menu under a window's green button (`desk::Desk::arrange`): Fill, Centre, Move & Resize, Full Screen
     Arrange}
 #[cfg(feature = "desktop-wayland")]
-#[derive(Clone)] pub(super) enum Action {Script(u8),Foreign(u32),Settings(&'static str),Desktop,Arrange(super::AppId,super::desk::Arrange),Close,Quit,Minimize,Zoom,ShowAll,Open(super::AppId),Context(u8,u32),QuickAction(u8,u8),AppMenu(u8,u32),Dock(super::desktop_dock::Change),DockMenu(u8,u32),Shortcut(u16),Command(bifrost_proto::Command),Term(super::hwkeys::TermKey),Wifi(bool),Scan,Select(String),Power(String),Lock,Sleep,Halt(super::power_menu::PowerAction),StatusItem(u8,u32,u32),Tile(super::desk::Tile),RestoreSize,CycleWindow,Print,InputSource(u8),InputMethod(String),Recent(u8),ClearRecent,CharacterViewer,KeyboardViewer,OnScreenKeyboard,Media(bifrost_ui::media_session::RemoteCommand),Bluetooth(crate::bare::bluetooth::Cmd),Portal(String),RecordStop,Service(u8),Photo(super::photos::commands::PhotoCommand),PhotoEditWith(String),GameModeOff,LowPowerMode(bool),HelpItem(Menu,usize),HelpTopic(String,Option<String>),Help(String)}
+#[derive(Clone)] pub(super) enum Action {Submenu(Menu),Window(super::utility_window::Kind),Script(u8),Foreign(u32),Settings(&'static str),Desktop,Arrange(super::AppId,super::desk::Arrange),Close,Quit,Minimize,Zoom,ShowAll,Open(super::AppId),Context(u8,u32),QuickAction(u8,u8),AppMenu(u8,u32),Dock(super::desktop_dock::Change),DockMenu(u8,u32),Shortcut(u16),Command(bifrost_proto::Command),Term(super::hwkeys::TermKey),Wifi(bool),Scan,Select(String),Power(String),Lock,Sleep,Halt(super::power_menu::PowerAction),StatusItem(u8,u32,u32),Tile(super::desk::Tile),RestoreSize,CycleWindow,Print,InputSource(u8),InputMethod(String),Recent(u8),ClearRecent,CharacterViewer,KeyboardViewer,OnScreenKeyboard,Media(bifrost_ui::media_session::RemoteCommand),Bluetooth(crate::bare::bluetooth::Cmd),Portal(String),RecordStop,Service(u8),Photo(super::photos::commands::PhotoCommand),PhotoEditWith(String),GameModeOff,LowPowerMode(bool),HelpItem(Menu,usize),HelpTopic(String,Option<String>),Help(String)}
 // Only the desktop-wayland bar reads these fields; other builds never build the menu.
 #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
 pub(super) struct ContextMenu {pub slot:u8,pub x:f32,pub y:f32,pub items:Vec<bifrost_proto::ContextItem>}
 #[cfg(feature = "desktop-wayland")]
 pub(super) struct Row {pub(super) text:String,pub(super) action:Option<Action>,sep:bool,key:Option<String>,symbol:Option<crate::symbols::Symbol>,indent:bool,search:bool,header:bool}
+/// How an app's menu extra (`NativeStatusItem`) shows on the bar.
+#[cfg(any(test, feature = "desktop-wayland"))]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) enum StatusFace {
+    /// the app's own title
+    Text(String),
+    /// the name of the symbol it registered, one the bar can draw
+    Icon(String),
+}
+/// The symbols a menu extra can be drawn with: the shell's symbol set and the hand-drawn glyphs of `draw_status_symbol`.
+#[cfg(any(test, feature = "desktop-wayland"))]
+fn status_symbol_known(name:&str)->bool {matches!(name,"square.and.pencil"|"checklist")||crate::symbols::Symbol::ALL.iter().any(|s|s.name()==name)}
+/// What the bar draws for an app's menu extra: its title when it has one, else its symbol when the bar can draw it, else
+/// nothing. An item is never stood in for by a letter of the app's name.
+#[cfg(any(test, feature = "desktop-wayland"))]
+pub(super) fn status_face(title:&str,symbol:&str)->Option<StatusFace> {
+    if !title.is_empty() {Some(StatusFace::Text(title.to_string()))}
+    else if status_symbol_known(symbol) {Some(StatusFace::Icon(symbol.to_string()))}
+    else {None}
+}
 /// Row, separator and edge padding of a bar menu, in pt (the HIG groups menu items with separators).
 #[cfg(feature = "desktop-wayland")]
 const MENU_ROW_PT:f32=24.;
@@ -118,7 +140,7 @@ pub(super) fn menu_spans(rows:&[Row])->(Vec<(f32,f32)>,f32) {let mut y=MENU_PAD_
 /// Key equivalents the shell really handles (`NativeMenuItem.keyEquivalent`), as `bifrost_ui::keys` combos; the menus show them
 /// in Golden Gate notation and `menu_key_equivalents_parse_and_do_not_conflict` checks the table.
 #[cfg(feature = "desktop-wayland")]
-pub(super) const MENU_KEYS:&[(&str,&str)]=&[("Close Window","cmd+w"),("Minimize","cmd+m"),("Minimize Window","cmd+m"),("Undo","cmd+z"),("Redo","cmd+shift+z"),("Cut","cmd+x"),("Copy","cmd+c"),("Paste","cmd+v"),("Select All","cmd+a"),("Quit","cmd+q"),("Lock Screen","ctrl+cmd+q"),("Settings…","cmd+,"),("Search","cmd+space"),("App Switcher","cmd+tab"),("Back","escape"),("Print\u{2026}","cmd+p")];
+pub(super) const MENU_KEYS:&[(&str,&str)]=&[("Close Window","cmd+w"),("Minimize","cmd+m"),("Minimize Window","cmd+m"),("Undo","cmd+z"),("Redo","cmd+shift+z"),("Cut","cmd+x"),("Copy","cmd+c"),("Paste","cmd+v"),("Select All","cmd+a"),("Quit","cmd+q"),("Lock Screen","ctrl+cmd+q"),("Force Quit\u{2026}","alt+cmd+escape"),("Log Out","shift+cmd+q"),("Settings…","cmd+,"),("Search","cmd+space"),("App Switcher","cmd+tab"),("Back","escape"),("Print\u{2026}","cmd+p")];
 #[cfg(feature = "desktop-wayland")]
 impl Row {fn indented(mut self)->Self {self.indent=true;self} fn symbol(mut self,sym:crate::symbols::Symbol)->Self {self.symbol=Some(sym);self} fn key(mut self,combo:&str)->Self {self.key=bifrost_ui::keys::KeyCombo::parse(combo).map(|c|c.to_string());self} fn separator()->Self {Self{text:String::new(),action:None,sep:true,key:None,symbol:None,indent:false,search:false,header:false}} fn action(text:impl Into<String>,action:Action)->Self {Self{text:text.into(),action:Some(action),sep:false,key:None,symbol:None,indent:false,search:false,header:false}} fn label(text:impl Into<String>)->Self {Self{text:text.into(),action:None,sep:false,key:None,symbol:None,indent:false,search:false,header:false}}}
 #[cfg(feature = "desktop-wayland")]
@@ -387,8 +409,13 @@ impl Shell {
         // the Now Playing extra sits left of the system extras while an app has a session, and right of the app extras
         if self.game_mode_on(){let label=String::from("Game Mode");let w=self.measure_chrome(&label,12.,Weight::Regular)+self.ui.pt(2.*STATUS_PAD_PT);extras.push((Menu::GameMode,w,label));}
         if let Some(p)=super::now_playing_menu::panel(){let label=self.fit_chrome(&p.label,12.,self.ui.pt(160.));let w=self.measure_chrome(&label,12.,Weight::Regular)+self.ui.pt(2.*STATUS_PAD_PT);extras.push((Menu::NowPlaying,w,label));}
-        // menu extras of running apps (`NativeStatusItem`) sit left of the system extras; an empty title shows the app's initial
-        for (i,e) in self.status_entries_now().iter().enumerate() {let label=if e.title.is_empty(){super::apphost::installed().get(e.slot as usize).and_then(|a|a.manifest.name.chars().next()).unwrap_or('•').to_string()}else{e.title.clone()};let w=self.measure_chrome(&label,12.,Weight::Regular)+self.ui.pt(2.*STATUS_PAD_PT);extras.push((Menu::Status(i as u8),w,label));}
+        // menu extras of running apps (`NativeStatusItem`) sit left of the system extras: the app's title, or its symbol when it
+        // registered a symbol the bar draws; an item with neither is not shown (no letter stands in for it)
+        for (i,e) in self.status_entries_now().iter().enumerate() {match status_face(&e.title,&e.symbol){
+            Some(StatusFace::Text(label))=>{let w=self.measure_chrome(&label,12.,Weight::Regular)+self.ui.pt(2.*STATUS_PAD_PT);extras.push((Menu::Status(i as u8),w,label));},
+            Some(StatusFace::Icon(name))=>extras.push((Menu::Status(i as u8),self.ui.pt(STATUS_ICON_PT),name)),
+            None=>{},
+        }}
         for (menu,width,label) in extras {
             if !self.menu_extra_shown(menu){continue;}
             // the recording indicator is never left out for lack of room: a running screen recording is always shown
@@ -411,8 +438,33 @@ impl Shell {
         if self.bar_on_light {BarInk{text:BAR_TEXT_ON_LIGHT,text_alpha:BAR_TEXT_ON_LIGHT_ALPHA,shadow:BAR_TEXT_HALO,shadow_alpha:BAR_TEXT_HALO_ALPHA,capsule:BAR_OPEN_CAPSULE_ON_LIGHT}}
         else {BarInk{text:BAR_TEXT,text_alpha:255,shadow:BAR_TEXT_SHADOW,shadow_alpha:BAR_TEXT_SHADOW_ALPHA,capsule:BAR_OPEN_CAPSULE}}
     }
+    /// Whether the bar item for `menu` is an app's menu extra drawn as a symbol (its title is empty), not as text.
+    pub(super) fn status_item_is_icon(&self,menu:Menu)->bool {
+        let Menu::Status(i)=menu else{return false;};
+        self.status_entries_now().get(i as usize).is_some_and(|e|matches!(status_face(&e.title,&e.symbol),Some(StatusFace::Icon(_))))
+    }
+    /// An app's menu extra symbol, centred on (`x`, `y`): a shell symbol when it has one of that name, else a hand-drawn glyph.
+    fn draw_status_symbol(&self,s:&mut Surface,name:&str,x:f32,y:f32,ink:u32) {
+        let p=self.ui.pt(1.);
+        if let Some(sym)=crate::symbols::Symbol::ALL.iter().copied().find(|sym|sym.name()==name) {
+            if let Some(im)=self.ui.symbols.render(sym,self.ui.pt(15.),ink) {s.blit(&im,(x-im.w as f32/2.) as i32,(y-im.h as f32/2.) as i32,255,255);}
+            return;
+        }
+        match name {
+            // a square open at its top right, with a pencil stroke across the gap
+            "square.and.pencil"=>{
+                s.stroke_rrect(x-8.*p,y-6.*p,13.*p,13.*p,3.*p,1.2*p,ink);
+                for k in 0..=8 {let f=k as f32/8.;s.fill_rrect(x-2.*p+f*9.*p,y+1.*p-f*9.*p,2.*p,2.*p,p,ink);}
+            },
+            // three list rows: a dot and a line each
+            "checklist"=>for k in 0..3 {let ry=y+(k as f32*5.-6.)*p;s.fill_rrect(x-8.*p,ry,3.*p,3.*p,1.5*p,ink);s.fill_rrect(x-3.*p,ry+0.5*p,11.*p,2.*p,p,ink);},
+            _=>{},
+        }
+    }
     fn draw_status_glyph(&self,s:&mut Surface,menu:Menu,label:&str,x:f32,y:f32,ink:u32) {
         let p=self.ui.pt(1.);
+        // an app's menu extra drawn as its symbol (the label is the symbol's name, see `status_face`)
+        if matches!(menu,Menu::Status(_)) {self.draw_status_symbol(s,label,x,y,ink);return;}
         // the glyphs are drawn from different origins; lift each so its ink centres on the bar like the text beside it
         let y=y-p*if matches!(menu,Menu::System|Menu::ControlCenter){0.}else{status_icon_lift(menu==Menu::Power&&self.info.battery_present,label=="ethernet")};let rect=|s:&mut Surface,dx:f32,dy:f32,w:f32,h:f32|s.fill_rrect(x+dx*p,y+dy*p,w*p,h*p,p,ink);
         // the recording stop item: a red dot, as the recording indicator
@@ -551,7 +603,11 @@ impl Shell {
             Menu::Arrange=>self.arrange_rows(),
             Menu::Dock=>{use super::desktop_dock::{Change,Position};let p=self.dock_preferences();let d=self.desk.as_ref().unwrap();let mut rows=Vec::new();if let Some(index)=d.dock_menu_target{let name=super::apps().get(index).map(|a|a.name).unwrap_or("Application");rows.push(Row::label(name));rows.push(Row::action("Open / Show",Action::Dock(Change::Open(index))));let pinned=self.dock_app_key(index).is_some_and(|key|p.pinned.contains(&key));rows.push(Row::action(if pinned{"Remove from Dock"}else{"Keep in Dock"},Action::Dock(Change::Pin(index))));rows.push(Row::action("Quit",Action::Dock(Change::Quit(index))));if let Some(AppId::External(slot))=super::apps().get(index).map(|a|a.id){if let Some(Some(host))=self.ext.get(slot as usize){for (id,title) in host.windows.menu_items(&host.id){if let Ok(n)=u16::try_from(id){rows.push(Row::action(title,Action::Open(AppId::ExternalWindow(slot,n))));}}if !host.windows.of_app(&host.id).is_empty(){rows.push(Row::separator());}let quick=self.quick_actions_for(slot as usize);for (i,item) in quick.iter().enumerate(){rows.push(Row::action(item.title.clone(),Action::QuickAction(slot,i as u8)));}if !quick.is_empty(){rows.push(Row::separator());}for item in &host.dock_menu{rows.push(if item.enabled{Row::action(item.title.clone(),Action::DockMenu(slot,item.id))}else{Row::label(item.title.clone())});}if !host.dock_menu.is_empty(){rows.push(Row::separator());}}}}rows.push(Row::label("Dock"));for (label,position) in [("Bottom",Position::Bottom),("Left",Position::Left),("Right",Position::Right)] {rows.push(Row::action(format!("{} {}",if p.position==position{"✓"}else{" "},label),Action::Dock(Change::Position(position))));}rows.push(Row::action(format!("{} Automatically hide and show",if p.autohide{"✓"}else{" "}),Action::Dock(Change::Autohide)));rows.push(Row::action("Smaller Icons",Action::Dock(Change::Size(-8.))));rows.push(Row::action("Larger Icons",Action::Dock(Change::Size(8.))));rows},
             Menu::App=>{let enabled=self.foreign_active().is_some()||self.desk.as_ref().and_then(|d|d.front()).is_some();let name=self.app_menu_name();let quit=format!("Quit {name}");let mut rows=vec![Row::action(format!("About {name}"),Action::Settings("About")),Row::separator(),Row::action("Settings…",Action::Settings("")).symbol(crate::symbols::Symbol::GearOutline).key("cmd+,")];let services=super::services_route::menu_entries();if !services.is_empty(){rows.push(Row::separator());rows.push(Row::label("Services"));rows.extend(services.into_iter().map(|(i,title)|Row::action(title,Action::Service(i))));}rows.push(Row::separator());rows.push((if enabled{Row::action(quit,Action::Quit)}else{Row::label(quit)}).key("cmd+q"));rows},
-            Menu::System=>{use super::power_menu::PowerAction;let mut rows=vec![Row::action("About This Computer",Action::Settings("About")),Row::separator(),Row::action("System Settings…",Action::Settings("")),Row::action("App Store…",Action::Open(AppId::AppStore)),Row::separator()];rows.push(Row::label("Recent Items"));let recent=self.recent_titles();for (i,title) in recent.iter().enumerate(){rows.push(Row::action(title.clone(),Action::Recent(i as u8)));}rows.push(if recent.is_empty(){Row::label("Clear Menu")}else{Row::action("Clear Menu",Action::ClearRecent)});rows.push(Row::separator());rows.extend(vec![Row::action("Sleep",Action::Sleep),Row::action("Restart…",Action::Halt(PowerAction::Restart)),Row::action("Shut Down…",Action::Halt(PowerAction::Off)),Row::separator(),Row::action("Lock Screen",Action::Lock).key("ctrl+cmd+q")]);rows},
+            // About This Computer, the settings and the store, Recent Items (a submenu), Force Quit, the power rows, then Lock Screen
+            // and Log Out with the account's name (Golden Gate's system menu)
+            Menu::System=>{use super::power_menu::PowerAction;use super::utility_window::Kind;let user=self.fit_chrome(super::utility_window::user_name(),13.,self.ui.pt(180.));vec![Row::action("About This Computer",Action::Window(Kind::About)),Row::separator(),Row::action("System Settings…",Action::Settings("")),Row::action("App Store…",Action::Open(AppId::AppStore)),Row::separator(),Row::action("Recent Items",Action::Submenu(Menu::Recent)),Row::separator(),Row::action("Force Quit…",Action::Window(Kind::ForceQuit)).key("alt+cmd+escape"),Row::separator(),Row::action("Sleep",Action::Sleep),Row::action("Restart…",Action::Halt(PowerAction::Restart)),Row::action("Shut Down…",Action::Halt(PowerAction::Off)),Row::separator(),Row::action("Lock Screen",Action::Lock).key("ctrl+cmd+q"),Row::action(format!("Log Out {user}…"),Action::Window(Kind::LogOut)).key("shift+cmd+q")]},
+            // the Recent Items submenu: a way back, the apps opened last (newest first), then Clear Menu
+            Menu::Recent=>{let recent=self.recent_titles();let mut rows=vec![Row::action("Recent Items",Action::Submenu(Menu::System)).symbol(crate::symbols::Symbol::ChevronLeft),Row::separator()];if recent.is_empty(){rows.push(Row::label("No Recent Items"));}for (i,title) in recent.iter().enumerate(){rows.push(Row::action(title.clone(),Action::Recent(i as u8)));}rows.push(Row::separator());rows.push(if recent.is_empty(){Row::label("Clear Menu")}else{Row::action("Clear Menu",Action::ClearRecent)});rows},
             Menu::ControlCenter=>Vec::new(),
             Menu::Recording=>vec![Row::action("Stop Recording",Action::RecordStop)],
             Menu::GameMode=>vec![Row::action("Turn Off Game Mode",Action::GameModeOff)],
@@ -626,7 +682,8 @@ impl Shell {
             let area=super::desk::Desk::area(&self.desk_metrics());
             let (x,y)=context_menu_origin((c.x,c.y),(width,height),(0,area.y,self.w,area.h));
             return Some((x,y,width,height));
-        }let (_,x,_,_)=self.menu_buttons().into_iter().find(|b|b.0==menu)?;
+        }// the Recent Items submenu hangs from the system menu's bar item
+        let anchor=if menu==Menu::Recent{Menu::System}else{menu};let (_,x,_,_)=self.menu_buttons().into_iter().find(|b|b.0==anchor)?;
         let rows=self.menu_rows(menu);let width=self.menu_width(&rows);let height=self.ui.pt(menu_spans(&rows).1).ceil() as usize;
         Some(((x as usize).min((self.w as usize).saturating_sub(width)),self.desktop_bar_height()+self.ui.pt(MENU_GAP_PT) as usize,width,height))
     }
@@ -650,6 +707,8 @@ impl Shell {
         if let Some(((x,y,w,h),_))=self.assistant.desk_overlay(&self.ui,self.w){v.push((x as i32,y as i32,w as i32,h as i32));}
         // the Quick Look card floats over the windows: the GPU presenter keeps its region (cleared again once it closes)
         if let Some((x,y,w,h))=self.quick_look_rect(){v.push((x as i32,y as i32,w as i32,h as i32));}
+        // the system menu's card (Force Quit, About, Log Out) is an overlay surface above the windows as well
+        if let Some((x,y,w,h))=self.utility_rect(){v.push((x as i32,y as i32,w as i32,h as i32));}
         if self.perf.enabled||self.perf_drawn{let (x,y,w,h)=self.perf_rect();let g=self.ui.pt(2.) as i32;v.push((x as i32-g,y as i32-g,w as i32+2*g,h as i32+2*g));}
         Some(v)
     }
@@ -678,7 +737,7 @@ impl Shell {
         self.draw_desktop_bar_items(s,height);
     }
     fn draw_desktop_bar_items(&self,s:&mut Surface,height:usize) {
-        for (menu,x,width,label) in self.menu_buttons() {if self.desktop_menu==Some(menu){let h=height as f32-self.ui.pt(4.);s.fill_rrect(x,self.ui.pt(2.),width,h,h/2.,self.bar_ink().capsule);}if matches!(menu,Menu::System|Menu::Network|Menu::Power|Menu::ControlCenter|Menu::Bluetooth|Menu::Location) {
+        for (menu,x,width,label) in self.menu_buttons() {if self.desktop_menu==Some(menu)||(menu==Menu::System&&self.desktop_menu==Some(Menu::Recent)){let h=height as f32-self.ui.pt(4.);s.fill_rrect(x,self.ui.pt(2.),width,h,h/2.,self.bar_ink().capsule);}if matches!(menu,Menu::System|Menu::Network|Menu::Power|Menu::ControlCenter|Menu::Bluetooth|Menu::Location)||self.status_item_is_icon(menu) {
             // the battery item with its percentage: the glyph stays at the item's left, the percentage follows it
             let percent=if menu==Menu::Power {self.battery_bar_label()} else {None};
             let glyph_x=if percent.is_some() {x+self.ui.pt(STATUS_ICON_PT)/2.} else {x+width/2.};
@@ -739,6 +798,8 @@ impl Shell {
             if let Some(sym)=row.symbol{if let Some(im)=self.ui.symbols.render(sym,self.ui.pt(15.),ink){s.blit(&im,x as i32+self.ui.pt(lead+7.5) as i32-im.w as i32/2,(mid-im.h as f32/2.) as i32,255,255);}}
             let text_x=(if row.symbol.is_some(){lead+20.}else{lead})+if row.indent{12.}else{0.};
             self.label(&row.text,13.,Weight::Regular,ink,|im|s.blit(im,x as i32+self.ui.pt(text_x) as i32,(mid-im.h as f32/2.) as i32,255,255));
+            // a row that opens a submenu ends in a chevron
+            if matches!(row.action,Some(Action::Submenu(Menu::Recent))) {if let Some(im)=self.ui.symbols.render(crate::symbols::Symbol::ChevronRight,self.ui.pt(11.),ink) {s.blit(&im,(x+w) as i32-self.ui.pt(16.) as i32-im.w as i32,(mid-im.h as f32/2.) as i32,255,255);}}
             if let Some(k)=&row.key{let k=shortcut_spaced(k);self.label(&k,13.,Weight::Regular,if hi{super::ui::MENU_HIGHLIGHT_TEXT}else{super::ui::MENU_SHORTCUT},|im|s.blit(im,(x+w) as i32-self.ui.pt(16.) as i32-im.w as i32,(mid-im.h as f32/2.) as i32,255,255));}}
     }
     /// The one-pixel edge every popup gets (a menu, the Dock's menu, an open panel), in the separator colour, so the
@@ -796,6 +857,9 @@ impl Shell {
         if menu==Menu::Help {if let Some(fx)=self.help_key(code) {return Some(fx);}}
         let mut bar=vec![Menu::System,Menu::App];bar.extend(bar_after_app(self.app_menus(),self.photos_front()));
         self.dirty=true;
+        // Left leaves the Recent Items submenu; Right opens the submenu of the highlighted row
+        if menu==Menu::Recent&&code==105 {self.desktop_menu=Some(Menu::System);self.desktop_menu_row=None;return Some(vec![]);}
+        if code==106 {if let Some(Action::Submenu(sub))=self.menu_row_of(menu).and_then(|i|self.menu_rows(menu).get(i).and_then(|r|r.action.clone())) {self.desktop_menu=Some(sub);self.desktop_menu_row=None;return Some(vec![]);}}
         match code {
             103|108=>{if let Some(i)=self.menu_step(menu,if code==108{1}else{-1}){self.desktop_menu_row=Some((menu,i));}},
             105|106=>{if let Some(at)=bar.iter().position(|m|*m==menu){let n=bar.len();self.desktop_menu=Some(bar[(at+if code==106{1}else{n-1})%n]);self.desktop_menu_row=None;self.help_reset();}},
@@ -853,6 +917,8 @@ impl Shell {
                     Action::Help(id)=>self.open_help(&id,None),
                     Action::KeyboardViewer=>self.keyboard_viewer_open(),
                     Action::OnScreenKeyboard=>{if self.keyboard_opened_explicitly(){self.keyboard_close_explicit(t);}else{self.keyboard_open_explicit(t);}},
+                    Action::Submenu(menu)=>{self.desktop_menu=Some(menu);self.desktop_menu_row=None;self.dirty=true;},
+                    Action::Window(kind)=>self.utility_open(kind),
                     Action::Recent(n)=>{if let Some(app)=self.recent_app_at(n as usize){self.desk_open(app,t);}},
                     Action::ClearRecent=>self.recent_clear(),
                     Action::Desktop=>self.desk_show_desktop(),
@@ -1016,6 +1082,13 @@ impl Shell {
             let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}
             let mut image=Image{w,h,px:data};image.apply_mask(&mask);
             frames.push(crate::bare::wayland::ChromeFrame{id:7,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px,input:None});
+        }
+        // The system menu's card (Force Quit, About, Log Out): an overlay surface above every window, like Quick Look. It takes the
+        // pointer over its whole card; its keys come from the shell's own keyboard reader.
+        if let Some(((x,y,w,h),mask))=self.utility_overlay() {
+            let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}
+            let mut image=Image{w,h,px:data};image.apply_mask(&mask);
+            frames.push(crate::bare::wayland::ChromeFrame{id:super::utility_window::CHROME_ID,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px,input:None});
         }
         // The Apps grid: id 8, an overlay surface above every window that takes the keyboard while it is
         // open. It spans the veil only, so the menu bar and the Dock stay their own surfaces and stay usable. It is
@@ -1649,5 +1722,68 @@ mod changed_bar_item_tests {
         let after = vec![item(Menu::Cpu, 2540., 40., "CPU 1%")];
         let rects = changed_bar_rects(&before, &after, 2560, 44, 8);
         assert_eq!(rects, vec![(0, 0, 58, 44), (2532, 0, 28, 44)], "a gone item and a new one, clipped to the screen");
+    }
+}
+
+/// An app's menu extra shows its title or a symbol the bar draws, never the first letter of the app's name (E2E MB1).
+#[cfg(test)]
+mod status_face_tests {
+    use super::*;
+
+    #[test]
+    fn a_title_wins_and_a_drawable_symbol_shows_as_an_icon() {
+        assert_eq!(status_face("Quick", "square.and.pencil"), Some(StatusFace::Text("Quick".into())));
+        assert_eq!(status_face("", "square.and.pencil"), Some(StatusFace::Icon("square.and.pencil".into())), "Notes' extra");
+        assert_eq!(status_face("", "checklist"), Some(StatusFace::Icon("checklist".into())), "Reminders' extra");
+        assert_eq!(status_face("", "wifi"), Some(StatusFace::Icon("wifi".into())), "a symbol of the shell's own set");
+    }
+
+    #[test]
+    fn an_item_with_no_title_and_no_symbol_the_bar_draws_is_not_shown() {
+        assert_eq!(status_face("", ""), None, "no letter stands in for it");
+        assert_eq!(status_face("", "unknown.symbol.name"), None);
+    }
+}
+
+/// The Recent Items submenu opens in place of the system menu and keeps the keyboard path (Right in, Left out).
+#[cfg(all(test, feature = "desktop-wayland"))]
+mod submenu_tests {
+    use super::*;
+
+    fn open_system() -> Shell {
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.screen = Screen::Home;
+        sh.anim = None;
+        sh.desktop_menu = Some(Menu::System);
+        sh
+    }
+
+    #[test]
+    fn right_opens_the_submenu_of_the_highlighted_row_and_left_goes_back() {
+        let mut sh = open_system();
+        let at = sh.menu_row_texts(Menu::System).iter().position(|t| t == "Recent Items").unwrap();
+        sh.desktop_menu_row = Some((Menu::System, at));
+        let _ = sh.desktop_menu_key(106, 1.);
+        assert_eq!(sh.desktop_menu, Some(Menu::Recent));
+        let _ = sh.desktop_menu_key(105, 2.);
+        assert_eq!(sh.desktop_menu, Some(Menu::System));
+        // Right on a row without a submenu still moves to the next bar menu
+        sh.desktop_menu_row = Some((Menu::System, 0));
+        let _ = sh.desktop_menu_key(106, 3.);
+        assert_eq!(sh.desktop_menu, Some(Menu::App));
+    }
+
+    #[test]
+    fn a_click_on_recent_items_opens_the_submenu_and_keeps_a_popup() {
+        let mut sh = open_system();
+        let rows = sh.menu_rows(Menu::System);
+        let at = rows.iter().position(|r| r.text == "Recent Items").unwrap();
+        let (x, top, w, _) = sh.desktop_popup_rect().unwrap();
+        let (spans, _) = menu_spans(&rows);
+        let y = top as f32 + sh.ui.pt(spans[at].0 + spans[at].1 / 2.);
+        let fx = sh.desktop_bar_event(Event::Up((x + w / 2) as f32, y), 1.);
+        assert!(fx.is_some());
+        assert_eq!(sh.desktop_menu, Some(Menu::Recent), "the click opens the submenu instead of closing the menu");
+        assert!(sh.desktop_popup_rect().is_some());
     }
 }

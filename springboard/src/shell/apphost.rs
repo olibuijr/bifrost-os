@@ -1450,6 +1450,16 @@ impl AppHost {
         }
     }
 
+    /// Force Quit: ends the app's process at once with SIGKILL, with no `Quit` first and no time to save.
+    #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+    pub fn force_kill(&mut self) {
+        if self.child.is_some() && self.status == Status::Running {
+            self.sigkill();
+        } else if self.child.is_none() {
+            self.status = Status::Exited(0);
+        }
+    }
+
     fn sigkill(&mut self) {
         #[cfg(feature="desktop-wayland")]
         if std::env::var_os("SPRINGBOARD_WAYLAND").is_some(){crate::bare::app_manager::terminate(&self.id);}
@@ -1758,6 +1768,21 @@ impl Shell {
             if !h.begin_quit(bifrost_proto::sys::now_ms()) {
                 self.dying.push(h);
             }
+        }
+        if self.ext_fg == Some(slot as u8) {
+            self.ext_fg = None;
+        }
+        self.extras_app_gone(slot as u8);
+        self.workspace_app_event(bifrost_proto::WorkspaceEventKind::DidTerminateApplication, slot as u8);
+    }
+
+    /// Force Quit: the app in `slot` is killed at once (`AppHost::force_kill`) and dropped, with no `Quit` and no grace
+    /// period, so an app that stopped answering goes away. Its menu extras and the workspace observers hear of it as for a
+    /// normal quit.
+    #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+    pub(super) fn ext_force_quit(&mut self, slot: usize) {
+        if let Some(mut h) = self.ext.get_mut(slot).and_then(Option::take) {
+            h.force_kill();
         }
         if self.ext_fg == Some(slot as u8) {
             self.ext_fg = None;
