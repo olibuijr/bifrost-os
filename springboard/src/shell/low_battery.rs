@@ -201,6 +201,12 @@ impl Alert {
         Some(self.card.button_centre(ui, w, h, i))
     }
 
+    /// The centre of the button a key presses: Esc dismisses, Return takes the bold button (Low Power Mode when it is offered).
+    pub fn key_button(&self, ui: &Ui, w: i32, h: i32, cancel: bool) -> Option<(f32, f32)> {
+        let offered = !cancel && self.buttons.contains(&Button::LowPowerMode);
+        self.button(ui, w, h, if offered { Button::LowPowerMode } else { Button::Dismiss })
+    }
+
     pub fn draw(&self, s: &mut Surface, ui: &Ui, w: i32, h: i32) {
         self.card.draw(s, ui, w, h);
     }

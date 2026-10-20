@@ -497,7 +497,10 @@ const ALERT_W_PT: f32 = 259.0;
 /// An alert card (`NativeAlert` in the Golden Gate style): left-aligned title and message and a row of capsule buttons,
 /// centred on a dimmed screen. Shared by the Settings confirmations and the Low Battery alert.
 pub struct AlertCard {
-    title: Image,
+    /// The title, wrapped to the card's width: a long one takes more lines and the card grows, it is never clipped.
+    title: Vec<Image>,
+    /// The height of one title line, measured once when the card is built (an empty title takes one line of this height).
+    title_line_h: f32,
     message: Vec<Image>,
     buttons: Vec<Image>,
     /// `showsSuppressionButton`-style checkbox above the buttons: its label and whether it is checked
@@ -526,8 +529,11 @@ impl AlertCard {
     /// do not fit the standard width.
     pub fn new_wide(ui: &Ui, title: &str, message: &str, buttons: Vec<Image>, width_pt: f32) -> Self {
         let width_pt = width_pt.max(ALERT_W_PT);
+        let title: Vec<Image> = ui.wrap(title, MAC_TITLE3_PT, Weight::Semibold, ui.pt(width_pt - 2.0 * ALERT_PAD_PT)).iter().map(|l| ui.text(l, MAC_TITLE3_PT, Weight::Semibold, WHITE)).collect();
+        let title_line_h = title.iter().map(|l| l.h).max().unwrap_or_else(|| ui.text("A", MAC_TITLE3_PT, Weight::Semibold, WHITE).h) as f32;
         AlertCard {
-            title: ui.text(title, MAC_TITLE3_PT, Weight::Semibold, WHITE),
+            title,
+            title_line_h,
             message: ui.wrap(message, MAC_BODY_PT, Weight::Regular, ui.pt(width_pt - 2.0 * ALERT_PAD_PT)).iter().map(|l| ui.text(l, MAC_BODY_PT, Weight::Regular, WHITE)).collect(),
             buttons,
             check: None,
@@ -570,10 +576,20 @@ impl AlertCard {
         self.check_rect(ui, self.card(ui, w, h)).map(|(rx, ry, rw, rh)| (rx + rw / 2.0, ry + rh / 2.0))
     }
 
+    /// Height of the title block: its wrapped lines (a title with no text still takes one line, as an empty one always did).
+    fn title_height(&self) -> f32 {
+        self.title_line_h * self.title.len().max(1) as f32
+    }
+
+    /// The card (x, y, w, h) on a w by h screen, for hit tests and for sizing the surface that carries it.
+    pub fn card_rect(&self, ui: &Ui, w: i32, h: i32) -> (f32, f32, f32, f32) {
+        self.card(ui, w, h)
+    }
+
     /// The card (x, y, w, h), centred on screen.
     fn card(&self, ui: &Ui, w: i32, h: i32) -> (f32, f32, f32, f32) {
         let cw = ui.pt(self.width_pt);
-        let ch = ui.pt(ALERT_PAD_PT + 2.0) + self.title.h as f32 + ui.pt(8.0) + ui.pt(17.0) * self.message.len() as f32 + ui.pt(ALERT_PAD_PT) + ui.pt(ALERT_BTN_H_PT) + ui.pt(ALERT_PAD_PT)
+        let ch = ui.pt(ALERT_PAD_PT + 2.0) + self.title_height() + ui.pt(8.0) + ui.pt(17.0) * self.message.len() as f32 + ui.pt(ALERT_PAD_PT) + ui.pt(ALERT_BTN_H_PT) + ui.pt(ALERT_PAD_PT)
             + if self.check.is_some() { ui.pt(ALERT_CHECK_H_PT + ALERT_CHECK_GAP_PT) } else { 0.0 };
         (((w as f32 - cw) / 2.0).round(), ((h as f32 - ch) / 2.0).round(), cw, ch)
     }
@@ -607,8 +623,15 @@ impl AlertCard {
         let (x, y, cw, ch) = card;
         s.fill_rrect(x, y, cw, ch, ui.pt(ALERT_RADIUS_PT), CARD_BG.now());
         let (lx, mut ty) = (x + ui.pt(ALERT_PAD_PT), y + ui.pt(ALERT_PAD_PT + 2.0));
-        s.blit_colored(&self.title, lx as i32, ty as i32, LABEL.now(), 255);
-        ty += self.title.h as f32 + ui.pt(8.0);
+        let line_h = self.title_line_h;
+        for line in &self.title {
+            s.blit_colored(line, lx as i32, ty as i32, LABEL.now(), 255);
+            ty += line_h;
+        }
+        if self.title.is_empty() {
+            ty += line_h;
+        }
+        ty += ui.pt(8.0);
         for line in &self.message {
             s.blit_colored(line, lx as i32, ty as i32, LABEL.now(), 255);
             ty += ui.pt(17.0);
@@ -712,6 +735,28 @@ mod tests {
         assert!(ink(&bold) > ink(&plain), "Bold Text renders heavier");
         assert_eq!(Weight::Bold.heavier(), Weight::Bold);
         assert_eq!(Weight::Medium.heavier(), Weight::Semibold);
+    }
+
+    #[test]
+    fn a_long_alert_title_wraps_and_the_card_grows_instead_of_clipping() {
+        let ui = ui();
+        let label = || vec![ui.text("OK", MAC_BODY_PT, Weight::Regular, WHITE)];
+        let short = AlertCard::new(&ui, "Low Battery", "20% remaining.", label());
+        let long = AlertCard::new(&ui, "\u{201c}Mail\u{201d} Would Like to Send You Notifications", "20% remaining.", label());
+        assert_eq!(short.title.len(), 1);
+        assert!(long.title.len() >= 2, "the title wraps onto more lines");
+        let inner = (ui.pt(ALERT_W_PT - 2.0 * ALERT_PAD_PT) + ui.pt(4.0)) as usize;
+        assert!(long.title.iter().all(|l| l.w <= inner), "no title line is wider than the card's text area");
+        let (_, _, _, sh) = short.card_rect(&ui, 1200, 800);
+        let (_, _, cw, ch) = long.card_rect(&ui, 1200, 800);
+        assert!(ch > sh, "the card is taller for the extra title line");
+        // the card stays on the screen and the buttons stay inside it
+        let (bx, by) = long.button_centre(&ui, 1200, 800, 0);
+        let (x, y, _, _) = long.card_rect(&ui, 1200, 800);
+        assert!(bx >= x && bx <= x + cw && by >= y && by <= y + ch);
+        assert_eq!(long.hit(&ui, 1200, 800, bx, by), Some(0));
+        // an empty title still takes one line
+        assert!(AlertCard::new(&ui, "", "", label()).card_rect(&ui, 1200, 800).3 > 0.0);
     }
 
     #[test]

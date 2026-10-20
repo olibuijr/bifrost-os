@@ -34,6 +34,10 @@ impl Shell {
     /// The wheel moved `dx`, `dy` pixels of content at screen point (`x`, `y`) at `t` ms. True when an app that asked for
     /// the wheel took it; the drag emulated for it is then dropped for that app.
     pub fn pointer_wheel(&mut self, x: f32, y: f32, dx: f32, dy: f32, t: f64) -> bool {
+        // a system alert on the desktop is screen-modal: the wheel is used up over it and never reaches the app under the veil
+        if self.modal_layer.is_some() {
+            return true;
+        }
         let Some((slot, lx, ly)) = self.ext_content_at(x, y) else { return false };
         let Some(Some(host)) = self.ext.get_mut(slot as usize) else { return false };
         let event = PointerEvent::Wheel { x: lx, y: ly, dx, dy, precise: false, phase: Phase::None, momentum: Phase::None };

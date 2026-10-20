@@ -168,6 +168,12 @@ impl Sheet {
         Some(self.card.button_centre(ui, w, h, i))
     }
 
+    /// The centre of the button a key presses: Esc is Don't Allow. Return presses nothing: a key never grants, because
+    /// the sheet appears on its own while the person types into an app and a stray Return must not give a permission.
+    pub fn key_button(&self, ui: &Ui, w: i32, h: i32, cancel: bool) -> Option<(f32, f32)> {
+        if cancel { self.button(ui, w, h, Button::DontAllow) } else { None }
+    }
+
     /// The person pressed a button at `now`. The question takes the answer and the store is written. Returns whether
     /// the request was allowed (any Allow), or None when the question refused the answer.
     pub fn finish(mut self, button: Button, now: u64) -> Option<bool> {
@@ -301,6 +307,18 @@ mod tests {
         assert_eq!(Button::Allow.choice(), "allow");
         assert_eq!(Button::DontAllow.choice(), "dont_allow");
     }
+    /// A key never grants: Escape is Don't Allow and Return presses nothing, whatever the kind (the sheet appears on its own).
+    #[test]
+    fn a_key_never_grants_a_permission() {
+        let ui = crate::shell::tests::ui();
+        for (n, kind) in [("loc", Kind::Location), ("cam", Kind::Media(Media::Video)), ("usb", Kind::Usb), ("con", Kind::Contacts)] {
+            let sheet = Sheet::new(&ui, request(&format!("is.example.sheet.key.{n}"), "Maps", kind), 0).unwrap();
+            assert_eq!(sheet.key_button(&ui, 1200, 1920, false), None, "Return presses no button");
+            let (x, y) = sheet.key_button(&ui, 1200, 1920, true).expect("Escape presses Don't Allow");
+            assert_eq!(sheet.hit(&ui, 1200, 1920, x, y), Some(Button::DontAllow));
+        }
+    }
+
     /// MA6: Mail asked for the address book when a message was composed, and the sheet was drawn into the shell's own frame, which
     /// sits under every window on the desktop: no card to see, a veil left on the wallpaper that grew darker with each frame
     /// and stayed after the sheet was gone. On the desktop the sheet is a surface of its own above the windows.

@@ -136,6 +136,11 @@ impl Alert {
         Some(self.card.button_centre(ui, w, h, i))
     }
 
+    /// The centre of the button a key presses: Esc closes, Return reopens (the bold button).
+    pub fn key_button(&self, ui: &Ui, w: i32, h: i32, cancel: bool) -> Option<(f32, f32)> {
+        self.button(ui, w, h, if cancel { Button::Close } else { Button::Reopen })
+    }
+
     pub fn draw(&self, s: &mut Surface, ui: &Ui, w: i32, h: i32) {
         self.card.draw(s, ui, w, h);
     }
