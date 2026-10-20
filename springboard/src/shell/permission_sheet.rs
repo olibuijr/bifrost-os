@@ -168,6 +168,12 @@ impl Sheet {
         Some(self.card.button_centre(ui, w, h, i))
     }
 
+    /// The centre of the button a key presses: Esc is Don't Allow, Return the bold one (Don't Allow when none is bold).
+    pub fn key_button(&self, ui: &Ui, w: i32, h: i32, cancel: bool) -> Option<(f32, f32)> {
+        let bold = buttons_for(self.prompt.kind).iter().copied().find(|b| b.bold());
+        self.button(ui, w, h, if cancel { Button::DontAllow } else { bold.unwrap_or(Button::DontAllow) })
+    }
+
     /// The person pressed a button at `now`. The question takes the answer and the store is written. Returns whether
     /// the request was allowed (any Allow), or None when the question refused the answer.
     pub fn finish(mut self, button: Button, now: u64) -> Option<bool> {

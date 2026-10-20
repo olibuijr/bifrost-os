@@ -777,7 +777,7 @@ impl Shell {
     /// Power, volume and wake stay with the shell.
     pub fn hw_key(&mut self, code: u16, down: bool, t: f64) -> bool {
         const KEEP: [u16; 4] = [114, 115, 116, 143];
-        if !down || !self.screen_on || self.anim.is_some() || KEEP.contains(&code) {
+        if !down || !self.screen_on || self.anim.is_some() || KEEP.contains(&code) || self.card_alert_up() {
             return false;
         }
         // Space in an open capture session turns the selection into a window pick and back
@@ -838,6 +838,7 @@ impl Shell {
             || self.quicksearch.is_shown()
             || self.assistant.is_shown()
             || self.help_viewer.is_some()
+            || self.card_alert_up()
     }
 
     #[cfg(feature = "desktop-wayland")]
@@ -908,6 +909,11 @@ impl Shell {
         // the account access sheet, the USB prompt and the firewall question take touches only: typing waits for the answer
         if self.access_showing() || self.usb_showing() || self.fw_showing() {
             return vec![];
+        }
+        // a system alert holds the keyboard: Return presses its bold button, every other key is used up (the app behind
+        // it gets none)
+        if self.card_alert_up() {
+            return if matches!(out, Out::Enter) { self.card_alert_key(false, t) } else { vec![] };
         }
         // the Apps grid is modal: typing goes to its search field, its own keys move and open, nothing reaches the app
         if self.overview_typed(&out, t) {
@@ -1247,6 +1253,8 @@ impl Shell {
                 self.capture_open(super::capture::Session::crosshair(self.capture_prefs));
                 vec![]
             }
+            // an alert is modal over everything and holds the keyboard: Escape answers it as its cancel button would
+            Shortcut::Back if self.card_alert_up() => self.card_alert_key(true, t),
             Shortcut::Back if self.capture.is_some() => {
                 self.capture = None;
                 vec![]

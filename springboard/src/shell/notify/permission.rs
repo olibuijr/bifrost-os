@@ -116,6 +116,11 @@ impl Sheet {
         Some(self.card.button_centre(ui, w, h, i))
     }
 
+    /// The centre of the button a key presses: Esc is Don't Allow, Return the bold Allow.
+    pub fn key_button(&self, ui: &Ui, w: i32, h: i32, cancel: bool) -> Option<(f32, f32)> {
+        self.button(ui, w, h, if cancel { Button::DontAllow } else { Button::Allow })
+    }
+
     /// The person pressed `button` at `now`. Returns whether the notifications are allowed, or None when the question
     /// refused the answer.
     pub fn finish(mut self, button: Button, now: u64) -> Option<bool> {

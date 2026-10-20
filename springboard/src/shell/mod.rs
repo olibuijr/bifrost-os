@@ -131,6 +131,7 @@ pub mod thermal_alert;
 pub mod crash_alert;
 pub mod permission_sheet;
 pub mod guardian_sheet;
+mod modal_keys;
 pub mod malware_gate;
 pub mod trust_sheet;
 pub mod background;
