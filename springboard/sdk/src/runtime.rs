@@ -1064,9 +1064,7 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
             c.wants_keyboard(on);
         }
         // flush requests and clipboard changes
-        for m in c.out.borrow_mut().drain(..) {
-            let _ = chan.send(&m.encode(), &[]);
-        }
+        flush_out(&chan, c);
         let now_clip = kit::clipboard::text();
         if now_clip != clip_seen {
             clip_seen = now_clip.clone();
@@ -1099,6 +1097,14 @@ fn reconfigure(c: &mut Ctx, cfg: Configure) {
     c.ui.s = cfg.scale;
     c.ui.text_scale = cfg.text_scale;
     c.cfg = cfg;
+}
+
+/// Sends the messages the app queued in `ctx` (`Ctx::send`), oldest first. Anything the app sends straight on the channel
+/// (frames and their buffers) must come after the requests that name it, so callers flush before they send those.
+fn flush_out(chan: &Channel, ctx: &Ctx) {
+    for m in ctx.take_sent() {
+        let _ = chan.send(&m.encode(), &[]);
+    }
 }
 
 fn alloc(chan: &Channel, w: u32, h: u32, generation: u32) -> Option<[Slot; 2]> {
@@ -1167,6 +1173,11 @@ fn release_window_buffer(pixels: &mut std::collections::BTreeMap<u32, WindowPixe
 /// slot, then `WindowFrame`. A window the app or the shell closed loses its pixels here.
 fn draw_windows<A: App>(chan: &Channel, app: &mut A, ctx: &Ctx, pixels: &mut std::collections::BTreeMap<u32, WindowPixels>, t: f64, due: bool) {
     let scale = ctx.cfg.scale;
+    // `WindowOpen` is queued in the context and sent at the end of the turn, but `WindowBuffers` and `WindowFrame` go
+    // straight to the channel. A window opened in this turn would reach the shell as buffers for a window it does not
+    // know yet: the shell drops them, the app never sends them again, and the window stays unmapped (never drawn).
+    // The queued requests go first, so the shell has the window before its pixels.
+    flush_out(chan, ctx);
     // the registry is borrowed only for this listing: the app may open or close windows from its draw
     let open: Vec<(u32, (u32, u32))> = ctx.windows.borrow().list().iter().filter(|w| !w.id.is_main()).map(|w| (w.id.0, window_px(w.width, w.height, scale))).collect();
     pixels.retain(|id, _| open.iter().any(|(o, _)| o == id));
@@ -1874,6 +1885,24 @@ mod window_pixel_tests {
         assert!(pixels.is_empty());
         assert_eq!(app.drawn.len(), 2);
         assert_eq!(app.main_drawn, 0);
+    }
+
+    #[test]
+    fn a_window_opened_this_turn_is_known_to_the_shell_before_its_buffers_arrive() {
+        let (a, b) = crate::proto::sys::socketpair_pair().unwrap();
+        let ctx = test_ctx();
+        let id = ctx.open_window(WindowSpec::new("New Message", 40.0, 30.0)).unwrap();
+        let mut app = Two::default();
+        let mut pixels = BTreeMap::new();
+        draw_windows(&a, &mut app, &ctx, &mut pixels, 0.0, false);
+        let mut seen = Vec::new();
+        while let Ok(Recv::Packet(p, _)) = b.recv(false) {
+            seen.push(ToShell::decode(&p).unwrap());
+        }
+        assert!(matches!(seen.first(), Some(ToShell::WindowOpen { id: o, .. }) if *o == id.0), "the open request is first: {seen:?}");
+        let buffers = seen.iter().position(|m| matches!(m, ToShell::WindowBuffers { id: o, .. } if *o == id.0)).expect("the buffers follow");
+        let frame = seen.iter().position(|m| matches!(m, ToShell::WindowFrame { id: o, .. } if *o == id.0)).expect("and the first frame");
+        assert!(buffers > 0 && frame > buffers, "open, then buffers, then the frame: {seen:?}");
     }
 
     #[test]

@@ -447,6 +447,24 @@ pub enum Status {
 /// The manifest id of the on-screen keyboard system app (`provides = ["keyboard"]`).
 pub const KEYBOARD_APP_ID: &str = "is.olibuijr.keyboard";
 
+/// What an app sent for an extra window before the window's `WindowOpen`. An SDK built before the fix queued the open request
+/// behind the window's buffers and first frame, so the pixels came first; they are kept and replayed when the window opens.
+enum Early {
+    Buffers { id: u32, w: u32, h: u32, generation: u32, fds: Vec<sys::Owned> },
+    Frame { id: u32, buf: u32, damage: Vec<bifrost_proto::Rect> },
+}
+
+impl Early {
+    fn window(&self) -> u32 {
+        match self {
+            Early::Buffers { id, .. } | Early::Frame { id, .. } => *id,
+        }
+    }
+}
+
+/// The most early messages an app may leave waiting; the oldest go first (their descriptors close with them).
+const MAX_EARLY: usize = 8;
+
 /// What `pump` saw that the shell must act on besides the frame.
 #[derive(Debug, Default, PartialEq)]
 pub struct Pumped {
@@ -598,6 +616,8 @@ pub struct AppHost {
     pub key_window: u32,
     /// Each extra window's buffers, by window id (`ToShell::WindowBuffers`).
     window_bufs: std::collections::BTreeMap<u32, WinBufs>,
+    /// Buffers and frames that arrived for a window the table does not hold yet, oldest first (`Early`).
+    early: std::collections::VecDeque<Early>,
 }
 
 impl AppHost {
@@ -713,6 +733,7 @@ impl AppHost {
             windows: WindowTable::new(),
             key_window: 0,
             window_bufs: std::collections::BTreeMap::new(),
+            early: std::collections::VecDeque::new(),
         }
     }
 
@@ -749,6 +770,7 @@ impl AppHost {
         self.exit_reported = true;
         self.windows.close_app(&self.id);
         self.window_bufs.clear();
+        self.early.clear();
         true
     }
 
@@ -1192,12 +1214,14 @@ impl AppHost {
             ToShell::WindowOpen { id, title, w, h, position, flags } => {
                 // no room for the window, or its id is taken: the app is told to drop it, so the two sides agree
                 if self.windows.open(&self.id, id, &title, w, h).is_err() {
+                    self.early.retain(|e| e.window() != id);
                     self.send(&ToApp::WindowClosed { id });
                 } else {
                     if let Some((x, y)) = position {
                         self.windows.request_position(&self.id, id, x, y);
                     }
                     self.windows.set_title_double_click(&self.id, id, flags & bifrost_proto::window_flags::TITLE_DOUBLE_CLICK != 0);
+                    self.replay_early(id, out);
                 }
                 out.chrome();
             }
@@ -1215,6 +1239,7 @@ impl AppHost {
             ToShell::WindowClose { id } => {
                 self.windows.close(&self.id, id);
                 self.window_bufs.remove(&id);
+                self.early.retain(|e| e.window() != id);
                 out.chrome();
             }
             // the same title or size again changes nothing the desk draws: no frame
@@ -1232,6 +1257,8 @@ impl AppHost {
                     out.chrome();
                 }
             }
+            ToShell::WindowBuffers { id, w, h, generation } if !self.window_open(id) => self.keep_early(Early::Buffers { id, w, h, generation, fds }),
+            ToShell::WindowFrame { id, buf, damage } if !self.window_open(id) => self.keep_early(Early::Frame { id, buf, damage }),
             ToShell::WindowBuffers { id, w, h, generation } => self.window_buffers(id, w, h, generation, fds),
             ToShell::WindowFrame { id, buf, damage } => self.window_frame_arrived(id, buf, damage, out),
             ToShell::Materials(list) => {if self.materials!=list {self.materials=list;out.chrome();}},
@@ -1247,6 +1274,26 @@ impl AppHost {
     pub fn frame(&self) -> Option<(&[u32], usize, usize)> {
         let b = self.bufs.get(self.shown?)?;
         Some((b.map.pixels(), self.buffer_size.0, self.buffer_size.1))
+    }
+
+    /// Keeps what arrived for a window that is not open (yet), within `MAX_EARLY` messages.
+    fn keep_early(&mut self, e: Early) {
+        while self.early.len() >= MAX_EARLY {
+            self.early.pop_front();
+        }
+        self.early.push_back(e);
+    }
+
+    /// The window `id` was just opened: what the app sent for it before that is handled now, in the order it came.
+    fn replay_early(&mut self, id: u32, out: &mut Pumped) {
+        let (mine, rest): (Vec<Early>, Vec<Early>) = std::mem::take(&mut self.early).into_iter().partition(|e| e.window() == id);
+        self.early = rest.into();
+        for e in mine {
+            match e {
+                Early::Buffers { id, w, h, generation, fds } => self.window_buffers(id, w, h, generation, fds),
+                Early::Frame { id, buf, damage } => self.window_frame_arrived(id, buf, damage, out),
+            }
+        }
     }
 
     /// `ToShell::WindowBuffers`: maps one extra window's two buffers, with the main window's size and seal checks. A window
@@ -1426,6 +1473,7 @@ impl AppHost {
         // an app that exits takes its extra windows with it
         self.windows.close_app(&self.id);
         self.window_bufs.clear();
+        self.early.clear();
         bifrost_core::log::shell_logger("apphost").notice(format!("app {} exited {code}", self.id));
     }
 
@@ -2919,6 +2967,34 @@ mod window_table_tests {
         assert!(host.window_frame(9).is_none(), "a frame for a window that is not open is dropped");
     }
 
+    /// MA6: an SDK built before the fix sent a window's buffers and first frame before its `WindowOpen` (the request waited in
+    /// the app's queue until the end of the turn). The shell dropped them, the app never sent the first frame again, and the
+    /// window stayed unmapped. They are kept and handled when the window opens.
+    #[test]
+    fn buffers_and_a_frame_that_come_before_the_window_open_are_kept_until_it_opens() {
+        let (channel, peer) = sys::socketpair_pair().unwrap();
+        let mut host = AppHost::with_channel("fixture", channel, None, cfg());
+        let mut out = Pumped::default();
+        let bytes = 2 * 2 * 4;
+        let fds = vec![sys::shm_create("early-window-0", bytes).unwrap(), sys::shm_create("early-window-1", bytes).unwrap()];
+        host.handle(ToShell::WindowBuffers { id: 1, w: 2, h: 2, generation: 3 }, fds, &mut out);
+        host.handle(ToShell::WindowFrame { id: 1, buf: 0, damage: vec![[0, 0, 2, 2]] }, Vec::new(), &mut out);
+        assert!(host.window_frame(1).is_none(), "the window is not open yet");
+        host.handle(ToShell::WindowOpen { id: 1, title: "New Message".into(), w: 2.0, h: 2.0, position: None, flags: 0 }, Vec::new(), &mut out);
+        assert_eq!(host.window_frame(1).map(|(_, w, h)| (w, h)), Some((2, 2)), "the first frame is there once the window is");
+        assert!(host.window_mapped(1));
+        assert!(sent(&peer).is_empty(), "the app is not told to drop the window");
+        // pixels for a window that never opens do not pile up, and a window the table refuses loses its pixels
+        for id in 10..40 {
+            host.handle(ToShell::WindowFrame { id, buf: 0, damage: Vec::new() }, Vec::new(), &mut out);
+        }
+        assert!(host.early.len() <= MAX_EARLY, "{} kept", host.early.len());
+        host.handle(ToShell::WindowOpen { id: 39, title: "Late".into(), w: 2.0, h: 2.0, position: None, flags: 0 }, Vec::new(), &mut out);
+        assert!(host.early.iter().all(|e| e.window() != 39), "what was kept for a window is used up when it opens");
+        host.handle(ToShell::WindowClose { id: 1 }, Vec::new(), &mut out);
+        assert!(host.window_frame(1).is_none());
+    }
+
     #[test]
     fn the_shell_closing_a_window_drops_it_and_tells_the_app_once() {
         let (channel, peer) = sys::socketpair_pair().unwrap();
@@ -2939,6 +3015,78 @@ mod window_table_tests {
                 ToApp::WindowClosed { id: 3 },
             ]
         );
+    }
+}
+
+/// MA6: an app's second window (Mail's compose window) is drawn above the app's main window with the app's pixels in it,
+/// and closing it takes it off the desk.
+#[cfg(all(test, feature = "desktop-wayland"))]
+mod extra_window_frame_tests {
+    use super::*;
+    use crate::shell::{desk, AppId, Screen};
+
+    /// The colour the app paints into every window.
+    const FILL: u32 = 0xff33_6699;
+
+    /// Two buffers of `w` by `h` filled with `FILL`, handed to the host as a window's (or, with no id, the main window's).
+    fn buffers(host: &mut AppHost, window: Option<u32>, w: usize, h: usize) {
+        let bytes = w * h * 4;
+        let fds = vec![sys::shm_create("extra-window-a", bytes).unwrap(), sys::shm_create("extra-window-b", bytes).unwrap()];
+        for fd in &fds {
+            Map::new(fd, bytes).unwrap().pixels_mut().fill(FILL);
+        }
+        let (w, h) = (w as u32, h as u32);
+        let msg = match window {
+            Some(id) => ToShell::WindowBuffers { id, w, h, generation: 1 },
+            None => ToShell::Buffers { w, h, generation: 1 },
+        };
+        host.handle(msg, fds, &mut Pumped::default());
+    }
+
+    #[test]
+    fn a_second_window_is_drawn_with_pixels_above_its_app_and_closing_it_takes_it_off_the_desk() {
+        let _lock = crate::test_support::global_lock();
+        let saved = std::env::var_os("SPRINGBOARD_WAYLAND");
+        std::env::set_var("SPRINGBOARD_WAYLAND", "1");
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.screen = Screen::Home;
+        sh.anim = None;
+        let (mine, _peer) = sys::socketpair_pair().unwrap();
+        let cfg = Configure { w: 64, h: 48, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
+        let mut host = AppHost::with_channel("fixture", mine, None, cfg);
+        let mut out = Pumped::default();
+        // the order the app sends them in: its window, then the window's buffers and first frame
+        buffers(&mut host, None, 64, 48);
+        host.handle(ToShell::Frame { buf: 0, damage: vec![[0, 0, 64, 48]] }, Vec::new(), &mut out);
+        host.handle(ToShell::WindowOpen { id: 1, title: "New Message".into(), w: 40.0, h: 30.0, position: None, flags: 0 }, Vec::new(), &mut out);
+        buffers(&mut host, Some(1), 40, 30);
+        host.handle(ToShell::WindowFrame { id: 1, buf: 0, damage: vec![[0, 0, 40, 30]] }, Vec::new(), &mut out);
+        sh.ext.push(Some(host));
+        let m = sh.desk_metrics();
+        sh.desk.as_mut().unwrap().open(&m, AppId::External(0), (600, 400));
+        sh.desk_sync_extra_windows();
+        let (main, extra) = (AppId::External(0), AppId::ExternalWindow(0, 1));
+        assert!(sh.desk.as_ref().unwrap().index_of(extra).is_some(), "the app's window is on the desk");
+        assert!(!sh.desk_window_unmapped(extra), "the app committed a frame to it");
+        let (w, h) = (sh.w as usize, sh.h as usize);
+        let mut px = vec![0u32; w * h];
+        sh.dirty = true;
+        sh.draw_desk_windows(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, 1000.0);
+        let frames = sh.take_wayland_windows();
+        let at = |app: AppId| frames.iter().position(|f| Some(f.id) == desk::win_id(app));
+        let (parent, window) = (at(main).expect("the app's own window is drawn"), at(extra).expect("a frame is drawn for the second window"));
+        assert!(window > parent, "the second window is above its app's window");
+        assert!(frames[window].pixels.as_ref().is_some_and(|p| p.iter().any(|&c| c == FILL)), "with the app's pixels in it");
+        // closed: it is off the desk, the app is told, and the next frame has no window for it
+        sh.desk_close_extra_window(0, 1);
+        assert!(sh.desk.as_ref().unwrap().index_of(extra).is_none());
+        assert!(sh.ext[0].as_ref().unwrap().windows.of_app("fixture").is_empty(), "the app's window table dropped it");
+        sh.dirty = true;
+        sh.draw_desk_windows(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, 2000.0);
+        let after = sh.take_wayland_windows();
+        assert!(after.iter().all(|f| Some(f.id) != desk::win_id(extra)), "no frame for the closed window");
+        assert!(after.iter().any(|f| Some(f.id) == desk::win_id(main)), "the app's own window stays");
+        if let Some(v) = saved { std::env::set_var("SPRINGBOARD_WAYLAND", v) } else { std::env::remove_var("SPRINGBOARD_WAYLAND") };
     }
 }
 

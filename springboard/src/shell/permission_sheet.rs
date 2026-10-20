@@ -301,4 +301,42 @@ mod tests {
         assert_eq!(Button::Allow.choice(), "allow");
         assert_eq!(Button::DontAllow.choice(), "dont_allow");
     }
+    /// MA6: Mail asked for the address book when a message was composed, and the sheet was drawn into the shell's own frame, which
+    /// sits under every window on the desktop: no card to see, a veil left on the wallpaper that grew darker with each frame
+    /// and stayed after the sheet was gone. On the desktop the sheet is a surface of its own above the windows.
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn on_the_desktop_a_sheet_is_an_overlay_above_the_windows_and_leaves_no_veil_behind() {
+        use crate::shell::desktop_bar::MODAL_CHROME_ID;
+        let _lock = crate::test_support::global_lock();
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.screen = crate::shell::Screen::Home;
+        sh.anim = None;
+        let (w, h) = (sh.w as usize, sh.h as usize);
+        let mid = (h / 2) * w + w / 2;
+        let mut px = vec![0u32; w * h];
+        sh.dirty = true;
+        sh.draw(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, 500.0);
+        let bare = px[mid];
+        assert!(sh.desktop_chrome_frames(&px, w, h).iter().all(|f| f.id != MODAL_CHROME_ID), "no sheet, no overlay");
+        sh.permission_sheet = Sheet::new(&sh.ui, request("is.example.sheet.veil", "Mail", Kind::Contacts), 0);
+        assert!(sh.permission_sheet.is_some());
+        for k in 0..3 {
+            sh.dirty = true;
+            sh.draw(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, 1000.0 + k as f64 * 100.0);
+        }
+        assert_eq!(px[mid], bare, "the sheet does not draw into the frame under the windows: no veil, however many frames");
+        let frames = sh.desktop_chrome_frames(&px, w, h);
+        let f = frames.iter().find(|f| f.id == MODAL_CHROME_ID).expect("the sheet is a surface above the windows");
+        assert_eq!((f.x, f.y, f.width, f.height), (0, 0, w, h), "the whole screen, so the sheet is modal");
+        assert_eq!(f.input, None, "it takes the pointer");
+        assert!(f.pixels[0] >> 24 != 0, "the veil covers the corner of the screen");
+        assert!(f.pixels[mid] != f.pixels[0], "and the card is on it");
+        // answered: the surface goes and the desktop is as it was
+        sh.permission_sheet = None;
+        sh.dirty = true;
+        sh.draw(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, 2000.0);
+        assert!(sh.desktop_chrome_frames(&px, w, h).iter().all(|f| f.id != MODAL_CHROME_ID), "the overlay is dropped with the sheet");
+        assert_eq!(px[mid], bare, "nothing of the sheet is left on the desktop");
+    }
 }
