@@ -30,10 +30,15 @@ pub fn check_line(line: &str) -> Result<(), String> {
 
 /// Sends one request line to the shell on its control socket and returns every byte of its answer.
 pub fn request(line: &str, socket: &Path) -> Result<Vec<u8>, String> {
+    request_within(line, socket, TIMEOUT)
+}
+
+/// Like `request`, with a longer or shorter wait for the answer (`image-attach` can take a while).
+pub fn request_within(line: &str, socket: &Path, timeout: Duration) -> Result<Vec<u8>, String> {
     check_line(line)?;
     let mut stream = UnixStream::connect(socket).map_err(|e| format!("the desktop is not answering on {}: {e}", socket.display()))?;
-    stream.set_read_timeout(Some(TIMEOUT)).map_err(|e| e.to_string())?;
-    stream.set_write_timeout(Some(TIMEOUT)).map_err(|e| e.to_string())?;
+    stream.set_read_timeout(Some(timeout)).map_err(|e| e.to_string())?;
+    stream.set_write_timeout(Some(timeout)).map_err(|e| e.to_string())?;
     stream.write_all(format!("{line}\n").as_bytes()).map_err(|e| e.to_string())?;
     let mut answer = Vec::new();
     stream.read_to_end(&mut answer).map_err(|e| format!("no answer from the desktop: {e}"))?;

@@ -5,13 +5,10 @@
 
 use bifrost_core::disk_image::{self as img, BlockSize, ImageContents};
 use std::fs::File;
-use std::io::{BufRead, BufReader, Read, Write};
-use std::net::TcpStream;
+use std::io::Read;
 use std::path::Path;
 use std::time::Duration;
 
-/// Longest control line the shell reads (the same limit `open` keeps).
-const MAX_LINE: usize = 510;
 const TIMEOUT: Duration = Duration::from_secs(60);
 /// The head read for `info` and `verify`: the 32 KB system area plus the volume descriptor sector.
 const HEAD_BYTES: u64 = 34 * 1024;
@@ -251,21 +248,16 @@ fn create_iso(folder: &str, volname: Option<&str>, output: &str) -> Result<Strin
     Ok(format!("created {output} from {folder}"))
 }
 
-/// Sends one control line to the shell and returns the body of its `ok` answer.
-fn ask(line: &str, port: u16) -> Result<String, String> {
-    if line.len() > MAX_LINE {
-        return Err("the path is too long".into());
-    }
+/// Sends one control line to the shell on its control socket and returns the body of its `ok` answer.
+fn ask(line: &str) -> Result<String, String> {
     if line.contains(['\n', '\r']) {
         return Err("a path with a line break cannot be sent".into());
     }
-    let mut stream = TcpStream::connect(("127.0.0.1", port)).map_err(|e| format!("the desktop is not answering on port {port}: {e}"))?;
-    stream.set_read_timeout(Some(TIMEOUT)).map_err(|e| e.to_string())?;
-    stream.set_write_timeout(Some(TIMEOUT)).map_err(|e| e.to_string())?;
-    stream.write_all(format!("{line}\n").as_bytes()).map_err(|e| e.to_string())?;
-    let mut answer = String::new();
-    BufReader::new(stream).read_line(&mut answer).map_err(|e| e.to_string())?;
-    reply_body(&answer)
+    if line.len() > crate::control::MAX_LINE {
+        return Err("the path is too long".into());
+    }
+    let answer = crate::control::request_within(line, &crate::control::socket(), TIMEOUT)?;
+    reply_body(&String::from_utf8_lossy(&answer))
 }
 
 /// The body of a shell answer: `ok` (with an optional body) or `error: <why>`.
@@ -294,12 +286,12 @@ pub fn run(cmd: &Command) -> Result<String, String> {
             let abs = std::fs::canonicalize(path).map_err(|e| format!("{path}: {e}"))?;
             let abs = abs.to_str().ok_or_else(|| format!("{path}: the path is not text"))?;
             let mode = if *read_only { "ro" } else { "rw" };
-            let body = ask(&format!("image-attach {mode} {abs}"), crate::open::port())?;
+            let body = ask(&format!("image-attach {mode} {abs}"))?;
             let (device, point) = body.split_once(' ').ok_or_else(|| "the desktop gave no mount folder".to_string())?;
             Ok(format!("{device} {point}"))
         }
         Command::Detach(target) => {
-            let device = ask(&format!("image-detach {target}"), crate::open::port())?;
+            let device = ask(&format!("image-detach {target}"))?;
             Ok(format!("released {device}"))
         }
         Command::Info(path) => {

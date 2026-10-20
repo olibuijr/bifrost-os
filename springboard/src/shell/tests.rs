@@ -653,6 +653,45 @@
         let _=std::fs::remove_dir_all(&dir);
     }
 
+    /// E2E round 3: the menu bar over a full-screen window follows the pointer, not the last press. A pointer that only
+    /// moves (no button) away from the top hides the bar again, and moving to the top reveals it.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn the_bar_over_a_full_screen_window_follows_the_pointer_when_it_only_moves() {
+        use crate::bare::wayland::WindowEvent;
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        sh.desk_open(AppId::Settings,0.);
+        let id=apps().iter().position(|a|a.id==AppId::Settings).unwrap() as u32+1;
+        sh.wayland_window_event(WindowEvent::Fullscreen(id,true));
+        assert!(sh.desk_bar_hidden(),"no pointer seen: hidden");
+        sh.dirty=false;
+        sh.desktop_pointer(300.,2.,false,10.);
+        assert!(!sh.desk_bar_hidden(),"the pointer reached the top edge: the bar is there");
+        assert!(sh.dirty,"and it repaints");
+        sh.dirty=false;
+        sh.desktop_pointer(300.,sh.h as f32/2.,false,20.);
+        assert!(sh.desk_bar_hidden(),"the pointer moved away without a button: hidden again, not left over the window");
+        assert!(sh.dirty,"and it repaints");
+    }
+
+    /// A rest on the green button that began before the click must not open the one-item full-screen menu on the window
+    /// the click took full screen.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn a_rest_on_the_green_button_before_the_click_opens_no_menu_on_the_full_screen_window() {
+        use crate::bare::wayland::WindowEvent;
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        sh.desk_open(AppId::Settings,0.);
+        let id=apps().iter().position(|a|a.id==AppId::Settings).unwrap() as u32+1;
+        let (gx,gy)=green_button(&sh);
+        sh.desktop_pointer(gx,gy,false,1000.);
+        assert!(sh.desk.as_ref().unwrap().arrange_at.is_some(),"the rest has begun");
+        sh.wayland_window_event(WindowEvent::Fullscreen(id,true));
+        assert!(sh.desk.as_ref().unwrap().arrange_at.is_none(),"going full screen ends the rest");
+        sh.arrange_tick(1000.+desk::ARRANGE_DWELL_MS+1.);
+        assert!(sh.desktop_menu.is_none(),"so no menu opens on the full-screen window");
+    }
+
     /// The same on an output of any size: the frame is the output, never a number of pixels.
     #[cfg(feature="desktop-wayland")]
     #[test]
@@ -1346,6 +1385,41 @@
     fn review_identical_foreign_windows_do_not_dirty_desktop() {
         let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.dirty=false;
         sh.wayland_foreign_windows(vec![]);assert!(!sh.dirty);
+    }
+
+    /// An idle second used to cost a whole desktop frame whenever the CPU or RAM reading changed the bar's text.
+    #[test]
+    fn a_changed_reading_alone_asks_for_a_bar_only_frame_and_anything_else_for_a_full_one() {
+        let mut sh=shell();
+        sh.dirty=false;sh.bar_only=false;sh.metrics_changed=true;
+        sh.note_metrics_frame();
+        assert!(sh.dirty&&sh.bar_only,"nothing else wanted a frame: only the bar's rows");
+        assert!(!sh.metrics_changed,"the reading is settled");
+        sh.dirty=true;sh.bar_only=false;sh.metrics_changed=true;
+        sh.note_metrics_frame();
+        assert!(sh.dirty&&!sh.bar_only,"something else is dirty: the ordinary frame");
+        sh.dirty=false;sh.bar_only=false;sh.metrics_changed=false;
+        sh.note_metrics_frame();
+        assert!(!sh.dirty&&!sh.bar_only,"no new reading, no frame");
+    }
+
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn a_bar_only_frame_repaints_only_the_menu_bar_band() {
+        let saved=std::env::var_os("SPRINGBOARD_WAYLAND");std::env::set_var("SPRINGBOARD_WAYLAND","1");
+        let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;sh.drawn=Drawn::App;
+        let mut pixels=vec![0;sh.w as usize*sh.h as usize];
+        let (w,h)=(sh.w as usize,sh.h as usize);
+        // a bar-only repaint always follows a full desktop frame (it is what sets desk_drawn)
+        sh.draw(&mut Surface{w,h,stride:w,px:&mut pixels,y0:0},0.);
+        let band=sh.desktop_bar_height().min(h);
+        let mut expected=pixels.clone();
+        sh.draw_desktop_background(&mut Surface{w,h,stride:w,px:&mut expected,y0:0}.rows(0,band));
+        sh.bar_only=true;
+        let damage=sh.draw(&mut Surface{w,h,stride:w,px:&mut pixels,y0:0},1000.);
+        assert!(!damage.is_all());assert!(damage.pixels()<=w*band,"nothing below the bar is repainted");
+        assert!(pixels[..w*band]==expected[..w*band],"the bar's rows equal a desktop repaint of them");
+        if let Some(v)=saved {std::env::set_var("SPRINGBOARD_WAYLAND",v)} else {std::env::remove_var("SPRINGBOARD_WAYLAND")};
     }
 
     #[cfg(feature = "desktop-wayland")]

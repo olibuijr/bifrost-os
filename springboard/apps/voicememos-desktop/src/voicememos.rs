@@ -386,7 +386,7 @@ impl VoiceMemos {
             search_focused: false,
             selected: None,
             confirm_delete: false,
-            audio: audio::Client::for_root(shell_dir),
+            audio: audio::Client::for_app(shell_dir),
             recording: false,
             recording_path: None,
             take: None,

@@ -298,6 +298,8 @@ pub struct Music {
     logo_pending: HashSet<(u64, u8)>,
     logo_failed: HashSet<(u64, u8)>,
     player: AudioPlayer,
+    /// why the last playback command could not be sent (the audio service is down), until it connects
+    notice: Option<String>,
     library: Library,
     /// album index of every song, by song id
     album_of: Vec<usize>,
@@ -466,6 +468,7 @@ impl Music {
             logo_pending: HashSet::new(),
             logo_failed: HashSet::new(),
             player,
+            notice: None,
             library: Library::default(),
             album_of: Vec::new(),
             scanning: true,
@@ -921,6 +924,21 @@ impl Music {
         if texts.as_ref() != self.labels.as_ref().map(|l| &l.key) {
             self.labels = texts.map(|t| self.make_labels(ui, t));
         }
+        if self.notice.is_some() && self.player.connected() {
+            self.notice = None;
+        }
+        // every playback error reaches the log with its cause, once per change
+        if snap.error != self.snap.error {
+            if let Some(e) = &snap.error {
+                eprintln!("music: playback error: {e}");
+            }
+        }
+        let live_error = |s: &Snapshot| s.live.as_ref().and_then(|l| l.error.clone());
+        if live_error(&snap) != live_error(&self.snap) {
+            if let Some(e) = live_error(&snap) {
+                eprintln!("music: stream error: {e}");
+            }
+        }
         let sec = (snap.position_ms / 1000.0) as i64;
         let changed = snap.playing != self.snap.playing || snap.index != self.snap.index || snap.shuffle != self.snap.shuffle || snap.repeat != self.snap.repeat || sec != self.drawn_sec || snap.error != self.snap.error || snap.live != self.snap.live;
         self.snap = snap;
@@ -940,6 +958,7 @@ impl Music {
         let station = self.radio.station(track.id);
         let on_air = || live.and_then(|l| l.title.clone()).or_else(|| station.and_then(|s| s.now.clone())).or_else(|| station.map(Station::frequency_text).filter(|f| !f.is_empty()));
         let sub = match live.map(|l| l.phase) {
+            _ if live.is_some_and(|l| l.error.is_some()) => live.and_then(|l| l.error.clone()).unwrap_or_default(),
             Some(Phase::Reconnecting(_)) => "Reconnecting…".to_string(),
             Some(Phase::Buffering) => "Buffering…".to_string(),
             _ => on_air().unwrap_or_else(|| "Live".into()),
@@ -1666,7 +1685,8 @@ impl Music {
     /// paused state, and saves it.
     fn push_queue(&mut self, position_ms: f64, playing: bool) {
         let tracks: Vec<Track> = self.queue.items().iter().filter_map(|p| self.path_id.get(p).map(|&id| Track::file(id as u64, p.clone()))).collect();
-        self.player.play_queue(tracks, self.queue.current(), false, self.seed);
+        let sent = self.player.play_queue(tracks, self.queue.current(), false, self.seed);
+        self.report("play the queue", sent);
         if position_ms > 0.0 {
             self.player.seek_ms(position_ms);
         }
@@ -1763,15 +1783,36 @@ impl Music {
             return;
         }
         let tracks: Vec<Track> = order.into_iter().map(|s| Track::live(stations[s].id, stations[s].stream_url.clone())).collect();
-        self.player.play_queue(tracks, i, false, self.seed);
+        let sent = self.player.play_queue(tracks, i, false, self.seed);
+        self.report("tune in the station", sent);
         self.take_snapshot();
+    }
+
+    /// Records the outcome of a command to the audio service: a failure goes to stderr with its cause and stays on
+    /// screen (`playback_problem`) until the service is reachable; a success clears it.
+    fn report(&mut self, what: &str, sent: Result<(), String>) {
+        match sent {
+            Ok(()) => self.notice = None,
+            Err(cause) => {
+                eprintln!("music: cannot {what}: {cause}");
+                self.notice = Some(cause);
+                self.dirty = true;
+            }
+        }
+    }
+
+    /// What is wrong with playback, in a few words for the screen: the command that could not be sent, the service's
+    /// error for the queue, or the stream's own.
+    pub fn playback_problem(&self) -> Option<String> {
+        self.notice.clone().or_else(|| self.snap.live.as_ref().and_then(|l| l.error.clone())).or_else(|| self.snap.error.clone())
     }
 
     /// Plays a paused live track again from the live edge by reopening the stream.
     fn resume_live(&mut self) {
         if !self.snap.playing {
             if let Some(i) = self.snap.index {
-                self.player.jump_to(i);
+                let sent = self.player.jump_to(i);
+                self.report("resume the stream", sent);
             }
         }
         self.take_snapshot();
@@ -2225,7 +2266,8 @@ impl Music {
                 (Page::Info, _) => {}
                 (Page::Queue, _) => {
                     if i > 0 && i <= self.queue.upcoming().len() {
-                        self.player.jump_to(self.queue.current() + i);
+                        let sent = self.player.jump_to(self.queue.current() + i);
+                        self.report("jump to the song", sent);
                         self.take_snapshot();
                     }
                 }
@@ -2649,7 +2691,7 @@ impl Music {
             let room = self.w as f32 - text_x - ui.pt(FAV_ZONE_PT);
             let name = ui.fit(&station.name, MAC_BODY_PT, room);
             self.label(s, ui, &name, MAC_BODY_PT, Weight::Regular, if is_tuned { PINK } else { LABEL.now() }, text_x, mid - ui.pt(SPACE_M), 0.0);
-            let on_air = if is_tuned { live.as_ref().and_then(|l| l.title.clone()) } else { None }.or(station.now.clone());
+            let on_air = if is_tuned { live.as_ref().and_then(|l| l.error.clone().or(l.title.clone())) } else { None }.or(station.now.clone());
             let sub = [Some(station.frequency_text()).filter(|f| !f.is_empty()), on_air].into_iter().flatten().collect::<Vec<_>>().join(" · ");
             let sub = ui.fit(&sub, MAC_FOOTNOTE_PT, room);
             self.label(s, ui, &sub, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), text_x, mid + ui.pt(SPACE_M), 0.0);
@@ -2657,6 +2699,13 @@ impl Music {
             let dim = if pressed == Some(Target::Fav(i)) { LABEL_3.now() } else if fav { PINK } else { LABEL_3.now() };
             icons::heart(s, (self.w as f32 - m - ui.pt(SPACE_M), mid), ui.pt(SPACE_XXL), dim);
             s.fill_rrect(text_x, y + row - 1.0, self.w as f32 - text_x, 1.0, 0.0, SEPARATOR_C.now());
+        }
+        // a short message when playback does not work, over the foot of the list
+        if let Some(problem) = self.playback_problem() {
+            let line = ui.pt(MAC_FOOTNOTE_PT + 2.0 * SPACE_M);
+            s.fill_rect(0, (bottom - line).max(0.0) as usize, self.w as usize, line as usize, CONTENT_BG.now());
+            let text = ui.fit(&format!("Cannot play: {problem}"), MAC_FOOTNOTE_PT, self.w as f32 - 2.0 * m);
+            self.label(s, ui, &text, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), self.w as f32 / 2.0, bottom - line / 2.0, 0.5);
         }
     }
 
@@ -3303,6 +3352,27 @@ mod tests {
 
     fn song_path(m: &Music, id: usize) -> PathBuf {
         m.library.songs[id].path.clone()
+    }
+
+    #[test]
+    fn a_command_the_service_cannot_take_leaves_its_cause_on_screen() {
+        let dir = folder("service-down");
+        let mut m = music(&dir);
+        assert!(m.playback_problem().is_none());
+        m.report("tune in the station", Err("the audio service is not reachable (no socket)".into()));
+        assert_eq!(m.playback_problem().as_deref(), Some("the audio service is not reachable (no socket)"));
+        m.report("tune in the station", Ok(()));
+        assert!(m.playback_problem().is_none(), "a command that was sent clears it");
+    }
+
+    #[test]
+    fn tuning_in_without_the_service_reports_the_unreachable_socket() {
+        let dir = folder("tune-without-service");
+        let mut m = music(&dir);
+        let tracks = vec![Track::live(4, "http://example.test/live".into())];
+        let sent = m.player.play_queue(tracks, 0, false, 1);
+        let cause = sent.expect_err("nothing listens on the service socket");
+        assert!(cause.contains("audio service"), "{cause}");
     }
 
     #[test]

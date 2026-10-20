@@ -926,6 +926,12 @@ pub struct Shell {
     battery_checked: f64,
     dirty: bool,
     perf_only: bool,
+    /// the only reason for the next frame is a CPU or RAM reading that changed what the menu bar shows: the frame repaints
+    /// the bar's rows and nothing else (`note_metrics_frame`, the draw's bar-only path)
+    #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+    bar_only: bool,
+    /// a reading changed the bar's text this tick; settled into `dirty` and `bar_only` at the end of the tick
+    metrics_changed: bool,
     /// Overview, the Apps grid and the desktops (see `overview.rs`)
     overview: overview::Overview,
     desktop_menu:Option<desktop_bar::Menu>,
@@ -956,6 +962,9 @@ pub struct Shell {
     /// what the last desktop frame drew outside the transparent content layer (GPU presenter only):
     /// the next desktop frame damages these and its own instead of the whole frame
     desk_regions:Option<Vec<(i32,i32,i32,i32)>>,
+    /// whether Control Center or Notification Center was open at the last desktop frame: a frame where either opens or
+    /// closes is presented in full (the presenter then keeps no glass shape of the panel's last positions)
+    panels_were_open:bool,
     /// set while a partial GPU desktop frame draws: the only rectangles the wallpaper layer clears
     desk_clear:Option<Vec<(i32,i32,i32,i32)>>,
     /// the Dock capsule as the last desktop frame pushed it as a glass shape (x, y, w, h), and the capsules it has left
@@ -1296,6 +1305,8 @@ impl Shell {
             voice_fx: Vec::new(),
             dirty: true,
             perf_only: false,
+            bar_only: false,
+            metrics_changed: false,
             overview:Default::default(),
             desktop_menu:None,defaults:None,recent_list:recent_items::new(),recent_dir:None,desktop_context:None,
             #[cfg(feature = "desktop-wayland")]
@@ -1313,7 +1324,7 @@ impl Shell {
             quick_look:Default::default(),
             pip:Default::default(),
             thermal:Default::default(),
-            bar_backdrop:std::cell::RefCell::new(None),chrome_text:std::cell::RefCell::new(bifrost_render::cache::TextCache::for_screen(w.max(0) as usize, h.max(0) as usize)),bar_shadows:Default::default(),desk_regions:None,desk_clear:None,dock_glass_bar:std::cell::Cell::new(None),dock_glass_vacated:std::cell::RefCell::new(Vec::new()),desk_drawn:false,
+            bar_backdrop:std::cell::RefCell::new(None),chrome_text:std::cell::RefCell::new(bifrost_render::cache::TextCache::for_screen(w.max(0) as usize, h.max(0) as usize)),bar_shadows:Default::default(),desk_regions:None,panels_were_open:false,desk_clear:None,dock_glass_bar:std::cell::Cell::new(None),dock_glass_vacated:std::cell::RefCell::new(Vec::new()),desk_drawn:false,
             desktop_metrics:Default::default(),desktop_metrics_at:0.,metrics_sampler:Default::default(),metrics_running:false,
             desk: Some(desk::Desk::new()),
             desktop_gate: Default::default(),
@@ -2500,6 +2511,7 @@ impl Shell {
             && !self.quicksearch.active() && ambient_only(&self.info, &info);
         if !quiet {
             self.perf_only = false;
+            self.bar_only = false;
         }
         self.info = info;
         self.today_stale = true;
@@ -3188,14 +3200,27 @@ impl Shell {
         fx
     }
 
+    /// Remembers how far down the pointer is, from a press, a drag or a plain move, for the menu bar that a full-screen
+    /// window hides (`desk::bar_hidden`). The bar comes and goes as the pointer enters or leaves its band, so crossing the
+    /// band repaints.
+    pub(super) fn note_pointer_y(&mut self, y: f32) {
+        let band = self.desktop_bar_height() as f32;
+        let was_in_band = self.pointer_y.is_some_and(|p| p < band);
+        self.pointer_y = Some(y);
+        if (y < band) != was_in_band {
+            self.dirty = true;
+        }
+    }
+
     fn event_inner(&mut self, ev: Event, t: f64) -> Vec<Effect> {
         // session event taps see the pointer first and may drop or move it (`services::event_services`)
         let Some(ev) = self.tap_pointer_event(ev) else { return vec![] };
         if let Event::Down(_, y) | Event::Move(_, y) = ev {
-            self.pointer_y = Some(y);
+            self.note_pointer_y(y);
         }
         self.last_input = t;
         self.dirty = true;
+        self.bar_only = false;
         // a touch or key ends a screen saver and is not passed on (the display power key still sleeps)
         if ev != Event::Power && self.saver_wake(t) {
             return vec![];
@@ -3711,7 +3736,9 @@ impl Shell {
         let before = key(&self.desktop_metrics);
         self.metrics_sampler.sample(&mut self.desktop_metrics, menu);
         if key(&self.desktop_metrics) != before {
-            self.dirty = true; // redraw only when the shown text changed
+            // redraw only when the shown text changed, and then only the bar if nothing else asks for a frame
+            // (`note_metrics_frame`, at the end of the tick)
+            self.metrics_changed = true;
         }
     }
 
@@ -3739,7 +3766,19 @@ impl Shell {
         fx.extend(self.voice_click_tick(t));
         fx.extend(self.gated_clicks().into_iter().map(Effect::KeyClick));
         fx.extend(self.bell_tick(t));
+        self.note_metrics_frame();
         fx
+    }
+
+    /// Settles a CPU or RAM reading that changed the bar's text. When nothing else asked for a frame this tick, the frame
+    /// repaints the bar's rows alone (a full desktop frame costs ten milliseconds to change one label); otherwise it is the
+    /// ordinary frame.
+    fn note_metrics_frame(&mut self) {
+        if std::mem::take(&mut self.metrics_changed) {
+            self.bar_only = !self.dirty;
+            self.perf_only = false;
+            self.dirty = true;
+        }
     }
 
     /// Settles the terminal bell: the Alert Sound at the alert volume, or a flash of the terminal while sound is muted
@@ -4132,6 +4171,19 @@ impl Shell {
             self.damage=damage; self.rows=rows;
             return &self.damage;
         }
+        // a changed CPU or RAM reading repaints the menu bar's rows alone, under the conditions of the performance band above
+        #[cfg(feature = "desktop-wayland")]
+        if std::mem::take(&mut self.bar_only) && std::env::var_os("SPRINGBOARD_WAYLAND").is_some()
+            && self.desk_active() && !self.is_locked() && self.anim.is_none()
+            && self.desktop_menu.is_none() && !self.cc_active() && !self.center_active() && !self.overlay_visible() && !self.quick_look.is_visible()
+            && !self.overview_active()
+            && self.desk_drawn && self.retain_wayland_windows() {
+            let bottom=self.desktop_bar_height().min(s.h);
+            self.draw_desktop_background(&mut s.rows(0,bottom));
+            damage.add(0,0,s.w as i32,bottom as i32);
+            self.damage=damage; self.rows=rows;
+            return &self.damage;
+        }
         let prev_regions = self.desk_regions.take();
         self.desk_drawn = false;
         if self.draw_turn(s, t) {
@@ -4307,6 +4359,12 @@ impl Shell {
                 // frame, so that frame is presented even when its pixels came out the same
                 let overview_now = self.overview.visible();
                 if std::mem::replace(&mut self.overview.was_visible, overview_now) != overview_now {
+                    damage.all();
+                }
+                // the same for the two panels: they slide, so the glass shapes of the frames before the last one sit at
+                // other positions than the shapes of the last frame, and a panel that closes must leave none of them (OV1)
+                let panels_now = self.center_active() || self.cc_active();
+                if panel_visibility_changed(&mut self.panels_were_open, panels_now) {
                     damage.all();
                 }
                 match self.desk_clear.take() {
@@ -4991,6 +5049,7 @@ impl Shell {
     /// Repaints everything on the next `draw` (after the GPU path drew frames the CPU did not see).
     pub fn force_full_redraw(&mut self) {
         self.perf_only = false;
+        self.bar_only = false;
         self.desk_regions = None;
         self.drawn = Drawn::Nothing;
         self.desk_drawn = false;
@@ -5947,5 +6006,25 @@ mod idle_tests {
         let mut c = a.clone();
         c.battery = 50;
         assert!(!ambient_only(&a, &c));
+    }
+}
+
+/// Records whether a panel is open now and says whether that differs from the frame before.
+fn panel_visibility_changed(was_open: &mut bool, open_now: bool) -> bool {
+    std::mem::replace(was_open, open_now) != open_now
+}
+
+#[cfg(test)]
+mod panel_frame_tests {
+    use super::panel_visibility_changed;
+
+    #[test]
+    fn a_panel_that_opens_or_closes_asks_for_a_full_frame_and_a_steady_one_does_not() {
+        let mut open = false;
+        assert!(!panel_visibility_changed(&mut open, false), "nothing open, nothing changed");
+        assert!(panel_visibility_changed(&mut open, true), "it opened");
+        assert!(!panel_visibility_changed(&mut open, true), "it stays open");
+        assert!(panel_visibility_changed(&mut open, false), "it closed: the last frame is presented in full");
+        assert!(!panel_visibility_changed(&mut open, false));
     }
 }

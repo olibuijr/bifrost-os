@@ -538,7 +538,12 @@ mod tests {
                 assert_eq!(answer, "version=1\n");
             } else {
                 assert!(got.is_none(), "a refused peer is dropped");
-                client.read_to_string(&mut answer).unwrap();
+                // the server drops the connection without reading the request line, so the kernel ends it with a reset
+                // (the request is still unread in the server's queue) or a plain close, depending on timing
+                match client.read_to_string(&mut answer) {
+                    Ok(_) => {}
+                    Err(e) => assert_eq!(e.kind(), std::io::ErrorKind::ConnectionReset, "a refused peer is cut off: {e}"),
+                }
                 assert!(answer.is_empty(), "a refused peer gets no answer");
                 assert!(server.refused.lock().unwrap().contains(&own), "the refused uid is remembered for the one-time log");
             }

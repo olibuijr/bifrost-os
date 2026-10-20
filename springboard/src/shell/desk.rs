@@ -1082,6 +1082,15 @@ impl Shell {
     #[cfg(not(feature = "desktop-wayland"))]
     pub(super) fn mission_foreign_windows(&self) -> Vec<(u32, String)> { Vec::new() }
 
+    /// The window of another client the window server reports as active (the one with the focus), if any.
+    #[cfg(feature = "desktop-wayland")]
+    pub(super) fn foreign_front_window(&self) -> Option<u32> {
+        let d = self.desk.as_ref()?;
+        d.native_windows.iter().chain(d.linux_apps.iter().flat_map(|a| a.windows.iter())).find(|w| w.active).map(|w| w.id)
+    }
+    #[cfg(not(feature = "desktop-wayland"))]
+    pub(super) fn foreign_front_window(&self) -> Option<u32> { None }
+
     /// Activates window `id` of another client: the window server raises and focuses it.
     pub(super) fn desk_activate_foreign(&mut self, id: u32) {
         #[cfg(feature = "desktop-wayland")]
@@ -1448,6 +1457,11 @@ impl Shell {
     pub(super) fn arrange_tick(&mut self, t: f64) {
         let Some((app, since)) = self.desk.as_ref().and_then(|d| d.arrange_at) else { return };
         if t - since < ARRANGE_DWELL_MS { return; }
+        // a full-screen window has no traffic lights to rest on: a rest that began before it went full screen is dropped
+        if self.desk.as_ref().is_some_and(|d| d.index_of(app).and_then(|i| d.wins.get(i)).is_some_and(|w| w.full)) {
+            if let Some(d) = self.desk.as_mut() { d.arrange_at = None; }
+            return;
+        }
         let m = self.desk_metrics();
         let button = self.desk.as_ref().and_then(|d| d.index_of(app).and_then(|i| d.wins.get(i))).map(|w| w.light_rect(&m, 2));
         let idle = self.desk.as_ref().is_some_and(|d| d.grab_idle());
@@ -1514,6 +1528,8 @@ impl Shell {
         }
         // the Dock slides away with the menu bar and comes back when the window leaves full screen; either edge reveals it
         d.arrange = None;
+        // a rest on the green button that began before the click must not open a menu on the window the click changed
+        d.arrange_at = None;
         if on {
             d.dock_hide_at = Some(now);
         } else {
@@ -3294,7 +3310,7 @@ mod tests {
         assert!(sh.dock_picture(AppId::Settings).is_some());
         let picture_centre = minimized_slot_centre(&sh, i, 5000.0);
         assert_ne!(picture_centre, icon_centre, "the slot no longer shows the icon");
-        assert_eq!(picture_centre >> 16 & 255, 250, "it shows the window's own pixels");
+        assert_eq!(picture_centre & 255, 250, "it shows the window's own pixels");
     }
 
     #[cfg(feature = "desktop-wayland")]

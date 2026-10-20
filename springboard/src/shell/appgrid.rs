@@ -144,6 +144,11 @@ impl AppGrid {
         self.open
     }
 
+    /// The grid is on screen but animating out: a toggle then brings it back instead of asking it to close again.
+    pub(super) fn closing(&self) -> bool {
+        self.open && self.closing.is_some()
+    }
+
     /// The veil's rectangle (x, y, w, h px): between the menu bar and the Dock. On the window server the grid is
     /// exported as an overlay surface of exactly this size, above every window, with the bar and the Dock left to
     /// their own surfaces (`Shell::desktop_chrome_frames`, id 8). None once it is closed.
@@ -650,6 +655,17 @@ mod overlay_tests {
         finish(&mut sh);
         assert!(!sh.overview.grid.visible());
         assert!(!frame_ids(&sh).contains(&8), "the frame it closes in drops the surface");
+    }
+
+    #[test]
+    fn the_apps_icon_while_the_grid_animates_out_opens_it_again() {
+        let mut sh = open_grid();
+        sh.appgrid_toggle(2.0);
+        sh.appgrid_toggle(2.1);
+        assert!(sh.overview.grid.visible() && !sh.overview.grid.closing(), "a toggle during the close brings the grid back");
+        sh.appgrid_toggle(2.2);
+        finish(&mut sh);
+        assert!(!sh.overview.grid.visible(), "and the next one closes it");
     }
 
     #[test]

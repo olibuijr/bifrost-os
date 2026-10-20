@@ -1958,6 +1958,8 @@ fn spawn_audio_worker() -> std::sync::mpsc::Sender<AudioJob> {
                     Ok(p) => player = Some(p),
                     Err(e) => {
                         eprintln!("springboard: sound: {e}");
+                        // the visual bell flashes while sound does not come out, also when no player could be made
+                        springboard::shell::bell::set_sound_failed(true);
                         continue;
                     }
                 }
