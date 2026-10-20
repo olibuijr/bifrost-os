@@ -956,6 +956,9 @@ pub struct Shell {
     /// what the last desktop frame drew outside the transparent content layer (GPU presenter only):
     /// the next desktop frame damages these and its own instead of the whole frame
     desk_regions:Option<Vec<(i32,i32,i32,i32)>>,
+    /// whether Control Center or Notification Center was open at the last desktop frame: a frame where either opens or
+    /// closes is presented in full (the presenter then keeps no glass shape of the panel's last positions)
+    panels_were_open:bool,
     /// set while a partial GPU desktop frame draws: the only rectangles the wallpaper layer clears
     desk_clear:Option<Vec<(i32,i32,i32,i32)>>,
     /// the Dock capsule as the last desktop frame pushed it as a glass shape (x, y, w, h), and the capsules it has left
@@ -1313,7 +1316,7 @@ impl Shell {
             quick_look:Default::default(),
             pip:Default::default(),
             thermal:Default::default(),
-            bar_backdrop:std::cell::RefCell::new(None),chrome_text:std::cell::RefCell::new(bifrost_render::cache::TextCache::for_screen(w.max(0) as usize, h.max(0) as usize)),bar_shadows:Default::default(),desk_regions:None,desk_clear:None,dock_glass_bar:std::cell::Cell::new(None),dock_glass_vacated:std::cell::RefCell::new(Vec::new()),desk_drawn:false,
+            bar_backdrop:std::cell::RefCell::new(None),chrome_text:std::cell::RefCell::new(bifrost_render::cache::TextCache::for_screen(w.max(0) as usize, h.max(0) as usize)),bar_shadows:Default::default(),desk_regions:None,panels_were_open:false,desk_clear:None,dock_glass_bar:std::cell::Cell::new(None),dock_glass_vacated:std::cell::RefCell::new(Vec::new()),desk_drawn:false,
             desktop_metrics:Default::default(),desktop_metrics_at:0.,metrics_sampler:Default::default(),metrics_running:false,
             desk: Some(desk::Desk::new()),
             desktop_gate: Default::default(),
@@ -4309,6 +4312,12 @@ impl Shell {
                 if std::mem::replace(&mut self.overview.was_visible, overview_now) != overview_now {
                     damage.all();
                 }
+                // the same for the two panels: they slide, so the glass shapes of the frames before the last one sit at
+                // other positions than the shapes of the last frame, and a panel that closes must leave none of them (OV1)
+                let panels_now = self.center_active() || self.cc_active();
+                if panel_visibility_changed(&mut self.panels_were_open, panels_now) {
+                    damage.all();
+                }
                 match self.desk_clear.take() {
                     Some(rects) => match before {
                         Some(b) => damage.union(&Damage::changed_in(&rects, &b, s.px, s.stride, s.w, s.h)),
@@ -5947,5 +5956,25 @@ mod idle_tests {
         let mut c = a.clone();
         c.battery = 50;
         assert!(!ambient_only(&a, &c));
+    }
+}
+
+/// Records whether a panel is open now and says whether that differs from the frame before.
+fn panel_visibility_changed(was_open: &mut bool, open_now: bool) -> bool {
+    std::mem::replace(was_open, open_now) != open_now
+}
+
+#[cfg(test)]
+mod panel_frame_tests {
+    use super::panel_visibility_changed;
+
+    #[test]
+    fn a_panel_that_opens_or_closes_asks_for_a_full_frame_and_a_steady_one_does_not() {
+        let mut open = false;
+        assert!(!panel_visibility_changed(&mut open, false), "nothing open, nothing changed");
+        assert!(panel_visibility_changed(&mut open, true), "it opened");
+        assert!(!panel_visibility_changed(&mut open, true), "it stays open");
+        assert!(panel_visibility_changed(&mut open, false), "it closed: the last frame is presented in full");
+        assert!(!panel_visibility_changed(&mut open, false));
     }
 }
