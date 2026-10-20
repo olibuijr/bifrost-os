@@ -16,8 +16,41 @@ port, unit or tool changes.
 | Window server `bifrost-wm`, chrome clients | `springboard/wm`, `springboard/chrome` | `/usr/bin/bifrost-wm` | `springboard-shell` package (built by `pc-publish.py`) |
 
 The `springboard-shell` package is built with `packaging/arch/fast/PKGBUILD` and
-`packaging/arch/package-files.sh`. It has no assets: `/usr/share/springboard/assets` and the
-installer media (`/usr/share/bifrost/installer`, `video`) come from the live medium.
+`packaging/arch/package-files.sh`. It carries the system assets (see "System assets" below) at the
+package-owned `/usr/share/springboard/system-assets`; the installer media (`/usr/share/bifrost/installer`, `video`)
+come from the live medium.
+
+### System assets (2026-10-20)
+
+The shell's UI fonts, app icons and wallpapers used to live in `/usr/share/springboard/assets`, copied from the live
+medium by the installer, so no package owned them and an update could never change them (a machine kept the icons it
+was installed with, vendor-derived ones included). Now the update package owns them:
+
+| Path | Owner | Content |
+|---|---|---|
+| `/usr/share/springboard/system-assets` | `springboard-shell` | the allowlisted assets (`packaging/assets-allowlist.txt`), staged by `tools/pc-publish.py` with `tools/stage-assets.py` |
+| `/usr/share/springboard/assets` | nobody (live medium, older installs, host previews, tests) | the legacy location; read only when `system-assets` is empty or absent |
+| `/usr/lib/springboard/prune-stale-assets`, `assets-allowlist.txt` | `springboard-shell` | the scriptlet's cleanup helper and the allowlist it checks against |
+
+- **Readers.** `bifrost_core::system_assets` (`springboard/core/src/system_assets.rs`) is the one resolver: the
+  `BIFROST_ASSETS` override, then `system-assets` when it holds files, then `assets`. The installer binary, the first-frame
+  cache, the thumbnail canvas and the app sandbox's `BIFROST_SHELL_DIR` use it. The shell itself reads fonts, icons and
+  wallpapers from its data dir `/var/lib/springboard`, which `/usr/lib/springboard/seed-data` fills at every start: with
+  `system-assets` present it copies every file that differs whenever the set changed (a stamp in
+  `/var/lib/springboard/.system-assets`) and makes `icons/` a mirror, so a retired icon disappears; without it the old
+  copy-if-missing seeding from `assets` runs.
+- **Existing installs.** pacman refuses to install a file that exists unowned, and the guard that runs an update is the
+  one already installed, so the package uses a path no install has a file at: no conflict. `springboard.install`
+  (`post_install`, `post_upgrade`) then runs `prune-stale-assets`: it removes files under `assets/` that no package owns
+  (`pacman -Qo`) and that `system-assets` supersedes or the allowlist does not name, logs each one (package output and
+  `/var/log/bifrost-assets.log`) and drops the directories that became empty. It never touches a file a package owns, is
+  idempotent, and does nothing until `system-assets` has files. Tests: `python3 tools/test_asset_scripts.py`.
+- **Guard.** `/usr/share/springboard/system-assets/*` is in the guard's `--overwrite` list, harmless today and ready for a
+  file that ever exists unowned there. The installed guard runs the update, so a new entry first helps the update after next.
+- **Installer.** It no longer copies `/usr/share/springboard/assets` from the medium: the package it installs brings
+  `system-assets`. Only a package older than that (no `system-assets` in the target after `pacman`) makes it fall back to
+  the medium's copy, pruned to the packed set (`live_assets_needed`). The first-frame cache is built from the target's own
+  root (`system_assets::root_under("/mnt")`). The live medium itself keeps using `/usr/share/springboard/assets`.
 
 ## 2. Installer (`springboard/src/installer/`)
 
@@ -31,15 +64,15 @@ Environment switches (`springboard/src/bin/installer.rs`, `plan.rs`):
 |---|---|
 | `BIFROST_AUTO=user:password:/dev/DISK` | Headless install with no UI. Erases DISK. Used by `midget-wipe.py`. |
 | `BIFROST_TRACE=1` | Verbose step log to the journal (`plan.rs`). |
-| `BIFROST_ASSETS` | Asset directory, default `/usr/share/springboard/assets`. |
+| `BIFROST_ASSETS` | Asset directory override. Default: `/usr/share/springboard/system-assets` when it has files, else `/usr/share/springboard/assets` (`bifrost_core::system_assets`). |
 | `BIFROST_BRANDING`, `BIFROST_LAYOUT`, `BIFROST_NO_VIDEO`, `BIFROST_STATS` | UI and branding options. |
 | `BIFROST_HWACCEL` | Hardware video selection (`video.rs`). |
 | `BIFROST_DISK_FIXTURE` | Test fixture for the disk list (`disks.rs`). Never set on hardware. |
 
 Install order (`plan::install`):
 
-1. `stage_live_files`: copy `/usr/share/bifrost/bootweave.efi`, `/usr/share/springboard/assets` and
-   `/usr/share/bifrost` into RAM (`/run/bifrost-stage`). A dropped network medium cannot break an install
+1. `stage_live_files`: copy `/usr/share/bifrost/bootweave.efi`, `/usr/share/springboard/assets` (kept only as the
+   fallback for an old package) and `/usr/share/bifrost` into RAM (`/run/bifrost-stage`). A dropped network medium cannot break an install
    that has started. The stage copy happens before anything is erased.
 2. Partition (`disks::partition_commands`): ESP (512 MiB vfat) and one btrfs root labelled `BifrOSt`.
 3. Mount subvolumes (`BTRFS_LAYOUT`): `@system /`, `@home /home`, `@state /var/lib/springboard`,
@@ -50,8 +83,9 @@ Install order (`plan::install`):
    `PermitRootLogin prohibit-password`.
 6. Update channel: `/etc/pacman.conf` gets `[bifrost]`. Lab: `http://192.168.1.12:8079/bifrost/$arch` (Titan home LAN, served by the `bifrost-repo` unit).
    Release: `https://bifrost.olibuijr.com/arch/$arch`. The lab server also serves the package mirror on :8079, synced by `bifrost pc publish` (`tools/pc_mirror.py`, `docs/installer.md`).
-7. Copy the media (assets, `/usr/share/bifrost`) from the stage, then `pacman -Sy --noconfirm springboard-shell`
-   (the package is installed last so it wins any overlap).
+7. Copy the installer media (`/usr/share/bifrost/installer`, `video`; not the assets) from the stage, then
+   `pacman -Sy --noconfirm springboard-shell`, which brings `system-assets`. Only when the target has none (a package
+   older than that) is the medium's `assets` copied afterwards and pruned.
 8. Look: the look chosen in the installer goes into `/var/lib/springboard/settings.ini`.
 9. Browser: `springboard --install-store-app is.olibuijr.browser.desktop` in the chroot.
 10. Account: `useradd -m -G wheel,audio,video,input,storage`, sudo for wheel, root locked,
@@ -65,9 +99,8 @@ Install order (`plan::install`):
 13. Browser store app, then the summary screen. Progress stages: `Preparing the disk`,
     `Installing the system`, `Setting up your account and apps`, `Finishing`.
 
-Known gap (found 2026-10-08): assets are not in the package. An install whose stage lacks
-`/usr/share/springboard/assets` starts a shell that exits with `No such file or directory`. The
-fix (copy assets before pacman) is in `plan.rs` but not yet verified on hardware.
+Resolved (2026-10-20): the assets are in the package (`system-assets`). Before that (found 2026-10-08) an install
+whose stage lacked `/usr/share/springboard/assets` started a shell that exited with `No such file or directory`.
 
 ## 3. Boot chain (installed PC)
 

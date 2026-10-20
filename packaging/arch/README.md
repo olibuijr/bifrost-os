@@ -6,10 +6,12 @@ Installs the SpringBoard shell as the sole UI of an x86_64 Arch machine (desktop
 | Path | Content |
 |---|---|
 | `/usr/bin/springboard` | the `shell` binary (`cargo build --release --bin shell`) |
-| `/usr/share/springboard/assets` | the allowlisted part of the packed assets (`packaging/assets-allowlist.txt`: wallpaper, open-licence fonts, BifrOSt's own icons) |
-| `/var/lib/springboard` | data dir (root's desktop-profile default); seeded from the assets on first start (`.seeded` marker) |
+| `/usr/share/springboard/system-assets` | the allowlisted part of the packed assets (`packaging/assets-allowlist.txt`: wallpaper, open-licence fonts, BifrOSt's own icons); owned by the package, so updates change it |
+| `/usr/share/springboard/assets` | owned by nobody: the live medium's and older installs' copy; `prune-stale-assets` empties it of what the package supersedes |
+| `/var/lib/springboard` | data dir (root's desktop-profile default); `seed-data` fills it from `system-assets` (else `assets`) at every start (`.seeded` marker) |
 | `/usr/lib/systemd/system/springboard.service` | runs the shell on tty1 |
-| `/usr/lib/springboard/seed-data` | the first-start seeding script |
+| `/usr/lib/springboard/seed-data` | the seeding script (copies changed assets, mirrors `icons/`) |
+| `/usr/lib/springboard/prune-stale-assets`, `assets-allowlist.txt` | the scriptlet's cleanup of unowned files under `assets/` (see below) |
 
 ## Build
 
@@ -27,7 +29,7 @@ Crates are not vendored: cargo runs `--offline` against the local registry cache
 first with `cargo fetch` in `springboard/` (or pass `SPRINGBOARD_CARGO_FLAGS=` to allow network).
 Use `BUILDDIR=` to keep `src/`/`pkg/` out of the checkout.
 The assets directory is untracked (about 244 MB, produced by `tools/pack.py ../ipad-ref assets W H`); without it the
-package still builds but ships an empty assets dir.
+package still builds but ships an empty system-assets dir.
 
 ## What a package may carry
 
@@ -36,7 +38,19 @@ takes only the files named in `packaging/assets-allowlist.txt` (a vendor font or
 sits in the assets directory is skipped), nothing is read from `bifrost-ref`, and the finished `$pkgdir` must pass
 `tools/check-package-licenses.py` (no path under `/usr/share/bifrost/ref`, every font names an open licence in its name
 table). `tools/pc-publish.py`, `tools/pc-app.py` and `tools/build-iso.sh` run the same guard on what they build; see
-`docs/bifrost-pc-workflow.md`, "Package licences". The fast update package (`fast/PKGBUILD`) carries no assets at all.
+`docs/bifrost-pc-workflow.md`, "Package licences". The fast update package (`fast/PKGBUILD`) carries the same staged
+assets (`tools/pc-publish.py` passes them as `PC_SYSTEM_ASSETS`).
+
+## System assets and the scriptlet
+
+Both packages install the assets at `/usr/share/springboard/system-assets`, never at `/usr/share/springboard/assets`:
+pacman refuses a file that exists on disk unowned, and every installed machine has an unowned `assets/`. In
+`springboard.install`, `post_install` and `post_upgrade` run `/usr/lib/springboard/prune-stale-assets` before anything
+else: it removes the files under `assets/` that no package owns (`pacman -Qo`) and that `system-assets` supersedes or
+`assets-allowlist.txt` does not name, logs each removal (package output and `/var/log/bifrost-assets.log`), removes the
+directories that became empty, never touches a file a package owns, and does nothing until `system-assets` has files. The
+update guard's `--overwrite` list includes `/usr/share/springboard/system-assets/*`. Details and the reader order:
+`docs/installer-and-boot.md`, "System assets". Tests: `python3 tools/test_asset_scripts.py`.
 
 ## Why root on tty1
 
