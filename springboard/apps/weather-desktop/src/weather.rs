@@ -236,6 +236,11 @@ impl Delegate for LocSink {
     }
 }
 
+/// What the My Location entry says before it has a fix: a tablet taps it, a desktop clicks it.
+fn here_prompt(form: bifrost_app::form_factor::FormFactor) -> &'static str {
+    if form.is_tablet() { "Tap to find this place" } else { "Click to find this place" }
+}
+
 /// The My Location place for a fix: its coordinates rounded to two decimals (about 1 km) and the name "My Location".
 /// Open-Meteo has no reverse lookup, so the coordinates are the only label.
 fn here_place(fix: &Fix) -> Location {
@@ -793,7 +798,7 @@ impl Weather {
     fn here_hint(&self) -> String {
         match &self.my_location {
             Some(p) => p.region.clone(),
-            None => "Tap to find this place".into(),
+            None => here_prompt(bifrost_app::form_factor::FormFactor::current()).into(),
         }
     }
 
@@ -2281,6 +2286,13 @@ fn now_unix() -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_my_location_hint_follows_the_form_factor() {
+        use bifrost_app::form_factor::FormFactor;
+        assert_eq!(here_prompt(FormFactor::Tablet), "Tap to find this place");
+        assert_eq!(here_prompt(FormFactor::Desktop), "Click to find this place");
+    }
 
     fn test_ui() -> Ui {
         use bifrost_app::kit::Font;

@@ -1085,7 +1085,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-weather"
-version = "1.8.1"
+version = "1.8.2"
 dependencies = [
  "bifrost-app",
  "bifrost-core",

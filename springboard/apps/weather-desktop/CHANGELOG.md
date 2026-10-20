@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.8.2
+
+- Fix: before My Location has a fix its entry says "Click to find this place" on a desktop; "Tap to find this place" stays on the tablet.
+
 ## 1.8.1
 
 - BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.
