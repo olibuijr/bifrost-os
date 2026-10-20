@@ -85,12 +85,12 @@ Gotchas: the lab key only works on the live (lab ISO) system; the installed syst
 | `reboot [--netboot\|--disk]` | sets UEFI BootNext (the PXE entry or the BifrOSt disk entry) then `systemctl reboot --force --force`; waits for it to come back and reports the state |
 | `poweroff`, `bootnext pxe\|disk\|NNNN`, `efi` | power off, one-shot boot entry, the UEFI boot list (`efibootmgr`) |
 | `hw` | DMI/BIOS, CPU, RAM, disks, GPU and `/dev/dri`, NICs, temperatures, UEFI or BIOS |
-| `screen OUT.png` | live: the installer's own frame; installed: the shell's frame through its control port |
+| `screen OUT.png` | live: the installer's own frame; installed: the shell's frame through its control socket |
 | `logs [N]` | tail of the streamed lab journal (`out/lab/logs`) |
 | `me` | what the OS says about Intel ME/AMT (PCI, `/dev/mei0`, firmware version, `meshcmd`/`amtinfo` if installed): the M900 is vPro-certified but many units are ISM-only or have no AMT, so check before relying on remote power/KVM |
 | `amt` | probes for Intel AMT/vPro (remote power, boot-to-PXE, KVM); the M900 only has it on some SKUs and it must be enabled in MEBx |
 | `ssh CMD` | run a command as root with the lab key |
-| `state`, `lock`, `ax [PREFIX]`, `press NAME`, `wait NAME [--value V] [--gone] [--enabled] [--timeout S]` | the shell's control port: version and windows; lock; the element map (`ax` lists, `press` presses by address, path or unique name, `wait` blocks on an element). See [agent-api.md](agent-api.md) |
+| `state`, `lock`, `ax [PREFIX]`, `press NAME`, `wait NAME [--value V] [--gone] [--enabled] [--timeout S]` | the shell's control socket: version and windows; lock; the element map (`ax` lists, `press` presses by address, path or unique name, `wait` blocks on an element). See [agent-api.md](agent-api.md) |
 | `ota [--timeout=S]` | Settings > General > Software Update by element name: check, download, install, restart, unlock, wait for `phase=accepted`. Handles an update already staged by `update` |
 | `update [--restart]` | `bifrost-update-guard install` (stages the package transaction), then `apply` with `--restart` |
 | `recovery`, `apps`, `mem`, `idle LABEL` | `bifrost-update-guard status`; `/run/bifrost/app-resources.json` ([app-manager.md](app-manager.md)); process-tree PSS; idle CPU per process |
@@ -420,8 +420,14 @@ CLI (wraps `tools/app-control.py`):
 | Methods an app serves | `bifrost pc control methods is.olibuijr.notes.desktop` |
 | One call | `bifrost pc control call is.olibuijr.notes.desktop notes.list '{"query":"milk"}'` |
 
-Text control socket (127.0.0.1:7777, the shell, not an app): `open-app ID`, `open-url URL`, and
+Text control socket (`/run/bifrost/shell-control.sock`, the shell, not an app): `open-app ID`, `open-url URL`, and
 since 0.4.47 `open-folder ID /absolute/folder` (see Show in Files above).
+
+**Who may use it.** The shell's control socket is a Unix socket at `/run/bifrost/shell-control.sock` (mode 0600, owned by the installed account), not a TCP port. The kernel reports each peer's uid (`SO_PEERCRED`); only root and the account the window server runs as are served, any other uid is refused and logged once. Sandboxed apps mount a fresh `/run` and cannot see the path. `SPRINGBOARD_CONTROL_SOCKET` (an absolute path) overrides the path for emulators and tests. Lab tools reach it over ssh as root: `tools/midget.py` runs a one-line `python3` with `AF_UNIX` on the
+remote side (`control_script`), and `bifrost pc midget control|state|tap-window|ax|press|wait` all go through it. Nothing listens on
+TCP 7777 any more, also not on lab builds. The one-line protocol is unchanged. A process of the account that runs outside the
+sandbox (a Linux app such as a browser, or a terminal) can still use the socket, as it can already drive the session; the lock screen
+policy (`allowed_while_locked`) still applies to every peer.
 
 Adding a method to an app: implement `App::rpc_methods` (names) and `App::rpc(ctx, data_dir,
 method, params)` (dispatch) in the app's host crate, calling shared code in the app crate. Keep
@@ -443,7 +449,7 @@ line opens there.
 
 Show in Files: another app or a script asks for a folder to open in Files.
 - Helper: `/usr/bin/bifrost-apps --open <absolute folder>` (source `packaging/arch/wayland/apps`).
-  It sends `open-folder is.olibuijr.files.desktop <folder>` to the shell's control port 7777.
+  It sends `open-folder is.olibuijr.files.desktop <folder>` to the shell's control socket.
 - Shell: `desktop_open_folder` (`springboard/src/shell/desk.rs`) checks the app is installed,
   writes the request as the file `open-request` in the app's data folder
   (`appdata/<app id>`, helper `springboard::files::handoff`), then opens the app. A failed open

@@ -42,7 +42,7 @@ in `/usr/local/bin`. In a session in this repo the tools appear as `mcp__bifrost
 |---|---|---|
 | Compositor (`bifrost-wm`) | one persistent Wayland connection: `wlr-screencopy` (screen, regions), `ext-image-copy-capture` + `ext-foreign-toplevel-image-capture-source` (one window, even covered), `wlr-foreign-toplevel` (window list, activate, close, minimize, maximize, fullscreen), `wlr-virtual-pointer` (exact compositor pixels), `zwp-virtual-keyboard` (text, with a keymap generated per call, so any Unicode is typed whatever the layout) | `observe`, `screenshot`, `click`, `pointer`, `scroll`, `type`, `window` |
 | Kernel | one persistent uinput keyboard, created on first use (400 ms once) | `key`: the shell's evdev shortcuts and every client see it like a real keyboard |
-| Shell | control port `127.0.0.1:7777` (`src/bare/control.rs`) | `observe` (state), `ui` (accessibility map, `ax list/press`), `open`, `wait`, `shell` |
+| Shell | control socket `/run/bifrost/shell-control.sock` (Unix socket, `src/bare/control.rs`; served to root and the installed account only, see [bifrost-pc-workflow.md](bifrost-pc-workflow.md); `bifrost-mcp` runs as root; `SPRINGBOARD_CONTROL_SOCKET` overrides the path) | `observe` (state), `ui` (accessibility map, `ax list/press`), `open`, `wait`, `shell` |
 | Apps | each app's JSON-RPC control socket (`$XDG_RUNTIME_DIR/bifrost/apps/<id>.sock`, older apps `appdata/<id>/control.sock`; `sys::app_sockets` lists both), connected as the account's uid (SO_PEERCRED) | `app` (methods, `intent.*`, app state) |
 | System | `/proc`, files, `bash`, `journalctl` | `system`, `file`, `exec` |
 
@@ -93,7 +93,7 @@ tried first). A covered window can be captured but not located; activate it firs
 |---|---|
 | `logs` | Journal lines new since the previous call with the same filters (cursor per session and filter set, `--after-cursor`). Filters: `unit`, `priority` (`err`, `0..3`), `filter` text, `app=<id>`, `subsystem` and `category` (exact Unified Logging fields, any unit; 0.4.1); `follow_ms` waits for new lines; `reset` restarts at the tail. SDK apps are spawned by the shell (through bwrap, `apphost.rs`) and inherit its stderr, so their output is in the `springboard` unit with no id tag: `app` is that unit filtered on the id appearing in the line. |
 | `crash` | `list`: `coredumpctl` since boot (or `since`) plus the tail of the shell's `crash.log`; `info` (pid or exe): identity header and a trimmed backtrace; `panic`: `<data dir>/crash.log` (panic hook in `src/bare/crashlog.rs`, rotated at 256 KB) and `last_exit`. |
-| `dev` | `upload` (base64, `append` for chunks, `mode`, returns size and sha256 of the whole file), `install_package` (`springboard --install-package`), `install_store_app`, `restart` `shell` / `compositor` (`systemctl restart springboard`, as `tools/midget-push-shell.sh`; the window server `bifrost-wm` comes back with the session; waits for the control port and reports the version) / `app:<id>` (SIGTERM, `open-app`, waits for the control socket) / `mcp` (delayed `systemctl restart bifrost-mcp`). A restarted shell is locked: `key enter`. |
+| `dev` | `upload` (base64, `append` for chunks, `mode`, returns size and sha256 of the whole file), `install_package` (`springboard --install-package`), `install_store_app`, `restart` `shell` / `compositor` (`systemctl restart springboard`, as `tools/midget-push-shell.sh`; the window server `bifrost-wm` comes back with the session; waits for the control socket and reports the version) / `app:<id>` (SIGTERM, `open-app`, waits for the control socket) / `mcp` (delayed `systemctl restart bifrost-mcp`). A restarted shell is locked: `key enter`. |
 | `perf` | Shell `perf` line, machine CPU, and CPU% per process over `ms` from `/proc/<pid>/stat` deltas. |
 | `wait` `screen_changed` / `screen_stable` | Hashes cheap captures (screen, `region`, or `window`) every 40 ms; stable means unchanged for `stable_ms`. |
 | `screenshot` `diff=true` | Adds the bounding box that changed since the previous capture of the same target. |
@@ -153,7 +153,7 @@ Apps answer JSON-RPC 2.0 on `appdata/<id>/control.sock` (SDK `sdk/src/control.rs
 ### Term tool (`term`)
 
 Drives and debugs Term (the terminal built into the shell, `src/shell/terminal/`). The MCP sends one line on the
-shell control port, `term <verb> key=value ...` (values percent-encoded; `bare/control.rs` `Request::Term`), and the
+shell control socket, `term <verb> key=value ...` (values percent-encoded; `bare/control.rs` `Request::Term`), and the
 shell answers in `shell/terminal/control.rs`. Tab indexes are the ones `state` prints; `tab` defaults to the current tab.
 
 | Action | Parameters | Result |

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Security: apps can no longer control the desktop through the shell's control port. The shell used to listen on TCP
+  127.0.0.1:7777, which any local process could reach, sandboxed apps included, to type, click, take screenshots or start a
+  recording. The port is gone (also on lab builds); the shell now listens on a private socket, `/run/bifrost/shell-control.sock`,
+  that only root and your own account can use (the kernel checks who is calling), and that sandboxed apps cannot even see. The
+  window server's shortcuts, `open`, `screencapture`, `notifyutil`, `bifrost-open-url`, the update guard's health check and the
+  lab tools were moved to it; the commands themselves are unchanged. `SPRINGBOARD_CONTROL_PORT` is replaced by
+  `SPRINGBOARD_CONTROL_SOCKET` (a socket path).
 - Screen recordings (Shift+Cmd+5 > Record Screen or Record Selection, `screencapture -v`) now show what is on the screen:
   the wallpaper, every window, the menu bar and the Dock. Before, they recorded the shell's own frame, which holds only the
   menu bar and the Dock on black. A worker reads the window server's composed output through its screencopy protocol, cropped

@@ -160,9 +160,9 @@ CLI: `bifrost-update-guard status|prepare|install|watch|rollback`.
 
 ## 5. Control socket (running shell)
 
-`springboard/src/bare/control.rs`, TCP `7777` (override `SPRINGBOARD_CONTROL_PORT`). Line commands:
+`springboard/src/bare/control.rs`, Unix socket `/run/bifrost/shell-control.sock` (mode 0600, owner the installed account; served to root and that account by `SO_PEERCRED`; override `SPRINGBOARD_CONTROL_SOCKET`). There is no TCP listener. Line commands:
 `state`, `shot [N]` (1-8), `tap X Y`, `swipe X0 Y0 X1 Y1 [MS]` (alias `drag`), `key ...`, `trace on|off`.
-Coordinates are original panel pixels. `tools/midget.py` sends each line over SSH to `127.0.0.1:7777` on Midget (`cmd_control`); the port is not exposed on the lab network.
+Coordinates are original panel pixels. `tools/midget.py` sends each line over SSH as root and speaks `AF_UNIX` to that socket on Midget (`cmd_control`, `control_script`); nothing is exposed on the lab network.
 
 ## 6. Endpoints
 
@@ -174,7 +174,6 @@ Coordinates are original panel pixels. `tools/midget.py` sends each line over SS
 | `10.99.0.1` `eno2` | iVentoy PXE/netboot (ISO folder) | titan |
 | `192.168.20.140:22` | Midget sshd (lab key on lab installs only) | installed system |
 | `192.168.20.140:8651` | `bifrost-lab` API (lab ISO only) | live medium |
-| `192.168.20.140:7777` | shell control socket | `springboard` |
 | `https://bifrost.olibuijr.com/arch/$arch` | release pacman repo; live static files under `bifrost-site/site/arch/$arch` | `tools/pc-publish.py` |
 | `192.168.1.12` | Titan (lab host, Midget control scripts run here) | titan |
 

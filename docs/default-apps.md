@@ -33,7 +33,7 @@ Sources: Apple Support, "Choose an app to open a file on Mac"; AppKit `NSWorkspa
 - Shell service: `launch` (`shell/services/launch_services.rs`, SDK `bifrost_app::launch_services`) answers
   `default_for_file`, the Open With candidates (default first, `Shell::open_with_choices`) and the URL-scheme lookups
   (`default_app_for_scheme`, `apps_for_scheme`). Apps reach it without touching the registry.
-- Links: `open-url` on the control port (and `bifrost-open-url`) goes through `Shell::desktop_open_link`: web links to the
+- Links: `open-url` on the control socket (and `bifrost-open-url`) goes through `Shell::desktop_open_link`: web links to the
   browser, any other declared scheme (`mailto:`, `bifrost-app:`) to the app the registry names; local and script schemes
   are refused.
 - Files: the Open With panel (`springboard/apps/files/src/openwith.rs`) lists the candidates with the default marked.

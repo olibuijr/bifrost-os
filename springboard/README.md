@@ -176,7 +176,7 @@ The previews write images under `target/` (`radio_preview` under the directory y
 ## Host run
 
 The shell also runs on an x86_64 dev host: `cargo build --offline --profile fast --bin shell --features desktop-wayland`.
-`SPRINGBOARD_VIRTUAL=1200x1920` selects the virtual panel and `SPRINGBOARD_CONTROL_PORT` the port. See `../docs/arch-x86-vm.md` for the VM.
+`SPRINGBOARD_VIRTUAL=1200x1920` selects the virtual panel and `SPRINGBOARD_CONTROL_SOCKET` the control socket path (default `/run/bifrost/shell-control.sock`). See `../docs/arch-x86-vm.md` for the VM.
 
 ## Updates and recovery
 
