@@ -1,11 +1,16 @@
 [Unit]
 Description=BifrOSt MCP server (agent access: screen, input, windows, apps, system)
 Documentation=file:///usr/share/doc/bifrost/bifrost-mcp.md
+# Lab installs only: the installer writes /etc/bifrost/lab-install (and springboard.install derives it on a lab machine
+# installed before the marker existed). A public install never runs this server (docs/bifrost-mcp.md, "System service").
+ConditionPathExists=/etc/bifrost/lab-install
 After=network.target springboard.service bifrost-after-desktop.target
 
 [Service]
 ExecStart=/usr/bin/bifrost-mcp --serve
 Environment=BIFROST_MCP_PORT=7420
+# loopback unless /etc/bifrost/mcp.env widens it (the lab file does, with an allow list of private ranges)
+EnvironmentFile=-/etc/bifrost/mcp.env
 Restart=always
 RestartSec=1
 Nice=-5

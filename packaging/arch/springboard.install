@@ -12,6 +12,27 @@ bifrost_prune_assets() {
     return 0
 }
 
+# bifrost-mcp (remote root exec for agents) runs only on a lab machine, which the lab installer marks with
+# /etc/bifrost/lab-install. A machine the lab installer set up before the marker existed has /etc/ssh/sshd_config.d/05-lab.conf
+# (written by no other path), so it gets the marker here and keeps its agent access. Everything else has the server stopped and
+# disabled; a restart picks up a new binary on a lab machine.
+bifrost_mcp_policy() {
+    marker=/etc/bifrost/lab-install
+    if [ ! -f "$marker" ] && [ -f /etc/ssh/sshd_config.d/05-lab.conf ]; then
+        install -d -m755 /etc/bifrost 2>/dev/null && : > "$marker" 2>/dev/null || true
+    fi
+    if [ -f "$marker" ]; then
+        if [ ! -f /etc/bifrost/mcp.env ] && [ -f /usr/share/bifrost/mcp-lab.env ]; then
+            install -Dm644 /usr/share/bifrost/mcp-lab.env /etc/bifrost/mcp.env 2>/dev/null || true
+        fi
+        systemctl enable bifrost-mcp.service >/dev/null 2>&1 || true
+        systemctl restart bifrost-mcp.service >/dev/null 2>&1 || true
+    else
+        systemctl disable --now bifrost-mcp.service >/dev/null 2>&1 || true
+    fi
+    return 0
+}
+
 bifrost_post_update() {
     bifrost_prune_assets
     install -d -m700 /var/lib/bifrost-recovery
@@ -25,9 +46,8 @@ bifrost_post_update() {
     systemctl enable bifrost-privd.service >/dev/null 2>&1 || true
     systemctl start bifrost-update-guard.service >/dev/null 2>&1 || true
     systemctl enable --now power-profiles-daemon.service >/dev/null 2>&1 || true
-    # agent access (docs/bifrost-mcp.md), on by default; restart picks up the new binary
-    systemctl enable bifrost-mcp.service >/dev/null 2>&1 || true
-    systemctl restart bifrost-mcp.service >/dev/null 2>&1 || true
+    # agent access (docs/bifrost-mcp.md): lab machines only
+    bifrost_mcp_policy
     # socket-activated services: started on the first desktop frame by bifrost-desktop-ready (docs/boot-architecture.md)
     systemctl daemon-reload >/dev/null 2>&1 || true
     systemctl enable bifrost-desktop-ready.service bifrostd.service >/dev/null 2>&1 || true

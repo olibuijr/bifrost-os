@@ -49,6 +49,8 @@ package_bifrost_files() {
     install -Dm755 "$PC_LOG" "$pkgdir/usr/bin/bifrost-log"
   fi
   install -Dm644 "$here/bifrost-mcp.service" "$pkgdir/usr/lib/systemd/system/bifrost-mcp.service"
+  # lab machines only (the scriptlet copies it to /etc/bifrost/mcp.env next to the lab-install marker)
+  install -Dm644 "$here/mcp-lab.env" "$pkgdir/usr/share/bifrost/mcp-lab.env"
   # socket-activated services (docs/boot-architecture.md "Services on demand"): the supervisor, the target it runs
   # under, and the trigger that starts the target on the first desktop frame
   install -Dm755 "$PC_BIFROSTD" "$pkgdir/usr/bin/bifrostd"
