@@ -155,6 +155,7 @@ package_bifrost_files() {
   done
   install -Dm755 "$here/wayland/video-arg" "$pkgdir/usr/lib/bifrost/video-arg"
   install -Dm755 "$here/wayland/display-refresh" "$pkgdir/usr/lib/bifrost/display-refresh"
+  install -Dm755 "$here/wayland/privileged-socket" "$pkgdir/usr/lib/bifrost/privileged-socket"
   # PID 1 status and log lines stay off the console (docs/boot-architecture.md, "Text-free on every path").
   install -Dm644 "$here/systemd/50-bifrost-console.conf" "$pkgdir/usr/lib/systemd/system.conf.d/50-bifrost-console.conf"
   # Bootweave owns the EFI-frame-to-desktop lifecycle; no text console is exposed.

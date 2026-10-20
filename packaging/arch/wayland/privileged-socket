@@ -1,0 +1,34 @@
+#!/usr/bin/python3
+"""Binds the window server's privileged socket as root, then runs the window server with its listening descriptor.
+
+usage: privileged-socket /absolute/socket/path -- command [args...]
+
+The window server runs as the session's account, as do the apps, so a uid cannot tell the shell from an app. The capture
+globals (screen capture, window capture) are visible only to clients that connect through this socket, which only root can
+open: the file is owned by root, mode 0600, in a directory the account cannot write to (docs/window-server.md, "Privileged
+socket and capture globals"). It is made here, by root, and the listening descriptor is passed down in
+BIFROST_WM_PRIVILEGED_FD, so the window server never needs to be able to make a root-owned file.
+"""
+import os, socket, sys
+
+args = sys.argv[1:]
+if len(args) < 3 or args[1] != '--' or not args[0].startswith('/'):
+    sys.exit('usage: privileged-socket /absolute/socket/path -- command [args...]')
+if os.geteuid() != 0:
+    sys.exit('the privileged socket must be made by root')
+path = args[0]
+try:
+    os.unlink(path)
+except FileNotFoundError:
+    pass
+old = os.umask(0o177)
+listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+listener.bind(path)
+os.umask(old)
+os.chown(path, 0, 0)
+os.chmod(path, 0o600)
+listener.listen(16)
+fd = listener.fileno()
+os.set_inheritable(fd, True)
+env = dict(os.environ, BIFROST_WM_PRIVILEGED_FD=str(fd))
+os.execvpe(args[2], args[2:], env)

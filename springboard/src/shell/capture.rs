@@ -640,11 +640,19 @@ pub fn window_image(ui: &Ui, shot: &Image, win: Rect, radius: f32, pad: i32, sca
     let sh = ((win.h as f32 * scale.1).round() as i32).max(1);
     let (sx, sy) = ((win.x as f32 * scale.0).round().max(0.0) as usize, (win.y as f32 * scale.1).round().max(0.0) as usize);
     let body = shot.crop(sx, sy, sw as usize, sh as usize);
+    window_picture(ui, &body, radius, pad)
+}
+
+/// A window screenshot from the window's own picture `body` (what the window server captured of that window alone): on
+/// a transparent ground with its corners rounded by `radius` px and its drop shadow around it, `pad` px of room on every
+/// side. Nothing that overlaps the window on the screen can be in it.
+pub fn window_picture(ui: &Ui, body: &Image, radius: f32, pad: i32) -> Image {
+    let (sw, sh) = (body.w.max(1) as i32, body.h.max(1) as i32);
     let (w, h) = (sw as usize + 2 * pad as usize, sh as usize + 2 * pad as usize);
     let mut out = Image::new(w, h);
     let mut s = Surface { w, h, stride: w, px: &mut out.px, y0: 0 };
     super::desk::soft_shadow(&mut s, ui, pad as f32, pad as f32, sw as f32, sh as f32, radius);
-    super::switcher::draw_scaled(&mut s, &body, Rect { x: pad, y: pad, w: sw, h: sh }, radius, 255);
+    super::switcher::draw_scaled(&mut s, body, Rect { x: pad, y: pad, w: sw, h: sh }, radius, 255);
     out
 }
 

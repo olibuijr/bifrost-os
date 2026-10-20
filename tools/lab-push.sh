@@ -22,7 +22,7 @@ install -m755 springboard/target/fast/installer "$SYNC/bifrost-installer"
 install -m755 springboard/target/fast/shell "$SYNC/springboard"
 # stripped like the ISO's copies, so an unchanged build matches byte for byte and lab-sync does not restart the installer
 strip --strip-debug "$SYNC/bifrost-installer" "$SYNC/springboard"
-for f in session session-env apps open-url bifrost-browser.desktop mimeapps.list; do
+for f in session session-env privileged-socket apps open-url bifrost-browser.desktop mimeapps.list; do
   cp "packaging/arch/wayland/$f" "$SYNC/wayland-$f"
 done
 cp packaging/archiso/airootfs/usr/lib/systemd/system/bifrost-installer.service "$SYNC/bifrost-installer.service"
@@ -43,6 +43,7 @@ wayland-bifrost-browser.desktop /usr/share/applications/bifrost-browser.desktop 
 wayland-mimeapps.list /etc/xdg/mimeapps.list 644
 wayland-session /usr/lib/bifrost/session 755
 wayland-session-env /usr/lib/bifrost/session-env 755
+wayland-privileged-socket /usr/lib/bifrost/privileged-socket 755
 wayland-apps /usr/bin/bifrost-apps 755
 bifrost-installer.service /usr/lib/systemd/system/bifrost-installer.service 644
 logo.png /usr/share/bifrost/installer/logo.png 644

@@ -909,6 +909,20 @@ impl Display {
     pub fn wayland_foreign_windows(&mut self) -> Option<Vec<super::wayland::ForeignWindow>> {
         self.wayland.as_mut().and_then(|w| w.foreign_windows())
     }
+    /// Whether window capture is offered (the connection is on the privileged socket).
+    #[cfg(feature = "desktop-wayland")]
+    pub fn wayland_window_capture_ready(&self) -> bool { self.wayland.as_ref().is_some_and(|w| w.window_capture_ready()) }
+    /// Sends window captures (see `wayland::Display::capture_windows`).
+    #[cfg(feature = "desktop-wayland")]
+    pub fn wayland_capture_windows(&mut self, reqs: Vec<crate::shell::window_shots::Request>) -> io::Result<()> {
+        if let Some(w) = &mut self.wayland { w.capture_windows(reqs)?; }
+        Ok(())
+    }
+    /// The answers to window captures since the last call.
+    #[cfg(feature = "desktop-wayland")]
+    pub fn wayland_capture_results(&mut self) -> Vec<(u64, crate::shell::window_shots::Outcome)> {
+        self.wayland.as_mut().map(|w| w.capture_results()).unwrap_or_default()
+    }
     #[cfg(feature = "desktop-wayland")]
     pub fn wayland_raise_front(&mut self) { if let Some(w)=&mut self.wayland { w.raise_front(); } }
     #[cfg(feature = "desktop-wayland")]

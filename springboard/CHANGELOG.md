@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Mission Control now has a tile for every window, including windows of other apps (the Browser, Files, Linux apps): the
+  window server draws each window alone, scaled to its tile, and the tiles refresh up to 5 times a second while Mission
+  Control is open. A minimized window's Dock slot shows the window's own picture in its thumbnail frame, and a window
+  screenshot is the window alone on a transparent ground with its shadow, without any window that overlaps it on the screen.
+  Where the window server cannot draw a window (no capture, the Vulkan renderer) the tiles show the window's title, the Dock
+  slot the app's icon, and the screenshot is cut from the screen as before.
+- Screen and window capture are for the shell only. The window server lists its capture globals (screen capture, window
+  capture) to clients that connect through a second socket only root can open (`/run/bifrost/wm-privileged`); apps no longer
+  see them, so a sandboxed app can no longer read the screen. The shell, the screen recorder and the screenshot tool use it.
+- A window minimized through the window server is kept (hidden, not dropped), so it can be captured and shown again.
 - Screen recordings (Shift+Cmd+5 > Record Screen or Record Selection, `screencapture -v`) now show what is on the screen:
   the wallpaper, every window, the menu bar and the Dock. Before, they recorded the shell's own frame, which holds only the
   menu bar and the Dock on black. A worker reads the window server's composed output through its screencopy protocol, cropped

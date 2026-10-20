@@ -13,6 +13,7 @@ use super::control_center::desk_glass;
 use bifrost_ui::material_request::ShellSurface;
 use super::desk::Metrics;
 use super::ui::{Weight, CARD_BG, FIELD_BG, LABEL, LABEL_2, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, SELECTION, TINT, WHITE};
+use super::window_shots::{self, Source};
 use super::{apps, AppId, Effect, Event, Shell};
 use crate::gfx::{rgba, Image, Surface};
 use bifrost_render::motion::{self, Curve, Kind};
@@ -183,10 +184,29 @@ enum Target {
     Back,
 }
 
+/// What a tile stands for: a window of the shell's desk, or a window of another client that the window server lists
+/// (its pixels come from a capture, `window_shots`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(super) enum TileKey {
+    App(AppId),
+    Foreign(u32),
+}
+
 struct Tile {
-    app: AppId,
+    key: TileKey,
+    /// the window's title (windows of other clients; empty for the desk's)
+    title: String,
     from: FRect,
     to: FRect,
+}
+
+/// The size a window of another client takes in the tile layout before its tile is fitted: the aspect of its picture
+/// (16:10 until there is one), at most 60 % of the screen each way. Its real size is not known to the shell.
+pub(super) fn foreign_natural(picture: Option<(usize, usize)>, screen: (f32, f32)) -> (f32, f32) {
+    let aspect = picture.filter(|p| p.0 > 0 && p.1 > 0).map_or(1.6, |p| p.0 as f32 / p.1 as f32).clamp(0.2, 5.0);
+    let (max_w, max_h) = ((screen.0 * 0.6).max(1.0), (screen.1 * 0.6).max(1.0));
+    let w = max_w.min(max_h * aspect);
+    (w, w / aspect)
 }
 
 struct Drag {
@@ -202,6 +222,8 @@ pub(super) struct Overview {
     start: f64,
     closing: Option<f64>,
     chosen: Option<AppId>,
+    /// a window of another client the person picked: it is activated when Mission Control has closed
+    chosen_foreign: Option<u32>,
     /// every window's minimized flag from before Overview hid them
     saved: Vec<(AppId, bool)>,
     tiles: Vec<Tile>,
@@ -212,8 +234,12 @@ pub(super) struct Overview {
     pub(super) spaces: Spaces,
     /// a desktop switch in flight: direction (+1 forward) and start time
     slide: Option<(i32, f64)>,
-    sources: HashMap<AppId, Image>,
-    scaled: HashMap<(AppId, usize, usize), Image>,
+    sources: HashMap<TileKey, Image>,
+    scaled: HashMap<(TileKey, usize, usize), Image>,
+    /// the captured windows of other clients, scaled to their tiles, by window, size and picture serial
+    fscaled: HashMap<(u32, usize, usize, u32), Image>,
+    /// the windows of other clients the layout was made for, with the size of the picture it used (0 when none yet)
+    foreign_sig: Vec<(u32, usize, usize)>,
     size: (i32, i32),
     pub(super) grid: AppGrid,
     /// a press that began on the menu bar or the Dock fell through, so its release must too (the Dock acts on release)
@@ -302,13 +328,26 @@ impl Overview {
         let Some(d) = sh.desk.as_ref() else { return };
         let cur = self.spaces.current;
         let wins: Vec<&super::desk::Win> = d.wins.iter().filter(|w| self.spaces.of.get(&w.app).copied().unwrap_or(cur) == cur).collect();
-        let sizes: Vec<(f32, f32)> = wins.iter().map(|w| (w.r.w as f32, w.r.h as f32)).collect();
+        // the desk's windows, then the windows of other clients (they belong to every desktop)
+        let mut entries: Vec<(TileKey, String, FRect, (f32, f32))> = wins
+            .iter()
+            .map(|w| {
+                let from = FRect { x: w.r.x as f32, y: w.r.y as f32, w: w.r.w as f32, h: w.r.h as f32 };
+                (TileKey::App(w.app), String::new(), from, (w.r.w as f32, w.r.h as f32))
+            })
+            .collect();
+        let mut sig = Vec::new();
+        for (id, title) in sh.mission_foreign_windows() {
+            let picture = sh.shots.shot(Source::Foreign(id)).map(|s| (s.image.w, s.image.h));
+            let (nw, nh) = foreign_natural(picture, (sh.w as f32, sh.h as f32));
+            sig.push((id, picture.map_or(0, |p| p.0), picture.map_or(0, |p| p.1)));
+            let from = FRect { x: (sh.w as f32 - nw) / 2.0, y: (sh.h as f32 - nh) / 2.0, w: nw, h: nh };
+            entries.push((TileKey::Foreign(id), title, from, (nw, nh)));
+        }
+        self.foreign_sig = sig;
+        let sizes: Vec<(f32, f32)> = entries.iter().map(|e| e.3).collect();
         let to = grid_layout(&sizes, g.area, TILE_GAP_PT * g.pt);
-        self.tiles = wins.iter().zip(to).map(|(w, to)| Tile {
-            app: w.app,
-            from: FRect { x: w.r.x as f32, y: w.r.y as f32, w: w.r.w as f32, h: w.r.h as f32 },
-            to,
-        }).collect();
+        self.tiles = entries.into_iter().zip(to).map(|((key, title, from, _), to)| Tile { key, title, from, to }).collect();
         self.size = (sh.w, sh.h);
         self.selected = self.selected.filter(|&i| i < self.tiles.len());
     }
@@ -357,7 +396,7 @@ impl Overview {
     /// Tiles in the current layout: (app, final rectangle), back to front.
     #[cfg(test)]
     fn tile_rects(&self) -> Vec<(AppId, FRect)> {
-        self.tiles.iter().map(|t| (t.app, t.to)).collect()
+        self.tiles.iter().filter_map(|t| match t.key { TileKey::App(app) => Some((app, t.to)), TileKey::Foreign(_) => None }).collect()
     }
 
     fn prog(&self, t: f64) -> f32 {
@@ -381,6 +420,7 @@ impl Overview {
         self.start = t;
         self.closing = None;
         self.chosen = None;
+        self.chosen_foreign = None;
         self.hover = None;
         self.press = None;
         self.drag = None;
@@ -391,13 +431,29 @@ impl Overview {
             for w in &d.wins {
                 if let Some((pw, ph, px)) = d.window_pixels(w.app) {
                     if pw > 0 && ph > 0 && px.len() >= pw * ph {
-                        self.sources.insert(w.app, Image { w: pw, h: ph, px: px[..pw * ph].to_vec() });
+                        self.sources.insert(TileKey::App(w.app), Image { w: pw, h: ph, px: px[..pw * ph].to_vec() });
                     }
                 }
             }
         }
         self.layout(sh);
+        self.request_shots(sh, t, 0.0);
         sh.dirty = true;
+    }
+
+    /// Asks the window server for a fresh picture of every window of another client that has a tile, at most one request
+    /// per window every `gap_ms` (a window that did not change costs nothing: it answers `unchanged`).
+    fn request_shots(&self, sh: &mut Shell, t: f64, gap_ms: f64) {
+        for tile in &self.tiles {
+            if let TileKey::Foreign(id) = tile.key {
+                sh.shots.request(Source::Foreign(id), window_shots::bound_for_tile(tile.to.w, tile.to.h), t, gap_ms);
+            }
+        }
+    }
+
+    /// Whether any window of another client has a tile.
+    fn has_foreign_tiles(&self) -> bool {
+        self.tiles.iter().any(|t| matches!(t.key, TileKey::Foreign(_)))
     }
 
     /// Leaves Overview, focusing `chosen` when given. The windows come back when the animation has finished.
@@ -427,12 +483,14 @@ impl Overview {
             }
             self.spaces.apply(&mut d.wins);
         }
-        match self.chosen.take() {
-            Some(app) => sh.desk_open(app, t),
-            None => sh.desk_refocus(),
+        match (self.chosen_foreign.take(), self.chosen.take()) {
+            (Some(id), _) => sh.desk_activate_foreign(id),
+            (None, Some(app)) => sh.desk_open(app, t),
+            (None, None) => sh.desk_refocus(),
         }
         self.sources.clear();
         self.scaled.clear();
+        self.fscaled.clear();
         sh.dirty = true;
     }
 
@@ -514,8 +572,7 @@ impl Overview {
         match code {
             KEY_ESC => self.close(sh, None, t),
             KEY_ENTER => {
-                let app = self.selected.and_then(|i| self.tiles.get(i)).map(|t| t.app);
-                self.close(sh, app, t);
+                self.pick(sh, self.selected, t);
             }
             KEY_TAB => {
                 if !self.tiles.is_empty() {
@@ -535,6 +592,19 @@ impl Overview {
         }
         sh.dirty = true;
         true
+    }
+
+    /// Leaves Mission Control for tile `i` (none: for no window): a desk window is opened, a window of another client is
+    /// activated.
+    fn pick(&mut self, sh: &mut Shell, i: Option<usize>, t: f64) {
+        match i.and_then(|i| self.tiles.get(i)).map(|tile| tile.key) {
+            Some(TileKey::App(app)) => self.close(sh, Some(app), t),
+            Some(TileKey::Foreign(id)) => {
+                self.chosen_foreign = Some(id);
+                self.close(sh, None, t);
+            }
+            None => self.close(sh, None, t),
+        }
     }
 
     fn event(&mut self, sh: &mut Shell, ev: Event, t: f64) -> Option<Vec<Effect>> {
@@ -561,7 +631,8 @@ impl Overview {
                 let press = self.press.take();
                 let tg = self.target_at(&g, x, y);
                 if let Some(d) = drag.filter(|d| d.moved) {
-                    let app = self.tiles.get(d.tile).map(|t| t.app);
+                    // only the desk's own windows move between desktops
+                    let app = self.tiles.get(d.tile).and_then(|t| match t.key { TileKey::App(app) => Some(app), TileKey::Foreign(_) => None });
                     if let Some(app) = app {
                         match tg {
                             Target::Desk(i) => self.move_window(sh, app, i),
@@ -576,10 +647,7 @@ impl Overview {
                 } else if let Some((pt, _, _)) = press {
                     if pt == tg {
                         match tg {
-                            Target::Tile(i) => {
-                                let app = self.tiles.get(i).map(|t| t.app);
-                                self.close(sh, app, t);
-                            }
+                            Target::Tile(i) => self.pick(sh, Some(i), t),
                             Target::Desk(i) => self.go_to(sh, i, t),
                             Target::Add => {
                                 if let Some(i) = self.add_desktop() {
@@ -598,7 +666,7 @@ impl Overview {
     }
 
     /// Scaled tile image for `app` at `w`x`h`, cached; None when the window was never drawn through the cache.
-    fn thumb(&mut self, app: AppId, w: usize, h: usize) -> Option<&Image> {
+    fn thumb(&mut self, app: TileKey, w: usize, h: usize) -> Option<&Image> {
         if w == 0 || h == 0 {
             return None;
         }
@@ -687,7 +755,7 @@ impl Overview {
             if dragging == Some(i) {
                 continue;
             }
-            let (app, from, to) = (self.tiles[i].app, self.tiles[i].from, self.tiles[i].to);
+            let (app, from, to) = (self.tiles[i].key, self.tiles[i].from, self.tiles[i].to);
             let r = FRect::lerp(from, to, p);
             self.draw_tile(sh, s, app, r, to.w / from.w.max(1.0), alpha, hover_tile == Some(i), self.selected == Some(i));
             if hover_tile == Some(i) || self.selected == Some(i) {
@@ -695,7 +763,7 @@ impl Overview {
             }
         }
         if let Some((tile, dx, dy)) = self.drag.as_ref().filter(|d| d.moved && d.tile < n).map(|d| (d.tile, d.x, d.y)) {
-            let (app, to, from) = (self.tiles[tile].app, self.tiles[tile].to, self.tiles[tile].from);
+            let (app, to, from) = (self.tiles[tile].key, self.tiles[tile].to, self.tiles[tile].from);
             let k = 0.6;
             let r = FRect { x: dx - to.w * k / 2.0, y: dy - to.h * k / 2.0, w: to.w * k, h: to.h * k };
             self.draw_tile(sh, s, app, r, k * to.w / from.w.max(1.0), 220, true, false);
@@ -703,7 +771,10 @@ impl Overview {
         // the title shows under the tile the pointer (or the keyboard) is on
         if let Some((i, r)) = title {
             if p >= 1.0 && dragging.is_none() {
-                let name = apps().iter().find(|a| a.id == self.tiles[i].app).map_or("", |a| a.name);
+                let name: &str = match self.tiles[i].key {
+                    TileKey::App(app) => apps().iter().find(|a| a.id == app).map_or("", |a| a.name),
+                    TileKey::Foreign(_) => self.tiles[i].title.as_str(),
+                };
                 let (tw, th) = sh.label(name, MAC_SUBHEAD_PT, Weight::Semibold, WHITE, |im| (im.w as f32, im.h as f32));
                 let (pw, ph) = (tw + ui.pt(20.0), th + ui.pt(8.0));
                 let (px, py) = (r.cx() - pw / 2.0, r.y + r.h + ui.pt(8.0));
@@ -714,8 +785,35 @@ impl Overview {
         p < 1.0 && self.closing.is_none() || self.closing.is_some()
     }
 
+    /// The captured picture of window `id` of another client in its tile `r` (scaled once per picture), or, while there is
+    /// none (the window server cannot capture, or the first answer is on its way), a plate with the window's title.
     #[allow(clippy::too_many_arguments)]
-    fn draw_tile(&mut self, sh: &Shell, s: &mut Surface, app: AppId, r: FRect, scale_k: f32, alpha: u32, hover: bool, selected: bool) {
+    fn draw_foreign_picture(&mut self, sh: &Shell, s: &mut Surface, id: u32, r: FRect, rad: f32, (iw, ih): (usize, usize), alpha: u32) {
+        if let Some(shot) = sh.shots.shot(Source::Foreign(id)).filter(|shot| shot.image.w > 0 && shot.image.h > 0) {
+            let ck = (id, iw, ih, shot.serial);
+            if !self.fscaled.contains_key(&ck) {
+                // keep the cache small: a resize animation makes many sizes
+                if self.fscaled.len() > 24 {
+                    self.fscaled.clear();
+                }
+                self.fscaled.insert(ck, shot.image.resized(iw, ih));
+            }
+            if let Some(img) = self.fscaled.get(&ck) {
+                s.blit(img, r.x.round() as i32, r.y.round() as i32, 255, alpha);
+                return;
+            }
+        }
+        s.fill_rrect(r.x, r.y, r.w, r.h, rad, crate::gfx::scale(CARD_BG.now(), alpha));
+        let title = self.tiles.iter().find(|t| t.key == TileKey::Foreign(id)).map(|t| t.title.clone()).unwrap_or_default();
+        if !title.is_empty() {
+            sh.label(&title, MAC_SUBHEAD_PT, Weight::Semibold, WHITE, |im| {
+                s.blit_colored(im, (r.x + (r.w - im.w as f32) / 2.0) as i32, (r.y + (r.h - im.h as f32) / 2.0) as i32, LABEL_2.now(), alpha);
+            });
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn draw_tile(&mut self, sh: &Shell, s: &mut Surface, key: TileKey, r: FRect, scale_k: f32, alpha: u32, hover: bool, selected: bool) {
         let ui = &sh.ui;
         let rad = (ui.pt(bifrost_ui::prefs_layout::m::WINDOW_RADIUS) * scale_k.clamp(0.0, 1.0)).max(ui.pt(4.0));
         // soft shadow
@@ -724,7 +822,18 @@ impl Overview {
             s.fill_rrect(r.x - gx, r.y - gx + ui.pt(4.0), r.w + 2.0 * gx, r.h + 2.0 * gx, rad + gx, rgba(0, 0, 0, ((a as u32 * alpha) / 255) as u8));
         }
         let (iw, ih) = (r.w.round().max(1.0) as usize, r.h.round().max(1.0) as usize);
-        match self.thumb(app, iw, ih) {
+        let app = match key {
+            TileKey::App(app) => app,
+            TileKey::Foreign(id) => {
+                self.draw_foreign_picture(sh, s, id, r, rad, (iw, ih), alpha);
+                if hover || selected {
+                    let c = if selected { TINT } else { SELECTION.now() };
+                    s.stroke_rrect(r.x - 2.0, r.y - 2.0, r.w + 4.0, r.h + 4.0, rad + 2.0, ui.pt(3.0), crate::gfx::scale(c, alpha));
+                }
+                return;
+            }
+        };
+        match self.thumb(key, iw, ih) {
             Some(img) => s.blit(img, r.x.round() as i32, r.y.round() as i32, 255, alpha),
             None => {
                 s.fill_rrect(r.x, r.y, r.w, r.h, rad, crate::gfx::scale(CARD_BG.now(), alpha));
@@ -812,6 +921,43 @@ impl Shell {
         } else {
             regions
         }
+    }
+
+    /// Mission Control is open: asks for fresh pictures of the windows of other clients, at most 5 times a second each.
+    pub(super) fn overview_refresh_shots(&mut self, t: f64) {
+        if !self.overview.open || self.overview.closing.is_some() || !self.shots.available() {
+            return;
+        }
+        let ov = std::mem::take(&mut self.overview);
+        ov.request_shots(self, t, window_shots::MISSION_REFRESH_MS);
+        self.overview = ov;
+    }
+
+    /// Whether Mission Control is open with a tile for a window of another client (it then wakes to refresh the tiles).
+    pub(super) fn overview_wants_shots(&self) -> bool {
+        self.overview.open && self.overview.closing.is_none() && self.shots.available() && self.overview.has_foreign_tiles()
+    }
+
+    /// A picture arrived: when the set of windows or a picture's shape changed since the tiles were laid out, lays them out
+    /// again (the first picture of a window gives its tile the window's real aspect). Otherwise the tile is just redrawn.
+    pub(super) fn overview_shots_changed(&mut self) {
+        if !self.overview.open || self.overview.closing.is_some() {
+            return;
+        }
+        let now: Vec<(u32, usize, usize)> = self
+            .mission_foreign_windows()
+            .into_iter()
+            .map(|(id, _)| {
+                let pic = self.shots.shot(Source::Foreign(id)).map(|s| (s.image.w, s.image.h));
+                (id, pic.map_or(0, |p| p.0), pic.map_or(0, |p| p.1))
+            })
+            .collect();
+        if now != self.overview.foreign_sig {
+            let mut ov = std::mem::take(&mut self.overview);
+            ov.layout(self);
+            self.overview = ov;
+        }
+        self.dirty = true;
     }
 
     /// Pointer events while Overview or the Apps grid is open; `None` when it is not.
@@ -1296,5 +1442,172 @@ mod tests {
         assert!(!frames.iter().any(|f| f.id == 9), "it is not Overview");
         settle(&mut sh);
         assert!(!frame_ids(&sh).contains(&10), "gone when the sweep ends");
+    }
+
+    // ---- windows of other clients: tiles from window captures ----------------------------------------------------------
+
+    /// Mission Control for a desk with `n` windows and the windows `foreign` of other clients, window capture offered.
+    #[cfg(feature = "desktop-wayland")]
+    fn desk_with_foreign(n: usize, foreign: &[(u32, &str)]) -> Shell {
+        let mut sh = desk_with(n, 1920, 1080, 1.0);
+        sh.shots.set_available(true);
+        sh.desk.as_mut().unwrap().native_windows = foreign
+            .iter()
+            .map(|(id, title)| crate::bare::wayland::ForeignWindow { id: *id, title: (*title).into(), app_id: format!("x.app{id}"), active: false, maximized: false })
+            .collect();
+        sh
+    }
+
+    #[cfg(feature = "desktop-wayland")]
+    fn foreign_tiles(sh: &Shell) -> Vec<(u32, FRect)> {
+        sh.overview.tiles.iter().filter_map(|t| match t.key { TileKey::Foreign(id) => Some((id, t.to)), TileKey::App(_) => None }).collect()
+    }
+
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn every_window_of_another_client_gets_a_tile_beside_the_desks() {
+        let mut sh = desk_with_foreign(2, &[(7, "Files"), (8, "Browser")]);
+        sh.overview_toggle(1000.0);
+        assert!(sh.overview.open);
+        assert_eq!(sh.overview.tiles.len(), 4, "two desk windows and two windows of other clients");
+        assert_eq!(sh.overview.tile_rects().len(), 2, "tile_rects is the desk's");
+        let foreign = foreign_tiles(&sh);
+        assert_eq!(foreign.iter().map(|(id, _)| *id).collect::<Vec<_>>(), vec![7, 8]);
+        let g = sh.overview.geo(&sh);
+        for (i, (_, a)) in foreign.iter().enumerate() {
+            assert!(a.x >= g.area.x - 0.5 && a.x + a.w <= g.area.x + g.area.w + 0.5 && a.y >= g.area.y - 0.5 && a.y + a.h <= g.area.y + g.area.h + 0.5, "tile {i} inside the area");
+        }
+        let all: Vec<FRect> = sh.overview.tiles.iter().map(|t| t.to).collect();
+        for (i, a) in all.iter().enumerate() {
+            for b in &all[i + 1..] {
+                assert!(!a.overlaps(b), "tiles never overlap");
+            }
+        }
+    }
+
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn a_window_listed_twice_has_one_tile() {
+        let mut sh = desk_with_foreign(1, &[(7, "Files")]);
+        sh.desk.as_mut().unwrap().linux_apps.push(crate::shell::desk::LinuxDockApp::for_test("x.app7", vec![crate::bare::wayland::ForeignWindow { id: 7, title: "Files".into(), app_id: "x.app7".into(), active: false, maximized: false }]));
+        sh.overview_toggle(1000.0);
+        assert_eq!(foreign_tiles(&sh).len(), 1);
+    }
+
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn opening_asks_for_each_windows_picture_at_the_tile_size() {
+        let mut sh = desk_with_foreign(1, &[(7, "Files")]);
+        sh.overview_toggle(1000.0);
+        let reqs = sh.take_capture_requests();
+        assert_eq!(reqs.len(), 1);
+        assert_eq!(reqs[0].source, Source::Foreign(7));
+        let tile = foreign_tiles(&sh)[0].1;
+        assert_eq!(reqs[0].max, window_shots::bound_for_tile(tile.w, tile.h));
+        assert_eq!(reqs[0].since, 0, "nothing held yet");
+    }
+
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn the_tiles_refresh_at_most_five_times_a_second_while_open() {
+        let mut sh = desk_with_foreign(0, &[(7, "Files")]);
+        sh.overview_toggle(1000.0);
+        let first = sh.take_capture_requests();
+        sh.window_capture_results(vec![(first[0].token, window_shots::Outcome::Ready { image: Image { w: 80, h: 50, px: vec![0xff00_ff00; 80 * 50] }, serial: 2 })], 1010.0);
+        for t in [1050.0, 1100.0, 1190.0] {
+            sh.shots_tick(t);
+            assert!(sh.take_capture_requests().is_empty(), "{t}: too soon after the last ask");
+        }
+        sh.shots_tick(1200.0);
+        let again = sh.take_capture_requests();
+        assert_eq!(again.len(), 1, "200 ms after the last ask it asks again");
+        assert_eq!(again[0].since, 2, "quoting the picture it holds, so an idle window costs nothing");
+        assert_eq!(sh.shots_wake(1200.0), Some(1200.0 + window_shots::MISSION_REFRESH_MS), "the loop wakes to refresh");
+        // closed: no more asking and no wake
+        sh.window_capture_results(vec![(again[0].token, window_shots::Outcome::Unchanged { serial: 2 })], 1210.0);
+        sh.overview_toggle(1300.0);
+        settle(&mut sh);
+        sh.shots_tick(5000.0);
+        assert!(sh.take_capture_requests().is_empty() && sh.shots_wake(5000.0).is_none());
+    }
+
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn the_first_picture_gives_its_tile_the_windows_real_aspect() {
+        let mut sh = desk_with_foreign(0, &[(7, "Files")]);
+        sh.overview_toggle(1000.0);
+        let before = foreign_tiles(&sh)[0].1;
+        assert!((before.w / before.h - 1.6).abs() < 0.05, "16:10 until there is a picture: {before:?}");
+        let token = sh.take_capture_requests()[0].token;
+        sh.window_capture_results(vec![(token, window_shots::Outcome::Ready { image: Image { w: 300, h: 400, px: vec![0xff11_2233; 300 * 400] }, serial: 1 })], 1050.0);
+        let after = foreign_tiles(&sh)[0].1;
+        assert!((after.w / after.h - 0.75).abs() < 0.02, "a tall window gets a tall tile: {after:?}");
+    }
+
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn a_tile_without_a_picture_still_draws_and_a_picture_replaces_the_plate() {
+        let mut sh = desk_with_foreign(0, &[(7, "Files")]);
+        sh.overview_toggle(1000.0);
+        let (w, h) = (sh.w as usize, sh.h as usize);
+        let draw = |sh: &mut Shell| -> Vec<u32> {
+            let mut px = vec![0u32; w * h];
+            sh.draw_overview(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, 1e9 / 2.0);
+            px
+        };
+        // the plate (the fallback: the window server cannot capture, or the answer is on its way)
+        let plate = draw(&mut sh);
+        let tile = foreign_tiles(&sh)[0].1;
+        let (cx, cy) = ((tile.x + tile.w / 2.0) as usize, (tile.y + tile.h * 0.9) as usize);
+        let token = sh.take_capture_requests()[0].token;
+        sh.window_capture_results(vec![(token, window_shots::Outcome::Ready { image: Image { w: 160, h: 100, px: vec![crate::gfx::pack(250, 10, 10, 255); 160 * 100] }, serial: 1 })], 1500.0);
+        let tile = foreign_tiles(&sh)[0].1;
+        let (cx2, cy2) = ((tile.x + tile.w / 2.0) as usize, (tile.y + tile.h * 0.9) as usize);
+        let picture = draw(&mut sh);
+        assert_ne!(plate[cy * w + cx], picture[cy2 * w + cx2], "the picture is drawn where the plate was");
+        assert_eq!(picture[cy2 * w + cx2] >> 16 & 255, 250, "the window's own red, not the plate");
+    }
+
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn choosing_a_window_of_another_client_activates_it() {
+        let mut sh = desk_with_foreign(1, &[(7, "Files")]);
+        sh.overview_toggle(1000.0);
+        let tile = foreign_tiles(&sh)[0].1;
+        let (cx, cy) = (tile.x + tile.w / 2.0, tile.y + tile.h / 2.0);
+        assert!(sh.overview_event(Event::Down(cx, cy), 2000.0).is_some());
+        assert!(sh.overview_event(Event::Up(cx, cy), 2010.0).is_some());
+        settle(&mut sh);
+        assert!(!sh.overview.open, "Mission Control closed");
+        assert_eq!(sh.take_native_activations(), vec![7], "the window server is asked to raise and focus window 7");
+    }
+
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn a_window_of_another_client_does_not_move_to_another_desktop() {
+        let mut sh = desk_with_foreign(1, &[(7, "Files")]);
+        sh.overview.spaces.count = 2;
+        sh.overview_toggle(1000.0);
+        let idx = sh.overview.tiles.iter().position(|t| t.key == TileKey::Foreign(7)).unwrap();
+        let g = sh.overview.geo(&sh);
+        let desk2 = sh.overview.desk_rects(&g)[1];
+        sh.overview.press = Some((Target::Tile(idx), 10.0, 10.0));
+        sh.overview.drag = Some(Drag { tile: idx, x: desk2.x + 1.0, y: desk2.y + 1.0, moved: true });
+        sh.overview.hover = Some(Target::Desk(1));
+        sh.overview_event(Event::Up(desk2.x + 1.0, desk2.y + 1.0), 2000.0);
+        assert!(sh.overview.open && sh.overview.closing.is_none(), "dropping it on a desktop does nothing");
+        assert_eq!(foreign_tiles(&sh).len(), 1);
+    }
+
+    #[test]
+    fn the_natural_size_of_a_window_of_another_client_follows_its_picture() {
+        let screen = (1920.0, 1080.0);
+        let (w, h) = foreign_natural(None, screen);
+        assert!((w / h - 1.6).abs() < 1e-3 && w <= 1920.0 * 0.6 + 0.5 && h <= 1080.0 * 0.6 + 0.5);
+        let (w, h) = foreign_natural(Some((300, 400)), screen);
+        assert!((w / h - 0.75).abs() < 1e-3 && h <= 1080.0 * 0.6 + 0.5, "{w}x{h}");
+        let (w, h) = foreign_natural(Some((4000, 100)), screen);
+        assert!(w <= 1920.0 * 0.6 + 0.5 && h > 0.0, "an extreme aspect is clamped: {w}x{h}");
+        assert_eq!(foreign_natural(Some((0, 0)), screen), foreign_natural(None, screen), "an empty picture is none");
     }
 }
