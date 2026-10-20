@@ -537,7 +537,8 @@ class ReleaseVmTest:
         return remote(self.port, self.key, text, timeout, user=self.user, check=check)
 
     def control(self, line: str):
-        script = ("import socket; s=socket.create_connection(('127.0.0.1',7777),5); s.settimeout(8); s.sendall(" +
+        # the shell's control socket is a Unix socket served to root and the installed account (the user this runs as)
+        script = ("import socket; s=socket.socket(socket.AF_UNIX); s.settimeout(8); s.connect('/run/bifrost/shell-control.sock'); s.sendall(" +
                   repr((line + "\n").encode()) + "); d=b''\nwhile True:\n c=s.recv(65536)\n if not c: break\n d+=c\nprint(d.decode(),end='')")
         result = self.installed("python3 -c " + shlex.quote(script), timeout=15)
         return result.stdout

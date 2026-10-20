@@ -23,8 +23,8 @@ elif len(sys.argv) == 3 and sys.argv[1] == "--open":
         request = f'open-folder is.olibuijr.files.desktop {path}\n'.encode()
         if len(request) > 511 or '\n' in str(path):
             sys.exit('Folder path is too long')
-        with socket.create_connection(('127.0.0.1',7777),5) as client:
-            client.settimeout(5);client.sendall(request);response=client.recv(4096).decode()
+        with socket.socket(socket.AF_UNIX) as client:
+            client.settimeout(5);client.connect('/run/bifrost/shell-control.sock');client.sendall(request);response=client.recv(4096).decode()
         if not response.startswith('ok'):sys.exit(response.strip())
         sys.exit(0)
     cmd = ['gio','open',str(path)]

@@ -73,6 +73,18 @@ def ssh(cmd, timeout=30):
     return run(SSH + [cmd], timeout).stdout
 
 
+# The shell's control socket on Midget: a Unix socket the shell serves to root (these ssh sessions) and the installed
+# account only. There is no TCP control port any more, so every helper reaches it with AF_UNIX on the remote side.
+CONTROL_SOCKET = "/run/bifrost/shell-control.sock"
+
+
+def control_script(line, timeout=10, raw=False):
+    """Python for the remote side: sends one request line to the control socket, then writes the whole answer to stdout."""
+    emit = "sys.stdout.buffer.write(d)" if raw else "print(d.decode(errors='replace'),end='')"
+    return ("import socket,sys; s=socket.socket(socket.AF_UNIX); s.settimeout(%d); s.connect(%r); s.sendall(%r); d=b''\n"
+            "while True:\n c=s.recv(65536)\n if not c: break\n d+=c\n%s" % (timeout, CONTROL_SOCKET, (line + "\n").encode(), emit))
+
+
 def ping():
     return run(["ping", "-c1", "-W1", HOST], 5).returncode == 0
 
@@ -221,7 +233,7 @@ def cmd_hw():
 
 
 def cmd_screen(out):
-    """Installer frame hook on a live system; the shell's control port on an installed one."""
+    """Installer frame hook on a live system; the shell's control socket on an installed one."""
     st = state()
     if st == "live":
         ssh("touch /run/bifrost-shot-on")
@@ -240,8 +252,7 @@ def cmd_screen(out):
             remember_size((w, h))
             print(f"{out} ({w}x{h} compositor pixels)")
             return 0
-        script = "exec 3<>/dev/tcp/127.0.0.1/7777; echo 'shot 1' >&3; timeout 20 cat <&3"
-        blob = subprocess.run(SSH + [f"bash -c {json.dumps(script)}"], capture_output=True, timeout=40).stdout
+        blob = subprocess.run(SSH + ["python3 -c " + shlex.quote(control_script("shot 1", 20, raw=True))], capture_output=True, timeout=40).stdout
         if blob[:4] == b"RIMG":
             w, h = struct.unpack("<II", blob[4:12])
             from PIL import Image
@@ -268,15 +279,12 @@ def cmd_show_in_files(args):
 
 
 def cmd_control(args):
-    """Send full-panel pixel input/state requests through the loopback control socket over SSH."""
+    """Send full-panel pixel input/state requests through the shell's Unix control socket over SSH (as root)."""
     line = " ".join(args)
     if not line or "\n" in line or len(line) > 500:
         print("invalid control command")
         return 2
-    script = ("import socket; s=socket.create_connection(('127.0.0.1',7777),5); "
-              "s.settimeout(10); s.sendall(" + repr((line + "\n").encode()) + "); "
-              "d=b''\nwhile True:\n c=s.recv(65536)\n if not c: break\n d+=c\nprint(d.decode(),end='')")
-    r = run(SSH + ["python3 -c " + shlex.quote(script)], 15)
+    r = run(SSH + ["python3 -c " + shlex.quote(control_script(line, 10))], 15)
     print(r.stdout, end="")
     if r.stderr:
         print(r.stderr, end="", file=sys.stderr)
@@ -1017,7 +1025,7 @@ def cmd_window_tap(args):
         x, y = float(args[1]), float(args[2])
     except ValueError:
         return 2
-    result = ssh("python3 -c " + shlex.quote("import socket; s=socket.create_connection(('127.0.0.1',7777),5); s.settimeout(5); s.sendall(b'state\\n'); print(s.recv(65536).decode())"), 10)
+    result = ssh("python3 -c " + shlex.quote(control_script("state", 5)), 10)
     for line in result.splitlines():
         fields = line.split('window=', 1)[-1].split(',')
         if 'window=' in line and len(fields) == 5 and fields[0].lower() == args[0].lower():
@@ -1159,10 +1167,8 @@ def cmd_labboot(args):
 
 def control_text(line, timeout=15):
     """One request on the shell's control socket; None when ssh or the socket does not answer."""
-    script = ("import socket; s=socket.create_connection(('127.0.0.1',7777),5); s.settimeout(10); "
-              "s.sendall(" + repr((line + "\n").encode()) + "); d=b''\nwhile True:\n c=s.recv(65536)\n if not c: break\n d+=c\nprint(d.decode(),end='')")
     try:
-        r = run(SSH + ["python3 -c " + shlex.quote(script)], timeout)
+        r = run(SSH + ["python3 -c " + shlex.quote(control_script(line, 10))], timeout)
     except Exception:
         return None
     return r.stdout if r.returncode == 0 else None

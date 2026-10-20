@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""e2e runner: run.py [--port N] [scenario ...] [--update-baseline] [--json] [--list]
+"""e2e runner: run.py [--socket PATH] [scenario ...] [--update-baseline] [--json] [--list]
 Exit codes: 0 all passed, 1 a scenario failed, 2 usage error or target unreachable."""
 import argparse
 import json
@@ -11,7 +11,7 @@ HERE = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.dirname(HERE))  # tools/ for fps.py
 
-from client import E2EError, Target  # noqa: E402
+from client import CONTROL_SOCKET, E2EError, Target  # noqa: E402
 from scenarios import SCENARIOS, Ctx  # noqa: E402
 
 
@@ -32,13 +32,11 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("scenarios", nargs="*")
     ap.add_argument("--target", choices=["vm"], default="vm")
-    ap.add_argument("--port", type=int, default=None, help="control port (default: 7777 inside the vm)")
+    ap.add_argument("--socket", default=CONTROL_SOCKET, help="control socket path on the target (default: %(default)s)")
     ap.add_argument("--update-baseline", action="store_true")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--list", action="store_true")
     a = ap.parse_args(argv)
-    if a.port is None:
-        a.port = 7777
     table = dict(SCENARIOS)
     if a.list:
         print("\n".join(table))
@@ -47,11 +45,11 @@ def main(argv=None):
     if unknown:
         print(f"unknown scenario(s): {', '.join(unknown)} (see --list)", file=sys.stderr)
         return 2
-    t = Target(a.target, a.port)
+    t = Target(a.target, a.socket)
     try:
         t.state()
     except E2EError as e:
-        print(f"target {a.target}:{a.port} unreachable: {e}", file=sys.stderr)
+        print(f"target {a.target}:{a.socket} unreachable: {e}", file=sys.stderr)
         return 2
     chosen = [(n, table[n]) for n in a.scenarios] if a.scenarios else SCENARIOS
     results = []

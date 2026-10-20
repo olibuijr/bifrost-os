@@ -12,6 +12,8 @@ TOOLS = os.path.dirname(HERE)
 DIFF_DIR = os.path.expanduser("~/Pictures/tab/e2e")
 BASELINES = os.path.join(HERE, "baselines")
 W, H = 1200, 1920
+# The shell serves a Unix socket (root and the installed account only); there is no TCP control port.
+CONTROL_SOCKET = "/run/bifrost/shell-control.sock"
 
 
 class E2EError(Exception):
@@ -19,19 +21,22 @@ class E2EError(Exception):
 
 
 class Target:
-    """One SpringBoard control socket: the Arch VM through ssh + bash /dev/tcp."""
+    """One SpringBoard control socket: the Arch VM through ssh, with python on the guest speaking AF_UNIX (root)."""
 
-    def __init__(self, kind="vm", port=7777):
-        self.kind, self.port = kind, port
+    def __init__(self, kind="vm", socket_path=CONTROL_SOCKET):
+        self.kind, self.socket_path = kind, socket_path
 
     def raw(self, line, timeout=10):
         if self.kind == "vm":
-            script = f'exec 3<>/dev/tcp/127.0.0.1/{self.port}; echo "$1" >&3; timeout {int(timeout)} cat <&3'
-            r = subprocess.run([os.path.join(TOOLS, "arch-vm.sh"), "ssh", f"bash -c {shlex.quote(script)} _ {shlex.quote(line)}"],
+            script = (f"import socket,sys; s=socket.socket(socket.AF_UNIX); s.settimeout({int(timeout)}); s.connect({self.socket_path!r}); "
+                      "s.sendall((sys.argv[1] + chr(10)).encode()); d=b''\n"
+                      "while True:\n try:\n  c=s.recv(65536)\n except socket.timeout:\n  break\n if not c: break\n d+=c\nsys.stdout.buffer.write(d)")
+            r = subprocess.run([os.path.join(TOOLS, "arch-vm.sh"), "ssh", f"python3 -c {shlex.quote(script)} {shlex.quote(line)}"],
                                capture_output=True, timeout=timeout + 20)
             return r.stdout
-        with socket.create_connection(("127.0.0.1", self.port), timeout=timeout) as s:
+        with socket.socket(socket.AF_UNIX) as s:
             s.settimeout(timeout)
+            s.connect(self.socket_path)
             s.sendall(line.encode() + b"\n")
             chunks = []
             while True:
