@@ -140,7 +140,12 @@ package_bifrost_files() {
     find "$pkgdir/usr/share/springboard/system-assets" -type d -exec chmod 755 {} +
     find "$pkgdir/usr/share/springboard/system-assets" -type f -exec chmod 644 {} +
   fi
-  install -Dm755 "$here/prune-stale-assets" "$pkgdir/usr/lib/springboard/prune-stale-assets"
+  # public key that signs this repository (packaging/arch/keys/README.md); the scriptlet imports it into pacman's keyring.
+  # Absent until the key is generated: the package then ships none and the repository stays unsigned.
+  if [[ -f $here/keys/bifrost-repo.gpg ]]; then
+    install -Dm644 "$here/keys/bifrost-repo.gpg" "$pkgdir/usr/share/bifrost/keys/bifrost-repo.gpg"
+  fi
+  install -Dm755 "$here/prune-stale-assets""$pkgdir/usr/lib/springboard/prune-stale-assets"
   install -Dm644 "$here/../assets-allowlist.txt" "$pkgdir/usr/lib/springboard/assets-allowlist.txt"
   # boot speed: the initrd mounts the fstab subvolumes, and seatd starts without waiting for local-fs.target
   install -Dm644 "$here/initcpio/install/bifrost-mounts" "$pkgdir/usr/lib/initcpio/install/bifrost-mounts"

@@ -77,13 +77,27 @@ bifrost_pam_wayvnc() {
     return 0
 }
 
+# The public key that signs this repository (packaging/arch/keys): imported into pacman's keyring and signed locally, so a
+# signed repository is trusted under SigLevel TrustedOnly. Idempotent; a missing key or keyring is not an error.
+bifrost_repo_key() {
+    key=/usr/share/bifrost/keys/bifrost-repo.gpg
+    [ -f "$key" ] || return 0
+    command -v pacman-key >/dev/null 2>&1 || return 0
+    pacman-key --add "$key" >/dev/null 2>&1 || return 0
+    fpr=$(gpg --batch --with-colons --import-options show-only --import "$key" 2>/dev/null | awk -F: '$1=="fpr"{print $10; exit}')
+    [ -n "$fpr" ] && pacman-key --lsign-key "$fpr" >/dev/null 2>&1
+    return 0
+}
+
 post_install() {
+    bifrost_repo_key
     bifrost_pam_wayvnc
     bifrost_post_update
     echo "BifrOSt: run 'systemctl enable springboard.service && systemctl set-default graphical.target'"
 }
 
 post_upgrade() {
+    bifrost_repo_key
     bifrost_pam_wayvnc
     bifrost_post_update
     echo "BifrOSt: apply the update through Settings > Software Update."

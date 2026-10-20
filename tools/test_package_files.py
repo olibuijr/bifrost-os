@@ -38,5 +38,16 @@ class NoRetiredCompositor(unittest.TestCase):
             self.assertIn("'%s':" % key, text)
 
 
+class RepositoryKey(unittest.TestCase):
+    def test_package_ships_the_key_when_present_and_the_scriptlet_imports_it(self):
+        files = read(ARCH, "package-files.sh")
+        self.assertIn("keys/bifrost-repo.gpg", files)
+        self.assertIn("/usr/share/bifrost/keys/bifrost-repo.gpg", files)
+        scriptlet = read(ARCH, "springboard.install")
+        self.assertIn("pacman-key --add", scriptlet)
+        self.assertIn("pacman-key --lsign-key", scriptlet)
+        self.assertTrue(os.path.exists(os.path.join(ARCH, "keys", "README.md")))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -309,6 +309,21 @@ fn strip_repo_section(conf: &str, name: &str) -> String {
     out
 }
 
+/// Signature policy for the `[bifrost]` update repository (docs/installer-and-boot.md, "Package signing").
+/// Phase 1: signatures are optional (the repository may still be unsigned) but a signature that is present must come from a
+/// trusted key, which the installer and the `springboard-shell` scriptlet import from `packaging/arch/keys`.
+/// Phase 2 (every machine holds the key and the repository is signed): change this to `Required DatabaseRequired`.
+const BIFROST_REPO_SIG_LEVEL: &str = "Optional TrustedOnly";
+/// The public repository key on the live medium (tools/build-iso.sh copies it from `packaging/arch/keys`) and in the target.
+const REPO_KEY_LIVE: &str = "/usr/share/bifrost/keys/bifrost-repo.gpg";
+const REPO_KEY_TARGET: &str = "/usr/share/bifrost/keys/bifrost-repo.gpg";
+/// Imports the key file `$1` into pacman's keyring and signs it locally (the same steps as the package scriptlet).
+const IMPORT_REPO_KEY_SH: &str = "pacman-key --add \"$1\" && fpr=$(gpg --batch --with-colons --import-options show-only --import \"$1\" | awk -F: '$1==\"fpr\"{print $10; exit}') && [ -n \"$fpr\" ] && pacman-key --lsign-key \"$fpr\"";
+
+fn bifrost_repo_section(server: &str) -> String {
+    format!("[bifrost]\nSigLevel = {BIFROST_REPO_SIG_LEVEL}\nServer = {server}\n")
+}
+
 fn offline_sync_args(config: &str, dbpath: &str) -> Vec<String> {
     vec!["pacman".into(), "-Sy".into(), "--noconfirm".into(), "--config".into(), config.into(), "--dbpath".into(), dbpath.into()]
 }
@@ -911,7 +926,19 @@ pub fn install(cfg: &Config, progress: &Shared) {
             if has_active_file_repo {
                 return Err("refusing to write ISO-only file repositories into the installed pacman.conf".into());
             }
-            r.write(&sys("/etc/pacman.conf"), &format!("{conf}\n[bifrost]\nSigLevel = Optional TrustAll\nServer = {server}\n"))?;
+            r.write(&sys("/etc/pacman.conf"), &format!("{conf}\n{}", bifrost_repo_section(server)))?;
+            // the public key that signs the repository: into the target's keyring before the first `pacman -Sy` below
+            // (the package ships the same key and its scriptlet keeps it imported afterwards)
+            if std::path::Path::new(REPO_KEY_LIVE).exists() {
+                let imported = r.cmd(&["install", "-Dm644", REPO_KEY_LIVE, &sys(REPO_KEY_TARGET)])
+                    .and_then(|_| r.chroot(&["sh", "-c", IMPORT_REPO_KEY_SH, "sh", REPO_KEY_TARGET]));
+                match imported {
+                    Ok(_) => r.log("update repository key imported into the installed keyring".to_string()),
+                    Err(e) => r.log(format!("WARNING: update repository key not imported ({e}); a signed repository will be refused")),
+                }
+            } else {
+                r.log(format!("WARNING: {REPO_KEY_LIVE} is not on the installer medium; a signed update repository is refused until the package brings the key"));
+            }
         }
 
         r.set(2, 86, "Installing the desktop");
@@ -1390,6 +1417,14 @@ mod tests {
         assert_eq!(lab_package_url("", pkg), None, "no lab mirror: the App Store as usual");
         assert_eq!(lab_package_url("http://10.99.0.1:8078/mirror/", "https://elsewhere/x.aap"), None, "only store paths");
         assert_eq!(lab_package_url("http://10.99.0.1:8078/mirror/", "/store/../etc/x.aap"), None);
+    }
+
+    #[test]
+    fn the_update_repository_trusts_only_known_keys() {
+        let s = bifrost_repo_section("https://repo.example/arch/$arch");
+        assert_eq!(s, "[bifrost]\nSigLevel = Optional TrustedOnly\nServer = https://repo.example/arch/$arch\n");
+        assert!(!s.contains("TrustAll"), "no unknown signing key is trusted");
+        assert!(IMPORT_REPO_KEY_SH.contains("pacman-key --add") && IMPORT_REPO_KEY_SH.contains("--lsign-key"));
     }
 
     #[test]
