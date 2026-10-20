@@ -75,10 +75,10 @@ impl Summary {
             in_reply_to: get("in-reply-to").map(parse_ids).unwrap_or_default(),
             references: get("references").map(parse_ids).unwrap_or_default(),
             subject: get("subject").map(decode_words).unwrap_or_default(),
-            from: get("from").map(decode_words).unwrap_or_default(),
-            to: get("to").map(decode_words).unwrap_or_default(),
-            cc: get("cc").map(decode_words).unwrap_or_default(),
-            reply_to: get("reply-to").map(decode_words).unwrap_or_default(),
+            from: get("from").map(decode_addresses).unwrap_or_default(),
+            to: get("to").map(decode_addresses).unwrap_or_default(),
+            cc: get("cc").map(decode_addresses).unwrap_or_default(),
+            reply_to: get("reply-to").map(decode_addresses).unwrap_or_default(),
             date: get("date").unwrap_or_default().to_string(),
             list_unsubscribe: get("list-unsubscribe").unwrap_or_default().to_string(),
             list_id: get("list-id").unwrap_or_default().to_string(),
@@ -431,6 +431,36 @@ pub fn split_addresses(list: &str) -> Vec<String> {
     out
 }
 
+/// An address header (From, To, Cc, ...) with the encoded words (RFC 2047) of its display names decoded. Each address is
+/// decoded on its own, before anything is joined, so a name that decodes to `Smith, Ana` is quoted and the list splits
+/// where it did. A header with no encoded word comes back as it was.
+pub fn decode_addresses(value: &str) -> String {
+    if !value.contains("=?") {
+        return value.to_string();
+    }
+    split_addresses(value).iter().map(|entry| decode_address(entry)).collect::<Vec<_>>().join(", ")
+}
+
+/// One `Name <address>` entry with its display name decoded; the name is quoted when it was or when it now holds a
+/// character that separates or ends an address.
+fn decode_address(entry: &str) -> String {
+    let Some(open) = entry.rfind('<') else { return decode_words(entry) };
+    let (name, address) = entry.split_at(open);
+    let name = name.trim();
+    let was_quoted = name.len() >= 2 && name.starts_with('"') && name.ends_with('"');
+    let inner = if was_quoted { name[1..name.len() - 1].replace("\\\"", "\"").replace("\\\\", "\\") } else { name.to_string() };
+    let decoded = decode_words(&inner);
+    if decoded.is_empty() {
+        return address.to_string();
+    }
+    let special = decoded.contains([',', ';', '<', '>', '"', '\\', '(', ')', ':']);
+    if was_quoted || special {
+        format!("\"{}\" {address}", decoded.replace('\\', "\\\\").replace('"', "\\\""))
+    } else {
+        format!("{decoded} {address}")
+    }
+}
+
 /// The threading headers a reply carries: References of the original (or its In-Reply-To) and its Message-ID.
 fn reply_references(original: &Summary) -> Vec<String> {
     if original.references.is_empty() {
@@ -502,7 +532,7 @@ pub fn forward_attachment_draft(original: &Summary, from: &str, raw: &str) -> Dr
 pub fn draft_of(raw: &str) -> Draft {
     let s = Summary::from_headers(raw);
     let headers = parse_headers(raw);
-    let get = |name: &str| headers.iter().find(|(n, _)| n == name).map(|(_, v)| decode_words(v)).unwrap_or_default();
+    let get = |name: &str| headers.iter().find(|(n, _)| n == name).map(|(_, v)| decode_addresses(v)).unwrap_or_default();
     Draft {
         from: s.from.clone(),
         to: split_addresses(&s.to),
@@ -580,6 +610,34 @@ mod tests {
         assert_eq!(s.subject, "Fundur á morgun");
         assert_eq!(s.from, "Ana <ana@example.com>");
         assert!(parse_headers(RAW).iter().all(|(n, _)| n != "nope"));
+    }
+
+    #[test]
+    fn every_header_is_decoded_whatever_the_encoding() {
+        let raw = concat!(
+            "From: =?utf-8?q?Ap=C3=B3tekarinn?= <apotek@example.com>\r\n",
+            "To: \"=?UTF-8?B?w4FzcsO6bg==?=\" <asrun@example.com>,\r\n",
+            " =?ISO-8859-1?Q?Su=F0ur?= <sudur@example.com>\r\n",
+            "Cc: =?utf-8?Q?Smith=2C_Ana?= <ana@example.com>, bo@example.com\r\n",
+            "Reply-To: =?iso-8859-15?q?=A4uro?= <euro@example.com>\r\n",
+            "Subject: =?utf-8?Q?Fundur_?=\r\n =?utf-8?Q?=C3=A1?=\r\n =?UTF-8?q?_morgun?=\r\n",
+            "\r\nbody"
+        );
+        let s = Summary::from_headers(raw);
+        assert_eq!(s.from, "Apótekarinn <apotek@example.com>");
+        assert_eq!(s.to, "\"Ásrún\" <asrun@example.com>, Suður <sudur@example.com>");
+        assert_eq!(s.cc, "\"Smith, Ana\" <ana@example.com>, bo@example.com");
+        assert_eq!(s.reply_to, "€uro <euro@example.com>");
+        assert_eq!(s.subject, "Fundur á morgun", "folded lines join and the spaces between words go");
+    }
+
+    #[test]
+    fn a_decoded_name_with_a_comma_stays_one_recipient() {
+        let s = Summary::from_headers("To: =?utf-8?Q?Smith=2C_Ana?= <ana@example.com>, bo@example.com\r\n\r\n");
+        assert_eq!(split_addresses(&s.to), ["\"Smith, Ana\" <ana@example.com>", "bo@example.com"]);
+        assert_eq!(address_of(&split_addresses(&s.to)[0]), "ana@example.com");
+        assert_eq!(decode_addresses("Ana <ana@example.com>, bo@example.com"), "Ana <ana@example.com>, bo@example.com", "no encoded word, no change");
+        assert_eq!(decode_addresses("ana@example.com (=?utf-8?q?\u{e1}na?=)"), "ana@example.com (\u{e1}na)");
     }
 
     #[test]

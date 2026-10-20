@@ -2,7 +2,7 @@
 //! with base64 and quoted-printable transfer encodings undone and ISO-8859-1 read as Latin-1. Headers are read with
 //! [`crate::message::parse_headers`], so folded lines and case are handled the same way as in the list.
 
-use crate::codec::{base64_decode, decode_words};
+use crate::codec::{base64_decode, decode_charset, parameter};
 use crate::html;
 use crate::message::parse_headers;
 
@@ -64,20 +64,15 @@ pub(crate) fn is_file_part(headers: &[(String, String)]) -> bool {
 }
 
 /// The file name of a part: the `filename` of its Content-Disposition, else the `name` of its Content-Type. Encoded
-/// words are decoded.
+/// words (RFC 2047) and the RFC 2231 forms (`filename*=utf-8''...`, continuations) are decoded.
 pub(crate) fn file_name(headers: &[(String, String)]) -> Option<String> {
     ["content-disposition", "content-type"]
         .iter()
         .find_map(|header| {
             let value = headers.iter().find(|(n, _)| n == header).map(|(_, v)| v.as_str())?;
-            value.split(';').skip(1).find_map(|part| {
-                let (key, val) = part.split_once('=')?;
-                let key = key.trim().to_ascii_lowercase();
-                (key == "filename" || key == "name").then(|| val.trim().trim_matches('"').to_string())
-            })
+            parameter(value, "filename").or_else(|| parameter(value, "name")).filter(|name| !name.trim().is_empty())
         })
-        .filter(|name| !name.is_empty())
-        .map(|name| decode_words(&name))
+        .map(|name| name.trim().to_string())
 }
 
 /// The part's bytes with its transfer encoding undone (no charset: attachments are kept as bytes).
@@ -181,12 +176,9 @@ fn decode_body(headers: &[(String, String)], body: &str, charset: Option<&str>) 
     apply_charset(&bytes, charset)
 }
 
-/// Reads bytes in the declared charset: ISO-8859-1 and Windows-1252 map one byte to one char, anything else is UTF-8.
+/// Reads bytes in the declared charset (see [`decode_charset`]); a charset Mail does not know reads as UTF-8.
 pub fn apply_charset(bytes: &[u8], charset: Option<&str>) -> String {
-    match charset.map(str::to_ascii_lowercase).as_deref() {
-        Some("iso-8859-1") | Some("latin1") | Some("windows-1252") | Some("iso-8859-15") => bytes.iter().map(|&b| b as char).collect(),
-        _ => String::from_utf8_lossy(bytes).into_owned(),
-    }
+    charset.and_then(|label| decode_charset(bytes, label)).unwrap_or_else(|| String::from_utf8_lossy(bytes).into_owned())
 }
 
 /// Quoted-printable (RFC 2045 section 6.7): `=XX` is a byte, `=` at a line end is a soft break, the rest is kept.
@@ -281,6 +273,28 @@ mod tests {
         assert_eq!(files[0], Attachment { name: "skjal.pdf".into(), mime: "application/pdf".into(), bytes: b"hi".to_vec() });
         assert_eq!(files[1].name, "attachment-2");
         assert_eq!(files[1].bytes, b"notes".to_vec());
+    }
+
+    #[test]
+    fn attachment_names_are_decoded_in_every_form() {
+        let part = |disposition: &str| {
+            format!("Content-Type: multipart/mixed; boundary=\"B\"\r\n\r\n--B\r\nContent-Type: application/pdf\r\nContent-Disposition: {disposition}\r\n\r\ndata\r\n--B--\r\n")
+        };
+        let name = |disposition: &str| attachments(&part(disposition)).remove(0).name;
+        assert_eq!(name("attachment; filename=\"=?UTF-8?B?c2tqYWzDsC5wZGY=?=\""), "skjalð.pdf");
+        assert_eq!(name("attachment; filename=\"=?iso-8859-1?q?sk=E1l.txt?=\""), "skál.txt");
+        assert_eq!(name("attachment; filename*=utf-8''%E2%82%AC.txt"), "€.txt");
+        assert_eq!(name("attachment; filename*0*=utf-8''ars; filename*1*=%C3%A1.pdf"), "arsá.pdf");
+        assert_eq!(name("attachment; filename=\"a; b.txt\""), "a; b.txt");
+    }
+
+    #[test]
+    fn declared_charsets_are_applied_to_bodies() {
+        assert_eq!(apply_charset(&[0x80, 0xE1], Some("Windows-1252")), "\u{20ac}á");
+        assert_eq!(apply_charset(&[0xA4], Some("iso-8859-15")), "€");
+        assert_eq!(apply_charset("á".as_bytes(), Some("utf-8")), "á");
+        assert_eq!(apply_charset("á".as_bytes(), Some("x-unknown")), "á", "an unknown charset reads as UTF-8");
+        assert_eq!(apply_charset("á".as_bytes(), None), "á");
     }
 
     #[test]
