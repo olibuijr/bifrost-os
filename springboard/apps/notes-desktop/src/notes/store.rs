@@ -21,6 +21,8 @@ impl Note {
     /// The first non-blank line, or the placeholder for an empty note.
     pub fn title(&self) -> &str {
         let line = self.text.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("New Note");
+        // a title marker with no name yet ("# " is hidden in the editor) is still a new note
+        let line = if line == "#" { "New Note" } else { line };
         // a Markdown heading marker is not part of the name
         let bare = line.trim_start_matches('#').trim_start();
         if bare.is_empty() { line } else { bare }
@@ -526,6 +528,7 @@ mod tests {
         assert_eq!(note("4", "## Plan\nx", 0).title(), "Plan", "heading markers are dropped");
         assert_eq!(note("5", "#hashtag", 0).title(), "hashtag");
         assert_eq!(note("6", "###", 0).title(), "###", "a bare marker stays");
+        assert_eq!(note("7", "# ", 0).title(), "New Note", "a title marker alone is a new note");
     }
 
     #[test]

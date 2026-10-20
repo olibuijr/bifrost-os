@@ -91,6 +91,7 @@ fn paint_formula(s: &mut Surface, ui: &Ui, lay: &Layout, x: f32, baseline: f32, 
 /// A run of chars (line-relative) drawn in one weight and colour. `kind` 1
 /// is a bullet marker and 2 a checkbox, both drawn as shapes; 3, 4 and 5 are
 /// struck-through, underlined and highlighted text, and 6 the bar of a quote.
+/// 7 draws nothing here: a formula is drawn over its source, and the "# " title marker of the first line is hidden.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Seg {
     a: usize,
@@ -551,6 +552,14 @@ impl TextArea {
                     }
                 }
             }
+            // the first line is the title; a "# " title marker on it is not shown (the line already has the title style)
+            let hide = match info {
+                Some(i) if pi == 0 && i.block == Block::Title => i.prefix.min(chars.len()),
+                _ => 0,
+            };
+            for st in styles.iter_mut().take(hide) {
+                st.2 = 7;
+            }
             let mut adv: Vec<f32> = if display.is_some() {
                 vec![0.0; chars.len()]
             } else if self.markdown {
@@ -559,6 +568,9 @@ impl TextArea {
             } else {
                 advances(ui, para, pt, weight)
             };
+            for d in adv.iter_mut().take(hide) {
+                *d = 0.0;
+            }
             // a formula takes its width on its first char; the rest of its source takes none
             for (a, b, lay) in &para_maths {
                 adv[*a] = lay.width;
@@ -1524,6 +1536,24 @@ mod tests {
         assert!(ta.lines.iter().filter(|l| l.block == Block::Check(false)).all(|l| l.simgs.iter().any(Option::is_some)));
         ta.edit(&ui, &Out::Text("x".into()), 1.0);
         ta.draw(&mut Surface { w: 600, h: 300, stride: 600, px: &mut buf, y0: 0 }, &ui, 20.0, 10.0, 0.0);
+    }
+
+    #[test]
+    fn a_title_marker_on_the_first_line_takes_no_room_and_draws_nothing() {
+        let ui = ui();
+        let plain = md_area(&ui, "Shopping list\nMilk");
+        let marked = md_area(&ui, "# Shopping list\nMilk");
+        assert_eq!(marked.text(), "# Shopping list\nMilk", "the text keeps its marker");
+        let (a, b) = (&plain.lines[0], &marked.lines[0]);
+        assert_eq!(&b.adv[..2], &[0.0, 0.0]);
+        assert_eq!(b.x_at(b.range.start + 2), 0.0);
+        assert_eq!(a.x_at(a.range.end), b.x_at(b.range.end), "the title is as wide as the same title without the marker");
+        assert!(b.pt == a.pt && b.weight == a.weight, "the first line has the title style either way");
+        assert_eq!(b.segs[0].kind, 7, "the marker is not drawn");
+        assert!(a.segs.iter().all(|g| g.kind != 7));
+        // the marker only hides on the first line
+        let later = md_area(&ui, "Note\n# Heading");
+        assert!(later.lines[1].adv[0] > 0.0);
     }
 
     #[test]
