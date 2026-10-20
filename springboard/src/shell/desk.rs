@@ -1457,6 +1457,11 @@ impl Shell {
     pub(super) fn arrange_tick(&mut self, t: f64) {
         let Some((app, since)) = self.desk.as_ref().and_then(|d| d.arrange_at) else { return };
         if t - since < ARRANGE_DWELL_MS { return; }
+        // a full-screen window has no traffic lights to rest on: a rest that began before it went full screen is dropped
+        if self.desk.as_ref().is_some_and(|d| d.index_of(app).and_then(|i| d.wins.get(i)).is_some_and(|w| w.full)) {
+            if let Some(d) = self.desk.as_mut() { d.arrange_at = None; }
+            return;
+        }
         let m = self.desk_metrics();
         let button = self.desk.as_ref().and_then(|d| d.index_of(app).and_then(|i| d.wins.get(i))).map(|w| w.light_rect(&m, 2));
         let idle = self.desk.as_ref().is_some_and(|d| d.grab_idle());
@@ -1523,6 +1528,8 @@ impl Shell {
         }
         // the Dock slides away with the menu bar and comes back when the window leaves full screen; either edge reveals it
         d.arrange = None;
+        // a rest on the green button that began before the click must not open a menu on the window the click changed
+        d.arrange_at = None;
         if on {
             d.dock_hide_at = Some(now);
         } else {

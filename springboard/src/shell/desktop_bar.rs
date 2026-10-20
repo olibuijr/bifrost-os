@@ -631,7 +631,10 @@ impl Shell {
         if bifrost_render::glass::gpu() {
             // Golden Gate: the bar is transparent over the wallpaper the presenter draws
             *self.bar_backdrop.borrow_mut()=None;
-            s.fill_rect(0,0,self.w as usize,height,0);
+            // over a full-screen window (the pointer is at the top, or the bar would not be here) the bar has a ground of its
+            // own: transparent, the window's toolbar and traffic lights would show through it and collide with its items
+            let ground=if self.desk.as_ref().is_some_and(|d|d.front_full()){MENU_SOLID.now()}else{0};
+            s.fill_rect(0,0,self.w as usize,height,ground);
             self.draw_desktop_bar_items(s,height);return;
         }
         let key=(self.w as usize,height,self.wallpaper_frame().px.as_ptr() as usize);

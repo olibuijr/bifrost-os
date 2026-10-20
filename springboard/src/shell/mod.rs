@@ -3191,11 +3191,23 @@ impl Shell {
         fx
     }
 
+    /// Remembers how far down the pointer is, from a press, a drag or a plain move, for the menu bar that a full-screen
+    /// window hides (`desk::bar_hidden`). The bar comes and goes as the pointer enters or leaves its band, so crossing the
+    /// band repaints.
+    pub(super) fn note_pointer_y(&mut self, y: f32) {
+        let band = self.desktop_bar_height() as f32;
+        let was_in_band = self.pointer_y.is_some_and(|p| p < band);
+        self.pointer_y = Some(y);
+        if (y < band) != was_in_band {
+            self.dirty = true;
+        }
+    }
+
     fn event_inner(&mut self, ev: Event, t: f64) -> Vec<Effect> {
         // session event taps see the pointer first and may drop or move it (`services::event_services`)
         let Some(ev) = self.tap_pointer_event(ev) else { return vec![] };
         if let Event::Down(_, y) | Event::Move(_, y) = ev {
-            self.pointer_y = Some(y);
+            self.note_pointer_y(y);
         }
         self.last_input = t;
         self.dirty = true;

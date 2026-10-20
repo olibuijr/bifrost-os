@@ -653,6 +653,45 @@
         let _=std::fs::remove_dir_all(&dir);
     }
 
+    /// E2E round 3: the menu bar over a full-screen window follows the pointer, not the last press. A pointer that only
+    /// moves (no button) away from the top hides the bar again, and moving to the top reveals it.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn the_bar_over_a_full_screen_window_follows_the_pointer_when_it_only_moves() {
+        use crate::bare::wayland::WindowEvent;
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        sh.desk_open(AppId::Settings,0.);
+        let id=apps().iter().position(|a|a.id==AppId::Settings).unwrap() as u32+1;
+        sh.wayland_window_event(WindowEvent::Fullscreen(id,true));
+        assert!(sh.desk_bar_hidden(),"no pointer seen: hidden");
+        sh.dirty=false;
+        sh.desktop_pointer(300.,2.,false,10.);
+        assert!(!sh.desk_bar_hidden(),"the pointer reached the top edge: the bar is there");
+        assert!(sh.dirty,"and it repaints");
+        sh.dirty=false;
+        sh.desktop_pointer(300.,sh.h as f32/2.,false,20.);
+        assert!(sh.desk_bar_hidden(),"the pointer moved away without a button: hidden again, not left over the window");
+        assert!(sh.dirty,"and it repaints");
+    }
+
+    /// A rest on the green button that began before the click must not open the one-item full-screen menu on the window
+    /// the click took full screen.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn a_rest_on_the_green_button_before_the_click_opens_no_menu_on_the_full_screen_window() {
+        use crate::bare::wayland::WindowEvent;
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        sh.desk_open(AppId::Settings,0.);
+        let id=apps().iter().position(|a|a.id==AppId::Settings).unwrap() as u32+1;
+        let (gx,gy)=green_button(&sh);
+        sh.desktop_pointer(gx,gy,false,1000.);
+        assert!(sh.desk.as_ref().unwrap().arrange_at.is_some(),"the rest has begun");
+        sh.wayland_window_event(WindowEvent::Fullscreen(id,true));
+        assert!(sh.desk.as_ref().unwrap().arrange_at.is_none(),"going full screen ends the rest");
+        sh.arrange_tick(1000.+desk::ARRANGE_DWELL_MS+1.);
+        assert!(sh.desktop_menu.is_none(),"so no menu opens on the full-screen window");
+    }
+
     /// The same on an output of any size: the frame is the output, never a number of pixels.
     #[cfg(feature="desktop-wayland")]
     #[test]
