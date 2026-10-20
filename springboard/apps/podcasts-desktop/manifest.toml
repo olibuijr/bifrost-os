@@ -1,6 +1,6 @@
 id = "is.olibuijr.podcasts.desktop"
 name = "Podcasts"
-version = "1.13.4"
+version = "1.13.5"
 exec = "bifrost-podcasts"
 icon = "icon.png"
 min_shell = "0.4.84"

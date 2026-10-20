@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.6 — 2026-10-20
+
+- Sound plays on the default output, and the app waits before reconnecting to the media service instead of retrying in a tight loop.
+
 ## 0.5.5 — 2026-10-20
 
 - Playback reaches the system's media service again (the app's audio connection was never opened, so nothing played).

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.10.11 — 2026-10-20
+
 - Sound plays on the default output: opening a stream on the device the audio server chose no longer fails with
   "add the IO procedure: UnknownObject". The server now publishes each device's buffer size, sample rate, available rates
   and buffer range (the client library reads the buffer size before it adds its IO procedure), and a property a device does
