@@ -30,8 +30,16 @@ pub struct View {
 
 impl View {
     pub fn load() -> View {
-        View::from_result(Client::local().printers().map_err(|e| e.to_string()))
-            .with_scanners(scanner::list().map_err(|e| e.to_string()))
+        let v = View::from_result(Client::local().printers().map_err(|e| e.to_string()))
+            .with_scanners(scanner::list().map_err(|e| e.to_string()));
+        // the page says it plainly; the reason goes to the log
+        if let Some(e) = &v.error {
+            bifrost_core::log::shell_logger("print").notice(format!("printing service unavailable: {e}"));
+        }
+        if let Some(e) = &v.scanner_error {
+            bifrost_core::log::shell_logger("print").notice(format!("scanning unavailable: {e}"));
+        }
+        v
     }
 
     pub fn from_result(r: Result<Vec<Printer>, String>) -> View {
@@ -63,11 +71,14 @@ pub fn state_label(state: PrinterState) -> &'static str {
     }
 }
 
+/// What the page says when the printing service cannot be reached (the reason is in the log, not on the page).
+const NOT_RUNNING: &str = "The printing service is not running.";
+
 /// The page's groups: the printers with the default one checked, then the add row.
 pub fn groups(v: &View) -> Vec<Group> {
     let mut out = Vec::new();
     match &v.error {
-        Some(e) => out.push(Group::new(vec![Item::new("No Printing Service").tint(Tint::Dim)]).footer(&format!("Printing is not available: {e}.")).header("PRINTERS")),
+        Some(_) => out.push(Group::new(vec![Item::new("No Printing Service").tint(Tint::Dim)]).footer(NOT_RUNNING).header("PRINTERS")),
         None if v.printers.is_empty() => out.push(Group::new(vec![Item::new("No Printers").tint(Tint::Dim)]).header("PRINTERS").footer("Add a printer to print from any app.")),
         None => {
             let rows = v
@@ -90,7 +101,7 @@ pub fn groups(v: &View) -> Vec<Group> {
 /// Capture app; this group only shows what is attached.
 pub fn scanners_group(v: &View) -> Group {
     match &v.scanner_error {
-        Some(e) => Group::new(vec![Item::new("No Scanners").tint(Tint::Dim)]).header("SCANNERS").footer(&format!("Scanning is not available: {e}.")),
+        Some(_) => Group::new(vec![Item::new("No Scanners").tint(Tint::Dim)]).header("SCANNERS").footer("Scanning is not available on this computer."),
         None if v.scanners.is_empty() => Group::new(vec![Item::new("No Scanners").tint(Tint::Dim)])
             .header("SCANNERS")
             .footer("Scanners on the network or over USB appear here when they are on. Scan with the Image Capture app."),
@@ -183,11 +194,11 @@ mod tests {
     }
 
     #[test]
-    fn no_printing_service_shows_why_and_offers_no_add_row() {
+    fn no_printing_service_says_so_plainly_and_offers_no_add_row() {
         let v = View::from_result(Err("printing service unreachable: refused".into()));
         let g = groups(&v);
         assert_eq!(g.len(), 2, "the printers group, then the scanners group");
-        assert!(g[0].footer.as_deref().is_some_and(|f| f.contains("refused")));
+        assert_eq!(g[0].footer.as_deref(), Some("The printing service is not running."), "a plain message, not the error");
         assert_eq!(g[1].header.as_deref(), Some("SCANNERS"));
     }
 
@@ -210,7 +221,7 @@ mod tests {
         let v = View::from_result(Ok(vec![])).with_scanners(Err("Scanning is not available: no such file".into()));
         let scanners = groups(&v).pop().unwrap();
         assert_eq!(scanners.items[0].label, "No Scanners");
-        assert!(scanners.footer.as_deref().is_some_and(|f| f.contains("no such file")));
+        assert_eq!(scanners.footer.as_deref(), Some("Scanning is not available on this computer."), "the command's error stays in the log");
     }
 
     #[test]

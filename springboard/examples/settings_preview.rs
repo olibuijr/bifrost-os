@@ -201,7 +201,7 @@ fn main() {
     }
     p.back(&mut st);
 
-    for (label, name) in [("Sounds", "sounds"), ("Control Centre", "control-centre"), ("Home Screen & Dock", "home-screen"), ("Accessibility", "accessibility"), ("Wallpaper", "wallpaper"), ("Battery", "battery"), ("Privacy", "privacy")] {
+    for (label, name) in [("Sounds", "sounds"), ("Control Center", "control-centre"), ("Home Screen & Dock", "home-screen"), ("Accessibility", "accessibility"), ("Wallpaper", "wallpaper"), ("Battery", "battery"), ("Privacy", "privacy")] {
         p.row(&mut st, label);
         p.save(&mut st, name, 0.0);
         p.back(&mut st);

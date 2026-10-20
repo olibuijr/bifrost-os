@@ -731,6 +731,12 @@ impl Settings {
                 let (unix, off) = crate::bare::sys::wall_time();
                 super::wake_page::spec(&self.wake, self.opts.clock_24h, unix, i64::from(off))
             }
+            PageId::Energy => {
+                // the wake Schedule sits with the sleep timeout
+                let mut s = spec(id, &self.model());
+                s.groups.push(Group::new(vec![Item::new("Schedule").value(super::wake_page::summary(&self.wake)).link(PageId::WakeSchedule)]));
+                s
+            }
             PageId::Battery => {
                 // the Schedule row sits under Energy
                 let mut s = spec(id, &self.model());
@@ -970,7 +976,7 @@ impl Settings {
         self.rebuild_visible(ui);
     }
 
-    /// Synchronizes a Control Centre Focus change while retaining the open page.
+    /// Synchronizes a Control Center Focus change while retaining the open page.
     pub(super) fn set_dnd(&mut self, ui: &Ui, on: bool) {
         self.opts.dnd = on;
         self.rebuild(ui);
@@ -1458,7 +1464,8 @@ impl Settings {
             "Wallpaper" => PageId::Wallpaper,
             "Screen Saver" => PageId::ScreenSaver,
             "About" => PageId::About,
-            "Battery" => PageId::Battery,
+            // a computer without a battery has no Battery pane: its power settings are Energy
+            "Battery" => if super::pages::has_battery(&self.info) { PageId::Battery } else { PageId::Energy },
             "Focus" | "Do Not Disturb" => PageId::Focus,
             "Notifications" => PageId::Notifications,
             "Software Update" => {
@@ -4113,7 +4120,7 @@ mod tests {
             (vec!["General", "Language & Region"], PageId::Language),
             (vec!["General", "Language & Region", "Region"], PageId::Region),
             (vec!["General", "Transfer or Reset Tab"], PageId::Reset),
-            (vec!["Control Centre"], PageId::ControlCentre),
+            (vec!["Control Center"], PageId::ControlCentre),
             (vec!["Menu Bar"], PageId::MenuBar),
             (vec!["Display & Brightness"], PageId::Display),
             (vec!["Display & Brightness", "Auto-Lock"], PageId::AutoLock),

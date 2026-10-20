@@ -3,7 +3,9 @@
 //! that can post. Settings keeps a copy of the state (`NotifyPrefs`) and
 //! reports edits as `NotifyChange`s that the shell applies to its store.
 
+use super::icons::Icon;
 use super::list::{Group, Item, Spec};
+use super::row_glyphs::Glyph;
 use super::notify::schedule::Schedule;
 use super::pages::{Action, PageId};
 use super::{AppId, apps};
@@ -174,11 +176,23 @@ fn clock(minute: u16, h24: bool) -> String {
     crate::status::clock_in((minute / 60) as i32, (minute % 60) as i32, h24)
 }
 
+/// The symbol tile of a Focus mode: Do Not Disturb has the Focus moon, the built-in modes their own, and a mode the
+/// person made a ring and a dot.
+fn with_mode_symbol(item: Item, name: &str) -> Item {
+    match name.trim().to_lowercase().as_str() {
+        "do not disturb" => item.icon(Icon::Focus),
+        "work" => item.glyph(Glyph::ModeWork),
+        "personal" => item.glyph(Glyph::ModePersonal),
+        "sleep" => item.glyph(Glyph::ModeSleep),
+        _ => item.glyph(Glyph::ModeOther),
+    }
+}
+
 /// The Focus modes, one row each; the mode that is on carries the check. Tapping it again switches Focus off.
 pub fn modes_group(p: &NotifyPrefs) -> Group {
-    Group::new(p.modes.iter().enumerate().map(|(i, name)| Item::new(name.as_str()).check(p.mode_on == Some(i), Action::Notify(NotifyEdit::Mode(i)))).collect())
+    Group::new(p.modes.iter().enumerate().map(|(i, name)| with_mode_symbol(Item::new(name.as_str()), name).check(p.mode_on == Some(i), Action::Notify(NotifyEdit::Mode(i)))).collect())
         .header("FOCUS MODES")
-        .footer("A mode holds back the notifications of every app and person it does not allow. Tap the mode that is on to turn Focus off.")
+        .footer(super::pages::by_form("A mode holds back the notifications of every app and person it does not allow. Tap the mode that is on to turn Focus off.", "A mode holds back the notifications of every app and person it does not allow. Click the mode that is on to turn Focus off."))
 }
 
 /// The Scheduled switch with its From and To rows, for the Focus page.
@@ -197,10 +211,32 @@ pub fn posting_apps() -> impl Iterator<Item = (AppId, &'static str)> {
     apps().iter().filter(|a| a.id != AppId::Settings).map(|a| (a.id, a.name))
 }
 
+/// The id of the app's icon (`apphost::icon_image` or the built-in drawn icon), for the leading slot of its row.
+fn app_icon_id(app: AppId) -> Option<&'static str> {
+    apps().iter().find(|a| a.id == app).map(|a| a.icon)
+}
+
+/// What an app's row says about its notifications: "Banners, Sounds, Badges" for what is on, "Off" when the app is
+/// muted.
+pub fn summary(p: &NotifyPrefs, app: AppId) -> String {
+    if p.is_muted(app) {
+        return "Off".into();
+    }
+    let n = p.app(app);
+    let on: Vec<&str> = [(n.style() == 1, "Banners"), (n.style() == 2, "Alerts"), (n.sounds, "Sounds"), (n.badges, "Badges")].into_iter().filter(|(on, _)| *on).map(|(_, label)| label).collect();
+    if on.is_empty() { "On".into() } else { on.join(", ") }
+}
+
 /// Settings › Notifications: every app, opening its page.
 pub fn spec(p: &NotifyPrefs) -> Spec {
     let rows = posting_apps()
-        .map(|(app, name)| Item::new(name).value(if p.is_muted(app) { "Off" } else { "On" }).link(PageId::NotificationApp))
+        .map(|(app, name)| {
+            let row = Item::new(name).value(summary(p, app)).link(PageId::NotificationApp);
+            match app_icon_id(app) {
+                Some(id) => row.app_icon(id),
+                None => row,
+            }
+        })
         .collect();
     Spec { id: PageId::Notifications, title: "Notifications".into(), large: false, groups: vec![Group::new(rows).header("NOTIFICATION STYLE")] }
 }
@@ -280,6 +316,28 @@ mod tests {
         assert!(s.groups[0].items.iter().all(|i| i.label != "Settings"));
         assert_eq!(app_spec(&p, "Photos").groups.len(), 1);
         assert!(app_spec(&NotifyPrefs::default(), "Photos").groups.len() > 4);
+    }
+
+    #[test]
+    fn each_app_row_has_its_icon_and_says_what_is_on() {
+        let p = NotifyPrefs { muted: vec![AppId::Photos], apps: vec![(AppId::Camera, AppNotif { sounds: false, persistent: true, ..AppNotif::default() })], ..Default::default() };
+        let s = spec(&p);
+        assert!(s.groups[0].items.iter().all(|i| i.app_icon.is_some()), "every row has an icon slot");
+        let row = |name: &str| s.groups[0].items.iter().find(|i| i.label == name).expect("a row").value.clone();
+        assert_eq!(row("Photos"), "Off", "a muted app");
+        assert_eq!(row("Camera"), "Alerts, Badges");
+        assert_eq!(summary(&NotifyPrefs::default(), AppId::Files), "Banners, Sounds, Badges");
+        let quiet = NotifyPrefs { apps: vec![(AppId::Files, AppNotif { banners: false, sounds: false, badges: false, ..AppNotif::default() })], ..Default::default() };
+        assert_eq!(summary(&quiet, AppId::Files), "On", "allowed, but nothing shows or sounds");
+    }
+
+    #[test]
+    fn focus_modes_have_their_symbols() {
+        let p = NotifyPrefs { modes: vec!["Do Not Disturb".into(), "Work".into(), "Personal".into(), "Sleep".into(), "Reading".into()], ..Default::default() };
+        let g = modes_group(&p);
+        assert_eq!(g.items[0].icon, Some(Icon::Focus));
+        let glyphs: Vec<_> = g.items[1..].iter().map(|i| i.glyph).collect();
+        assert_eq!(glyphs, [Some(Glyph::ModeWork), Some(Glyph::ModePersonal), Some(Glyph::ModeSleep), Some(Glyph::ModeOther)]);
     }
 
     #[test]

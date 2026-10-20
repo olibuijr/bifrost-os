@@ -401,7 +401,7 @@ fn header_for(id: PageId) -> Option<(Icon, &'static str)> {
         PageId::Sounds => (Icon::Sounds, "Set the volume and the sounds this computer plays."),
         PageId::Focus => (Icon::Focus, "Silence notifications while you work."),
         PageId::ScreenTime => (Icon::ScreenTime, "See how you use your computer and set limits."),
-        PageId::ControlCentre => (Icon::ControlCentre, "Choose which controls appear in Control Centre."),
+        PageId::ControlCentre => (Icon::ControlCentre, "Choose which controls appear in Control Center."),
         PageId::Sharing => (Icon::Wifi, "Choose how this computer shares with nearby devices and whether your other devices can pick up its work."),
         PageId::LockScreen => (Icon::Passcode, "Choose when the screen locks after a while and what it asks for before it opens again."),
         _ => return None,
@@ -688,7 +688,7 @@ impl ListPage {
                 let (icon_pt, _, gap_pt) = row_icon(pane.sidebar);
                 let label_w = cw - ui.pt(2.0 * TEXT_INSET_PT) - if has_leading(item) { ui.pt(icon_pt + gap_pt) } else { 0.0 } - value_room;
                 // the app's icon at the icon token; a built-in app has none and leaves the slot blank
-                let icon_img = item.app_icon.as_ref().filter(|_| has_leading(item)).and_then(|id| super::apphost::icon_image(id, ui.pt(icon_pt).round() as usize));
+                let icon_img = item.app_icon.as_ref().filter(|_| has_leading(item)).and_then(|id| { let px = ui.pt(icon_pt).round() as usize; super::apphost::icon_image(id, px).or_else(|| super::apps::builtin_icon(id, px)) });
                 images.push(RowImages {
                     label: ui.text(&ui.fit(&item.label, MAC_BODY_PT, label_w), MAC_BODY_PT, if pane.sidebar { Weight::Regular } else { Weight::Regular }, color),
                     value: value_img,

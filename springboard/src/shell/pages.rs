@@ -629,6 +629,41 @@ pub fn uptime(minutes: i64) -> String {
 
 /// The About page's rows: (label, value) in page order, grouped.
 /// The battery level as text. A desktop without a battery has no level to show.
+/// Whether this computer has a battery to show. A desktop (it has the network snapshot) without one has no Battery
+/// pane, and its menu bar shows no battery or plug.
+pub fn has_battery(info: &Info) -> bool {
+    info.desktop_network.is_none() || info.battery_present
+}
+
+/// The form factor Settings words itself for. Tests start as a tablet (what the pages assumed before the wording
+/// followed the form) and switch with `set_test_form`.
+fn form() -> bifrost_ui::form_factor::FormFactor {
+    #[cfg(test)]
+    return TEST_FORM.with(|f| f.get());
+    #[cfg(not(test))]
+    bifrost_ui::form_factor::FormFactor::current()
+}
+
+#[cfg(test)]
+thread_local! {
+    static TEST_FORM: std::cell::Cell<bifrost_ui::form_factor::FormFactor> = const { std::cell::Cell::new(bifrost_ui::form_factor::FormFactor::Tablet) };
+}
+
+#[cfg(test)]
+pub(super) fn set_test_form(f: bifrost_ui::form_factor::FormFactor) {
+    TEST_FORM.with(|c| c.set(f));
+}
+
+/// `touch` on a tablet and `click` on a desktop: a pane's instructions name the input the person has.
+pub fn by_form(touch: &'static str, click: &'static str) -> &'static str {
+    if form().is_tablet() { touch } else { click }
+}
+
+/// Whether the lock is a numeric passcode (a tablet's) rather than the account password (a desktop's).
+fn numeric_passcode() -> bool {
+    form().is_tablet()
+}
+
 fn battery_level(info: &Info) -> String {
     if info.desktop_network.is_some() && !info.battery_present {
         return "None".into();
@@ -793,7 +828,7 @@ const KEYWORDS: &[(&str, &str)] = &[
     ("keyboard shortcuts", "keys hotkeys commands"),
     ("overview", "windows desktops group switch"),
     ("menu bar", "top bar status items clock"),
-    ("control centre", "control center quick settings"),
+    ("control center", "control centre quick settings"),
     ("legal", "license regulatory terms"),
     ("dictionary", "spelling words"),
     ("text replacements", "shortcut expand autocorrect"),
@@ -827,50 +862,72 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
     let (info, o) = (m.info, m.opts);
     let page = |title: &str, large: bool, groups: Vec<Group>| Spec { id, title: title.into(), large, groups };
     match id {
-        PageId::Root => page(
-            "Settings",
-            true,
-            vec![
-                Group::new(vec![Item::new("BifrOSt Account").value(m.account).link(PageId::Account)]),
-                Group::new(vec![
-                    Item::new("Airplane Mode").icon(Icon::Airplane).switch(m.airplane, Action::Toggle(Toggle::Airplane)),
-                    if info.desktop_network.is_some() {Item::new("Network").icon(Icon::Wifi).value(if info.online {"Connected"}else{"Not Connected"}).link(PageId::Network)} else {Item::new("Wi-Fi").icon(Icon::Wifi).value(if m.wifi_on { info.wifi.as_str() } else { "Off" }).link(PageId::Wifi)},
-                    Item::new("Bluetooth").icon(Icon::Bluetooth).value(info.bt.summary()).link(PageId::Bluetooth),
-                ]),
-                Group::new(vec![
-                    Item::new("Notifications").icon(Icon::Notifications).link(PageId::Notifications),
-                    Item::new("Sounds").icon(Icon::Sounds).link(PageId::Sounds),
-                    Item::new("Focus").icon(Icon::Focus).value(on_off(o.dnd)).link(PageId::Focus),
-                    Item::new("Screen Time").icon(Icon::ScreenTime).link(PageId::ScreenTime),
-                ]),
-                Group::new(vec![
-                    Item::new("General").icon(Icon::General).badge(usize::from(m.update_badge)).link(PageId::General),
-                    Item::new("Control Centre").icon(Icon::ControlCentre).link(PageId::ControlCentre),
-                    Item::new("Menu Bar").icon(Icon::ControlCentre).link(PageId::MenuBar),
-                    Item::new("Display & Brightness").icon(Icon::Display).link(PageId::Display),
-                    Item::new("Home Screen & Dock").icon(Icon::HomeScreen).link(PageId::HomeScreen),
-                    Item::new("Overview").icon(Icon::HomeScreen).link(PageId::Overview),
-                    Item::new("Sharing").icon(Icon::Wifi).link(PageId::Sharing),
-                    Item::new("Print & Scan").icon(Icon::General).link(PageId::PrintScan),
-                    Item::new("Keyboard Shortcuts").icon(Icon::General).link(PageId::Shortcuts),
-                    Item::new("Assistant").icon(Icon::General).link(PageId::Assistant),
-                    Item::new("Trackpad").icon(Icon::General).link(PageId::Trackpad),
-                    Item::new("Mouse").icon(Icon::General).link(PageId::Mouse),
-                    Item::new("Users & Groups").icon(Icon::Passcode).link(PageId::Users),
-                    Item::new("Accessibility").icon(Icon::Accessibility).link(PageId::Accessibility),
-                    Item::new("Wallpaper").icon(Icon::Wallpaper).value(m.wallpaper.as_str()).link(PageId::Wallpaper),
-                    Item::new("Screen Saver").icon(Icon::Wallpaper).value(if o.screensaver_minutes == 0 { "Never" } else { super::screensaver::saver_name(o.screensaver_module) }).link(PageId::ScreenSaver),
-                    Item::new("Battery").icon(Icon::Battery).value(battery_level(info)).link(PageId::Battery),
-                    Item::new("Privacy").icon(Icon::Privacy).link(PageId::Privacy),
-                    Item::new("Spotlight").icon(Icon::General).link(PageId::Spotlight),
-                    Item::new("Lock Screen").icon(Icon::Passcode).link(PageId::LockScreen),
-                    Item::new("Passcode").icon(Icon::Passcode).link(PageId::Passcode),
-                    Item::new("Passwords").icon(Icon::Passcode).link(PageId::Passwords),
-                    Item::new("Internet Accounts").icon(Icon::General).link(PageId::InternetAccounts),
-                ]),
-                Group::new(vec![Item::new("Developer").icon(Icon::General).link(PageId::Developer)]),
-            ],
-        ),
+        PageId::Root => {
+            let wifi_row = Item::new("Wi-Fi").icon(Icon::Wifi).value(if m.wifi_on { info.wifi.as_str() } else { "Off" }).link(PageId::Wifi);
+            // a desktop lists Wi-Fi above Network when it has a wireless adapter; Network keeps the wired rows
+            let mut connections = vec![Item::new("Airplane Mode").icon(Icon::Airplane).switch(m.airplane, Action::Toggle(Toggle::Airplane))];
+            match info.desktop_network.as_ref() {
+                Some(n) => {
+                    if n.wifi_available {
+                        connections.push(wifi_row);
+                    }
+                    connections.push(Item::new("Network").icon(Icon::Network).value(if info.online { "Connected" } else { "Not Connected" }).link(PageId::Network));
+                }
+                None => connections.push(wifi_row),
+            }
+            connections.push(Item::new("Bluetooth").icon(Icon::Bluetooth).value(info.bt.summary()).link(PageId::Bluetooth));
+            // no battery, no Battery pane: a desktop offers its sleep and wake settings as Energy instead
+            let power = if has_battery(info) {
+                Item::new("Battery").icon(Icon::Battery).value(battery_level(info)).link(PageId::Battery)
+            } else {
+                Item::new("Energy").glyph(Glyph::Energy).value(o.system_sleep_label()).link(PageId::Energy)
+            };
+            let mut general = vec![
+                Item::new("General").icon(Icon::General).badge(usize::from(m.update_badge)).link(PageId::General),
+                Item::new("Control Center").icon(Icon::ControlCentre).link(PageId::ControlCentre),
+                Item::new("Menu Bar").icon(Icon::ControlCentre).link(PageId::MenuBar),
+                Item::new("Display & Brightness").icon(Icon::Display).link(PageId::Display),
+                Item::new("Home Screen & Dock").icon(Icon::HomeScreen).link(PageId::HomeScreen),
+                Item::new("Overview").icon(Icon::HomeScreen).link(PageId::Overview),
+                Item::new("Sharing").icon(Icon::Wifi).link(PageId::Sharing),
+                Item::new("Print & Scan").icon(Icon::Printer).link(PageId::PrintScan),
+                Item::new("Keyboard Shortcuts").icon(Icon::Keyboard).link(PageId::Shortcuts),
+                Item::new("Assistant").icon(Icon::Assistant).link(PageId::Assistant),
+                Item::new("Trackpad").icon(Icon::Trackpad).link(PageId::Trackpad),
+                Item::new("Mouse").icon(Icon::Mouse).link(PageId::Mouse),
+                Item::new("Users & Groups").icon(Icon::Passcode).link(PageId::Users),
+                Item::new("Accessibility").icon(Icon::Accessibility).link(PageId::Accessibility),
+                Item::new("Wallpaper").icon(Icon::Wallpaper).value(m.wallpaper.as_str()).link(PageId::Wallpaper),
+                Item::new("Screen Saver").icon(Icon::Wallpaper).value(if o.screensaver_minutes == 0 { "Never" } else { super::screensaver::saver_name(o.screensaver_module) }).link(PageId::ScreenSaver),
+                power,
+                Item::new("Privacy").icon(Icon::Privacy).link(PageId::Privacy),
+                Item::new("Spotlight").icon(Icon::Search).link(PageId::Spotlight),
+                Item::new("Lock Screen").icon(Icon::Passcode).link(PageId::LockScreen),
+            ];
+            // the numeric passcode is a tablet's lock; a desktop signs in with its account password, which Lock Screen
+            // and Users & Groups cover
+            if numeric_passcode() {
+                general.push(Item::new("Passcode").icon(Icon::Passcode).link(PageId::Passcode));
+            }
+            general.push(Item::new("Passwords").icon(Icon::Passcode).link(PageId::Passwords));
+            general.push(Item::new("Internet Accounts").icon(Icon::General).link(PageId::InternetAccounts));
+            page(
+                "Settings",
+                true,
+                vec![
+                    Group::new(vec![Item::new("BifrOSt Account").icon(Icon::Account).value(m.account).link(PageId::Account)]),
+                    Group::new(connections),
+                    Group::new(vec![
+                        Item::new("Notifications").icon(Icon::Notifications).link(PageId::Notifications),
+                        Item::new("Sounds").icon(Icon::Sounds).link(PageId::Sounds),
+                        Item::new("Focus").icon(Icon::Focus).value(on_off(o.dnd)).link(PageId::Focus),
+                        Item::new("Screen Time").icon(Icon::ScreenTime).link(PageId::ScreenTime),
+                    ]),
+                    Group::new(general),
+                    Group::new(vec![Item::new("Developer").icon(Icon::General).link(PageId::Developer)]),
+                ],
+            )
+        }
         PageId::Network => desktop_network_page(info),
         PageId::Ethernet => desktop_ethernet_page(info),
         PageId::Vpn => desktop_vpn_page(info),
@@ -1064,8 +1121,13 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
             "Lock Screen",
             false,
             vec![
-                Group::new(vec![Item::new("Passcode").icon(Icon::Passcode).link(PageId::Passcode)])
-                    .footer("A passcode is asked for before the screen opens again after it locks."),
+                if numeric_passcode() {
+                    Group::new(vec![Item::new("Passcode").icon(Icon::Passcode).link(PageId::Passcode)])
+                        .footer("A passcode is asked for before the screen opens again after it locks.")
+                } else {
+                    Group::new(vec![Item::new("Login Password").value("Users & Groups").link(PageId::Users)])
+                        .footer("The password you sign in with is asked for before the screen opens again after it locks. Change it in Users & Groups.")
+                },
                 Group::new(vec![Item::new("Lock After Inactivity").value(o.auto_lock_label()).link(PageId::AutoLock)]),
                 Group::new(vec![Item::new("Require Password").value(o.lock_grace_label()).link(PageId::RequirePassword)])
                     .footer("After the display has been off longer than this, the screen asks for the password before it opens again."),
@@ -1271,7 +1333,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
             page(
                 "Text Replacements",
                 false,
-                vec![Group::new(items).footer("Tap an entry to remove it. An app expands a shortcut when it asks the text service.")],
+                vec![Group::new(items).footer(by_form("Tap an entry to remove it. An app expands a shortcut when it asks the text service.", "Click an entry to remove it. An app expands a shortcut when it asks the text service."))],
             )
         }
         PageId::Language => {
@@ -1405,11 +1467,11 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                 .footer("Choose the controls and readouts shown at the right of the menu bar, beside the clock. Controls that do not fit are left out from the left.")],
         ),
         PageId::ControlCentre => page(
-            "Control Centre",
+            "Control Center",
             false,
             vec![rows(vec![("Brightness", String::new()), ("Volume", String::new()), ("Wi-Fi", String::new()), ("Screen Lock", String::new()), ("Focus", on_off(o.dnd).into())])
                 .header("INCLUDED CONTROLS")
-                .footer("Swipe down from the top-right corner of the screen to open Control Centre.")],
+                .footer(by_form("Swipe down from the top-right corner of the screen to open Control Center.", "Click the Control Center icon in the menu bar to open Control Center."))],
         ),
         PageId::Accessibility => {
             let a = m.a11y;
@@ -1470,7 +1532,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                         Item::new("Voice Control").switch(a.voice_control, Action::Toggle(Toggle::VoiceControl)),
                     ])
                     .header("TOUCH")
-                    .footer("Use the floating button to reach Home, Control Centre, notifications and other controls. Switch Control highlights one item at a time: Ctrl+Alt+Right and Left move the highlight and Ctrl+Alt+Space selects it. The switch keys also move through a panel of controls (Space) and choose from it (Enter); Escape closes the panel. Voice Control listens through the microphone on this computer, with the dictation model from Keyboard settings, and presses what you name: say \"press Save\", or \"show numbers\", \"show names\" or \"show grid\" to label what is on screen. Your speech is never uploaded."),
+                    .footer("Use the floating button to reach Home, Control Center, notifications and other controls. Switch Control highlights one item at a time: Ctrl+Alt+Right and Left move the highlight and Ctrl+Alt+Space selects it. The switch keys also move through a panel of controls (Space) and choose from it (Enter); Escape closes the panel. Voice Control listens through the microphone on this computer, with the dictation model from Keyboard settings, and presses what you name: say \"press Save\", or \"show numbers\", \"show names\" or \"show grid\" to label what is on screen. Your speech is never uploaded."),
                 ],
             )
         }
@@ -1536,7 +1598,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
             false,
             vec![Group::new(Feature::ALL.iter().enumerate().map(|(i, f)| Item::new(f.name()).check(m.a11y.shortcut.contains(f), Action::Pick(Pick::AccessibilityShortcut(i)))).collect())
                 .header("FEATURES")
-                .footer("Option+Cmd+F5 opens a panel with a checkbox for each feature checked here. Tap a feature in the panel to switch it.")],
+                .footer("Option+Cmd+F5 opens a panel with a checkbox for each feature checked here. Choose a feature in the panel to switch it.")],
         ),
         // built by `game_controllers_page::spec`, which reads the live controllers
         PageId::GameControllers | PageId::GameController(_) => page("", false, vec![]),
@@ -1555,7 +1617,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                 false,
                 vec![
                     Group::new(kinds).header("RESULTS").footer("Turn off a kind of result to keep it out of Search."),
-                    Group::new(folders).header("PRIVACY").footer("Search never lists files in an excluded folder or inside it. Tap a folder to include it again."),
+                    Group::new(folders).header("PRIVACY").footer(by_form("Search never lists files in an excluded folder or inside it. Tap a folder to include it again.", "Search never lists files in an excluded folder or inside it. Click a folder to include it again.")),
                 ],
             )
         }
@@ -1893,7 +1955,7 @@ pub fn screen_saver_page(o: &Options, sheet: &bifrost_ui::screensaver::Configure
         Group::new(super::screensaver::SAVERS.iter().enumerate().map(|(i, l)| Item::new(*l).check(i == o.screensaver_module, Action::Pick(Pick::ScreenSaverModule(i)))).collect())
             .header("SCREEN SAVER"),
         Group::new(vec![Item::new("Preview").tint(Tint::Blue).action(Action::Pick(Pick::ScreenSaverPreview))])
-            .footer("Shows the screen saver full screen. Touch the screen or press a key to return."),
+            .footer(by_form("Shows the screen saver full screen. Touch the screen or press a key to return.", "Shows the screen saver full screen. Click or press a key to return.")),
     ];
     for (n, key) in sheet.keys().into_iter().enumerate() {
         let title = super::screensaver::option_title(key);
@@ -1958,6 +2020,9 @@ pub fn shortcuts_page(o: &Options) -> Spec {
         super::kb_input::BINDINGS
             .iter()
             .enumerate()
+            // a lone Cmd goes Home on a tablet's keyboard; on a desktop it does nothing, so the row is left out (its
+            // switch keeps its place in `BINDINGS`, so the other rows still address their own bits)
+            .filter(|(_, (action, _))| *action != "Home" || !form().is_desktop())
             .map(|(i, (action, keys))| Item::new(*action).value(*keys).switch(o.shortcuts_off & (1 << i) == 0, Action::Toggle(Toggle::Shortcut(i))))
             .collect(),
     )
@@ -2228,7 +2293,7 @@ mod tests {
         let labels: Vec<&str> = s.groups.iter().flat_map(|g| g.items.iter().map(|i| i.label.as_str())).collect();
         assert_eq!(labels[..4], ["BifrOSt Account", "Airplane Mode", "Wi-Fi", "Bluetooth"]);
         assert_eq!(labels[4..8], ["Notifications", "Sounds", "Focus", "Screen Time"]);
-        assert_eq!(labels[8..], ["General", "Control Centre", "Menu Bar", "Display & Brightness", "Home Screen & Dock", "Overview", "Sharing", "Print & Scan", "Keyboard Shortcuts", "Assistant", "Trackpad", "Mouse", "Users & Groups", "Accessibility", "Wallpaper", "Screen Saver", "Battery", "Privacy", "Spotlight", "Lock Screen", "Passcode", "Passwords", "Internet Accounts", "Developer"]);
+        assert_eq!(labels[8..], ["General", "Control Center", "Menu Bar", "Display & Brightness", "Home Screen & Dock", "Overview", "Sharing", "Print & Scan", "Keyboard Shortcuts", "Assistant", "Trackpad", "Mouse", "Users & Groups", "Accessibility", "Wallpaper", "Screen Saver", "Battery", "Privacy", "Spotlight", "Lock Screen", "Passcode", "Passwords", "Internet Accounts", "Developer"]);
         assert_eq!(s.groups[1].items[1].value, "WIFI-5G");
         // Sharing, Trackpad, Mouse and Users & Groups sit before Wallpaper
         assert_eq!(s.groups[3].items[14].value, "Lake Day");
@@ -2240,6 +2305,111 @@ mod tests {
         let s = spec(PageId::Root, &off);
         assert_eq!(s.groups[1].items[1].value, "Off");
         assert_eq!(s.groups[1].items[0].accessory, Accessory::Switch(true));
+    }
+
+    fn desktop_info(battery: bool, wifi: bool) -> Info {
+        let mut info = Info { desktop_network: Some(Default::default()), battery_present: battery, ..Info::default() };
+        if let Some(n) = info.desktop_network.as_mut() {
+            n.wifi_available = wifi;
+        }
+        info
+    }
+
+    fn root_labels(info: &Info, form: bifrost_ui::form_factor::FormFactor) -> Vec<String> {
+        set_test_form(form);
+        let opts = Options::default();
+        let s = spec(PageId::Root, &model(info, &opts));
+        set_test_form(bifrost_ui::form_factor::FormFactor::Tablet);
+        s.groups.iter().flat_map(|g| g.items.iter().map(|i| i.label.clone())).collect()
+    }
+
+    #[test]
+    fn a_desktop_without_a_battery_has_no_battery_pane_but_offers_energy() {
+        use bifrost_ui::form_factor::FormFactor::Desktop;
+        let labels = root_labels(&desktop_info(false, false), Desktop);
+        assert!(!labels.iter().any(|l| l == "Battery"), "no Battery pane: {labels:?}");
+        assert!(labels.iter().any(|l| l == "Energy"), "sleep and wake settings stay, as Energy");
+        assert!(root_labels(&desktop_info(true, false), Desktop).iter().any(|l| l == "Battery"), "a desktop with a battery keeps it");
+        assert!(!root_labels(&desktop_info(true, false), Desktop).iter().any(|l| l == "Energy"));
+        assert!(has_battery(&Info::default()), "a machine that is not a desktop always has the pane");
+    }
+
+    #[test]
+    fn wifi_has_its_own_row_above_network_when_the_computer_has_a_wireless_adapter() {
+        use bifrost_ui::form_factor::FormFactor::Desktop;
+        let labels = root_labels(&desktop_info(false, true), Desktop);
+        let at = |name: &str| labels.iter().position(|l| l == name).unwrap_or(usize::MAX);
+        assert_eq!(at("Wi-Fi") + 1, at("Network"), "Wi-Fi sits right above Network: {labels:?}");
+        assert_eq!(labels.iter().filter(|l| *l == "Wi-Fi").count(), 1);
+        assert!(!root_labels(&desktop_info(false, false), Desktop).iter().any(|l| l == "Wi-Fi"), "no adapter, no Wi-Fi row");
+    }
+
+    #[test]
+    fn the_numeric_passcode_is_a_tablet_pane_and_a_desktop_has_a_login_password() {
+        use bifrost_ui::form_factor::FormFactor::{Desktop, Tablet};
+        assert!(!root_labels(&desktop_info(false, false), Desktop).iter().any(|l| l == "Passcode"));
+        assert!(root_labels(&desktop_info(false, false), Tablet).iter().any(|l| l == "Passcode"), "a tablet keeps it");
+        let (info, opts) = (desktop_info(false, false), Options::default());
+        set_test_form(Desktop);
+        let lock = spec(PageId::LockScreen, &model(&info, &opts));
+        set_test_form(Tablet);
+        assert_eq!(lock.groups[0].items[0].label, "Login Password");
+        assert_eq!(lock.groups[0].items[0].action, Action::Push(PageId::Users));
+    }
+
+    #[test]
+    fn touch_wording_gives_way_to_click_wording_on_a_desktop() {
+        use bifrost_ui::form_factor::FormFactor::{Desktop, Tablet};
+        let (info, opts) = (desktop_info(false, false), Options::default());
+        let footer = |form, id| {
+            set_test_form(form);
+            let s = spec(id, &model(&info, &opts));
+            set_test_form(Tablet);
+            s.groups.iter().filter_map(|g| g.footer.clone()).collect::<Vec<_>>().join(" ")
+        };
+        assert!(footer(Tablet, PageId::ControlCentre).contains("Swipe down from the top-right corner"));
+        assert!(!footer(Desktop, PageId::ControlCentre).contains("Swipe"));
+        assert!(footer(Desktop, PageId::ControlCentre).contains("Click"));
+        assert!(footer(Tablet, PageId::ScreenSaver).contains("Touch the screen"));
+        let desktop_saver = footer(Desktop, PageId::ScreenSaver);
+        assert!(!desktop_saver.contains("Touch") && desktop_saver.contains("Click or press a key"), "{desktop_saver}");
+    }
+
+    #[test]
+    fn a_lone_command_key_row_is_left_out_of_the_desktop_shortcuts() {
+        use bifrost_ui::form_factor::FormFactor::{Desktop, Tablet};
+        let opts = Options::default();
+        let home = |form| {
+            set_test_form(form);
+            let s = shortcuts_page(&opts);
+            set_test_form(Tablet);
+            s.groups[0].items.iter().any(|i| i.label == "Home")
+        };
+        assert!(home(Tablet));
+        assert!(!home(Desktop));
+        // the other rows still address their own bits
+        set_test_form(Desktop);
+        let s = shortcuts_page(&opts);
+        set_test_form(Tablet);
+        let assistant = s.groups[0].items.iter().find(|i| i.label == "Assistant").expect("the Assistant row");
+        assert_eq!(assistant.action, Action::Toggle(Toggle::Shortcut(11)));
+    }
+
+    #[test]
+    fn the_network_and_sidebar_rows_have_their_own_symbols() {
+        let (info, opts) = (desktop_info(false, true), Options::default());
+        let net = spec(PageId::Network, &model(&info, &opts));
+        let icon = |label: &str| net.groups[0].items.iter().find(|i| i.label == label).and_then(|i| i.icon);
+        assert_eq!((icon("Ethernet"), icon("VPN")), (Some(Icon::Ethernet), Some(Icon::Vpn)));
+        let root = spec(PageId::Root, &model(&info, &opts));
+        let icon = |label: &str| root.groups.iter().flat_map(|g| g.items.iter()).find(|i| i.label == label).and_then(|i| i.icon);
+        for (label, want) in [("BifrOSt Account", Icon::Account), ("Print & Scan", Icon::Printer), ("Keyboard Shortcuts", Icon::Keyboard), ("Assistant", Icon::Assistant), ("Trackpad", Icon::Trackpad), ("Mouse", Icon::Mouse), ("Spotlight", Icon::Search), ("Network", Icon::Network)] {
+            assert_eq!(icon(label), Some(want), "{label}");
+        }
+        // every pane row has a tile of its own kind: none of the listed ones is the gear any more
+        for label in ["Print & Scan", "Keyboard Shortcuts", "Assistant", "Trackpad", "Mouse", "Spotlight"] {
+            assert_ne!(icon(label), Some(Icon::General), "{label}");
+        }
     }
 
     #[test]
@@ -2731,7 +2901,7 @@ fn desktop_network_page(info:&Info)->Spec {
     let wifi=network.is_some_and(|n|n.wifi_available);
     let eth_status=ethernet.map(|i|if i.connected(){"Connected"}else{"Not Connected"}).unwrap_or("No adapter");
     Spec{id:PageId::Network,title:"Network".into(),large:false,groups:vec![
-        Group::new(vec![Item::new("Ethernet").icon(Icon::General).value(eth_status).link(PageId::Ethernet), Item::new("Wi-Fi").icon(Icon::Wifi).value(if wifi {info.wifi.as_str()}else{"No adapter"}).link(PageId::Wifi), Item::new("VPN").icon(Icon::General).value(match network.map_or(&[][..], |n|n.vpns.as_slice()){[]=>"None", v if v.iter().any(|c|c.active)=>"Connected", _=>"Not Connected"}).link(PageId::Vpn), Item::new("Firewall").icon(Icon::Passcode).link(PageId::Firewall)]).header("CONNECTIONS"),
+        Group::new(vec![Item::new("Ethernet").icon(Icon::Ethernet).value(eth_status).link(PageId::Ethernet), Item::new("Wi-Fi").icon(Icon::Wifi).value(if wifi {info.wifi.as_str()}else{"No adapter"}).link(PageId::Wifi), Item::new("VPN").icon(Icon::Vpn).value(match network.map_or(&[][..], |n|n.vpns.as_slice()){[]=>"None", v if v.iter().any(|c|c.active)=>"Connected", _=>"Not Connected"}).link(PageId::Vpn), Item::new("Firewall").icon(Icon::Passcode).link(PageId::Firewall)]).header("CONNECTIONS"),
         rows(vec![("Network Manager", "NetworkManager".into())]).footer("Ethernet and Wi-Fi use separate connection settings. Changes are applied by the system network service."),
     ]}
 }
@@ -2748,5 +2918,5 @@ fn desktop_ethernet_page(info:&Info)->Spec {
 fn desktop_vpn_page(info:&Info)->Spec {
     let vpns:&[super::desktop_network::VpnConnection]=info.desktop_network.as_ref().map_or(&[],|n|n.vpns.as_slice());
     let items:Vec<Item>=if vpns.is_empty(){vec![Item::new("No VPN Configurations").tint(Tint::Dim)]}else{vpns.iter().map(|v|Item::new(v.name.clone()).value(v.status_label()).action(Action::Vpn{name:v.name.clone(),up:!v.active})).collect()};
-    Spec{id:PageId::Vpn,title:"VPN".into(),large:false,groups:vec![Group::new(items).header("CONFIGURATIONS").footer("These are the VPN and WireGuard connections the system network service holds. Tap one to connect or disconnect it. Adding a configuration is done with the network service (nmcli connection import) and is not built into this page yet.")]}
+    Spec{id:PageId::Vpn,title:"VPN".into(),large:false,groups:vec![Group::new(items).header("CONFIGURATIONS").footer("These are the VPN and WireGuard connections the system network service holds. Choose one to connect or disconnect it. Adding a configuration is done with the network service (nmcli connection import) and is not built into this page yet.")]}
 }
