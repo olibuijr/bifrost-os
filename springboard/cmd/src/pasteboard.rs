@@ -151,8 +151,39 @@ pub fn board_dir() -> Result<PathBuf, String> {
     Ok(base.join("bifrost").join("pasteboards"))
 }
 
+/// The most a named board holds (and the most `pbcopy` reads from standard input): 64 MiB.
+pub const MAX_BOARD_BYTES: usize = 64 << 20;
+
+/// Creates `dir` (and its parents) readable by its owner only; a board folder made earlier with the default mode is
+/// tightened too.
+fn private_dir(dir: &std::path::Path) -> std::io::Result<()> {
+    use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+    std::fs::DirBuilder::new().recursive(true).mode(0o700).create(dir)?;
+    std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))
+}
+
+/// Writes `bytes` to `path` readable by its owner only (a file made earlier with the default mode is tightened too).
+fn write_private(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+    let mut f = std::fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(path)?;
+    f.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+    f.write_all(bytes)
+}
+
+/// Reads at most [`MAX_BOARD_BYTES`] from `input`; more is an error rather than a cut copy.
+pub fn read_bounded(input: &mut impl std::io::Read) -> Result<Vec<u8>, String> {
+    use std::io::Read as _;
+    let mut out = Vec::new();
+    input.take(MAX_BOARD_BYTES as u64 + 1).read_to_end(&mut out).map_err(|e| e.to_string())?;
+    if out.len() > MAX_BOARD_BYTES {
+        return Err(format!("the input is over {} MiB", MAX_BOARD_BYTES >> 20));
+    }
+    Ok(out)
+}
+
 /// Puts `input` on the named `board` (one of `BOARDS` other than general). Empty input clears it. The board's bytes go
-/// in a file named for the board, and its MIME type in `<board>.type`.
+/// in a file named for the board, and its MIME type in `<board>.type`; both are readable by the owner only, and input
+/// over [`MAX_BOARD_BYTES`] is refused.
 pub fn copy_to_board(board: &str, input: &[u8]) -> Result<(), String> {
     let dir = board_dir()?;
     let data = dir.join(board);
@@ -163,10 +194,13 @@ pub fn copy_to_board(board: &str, input: &[u8]) -> Result<(), String> {
             Err(e) => Err(format!("{}: {e}", data.display())),
         };
     }
-    std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
-    std::fs::write(&data, input).map_err(|e| format!("{}: {e}", data.display()))?;
+    if input.len() > MAX_BOARD_BYTES {
+        return Err(format!("{board}: the input is over {} MiB", MAX_BOARD_BYTES >> 20));
+    }
+    private_dir(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    write_private(&data, input).map_err(|e| format!("{}: {e}", data.display()))?;
     let kind = dir.join(format!("{board}.type"));
-    std::fs::write(&kind, mime_for_input(input)).map_err(|e| format!("{}: {e}", kind.display()))
+    write_private(&kind, mime_for_input(input).as_bytes()).map_err(|e| format!("{}: {e}", kind.display()))
 }
 
 /// The bytes on the named `board`, empty when it holds nothing. The type is not applied: a named board holds one flat item.
@@ -199,6 +233,9 @@ pub fn paste_for(board: Option<&str>, prefer: Option<Prefer>) -> Result<Vec<u8>,
 mod tests {
     use super::*;
 
+    /// The tests that point `XDG_DATA_HOME` at a folder of their own take turns.
+    static ENV_TURN: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     fn args(v: &[&str]) -> Vec<String> {
         v.iter().map(|s| s.to_string()).collect()
     }
@@ -217,6 +254,7 @@ mod tests {
     #[test]
     fn named_boards_round_trip_through_their_own_files() {
         let dir = std::env::temp_dir().join(format!("bifrost-pb-test-{}", std::process::id()));
+        let _turn = ENV_TURN.lock().unwrap_or_else(|e| e.into_inner());
         std::env::set_var("XDG_DATA_HOME", &dir);
         assert_eq!(board_dir().unwrap(), dir.join("bifrost").join("pasteboards"));
         assert_eq!(paste_from_board("find").unwrap(), Vec::<u8>::new());
@@ -227,6 +265,32 @@ mod tests {
         copy_to_board("find", b"").unwrap();
         assert_eq!(paste_from_board("find").unwrap(), Vec::<u8>::new());
         copy_to_board("find", b"").unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn named_boards_are_owner_only_and_bounded() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("bifrost-pb-private-{}", std::process::id()));
+        let boards = dir.join("bifrost").join("pasteboards");
+        // a folder and a file made earlier with the default mode are tightened
+        std::fs::create_dir_all(&boards).unwrap();
+        std::fs::set_permissions(&boards, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::write(boards.join("find"), b"old").unwrap();
+        std::fs::set_permissions(boards.join("find"), std::fs::Permissions::from_mode(0o644)).unwrap();
+        // the other test sets the same variable; board_dir() is read once per call, so serialise on a lock
+        let _turn = ENV_TURN.lock().unwrap_or_else(|e| e.into_inner());
+        std::env::set_var("XDG_DATA_HOME", &dir);
+        copy_to_board("find", b"secret needle").unwrap();
+        let mode = |p: &std::path::Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode(&boards), 0o700);
+        assert_eq!(mode(&boards.join("find")), 0o600);
+        assert_eq!(mode(&boards.join("find.type")), 0o600);
+        let too_big = vec![b'x'; MAX_BOARD_BYTES + 1];
+        assert!(copy_to_board("find", &too_big).unwrap_err().contains("over"));
+        assert_eq!(paste_from_board("find").unwrap(), b"secret needle".to_vec(), "a refused copy changes nothing");
+        assert!(read_bounded(&mut &too_big[..]).is_err());
+        assert_eq!(read_bounded(&mut &b"abc"[..]).unwrap(), b"abc".to_vec());
         let _ = std::fs::remove_dir_all(&dir);
     }
 
