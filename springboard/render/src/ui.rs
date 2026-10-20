@@ -360,9 +360,10 @@ fn text_images() -> &'static TextImages {
 }
 
 /// `render` on a miss, the stored image on a hit. Widgets that redraw every frame (Control Center, Settings
-/// rows, the desktop) would otherwise shape and composite the same strings again each time.
+/// rows, the desktop) would otherwise shape and composite the same strings again each time. The image is shared
+/// with the cache, never copied: a caller that only blits it keeps the `Arc` (it derefs to `&Image`).
 #[allow(clippy::too_many_arguments)]
-fn cached_text(font: &Font<'_>, text: &str, px: f32, pt: f32, weight: Weight, color: u32, shadow: bool, render: impl FnOnce() -> Image) -> Image {
+fn cached_text(font: &Font<'_>, text: &str, px: f32, pt: f32, weight: Weight, color: u32, shadow: bool, render: impl FnOnce() -> Image) -> std::sync::Arc<Image> {
     let key = TextKey {
         text: text.to_string(),
         px: px.to_bits(),
@@ -375,10 +376,12 @@ fn cached_text(font: &Font<'_>, text: &str, px: f32, pt: f32, weight: Weight, co
     };
     let images = text_images();
     if let Some(hit) = images.get(&key) {
-        return (*hit).clone();
+        return hit;
     }
     let img = render();
-    images.set(key, std::sync::Arc::new(img.clone()), img.px.len() * 4);
+    let cost = img.px.len() * 4;
+    let img = std::sync::Arc::new(img);
+    images.set(key, img.clone(), cost);
     img
 }
 
@@ -417,6 +420,16 @@ impl Ui {
     }
 
     pub fn styled(&self, text: &str, pt: f32, weight: Weight, color: u32, shadow: bool) -> Image {
+        Image::clone(&self.styled_shared(text, pt, weight, color, shadow))
+    }
+
+    /// [`Ui::text`] without the copy: the cached image itself, for a caller that only blits it.
+    pub fn text_shared(&self, text: &str, pt: f32, weight: Weight, color: u32) -> std::sync::Arc<Image> {
+        self.styled_shared(text, pt, weight, color, false)
+    }
+
+    /// [`Ui::styled`] without the copy.
+    pub fn styled_shared(&self, text: &str, pt: f32, weight: Weight, color: u32, shadow: bool) -> std::sync::Arc<Image> {
         let (pt, weight) = (self.scaled(pt), self.weight(weight));
         let color = crate::appearance::contrast(color);
         let px = self.pt(pt);
@@ -439,6 +452,11 @@ impl Ui {
     /// System chrome text (status bar, lock screen clock): never scaled by
     /// Dynamic Type, as on bifrost.
     pub fn chrome(&self, text: &str, pt: f32, weight: Weight, color: u32) -> Image {
+        Image::clone(&self.chrome_shared(text, pt, weight, color))
+    }
+
+    /// [`Ui::chrome`] without the copy.
+    pub fn chrome_shared(&self, text: &str, pt: f32, weight: Weight, color: u32) -> std::sync::Arc<Image> {
         let color = crate::appearance::contrast(color);
         let px = self.pt(pt);
         cached_text(&self.font, text, px, pt, weight, color, false, || self.font.render_var(text, &Style { px, embolden: 0.0, color, shadow: false }, &vars(pt, weight)))
@@ -473,6 +491,60 @@ impl Ui {
         }
         lines
     }
+
+    /// Word wrap for text that comes from outside (device names, crash reasons, app names): like [`Ui::wrap`], but a
+    /// word wider than `max_px` is broken across lines, and at most `max_lines` lines are returned, the last one
+    /// ending in an ellipsis when text was dropped.
+    pub fn wrap_capped(&self, text: &str, pt: f32, weight: Weight, max_px: f32, max_lines: usize) -> Vec<String> {
+        let mut lines: Vec<String> = vec![];
+        let mut line = String::new();
+        for word in text.split_whitespace() {
+            if self.measure(word, pt, weight) > max_px {
+                // break the over-wide word into chunks that each fit; the last chunk carries on as the current line
+                if !line.is_empty() {
+                    lines.push(std::mem::take(&mut line));
+                }
+                for c in word.chars() {
+                    let mut next = line.clone();
+                    next.push(c);
+                    if !line.is_empty() && self.measure(&next, pt, weight) > max_px {
+                        lines.push(std::mem::replace(&mut line, c.to_string()));
+                    } else {
+                        line = next;
+                    }
+                }
+                continue;
+            }
+            let candidate = if line.is_empty() { word.to_string() } else { format!("{line} {word}") };
+            if !line.is_empty() && self.measure(&candidate, pt, weight) > max_px {
+                lines.push(std::mem::replace(&mut line, word.to_string()));
+            } else {
+                line = candidate;
+            }
+        }
+        if !line.is_empty() {
+            lines.push(line);
+        }
+        if lines.len() > max_lines {
+            lines.truncate(max_lines);
+            if let Some(last) = lines.last_mut() {
+                *last = self.ellipsize(last, pt, weight, max_px);
+            }
+        }
+        lines
+    }
+
+    /// `line` with an ellipsis appended, trimmed so the result is no wider than `max_px` in `weight`.
+    fn ellipsize(&self, line: &str, pt: f32, weight: Weight, max_px: f32) -> String {
+        let mut chars: Vec<char> = line.chars().collect();
+        loop {
+            let candidate = format!("{}…", String::from_iter(&chars).trim_end());
+            if chars.is_empty() || self.measure(&candidate, pt, weight) <= max_px {
+                return candidate;
+            }
+            chars.pop();
+        }
+    }
 }
 
 /// Blits `img` horizontally centred on `cx`.
@@ -482,13 +554,13 @@ pub fn centred(s: &mut Surface, img: &Image, cx: i32, y: i32) {
 
 /// A footer line under a list or a screen: footnote size (10 pt) secondary, centred on `cx`, top at `y` (px).
 pub fn footer(s: &mut Surface, ui: &Ui, text: &str, cx: i32, y: i32) {
-    let img = ui.text(text, MAC_FOOTNOTE_PT, Weight::Regular, SECONDARY);
+    let img = ui.text_shared(text, MAC_FOOTNOTE_PT, Weight::Regular, SECONDARY);
     centred(s, &img, cx, y);
 }
 
 /// A large navigation title (Golden Gate large title, 26 pt bold, white) left-aligned at `x` (px), top at `y` (px).
 pub fn large_title(s: &mut Surface, ui: &Ui, text: &str, x: i32, y: i32) {
-    let img = ui.text(text, MAC_LARGE_TITLE_PT, Weight::Bold, WHITE);
+    let img = ui.text_shared(text, MAC_LARGE_TITLE_PT, Weight::Bold, WHITE);
     s.blit(&img, x, y, 255, 255);
 }
 
@@ -502,6 +574,10 @@ pub struct AlertCard {
     /// The height of one title line, measured once when the card is built (an empty title takes one line of this height).
     title_line_h: f32,
     message: Vec<Image>,
+    /// The wrapped message lines as text, so a card on a short screen can end its last visible line with an ellipsis.
+    message_text: Vec<String>,
+    /// The message's text width in px, the width the lines were wrapped to.
+    message_w: f32,
     buttons: Vec<Image>,
     /// `showsSuppressionButton`-style checkbox above the buttons: its label and whether it is checked
     check: Option<(Image, bool)>,
@@ -518,6 +594,12 @@ const ALERT_RADIUS_PT: f32 = 28.0;
 const ALERT_CHECK_H_PT: f32 = 18.0;
 const ALERT_CHECK_GAP_PT: f32 = 10.0;
 const ALERT_CHECK_BOX_PT: f32 = 14.0;
+/// Most lines a title and a message take (more ends in an ellipsis), so a long product string cannot push the
+/// buttons off the screen. A short screen shows fewer message lines still (`AlertCard::message_fit`).
+const ALERT_MAX_TITLE_LINES: usize = 3;
+const ALERT_MAX_MESSAGE_LINES: usize = 8;
+/// Margin kept free above and below the card, in pt.
+const ALERT_SCREEN_MARGIN_PT: f32 = 8.0;
 
 impl AlertCard {
     /// `buttons` are the rendered labels, left to right. Title and message are white images drawn in the label colour.
@@ -529,12 +611,16 @@ impl AlertCard {
     /// do not fit the standard width.
     pub fn new_wide(ui: &Ui, title: &str, message: &str, buttons: Vec<Image>, width_pt: f32) -> Self {
         let width_pt = width_pt.max(ALERT_W_PT);
-        let title: Vec<Image> = ui.wrap(title, MAC_TITLE3_PT, Weight::Semibold, ui.pt(width_pt - 2.0 * ALERT_PAD_PT)).iter().map(|l| ui.text(l, MAC_TITLE3_PT, Weight::Semibold, WHITE)).collect();
+        let text_w = ui.pt(width_pt - 2.0 * ALERT_PAD_PT);
+        let title: Vec<Image> = ui.wrap_capped(title, MAC_TITLE3_PT, Weight::Semibold, text_w, ALERT_MAX_TITLE_LINES).iter().map(|l| ui.text(l, MAC_TITLE3_PT, Weight::Semibold, WHITE)).collect();
         let title_line_h = title.iter().map(|l| l.h).max().unwrap_or_else(|| ui.text("A", MAC_TITLE3_PT, Weight::Semibold, WHITE).h) as f32;
+        let message_text = ui.wrap_capped(message, MAC_BODY_PT, Weight::Regular, text_w, ALERT_MAX_MESSAGE_LINES);
         AlertCard {
             title,
             title_line_h,
-            message: ui.wrap(message, MAC_BODY_PT, Weight::Regular, ui.pt(width_pt - 2.0 * ALERT_PAD_PT)).iter().map(|l| ui.text(l, MAC_BODY_PT, Weight::Regular, WHITE)).collect(),
+            message: message_text.iter().map(|l| ui.text(l, MAC_BODY_PT, Weight::Regular, WHITE)).collect(),
+            message_text,
+            message_w: text_w,
             buttons,
             check: None,
             width_pt,
@@ -586,11 +672,23 @@ impl AlertCard {
         self.card(ui, w, h)
     }
 
+    /// Height of everything in the card except the message lines, in px.
+    fn fixed_height(&self, ui: &Ui) -> f32 {
+        ui.pt(ALERT_PAD_PT + 2.0) + self.title_height() + ui.pt(8.0) + ui.pt(ALERT_PAD_PT) + ui.pt(ALERT_BTN_H_PT) + ui.pt(ALERT_PAD_PT)
+            + if self.check.is_some() { ui.pt(ALERT_CHECK_H_PT + ALERT_CHECK_GAP_PT) } else { 0.0 }
+    }
+
+    /// How many message lines fit on a screen `h` px tall, with a margin above and below the card (all of them on a
+    /// normal screen), so the buttons are never pushed off it.
+    fn message_fit(&self, ui: &Ui, h: i32) -> usize {
+        let free = h as f32 - 2.0 * ui.pt(ALERT_SCREEN_MARGIN_PT) - self.fixed_height(ui);
+        ((free / ui.pt(17.0)).floor().max(0.0) as usize).min(self.message.len())
+    }
+
     /// The card (x, y, w, h), centred on screen.
     fn card(&self, ui: &Ui, w: i32, h: i32) -> (f32, f32, f32, f32) {
         let cw = ui.pt(self.width_pt);
-        let ch = ui.pt(ALERT_PAD_PT + 2.0) + self.title_height() + ui.pt(8.0) + ui.pt(17.0) * self.message.len() as f32 + ui.pt(ALERT_PAD_PT) + ui.pt(ALERT_BTN_H_PT) + ui.pt(ALERT_PAD_PT)
-            + if self.check.is_some() { ui.pt(ALERT_CHECK_H_PT + ALERT_CHECK_GAP_PT) } else { 0.0 };
+        let ch = self.fixed_height(ui) + ui.pt(17.0) * self.message_fit(ui, h) as f32;
         (((w as f32 - cw) / 2.0).round(), ((h as f32 - ch) / 2.0).round(), cw, ch)
     }
 
@@ -632,8 +730,15 @@ impl AlertCard {
             ty += line_h;
         }
         ty += ui.pt(8.0);
-        for line in &self.message {
-            s.blit_colored(line, lx as i32, ty as i32, LABEL.now(), 255);
+        let shown = self.message_fit(ui, h);
+        for (i, line) in self.message.iter().take(shown).enumerate() {
+            if i + 1 == shown && shown < self.message.len() {
+                // the screen is too short for every line: the last one visible ends in an ellipsis
+                let cut = ui.ellipsize(&self.message_text[i], MAC_BODY_PT, Weight::Regular, self.message_w);
+                s.blit_colored(&ui.text(&cut, MAC_BODY_PT, Weight::Regular, WHITE), lx as i32, ty as i32, LABEL.now(), 255);
+            } else {
+                s.blit_colored(line, lx as i32, ty as i32, LABEL.now(), 255);
+            }
             ty += ui.pt(17.0);
         }
         if let (Some((label, on)), Some((rx, ry, _, rh))) = (&self.check, self.check_rect(ui, card)) {
@@ -757,6 +862,61 @@ mod tests {
         assert_eq!(long.hit(&ui, 1200, 800, bx, by), Some(0));
         // an empty title still takes one line
         assert!(AlertCard::new(&ui, "", "", label()).card_rect(&ui, 1200, 800).3 > 0.0);
+    }
+
+    #[test]
+    fn shared_text_is_the_cached_image_not_a_copy() {
+        let ui = ui();
+        let a = ui.text_shared("Shared row", 13.0, Weight::Regular, WHITE);
+        let b = ui.text_shared("Shared row", 13.0, Weight::Regular, WHITE);
+        assert!(std::sync::Arc::ptr_eq(&a, &b), "a hit hands out the stored image");
+        assert_eq!(*a, ui.text("Shared row", 13.0, Weight::Regular, WHITE));
+        let c1 = ui.chrome_shared("9:41", 12.0, Weight::Semibold, WHITE);
+        assert!(std::sync::Arc::ptr_eq(&c1, &ui.chrome_shared("9:41", 12.0, Weight::Semibold, WHITE)));
+    }
+
+    #[test]
+    fn wrap_capped_breaks_long_words_and_caps_the_lines_with_an_ellipsis() {
+        let ui = ui();
+        let max = ui.pt(200.0);
+        let fits = |l: &String| ui.measure(l, 13.0, Weight::Regular) <= max;
+        let token = "x".repeat(120);
+        let lines = ui.wrap_capped(&format!("Device {token} connected"), 13.0, Weight::Regular, max, 20);
+        assert!(lines.len() >= 3 && lines.iter().all(fits), "{lines:?}");
+        assert_eq!(lines.concat().replace(' ', ""), format!("Device{token}connected"), "no character is lost");
+        // ordinary text wraps as `wrap` does
+        let text = "Known networks will be joined automatically. If no known networks are available, you will be notified.";
+        assert_eq!(ui.wrap_capped(text, 13.0, Weight::Regular, ui.pt(300.0), 20), ui.wrap(text, 13.0, Weight::Regular, ui.pt(300.0)));
+        // the cap keeps the line count and marks the cut
+        let many = "word ".repeat(200);
+        let capped = ui.wrap_capped(&many, 13.0, Weight::Regular, max, 3);
+        assert_eq!(capped.len(), 3);
+        assert!(capped[2].ends_with('…') && capped.iter().all(fits));
+        assert!(!capped[0].ends_with('…'));
+        assert!(ui.wrap_capped("   ", 13.0, Weight::Regular, max, 3).is_empty());
+    }
+
+    #[test]
+    fn an_alert_with_a_huge_message_stays_on_the_screen_with_its_buttons() {
+        let ui = ui();
+        let label = || vec![ui.text("Allow", MAC_BODY_PT, Weight::Regular, WHITE), ui.text("Don't Allow", MAC_BODY_PT, Weight::Regular, WHITE)];
+        let title = format!("USB {}", "T".repeat(300));
+        let message = format!("{} {}", "m".repeat(400), "long message words ".repeat(300));
+        let card = AlertCard::new(&ui, &title, &message, label());
+        assert!(card.title.len() <= ALERT_MAX_TITLE_LINES && card.message.len() <= ALERT_MAX_MESSAGE_LINES);
+        let inner = (ui.pt(ALERT_W_PT - 2.0 * ALERT_PAD_PT) + ui.pt(4.0)) as usize;
+        assert!(card.title.iter().chain(&card.message).all(|l| l.w <= inner), "no line is wider than the text area");
+        for (w, h) in [(1200, 800), (800, 360), (400, 260)] {
+            let (x, y, cw, ch) = card.card_rect(&ui, w, h);
+            assert!(y >= 0.0 && y + ch <= h as f32, "the card fits a {w}x{h} screen: y={y} h={ch}");
+            for i in 0..2 {
+                let (bx, by) = card.button_centre(&ui, w, h, i);
+                assert!(bx >= x && bx <= x + cw && by >= y && by <= y + ch);
+                assert_eq!(card.hit(&ui, w, h, bx, by), Some(i));
+            }
+        }
+        // a short screen shows fewer message lines than a tall one
+        assert!(card.message_fit(&ui, 260) < card.message_fit(&ui, 800));
     }
 
     #[test]

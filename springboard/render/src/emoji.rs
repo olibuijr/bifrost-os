@@ -42,7 +42,8 @@ fn u32_at(d: &[u8], o: usize) -> Option<u32> {
 
 /// One parsed font file.
 pub struct Face {
-    data: Vec<u8>,
+    /// the font file: mapped (shared page cache) for the system fonts, owned for synthetic test fonts
+    data: std::borrow::Cow<'static, [u8]>,
     cmap: Vec<(u16, usize)>, // (format, subtable offset), 12 first
     cbdt: usize,
     strike: Option<Strike>,
@@ -58,21 +59,23 @@ struct Strike {
 }
 
 impl Face {
-    pub fn parse(data: Vec<u8>) -> Option<Face> {
-        let n = u16_at(&data, 4)? as usize;
+    pub fn parse(data: impl Into<std::borrow::Cow<'static, [u8]>>) -> Option<Face> {
+        let owned: std::borrow::Cow<'static, [u8]> = data.into();
+        let data: &[u8] = &owned;
+        let n = u16_at(data, 4)? as usize;
         let table = |tag: &[u8; 4]| -> Option<usize> {
             (0..n).find_map(|i| {
                 let r = 12 + i * 16;
-                (data.get(r..r + 4)? == tag).then(|| u32_at(&data, r + 8).map(|o| o as usize)).flatten()
+                (data.get(r..r + 4)? == tag).then(|| u32_at(data, r + 8).map(|o| o as usize)).flatten()
             })
         };
         let cmap_t = table(b"cmap")?;
         let (cblc, cbdt) = (table(b"CBLC")?, table(b"CBDT")?);
         let mut cmap = vec![];
-        for i in 0..u16_at(&data, cmap_t + 2)? as usize {
+        for i in 0..u16_at(data, cmap_t + 2)? as usize {
             let r = cmap_t + 4 + i * 8;
-            let off = cmap_t + u32_at(&data, r + 4)? as usize;
-            let fmt = u16_at(&data, off)?;
+            let off = cmap_t + u32_at(data, r + 4)? as usize;
+            let fmt = u16_at(data, off)?;
             if fmt == 4 || fmt == 12 {
                 cmap.push((fmt, off));
             }
@@ -82,17 +85,17 @@ impl Face {
             return None;
         }
         // the largest strike; PNG strikes are scaled down from it
-        let sizes = u32_at(&data, cblc + 4)? as usize;
+        let sizes = u32_at(data, cblc + 4)? as usize;
         let mut strike: Option<Strike> = None;
         for i in 0..sizes {
             let r = cblc + 8 + i * 48;
-            let (arr, count, ppem) = (cblc + u32_at(&data, r)? as usize, u32_at(&data, r + 8)? as usize, *data.get(r + 44)?);
+            let (arr, count, ppem) = (cblc + u32_at(data, r)? as usize, u32_at(data, r + 8)? as usize, *data.get(r + 44)?);
             if strike.is_none_or(|s| ppem > s.ppem) {
                 strike = Some(Strike { arr, count, ppem });
             }
         }
         let gsub = table(b"GSUB");
-        let mut face = Face { data, cmap, cbdt, strike, ligs: vec![] };
+        let mut face = Face { data: owned, cmap, cbdt, strike, ligs: vec![] };
         face.ligs = face.gsub_ligatures(gsub).unwrap_or_default();
         Some(face)
     }
@@ -103,7 +106,7 @@ impl Face {
     }
 
     fn cmap_lookup(&self, fmt: u16, o: usize, cp: u32) -> Option<u16> {
-        let d = &self.data;
+        let d: &[u8] = &self.data;
         let g = if fmt == 12 {
             let n = u32_at(d, o + 12)? as usize;
             let (mut lo, mut hi) = (0, n);
@@ -150,7 +153,7 @@ impl Face {
 
     /// PNG bytes of a glyph's bitmap in the chosen strike.
     pub fn bitmap(&self, gid: u16) -> Option<&[u8]> {
-        let d = &self.data;
+        let d: &[u8] = &self.data;
         let st = self.strike?;
         for i in 0..st.count {
             let e = st.arr + i * 8;
@@ -187,7 +190,7 @@ impl Face {
     }
 
     fn gsub_ligatures(&self, gsub: Option<usize>) -> Option<Vec<usize>> {
-        let d = &self.data;
+        let d: &[u8] = &self.data;
         let g = gsub?;
         let (flist, llist) = (g + u16_at(d, g + 6)? as usize, g + u16_at(d, g + 8)? as usize);
         let mut idx = vec![];
@@ -222,7 +225,7 @@ impl Face {
     }
 
     fn coverage(&self, o: usize, gid: u16) -> Option<usize> {
-        let d = &self.data;
+        let d: &[u8] = &self.data;
         match u16_at(d, o)? {
             1 => {
                 let n = u16_at(d, o + 2)? as usize;
@@ -244,7 +247,7 @@ impl Face {
 
     /// Applies one ligature subtable over `gids`.
     fn apply_lig(&self, st: usize, gids: &mut Vec<u16>) -> Option<()> {
-        let d = &self.data;
+        let d: &[u8] = &self.data;
         let cov = st + u16_at(d, st + 2)? as usize;
         let mut i = 0;
         while i < gids.len() {
@@ -297,7 +300,8 @@ pub fn search_paths_in(package_font: &Path, host: &[&str]) -> Vec<PathBuf> {
 
 /// Parses every readable CBDT font among `paths`, in order.
 pub fn load_faces(paths: &[PathBuf]) -> Vec<Face> {
-    paths.iter().filter_map(|p| std::fs::read(p).ok().and_then(Face::parse)).collect()
+    // mapped, not read: the 10 MB font then lives in the page cache every process shares
+    paths.iter().filter_map(|p| crate::assets::map_file(p.to_str()?).ok().and_then(Face::parse)).collect()
 }
 
 /// `None` until first use or after a reload; `Some` (possibly empty) once searched.
@@ -357,13 +361,19 @@ pub fn is_emoji_char(c: char) -> bool {
         | 0x1F000..=0x1FAFF | 0xFE0F | 0x200D)
 }
 
+/// The cheap pre-scan: false when `text` has no character that could draw as an emoji, so the font is not loaded.
+/// Symbols the UI font draws itself (the menu key glyphs, a check mark) do not count; a keycap mark always does.
+fn may_have_emoji(text: &str, has_glyph: &dyn Fn(char) -> bool) -> bool {
+    text.chars().any(|c| is_emoji_char(c) && c as u32 > 0x7F && (c == '\u{20E3}' || !has_glyph(c)))
+}
+
 /// Splits `text` into runs: `(run, true)` for an emoji cluster the font can
 /// draw, `(run, false)` for everything else. `has_glyph` tells which chars the
 /// UI font already covers (those stay text).
 pub fn segments<'a>(text: &'a str, has_glyph: &dyn Fn(char) -> bool) -> Vec<(&'a str, bool)> {
     let mut out: Vec<(&str, bool)> = vec![];
     // the cheap scan first: the font file is read when a text has an emoji, not by the first text of every process
-    if !text.chars().any(|c| is_emoji_char(c) && c as u32 > 0x7F) || !available() {
+    if !may_have_emoji(text, has_glyph) || !available() {
         return vec![(text, false)];
     }
     let chars: Vec<(usize, char)> = text.char_indices().collect();
@@ -706,6 +716,15 @@ pub(crate) mod tests {
         assert_eq!(faces.len(), 1);
         assert!(faces[0].cluster_glyph("\u{1F600}").is_some());
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn symbols_the_ui_font_draws_do_not_trigger_the_font_load() {
+        let ui_font = |c: char| matches!(c, '\u{2325}' | '\u{232B}' | '\u{23CE}' | '\u{2122}' | '\u{2713}');
+        assert!(!may_have_emoji("\u{2325}\u{232B} Delete \u{2713} \u{2122}", &ui_font));
+        assert!(may_have_emoji("ok \u{1F600}", &ui_font));
+        assert!(may_have_emoji("1\u{FE0F}\u{20E3}", &|_| true), "a keycap still needs the font");
+        assert!(may_have_emoji("\u{2713}", &|_| false), "no UI glyph: the emoji font is the fallback");
     }
 
     #[test]
