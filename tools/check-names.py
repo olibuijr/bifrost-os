@@ -17,7 +17,7 @@ DIRS = ["springboard", "tools", "packaging"]
 EXTS = (".rs", ".py", ".sh", ".js", ".toml", ".html", ".css")
 SKIP_DIRS = {"target", "target-agents", "node_modules", ".git"}
 CI = re.compile(
-    r"(?<![A-Za-z0-9])(apple\w*|mac ?os\w*|os x|mac os x|finder|safari|spotlight|launchpad|mission control|airdrop|quick ?look|"
+    r"(?<![A-Za-z0-9])(apple\w*|mac ?os\w*|os x|mac os x|(?-i:This Mac)|finder|safari|spotlight|launchpad|mission control|airdrop|quick ?look|"
     r"fsevent\w*|appkit|uikit|swiftui|ipados|iphone|ipad|ios|iosterm|xcode|icloud|siri|sf symbols|cupertino)(?![A-Za-z0-9])",
     re.I,
 )

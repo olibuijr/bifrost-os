@@ -48,6 +48,10 @@ pub fn fetch_tile(net: &dyn Net, source: &TileSource, cache: &TileCache, last_se
 
 type Finished = Arc<Mutex<Vec<(TileId, Option<Vec<u8>>)>>>;
 
+/// Called on the fetch thread each time a tile has finished. An app whose loop sleeps until something happens sets one
+/// that wakes the loop, so the next tick calls `pump` and the tile shows without waiting for input.
+pub type Wake = Arc<dyn Fn() + Send + Sync>;
+
 pub struct TileLoader {
     source: TileSource,
     cache: TileCache,
@@ -64,6 +68,8 @@ pub struct TileLoader {
     online: bool,
     /// a cached tile older than this is fetched again
     max_age: Duration,
+    /// wakes the app loop when a fetch finishes
+    wake: Option<Wake>,
 }
 
 impl TileLoader {
@@ -83,7 +89,14 @@ impl TileLoader {
             last_sent: Arc::new(Mutex::new(None)),
             online: true,
             max_age: MAX_TILE_AGE,
+            wake: None,
         }
+    }
+
+    /// Sets what runs when a fetch finishes, so a loop that sleeps between events looks at the new tile at once.
+    pub fn with_wake(mut self, wake: Wake) -> Self {
+        self.wake = Some(wake);
+        self
     }
 
     /// A loader for a layer drawn over the base map (traffic): its own cache folder, and tiles that are fetched again
@@ -175,10 +188,14 @@ impl TileLoader {
             }
             self.pending.insert(t);
             let (net, source, cache, last, done) = (self.net.clone(), self.source.clone(), self.cache.clone(), self.last_sent.clone(), self.finished.clone());
+            let wake = self.wake.clone();
             // one thread per fetch: at most MAX_IN_FLIGHT run at once, and each is paced by `fetch_tile`
             std::thread::spawn(move || {
                 let bytes = fetch_tile(&*net, &source, &cache, &last, t).ok();
                 done.lock().unwrap_or_else(|e| e.into_inner()).push((t, bytes));
+                if let Some(wake) = wake {
+                    wake();
+                }
             });
         }
     }
@@ -325,6 +342,28 @@ mod tests {
         assert!(loader.image(t).is_some());
         assert_eq!(loader.max_age(), super::super::source::TRAFFIC_MAX_AGE, "traffic tiles go stale sooner than map tiles");
         assert_eq!(TileLoader::new(&root, source, Arc::new(super::super::net::Offline)).max_age(), MAX_TILE_AGE);
+    }
+
+    #[test]
+    fn a_finished_fetch_wakes_the_loop() {
+        let root = dir("wake");
+        let net = Fake::with("https://tile.openstreetmap.org/", &png());
+        let woken = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counter = woken.clone();
+        let mut loader = TileLoader::new(&root, MapType::Standard.source("1.0.0"), net)
+            .with_wake(Arc::new(move || {
+                counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            }));
+        loader.want(&[TileId { z: 2, x: 1, y: 1 }]);
+        for _ in 0..200 {
+            if woken.load(std::sync::atomic::Ordering::SeqCst) > 0 {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(woken.load(std::sync::atomic::Ordering::SeqCst), 1, "the loop is woken once the tile is in");
+        assert!(loader.pump(), "and the next tick applies it");
+        assert!(loader.image(TileId { z: 2, x: 1, y: 1 }).is_some());
     }
 
     #[test]

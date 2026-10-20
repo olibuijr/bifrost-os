@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.8.2
+
+- The forecast toolbar no longer has a Stocks button (Weather keeps its own controls; the watchlist page stays in the code, unreachable from the toolbar).
+
 ## 1.8.1
 
 - BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.

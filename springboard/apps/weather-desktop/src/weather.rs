@@ -497,8 +497,9 @@ impl Weather {
         self.sidebar().hit(self.side_list(), 0.0, x, y).map(|id| if id == HERE_ROW_ID { SideTarget::Here } else { SideTarget::Place((id - PLACE_ID) as usize) })
     }
 
-    /// The detail pane's toolbar: Locations (only without the sidebar) and Stocks on the main page, Done on
-    /// Locations, Back on Stocks.
+    /// The detail pane's toolbar: Locations (only without the sidebar) and Share on the main page, Done on
+    /// Locations, Back on Stocks. The main page has no Stocks button: the watchlist belongs to the Stocks app, so
+    /// Weather's own controls stay about the forecast (the watchlist page and its saved symbols remain for now).
     fn bar(&self) -> Toolbar {
         let mut items = vec![];
         match self.screen {
@@ -508,7 +509,6 @@ impl Weather {
                 }
                 items.push(ToolbarItem::flexible_space());
                 items.push(ToolbarItem::icon(BAR_SHARE, "Share", "square.and.arrow.up").enabled(self.shareable()));
-                items.push(ToolbarItem::button(BAR_STOCKS, "Stocks"));
             }
             Screen::Places => {
                 items.push(ToolbarItem::flexible_space());
@@ -2662,6 +2662,7 @@ mod tests {
         let (mut app, ui, dir) = app_with("share-bar", &["A"]);
         let labels = |app: &Weather| app.bar().items.iter().map(|i| i.label.clone()).collect::<Vec<_>>();
         assert!(labels(&app).contains(&"Share".to_string()));
+        assert!(!labels(&app).contains(&"Stocks".to_string()), "the forecast page has no Stocks button");
         app.activate(&ui, Target::Places, 0.0, 0.0);
         assert!(!labels(&app).contains(&"Share".to_string()));
         let _ = std::fs::remove_dir_all(&dir);

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.5
+
+- Map tiles show: a finished tile fetch now wakes the app loop (the fetch threads added in 0.6.3 never did, so tiles that arrived stayed unseen until the next input).
+- The toolbar and sidebar use symbols the kit draws (Directions, Drop Pin, Current Location, Map and Measure Distance showed a clipped label); Work has an icon.
+
 ## 0.6.4
 
 - BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.

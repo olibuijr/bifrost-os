@@ -1,4 +1,4 @@
-//! Fonts as an installed BifrOSt app in the full-size window: a sidebar of lists (All, Off, collections, smart
+//! Fonts as an installed BifrOSt app in the full-size window: a sidebar of lists (All, Disabled, collections, smart
 //! collections, New Collection), the family list with search, and a preview with three modes (Sample, Repertoire,
 //! Info) plus a validation result, the on/off switch, Remove Font for the user's own installs, and collection
 //! membership. Fonts are added from the Font menu (Add Fonts), by Open With, or by a `fontbook:` link; a file is shown
@@ -483,7 +483,7 @@ impl FontBookApp {
         }
     }
 
-    /// The collection the sidebar shows, with whether it is smart; None for All Fonts and Off.
+    /// The collection the sidebar shows, with whether it is smart; None for All Fonts and Disabled.
     fn current_collection(&self) -> Option<(String, bool)> {
         match &self.source {
             Source::Collection(n) => Some((n.clone(), false)),
@@ -704,9 +704,9 @@ fn font_ui(bytes: Vec<u8>, scale: f32) -> Option<Ui> {
     Font::parse(data).map(|font| Ui::new(font, scale))
 }
 
-/// The sidebar rows in order: All Fonts, Off, the collections, then the smart collections.
+/// The sidebar rows in order: All Fonts, Disabled, the collections, then the smart collections.
 fn sidebar_sources(lib: &Library) -> Vec<(String, Source)> {
-    let mut rows = vec![("All Fonts".to_string(), Source::All), ("Off".to_string(), Source::Disabled)];
+    let mut rows = vec![("All Fonts".to_string(), Source::All), ("Disabled".to_string(), Source::Disabled)];
     rows.extend(lib.collection_names().into_iter().map(|n| (n.clone(), Source::Collection(n))));
     rows.extend(lib.smart_names().into_iter().map(|n| (n.clone(), Source::Smart(n))));
     rows
@@ -1030,7 +1030,7 @@ impl App for FontBookApp {
         let p = |v: f32| (v * scale) as usize;
         let (w, h) = (s.w, s.h);
         let (wp, hp) = (w as f32 / scale, h as f32 / scale);
-        s.fill_rect(0, 0, w, h, ui::DETAIL_BG.now());
+        s.fill_rect(0, 0, w, h, ui::CONTENT_BG.now());
         // Sidebar source list uses the shared Golden Gate neutral selection and row treatment.
         let rows = self.library.as_ref().map(sidebar_sources).unwrap_or_default();
         let entries = rows.iter().enumerate().map(|(i, (label, source))| {
@@ -1276,7 +1276,7 @@ mod tests {
         let lib = Library::new(Vec::new(), BTreeSet::new(), cols).with_smart(smart);
         let rows = sidebar_sources(&lib);
         let names: Vec<&str> = rows.iter().map(|(n, _)| n.as_str()).collect();
-        assert_eq!(names, ["All Fonts", "Off", "Work", "Mono"]);
+        assert_eq!(names, ["All Fonts", "Disabled", "Work", "Mono"]);
         assert_eq!(rows[3].1, Source::Smart("Mono".to_string()));
     }
 }

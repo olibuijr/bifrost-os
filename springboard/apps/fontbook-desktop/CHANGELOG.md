@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.8
+
+- The list of turned-off fonts is named Disabled, not Off (which read as a switch label), and the list and preview columns use the window's content colour instead of pure black.
+
 ## 0.6.7
 
 - BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.

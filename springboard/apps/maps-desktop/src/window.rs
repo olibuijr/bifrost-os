@@ -3,7 +3,7 @@
 //! Layout is computed from the window size in points; `buttons` is the one list that drawing, hit testing and the
 //! accessibility controls all read, so they cannot disagree.
 
-use crate::loader::TileLoader;
+use crate::loader::{TileLoader, Wake};
 use crate::net::Net;
 use crate::route::{self, Route};
 use crate::source::{MapType, LABELS_MAX_AGE, TRAFFIC_MAX_AGE};
@@ -166,6 +166,11 @@ fn location_error_text(error: LocationError) -> &'static str {
     }
 }
 
+/// What a finished tile fetch runs: an empty job on the main queue, which wakes the app loop so the next tick applies the tile.
+fn wake_loop() -> Wake {
+    Arc::new(|| DispatchQueue::main().async_(|| {}))
+}
+
 /// Draws a map tile at its place, scaled to the size on screen (the scaled copies are kept in `scaled`).
 fn blit_tile(c: &mut Surface, scaled: &mut HashMap<(TileId, usize), Image>, id: TileId, img: &Image, x: i32, y: i32, tile_px: usize) {
     if img.w == tile_px && img.h == tile_px {
@@ -232,12 +237,12 @@ fn rect(x: f32, y: f32, w: f32, h: f32) -> KRect {
 
 fn bar_table() -> Vec<(u32, &'static str, &'static str, Act, u32)> {
     vec![
-        (1, "Directions", "arrow.triangle.turn.up.right.diamond", Act::Directions, 0),
-        (2, "Drop Pin", "mappin", Act::DropPin, 0),
-        (3, "Current Location", "location", Act::Locate, 0),
-        (10, "Map", "map", Act::MapType(MapType::Standard), 1),
+        (1, "Directions", "flag", Act::Directions, 0),
+        (2, "Drop Pin", "bookmark", Act::DropPin, 0),
+        (3, "Current Location", "antenna.radiowaves.left.and.right", Act::Locate, 0),
+        (10, "Map", "rectangle.split.3x1", Act::MapType(MapType::Standard), 1),
         (11, "Satellite", "globe", Act::MapType(MapType::Satellite), 1),
-        (20, "Measure Distance", "ruler", Act::Measure, 0),
+        (20, "Measure Distance", "arrow.up.arrow.down", Act::Measure, 0),
         (21, "Download Map", "arrow.down.circle", Act::Download, 0),
         (22, "Share", "square.and.arrow.up", Act::Share, 0),
     ]
@@ -254,9 +259,9 @@ impl Window {
     pub fn with_shared(ui: &Ui, w: i32, h: i32, root: PathBuf, version: &str, net: Arc<dyn Net>, shared: SharedData) -> Window {
         let pt = ui.pt(1.0).max(0.01);
         let maps = Maps::with_shared(&root, version, (w as f32 / pt) as f64, (h as f32 / pt) as f64, shared);
-        let loader = TileLoader::new(&root, maps.map_type.source(version), net.clone());
-        let traffic = maps.traffic_source().cloned().map(|source| TileLoader::overlay(&root, source, net.clone(), TRAFFIC_MAX_AGE));
-        let map_labels = maps.map_type.labels_source(version).map(|source| TileLoader::overlay(&root, source, net.clone(), LABELS_MAX_AGE));
+        let loader = TileLoader::new(&root, maps.map_type.source(version), net.clone()).with_wake(wake_loop());
+        let traffic = maps.traffic_source().cloned().map(|source| TileLoader::overlay(&root, source, net.clone(), TRAFFIC_MAX_AGE).with_wake(wake_loop()));
+        let map_labels = maps.map_type.labels_source(version).map(|source| TileLoader::overlay(&root, source, net.clone(), LABELS_MAX_AGE).with_wake(wake_loop()));
         Window {
             maps,
             loader,
@@ -380,7 +385,7 @@ impl Window {
             };
             push(SidebarItem::header(&head), 0);
             for (i, s) in sug.iter().enumerate() {
-                let symbol = if s.local { "star" } else { "mappin" };
+                let symbol = if s.local { "star" } else { "flag" };
                 let mut row = SidebarItem::row(SUG_ID + i as u32, &s.title).with_symbol(symbol);
                 if !s.subtitle.is_empty() {
                     row = row.with_subtitle(&s.subtitle);
@@ -393,7 +398,7 @@ impl Window {
         let home = lib.home.as_ref().map_or("Not set".to_string(), |p| p.title().to_string());
         let work = lib.work.as_ref().map_or("Not set".to_string(), |p| p.title().to_string());
         push(SidebarItem::row(HOME_ID, "Home").with_symbol("house").with_subtitle(&home), HOME_ID);
-        push(SidebarItem::row(WORK_ID, "Work").with_symbol("briefcase").with_subtitle(&work), WORK_ID);
+        push(SidebarItem::row(WORK_ID, "Work").with_symbol("desktopcomputer").with_subtitle(&work), WORK_ID);
         if !lib.favorites.is_empty() {
             push(SidebarItem::header("Favorites"), 0);
             for (i, p) in lib.favorites.iter().enumerate() {
@@ -1084,7 +1089,7 @@ impl Window {
                         .maps
                         .map_type
                         .labels_source(self.maps.version())
-                        .map(|source| TileLoader::overlay(&root, source, self.net.clone(), LABELS_MAX_AGE));
+                        .map(|source| TileLoader::overlay(&root, source, self.net.clone(), LABELS_MAX_AGE).with_wake(wake_loop()));
                     self.scaled_map_labels.clear();
                 }
                 Effect::StartDownload(tiles) => self.loader.start_download(tiles),
@@ -1684,6 +1689,16 @@ mod tests {
         let mut win = Window::new(&ui, w, h, root, "1.0.0", Arc::new(Offline));
         win.set_online(false);
         (win, ui, ctx(w as u32, h as u32))
+    }
+
+    #[test]
+    fn every_toolbar_and_sidebar_symbol_is_one_the_kit_draws() {
+        for (_, label, symbol, _, _) in bar_table() {
+            assert!(bifrost_app::glyphs::has(symbol), "{label} uses {symbol}, which has no drawing (the button would show a clipped label)");
+        }
+        for symbol in ["house", "desktopcomputer", "star", "flag", "folder", "clock"] {
+            assert!(bifrost_app::glyphs::has(symbol), "{symbol}");
+        }
     }
 
     fn centre_of(b: &Btn) -> (f32, f32) {

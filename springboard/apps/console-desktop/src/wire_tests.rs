@@ -441,3 +441,19 @@ fn marked_messages_are_what_save_messages_writes_and_a_mark_toggles() {
     assert!(c.marked.is_empty());
     assert_eq!(c.messages_to_save().lines().count(), 3, "with no marks, every shown message is saved");
 }
+
+#[test]
+fn every_sidebar_row_has_a_drawn_icon_and_no_platform_name() {
+    use bifrost_app::controls::sidebar::SidebarItem;
+    let c = console_with(Vec::new());
+    let mut rows = 0;
+    for item in &c.sidebar().items {
+        if let SidebarItem::Row { label, symbol, .. } = item {
+            rows += 1;
+            let name = symbol.as_deref().unwrap_or_else(|| panic!("{label} has no icon"));
+            assert!(bifrost_app::glyphs::has(name), "{label} uses {name}, which the kit does not draw");
+        }
+    }
+    assert!(rows >= 8, "the live row and the report rows");
+    assert!(c.sidebar().items.iter().any(|i| matches!(i, SidebarItem::Row { label, .. } if label == "This Computer")));
+}

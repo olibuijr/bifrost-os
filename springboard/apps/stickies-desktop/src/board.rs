@@ -183,12 +183,8 @@ pub fn caret_vertical(ui: &Ui, note: &Note, down: bool) -> usize {
 
 /// Draws the whole board, back to front. `marks` holds the rules under the misspelled and detected text.
 pub fn draw(c: &mut dyn Canvas, ui: &Ui, board: &Board, marks: &Marks) {
-    let (cw, ch) = c.size();
-    if board.notes.is_empty() {
-        let img = ui.text("Choose File, New Sticky Note to add a note.", MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now());
-        widgets::blit(c, &img, (cw as i32 - img.w as i32) / 2, (ch as i32 - img.h as i32) / 2);
-        return;
-    }
+    // The surface is transparent and covers the screen, so with no notes nothing is drawn: a hint here would float
+    // over other apps' windows. The first launch opens a welcome note instead (`welcome_text`).
     let none: &[Mark] = &[];
     for note in &board.notes {
         let note_marks = marks.get(&note.id).map_or(none, |m| m.as_slice());
