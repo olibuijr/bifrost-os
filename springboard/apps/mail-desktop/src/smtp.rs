@@ -83,8 +83,9 @@ pub fn auth_plain(user: &str, password: &str) -> String {
 /// Turns a message into the DATA payload: CRLF line endings, a leading dot doubled, and the closing `.` line.
 pub fn data_payload(message: &str) -> String {
     let mut out = String::with_capacity(message.len() + 16);
+    // a lone CR is a line end too: a server that takes <CR>.<CR> as the end of the data must not see one in the text
+    let message = message.replace("\r\n", "\n").replace('\r', "\n");
     for line in message.split('\n') {
-        let line = line.strip_suffix('\r').unwrap_or(line);
         if line.starts_with('.') {
             out.push('.');
         }
@@ -134,5 +135,7 @@ mod tests {
         assert_eq!(data_payload("Subject: x\r\n\r\n.hidden\nline\n"), "Subject: x\r\n\r\n..hidden\r\nline\r\n.\r\n");
         assert_eq!(data_payload("no newline"), "no newline\r\n.\r\n");
         assert_eq!(data_payload(".\n"), "..\r\n.\r\n");
+        // a bare CR is a line end, so a dot after it is stuffed and no CR.CR survives
+        assert_eq!(data_payload("x\r.\rMAIL\r\ny\n"), "x\r\n..\r\nMAIL\r\ny\r\n.\r\n");
     }
 }

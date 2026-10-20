@@ -12,6 +12,7 @@ use springboard::deildu::http::Transport;
 use std::io::Write;
 use std::os::unix::net::UnixStream;
 use std::sync::mpsc::Sender;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use bifrost_app::dispatch::{DispatchQueue, Qos};
@@ -317,22 +318,50 @@ enum WatchEnd {
 }
 
 /// Keeps an IDLE connection (RFC 2177) open on the inbox of `account` and reports each new message as
-/// `Event::Arrived`, with the connection's state as `Event::Watch`. Runs on its own thread until a `Stop`. The poll
-/// covers an account whose watcher has stopped or is between connections.
-pub fn watch(transport: Arc<dyn Transport>, account: Account, password: String, tx: Sender<Event>, wake: Option<UnixStream>) {
+/// `Event::Arrived`, with the connection's state as `Event::Watch`. Runs on its own thread until a `Stop` or until
+/// `cancel` is set (Remove Account, Account Settings); a cancelled watcher reports nothing more. The poll covers an
+/// account whose watcher has stopped or is between connections.
+pub fn watch(transport: Arc<dyn Transport>, account: Account, password: String, tx: Sender<Event>, wake: Option<UnixStream>, cancel: Arc<AtomicBool>) {
     DispatchQueue::serial_qos("mail.inbox-watch", Qos::Utility).async_(move || loop {
-        let end = watch_inbox(transport.as_ref(), &account, &password, &tx, &wake);
+        if cancel.load(Ordering::Relaxed) {
+            return;
+        }
+        let end = watch_inbox(transport.as_ref(), &account, &password, &tx, &wake, &cancel);
+        if cancel.load(Ordering::Relaxed) {
+            return;
+        }
         report(&tx, &wake, Event::Watch { account: account.id.clone(), live: false });
         match end {
             WatchEnd::Stop => return,
-            WatchEnd::Retry => std::thread::sleep(WATCH_RETRY),
+            WatchEnd::Retry => {
+                if !sleep_unless_cancelled(WATCH_RETRY, &cancel) {
+                    return;
+                }
+            }
         }
     });
 }
 
-fn watch_inbox(transport: &dyn Transport, account: &Account, password: &str, tx: &Sender<Event>, wake: &Option<UnixStream>) -> WatchEnd {
+/// Sleeps for `total` in short steps. False when `cancel` was set meanwhile.
+fn sleep_unless_cancelled(total: Duration, cancel: &AtomicBool) -> bool {
+    let step = Duration::from_secs(1);
+    let mut slept = Duration::ZERO;
+    while slept < total {
+        if cancel.load(Ordering::Relaxed) {
+            return false;
+        }
+        std::thread::sleep(step);
+        slept += step;
+    }
+    !cancel.load(Ordering::Relaxed)
+}
+
+fn watch_inbox(transport: &dyn Transport, account: &Account, password: &str, tx: &Sender<Event>, wake: &Option<UnixStream>, cancel: &AtomicBool) -> WatchEnd {
     let Ok(server) = accounts::incoming(account) else { return WatchEnd::Stop };
     let Ok(mut session) = session::connect(transport, server) else { return WatchEnd::Retry };
+    if cancel.load(Ordering::Relaxed) {
+        return WatchEnd::Stop;
+    }
     if session.login(&account.username, password).is_err() {
         return WatchEnd::Stop;
     }
@@ -346,10 +375,16 @@ fn watch_inbox(transport: &dyn Transport, account: &Account, password: &str, tx:
     }
     report(tx, wake, Event::Watch { account: account.id.clone(), live: true });
     loop {
-        if session.idle().is_err() {
-            return WatchEnd::Retry;
+        // The socket's read timeout only wakes the wait to look at `cancel`; IDLE is renewed before the server's limit.
+        match session.idle_until(session::IDLE_REFRESH, &|| cancel.load(Ordering::Relaxed)) {
+            Ok(session::Idle::NewMail) => report(tx, wake, Event::Arrived { account: account.id.clone() }),
+            Ok(session::Idle::Refresh) => {}
+            Ok(session::Idle::Cancelled) => {
+                session.logout();
+                return WatchEnd::Stop;
+            }
+            Err(_) => return WatchEnd::Retry,
         }
-        report(tx, wake, Event::Arrived { account: account.id.clone() });
     }
 }
 

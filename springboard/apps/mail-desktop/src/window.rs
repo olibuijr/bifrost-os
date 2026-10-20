@@ -272,8 +272,9 @@ pub struct MailWindow {
     next_poll: f64,
     /// Poll rounds run so far (see [`IDLE_CHECK_ROUNDS`]).
     poll_round: u32,
-    /// Accounts with an inbox watcher started. A watcher runs for the rest of the run, or until its server has no IDLE.
-    watching: HashSet<String>,
+    /// Accounts with an inbox watcher started, each with the flag that stops it. A watcher runs until its server has no
+    /// IDLE, the account is removed or its settings change (see `stop_watcher`).
+    watching: HashMap<String, Arc<std::sync::atomic::AtomicBool>>,
     /// Accounts whose watcher is connected and waiting in IDLE.
     live: HashSet<String>,
     pub w: u32,
@@ -591,7 +592,7 @@ impl MailWindow {
             seq: 0,
             next_poll: 0.0,
             poll_round: 0,
-            watching: HashSet::new(),
+            watching: HashMap::new(),
             live: HashSet::new(),
             w: 0,
             h: 0,
@@ -1820,6 +1821,7 @@ impl MailWindow {
                         self.pending.insert(request, Pending::Forget);
                     }
                     let id = account.id.clone();
+                    self.stop_watcher(&id);
                     self.mail.replace_account(account, password);
                     self.mail.close_sheet();
                     self.mail.status = "Account saved".into();
@@ -1838,13 +1840,23 @@ impl MailWindow {
     fn refresh(&mut self, index: usize, mailbox: &str) {
         let Some(account) = self.mail.accounts.get(index).cloned() else { return };
         let Some(password) = self.mail.password(&account).map(str::to_string) else { return };
-        if self.watching.insert(account.id.clone()) {
-            sync::watch(self.transport.clone(), account.clone(), password.clone(), self.tx.clone(), self.wake_clone());
+        if !self.watching.contains_key(&account.id) {
+            let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
+            self.watching.insert(account.id.clone(), cancel.clone());
+            sync::watch(self.transport.clone(), account.clone(), password.clone(), self.tx.clone(), self.wake_clone(), cancel);
         }
         let transport = self.transport.clone();
         let mailbox = mailbox.to_string();
         self.jobs += 1;
         sync::spawn(self.tx.clone(), self.wake_clone(), move || sync::list(transport.as_ref(), &account, &password, &mailbox));
+    }
+
+    /// Stops the inbox watcher of an account, which holds the old server and password. The next refresh starts a new one.
+    fn stop_watcher(&mut self, id: &str) {
+        if let Some(cancel) = self.watching.remove(id) {
+            cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        self.live.remove(id);
     }
 
     fn refresh_account(&mut self, id: &str) {
@@ -2718,8 +2730,7 @@ impl MailWindow {
         let request = passwords::remove(ctx, &account.password_site(), &account.username);
         self.pending.insert(request, Pending::Forget);
         self.mail.forget_account(id);
-        self.watching.remove(id);
-        self.live.remove(id);
+        self.stop_watcher(id);
         self.mail.queue.outbox.retain(|q| q.account != id);
         self.mail.queue.reminders.retain(|r| r.account != id);
         self.save_queue_file();
