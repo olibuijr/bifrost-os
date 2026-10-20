@@ -271,6 +271,8 @@ impl WmState {
         self.contacts.down(slot, (pos.x, pos.y), emulate);
 
         let serial = SERIAL_COUNTER.next_serial();
+        // xdg-activation tokens are checked against the serials of real touches
+        self.note_input_serial(serial, under.as_ref().map(|(surface, _)| surface));
         if first && !emulate {
             // an emulated press focuses through `pointer_button`
             self.focus_at(pos, serial);

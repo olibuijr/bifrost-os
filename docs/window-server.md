@@ -400,9 +400,20 @@ ordinary client's registry does not list them and a bind is refused (`GlobalDisp
   shell connects for it and passes the connected descriptor down in `WAYLAND_SOCKET` (`capture_flow.rs`, `privileged::give_to`),
   which the Wayland client library uses in place of `WAYLAND_DISPLAY`; run by root without it (the lab tooling), the script
   connects itself. The recording worker is a thread of the shell and connects on its own.
-- **Not covered.** The foreign-toplevel list (titles and app ids, and requests to close, minimize or activate a window) and the
-  output-management globals are still offered to every client; they carry no pixels. Windows of XWayland clients are not on this
-  socket, and an X11 client could read the screen through X itself, which XWayland does not isolate.
+- **Also privileged-only.** `zwlr_foreign_toplevel_manager_v1` (every window's title and app id, and requests to close,
+  minimize, maximize, full-screen or activate any window), `zwlr_output_manager_v1` (mode and rotation changes) and
+  `zwlr_output_power_manager_v1` (blank the display) are listed to privileged clients only (`session_protocols.rs`,
+  `can_view`). The shell and `bifrost-mcp` (root; `mcp/src/wl.rs` opens the privileged socket first, `BIFROST_WM_PRIVILEGED` or
+  the default path, else the ordinary socket) are the consumers. Windows of XWayland clients are not on this socket, and an
+  X11 client could read the screen through X itself, which XWayland does not isolate.
+- **xdg-activation.** A client's token is kept only when its serial is the serial of a real button, key or touch event the
+  window server delivered to that client within 10 s (a ring of the last 64, filled by `pointer_button`, `key` and
+  `touch_down`), or the enter serial of the focus the client holds; a privileged requester is trusted. A made-up serial or one
+  from an input that went to another app gives a token that activates nothing.
+- **`bifrost_window_level_v1`.** An ordinary client may set the normal level and `set_origin` (the window model keeps the frame
+  on the usable area) on its own surfaces; `set_level` floating and `tile` are privileged-only (the shell). A client keeps at
+  most four managers bound. The shell must be on the privileged socket for floating windows and tiling to work; the ordinary
+  socket fallback of a development session loses them.
 - **Tests.** `wm/tests/window_capture.rs` (an ordinary client sees none of the four capture globals, a privileged one sees all
   four, and the socket file is owner-only), `privileged::tests` (the environment parsing and the mode), `bare/privileged.rs` tests
   (the helper descriptor reaches a child in `WAYLAND_SOCKET`).

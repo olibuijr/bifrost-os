@@ -444,6 +444,8 @@ impl WmState {
     pub fn pointer_button(&mut self, button: u32, pressed: bool, time: u32) {
         let pointer = self.seat.get_pointer().expect("pointer");
         let serial = SERIAL_COUNTER.next_serial();
+        // xdg-activation tokens are checked against the serials of real button events (a client may use a release's)
+        self.note_pointer_serial(serial);
         if pressed && !pointer.is_grabbed() {
             self.focus_at(pointer.current_location(), serial);
         }
@@ -481,12 +483,15 @@ impl WmState {
 
     pub fn key(&mut self, code: Keycode, state: KeyState, time: u32) {
         let keyboard = self.seat.get_keyboard().expect("keyboard");
+        let serial = SERIAL_COUNTER.next_serial();
+        // xdg-activation tokens are checked against the serials of real key events (a client may use a release's)
+        self.note_keyboard_serial(serial);
         // compositor chords are taken before any client sees them; the action runs on the press only
         let bound = keyboard.input::<Option<crate::keybindings::Action>, _>(
             self,
             code,
             state,
-            SERIAL_COUNTER.next_serial(),
+            serial,
             time,
             |_, mods, handle| {
                 match crate::keybindings::action(handle.modified_sym().raw(), crate::keybindings::Mods::from(mods)) {
