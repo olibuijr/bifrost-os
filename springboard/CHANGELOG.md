@@ -20,6 +20,13 @@ Keyboard, clipboard and Mail, from the owner's reports and the Mail test with a 
   shell received its buffers before it knew the window, and the dimmed desktop left behind is gone.
 - Toolbars: the SDK insets a full-size window's toolbar past the window buttons, so Printers and eight other apps no
   longer draw buttons under them.
+- Shell alerts and sheets (notification permission, crash, launch, permission, USB, network sign-in and the rest) are
+  one overlay surface (chrome id 15) above every window, with the veil over the whole screen; Esc answers the cancel
+  button, Return the default one (never a privacy grant), and keys, wheel and clicks behind the card are used up. A long
+  alert title wraps. Before, the card was drawn under the app windows and only its veil showed, darkening the desktop.
+- Overview: closing it leaves every window where it was. The windows' toplevels are re-created when Overview ends, and
+  the window server placed them at the cascade; `bifrost_window_level_v1` version 4 adds `set_origin`, so the shell
+  hands each window its own place back. A banner that arrives while Overview is open waits until it closes.
 - Mail 0.16.0: Add Account finds the servers from the address (autoconfig file, RFC 6186 service records, the mail
   exchanger); RFC 2047 headers decoded; HTML character references decoded; colour emoji.
 
