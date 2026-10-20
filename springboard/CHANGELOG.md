@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.10.16 — 2026-10-20
+
+- Moving windows: a full-size app window (Notes, Mail and the other kit apps) drags again from the empty part of its
+  toolbar row. The kit's toolbar and sidebar containers were published as controls, so the whole row was a no-drag
+  hole and only the strip above the buttons moved the window. Only interactive nodes (buttons, fields, switches,
+  sliders, segmented controls, menu items) block a drag now; a double-click on the empty band zooms.
+- Printing: a computer with no printers shows "No Printers" and Add Printer instead of "Loading..." (CUPS answers an
+  empty list with client-error-not-found); the Printers app lists nothing instead of failing.
+- Notification Center: the Calendar and Weather cards lay their lines out by measured height, so the big numerals no
+  longer cover the month, condition and high/low lines.
+
 ## 0.10.15 — 2026-10-20
 
 Leftovers from the 0.10.14 re-test (`docs/e2e/2026-10-20-second-pass.md`).
