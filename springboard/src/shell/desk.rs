@@ -1274,8 +1274,9 @@ impl Shell {
         let Some(i) = self.desk.as_ref().and_then(|d| d.index_of(app)) else { return };
         match ev {
             // the compositor hands focus back to a window when a menu or sheet closes; on a locked screen that must not
-            // lift the window over the lock (Lock Screen from the System menu closes the menu in the same turn)
-            WindowEvent::Focus(_) => { self.desk.as_mut().unwrap().raise(i); if !self.is_locked() { self.screen = Screen::App(app); } self.dirty = true; },
+            // lift the window over the lock (Lock Screen from the System menu closes the menu in the same turn); an extra window
+            // focuses the app that opened it, because the routing sites match the parent (`desk_refocus` does the same)
+            WindowEvent::Focus(_) => { self.desk.as_mut().unwrap().raise(i); if !self.is_locked() { self.screen = Screen::App(app.parent()); } self.dirty = true; },
             WindowEvent::Close(_) => self.desk_close_app(app),
             WindowEvent::Maximized(_,maximized) => {let win=&mut self.desk.as_mut().unwrap().wins[i]; if win.maximized!=maximized {if maximized {win.restore=win.r;}else{win.r=win.restore;}win.maximized=maximized;self.dirty=true;}},
             WindowEvent::Resize(_,w,h) if w > 0 && h > 0 => {
