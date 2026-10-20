@@ -94,3 +94,34 @@ reference, **P3** polish. Each row is one fix brief; IDs carried over from the f
 
 Stage Manager (no entry point found), Fast User Switching and Log Out (no menu item, SM1), Photo Booth with a camera,
 Voice Memos recording (microphone permission "not answered yet" with no prompt), Mail and Messages with an account.
+
+## Re-test on 0.10.14 (15:00 to 15:10)
+
+Midget 0.10.14 (`integration` at `fd8dd7886`), the eleven changed apps updated from the store. The first OTA rolled back
+because a manual reboot was sent during system probation (`update --restart` already reboots); the second OTA was
+accepted after about 50 s. Evidence `fNN-*.png` and `e14`-`e25`/`e70`-`e78` `g-`/`app-` shots taken after 15:00.
+
+| ID | Result | Notes |
+|---|---|---|
+| CT1 | Fixed | Holding Cmd after Tab shows the icon strip above the windows with the selection and its name (f04). |
+| SM1 | Fixed | System menu: Recent Items submenu, Force Quit... with Option+Cmd+Esc, Log Out user... (f05). Option+Cmd+Esc opens Force Quit; Down three times and Return force-quits Calculator (f08). |
+| AB1 | Fixed | A separate About window: ThinkCentre M900, Intel Core i7-6700T, 15.5 GB, serial, 0.10.14, More Info... (f07). New AB2 (P3): "8 cores" counts threads; the i7-6700T has 4 cores. |
+| L2 | Fixed | Floating Applications panel under a capsule header, category chips, 7 columns (f02). The panel is opaque, not glass (P3). |
+| S3 | Fixed | Wide glass field and results, filter chips, real pane and shortcut icons, two-line rows (f03). New S4 (P2): the results panel runs down into the Dock (no height limit). |
+| NC2 | Partly | Wider panel, quiet "No Notifications", Calendar and Notes cards with icons, capsule Edit Widgets with close (f10). No Weather card although Weather has data. |
+| CC2 | Fixed | Bluetooth (Unavailable) and Display (Dark) modules added (f11); closing leaves nothing behind (f12). |
+| D4, MB1 | Fixed | Dock divider before the minimised windows and folders; no per-app letters in the menu bar. |
+| ST1, ST5, ST7, ST8, ST12 | Fixed | Wi-Fi row, account icon, title-case group headers, titles beside back/forward, a compact Notifications header, the Overview label wraps, a distinct tile for every pane, click wording (e14-e19, f13, f20). |
+| ST6 | Mostly | Pop-ups in General, Desktop & Dock and Screen Saver; Energy's sleep time and Power Mode are still checklists (P3). |
+| ST9 | Mostly | App rows show icons and "Banners, Sounds, Badges"; Deildu, Photos and Files have no icon (P3). |
+| ST10 | Fixed | Energy instead of Battery on Midget, with Low Power Mode and Power Mode. |
+| ST11 | Partly | A plain "The printing service is not running." But printing still fails: `cups.socket` is active and listens on `/run/cups/cups.sock`, while `bifrost_ui::cups` connects over TCP to localhost:631 (Connection refused). |
+| ST13 | Partly | "Control Center" everywhere in Settings, but the Focus footer still says "Notification Centre". |
+| PV1 | Fixed | Viewer opens ("Open an image or a PDF to view it"). |
+| DU1, DU2 | Fixed | Disk Utility lists the NVMe disk and its partitions; the toolbar starts after the window buttons. |
+| MP1 | Fixed | Maps shows OpenStreetMap tiles around Reykjavík and its toolbar symbols. |
+| SK1 | Fixed | Sticky Notes opens a yellow first note. |
+| FB1 | Fixed | Fonts: "All Fonts" and "Disabled"; the list uses the window background. |
+| CO1 | Fixed | Console says "This Computer". |
+| MA1, MS1 | Fixed | Mail's title clears the window buttons, with Favorites/Mailboxes and a symbol toolbar; Messages' search field sits below the buttons. |
+| FD1, WE1 | Fixed | Voice Memos and Notes list only their own folders; Weather has no Stocks button. |
