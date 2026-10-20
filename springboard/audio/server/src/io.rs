@@ -412,6 +412,16 @@ fn planes(n: usize) -> BufferList {
 }
 
 impl DeviceRunner {
+    /// Running clients in the present snapshot.
+    fn running_clients(&self) -> usize {
+        self.snapshot.iter().filter(|s| s.running.load(Ordering::Acquire)).count()
+    }
+
+    /// The smallest buffer of a running client (`u32::MAX` with none).
+    fn min_client_buffer(&self) -> u32 {
+        self.snapshot.iter().filter(|s| s.running.load(Ordering::Acquire)).map(|s| s.buffer_frames).min().unwrap_or(u32::MAX)
+    }
+
     pub fn new(io: Box<dyn DeviceIo>, shared: Arc<Shared>, cfg: RunnerConfig) -> DeviceRunner {
         let quantum = shared.quantum.load(Ordering::Acquire).clamp(MIN_QUANTUM, MAX_QUANTUM);
         DeviceRunner {
@@ -902,7 +912,11 @@ pub fn spawn_io_thread_tuned(mut runner: DeviceRunner, name: String, tuning: cra
                 runner.shared.ev_late_cycles.fetch_add(1, Ordering::Relaxed);
             }
             let rate = runner.cfg.rate;
-            if let Some(q) = policy.record(rep.device_xrun || rep.late > 0, rep.frames, rt::window_cycles(rep.frames, rate)) {
+            // One late client is that client's trouble (and its own late counter); only a cycle where every running
+            // client was late looks like an overloaded machine.
+            let overloaded = rep.device_xrun || (rep.late > 0 && rep.late as usize >= runner.running_clients());
+            let raised = policy.record(overloaded, rep.frames, rt::window_cycles(rep.frames, rate)).map(|q| fallback_quantum(q, runner.min_client_buffer()));
+            if let Some(q) = raised.filter(|q| *q > rep.frames) {
                 runner.shared.fallback_floor.store(q, Ordering::Release);
                 runner.shared.quantum.store(q, Ordering::Release);
                 runner.notify_overload();
@@ -917,6 +931,12 @@ pub fn spawn_io_thread_tuned(mut runner: DeviceRunner, name: String, tuning: cra
         runner.stop();
         log("io", &format!("{name}: stopped"));
     })
+}
+
+/// The quantum a sustained-xrun fallback may use: never above the smallest buffer a running client asked for. A
+/// client writes one buffer per trigger and cannot follow a larger quantum, so a bigger one would starve it for good.
+pub fn fallback_quantum(wanted: u32, smallest_client_buffer: u32) -> u32 {
+    wanted.min(smallest_client_buffer)
 }
 
 /// One DLL-style step of the rate scalar: the measured ratio of device frames to host time between two stamps
@@ -1189,6 +1209,19 @@ mod tests {
         assert!((w[256] - g(0)).abs() < 1e-6);
         assert!((w[511] - g(255)).abs() < 1e-5);
         assert!(w[511] > 0.5);
+    }
+
+    #[test]
+    fn the_fallback_never_goes_above_a_clients_buffer() {
+        assert_eq!(fallback_quantum(512, 256), 256);
+        assert_eq!(fallback_quantum(512, 1024), 512);
+        assert_eq!(fallback_quantum(512, u32::MAX), 512);
+        let mut r = rig(256);
+        let a = r.add(1, 0, 2, 256);
+        Rig::play(&a, 256, &[0.5, 0.5]);
+        r.step();
+        assert_eq!(r.runner.running_clients(), 1);
+        assert_eq!(r.runner.min_client_buffer(), 256);
     }
 
     #[test]

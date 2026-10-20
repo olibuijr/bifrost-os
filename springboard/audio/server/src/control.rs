@@ -564,7 +564,8 @@ impl ServerCore {
             .unwrap_or(DEFAULT_QUANTUM);
         let q = want.clamp(d.desc.buffer_frames_range.0.max(MIN_QUANTUM), d.desc.buffer_frames_range.1.min(MAX_QUANTUM));
         // never below what the sustained-xrun fallback raised the device to
-        let q = q.max(d.shared.fallback_floor.load(Ordering::Acquire));
+        // (but never above the smallest buffer a running client asked for: it writes one buffer per trigger)
+        let q = q.max(d.shared.fallback_floor.load(Ordering::Acquire).min(want));
         d.shared.quantum.store(q, Ordering::Release);
         // the device's `BUFFER_FRAMES` property is the quantum it runs at
         let id = self.device_id(dev);
