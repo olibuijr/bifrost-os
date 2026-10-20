@@ -360,9 +360,12 @@ impl Shell {
         for (i,e) in self.status_entries_now().iter().enumerate() {let label=if e.title.is_empty(){super::apphost::installed().get(e.slot as usize).and_then(|a|a.manifest.name.chars().next()).unwrap_or('•').to_string()}else{e.title.clone()};let w=self.measure_chrome(&label,12.,Weight::Regular)+self.ui.pt(2.*STATUS_PAD_PT);extras.push((Menu::Status(i as u8),w,label));}
         for (menu,width,label) in extras {
             if !self.menu_extra_shown(menu){continue;}
-            if edge-width<limit {break;}
+            // the recording indicator is never left out for lack of room: a running screen recording is always shown
+            if edge-width<limit {if menu==Menu::Recording {edge-=width;tail.push((menu,edge,width,label));continue;} break;}
             edge-=width;tail.push((menu,edge,width,label));
         }
+        // when the first extra (Control Center) already ran out of room the loop ended before the indicator: put it in
+        if self.recording_active()&&!tail.iter().any(|t|t.0==Menu::Recording) {let w=self.ui.pt(STATUS_ICON_PT);edge-=w;tail.push((Menu::Recording,edge,w,String::from("stop")));}
         tail.reverse();buttons.extend(tail);buttons
 
     }

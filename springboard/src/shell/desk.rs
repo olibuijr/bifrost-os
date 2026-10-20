@@ -1454,7 +1454,8 @@ impl Shell {
     /// Whether the menu bar is hidden now: the front window is full screen and the pointer is not at the top.
     pub(super) fn desk_bar_hidden(&self) -> bool {
         // a menu opened from the revealed bar keeps the bar while the pointer is down in the menu
-        let full = self.desk.as_ref().is_some_and(|d| d.front_full()) && self.desktop_menu.is_none();
+        // a screen recording keeps the bar: its indicator must stay visible for the whole recording, even over a full-screen window
+        let full = self.desk.as_ref().is_some_and(|d| d.front_full()) && self.desktop_menu.is_none() && !self.recording_active();
         bar_hidden(full, self.pointer_y, self.desktop_bar_height() as f32)
     }
 
