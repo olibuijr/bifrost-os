@@ -246,6 +246,8 @@ struct Loads {
     users: Loaded<super::users_page::View>,
     sharing: Loaded<super::sharing_page::View>,
     printers: Loaded<super::print_scan_page::View>,
+    /// a Print & Scan edit that finished on its worker thread; `poll_loads` acts on it once
+    print_done: Loaded<super::print_scan_page::Landed>,
     screentime: Loaded<(StConfig, Vec<(i64, st_usage::Day)>)>,
     /// Settings > BifrOSt Account: the signed-in account and its devices (`account_page::load`)
     account_view: Loaded<super::account_page::View>,
@@ -279,7 +281,7 @@ impl Loads {
 
     /// A read is running.
     fn busy(&self) -> bool {
-        self.fonts.busy() || self.gpus.busy() || self.crashes.busy() || self.install_failures.busy() || self.latest_backup.busy() || self.logins.busy() || self.accounts.busy() || self.users.busy() || self.sharing.busy() || self.printers.busy() || self.screentime.busy() || self.net_diag.busy() || self.startup.busy() || self.account_view.busy()
+        self.fonts.busy() || self.gpus.busy() || self.crashes.busy() || self.install_failures.busy() || self.latest_backup.busy() || self.logins.busy() || self.accounts.busy() || self.users.busy() || self.sharing.busy() || self.printers.busy() || self.print_done.busy() || self.screentime.busy() || self.net_diag.busy() || self.startup.busy() || self.account_view.busy()
     }
 }
 
@@ -747,7 +749,7 @@ impl Settings {
             PageId::Graphics => super::gpu_page::spec(self.loads.gpus.get().map(Vec::as_slice)),
             PageId::StartupDisk => super::startup_disk_page::spec(self.loads.startup.get(), self.startup_pending.as_deref()),
             PageId::Sharing => super::pages::sharing_spec(&self.opts, self.loads.sharing.get()),
-            PageId::PrintScan => super::print_scan_page::spec(self.loads.printers.get()),
+            PageId::PrintScan => super::print_scan_page::spec_pending(self.loads.printers.get(), self.loads.print_done.busy()),
             PageId::GameControllers | PageId::GameController(_) => super::game_controllers_page::spec(id, &super::services::gamepad_service::snapshot()),
             PageId::Assistant => {
                 let prefs = super::prefs::Prefs::load(self.data_dir.join("settings.ini"));
@@ -1083,11 +1085,32 @@ impl Settings {
             self.account_landed(ui, t);
             frame = true;
         }
+        if self.loads.print_done.poll() {
+            self.print_landed(ui, t);
+            frame = true;
+        }
         self.account_label = super::account_page::label(self.loads.account_view.get());
         if frame {
             self.rebuild_visible(ui);
         }
         frame
+    }
+
+    /// Runs a Print & Scan edit on a worker thread (the scheduler can take seconds to answer); the page shows
+    /// "Working…" until `print_landed` has the answer. A newer edit replaces the wait for an older one.
+    fn start_print_edit(&mut self, ui: &Ui, work: impl FnOnce() -> Result<Option<super::forms::Prompt>, String> + Send + 'static) {
+        self.loads.print_done.start("print-scan-edit", move || super::print_scan_page::run_edit(work));
+        self.rebuild_visible(ui);
+    }
+
+    /// A Print & Scan edit finished: re-read the printers (also after a failure: the scheduler may have done the
+    /// change anyway), then show the next prompt or the reason it did not happen.
+    fn print_landed(&mut self, ui: &Ui, t: f64) {
+        use super::print_scan_page::Landed;
+        if let Landed::Edited(r) = std::mem::take(&mut self.loads.print_done.value) {
+            self.loads.printers.start("print-scan-read", super::print_scan_page::View::load);
+            self.edit_result(ui, t, r);
+        }
     }
 
     /// Reads the BifrOSt Account page's account on a worker thread: the stored session, its name and devices.
@@ -2104,9 +2127,8 @@ impl Settings {
                     r
                 }
                 super::forms::Purpose::PrinterAddress => {
-                    let r = super::print_scan_page::finish(&purpose, &text).map(|_| None);
-                    self.loads.printers.start("print-scan-read", super::print_scan_page::View::load);
-                    r
+                    self.start_print_edit(ui, move || super::print_scan_page::finish(&purpose, &text).map(|_| None));
+                    return vec![];
                 }
                 _ => return self.form_done(ui, &purpose, &text, t),
             };
@@ -3088,9 +3110,14 @@ impl Settings {
             }
             Action::StartupDisk(edit) => self.startup_disk_act(ui, edit),
             Action::PrintScan(edit) => {
-                let r = super::print_scan_page::apply(&edit);
-                self.loads.printers.start("print-scan-read", super::print_scan_page::View::load);
-                self.edit_result(ui, t, r);
+                match edit {
+                    // opening the address prompt touches no service
+                    super::print_scan_page::Edit::Add => {
+                        let r = super::print_scan_page::apply(&edit);
+                        self.edit_result(ui, t, r);
+                    }
+                    super::print_scan_page::Edit::SetDefault(_) => self.start_print_edit(ui, move || super::print_scan_page::apply(&edit)),
+                }
                 vec![]
             }
             Action::Notify(edit) => {
