@@ -406,6 +406,27 @@ impl TextEditApp {
 
     /// Runs a text command on the active document. Returns whether the window needs a frame.
     fn perform(&mut self, ctx: &Ctx, action: Action) -> bool {
+        // the standard editing commands belong to the field or sheet that has the keyboard, never to the document behind it
+        if matches!(action, Action::Cut | Action::Copy | Action::Paste | Action::PasteMatch | Action::SelectAll | Action::Undo | Action::Redo) {
+            let find_field = self.find_open && self.focus != Focus::Body;
+            let sheet_open = self.link.is_some()
+                || self.props.is_some()
+                || self.line.is_some()
+                || self.spacing_sheet.is_some()
+                || self.settings
+                || self.encodings_panel
+                || self.spelling_panel
+                || self.plain_sheet;
+            if find_field && !sheet_open && matches!(action, Action::Paste | Action::PasteMatch) {
+                let line = clipboard::text().map(|s| s.lines().next().unwrap_or("").to_string()).unwrap_or_default();
+                return self.type_into(&line);
+            }
+            let panel_paste = matches!(action, Action::Paste | Action::PasteMatch)
+                && (self.link.is_some() || self.props.is_some() || self.line.is_some() || self.spacing_sheet.is_some());
+            if (find_field || sheet_open) && !panel_paste {
+                return false;
+            }
+        }
         // a panel takes a paste as typing (the first line of the clipboard)
         let panel_open = self.link.is_some() || self.props.is_some() || self.line.is_some() || self.spacing_sheet.is_some();
         if matches!(action, Action::Paste | Action::PasteMatch) && panel_open {
@@ -3081,6 +3102,33 @@ mod tests {
         app.open_line_sheet();
         assert!(!app.event(&ctx, Input::Key(KeyInput::chord(107, CHORD_SHIFT))), "a panel is open over the page");
         assert_eq!(active_doc(&app.docs).unwrap().text.head(), 3);
+    }
+
+    #[test]
+    fn the_editing_commands_act_on_the_focused_find_field_or_sheet_not_the_document() {
+        let ctx = window(1200, 780);
+        let mut app = app_with_text(SENTENCE, 0..5);
+        app.find_open = true;
+        app.focus = Focus::Find;
+        clipboard::set_text("needle\nsecond");
+        assert!(app.event(&ctx, Input::Command(Command::Paste)));
+        assert_eq!(app.find, "needle", "paste goes into the find field");
+        assert_eq!(text_of(&app), SENTENCE, "the document is untouched");
+        for command in [Command::Cut, Command::SelectAll, Command::Undo] {
+            assert!(!app.event(&ctx, Input::Command(command)));
+        }
+        assert!(!app.event(&ctx, Input::Key(KeyInput::chord(45, CHORD_META))), "Cmd+X as a chord is swallowed too");
+        assert_eq!(text_of(&app), SENTENCE, "cut and undo left the document alone");
+        assert_eq!(caret_of(&app), 0..5, "select all left the selection alone");
+        // a sheet open over the page: the same
+        app.find_open = false;
+        app.focus = Focus::Body;
+        app.open_line_sheet();
+        for command in [Command::Cut, Command::SelectAll, Command::Undo] {
+            assert!(!app.event(&ctx, Input::Command(command)));
+        }
+        assert_eq!(text_of(&app), SENTENCE);
+        assert_eq!(caret_of(&app), 0..5);
     }
 
     fn text_of(app: &TextEditApp) -> String {
