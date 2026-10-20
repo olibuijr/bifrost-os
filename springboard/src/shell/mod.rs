@@ -1407,21 +1407,19 @@ impl Shell {
         self.dirty = true;
     }
 
-    /// Whether any desktop animations, window effects or floating overlays require frames.
+    /// Whether anything on the desktop moves by itself and so needs frames without input: fades, slides, window effects,
+    /// a playing preview. An overlay that is only open (a menu, Control Center, Search, Overview, the keyboard,
+    /// AssistiveTouch) is not motion: input, `tick` and the overlays' own wake-ups mark the shell dirty when it changes,
+    /// as the Cmd+Tab strip does, so an idle one costs no frames. Overview and the Apps grid keep themselves going
+    /// through `draw_overview`, which marks the shell dirty while they animate.
     pub fn desk_animating(&self, t: f64) -> bool {
         bifrost_render::appearance::fading()
             || self.anim.is_some()
             || self.turning()
-            || self.cc_active()
             || self.cc.animating()
-            || self.center_active()
             || self.notify.animating()
-            || self.quicksearch.active()
-            || self.desktop_menu.is_some()
-            || self.overlay_visible()
-            || self.quick_look.is_visible()
-            || self.overview_active()
-            || self.keyboard.shown()
+            || self.quicksearch.animating()
+            || self.quick_look.wants_frames()
             || self.keyboard.animating()
             || self.fx_animating(t)
             || self.desk.as_ref().is_some_and(|d| d.dock_vis_anim.is_some() || !d.dock_bounce.is_empty())

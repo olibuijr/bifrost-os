@@ -596,6 +596,18 @@ impl Panel {
         self.visible
     }
 
+    /// Whether the panel needs frames without input: a change waiting to be drawn, or content that moves by itself (a
+    /// playing movie or sound, a picture animation). A panel that is only open and idle needs none.
+    pub fn wants_frames(&self) -> bool {
+        self.dirty
+            || (self.visible
+                && match &self.body {
+                    Body::Media(m) => m.transport.playing,
+                    Body::Animation(_) => true,
+                    _ => false,
+                })
+    }
+
     /// True once after the panel changed, so the desktop repaints the whole frame.
     pub fn take_dirty(&mut self) -> bool {
         std::mem::take(&mut self.dirty)

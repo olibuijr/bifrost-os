@@ -1017,6 +1017,22 @@
         if let Some(v)=saved {std::env::set_var("SPRINGBOARD_WAYLAND",v)} else {std::env::remove_var("SPRINGBOARD_WAYLAND")};
     }
 
+    /// A menu, panel or overlay that is only open does not ask for frames: input and the overlays' own timers mark the
+    /// shell dirty when something changes (an idle open menu used to redraw the whole desktop at every vsync).
+    #[test]
+    fn an_open_menu_that_is_idle_asks_for_no_frames() {
+        let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;sh.drawn=Drawn::App;
+        let (w,h)=(sh.w as usize,sh.h as usize);
+        let mut pixels=vec![0;w*h];
+        sh.draw(&mut Surface{w,h,stride:w,px:&mut pixels,y0:0},0.);
+        sh.dirty=false;
+        sh.keyboard.tick(1.0e6);
+        assert!(!sh.desk_animating(1000.),"nothing animates on the settled desktop");
+        sh.desktop_menu=Some(super::desktop_bar::Menu::Help);
+        assert!(!sh.desk_animating(1000.),"an open menu is not motion");
+        assert!(!sh.quick_look.wants_frames(),"a closed preview wants nothing");
+    }
+
     /// One tile per app: a key kept in the Dock twice, or an app with two windows, never makes a second tile.
     #[cfg(feature="desktop-wayland")]
     #[test]
