@@ -8,9 +8,12 @@
 //! - **The shell.** It connected through the privileged socket (`privileged.rs`) and owns the selection: what an app
 //!   copies is offered to every program, and what a program copies is read into the shared pasteboard
 //!   (`src/shell/pasteboard_wl.rs`).
-//! - **Programs of the compositor's own user** on the ordinary socket: `wl-copy`, `wl-paste`, a terminal, `pbcopy` and
-//!   `pbpaste`. The sandbox proxy (`docs/wayland-filter-design.md`) does not forward these globals to a sandboxed
-//!   app, so an untrusted app never sees them.
+//! - **Unsandboxed programs of the compositor's own user** on the ordinary socket: `wl-copy`, `wl-paste`, a terminal,
+//!   `pbcopy` and `pbpaste`. A sandboxed app (native packages run in `bwrap`) runs as the same account and gets the raw
+//!   socket, because the sandbox proxy (`docs/wayland-filter-design.md`) is design only. So a same-user client is
+//!   admitted only when its mount namespace is the window server's (`state::shares_mount_ns`, read from the
+//!   `SO_PEERCRED` pid on accept); a sandbox always has a namespace of its own and never sees the globals. Such an app
+//!   still copies and pastes through the ordinary focused `wl_data_device`.
 //!
 //! `BIFROST_WM_DATA_CONTROL=off` removes both globals. The selection itself is kept by Smithay: this module only
 //! decides who may bind.
@@ -36,13 +39,17 @@ pub fn enabled(value: Option<&str>) -> bool {
 }
 
 /// Whether a client may bind: it is privileged (the shell), runs as root (which could read the window server's memory
-/// anyway), or runs as the compositor's own user. Unknown credentials admit nobody.
-pub fn admits(privileged: bool, client_uid: Option<u32>, own_uid: Option<u32>) -> bool {
-    privileged || client_uid == Some(0) || matches!((client_uid, own_uid), (Some(c), Some(o)) if c == o)
+/// anyway), or runs as the compositor's own user outside any app sandbox (`same_mount_ns`: its mount namespace is the
+/// window server's). Unknown credentials admit nobody.
+pub fn admits(privileged: bool, client_uid: Option<u32>, own_uid: Option<u32>, same_mount_ns: bool) -> bool {
+    privileged || client_uid == Some(0) || (same_mount_ns && matches!((client_uid, own_uid), (Some(c), Some(o)) if c == o))
 }
 
 fn filter(own: Option<u32>) -> impl for<'c> Fn(&'c Client) -> bool + Send + Sync + 'static {
-    move |client: &Client| admits(is_privileged(client), client.get_data::<ClientState>().and_then(|data| data.peer_uid), own)
+    move |client: &Client| {
+        let data = client.get_data::<ClientState>();
+        admits(is_privileged(client), data.and_then(|data| data.peer_uid), own, data.is_some_and(|data| data.shares_mount_ns))
+    }
 }
 
 /// The two data-control globals (none when switched off).
@@ -101,11 +108,18 @@ mod tests {
 
     #[test]
     fn the_shell_and_the_users_own_programs_may_bind() {
-        assert!(admits(true, Some(0), Some(1000)), "the privileged shell runs as root");
-        assert!(admits(false, Some(1000), Some(1000)), "wl-paste of the same user");
-        assert!(admits(false, Some(0), Some(1000)), "the shell on the ordinary socket, as root");
-        assert!(!admits(false, Some(1001), Some(1000)), "another user");
-        assert!(!admits(false, None, Some(1000)), "credentials that could not be read");
-        assert!(!admits(false, Some(1000), None), "an unknown own uid admits nobody");
+        assert!(admits(true, Some(0), Some(1000), true), "the privileged shell runs as root");
+        assert!(admits(false, Some(1000), Some(1000), true), "wl-paste of the same user");
+        assert!(admits(false, Some(0), Some(1000), true), "the shell on the ordinary socket, as root");
+        assert!(!admits(false, Some(1001), Some(1000), true), "another user");
+        assert!(!admits(false, None, Some(1000), true), "credentials that could not be read");
+        assert!(!admits(false, Some(1000), None, true), "an unknown own uid admits nobody");
+    }
+
+    #[test]
+    fn a_sandboxed_app_of_the_same_user_may_not_bind() {
+        assert!(!admits(false, Some(1000), Some(1000), false), "same uid, own mount namespace: a bwrap'd native app");
+        assert!(admits(true, Some(1000), Some(1000), false), "the privileged shell does not depend on the namespace");
+        assert!(admits(false, Some(0), Some(1000), false), "root is admitted as before");
     }
 }

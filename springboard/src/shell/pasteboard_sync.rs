@@ -163,7 +163,10 @@ impl<T: Transport> Board<T> {
         if rev != self.seen_rev {
             self.seen_rev = rev;
             let now = clipboard::text();
-            if pasteboard::text() != now {
+            // an image copy (Photos) moves the revision with no text: leave the pasteboard as it is rather than
+            // emptying it (the image itself is not offered yet, see docs/bifrost-ui.md "NSPasteboard rich types")
+            let image_only = now.is_none() && clipboard::global().as_ref().is_some_and(|c| c.image().is_some());
+            if !image_only && pasteboard::text() != now {
                 pasteboard::set_plain(now.as_deref().unwrap_or(""));
             }
         }
@@ -205,8 +208,13 @@ fn default_transport() -> Box<dyn Transport> {
     Box::new(Detached)
 }
 
-/// The shell's pass (`Shell::ext_tick`): starts the window server connection on first use.
+/// The shell's pass (`Shell::ext_tick`): starts the window server connection on first use. Under test it does nothing:
+/// the process-wide board would move the shared pasteboard under the tests that hold `pasteboard::TURN`; the board's own
+/// tests drive [`Board::pass`] directly.
 pub fn tick() {
+    if cfg!(test) {
+        return;
+    }
     let mut g = SYNC.lock().unwrap_or_else(|e| e.into_inner());
     g.get_or_insert_with(|| Board::new(default_transport())).pass();
 }
@@ -363,6 +371,22 @@ mod tests {
         assert!(mimes(&f.offered[0]).contains(&"text/html"));
         drop(f);
         assert_eq!(pasteboard::snapshot().1.len(), 2, "the rich items were not flattened to text");
+    }
+
+    #[test]
+    fn an_image_copy_does_not_empty_the_pasteboard() {
+        let _fresh = fresh();
+        let (mut sync, fake) = setup();
+        let text = pasteboard::set(vec![rep("public.utf8-plain-text", "kept")]);
+        clipboard::set_text(&text.unwrap());
+        sync.pass();
+        let offers_before = fake.lock().unwrap().offered.len();
+        if let Some(c) = clipboard::global().as_mut() {
+            c.set_image(bifrost_render::gfx::Image::new(2, 2));
+        }
+        sync.pass();
+        assert_eq!(pasteboard::text().as_deref(), Some("kept"), "no empty text replaced the pasteboard");
+        assert_eq!(fake.lock().unwrap().offered.len(), offers_before, "the selection was not cleared");
     }
 
     #[test]

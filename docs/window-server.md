@@ -363,11 +363,17 @@ copied" after a copy in an app). `wm/src/data_control.rs` offers `zwlr_data_cont
 
 - the shell, which connected through the privileged socket and owns the selection (`src/shell/pasteboard_wl.rs`, see
   "NSPasteboard rich types" in `docs/bifrost-ui.md`);
-- programs that run as the window server's own user or as root: `wl-copy`, `wl-paste`, a terminal, `pbcopy`, `pbpaste`.
+- programs that run as root, or as the window server's own user outside any app sandbox: `wl-copy`, `wl-paste`, a terminal,
+  `pbcopy`, `pbpaste`.
 
-A sandboxed app never sees the globals: the sandbox proxy does not forward them (`docs/wayland-filter-design.md`). Any program of
-the session's user can read the clipboard through them, as on other desktops. `BIFROST_WM_DATA_CONTROL=off` removes both
-globals. Tests: the policy in `wm/src/data_control.rs`.
+A sandboxed native app runs as the same account and gets the raw socket (the sandbox proxy in `docs/wayland-filter-design.md` is
+design only, nothing is implemented), so the uid alone cannot tell it from `wl-paste`. The window server records the peer pid
+(`SO_PEERCRED`) when it accepts a client and admits a same-user client only when `/proc/<pid>/ns/mnt` is the window server's own
+mount namespace (`wm/src/state.rs` `shares_mount_ns`). A `bwrap`'d app always has a namespace of its own, and a peer whose pid
+cannot be resolved (another pid namespace, unreadable link) is refused, so it never sees the globals; it copies and pastes through
+the ordinary focused `wl_data_device`, which the shell's data-control source feeds. Any unsandboxed program of the session's user
+can read the clipboard through the globals, as on other desktops. `BIFROST_WM_DATA_CONTROL=off` removes both
+globals. Tests: the policy in `wm/src/data_control.rs` (including a sandboxed same-user peer) and the namespace check in `wm/src/state.rs`.
 
 ## Privileged socket and capture globals
 

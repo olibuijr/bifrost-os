@@ -2241,7 +2241,7 @@ count (`AppHost::sync_pasteboard`); the writer is not sent its own write.
 equal. A copy in a shell field (Settings search, Search, Apps search, file names in Files), an app's `SetClipboard` or
 `PasteboardSet`, and a selection another Wayland program sets all end up on the pasteboard, in the apps and in the selection.
 The shell owns the selection through `zwlr_data_control_v1` (`pasteboard_wl.rs`, a thread with its own privileged connection;
-`wm/src/data_control.rs` offers the global to the shell and to programs of the session's user, never to a sandboxed app) and
+`wm/src/data_control.rs` offers the global to the shell and to unsandboxed programs of the session's user: a client in another mount namespace, which a sandboxed native app always is, is refused and uses the ordinary focused data device) and
 offers text as `text/plain;charset=utf-8`, `text/plain`, `UTF8_STRING`, `TEXT` and `STRING`, beside `text/html`, `text/rtf`
 (and `application/rtf`), `image/png`, `image/jpeg` and `text/uri-list`. From another program's selection it reads one text
 type and each rich type (32 MiB at most per type, 1.5 s per type). Gaps: `STRING` carries UTF-8 (X clients that expect

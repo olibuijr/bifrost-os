@@ -66,8 +66,10 @@ the SDK path (already has no socket).
 | Sandbox escape helper | `wp_security_context_v1` | Only the compositor may mark a connection sandboxed; the app must never create one |
 
 Deny-by-default: the allowlist below is the only set of globals the child may
-see. The data-control globals are offered on the raw socket to the shell and to the session user's own tools
-(`wm/src/data_control.rs`, `docs/window-server.md` "Clipboard control"); that is why the proxy must never list them.
+see. The data-control globals are offered on the raw socket to the shell and to the session user's own unsandboxed tools
+(`wm/src/data_control.rs`, `docs/window-server.md` "Clipboard control"); that is why the proxy must never list them. Until the
+proxy exists, the window server itself refuses a same-user client whose mount namespace differs from its own (a `bwrap`'d app),
+so a sandboxed app does not see them even on the raw socket.
 
 ## Approach: client-side proxy
 
