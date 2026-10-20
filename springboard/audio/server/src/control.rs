@@ -105,6 +105,8 @@ struct DeviceHost {
     /// An IO thread that outlived its stop request. The device stays busy (no reopen) until it is reaped.
     stopping: Option<std::thread::JoinHandle<()>>,
     running: bool,
+    /// Unplugged: kept in the list so device indices stay stable; nothing can open or start it.
+    gone: bool,
     idle_since: Option<Instant>,
     /// Frames of the output and input level taps the analysis has already seen.
     levels_seen: [u64; 2],
@@ -215,7 +217,7 @@ impl ServerCore {
 
     fn host(driver: usize, desc: DeviceDesc) -> DeviceHost {
         let q = initial_quantum(&desc);
-        DeviceHost { driver, desc, shared: Shared::new(q), thread: None, manual: None, abort: None, stopping: None, running: false, idle_since: None, levels_seen: [0; 2] }
+        DeviceHost { driver, desc, shared: Shared::new(q), thread: None, manual: None, abort: None, stopping: None, running: false, gone: false, idle_since: None, levels_seen: [0; 2] }
     }
 
     pub fn device_count(&self) -> usize {
@@ -446,6 +448,9 @@ impl ServerCore {
         else {
             return err(AudioError::UnknownObject);
         };
+        if self.devices[dev].gone {
+            return err(AudioError::DeviceGone);
+        }
         let range = self.devices[dev].desc.buffer_frames_range;
         if r.input_channels as usize > MAX_CH
             || r.output_channels as usize > MAX_CH
@@ -517,6 +522,9 @@ impl ServerCore {
     }
 
     fn start_device(&mut self, idx: usize) -> Result<(), AudioError> {
+        if self.devices[idx].gone {
+            return Err(AudioError::DeviceGone);
+        }
         if self.devices[idx].running {
             return Ok(());
         }
@@ -662,6 +670,23 @@ impl ServerCore {
         }
         for (driver, e) in events {
             match e {
+                DriverEvent::DeviceRemoved { uid } => {
+                    if let Some(index) = self.devices.iter().position(|d| d.desc.uid == uid && !d.gone) {
+                        self.device_removed(index);
+                    }
+                }
+                DriverEvent::DeviceAdded(desc) if self.devices.iter().any(|d| d.desc.uid == desc.uid && d.gone) => {
+                    // the same hardware plugged in again: its slot in the list lives on
+                    let index = self.devices.iter().position(|d| d.desc.uid == desc.uid).unwrap_or(0);
+                    log("driver", &format!("device returned: {}", desc.uid));
+                    let d = &mut self.devices[index];
+                    d.driver = driver;
+                    d.desc = desc.clone();
+                    d.gone = false;
+                    let id = self.device_id(index);
+                    self.apps.device_returned(id, &desc);
+                    self.refresh_dsp(index);
+                }
                 DriverEvent::DeviceAdded(desc) => {
                     if !self.devices.iter().any(|d| d.desc.uid == desc.uid) {
                         log("driver", &format!("device added: {}", desc.uid));
@@ -678,6 +703,26 @@ impl ServerCore {
             self.levels_at = Some(now);
             self.publish_levels();
         }
+    }
+
+    /// A device was unplugged: its IO thread stops, its streams are stopped (they read as failing on their next
+    /// request), and the server publishes it as not alive and moves the defaults off it.
+    fn device_removed(&mut self, index: usize) {
+        log("driver", &format!("device removed: {}", self.devices[index].desc.uid));
+        self.devices[index].gone = true;
+        let slots: Vec<u32> = self.slots.iter().filter(|(_, r)| r.device == index).map(|(k, _)| *k).collect();
+        for id in slots {
+            if let Some(r) = self.slots.get(&id) {
+                r.slot.running.store(false, Ordering::Release);
+            }
+            self.apps.stream_stopped(out_stream(id));
+            self.apps.stream_stopped(in_stream(id));
+        }
+        self.stop_device(index);
+        self.recompute_quantum(index);
+        let id = self.device_id(index);
+        self.apps.device_removed(id);
+        self.refresh_dsp(index);
     }
 
     /// Whether the application's session allows streams in the directions of a new or starting stream.
@@ -1083,6 +1128,25 @@ mod tests {
             c.add_client(1, std::process::id() as i32, unsafe { libc::getuid() });
             hello(&mut c, 1, false);
         }
+    }
+
+    #[test]
+    fn an_unplugged_device_stops_leaves_the_defaults_and_refuses_new_streams() {
+        let (mut c, h) = core();
+        hello(&mut c, 1, false);
+        let a = add(&mut c, 1, 256);
+        assert_eq!(c.handle(1, Request::StartIoProc { id: a }).reply, Reply::Done);
+        assert!(c.device_running(0));
+        let dev = c.device_id(0);
+        let sys = SYSTEM_OBJECT;
+        assert_eq!(c.apps().get(sys, PropertyAddress::global(bifrost_audio_types::props::DEFAULT_OUTPUT)), Ok(PropertyValue::Object(dev)));
+        h.push_event(DriverEvent::DeviceRemoved { uid: "n0".into() });
+        c.tick(Instant::now());
+        assert!(!c.device_running(0));
+        assert_eq!(c.apps().get(dev, PropertyAddress::global(bifrost_audio_types::props::IS_ALIVE)), Ok(PropertyValue::Bool(false)));
+        assert_eq!(c.apps().get(sys, PropertyAddress::global(bifrost_audio_types::props::DEFAULT_OUTPUT)), Ok(PropertyValue::Object(ObjectId(0))));
+        assert_eq!(c.handle(1, proc_req(256)).reply, Reply::Error(AudioError::DeviceGone));
+        assert_eq!(c.handle(1, Request::StartIoProc { id: a }).reply, Reply::Error(AudioError::DeviceGone));
     }
 
     #[test]
