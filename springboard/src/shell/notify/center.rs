@@ -471,14 +471,16 @@ const NC_W_FRAC: f32 = 0.245;
 const NC_ICON_PT: f32 = 40.0;
 const NC_ROW_ICON_PT: f32 = 32.0;
 const NC_ICON_GAP_PT: f32 = 10.0;
-/// a Calendar or Weather card under the notifications
+/// the least height of a Calendar or Weather card under the notifications (a card grows to fit its lines)
 const NC_INFO_PT: f32 = 104.0;
-/// the row's height when the Weather card also shows the next hours, and the Calendar card's share of the row then
+/// the least height of the row when the Weather card also shows the next hours, and the Calendar card's share of the row then
 const NC_INFO_HOURS_PT: f32 = 132.0;
 const NC_CAL_SHARE: f32 = 0.34;
 /// the narrowest column of the Weather card's hour strip, and the radius of an hour's glyph
 const NC_HOUR_COL_PT: f32 = 38.0;
 const NC_HOUR_GLYPH_R_PT: f32 = 8.0;
+/// the gap between an hour's name, its glyph and its temperature
+const NC_HOUR_GAP_PT: f32 = 3.0;
 /// the Edit Widgets capsule's width and the gap to the round close button beside it (the button is NC_EDIT_PT wide)
 const NC_EDIT_W_PT: f32 = 104.0;
 const NC_EDIT_GAP_PT: f32 = 8.0;
@@ -541,6 +543,35 @@ impl InfoCard {
     }
 }
 
+/// A line of text on an info card.
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum InfoLine {
+    Day,
+    Date,
+    Month,
+    Place,
+    Temp,
+    Sky,
+    HighLow,
+    HourLabel,
+    HourTemp,
+}
+
+/// One line of text on an info card: what it says, its style and its box (x, y, w, h) in px, as measured.
+struct InfoRun {
+    line: InfoLine,
+    text: String,
+    pt: f32,
+    weight: Weight,
+    rect: R4,
+}
+
+/// Everything an info card draws: its text lines and the centres and radii of its hour glyphs (hour index, centre, radius).
+struct InfoLayout {
+    runs: Vec<InfoRun>,
+    hour_glyphs: Vec<(usize, (f32, f32), f32)>,
+}
+
 /// One gallery row: (index in the listing, row rect, add/remove disc, the size chips the widget supports with the size
 /// each sets, the Options chip when the widget has options).
 type GalleryRow = (usize, R4, R4, Vec<(Family, R4)>, Option<R4>);
@@ -576,6 +607,100 @@ impl Shell {
         }
     }
 
+    /// Height in px of one line of text at `pt`: the line box `Ui::text` renders, whatever the string.
+    fn info_line_h(&self, pt: f32) -> f32 {
+        self.ui.text("0", pt, Weight::Regular, WHITE).h as f32
+    }
+
+    /// The info row's height without and with the Weather card's hour strip. Both come from the measured line
+    /// heights of the lines stacked in the cards, so a numeral never lies under the lines that follow it.
+    fn info_heights(&self) -> (f32, f32) {
+        use super::super::ui::{MAC_DISPLAY_PT, MAC_FOOTNOTE_PT, MAC_HEADLINE_PT, MAC_LARGE_TITLE_PT, MAC_SUBHEAD_PT};
+        let ui = &self.ui;
+        let (pad, gap) = (ui.pt(NC_PAD_PT), ui.pt(NC_GAP_PT));
+        let ln = |pt: f32| self.info_line_h(pt);
+        // Calendar: the weekday, the date numeral and the month; Weather: the place, the temperature, one line below
+        let calendar = 2.0 * pad + 2.0 * ln(MAC_SUBHEAD_PT) + ln(MAC_DISPLAY_PT);
+        let weather = 2.0 * pad + ln(MAC_HEADLINE_PT) + ln(MAC_DISPLAY_PT) + ln(MAC_SUBHEAD_PT);
+        let plain = calendar.max(weather).max(ui.pt(NC_INFO_PT));
+        // with hours: the place, the temperature line and the strip (name, glyph, temperature)
+        let strip = ln(MAC_FOOTNOTE_PT) + 2.0 * ui.pt(NC_HOUR_GAP_PT) + 2.0 * ui.pt(NC_HOUR_GLYPH_R_PT) + ln(MAC_SUBHEAD_PT);
+        let hours = (2.0 * pad + ln(MAC_HEADLINE_PT) + ln(MAC_LARGE_TITLE_PT) + strip).max(plain + gap).max(ui.pt(NC_INFO_HOURS_PT));
+        (plain, hours)
+    }
+
+    /// A line of text with its measured box, its top left at (`x`, `y`).
+    fn info_run(&self, line: InfoLine, text: String, pt: f32, weight: Weight, x: f32, y: f32) -> InfoRun {
+        let rect = (x, y, self.ui.measure(&text, pt, weight), self.info_line_h(pt));
+        InfoRun { line, text, pt, weight, rect }
+    }
+
+    /// The lines of an info card laid out inside `rect`: each one under the one before it by its measured height,
+    /// the last line at the foot, so nothing overlaps. Drawing and tests read the same boxes.
+    fn info_layout(&self, card: InfoCard, (x, y, w, h): R4) -> InfoLayout {
+        use super::super::ui::{MAC_DISPLAY_PT, MAC_FOOTNOTE_PT, MAC_HEADLINE_PT, MAC_LARGE_TITLE_PT, MAC_SUBHEAD_PT};
+        let ui = &self.ui;
+        let (pad, gap) = (ui.pt(NC_PAD_PT), ui.pt(NC_CHIP_GAP_PT));
+        let mut out = InfoLayout { runs: Vec::new(), hour_glyphs: Vec::new() };
+        match card {
+            InfoCard::Calendar => {
+                let region = bifrost_ui::region::current();
+                let day = bifrost_ui::region::day_name(&region, self.info.wday).to_uppercase();
+                let month = bifrost_ui::region::month_name(&region, self.info.mon).to_string();
+                let wd = self.info_run(InfoLine::Day, day, MAC_SUBHEAD_PT, Weight::Semibold, x + pad, y + pad);
+                let num = self.info_run(InfoLine::Date, self.info.mday.to_string(), MAC_DISPLAY_PT, Weight::Regular, x + pad, wd.rect.1 + wd.rect.3);
+                let mut mo = self.info_run(InfoLine::Month, month, MAC_SUBHEAD_PT, Weight::Regular, x + pad, 0.0);
+                mo.rect.1 = (y + h - pad - mo.rect.3).max(num.rect.1 + num.rect.3);
+                out.runs.extend([wd, num, mo]);
+            }
+            InfoCard::Weather => {
+                let Some(sum) = self.today.weather() else { return out };
+                let glyph_r = ui.pt(NC_WEATHER_GLYPH_R_PT);
+                let room = w - 2.0 * pad - 2.0 * glyph_r - gap;
+                let place = self.info_run(InfoLine::Place, ui.fit(&sum.place, MAC_HEADLINE_PT, room), MAC_HEADLINE_PT, Weight::Semibold, x + pad, y + pad);
+                let ty = place.rect.1 + place.rect.3;
+                let hours = self.today.weather_hours();
+                let label = sum.sky().label();
+                if h > self.info_heights().0 + 1.0 && !hours.is_empty() {
+                    // with the next hours: the temperature with the condition at its right, the hour strip along the foot
+                    let temp = self.info_run(InfoLine::Temp, sum.units.degrees(sum.temp), MAC_LARGE_TITLE_PT, Weight::Regular, x + pad, ty);
+                    let room = x + w - pad - (temp.rect.0 + temp.rect.2) - gap;
+                    let mut sky = self.info_run(InfoLine::Sky, ui.fit(label, MAC_SUBHEAD_PT, room), MAC_SUBHEAD_PT, Weight::Medium, 0.0, 0.0);
+                    sky.rect.0 = x + w - pad - sky.rect.2;
+                    sky.rect.1 = temp.rect.1 + temp.rect.3 - sky.rect.3;
+                    out.runs.extend([place, temp, sky]);
+                    let n = hours.len().min(((w - 2.0 * pad) / ui.pt(NC_HOUR_COL_PT)).floor().max(1.0) as usize);
+                    let col = (w - 2.0 * pad) / n as f32;
+                    let (gr, hg) = (ui.pt(NC_HOUR_GLYPH_R_PT), ui.pt(NC_HOUR_GAP_PT));
+                    for (i, hour) in hours.iter().take(n).enumerate() {
+                        let cx = x + pad + (i as f32 + 0.5) * col;
+                        let name = if i == 0 { "Now".to_string() } else { hour.label.clone() };
+                        let mut deg = self.info_run(InfoLine::HourTemp, sum.units.degrees(hour.temp), MAC_SUBHEAD_PT, Weight::Semibold, 0.0, 0.0);
+                        deg.rect.0 = cx - deg.rect.2 / 2.0;
+                        deg.rect.1 = y + h - pad - deg.rect.3;
+                        let glyph_y = deg.rect.1 - hg - gr;
+                        let mut name = self.info_run(InfoLine::HourLabel, name, MAC_FOOTNOTE_PT, Weight::Regular, 0.0, 0.0);
+                        name.rect.0 = cx - name.rect.2 / 2.0;
+                        name.rect.1 = glyph_y - gr - hg - name.rect.3;
+                        out.runs.extend([name, deg]);
+                        out.hour_glyphs.push((i, (cx, glyph_y), gr));
+                    }
+                } else {
+                    // the temperature under the place; the condition and the high and low on one line at the foot
+                    let temp = self.info_run(InfoLine::Temp, sum.units.degrees(sum.temp), MAC_DISPLAY_PT, Weight::Regular, x + pad, ty);
+                    let hl_text = format!("H:{}  L:{}", sum.units.degrees(sum.max), sum.units.degrees(sum.min));
+                    let mut hl = self.info_run(InfoLine::HighLow, hl_text, MAC_SUBHEAD_PT, Weight::Regular, 0.0, 0.0);
+                    hl.rect.0 = x + w - pad - hl.rect.2;
+                    hl.rect.1 = (y + h - pad - hl.rect.3).max(temp.rect.1 + temp.rect.3);
+                    let room = hl.rect.0 - gap - (x + pad);
+                    let sky = self.info_run(InfoLine::Sky, ui.fit(label, MAC_SUBHEAD_PT, room), MAC_SUBHEAD_PT, Weight::Medium, x + pad, hl.rect.1);
+                    out.runs.extend([place, temp, sky, hl]);
+                }
+            }
+        }
+        out
+    }
+
     /// The Calendar and, with a saved forecast, Weather cards: one row under the notifications, sharing the width.
     fn center_info_rects(&self) -> Vec<(InfoCard, R4)> {
         let ui = &self.ui;
@@ -585,8 +710,9 @@ impl Shell {
         // the cards must end above the Edit Widgets capsule's slot, or the capsule would overlap them and win the tap
         let fits = |h: f32| y + h + ui.pt(NC_EDIT_TOP_PT) + ui.pt(NC_EDIT_PT) <= self.h as f32 - ui.pt(NC_BOTTOM_PT);
         // the Weather card grows to carry the next hours when the Weather service saved them and the room allows
-        let hours = self.today.weather().is_some() && !self.today.weather_hours().is_empty() && fits(ui.pt(NC_INFO_HOURS_PT));
-        let h = ui.pt(if hours { NC_INFO_HOURS_PT } else { NC_INFO_PT });
+        let (plain_h, hours_h) = self.info_heights();
+        let hours = self.today.weather().is_some() && !self.today.weather_hours().is_empty() && fits(hours_h);
+        let h = if hours { hours_h } else { plain_h };
         if !fits(h) {
             return vec![];
         }
@@ -1006,7 +1132,7 @@ impl Shell {
 
     fn draw_desk_center(&mut self, s: &mut Surface, t: f64) {
         use super::super::control_center::desk_glass;
-        use super::super::ui::{FIELD_BG, LABEL, LABEL_2, LINK, MAC_BODY_PT, MAC_HEADLINE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT, BAR_TEXT, BAR_TEXT_SHADOW, BAR_TEXT_SHADOW_ALPHA, MAC_DISPLAY_PT, MAC_FOOTNOTE_PT, MAC_LARGE_TITLE_PT, NC_QUIET_ALPHA, NC_WEATHER_TINT, SYSTEM_RED};
+        use super::super::ui::{FIELD_BG, LABEL, LABEL_2, LINK, MAC_BODY_PT, MAC_HEADLINE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT, BAR_TEXT, BAR_TEXT_SHADOW, BAR_TEXT_SHADOW_ALPHA, NC_QUIET_ALPHA, NC_WEATHER_TINT, SYSTEM_RED};
         let c = &self.notify.center;
         let p = c.progress(t).clamp(0.0, 1.0);
         if let Some((x, y, w, h)) = self.center_desk_rect().filter(|_| bifrost_render::glass::gpu()) {
@@ -1094,62 +1220,36 @@ impl Shell {
             s.blit(&t2, tx as i32, ly as i32, 255, alpha);
             disc(s, close, FIELD_BG.now(), label);
         }
-        // Calendar and Weather: glass cards with the date, and the Weather app's saved place on a blue plate
-        for (card, (x, y, w, h)) in self.center_info_rects() {
+        // Calendar and Weather: glass cards with the date, and the Weather app's saved place on a blue plate; the text
+        // lines come from `info_layout`, the same boxes the layout tests check
+        for (card, rect) in self.center_info_rects() {
+            let (x, y, w, h) = rect;
+            let layout = self.info_layout(card, rect);
             let x = x + slide;
             let r = ui.pt(NC_CARD_R_PT);
             desk_glass(s, ShellSurface::NotificationPanel, (x, y, w, h), r, alpha);
-            match card {
-                InfoCard::Calendar => {
-                    let region = bifrost_ui::region::current();
-                    let day = bifrost_ui::region::day_name(&region, self.info.wday).to_uppercase();
-                    let month = bifrost_ui::region::month_name(&region, self.info.mon);
-                    // the weekday is red like the calendar's today marker, the one red besides destructive actions
-                    let wd = ui.text(&day, MAC_SUBHEAD_PT, Weight::Semibold, SYSTEM_RED);
-                    let num = ui.text(&self.info.mday.to_string(), MAC_DISPLAY_PT, Weight::Regular, label);
-                    let mo = ui.text(month, MAC_SUBHEAD_PT, Weight::Regular, secondary);
-                    s.blit(&wd, (x + pad) as i32, (y + pad) as i32, 255, alpha);
-                    s.blit(&num, (x + pad) as i32, (y + pad + wd.h as f32) as i32, 255, alpha);
-                    s.blit(&mo, (x + pad) as i32, (y + h - pad - mo.h as f32) as i32, 255, alpha);
+            if card == InfoCard::Weather {
+                let Some(sum) = self.today.weather() else { continue };
+                s.fill_rrect(x, y, w, h, r, crate::gfx::scale(NC_WEATHER_TINT, alpha));
+                let glyph_r = ui.pt(NC_WEATHER_GLYPH_R_PT);
+                super::super::weather::glyph::draw(s, sum.sky(), sum.day, (x + w - pad - glyph_r, y + pad + glyph_r), glyph_r);
+                let hours = self.today.weather_hours();
+                for &(i, (cx, cy), gr) in &layout.hour_glyphs {
+                    let hour = &hours[i];
+                    super::super::weather::glyph::draw(s, super::super::weather::data::Sky::from_code(hour.code), hour.day, (cx + slide, cy), gr);
                 }
-                InfoCard::Weather => {
-                    let Some(sum) = self.today.weather() else { continue };
-                    s.fill_rrect(x, y, w, h, r, crate::gfx::scale(NC_WEATHER_TINT, alpha));
-                    let glyph_r = ui.pt(NC_WEATHER_GLYPH_R_PT);
-                    super::super::weather::glyph::draw(s, sum.sky(), sum.day, (x + w - pad - glyph_r, y + pad + glyph_r), glyph_r);
-                    let room = w - 2.0 * pad - 2.0 * glyph_r - ui.pt(NC_CHIP_GAP_PT);
-                    let place = ui.text(&ui.fit(&sum.place, MAC_HEADLINE_PT, room), MAC_HEADLINE_PT, Weight::Semibold, WHITE);
-                    let sky = ui.text(sum.sky().label(), MAC_SUBHEAD_PT, Weight::Medium, WHITE);
-                    s.blit(&place, (x + pad) as i32, (y + pad) as i32, 255, alpha);
-                    let hours = self.today.weather_hours();
-                    if h > ui.pt(NC_INFO_PT) + 1.0 && !hours.is_empty() {
-                        // with the next hours: the temperature and condition on one line, the hour strip along the foot
-                        let temp = ui.text(&sum.units.degrees(sum.temp), MAC_LARGE_TITLE_PT, Weight::Regular, WHITE);
-                        let ty = y + pad + place.h as f32;
-                        s.blit(&temp, (x + pad) as i32, ty as i32, 255, alpha);
-                        s.blit(&sky, (x + w - pad - sky.w as f32) as i32, (ty + temp.h as f32 - sky.h as f32) as i32, 255, alpha);
-                        let n = hours.len().min(((w - 2.0 * pad) / ui.pt(NC_HOUR_COL_PT)).floor().max(1.0) as usize);
-                        let col = (w - 2.0 * pad) / n as f32;
-                        let gr = ui.pt(NC_HOUR_GLYPH_R_PT);
-                        for (i, hour) in hours.iter().take(n).enumerate() {
-                            let cx = x + pad + (i as f32 + 0.5) * col;
-                            let name = if i == 0 { "Now".to_string() } else { hour.label.clone() };
-                            let label = ui.text(&name, MAC_FOOTNOTE_PT, Weight::Regular, WHITE);
-                            let deg = ui.text(&sum.units.degrees(hour.temp), MAC_SUBHEAD_PT, Weight::Semibold, WHITE);
-                            let deg_y = y + h - pad - deg.h as f32;
-                            let glyph_y = deg_y - ui.pt(3.0) - gr;
-                            s.blit(&label, (cx - label.w as f32 / 2.0) as i32, (glyph_y - gr - ui.pt(3.0) - label.h as f32) as i32, 255, alpha * 200 / 255);
-                            super::super::weather::glyph::draw(s, super::super::weather::data::Sky::from_code(hour.code), hour.day, (cx, glyph_y), gr);
-                            s.blit(&deg, (cx - deg.w as f32 / 2.0) as i32, deg_y as i32, 255, alpha);
-                        }
-                    } else {
-                        let temp = ui.text(&sum.units.degrees(sum.temp), MAC_DISPLAY_PT, Weight::Regular, WHITE);
-                        let hl = ui.text(&format!("H:{}  L:{}", sum.units.degrees(sum.max), sum.units.degrees(sum.min)), MAC_SUBHEAD_PT, Weight::Regular, WHITE);
-                        s.blit(&temp, (x + pad) as i32, (y + pad + place.h as f32) as i32, 255, alpha);
-                        s.blit(&sky, (x + pad) as i32, (y + h - pad - sky.h as f32 - hl.h as f32) as i32, 255, alpha);
-                        s.blit(&hl, (x + pad) as i32, (y + h - pad - hl.h as f32) as i32, 255, alpha * 200 / 255);
-                    }
-                }
+            }
+            for run in &layout.runs {
+                // the weekday is red like the calendar's today marker, the one red besides destructive actions
+                let (ink, a) = match run.line {
+                    InfoLine::Day => (SYSTEM_RED, alpha),
+                    InfoLine::Date => (label, alpha),
+                    InfoLine::Month => (secondary, alpha),
+                    InfoLine::HighLow | InfoLine::HourLabel => (WHITE, alpha * 200 / 255),
+                    InfoLine::Place | InfoLine::Temp | InfoLine::Sky | InfoLine::HourTemp => (WHITE, alpha),
+                };
+                let img = ui.text(&run.text, run.pt, run.weight, ink);
+                s.blit(&img, (run.rect.0 + slide) as i32, run.rect.1 as i32, 255, a);
             }
         }
         // widget rows: the providing app's icon, then its title and value; the entry's buttons at the trailing edge
@@ -1377,7 +1477,7 @@ mod column_tests {
         let plain = sh.center_info_rects();
         assert_eq!(plain.len(), 2);
         assert!((plain[0].1 .2 - plain[1].1 .2).abs() < 0.5, "equal shares without hours");
-        assert!((plain[0].1 .3 - sh.ui.pt(NC_INFO_PT)).abs() < 0.5);
+        assert!((plain[0].1 .3 - sh.info_heights().0).abs() < 0.5 && plain[0].1 .3 >= sh.ui.pt(NC_INFO_PT) - 0.5);
         let hours = (0..6).map(|i| Hour::basic(&format!("{}", 14 + i), 5.0 - i as f64, 3, true)).collect();
         sh.today.set_weather(Some(sum), hours);
         let tall = sh.center_info_rects();
@@ -1387,5 +1487,42 @@ mod column_tests {
         let (x, w) = (sh.w as f32 - sh.ui.pt(NC_RIGHT_PT) - sh.center_w(), sh.center_w());
         assert!(cal.1 .0 >= x - 0.5 && wx.1 .0 + wx.1 .2 <= x + w + 0.5, "both inside the column");
         assert!(wx.1 .2 >= sh.ui.pt(NC_HOUR_COL_PT) * 3.0, "room for several hours");
+    }
+
+    /// E2E second pass (k03): the big numeral of the Calendar and Weather cards had the month, the condition and the
+    /// high and low drawn over its lower half. At two scales, with and without the hour strip, no text box of a card
+    /// overlaps another, every box lies inside its card, and a tap in the middle of each card still finds that card.
+    #[test]
+    fn the_info_cards_lay_their_lines_out_without_overlap() {
+        use crate::shell::weather::data::{Hour, Summary, Units};
+        for pt in [1.5625_f32, 2.0] {
+            for with_hours in [false, true] {
+                let mut sh = crate::shell::tests::desktop_shell();
+                sh.screen = crate::shell::Screen::Home;
+                sh.ui.s = pt;
+                let sum = Summary { place: "Reykjav\u{ed}k".into(), temp: 6.0, code: 3, day: true, max: 6.0, min: 2.0, units: Units::Celsius };
+                let hours = if with_hours { (0..6).map(|i| Hour::basic(&format!("{}", 14 + i), 5.0 - i as f64, 3, true)).collect() } else { Vec::new() };
+                sh.today.set_weather(Some(sum), hours);
+                let cards = sh.center_info_rects();
+                assert_eq!(cards.len(), 2, "pt {pt}: the date and the Weather card");
+                assert_eq!(with_hours, cards[1].1 .3 > sh.info_heights().0 + 1.0, "pt {pt}: the hour strip makes the row taller");
+                for (card, rect) in cards {
+                    let runs = sh.info_layout(card, rect).runs;
+                    assert!(runs.len() >= 3, "pt {pt}: the card has its lines");
+                    let (cx, cy, cw, ch) = rect;
+                    for (i, a) in runs.iter().enumerate() {
+                        let (ax, ay, aw, ah) = a.rect;
+                        assert!(ax >= cx - 0.5 && ay >= cy - 0.5 && ax + aw <= cx + cw + 0.5 && ay + ah <= cy + ch + 0.5, "pt {pt} hours {with_hours}: {:?} {:?} lies inside the card {rect:?}", a.line, a.rect);
+                        for b in &runs[i + 1..] {
+                            let (bx, by, bw, bh) = b.rect;
+                            let apart = ax + aw <= bx + 0.5 || bx + bw <= ax + 0.5 || ay + ah <= by + 0.5 || by + bh <= ay + 0.5;
+                            assert!(apart, "pt {pt} hours {with_hours}: {:?} {:?} overlaps {:?} {:?}", a.line, a.rect, b.line, b.rect);
+                        }
+                    }
+                    assert!(matches!(sh.center_desk_hit(cx + cw / 2.0, cy + ch / 2.0), Some(DeskHit::Info(k)) if k == card), "pt {pt}: a tap in the middle opens the card's app");
+                    assert!(matches!(sh.center_desk_hit(cx + cw / 2.0, cy + ch - 1.0), Some(DeskHit::Info(k)) if k == card), "pt {pt}: the whole card height takes the tap");
+                }
+            }
+        }
     }
 }
