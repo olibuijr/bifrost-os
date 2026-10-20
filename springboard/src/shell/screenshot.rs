@@ -54,31 +54,208 @@ pub fn account_owner() -> Option<(u32, u32)> {
     None
 }
 
-/// Writes PNG `bytes` to `dir/<name>` through a temporary file, dating the
-/// file `unix` so the library orders it where the capture happened.
+/// The home folder of the installed account (None off Linux or before an account exists).
+#[cfg(target_os = "linux")]
+fn account_home() -> Option<PathBuf> {
+    crate::bare::account::Account::installed().ok().map(|a| a.home)
+}
+
+#[cfg(not(target_os = "linux"))]
+fn account_home() -> Option<PathBuf> {
+    None
+}
+
+/// Writes PNG `bytes` to `dir/<name>` through a temporary file, dating the file `unix` so the library orders it where
+/// the capture happened. A root shell hands the file to the session account (see `write_as`).
 pub fn write(dir: &Path, name: &str, bytes: &[u8], unix: i64) -> std::io::Result<PathBuf> {
-    write_as(dir, name, bytes, unix, None)
+    write_as(dir, name, bytes, unix, account_owner())
 }
 
 /// `write`, handing the folder (when it had to be made) and the file to `owner` (uid, gid): a root shell saving into the
 /// account's Desktop must not leave a file the account cannot move or delete.
+///
+/// The folders under the account's home belong to the account, so a process running as the account can plant links
+/// there. Nothing below the home is therefore reached by a path: the home is opened, and each folder, the temporary
+/// file and the final rename go through directory descriptors that refuse to leave the home (`openat2` with
+/// `RESOLVE_BENEATH`), create the temporary file exclusively without following a link, and hand ownership over by
+/// descriptor, never by path.
 pub fn write_as(dir: &Path, name: &str, bytes: &[u8], unix: i64, owner: Option<(u32, u32)>) -> std::io::Result<PathBuf> {
-    let made = !dir.exists();
-    std::fs::create_dir_all(dir)?;
-    if let (true, Some((uid, gid))) = (made, owner) {
-        let _ = std::os::unix::fs::chown(dir, Some(uid), Some(gid));
+    let home = owner.and_then(|_| account_home()).filter(|h| dir.starts_with(h));
+    match home {
+        Some(home) => {
+            let rel = dir.strip_prefix(&home).map(Path::to_path_buf).unwrap_or_default();
+            safe_write::write_beneath(&home, &rel, name, bytes, unix, owner)?;
+        }
+        None => {
+            // not under the account's home: the shell chose the folder, not the account
+            let made = !dir.exists();
+            std::fs::create_dir_all(dir)?;
+            if let (true, Some((uid, gid))) = (made, owner) {
+                let _ = std::os::unix::fs::lchown(dir, Some(uid), Some(gid));
+            }
+            safe_write::write_beneath(dir, Path::new(""), name, bytes, unix, owner)?;
+        }
     }
-    let path = dir.join(name);
-    let tmp = path.with_extension("tmp");
-    std::fs::write(&tmp, bytes)?;
-    if let Some((uid, gid)) = owner {
-        std::os::unix::fs::chown(&tmp, Some(uid), Some(gid))?;
+    Ok(dir.join(name))
+}
+
+/// Writing a file under a folder that another user can reorganise.
+mod safe_write {
+    use std::ffi::{c_char, c_int, c_long, c_uint, CString, OsStr};
+    use std::fs::File;
+    use std::io::{self, Write};
+    use std::os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd};
+    use std::os::unix::ffi::OsStrExt;
+    use std::os::unix::fs::PermissionsExt;
+    use std::path::{Component, Path, PathBuf};
+
+    const SYS_OPENAT2: c_long = 437;
+    const O_RDONLY: c_int = 0;
+    const O_WRONLY: c_int = 1;
+    const O_CREAT: c_int = 0o100;
+    const O_EXCL: c_int = 0o200;
+    const O_CLOEXEC: c_int = 0o2000000;
+    // the directory and no-follow bits differ on the ARM ABIs
+    #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+    const O_DIRECTORY: c_int = 0o40000;
+    #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+    const O_NOFOLLOW: c_int = 0o100000;
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "arm")))]
+    const O_DIRECTORY: c_int = 0o200000;
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "arm")))]
+    const O_NOFOLLOW: c_int = 0o400000;
+    const RESOLVE_NO_MAGICLINKS: u64 = 0x02;
+    const RESOLVE_BENEATH: u64 = 0x08;
+
+    #[repr(C)]
+    struct OpenHow {
+        flags: u64,
+        mode: u64,
+        resolve: u64,
     }
-    std::fs::rename(&tmp, &path)?;
-    if let Ok(f) = std::fs::File::options().write(true).open(&path) {
-        let _ = f.set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(unix.max(0) as u64));
+
+    extern "C" {
+        fn syscall(n: c_long, ...) -> c_long;
+        fn openat(dirfd: c_int, path: *const c_char, flags: c_int, ...) -> c_int;
+        fn mkdirat(dirfd: c_int, path: *const c_char, mode: c_uint) -> c_int;
+        fn renameat(olddir: c_int, old: *const c_char, newdir: c_int, new: *const c_char) -> c_int;
+        fn unlinkat(dirfd: c_int, path: *const c_char, flags: c_int) -> c_int;
     }
-    Ok(path)
+
+    fn invalid(what: &str) -> io::Error {
+        io::Error::new(io::ErrorKind::InvalidInput, what.to_string())
+    }
+
+    fn cstr(s: &OsStr) -> io::Result<CString> {
+        CString::new(s.as_bytes()).map_err(|_| invalid("path holds a NUL"))
+    }
+
+    /// A file name: one plain component.
+    fn valid_name(name: &str) -> bool {
+        !name.is_empty() && name.len() <= 200 && name != "." && name != ".." && !name.contains(['/', '\0'])
+    }
+
+    /// Opens the folder `rel` below the folder `dir`, following only links that stay below `dir`.
+    fn open_beneath(dir: RawFd, rel: &Path) -> io::Result<OwnedFd> {
+        let c = cstr(rel.as_os_str())?;
+        let how = OpenHow { flags: (O_RDONLY | O_DIRECTORY | O_CLOEXEC) as u64, mode: 0, resolve: RESOLVE_BENEATH | RESOLVE_NO_MAGICLINKS };
+        // SAFETY: `c` is NUL-terminated and `how` is a live OpenHow of the size passed.
+        let fd = unsafe { syscall(SYS_OPENAT2, dir as c_long, c.as_ptr(), &how as *const OpenHow, std::mem::size_of::<OpenHow>() as c_long) };
+        if fd < 0 {
+            return Err(io::Error::last_os_error());
+        }
+        // SAFETY: the kernel returned a new descriptor that nothing else owns.
+        Ok(unsafe { OwnedFd::from_raw_fd(fd as RawFd) })
+    }
+
+    /// The folder `rel` below `root` as a descriptor. A missing folder is made and handed to `owner`.
+    fn open_dir(root: &File, rel: &Path, owner: Option<(u32, u32)>) -> io::Result<OwnedFd> {
+        let mut cur = OwnedFd::from(root.try_clone()?);
+        let mut prefix = PathBuf::new();
+        for part in rel.components() {
+            let name = match part {
+                Component::Normal(n) => n,
+                Component::CurDir => continue,
+                _ => return Err(invalid("folder path leaves its root")),
+            };
+            prefix.push(name);
+            match open_beneath(root.as_raw_fd(), &prefix) {
+                Ok(fd) => cur = fd,
+                Err(e) if e.kind() == io::ErrorKind::NotFound => {
+                    let c = cstr(name)?;
+                    // SAFETY: `cur` is an open descriptor and `c` is NUL-terminated; mkdirat never follows a final link.
+                    let made = unsafe { mkdirat(cur.as_raw_fd(), c.as_ptr(), 0o755) } == 0;
+                    if !made {
+                        let e = io::Error::last_os_error();
+                        if e.kind() != io::ErrorKind::AlreadyExists {
+                            return Err(e);
+                        }
+                    }
+                    let fd = open_beneath(root.as_raw_fd(), &prefix)?;
+                    if let (true, Some((uid, gid))) = (made, owner) {
+                        std::os::unix::fs::fchown(&fd, Some(uid), Some(gid))?;
+                    }
+                    cur = fd;
+                }
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(cur)
+    }
+
+    fn unlink(dir: RawFd, name: &CString) {
+        // SAFETY: `name` is NUL-terminated and `dir` is an open descriptor; unlinkat removes the entry, not a target.
+        let _ = unsafe { unlinkat(dir, name.as_ptr(), 0) };
+    }
+
+    /// Writes `bytes` as `rel/name` below the folder `root`. `root` itself is opened as given; everything below it is
+    /// reached through descriptors and cannot lead out of it. The file is made under a hidden temporary name (created
+    /// exclusively, never through a link), owned by `owner` and dated `unix`, then renamed over `name`: a link at
+    /// `name` is replaced, never written through.
+    pub fn write_beneath(root: &Path, rel: &Path, name: &str, bytes: &[u8], unix: i64, owner: Option<(u32, u32)>) -> io::Result<()> {
+        if !valid_name(name) {
+            return Err(invalid("not a plain file name"));
+        }
+        let root = File::open(root)?;
+        let dir = open_dir(&root, rel, owner)?;
+        let dirfd = dir.as_raw_fd();
+        let final_name = CString::new(name).map_err(|_| invalid("name holds a NUL"))?;
+        for attempt in 0..32u32 {
+            let tmp = CString::new(format!(".{name}.{}.{attempt}.tmp", std::process::id())).map_err(|_| invalid("name holds a NUL"))?;
+            // SAFETY: `tmp` is NUL-terminated and `dirfd` is open; O_EXCL with O_NOFOLLOW never opens an existing entry.
+            let fd = unsafe { openat(dirfd, tmp.as_ptr(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600 as c_uint) };
+            if fd < 0 {
+                let e = io::Error::last_os_error();
+                if e.kind() == io::ErrorKind::AlreadyExists {
+                    continue;
+                }
+                return Err(e);
+            }
+            // SAFETY: openat returned a new descriptor that nothing else owns.
+            let mut file = File::from(unsafe { OwnedFd::from_raw_fd(fd) });
+            let made = (|| -> io::Result<()> {
+                file.write_all(bytes)?;
+                if let Some((uid, gid)) = owner {
+                    std::os::unix::fs::fchown(&file, Some(uid), Some(gid))?;
+                }
+                file.set_permissions(std::fs::Permissions::from_mode(0o644))?;
+                file.set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(unix.max(0) as u64))
+            })();
+            drop(file);
+            if let Err(e) = made {
+                unlink(dirfd, &tmp);
+                return Err(e);
+            }
+            // SAFETY: both names are NUL-terminated and `dirfd` is open.
+            if unsafe { renameat(dirfd, tmp.as_ptr(), dirfd, final_name.as_ptr()) } != 0 {
+                let e = io::Error::last_os_error();
+                unlink(dirfd, &tmp);
+                return Err(e);
+            }
+            return Ok(());
+        }
+        Err(io::Error::new(io::ErrorKind::AlreadyExists, "no free temporary name"))
+    }
 }
 
 /// The capture animation over the screen.
@@ -369,8 +546,63 @@ mod tests {
         let path = write_as(&dir, "Screenshot-20261020-014807.png", &[1, 2, 3], 1_791_073_395, None).unwrap();
         assert_eq!(path, dir.join("Screenshot-20261020-014807.png"));
         assert_eq!(std::fs::read(&path).unwrap(), vec![1, 2, 3]);
-        assert!(!dir.join("Screenshot-20261020-014807.tmp").exists(), "the temporary file is gone");
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1, "no temporary file is left");
         let _ = std::fs::remove_dir_all(dir.parent().unwrap());
+    }
+
+    #[test]
+    fn a_linked_folder_that_leaves_the_home_is_refused() {
+        let base = crate::shell::photos::library::tests::scratch("screenshot-link-dir");
+        let (home, outside) = (base.join("home"), base.join("outside"));
+        std::fs::create_dir_all(&home).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        std::os::unix::fs::symlink(&outside, home.join("Desktop")).unwrap();
+        assert!(safe_write::write_beneath(&home, Path::new("Desktop"), "Shot.png", &[1], 0, None).is_err());
+        assert_eq!(std::fs::read_dir(&outside).unwrap().count(), 0, "nothing was written outside the home");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_link_in_the_name_or_the_temporary_file_is_replaced_not_followed() {
+        let base = crate::shell::photos::library::tests::scratch("screenshot-link-file");
+        let (home, outside) = (base.join("home"), base.join("outside"));
+        let desk = home.join("Desktop");
+        std::fs::create_dir_all(&desk).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        let victim = outside.join("victim");
+        std::fs::write(&victim, b"keep").unwrap();
+        std::os::unix::fs::symlink(&victim, desk.join("Shot.png")).unwrap();
+        std::os::unix::fs::symlink(&victim, desk.join(format!(".Shot.png.{}.0.tmp", std::process::id()))).unwrap();
+        safe_write::write_beneath(&home, Path::new("Desktop"), "Shot.png", &[1, 2, 3], 1_791_073_395, None).unwrap();
+        assert_eq!(std::fs::read(&victim).unwrap(), b"keep", "the link target was not written");
+        assert_eq!(std::fs::read(desk.join("Shot.png")).unwrap(), vec![1, 2, 3]);
+        assert!(!std::fs::symlink_metadata(desk.join("Shot.png")).unwrap().file_type().is_symlink());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_link_that_stays_inside_the_home_is_followed_and_missing_folders_are_made() {
+        let base = crate::shell::photos::library::tests::scratch("screenshot-inside");
+        let home = base.join("home");
+        std::fs::create_dir_all(home.join("Pictures")).unwrap();
+        std::os::unix::fs::symlink("Pictures", home.join("Desktop")).unwrap();
+        safe_write::write_beneath(&home, Path::new("Desktop"), "A.png", &[7], 0, None).unwrap();
+        assert_eq!(std::fs::read(home.join("Pictures/A.png")).unwrap(), vec![7]);
+        safe_write::write_beneath(&home, Path::new("Pictures/Screens/2026"), "B.png", &[8], 0, None).unwrap();
+        assert_eq!(std::fs::read(home.join("Pictures/Screens/2026/B.png")).unwrap(), vec![8]);
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_folder_path_with_parent_parts_and_a_bad_file_name_are_refused() {
+        let base = crate::shell::photos::library::tests::scratch("screenshot-escape");
+        let home = base.join("home");
+        std::fs::create_dir_all(&home).unwrap();
+        assert!(safe_write::write_beneath(&home, Path::new("../x"), "a.png", &[1], 0, None).is_err());
+        assert!(safe_write::write_beneath(&home, Path::new(""), "../a.png", &[1], 0, None).is_err());
+        assert!(safe_write::write_beneath(&home, Path::new(""), "", &[1], 0, None).is_err());
+        assert!(!base.join("x").exists() && !base.join("a.png").exists());
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
