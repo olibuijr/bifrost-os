@@ -741,7 +741,7 @@ impl Weather {
             Some(Target::Back) => Some(if self.screen == Screen::Places { BAR_DONE } else { BAR_BACK }),
             _ => None,
         };
-        widgets::toolbar(s, ui, self.bar_bounds(ui), &self.bar(), pressed);
+        widgets::toolbar_in(s, ui, self.bar_bounds(ui), &self.bar(), pressed, self.side / ui.pt(1.0));
     }
 
     pub fn keyboard_shown(&self) -> bool {
@@ -2436,6 +2436,19 @@ mod tests {
         let mut app = Weather::new(&ui, 1200, 780, dir.clone(), Arc::new(Offline));
         app.relayout(&ui);
         (app, ui, dir)
+    }
+
+    #[test]
+    fn the_drawn_toolbar_sits_where_clicks_land_with_the_sidebar_shown() {
+        let (app, ui, _) = app_with("bar-drawn", &["A"]);
+        assert!(app.side > 0.0, "the 1200 px window shows the sidebar");
+        let drawn = widgets::toolbar_layout_in(&ui, app.bar_bounds(&ui), &app.bar(), app.side / ui.pt(1.0));
+        let hit = app.bar_layout(&ui);
+        assert_eq!(drawn.visible.len(), hit.visible.len());
+        for ((id, d), (hid, h)) in drawn.visible.iter().zip(hit.visible.iter()) {
+            assert_eq!(id, hid);
+            assert!((d.x - h.x).abs() < 0.01 && (d.w - h.w).abs() < 0.01, "item {id} drawn at {} but hit-tested at {}", d.x, h.x);
+        }
     }
 
     fn names(app: &Weather) -> Vec<&str> {

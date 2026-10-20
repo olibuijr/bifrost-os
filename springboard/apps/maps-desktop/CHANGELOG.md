@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.6
+
+- Fix: the toolbar is drawn where its clicks land. It is laid out in the detail pane's own coordinates, so the SDK traffic-light inset now gets the pane's offset and leaves it beside the sidebar.
+
 ## 0.6.5
 
 - Map tiles show: a finished tile fetch now wakes the app loop (the fetch threads added in 0.6.3 never did, so tiles that arrived stayed unseen until the next input).
