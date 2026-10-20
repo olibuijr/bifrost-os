@@ -632,6 +632,27 @@
         assert!(sh.dock_is_visible(),"the Dock is back");
     }
 
+    /// A running screen recording keeps its indicator on screen: the menu bar does not hide over a full-screen window, and the
+    /// indicator is among the bar's buttons however little room is left.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn a_screen_recording_keeps_the_menu_bar_and_its_indicator_over_a_full_screen_window() {
+        use crate::bare::wayland::WindowEvent;
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        sh.desk_open(AppId::Settings,0.);
+        let id=apps().iter().position(|a|a.id==AppId::Settings).unwrap() as u32+1;
+        sh.wayland_window_event(WindowEvent::Fullscreen(id,true));
+        assert!(sh.desk_bar_hidden(),"without a recording the bar auto-hides");
+        let dir=crate::shell::photos::library::tests::scratch("recording-indicator");
+        let area=crate::shell::screenrec::Area{x:0,y:0,w:4,h:2};
+        sh.rec=Some(crate::shell::screenrec::Session::start(dir.join("a.avi"),crate::shell::screenrec::Encoder::Avi,area,10,0.).unwrap());
+        assert!(!sh.desk_bar_hidden(),"the recording keeps the bar over the full-screen window");
+        assert!(sh.menu_buttons().iter().any(|b|b.0==desktop_bar::Menu::Recording),"the indicator is in the bar");
+        if let Some(r)=sh.rec.take(){let _=r.finish();}
+        assert!(sh.desk_bar_hidden(),"and the bar hides again once the recording has ended");
+        let _=std::fs::remove_dir_all(&dir);
+    }
+
     /// The same on an output of any size: the frame is the output, never a number of pixels.
     #[cfg(feature="desktop-wayland")]
     #[test]

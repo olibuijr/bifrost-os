@@ -1,5 +1,10 @@
-//! Screen recording. The shell records the frames it draws (the same drawing a screenshot takes), cropped to the chosen
-//! area, and an encoder writes them. The encoder is the system `ffmpeg` when the PATH holds one (H.264 in a `.mov`), else
+//! Screen recording. Under the window server the screen is composed there (wallpaper, every window, the menu bar and the
+//! Dock), so the shell records the composed output: a worker captures it frame by frame through the window server's
+//! screencopy protocol, cropped to the chosen area, and hands the frames to the encoder (`screenrec_composed.rs`,
+//! `screenrec_wl.rs`). Without a window server (the tablet, the test fixtures) the shell records the frames it draws itself
+//! (the same drawing a screenshot takes), cropped to the chosen area. If the composed screen cannot be captured the
+//! recording does not start and the person is told; a black frame is never recorded in its place.
+//! The encoder is the system `ffmpeg` when the PATH holds one (H.264 in a `.mov`), else
 //! a built-in Motion JPEG AVI writer. The frame rate follows the display while the GPU path is up (`frame_rate`), else
 //! `FPS`. With ffmpeg and the Options menu's Microphone on, the audio service records a WAV take beside the movie, and
 //! `mux_audio` adds it to the movie once the service has written it.
@@ -12,7 +17,8 @@
 //! drawn into a movie (only into pictures).
 
 use super::camera::jpeg;
-use super::photos::library::civil;
+use super::photos::library::{civil, Date};
+use super::screenrec_composed::{self as composed, chown_path, create_dir_owned, Composed, Event, Job, Stats};
 use super::services::privacy_permissions::{self, Kind};
 use super::Shell;
 use crate::gfx::Image;
@@ -21,7 +27,9 @@ use std::fs::File;
 use std::io::{Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
+use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender, TrySendError};
+use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
@@ -42,9 +50,9 @@ const AUDIO_WAIT_MS: f64 = 15_000.0;
 /// How soon the loop comes round again while a take is on its way or being muxed (ms).
 const MUX_POLL_MS: f64 = 50.0;
 /// JPEG quality of the built-in writer.
-const JPEG_QUALITY: u8 = 80;
+pub(super) const JPEG_QUALITY: u8 = 80;
 /// Frames queued for the encoder before a frame is skipped instead of waited for.
-const QUEUE: usize = 2;
+pub(super) const QUEUE: usize = 2;
 
 /// Where the built-in AVI writer's `movi` list type fourcc sits: the header below is fixed in size.
 const MOVI_AT: u64 = 220;
@@ -97,9 +105,12 @@ fn is_executable(p: &Path) -> bool {
     std::fs::metadata(p).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
 }
 
-/// The ffmpeg arguments that read raw RGBA frames of `w` by `h` on stdin and write `out` as H.264 at `fps`.
-pub fn ffmpeg_args(w: u32, h: u32, fps: u32, out: &Path) -> Vec<String> {
-    let mut a: Vec<String> = ["-hide_banner", "-loglevel", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgba", "-s"].iter().map(|s| s.to_string()).collect();
+/// The ffmpeg arguments that read raw frames of `w` by `h` in pixel format `pix_fmt` on stdin and write `out` as H.264 at
+/// `fps`. The shell's own frames are `rgba`; the window server's screencopy buffers are `bgr0` (XRGB8888 in memory).
+pub fn ffmpeg_args(w: u32, h: u32, fps: u32, pix_fmt: &str, out: &Path) -> Vec<String> {
+    let mut a: Vec<String> = ["-hide_banner", "-loglevel", "error", "-y", "-f", "rawvideo", "-pix_fmt"].iter().map(|s| s.to_string()).collect();
+    a.push(pix_fmt.to_string());
+    a.push("-s".to_string());
     a.push(format!("{w}x{h}"));
     a.extend(["-r".to_string(), fps.to_string(), "-i".to_string(), "-".to_string()]);
     a.extend(["-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p", "-movflags", "+faststart"].iter().map(|s| s.to_string()));
@@ -285,24 +296,50 @@ impl<W: Write + Seek> AviWriter<W> {
 }
 
 /// Where the encoder writes its output.
-enum Sink {
+pub(super) enum Sink {
     Ffmpeg(Child),
     Avi(AviWriter<File>),
 }
 
-fn spawn_ffmpeg(bin: &Path, area: Area, fps: u32, path: &Path) -> Result<Child, String> {
-    Command::new(bin)
-        .args(ffmpeg_args(area.w, area.h, fps, path))
-        .stdin(Stdio::piped())
-        .stdout(Stdio::null())
-        .stderr(Stdio::inherit())
-        .spawn()
-        .map_err(|e| format!("ffmpeg: {e}"))
+/// Starts ffmpeg reading `pix_fmt` frames. With an `owner` (a root shell recording for the account) the process runs as
+/// that user and group, so the file it creates belongs to the account and the process can write nowhere the account cannot.
+pub(super) fn spawn_ffmpeg(bin: &Path, area: Area, fps: u32, pix_fmt: &str, path: &Path, owner: Option<(u32, u32)>) -> Result<Child, String> {
+    use std::os::unix::process::CommandExt;
+    let mut cmd = Command::new(bin);
+    cmd.args(ffmpeg_args(area.w, area.h, fps, pix_fmt, path)).stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::inherit());
+    if let Some((uid, gid)) = owner {
+        cmd.uid(uid).gid(gid);
+    }
+    cmd.spawn().map_err(|e| format!("ffmpeg: {e}"))
 }
 
-fn open_avi(path: &Path, area: Area, fps: u32) -> Result<AviWriter<File>, String> {
-    let f = File::create(path).map_err(|e| format!("{}: {e}", path.display()))?;
+/// Creates the AVI file. With an `owner` the file must be new (it is never truncated or followed through a link) and is
+/// handed to the account.
+pub(super) fn open_avi(path: &Path, area: Area, fps: u32, owner: Option<(u32, u32)>) -> Result<AviWriter<File>, String> {
+    let f = match owner {
+        Some(_) => File::options().write(true).create_new(true).open(path),
+        None => File::create(path),
+    }
+    .map_err(|e| format!("{}: {e}", path.display()))?;
+    chown_path(path, owner).map_err(|e| format!("{}: {e}", path.display()))?;
     AviWriter::new(f, area.w, area.h, fps).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+/// Closes the encoder's output: ffmpeg gets its input closed and is waited for, the AVI gets its index.
+pub(super) fn finish_sink(sink: Sink) -> Result<(), String> {
+    match sink {
+        Sink::Ffmpeg(mut child) => {
+            drop(child.stdin.take());
+            let status = child.wait().map_err(|e| format!("ffmpeg: {e}"))?;
+            if !status.success() {
+                return Err(format!("ffmpeg failed ({status})"));
+            }
+        }
+        Sink::Avi(writer) => {
+            writer.finish().map_err(|e| format!("cannot finish the file: {e}"))?;
+        }
+    }
+    Ok(())
 }
 
 /// The encoder thread: takes frames until the channel closes, then closes the file. Returns the frame count.
@@ -321,30 +358,63 @@ fn encode(rx: Receiver<Vec<u32>>, mut sink: Sink, area: Area) -> Result<usize, S
         }
         n += 1;
     }
-    match sink {
-        Sink::Ffmpeg(mut child) => {
-            drop(child.stdin.take());
-            let status = child.wait().map_err(|e| format!("ffmpeg: {e}"))?;
-            if !status.success() {
-                return Err(format!("ffmpeg failed ({status})"));
-            }
-        }
-        Sink::Avi(writer) => {
-            writer.finish().map_err(|e| format!("cannot finish the file: {e}"))?;
-        }
-    }
+    finish_sink(sink)?;
     Ok(n)
 }
 
 /// The microphone take a recording makes beside its movie: the WAV the audio service writes, and the ffmpeg that muxes it
-/// into the movie.
+/// into the movie. `owner` is the account the finished movie belongs to when the shell runs as root.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Audio {
     pub wav: PathBuf,
     pub ffmpeg: PathBuf,
+    pub owner: Option<(u32, u32)>,
 }
 
-/// A recording in progress: the shell hands it frames, and the encoder thread owns the file.
+/// Where a recording's frames come from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Source {
+    /// the window server's composed output, captured by a worker (the desktop)
+    Composed,
+    /// the frames the shell draws itself, pushed by the loop (no window server)
+    ShellFrame,
+}
+
+/// Which source a recording uses. `on_desk` is whether the shell runs under the window server, whose composed output is the
+/// screen; `session_reachable` is whether the shell can reach the window server's socket (`WAYLAND_DISPLAY` and
+/// `XDG_RUNTIME_DIR`). Under the window server the shell's own frame holds only the menu bar and the Dock, so it is never a
+/// fallback: when the composed output cannot be reached the recording does not start.
+pub fn plan_source(on_desk: bool, session_reachable: bool) -> Result<Source, String> {
+    match (on_desk, session_reachable) {
+        (false, _) => Ok(Source::ShellFrame),
+        (true, true) => Ok(Source::Composed),
+        (true, false) => Err(composed::Unavailable::NoSession.message()),
+    }
+}
+
+/// The file name of a recording that starts at `d`: `Screen Recording 2026-10-20 at 14.03.09.mov`.
+pub fn file_name(d: &Date, ext: &str) -> String {
+    format!("Screen Recording {:04}-{:02}-{:02} at {:02}.{:02}.{:02}.{}", d.year, d.month, d.day, d.hour, d.min, d.sec, ext)
+}
+
+/// What starts a composed recording.
+pub struct Start {
+    pub path: PathBuf,
+    pub encoder: Encoder,
+    /// the area in the shell's pixels; None: the whole screen
+    pub area: Option<Area>,
+    /// the shell's screen size in pixels, which `area` is in
+    pub screen: (u32, u32),
+    pub fps: u32,
+    /// whether the pointer is drawn into the movie
+    pub cursor: bool,
+    /// how long to wait before the first frame, so the shell's own overlays have left the screen (ms)
+    pub settle_ms: f64,
+    /// the account the file belongs to when the shell runs as root
+    pub owner: Option<(u32, u32)>,
+}
+
+/// A recording in progress: the shell hands it frames (or a worker captures them), and the encoder thread owns the file.
 pub struct Session {
     path: PathBuf,
     area: Area,
@@ -354,10 +424,16 @@ pub struct Session {
     pub audio: Option<Audio>,
     tx: Option<SyncSender<Vec<u32>>>,
     worker: Option<JoinHandle<Result<usize, String>>>,
-    /// the time (ms) the next frame is due
+    /// the time (ms) the next frame is due; for a composed recording, the next time to look at the worker's status
     next_due: f64,
     /// milliseconds between two recorded frames
     interval: f64,
+    /// the composed-screen capture, when the window server composes the screen
+    composed: Option<Composed>,
+    /// frames captured, dropped, repeated to keep time and failed
+    stats: Arc<Stats>,
+    /// the account the file belongs to when the shell runs as root
+    owner: Option<(u32, u32)>,
 }
 
 /// A finished recording whose audio take is still on its way from the audio service.
@@ -369,11 +445,14 @@ pub struct PendingMux {
 }
 
 /// Muxes the take into the movie: the video is copied and the take added as AAC. The movie is replaced only when ffmpeg
-/// wrote the new file; a take the audio service never wrote leaves the movie as it is.
+/// wrote the new file; a take the audio service never wrote leaves the movie as it is. The movie keeps belonging to the
+/// account.
 fn mux_audio(movie: &Path, audio: &Audio) {
     if audio.wav.is_file() {
         let out = movie.with_extension("muxing.mov");
-        let muxed = Command::new(&audio.ffmpeg).args(mux_args(movie, &audio.wav, &out)).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::inherit()).status().is_ok_and(|s| s.success()) && std::fs::rename(&out, movie).is_ok();
+        let muxed = Command::new(&audio.ffmpeg).args(mux_args(movie, &audio.wav, &out)).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::inherit()).status().is_ok_and(|s| s.success())
+            && chown_path(&out, audio.owner).is_ok()
+            && std::fs::rename(&out, movie).is_ok();
         if !muxed {
             let _ = std::fs::remove_file(&out);
             eprintln!("springboard: recording: could not add the audio to {}", movie.display());
@@ -385,43 +464,140 @@ fn mux_audio(movie: &Path, audio: &Audio) {
 impl Session {
     /// Starts recording `area` to `path` with `encoder` at `fps` frames a second; the first frame is due at `t` (ms).
     pub fn start(path: PathBuf, encoder: Encoder, area: Area, fps: u32, t: f64) -> Result<Session, String> {
+        Session::start_owned(path, encoder, area, fps, t, None)
+    }
+
+    /// `start`, with the folder and the file handed to `owner` (uid, gid) when the shell runs as root for an account.
+    pub fn start_owned(path: PathBuf, encoder: Encoder, area: Area, fps: u32, t: f64, owner: Option<(u32, u32)>) -> Result<Session, String> {
         let fps = fps.clamp(1, MAX_FPS);
         if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
-            std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+            create_dir_owned(dir, owner).map_err(|e| format!("{}: {e}", dir.display()))?;
         }
         let sink = match encoder {
-            Encoder::Ffmpeg(bin) => Sink::Ffmpeg(spawn_ffmpeg(&bin, area, fps, &path)?),
-            Encoder::Avi => Sink::Avi(open_avi(&path, area, fps)?),
+            Encoder::Ffmpeg(bin) => Sink::Ffmpeg(spawn_ffmpeg(&bin, area, fps, "rgba", &path, owner)?),
+            Encoder::Avi => Sink::Avi(open_avi(&path, area, fps, owner)?),
         };
         let (tx, rx) = sync_channel::<Vec<u32>>(QUEUE);
         let worker = std::thread::spawn(move || {
             crate::gfx::affinity::background_thread();
             encode(rx, sink, area)
         });
-        Ok(Session { path, area, fps, audio: None, tx: Some(tx), worker: Some(worker), next_due: t, interval: 1000.0 / fps as f64 })
+        Ok(Session { path, area, fps, audio: None, tx: Some(tx), worker: Some(worker), next_due: t, interval: 1000.0 / fps as f64, composed: None, stats: Arc::default(), owner })
     }
 
-    /// Takes the frame `img` when one is due at `t` (ms). A frame the encoder cannot take yet is skipped, not waited for.
+    /// Starts recording the window server's composed output. A worker connects to the window server, takes one probe frame
+    /// (the proof that the composed screen can be read) and only then opens the encoder, so a refusal leaves no file; the
+    /// answer arrives through `poll`. `t` is the loop's clock (ms).
+    pub fn start_composed(s: Start, t: f64) -> Result<Session, String> {
+        let fps = s.fps.clamp(1, composed::COMPOSED_MAX_FPS);
+        let area = crop_box(s.area, s.screen.0, s.screen.1)?;
+        if let Some(dir) = s.path.parent().filter(|d| !d.as_os_str().is_empty()) {
+            create_dir_owned(dir, s.owner).map_err(|e| format!("{}: {e}", dir.display()))?;
+        }
+        let stats = Arc::new(Stats::default());
+        let job = Job {
+            path: s.path.clone(),
+            encoder: s.encoder,
+            area: s.area,
+            screen: s.screen,
+            fps,
+            cursor: s.cursor,
+            settle_ms: s.settle_ms,
+            owner: s.owner,
+            stats: stats.clone(),
+            stop: Arc::new(AtomicBool::new(false)),
+            paused: Arc::new(AtomicBool::new(false)),
+        };
+        let (handle, worker) = composed::launch(job);
+        Ok(Session {
+            path: s.path,
+            area,
+            fps,
+            audio: None,
+            tx: None,
+            worker: Some(worker),
+            next_due: t + composed::STATUS_POLL_MS,
+            interval: 1000.0 / fps as f64,
+            composed: Some(handle),
+            stats,
+            owner: s.owner,
+        })
+    }
+
+    /// Whether the window server's composed output feeds this recording (the loop does not push frames to it).
+    pub fn is_composed(&self) -> bool {
+        self.composed.is_some()
+    }
+
+    /// Tells the composed capture's worker whether the screen is off; it takes no frame while it is.
+    pub fn set_screen_off(&self, off: bool) {
+        if let Some(c) = &self.composed {
+            c.set_paused(off);
+        }
+    }
+
+    /// Looks at the composed capture's worker at `t` (ms). An `Event` says the worker refused to start or stopped by
+    /// itself; the shell shows the message.
+    pub fn poll(&mut self, t: f64) -> Option<Event> {
+        self.next_due = t + composed::STATUS_POLL_MS;
+        self.composed.as_mut()?.poll()
+    }
+
+    /// The account the file belongs to.
+    pub fn owner(&self) -> Option<(u32, u32)> {
+        self.owner
+    }
+
+    /// `frames captured, written, dropped ...` for the log and `rec status`.
+    pub fn summary(&self) -> String {
+        self.stats.summary()
+    }
+
+    /// Takes the frame `img` when one is due at `t` (ms). A frame the encoder cannot take yet is skipped, not waited for,
+    /// and counted.
     pub fn push(&mut self, img: &Image, t: f64) {
+        use std::sync::atomic::Ordering::Relaxed;
         if t < self.next_due {
             return;
         }
         self.next_due = t + self.interval;
         if let Some(tx) = &self.tx {
             match tx.try_send(crop_pixels(img, self.area)) {
-                Ok(()) | Err(TrySendError::Full(_)) | Err(TrySendError::Disconnected(_)) => {}
+                Ok(()) => {
+                    self.stats.captured.fetch_add(1, Relaxed);
+                }
+                Err(TrySendError::Full(_)) | Err(TrySendError::Disconnected(_)) => {
+                    self.stats.dropped.fetch_add(1, Relaxed);
+                }
             }
+        }
+    }
+
+    /// Gives up a recording that never started: the worker is stopped and waited for. The worker opens the file only after
+    /// it has read a frame, so a recording that never started has made none (and a file that was already there is left alone).
+    pub fn abort(mut self) {
+        if let Some(c) = &self.composed {
+            c.request_stop();
+        }
+        drop(self.tx.take());
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.join();
         }
     }
 
     /// Ends the recording: the encoder drains its queue and closes the file. Returns the file's path.
     pub fn finish(mut self) -> Result<PathBuf, String> {
+        if let Some(c) = &self.composed {
+            c.request_stop();
+        }
         drop(self.tx.take());
         let worker = self.worker.take().ok_or("the recording has no encoder")?;
         let frames = worker.join().map_err(|_| "the encoder stopped unexpectedly".to_string())??;
+        eprintln!("springboard: recording: {}: {}", self.path.display(), self.stats.summary());
         if frames == 0 {
             return Err(format!("nothing was recorded to {}", self.path.display()));
         }
+        let _ = chown_path(&self.path, self.owner);
         Ok(self.path.clone())
     }
 }
@@ -435,22 +611,35 @@ impl Shell {
     /// Starts a recording of the whole screen, or of `area` (x, y, width, height in screen pixels), to `file`, or else to
     /// a dated file on the Desktop. Returns the file's path.
     pub fn recording_start(&mut self, area: Option<(u32, u32, u32, u32)>, file: Option<String>, t: f64) -> Result<PathBuf, String> {
+        self.recording_begin(area, file, t, 0.0)
+    }
+
+    /// `recording_start`, first waiting `settle_ms` before the first frame so that the shell's own overlays (the capture
+    /// toolbar that started it) have left the composed screen.
+    ///
+    /// Under the window server the frames are the composed output, read by a worker through the window server's screencopy
+    /// protocol; the answer to "can it be read" arrives a moment later (`recording_tick`), and a recording that cannot read
+    /// it does not start: the person gets a message and no file is made. The file is made for the account (the folder pictures
+    /// go to, see `capture_dir`), not for root.
+    pub(super) fn recording_begin(&mut self, area: Option<(u32, u32, u32, u32)>, file: Option<String>, t: f64, settle_ms: f64) -> Result<PathBuf, String> {
         if self.rec.is_some() {
             return Err("already recording".into());
         }
         if !self.screen_on || self.is_locked() {
             return Err("locked".into());
         }
+        self.rec_note = None;
         let area = area.map(|(x, y, w, h)| Area { x, y, w, h });
-        let area = crop_box(area, self.w as u32, self.h as u32)?;
+        let screen = (self.w as u32, self.h as u32);
+        let reachable = std::env::var_os("WAYLAND_DISPLAY").is_some() && std::env::var_os("XDG_RUNTIME_DIR").is_some();
+        let source = plan_source(self.overlays_on_desk(), reachable).inspect_err(|e| self.rec_note = Some(e.clone()))?;
+        let owner = self.recording_owner()?;
         let encoder = choose(std::env::var_os("PATH").as_deref());
         let path = match file.filter(|f| !f.is_empty()) {
             Some(f) => PathBuf::from(f),
             None => {
                 let (unix, offset) = self.wall_now(t);
-                let d = civil(unix, offset);
-                let name = format!("Screen Recording {:04}-{:02}-{:02} at {:02}.{:02}.{:02}.{}", d.year, d.month, d.day, d.hour, d.min, d.sec, encoder.extension());
-                self.recording_dir().join(name)
+                self.recording_dir().join(file_name(&civil(unix, offset), encoder.extension()))
             }
         };
         // the take is muxed with ffmpeg, so only an ffmpeg recording can carry sound
@@ -458,15 +647,47 @@ impl Shell {
             Encoder::Ffmpeg(bin) => Some(bin.clone()),
             Encoder::Avi => None,
         };
-        let fps = frame_rate(self.rec_display.0, self.rec_display.1);
-        let mut session = Session::start(path.clone(), encoder, area, fps, t)?;
+        let mut session = match source {
+            Source::ShellFrame => {
+                let area = crop_box(area, screen.0, screen.1)?;
+                let fps = frame_rate(self.rec_display.0, self.rec_display.1);
+                Session::start_owned(path.clone(), encoder, area, fps, t, owner)?
+            }
+            Source::Composed => {
+                let fps = composed::composed_fps(self.rec_display.0, self.rec_display.1);
+                Session::start_composed(Start { path: path.clone(), encoder, area, screen, fps, cursor: self.capture_prefs.pointer, settle_ms, owner }, t)?
+            }
+        };
         if let Some(bin) = ffmpeg.filter(|_| self.capture_prefs.microphone) {
-            session.audio = self.recording_audio(&path, &bin);
+            session.audio = self.recording_audio(&path, &bin, owner);
         }
         self.rec = Some(session);
         self.rec_clock = t;
         self.dirty = true;
         Ok(path)
+    }
+
+    /// The account the recording's folder and file belong to when the shell runs as root; None when the shell runs as the
+    /// account. A root shell that does not know the account records nothing rather than leave a file the account cannot
+    /// move or delete.
+    fn recording_owner(&self) -> Result<Option<(u32, u32)>, String> {
+        #[cfg(target_os = "linux")]
+        {
+            let account = crate::bare::account::Account::installed().ok().map(|a| (a.uid, a.gid));
+            composed::owner_for_recording(crate::appearance_portal::is_root(), account)
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            Ok(None)
+        }
+    }
+
+    /// Tells the person a recording did not start or stopped: a notification, the log, and a line for `rec status`.
+    pub(super) fn recording_notice(&mut self, title: &str, body: &str) {
+        eprintln!("springboard: recording: {title}: {body}");
+        self.rec_note = Some(format!("{title}: {body}"));
+        let now = crate::bare::sys::wall_time().0;
+        self.notify(super::notify::store::Notification::new(super::AppId::Settings, title, body, now));
     }
 
     /// Ends the recording and returns its file. The file opens in the Video Player once it is final.
@@ -497,7 +718,7 @@ impl Shell {
 
     /// The microphone take for a recording to `movie`: starts the audio service recording a WAV beside it. None (the
     /// recording is silent) while the microphone is not allowed or the audio service does not take the start.
-    fn recording_audio(&mut self, movie: &Path, ffmpeg: &Path) -> Option<Audio> {
+    fn recording_audio(&mut self, movie: &Path, ffmpeg: &Path, owner: Option<(u32, u32)>) -> Option<Audio> {
         match privacy_permissions::access(CAPTURE_APP).status(Media::Audio) {
             Status::Authorized => {}
             Status::NotDetermined => {
@@ -516,7 +737,7 @@ impl Shell {
             eprintln!("springboard: recording: no audio service; this recording is silent");
             return None;
         }
-        Some(Audio { wav, ffmpeg: ffmpeg.to_path_buf() })
+        Some(Audio { wav, ffmpeg: ffmpeg.to_path_buf(), owner })
     }
 
     /// A recording is written: it opens in the Video Player, after its audio take is muxed in when it has one.
@@ -574,16 +795,18 @@ impl Shell {
         }
     }
 
-    /// `idle`, or `recording <file>` while a recording runs (the answer to `rec status`).
+    /// `idle`, or `recording <file>` while a recording runs (the answer to `rec status`), then a line with the frame counts.
+    /// After a recording that did not start or stopped by itself, `idle` is followed by the reason.
     pub fn recording_status(&self) -> String {
-        match &self.rec {
-            Some(r) => format!("recording {}\n", r.path.display()),
-            None => "idle\n".into(),
+        match (&self.rec, &self.rec_note) {
+            (Some(r), _) => format!("recording {}\n{}\n", r.path.display(), r.summary()),
+            (None, Some(note)) => format!("idle\n{note}\n"),
+            (None, None) => "idle\n".into(),
         }
     }
 
     /// Records the frame that is due at `t` (ms), and opens the recordings whose audio is in. Called once per pass of the
-    /// loop.
+    /// loop. A composed recording is captured by its worker; the loop only looks at the worker's status.
     pub fn recording_tick(&mut self, t: f64) {
         self.rec_clock = t;
         while let Ok(movie) = self.rec_ready.1.try_recv() {
@@ -591,12 +814,56 @@ impl Shell {
             self.open_recording(movie);
         }
         self.finish_mux(t);
+        if self.rec.as_ref().is_some_and(|r| r.is_composed()) {
+            self.composed_tick(t);
+            return;
+        }
         if !self.rec.as_ref().is_some_and(|r| t >= r.next_due) {
             return;
         }
         let img = self.capture_frame(t);
         if let Some(r) = self.rec.as_mut() {
             r.push(&img, t);
+        }
+    }
+
+    /// One look at a composed recording's worker. The recording ends when the screen locks (the lock screen is never
+    /// recorded), waits while the screen is off, and ends with a message when the worker could not start or stopped.
+    fn composed_tick(&mut self, t: f64) {
+        if self.is_locked() {
+            self.recording_end("The screen was locked.");
+            return;
+        }
+        // every pass, so no frame is taken between the screen going off and the next look at the worker
+        let off = !self.screen_on;
+        if let Some(r) = self.rec.as_ref() {
+            r.set_screen_off(off);
+        }
+        if !self.rec.as_ref().is_some_and(|r| t >= r.next_due) {
+            return;
+        }
+        let event = self.rec.as_mut().and_then(|r| r.poll(t));
+        match event {
+            None => {}
+            Some(Event::Refused(why)) => {
+                if let Some(r) = self.rec.take() {
+                    r.abort();
+                }
+                self.dirty = true;
+                self.recording_notice("Screen recording did not start", &why);
+            }
+            Some(Event::Ended(why)) => self.recording_end(&why),
+        }
+    }
+
+    /// Ends the recording because of `why` and tells the person where the movie is.
+    fn recording_end(&mut self, why: &str) {
+        match self.recording_stop() {
+            Ok(movie) => {
+                let name = movie.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                self.recording_notice("Screen recording stopped", &format!("{why} Saved as {name}."));
+            }
+            Err(e) => self.recording_notice("Screen recording stopped", &format!("{why} {e}")),
         }
     }
 
@@ -613,7 +880,7 @@ impl Shell {
     /// The folder a recording is saved to: the Options menu's choice in the account's home directory (the Desktop unless
     /// it says otherwise), the same folder pictures go to.
     fn recording_dir(&self) -> PathBuf {
-        self.capture_prefs.save_to.dir(&super::dock_stack::home_dir())
+        self.capture_dir()
     }
 }
 
@@ -626,7 +893,7 @@ mod tests {
 
     #[test]
     fn ffmpeg_reads_raw_rgba_and_writes_h264() {
-        let a = ffmpeg_args(1280, 720, FPS, Path::new("/x/out.mov"));
+        let a = ffmpeg_args(1280, 720, FPS, "rgba", Path::new("/x/out.mov"));
         let at = |flag: &str| a.iter().position(|s| s == flag).unwrap();
         assert_eq!(a[at("-s") + 1], "1280x720");
         assert_eq!(a[at("-pix_fmt") + 1], "rgba", "the input is raw RGBA");
