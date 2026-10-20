@@ -744,6 +744,10 @@ impl Shell {
         if self.access_showing() || self.usb_showing() || self.fw_showing() {
             return vec![];
         }
+        // the Apps grid is modal: typing goes to its search field, its own keys move and open, nothing reaches the app
+        if self.overview_typed(&out, t) {
+            return vec![];
+        }
         // Keyboard Navigation off: Tab does not move focus, though a terminal still gets it for completion
         if matches!(out, Out::Named("Tab")) && !super::kb_input::get().tab_navigation && !matches!(self.screen, Screen::App(AppId::Terminal | AppId::External(_))) {
             return vec![];
@@ -843,6 +847,10 @@ impl Shell {
         #[cfg(feature = "desktop-wayland")]
         if let Some(fx) = self.desktop_menu_key(1, t) {
             return fx;
+        }
+        // Overview or the Apps grid is a modal layer over the windows: Escape closes it before anything under it
+        if self.overview_escape(t) {
+            return vec![];
         }
         if self.cc_active() {
             self.cc.hide();

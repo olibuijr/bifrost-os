@@ -854,8 +854,12 @@ impl Shell {
         let p = c.progress(t).clamp(0.0, 1.0);
         if let Some((x, y, w, h)) = self.center_desk_rect().filter(|_| bifrost_render::glass::gpu()) {
             // the column floats over the live desktop: clear only its own rect (and the slide) for the glass
+            // The padding stops at the menu bar: clearing up from the column's top edge reached y = 0 and wiped the
+            // bar's status items and clock under the column (E2E NC2).
             let pad = self.ui.pt(32.0);
-            s.fill_rect((x - pad).max(0.0) as usize, (y - pad).max(0.0) as usize, (w + 2.0 * pad) as usize, (h + 2.0 * pad) as usize, 0);
+            let bar = self.desktop_bar_height() as f32;
+            let top = (y - pad).max(bar);
+            s.fill_rect((x - pad).max(0.0) as usize, top as usize, (w + 2.0 * pad) as usize, (y + h + pad - top).max(0.0) as usize, 0);
         }
         if self.notify.center.editing {
             return self.draw_desk_gallery(s, p);

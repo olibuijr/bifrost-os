@@ -4214,6 +4214,19 @@ impl Shell {
                 }
                 // the compose candidate window floats above the windows
                 self.draw_compose(s, &self.ui, self.w, self.h);
+                // the regions this frame cleared and drew again: a glass shape inside one that was not pushed again is
+                // gone, whatever the pixels did (a fade-out ends on pixels that equal the last frame's, OV1)
+                if bifrost_render::glass::gpu() {
+                    if let Some(rects) = &self.desk_clear {
+                        bifrost_render::glass::note_redrawn(rects);
+                    }
+                }
+                // Overview or the Apps grid appearing or going changes the overlay surfaces that are exported with the
+                // frame, so that frame is presented even when its pixels came out the same
+                let overview_now = self.overview.visible();
+                if std::mem::replace(&mut self.overview.was_visible, overview_now) != overview_now {
+                    damage.all();
+                }
                 match self.desk_clear.take() {
                     Some(rects) => match before {
                         Some(b) => damage.union(&Damage::changed_in(&rects, &b, s.px, s.stride, s.w, s.h)),

@@ -167,6 +167,8 @@ pub fn saturation() -> f32 {
 
 static ON: AtomicBool = AtomicBool::new(false);
 static RECTS: Mutex<Vec<Rect>> = Mutex::new(Vec::new());
+/// The rectangles (x0, y0, x1, y1) the shell redrew in full since the presenter last looked.
+static REDRAWN: Mutex<Vec<(f32, f32, f32, f32)>> = Mutex::new(Vec::new());
 /// Liquid Glass clarity, 0 (clear) to 1 (tinted), as f32 bits; 0.5 by default.
 static CLARITY: AtomicU32 = AtomicU32::new(0x3f00_0000);
 
@@ -192,6 +194,34 @@ pub fn push(r: Rect) {
 /// The shapes recorded since the last call.
 pub fn take() -> Vec<Rect> {
     RECTS.lock().map(|mut v| std::mem::take(&mut *v)).unwrap_or_default()
+}
+
+/// Records that the shell redrew the rectangles `rects` (x, y, w, h px) in full this frame: every glass shape it
+/// still wants inside them was pushed again, so a stored shape inside them that was not is gone. This is the
+/// regions the shell clears and draws, not the pixels that came out different: a panel that fades to nothing
+/// leaves identical pixels (or a row-run damage that misses a rounded corner), and its shape must still go.
+pub fn note_redrawn(rects: &[(i32, i32, i32, i32)]) {
+    if let Ok(mut v) = REDRAWN.lock() {
+        for &(x, y, w, h) in rects {
+            let r = (x as f32, y as f32, (x + w) as f32, (y + h) as f32);
+            if w > 0 && h > 0 && !v.contains(&r) {
+                v.push(r);
+            }
+        }
+    }
+}
+
+/// The rectangles noted by `note_redrawn` since the last call, as (x0, y0, x1, y1).
+pub fn take_redrawn() -> Vec<(f32, f32, f32, f32)> {
+    REDRAWN.lock().map(|mut v| std::mem::take(&mut *v)).unwrap_or_default()
+}
+
+/// The bounds (x, y, w, h) of every shape that is in one of `before` and `after` but not in the other: the areas
+/// whose backdrop changes with this frame's shape list, whatever the content pixels did.
+pub fn changed_shapes(before: &[Rect], after: &[Rect]) -> Vec<(f32, f32, f32, f32)> {
+    let gone = before.iter().filter(|r| !after.contains(r));
+    let new = after.iter().filter(|r| !before.contains(r));
+    gone.chain(new).map(|r| (r.x, r.y, r.w, r.h)).collect()
 }
 
 /// Updates the shapes the presenter keeps between frames. `damage` is the frame's redrawn areas as
@@ -266,6 +296,37 @@ mod merge_tests {
         let mut stored = vec![dock];
         merge(&mut stored, vec![], &[(0.0, 0.0, 800.0, 160.0)]);
         assert_eq!(stored, vec![dock]);
+    }
+
+    #[test]
+    fn a_closed_panel_drops_its_shape_though_its_pixels_did_not_change() {
+        // the damage a fade-out leaves is a row run that misses the rounded corners (or nothing at all); the redrawn
+        // region is the whole rectangle the shell cleared
+        let tile = r(100.0, 40.0, 200.0, 100.0);
+        let bar = r(0.0, 0.0, 800.0, 30.0);
+        let mut stored = vec![bar, tile];
+        merge(&mut stored, vec![bar], &[(104.0, 41.0, 296.0, 139.0)]);
+        assert_eq!(stored, vec![bar, tile], "pixel damage that misses the corners keeps the stale shape");
+        merge(&mut stored, vec![bar], &[(90.0, 30.0, 310.0, 150.0)]);
+        assert_eq!(stored, vec![bar], "the cleared region removes it");
+    }
+
+    #[test]
+    fn redrawn_regions_are_taken_once() {
+        note_redrawn(&[(90, 30, 220, 120), (5, 5, 0, 10)]);
+        let taken = take_redrawn();
+        assert!(taken.contains(&(90.0, 30.0, 310.0, 150.0)), "x, y, w, h become x0, y0, x1, y1");
+        assert!(!taken.iter().any(|r| r.0 == 5.0 && r.1 == 5.0), "an empty rectangle is not a region");
+        assert!(!take_redrawn().contains(&(90.0, 30.0, 310.0, 150.0)), "taken once");
+    }
+
+    #[test]
+    fn a_shape_that_appears_or_goes_marks_its_area_changed() {
+        let a = r(0.0, 0.0, 10.0, 10.0);
+        let b = r(20.0, 20.0, 30.0, 30.0);
+        assert!(changed_shapes(&[a, b], &[a, b]).is_empty());
+        assert_eq!(changed_shapes(&[a, b], &[a]), vec![(20.0, 20.0, 30.0, 30.0)]);
+        assert_eq!(changed_shapes(&[a], &[a, b]), vec![(20.0, 20.0, 30.0, 30.0)]);
     }
 
     #[test]
