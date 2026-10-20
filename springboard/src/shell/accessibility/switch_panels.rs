@@ -49,7 +49,7 @@ pub const BUILTIN: &str = "\
 panel system \"System\"
   button \"Home\" action=system.home
   button \"Notifications\" action=system.notifications
-  button \"Control Centre\" action=system.control-centre
+  button \"Control Center\" action=system.control-centre
   button \"Volume Up\" action=system.volume-up
   button \"Volume Down\" action=system.volume-down
   button \"Lock\" action=system.lock

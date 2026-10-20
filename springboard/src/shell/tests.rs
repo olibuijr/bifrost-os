@@ -1417,6 +1417,19 @@
         }
     }
 
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn a_desktop_without_a_battery_shows_no_battery_or_plug_in_the_menu_bar() {
+        let mut sh = shell();
+        sh.desk = Some(desk::Desk::new());
+        sh.screen = Screen::Home;
+        sh.info.desktop_network = Some(Default::default());
+        sh.info.battery_present = true;
+        assert!(sh.menu_buttons().iter().any(|b| b.0 == desktop_bar::Menu::Power), "a desktop with a battery shows its item");
+        sh.info.battery_present = false;
+        assert!(!sh.menu_buttons().iter().any(|b| b.0 == desktop_bar::Menu::Power), "no battery, no item (and no plug)");
+    }
+
     #[allow(dead_code)]
     fn dock_centre(sh: &Shell, app: AppId) -> (f32, f32) {
         let m = sh.desk_metrics();

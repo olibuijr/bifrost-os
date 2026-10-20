@@ -154,6 +154,12 @@ fn intern(s: &str) -> &'static str {
 }
 
 
+/// A built-in app's drawn icon at `size` px (`None` for an id that is not a built-in, or a built-in whose icon is a
+/// packaged asset rather than drawn). Settings rows use it when `apphost::icon_image` finds no installed package.
+pub fn builtin_icon(id: &str, size: usize) -> Option<Image> {
+    APPS.iter().find(|a| a.icon == id).and_then(|a| a.icon_image).map(|draw| draw(size))
+}
+
 /// The icon of every app in `list` decoded at `size` px (`apphost::icon_image`, None when the app has no
 /// installed icon), in the same order. Each app decodes on its own thread, so the home screen's PNG icons
 /// are ready together before the first frame instead of one after another.

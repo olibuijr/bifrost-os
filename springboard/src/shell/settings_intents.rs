@@ -34,7 +34,7 @@ pub const CATALOGUE: &[SettingsIntent] = &[
     SettingsIntent { id: "open-appearance", title: "Open Appearance", description: "Show the light, dark and accent settings", page: PageId::Appearance },
     SettingsIntent { id: "open-battery", title: "Open Battery", description: "Show the battery and power settings", page: PageId::Battery },
     SettingsIntent { id: "open-bluetooth", title: "Open Bluetooth", description: "Show the Bluetooth devices and settings", page: PageId::Bluetooth },
-    SettingsIntent { id: "open-control-centre", title: "Open Control Centre", description: "Show which controls the Control Centre holds", page: PageId::ControlCentre },
+    SettingsIntent { id: "open-control-centre", title: "Open Control Center", description: "Show which controls the Control Center holds", page: PageId::ControlCentre },
     SettingsIntent { id: "open-passcode", title: "Open Passcode", description: "Show the passcode and lock settings", page: PageId::Passcode },
     SettingsIntent { id: "open-passwords", title: "Open Passwords", description: "Show the saved passwords", page: PageId::Passwords },
     SettingsIntent { id: "open-date-time", title: "Open Date & Time", description: "Show the date, time and time zone settings", page: PageId::DateTime },

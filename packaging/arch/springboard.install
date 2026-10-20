@@ -49,6 +49,11 @@ bifrost_post_update() {
     systemd-tmpfiles --create /usr/lib/tmpfiles.d/bifrost-audio.conf >/dev/null 2>&1 || true
     systemctl enable bifrost-audiod.service >/dev/null 2>&1 || true
     systemctl restart bifrost-audiod.service >/dev/null 2>&1 || true
+    # printing (Settings > Print & Scan): cups is installed with the system, but nothing enabled it. The socket
+    # activates cupsd on the first client, so it costs nothing while nothing prints
+    if [ -f /usr/lib/systemd/system/cups.socket ]; then
+        systemctl enable --now cups.socket >/dev/null 2>&1 || true
+    fi
     # MIDI server: only when the package shipped it
     if [ -f /usr/lib/systemd/system/bifrost-midid.service ]; then
         systemctl enable bifrost-midid.service >/dev/null 2>&1 || true

@@ -802,7 +802,7 @@ impl ListPage {
                 // the label stops before the value and the trailing control and wraps instead of running under them
                 let label_w = cw - ui.pt(2.0 * TEXT_INSET_PT) - if has_leading(item) { ui.pt(icon_pt + gap_pt) } else { 0.0 } - if item.leading_check { ui.pt(LEADING_CHECK_PT) } else { 0.0 } - value_room - accessory;
                 // the app's icon at the icon token; a built-in app has none and leaves the slot blank
-                let icon_img = item.app_icon.as_ref().filter(|_| has_leading(item)).and_then(|id| super::apphost::icon_image(id, ui.pt(icon_pt).round() as usize));
+                let icon_img = item.app_icon.as_ref().filter(|_| has_leading(item)).and_then(|id| { let px = ui.pt(icon_pt).round() as usize; super::apphost::icon_image(id, px).or_else(|| super::apps::builtin_icon(id, px)) });
                 images.push(RowImages {
                     label: label_lines(ui, &item.label, label_w, !pane.sidebar).iter().map(|l| ui.text(l, MAC_BODY_PT, Weight::Regular, color)).collect(),
                     value: value_img,

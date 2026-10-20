@@ -322,6 +322,7 @@ const ALIASES: &[(&str, PageId)] = &[
     ("Screen Time", PageId::ScreenTime),
     ("Trackpad", PageId::Trackpad),
     ("Mouse", PageId::Mouse),
+    ("Control Centre", PageId::ControlCentre),
 ];
 
 /// The pane an alias names ("Wi-Fi Settings"), if it is one.

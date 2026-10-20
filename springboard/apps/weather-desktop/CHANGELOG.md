@@ -3,6 +3,7 @@
 ## 1.8.2
 
 - The forecast toolbar no longer has a Stocks button (Weather keeps its own controls; the watchlist page stays in the code, unreachable from the toolbar).
+- Fix: before My Location has a fix its entry says "Click to find this place" on a desktop; "Tap to find this place" stays on the tablet.
 
 ## 1.8.1
 

@@ -27,7 +27,7 @@ const RADIUS_PT: f32 = 13.0;
 const TOP_SHARE: f32 = 0.22;
 /// The hint under the rows when no feature is chosen, and the one when some are.
 const HINT_NONE: &str = "Choose features in Settings > Accessibility";
-const HINT_SOME: &str = "Tap a feature to switch it on or off";
+const HINT_SOME: &str = "Choose a feature to switch it on or off";
 
 /// x, y, w, h in px.
 type Rect = (f32, f32, f32, f32);
