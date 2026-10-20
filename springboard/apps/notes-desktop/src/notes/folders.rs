@@ -37,10 +37,16 @@ pub fn folder_dir(dir: &Path, folder: Option<&str>) -> PathBuf {
     folder.map_or_else(|| dir.to_path_buf(), |f| dir.join(f))
 }
 
-/// User folders, sorted by name; hidden directories (pins, trash, export) are left out.
+/// User folders, sorted by name; hidden directories (pins, trash, export) and the container's own folders (`Documents`,
+/// `Library`, `tmp`, which the system creates in the data directory) are left out.
 pub fn list(dir: &Path) -> Vec<String> {
     let Ok(entries) = std::fs::read_dir(dir) else { return vec![] };
-    let mut names: Vec<String> = entries.flatten().filter(|e| e.path().is_dir()).filter_map(|e| e.file_name().into_string().ok()).filter(|n| !n.starts_with('.')).collect();
+    let mut names: Vec<String> = entries
+        .flatten()
+        .filter(|e| e.path().is_dir())
+        .filter_map(|e| e.file_name().into_string().ok())
+        .filter(|n| !n.starts_with('.') && !bifrost_app::container_layout::is_container_folder(n))
+        .collect();
     names.sort_by_key(|n| n.to_lowercase());
     names
 }
@@ -48,7 +54,10 @@ pub fn list(dir: &Path) -> Vec<String> {
 /// Creates a folder named like `name` (made unique); returns the name used.
 pub fn create(dir: &Path, name: &str) -> io::Result<String> {
     let base = valid_name(name).ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "Invalid folder name"))?;
-    let name = unique_name(&list(dir), &base);
+    // a new folder never takes a container folder's name: it would not be listed
+    let mut taken = list(dir);
+    taken.extend(bifrost_app::container_layout::container_folders().into_iter().map(String::from));
+    let name = unique_name(&taken, &base);
     std::fs::create_dir_all(dir.join(&name))?;
     Ok(name)
 }
@@ -57,6 +66,9 @@ pub fn create(dir: &Path, name: &str) -> io::Result<String> {
 /// (or a different case of it) is allowed, any other clash is an error.
 pub fn rename(dir: &Path, old: &str, new: &str) -> io::Result<String> {
     let new = valid_name(new).ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "Invalid folder name"))?;
+    if new != old && bifrost_app::container_layout::is_container_folder(&new) {
+        return Err(io::Error::new(io::ErrorKind::AlreadyExists, "A folder with that name exists"));
+    }
     if new != old && list(dir).iter().any(|n| n.eq_ignore_ascii_case(&new) && !n.eq_ignore_ascii_case(old)) {
         return Err(io::Error::new(io::ErrorKind::AlreadyExists, "A folder with that name exists"));
     }
@@ -236,6 +248,24 @@ mod tests {
         assert_eq!(rename(&dir, "Home", "Home").unwrap(), "Home");
         assert!(rename(&dir, "Home", "").is_err());
         assert_eq!(list(&dir), vec!["Home".to_string(), "Work 2".to_string()]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_containers_own_folders_are_not_note_folders() {
+        let dir = scratch("container");
+        for name in ["Documents", "Library", "tmp"] {
+            std::fs::create_dir_all(dir.join(name)).unwrap();
+        }
+        std::fs::create_dir_all(dir.join("Library/Caches")).unwrap();
+        assert!(list(&dir).is_empty(), "no folders but the system's");
+        // notes inside the system folders are not loaded as notes of a folder either
+        put(&dir.join("Documents"), "1", "not a note of the user's");
+        assert!(load_all(&dir).is_empty());
+        assert_eq!(create(&dir, "Documents").unwrap(), "Documents 2", "a new folder never takes a system name");
+        assert_eq!(create(&dir, "Work").unwrap(), "Work");
+        assert_eq!(list(&dir), vec!["Documents 2".to_string(), "Work".to_string()]);
+        assert!(rename(&dir, "Work", "tmp").is_err());
         let _ = std::fs::remove_dir_all(&dir);
     }
 

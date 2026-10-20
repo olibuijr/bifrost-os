@@ -47,6 +47,20 @@ impl Folder {
     }
 }
 
+/// The container's own top-level folders (`Documents`, `Library`, `tmp`), each once.
+pub fn container_folders() -> Vec<&'static str> {
+    let mut names: Vec<&'static str> = Folder::ALL.iter().filter_map(|f| f.relative().split('/').next()).collect();
+    names.dedup();
+    names
+}
+
+/// True when `name` is one of the container's own top-level folders. An app that keeps its data in the container root
+/// and lists the folders there (a user's note or recording folders) must leave these out: they belong to the system,
+/// not to the user.
+pub fn is_container_folder(name: &str) -> bool {
+    container_folders().contains(&name)
+}
+
 /// Why a relative path was refused.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PathError {
@@ -219,6 +233,18 @@ mod tests {
     fn layout() -> (ContainerLayout, tempfile::TempDir) {
         let dir = tempfile::tempdir().unwrap();
         (ContainerLayout::new(dir.path().join("container")), dir)
+    }
+
+    #[test]
+    fn the_containers_own_top_level_folders_are_told_from_a_users_folders() {
+        assert_eq!(container_folders(), ["Documents", "Library", "tmp"]);
+        for name in ["Documents", "Library", "tmp"] {
+            assert!(is_container_folder(name), "{name}");
+        }
+        // Caches is inside Library, not a top-level folder; other case and look-alikes are the user's own
+        for name in ["Caches", "Work", "documents", "Library 2", "", "Library/Caches"] {
+            assert!(!is_container_folder(name), "{name:?}");
+        }
     }
 
     #[test]

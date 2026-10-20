@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.23.3 — 2026-10-20
+
+- The folder list shows only your own folders: the system's Documents, Library and tmp folders are no longer listed, and a new folder cannot take one of those names.
+
 ## 1.23.2 — 2026-10-20
 
 - A first line typed as a title no longer shows the Markdown marker: "Shopping list" appears in the title style with no "#" in front of it. The note file keeps its Markdown.

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.10.6 — 2026-10-20
+
+- The folder list shows only your own folders: the system's Documents, Library and tmp folders are no longer listed, and a new folder cannot take one of those names.
+
 ## 1.10.5 — 2026-10-20
 
 - Sound plays on the default output, and the app waits before reconnecting to the media service instead of retrying in a tight loop.

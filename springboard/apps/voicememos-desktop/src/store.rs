@@ -89,14 +89,16 @@ pub fn scan_deleted(dir: &Path) -> Vec<Memo> {
     scan_dir(&dir.join(DELETED_DIR), "", true)
 }
 
-/// The folders in `dir`, sorted without regard to case. Hidden directories (Recently Deleted among them) are not folders.
+/// The folders in `dir`, sorted without regard to case. Hidden directories (Recently Deleted among them) and the
+/// container's own folders (`Documents`, `Library`, `tmp`, which the system creates in the data directory) are not
+/// folders of the user's.
 pub fn folders(dir: &Path) -> Vec<String> {
     let mut names: Vec<String> = std::fs::read_dir(dir)
         .map(|d| {
             d.flatten()
                 .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
                 .map(|e| e.file_name().to_string_lossy().into_owned())
-                .filter(|n| !n.starts_with('.'))
+                .filter(|n| !n.starts_with('.') && !bifrost_app::container_layout::is_container_folder(n))
                 .collect()
         })
         .unwrap_or_default();
@@ -111,7 +113,7 @@ pub fn create_folder(dir: &Path, name: &str) -> std::io::Result<String> {
     if name.is_empty() {
         return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "empty folder name"));
     }
-    if folders(dir).iter().any(|f| f.to_lowercase() == name.to_lowercase()) {
+    if bifrost_app::container_layout::is_container_folder(&name) || folders(dir).iter().any(|f| f.to_lowercase() == name.to_lowercase()) {
         return Err(std::io::Error::new(std::io::ErrorKind::AlreadyExists, "a folder with that name exists"));
     }
     std::fs::create_dir_all(dir.join(&name))?;
@@ -551,6 +553,19 @@ mod tests {
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         d
+    }
+
+    #[test]
+    fn the_containers_own_folders_are_not_memo_folders() {
+        let dir = temp("container");
+        for name in ["Documents", "Library", "tmp"] {
+            std::fs::create_dir_all(dir.join(name)).unwrap();
+        }
+        assert!(folders(&dir).is_empty(), "only the system's folders: none of the user's");
+        assert!(create_folder(&dir, "Documents").is_err(), "a user folder cannot take a system name");
+        assert_eq!(create_folder(&dir, "Trips").unwrap(), "Trips");
+        assert_eq!(folders(&dir), vec!["Trips".to_string()]);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
