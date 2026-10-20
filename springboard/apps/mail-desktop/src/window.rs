@@ -1655,7 +1655,7 @@ impl MailWindow {
                     let count = listing.messages.len();
                     self.note(format!("{}: {mailbox} read, {count} message{}", self.account_name(&account), if count == 1 { "" } else { "s" }));
                     self.mail.drafts_mailbox = listing.drafts.clone();
-                    let notices = self.mail.apply_listing(&account, &mailbox, listing.mailboxes, listing.messages);
+                    let notices = self.mail.apply_listing_of(&account, &mailbox, listing.uid_validity, listing.mailboxes, listing.messages);
                     // a message a rule moves or reads raises no notification
                     let quiet = self.apply_rules_to_arrivals();
                     for notice in notices {

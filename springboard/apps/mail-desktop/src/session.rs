@@ -52,6 +52,8 @@ struct Exchange {
 pub struct Session<S: Read + Write> {
     lines: Lines<S>,
     tag: u32,
+    /// The UIDVALIDITY the server gave for the mailbox last selected.
+    uid_validity: Option<u32>,
 }
 
 impl<S: Read + Write> Session<S> {
@@ -62,7 +64,7 @@ impl<S: Read + Write> Session<S> {
         if !(greeting.starts_with("* OK") || greeting.starts_with("* PREAUTH")) {
             return Err(format!("the server did not greet: {greeting}"));
         }
-        Ok(Session { lines, tag: 0 })
+        Ok(Session { lines, tag: 0, uid_validity: None })
     }
 
     pub fn login(&mut self, user: &str, password: &str) -> Result<(), String> {
@@ -76,7 +78,14 @@ impl<S: Read + Write> Session<S> {
     }
 
     pub fn select(&mut self, mailbox: &str) -> Result<(), String> {
-        self.run(&imap::select(mailbox)).map(|_| ())
+        let untagged = self.run(&imap::select(mailbox))?;
+        self.uid_validity = untagged.iter().find_map(|line| imap::parse_uid_validity(line));
+        Ok(())
+    }
+
+    /// The UIDVALIDITY of the mailbox last selected, when the server said.
+    pub fn uid_validity(&self) -> Option<u32> {
+        self.uid_validity
     }
 
     /// The UID values of every message in the selected mailbox, in the server's order (ascending for most servers).
@@ -351,9 +360,9 @@ impl Session<Box<dyn Stream>> {
     /// Upgrades a plain connection with STARTTLS (RFC 3501 section 6.2.1). The greeting has already been read.
     pub fn starttls(mut self, transport: &dyn Transport, host: &str) -> Result<Self, String> {
         self.run("STARTTLS")?;
-        let Session { lines, tag } = self;
+        let Session { lines, tag, uid_validity } = self;
         let secure = transport.upgrade(host, lines.into_inner()).map_err(io_text)?;
-        Ok(Session { lines: Lines::new(secure), tag })
+        Ok(Session { lines: Lines::new(secure), tag, uid_validity })
     }
 }
 

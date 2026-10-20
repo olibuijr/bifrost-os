@@ -18,9 +18,11 @@ use std::time::Duration;
 use bifrost_app::dispatch::{DispatchQueue, Qos};
 
 /// What a mailbox listing read: the mailboxes of the account and the newest messages of the one asked for.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Listing {
     pub mailboxes: Vec<String>,
+    /// The UIDVALIDITY of the mailbox, when the server gave one. UID values from another validity are not comparable.
+    pub uid_validity: Option<u32>,
     /// The account's Drafts mailbox by special use (`\Drafts`), when the server flags one.
     pub drafts: Option<String>,
     pub messages: Vec<Listed>,
@@ -128,11 +130,12 @@ fn fetch_listing(transport: &dyn Transport, account: &Account, password: &str, m
     let drafts = crate::imap::drafts_name(&listed).map(str::to_string);
     let mailboxes: Vec<String> = listed.into_iter().map(|m| m.name).collect();
     session.select(mailbox)?;
+    let uid_validity = session.uid_validity();
     let uids = session.uids()?;
     let newest: Vec<u32> = uids.iter().rev().take(LIST_LIMIT).copied().collect();
     let messages = session.headers(&newest)?;
     session.logout();
-    Ok(Listing { mailboxes, drafts, messages })
+    Ok(Listing { mailboxes, uid_validity, drafts, messages })
 }
 
 /// The whole text of one message. Opening it sets the Seen flag on the server.
