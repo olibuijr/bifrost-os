@@ -5078,6 +5078,20 @@ point size times the scale (`window_px`, capped at 8192). A window is drawn when
 (a new buffer set, an event). `WindowRelease {id, buf, generation}` frees a slot only when the generation matches (a stale
 release is ignored). A window the app closes loses its pixels at the next draw.
 
+Order on the wire (MA6): the app's queued requests (`WindowOpen`) are flushed before `draw_windows` sends a window's
+`WindowBuffers` and first `WindowFrame` (`flush_out`); before the fix the open request waited behind the pixels, the shell
+dropped them for a window it did not know, and the window stayed unmapped (listed, never drawn: Mail's compose window). The
+shell also keeps such early buffers and frames (`AppHost::early`, at most 8) and handles them when the window opens, so
+apps built with the older SDK show their second windows too. Test: `window_pixel_tests` (`a_window_opened_this_turn_*`),
+`window_table_tests` (`buffers_and_a_frame_that_come_before_the_window_open_*`), `extra_window_frame_tests`.
+
+System sheets and alerts on the desktop (MA6): the shell's own frame sits under every window, so a sheet or alert drawn into it
+is hidden behind them, leaves its veil on the wallpaper (the frame is cleared only where the bar, the Dock and the menus are)
+and darkens it with each frame. On the desktop they are one overlay surface of their own above the windows, chrome id 15
+(`Shell::modal_layer`, `desktop_chrome_frames`, whole screen, pointer and exclusive keyboard); it goes away with the sheet and
+leaves the desktop as it was. Mail asks for the address book when a message is composed, so the first compose raises the
+Contacts question. Test: `permission_sheet` `on_the_desktop_a_sheet_is_an_overlay_*`.
+
 Shell (`springboard/src/shell/apphost.rs`): each `AppHost` holds its app's `WindowTable` (`pub windows`) and maps each extra
 window's buffers (`window_buffers`, the main window's size and seal checks). `window_frame(id)` gives the newest frame, and
 `window_blitted(id)` gives the replaced buffer back to the app. `close_window_from_shell`, `configure_window` and `touch_window`

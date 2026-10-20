@@ -784,6 +784,8 @@ pub struct Shell {
     /// The capture session and the thumbnail as surfaces of their own above the windows (the desktop; `capture_flow`).
     capture_layer: Option<capture_flow::Layer>,
     shot_layer: Option<capture_flow::Layer>,
+    /// The system sheets and alerts as a surface of their own above the windows on the desktop (id 15)
+    modal_layer: Option<capture_flow::Layer>,
     /// A folder that pictures go to instead of the account's Desktop (the tests set it).
     shot_dir: Option<PathBuf>,
     /// The pictures saved since the screenshot service last looked, in order (`services/screenshot.rs`).
@@ -1241,6 +1243,7 @@ impl Shell {
             grab: None,
             capture_layer: None,
             shot_layer: None,
+            modal_layer: None,
             shot_dir: None,
             shot_saved: Vec::new(),
             rec: None,
@@ -4664,87 +4667,25 @@ impl Shell {
             damage.all();
             self.drawn = Drawn::Nothing;
         }
-        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.pick_sheet.is_some() || self.crash_alert.is_some() || self.notify.ask.is_some() || self.compose_showing() || self.print_showing() || self.char_viewer.is_some() || self.help_viewer.is_some() || self.keyboard_viewer.is_some() || self.auth_showing() || self.volume_showing() || self.access_showing() || self.guardian_sheet.is_some() || self.malware_alert.is_some() || self.usb_showing() || self.net_auth_showing() || self.package_showing() || self.photo_pick_sheet.is_some() || self.trust_sheet.is_some() || self.fw_showing() || self.launch_alert.is_some() || self.a11y_panel.is_some() || self.switch_panel_shown() {
+        // A system sheet is modal over the whole screen. On the desktop the shell's own frame sits under every window: a
+        // sheet drawn into it is hidden behind them, its veil stays on the wallpaper (the frame is cleared only where the
+        // bar, the Dock and the menus are) and darkens with each frame. There the sheets are a surface of their own above
+        // the windows (`desktop_chrome_frames`, id 15), which goes away with the sheet and leaves the desktop as it was.
+        if self.modal_up() {
             // modal: repaint everything under it every frame, and again once it is gone
             damage.all();
             self.drawn = Drawn::Nothing;
-            if let Some(a) = &self.low_alert {
-                a.draw(s, &self.ui, self.w, self.h);
+            if self.overlays_on_desk() && !self.is_locked() {
+                let mut image = Image::new(self.w.max(1) as usize, self.h.max(1) as usize);
+                self.draw_modal_sheets(&mut Surface { w: image.w, h: image.h, stride: image.w, px: &mut image.px, y0: 0 }, t);
+                self.modal_layer = Some(capture_flow::Layer { x: 0, y: 0, image, input: None });
+            } else {
+                self.modal_layer = None;
+                self.draw_modal_sheets(s, t);
             }
-            if let Some(m) = &self.power_menu {
-                m.draw(s, &self.ui, self.w, self.h);
-            }
-            if let Some(p) = &self.permission_sheet {
-                p.draw(s, &self.ui, self.w, self.h);
-            }
-            if let Some(g) = &self.guardian_sheet {
-                g.draw(s, &self.ui, self.w, self.h);
-            }
-            if let Some(m) = &self.malware_alert {
-                m.draw(s, &self.ui, self.w, self.h);
-            }
-            if let Some(t) = &self.trust_sheet {
-                t.draw(s, &self.ui, self.w, self.h);
-            }
-            if let Some(p) = &self.pick_sheet {
-                p.draw(s, &self.ui, self.w, self.h);
-            }
-            if let Some(p) = &self.photo_pick_sheet {
-                p.draw(s, &self.ui, self.w, self.h);
-            }
-            if self.auth_showing() {
-                self.auth_draw(s, t);
-            }
-            if self.volume_showing() {
-                self.volume_draw(s, t);
-            }
-            if self.access_showing() {
-                self.access_draw(s);
-            }
-            if self.usb_showing() {
-                self.usb_draw(s);
-            }
-            if self.net_auth_showing() {
-                self.net_auth_draw(s, t);
-            }
-            if self.package_showing() {
-                self.package_draw(s, t);
-            }
-            if self.fw_showing() {
-                self.fw_draw(s);
-            }
-            if let Some(a) = &self.crash_alert {
-                a.draw(s, &self.ui, self.w, self.h);
-            }
-            if let Some(a) = &self.launch_alert {
-                a.draw(s, &self.ui, self.w, self.h);
-            }
-            if let Some(a) = &self.notify.ask {
-                a.draw(s, &self.ui, self.w, self.h);
-            }
-            #[cfg(feature = "desktop-wayland")]
-            if let Some(c) = &self.compose {
-                c.draw(s, &self.ui, self.w, self.h);
-            }
-            #[cfg(feature = "desktop-wayland")]
-            if let Some(p) = &self.print_sheet {
-                p.draw(s, &self.ui, self.w, self.h);
-            }
-            if let Some(v) = &self.char_viewer {
-                v.draw(s, &self.ui, self.w, self.h);
-            }
-            if let Some(v) = &self.help_viewer {
-                v.draw(s, &self.ui, self.w, self.h);
-            }
-            if let Some(v) = &self.keyboard_viewer {
-                v.draw(s, &self.ui, self.w, self.h, self.keyboard_viewer_layout());
-            }
-            if let Some(p) = &self.a11y_panel {
-                p.draw(s, &self.ui, self.w, self.h);
-            }
-            if let Some(p) = self.switch_panel().filter(|_| self.switch_panel_shown()) {
-                p.draw(s, &self.ui, self.w, self.h);
-            }
+        } else if self.modal_layer.take().is_some() {
+            // its surface goes away with the next export: a full frame makes sure there is one
+            damage.all();
         }
         self.draw_share(s);
         self.draw_look_up(s);
@@ -4753,6 +4694,92 @@ impl Shell {
         self.damage = damage;
         self.rows = rows;
         &self.damage
+    }
+
+    /// Whether a system sheet or alert is up that takes the whole screen (`draw_modal_sheets`).
+    fn modal_up(&self) -> bool {
+        self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.pick_sheet.is_some() || self.crash_alert.is_some() || self.notify.ask.is_some() || self.compose_showing() || self.print_showing() || self.char_viewer.is_some() || self.help_viewer.is_some() || self.keyboard_viewer.is_some() || self.auth_showing() || self.volume_showing() || self.access_showing() || self.guardian_sheet.is_some() || self.malware_alert.is_some() || self.usb_showing() || self.net_auth_showing() || self.package_showing() || self.photo_pick_sheet.is_some() || self.trust_sheet.is_some() || self.fw_showing() || self.launch_alert.is_some() || self.a11y_panel.is_some() || self.switch_panel_shown()
+    }
+
+    /// Draws every sheet and alert that is up, over what `s` holds (the veils included).
+    fn draw_modal_sheets(&mut self, s: &mut Surface, t: f64) {
+        if let Some(a) = &self.low_alert {
+            a.draw(s, &self.ui, self.w, self.h);
+        }
+        if let Some(m) = &self.power_menu {
+            m.draw(s, &self.ui, self.w, self.h);
+        }
+        if let Some(p) = &self.permission_sheet {
+            p.draw(s, &self.ui, self.w, self.h);
+        }
+        if let Some(g) = &self.guardian_sheet {
+            g.draw(s, &self.ui, self.w, self.h);
+        }
+        if let Some(m) = &self.malware_alert {
+            m.draw(s, &self.ui, self.w, self.h);
+        }
+        if let Some(t) = &self.trust_sheet {
+            t.draw(s, &self.ui, self.w, self.h);
+        }
+        if let Some(p) = &self.pick_sheet {
+            p.draw(s, &self.ui, self.w, self.h);
+        }
+        if let Some(p) = &self.photo_pick_sheet {
+            p.draw(s, &self.ui, self.w, self.h);
+        }
+        if self.auth_showing() {
+            self.auth_draw(s, t);
+        }
+        if self.volume_showing() {
+            self.volume_draw(s, t);
+        }
+        if self.access_showing() {
+            self.access_draw(s);
+        }
+        if self.usb_showing() {
+            self.usb_draw(s);
+        }
+        if self.net_auth_showing() {
+            self.net_auth_draw(s, t);
+        }
+        if self.package_showing() {
+            self.package_draw(s, t);
+        }
+        if self.fw_showing() {
+            self.fw_draw(s);
+        }
+        if let Some(a) = &self.crash_alert {
+            a.draw(s, &self.ui, self.w, self.h);
+        }
+        if let Some(a) = &self.launch_alert {
+            a.draw(s, &self.ui, self.w, self.h);
+        }
+        if let Some(a) = &self.notify.ask {
+            a.draw(s, &self.ui, self.w, self.h);
+        }
+        #[cfg(feature = "desktop-wayland")]
+        if let Some(c) = &self.compose {
+            c.draw(s, &self.ui, self.w, self.h);
+        }
+        #[cfg(feature = "desktop-wayland")]
+        if let Some(p) = &self.print_sheet {
+            p.draw(s, &self.ui, self.w, self.h);
+        }
+        if let Some(v) = &self.char_viewer {
+            v.draw(s, &self.ui, self.w, self.h);
+        }
+        if let Some(v) = &self.help_viewer {
+            v.draw(s, &self.ui, self.w, self.h);
+        }
+        if let Some(v) = &self.keyboard_viewer {
+            v.draw(s, &self.ui, self.w, self.h, self.keyboard_viewer_layout());
+        }
+        if let Some(p) = &self.a11y_panel {
+            p.draw(s, &self.ui, self.w, self.h);
+        }
+        if let Some(p) = self.switch_panel().filter(|_| self.switch_panel_shown()) {
+            p.draw(s, &self.ui, self.w, self.h);
+        }
     }
 
     /// Everything the Terminal frame shows apart from its grid, hashed; None when something
