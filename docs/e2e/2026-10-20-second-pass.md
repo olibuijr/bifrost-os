@@ -125,3 +125,22 @@ accepted after about 50 s. Evidence `fNN-*.png` and `e14`-`e25`/`e70`-`e78` `g-`
 | CO1 | Fixed | Console says "This Computer". |
 | MA1, MS1 | Fixed | Mail's title clears the window buttons, with Favorites/Mailboxes and a symbol toolbar; Messages' search field sits below the buttons. |
 | FD1, WE1 | Fixed | Voice Memos and Notes list only their own folders; Weather has no Stocks button. |
+
+## Mail with a real account, keyboard and clipboard (0.10.15, 15:50 to 16:00)
+
+The owner's own mail account (IMAP 993 SSL, submission 587 STARTTLS on the domain's published mail host) was added
+through Add Account; the inbox loaded with real mail in about 10 s, and messages open. Evidence `m01`-`m08`, `t01`-`t12`.
+
+| ID | Sev | Finding | Expected |
+|---|---|---|---|
+| MA2 | P1 | Add Account asks for the incoming and outgoing servers and ports; it does not look them up | Autoconfiguration from the address: the domain's autoconfig file (`autoconfig.<domain>/mail/config-v1.1.xml`, `.well-known`), then the `_imaps._tcp` / `_submission._tcp` SRV records, then MX; the server fields only under a manual option |
+| MA3 | P1 | Senders and subjects show raw MIME encoded words (`=?utf-8?B?…?=`, `=?UTF-8?Q?…?=`, `=?ISO-8859-1?Q?…?=`), some decoded and some not | RFC 2047 decoding of every header (B and Q, any charset, adjacent words joined, folded lines) |
+| MA4 | P2 | The message body shows HTML entities as text (`&#8202;`, `&bull;`) | Named and numeric entities decoded |
+| MA5 | P2 | Emoji in subjects draw as empty boxes | An emoji fallback font (openly licensed) |
+| MA6 | P1 | Compose (the toolbar button) opens a window the shell lists (`ExternalWindow(18, 1)` 750x738) that is never drawn; the whole screen dims instead, and after Cmd+W closes it the desktop stays dark except a strip near the Dock | The compose window shows; closing it leaves the desktop as it was. Sending was not tested because of this |
+| MA7 | P2 | Cmd+A does nothing in Mail's Add Account fields (the old text stayed when retyping) | Select all |
+| KB1 | P1 | Text Editor: Cmd+A, Cmd+C, Cmd+X and Cmd+V do nothing (nothing selected, nothing cut, nothing pasted, Undo has nothing to undo); after Cmd+C the Wayland clipboard is empty ("Nothing is copied"). Cmd+Up/Down and the arrows work, so the Cmd+letter chords are lost on the way to the app or its copy never reaches the clipboard | Standard editing shortcuts in every text view and field; copy and paste within an app, between apps, between the shell and apps, and with other Wayland programs |
+| KB2 | P2 | Option+Backspace does not delete a word; Cmd+Backspace does not delete to the line start | Both, plus the other standard text keys (Option+Fn+Delete, Ctrl+A/E/K, Shift+Cmd+arrows, Page Up/Down) |
+| KB3 | — | Passed: Home, End, Shift+Home, Option+Left and Shift+Option+Left by word, Cmd+Up/Down, Shift+Right selection, typing over a selection | |
+| TB1 | P2 | Printers (like Disk Utility before 0.10.14) draws its first toolbar button under the window buttons: the SDK toolbar helper has no traffic-light inset | The inset in the SDK, so every app gets it |
+| TL1 | tool | `midget.py type` assumes a US layout; Midget uses the Icelandic one, so `@` came out as `"` or `^` | Type through the machine's layout (AltGr+Q is `@` on Icelandic) |
