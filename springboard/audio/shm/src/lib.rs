@@ -160,6 +160,20 @@ impl<'a> Ring<'a> {
         w.wrapping_sub(r).min(self.cap() as u64) as u32
     }
 
+    /// True when the peer-writable indices disagree with the capacity (`write - read` beyond a full ring). Only the
+    /// consumer calls this, and answers with `resync`.
+    pub fn corrupt(&self) -> bool {
+        let w = self.header.write.load(Ordering::Acquire);
+        let r = self.header.read.load(Ordering::Acquire);
+        w.wrapping_sub(r) > self.cap() as u64
+    }
+
+    /// Consumer side: discards everything pending by moving `read` up to `write`.
+    pub fn resync(&self) {
+        let w = self.header.write.load(Ordering::Acquire);
+        self.header.read.store(w, Ordering::Release);
+    }
+
     /// Frames of free space to write.
     pub fn writable(&self) -> u32 {
         self.cap() - self.readable()
@@ -667,6 +681,22 @@ mod tests {
         assert_eq!(offset_of!(RingHeader, read), 8);
         assert_eq!(offset_of!(RingHeader, frames), 16);
         assert_eq!(offset_of!(RingHeader, channels), 20);
+    }
+
+    #[test]
+    fn corrupt_header_is_detected_and_resynced() {
+        let header = RingHeader::default();
+        let planes: Vec<UnsafeCell<f32>> = (0..64).map(|_| UnsafeCell::new(0.0)).collect();
+        let ring = Ring::new(&header, &planes, 1, 64).unwrap();
+        assert!(!ring.corrupt());
+        header.write.store(10, Ordering::Release);
+        assert!(!ring.corrupt());
+        header.write.store(1u64 << 40, Ordering::Release);
+        assert!(ring.corrupt());
+        assert_eq!(ring.readable(), 64);
+        ring.resync();
+        assert!(!ring.corrupt());
+        assert_eq!(ring.readable(), 0);
     }
 
     #[test]

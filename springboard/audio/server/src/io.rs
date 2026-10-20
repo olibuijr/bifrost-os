@@ -669,9 +669,20 @@ impl DeviceRunner {
             }
             let ring = s.output_ring().unwrap();
             let ch = s.output_channels as usize;
+            if ring.corrupt() {
+                // The indices live in memory the client can write. A header claiming more than a full ring is
+                // hostile or broken: discard it server-side and count the cycle as late for that client.
+                ring.resync();
+                s.miss();
+                self.shared.late_total.fetch_add(1, Ordering::Relaxed);
+                report.late += 1;
+                continue;
+            }
             if st.every == 1 {
-                // A client that was late left a stale quantum behind: drop it to stay in step.
-                while ring.readable() as usize >= 2 * q {
+                // A client that was late left a stale quantum behind: drop it to stay in step. The number of
+                // quanta to drop is computed once, so the loop is bounded whatever the header says.
+                let drop = (ring.readable() as usize / q.max(1)).saturating_sub(1);
+                for _ in 0..drop {
                     let mut it = self.scratch.iter_mut();
                     let mut d: [&mut [f32]; MAX_CH] = std::array::from_fn(|_| &mut it.next().unwrap()[..q]);
                     ring.read(&mut d[..ch], want);
@@ -1178,6 +1189,22 @@ mod tests {
         assert!((w[256] - g(0)).abs() < 1e-6);
         assert!((w[511] - g(255)).abs() < 1e-5);
         assert!(w[511] > 0.5);
+    }
+
+    #[test]
+    fn a_hostile_ring_header_cannot_spin_the_io_thread() {
+        let mut r = rig(256);
+        let a = r.add(1, 0, 2, 256);
+        Rig::play(&a, 256, &[0.5, 0.5]);
+        r.step();
+        let ring = a.output_ring().unwrap();
+        // write = read + 2^40: the old drain loop never terminated
+        let rd = ring.header.read.load(Ordering::Acquire);
+        ring.header.write.store(rd.wrapping_add(1 << 40), Ordering::Release);
+        let rep = r.step();
+        assert_eq!(rep.late, 1);
+        assert!(!ring.corrupt());
+        assert_eq!(ring.readable(), 0);
     }
 
     #[test]
