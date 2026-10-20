@@ -144,3 +144,13 @@ through Add Account; the inbox loaded with real mail in about 10 s, and messages
 | KB3 | — | Passed: Home, End, Shift+Home, Option+Left and Shift+Option+Left by word, Cmd+Up/Down, Shift+Right selection, typing over a selection | |
 | TB1 | P2 | Printers (like Disk Utility before 0.10.14) draws its first toolbar button under the window buttons: the SDK toolbar helper has no traffic-light inset | The inset in the SDK, so every app gets it |
 | TL1 | tool | `midget.py type` assumes a US layout; Midget uses the Icelandic one, so `@` came out as `"` or `^` | Type through the machine's layout (AltGr+Q is `@` on Icelandic) |
+
+## Window moving (owner report) and 0.10.15/0.10.16 re-test (16:00 to 16:12)
+
+| ID | Result | Notes |
+|---|---|---|
+| WM1 | Fixed in 0.10.16 | Owner: "moving windows does not work". Store apps with a full-size window (Notes, Mail) moved only from the top ~9 px: the kit's "Toolbar" and "Sidebar" container nodes were published as controls and became no-drag holes over the whole toolbar row. Only interactive nodes block a drag now. On Midget: Notes dragged from the empty toolbar space (737,296 to 1137,496 and back), Mail from beside its title (765,324 to 1065,524). |
+| S4, L2, CT1 glass | Fixed in 0.10.15 | Search's card ends above the Dock and scrolls; the Apps grid panel and the Cmd+Tab strip are frosted. |
+| NC2 | Fixed in 0.10.16 | Weather card with live data; the card lines no longer overlap the numerals. |
+| AB2, ST6, ST9, ST13 | Fixed in 0.10.15 | About says 4 cores; Energy pop-ups; icons for every app in Notifications; "Center" everywhere. |
+| ST11 | Fixed in 0.10.15/0.10.16 | The CUPS client uses `/run/cups/cups.sock` and an empty printer list (IPP not-found) shows No Printers. |
