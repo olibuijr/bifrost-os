@@ -154,3 +154,14 @@ through Add Account; the inbox loaded with real mail in about 10 s, and messages
 | NC2 | Fixed in 0.10.16 | Weather card with live data; the card lines no longer overlap the numerals. |
 | AB2, ST6, ST9, ST13 | Fixed in 0.10.15 | About says 4 cores; Energy pop-ups; icons for every app in Notifications; "Center" everywhere. |
 | ST11 | Fixed in 0.10.15/0.10.16 | The CUPS client uses `/run/cups/cups.sock` and an empty printer list (IPP not-found) shows No Printers. |
+
+## Screen check on request (0.10.16, 17:08 to 17:13)
+
+The desktop was black except a patch around the Dock (`n01`). Evidence `n01`-`n07`.
+
+| ID | Sev | Finding | Expected |
+|---|---|---|---|
+| NP1 | P1 | The notification permission alert ("Mail" Would Like to Send You Notifications) is drawn in the shell's desktop layer, under every app window: on the desktop only its dimming veil shows, which darkens the wallpaper to near black, and the person cannot see or answer it. It is visible only in Overview (`n02`, `n05`); answering Allow there brought the wallpaper back (`n07`). The same drawing path serves the shell's other alerts and sheets (`Shell::modal_showing` lists about 25: crash and launch alerts, permission sheets, USB, network sign-in, package install, firewall, trust, malware, low battery, power menu...). This also explains the dark desktop after Mail's compose at 15:56 | Every shell alert and sheet is an overlay surface above all windows, keyboard exclusive while open, with its veil (if any) over the whole screen; closing it leaves nothing behind |
+| NP2 | P2 | The alert's title is clipped at the card edge ("...Send You Notificati") | The title wraps |
+| MC4 | P1 | Leaving Overview (F3) puts every window back to its cascade position: Mail moved by hand to 1065,524 came back at 681,240, Notes from 737,336 to 765,324 | Windows return to where they were |
+| NB1 | P2 | A "New Mail" banner appears over Overview's desktop strip, and its body shows the raw encoded subject (`=?utf-8?Q?...`) | Banners stay clear of Overview (or wait); the subject decoded (Mail 0.16.0 decodes headers; check the notification text uses the decoded subject) |
