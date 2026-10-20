@@ -98,6 +98,7 @@ fn bench_frame_menu_open() {
 #[test]
 #[ignore]
 fn bench_frame_ext_pixels() {
+    let _lock = crate::test_support::global_lock();
     let saved = std::env::var_os("SPRINGBOARD_WAYLAND");
     std::env::set_var("SPRINGBOARD_WAYLAND", "1");
     let mut sh = desktop(Some(AppId::Settings));
