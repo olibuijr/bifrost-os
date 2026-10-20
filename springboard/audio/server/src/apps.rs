@@ -90,11 +90,13 @@ struct Candidate {
     transport: String,
     output: bool,
     input: bool,
+    /// Unplugged: kept so the indices of `AppState::devices` stay stable, never a default again.
+    gone: bool,
 }
 
 impl Candidate {
     fn of(desc: &DeviceDesc) -> Candidate {
-        Candidate { uid: desc.uid.clone(), name: desc.name.clone(), transport: desc.transport.clone(), output: desc.output_channels > 0, input: desc.input_channels > 0 }
+        Candidate { uid: desc.uid.clone(), name: desc.name.clone(), transport: desc.transport.clone(), output: desc.output_channels > 0, input: desc.input_channels > 0, gone: false }
     }
 
     /// Lower is better; `None` when the device is never a default (virtual loopback and null devices).
@@ -116,6 +118,7 @@ fn pick_default(candidates: &[Candidate], output: bool) -> Option<usize> {
     candidates
         .iter()
         .enumerate()
+        .filter(|(_, c)| !c.gone)
         .filter(|(_, c)| if output { c.output } else { c.input })
         // a capture default is never an HDMI port
         .filter(|(_, c)| output || c.transport != "hdmi")
@@ -267,8 +270,44 @@ impl AppState {
         }
         self.devices.push(id);
         self.candidates.push(Candidate::of(desc));
-        let _ = self.tree.update(SYSTEM_OBJECT, g(props::DEVICES), PropertyValue::Objects(self.devices.clone()));
+        self.publish_device_list();
         self.choose_defaults();
+    }
+
+    /// A device went away: it reads as not alive (listeners are told), and every default that pointed at it, pinned
+    /// or not, moves to the best remaining device (or to none) so output does not stay on a dead id.
+    pub fn device_removed(&mut self, id: ObjectId) {
+        let Some(index) = self.devices.iter().position(|d| *d == id) else { return };
+        let _ = self.tree.update(id, g(props::IS_ALIVE), PropertyValue::Bool(false));
+        let _ = self.tree.update(id, g(props::IS_RUNNING), PropertyValue::Bool(false));
+        // a gone device is never a candidate; its slot keeps the indices of `devices` stable
+        self.candidates[index].gone = true;
+        self.publish_device_list();
+        for (slot, selector) in DEFAULT_ROLES.into_iter().enumerate() {
+            if self.tree.get(SYSTEM_OBJECT, g(selector)) == Ok(PropertyValue::Object(id)) {
+                self.pinned[slot] = false;
+                let _ = self.tree.update(SYSTEM_OBJECT, g(selector), PropertyValue::Object(ObjectId(0)));
+            }
+        }
+        self.choose_defaults();
+    }
+
+    /// A device that was unplugged is back (same uid): it reads alive again and may be chosen as a default.
+    pub fn device_returned(&mut self, id: ObjectId, desc: &DeviceDesc) {
+        let Some(index) = self.devices.iter().position(|d| *d == id) else { return };
+        if !self.candidates[index].gone {
+            return;
+        }
+        self.candidates[index] = Candidate::of(desc);
+        let _ = self.tree.update(id, g(props::IS_ALIVE), PropertyValue::Bool(true));
+        self.publish_device_list();
+        self.choose_defaults();
+    }
+
+    /// The system object lists the devices that are plugged in.
+    fn publish_device_list(&mut self) {
+        let live: Vec<ObjectId> = self.devices.iter().zip(self.candidates.iter()).filter(|(_, c)| !c.gone).map(|(d, _)| *d).collect();
+        let _ = self.tree.update(SYSTEM_OBJECT, g(props::DEVICES), PropertyValue::Objects(live));
     }
 
     /// The device's current buffer size (the graph quantum) changed.
@@ -463,12 +502,26 @@ impl AppState {
             return Err(AudioError::NotSettable);
         }
         if class != Class::Process {
-            self.tree.set(object, address, value)?;
             if object == SYSTEM_OBJECT {
+                // The defaults are the user's choice (Settings, the policy daemon): any other client would reroute
+                // every app's sound. The value must be a live device with channels in the role's direction.
+                if !policy {
+                    return Err(AudioError::PermissionDenied);
+                }
                 if let Some(slot) = DEFAULT_ROLES.iter().position(|r| *r == address.selector) {
+                    let PropertyValue::Object(id) = value else { return Err(AudioError::BadValue) };
+                    let index = self.devices.iter().position(|d| *d == id).ok_or(AudioError::BadValue)?;
+                    let c = &self.candidates[index];
+                    let usable = if address.selector == props::DEFAULT_INPUT { c.input } else { c.output };
+                    if !usable || self.candidates[index].gone {
+                        return Err(AudioError::BadValue);
+                    }
+                    self.tree.set(object, address, value)?;
                     self.pinned[slot] = true;
+                    return Ok(Vec::new());
                 }
             }
+            self.tree.set(object, address, value)?;
             return Ok(Vec::new());
         }
         // the property must exist at this address before anything else is judged
@@ -754,6 +807,44 @@ mod tests {
         a.add_device(ObjectId(1002), &dev("alsa:PCH:2", "pci", 2, 0));
         assert_eq!(default_of(&a, props::DEFAULT_OUTPUT), PropertyValue::Object(ObjectId(1001)));
         assert_eq!(default_of(&a, props::DEFAULT_SOUND_EFFECTS), PropertyValue::Object(ObjectId(1000)), "the other roles keep following the server");
+    }
+
+    #[test]
+    fn only_a_policy_client_sets_the_defaults_and_only_to_a_live_device_of_the_right_direction() {
+        let mut a = AppState::new();
+        a.add_device(ObjectId(1000), &dev("alsa:PCH:0", "pci", 2, 2));
+        a.add_device(ObjectId(1001), &dev("usb:1", "usb", 2, 0));
+        let out = g(props::DEFAULT_OUTPUT);
+        assert!(matches!(a.set(7, false, SYSTEM_OBJECT, out, PropertyValue::Object(ObjectId(1001))), Err(AudioError::PermissionDenied)));
+        assert_eq!(default_of(&a, props::DEFAULT_OUTPUT), PropertyValue::Object(ObjectId(1000)));
+        assert!(matches!(a.set(1, true, SYSTEM_OBJECT, out, PropertyValue::Object(ObjectId(0))), Err(AudioError::BadValue)));
+        assert!(matches!(a.set(1, true, SYSTEM_OBJECT, out, PropertyValue::Object(ObjectId(999_999))), Err(AudioError::BadValue)));
+        assert!(matches!(a.set(1, true, SYSTEM_OBJECT, out, PropertyValue::U32(3)), Err(AudioError::BadValue)));
+        // the usb device has no capture channels
+        assert!(matches!(a.set(1, true, SYSTEM_OBJECT, g(props::DEFAULT_INPUT), PropertyValue::Object(ObjectId(1001))), Err(AudioError::BadValue)));
+        assert!(a.set(1, true, SYSTEM_OBJECT, out, PropertyValue::Object(ObjectId(1001))).is_ok());
+        assert_eq!(default_of(&a, props::DEFAULT_OUTPUT), PropertyValue::Object(ObjectId(1001)));
+    }
+
+    #[test]
+    fn a_removed_device_leaves_the_defaults_even_when_they_were_pinned() {
+        let mut a = AppState::new();
+        a.add_device(ObjectId(1000), &dev("alsa:PCH:0", "pci", 2, 2));
+        a.add_device(ObjectId(1001), &dev("usb:1", "usb", 2, 0));
+        a.set(1, true, SYSTEM_OBJECT, g(props::DEFAULT_OUTPUT), PropertyValue::Object(ObjectId(1001))).unwrap();
+        a.device_removed(ObjectId(1001));
+        assert_eq!(a.get(ObjectId(1001), g(props::IS_ALIVE)), Ok(PropertyValue::Bool(false)));
+        assert_eq!(default_of(&a, props::DEFAULT_OUTPUT), PropertyValue::Object(ObjectId(1000)), "moved to the remaining device");
+        assert_eq!(a.get(SYSTEM_OBJECT, g(props::DEVICES)), Ok(PropertyValue::Objects(vec![ObjectId(1000)])));
+        assert!(matches!(a.set(1, true, SYSTEM_OBJECT, g(props::DEFAULT_OUTPUT), PropertyValue::Object(ObjectId(1001))), Err(AudioError::BadValue)));
+        // the last device goes: no default rather than a dead id
+        a.device_removed(ObjectId(1000));
+        assert_eq!(default_of(&a, props::DEFAULT_OUTPUT), PropertyValue::Object(ObjectId(0)));
+        assert_eq!(default_of(&a, props::DEFAULT_INPUT), PropertyValue::Object(ObjectId(0)));
+        // plugged in again: alive and chosen
+        a.device_returned(ObjectId(1001), &dev("usb:1", "usb", 2, 0));
+        assert_eq!(a.get(ObjectId(1001), g(props::IS_ALIVE)), Ok(PropertyValue::Bool(true)));
+        assert_eq!(default_of(&a, props::DEFAULT_OUTPUT), PropertyValue::Object(ObjectId(1001)));
     }
 
     #[test]

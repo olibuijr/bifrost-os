@@ -5,11 +5,11 @@
 use bifrost_proto::svc::audio::{Cmd, Evt, Live, Repeat as WireRepeat, Snapshot, Track as WireTrack};
 use bifrost_proto::svc;
 use springboard::media::audioplayer::{AudioPlayer, Snapshot as PlayerSnapshot, Track};
-use springboard::media::capture::{wav_bytes, Recorder};
+use springboard::media::capture::{wav_bytes, Recorder, Take};
 use springboard::media::queue::Repeat;
 use springboard::media::stream::Phase;
 use std::os::unix::net::UnixStream;
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
@@ -32,18 +32,49 @@ fn wait<'a, T>(cv: &Condvar, g: MutexGuard<'a, T>) -> MutexGuard<'a, T> {
     cv.wait(g).unwrap_or_else(PoisonError::into_inner)
 }
 
+/// A subscriber: the write side of its connection (shared with the connection's own replies, so frames never
+/// interleave) and the broadcast sequence number it joined at.
 struct Client {
-    stream: UnixStream,
-    subscribed: bool,
+    id: u32,
+    out: Arc<Mutex<UnixStream>>,
+    since: u64,
 }
+
+/// A recording in progress and the connection that started it.
+struct Active {
+    recorder: Recorder,
+    path: PathBuf,
+    owner: u32,
+}
+
+/// A finished take whose file could not be written: it is kept so the owner can stop again to retry.
+struct Kept {
+    take: Take,
+    path: PathBuf,
+    owner: u32,
+}
+
+/// Longest take kept in memory (16-bit mono: about 345 MB an hour at 48 kHz). The service ends and saves a take that
+/// reaches it.
+const MAX_RECORD_MS: u64 = 2 * 60 * 60 * 1000;
+/// Broadcast frames queued for the sender thread; the oldest go first (a state frame is superseded by the next).
+const MAX_OUTBOX: usize = 64;
 
 struct Core {
     player: AudioPlayer,
-    recorder: Option<(Recorder, PathBuf)>,
+    recorder: Option<Active>,
+    /// the connection whose `Recorder::start` is in flight (the core lock is not held meanwhile)
+    starting: Option<u32>,
+    kept: Option<Kept>,
     muted: bool,
     clients: Vec<Client>,
     /// The output route the shell reported last (headphones, reason), told to every subscriber and to new ones.
     route: Option<(bool, u8)>,
+    /// Frames to broadcast, numbered; the sender thread writes them outside the core lock.
+    outbox: Vec<(u64, Vec<u8>)>,
+    seq: u64,
+    /// something changed that subscribers may need to hear about (a command ran, the engine signalled)
+    dirty: bool,
 }
 
 fn track_in(t: &WireTrack) -> Track {
@@ -87,6 +118,73 @@ fn snapshot(s: PlayerSnapshot, muted: bool) -> Snapshot {
     }
 }
 
+/// Where recordings may be written: the apps' data directories under the service root (the shell directory the
+/// service was started with).
+fn record_root() -> PathBuf {
+    let root = std::env::var_os("BIFROST_SHELL_DIR")
+        .or_else(|| std::env::var_os("BIFROST_SERVICE_ROOT"))
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/var/lib/springboard"));
+    root.join("appdata")
+}
+
+/// A recording path the service accepts: absolute, no `..`, a `.wav` name, and a directory that exists inside
+/// `root` once symlinks are resolved. Returns the path with its directory resolved. The file itself is only ever
+/// created new (see `write_wav_atomic`), so an existing file or link at the name is never followed.
+fn validate_record_path(path: &str, root: &Path) -> Result<PathBuf, String> {
+    let p = Path::new(path);
+    if !p.is_absolute() {
+        return Err("the recording path must be absolute".into());
+    }
+    if p.components().any(|c| matches!(c, Component::ParentDir)) {
+        return Err("the recording path must not contain ..".into());
+    }
+    if p.extension().and_then(|e| e.to_str()) != Some("wav") {
+        return Err("the recording path must end in .wav".into());
+    }
+    let name = p.file_name().ok_or_else(|| "the recording path has no file name".to_string())?;
+    let dir = p.parent().ok_or_else(|| "the recording path has no directory".to_string())?;
+    let dir = std::fs::canonicalize(dir).map_err(|e| format!("the recording directory is not usable: {e}"))?;
+    let root = std::fs::canonicalize(root).map_err(|e| format!("the recordings area is not available: {e}"))?;
+    if !dir.starts_with(&root) {
+        return Err("recordings can only be saved inside an app's data directory".into());
+    }
+    Ok(dir.join(name))
+}
+
+/// Writes `bytes` to `path` without ever following a link or replacing a file in place: a new temporary file next to
+/// it (created exclusively, so a link at that name is refused), synced, then renamed over the target. A crash leaves
+/// the old file or none, never a truncated one.
+fn write_wav_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    if std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink()) {
+        return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "the target is a symbolic link"));
+    }
+    let mut tmp = path.as_os_str().to_owned();
+    tmp.push(".tmp");
+    let tmp = PathBuf::from(tmp);
+    let result = (|| {
+        let mut f = std::fs::OpenOptions::new().write(true).create_new(true).open(&tmp)?;
+        f.write_all(bytes)?;
+        f.sync_all()?;
+        std::fs::rename(&tmp, path)
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    result
+}
+
+/// Whole milliseconds a take covers.
+fn take_ms(take: &Take) -> u64 {
+    take.samples.len() as u64 / take.format.channels.max(1) as u64 * 1000 / take.format.sample_rate.max(1.0) as u64
+}
+
+/// Broadcast frames a client that joined at `since` still has to receive.
+fn due(frames: &[(u64, Vec<u8>)], since: u64) -> impl Iterator<Item = &Vec<u8>> {
+    frames.iter().filter(move |(n, _)| *n > since).map(|(_, b)| b)
+}
+
 impl Core {
     fn state(&self) -> Evt {
         Evt::State(snapshot(self.player.snapshot(), self.muted))
@@ -94,14 +192,23 @@ impl Core {
 
     fn record_state(&self) -> Evt {
         match &self.recorder {
-            Some((r, _)) => Evt::Record { active: true, elapsed_ms: r.elapsed_ms(), level: r.level(), error: r.error() },
+            Some(a) => Evt::Record { active: true, elapsed_ms: a.recorder.elapsed_ms(), level: a.recorder.level(), error: a.recorder.error() },
             None => Evt::Record { active: false, elapsed_ms: 0, level: 0.0, error: None },
         }
     }
 
+    /// Queues a frame for every subscriber. Nothing is written here: the sender thread does that outside the lock,
+    /// so a slow subscriber never holds up a command.
     fn send_all(&mut self, evt: &Evt) {
-        let bytes = evt.encode();
-        self.clients.retain_mut(|c| !c.subscribed || svc::write_frame(&mut c.stream, &bytes).is_ok());
+        if self.clients.is_empty() {
+            return;
+        }
+        self.seq += 1;
+        self.outbox.push((self.seq, evt.encode()));
+        if self.outbox.len() > MAX_OUTBOX {
+            self.outbox.remove(0);
+        }
+        OUTBOX.notify_all();
     }
 
     /// Applies one command; the reply for the sender, if any.
@@ -141,121 +248,318 @@ impl Core {
                 self.player.set_muted(m);
             }
             Cmd::Stop => self.player.pause(),
-            Cmd::RecordStart { path } => {
-                if self.recorder.is_none() {
-                    match Recorder::start() {
-                        Ok(r) => self.recorder = Some((r, PathBuf::from(path))),
-                        Err(e) => return Some(Evt::Record { active: false, elapsed_ms: 0, level: 0.0, error: Some(e.to_string()) }),
-                    }
-                }
-                let evt = self.record_state();
-                self.send_all(&evt);
-                return None;
-            }
-            Cmd::RecordStop => {
-                if let Some((r, path)) = self.recorder.take() {
-                    let take = r.stop();
-                    let ms = take.samples.len() as u64 / take.format.channels.max(1) as u64 * 1000 / take.format.sample_rate.max(1.0) as u64;
-                    let evt = match std::fs::write(&path, wav_bytes(&take.format, &take.samples)) {
-                        Ok(()) => Evt::RecordDone { path: path.to_string_lossy().into_owned(), duration_ms: ms },
-                        Err(e) => Evt::Record { active: false, elapsed_ms: ms, level: 0.0, error: Some(e.to_string()) },
-                    };
-                    self.send_all(&evt);
-                }
-                let evt = self.record_state();
-                self.send_all(&evt);
-                return None;
-            }
+            // the recording commands talk to the audio server and the disk: `serve` runs them without the lock
+            Cmd::RecordStart { .. } | Cmd::RecordStop => return None,
         }
         let evt = self.state();
         self.send_all(&evt);
+        self.dirty = true;
+        WAKE.notify_all();
         None
     }
 }
 
-fn serve(core: Arc<Mutex<Core>>, mut stream: UnixStream) {
-    let _ = stream.set_write_timeout(Some(Duration::from_millis(500)));
-    let Ok(writer) = stream.try_clone() else { return };
-    let mut writer = Some(writer);
-    // the connection that started a recording owns it: if it drops (the app crashed or was killed) the take is saved and the microphone closed
-    let mut recording = false;
-    while let Ok(frame) = svc::read_frame(&mut stream) {
-        let Ok(cmd) = Cmd::decode(&frame) else { continue };
-        let subscribe = cmd == Cmd::Subscribe;
-        let mut c = lock(&core);
-        let free = c.recorder.is_none();
-        let (starts, stops) = (matches!(cmd, Cmd::RecordStart { .. }), cmd == Cmd::RecordStop);
-        let reply = c.apply(cmd);
-        if starts && free && c.recorder.is_some() {
-            recording = true;
-        } else if stops && recording {
-            recording = false;
+/// Writes one event to a connection (whole frame, under the connection's write lock).
+fn send_to(out: &Mutex<UnixStream>, evt: &Evt) -> bool {
+    svc::write_frame(&mut *lock(out), &evt.encode()).is_ok()
+}
+
+fn record_error(message: String) -> Evt {
+    Evt::Record { active: false, elapsed_ms: 0, level: 0.0, error: Some(message) }
+}
+
+/// `RecordStart` from connection `conn`. The audio server round trips (connect, default device, start) run with the
+/// core lock released, so a slow server cannot freeze the other clients. True when this connection now owns a take.
+fn start_recording(core: &Mutex<Core>, conn: u32, path: &str, out: &Mutex<UnixStream>) -> bool {
+    let path = match validate_record_path(path, &record_root()) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("audio.player: connection {conn}: record refused: {e}");
+            send_to(out, &record_error(e));
+            return false;
         }
-        if subscribe {
-            if let Some(w) = writer.take() {
-                c.clients.push(Client { stream: w, subscribed: true });
-                CLIENTS.notify_all();
-            }
+    };
+    let leftover = {
+        let mut c = lock(core);
+        if c.recorder.is_some() || c.starting.is_some() {
+            // a take is running (or about to): report it, change nothing
+            let evt = c.record_state();
+            c.send_all(&evt);
+            return false;
         }
-        if let Some(r) = reply {
-            if subscribe || matches!(r, Evt::Pong { .. } | Evt::Record { .. }) {
-                if svc::write_frame(&mut stream, &r.encode()).is_err() {
-                    break;
-                }
-            }
-        }
-        // a new subscriber learns the output route at once (it follows the state it just got)
-        if subscribe {
-            if let Some((headphones, reason)) = c.route {
-                if svc::write_frame(&mut stream, &Evt::Route { headphones, reason }.encode()).is_err() {
-                    break;
-                }
-            }
+        c.starting = Some(conn);
+        c.kept.take()
+    };
+    if let Some(k) = leftover {
+        // a take that could not be written and was never retried: one more try before it is replaced
+        if let Err(e) = write_wav_atomic(&k.path, &wav_bytes(&k.take.format, &k.take.samples)) {
+            eprintln!("audio.player: unsaved take for {} dropped: {e}", k.path.display());
         }
     }
-    if recording {
-        lock(&core).apply(Cmd::RecordStop);
+    let started = Recorder::start();
+    let mut c = lock(core);
+    c.starting = None;
+    match started {
+        Ok(recorder) => {
+            c.recorder = Some(Active { recorder, path, owner: conn });
+            let evt = c.record_state();
+            c.send_all(&evt);
+            c.dirty = true;
+            WAKE.notify_all();
+            true
+        }
+        Err(e) => {
+            drop(c);
+            send_to(out, &record_error(e.to_string()));
+            false
+        }
     }
 }
 
-/// Wakes the state ticker when the first client arrives (it parks while nobody listens).
-static CLIENTS: std::sync::Condvar = std::sync::Condvar::new();
+/// Ends the take `conn` owns (any take with `None`: the length cap) and saves it, with the lock released while the
+/// capture thread is joined and the file is written. A take that cannot be written is kept for the owner to retry.
+fn stop_recording(core: &Mutex<Core>, conn: Option<u32>, report: bool) {
+    enum Job {
+        Stop(Active),
+        Retry(Kept),
+        None,
+    }
+    let job = {
+        let mut c = lock(core);
+        let owns = |owner: u32| conn.is_none_or(|id| id == owner);
+        if c.recorder.as_ref().is_some_and(|a| owns(a.owner)) {
+            Job::Stop(c.recorder.take().expect("checked above"))
+        } else if c.recorder.is_none() && c.kept.as_ref().is_some_and(|k| owns(k.owner)) {
+            Job::Retry(c.kept.take().expect("checked above"))
+        } else {
+            Job::None
+        }
+    };
+    let (take, path, owner) = match job {
+        Job::Stop(a) => (a.recorder.stop(), a.path, a.owner),
+        Job::Retry(k) => (k.take, k.path, k.owner),
+        Job::None => {
+            // not this connection's take (or none): say how things stand and leave them
+            if report {
+                let mut c = lock(core);
+                let evt = c.record_state();
+                c.send_all(&evt);
+            }
+            return;
+        }
+    };
+    let ms = take_ms(&take);
+    let written = write_wav_atomic(&path, &wav_bytes(&take.format, &take.samples));
+    let mut c = lock(core);
+    let evt = match written {
+        Ok(()) => Evt::RecordDone { path: path.to_string_lossy().into_owned(), duration_ms: ms },
+        Err(e) => {
+            let message = format!("{e}; the recording is kept, stop again to retry");
+            c.kept = Some(Kept { take, path, owner });
+            Evt::Record { active: false, elapsed_ms: ms, level: 0.0, error: Some(message) }
+        }
+    };
+    c.send_all(&evt);
+    let evt = c.record_state();
+    c.send_all(&evt);
+    c.dirty = true;
+    WAKE.notify_all();
+}
+
+fn serve(core: Arc<Mutex<Core>>, stream: UnixStream, conn: u32) {
+    let _ = stream.set_write_timeout(Some(Duration::from_millis(500)));
+    let Ok(writer) = stream.try_clone() else { return };
+    let mut stream = stream;
+    // everything this connection sends goes through one write lock, shared with the broadcast sender
+    let out = Arc::new(Mutex::new(writer));
+    let mut subscribed = false;
+    while let Ok(frame) = svc::read_frame(&mut stream) {
+        let Ok(cmd) = Cmd::decode(&frame) else { continue };
+        match cmd {
+            Cmd::RecordStart { path } => {
+                start_recording(&core, conn, &path, &out);
+                continue;
+            }
+            Cmd::RecordStop => {
+                stop_recording(&core, Some(conn), true);
+                continue;
+            }
+            _ => {}
+        }
+        let subscribe = cmd == Cmd::Subscribe;
+        let mut c = lock(&core);
+        let reply = c.apply(cmd);
+        let first = subscribe && !subscribed;
+        if first {
+            subscribed = true;
+            let since = c.seq;
+            c.clients.push(Client { id: conn, out: out.clone(), since });
+            WAKE.notify_all();
+        }
+        let route = if subscribe { c.route } else { None };
+        // A first subscribe takes its write lock before the core is let go, so the sender cannot put a newer frame
+        // ahead of the snapshot this subscriber is about to get (nothing else holds a new subscriber's lock). Any
+        // other write waits until the core is free: a slow reader must never hold the core.
+        let early = if first { Some(lock(&out)) } else { None };
+        drop(c);
+        let wants_reply = reply.as_ref().is_some_and(|r| subscribe || matches!(r, Evt::Pong { .. } | Evt::Record { .. }));
+        if wants_reply || route.is_some() {
+            let mut w = early.unwrap_or_else(|| lock(&out));
+            if let Some(r) = reply.filter(|_| wants_reply) {
+                if svc::write_frame(&mut *w, &r.encode()).is_err() {
+                    break;
+                }
+            }
+            // a new subscriber learns the output route at once (it follows the state it just got)
+            if let Some((headphones, reason)) = route {
+                if svc::write_frame(&mut *w, &Evt::Route { headphones, reason }.encode()).is_err() {
+                    break;
+                }
+            }
+        }
+    }
+    // the connection that started a recording owns it: if it drops (the app crashed or was killed) the take is saved
+    // and the microphone closed
+    stop_recording(&core, Some(conn), false);
+    lock(&core).clients.retain(|c| c.id != conn);
+}
+
+/// Wakes the state ticker: a subscriber arrived, a command ran or the engine signalled a change.
+static WAKE: std::sync::Condvar = std::sync::Condvar::new();
+/// Wakes the sender thread: broadcast frames are waiting.
+static OUTBOX: std::sync::Condvar = std::sync::Condvar::new();
+
+/// Writes queued broadcasts to the subscribers, outside the core lock. One thread, so frames keep their order.
+fn sender(core: Arc<Mutex<Core>>) {
+    loop {
+        let (frames, targets) = {
+            let mut c = lock(&core);
+            while c.outbox.is_empty() {
+                c = wait(&OUTBOX, c);
+            }
+            let frames = std::mem::take(&mut c.outbox);
+            let targets: Vec<(u32, Arc<Mutex<UnixStream>>, u64)> = c.clients.iter().map(|k| (k.id, k.out.clone(), k.since)).collect();
+            (frames, targets)
+        };
+        let mut gone = Vec::new();
+        for (id, out, since) in targets {
+            let mut w = lock(&out);
+            if due(&frames, since).any(|b| svc::write_frame(&mut *w, b).is_err()) {
+                gone.push(id);
+            }
+        }
+        if !gone.is_empty() {
+            lock(&core).clients.retain(|c| !gone.contains(&c.id));
+        }
+    }
+}
+
+/// Turns the engine's wake-ups (a song or state change, an error) into a ticker wake-up. Blocks in `poll`: no
+/// wake-ups of its own.
+fn engine_bridge(core: Arc<Mutex<Core>>, fd: std::ffi::c_int) {
+    loop {
+        let mut p = PollFd { fd, events: 1, revents: 0 };
+        // SAFETY: one valid pollfd; the descriptor belongs to the player, which lives as long as the process.
+        let n = unsafe { poll(&mut p, 1, -1) };
+        if n < 0 {
+            if std::io::Error::last_os_error().kind() == std::io::ErrorKind::Interrupted {
+                continue;
+            }
+            return;
+        }
+        if p.revents & !1 != 0 {
+            return;
+        }
+        let mut c = lock(&core);
+        c.player.drain();
+        c.dirty = true;
+        drop(c);
+        WAKE.notify_all();
+    }
+}
+
+#[repr(C)]
+struct PollFd {
+    fd: std::ffi::c_int,
+    events: i16,
+    revents: i16,
+}
+
+extern "C" {
+    fn poll(fds: *mut PollFd, nfds: std::ffi::c_ulong, timeout: std::ffi::c_int) -> std::ffi::c_int;
+}
 
 fn main() -> std::io::Result<()> {
     let sock = std::env::var("BIFROST_SERVICE_SOCK").unwrap_or_else(|_| "/var/lib/springboard/run/is.olibuijr.audio.sock".into());
     let player = AudioPlayer::open_device()?;
-    let core = Arc::new(Mutex::new(Core { player, recorder: None, muted: true, clients: Vec::new(), route: None }));
+    let fd = player.fd();
+    let core = Arc::new(Mutex::new(Core {
+        player,
+        recorder: None,
+        starting: None,
+        kept: None,
+        muted: true,
+        clients: Vec::new(),
+        route: None,
+        outbox: Vec::new(),
+        seq: 0,
+        dirty: false,
+    }));
     // socket activation: bifrostd binds the socket and starts this process on the first connection
     let listener = svc::listen(std::path::Path::new(&sock))?;
     eprintln!("audio.player: {CLIENT} {VERSION} listening on {sock}");
 
-    // pushes state to subscribers when the song, the state or the second changes, and the meter while recording
+    {
+        let core = core.clone();
+        std::thread::spawn(move || sender(core));
+    }
+    {
+        let core = core.clone();
+        std::thread::spawn(move || engine_bridge(core, fd));
+    }
+    // pushes state to subscribers when the song, the state or the second changes, and the meter while recording. It
+    // runs (five times a second) only while something plays or records; otherwise it parks until a command, the
+    // engine or a new subscriber gives it a reason.
     let ticker = core.clone();
     std::thread::spawn(move || {
         let mut last: Option<(Snapshot, u64)> = None;
         loop {
-            std::thread::sleep(Duration::from_millis(200));
             let mut c = lock(&ticker);
-            while c.clients.is_empty() {
-                c = wait(&CLIENTS, c);
+            while c.clients.is_empty() || !(c.dirty || c.recorder.is_some() || c.player.snapshot().playing) {
+                c = wait(&WAKE, c);
             }
+            c.dirty = false;
             let snap = snapshot(c.player.snapshot(), c.muted);
+            let active = snap.playing || c.recorder.is_some();
             let key = (snap.position_ms / 1000.0) as u64;
             let moved = last.as_ref().is_none_or(|(s, k)| Snapshot { position_ms: 0.0, ..s.clone() } != Snapshot { position_ms: 0.0, ..snap.clone() } || *k != key);
             if moved {
                 last = Some((snap.clone(), key));
                 c.send_all(&Evt::State(snap));
             }
-            if c.recorder.is_some() {
+            let mut too_long = false;
+            if let Some(a) = &c.recorder {
+                too_long = a.recorder.elapsed_ms() >= MAX_RECORD_MS;
                 let evt = c.record_state();
                 c.send_all(&evt);
+            }
+            drop(c);
+            if too_long {
+                // a take that reaches the cap is saved and ended, whoever started it
+                stop_recording(&ticker, None, false);
+            }
+            if active {
+                std::thread::sleep(Duration::from_millis(200));
             }
         }
     });
 
+    let mut next_conn = 1u32;
     for stream in listener.incoming().flatten() {
         let core = core.clone();
-        std::thread::spawn(move || serve(core, stream));
+        let conn = next_conn;
+        next_conn = next_conn.wrapping_add(1).max(1);
+        std::thread::spawn(move || serve(core, stream, conn));
     }
     Ok(())
 }
@@ -293,5 +597,70 @@ mod tests {
         let w = WireTrack { id: 3, path: "/m/b.flac".into(), url: None };
         let back = track_out(&track_in(&w));
         assert_eq!((back.id, back.path.as_str(), back.url), (3, "/m/b.flac", None));
+    }
+
+    /// A fresh directory tree: `<tmp>/root/appdata/app/` and `<tmp>/outside/`.
+    fn tree(tag: &str) -> (PathBuf, PathBuf, PathBuf) {
+        let base = std::env::temp_dir().join(format!("audiod-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let appdata = base.join("root").join("appdata");
+        std::fs::create_dir_all(appdata.join("app")).unwrap();
+        std::fs::create_dir_all(base.join("outside")).unwrap();
+        (base.clone(), appdata, base.join("outside"))
+    }
+
+    #[test]
+    fn record_paths_must_stay_inside_the_apps_data_directory() {
+        let (base, appdata, outside) = tree("paths");
+        let ok = appdata.join("app").join("memo.wav");
+        assert_eq!(validate_record_path(ok.to_str().unwrap(), &appdata).unwrap(), std::fs::canonicalize(appdata.join("app")).unwrap().join("memo.wav"));
+        // relative, wrong extension, parent hops, outside the area
+        assert!(validate_record_path("memo.wav", &appdata).is_err());
+        assert!(validate_record_path(appdata.join("app").join("memo.txt").to_str().unwrap(), &appdata).is_err());
+        assert!(validate_record_path(&format!("{}/app/../../outside/x.wav", appdata.display()), &appdata).is_err());
+        assert!(validate_record_path(outside.join("x.wav").to_str().unwrap(), &appdata).is_err());
+        assert!(validate_record_path("/etc/passwd.wav", &appdata).is_err());
+        // a directory that is a link out of the area is resolved and refused
+        std::os::unix::fs::symlink(&outside, appdata.join("app").join("escape")).unwrap();
+        assert!(validate_record_path(appdata.join("app").join("escape").join("x.wav").to_str().unwrap(), &appdata).is_err());
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn a_wav_is_written_whole_and_never_through_a_link() {
+        let (base, appdata, outside) = tree("write");
+        let target = appdata.join("app").join("a.wav");
+        write_wav_atomic(&target, b"RIFFdata").unwrap();
+        assert_eq!(std::fs::read(&target).unwrap(), b"RIFFdata");
+        assert!(!appdata.join("app").join("a.wav.tmp").exists());
+        // a link at the target name is refused and what it points at is untouched
+        let victim = outside.join("victim");
+        std::fs::write(&victim, b"keep").unwrap();
+        let link = appdata.join("app").join("b.wav");
+        std::os::unix::fs::symlink(&victim, &link).unwrap();
+        assert!(write_wav_atomic(&link, b"RIFFdata").is_err());
+        assert_eq!(std::fs::read(&victim).unwrap(), b"keep");
+        // a link at the temporary name is refused too
+        let c = appdata.join("app").join("c.wav");
+        std::os::unix::fs::symlink(&victim, appdata.join("app").join("c.wav.tmp")).unwrap();
+        assert!(write_wav_atomic(&c, b"RIFFdata").is_err());
+        assert_eq!(std::fs::read(&victim).unwrap(), b"keep");
+        // a directory that is gone: an error, the caller keeps its take
+        assert!(write_wav_atomic(&appdata.join("missing").join("d.wav"), b"x").is_err());
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn a_subscriber_gets_only_the_frames_after_it_joined() {
+        let frames = vec![(1, vec![1u8]), (2, vec![2]), (3, vec![3])];
+        assert_eq!(due(&frames, 0).count(), 3);
+        assert_eq!(due(&frames, 2).cloned().collect::<Vec<_>>(), vec![vec![3u8]]);
+        assert_eq!(due(&frames, 3).count(), 0);
+    }
+
+    #[test]
+    fn take_length_follows_samples_channels_and_rate() {
+        let take = Take { format: springboard::media::capture::pcm16(48_000, 1), samples: vec![0; 96_000] };
+        assert_eq!(take_ms(&take), 2000);
     }
 }

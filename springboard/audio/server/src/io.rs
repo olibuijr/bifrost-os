@@ -412,6 +412,16 @@ fn planes(n: usize) -> BufferList {
 }
 
 impl DeviceRunner {
+    /// Running clients in the present snapshot.
+    fn running_clients(&self) -> usize {
+        self.snapshot.iter().filter(|s| s.running.load(Ordering::Acquire)).count()
+    }
+
+    /// The smallest buffer of a running client (`u32::MAX` with none).
+    fn min_client_buffer(&self) -> u32 {
+        self.snapshot.iter().filter(|s| s.running.load(Ordering::Acquire)).map(|s| s.buffer_frames).min().unwrap_or(u32::MAX)
+    }
+
     pub fn new(io: Box<dyn DeviceIo>, shared: Arc<Shared>, cfg: RunnerConfig) -> DeviceRunner {
         let quantum = shared.quantum.load(Ordering::Acquire).clamp(MIN_QUANTUM, MAX_QUANTUM);
         DeviceRunner {
@@ -669,9 +679,20 @@ impl DeviceRunner {
             }
             let ring = s.output_ring().unwrap();
             let ch = s.output_channels as usize;
+            if ring.corrupt() {
+                // The indices live in memory the client can write. A header claiming more than a full ring is
+                // hostile or broken: discard it server-side and count the cycle as late for that client.
+                ring.resync();
+                s.miss();
+                self.shared.late_total.fetch_add(1, Ordering::Relaxed);
+                report.late += 1;
+                continue;
+            }
             if st.every == 1 {
-                // A client that was late left a stale quantum behind: drop it to stay in step.
-                while ring.readable() as usize >= 2 * q {
+                // A client that was late left a stale quantum behind: drop it to stay in step. The number of
+                // quanta to drop is computed once, so the loop is bounded whatever the header says.
+                let drop = (ring.readable() as usize / q.max(1)).saturating_sub(1);
+                for _ in 0..drop {
                     let mut it = self.scratch.iter_mut();
                     let mut d: [&mut [f32]; MAX_CH] = std::array::from_fn(|_| &mut it.next().unwrap()[..q]);
                     ring.read(&mut d[..ch], want);
@@ -819,7 +840,7 @@ pub fn wait_until(timer: Option<&bifrost_audio_alsa::CycleTimer>, arm: u64, stop
 
 /// Runs `runner` on its own SCHED_FIFO thread until `shared.stop` is set; then stops the hardware.
 pub fn spawn_io_thread(runner: DeviceRunner, name: String) -> std::io::Result<std::thread::JoinHandle<()>> {
-    spawn_io_thread_tuned(runner, name, crate::rt::Tuning::default())
+    spawn_io_thread_tuned(runner, name, crate::rt::Tuning::default(), None)
 }
 
 /// As `spawn_io_thread`, with the driver thread's CPU set (away from the sound IRQ) from `rt::device_started`.
@@ -828,7 +849,15 @@ pub fn spawn_io_thread(runner: DeviceRunner, name: String) -> std::io::Result<st
 /// the driver's DLL when it has locked), then spins to the exact start. The margin is the measured p99 wake-up
 /// lateness (`rt::JitterTracker`). Sustained xruns double the quantum and post an overload notice
 /// (`rt::FallbackPolicy`).
-pub fn spawn_io_thread_tuned(mut runner: DeviceRunner, name: String, tuning: crate::rt::Tuning) -> std::io::Result<std::thread::JoinHandle<()>> {
+///
+/// `started` (when given) receives whether the hardware started, once `runner.start()` has returned: the caller
+/// learns of a failed start instead of marking the device running.
+pub fn spawn_io_thread_tuned(
+    mut runner: DeviceRunner,
+    name: String,
+    tuning: crate::rt::Tuning,
+    started: Option<std::sync::mpsc::Sender<bool>>,
+) -> std::io::Result<std::thread::JoinHandle<()>> {
     use crate::rt;
     std::thread::Builder::new().name(name.clone()).spawn(move || {
         rt::set_timer_slack_1ns();
@@ -844,9 +873,17 @@ pub fn spawn_io_thread_tuned(mut runner: DeviceRunner, name: String, tuning: cra
         log("io", &format!("{name}: starting at quantum {}", runner.quantum()));
         spawn_event_logger(name.clone(), runner.shared.clone());
         let start = match runner.start() {
-            Ok(t) => t,
+            Ok(t) => {
+                if let Some(tx) = &started {
+                    let _ = tx.send(true);
+                }
+                t
+            }
             Err(e) => {
                 log("driver", &format!("{name}: start failed: {e:?}"));
+                if let Some(tx) = &started {
+                    let _ = tx.send(false);
+                }
                 // ends the logger thread started above
                 runner.shared.stop.store(true, Ordering::Release);
                 return;
@@ -891,7 +928,11 @@ pub fn spawn_io_thread_tuned(mut runner: DeviceRunner, name: String, tuning: cra
                 runner.shared.ev_late_cycles.fetch_add(1, Ordering::Relaxed);
             }
             let rate = runner.cfg.rate;
-            if let Some(q) = policy.record(rep.device_xrun || rep.late > 0, rep.frames, rt::window_cycles(rep.frames, rate)) {
+            // One late client is that client's trouble (and its own late counter); only a cycle where every running
+            // client was late looks like an overloaded machine.
+            let overloaded = rep.device_xrun || (rep.late > 0 && rep.late as usize >= runner.running_clients());
+            let raised = policy.record(overloaded, rep.frames, rt::window_cycles(rep.frames, rate)).map(|q| fallback_quantum(q, runner.min_client_buffer()));
+            if let Some(q) = raised.filter(|q| *q > rep.frames) {
                 runner.shared.fallback_floor.store(q, Ordering::Release);
                 runner.shared.quantum.store(q, Ordering::Release);
                 runner.notify_overload();
@@ -906,6 +947,12 @@ pub fn spawn_io_thread_tuned(mut runner: DeviceRunner, name: String, tuning: cra
         runner.stop();
         log("io", &format!("{name}: stopped"));
     })
+}
+
+/// The quantum a sustained-xrun fallback may use: never above the smallest buffer a running client asked for. A
+/// client writes one buffer per trigger and cannot follow a larger quantum, so a bigger one would starve it for good.
+pub fn fallback_quantum(wanted: u32, smallest_client_buffer: u32) -> u32 {
+    wanted.min(smallest_client_buffer)
 }
 
 /// One DLL-style step of the rate scalar: the measured ratio of device frames to host time between two stamps
@@ -1178,6 +1225,46 @@ mod tests {
         assert!((w[256] - g(0)).abs() < 1e-6);
         assert!((w[511] - g(255)).abs() < 1e-5);
         assert!(w[511] > 0.5);
+    }
+
+    #[test]
+    fn the_io_thread_reports_that_the_hardware_started() {
+        let r = rig(256);
+        let shared = r.shared.clone();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let h = spawn_io_thread_tuned(r.runner, "audio-io-test".into(), crate::rt::Tuning::default(), Some(tx)).unwrap();
+        assert_eq!(rx.recv_timeout(std::time::Duration::from_secs(3)), Ok(true));
+        shared.stop.store(true, Ordering::Release);
+        h.join().unwrap();
+    }
+
+    #[test]
+    fn the_fallback_never_goes_above_a_clients_buffer() {
+        assert_eq!(fallback_quantum(512, 256), 256);
+        assert_eq!(fallback_quantum(512, 1024), 512);
+        assert_eq!(fallback_quantum(512, u32::MAX), 512);
+        let mut r = rig(256);
+        let a = r.add(1, 0, 2, 256);
+        Rig::play(&a, 256, &[0.5, 0.5]);
+        r.step();
+        assert_eq!(r.runner.running_clients(), 1);
+        assert_eq!(r.runner.min_client_buffer(), 256);
+    }
+
+    #[test]
+    fn a_hostile_ring_header_cannot_spin_the_io_thread() {
+        let mut r = rig(256);
+        let a = r.add(1, 0, 2, 256);
+        Rig::play(&a, 256, &[0.5, 0.5]);
+        r.step();
+        let ring = a.output_ring().unwrap();
+        // write = read + 2^40: the old drain loop never terminated
+        let rd = ring.header.read.load(Ordering::Acquire);
+        ring.header.write.store(rd.wrapping_add(1 << 40), Ordering::Release);
+        let rep = r.step();
+        assert_eq!(rep.late, 1);
+        assert!(!ring.corrupt());
+        assert_eq!(ring.readable(), 0);
     }
 
     #[test]

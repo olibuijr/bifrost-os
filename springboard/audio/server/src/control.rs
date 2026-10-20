@@ -12,7 +12,7 @@ use crate::client::{recv_msg, send_msg, Conn, HELLO_TIMEOUT, MAX_STALLED};
 use crate::dsp::{Plan, Stages};
 use crate::io::{
     log, set_realtime, ClientSlot, DeviceRunner, RunnerConfig, Shared, WaitPolicy, CLIENT_PRIORITY, DEFAULT_QUANTUM,
-    MAX_CH, MAX_QUANTUM, MIN_QUANTUM,
+    MAX_CH, MAX_CLIENTS, MAX_QUANTUM, MIN_QUANTUM,
 };
 use bifrost_audio_driver::{DeviceDesc, Driver, DriverEvent, IoConfig};
 use bifrost_audio_policy::dsp::DspManager;
@@ -105,6 +105,8 @@ struct DeviceHost {
     /// An IO thread that outlived its stop request. The device stays busy (no reopen) until it is reaped.
     stopping: Option<std::thread::JoinHandle<()>>,
     running: bool,
+    /// Unplugged: kept in the list so device indices stay stable; nothing can open or start it.
+    gone: bool,
     idle_since: Option<Instant>,
     /// Frames of the output and input level taps the analysis has already seen.
     levels_seen: [u64; 2],
@@ -115,6 +117,29 @@ struct ClientRec {
     policy: bool,
     uid: u32,
     pid: i32,
+    /// Threads of this client the server raised to real-time (`PromoteThread`), capped by `MAX_PROMOTED`.
+    promoted: Vec<i32>,
+}
+
+/// IO procedures one connection may hold (each is a pinned shared-memory region).
+/// The PulseAudio-protocol compat daemon is a multiplexing client: it holds one connection and adds one
+/// IO procedure per desktop-app stream, so the cap must fit a busy desktop (many tabs, music, a call).
+pub const MAX_SLOTS_PER_CLIENT: usize = 32;
+/// IO procedures across all clients.
+pub const MAX_SLOTS_TOTAL: usize = 128;
+/// Real-time threads one connection may have, and all connections together. Each IO procedure has its own
+/// IO thread that joins the workgroup, so the per-connection cap follows `MAX_SLOTS_PER_CLIENT` (the compat
+/// daemon multiplexes many streams over one connection) and the total follows `MAX_SLOTS_TOTAL`.
+pub const MAX_PROMOTED: usize = 32;
+pub const MAX_PROMOTED_TOTAL: usize = 128;
+/// Open connections; further ones are closed at accept.
+pub const MAX_CONNECTIONS: usize = 64;
+/// The longest client name kept (and logged).
+const MAX_NAME: usize = 128;
+
+/// A client-claimed name made safe to log: control characters dropped, length capped.
+fn clean_name(name: &str) -> String {
+    name.chars().filter(|c| !c.is_control()).take(MAX_NAME).collect()
 }
 
 struct SlotRec {
@@ -215,7 +240,7 @@ impl ServerCore {
 
     fn host(driver: usize, desc: DeviceDesc) -> DeviceHost {
         let q = initial_quantum(&desc);
-        DeviceHost { driver, desc, shared: Shared::new(q), thread: None, manual: None, abort: None, stopping: None, running: false, idle_since: None, levels_seen: [0; 2] }
+        DeviceHost { driver, desc, shared: Shared::new(q), thread: None, manual: None, abort: None, stopping: None, running: false, gone: false, idle_since: None, levels_seen: [0; 2] }
     }
 
     pub fn device_count(&self) -> usize {
@@ -248,7 +273,7 @@ impl ServerCore {
     }
 
     pub fn add_client(&mut self, id: u32, pid: i32, uid: u32) {
-        self.clients.insert(id, ClientRec { name: None, policy: false, uid, pid });
+        self.clients.insert(id, ClientRec { name: None, policy: false, uid, pid, promoted: Vec::new() });
     }
 
     /// A connection closed: its IO procedures go with it.
@@ -283,6 +308,7 @@ impl ServerCore {
                 if policy && c.uid != 0 && c.uid != server_uid {
                     return err(AudioError::PermissionDenied);
                 }
+                let name = clean_name(&name);
                 log("client", &format!("client {client}: {name} (pid {}, policy {policy})", c.pid));
                 let pid = c.pid;
                 c.name = Some(name.clone());
@@ -421,6 +447,9 @@ impl ServerCore {
                 if tid <= 0 || !std::path::Path::new(&format!("/proc/{pid}/task/{tid}")).exists() {
                     return err(AudioError::PermissionDenied);
                 }
+                if !self.reserve_promotion(client, tid) {
+                    return err(AudioError::PermissionDenied);
+                }
                 match set_realtime(tid, CLIENT_PRIORITY, 1024) {
                     Ok(()) => plain(Reply::Done),
                     Err(e) if e.raw_os_error() == Some(libc::EPERM) => err(AudioError::PermissionDenied),
@@ -431,6 +460,26 @@ impl ServerCore {
                 }
             }
         }
+    }
+
+    /// Counts a real-time thread against the client's budget and the server's. A thread already promoted is free;
+    /// threads that have ended no longer count.
+    fn reserve_promotion(&mut self, client: u32, tid: i32) -> bool {
+        for c in self.clients.values_mut() {
+            let pid = c.pid;
+            c.promoted.retain(|t| std::path::Path::new(&format!("/proc/{pid}/task/{t}")).exists());
+        }
+        let total: usize = self.clients.values().map(|c| c.promoted.len()).sum();
+        let Some(c) = self.clients.get_mut(&client) else { return false };
+        if c.promoted.contains(&tid) {
+            return true;
+        }
+        if c.promoted.len() >= MAX_PROMOTED || total >= MAX_PROMOTED_TOTAL {
+            log("client", &format!("client {client}: real-time thread budget used up"));
+            return false;
+        }
+        c.promoted.push(tid);
+        true
     }
 
     fn owned_slot(&self, client: u32, id: u32) -> Result<SlotView, AudioError> {
@@ -446,6 +495,9 @@ impl ServerCore {
         else {
             return err(AudioError::UnknownObject);
         };
+        if self.devices[dev].gone {
+            return err(AudioError::DeviceGone);
+        }
         let range = self.devices[dev].desc.buffer_frames_range;
         if r.input_channels as usize > MAX_CH
             || r.output_channels as usize > MAX_CH
@@ -454,6 +506,13 @@ impl ServerCore {
             || r.buffer_frames > range.1.min(MAX_QUANTUM * 2)
         {
             return err(AudioError::BadValue);
+        }
+        // Every slot pins a shared-memory region: bound them per client, per device and in all.
+        let mine = self.slots.values().filter(|s| s.slot.owner == client).count();
+        let on_device = self.slots.values().filter(|s| s.device == dev).count();
+        if mine >= MAX_SLOTS_PER_CLIENT || on_device >= MAX_CLIENTS || self.slots.len() >= MAX_SLOTS_TOTAL {
+            log("client", &format!("client {client}: io proc refused, too many ({mine} of its own, {on_device} on device {dev})"));
+            return err(AudioError::PermissionDenied);
         }
         if let Err(e) = self.check_session(client, r.output_channels > 0, r.input_channels > 0) {
             return err(e);
@@ -509,7 +568,8 @@ impl ServerCore {
             .unwrap_or(DEFAULT_QUANTUM);
         let q = want.clamp(d.desc.buffer_frames_range.0.max(MIN_QUANTUM), d.desc.buffer_frames_range.1.min(MAX_QUANTUM));
         // never below what the sustained-xrun fallback raised the device to
-        let q = q.max(d.shared.fallback_floor.load(Ordering::Acquire));
+        // (but never above the smallest buffer a running client asked for: it writes one buffer per trigger)
+        let q = q.max(d.shared.fallback_floor.load(Ordering::Acquire).min(want));
         d.shared.quantum.store(q, Ordering::Release);
         // the device's `BUFFER_FRAMES` property is the quantum it runs at
         let id = self.device_id(dev);
@@ -517,6 +577,9 @@ impl ServerCore {
     }
 
     fn start_device(&mut self, idx: usize) -> Result<(), AudioError> {
+        if self.devices[idx].gone {
+            return Err(AudioError::DeviceGone);
+        }
         if self.devices[idx].running {
             return Ok(());
         }
@@ -546,10 +609,24 @@ impl ServerCore {
         shared.stop.store(false, Ordering::Release);
         if self.cfg.spawn_threads {
             let tuning = crate::rt::device_started();
-            let h = crate::io::spawn_io_thread_tuned(runner, format!("audio-io-{idx}"), tuning).map_err(|_| {
+            let (tx, rx) = std::sync::mpsc::channel();
+            let h = crate::io::spawn_io_thread_tuned(runner, format!("audio-io-{idx}"), tuning, Some(tx)).map_err(|_| {
                 crate::rt::device_stopped();
                 AudioError::Io
             })?;
+            // The thread starts the hardware (prepare, prefill, start); a failure there must reach the caller.
+            match rx.recv_timeout(START_WAIT) {
+                Ok(false) | Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                    let _ = h.join();
+                    crate::rt::device_stopped();
+                    log("io", &format!("device {} failed to start", desc.uid));
+                    return Err(AudioError::Io);
+                }
+                Ok(true) => {}
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                    log("io", &format!("device {} is slow to start; carrying on", desc.uid));
+                }
+            }
             self.devices[idx].thread = Some(h);
             self.devices[idx].abort = abort;
         } else {
@@ -662,6 +739,23 @@ impl ServerCore {
         }
         for (driver, e) in events {
             match e {
+                DriverEvent::DeviceRemoved { uid } => {
+                    if let Some(index) = self.devices.iter().position(|d| d.desc.uid == uid && !d.gone) {
+                        self.device_removed(index);
+                    }
+                }
+                DriverEvent::DeviceAdded(desc) if self.devices.iter().any(|d| d.desc.uid == desc.uid && d.gone) => {
+                    // the same hardware plugged in again: its slot in the list lives on
+                    let index = self.devices.iter().position(|d| d.desc.uid == desc.uid).unwrap_or(0);
+                    log("driver", &format!("device returned: {}", desc.uid));
+                    let d = &mut self.devices[index];
+                    d.driver = driver;
+                    d.desc = desc.clone();
+                    d.gone = false;
+                    let id = self.device_id(index);
+                    self.apps.device_returned(id, &desc);
+                    self.refresh_dsp(index);
+                }
                 DriverEvent::DeviceAdded(desc) => {
                     if !self.devices.iter().any(|d| d.desc.uid == desc.uid) {
                         log("driver", &format!("device added: {}", desc.uid));
@@ -678,6 +772,26 @@ impl ServerCore {
             self.levels_at = Some(now);
             self.publish_levels();
         }
+    }
+
+    /// A device was unplugged: its IO thread stops, its streams are stopped (they read as failing on their next
+    /// request), and the server publishes it as not alive and moves the defaults off it.
+    fn device_removed(&mut self, index: usize) {
+        log("driver", &format!("device removed: {}", self.devices[index].desc.uid));
+        self.devices[index].gone = true;
+        let slots: Vec<u32> = self.slots.iter().filter(|(_, r)| r.device == index).map(|(k, _)| *k).collect();
+        for id in slots {
+            if let Some(r) = self.slots.get(&id) {
+                r.slot.running.store(false, Ordering::Release);
+            }
+            self.apps.stream_stopped(out_stream(id));
+            self.apps.stream_stopped(in_stream(id));
+        }
+        self.stop_device(index);
+        self.recompute_quantum(index);
+        let id = self.device_id(index);
+        self.apps.device_removed(id);
+        self.refresh_dsp(index);
     }
 
     /// Whether the application's session allows streams in the directions of a new or starting stream.
@@ -897,6 +1011,9 @@ fn send_reply(fd: RawFd, reply: &Reply, fds: &[RawFd]) -> bool {
     false
 }
 
+/// How long a start request waits for the IO thread to report that the hardware started.
+const START_WAIT: Duration = Duration::from_secs(3);
+
 /// How long the control loop waits for a device's IO thread to end before it detaches it.
 const STOP_WAIT: Duration = Duration::from_millis(500);
 
@@ -943,7 +1060,13 @@ pub fn serve(core: &mut ServerCore, listener: &OwnedFd, stop: &AtomicBool, wake:
                     break;
                 }
                 // SAFETY: a fresh descriptor from accept4.
-                let c = Conn::new(unsafe { OwnedFd::from_raw_fd(fd) }, next_id);
+                let owned = unsafe { OwnedFd::from_raw_fd(fd) };
+                if conns.len() >= MAX_CONNECTIONS {
+                    // too many open connections: close this one at once (dropping the descriptor)
+                    log("client", "connection refused: too many clients");
+                    continue;
+                }
+                let c = Conn::new(owned, next_id);
                 next_id += 1;
                 core.add_client(c.id, c.pid, c.uid);
                 conns.push(c);
@@ -1083,6 +1206,61 @@ mod tests {
             c.add_client(1, std::process::id() as i32, unsafe { libc::getuid() });
             hello(&mut c, 1, false);
         }
+    }
+
+    #[test]
+    fn an_unplugged_device_stops_leaves_the_defaults_and_refuses_new_streams() {
+        let (mut c, h) = core();
+        hello(&mut c, 1, false);
+        let a = add(&mut c, 1, 256);
+        assert_eq!(c.handle(1, Request::StartIoProc { id: a }).reply, Reply::Done);
+        assert!(c.device_running(0));
+        let dev = c.device_id(0);
+        let sys = SYSTEM_OBJECT;
+        assert_eq!(c.apps().get(sys, PropertyAddress::global(bifrost_audio_types::props::DEFAULT_OUTPUT)), Ok(PropertyValue::Object(dev)));
+        h.push_event(DriverEvent::DeviceRemoved { uid: "n0".into() });
+        c.tick(Instant::now());
+        assert!(!c.device_running(0));
+        assert_eq!(c.apps().get(dev, PropertyAddress::global(bifrost_audio_types::props::IS_ALIVE)), Ok(PropertyValue::Bool(false)));
+        assert_eq!(c.apps().get(sys, PropertyAddress::global(bifrost_audio_types::props::DEFAULT_OUTPUT)), Ok(PropertyValue::Object(ObjectId(0))));
+        assert_eq!(c.handle(1, proc_req(256)).reply, Reply::Error(AudioError::DeviceGone));
+        assert_eq!(c.handle(1, Request::StartIoProc { id: a }).reply, Reply::Error(AudioError::DeviceGone));
+    }
+
+    #[test]
+    fn one_client_cannot_hold_more_io_procs_than_the_cap() {
+        let (mut c, _) = core();
+        hello(&mut c, 1, false);
+        for _ in 0..MAX_SLOTS_PER_CLIENT {
+            add(&mut c, 1, 256);
+        }
+        assert_eq!(c.handle(1, proc_req(256)).reply, Reply::Error(AudioError::PermissionDenied));
+        // another connection is not affected by the first one's count
+        hello(&mut c, 2, false);
+        add(&mut c, 2, 256);
+    }
+
+    #[test]
+    fn a_multiplexing_client_fits_and_every_io_thread_can_be_promoted() {
+        // The compat daemon holds one connection with an IO procedure (and IO thread) per desktop stream.
+        assert!(MAX_SLOTS_PER_CLIENT >= 32);
+        assert!(MAX_PROMOTED >= MAX_SLOTS_PER_CLIENT);
+        // Four busy clients still fit under the global bounds.
+        assert!(MAX_SLOTS_TOTAL >= 4 * MAX_SLOTS_PER_CLIENT);
+        assert!(MAX_PROMOTED_TOTAL >= 4 * MAX_PROMOTED);
+    }
+
+    #[test]
+    fn a_promoted_thread_counts_once_and_the_client_name_is_logged_clean() {
+        let (mut c, _) = core();
+        hello(&mut c, 1, false);
+        // SAFETY: gettid takes no arguments.
+        let tid = unsafe { libc::syscall(libc::SYS_gettid) } as i32;
+        assert!(c.reserve_promotion(1, tid));
+        assert!(c.reserve_promotion(1, tid));
+        assert_eq!(c.clients[&1].promoted, vec![tid]);
+        assert_eq!(clean_name("a\nb\u{1b}[31mc"), "ab[31mc");
+        assert_eq!(clean_name(&"x".repeat(1000)).len(), 128);
     }
 
     #[test]

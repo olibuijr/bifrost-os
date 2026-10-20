@@ -26,9 +26,18 @@ pub(crate) struct Shared {
     pub dead: AtomicBool,
 }
 
+/// The reply side of the connection. The server answers every request exactly once and in order, and the reader
+/// turns even an undecodable or oversized answer into a message, so replies pair with requests one to one. A request
+/// that timed out leaves its reply owed: `stale` counts the answers still to arrive that belong to requests nobody
+/// waits for any more, so the next request skips them instead of taking one for its own.
+struct ReplyQueue {
+    rx: Receiver<Msg>,
+    stale: u32,
+}
+
 pub(crate) struct Conn {
     pub sock: Arc<OwnedFd>,
-    rx: Mutex<Receiver<Msg>>,
+    rx: Mutex<ReplyQueue>,
     pub shared: Arc<Shared>,
 }
 
@@ -162,6 +171,11 @@ impl Conn {
                         Ok(r) => r,
                         Err(e) => {
                             eprintln!("[is.olibuijr.audio/hal] undecodable reply: {e:?}");
+                            // It was still the server's answer to a request: pass it on as a protocol error so the
+                            // pairing of replies and requests holds (a notification has nobody waiting).
+                            if let Some(m) = oversized_answer(buf.first().copied()) {
+                                let _ = tx.send(m);
+                            }
                             continue;
                         }
                     };
@@ -186,7 +200,7 @@ impl Conn {
                 // dropping `tx` wakes a waiting request with a disconnect
             })
             .expect("spawn audio-notify");
-        Arc::new(Conn { sock, rx: Mutex::new(rx), shared })
+        Arc::new(Conn { sock, rx: Mutex::new(ReplyQueue { rx, stale: 0 }), shared })
     }
 
     /// One request, one reply (and the fds that came with it). `Reply::Error` becomes `Err`.
@@ -196,17 +210,32 @@ impl Conn {
 
     /// Like [`Conn::request`] with its own reply timeout. Workers that must not wait long (the shell's probes) pass a short one.
     pub fn request_within(&self, req: &Request, fds: &[RawFd], timeout: Duration) -> Result<Msg, AudioError> {
-        let rx = self.rx.lock().unwrap();
+        let mut q = self.rx.lock().unwrap();
         if self.shared.dead.load(Ordering::Acquire) {
             return Err(AudioError::NoServer);
         }
-        while rx.try_recv().is_ok() {}
+        // Late answers that have arrived since: each pays off one owed reply.
+        while q.rx.try_recv().is_ok() {
+            q.stale = q.stale.saturating_sub(1);
+        }
         send_packet(self.sock.as_raw_fd(), &encode_request(req), fds).map_err(|_| AudioError::NoServer)?;
-        match rx.recv_timeout(timeout) {
-            Ok((Reply::Error(e), _)) => Err(e),
-            Ok(m) => Ok(m),
-            Err(RecvTimeoutError::Timeout) => Err(AudioError::Io),
-            Err(RecvTimeoutError::Disconnected) => Err(AudioError::NoServer),
+        let deadline = std::time::Instant::now() + timeout;
+        loop {
+            let left = deadline.saturating_duration_since(std::time::Instant::now());
+            match q.rx.recv_timeout(left) {
+                Ok(_) if q.stale > 0 => {
+                    // the answer to an earlier request that gave up
+                    q.stale -= 1;
+                }
+                Ok((Reply::Error(e), _)) => return Err(e),
+                Ok(m) => return Ok(m),
+                Err(RecvTimeoutError::Timeout) => {
+                    // this request's own answer is now owed too
+                    q.stale = q.stale.saturating_add(1);
+                    return Err(AudioError::Io);
+                }
+                Err(RecvTimeoutError::Disconnected) => return Err(AudioError::NoServer),
+            }
         }
     }
 }
@@ -334,6 +363,39 @@ mod tests {
         let _srv2 = script(b2, vec![vec![Reply::Done]]);
         let c2 = Conn::new(a2);
         assert!(matches!(c2.request(&ping(), &[]), Ok((Reply::Done, _))));
+    }
+
+    #[test]
+    fn a_late_reply_is_not_taken_for_the_next_requests_answer() {
+        use bifrost_audio_types::control::encode_reply;
+        let (a, b) = socket_pair();
+        let (go_tx, go_rx) = std::sync::mpsc::channel::<()>();
+        let srv = std::thread::spawn(move || {
+            let mut buf = vec![0u8; MAX_LEN];
+            // request A: answered only after A has timed out and B was sent
+            let _ = recv_packet(b.as_raw_fd(), &mut buf);
+            let _ = recv_packet(b.as_raw_fd(), &mut buf);
+            let _ = go_rx.recv();
+            let _ = send_packet(b.as_raw_fd(), &encode_reply(&Reply::Done), &[]);
+            let _ = send_packet(b.as_raw_fd(), &encode_reply(&Reply::Objects(vec![ObjectId(5)])), &[]);
+            let _ = recv_packet(b.as_raw_fd(), &mut buf);
+        });
+        let c = Conn::new(a);
+        // A times out
+        assert_eq!(c.request_within(&ping(), &[], Duration::from_millis(50)).err(), Some(AudioError::Io));
+        // B waits; A's late Done arrives first, then B's own Objects
+        let go = go_tx;
+        let t = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(50));
+            let _ = go.send(());
+        });
+        match c.request_within(&ping(), &[], Duration::from_secs(3)) {
+            Ok((Reply::Objects(v), _)) => assert_eq!(v, vec![ObjectId(5)]),
+            other => panic!("B took the wrong reply: {:?}", other.map(|m| m.0)),
+        }
+        t.join().unwrap();
+        drop(c);
+        srv.join().unwrap();
     }
 
     /// A peer that answers each request with the next list of raw packets.
