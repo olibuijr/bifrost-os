@@ -179,3 +179,22 @@ Midget 0.10.10 (`integration` at `8fd4bcf32`), Music 1.13.4, Podcasts 1.13.4, Vo
 | Idle | Fixed | With Music playing in front: springboard 0.8% CPU (was 98.6%), Music 3.4% (was 25.6%), bifrost-audiod 1.2%, the media service 0.8%; no shell frame and no slow frame in 10 s of trace. |
 
 New: the speaker trace reports `underruns 768` and a slowest write of 30 ms during radio playback, and the audio server logged one device xrun when the first stream started. Check for audible glitches and the stream buffer size.
+
+## QA install and 0.10.12 (05:25 to 05:50)
+
+- QA install of the lab ISO `bifrost-lab-20261020-051025.iso` (0.10.11 bundled) through the installer screens: pass in
+  about 3 minutes (Welcome, Language with the Icelandic keyboard, Account, Look, Disk `/dev/nvme0n1`, Confirm, Progress,
+  Restart); the installed system came up 22 s after Restart with the session and MCP running. Shots in
+  `docs/e2e/2026-10-20-qa-install/`. Two tool fixes on the way (`tools/midget.py`): taps go through the installer's input
+  FIFO (a temporary uinput pointer is not seen by the running installer), and typing waits 1 s after a field tap
+  (Verify lost its first keys).
+- The fresh system: no `/usr/share/springboard/assets` at all, the package-owned `system-assets`, 14 own icons and no
+  vendor-named ones, the system services' sockets (audio owned by the user), the default output chosen, the control
+  socket private.
+- The installer's first start on the live ISO exited with "No such file or directory" while the lab sync was replacing
+  the assets, and systemd restarted it a second later. It should wait for its assets instead of exiting.
+- OTA from the fresh install to 0.10.12: `phase=accepted`.
+- Radio on 0.10.12: `underruns 0 event(s) / 0 frame(s)` in every interval and in total, no xrun lines, the ring full
+  (the 30 ms slowest write is back-pressure: every write waited for room).
+- New: a fresh install starts with the system volume at 0, so nothing is audible until the volume is raised. Fix:
+  `fix/default-volume` (half volume when nothing is saved).
