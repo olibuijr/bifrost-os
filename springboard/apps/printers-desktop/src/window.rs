@@ -34,6 +34,10 @@ pub const PAD_PT: f32 = 20.0;
 /// While a job waits or prints the listing comes sooner, see `model::poll_interval_ms`.
 #[cfg(test)]
 pub const POLL_MS: f64 = model::IDLE_POLL_MS;
+/// The longest wait between listings after the scheduler failed (loop milliseconds), and how many times a failure
+/// doubles the wait.
+pub const MAX_POLL_MS: f64 = 60_000.0;
+const MAX_BACKOFF_DOUBLINGS: u32 = 4;
 /// How soon the loop comes back while the Add Printer pane listens for replies (milliseconds).
 const DISCOVER_WAKE_MS: f64 = 250.0;
 /// One printer found on the network (points).
@@ -99,6 +103,8 @@ pub struct PrintCenter {
     in_flight: usize,
     /// When the printers are listed next (loop milliseconds).
     next_poll: f64,
+    /// Replies in a row that said the scheduler failed; each one doubles the wait before the next listing.
+    poll_failures: u32,
     /// The window size, in points.
     pub size: (f32, f32),
     pub labels: TextCache,
@@ -139,6 +145,7 @@ impl PrintCenter {
             link,
             in_flight: 0,
             next_poll: 0.0,
+            poll_failures: 0,
             // The app host configures the actual client size before the first frame.
             size: (0.0, 0.0),
             labels: TextCache::default(),
@@ -472,6 +479,11 @@ impl PrintCenter {
         self.in_flight = self.in_flight.saturating_sub(replies.len());
         self.refresh_clock();
         for reply in replies {
+            match &reply {
+                Reply::Failed(_) => self.poll_failures = (self.poll_failures + 1).min(MAX_BACKOFF_DOUBLINGS),
+                Reply::Listed { .. } => self.poll_failures = 0,
+                _ => {}
+            }
             let done = matches!(reply, Reply::Done(_) | Reply::Added(_) | Reply::Printed(_));
             let added = matches!(reply, Reply::Added(_));
             self.model.apply(reply);
@@ -486,12 +498,19 @@ impl PrintCenter {
         true
     }
 
-    /// One loop turn in the foreground: takes the replies and lists the printers every `POLL_MS`. True when a frame is
+    /// The wait before the next listing: the interval the printers' state asks for, doubled for each failure in a row
+    /// and never more than `MAX_POLL_MS`.
+    fn poll_delay(&self) -> f64 {
+        (model::poll_interval_ms(&self.model.printers) * f64::from(1u32 << self.poll_failures.min(MAX_BACKOFF_DOUBLINGS))).min(MAX_POLL_MS)
+    }
+
+    /// One loop turn in the foreground: takes the replies and lists the printers every `POLL_MS`, but only when no
+    /// request is waiting for its reply, so a stalled scheduler is not sent a queue of listings. True when a frame is
     /// needed.
     pub fn step(&mut self, t: f64) -> bool {
         let mut changed = self.poll();
-        if t >= self.next_poll {
-            self.next_poll = t + model::poll_interval_ms(&self.model.printers);
+        if t >= self.next_poll && self.in_flight == 0 {
+            self.next_poll = t + self.poll_delay();
             self.list();
         }
         if self.model.pane() == Pane::Discover && self.discover.poll(t) {
@@ -1323,8 +1342,34 @@ mod tests {
         w.step(0.0);
         assert_eq!(w.next_poll, model::ACTIVE_POLL_MS, "a waiting job brings the next listing within a second");
         w.model.printers[0].queued_jobs = 0;
+        w.in_flight = 0;
         w.step(model::ACTIVE_POLL_MS);
         assert_eq!(w.next_poll, model::ACTIVE_POLL_MS + POLL_MS);
+    }
+
+    #[test]
+    fn no_listing_is_sent_while_a_request_is_waiting_for_its_reply() {
+        let mut w = window();
+        w.step(0.0);
+        assert_eq!(w.in_flight, 1);
+        w.step(POLL_MS * 3.0);
+        assert_eq!(w.in_flight, 1, "the listing waits for the reply to the last one");
+        w.in_flight = 0;
+        w.step(POLL_MS * 3.0);
+        assert_eq!(w.in_flight, 1);
+    }
+
+    #[test]
+    fn failures_in_a_row_back_the_listing_off_and_a_listing_resets_it() {
+        let mut w = window();
+        assert_eq!(w.poll_delay(), POLL_MS);
+        w.poll_failures = 1;
+        assert_eq!(w.poll_delay(), POLL_MS * 2.0);
+        w.poll_failures = MAX_BACKOFF_DOUBLINGS;
+        assert_eq!(w.poll_delay(), (POLL_MS * 16.0).min(MAX_POLL_MS));
+        assert!(w.poll_delay() <= MAX_POLL_MS);
+        w.poll_failures = 0;
+        assert_eq!(w.poll_delay(), POLL_MS);
     }
 
     #[test]

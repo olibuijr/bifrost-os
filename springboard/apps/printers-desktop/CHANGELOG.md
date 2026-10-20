@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.5
+
+- Print Center lists the printers only when no request is waiting for its reply, and waits longer after the scheduler fails (up to a minute), so a stalled scheduler is not sent a queue of listings.
+- Add Printer reads at most 64 network announcements per turn, listens to private and link-local senders only, keeps at most 128 printers, and skips an announcement whose host or path holds characters that would change the address (a space, ?, #, /, a control character).
+
 ## 0.7.4
 
 - Fix: the toolbar starts after the traffic lights instead of under them (the SDK toolbar now keeps clear of the window controls).
