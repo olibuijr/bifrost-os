@@ -14,7 +14,7 @@ use crate::window::{MailWindow, Region};
 use bifrost_app::controls::prefs_layout::m;
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem};
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
-use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_TITLE1_PT, SEPARATOR_C, SPACE_M, SPACE_S, SPACE_XL, SPACE_XS, SPACE_XXS, WHITE};
+use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_TITLE1_PT, SELECTION, SEPARATOR_C, SPACE_M, SPACE_S, SPACE_XL, SPACE_XS, SPACE_XXS, WHITE};
 use bifrost_app::kit::ui::system::{FIND_HIGHLIGHT, SYSTEM_ORANGE};
 use bifrost_app::kit::{colors, Image, Surface, TextCache, Ui, Weight};
 use bifrost_app::layout::traffic_lights_trailing;
@@ -1146,12 +1146,17 @@ impl MailWindow {
         let current = compose.misspelled.get(compose.misspelled_at);
         let (suggested, suggested_at) = compose.proofread_marks();
         let mut end_x = tx;
+        let hilite = focused && compose.form.selected();
         for (k, line) in lines[first..].iter().enumerate() {
             let y = value_y + k as f32 * line_h;
             let mut x = tx;
+            if hilite {
+                let line_w: f32 = line.iter().map(|run| measure(&run.text, run.style)).sum();
+                s.fill_rect(px(tx), px(y), px(line_w), px(line_h), SELECTION.now());
+            }
             for run in line {
                 let wide = measure(&run.text, run.style);
-                let color = style_rgb(run.style);
+                let color = if hilite { WHITE } else { style_rgb(run.style) };
                 let img = self.labels.get(ui, &run.text, MAC_BODY_PT, style_weight(run.style), color);
                 if run.style.italic {
                     s.blit(&slanted(img), x as i32, y as i32, 255, 255);
@@ -1240,8 +1245,13 @@ impl MailWindow {
                 let lines = wrap(ui, &field.value, text_w, MAC_BODY_PT, Weight::Regular);
                 let room = ((r[1] + r[3] - value_y - ui.pt(SPACE_XS)) / line_h).floor().max(1.0) as usize;
                 let start = lines.len().saturating_sub(room);
+                let hilite = focused && form.selected();
                 for (k, line) in lines[start..].iter().enumerate() {
-                    put(s, &mut self.labels, ui, line, MAC_BODY_PT, Weight::Regular, LABEL.now(), tx, value_y + k as f32 * line_h);
+                    let y = value_y + k as f32 * line_h;
+                    if hilite {
+                        s.fill_rect(px(tx), px(y), px(ui.measure(line, MAC_BODY_PT, Weight::Regular)), px(line_h), SELECTION.now());
+                    }
+                    put(s, &mut self.labels, ui, line, MAC_BODY_PT, Weight::Regular, if hilite { WHITE } else { LABEL.now() }, tx, y);
                 }
                 if focused {
                     let last = lines.last().map_or(0.0, |line| ui.measure(line, MAC_BODY_PT, Weight::Regular));
@@ -1257,7 +1267,12 @@ impl MailWindow {
                     (field.value.clone(), LABEL.now())
                 };
                 let shown = fit(ui, &shown, MAC_BODY_PT, Weight::Regular, (r[2] - 2.0 * pad).max(0.0));
-                put(s, &mut self.labels, ui, &shown, MAC_BODY_PT, Weight::Regular, color, tx, value_y);
+                // Select All: the whole text is on the selection colour, in white
+                let hilite = focused && form.selected();
+                if hilite {
+                    s.fill_rect(px(tx), px(value_y), px(ui.measure(&shown, MAC_BODY_PT, Weight::Regular)), px(ui.pt(BODY_LINE_PT)), SELECTION.now());
+                }
+                put(s, &mut self.labels, ui, &shown, MAC_BODY_PT, Weight::Regular, if hilite { WHITE } else { color }, tx, value_y);
                 if focused {
                     let end = if field.value.is_empty() { 0.0 } else { ui.measure(&shown, MAC_BODY_PT, Weight::Regular) };
                     s.fill_rect(px(tx + end), px(value_y), px(caret), px(ui.pt(MAC_BODY_PT)), colors::SYSTEM_BLUE.now());

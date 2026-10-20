@@ -112,7 +112,8 @@ impl App for MailApp {
     }
 
     fn commands(&self, _ctx: &Ctx) -> Commands {
-        Commands(Command::Paste.bit())
+        // the fields of a sheet take the standard editing commands; the keyboard sends them as commands when the app says it takes them
+        Commands::default().with(Command::Paste, true).with(Command::SelectAll, true).with(Command::Copy, true).with(Command::Cut, true)
     }
 
     fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
@@ -147,6 +148,9 @@ impl App for MailApp {
                 }
                 Input::Key(k) => mail.key(ctx, k),
                 Input::Command(Command::Paste) => mail.paste(),
+                Input::Command(Command::SelectAll) => mail.select_all(),
+                Input::Command(Command::Copy) => mail.copy(),
+                Input::Command(Command::Cut) => mail.cut(),
                 Input::Open(url) => {
                     mail.open_handoff(&url);
                     true

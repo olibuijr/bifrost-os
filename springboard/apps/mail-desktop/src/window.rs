@@ -34,7 +34,7 @@ use bifrost_app::passwords::{self, Error as KeyError};
 use bifrost_app::text_services;
 use bifrost_app::usernotif::{self, Request};
 use bifrost_app::{AppMenu, AppMenuItem, Ctx, DocumentEvent, KeyInput, OpenOptions, TouchKind};
-use bifrost_app::proto::{DocErrorCode, DocMode, CHORD_CTRL, CHORD_META};
+use bifrost_app::proto::{DocErrorCode, DocMode, CHORD_ALT, CHORD_CTRL, CHORD_META};
 use bifrost_core::json::Json;
 use springboard::deildu::http::Transport;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -172,6 +172,11 @@ const KEY_UP: u32 = 38;
 const KEY_DOWN: u32 = 40;
 /// evdev V, for the paste chord.
 const KEY_V: u32 = 47;
+/// The evdev codes of the other keys the editing chords name: A, C, X and Backspace.
+const KEY_A: u32 = 30;
+const KEY_C: u32 = 46;
+const KEY_X: u32 = 45;
+const KEY_BACKSPACE_CHORD: u32 = 14;
 
 /// What the window is waiting for from Passwords (the passwords group, through `service_reply`).
 enum Pending {
@@ -850,7 +855,7 @@ impl MailWindow {
 
     pub fn key(&mut self, ctx: &Ctx, k: KeyInput) -> bool {
         if let Some((key, mods)) = k.as_chord() {
-            return key == KEY_V && mods & (CHORD_CTRL | CHORD_META) != 0 && self.paste();
+            return self.chord(key, mods);
         }
         if self.mail.sheet.is_none() {
             return self.find_key(k);
@@ -960,6 +965,80 @@ impl MailWindow {
         let (origin, line_h, area) = self.reader_metrics;
         let position = origin + span.line as f32 * line_h;
         self.reader_scroll.jump_to((position - area / 3.0).max(0.0));
+    }
+
+    /// A chord for the field of the open sheet: Cmd or Ctrl with V, C or X, Cmd+A (select all), Option or Ctrl with Backspace
+    /// (the word before the caret) and Cmd+Backspace (everything before it). The shell sends Select All, Copy, Cut and Paste as
+    /// commands when it can (`Mail::commands`); the chords are what arrives when it cannot.
+    fn chord(&mut self, key: u32, mods: u32) -> bool {
+        let primary = mods & (CHORD_CTRL | CHORD_META) != 0;
+        if key == KEY_V && primary {
+            return self.paste();
+        }
+        if self.mail.sheet.is_none() {
+            return false;
+        }
+        if key == KEY_A && mods & CHORD_META != 0 {
+            return self.select_all();
+        }
+        if key == KEY_C && primary {
+            return self.copy();
+        }
+        if key == KEY_X && primary {
+            return self.cut();
+        }
+        if key == KEY_BACKSPACE_CHORD && mods & (CHORD_ALT | CHORD_CTRL) != 0 {
+            return self.edit_field(|form| form.delete_word());
+        }
+        if key == KEY_BACKSPACE_CHORD && mods & CHORD_META != 0 {
+            return self.edit_field(|form| form.delete_to_start());
+        }
+        false
+    }
+
+    /// An edit of the sheet's focused field that is not typing; false for the From picker, which takes no text.
+    fn edit_field(&mut self, change: impl FnOnce(&mut crate::state::Form)) -> bool {
+        if self.mail.sheet.is_none() || self.focus_is_picker() {
+            return false;
+        }
+        self.edit_form(change);
+        self.mail.sync_recipient_field();
+        self.dirty = true;
+        true
+    }
+
+    /// Edit > Select All in the open sheet: the whole text of the focused field is selected, so typing, Backspace or Paste
+    /// replaces it (an Add Account form retyped from the start). False when no field with text has the focus.
+    pub fn select_all(&mut self) -> bool {
+        if self.focus_is_picker() {
+            return false;
+        }
+        let done = self.form_mut().is_some_and(|form| form.select_all());
+        self.dirty |= done;
+        done
+    }
+
+    /// Edit > Copy: the selected text of the focused field goes on the clipboard. A password is never copied. Nothing changes
+    /// on screen, so the window needs no frame.
+    pub fn copy(&mut self) -> bool {
+        if let Some(text) = self.form_mut().and_then(|form| form.selected_text().map(str::to_string)) {
+            clipboard::set_text(&text);
+        }
+        false
+    }
+
+    /// Edit > Cut: the selected text of the focused field goes on the clipboard and leaves the field.
+    pub fn cut(&mut self) -> bool {
+        if self.focus_is_picker() {
+            return false;
+        }
+        let mut cut = None;
+        self.edit_form(|form| cut = form.cut());
+        let Some(text) = cut else { return false };
+        clipboard::set_text(&text);
+        self.mail.sync_recipient_field();
+        self.dirty = true;
+        true
     }
 
     pub fn paste(&mut self) -> bool {
@@ -3039,6 +3118,7 @@ impl MailWindow {
                     .map_or((false, false), |f| (f.label == "From", f.choice));
                 if let Some(form) = self.form_mut() {
                     form.focus_on(index);
+                    form.deselect();
                 }
                 self.mail.sync_recipient_field();
                 if choice {

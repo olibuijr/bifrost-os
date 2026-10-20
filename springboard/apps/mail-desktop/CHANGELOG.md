@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.15.5 — 2026-10-20
+
+- Select All (Cmd+A) in a sheet's field selects the field's whole text, and typing, Paste or Backspace replaces it, so an Add
+  Account form can be retyped from the start. Copy and Cut take the selected text to the clipboard (a password is never
+  copied or cut). Option+Backspace deletes the last word of the field and Cmd+Backspace the whole text.
+
 ## 0.15.4 — 2026-10-20
 
 - With no account the Favorites rows, Inbox included, are greyed and do nothing; they come alive once an account is added.
