@@ -385,7 +385,7 @@ fn sync_app_types(apps: &[Installed]) {
     }
 }
 /// How many installed apps the registry holds. A slot is a `u8` on the wire and in the window table, and the Dock and
-/// Launchpad list the first 200; a package beyond the limit is not listed or launchable, and the shell says so (`merge_installed`).
+/// the app grid list the first 200; a package beyond the limit is not listed or launchable, and the shell says so (`merge_installed`).
 pub const MAX_INSTALLED: usize = 200;
 static IGNORED_REPORTED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 

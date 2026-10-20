@@ -874,9 +874,10 @@ impl Broker {
 
     /// A read grant for `path` (absolute, under the home) for a drag `app_id` begins: the file items of the drag carry it,
     /// and the shell releases it when the drag ends (`dnd`). Paths outside the home are `Denied`, as are symlinks, and
-    /// so is every path the person did not hand to this app: only a file or folder the app already holds a grant for
-    /// (chosen in an open or save panel, dropped or shared onto it) can be granted again. An app cannot name its way
-    /// to the rest of the home folder.
+    /// so is every path the person did not hand to a `documents`-only app: only a file or folder it already holds a grant
+    /// for (chosen in an open or save panel, dropped or shared onto it) can be granted again, so it cannot name its way
+    /// to the rest of the home folder. An app that holds `storage` already has the whole home bound read-write, so a
+    /// descriptor gives it nothing new and the grant-list requirement is skipped for it (Files drags what it browses).
     fn drag_grant(&mut self, app_id: &str, request: u32, path: &str) -> (ToApp, Option<std::fs::File>) {
         let refuse = |code| (ToApp::DocError { request, code }, None);
         let Ok(rel) = Path::new(path).strip_prefix(self.opener.home()) else { return refuse(DocErrorCode::Denied) };
@@ -884,7 +885,7 @@ impl Broker {
             return refuse(DocErrorCode::Denied);
         }
         let rel = rel.to_path_buf();
-        if !self.grants.of_app(app_id).any(|g| g.path == rel) {
+        if !super::services::app_has_permission(app_id, "storage") && !self.grants.of_app(app_id).any(|g| g.path == rel) {
             return refuse(DocErrorCode::Denied);
         }
         let f = match self.opener.open_any(&rel, DocMode::Read) {
