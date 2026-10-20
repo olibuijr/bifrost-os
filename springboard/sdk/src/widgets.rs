@@ -448,8 +448,13 @@ pub fn toolbar_lead_pt() -> f32 {
 
 /// `bounds` (points) moved clear of the traffic lights: a toolbar row that begins left of `toolbar_lead_pt` and meets the
 /// lights' rows starts at `toolbar_lead_pt` instead and loses that much width. A bar below or above the lights' band,
-/// or one that already starts clear of them (a content toolbar beside a sidebar), is returned unchanged.
+/// or one that already starts clear of them (a content toolbar beside a sidebar), is returned unchanged, as is every bar
+/// of a window that has no lights over its content (`layout::traffic_lights_over_content`).
 pub fn clear_of_traffic_lights(bounds: Rect) -> Rect {
+    // no lights over the content (a classic title-bar window, a tablet): nothing to clear
+    if !crate::layout::traffic_lights_over_content() {
+        return bounds;
+    }
     let lead = toolbar_lead_pt();
     let (top, bottom) = crate::layout::traffic_lights_band();
     if bounds.x >= lead || bounds.y >= bottom || bounds.y + bounds.h <= top {
@@ -1722,6 +1727,23 @@ mod tests {
         assert_eq!(clear_of_traffic_lights_in(Rect { x: 0.0, ..pane }, 40.0).x, lead - 40.0);
         // a window narrower than the lights leaves no negative width
         assert_eq!(clear_of_traffic_lights(Rect { x: 0.0, y: 0.0, w: 20.0, h: bar }).w, 0.0);
+    }
+
+    #[test]
+    fn a_window_without_lights_over_its_content_keeps_its_toolbar_where_it_is() {
+        use bifrost_ui::form_factor::FormFactor;
+        let bar = Rect { x: 0.0, y: 0.0, w: 600.0, h: crate::layout::UNIFIED_BAR_PT };
+        // which windows and form factors have lights over the content
+        assert!(crate::layout::lights_over_content(Some("full-size"), FormFactor::Desktop));
+        assert!(crate::layout::lights_over_content(None, FormFactor::Desktop), "not told: the full-size layout");
+        assert!(!crate::layout::lights_over_content(Some(""), FormFactor::Desktop), "a classic title-bar window");
+        assert!(!crate::layout::lights_over_content(Some("native"), FormFactor::Desktop));
+        assert!(!crate::layout::lights_over_content(Some("full-size"), FormFactor::Tablet), "the tablet has no lights");
+        crate::layout::TEST_LIGHTS.with(|t| t.set(Some(false)));
+        assert_eq!(clear_of_traffic_lights(bar), bar);
+        assert_eq!(clear_of_traffic_lights_in(bar, 0.0), bar);
+        crate::layout::TEST_LIGHTS.with(|t| t.set(Some(true)));
+        assert_eq!(clear_of_traffic_lights(bar).x, toolbar_lead_pt());
     }
 
     #[test]

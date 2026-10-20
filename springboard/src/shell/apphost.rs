@@ -620,6 +620,12 @@ pub struct AppHost {
     early: std::collections::VecDeque<Early>,
 }
 
+/// The `window` value of the manifest beside `exec` (empty for a classic title-bar window), `None` when there is none.
+fn manifest_window_style(exec: &Path) -> Option<String> {
+    let text = std::fs::read_to_string(exec.parent()?.join("manifest.toml")).ok()?;
+    Manifest::parse(&text).map(|m| m.window)
+}
+
 impl AppHost {
     /// Starts `exec` with the app end of a fresh socketpair and sends `cfg`.
     pub fn spawn(id: &str, exec: &Path, data_dir: &Path, shell_dir: &Path, cfg: Configure) -> std::io::Result<AppHost> {
@@ -653,6 +659,12 @@ impl AppHost {
             .stdin(Stdio::null())
             .current_dir(data_dir);
         if std::env::var_os("SPRINGBOARD_WAYLAND").is_none() {cmd.env("BIFROST_SHELL_DIR",shell_dir);}
+        // the window style, so the app knows whether the traffic lights sit over its content (`layout::traffic_lights_over_content`);
+        // never inherited from the shell's own environment
+        match manifest_window_style(exec) {
+            Some(style) => cmd.env("BIFROST_WINDOW", style),
+            None => cmd.env_remove("BIFROST_WINDOW"),
+        };
         // SAFETY: only async-signal-safe fcntl between fork and exec.
         unsafe {
             cmd.pre_exec(move || {
@@ -2744,6 +2756,22 @@ mod tests {
         let sys = Manifest::parse("id = \"a.b\"\nname = \"x\"\nkind = \"system\"\nprovides = [\"keyboard\"]").unwrap();
         assert!(sys.is_system() && sys.exec.is_empty() && sys.provides == ["keyboard"]);
         assert!(Manifest::parse("id = \"a.b\"\nname = \"x\"\nkind = \"system\"\nexec = \"../x\"").is_none());
+    }
+
+    #[test]
+    fn the_window_style_comes_from_the_manifest_beside_the_executable() {
+        let root = std::env::temp_dir().join(format!("system-pkgs-window-style-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let write = |dir: &str, extra: &str| {
+            let d = root.join(dir);
+            std::fs::create_dir_all(&d).unwrap();
+            std::fs::write(d.join("manifest.toml"), format!("id = \"a.b\"\nname = \"x\"\nexec = \"x\"\n{extra}")).unwrap();
+            d.join("x")
+        };
+        assert_eq!(manifest_window_style(&write("full", "window = \"full-size\"\n")).as_deref(), Some("full-size"));
+        assert_eq!(manifest_window_style(&write("classic", "")).as_deref(), Some(""), "a classic window is told apart from an unknown one");
+        assert_eq!(manifest_window_style(&root.join("none/x")), None, "no manifest: the app keeps the full-size layout");
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

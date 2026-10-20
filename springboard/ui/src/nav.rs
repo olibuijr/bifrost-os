@@ -337,7 +337,8 @@ impl Toolbar {
             x += w;
         }
         let overflow: Vec<u32> = self.items[shown..].iter().filter(|i| i.kind == ToolbarKind::Button).map(|i| i.id).collect();
-        let overflow_button = overflowing.then(|| Rect { x: bounds.right() - overflow_w, y: bounds.y, w: overflow_w, h: bounds.h });
+        // never left of the bar: a bar narrower than the button (squeezed by the traffic-light inset) keeps it at its start
+        let overflow_button = overflowing.then(|| Rect { x: (bounds.right() - overflow_w).max(bounds.x), y: bounds.y, w: overflow_w, h: bounds.h });
         ToolbarLayout { visible, overflow, overflow_button, groups }
     }
 }
@@ -465,6 +466,15 @@ mod tests {
         assert!(ob.right() <= b.right() + 0.01);
         assert_eq!(l.visible.len() + l.overflow.len(), 4, "every button is either shown or in the menu");
         assert_eq!(l.overflow.last(), Some(&4));
+    }
+
+    #[test]
+    fn the_overflow_button_never_leaves_a_bar_narrower_than_itself() {
+        let b = Rect { x: 95.0, y: 0.0, w: 20.0, h: 30.0 };
+        let l = bar().layout(b, 40.0, 8.0);
+        let ob = l.overflow_button.expect("every button overflows");
+        assert!(ob.x >= b.x, "the » button starts at the bar's left edge, not left of it: {ob:?}");
+        assert!(l.visible.is_empty());
     }
 
     fn file_manager() -> Toolbar {
