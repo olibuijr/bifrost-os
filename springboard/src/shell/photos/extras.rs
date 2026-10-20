@@ -1593,17 +1593,26 @@ mod tests {
         let (mut p, dir, ui) = photos("copy-edits", 3);
         p.open_viewer(0);
         p.tick(&ui, 1000.0);
-        pump_until(&mut p, &ui, |p| p.full.len() >= 1);
+        // The viewer decodes the shown picture and its neighbour on worker threads, in no fixed order; Edit only opens
+        // once the shown one is there, so wait for that one and not for any picture.
+        let shown = p.viewing().expect("the viewer shows a photo").key();
+        pump_until(&mut p, &ui, |p| p.full.contains(&shown));
         let cy = p.bar_top(&ui) + ui.pt(BAR_PT) / 2.0;
         tap(&mut p, &ui, 1200.0 * 0.69, cy, 2000.0);
+        assert!(p.editor.is_some(), "the Edit button opens the editor on the shown picture");
         let (row, top) = (ui.pt(EDIT_ROW_PT), p.edit_panel_top(&ui));
         tap(&mut p, &ui, 1200.0 / 4.0 * 3.5, top + row * 2.5, 2100.0);
+        assert_eq!(p.editor.as_ref().map(|e| e.pane), Some(EditPane::Tools));
         // rotate once and brighten
         tap(&mut p, &ui, 1200.0 / 6.0, top + row * 3.5, 2200.0);
+        assert_eq!(p.editor.as_ref().map(|e| e.edit.turns), Some(3), "Rotate Left is a quarter back");
         tap(&mut p, &ui, 1200.0 / 4.0 * 0.5, top + row * 2.5, 2250.0);
+        assert_eq!(p.editor.as_ref().map(|e| e.pane), Some(EditPane::Adjust));
         let (_, x1) = p.slider_track(&ui);
         tap(&mut p, &ui, x1, top + row * 3.5, 2300.0);
+        assert_eq!(p.editor.as_ref().map(|e| e.edit.brightness), Some(1.0));
         tap(&mut p, &ui, 1200.0 / 4.0 * 3.5, top + row * 2.5, 2350.0);
+        assert_eq!(p.editor.as_ref().map(|e| e.pane), Some(EditPane::Tools));
         tap(&mut p, &ui, 300.0, top + row * 5.5, 2400.0);
         let clip = p.edit_clip.expect("Copy Edits keeps the edit");
         assert_eq!((clip.turns, clip.brightness), (3, 1.0));
