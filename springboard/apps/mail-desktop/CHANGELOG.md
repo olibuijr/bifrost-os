@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.15.5 — 2026-10-20
+
+- Add Account asks for a name, an address and a password. The servers are found from the address: the domain's autoconfig
+  file (`autoconfig.<domain>`, then `.well-known`, over https), then the DNS service records of RFC 6186
+  (`_imaps`, `_imap`, `_submissions`, `_submission`), then the domain's own mail exchanger, and `imap.` and `smtp.` of the
+  domain only when they exist. The sheet says what it is looking up and why when nothing is found. Servers that only DNS
+  names, and that are outside the address's domain, are shown for confirmation before the password goes to them.
+- Configure Manually (click or Space) shows the server fields for an account that is set up by hand.
+- Senders, recipients, subjects and file names are read properly from RFC 2047 encoded words: B and Q encodings in any
+  case, UTF-8, US-ASCII, ISO-8859-1, ISO-8859-15 and Windows-1252, adjacent words joined, a word that is malformed left
+  as written. File names also read the RFC 2231 forms (`filename*=utf-8''...` and continuations). A name that decodes
+  to one with a comma stays one recipient.
+- Message text from HTML decodes every named and numeric character reference (`&bull;`, `&#8202;`, `&#x2022;`); the
+  invisible padding characters senders put in the preview line are dropped.
+- Declared charsets other than UTF-8 are read for message bodies too (Windows-1252, ISO-8859-15).
+- Emoji in subjects and text draw in colour: the emoji font of the system is found on a PC (see the system CHANGELOG).
+
 ## 0.15.4 — 2026-10-20
 
 - With no account the Favorites rows, Inbox included, are greyed and do nothing; they come alive once an account is added.
