@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.15.3 — 2026-10-20
+
+- The title "Mail" starts clear of the window buttons instead of running under them, and the toolbar starts after them too.
+- The toolbar buttons are symbols (New Message, Get Mail, Reply, Reply All, Archive, Move to Trash) in capsules, not text buttons.
+- The sidebar has Favorites (Inbox, Drafts, Sent, Junk, Trash) and Mailboxes with a symbol for each mailbox; with no account the rows are greyed and Mailboxes says there are none.
+
 ## 0.15.2
 
 - BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.

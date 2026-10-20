@@ -67,7 +67,7 @@ pub fn polygon_verbs(pts: &[(f32, f32)]) -> Vec<PathVerb> {
 }
 
 /// Every name `glyph` draws, for galleries and tests.
-pub const NAMES: [&str; 70] = [
+pub const NAMES: [&str; 76] = [
     "chevron.left", "chevron.right", "sidebar.left", "square.grid.2x2", "list.bullet", "rectangle.split.3x1",
     "magnifyingglass", "xmark.circle.fill", "folder", "folder.badge.plus", "checkmark.circle", "clock",
     "menubar.dock.rectangle", "doc", "arrow.down.circle", "house", "desktopcomputer", "internaldrive", "trash", "tag",
@@ -78,6 +78,7 @@ pub const NAMES: [&str; 70] = [
     "calculator", "cloud.sun", "ellipsis.circle", "info.circle", "flag", "calendar",
     "arrow.clockwise", "xmark", "rectangle.grid.1x2", "chevron.up", "text.alignleft", "square.on.square",
     "bold", "italic", "underline", "strikethrough", "text.aligncenter", "text.alignright", "text.justify", "list.number",
+    "tray", "paperplane", "archivebox", "xmark.bin", "arrowshape.turn.up.left", "arrowshape.turn.up.left.2",
 ];
 
 /// True when `name` has a drawing.
@@ -508,6 +509,35 @@ pub fn glyph(s: &mut dyn Canvas, ui: &Ui, name: &str, bounds: Rect, color: u32) 
             poly(s, &[(0.6, 0.42), (0.8, 0.42)], false);
             poly(s, &[(0.28, 0.58), (0.8, 0.58)], false);
             poly(s, &[(0.28, 0.72), (0.8, 0.72)], false);
+        }
+        // Mail's mailboxes and message actions: the inbox tray, the sent plane, the archive and junk boxes, reply and reply all
+        "tray" => {
+            poly(s, &[(0.1, 0.56), (0.22, 0.14), (0.78, 0.14), (0.9, 0.56), (0.9, 0.86), (0.1, 0.86)], true);
+            poly(s, &[(0.1, 0.56), (0.34, 0.56), (0.4, 0.7), (0.6, 0.7), (0.66, 0.56), (0.9, 0.56)], false);
+        }
+        "paperplane" => {
+            poly(s, &[(0.1, 0.46), (0.9, 0.12), (0.62, 0.9), (0.46, 0.58)], true);
+            poly(s, &[(0.9, 0.12), (0.46, 0.58)], false);
+        }
+        "archivebox" => {
+            rbox(s, 0.08, 0.14, 0.84, 0.22, 0.04);
+            poly(s, &[(0.14, 0.36), (0.14, 0.86), (0.86, 0.86), (0.86, 0.36)], false);
+            poly(s, &[(0.4, 0.54), (0.6, 0.54)], false);
+        }
+        "xmark.bin" => {
+            rbox(s, 0.08, 0.14, 0.84, 0.22, 0.04);
+            poly(s, &[(0.14, 0.36), (0.14, 0.86), (0.86, 0.86), (0.86, 0.36)], false);
+            poly(s, &[(0.38, 0.5), (0.62, 0.74)], false);
+            poly(s, &[(0.62, 0.5), (0.38, 0.74)], false);
+        }
+        "arrowshape.turn.up.left" => {
+            poly(s, &[(0.4, 0.2), (0.12, 0.46), (0.4, 0.72)], false);
+            poly(s, &[(0.12, 0.46), (0.6, 0.46), (0.86, 0.6), (0.86, 0.84)], false);
+        }
+        "arrowshape.turn.up.left.2" => {
+            poly(s, &[(0.3, 0.2), (0.06, 0.46), (0.3, 0.72)], false);
+            poly(s, &[(0.52, 0.2), (0.28, 0.46), (0.52, 0.72)], false);
+            poly(s, &[(0.28, 0.46), (0.62, 0.46), (0.88, 0.6), (0.88, 0.84)], false);
         }
         _ => return false,
     }
