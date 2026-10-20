@@ -3285,7 +3285,8 @@ mod tests {
         form(&mut mail).select_all();
         assert_eq!(edit_enabled(&mail), (true, true, true, true), "a selection can be copied and cut");
         // a password is never copied or cut
-        form(&mut mail).focus_on(3);
+        let secret = form(&mut mail).fields.iter().position(|f| f.secret).expect("a password field");
+        form(&mut mail).focus_on(secret);
         form(&mut mail).type_text("hunter2");
         form(&mut mail).select_all();
         assert_eq!(edit_enabled(&mail), (true, false, false, true), "a secret field gives nothing up");
