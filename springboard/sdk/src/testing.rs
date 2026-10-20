@@ -19,7 +19,7 @@ pub use bifrost_core::pin::{pinned, ENV_PIN, PINNED_SEED, PINNED_UNIX_SECS};
 
 /// Pins the clock and seed for this process and the app binaries it spawns. Call it once, before spawning.
 pub fn pin() {
-    std::env::set_var(ENV_PIN, "1");
+    bifrost_core::pin::pin_process();
 }
 
 /// Wall-clock Unix seconds: [`PINNED_UNIX_SECS`] when pinned, else the system clock.

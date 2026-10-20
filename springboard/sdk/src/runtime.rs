@@ -585,6 +585,7 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
     let mut last_all = false;
     let mut first_turn_flag = true;
     let mut clip_seen = kit::clipboard::text();
+    let mut clip_rev = kit::clipboard::revision();
     let mut open = true;
     let mut commands_seen = None;
     let mut pointer_interest_sent = 0u32;
@@ -663,11 +664,16 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
             };
             let Ok(msg) = ToApp::decode(&pkt) else { continue };
             let now = now_ms();
-            busy = true;
+            // pointer motion and touch frames (hundreds a second) publish nothing by themselves: they count as a busy
+            // turn only when the app says it changed (it asked for a frame); every other packet may change what is published
+            let motion = matches!(msg, ToApp::Touch { kind: TouchKind::Move, .. } | ToApp::Touches(_));
+            busy |= !motion;
             if let ToApp::Touch { kind: TouchKind::Move, id, x, y, t_ms } = msg {
                 if let Some(h) = held_move.replace((id, x, y, t_ms)) {
                     if h.0 != id {
-                        need_frame |= deliver_move(&mut app, ctx.as_ref(), &mut touch_router, h, now);
+                        let changed = deliver_move(&mut app, ctx.as_ref(), &mut touch_router, h, now);
+                        need_frame |= changed;
+                        busy |= changed;
                     }
                 }
                 continue;
@@ -678,13 +684,17 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                 if let Some(c) = &ctx {
                     localize(&mut ev, now);
                     if let Some(ev) = touch_router.frame(app.wants_touch_events(), ev) {
-                        need_frame |= app.touches(c, &ev);
+                        let changed = app.touches(c, &ev);
+                        need_frame |= changed;
+                        busy |= changed;
                     }
                 }
                 continue;
             }
             if let Some(h) = held_move.take() {
-                need_frame |= deliver_move(&mut app, ctx.as_ref(), &mut touch_router, h, now);
+                let changed = deliver_move(&mut app, ctx.as_ref(), &mut touch_router, h, now);
+                need_frame |= changed;
+                busy |= changed;
             }
             match msg {
                 ToApp::Configure(cfg) => {
@@ -876,6 +886,7 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                 ToApp::Clipboard { text } => {
                     kit::clipboard::set_text(&text);
                     clip_seen = kit::clipboard::text();
+                    clip_rev = kit::clipboard::revision();
                 }
                 ToApp::NotificationAction { id, action, text, thread, category, user_info } => {
                     if let Some(c) = &ctx {
@@ -987,7 +998,9 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
             }
         }
         if let Some(h) = held_move.take() {
-            need_frame |= deliver_move(&mut app, ctx.as_ref(), &mut touch_router, h, now_ms());
+            let changed = deliver_move(&mut app, ctx.as_ref(), &mut touch_router, h, now_ms());
+            need_frame |= changed;
+            busy |= changed;
         }
         if !open {
             break;
@@ -1018,11 +1031,20 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                     let _ = crate::widgets::take_frame_materials();
                     let full = first_frame || app.full_redraw();
                     let sent = draw_into(&chan, &mut app, c, slots, i, t, first_frame, &mut last_all, last);
-                    // a partial redraw may skip the sidebar: keep the regions it declared until a frame draws some
-                    // (or a full redraw draws none)
+                    // a full redraw declares every region; a partial one only those inside what it redrew, so the regions
+                    // outside that damage are kept (the toolbar band stays blurred after only the sidebar redrew)
                     let drawn = crate::widgets::take_frame_materials();
-                    if sent && (full || !drawn.is_empty()) {
-                        materials = drawn;
+                    if sent {
+                        if full {
+                            materials = drawn;
+                        } else {
+                            let scale = c.cfg.scale.max(0.01);
+                            let damage: Vec<(f32, f32, f32, f32)> = take_reported_damage()
+                                .iter()
+                                .map(|r| (r[0] as f32 / scale, r[1] as f32 / scale, (r[0] + r[2]) as f32 / scale, (r[1] + r[3]) as f32 / scale))
+                                .collect();
+                            merge_materials(&mut materials, drawn, &damage, 1.0 / scale);
+                        }
                     }
                     if sent {
                         busy = true;
@@ -1065,10 +1087,8 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
         }
         // flush requests and clipboard changes
         flush_out(&chan, c);
-        let now_clip = kit::clipboard::text();
-        if now_clip != clip_seen {
-            clip_seen = now_clip.clone();
-            let _ = chan.send(&ToShell::SetClipboard { text: now_clip.unwrap_or_default() }.encode(), &[]);
+        if let Some(text) = clipboard_changed(&mut clip_rev, &mut clip_seen) {
+            let _ = chan.send(&ToShell::SetClipboard { text }.encode(), &[]);
         }
     }
 }
@@ -1317,8 +1337,49 @@ fn paint_slot(chan: &Channel, slots: &mut [Slot; 2], i: usize, (w, h): (usize, u
         }
     }
     cur.held = true;
+    REPORTED_DAMAGE.with(|r| *r.borrow_mut() = reported);
     let _ = chan.send(&frame(i as u32, rects).encode(), &[]);
     true
+}
+
+thread_local! {
+    /// What the app redrew in the last frame `paint_slot` sent (px, x y w h), for the region-wise material merge.
+    static REPORTED_DAMAGE: RefCell<Vec<Rect>> = const { RefCell::new(Vec::new()) };
+}
+
+fn take_reported_damage() -> Vec<Rect> {
+    REPORTED_DAMAGE.with(|r| std::mem::take(&mut *r.borrow_mut()))
+}
+
+/// Folds the material regions a partial redraw declared (`fresh`) into the stored list. `damage` is what the frame
+/// redrew in points (x0, y0, x1, y1): a stored region wholly inside it was drawn again (or went away), so it is
+/// replaced by `fresh`; regions outside it were not redrawn and stay. `slack` (points) absorbs pixel rounding.
+fn merge_materials(stored: &mut Vec<crate::proto::Material>, fresh: Vec<crate::proto::Material>, damage: &[(f32, f32, f32, f32)], slack: f32) {
+    stored.retain(|m| {
+        let r = m.rect;
+        !damage.iter().any(|&(x0, y0, x1, y1)| r.x >= x0 - slack && r.y >= y0 - slack && r.x + r.w <= x1 + slack && r.y + r.h <= y1 + slack)
+    });
+    for m in fresh {
+        if !stored.contains(&m) && stored.len() < crate::proto::MAX_MATERIALS {
+            stored.push(m);
+        }
+    }
+}
+
+/// The clipboard text when it changed since the last call, else `None`. The revision is compared first, so a turn
+/// where nothing was copied clones no text.
+fn clipboard_changed(rev_seen: &mut u64, text_seen: &mut Option<String>) -> Option<String> {
+    let rev = kit::clipboard::revision();
+    if rev == *rev_seen {
+        return None;
+    }
+    *rev_seen = rev;
+    let now = kit::clipboard::text();
+    if now == *text_seen {
+        return None;
+    }
+    *text_seen = now.clone();
+    Some(now.unwrap_or_default())
 }
 
 /// Brings `cur` up to date with `other`: everything when `cur` is wholly stale, else the rectangles `other` drew since;
@@ -1943,5 +2004,69 @@ mod tree_merge_tests {
     fn the_merged_tree_stays_within_the_packet_limit() {
         let links: Vec<AxLink> = (0..300).map(|i| AxLink { id: i, parent: 999 }).collect();
         assert_eq!(merge_tree(Vec::new(), &links).len(), crate::proto::MAX_NODE_EXT);
+    }
+}
+
+#[cfg(test)]
+mod publish_tests {
+    use super::{clipboard_changed, merge_materials};
+    use crate::proto::{Material, MaterialKind};
+    use bifrost_ui::Rect as UiRect;
+
+    fn mat(kind: MaterialKind, x: f32, y: f32, w: f32, h: f32) -> Material {
+        Material::new(kind, UiRect { x, y, w, h }, 0.0)
+    }
+
+    #[test]
+    fn a_partial_redraw_keeps_the_regions_it_did_not_redraw() {
+        let sidebar = mat(MaterialKind::Sidebar, 0.0, 0.0, 200.0, 600.0);
+        let toolbar = mat(MaterialKind::Titlebar, 200.0, 0.0, 600.0, 52.0);
+        let mut stored = vec![sidebar, toolbar];
+        // only the sidebar redrew, and it declared its material again
+        merge_materials(&mut stored, vec![sidebar], &[(0.0, 0.0, 200.0, 600.0)], 0.0);
+        assert_eq!(stored, vec![toolbar, sidebar], "the toolbar band survives, the sidebar is not duplicated");
+        // the sidebar redrew without a material (it was removed): its region goes, the toolbar stays
+        merge_materials(&mut stored, vec![], &[(0.0, 0.0, 200.0, 600.0)], 0.0);
+        assert_eq!(stored, vec![toolbar]);
+        // a region only partly inside the damage was not redrawn as a whole: it stays
+        merge_materials(&mut stored, vec![], &[(300.0, 0.0, 400.0, 52.0)], 0.0);
+        assert_eq!(stored, vec![toolbar]);
+        // the same region declared with a new size replaces the old one
+        let wider = mat(MaterialKind::Sidebar, 0.0, 0.0, 240.0, 600.0);
+        merge_materials(&mut stored, vec![wider], &[(0.0, 0.0, 240.0, 600.0)], 0.0);
+        assert_eq!(stored, vec![toolbar, wider]);
+    }
+
+    #[test]
+    fn pixel_rounding_does_not_keep_a_redrawn_region() {
+        let sidebar = mat(MaterialKind::Sidebar, 0.0, 0.0, 200.0, 600.0);
+        let mut stored = vec![sidebar];
+        // the damage is a hair smaller than the region once converted from px
+        merge_materials(&mut stored, vec![], &[(0.0, 0.0, 199.7, 600.0)], 0.64);
+        assert!(stored.is_empty());
+    }
+
+    #[test]
+    fn the_stored_list_never_exceeds_the_wire_limit() {
+        let mut stored = Vec::new();
+        let fresh: Vec<Material> = (0..40).map(|i| mat(MaterialKind::Sidebar, i as f32, 0.0, 1.0, 1.0)).collect();
+        merge_materials(&mut stored, fresh, &[], 0.0);
+        assert_eq!(stored.len(), crate::proto::MAX_MATERIALS);
+    }
+
+    #[test]
+    fn the_clipboard_is_cloned_only_when_its_revision_moved() {
+        let _turn = bifrost_render::clipboard::tests::exclusive();
+        let (mut rev, mut seen) = (crate::kit::clipboard::revision(), crate::kit::clipboard::text());
+        assert_eq!(clipboard_changed(&mut rev, &mut seen), None, "nothing copied");
+        crate::kit::clipboard::set_text("copied");
+        assert_eq!(clipboard_changed(&mut rev, &mut seen).as_deref(), Some("copied"));
+        assert_eq!(clipboard_changed(&mut rev, &mut seen), None, "reported once");
+        // the shell's own copy (`ToApp::Clipboard`) is recorded by the loop and is not echoed back
+        crate::kit::clipboard::set_text("from the shell");
+        seen = crate::kit::clipboard::text();
+        assert_eq!(clipboard_changed(&mut rev, &mut seen), None, "same text as already known");
+        crate::kit::clipboard::set_text("");
+        assert_eq!(clipboard_changed(&mut rev, &mut seen).as_deref(), Some(""), "a cleared clipboard is reported as empty text");
     }
 }

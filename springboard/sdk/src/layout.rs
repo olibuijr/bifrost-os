@@ -52,6 +52,30 @@ pub fn traffic_lights_trailing() -> f32 {
     m::TRAFFIC_X0 + 2.0 * m::TRAFFIC_PITCH + TRAFFIC_LIGHT_RADIUS_PT + 8.0
 }
 
+/// Whether the shell draws traffic lights over this app's content at the top left: a full-size-content window on the
+/// desktop form factor. A classic title-bar window has its lights above the content, and a tablet has none, so a
+/// toolbar there needs no inset (`widgets::clear_of_traffic_lights`). The shell tells the app its window style in
+/// `BIFROST_WINDOW` (the manifest's `window`); an app started without it (a test, a tool) keeps the full-size layout.
+pub fn traffic_lights_over_content() -> bool {
+    #[cfg(test)]
+    if let Some(v) = TEST_LIGHTS.with(|t| t.get()) {
+        return v;
+    }
+    static SHOWN: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *SHOWN.get_or_init(|| lights_over_content(std::env::var("BIFROST_WINDOW").ok().as_deref(), bifrost_ui::form_factor::FormFactor::current()))
+}
+
+/// [`traffic_lights_over_content`] for a manifest `window` value (`None`: not told) and a form factor.
+pub fn lights_over_content(window: Option<&str>, form: bifrost_ui::form_factor::FormFactor) -> bool {
+    form.is_desktop() && window.is_none_or(|w| w == "full-size")
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Lets a test pick the answer of [`traffic_lights_over_content`] (the real one reads the machine's form factor).
+    pub(crate) static TEST_LIGHTS: std::cell::Cell<Option<bool>> = const { std::cell::Cell::new(Some(true)) };
+}
+
 /// Radius of a traffic light the shell draws over a full-size-content window, in points (the lights are 14 pt).
 pub const TRAFFIC_LIGHT_RADIUS_PT: f32 = 7.0;
 
