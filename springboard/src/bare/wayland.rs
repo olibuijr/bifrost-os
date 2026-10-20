@@ -602,8 +602,8 @@ fn set_chrome_input(compositor:Option<&wl_compositor::WlCompositor>,surface:&wl_
                 let l=self.state.layer.as_ref().unwrap().get_layer_surface(&s,None,if frame.id==0 {layer::Layer::Top}else{layer::Layer::Overlay},"bifrost-desktop-chrome".into(),&qh,frame.id);
                 l.set_size(frame.width as u32,frame.height as u32);Self::place_chrome(&l,&frame,screen);
                 if frame.input.is_some() {Self::set_chrome_input(self.state.compositor.as_ref(),&s,frame.input,&qh);}
-                // id 3 is Search and id 6 the assistant panel: they take the keyboard from the window in front while open
-                l.set_keyboard_interactivity(if frame.id==3 || frame.id==6 {surface::KeyboardInteractivity::Exclusive} else {surface::KeyboardInteractivity::None});s.commit();
+                // id 3 is Search, id 6 the assistant panel and id 8 the Apps grid: they take the keyboard from the window in front while open
+                l.set_keyboard_interactivity(if frame.id==3 || frame.id==6 || frame.id==8 {surface::KeyboardInteractivity::Exclusive} else {surface::KeyboardInteractivity::None});s.commit();
                 let mut pending=Damage::new(frame.width,frame.height);pending.all();
                 self.state.chrome.insert(frame.id,ChromeWindow{surface:s,layer:l,slots:vec![],configured:false,frame,pending});
             }
@@ -730,7 +730,24 @@ fn set_chrome_input(compositor:Option<&wl_compositor::WlCompositor>,surface:&wl_
             g.zoomed = magnify.is_some();
             let damage = whole.as_ref().unwrap_or(damage);
             let fresh = bifrost_render::glass::take();
-            if damage.pixels() >= w*h { g.glass = fresh; } else { let areas: Vec<_> = damage.areas().iter().map(|a| (a.x0 as f32, a.y0 as f32, a.x1 as f32, a.y1 as f32)).collect(); bifrost_render::glass::merge(&mut g.glass, fresh, &areas); }
+            // the regions the shell redrew count as redrawn even where their pixels came out the same: a panel that
+            // fades out ends on identical pixels, and its blur shape must still go (OV1)
+            let redrawn = bifrost_render::glass::take_redrawn();
+            let before = g.glass.clone();
+            if damage.pixels() >= w*h { g.glass = fresh; } else {
+                let mut areas: Vec<_> = damage.areas().iter().map(|a| (a.x0 as f32, a.y0 as f32, a.x1 as f32, a.y1 as f32)).collect();
+                areas.extend(redrawn);
+                bifrost_render::glass::merge(&mut g.glass, fresh, &areas);
+            }
+            // a shape that came or went changes the backdrop under its bounds, so those bounds are drawn again
+            let moved = bifrost_render::glass::changed_shapes(&before, &g.glass);
+            let grown;
+            let damage = if moved.is_empty() || damage.is_all() { damage } else {
+                let mut d = damage.clone();
+                for (x, y, sw, sh) in moved { d.add(x.floor() as i32, y.floor() as i32, sw.ceil() as i32 + 1, sh.ceil() as i32 + 1); }
+                grown = d;
+                &grown
+            };
             // always consume the flush flag, so an owed glass refresh is not left for a later empty present
             let flush = g.p.take_flush();
             if damage.is_empty() && !flush { return Ok(()); }

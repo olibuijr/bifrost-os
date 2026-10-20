@@ -216,6 +216,11 @@ pub(super) struct Overview {
     scaled: HashMap<(AppId, usize, usize), Image>,
     size: (i32, i32),
     pub(super) grid: AppGrid,
+    /// a press that began on the menu bar or the Dock fell through, so its release must too (the Dock acts on release)
+    pass_up: bool,
+    /// whether the last desktop frame had Overview or the Apps grid on screen: a change repaints the frame, so the
+    /// overlay surface the grid is exported as appears and goes in step with it
+    pub(super) was_visible: bool,
 }
 
 fn dur(kind: Kind) -> f32 {
@@ -758,13 +763,20 @@ impl Shell {
         if !self.desk_active() || self.is_locked() || !(self.overview.open || self.overview.grid.visible()) {
             return None;
         }
-        // the menu bar and the dock stay usable while Overview is open: their presses fall through
-        if let Event::Down(x, y) = ev {
-            let d = self.dock_overlay_rect();
-            let in_dock = x >= d.x as f32 && x < (d.x + d.w) as f32 && y >= d.y as f32 && y < (d.y + d.h) as f32;
-            if y < self.desktop_bar_height() as f32 || in_dock {
-                return None;
+        // the menu bar and the dock stay usable while Overview is open: their presses fall through, and so does the
+        // release that ends one (the Dock acts on release: the Apps icon closes the grid with it, E2E L3)
+        match ev {
+            Event::Down(x, y) => {
+                let d = self.dock_overlay_rect();
+                let in_dock = x >= d.x as f32 && x < (d.x + d.w) as f32 && y >= d.y as f32 && y < (d.y + d.h) as f32;
+                let through = y < self.desktop_bar_height() as f32 || in_dock;
+                self.overview.pass_up = through;
+                if through {
+                    return None;
+                }
             }
+            Event::Up(..) if std::mem::take(&mut self.overview.pass_up) => return None,
+            _ => {}
         }
         let mut ov = std::mem::take(&mut self.overview);
         let r = if ov.grid.visible() { ov.grid.event(self, ev, t) } else { ov.event(self, ev, t) };
@@ -882,6 +894,40 @@ impl Shell {
         self.dirty = true;
         // a modal layer swallows the rest
         let _ = used;
+        true
+    }
+
+    /// Esc while Overview or the Apps grid is open closes it, before the key reaches anything under it; true when taken.
+    pub(super) fn overview_escape(&mut self, t: f64) -> bool {
+        if !(self.overview.open || self.overview.grid.visible()) {
+            return false;
+        }
+        self.overview_key(KEY_ESC, true, KeyMods::default(), t)
+    }
+
+    /// Typing while the Apps grid is open: text goes to its search field, Backspace, Return, Esc and the arrows are its
+    /// keys, and nothing else gets through (the grid is modal, and its overlay surface holds the keyboard); true when
+    /// the grid took it.
+    pub(super) fn overview_typed(&mut self, out: &super::keyboard::Out, t: f64) -> bool {
+        use super::keyboard::Out;
+        if !self.desk_active() || self.is_locked() || !self.overview.grid.visible() {
+            return false;
+        }
+        let code = match out.clone() {
+            Out::Text(text) => {
+                self.overview_type(&text);
+                return true;
+            }
+            Out::Backspace => KEY_BACKSPACE,
+            Out::Enter => KEY_ENTER,
+            Out::Named("Escape") => KEY_ESC,
+            Out::Named("Up") => KEY_UP,
+            Out::Named("Down") => KEY_DOWN,
+            Out::Named("Left") => KEY_LEFT,
+            Out::Named("Right") => KEY_RIGHT,
+            _ => return true,
+        };
+        self.overview_key(code, true, KeyMods::default(), t);
         true
     }
 

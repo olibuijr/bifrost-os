@@ -913,7 +913,9 @@ impl Shell {
     /// room for its shadow: drawn only into the desktop frame they would sit under the windows of the session.
     fn desk_panel_overlays(&self)->Vec<(u32,usize,usize,usize,usize)> {
         let g=self.ui.pt(super::desk::SHADOW_REACH_PT);
-        [(4,self.cc_desk_rect()),(5,self.center_desk_rect())].into_iter().filter_map(|(id,r)|r.map(|r|(id,panel_overlay_rect(r,g)))).map(|(id,(x,y,w,h))|(id,x,y,w,h)).collect()
+        let bar=self.desktop_bar_height();
+        // the surface starts under the menu bar: the shadow margin above a panel must not cover the bar's items
+        [(4,self.cc_desk_rect()),(5,self.center_desk_rect())].into_iter().filter_map(|(id,r)|r.map(|r|(id,panel_overlay_rect(r,g)))).map(|(id,(x,y,w,h))|{let top=y.max(bar);(id,x,top,w,(y+h).saturating_sub(top))}).collect()
     }
     #[cfg(feature="desktop-wayland")]
     pub fn desktop_chrome_frames(&self,pixels:&[u32],width:usize,height:usize)->Vec<crate::bare::wayland::ChromeFrame> {
@@ -950,6 +952,16 @@ impl Shell {
             let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}
             let mut image=Image{w,h,px:data};image.apply_mask(&mask);
             frames.push(crate::bare::wayland::ChromeFrame{id:7,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px,input:None});
+        }
+        // The Apps grid (Launchpad): id 8, an overlay surface above every window that takes the keyboard while it is
+        // open. It spans the veil only, so the menu bar and the Dock stay their own surfaces and stay usable. It is
+        // listed only while the grid is open: the frame it closes in drops the surface (E2E L1, OV1).
+        if let Some((x,y,w,h))=self.overview.grid.overlay_rect(self) {
+            let w=w.min(width.saturating_sub(x));let h=h.min(height.saturating_sub(y));
+            if w>0&&h>0 {
+                let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}
+                frames.push(crate::bare::wayland::ChromeFrame{id:8,x:x as i32,y:y as i32,width:w,height:h,pixels:data,input:None});
+            }
         }
         frames
     }
@@ -1169,6 +1181,25 @@ mod panel_overlay_tests {
     fn a_panel_overlay_covers_the_panel_and_its_shadow() {
         assert_eq!(super::panel_overlay_rect((100.,50.,200.,300.),10.),(90,40,220,320));
         assert_eq!(super::panel_overlay_rect((5.,5.,20.,20.),10.),(0,0,35,35),"clipped at the top-left corner");
+    }
+
+    /// E2E NC2: the column opens under the menu bar, and its overlay surface (shadow margin included) starts there too,
+    /// so the bar's status items and clock stay visible and take their clicks.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn a_panel_overlay_starts_under_the_menu_bar() {
+        let mut sh=crate::shell::tests::desktop_shell();
+        sh.anim=None;
+        // the fixture starts on the lock screen, where the column does not open
+        sh.screen=crate::shell::Screen::Home;
+        sh.open_desk_notification_center(1.0);
+        let bar=sh.desktop_bar_height();
+        let overlays=sh.desk_panel_overlays();
+        let column=overlays.iter().find(|o|o.0==5).expect("the open column is an overlay surface");
+        assert!(column.2>=bar,"the surface starts at y {} under the {bar} px bar",column.2);
+        assert!(column.4>0,"and has height");
+        let top=sh.center_desk_rect().expect("the column is open").1;
+        assert!(top>=bar as f32,"the column itself is under the bar");
     }
 }
 

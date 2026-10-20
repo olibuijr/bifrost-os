@@ -773,12 +773,6 @@ impl Shell {
         if !self.screen_on {
             return vec![];
         }
-        // the Apps grid, while it is open, takes the typing for its search field
-        if let Out::Text(text) = &out {
-            if self.overview_type(text) {
-                return vec![];
-            }
-        }
         // the password sheet of an app's local authentication takes the typing before anything else
         if self.auth_showing() {
             self.auth_type(out, t);
@@ -801,6 +795,10 @@ impl Shell {
         }
         // the account access sheet, the USB prompt and the firewall question take touches only: typing waits for the answer
         if self.access_showing() || self.usb_showing() || self.fw_showing() {
+            return vec![];
+        }
+        // the Apps grid is modal: typing goes to its search field, its own keys move and open, nothing reaches the app
+        if self.overview_typed(&out, t) {
             return vec![];
         }
         // Keyboard Navigation off: Tab does not move focus, though a terminal still gets it for completion
@@ -902,6 +900,10 @@ impl Shell {
         #[cfg(feature = "desktop-wayland")]
         if let Some(fx) = self.desktop_menu_key(1, t) {
             return fx;
+        }
+        // Overview or the Apps grid is a modal layer over the windows: Escape closes it before anything under it
+        if self.overview_escape(t) {
+            return vec![];
         }
         if self.cc_active() {
             self.cc.hide();

@@ -144,6 +144,20 @@ impl AppGrid {
         self.open
     }
 
+    /// The veil's rectangle (x, y, w, h px): between the menu bar and the Dock. On the window server the grid is
+    /// exported as an overlay surface of exactly this size, above every window, with the bar and the Dock left to
+    /// their own surfaces (`Shell::desktop_chrome_frames`, id 8). None once it is closed.
+    #[allow(dead_code)] // the window-server export is the desktop-wayland build's
+    pub(super) fn overlay_rect(&self, sh: &Shell) -> Option<(usize, usize, usize, usize)> {
+        if !self.open {
+            return None;
+        }
+        let m = sh.desk_metrics();
+        let top = m.menubar.max(0);
+        let bottom = m.h - if sh.dock_is_visible() { m.dock_bottom } else { 0 };
+        (m.w > 0 && bottom > top).then(|| (0, top as usize, m.w as usize, (bottom - top) as usize))
+    }
+
     fn lay(&self, sh: &Shell) -> Lay {
         let m = sh.desk_metrics();
         let pt = m.pt;
@@ -588,5 +602,85 @@ mod tests {
         assert_eq!(o, ["a", "d", "b", "c"]);
         reorder(&mut o, "a", "c");
         assert_eq!(o, ["d", "b", "a", "c"]);
+    }
+}
+
+/// The Apps grid as an overlay surface above the windows, and how it closes (E2E L1, L3, OV1).
+#[cfg(all(test, feature = "desktop-wayland"))]
+mod overlay_tests {
+    use crate::gfx::Surface;
+    use crate::shell::hwkeys::Shortcut;
+    use crate::shell::tests::desktop_shell;
+    use crate::shell::{Event, Screen, Shell};
+
+    fn open_grid() -> Shell {
+        let mut sh = desktop_shell();
+        // the fixture starts on the lock screen, where nothing opens and no chrome is exported
+        sh.anim = None;
+        sh.screen = Screen::Home;
+        sh.appgrid_toggle(1.0);
+        assert!(sh.overview.grid.visible(), "the grid opens");
+        sh
+    }
+
+    fn frame_ids(sh: &Shell) -> Vec<u32> {
+        let (w, h) = (sh.w as usize, sh.h as usize);
+        let pixels = vec![0u32; w * h];
+        sh.desktop_chrome_frames(&pixels, w, h).iter().map(|f| f.id).collect()
+    }
+
+    /// Runs the grid's close animation to its end, as the frames after the close would.
+    fn finish(sh: &mut Shell) {
+        let (w, h) = (sh.w as usize, sh.h as usize);
+        let mut px = vec![0u32; w * h];
+        let mut grid = std::mem::take(&mut sh.overview.grid);
+        grid.draw(sh, &mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, 1e9);
+        sh.overview.grid = grid;
+    }
+
+    #[test]
+    fn the_open_grid_is_an_overlay_surface_between_the_bar_and_the_dock_and_closing_removes_it() {
+        let mut sh = open_grid();
+        let (w, h) = (sh.w as usize, sh.h as usize);
+        let pixels = vec![0u32; w * h];
+        let frames = sh.desktop_chrome_frames(&pixels, w, h);
+        let f = frames.iter().find(|f| f.id == 8).expect("the open grid is a chrome surface above the windows");
+        assert_eq!(f.pixels.len(), f.width * f.height);
+        assert_eq!((f.x, f.y as usize, f.width), (0, sh.desktop_bar_height(), w), "the veil: the full width under the menu bar");
+        assert!(f.y as usize + f.height <= h - sh.desk_metrics().dock_bottom.max(0) as usize, "and above the Dock");
+        assert!(f.input.is_none(), "the whole surface takes the pointer, so a click outside the icons closes it");
+        sh.appgrid_toggle(2.0);
+        finish(&mut sh);
+        assert!(!sh.overview.grid.visible());
+        assert!(!frame_ids(&sh).contains(&8), "the frame it closes in drops the surface");
+    }
+
+    #[test]
+    fn escape_closes_the_grid_before_it_reaches_anything_under_it() {
+        let mut sh = open_grid();
+        sh.hw_shortcut(Shortcut::Back, 2.0);
+        finish(&mut sh);
+        assert!(!sh.overview.grid.visible(), "Escape closes the Apps grid");
+        assert!(!frame_ids(&sh).contains(&8));
+    }
+
+    #[test]
+    fn the_dock_icon_closes_it_and_a_click_outside_needs_one_click() {
+        let mut sh = open_grid();
+        // a press on the Dock falls through, and so does its release: the Dock acts on release
+        let d = sh.dock_overlay_rect();
+        let (x, y) = ((d.x + d.w / 2) as f32, (d.y + d.h / 2) as f32);
+        assert!(sh.overview_event(Event::Down(x, y), 2.0).is_none(), "the press reaches the Dock");
+        assert!(sh.overview_event(Event::Up(x, y), 2.1).is_none(), "and so does its release");
+        sh.appgrid_toggle(2.2);
+        finish(&mut sh);
+        assert!(!sh.overview.grid.visible(), "the Apps icon toggles it closed");
+        // one click on the empty veil under the menu bar closes it
+        let mut sh = open_grid();
+        let (cx, cy) = (2.0, sh.desktop_bar_height() as f32 + 2.0);
+        assert!(sh.overview_event(Event::Down(cx, cy), 3.0).is_some());
+        assert!(sh.overview_event(Event::Up(cx, cy), 3.1).is_some());
+        finish(&mut sh);
+        assert!(!sh.overview.grid.visible(), "one click outside the icons closes the grid");
     }
 }
