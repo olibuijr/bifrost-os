@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+## 0.10.17 — 2026-10-20
+
+Keyboard, clipboard and Mail, from the owner's reports and the Mail test with a real account.
+
+- Keyboard: Cmd+A, C, X, V and Z reach the app in front (the shell took them as its own shortcuts and then dropped them
+  for every store app). The shared text engine has the whole standard key table, so every text view and field gets it:
+  select all, copy, cut, paste, undo and redo; Home/End and Cmd+Left/Right, Cmd+Up/Down, Option+Left/Right with Shift
+  to select; Page Up/Down; Option+Backspace, Cmd+Backspace, Option+Delete and Fn+Delete; Ctrl+A/E/K/D/H; double-click
+  a word and triple-click a line. Ctrl+A is line start in an app, not Select All. Shift+click is not yet carried by
+  the app protocol.
+- Clipboard: copies leave the process. The window server offers the data-control protocols (wlr and ext) to the
+  privileged shell and to the user's own unsandboxed programs only (a sandboxed app has its own mount namespace and
+  cannot bind); the shell owns the selection, offers every copy to other programs (`wl-paste`, terminals, the browser)
+  and reads their copies into the shared pasteboard. `BIFROST_WM_DATA_CONTROL=off` removes the globals.
+- App windows: a store app's second window (Mail's compose, any `ctx.open_window`) is drawn above its parent. The
+  shell received its buffers before it knew the window, and the dimmed desktop left behind is gone.
+- Toolbars: the SDK insets a full-size window's toolbar past the window buttons, so Printers and eight other apps no
+  longer draw buttons under them.
+- Mail 0.16.0: Add Account finds the servers from the address (autoconfig file, RFC 6186 service records, the mail
+  exchanger); RFC 2047 headers decoded; HTML character references decoded; colour emoji.
+
 ## 0.10.16 — 2026-10-20
 
 - Moving windows: a full-size app window (Notes, Mail and the other kit apps) drags again from the empty part of its
