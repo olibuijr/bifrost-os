@@ -127,3 +127,31 @@ and Log Out.
 Midget: Dark, Purple accent, volume 0.716, Settings minimised, Music, Notes, Reminders, TextEdit, App Store and the
 earlier windows open. Test data: `~/Documents/e2e-note.rtf`, a "Shopping list" note, a completed "Buy milk" reminder,
 `/Pictures/Screenshot-20261020-014807.png`.
+
+## Re-test on 0.10.9 (03:15 to 03:27)
+
+Midget 0.10.9 (`integration` at `676cb6a82`), apps from the same round installed through the store. Evidence `rNN-*.png`
+next to this file.
+
+| ID | Result | Notes |
+|---|---|---|
+| K1 | Fixed | Cmd+A in the Settings search field selects the text; the state stays `app:settings` (r02). |
+| S1 | Fixed | Cmd+Space opens Spotlight over Settings, Esc closes it with nothing left behind (r03, r04). |
+| K2 | Fixed | The window server no longer binds Cmd+A, so no "Applications:" box. |
+| L1, L3 | Partly | F4 opens Launchpad above the windows, Esc closes it (r05, r06). Clicking the Launchpad icon in the Dock no longer opens it (r07, r08): new finding L4. |
+| MC1 | Fixed | F3 opens Mission Control above the windows with a tile for every window and the desktops strip (r14). Closing with F3 brought Notes to the front instead of Settings: new finding MC2. |
+| OV1 | Partly | Control Centre closes cleanly (r11). Notification Center still leaves blurred tiles until a full redraw (r13). |
+| NC2 | Fixed | Notification Center opens below the menu bar; the clock stays visible (r12). |
+| D3, D2 | Fixed | After the switch to Light every Dock slot keeps its own icon, one plate (r09-dock-crop). |
+| W2 | Fixed | Full screen fills 0,0 at 2560x1440, the Dock hides, Ctrl+Cmd+F restores the old frame (r18). A faint menu bar stays over the window's top edge and clicking green opens a one-item menu: new finding W4. |
+| TE1 | Fixed | Double-click a word and type replaces it; B applies to the selection and the bar shows its state; title "Untitled – Edited" (r22-crop). |
+| SC1, SC2, SC3 | Fixed | Shift+Cmd+3 saves `~/Desktop/Screenshot-….png` owned by the user, with the whole composed screen; the thumbnail sits at the bottom right and slides away (r23, r24). |
+| ST4 | Fixed | Checkmarks, the selection plate and the text selection follow the Purple accent. |
+| N2 | Fixed | The note title shows without "#" (r15). |
+| MU1 | Not fixed | The media service now runs (as the user, socket 0600) but Music never connects to it; Radio plays nothing. |
+| AU1 | Not fixed | The bell plays nothing; the shell logs `sound: default output device: UnknownObject`. |
+
+New: the shell draws a 21-22 ms CPU frame about once a second while idle with zero damage (log `slow frame ... damage=0% path=cpu`).
+
+Fix wave `fix/e2e3-followups`: L4, MC2, OV1 (Notification Center), W4, MU1, AU1 (default output device), the idle frame,
+plus the 0.10.10 build breaks (hdiutil after the control socket change, two capture tests, the control socket test).
