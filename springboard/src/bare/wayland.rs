@@ -1102,8 +1102,10 @@ impl Dispatch<wl_pointer::WlPointer, ()> for State {
                 if s.pressed {if let Some(id)=s.target {s.focused=Some(id);s.window_events.push(WindowEvent::Focus(id));}}
                 let drags=s.target.and_then(|id|s.windows.get(&id)).is_some_and(|w|{let (x,y)=(s.xy.0 as i32,s.xy.1 as i32);
                     s.xy.1<w.frame.drag_height as f32 && !w.frame.no_drag.iter().any(|r|x>=r[0]&&x<r[0]+r[2]&&y>=r[1]&&y<r[1]+r[3])});
-                if s.pressed && drags && s.xy.0 > 80.0 {
-                    if let (Some(w),Some(seat)) = (s.target.and_then(|id| s.windows.get(&id)),s.seat.as_ref()) { w.top._move(seat,serial); return; }
+                // the traffic lights are in `no_drag` (the shell lists them for every window), so a press on one still reaches
+                // the shell as a click; a move grab takes the release, so the press is over for the shell as well
+                if s.pressed && drags {
+                    if let (Some(w),Some(seat)) = (s.target.and_then(|id| s.windows.get(&id)),s.seat.as_ref()) { w.top._move(seat,serial); s.pressed=false; return; }
                 }
                 s.inputs.push(if s.pressed { Event::Down { x:s.xy.0+offset.0,y:s.xy.1+offset.1,t } } else { Event::Up { x:s.xy.0+offset.0,y:s.xy.1+offset.1,t } });
             },

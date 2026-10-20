@@ -496,13 +496,15 @@ pub fn takes_press(role: bifrost_proto::Role) -> bool {
 
 /// `drag_zone` for a window that is (`unified`) or is not a full-size app window.
 fn zone_of(w: &Win, m: &Metrics, controls: &[bifrost_proto::Node], unified: bool) -> (i32, Vec<[i32; 4]>) {
-    if !unified {
-        return (m.title, Vec::new());
-    }
     let pt = m.pt;
-    let band = (UNIFIED_BAR_PT * pt).round() as i32;
     let l2 = w.light_rect(m, 2);
-    let mut out = vec![[0, 0, l2.x + l2.w - w.r.x + (6.0 * pt) as i32, band]];
+    let lights_w = l2.x + l2.w - w.r.x + (6.0 * pt) as i32;
+    // a titled window: the traffic lights (and a margin of 6 pt past the last) take the press, the rest of the title bar moves
+    if !unified {
+        return (m.title, vec![[0, 0, lights_w, m.title]]);
+    }
+    let band = (UNIFIED_BAR_PT * pt).round() as i32;
+    let mut out = vec![[0, 0, lights_w, band]];
     for n in controls.iter().filter(|n| n.bounds.y < UNIFIED_BAR_PT && takes_press(n.role)) {
         let b = n.bounds;
         out.push([(b.x * pt).floor() as i32, (b.y * pt).floor() as i32, (b.w * pt).ceil() as i32, (b.h * pt).ceil() as i32]);
@@ -3426,7 +3428,9 @@ mod tests {
         assert!(drags(band, &holes, 600, 40), "empty toolbar space moves the window");
         assert!(!drags(band, &holes, 1130, 40), "the button does not");
         let (title, none) = zone_of(&w, &m, &nodes, false);
-        assert_eq!((title, none.len()), (m.title, 0), "a window without the style drags from its title bar");
+        assert_eq!((title, none.len()), (m.title, 1), "a window without the style drags from its title bar, but not from the lights");
+        assert!(!drags(title, &none, 12 + 2 * (m.light + m.light_gap) + m.light / 2, m.title / 2), "the green light is not a drag");
+        assert!(drags(title, &none, 600, m.title / 2), "past the lights the title bar drags");
     }
 
     #[test]

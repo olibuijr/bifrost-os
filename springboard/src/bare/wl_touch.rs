@@ -39,14 +39,12 @@ impl Placement {
 }
 
 /// Whether a touch at `local` (window content px) starts a window move: it lands in the title area above
-/// `drag_height`, outside the rectangles `no_drag` (x, y, w, h), and right of the traffic lights.
+/// `drag_height` and outside the rectangles `no_drag` (x, y, w, h), which hold the traffic lights (the shell derives
+/// them from the lights' own rectangles and the scale) and an app's toolbar controls.
 pub fn starts_window_drag(local: (f32, f32), drag_height: i32, no_drag: &[[i32; 4]]) -> bool {
     let (x, y) = (local.0 as i32, local.1 as i32);
-    local.1 < drag_height as f32 && local.0 > TRAFFIC_LIGHTS_PX && !no_drag.iter().any(|r| x >= r[0] && x < r[0] + r[2] && y >= r[1] && y < r[1] + r[3])
+    local.1 < drag_height as f32 && !no_drag.iter().any(|r| x >= r[0] && x < r[0] + r[2] && y >= r[1] && y < r[1] + r[3])
 }
-
-/// Width of the title bar's left edge that holds the window buttons, px: a press there never moves the window.
-const TRAFFIC_LIGHTS_PX: f32 = 80.0;
 
 struct Contact {
     id: i32,
@@ -328,7 +326,7 @@ mod tests {
 
     #[test]
     fn title_area_press_starts_a_window_drag() {
-        let no_drag = [[100, 0, 40, 30]];
+        let no_drag = [[0, 0, 80, 30], [100, 0, 40, 30]];
         assert!(starts_window_drag((300.0, 10.0), 30, &no_drag));
         assert!(!starts_window_drag((300.0, 40.0), 30, &no_drag), "below the title bar");
         assert!(!starts_window_drag((40.0, 10.0), 30, &no_drag), "on the traffic lights");
