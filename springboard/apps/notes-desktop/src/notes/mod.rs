@@ -3372,7 +3372,13 @@ impl Notes {
             self.key(ui, out, t);
         }
         if self.autosave.pending() {
+            let waiting = self.unsaved.is_some();
             self.save(t, false);
+            if waiting && self.unsaved.is_none() {
+                // the debounce lapsed: the list row (title, snippet, date, order) follows the text without a refocus
+                self.rebuild(ui, t);
+                self.dirty = true;
+            }
         }
         if self.poll_images(ui) {
             self.dirty = true;
@@ -3864,6 +3870,25 @@ mod tests {
         assert_eq!(n.editing().unwrap().text, "Shopping\nmilk\neggs");
         let saved = store::load(&dir);
         assert_eq!((saved.len(), saved[0].text.as_str()), (1, "Shopping\nmilk\neggs"), "on disk without waiting for the autosave");
+    }
+
+    #[test]
+    fn the_list_row_follows_the_typed_text_once_the_autosave_fires() {
+        let ui = ui();
+        let dir = scratch("live-row");
+        let mut n = app(&ui, &dir);
+        let (cx, cy) = centre(n.compose_rect(&ui));
+        tap(&mut n, &ui, cx, cy, 1000.0);
+        assert_eq!(n.rows[0].title_text, "New Note", "an empty note, or one holding only the hidden title marker");
+        type_text(&mut n, &ui, "Shopping list", 2000.0);
+        tap_key(&mut n, &ui, "return", 2100.0);
+        type_text(&mut n, &ui, "Milk", 2100.0);
+        n.tick(&ui, 2200.0);
+        assert_eq!(n.rows[0].title_text, "New Note", "not before the debounce lapses");
+        n.tick(&ui, 2700.0);
+        assert_eq!(n.rows[0].title_text, "Shopping list");
+        assert_eq!(n.rows[0].snippet_text, "Milk");
+        assert!(n.editing().is_some(), "the note stays open");
     }
 
     #[test]
