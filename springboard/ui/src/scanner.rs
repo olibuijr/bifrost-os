@@ -6,8 +6,10 @@
 use crate::device_browser::{Device, DeviceKind, Transport};
 use crate::scan_job::{ColorMode, DocumentFormat, FunctionalUnit, FunctionalUnitType, ScanSettings};
 use std::fmt;
+use std::io::Read;
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 
 /// The program that talks to scanners.
 pub const PROGRAM: &str = "scanimage";
@@ -201,9 +203,59 @@ fn run(args: &[String]) -> Result<Vec<u8>, CommandError> {
     }
 }
 
+/// Runs `program` with `args` and returns its standard output, but kills it when it has not finished within `limit`
+/// (a network scanner search can hang). The output is drained on threads so a chatty program never blocks on a full pipe.
+fn run_within(program: &str, args: &[String], limit: Duration) -> Result<Vec<u8>, CommandError> {
+    let mut child = Command::new(program)
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| CommandError::NotInstalled(e.to_string()))?;
+    fn drain<R: Read + Send + 'static>(pipe: Option<R>) -> std::thread::JoinHandle<Vec<u8>> {
+        std::thread::spawn(move || {
+            let mut bytes = Vec::new();
+            if let Some(mut pipe) = pipe {
+                let _ = pipe.read_to_end(&mut bytes);
+            }
+            bytes
+        })
+    }
+    let out = drain(child.stdout.take());
+    let err = drain(child.stderr.take());
+    let deadline = Instant::now() + limit;
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                let out = out.join().unwrap_or_default();
+                let err = err.join().unwrap_or_default();
+                return if status.success() { Ok(out) } else { Err(CommandError::Failed(String::from_utf8_lossy(&err).trim().to_string())) };
+            }
+            Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(20)),
+            Ok(None) => {
+                // too slow: stop the program so it does not outlive the wait (the drain threads end with its pipes)
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(CommandError::Failed("the search took too long".into()));
+            }
+            Err(e) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(CommandError::Failed(e.to_string()));
+            }
+        }
+    }
+}
+
 /// The scanners the system reports now (`scanimage -L`). A scanner that is off or not reachable is not listed.
 pub fn list() -> Result<Vec<ScannerInfo>, CommandError> {
     run(&["-L".to_string()]).map(|out| parse_list(&String::from_utf8_lossy(&out)))
+}
+
+/// Like [`list`], but `scanimage` is killed when it has not answered within `limit`.
+pub fn list_within(limit: Duration) -> Result<Vec<ScannerInfo>, CommandError> {
+    run_within(PROGRAM, &["-L".to_string()], limit).map(|out| parse_list(&String::from_utf8_lossy(&out)))
 }
 
 /// What `device` can do, read from its `--help`. A device whose help cannot be read gets the default capabilities.
@@ -238,6 +290,23 @@ Options specific to device `genesys:libusb:001,004':
   --mode Color|Gray|Lineart [Color]
     Selects the scan mode.
 ";
+
+    #[test]
+    fn a_program_that_outlives_the_limit_is_killed() {
+        let began = Instant::now();
+        let r = run_within("sleep", &["30".to_string()], Duration::from_millis(150));
+        assert!(matches!(r, Err(CommandError::Failed(_))), "{r:?}");
+        assert!(began.elapsed() < Duration::from_secs(5), "{:?}", began.elapsed());
+    }
+
+    #[test]
+    fn a_program_that_finishes_returns_its_output_and_failures_return_stderr() {
+        let ok = run_within("sh", &["-c".to_string(), "echo hello".to_string()], Duration::from_secs(5));
+        assert_eq!(ok, Ok(b"hello\n".to_vec()));
+        let bad = run_within("sh", &["-c".to_string(), "echo nope >&2; exit 3".to_string()], Duration::from_secs(5));
+        assert_eq!(bad, Err(CommandError::Failed("nope".into())));
+        assert!(matches!(run_within("/nonexistent/scanner-tool", &[], Duration::from_secs(1)), Err(CommandError::NotInstalled(_))));
+    }
 
     #[test]
     fn the_device_list_names_each_scanner_and_skips_other_lines() {
