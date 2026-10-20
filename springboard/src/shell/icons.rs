@@ -415,7 +415,7 @@ mod tests {
     }
 }
 
-/// The bifrost tile captured from the reference bifrost (`res/settings-icons`, 58 px at 2x),
+/// The tile drawn for BifrOSt by tools/make-icons.py (`res/settings-icons`, 58 px at 2x),
 /// scaled once per size; None falls back to the drawn tile.
 fn artwork(icon: Icon, px: usize) -> Option<std::sync::Arc<crate::gfx::Image>> {
     use std::collections::HashMap;
