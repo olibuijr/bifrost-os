@@ -20,6 +20,9 @@ use crate::appearance::Pair;
 /// Menu bar and menu materials: the tint over the blurred backdrop (straight alpha, as `glass::tint` takes it).
 pub const BAR_TINT: Pair = Pair::new(pack(28, 28, 30, 220), pack(246, 246, 246, 205));
 pub const MENU_TINT: Pair = Pair::new(pack(28, 28, 30, 240), pack(246, 246, 246, 238));
+/// The tint of the Search field and its results card (and the assistant's panel): lighter than a menu's, so the desktop
+/// shows through the blur as in the reference.
+pub const SEARCH_TINT: Pair = Pair::new(pack(28, 28, 30, 170), pack(246, 246, 246, 160));
 /// Golden Gate menu bar: transparent over the wallpaper; titles and status items are white with a soft dark shadow.
 pub const BAR_TEXT: u32 = WHITE;
 pub const BAR_TEXT_SHADOW: u32 = pack(0, 0, 0, 255);
