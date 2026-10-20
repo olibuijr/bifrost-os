@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.10.7 — 2026-10-20
+
+- BifrOSt now ships and loads only its own and openly licensed files. The reference assets that were packaged under
+  /usr/share/bifrost/ref (fonts, sounds, icons, symbols, wallpapers, cursors) are gone from the package, and nothing
+  loads them at run time; named alert sounds are synthesised, symbols come from BifrOSt own glyphs and Noto Sans
+  Symbols 2, font lookup uses the installed open fonts.
+- New app icons for the built-in apps and new Settings pane icons, drawn for BifrOSt by tools/make-icons.py.
+- A licence guard in tools/ checks every system package, app package and ISO before it is published; system assets
+  are staged from an allowlist (packaging/assets-allowlist.txt).
+
 ## 0.10.6 — 2026-10-19
 
 - Inactive windows are opaque: the window server backs their sidebar and toolbar materials with the recipe's plate
