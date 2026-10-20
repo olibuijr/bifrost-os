@@ -228,6 +228,10 @@ pub enum Shortcut {
     HelpSearch,
     /// Ctrl+Cmd+Q: locks the screen (the System menu's Lock Screen)
     Lock,
+    /// Option+Cmd+Esc: the Force Quit Applications window (the System menu's Force Quit…)
+    ForceQuit,
+    /// Shift+Cmd+Q: asks to log out (the System menu's Log Out)
+    LogOut,
 }
 
 impl Shortcut {
@@ -240,7 +244,7 @@ impl Shortcut {
             Shortcut::SelectAll => "SelectAll",
             Shortcut::Undo => "Undo",
             Shortcut::Redo => "Redo",
-            Shortcut::Term(_) | Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Back | Shortcut::Home | Shortcut::Close | Shortcut::Quit | Shortcut::Minimize | Shortcut::Settings | Shortcut::FullScreen | Shortcut::Tile(_) | Shortcut::CycleWindow | Shortcut::InputSource | Shortcut::ReaderStep(_) | Shortcut::ReaderRotor(_) | Shortcut::ReaderActivate | Shortcut::SpeakSelection | Shortcut::AccessibilityShortcut | Shortcut::Capture | Shortcut::CaptureScreen | Shortcut::CaptureSelection | Shortcut::ZoomToggle | Shortcut::ZoomStep(_) | Shortcut::LookUp | Shortcut::Photo(_) | Shortcut::HelpSearch | Shortcut::Lock | Shortcut::Assistant => return None,
+            Shortcut::Term(_) | Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Back | Shortcut::Home | Shortcut::Close | Shortcut::Quit | Shortcut::Minimize | Shortcut::Settings | Shortcut::FullScreen | Shortcut::Tile(_) | Shortcut::CycleWindow | Shortcut::InputSource | Shortcut::ReaderStep(_) | Shortcut::ReaderRotor(_) | Shortcut::ReaderActivate | Shortcut::SpeakSelection | Shortcut::AccessibilityShortcut | Shortcut::Capture | Shortcut::CaptureScreen | Shortcut::CaptureSelection | Shortcut::ZoomToggle | Shortcut::ZoomStep(_) | Shortcut::LookUp | Shortcut::Photo(_) | Shortcut::HelpSearch | Shortcut::Lock | Shortcut::ForceQuit | Shortcut::LogOut | Shortcut::Assistant => return None,
         }))
     }
 }
@@ -487,6 +491,8 @@ impl HwKeys {
             // Ctrl+Cmd+Q locks the screen; the plain Cmd+Q below quits the front app (Cmd+W only closes its window)
             KEY_Q if meta && ctrl && !alt && self.shift == 0 => Some(Shortcut::Lock),
             KEY_Q if meta && !ctrl && !alt && self.shift == 0 => Some(Shortcut::Quit),
+            // Shift+Cmd+Q asks to log out (Cmd+Q alone quits the front app)
+            KEY_Q if meta && !ctrl && !alt && self.shift > 0 => Some(Shortcut::LogOut),
             KEY_W if meta && !ctrl && !alt && self.shift == 0 => Some(Shortcut::Close),
             // Shift+Cmd+W closes the window of an app that keeps plain Cmd+W for its own Close Tab (`Shell::app_owns_close`)
             KEY_W if meta && !ctrl && !alt && self.shift > 0 => Some(Shortcut::Close),
@@ -507,6 +513,8 @@ impl HwKeys {
             KEY_UP | KEY_DOWN if ctrl && alt && !meta && self.shift == 0 => Some(Shortcut::ReaderRotor(code == KEY_DOWN)),
             KEY_SPACE if ctrl && alt && !meta && self.shift == 0 => Some(Shortcut::ReaderActivate),
             KEY_ESC if alt && !ctrl && !meta && self.shift == 0 => Some(Shortcut::SpeakSelection),
+            // Option+Cmd+Esc opens Force Quit Applications, from any app (the shell reads the keyboard itself)
+            KEY_ESC if alt && meta && !ctrl && self.shift == 0 => Some(Shortcut::ForceQuit),
             KEY_F5 if meta && alt && !ctrl && self.shift == 0 => Some(Shortcut::AccessibilityShortcut),
             KEY_3 if meta && self.shift > 0 && !ctrl && !alt => Some(Shortcut::CaptureScreen),
             KEY_4 if meta && self.shift > 0 && !ctrl && !alt => Some(Shortcut::CaptureSelection),
@@ -939,6 +947,11 @@ impl Shell {
         if self.quick_look_key(1, true).is_some() {
             return vec![];
         }
+        // so is a card of the System menu (Force Quit, About, Log Out)
+        #[cfg(feature = "desktop-wayland")]
+        if let Some(fx) = self.utility_key(1, true, t) {
+            return fx;
+        }
         #[cfg(feature = "desktop-wayland")]
         if let Some(fx) = self.desktop_menu_key(1, t) {
             return fx;
@@ -1047,6 +1060,11 @@ impl Shell {
         if self.quick_look_key(code, down).is_some() {
             return Some(vec![]);
         }
+        // a card of the System menu takes Esc, Return and (Force Quit) the arrows
+        #[cfg(feature = "desktop-wayland")]
+        if let Some(fx) = self.utility_key(code, down, t) {
+            return Some(fx);
+        }
         #[cfg(feature = "desktop-wayland")]
         if self.desktop_menu.is_some() {
             return Some(if down { self.desktop_menu_key(code, t).unwrap_or_default() } else { vec![] });
@@ -1062,7 +1080,7 @@ impl Shell {
         let in_terminal = matches!(self.screen, Screen::App(AppId::Terminal | AppId::External(_)));
         // Secure Keyboard Entry: while the Terminal is in front, only its own keys run; the shell's shortcuts
         // (switcher, search, input source, Home, Back, window keys) never see them.
-        if self.screen == Screen::App(AppId::Terminal) && self.terminal_ui.secure && !matches!(sc, Shortcut::Term(_) | Shortcut::Paste | Shortcut::Lock) {
+        if self.screen == Screen::App(AppId::Terminal) && self.terminal_ui.secure && !matches!(sc, Shortcut::Term(_) | Shortcut::Paste | Shortcut::Lock | Shortcut::ForceQuit) {
             return vec![];
         }
         let fx = match sc {
@@ -1081,6 +1099,17 @@ impl Shell {
             Shortcut::Assistant => self.assistant_hotkey(t),
             // Ctrl+Cmd+Q: the same lock as the System menu's Lock Screen row
             Shortcut::Lock => self.lock_screen(),
+            // Option+Cmd+Esc and Shift+Cmd+Q: the cards of the System menu's Force Quit… and Log Out rows
+            #[cfg(feature = "desktop-wayland")]
+            Shortcut::ForceQuit if self.desk_active() && !self.is_locked() => {
+                self.utility_open(super::utility_window::Kind::ForceQuit);
+                vec![]
+            }
+            #[cfg(feature = "desktop-wayland")]
+            Shortcut::LogOut if self.desk_active() && !self.is_locked() => {
+                self.utility_open(super::utility_window::Kind::LogOut);
+                vec![]
+            }
             Shortcut::AppSwitch => {
                 if self.screen != Screen::Switcher {
                     self.open_app_switcher(t);
@@ -1539,7 +1568,17 @@ mod tests {
         // Shift+Cmd+W closes the window of an app that keeps plain Cmd+W for its own Close Tab
         assert_eq!(chord(&mut k, &[KEY_LEFTMETA, KEY_LEFTSHIFT], KEY_W), Some(Shortcut::Close));
         assert_eq!(chord(&mut k, &[KEY_LEFTCTRL, KEY_LEFTSHIFT], KEY_W), None, "Ctrl+Shift+W stays a plain key");
-        assert_eq!(chord(&mut k, &[KEY_LEFTMETA, KEY_LEFTSHIFT], KEY_Q), None, "Shift+Cmd+Q is not a quit");
+        assert_eq!(chord(&mut k, &[KEY_LEFTMETA, KEY_LEFTSHIFT], KEY_Q), Some(Shortcut::LogOut), "Shift+Cmd+Q asks to log out, it is not a quit");
+    }
+
+    /// Option+Cmd+Esc opens Force Quit Applications; Option+Esc alone still speaks the selection and Esc alone goes Back.
+    #[test]
+    fn option_command_escape_is_force_quit() {
+        let mut k = HwKeys::default();
+        assert_eq!(chord(&mut k, &[KEY_LEFTALT, KEY_LEFTMETA], KEY_ESC), Some(Shortcut::ForceQuit));
+        assert_eq!(chord(&mut k, &[KEY_LEFTALT], KEY_ESC), Some(Shortcut::SpeakSelection));
+        assert_eq!(chord(&mut k, &[], KEY_ESC), Some(Shortcut::Back));
+        assert_eq!(chord(&mut k, &[KEY_LEFTALT, KEY_LEFTMETA, KEY_LEFTSHIFT], KEY_ESC), None, "Shift makes it another chord");
     }
 
     #[test]

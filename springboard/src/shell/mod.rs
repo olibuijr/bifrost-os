@@ -150,11 +150,15 @@ mod login_items_page;
 pub mod extension_host;
 pub mod axmap;
 pub mod power_menu;
+pub mod device_name;
 #[cfg(feature = "desktop-wayland")]
 mod compose_sheet;
 mod recent_items;
 #[cfg(feature = "desktop-wayland")]
 mod print_sheet;
+/// System menu cards over the desktop: Force Quit Applications, About This Computer and the Log Out question.
+#[cfg(feature = "desktop-wayland")]
+mod utility_window;
 mod character_viewer;
 mod help_viewer;
 mod keyboard_viewer;
@@ -846,6 +850,12 @@ pub struct Shell {
     /// File > Print…: the print sheet over the captured desktop (see `print_sheet.rs`)
     #[cfg(feature = "desktop-wayland")]
     print_sheet: Option<print_sheet::PrintSheet>,
+    /// The system menu's cards: Force Quit, About This Computer, Log Out (see `utility_window.rs`)
+    #[cfg(feature = "desktop-wayland")]
+    utility: Option<utility_window::UtilityWindow>,
+    /// the card came, moved or went: the next frame repaints everything
+    #[cfg(feature = "desktop-wayland")]
+    utility_dirty: bool,
     /// Edit > Emoji & Symbols: the character viewer panel (see `character_viewer.rs`)
     char_viewer: Option<character_viewer::CharacterViewer>,
     /// How often each app's Home Screen quick actions were picked this session (see `quick_actions.rs`)
@@ -1267,6 +1277,10 @@ impl Shell {
             compose: None,
             #[cfg(feature = "desktop-wayland")]
             print_sheet: None,
+            #[cfg(feature = "desktop-wayland")]
+            utility: None,
+            #[cfg(feature = "desktop-wayland")]
+            utility_dirty: false,
             char_viewer: None,
             quick_action_uses: quick_actions::Usage::default(),
             help_viewer: None,
@@ -3156,6 +3170,12 @@ impl Shell {
         self.shield = None;
         self.screentime.flush();
         self.assistive_touch.dismiss();
+        // a Force Quit, About or Log Out card does not outlive the lock (its keys would otherwise act at the login window)
+        #[cfg(feature = "desktop-wayland")]
+        {
+            self.utility = None;
+            self.utility_dirty = true;
+        }
         self.screen_on = false;
         self.screen = Screen::Lock;
         self.lock_pad = None;
@@ -3327,6 +3347,13 @@ impl Shell {
         };
         if quick_look_took {
             return vec![];
+        }
+        // the system menu's cards (Force Quit, About, Log Out) take their pointer inside the card, and a title-bar drag anywhere
+        #[cfg(feature = "desktop-wayland")]
+        if !self.is_locked() {
+            if let Some(fx) = self.utility_pointer(ev, t) {
+                return fx;
+            }
         }
         #[cfg(feature="desktop-wayland")]
         if let Some(fx)=self.desktop_bar_event(ev,t) {return fx;}
@@ -4219,7 +4246,7 @@ impl Shell {
         #[cfg(feature = "desktop-wayland")]
         if std::mem::take(&mut self.perf_only) && std::env::var_os("SPRINGBOARD_WAYLAND").is_some()
             && self.desk_active() && !self.is_locked() && self.anim.is_none()
-            && self.desktop_menu.is_none() && !self.cc_active() && !self.center_active() && !self.overlay_visible() && !self.quick_look.is_visible()
+            && self.desktop_menu.is_none() && !self.cc_active() && !self.center_active() && !self.overlay_visible() && !self.quick_look.is_visible() && !self.utility_up()
             && self.desk_drawn && self.windows_ready(s, ext, t) {
             let (_,y,_,h)=self.perf_rect();
             let top=y.floor().max(0.) as usize;
@@ -4234,7 +4261,7 @@ impl Shell {
         #[cfg(feature = "desktop-wayland")]
         if std::mem::take(&mut self.bar_only) && std::env::var_os("SPRINGBOARD_WAYLAND").is_some()
             && self.desk_active() && !self.is_locked() && self.anim.is_none()
-            && self.desktop_menu.is_none() && !self.cc_active() && !self.center_active() && !self.overlay_visible() && !self.quick_look.is_visible()
+            && self.desktop_menu.is_none() && !self.cc_active() && !self.center_active() && !self.overlay_visible() && !self.quick_look.is_visible() && !self.utility_up()
             && !self.overview_active()
             && self.desk_drawn && self.windows_ready(s, ext, t) {
             let bottom=self.desktop_bar_height().min(s.h);
@@ -4316,6 +4343,11 @@ impl Shell {
         }
         // the preview panel is drawn over the whole desktop: a change repaints the frame
         if self.quick_look.take_dirty() {
+            damage.all();
+        }
+        // the system menu's card is drawn over the whole desktop too
+        #[cfg(feature = "desktop-wayland")]
+        if std::mem::take(&mut self.utility_dirty) {
             damage.all();
         }
         let ease = gestures::ease_out_quartic(self.progress(t));

@@ -78,7 +78,11 @@ pub(super) fn model(shell: &Shell) -> MenuBarModel {
             | Menu::View
             | Menu::Window
             | Menu::Help => menus.push(BarMenu { id, title, items }),
-            _ => status.push(StatusItem { id, symbol: String::new(), text: title, menu: items }),
+            // an app's extra drawn as a symbol carries the symbol's name (its title is empty); a text extra carries its text
+            _ => {
+                let (symbol, text) = if shell.status_item_is_icon(kind) { (title, String::new()) } else { (String::new(), title) };
+                status.push(StatusItem { id, symbol, text, menu: items });
+            }
         }
     }
     let app_name = menus.get(1).map(|m| m.title.clone()).unwrap_or_default();

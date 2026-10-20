@@ -267,6 +267,13 @@ enum Grab {
 
 #[cfg(feature = "desktop-wayland")]
 pub(super) struct LinuxDockApp { pub(super) app_id:String, pub(super) windows:Vec<crate::bare::wayland::ForeignWindow>, icon:Image }
+#[cfg(feature = "desktop-wayland")]
+impl LinuxDockApp {
+    /// The app's icon, as the Dock draws it.
+    pub(super) fn icon(&self) -> &Image {
+        &self.icon
+    }
+}
 #[cfg(all(test, feature = "desktop-wayland"))]
 impl LinuxDockApp {
     /// A Linux app entry with the given windows, for tests that need windows of other clients.
@@ -1005,7 +1012,7 @@ impl Shell {
     pub(super) fn ext_windows_only_ok(&self, t: f64) -> bool {
         std::env::var_os("SPRINGBOARD_WAYLAND").is_some()
             && self.desk_active() && self.desk_drawn && !self.is_locked() && self.anim.is_none()
-            && self.desktop_menu.is_none() && !self.cc_active() && !self.center_active() && !self.overlay_visible() && !self.quick_look.is_visible()
+            && self.desktop_menu.is_none() && !self.cc_active() && !self.center_active() && !self.overlay_visible() && !self.quick_look.is_visible() && !self.utility_up()
             && !self.overview_active() && !self.desk_animating(t)
     }
 
@@ -2820,6 +2827,8 @@ impl Shell {
         self.draw_desktop_popup(s);
         self.quick_look_prepare(s.w as f32, s.h as f32);
         self.draw_quick_look(s);
+        #[cfg(feature = "desktop-wayland")]
+        self.draw_utility(s);
         self.draw_cmdtab(s);
         // Developer > Performance HUD: the desktop branch never reached `draw_assistive`, so it never showed
         self.draw_perf(s);

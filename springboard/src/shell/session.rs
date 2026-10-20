@@ -187,6 +187,8 @@ impl Shell {
             return;
         }
         self.session.restored = true;
+        // a login after Log Out (`utility_window::log_out` froze the layout when it wrote it down) writes the layout again
+        self.session.frozen = false;
         let plan = load(&self.data_dir).plan(|key| app_of(key).is_some());
         if plan.is_empty() {
             return;

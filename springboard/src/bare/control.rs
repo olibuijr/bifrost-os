@@ -118,6 +118,10 @@ pub enum Request {
     Overview,
     /// `appgrid`: the Apps grid opens or closes (F4)
     AppGrid,
+    /// `forcequit`: the Force Quit window opens (Option+Cmd+Esc, taken by the window server)
+    ForceQuit,
+    /// `logout`: the Log Out card opens (Shift+Cmd+Q, taken by the window server)
+    LogOut,
     Lock,
     /// `term <verb> key=value ...` (values percent-encoded): Term agent control, see `shell/terminal/control.rs`.
     Term(String, Vec<(String, String)>),
@@ -278,6 +282,8 @@ pub fn parse(line: &str) -> Result<Request, String> {
         Some("quicksearch") => Ok(Request::QuickSearch),
         Some("overview") if w.len() == 1 => Ok(Request::Overview),
         Some("appgrid") if w.len() == 1 => Ok(Request::AppGrid),
+        Some("forcequit") if w.len() == 1 => Ok(Request::ForceQuit),
+        Some("logout") if w.len() == 1 => Ok(Request::LogOut),
         Some("lock") if w.len() == 1 => Ok(Request::Lock),
         c => Err(format!("unknown command {c:?}")),
     }
@@ -462,6 +468,12 @@ mod tests {
         assert_eq!(parse("appgrid"), Ok(Request::AppGrid));
         assert!(parse("appgrid now").is_err());
         assert!(!allowed_while_locked(&Request::AppGrid), "the Apps grid waits for a login");
+        assert_eq!(parse("forcequit"), Ok(Request::ForceQuit));
+        assert_eq!(parse("logout"), Ok(Request::LogOut));
+        assert!(parse("forcequit now").is_err());
+        assert!(parse("logout now").is_err());
+        assert!(!allowed_while_locked(&Request::ForceQuit), "Force Quit waits for a login");
+        assert!(!allowed_while_locked(&Request::LogOut), "Log Out waits for a login");
     }
 
     #[test]
