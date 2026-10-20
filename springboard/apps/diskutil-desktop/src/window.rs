@@ -18,7 +18,7 @@ use bifrost_app::{service, Ctx};
 use bifrost_core::disk_scan::Volume;
 use bifrost_core::disk_wire;
 use bifrost_core::json::Json;
-use bifrost_app::layout::{traffic_lights_trailing, UNIFIED_BAR_PT};
+use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::widgets;
 use bifrost_core::disk_commands::Command;
 use bifrost_core::disk_format::Personality;
@@ -570,7 +570,7 @@ impl DiskUtility {
 
     /// The toolbar's rectangle: the bar to the right of the traffic lights the shell draws over the window's top left.
     pub fn toolbar_bounds(&self) -> Rect {
-        let x = traffic_lights_trailing() + widgets::TOOLBAR_GAP_PT;
+        let x = widgets::toolbar_lead_pt();
         Rect { x, y: 0.0, w: (self.size.0 - x - PAD_PT / 2.0).max(0.0), h: UNIFIED_BAR_PT }
     }
 
@@ -675,6 +675,7 @@ mod tests {
 
     #[test]
     fn the_toolbar_starts_after_the_traffic_lights() {
+        use bifrost_app::layout::traffic_lights_trailing;
         let mut w = DiskUtility::new();
         w.size = (1000.0, 700.0);
         let bounds = w.toolbar_bounds();
