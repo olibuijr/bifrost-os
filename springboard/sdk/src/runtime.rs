@@ -1017,7 +1017,7 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                     bifrost_ui::ax::begin_frame();
                     let _ = crate::widgets::take_frame_materials();
                     let full = first_frame || app.full_redraw();
-                    let sent = draw_into(&chan, &mut app, c, slots, i, t, first_frame, &mut last_all);
+                    let sent = draw_into(&chan, &mut app, c, slots, i, t, first_frame, &mut last_all, last);
                     // a partial redraw may skip the sidebar: keep the regions it declared until a frame draws some
                     // (or a full redraw draws none)
                     let drawn = crate::widgets::take_frame_materials();
@@ -1188,6 +1188,7 @@ fn draw_windows<A: App>(chan: &Channel, app: &mut A, ctx: &Ctx, pixels: &mut std
         }
         let Some(i) = pick_free([p.slots[0].held, p.slots[1].held], p.last) else { continue };
         let first = p.first;
+        let narrow = !first && p.last == Some(1 - i);
         let sent = paint_slot(
             chan,
             &mut p.slots,
@@ -1196,6 +1197,7 @@ fn draw_windows<A: App>(chan: &Channel, app: &mut A, ctx: &Ctx, pixels: &mut std
             t,
             first,
             false,
+            narrow,
             &mut p.last_all,
             |s| app.draw_window(ctx, crate::app_windows::WindowId(id), s, t),
             |buf, damage| ToShell::WindowFrame { id, buf, damage },
@@ -1228,10 +1230,12 @@ fn deliver_touch<A: App>(app: &mut A, c: &Ctx, router: &mut TouchRouter, kind: T
 /// Draws into slot `i`, brings it up to date with the other buffer, and sends the frame. Returns whether a frame went
 /// out. An app whose last frame repainted everything (`last_all`) is drawn first and only then is the part of the
 /// stale area its damage did not cover copied up, so a full repaint costs no copy at all.
-fn draw_into<A: App>(chan: &Channel, app: &mut A, ctx: &Ctx, slots: &mut [Slot; 2], i: usize, t: f64, first: bool, last_all: &mut bool) -> bool {
+fn draw_into<A: App>(chan: &Channel, app: &mut A, ctx: &Ctx, slots: &mut [Slot; 2], i: usize, t: f64, first: bool, last_all: &mut bool, last: Option<usize>) -> bool {
     let full = app.full_redraw();
     let canvas = app.draws_canvas();
     let (w, h) = (ctx.cfg.w as usize, ctx.cfg.h as usize);
+    // the other buffer holds the frame the shell shows now: a repaint can be compared with it
+    let narrow = !first && last == Some(1 - i);
     paint_slot(
         chan,
         slots,
@@ -1240,6 +1244,7 @@ fn draw_into<A: App>(chan: &Channel, app: &mut A, ctx: &Ctx, slots: &mut [Slot; 
         t,
         first,
         full,
+        narrow,
         last_all,
         |s| if canvas { app.draw_canvas(ctx, s, t) } else { app.draw(ctx, s, t) },
         |buf, damage| ToShell::Frame { buf, damage },
@@ -1249,7 +1254,7 @@ fn draw_into<A: App>(chan: &Channel, app: &mut A, ctx: &Ctx, slots: &mut [Slot; 
 /// The drawing shared by the main window and the extra windows: `draw` paints slot `i`, the other buffer is brought up
 /// to date, and `frame` builds the message that carries the damage. Returns whether a frame went out.
 #[allow(clippy::too_many_arguments)]
-fn paint_slot(chan: &Channel, slots: &mut [Slot; 2], i: usize, (w, h): (usize, usize), _t: f64, first: bool, full: bool, last_all: &mut bool, draw: impl FnOnce(&mut Surface) -> Damage, frame: impl FnOnce(u32, Vec<Rect>) -> ToShell) -> bool {
+fn paint_slot(chan: &Channel, slots: &mut [Slot; 2], i: usize, (w, h): (usize, usize), _t: f64, first: bool, full: bool, narrow: bool, last_all: &mut bool, draw: impl FnOnce(&mut Surface) -> Damage, frame: impl FnOnce(u32, Vec<Rect>) -> ToShell) -> bool {
     let (lo, hi) = slots.split_at_mut(1);
     let (cur, other) = if i == 0 { (&mut lo[0], &mut hi[0]) } else { (&mut hi[0], &mut lo[0]) };
     let t0 = now_ms();
@@ -1267,17 +1272,31 @@ fn paint_slot(chan: &Channel, slots: &mut [Slot; 2], i: usize, (w, h): (usize, u
         damage = Damage::new(w, h);
         damage.all();
     }
-    let rects: Vec<Rect> = damage.areas().iter().map(|a| [a.x0 as u32, a.y0 as u32, (a.x1 - a.x0) as u32, (a.y1 - a.y0) as u32]).collect();
+    // `last_all` follows what the app reported, not what changed
+    let reported_all = damage.is_all();
+    let rect_of = |a: &bifrost_render::gfx::Area| -> Rect { [a.x0 as u32, a.y0 as u32, (a.x1 - a.x0) as u32, (a.y1 - a.y0) as u32] };
+    // what the app reported: a deferred copy-up leaves exactly this alone (a full repaint copies nothing)
+    let reported: Vec<Rect> = damage.areas().iter().map(rect_of).collect();
+    // An app that repaints everything (it keeps no damage of its own) often paints what is already on screen: compare
+    // with the buffer the shell shows and send only what differs, nothing at all when nothing does. The shell then
+    // draws no frame for a repaint that changed no pixel.
+    if narrow && reported_all && cur.map.pixels().len() == w * h && other.map.pixels().len() == w * h {
+        damage = Damage::between(other.map.pixels(), cur.map.pixels(), w, h);
+    }
+    let rects: Vec<Rect> = damage.areas().iter().map(rect_of).collect();
     if defer {
-        copy_up(cur, other, w, h, &rects);
+        copy_up(cur, other, w, h, &reported);
     }
     cur.stale.clear();
     cur.stale_all = false;
     STATS.with(|st| st.borrow_mut().frame((t1 - t0) + (now_ms() - t2), t2 - t1));
     if damage.is_empty() {
+        if narrow && reported_all {
+            STATS.with(|st| st.borrow_mut().identical());
+        }
         return false;
     }
-    *last_all = damage.is_all();
+    *last_all = reported_all;
     if first {
         other.stale_all = true;
     } else {
@@ -1351,9 +1370,15 @@ struct Stats {
     copy: f64,
     draw: f64,
     draw_max: f64,
+    /// repaints that came out pixel for pixel like the frame on screen and were not sent
+    same: u32,
 }
 
 impl Stats {
+    fn identical(&mut self) {
+        self.same += 1;
+    }
+
     fn frame(&mut self, copy: f64, draw: f64) {
         let now = now_ms();
         if self.n == 0 {
@@ -1366,7 +1391,7 @@ impl Stats {
         if now - self.since >= 1000.0 {
             let n = self.n as f64;
             if std::env::var_os("BIFROST_FRAME_STATS").is_some_and(|v| v == "1") {
-            eprintln!("app frames: {:.0} fps, copy-up {:.1} ms, draw {:.1} ms avg {:.1} max", n * 1000.0 / (now - self.since), self.copy / n, self.draw / n, self.draw_max);
+            eprintln!("app frames: {:.0} fps, copy-up {:.1} ms, draw {:.1} ms avg {:.1} max, {} repaints identical to the screen (not sent)", n * 1000.0 / (now - self.since), self.copy / n, self.draw / n, self.draw_max, self.same);
             }
             *self = Stats::default();
         }
@@ -1679,13 +1704,71 @@ mod audit_fix_tests {
         let mut slots = alloc(&a, 100, 100, 1).expect("buffers");
         let mut app = Fake { canvas: true };
         let mut last_all = false;
-        assert!(draw_into(&a, &mut app, &ctx, &mut slots, 0, 0.0, true, &mut last_all));
+        assert!(draw_into(&a, &mut app, &ctx, &mut slots, 0, 0.0, true, &mut last_all, None));
         assert!(last_all, "the first frame was whole");
         // slot 1 is wholly stale, yet a full repaint leaves nothing to copy
         let (lo, hi) = slots.split_at_mut(1);
         assert_eq!(copy_up(&mut hi[0], &lo[0], 100, 100, &[[0, 0, 100, 100]]), 0);
-        assert!(draw_into(&a, &mut app, &ctx, &mut slots, 1, 1.0, false, &mut last_all));
+        assert!(draw_into(&a, &mut app, &ctx, &mut slots, 1, 1.0, false, &mut last_all, None));
         assert!(!slots[1].stale_all && slots[1].stale.is_empty());
+    }
+
+    /// Paints the whole surface one colour, plus one pixel when asked, and reports the whole surface as damage.
+    struct Repaint {
+        colour: u32,
+        dot: Option<(usize, usize)>,
+    }
+
+    impl App for Repaint {
+        fn id(&self) -> &str {
+            "is.test.repaint"
+        }
+        fn draw(&mut self, _ctx: &Ctx, s: &mut Surface, _t: f64) -> Damage {
+            let (w, h, stride) = (s.w, s.h, s.stride);
+            for y in 0..h {
+                s.px[y * stride..y * stride + w].fill(self.colour);
+            }
+            if let Some((x, y)) = self.dot {
+                s.px[y * stride + x] = !self.colour;
+            }
+            all()
+        }
+    }
+
+    /// The `ToShell::Frame` messages waiting on the shell's end, as (buffer, damage).
+    fn frames_sent(shell_end: &Channel) -> Vec<(u32, Vec<Rect>)> {
+        let mut out = Vec::new();
+        while let Ok(Recv::Packet(p, _)) = shell_end.recv(false) {
+            if let Ok(ToShell::Frame { buf, damage }) = ToShell::decode(&p) {
+                out.push((buf, damage));
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn a_repaint_that_changes_no_pixel_is_not_sent_and_a_small_change_is_sent_small() {
+        let (a, shell_end) = crate::proto::sys::socketpair_pair().unwrap();
+        let ctx = test_ctx();
+        let mut slots = alloc(&a, 100, 100, 1).expect("buffers");
+        let mut app = Repaint { colour: 0xff20_2020, dot: None };
+        let mut last_all = false;
+        // the first frame goes whole
+        assert!(draw_into(&a, &mut app, &ctx, &mut slots, 0, 0.0, true, &mut last_all, None));
+        assert_eq!(frames_sent(&shell_end), vec![(0, vec![[0, 0, 100, 100]])]);
+        // the same picture again, into the other buffer: nothing goes out and the buffer is not held
+        assert!(!draw_into(&a, &mut app, &ctx, &mut slots, 1, 1.0, false, &mut last_all, Some(0)));
+        assert!(frames_sent(&shell_end).is_empty(), "the shell hears nothing of a repaint that changed nothing");
+        assert!(!slots[1].held && last_all, "the unsent buffer is free and the last frame still stands");
+        // one pixel differs: that pixel is the damage
+        app.dot = Some((7, 9));
+        assert!(draw_into(&a, &mut app, &ctx, &mut slots, 1, 2.0, false, &mut last_all, Some(0)));
+        assert_eq!(frames_sent(&shell_end), vec![(1, vec![[7, 9, 1, 1]])]);
+        assert!(slots[1].held);
+        // without knowing which buffer the shell shows (the last frame's slot is the only free one) the app's damage is sent as it is
+        slots[0].held = false;
+        assert!(draw_into(&a, &mut app, &ctx, &mut slots, 0, 3.0, false, &mut last_all, None));
+        assert_eq!(frames_sent(&shell_end), vec![(0, vec![[0, 0, 100, 100]])]);
     }
 
     #[test]
