@@ -15,7 +15,7 @@
 //! Single-threaded: everything here runs on the control thread. The audio thread only sees the results (the session gain
 //! of a stream, the DSP plan in the device's mailbox, the level tap it writes).
 
-use crate::io::log;
+use crate::io::{log, DEFAULT_QUANTUM, MAX_QUANTUM, MIN_QUANTUM};
 use crate::objects::ObjectTree;
 use bifrost_audio_driver::transport::Transport;
 use bifrost_audio_driver::DeviceDesc;
@@ -62,6 +62,21 @@ pub fn plan_text(a: &Assignment) -> String {
         .map(|p| format!("{} {}{}", p.stage.kind.name(), p.stage.id, if p.origin == Origin::App { " (app)" } else { "" }))
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+/// The rate a device is opened at: 48 kHz when it supports it, else its lowest. This is the `NOMINAL_RATE` the device
+/// publishes and the rate `ServerCore` opens it with, so a client that reads the property resamples to the real rate.
+pub fn device_rate(desc: &DeviceDesc) -> f64 {
+    if desc.rates.iter().any(|r| 48_000.0 >= r.0 && 48_000.0 <= r.1) {
+        48_000.0
+    } else {
+        desc.rates.first().map(|r| r.0).unwrap_or(48_000.0)
+    }
+}
+
+/// The quantum a device starts with (before any client asked for another): the default, within the device's range.
+pub fn initial_quantum(desc: &DeviceDesc) -> u32 {
+    DEFAULT_QUANTUM.clamp(desc.buffer_frames_range.0.max(MIN_QUANTUM), desc.buffer_frames_range.1.min(MAX_QUANTUM))
 }
 
 /// The default-device selectors, in the order of `AppState::pinned`.
@@ -231,6 +246,17 @@ impl AppState {
         let _ = t.define(id, g(props::DEVICE_UID), PropertyValue::String(desc.uid.clone()));
         let _ = t.define(id, g(props::TRANSPORT), PropertyValue::U32(transport_code(&Transport::from_name(&desc.transport))));
         let _ = t.define(id, g(props::IS_RUNNING), PropertyValue::Bool(false));
+        // What a client reads before it adds an IO procedure (the HAL reads `BUFFER_FRAMES` when the client asks for
+        // the device's own buffer size, and the media paths read `NOMINAL_RATE`). A device that does not carry them
+        // makes `add_io_proc` fail, which is how the default output once could not play.
+        let _ = t.define(id, g(props::MANUFACTURER), PropertyValue::String(desc.manufacturer.clone()));
+        let _ = t.define(id, g(props::MODEL_UID), PropertyValue::String(desc.uid.clone()));
+        let _ = t.define(id, g(props::IS_ALIVE), PropertyValue::Bool(true));
+        let _ = t.define(id, g(props::NOMINAL_RATE), PropertyValue::F64(device_rate(desc)));
+        let _ = t.define(id, g(props::AVAILABLE_RATES), PropertyValue::Rates(desc.rates.clone()));
+        let _ = t.define(id, g(props::BUFFER_FRAMES), PropertyValue::U32(initial_quantum(desc)));
+        let _ = t.define(id, g(props::BUFFER_FRAMES_RANGE), PropertyValue::RangeU32(desc.buffer_frames_range.0.max(MIN_QUANTUM), desc.buffer_frames_range.1.min(MAX_QUANTUM * 2)));
+        let _ = t.define(id, g(props::CLOCK_DOMAIN), PropertyValue::U32(desc.clock_domain));
         for (scope, channels) in [(Scope::Output, desc.output_channels), (Scope::Input, desc.input_channels)] {
             if channels == 0 {
                 continue;
@@ -243,6 +269,11 @@ impl AppState {
         self.candidates.push(Candidate::of(desc));
         let _ = self.tree.update(SYSTEM_OBJECT, g(props::DEVICES), PropertyValue::Objects(self.devices.clone()));
         self.choose_defaults();
+    }
+
+    /// The device's current buffer size (the graph quantum) changed.
+    pub fn publish_buffer_frames(&mut self, id: ObjectId, frames: u32) {
+        let _ = self.tree.update(id, g(props::BUFFER_FRAMES), PropertyValue::U32(frames));
     }
 
     /// A device started or stopped.
@@ -425,7 +456,13 @@ impl AppState {
     /// A client's set. Only the process itself or a client with policy rights may change a process's session; every
     /// other property is read-only. Returns the actions the arbiter decided, for the caller to apply to the streams.
     pub fn set(&mut self, client: u32, policy: bool, object: ObjectId, address: PropertyAddress, value: PropertyValue) -> Result<Vec<Action>, AudioError> {
-        if self.tree.class(object)? != Class::Process {
+        let class = self.tree.class(object)?;
+        if class == Class::Device && (address.selector == props::BUFFER_FRAMES || address.selector == props::NOMINAL_RATE) {
+            // The server picks the buffer size (the smallest any client asked for) and the rate; a set would change
+            // only what the property reads, not what the device does.
+            return Err(AudioError::NotSettable);
+        }
+        if class != Class::Process {
             self.tree.set(object, address, value)?;
             if object == SYSTEM_OBJECT {
                 if let Some(slot) = DEFAULT_ROLES.iter().position(|r| *r == address.selector) {
@@ -734,6 +771,39 @@ mod tests {
         assert_eq!(text(a.get(d, PropertyAddress::scoped(props::DSP_PLAN, Scope::Input))), "", "the input side has no chain");
         a.device_running(d, true);
         assert_eq!(a.get(d, g(props::IS_RUNNING)), Ok(PropertyValue::Bool(true)));
+    }
+
+    #[test]
+    fn a_device_publishes_what_a_client_reads_before_adding_an_io_procedure() {
+        let mut a = AppState::new();
+        let d = ObjectId(1000);
+        a.add_device(d, &dev("alsa:PCH:0", "pci", 2, 0));
+        // the HAL reads the buffer size when the client asks for the device's own, and the speaker reads the rate
+        assert_eq!(a.get(d, g(props::BUFFER_FRAMES)), Ok(PropertyValue::U32(DEFAULT_QUANTUM)));
+        assert_eq!(a.get(d, g(props::BUFFER_FRAMES_RANGE)), Ok(PropertyValue::RangeU32(16, 4096)));
+        assert_eq!(a.get(d, g(props::NOMINAL_RATE)), Ok(PropertyValue::F64(48_000.0)));
+        assert_eq!(a.get(d, g(props::AVAILABLE_RATES)), Ok(PropertyValue::Rates(vec![(48_000.0, 48_000.0)])));
+        assert_eq!(a.get(d, g(props::IS_ALIVE)), Ok(PropertyValue::Bool(true)));
+        assert_eq!(a.get(d, g(props::CLOCK_DOMAIN)), Ok(PropertyValue::U32(1)));
+        // the property follows the quantum the server runs the device at
+        a.publish_buffer_frames(d, 64);
+        assert_eq!(a.get(d, g(props::BUFFER_FRAMES)), Ok(PropertyValue::U32(64)));
+        // a set would change only what the property reads
+        assert_eq!(a.set(1, true, d, g(props::BUFFER_FRAMES), PropertyValue::U32(128)), Err(AudioError::NotSettable));
+        assert_eq!(a.set(1, true, d, g(props::NOMINAL_RATE), PropertyValue::F64(44_100.0)), Err(AudioError::NotSettable));
+        assert_eq!(a.get(d, g(props::BUFFER_FRAMES)), Ok(PropertyValue::U32(64)));
+    }
+
+    #[test]
+    fn the_nominal_rate_is_48k_when_supported_else_the_lowest() {
+        let mut d = dev("x", "pci", 2, 0);
+        assert_eq!(device_rate(&d), 48_000.0);
+        d.rates = vec![(44_100.0, 44_100.0), (96_000.0, 96_000.0)];
+        assert_eq!(device_rate(&d), 44_100.0);
+        d.rates = vec![(8_000.0, 192_000.0)];
+        assert_eq!(device_rate(&d), 48_000.0);
+        d.buffer_frames_range = (512, 1024);
+        assert_eq!(initial_quantum(&d), 512);
     }
 
     #[test]

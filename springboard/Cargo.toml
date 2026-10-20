@@ -114,6 +114,8 @@ members = ["core", "render", "ui", "proto", "wire", "sdk", "bifrostd", "audiod",
 
 [dev-dependencies]
 tempfile = "3"
+bifrost-audiod = { path = "audio/server" }
+bifrost-audio-driver = { path = "audio/driver" }
 bifrost-render = { path = "render", features = ["testkit"] }
 
 [[example]]

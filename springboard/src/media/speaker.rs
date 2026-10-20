@@ -234,6 +234,15 @@ fn io_err(what: &str, e: AudioError) -> io::Error {
     io::Error::other(format!("{what}: {e:?}"))
 }
 
+/// An error that names the device it happened on (its object id and uid), so a log line says which output failed.
+fn device_err(what: &str, device: &Device, e: AudioError) -> io::Error {
+    let uid = match device.get(PropertyAddress::global(props::DEVICE_UID)) {
+        Ok(PropertyValue::String(u)) => u,
+        _ => "unknown uid".to_string(),
+    };
+    io_err(&format!("{what} on device {} ({uid})", device.id.0), e)
+}
+
 /// An open stream on the sound server.
 struct Stream {
     device: Device,
@@ -244,9 +253,15 @@ struct Stream {
 impl Stream {
     /// Runs on an opener thread, never under the session lock: the Hello gets 100 ms, so a server that accepts and
     /// never answers costs the caller nothing.
-    fn open(role: Role, source_rate: u32) -> io::Result<Stream> {
-        let system = System::connect_within(CLIENT, Duration::from_millis(100)).map_err(|e| io_err("connect to the audio server", e))?;
-        let device = system.default_device(role).map_err(|e| io_err("default output device", e))?;
+    fn open(socket: &str, role: Role, source_rate: u32) -> io::Result<Stream> {
+        let system = System::connect_path_within(socket, CLIENT, Duration::from_millis(100)).map_err(|e| io_err("connect to the audio server", e))?;
+        Self::open_on(&system, role, source_rate)
+    }
+
+    /// The stream on the default device of `role` on a connected server: the device's rate, an IO procedure with the
+    /// device's own buffer size, started. Every failure says which device it happened on.
+    fn open_on(system: &System, role: Role, source_rate: u32) -> io::Result<Stream> {
+        let device = system.default_device(role).map_err(|e| io_err(&format!("default {role:?} device"), e))?;
         let rate = match device.get(PropertyAddress::global(props::NOMINAL_RATE)) {
             Ok(PropertyValue::F64(r)) => r,
             _ => source_rate as f64,
@@ -258,10 +273,10 @@ impl Stream {
                 IoProcConfig { input_channels: 0, output_channels: 2, buffer_frames: 0 },
                 Box::new(move |_ctx: &IoContext, _now: &TimeStamp, _input: &BufferList, _input_ts: &TimeStamp, out: &mut BufferList, _out_ts: &TimeStamp| renderer.render(out)),
             )
-            .map_err(|e| io_err("add the IO procedure", e))?;
+            .map_err(|e| device_err("add the IO procedure", &device, e))?;
         if let Err(e) = device.start(proc_id) {
             let _ = device.remove_io_proc(proc_id);
-            return Err(io_err("start the device", e));
+            return Err(device_err("start the device", &device, e));
         }
         Ok(Stream { device, proc_id, ring })
     }
@@ -275,6 +290,8 @@ impl Drop for Stream {
 }
 
 struct Session {
+    /// The control socket of the audio server.
+    socket: String,
     role: Role,
     rate: u32,
     desk: Option<Stream>,
@@ -286,6 +303,8 @@ struct Session {
     /// No new connection before this; set after a failed open (1 s, doubling to 30 s), cleared by a good one.
     retry_after: Option<Instant>,
     backoff: Duration,
+    /// Why the last open failed, for the error a caller gets while the retry is pending.
+    last_error: Option<String>,
     /// An open in flight on its own thread; polled by `ensure`, so no caller waits for the server.
     opening: Option<std::sync::mpsc::Receiver<io::Result<Stream>>>,
 }
@@ -302,6 +321,7 @@ impl Session {
                 Ok(Ok(s)) => {
                     self.opening = None;
                     self.retry_after = None;
+                    self.last_error = None;
                     self.backoff = Duration::from_secs(1);
                     s.ring.set_paused(self.paused);
                     self.desk = Some(s);
@@ -310,6 +330,8 @@ impl Session {
                 }
                 Ok(Err(e)) => {
                     self.opening = None;
+                    eprintln!("audio.speaker: could not open the {:?} device of the audio server: {e}", self.role);
+                    self.last_error = Some(e.to_string());
                     self.retry_after = Some(Instant::now() + self.backoff);
                     self.backoff = (self.backoff * 2).min(Duration::from_secs(30));
                     return Err(e);
@@ -324,13 +346,15 @@ impl Session {
         }
         if let Some(at) = self.retry_after {
             if Instant::now() < at {
-                return Err(io::Error::new(io::ErrorKind::NotConnected, "the audio server is not reachable; retrying later"));
+                // the open that failed said why (no server, no default device, a refused IO procedure); say that
+                let why = self.last_error.as_deref().unwrap_or("the audio server is not reachable");
+                return Err(io::Error::new(io::ErrorKind::NotConnected, format!("{why}; retrying later")));
             }
         }
         let (tx, rx) = std::sync::mpsc::channel();
-        let (role, rate) = (self.role, self.rate);
+        let (role, rate, socket) = (self.role, self.rate, self.socket.clone());
         std::thread::Builder::new().name("speaker-open".into()).spawn(move || {
-            let _ = tx.send(Stream::open(role, rate));
+            let _ = tx.send(Stream::open(&socket, role, rate));
         })?;
         self.opening = Some(rx);
         Err(io::Error::new(io::ErrorKind::WouldBlock, "opening the audio server stream"))
@@ -373,8 +397,13 @@ impl SpeakerOut {
         Self::with_role(Role::SoundEffects, rate, channels)
     }
 
-    pub fn with_role(role: Role, rate: u32, _channels: u32) -> Self {
-        let session = Arc::new(Mutex::new(Session { role, rate, desk: None, active: Instant::now(), meter: Meter::default(), reported: Instant::now(), paused: false, retry_after: None, backoff: Duration::from_secs(1), opening: None }));
+    pub fn with_role(role: Role, rate: u32, channels: u32) -> Self {
+        Self::with_socket(bifrost_audio_types::control::CONTROL_SOCKET, role, rate, channels)
+    }
+
+    /// Like `with_role` on another server socket (a private server in tests).
+    pub fn with_socket(socket: &str, role: Role, rate: u32, _channels: u32) -> Self {
+        let session = Arc::new(Mutex::new(Session { socket: socket.to_string(), role, rate, desk: None, active: Instant::now(), meter: Meter::default(), reported: Instant::now(), paused: false, retry_after: None, backoff: Duration::from_secs(1), last_error: None, opening: None }));
         let weak: Weak<Mutex<Session>> = Arc::downgrade(&session);
         std::thread::Builder::new()
             .name("speaker-idle".into())
@@ -611,5 +640,89 @@ mod tests {
         let e = push_all(&ring, &stereo(5, 1), Duration::from_millis(20)).unwrap_err();
         assert_eq!(e.kind(), io::ErrorKind::TimedOut);
         assert_eq!(ring.queued(), 2);
+    }
+
+    /// A real control loop (the server's `serve`) on a private socket, with one null device, for the output-path tests.
+    struct TestServer {
+        path: String,
+        stop: Arc<AtomicBool>,
+        thread: Option<std::thread::JoinHandle<()>>,
+    }
+
+    impl TestServer {
+        /// `transport` "pci" makes the device a real playback device for the default choice; "virtual" never is.
+        fn start(tag: &str, transport: &str) -> TestServer {
+            use bifrost_audio_driver::null::NullDriver;
+            use bifrost_audiod::control::{listen, serve, CoreConfig, NoObjects, ServerCore};
+            let dir = std::env::temp_dir().join(format!("bifrost-speaker-test-{}-{tag}", std::process::id()));
+            let path = dir.join("control").to_string_lossy().into_owned();
+            let listener = listen(&path).expect("listen on the private socket");
+            let stop = Arc::new(AtomicBool::new(false));
+            let stop2 = stop.clone();
+            let transport = transport.to_string();
+            let thread = std::thread::spawn(move || {
+                let mut desc = NullDriver::stereo("alsa:PCH:0", 48_000.0);
+                desc.name = "ALC233 Analog".into();
+                desc.transport = transport;
+                let mut core = ServerCore::new(vec![Box::new(NullDriver::new(vec![desc]))], Box::new(NoObjects), CoreConfig::default());
+                serve(&mut core, &listener, &stop2, None);
+            });
+            TestServer { path, stop, thread: Some(thread) }
+        }
+    }
+
+    impl Drop for TestServer {
+        fn drop(&mut self) {
+            self.stop.store(true, Ordering::Release);
+            if let Some(t) = self.thread.take() {
+                let _ = t.join();
+            }
+            let _ = std::fs::remove_file(&self.path);
+        }
+    }
+
+    /// Writes until the stream has opened (the open runs on its own thread, so the first writes are `WouldBlock`).
+    fn write_when_open(out: &mut SpeakerOut, frames: &[i16], limit: Duration) -> io::Result<()> {
+        let until = Instant::now() + limit;
+        loop {
+            match out.write(frames) {
+                Err(e) if e.kind() == io::ErrorKind::WouldBlock && Instant::now() < until => std::thread::sleep(Duration::from_millis(20)),
+                other => return other,
+            }
+        }
+    }
+
+    #[test]
+    fn the_speaker_reaches_io_on_the_default_device_of_a_real_server() {
+        let server = TestServer::start("io", "pci");
+        // the media player's output (Role::Output) and the shell's system sounds (Role::SoundEffects) take the same path
+        for role in [Role::Output, Role::SoundEffects] {
+            let mut out = SpeakerOut::with_socket(&server.path, role, 48_000, 2);
+            let frames = stereo(480, 2000);
+            write_when_open(&mut out, &frames, Duration::from_secs(10)).unwrap_or_else(|e| panic!("{role:?}: the stream did not open: {e}"));
+            // the server's cycles pull the frames out of the ring
+            let until = Instant::now() + Duration::from_secs(5);
+            while out.played() == 0 && Instant::now() < until {
+                let _ = out.write(&frames);
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            assert!(out.played() > 0, "{role:?}: the server never ran the IO procedure");
+            drop(out);
+            // the closer thread removes the IO procedure; the device is free for the next role
+            std::thread::sleep(Duration::from_millis(300));
+        }
+    }
+
+    #[test]
+    fn a_refused_open_says_which_step_and_why_not_that_the_server_is_unreachable() {
+        // the only device is virtual, so the server publishes no default output
+        let server = TestServer::start("nodefault", "virtual");
+        let mut out = SpeakerOut::with_socket(&server.path, Role::Output, 48_000, 2);
+        let e = write_when_open(&mut out, &stereo(64, 1), Duration::from_secs(10)).unwrap_err();
+        assert!(e.to_string().contains("default Output device"), "{e}");
+        // while the retry is pending the caller is told the same reason
+        let again = out.write(&stereo(64, 1)).unwrap_err();
+        assert_eq!(again.kind(), io::ErrorKind::NotConnected);
+        assert!(again.to_string().contains("default Output device") && again.to_string().contains("retrying later"), "{again}");
     }
 }

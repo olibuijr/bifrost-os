@@ -167,7 +167,12 @@ impl System {
     /// once) and the Welcome must arrive within `limit`. A server that accepts and never answers costs at most `limit`.
     /// Only workers use this (100 ms); the shell's UI thread never connects.
     pub fn connect_within(client: &str, limit: Duration) -> Result<System, AudioError> {
-        System::connect_detailed_within(CONTROL_SOCKET, client, Some(limit)).map_err(|e| e.error)
+        System::connect_path_within(CONTROL_SOCKET, client, limit)
+    }
+
+    /// Like [`System::connect_within`] with another socket path (tests, a private server).
+    pub fn connect_path_within(path: &str, client: &str, limit: Duration) -> Result<System, AudioError> {
+        System::connect_detailed_within(path, client, Some(limit)).map_err(|e| e.error)
     }
 
     fn connect_detailed_within(path: &str, client: &str, limit: Option<Duration>) -> Result<System, ConnectError> {
@@ -340,7 +345,11 @@ impl Device {
             return Err(AudioError::BadValue);
         }
         let frames = if cfg.buffer_frames == 0 {
-            match self.get(PropertyAddress::global(props::BUFFER_FRAMES))? {
+            let current = self.get(PropertyAddress::global(props::BUFFER_FRAMES)).map_err(|e| {
+                eprintln!("[is.olibuijr.audio/hal] device {}: cannot read its buffer size to add an IO procedure: {e:?}", self.id.0);
+                e
+            })?;
+            match current {
                 PropertyValue::U32(n) if n > 0 => n,
                 PropertyValue::U32(_) => return Err(AudioError::BadValue),
                 _ => return Err(AudioError::BadValueType),

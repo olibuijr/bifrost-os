@@ -218,10 +218,10 @@ impl Recorder {
                 IoProcConfig { input_channels: CHANNELS, output_channels: 0, buffer_frames: 0 },
                 Box::new(move |_ctx: &IoContext, _now: &TimeStamp, input: &BufferList, _input_ts: &TimeStamp, _out: &mut BufferList, _out_ts: &TimeStamp| capture_cycle(&producer, input)),
             )
-            .map_err(|e| io_err("add the IO procedure", e))?;
+            .map_err(|e| io_err(&format!("add the IO procedure on input device {} ({node})", device.id.0), e))?;
         if let Err(e) = device.start(proc_id) {
             let _ = device.remove_io_proc(proc_id);
-            return Err(io_err("start the input device", e));
+            return Err(io_err(&format!("start input device {} ({node})", device.id.0), e));
         }
         let shared = Arc::new(Mutex::new(Shared::default()));
         let stop = Arc::new(AtomicBool::new(false));
