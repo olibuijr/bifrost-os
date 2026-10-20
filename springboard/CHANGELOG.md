@@ -5,6 +5,7 @@
 - The system services (audio, network, update) now ship with the system. Music Radio, Podcasts and Voice Memos play
   again and `bifrost-audio status` finds the media service: the update package installs the services under
   /usr/lib/bifrost/services and bifrostd supervises them; a newer store-installed copy still wins.
+- The media service no longer runs as root: it runs as the logged-in user, and its socket is private to that user.
 - The terminal bell and the alert sound chosen in Settings > Sounds now play (at the system volume). When sound is
   muted, or does not come out, the bell flashes the terminal instead. Choosing an alert sound plays it once.
 - The first system sound after the audio server connects is no longer lost: the shell keeps its sound player while the

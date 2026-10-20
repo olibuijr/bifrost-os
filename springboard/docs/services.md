@@ -27,8 +27,22 @@ to talk to.
   When the store copy later wins, the usual health-checked swap applies.
 - Sockets stay `<root>/run/<id>.sock`, so clients (`bifrost_app::system_audio`, `bifrost-audio`, the Settings and
   Software Update tools) and the app sandbox bind (`src/bare/app_policy.rs`) are unchanged.
-- The audio socket is mode 0666: `bifrostd` runs as root and apps run under their own accounts inside the sandbox,
-  which binds only that socket. The network and update sockets keep the default (root only).
+- Who a service runs as is the manifest field `user`: empty or `root` (the default; network and update need it), `session`
+  (the user logged in to the desktop), or a system user name. `is.olibuijr.audio` is `user = "session"`: it decodes internet
+  radio streams and user files, so a decoder bug must not be remote-to-root.
+- `bifrostd` runs as root and drops privileges for a `user` service in `pre_exec`: `setgroups` (the user's primary and
+  supplementary groups from `/etc/group`, so audio-device access is kept), `setgid`, `setuid`, then
+  `PR_SET_NO_NEW_PRIVS`. The child gets `HOME`, `USER`, `LOGNAME` and `XDG_RUNTIME_DIR` (`/run/user/<uid>` when it exists,
+  else its data directory). Its data directory `<root>/appdata/<id>` is created and chowned to that user.
+- The session user is the `username=` of `<root>/account` (what the app launch policy reads) looked up in `/etc/passwd`.
+  When the account file names nobody, uid 1000 is taken and the choice is logged once. When no such user exists, or the
+  name is uid 0, the service is neither bound nor started and is retried on the next pass: a session service never runs
+  as root.
+- Every service socket is mode 0600. For a `user` service it is chowned to that user (also the swap side socket, and again
+  when the session user changes); the sandboxed apps run as the same uid (`bwrap --uid`), so they connect and nobody else
+  can. The shell, which is root, connects regardless. No socket is world-writable.
+- What the media service still reaches as that user: the audio server's control socket `/run/bifrost/audio/control`
+  (mode 0666 by design, in a 0755 directory), the network, and the user's files.
 - `bifrost-audio status` names the media service and the audio server (`bifrost-audiod`) separately, so a missing
   service is not mistaken for a missing server.
 - A package update restarts `bifrostd` (`try-restart` in `springboard.install`); the services start again on their

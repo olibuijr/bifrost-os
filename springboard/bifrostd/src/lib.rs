@@ -15,10 +15,12 @@
 //! first desktop frame is on screen, so the services that are not needed for the desktop start after it.
 
 use bifrost_proto::svc::{self, common};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io;
 use std::os::fd::{AsRawFd, OwnedFd};
+use std::os::unix::ffi::OsStrExt;
 use std::os::unix::net::{UnixListener, UnixStream};
+use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
@@ -51,6 +53,9 @@ pub struct Manifest {
     pub version: String,
     pub kind: String,
     pub exec: String,
+    /// who the service runs as: empty or `root` (the default), `session` (the logged-in desktop user), or a system
+    /// user name. A service that decodes untrusted data (the media player) is `session`, never root.
+    pub user: String,
 }
 
 impl Manifest {
@@ -65,13 +70,15 @@ impl Manifest {
                 "version" => m.version = v,
                 "kind" => m.kind = v,
                 "exec" => m.exec = v,
+                "user" => m.user = v,
                 _ => {}
             }
         }
         let safe_id = !m.id.is_empty() && m.id.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'));
         let safe_exec = !m.exec.is_empty() && !m.exec.starts_with('/') && !m.exec.split('/').any(|p| p == "..");
+        let safe_user = m.user.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'));
         // only `service` packages: the shell's kind table (src/shell/kinds.rs) is the reference
-        (m.kind == "service" && safe_id && safe_exec).then_some(m)
+        (m.kind == "service" && safe_id && safe_exec && safe_user).then_some(m)
     }
 }
 
@@ -253,6 +260,11 @@ struct PollFd {
 const POLLIN: i16 = 0x001;
 
 extern "C" {
+    fn chown(path: *const std::ffi::c_char, owner: u32, group: u32) -> i32;
+    fn setgroups(size: usize, list: *const u32) -> i32;
+    fn setgid(gid: u32) -> i32;
+    fn setuid(uid: u32) -> i32;
+    fn prctl(option: i32, arg2: usize, arg3: usize, arg4: usize, arg5: usize) -> i32;
     fn kill(pid: i32, sig: i32) -> i32;
     fn poll(fds: *mut PollFd, nfds: u64, timeout: i32) -> i32;
 }
@@ -277,45 +289,173 @@ fn pending(listener: &UnixListener) -> bool {
     ready > 0 && p.revents & POLLIN != 0
 }
 
-/// Services whose socket any local account may connect to: the apps run under their own accounts (inside the
-/// sandbox, which binds only this socket) and bifrostd runs as root, so the default 0755 would refuse them.
-const OPEN_SOCKETS: &[&str] = &["is.olibuijr.audio"];
+/// `user = "session"` in a manifest: the user logged in to the desktop.
+pub const SESSION_USER: &str = "session";
+/// The uid taken for the session user only when no account file names one (logged when it happens).
+pub const FALLBACK_UID: u32 = 1000;
+/// The mode of every service socket. A service that runs as a user gets the socket chowned to that user, and the
+/// sandboxed apps run as the same uid (`bwrap --uid`), so nobody else needs to connect.
+pub const SOCKET_MODE: u32 = 0o600;
 
-/// The socket file mode for `id`: world-connectable for [`OPEN_SOCKETS`], else the umask's default (root only).
-pub fn socket_mode(id: &str) -> Option<u32> {
-    OPEN_SOCKETS.contains(&id).then_some(0o666)
+/// A non-root identity a service is started as.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Identity {
+    pub name: String,
+    pub uid: u32,
+    pub gid: u32,
+    pub home: PathBuf,
+    /// the primary group first, then the supplementary groups from `/etc/group` (so audio-device access is kept)
+    pub groups: Vec<u32>,
+    /// the session user was not named by the account file, so uid [`FALLBACK_UID`] was taken
+    pub fallback: bool,
 }
 
-/// Applies [`socket_mode`] to the bound socket file at `path`.
-fn set_socket_mode(path: &Path, id: &str) {
-    if let Some(mode) = socket_mode(id) {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode));
+struct PasswdEntry {
+    name: String,
+    uid: u32,
+    gid: u32,
+    home: PathBuf,
+}
+
+fn passwd_entry(passwd: &str, pick: impl Fn(&PasswdEntry) -> bool) -> Option<PasswdEntry> {
+    passwd
+        .lines()
+        .filter_map(|l| {
+            let f: Vec<&str> = l.split(':').collect();
+            if f.len() != 7 {
+                return None;
+            }
+            Some(PasswdEntry { name: f[0].to_string(), uid: f[2].parse().ok()?, gid: f[3].parse().ok()?, home: PathBuf::from(f[5]) })
+        })
+        .find(|e| pick(e))
+}
+
+/// The primary group, then every other group of `/etc/group` text that lists `name` as a member (never group 0).
+fn groups_of(group: &str, name: &str, gid: u32) -> Vec<u32> {
+    let mut v = vec![gid];
+    for line in group.lines() {
+        let f: Vec<&str> = line.split(':').collect();
+        if f.len() == 4 && f[3].split(',').any(|u| u == name) {
+            if let Ok(g) = f[2].parse::<u32>() {
+                if g != 0 && !v.contains(&g) {
+                    v.push(g);
+                }
+            }
+        }
+    }
+    v
+}
+
+/// The `username=` line of `<root>/account` (what the shell's app launch policy reads), when it is a safe name.
+pub fn account_name(text: &str) -> Option<&str> {
+    let n = text.lines().find_map(|l| l.strip_prefix("username="))?.trim();
+    (!n.is_empty() && n.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')).then_some(n)
+}
+
+/// The identity for a manifest `user` value. `Ok(None)` is root (empty or `root`). `session` is the account file's user,
+/// else the passwd entry with uid [`FALLBACK_UID`] (`fallback` set); `Err` when no such user is known, so the caller
+/// waits instead of ever starting a session service as root. A named user is looked up in passwd; a name that is uid 0
+/// is refused.
+pub fn resolve_identity(user: &str, account: Option<&str>, passwd: &str, group: &str) -> Result<Option<Identity>, String> {
+    let (entry, fallback) = match user {
+        "" | "root" => return Ok(None),
+        SESSION_USER => match account.and_then(account_name).and_then(|n| passwd_entry(passwd, |e| e.name == n)) {
+            Some(e) => (e, false),
+            None => (passwd_entry(passwd, |e| e.uid == FALLBACK_UID).ok_or("no desktop session user is known (no account, no uid 1000)")?, true),
+        },
+        name => (passwd_entry(passwd, |e| e.name == name).ok_or_else(|| format!("unknown user {name}"))?, false),
+    };
+    if entry.uid == 0 || entry.gid == 0 {
+        return Err(format!("{} is root; a service never runs as root by another name", entry.name));
+    }
+    let groups = groups_of(group, &entry.name, entry.gid);
+    Ok(Some(Identity { name: entry.name, uid: entry.uid, gid: entry.gid, home: entry.home, groups, fallback }))
+}
+
+/// [`resolve_identity`] for a manifest, reading `<root>/account` and `<etc>/passwd` and `<etc>/group`.
+pub fn identity_for(root: &Path, etc: &Path, m: &Manifest) -> Result<Option<Identity>, String> {
+    if m.user.is_empty() || m.user == "root" {
+        return Ok(None);
+    }
+    let account = std::fs::read_to_string(root.join("account")).ok();
+    let passwd = std::fs::read_to_string(etc.join("passwd")).map_err(|e| format!("cannot read passwd: {e}"))?;
+    let group = std::fs::read_to_string(etc.join("group")).unwrap_or_default();
+    resolve_identity(&m.user, account.as_deref(), &passwd, &group)
+}
+
+/// The uid and gid that own the socket of a service run as `who` (None: root keeps it).
+pub fn socket_owner(who: Option<&Identity>) -> Option<(u32, u32)> {
+    who.map(|i| (i.uid, i.gid))
+}
+
+fn chown_path(path: &Path, uid: u32, gid: u32) -> io::Result<()> {
+    let c = std::ffi::CString::new(path.as_os_str().as_bytes()).map_err(io::Error::other)?;
+    // SAFETY: `c` is a live NUL-terminated path for the duration of the call.
+    if unsafe { chown(c.as_ptr(), uid, gid) } == 0 {
+        Ok(())
+    } else {
+        Err(io::Error::last_os_error())
     }
 }
 
-/// Binds the service's socket, replacing a stale file from an earlier run.
-fn bind(root: &Path, id: &str) -> io::Result<UnixListener> {
+/// Mode [`SOCKET_MODE`] first (so the socket is never reachable by others while it changes hands), then the owner.
+fn secure_socket(path: &Path, owner: Option<(u32, u32)>) {
+    use std::os::unix::fs::PermissionsExt;
+    let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(SOCKET_MODE));
+    if let Some((uid, gid)) = owner {
+        if let Err(e) = chown_path(path, uid, gid) {
+            eprintln!("bifrostd: cannot hand {} to {uid}:{gid}: {e}", path.display());
+        }
+    }
+}
+
+/// Binds the service's socket (mode 0600, owned by `who`), replacing a stale file from an earlier run.
+fn bind(root: &Path, id: &str, who: Option<&Identity>) -> io::Result<UnixListener> {
     let path = sock_path(root, id);
     let _ = std::fs::remove_file(&path);
     let l = UnixListener::bind(&path)?;
-    set_socket_mode(&path, id);
+    secure_socket(&path, socket_owner(who));
     Ok(l)
 }
 
-/// Starts the child with `listener` as its stdin (socket activation).
-fn spawn(root: &Path, f: &Found, listener: &UnixListener) -> io::Result<Child> {
+/// Starts the child with `listener` as its stdin (socket activation). With `who`, the data directory is created for that
+/// user and the child drops to it before exec: supplementary groups, then gid, then uid, and no new privileges.
+fn spawn(root: &Path, f: &Found, listener: &UnixListener, who: Option<&Identity>) -> io::Result<Child> {
     let data = root.join("appdata").join(&f.manifest.id);
     std::fs::create_dir_all(&data)?;
+    if let Some(i) = who {
+        chown_path(&data, i.uid, i.gid)?;
+    }
     let stdin: OwnedFd = listener.try_clone()?.into();
-    Command::new(f.exec_path())
-        .current_dir(&data)
+    let mut cmd = Command::new(f.exec_path());
+    cmd.current_dir(&data)
         .env("BIFROST_SERVICE_SOCK", sock_path(root, &f.manifest.id))
         .env("BIFROST_DATA", &data)
         .env("BIFROST_SHELL_DIR", root)
         .env(svc::ACTIVATED_ENV, "1")
-        .stdin(Stdio::from(stdin))
-        .spawn()
+        .stdin(Stdio::from(stdin));
+    if let Some(i) = who {
+        let runtime = PathBuf::from(format!("/run/user/{}", i.uid));
+        cmd.env("HOME", &i.home)
+            .env("USER", &i.name)
+            .env("LOGNAME", &i.name)
+            .env("XDG_RUNTIME_DIR", if runtime.is_dir() { runtime } else { data.clone() });
+        let (uid, gid, groups) = (i.uid, i.gid, i.groups.clone());
+        // SAFETY: the hook runs between fork and exec and only makes syscalls on values it owns (no allocation, no locks).
+        unsafe {
+            cmd.pre_exec(move || {
+                if setgroups(groups.len(), groups.as_ptr()) != 0 || setgid(gid) != 0 || setuid(uid) != 0 {
+                    return Err(io::Error::last_os_error());
+                }
+                // PR_SET_NO_NEW_PRIVS: a decoder bug cannot gain anything through a setuid file
+                if prctl(38, 1, 0, 0, 0) != 0 {
+                    return Err(io::Error::last_os_error());
+                }
+                Ok(())
+            });
+        }
+    }
+    cmd.spawn()
 }
 
 /// SIGTERM, then SIGKILL after `STOP_GRACE`.
@@ -349,13 +489,19 @@ struct Slot {
     not_before: Option<Instant>,
     /// a version directory whose swap failed; not retried until `current` moves
     rejected: Option<PathBuf>,
+    /// who owns the bound socket now (None: root); changed when the session user changes
+    owner: Option<(u32, u32)>,
 }
 
 pub struct Supervisor {
     root: PathBuf,
     /// where the OS package keeps its services ([`SYSTEM_SERVICES_DIR`])
     system: PathBuf,
+    /// where passwd and group are read (`/etc`)
+    etc: PathBuf,
     slots: HashMap<String, Slot>,
+    /// one-time log lines ("waits", "fallback") already written
+    noted: HashSet<String>,
 }
 
 impl Supervisor {
@@ -366,7 +512,13 @@ impl Supervisor {
     /// A supervisor that reads the package-provided services from `system` instead of [`SYSTEM_SERVICES_DIR`].
     pub fn with_system_dir(root: PathBuf, system: PathBuf) -> Self {
         let _ = std::fs::create_dir_all(run_dir(&root));
-        Supervisor { root, system, slots: HashMap::new() }
+        Supervisor { root, system, etc: PathBuf::from("/etc"), slots: HashMap::new(), noted: HashSet::new() }
+    }
+
+    /// Reads passwd and group from `etc` instead of `/etc`.
+    pub fn with_etc(mut self, etc: PathBuf) -> Self {
+        self.etc = etc;
+        self
     }
 
     /// How many services are running now (started on demand and not yet exited).
@@ -407,14 +559,39 @@ impl Supervisor {
         }
         for f in found {
             let id = f.manifest.id.clone();
+            // who the service runs as; a session service whose user is not known yet is neither bound nor started
+            // (retried on the next tick), and never falls back to root
+            let identity = identity_for(&self.root, &self.etc, &f.manifest);
+            match &identity {
+                Ok(Some(i)) if i.fallback && self.noted.insert(format!("fallback:{id}")) => {
+                    eprintln!("bifrostd: {id}: the account file names no user, running as {} (uid {FALLBACK_UID})", i.name)
+                }
+                Err(why) if self.noted.insert(format!("wait:{id}")) => eprintln!("bifrostd: {id} waits: {why}"),
+                Ok(_) => {
+                    self.noted.remove(&format!("wait:{id}"));
+                }
+                Err(_) => {}
+            }
+            let known: Option<Option<&Identity>> = identity.as_ref().ok().map(|o| o.as_ref());
             let slot = self.slots.entry(id.clone()).or_default();
             if slot.listener.is_none() {
-                match bind(&self.root, &id) {
-                    Ok(l) => slot.listener = Some(l),
+                let Some(who) = known else { continue };
+                match bind(&self.root, &id, who) {
+                    Ok(l) => {
+                        slot.listener = Some(l);
+                        slot.owner = socket_owner(who);
+                    }
                     Err(e) => {
                         eprintln!("bifrostd: cannot bind {id}: {e}");
                         continue;
                     }
+                }
+            } else if let Some(who) = known {
+                // the session user changed: the socket follows
+                let want = socket_owner(who);
+                if slot.owner != want {
+                    secure_socket(&sock_path(&self.root, &id), want);
+                    slot.owner = want;
                 }
             }
             if let Some(r) = &mut slot.running {
@@ -436,8 +613,8 @@ impl Supervisor {
                 let due = slot.not_before.is_none_or(|t| now >= t);
                 let waiting = slot.listener.as_ref().is_some_and(pending);
                 if due && waiting {
-                    if let Some(listener) = slot.listener.as_ref() {
-                        match spawn(&self.root, &f, listener) {
+                    if let (Some(listener), Some(who)) = (slot.listener.as_ref(), known) {
+                        match spawn(&self.root, &f, listener, who) {
                             Ok(child) => {
                                 eprintln!("bifrostd: started {id} {} on demand", f.manifest.version);
                                 slot.running = Some(Running { child, found: f, started: now, up: false });
@@ -450,12 +627,13 @@ impl Supervisor {
                         }
                     }
                 }
-            } else if slot.running.as_ref().is_some_and(|r| r.found.dir != f.dir) && slot.rejected.as_ref() != Some(&f.dir) {
+            } else if let (true, Some(who)) = (slot.running.as_ref().is_some_and(|r| r.found.dir != f.dir) && slot.rejected.as_ref() != Some(&f.dir), known) {
                 let mut old = slot.running.take().expect("checked running above");
-                match swap(&self.root, &id, &mut old, &f) {
+                match swap(&self.root, &id, &mut old, &f, who) {
                     Some((new, listener)) => {
                         slot.running = Some(new);
                         slot.listener = Some(listener);
+                        slot.owner = socket_owner(who);
                         slot.rejected = None;
                     }
                     None => {
@@ -481,12 +659,12 @@ impl Supervisor {
 /// Starts the new version on a side socket, waits for it to answer, then retires the old one and moves the side socket
 /// into place. None (the old version stays) when the new one never answers. The new version's listener is returned
 /// with it, so the supervisor keeps the socket that the running child accepts on.
-fn swap(root: &Path, id: &str, old: &mut Running, new: &Found) -> Option<(Running, UnixListener)> {
+fn swap(root: &Path, id: &str, old: &mut Running, new: &Found, who: Option<&Identity>) -> Option<(Running, UnixListener)> {
     let side_path = run_dir(root).join(format!("{id}.sock.new"));
     let _ = std::fs::remove_file(&side_path);
     let side = match UnixListener::bind(&side_path) {
         Ok(l) => {
-            set_socket_mode(&side_path, id);
+            secure_socket(&side_path, socket_owner(who));
             l
         }
         Err(e) => {
@@ -494,7 +672,7 @@ fn swap(root: &Path, id: &str, old: &mut Running, new: &Found) -> Option<(Runnin
             return None;
         }
     };
-    let mut child = match spawn(root, new, &side) {
+    let mut child = match spawn(root, new, &side, who) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("bifrostd: swap of {id} to {}: cannot start: {e}", new.manifest.version);
@@ -717,7 +895,7 @@ mod tests {
         assert!(sock.exists(), "the socket stays under <root>/run so clients and the app sandbox find it");
         assert_eq!(sup.running(), 0);
         let mode = std::fs::metadata(&sock).unwrap().permissions().mode() & 0o777;
-        assert_eq!(mode, 0o666, "apps run under their own accounts and must reach the audio socket");
+        assert_eq!(mode, SOCKET_MODE, "a service socket is private to its owner; apps run as the same uid");
         let _client = UnixStream::connect(&sock).unwrap();
         sup.tick();
         assert_eq!(sup.running(), 1);
@@ -725,11 +903,95 @@ mod tests {
         let _ = std::fs::remove_dir_all(&d);
     }
 
+    const PASSWD: &str = "root:x:0:0:root:/root:/bin/bash\naudio:x:975:975:audio:/:/usr/bin/nologin\nolibuijr:x:1000:1000::/home/olibuijr:/bin/bash\nguest:x:1001:1001::/home/guest:/bin/bash\n";
+    const GROUP: &str = "root:x:0:root\naudio:x:975:olibuijr\nwheel:x:998:olibuijr,guest\nolibuijr:x:1000:\nguest:x:1001:\nvideo:x:12:root,olibuijr\n";
+
     #[test]
-    fn only_the_audio_socket_is_open_to_every_account() {
-        assert_eq!(socket_mode("is.olibuijr.audio"), Some(0o666));
-        assert_eq!(socket_mode("is.olibuijr.net"), None);
-        assert_eq!(socket_mode("is.olibuijr.update"), None);
+    fn the_manifest_names_who_the_service_runs_as() {
+        let m = |user: &str| format!("id = \"is.olibuijr.audio\"\nversion = \"1\"\nkind = \"service\"\nexec = \"audiod\"\n{user}");
+        assert_eq!(Manifest::parse(&m("")).unwrap().user, "", "root by default");
+        assert_eq!(Manifest::parse(&m("user = \"session\"\n")).unwrap().user, "session");
+        assert_eq!(Manifest::parse(&m("user = \"audio\"\n")).unwrap().user, "audio");
+        assert!(Manifest::parse(&m("user = \"a/b\"\n")).is_none(), "an unsafe user name is refused");
+        assert!(Manifest::parse(&m("user = \"x y\"\n")).is_none());
+    }
+
+    #[test]
+    fn the_shipped_manifests_run_audio_as_the_session_and_the_rest_as_root() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../system");
+        let user = |d: &str| Manifest::parse(&std::fs::read_to_string(dir.join(d).join("manifest.toml")).unwrap()).unwrap().user;
+        assert_eq!(user("audio"), "session");
+        assert_eq!(user("net"), "");
+        assert_eq!(user("update"), "");
+    }
+
+    #[test]
+    fn root_services_have_no_identity_and_the_socket_stays_with_root() {
+        assert_eq!(resolve_identity("", None, PASSWD, GROUP), Ok(None));
+        assert_eq!(resolve_identity("root", None, PASSWD, GROUP), Ok(None));
+        assert_eq!(socket_owner(None), None);
+        assert_eq!(SOCKET_MODE, 0o600);
+    }
+
+    #[test]
+    fn the_session_user_comes_from_the_account_file_with_its_groups() {
+        let who = resolve_identity("session", Some("username=guest\n"), PASSWD, GROUP).unwrap().unwrap();
+        assert_eq!((who.name.as_str(), who.uid, who.gid), ("guest", 1001, 1001));
+        assert_eq!(who.home, PathBuf::from("/home/guest"));
+        assert_eq!(who.groups, [1001, 998], "primary group, then the supplementary ones");
+        assert!(!who.fallback);
+        assert_eq!(socket_owner(Some(&who)), Some((1001, 1001)), "the socket goes to the session user");
+        let me = resolve_identity("session", Some("username=olibuijr\n"), PASSWD, GROUP).unwrap().unwrap();
+        assert_eq!(me.groups, [1000, 975, 998, 12], "audio-device access (group audio) is kept");
+    }
+
+    #[test]
+    fn a_session_service_falls_back_to_uid_1000_only_when_the_account_names_nobody_and_says_so() {
+        let who = resolve_identity("session", None, PASSWD, GROUP).unwrap().unwrap();
+        assert_eq!((who.uid, who.fallback), (1000, true));
+        let unknown = resolve_identity("session", Some("username=ghost\n"), PASSWD, GROUP).unwrap().unwrap();
+        assert_eq!((unknown.uid, unknown.fallback), (1000, true));
+    }
+
+    #[test]
+    fn a_session_service_is_refused_without_a_session_user_and_never_runs_as_root() {
+        let only_system = "root:x:0:0:root:/root:/bin/bash\naudio:x:975:975:audio:/:/usr/bin/nologin\n";
+        assert!(resolve_identity("session", None, only_system, GROUP).is_err());
+        assert!(resolve_identity("session", Some("username=root\n"), only_system, GROUP).is_err(), "root is no session user");
+        assert!(resolve_identity("root-by-name", None, PASSWD, GROUP).is_err(), "an unknown name is refused");
+        assert!(resolve_identity("session", Some("username=root\n"), PASSWD, GROUP).is_err(), "an account file naming root is refused, not replaced by someone else");
+        // a name that resolves to uid 0 is refused outright
+        let alias = "toor:x:0:0::/root:/bin/sh\n";
+        assert!(resolve_identity("toor", None, alias, "").is_err());
+    }
+
+    #[test]
+    fn the_account_file_name_must_be_safe() {
+        assert_eq!(account_name("username=olibuijr\nother=1\n"), Some("olibuijr"));
+        assert_eq!(account_name("username=\n"), None);
+        assert_eq!(account_name("username=a/b\n"), None);
+        assert_eq!(account_name("nothing\n"), None);
+    }
+
+    /// A session service is neither bound nor started while no session user is known.
+    #[test]
+    fn a_session_service_waits_for_a_session_user() {
+        let d = scratch("session-wait");
+        let (root, system, etc) = (d.join("root"), d.join("system"), d.join("etc"));
+        std::fs::create_dir_all(&etc).unwrap();
+        std::fs::write(etc.join("passwd"), "root:x:0:0:root:/root:/bin/bash\n").unwrap();
+        std::fs::write(etc.join("group"), "root:x:0:\n").unwrap();
+        write_service(&system.join("is.olibuijr.audio"), "is.olibuijr.audio", "0.1.0");
+        std::fs::write(
+            system.join("is.olibuijr.audio/manifest.toml"),
+            "id = \"is.olibuijr.audio\"\nversion = \"0.1.0\"\nkind = \"service\"\nexec = \"svc.sh\"\nuser = \"session\"\n",
+        )
+        .unwrap();
+        let mut sup = Supervisor::with_system_dir(root.clone(), system).with_etc(etc);
+        sup.tick();
+        assert!(!sock_path(&root, "is.olibuijr.audio").exists(), "no socket: nothing may bind or start it as root");
+        assert_eq!(sup.running(), 0);
+        let _ = std::fs::remove_dir_all(&d);
     }
 
     #[test]
