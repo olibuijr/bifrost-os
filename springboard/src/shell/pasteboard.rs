@@ -10,6 +10,77 @@ type State = (u32, Vec<(String, Vec<u8>)>, Vec<usize>);
 
 static STATE: Mutex<State> = Mutex::new((0, Vec::new(), Vec::new()));
 
+/// How long the contents are meant to live. A write that carries the `ConcealedType` marker holds a secret (a password): it
+/// is kept in memory only, goes to the app in front but not to the apps in the background, reaches other programs only
+/// with the password-manager hint, and is cleared after [`bifrost_proto::PB_CONCEALED_SECS`] when nothing else was copied.
+/// A `TransientType` write is also kept in memory only and flagged for other programs, but stays until replaced.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Kind {
+    #[default]
+    Normal,
+    Transient,
+    Concealed,
+}
+
+impl Kind {
+    /// Whether the contents must stay off the disk and out of the apps in the background.
+    pub fn is_private(self) -> bool {
+        self != Kind::Normal
+    }
+}
+
+/// The kind of the contents written at change count `.1`, and when (monotonic ms). A later write bumps the count, so a
+/// mark of an earlier count says nothing about what is on the board now.
+static MARK: Mutex<(Kind, u32, f64)> = Mutex::new((Kind::Normal, 0, 0.0));
+
+/// The kind an app's write asks for: concealed beats transient beats normal.
+pub fn kind_of_items(items: &[(String, Vec<u8>)]) -> Kind {
+    if items.iter().any(|(t, _)| t == bifrost_proto::PB_CONCEALED) {
+        Kind::Concealed
+    } else if items.iter().any(|(t, _)| t == bifrost_proto::PB_TRANSIENT) {
+        Kind::Transient
+    } else {
+        Kind::Normal
+    }
+}
+
+/// `items` without the marker types (they describe the write; no app or program is given them as data).
+pub fn without_markers(items: Vec<(String, Vec<u8>)>) -> Vec<(String, Vec<u8>)> {
+    items.into_iter().filter(|(t, _)| !bifrost_proto::is_pb_marker(t)).collect()
+}
+
+/// Like [`set`] for an app's write: the marker types are taken off the items and decide the board's [`Kind`] from `now`
+/// (monotonic ms). Returns the text to publish on the plain clipboard and the kind.
+pub fn set_marked(items: Vec<(String, Vec<u8>)>, now: f64) -> (Option<String>, Kind) {
+    let kind = kind_of_items(&items);
+    let text = set(without_markers(items));
+    mark(kind, now);
+    (text, kind)
+}
+
+/// Records that the contents now on the board are of `kind`, written at `now` (monotonic ms).
+pub fn mark(kind: Kind, now: f64) {
+    let count = count();
+    *MARK.lock().unwrap_or_else(|e| e.into_inner()) = (kind, count, now);
+}
+
+/// The kind of the contents on the board now.
+pub fn kind() -> Kind {
+    let (kind, at, _) = *MARK.lock().unwrap_or_else(|e| e.into_inner());
+    if at == count() {
+        kind
+    } else {
+        Kind::Normal
+    }
+}
+
+/// Whether concealed contents have been on the board for their lifetime at `now` (monotonic ms) and are still the latest
+/// write.
+pub fn expired(now: f64) -> bool {
+    let (kind, at, since) = *MARK.lock().unwrap_or_else(|e| e.into_inner());
+    kind == Kind::Concealed && at == count() && now - since >= bifrost_proto::PB_CONCEALED_SECS as f64 * 1000.0
+}
+
 /// The state is process-wide, so the tests that write and read it take turns.
 #[cfg(test)]
 pub(crate) static TURN: Mutex<()> = Mutex::new(());
@@ -109,6 +180,42 @@ mod tests {
     use super::*;
 
     use super::TURN;
+
+    #[test]
+    fn markers_decide_the_kind_and_are_not_data() {
+        let _turn = TURN.lock().unwrap_or_else(|e| e.into_inner());
+        let w = |extra: &[&str]| -> Vec<(String, Vec<u8>)> {
+            let mut v = vec![("public.utf8-plain-text".to_string(), b"hunter2".to_vec())];
+            v.extend(extra.iter().map(|t| (t.to_string(), Vec::new())));
+            v
+        };
+        assert_eq!(kind_of_items(&w(&[])), Kind::Normal);
+        assert_eq!(kind_of_items(&w(&[bifrost_proto::PB_TRANSIENT])), Kind::Transient);
+        assert_eq!(kind_of_items(&w(&[bifrost_proto::PB_TRANSIENT, bifrost_proto::PB_CONCEALED])), Kind::Concealed);
+        let (text, kind_now) = set_marked(w(&[bifrost_proto::PB_CONCEALED]), 1000.0);
+        assert_eq!(text.as_deref(), Some("hunter2"));
+        assert_eq!(kind_now, Kind::Concealed);
+        assert_eq!(snapshot().1.len(), 1, "the marker is not an item");
+        assert_eq!(kind(), Kind::Concealed);
+        assert!(kind().is_private());
+    }
+
+    #[test]
+    fn a_concealed_copy_expires_unless_something_else_was_copied() {
+        let _turn = TURN.lock().unwrap_or_else(|e| e.into_inner());
+        let secs = bifrost_proto::PB_CONCEALED_SECS as f64 * 1000.0;
+        set_marked(vec![("public.utf8-plain-text".into(), b"pw".to_vec()), (bifrost_proto::PB_CONCEALED.into(), Vec::new())], 5000.0);
+        assert!(!expired(5000.0 + secs - 1.0));
+        assert!(expired(5000.0 + secs));
+        // a newer write of any kind ends the mark
+        set_plain("later");
+        assert!(!expired(5000.0 + secs * 2.0));
+        assert_eq!(kind(), Kind::Normal);
+        // a transient copy never expires on a timer
+        set_marked(vec![("public.utf8-plain-text".into(), b"t".to_vec()), (bifrost_proto::PB_TRANSIENT.into(), Vec::new())], 0.0);
+        assert!(!expired(1e12));
+        assert_eq!(kind(), Kind::Transient);
+    }
 
     #[test]
     fn maps_and_counts() {
