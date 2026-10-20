@@ -6181,3 +6181,11 @@ Gaps (not matched yet): the thumbnail does not show the window's pixels, because
 (`desk_dock` window pixels are kept only while the minimise effect runs); a real thumbnail needs the last frame kept per
 minimised window. Every slot keeps the same square size, so a thumbnail is letterboxed inside it instead of the slot taking the
 window's width. Code only: not built or run, not verified on Midget.
+
+## Mission Control as an overlay (E2E round 3, MC1)
+
+Mission Control (`shell/overview.rs`, "Overview" in code) is an overlay-layer chrome surface (id 9) above every window on the desktop, on the rectangle between the menu bar and the Dock, with exclusive keyboard focus while it is open; the surface list and the reasons are in `docs/gpu-first.md` ("Mission Control is an overlay surface").
+
+- Layout: the windows of the current desktop are tiled by `grid_layout` without overlap, never scaled up, in the area under the desktops strip and above the Dock. Every size comes from `ui.pt()` tokens and the output size, so any output size, aspect ratio or scale works (test: `tiles_fit_any_output_without_overlap`).
+- Input: click a tile to raise and focus that window and close Mission Control; click empty space, press Esc, F3 or Ctrl+Up to close it; Return opens the selected tile (Tab and the arrows select); hover highlights a tile. F4 toggles the Apps grid and the wheel (or a two-finger swipe) pages it; Mission Control swallows the wheel.
+- Reference parity: the reference also shows full-screen apps as desktops and groups the windows of one app; ours lists desktops (tags on windows) and one tile per window. Not matched yet: windows of apps that are separate Wayland clients (the Browser, Linux apps) have no tile, because the shell has no capture of their pixels (the window server composes them; a per-window export would be needed). While Mission Control is open the veil hides them.

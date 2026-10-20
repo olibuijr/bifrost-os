@@ -4,6 +4,7 @@
 
 - Keyboard: Cmd+A (Select All) reaches the front app again. The window server no longer binds Super+A to the app menu launcher, which also swallowed the chord and showed a cream "Applications:" box. A lone Cmd press no longer goes Home on the desktop (it stays the Home key of a tablet), so a chord the window server or the app takes never sends every window to the Dock, and Cmd+Space keeps Spotlight open.
 - Mission Control opens with Ctrl+Up and F3 (the window server binds them, so it works with any app in front); Esc, Return, Tab and the arrows work inside it, and typing goes to the Apps grid's search field.
+- Mission Control now opens above the app windows (an overlay surface above every window, with the keyboard while it is open): click a window to raise it, or click empty space, press Esc, F3 or Ctrl+Up to close it. F4 opens and closes the Apps grid, and the mouse wheel pages through it.
 
 ## 0.10.8 — 2026-10-20
 

@@ -858,6 +858,10 @@ fn run() -> std::io::Result<()> {
                         shell.overview_toggle(t);
                         b"ok\n".to_vec()
                     }
+                    Ok(Request::AppGrid) => {
+                        shell.appgrid_toggle(t);
+                        b"ok\n".to_vec()
+                    }
                     Ok(Request::Lock) => {
                         effects.extend(shell.lock_screen());
                         b"ok\n".to_vec()
@@ -931,10 +935,12 @@ fn run() -> std::io::Result<()> {
                     let (x, y) = map(x, y);
                     Event::Up(x, y)
                 }
-                input::Event::Hover{x,y,..}=>{let (x,y)=map(x,y);let Some((x,y))=shell.tap_hover(x,y) else {continue};shell.desktop_pointer(x,y,false,t);continue;},
+                input::Event::Hover{x,y,..}=>{let (x,y)=map(x,y);let Some((x,y))=shell.tap_hover(x,y) else {continue};if shell.overview_hover(x,y) {continue;}shell.desktop_pointer(x,y,false,t);continue;},
                 // the wheel goes to an app that asked for it; the drag emulated for it (the next three events) is then
                 // dropped for that app (`pointer_wheel`)
-                input::Event::Wheel{x,y,dx,dy,..}=>{let (x,y)=map(x,y);shell.pointer_wheel(x,y,dx,dy,t);continue;},
+                // the Apps grid pages with the wheel (a wheel turned down is the next page: `dy` is the content's travel, so both are negated) and
+                // Mission Control swallows it
+                input::Event::Wheel{x,y,dx,dy,..}=>{let (x,y)=map(x,y);if shell.overview_scroll(-dx,-dy,t) {continue;}shell.pointer_wheel(x,y,dx,dy,t);continue;},
                 input::Event::Context{x,y,..}=>{let (x,y)=map(x,y);shell.desktop_pointer(x,y,true,t);continue;},
                 input::Event::Switch { .. } => continue,
                 // per-finger contacts run on the gesture recognizers; the first finger also arrives as Down/Move/Up,

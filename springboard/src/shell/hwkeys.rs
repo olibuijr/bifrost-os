@@ -735,7 +735,7 @@ impl Shell {
         used
     }
 
-    /// Mission Control from the keyboard while the shell has the keys: F3 and Ctrl+Up open or close it (the window server binds the
+    /// Mission Control and the Apps grid from the keyboard while the shell has the keys: F3 and Ctrl+Up open or close Mission Control, F4 the Apps grid (the window server binds the
     /// same chords for the times an app holds the keyboard, `wm/src/keybindings.rs`), and while Mission Control or the Apps grid is open
     /// its own keys (Esc, Return, Tab, the arrows) are taken here and nothing else is typed. True when the key was used. Modifier,
     /// volume and brightness keys always pass.
@@ -747,7 +747,7 @@ impl Shell {
         // the Apps grid takes only its navigation keys: letters go on to `hw_type`, which types them into its search field
         let grid_key = self.overview.grid.visible() && matches!(code, KEY_ESC | KEY_BACKSPACE | KEY_ENTER | KEY_UP | KEY_LEFT | KEY_RIGHT | KEY_DOWN);
         let open = self.overview.open || grid_key;
-        let bound = !mods.cmd && !mods.shift && (code == super::overview::KEY_F3 && !mods.ctrl || code == super::overview::KEY_UP && mods.ctrl);
+        let bound = !mods.cmd && !mods.shift && (matches!(code, super::overview::KEY_F3 | super::overview::KEY_F4) && !mods.ctrl || code == super::overview::KEY_UP && mods.ctrl);
         if !(open || bound) {
             return false;
         }
