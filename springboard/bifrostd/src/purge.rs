@@ -12,9 +12,17 @@
 //!
 //! Planning reads the tree and returns the ordered list; [`select`] takes the prefix that reaches a byte budget and
 //! [`execute`] deletes it. Only the listed paths are touched.
+//!
+//! The daemon runs as root and `~/.cache` and `~/.RecentlyDeleted` belong to the person, who can replace either with a
+//! link. Nothing under them is reached through a path they control: the home and the folder are opened without
+//! following a link and checked to have the same owner, and the item is removed through those descriptors
+//! ([`remove_in_user_dir`]). A link at the folder, or an item that is a link, never leads to a deletion elsewhere.
 
 use std::collections::BTreeMap;
 use std::fs;
+use std::io;
+use std::os::fd::AsRawFd;
+use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -127,6 +135,70 @@ pub fn pkg_name(file: &str) -> Option<&str> {
     (cut > 0).then(|| &base[..cut])
 }
 
+// The directory and no-follow open flags differ on the ARM ABIs.
+#[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+const O_DIRECTORY: i32 = 0o40000;
+#[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+const O_NOFOLLOW: i32 = 0o100000;
+#[cfg(not(any(target_arch = "aarch64", target_arch = "arm")))]
+const O_DIRECTORY: i32 = 0o200000;
+#[cfg(not(any(target_arch = "aarch64", target_arch = "arm")))]
+const O_NOFOLLOW: i32 = 0o400000;
+
+/// The folders under a home that belong to the person, the only parents of [`Class::AppCache`] and [`Class::OldTrash`]
+/// candidates.
+const USER_DIRS: [&str; 2] = [".cache", TRASH_DIR];
+
+/// True for a real directory: not a link to one.
+fn is_real_dir(path: &Path) -> bool {
+    fs::symlink_metadata(path).map(|m| m.is_dir()).unwrap_or(false)
+}
+
+/// `home/sub` when `home` and `home/sub` are real directories (neither a link) and one user owns both, else None.
+fn user_dir(home: &Path, sub: &str) -> Option<PathBuf> {
+    let h = fs::symlink_metadata(home).ok()?;
+    let dir = home.join(sub);
+    let s = fs::symlink_metadata(&dir).ok()?;
+    (h.is_dir() && s.is_dir() && s.uid() == h.uid()).then_some(dir)
+}
+
+fn open_dir_nofollow(path: &Path) -> io::Result<fs::File> {
+    fs::OpenOptions::new().read(true).custom_flags(O_DIRECTORY | O_NOFOLLOW).open(path)
+}
+
+/// The path of an open descriptor, which the kernel resolves to the directory that was opened, whatever is renamed or
+/// linked afterwards.
+fn via_fd(f: &fs::File) -> PathBuf {
+    PathBuf::from(format!("/proc/self/fd/{}", f.as_raw_fd()))
+}
+
+/// Removes the item `path` (`<home>/<.cache|.RecentlyDeleted>/<name>`) without trusting any name the person controls: the
+/// home is opened as a directory that is not a link, the folder is opened below it the same way and must have the
+/// home's owner, and the item is then removed through the folder's descriptor. A directory goes with its contents
+/// (`remove_dir_all` does not follow links); an item that is a link is only unlinked.
+fn remove_in_user_dir(path: &Path) -> io::Result<()> {
+    let bad = |what: &str| io::Error::new(io::ErrorKind::PermissionDenied, what.to_string());
+    let name = path.file_name().ok_or_else(|| bad("no item name"))?;
+    let dir = path.parent().ok_or_else(|| bad("no folder"))?;
+    let dir_name = dir.file_name().and_then(|n| n.to_str()).ok_or_else(|| bad("no folder name"))?;
+    if !USER_DIRS.contains(&dir_name) {
+        return Err(bad("not a user cache or trash folder"));
+    }
+    let home = dir.parent().ok_or_else(|| bad("no home"))?;
+    let home_fd = open_dir_nofollow(home)?;
+    let owner = home_fd.metadata()?.uid();
+    let dir_fd = open_dir_nofollow(&via_fd(&home_fd).join(dir_name))?;
+    if dir_fd.metadata()?.uid() != owner {
+        return Err(bad("folder owner differs from the home's"));
+    }
+    let item = via_fd(&dir_fd).join(name);
+    if fs::symlink_metadata(&item)?.is_dir() {
+        fs::remove_dir_all(&item)
+    } else {
+        fs::remove_file(&item)
+    }
+}
+
 fn entries(dir: &Path) -> Vec<PathBuf> {
     let Ok(rd) = fs::read_dir(dir) else { return Vec::new() };
     let mut v: Vec<PathBuf> = rd.flatten().map(|e| e.path()).collect();
@@ -141,9 +213,9 @@ pub fn plan(cfg: &Config) -> Vec<Candidate> {
     // 1. app caches, biggest first
     let mut apps = Vec::new();
     for home in &cfg.homes {
-        for p in entries(&home.join(".cache")) {
-            let is_real_dir = fs::symlink_metadata(&p).map(|m| m.is_dir()).unwrap_or(false);
-            if is_real_dir {
+        let Some(cache) = user_dir(home, ".cache") else { continue };
+        for p in entries(&cache) {
+            if is_real_dir(&p) {
                 apps.push(Candidate { class: Class::AppCache, bytes: size(&p), path: p });
             }
         }
@@ -161,7 +233,8 @@ pub fn plan(cfg: &Config) -> Vec<Candidate> {
     if cfg.trash_auto {
         let mut old = Vec::new();
         for home in &cfg.homes {
-            for p in entries(&home.join(TRASH_DIR)) {
+            let Some(trash) = user_dir(home, TRASH_DIR) else { continue };
+            for p in entries(&trash) {
                 let stamped = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
                 let Some((at, _)) = stamped.split_once(TRASH_SEP) else { continue };
                 let Ok(at) = at.parse::<u64>() else { continue };
@@ -214,12 +287,21 @@ pub fn select(list: &[Candidate], need: u64) -> Vec<&Candidate> {
 }
 
 /// Deletes the chosen candidates. A directory is removed with its contents, but a symlink is only unlinked, never
-/// followed. Returns the bytes of the items that were removed.
+/// followed. Items under a person's home go through [`remove_in_user_dir`]. Returns the bytes of the items that were
+/// removed.
 pub fn execute(chosen: &[&Candidate]) -> u64 {
     let mut reclaimed = 0u64;
     for c in chosen {
-        let is_dir = fs::symlink_metadata(&c.path).map(|m| m.is_dir()).unwrap_or(false);
-        let res = if is_dir { fs::remove_dir_all(&c.path) } else { fs::remove_file(&c.path) };
+        let res = match c.class {
+            Class::AppCache | Class::OldTrash => remove_in_user_dir(&c.path),
+            Class::ThumbnailCache | Class::PackageCache => {
+                if is_real_dir(&c.path) {
+                    fs::remove_dir_all(&c.path)
+                } else {
+                    fs::remove_file(&c.path)
+                }
+            }
+        };
         if res.is_ok() {
             reclaimed = reclaimed.saturating_add(c.bytes);
             if c.class == Class::PackageCache {
@@ -274,9 +356,9 @@ pub fn space(_path: &Path) -> Option<Space> {
 
 /// The homes to purge: the directories under `/home`, plus `/root` when it exists.
 pub fn homes() -> Vec<PathBuf> {
-    let mut v: Vec<PathBuf> = entries(Path::new("/home")).into_iter().filter(|p| p.is_dir()).collect();
+    let mut v: Vec<PathBuf> = entries(Path::new("/home")).into_iter().filter(|p| is_real_dir(p)).collect();
     let root = PathBuf::from("/root");
-    if root.is_dir() {
+    if is_real_dir(&root) {
         v.push(root);
     }
     v
@@ -519,6 +601,67 @@ mod tests {
         let link_only = vec![Candidate { class: Class::AppCache, path: cache.join("link"), bytes: 0 }];
         execute(&link_only.iter().collect::<Vec<_>>());
         assert!(docs.exists(), "the link target survives");
+    }
+
+    #[test]
+    fn a_cache_folder_that_is_a_link_is_not_listed_and_nothing_behind_it_is_deleted() {
+        let t = Tree::new("cache-link");
+        let victim = t.file("elsewhere/victim/data", 4096);
+        t.dir("home/alice");
+        std::os::unix::fs::symlink(t.path("elsewhere"), t.path("home/alice/.cache")).unwrap();
+        let cfg = Config { homes: vec![t.path("home/alice")], thumbnails: t.path("none"), pacman_cache: t.path("none"), trash_auto: true, now: 0 };
+        assert!(plan(&cfg).is_empty(), "the link is not followed to list what is behind it");
+        // even a candidate planned before the folder was swapped for a link is refused
+        let stale = Candidate { class: Class::AppCache, path: t.path("home/alice/.cache/victim"), bytes: 4096 };
+        assert_eq!(execute(&[&stale]), 0);
+        assert!(victim.exists(), "the target of the link survives");
+    }
+
+    #[test]
+    fn a_trash_folder_that_is_a_link_is_not_listed_and_nothing_behind_it_is_deleted() {
+        let t = Tree::new("trash-link");
+        let victim = t.file("elsewhere/1000__old.txt", 40);
+        t.dir("home/alice");
+        std::os::unix::fs::symlink(t.path("elsewhere"), t.path("home/alice/.RecentlyDeleted")).unwrap();
+        let cfg = Config { homes: vec![t.path("home/alice")], thumbnails: t.path("none"), pacman_cache: t.path("none"), trash_auto: true, now: 1000 + 30 * DAY + 1 };
+        assert!(plan(&cfg).is_empty());
+        let stale = Candidate { class: Class::OldTrash, path: t.path("home/alice/.RecentlyDeleted/1000__old.txt"), bytes: 40 };
+        assert_eq!(execute(&[&stale]), 0);
+        assert!(victim.exists());
+    }
+
+    #[test]
+    fn a_home_that_is_a_link_is_not_purged() {
+        let t = Tree::new("home-link");
+        let victim = t.file("elsewhere/.cache/app/data", 100);
+        std::os::unix::fs::symlink(t.path("elsewhere"), t.path("alice")).unwrap();
+        let cfg = Config { homes: vec![t.path("alice")], thumbnails: t.path("none"), pacman_cache: t.path("none"), trash_auto: false, now: 0 };
+        assert!(plan(&cfg).is_empty());
+        let stale = Candidate { class: Class::AppCache, path: t.path("alice/.cache/app"), bytes: 100 };
+        assert_eq!(execute(&[&stale]), 0);
+        assert!(victim.exists());
+    }
+
+    #[test]
+    fn a_user_candidate_outside_the_cache_and_trash_folders_is_refused() {
+        let t = Tree::new("outside");
+        let doc = t.file("home/alice/Documents/report.txt", 10);
+        let wrong = Candidate { class: Class::AppCache, path: t.path("home/alice/Documents/report.txt"), bytes: 10 };
+        let bare = Candidate { class: Class::OldTrash, path: PathBuf::from("/"), bytes: 1 };
+        assert_eq!(execute(&[&wrong, &bare]), 0);
+        assert!(doc.exists());
+    }
+
+    #[test]
+    fn a_link_inside_the_cache_is_unlinked_and_a_real_cache_folder_still_goes() {
+        let t = Tree::new("inside");
+        let keep = t.file("keep/file", 10);
+        t.file("home/alice/.cache/app/deep/data", 100);
+        std::os::unix::fs::symlink(t.path("keep"), t.path("home/alice/.cache/app/deep/link")).unwrap();
+        let app = Candidate { class: Class::AppCache, path: t.path("home/alice/.cache/app"), bytes: 100 };
+        assert_eq!(execute(&[&app]), 100);
+        assert!(!t.path("home/alice/.cache/app").exists());
+        assert!(keep.exists(), "a link inside the folder is not followed");
     }
 
     #[test]

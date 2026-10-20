@@ -38,6 +38,7 @@ pub const SETTINGS: [(&str, Setting); 3] = [("Store", Setting::StoreOnly), ("Sto
 
 extern "C" {
     fn lgetxattr(path: *const c_char, name: *const c_char, value: *mut c_void, size: usize) -> isize;
+    fn geteuid() -> u32;
 }
 
 /// What the shell does that the tests replace: reading the record and running the program.
@@ -99,13 +100,64 @@ pub fn identity_of(path: &Path) -> std::io::Result<Identity> {
     Ok(Identity { code_directory_hash: Some(sha256::hex(&hash.finish())), ..Identity::default() })
 }
 
-/// Starts the program detached, in its own folder, with no input or output.
-pub fn run_program(path: &Path) -> std::io::Result<()> {
-    let mut cmd = std::process::Command::new(path);
-    if let Some(dir) = path.parent() {
-        cmd.current_dir(dir);
+/// The identity a downloaded program runs under: its own cgroup, data folder and prefetch record.
+pub const PROGRAM_ID: &str = "is.olibuijr.downloaded-program";
+
+/// The command that starts `path` the way an installed native app starts: as the session account (never as the shell's
+/// root), with no new privileges, no inherited descriptors and the app sandbox around it, holding the storage
+/// permission only (the home folder, no network). It fails when that cannot be set up.
+#[cfg(feature = "desktop-wayland")]
+fn sandboxed_command(path: &Path) -> std::io::Result<std::process::Command> {
+    use crate::bare::app_policy::{command, Policy};
+    let data = super::apphost::root().join("appdata").join(PROGRAM_ID);
+    command(PROGRAM_ID, path, &data, Policy { storage: true, ..Policy::default() }, true)
+}
+
+/// Builds without the desktop sandbox cannot confine a program.
+#[cfg(not(feature = "desktop-wayland"))]
+fn sandboxed_command(_path: &Path) -> std::io::Result<std::process::Command> {
+    Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "no sandbox in this build"))
+}
+
+/// True when this process runs as root (the session service does).
+fn running_as_root() -> bool {
+    // SAFETY: geteuid has no preconditions.
+    unsafe { geteuid() == 0 }
+}
+
+/// The command for `path`: sandboxed as the session account. A root shell never starts a program any other way, so
+/// when the sandbox cannot be built the program is refused. A shell that is not root (a development host) starts it
+/// as its own user in its own folder.
+fn program_command(path: &Path) -> std::io::Result<std::process::Command> {
+    match sandboxed_command(path) {
+        Ok(cmd) => Ok(cmd),
+        Err(e) if running_as_root() => Err(e),
+        Err(_) => {
+            let mut cmd = std::process::Command::new(path);
+            if let Some(dir) = path.parent() {
+                cmd.current_dir(dir);
+            }
+            Ok(cmd)
+        }
     }
-    cmd.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn().map(|_| ())
+}
+
+/// Starts the program built by `build` detached, with no input or output, and reaps it when it ends. Nothing is
+/// started when `build` fails.
+fn start(path: &Path, build: impl FnOnce(&Path) -> std::io::Result<std::process::Command>) -> std::io::Result<()> {
+    let mut cmd = build(path)?;
+    let mut child = cmd.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn()?;
+    // wait for it on its own thread so a finished program does not stay a zombie of the shell
+    let _ = std::thread::Builder::new().name("launch-reap".into()).spawn(move || {
+        let _ = child.wait();
+    });
+    Ok(())
+}
+
+/// Starts the program detached with no input or output, as the session account inside the app sandbox (see
+/// `program_command`).
+pub fn run_program(path: &Path) -> std::io::Result<()> {
+    start(path, program_command)
 }
 
 /// The policy: the setting from the prefs and the remembered programs from the data folder.
@@ -256,6 +308,46 @@ mod tests {
         assert_ne!(replaced.code_directory_hash, id.code_directory_hash);
         assert!(matches!(assess(&policy, &prog, record(), &replaced), Verdict::Block(_)));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_program_whose_sandbox_cannot_be_built_is_not_started() {
+        let dir = temp("refused");
+        let marker = dir.join("ran");
+        let prog = program(&dir, "tool", &format!("#!/bin/sh\necho x > {}\n", marker.display()));
+        let refused = start(&prog, |_| Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "no sandbox")));
+        assert_eq!(refused.unwrap_err().kind(), std::io::ErrorKind::Unsupported);
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        assert!(!marker.exists(), "nothing ran");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_started_program_runs_detached_through_the_command_that_was_built() {
+        let dir = temp("started");
+        let marker = dir.join("ran");
+        let prog = program(&dir, "tool", &format!("#!/bin/sh\necho x > {}\n", marker.display()));
+        start(&prog, |p| Ok(std::process::Command::new(p))).unwrap();
+        for _ in 0..50 {
+            if marker.exists() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        assert!(marker.exists(), "the built command ran");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_missing_sandbox_in_this_build_refuses_instead_of_running_as_root() {
+        #[cfg(not(feature = "desktop-wayland"))]
+        {
+            let err = sandboxed_command(Path::new("/x")).unwrap_err();
+            assert_eq!(err.kind(), std::io::ErrorKind::Unsupported);
+            if running_as_root() {
+                assert!(program_command(Path::new("/x")).is_err(), "a root shell does not fall back to a plain spawn");
+            }
+        }
     }
 
     #[test]
