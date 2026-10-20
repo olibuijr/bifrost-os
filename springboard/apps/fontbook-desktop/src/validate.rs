@@ -229,7 +229,11 @@ fn format4(sub: &[u8]) -> Option<Vec<(u32, u32)>> {
     let start_at = end_at + 2 + 2 * seg; // the reserved pad word sits between the end and start arrays
     let delta_at = start_at + 2 * seg;
     let range_at = delta_at + 2 * seg;
-    let mut out = Vec::new();
+    // The work is bounded by the table, not by what a segment claims: a segment that maps through the delta alone
+    // is one range (less the one code point that lands on glyph 0), and a segment that reads the glyph index array
+    // stops where the array ends. A shared iteration budget stops overlapping segments from multiplying that.
+    let mut budget: u32 = MAX_CODEPOINT + 1;
+    let mut out: Vec<(u32, u32)> = Vec::new();
     for i in 0..seg {
         let end = u16_at(sub, end_at + 2 * i)? as u32;
         let start = u16_at(sub, start_at + 2 * i)? as u32;
@@ -239,16 +243,43 @@ fn format4(sub: &[u8]) -> Option<Vec<(u32, u32)>> {
         if start > end {
             continue;
         }
-        for c in start..=end {
-            let glyph = if ro == 0 {
-                (c as u16).wrapping_add(delta)
+        if ro == 0 {
+            // glyph = (c + delta) mod 65536; zero exactly at c = 65536 - delta (mod 65536)
+            let hole = 0x1_0000u32.wrapping_sub(delta as u32) & 0xFFFF;
+            if hole < start || hole > end {
+                out.push((start, end));
             } else {
-                let g = u16_at(sub, ro_at + ro + 2 * ((c - start) as usize)).unwrap_or(0);
-                if g == 0 { 0 } else { g.wrapping_add(delta) }
-            };
-            if glyph != 0 {
-                out.push((c, c));
+                if hole > start {
+                    out.push((start, hole - 1));
+                }
+                if hole < end {
+                    out.push((hole + 1, end));
+                }
             }
+            continue;
+        }
+        let mut run: Option<(u32, u32)> = None;
+        for c in start..=end {
+            let Some(g) = u16_at(sub, ro_at + ro + 2 * ((c - start) as usize)) else {
+                break; // past the end of the glyph index array, every later code point is unmapped too
+            };
+            if budget == 0 {
+                break;
+            }
+            budget -= 1;
+            let glyph = if g == 0 { 0 } else { g.wrapping_add(delta) };
+            match (glyph != 0, run) {
+                (true, Some((a, _))) => run = Some((a, c)),
+                (true, None) => run = Some((c, c)),
+                (false, Some(r)) => {
+                    out.push(r);
+                    run = None;
+                }
+                (false, None) => {}
+            }
+        }
+        if let Some(r) = run {
+            out.push(r);
         }
     }
     Some(out)
@@ -391,6 +422,52 @@ mod tests {
         assert_eq!(r.glyphs, 8);
         assert_eq!(r.characters, 3);
         assert_eq!(r.blocks, ["Basic Latin"]);
+    }
+
+    #[test]
+    fn a_hostile_format_4_font_is_read_in_bounded_time_and_memory() {
+        // 4000 segments, each 0..=0xFFFF with a zero range offset: one range each, not 65536 entries each.
+        let seg = 4000u16;
+        let mut t = Vec::new();
+        t.extend_from_slice(&4u16.to_be_bytes());
+        t.extend_from_slice(&0u16.to_be_bytes());
+        t.extend_from_slice(&0u16.to_be_bytes());
+        t.extend_from_slice(&(seg * 2).to_be_bytes());
+        t.extend_from_slice(&[0u8; 6]);
+        for _ in 0..seg {
+            t.extend_from_slice(&0xFFFFu16.to_be_bytes());
+        }
+        t.extend_from_slice(&0u16.to_be_bytes());
+        for _ in 0..seg {
+            t.extend_from_slice(&0u16.to_be_bytes());
+        }
+        for _ in 0..seg {
+            t.extend_from_slice(&1u16.to_be_bytes());
+        }
+        t.extend_from_slice(&vec![0u8; 2 * seg as usize]);
+        let ranges = repertoire(&cmap(3, 1, t)).expect("readable");
+        // glyph 0 falls on code point 0xFFFF only
+        assert_eq!(ranges, vec![(0, 0xFFFE)]);
+    }
+
+    #[test]
+    fn a_format_4_segment_through_the_glyph_array_stops_where_the_array_ends() {
+        let mut t = Vec::new();
+        t.extend_from_slice(&4u16.to_be_bytes());
+        t.extend_from_slice(&0u16.to_be_bytes());
+        t.extend_from_slice(&0u16.to_be_bytes());
+        t.extend_from_slice(&2u16.to_be_bytes()); // one segment
+        t.extend_from_slice(&[0u8; 6]);
+        t.extend_from_slice(&0xFFFFu16.to_be_bytes()); // end
+        t.extend_from_slice(&0u16.to_be_bytes()); // pad
+        t.extend_from_slice(&0u16.to_be_bytes()); // start
+        t.extend_from_slice(&0u16.to_be_bytes()); // delta
+        t.extend_from_slice(&2u16.to_be_bytes()); // idRangeOffset: the array follows this word
+        t.extend_from_slice(&5u16.to_be_bytes()); // code point 0 -> glyph 5
+        t.extend_from_slice(&6u16.to_be_bytes()); // code point 1 -> glyph 6
+        t.extend_from_slice(&0u16.to_be_bytes()); // code point 2 -> none
+        let ranges = repertoire(&cmap(3, 1, t)).expect("readable");
+        assert_eq!(ranges, vec![(0, 1)]);
     }
 
     #[test]
