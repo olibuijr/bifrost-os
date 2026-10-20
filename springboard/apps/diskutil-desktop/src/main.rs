@@ -23,6 +23,7 @@ use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, DocumentEvent, Input, KeyInput
 use crate::actions::Action;
 use crate::model::Kind;
 use bifrost_core::disk_format::Personality;
+use bifrost_core::json::Json;
 use window::{Ask, DiskUtility, Target, B_DETACH, REFRESH_S, SHEET_CANCEL};
 
 /// Menu item ids.
@@ -141,7 +142,16 @@ impl App for DiskUtility {
         if self.last_refresh.is_infinite() {
             let t = self.now;
             self.refresh(t, true);
+            self.ask_shell(ctx);
         }
+    }
+
+    /// The shell's list of the disks, for a sandbox that cannot read the device tree itself (`window.rs`).
+    fn service_reply(&mut self, _ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
+        if self.volumes_request == Some(request) {
+            return self.on_volumes(result);
+        }
+        false
     }
 
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
@@ -168,7 +178,9 @@ impl App for DiskUtility {
         let finished = self.poll(t);
         self.flush(ctx);
         if t - self.last_refresh >= REFRESH_S {
-            self.refresh(t, false) || finished
+            let changed = self.refresh(t, false);
+            self.ask_shell(ctx);
+            changed || finished
         } else {
             finished
         }

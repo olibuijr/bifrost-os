@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.7
+
+- Fix: the disks show. The app's sandbox has no `/sys`, so the sidebar was empty ("No disks were found."); it now asks
+  the shell's `disks` service for the disks, partitions, sizes, file systems and mount points when it cannot read them.
+- Fix: the toolbar starts after the traffic lights instead of under them.
+- Mount, unmount and eject say plainly that the disk service is not available when udisks2 cannot be reached.
+
 ## 0.7.6
 
 - BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.

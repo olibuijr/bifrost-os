@@ -14,7 +14,11 @@ use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
 use bifrost_app::controls::sheet::{ButtonRole, Hit, Sheet, SheetButton, BUTTON_H_PT, SHEET_PAD_PT};
 use bifrost_app::controls::Rect;
 use bifrost_app::kit::{TextCache, Ui};
-use bifrost_app::layout::UNIFIED_BAR_PT;
+use bifrost_app::{service, Ctx};
+use bifrost_core::disk_scan::Volume;
+use bifrost_core::disk_wire;
+use bifrost_core::json::Json;
+use bifrost_app::layout::{traffic_lights_trailing, UNIFIED_BAR_PT};
 use bifrost_app::widgets;
 use bifrost_core::disk_commands::Command;
 use bifrost_core::disk_format::Personality;
@@ -141,6 +145,13 @@ pub struct DiskUtility {
     pub press: Target,
     /// The clock time of the last event, frame or tick (seconds).
     pub now: f64,
+    /// Set by `refresh` when this sandbox has no `/sys`: the window then asks the shell's `disks` service for the
+    /// volumes (`ask_shell`) and takes the answer in `on_volumes`.
+    pub shell_scan: bool,
+    /// The `volumes` call waiting for its answer.
+    pub volumes_request: Option<u32>,
+    /// Whether the last `volumes` answer failed, so the footer sentence it set is cleared by the next good one.
+    pub scan_failed: bool,
 }
 
 impl DiskUtility {
@@ -166,6 +177,9 @@ impl DiskUtility {
             last_usage: f64::NEG_INFINITY,
             press: Target::Nothing,
             now: 0.0,
+            shell_scan: false,
+            volumes_request: None,
+            scan_failed: false,
         }
     }
 
@@ -174,6 +188,11 @@ impl DiskUtility {
         self.last_refresh = t;
         let before = self.nodes.clone();
         let mut nodes = sysfs::read_nodes(Path::new("/sys"), Path::new("/run/udev/data"));
+        if nodes.is_empty() && !Path::new("/sys/block").is_dir() {
+            // The app sandbox has no `/sys`, no udev database and no host mount table: the shell reads them for us.
+            self.shell_scan = true;
+            return false;
+        }
         model::apply_mounts(&mut nodes, &model::parse_mounts(&probe::read_mounts()));
         if force_usage || t - self.last_usage >= USAGE_S {
             let points: Vec<String> = nodes.iter().filter_map(|n| n.mount_point.clone()).collect();
@@ -192,6 +211,45 @@ impl DiskUtility {
             }
         }
         self.probe_smart();
+        self.nodes != before
+    }
+
+    /// Asks the shell for the disks when `refresh` found no device tree to read. One call at a time.
+    pub fn ask_shell(&mut self, ctx: &Ctx) {
+        if !self.shell_scan || self.volumes_request.is_some() {
+            return;
+        }
+        self.shell_scan = false;
+        self.volumes_request = Some(service::call(ctx, disk_wire::SERVICE, "volumes", &Json::Null));
+    }
+
+    /// Takes the shell's answer to the `volumes` call. True when the window changed. Usage is not part of the answer
+    /// (a mount point is not visible in this sandbox), so the rows show capacity, file system and mount point only.
+    pub fn on_volumes(&mut self, result: &Result<Json, String>) -> bool {
+        self.volumes_request = None;
+        let list = result.as_ref().ok().and_then(|body| body.get("volumes")).and_then(Json::as_array);
+        let volumes: Option<Vec<Volume>> = list.and_then(|l| l.iter().map(disk_wire::decode_volume).collect());
+        let Some(volumes) = volumes else {
+            let why = result.as_ref().err().map(|e| format!(" ({e})")).unwrap_or_default();
+            self.error = Some(format!("The disks could not be listed: the disk service is not available{why}."));
+            self.scan_failed = true;
+            return true;
+        };
+        if std::mem::take(&mut self.scan_failed) {
+            self.error = None;
+        }
+        let before = self.nodes.clone();
+        let mut nodes = model::nodes_from_volumes(&volumes);
+        model::carry_usage(&mut nodes, &self.nodes);
+        for node in nodes.iter_mut().filter(|n| n.kind == Kind::Disk) {
+            node.smart = self.smart.get(&node.name).cloned();
+        }
+        self.nodes = nodes;
+        if let Some(name) = &self.selected {
+            if !self.nodes.iter().any(|n| &n.name == name) {
+                self.selected = None;
+            }
+        }
         self.nodes != before
     }
 
@@ -510,6 +568,12 @@ impl DiskUtility {
         Rect { x: 0.0, y: 0.0, w: self.size.0, h: UNIFIED_BAR_PT }
     }
 
+    /// The toolbar's rectangle: the bar to the right of the traffic lights the shell draws over the window's top left.
+    pub fn toolbar_bounds(&self) -> Rect {
+        let x = traffic_lights_trailing() + widgets::TOOLBAR_GAP_PT;
+        Rect { x, y: 0.0, w: (self.size.0 - x - PAD_PT / 2.0).max(0.0), h: UNIFIED_BAR_PT }
+    }
+
     pub fn sidebar_rect(&self) -> Rect {
         Rect { x: 0.0, y: UNIFIED_BAR_PT, w: SIDE_PT, h: (self.size.1 - UNIFIED_BAR_PT).max(0.0) }
     }
@@ -524,7 +588,7 @@ impl DiskUtility {
     }
 
     pub fn toolbar_layout(&self, ui: &Ui) -> ToolbarLayout {
-        widgets::toolbar_layout(ui, self.bar_rect(), &self.toolbar())
+        widgets::toolbar_layout(ui, self.toolbar_bounds(), &self.toolbar())
     }
 
     /// What the point is over while a form sheet is open (it blocks the window), or `None` when there is no form.
@@ -607,6 +671,17 @@ mod tests {
         let enabled = |id: u32| bar.items.iter().find(|i| i.id == id).is_some_and(|i| i.enabled);
         assert!(enabled(B_UNMOUNT));
         assert!(!enabled(B_EJECT));
+    }
+
+    #[test]
+    fn the_toolbar_starts_after_the_traffic_lights() {
+        let mut w = DiskUtility::new();
+        w.size = (1000.0, 700.0);
+        let bounds = w.toolbar_bounds();
+        assert!(bounds.x >= traffic_lights_trailing(), "the first button is not under the window controls");
+        assert!(bounds.x + bounds.w <= w.size.0 && bounds.h == UNIFIED_BAR_PT);
+        w.size = (10.0, 10.0);
+        assert_eq!(w.toolbar_bounds().w, 0.0, "a tiny window never gets a negative width");
     }
 
     #[test]

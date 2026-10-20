@@ -3722,7 +3722,7 @@ input, written from a thread so the shell never blocks on a long text.
 
 ## Screenshot service (`bifrost_app::screenshot`, the `screenshot` service)
 
-Pictures of the screen for apps with the Screen permission. The shell takes the picture the way the screenshot toolbar
+Pictures of the screen for any app (no manifest permission: the shell takes the picture, and the person's screen-recording consent is asked on the first request). The shell takes the picture the way the screenshot toolbar
 does and saves it to Photos. Methods: `selection()` (drag a rectangle), `window()` (the window pick, with its shadow),
 `screen()` (the whole screen now). Each replies `{started: true}`, or an error for a locked screen, a missing permission
 or a capture already on screen. When the file has landed, the shell sends the event `captured` with body `{path}`; an app

@@ -123,6 +123,7 @@ impl DiskUtility {
     /// Sends the panel the window wants, commits or throws away a finished save, and tells the shell whether a text
     /// field has the keyboard. Called after every event, menu command and tick.
     pub fn flush(&mut self, ctx: &Ctx) {
+        self.ask_shell(ctx);
         if let Some(want) = self.want.take() {
             match want {
                 Want::Open { title, filters, directories, then } => {

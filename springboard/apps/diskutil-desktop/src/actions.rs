@@ -114,11 +114,23 @@ pub fn spawn(plan: Vec<Command>) -> Receiver<Result<(), String>> {
 pub fn spawn_with(plan: Vec<Command>, repairing: bool) -> Receiver<Result<(), String>> {
     let (tx, rx) = channel();
     DispatchQueue::global(Qos::Utility).async_(move || {
-        let result = disk_run::run_plan(&plan, repairing).map(|_| ());
+        let result = disk_run::run_plan(&plan, repairing).map(|_| ()).map_err(|e| disk_service_text(&plan, e));
         let _ = tx.send(result);
         DispatchQueue::main().async_(|| {});
     });
     rx
+}
+
+/// The sentence for a failed plan. When a `udisksctl` step could not reach the disk service (udisks2 is not running, or
+/// this sandbox has no bus to it) the person is told that plainly, not shown the tool's own error line.
+pub fn disk_service_text(plan: &[Command], error: String) -> String {
+    let lower = error.to_lowercase();
+    let unreachable = ["error connecting", "could not connect", "could not run", "not activatable", "not provided by any"].iter().any(|p| lower.contains(p));
+    if unreachable && plan.iter().any(|c| c.program == "udisksctl") {
+        "The disk service is not available, so this cannot be done here.".to_string()
+    } else {
+        error
+    }
 }
 
 /// The disks as planning sees them: each row with its parent.
@@ -169,6 +181,16 @@ mod tests {
 
     fn tools(plan: &[Command]) -> Vec<(&'static str, String)> {
         plan.iter().map(|c| (c.program, c.args.join(" "))).collect()
+    }
+
+    #[test]
+    fn an_unreachable_disk_service_is_named_plainly() {
+        let plan = vec![Command { program: "udisksctl", args: vec!["mount".to_string()] }];
+        let said = disk_service_text(&plan, "Error connecting: Could not connect: No such file or directory".to_string());
+        assert_eq!(said, "The disk service is not available, so this cannot be done here.");
+        assert_eq!(disk_service_text(&plan, "Error mounting /dev/sdb1: busy".to_string()), "Error mounting /dev/sdb1: busy");
+        let other = vec![Command { program: "mkfs.ext4", args: vec![] }];
+        assert_eq!(disk_service_text(&other, "could not run".to_string()), "could not run");
     }
 
     #[test]

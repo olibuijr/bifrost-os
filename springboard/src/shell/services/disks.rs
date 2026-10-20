@@ -7,6 +7,8 @@
 //!
 //! Methods (JSON params):
 //! - `list` -> `{disks: [disk]}`, a disk being `bifrost_core::disk_wire::encode_disk`
+//! - `volumes` -> `{volumes: [volume]}`, every disk and partition read now, with its parent disk, file system type and
+//!   label (`bifrost_core::disk_wire::encode_volume`); Disk Utility's sandbox has no `/sys`, so it asks for these
 //! - `describe` `{bsd_name}` -> `{description: {key: text}}` (`disk_events::description`)
 //! - `plan_unmount` / `plan_eject` `{bsd_name}` -> `{commands: [{program, args}]}`, the plan after the claim, approval
 //!   and device checks. The service validates and plans; it does not run the commands yet (they need the privileged
@@ -42,6 +44,8 @@ pub struct Disks {
     session: Session,
     sys_block: PathBuf,
     mounts: PathBuf,
+    /// the udev database the volumes call reads file system types and labels from
+    udev: PathBuf,
     /// Whether a snapshot has been taken; the first one is recorded without events.
     primed: bool,
     next_scan: f64,
@@ -66,6 +70,7 @@ impl Disks {
             session: Session::new(),
             sys_block: sys_block.into(),
             mounts: mounts.into(),
+            udev: PathBuf::from("/run/udev/data"),
             primed: false,
             next_scan: 0.0,
             arrivals: Vec::new(),
@@ -134,6 +139,13 @@ impl Disks {
             "list" => {
                 let disks = self.session.disks().iter().map(disk_wire::encode_disk).collect();
                 Ok(obj(vec![("disks", Json::Arr(disks))]))
+            }
+            // every disk and partition with its parent, file system and label, read now: Disk Utility's sandbox has no
+            // `/sys`, no udev database and no host mount table, so it asks the shell what they hold
+            "volumes" => {
+                let text = std::fs::read_to_string(&self.mounts).unwrap_or_default();
+                let volumes = disk_scan::scan_volumes(&self.sys_block, &self.udev, &text).iter().map(disk_wire::encode_volume).collect();
+                Ok(obj(vec![("volumes", Json::Arr(volumes))]))
             }
             "describe" => {
                 let name = name_param(params)?;
@@ -240,6 +252,22 @@ mod tests {
         assert!(s.rescan().is_empty());
         let r = s.handle("a", "list", &Json::Null).unwrap();
         assert_eq!(r.get("disks").and_then(Json::as_array).map(|d| d.len()), Some(1));
+    }
+
+    #[test]
+    fn the_volumes_call_lists_partitions_with_their_disk() {
+        let (sys, mounts) = fixture("volumes");
+        let part = sys.join("sda").join("sda1");
+        fs::create_dir_all(&part).unwrap();
+        fs::write(part.join("partition"), "1").unwrap();
+        fs::write(part.join("size"), "50000").unwrap();
+        fs::write(&mounts, "/dev/sda1 /media/data ext4 rw 0 0\n").unwrap();
+        let mut s = Disks::at(&sys, &mounts);
+        let r = s.handle("a", "volumes", &Json::Null).unwrap();
+        let volumes: Vec<_> = r.get("volumes").and_then(Json::as_array).unwrap().iter().filter_map(disk_wire::decode_volume).collect();
+        assert_eq!(volumes.iter().map(|v| v.disk.bsd_name.as_str()).collect::<Vec<_>>(), vec!["sda", "sda1"]);
+        assert_eq!(volumes[1].parent.as_deref(), Some("sda"));
+        assert_eq!(volumes[1].disk.mount_point.as_deref(), Some("/media/data"));
     }
 
     #[test]
