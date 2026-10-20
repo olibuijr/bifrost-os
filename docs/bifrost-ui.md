@@ -6168,3 +6168,16 @@ compliance snapshots of the calendar need a re-bless on Midget.
 Gaps: the rename field does not grow with the text (the field scrolls to keep the caret in view); there is no Shift-arrow selection
 in the field yet; the SDK's direct Wayland key path (`wl::input::translate_key`) still delivers an arrow with Cmd held as the plain
 arrow, so the arrow chords reach an app only through the shell's key path. Code only: not built or run, not verified on Midget.
+
+## Dock: icon cache, minimised windows and the plate (E2E fixes D3, D1, D2, 2026-10-20)
+
+| Ours | Apple | Notes |
+|---|---|---|
+| `Desk::with_scaled_icon`, `DockIconKey { owner, generation, size }` (`shell/desk.rs`) | The Dock keeps one image per app | The scaled Dock icons were cached by the address of the source pixel buffer. A rebuilt icon (Dark switch, an update) freed the old buffer and the next one reused its address, so a slot drew another app's picture (two Settings, no Camera) until a click cleared the cache. The key is now the app (`apps()` entry or Linux app id), the icon generation (`Shell::icon_rebuilds`) and the size; `rebuild_app_icons` also clears the cache. Drawing and hit-testing already read the same `desk_dock` list. |
+| `thumbnail_frame`, minimised slots in `draw_desk_dock` | A minimised window is a small thumbnail of the window, right of the separator | A minimised window's slot is a frame at the window's aspect (clamped 1:2 to 2:1) with the app's icon in it and a small badge of the app. One tile per app stays on the left. |
+| `Shell::note_dock_glass`, `dock_glass_vacated` (`shell/desk.rs`, `shell/mod.rs`) | The Dock plate always fits its icons | The presenter keeps a glass shape until redrawn pixels wholly cover it, and the frame damage is exact changed rows, so a Dock that lost an icon (or hid) left its old, wider glass shape as a pale slab at the ends (later tinted by the wallpaper). The frame now also damages the capsule it vacated. |
+
+Gaps (not matched yet): the thumbnail does not show the window's pixels, because the shell drops a minimised window's frame cache
+(`desk_dock` window pixels are kept only while the minimise effect runs); a real thumbnail needs the last frame kept per
+minimised window. Every slot keeps the same square size, so a thumbnail is letterboxed inside it instead of the slot taking the
+window's width. Code only: not built or run, not verified on Midget.
