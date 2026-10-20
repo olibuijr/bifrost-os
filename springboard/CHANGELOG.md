@@ -2,12 +2,16 @@
 
 ## Unreleased
 
+## 0.10.12 — 2026-10-20
+
 - Streaming audio starts clean: the speaker output prebuffers about 50 ms before the device starts (a short system sound
   starts at once) and again after a seek, a skip or a stall, instead of playing into an empty ring. The speaker trace now
   says whether glitches continue: underruns as events and silent frames per interval and in total, prebuffering counted
   apart, the fill of the ring, and how many writes slept for room (back-pressure of a full ring, not a stall). The audio
   server starts its IO thread's logging and timer before the device starts, and logs xruns in the first 8 cycles as
   start-up xruns (with frames lost and the cycle) that do not feed the quantum fallback.
+- The installer leaves the asset copy to the package: a fresh install has no `/usr/share/springboard/assets`, only the
+  package-owned system assets (verified with a full install through the installer screens on the lab machine).
 
 ## 0.10.11 — 2026-10-20
 
