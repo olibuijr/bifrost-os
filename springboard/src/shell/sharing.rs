@@ -268,10 +268,14 @@ impl super::Shell {
             self.ext_open(to);
         }
         self.ext_send(to, &bifrost_proto::ToApp::Open { url: url.to_string() });
+        // file grants need the document broker, which only the desktop has
+        #[cfg(feature = "desktop-wayland")]
         if !files.is_empty() {
             let request = self.app_share.next_inbound();
             self.inbound_files(sender, MAIL_APP, to as u8, request, files);
         }
+        #[cfg(not(feature = "desktop-wayland"))]
+        let _ = (sender, files);
         self.dirty = true;
         Ok(())
     }

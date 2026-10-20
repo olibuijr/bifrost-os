@@ -1,10 +1,11 @@
 //! Desktop menus backed by actual app, network and power commands.
 use super::Shell;
 use super::helpbook;
+use super::ui::Weight;
 #[cfg(feature = "desktop-wayland")]
 use super::hwkeys::TermKey;
 #[cfg(feature = "desktop-wayland")]
-use super::{AppId,Screen,Effect,Event,desktop_network,ui::{Weight,WHITE,SECONDARY,CELL,LABEL,MENU_TINT,MENU_SOLID,MENU_RADIUS_PT}};
+use super::{AppId,Screen,Effect,Event,desktop_network,ui::{WHITE,SECONDARY,CELL,LABEL,MENU_TINT,MENU_SOLID,MENU_RADIUS_PT}};
 #[cfg(feature = "desktop-wayland")]
 use crate::gfx::{Image,Surface};
 /// Width of a menu extra's button, in pt (Golden Gate spaces menu extras about 8 pt apart).
@@ -249,6 +250,8 @@ impl Shell {
     }
 
     pub(super) fn desktop_bar_height(&self)->usize {self.ui.pt(28.).ceil() as usize}
+    /// Advance width of a bar label (`Ui::measure`), from the chrome text cache: the bar lays its menus out on every frame.
+    pub(super) fn measure_chrome(&self,text:&str,pt:f32,weight:Weight)->f32 {self.chrome_text.borrow_mut().width(&self.ui,text,pt,weight)}
     /// Without the desktop there is no menu bar, so nothing shows CPU or RAM readings.
     #[cfg(not(feature="desktop-wayland"))]
     pub(super) fn metrics_wanted(&self)->bool {false}
@@ -268,8 +271,6 @@ impl Shell {
 }
 #[cfg(feature="desktop-wayland")]
 impl Shell {
-    /// Advance width of a bar label (`Ui::measure`), from the chrome text cache: the bar lays its menus out on every frame.
-    pub(super) fn measure_chrome(&self,text:&str,pt:f32,weight:Weight)->f32 {self.chrome_text.borrow_mut().width(&self.ui,text,pt,weight)}
     /// A bar label fitted into `max_px` (`Ui::fit`), from the chrome text cache.
     pub(super) fn fit_chrome(&self,text:&str,pt:f32,max_px:f32)->String {self.chrome_text.borrow_mut().fit(&self.ui,text,pt,max_px)}
     fn foreign_active(&self)->Option<u32> {

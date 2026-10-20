@@ -2384,6 +2384,7 @@ impl Shell {
 
     /// A Time Limit cover was raised or dropped: the desktop's window caches are stale.
     pub(super) fn desk_cover_changed(&mut self) {
+        #[cfg(feature = "desktop-wayland")]
         if let Some(d) = self.desk.as_mut() {
             d.window_cache.clear();
             d.body_cache.clear();
