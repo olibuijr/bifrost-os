@@ -799,7 +799,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-mail"
-version = "0.15.2"
+version = "0.15.3"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -830,7 +830,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-messages"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -874,7 +874,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-notes"
-version = "1.23.2"
+version = "1.23.3"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -1076,7 +1076,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-voicememos"
-version = "1.10.5"
+version = "1.10.6"
 dependencies = [
  "bifrost-app",
  "bifrost-core",

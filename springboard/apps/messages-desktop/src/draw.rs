@@ -13,6 +13,8 @@ use bifrost_app::kit::{colors, Surface, TextCache, Ui, Weight};
 use bifrost_app::widgets;
 
 pub const HEADER_PT: f32 = 52.0;
+/// The row under the list's header that holds the search field, below the window controls.
+const SEARCH_ROW_PT: f32 = 44.0;
 const SIDE_MIN_PT: f32 = 220.0;
 const SIDE_MAX_PT: f32 = 320.0;
 const SIDE_SHARE: f32 = 0.3;
@@ -141,6 +143,8 @@ pub struct Layout {
     /// The width of the room list.
     pub side: f32,
     pub header: f32,
+    /// The height of the search row under the list's header.
+    pub search_h: f32,
     pub row: f32,
     pub composer: f32,
     pub pad: f32,
@@ -182,6 +186,7 @@ impl Layout {
             h,
             side,
             header: ui.pt(HEADER_PT),
+            search_h: ui.pt(SEARCH_ROW_PT),
             row: ui.pt(ROW_PT),
             composer: ui.pt(COMPOSER_PT),
             pad: ui.pt(SPACE_M),
@@ -204,11 +209,17 @@ impl Layout {
 
     /// The row of the conversation at `index`, moved up by the list's scroll.
     pub fn room_row(&self, index: usize, scroll: f32) -> Rect {
-        [0.0, self.header + index as f32 * self.row - scroll, self.side, self.row]
+        [0.0, self.list_top() + index as f32 * self.row - scroll, self.side, self.row]
+    }
+
+    /// Where the room list starts: under the header (the window controls and New Message) and the search row.
+    pub fn list_top(&self) -> f32 {
+        self.header + self.search_h
     }
 
     pub fn sidebar(&self) -> Rect {
-        [0.0, self.header, self.side, (self.h - self.header).max(0.0)]
+        let top = self.list_top();
+        [0.0, top, self.side, (self.h - top).max(0.0)]
     }
 
     /// The timeline: the main pane between the header and the composer.
@@ -226,14 +237,14 @@ impl Layout {
         [b[0] + b[2] - self.pad - self.send_w, b[1] + (b[3] - self.button_h) / 2.0, self.send_w, self.button_h]
     }
 
-    /// New Message, at the right of the room list's header.
+    /// New Message, at the right of the room list's header (the window controls take the left).
     pub fn new_button(&self) -> Rect {
         [self.side - self.pad - self.button_h, (self.header - self.button_h) / 2.0, self.button_h, self.button_h]
     }
 
+    /// The search field, in its own row under the header so it never sits under the window controls.
     pub fn search_field(&self) -> Rect {
-        let n = self.new_button();
-        [self.pad, n[1], (n[0] - self.gap - self.pad).max(0.0), self.button_h]
+        [self.pad, self.header + (self.search_h - self.button_h) / 2.0, (self.side - 2.0 * self.pad).max(0.0), self.button_h]
     }
 
     /// Details, at the right of the conversation header.
@@ -400,7 +411,7 @@ impl MessagesWindow {
         if inside(lay.sidebar(), x, y) {
             let scale = ui.pt(1.0);
             let list = self.room_source_list(&lay);
-            if let Some(index) = list.hit(KRect { x: 0.0, y: HEADER_PT, w: lay.side / scale, h: lay.sidebar()[3] / scale }, self.room_scroll.offset() / scale, x / scale, y / scale) {
+            if let Some(index) = list.hit(KRect { x: 0.0, y: lay.list_top() / scale, w: lay.side / scale, h: lay.sidebar()[3] / scale }, self.room_scroll.offset() / scale, x / scale, y / scale) {
                 if let Some(room) = self.model.visible_rooms().get(index as usize) {
                     return Hit::Room(room.id.clone());
                 }
@@ -417,7 +428,7 @@ impl MessagesWindow {
         }
         let scale = ui.pt(1.0);
         let list = self.room_source_list(&lay);
-        let index = list.hit(KRect { x: 0.0, y: HEADER_PT, w: lay.side / scale, h: lay.sidebar()[3] / scale }, self.room_scroll.offset() / scale, x / scale, y / scale)?;
+        let index = list.hit(KRect { x: 0.0, y: lay.list_top() / scale, w: lay.side / scale, h: lay.sidebar()[3] / scale }, self.room_scroll.offset() / scale, x / scale, y / scale)?;
         self.model.visible_rooms().get(index as usize).map(|r| r.id.clone())
     }
 
@@ -612,11 +623,11 @@ impl MessagesWindow {
             } else {
                 "No conversation matches"
             };
-            put(s, &mut self.labels, ui, hint, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), lay.pad, lay.header + lay.pad);
+            put(s, &mut self.labels, ui, hint, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), lay.pad, lay.list_top() + lay.pad);
         }
-        // The header strip is drawn last so a scrolled row never shows through it.
-        s.fill_rect(px(side[0]), 0, px(side[2]), px(lay.header), CARD_BG.now());
-        s.fill_rect(px(side[0]), px(lay.header - lay.rule), px(side[2]), px(lay.rule), SEPARATOR_C.now());
+        // The header and the search row are drawn last so a scrolled row never shows through them.
+        s.fill_rect(px(side[0]), 0, px(side[2]), px(lay.list_top()), CARD_BG.now());
+        s.fill_rect(px(side[0]), px(lay.list_top() - lay.rule), px(side[2]), px(lay.rule), SEPARATOR_C.now());
         draw_field(s, &mut self.labels, ui, lay, search, &self.model.search, "Search", focus);
         draw_button(s, &mut self.labels, ui, lay, add, "+", false, false, enabled);
     }
@@ -649,7 +660,9 @@ impl MessagesWindow {
         if !status.is_empty() {
             let shown = fit(ui, &status, MAC_FOOTNOTE_PT, Weight::Regular, (width / 2.0 - right).max(0.0));
             let sw = ui.measure(&shown, MAC_FOOTNOTE_PT, Weight::Regular);
-            put_mid(s, &mut self.labels, ui, &shown, MAC_FOOTNOTE_PT, Weight::Regular, DESTRUCTIVE, lay.w - lay.pad - right - sw, lay.header / 2.0);
+            // progress ("Loading...", "Sending...") is secondary text; only a real problem is red
+            let color = if self.model.status_is_progress() { LABEL_2.now() } else { DESTRUCTIVE };
+            put_mid(s, &mut self.labels, ui, &shown, MAC_FOOTNOTE_PT, Weight::Regular, color, lay.w - lay.pad - right - sw, lay.header / 2.0);
         }
         if has_room {
             draw_button(s, &mut self.labels, ui, lay, lay.info_button(), "Details", false, false, true);
@@ -1247,6 +1260,7 @@ mod tests {
             h,
             side: 0.0,
             header: HEADER_PT,
+            search_h: SEARCH_ROW_PT,
             row: ROW_PT,
             composer: COMPOSER_PT,
             pad: 12.0,
@@ -1294,6 +1308,7 @@ mod tests {
         let r0 = lay.room_row(0, 0.0);
         let r2 = lay.room_row(2, 0.0);
         assert_eq!(r2[1] - r0[1], 2.0 * ROW_PT);
+        assert_eq!(r0[1], lay.list_top(), "the first row starts under the search row");
         assert_eq!(lay.room_row(2, 10.0)[1], r2[1] - 10.0);
     }
 
@@ -1310,11 +1325,15 @@ mod tests {
     }
 
     #[test]
-    fn the_list_header_holds_the_search_field_and_new_message() {
+    fn the_search_field_sits_in_its_own_row_under_the_header_and_new_message_stays_in_it() {
         let mut lay = layout(900.0, 600.0);
         lay.side = 240.0;
         let (search, add) = (lay.search_field(), lay.new_button());
-        assert!(search[0] + search[2] <= add[0], "the field stops before the button");
+        assert!(search[1] >= HEADER_PT, "the field is below the row the window controls are in");
+        assert!(search[1] + search[3] <= lay.list_top(), "the field stays in its row");
+        assert!(search[0] + search[2] <= 240.0 - lay.pad + 0.01, "the field keeps the pad from the divider");
+        assert_eq!(lay.sidebar()[1], lay.list_top(), "the rooms start under the field");
+        assert!(add[1] + add[3] <= HEADER_PT, "New Message stays in the header");
         assert!(add[0] + add[2] <= 240.0 - lay.pad + 0.01, "the button keeps the pad from the divider");
         let info = lay.info_button();
         assert_eq!(info[0] + info[2], 900.0 - lay.pad);

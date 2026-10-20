@@ -9,7 +9,7 @@ use crate::layout;
 use crate::message::Priority;
 use crate::prefs::Favorite;
 use crate::richtext::{self, Style, TextColor};
-use crate::state::{is_multiline, Compose, Filter, Mail, Sheet, MAX_CHOICES, MAX_SUGGESTIONS};
+use crate::state::{is_multiline, Compose, Filter, Mail, Sheet, ARCHIVE_NAMES, INBOX, JUNK_NAMES, MAX_CHOICES, MAX_SUGGESTIONS, TRASH_NAMES};
 use crate::window::{MailWindow, Region};
 use bifrost_app::controls::prefs_layout::m;
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem};
@@ -17,6 +17,7 @@ use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
 use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_TITLE1_PT, SEPARATOR_C, SPACE_M, SPACE_S, SPACE_XL, SPACE_XS, SPACE_XXS, WHITE};
 use bifrost_app::kit::ui::system::{FIND_HIGHLIGHT, SYSTEM_ORANGE};
 use bifrost_app::kit::{colors, Image, Surface, TextCache, Ui, Weight};
+use bifrost_app::layout::traffic_lights_trailing;
 use bifrost_app::widgets;
 
 pub const TOOLBAR_PT: f32 = 52.0;
@@ -194,6 +195,27 @@ fn toolbar_items(open: bool, others: bool, filter: Filter) -> Vec<(Button, Strin
     order
 }
 
+/// Where the toolbar's items go, in points: the unified bar, starting clear of the traffic lights the shell draws over
+/// the window's top left corner.
+fn toolbar_bounds(ui: &Ui, w: f32) -> bifrost_app::controls::Rect {
+    let x = traffic_lights_trailing() + widgets::TOOLBAR_GAP_PT;
+    bifrost_app::controls::Rect { x, y: 0.0, w: (w / ui.pt(1.0) - x - widgets::TOOLBAR_GAP_PT).max(0.0), h: TOOLBAR_PT }
+}
+
+/// The glyph a toolbar button wears and its name (the accessibility label), or `None` for the filter chip, which shows
+/// the filter's name.
+fn toolbar_glyph(button: &Button) -> Option<(&'static str, &'static str)> {
+    Some(match button {
+        Button::Refresh => ("arrow.clockwise", "Get Mail"),
+        Button::Compose => ("square.and.pencil", "New Message"),
+        Button::Reply => ("arrowshape.turn.up.left", "Reply"),
+        Button::ReplyAll => ("arrowshape.turn.up.left.2", "Reply All"),
+        Button::Archive => ("archivebox", "Archive"),
+        Button::Trash => ("trash", "Move to Trash"),
+        Button::Filter => return None,
+    })
+}
+
 fn toolbar_model(mail: &Mail) -> Toolbar {
     let mut items = vec![ToolbarItem::custom(90, "Mailbox title", 180.0), ToolbarItem::flexible_space()];
     let visible = toolbar_items(mail.open.is_some(), open_has_others(mail), mail.filter);
@@ -202,7 +224,16 @@ fn toolbar_model(mail: &Mail) -> Toolbar {
             Button::Refresh => 1, Button::Compose => 2, Button::Reply => 3, Button::ReplyAll => 4,
             Button::Archive => 5, Button::Trash => 6, Button::Filter => 7,
         };
-        items.push(ToolbarItem::button(id, &label));
+        // the message actions sit in two capsules: replying, then filing
+        let group = match button {
+            Button::Reply | Button::ReplyAll => 1,
+            Button::Archive | Button::Trash => 2,
+            _ => 0,
+        };
+        items.push(match toolbar_glyph(&button) {
+            Some((symbol, name)) => ToolbarItem::icon(id, name, symbol).in_group(group),
+            None => ToolbarItem::button(id, &label),
+        });
     }
     Toolbar::new(items)
 }
@@ -214,19 +245,52 @@ fn toolbar_button(id: u32) -> Option<Button> {
     })
 }
 
+/// The names a provider gives the Sent and Drafts mailboxes, in order.
+const SENT_NAMES: [&str; 4] = ["Sent", "Sent Items", "Sent Messages", "[Gmail]/Sent Mail"];
+const DRAFTS_NAMES: [&str; 3] = ["Drafts", "Draft", "[Gmail]/Drafts"];
+
+/// The glyph of a mailbox in the sidebar, by the role its name says (the standard mailboxes get their own).
+fn mailbox_symbol(name: &str) -> &'static str {
+    let is = |names: &[&str]| names.iter().any(|n| n.eq_ignore_ascii_case(name));
+    if is(&[INBOX]) {
+        "tray"
+    } else if is(&DRAFTS_NAMES) {
+        "doc"
+    } else if is(&SENT_NAMES) {
+        "paperplane"
+    } else if is(&JUNK_NAMES) {
+        "xmark.bin"
+    } else if is(&TRASH_NAMES) {
+        "trash"
+    } else if is(&ARCHIVE_NAMES) {
+        "archivebox"
+    } else {
+        "folder"
+    }
+}
+
+/// The sidebar: Favorites (the standard mailboxes of the account on screen, greyed while it has none), the smart
+/// mailboxes, then Mailboxes (each account, and the mailboxes of the one on screen). With no account every favourite is
+/// greyed and Mailboxes says so, so the column never reads as broken. The second list maps a row's id to what a tap
+/// does; greyed rows have no entry.
 fn sidebar_model(mail: &Mail) -> (SourceList, Vec<(u32, Side)>) {
     let mut items = Vec::new();
-    let mut actions = Vec::new();
-    for (index, account) in mail.accounts.iter().enumerate() {
-        let id = actions.len() as u32 + 1;
-        items.push(SidebarItem::row(id, &account.name));
-        actions.push((id, Side::Account(index)));
-        if index == mail.account {
-            for name in &mail.mailboxes {
+    let mut actions: Vec<(u32, Side)> = Vec::new();
+    let standard: [(&str, &[&str]); 5] =
+        [("Inbox", &[INBOX]), ("Drafts", &DRAFTS_NAMES), ("Sent", &SENT_NAMES), ("Junk", &JUNK_NAMES), ("Trash", &TRASH_NAMES)];
+    items.push(SidebarItem::header("Favorites"));
+    for (title, names) in standard {
+        let symbol = mailbox_symbol(names[0]);
+        // `Mail::new` seeds the Inbox, so without an account nothing is found: the row stays greyed
+        let found = if mail.accounts.is_empty() { None } else { mail.find_mailbox(names) };
+        match found {
+            Some(name) => {
                 let id = actions.len() as u32 + 1;
-                items.push(SidebarItem::row(id, mailbox_title(name)).with_symbol("folder"));
-                actions.push((id, Side::Mailbox(name.clone())));
+                items.push(SidebarItem::row(id, title).with_symbol(symbol));
+                actions.push((id, Side::Mailbox(name)));
             }
+            // a row nothing answers to: its id never collides with an action's
+            None => items.push(SidebarItem::row(u32::MAX - items.len() as u32, title).with_symbol(symbol).disabled()),
         }
     }
     if !mail.prefs.smart.is_empty() {
@@ -235,6 +299,22 @@ fn sidebar_model(mail: &Mail) -> (SourceList, Vec<(u32, Side)>) {
             let id = actions.len() as u32 + 1;
             items.push(SidebarItem::row(id, &smart.name).with_symbol("folder"));
             actions.push((id, Side::Smart(index)));
+        }
+    }
+    items.push(SidebarItem::header("Mailboxes"));
+    if mail.accounts.is_empty() {
+        items.push(SidebarItem::row(u32::MAX - items.len() as u32, "No Accounts").with_symbol("envelope").disabled());
+    }
+    for (index, account) in mail.accounts.iter().enumerate() {
+        let id = actions.len() as u32 + 1;
+        items.push(SidebarItem::row(id, &account.name).with_symbol("envelope"));
+        actions.push((id, Side::Account(index)));
+        if index == mail.account {
+            for name in &mail.mailboxes {
+                let id = actions.len() as u32 + 1;
+                items.push(SidebarItem::row(id, mailbox_title(name)).with_symbol(mailbox_symbol(name)));
+                actions.push((id, Side::Mailbox(name.clone())));
+            }
         }
     }
     let id = actions.len() as u32 + 1;
@@ -602,8 +682,7 @@ impl MailWindow {
         if y < bar {
             let scale = ui.pt(1.0);
             let model = toolbar_model(&self.mail);
-            let bounds = bifrost_app::controls::Rect { x: 0.0, y: 0.0, w: w / scale, h: TOOLBAR_PT };
-            let placed = widgets::toolbar_layout(ui, bounds, &model);
+            let placed = widgets::toolbar_layout(ui, toolbar_bounds(ui, w), &model);
             return placed.hit(x / scale, y / scale).and_then(toolbar_button).map_or(Hit::None, Hit::Button);
         }
         if y < top {
@@ -716,8 +795,7 @@ impl MailWindow {
         widgets::toolbar_band(s, ui, bifrost_app::controls::Rect { x: 0.0, y: 0.0, w: w / ui.pt(1.0), h: TOOLBAR_PT });
         let title = if self.mail.accounts.is_empty() { "Mail" } else { mailbox_title(&self.mail.mailbox) };
         let model = toolbar_model(&self.mail);
-        let bounds = bifrost_app::controls::Rect { x: 0.0, y: 0.0, w: w / ui.pt(1.0), h: TOOLBAR_PT };
-        let placed = widgets::toolbar(s, ui, bounds, &model, None);
+        let placed = widgets::toolbar(s, ui, toolbar_bounds(ui, w), &model, None);
         if let Some(r) = placed.rect_of(90) {
             put_mid(s, &mut self.labels, ui, title, MAC_BODY_PT, Weight::Semibold, LABEL.now(), ui.pt(r.x), ui.pt(r.y + r.h / 2.0));
         }
@@ -1287,6 +1365,68 @@ mod tests {
         assert_eq!(choices_of(&mail), ["Receipts", "Work/Receipts"]);
         mail.sheet.as_mut().unwrap().form_mut().type_text("zzz");
         assert!(choices_of(&mail).is_empty());
+    }
+
+    fn row_labels(list: &SourceList) -> Vec<(String, bool)> {
+        list.items.iter().filter_map(|i| match i {
+            SidebarItem::Row { label, enabled, .. } => Some((label.clone(), *enabled)),
+            _ => None,
+        }).collect()
+    }
+
+    #[test]
+    fn the_sidebar_without_an_account_greys_the_standard_mailboxes_and_says_there_are_none() {
+        let mail = Mail::new(vec![]);
+        let (list, actions) = sidebar_model(&mail);
+        let rows = row_labels(&list);
+        for name in ["Inbox", "Drafts", "Sent", "Junk", "Trash"] {
+            assert!(rows.contains(&(name.to_string(), false)), "{name} is greyed");
+        }
+        assert!(rows.contains(&("No Accounts".to_string(), false)));
+        assert_eq!(actions.len(), 1, "only Add Account answers a tap");
+        assert_eq!(actions[0].1, Side::Add);
+        let headers: Vec<_> = list.items.iter().filter_map(|i| if let SidebarItem::Header(h) = i { Some(h.as_str()) } else { None }).collect();
+        assert_eq!(headers, ["Favorites", "Mailboxes"]);
+    }
+
+    #[test]
+    fn the_sidebar_enables_the_mailboxes_the_account_has() {
+        let mut mail = Mail::new(vec![bifrost_app::controls::internet_accounts::Account::new(
+            bifrost_app::controls::internet_accounts::Kind::Mail,
+            "work",
+            "Work",
+            "user",
+        )]);
+        mail.mailboxes = vec!["INBOX".into(), "Sent Items".into(), "Deleted Items".into(), "Work".into()];
+        let (list, actions) = sidebar_model(&mail);
+        let rows = row_labels(&list);
+        assert!(rows.contains(&("Inbox".to_string(), true)) && rows.contains(&("Sent".to_string(), true)) && rows.contains(&("Trash".to_string(), true)));
+        assert!(rows.contains(&("Drafts".to_string(), false)) && rows.contains(&("Junk".to_string(), false)));
+        assert!(actions.contains(&(1, Side::Mailbox("INBOX".into()))), "the first favourite opens the Inbox");
+        assert!(actions.iter().any(|(_, s)| *s == Side::Mailbox("Sent Items".into())), "Sent opens the provider's name for it");
+        let ids: Vec<u32> = list.items.iter().filter_map(|i| if let SidebarItem::Row { id, .. } = i { Some(*id) } else { None }).collect();
+        let mut unique = ids.clone();
+        unique.sort_unstable();
+        unique.dedup();
+        assert_eq!(ids.len(), unique.len(), "every row has its own id");
+    }
+
+    #[test]
+    fn mailboxes_wear_the_glyph_of_their_role() {
+        assert_eq!(mailbox_symbol("INBOX"), "tray");
+        assert_eq!(mailbox_symbol("sent items"), "paperplane");
+        assert_eq!(mailbox_symbol("[Gmail]/Spam"), "xmark.bin");
+        assert_eq!(mailbox_symbol("Deleted Items"), "trash");
+        assert_eq!(mailbox_symbol("Work/Receipts"), "folder");
+    }
+
+    #[test]
+    fn every_toolbar_button_but_the_filter_chip_has_a_glyph_the_kit_draws() {
+        for button in [Button::Refresh, Button::Compose, Button::Reply, Button::ReplyAll, Button::Archive, Button::Trash] {
+            let (symbol, _) = toolbar_glyph(&button).expect("a glyph");
+            assert!(bifrost_app::glyphs::has(symbol), "{symbol}");
+        }
+        assert!(toolbar_glyph(&Button::Filter).is_none());
     }
 
     #[test]

@@ -27,7 +27,7 @@ fn inked(px: &[u32]) -> usize {
 
 #[test]
 fn headless_the_glyph_names_are_unique_and_all_have_a_drawing() {
-    assert_eq!(NAMES.len(), 70);
+    assert_eq!(NAMES.len(), 76);
     let mut seen = std::collections::HashSet::new();
     for name in NAMES {
         assert!(seen.insert(name), "{name} is listed twice");
