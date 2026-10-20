@@ -3220,14 +3220,21 @@ mod tests {
 /// menu tint, the solid colour with Reduce Transparency, the tint alone without a GPU presenter). The panel
 /// fades in with `alpha`; the blur shape is declared only once it is fully opaque, so it never pops mid-fade.
 pub(super) fn mac_glass(s: &mut Surface, x: f32, y: f32, w: f32, h: f32, r: f32, alpha: u32) {
-    use bifrost_ui::material_request::ShellSurface;
+    panel_glass(s, bifrost_ui::material_request::ShellSurface::Search, x, y, w, h, r, alpha);
+}
+
+/// The material of the desktop's translucent panels (Search, the Apps grid, the Cmd+Tab strip): the request of
+/// `surface` declares the presenter's blur, and the fill is the search tint, so the wallpaper shows through frosted.
+// Rect, radius, alpha and the surface are independent draw parameters, mirroring `Surface::glass_rrect`.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn panel_glass(s: &mut Surface, surface: bifrost_ui::material_request::ShellSurface, x: f32, y: f32, w: f32, h: f32, r: f32, alpha: u32) {
     // The field and the results card are one material: the presenter's blur under the search tint, which lets the
     // desktop show through (the menus' tint is nearly opaque); solid with Reduce Transparency.
     let fill = if bifrost_render::appearance::reduce_transparency() {
         MENU_SOLID.now()
     } else {
         if alpha == 255 && bifrost_render::glass::gpu() {
-            bifrost_render::glass::push(super::control_center::shell_glass_rect(&ShellSurface::Search.request((x, y, w, h), r)));
+            bifrost_render::glass::push(super::control_center::shell_glass_rect(&surface.request((x, y, w, h), r)));
         }
         if bifrost_render::glass::gpu() {
             bifrost_render::glass::tint(SEARCH_TINT.now())

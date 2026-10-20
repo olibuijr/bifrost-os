@@ -10,7 +10,7 @@
 //! turns reordering off while a query is typed. Motion uses `bifrost_render::motion` (`Kind::OverviewEnter` for
 //! opening and closing, `Kind::PanelReveal` for a page settling); both are instant with Reduce Motion.
 
-use super::control_center::desk_glass;
+use super::quicksearch::{mac_glass, panel_glass};
 use bifrost_ui::material_request::ShellSurface;
 use super::overview::{KeyMods, KEY_BACKSPACE, KEY_DOWN, KEY_ENTER, KEY_ESC, KEY_LEFT, KEY_RIGHT, KEY_UP};
 use super::ui::{Weight, FIELD_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_CALLOUT_PT, MAC_LARGE_TITLE_PT, SIDEBAR_PLATE, WHITE};
@@ -677,7 +677,7 @@ impl AppGrid {
         let ui = &sh.ui;
         // the capsule header: glass like the Search field, the store glyph, the query (or its placeholder) and "..."
         let (sx, sy, _, shh) = lay.search;
-        desk_glass(s, ShellSurface::Search, lay.search, shh / 2.0, a);
+        mac_glass(s, sx, sy, lay.search.2, shh, shh / 2.0, a);
         let glyph = (shh * 0.34) as usize;
         let mut text_x = sx + shh * 0.62;
         if let Some(store) = apps().iter().position(|d| d.id == AppId::AppStore) {
@@ -719,8 +719,10 @@ impl AppGrid {
             let dx = mx + mw / 2.0 + (i as f32 - 1.0) * dot * 2.4 - dot / 2.0;
             s.fill_rrect(dx, my + (mh - dot) / 2.0, dot, dot, dot / 2.0, scale(LABEL_2.now(), a));
         }
-        // the panel: the same material as the field, with the category chips across its top
-        desk_glass(s, ShellSurface::AppGridVeil, lay.panel, lay.panel_r, a);
+        // the panel: the same translucent material as the field (the search tint, not the menus' nearly opaque one), so the
+        // wallpaper shows through it blurred, with the category chips across its top
+        let (px, py, pw, ph) = lay.panel;
+        panel_glass(s, ShellSurface::AppGridVeil, px, py, pw, ph, lay.panel_r, a);
         for &(c, (cx, cy, cw, ch)) in &lay.chips {
             let on = self.chip == Some(c);
             let plate = if on { scale(SIDEBAR_PLATE.now(), a) } else { scale(FIELD_BG.now(), a * 110 / 255) };
@@ -1017,5 +1019,25 @@ mod overlay_tests {
         assert!(sh.overview_event(Event::Down(x, y), 4.0).is_some());
         assert!(sh.overview_event(Event::Up(x, y), 4.1).is_some());
         assert_eq!(sh.overview.grid.chip, None);
+    }
+
+    /// The panel and the capsule are the Search material (a translucent tint over the presenter's blur), not the menus'
+    /// nearly opaque flat plate: the wallpaper must show through the panel.
+    #[test]
+    fn the_panel_is_translucent_glass_not_an_opaque_plate() {
+        let mut sh = open_grid();
+        let (w, h) = (sh.w as usize, sh.h as usize);
+        let mut buf = vec![0u32; w * h];
+        let mut grid = std::mem::take(&mut sh.overview.grid);
+        let lay = grid.lay(&sh);
+        grid.draw(&sh, &mut Surface { w, h, stride: w, px: &mut buf, y0: 0 }, 1e9);
+        sh.overview.grid = grid;
+        let (px, py, _, ph) = lay.panel;
+        // the panel's left padding, level with its middle: no icon, chip or text is there
+        let panel = buf[(py + ph / 2.0) as usize * w + (px + 3.0 * lay.pt) as usize] >> 24;
+        assert!(panel > 100 && panel < 200, "the panel fill is translucent (alpha {panel}), not the menus' 240");
+        let (sx, sy, _, shh) = lay.search;
+        let capsule = buf[(sy + shh / 2.0) as usize * w + (sx + 3.0 * lay.pt) as usize] >> 24;
+        assert!(capsule > 100 && capsule < 200, "and so is the capsule (alpha {capsule})");
     }
 }
