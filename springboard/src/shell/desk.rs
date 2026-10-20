@@ -2863,6 +2863,7 @@ impl Shell {
                     if let Some(img) = picture {
                         let inset = hair.round() as i32;
                         let inner = Rect { x: frame.x + inset, y: frame.y + inset, w: (frame.w - 2 * inset).max(1), h: (frame.h - 2 * inset).max(1) };
+                        let inner = crate::layout::Rect { x: inner.x, y: inner.y, w: inner.w, h: inner.h };
                         super::switcher::draw_scaled(s, img, inner, (radius - hair).max(0.0), 255);
                     }
                     if let Some(ai) = apps().iter().position(|a| a.id == win.app) {
@@ -3253,7 +3254,7 @@ mod tests {
         let (list, bar0, rects0) = sh.desk_dock(&m);
         let (_, slid) = sh.dock_slid(bar0, &rects0, t / 1000.0);
         let rects = sh.dock_magnified(&slid, t / 1000.0);
-        let k = list.iter().position(|&e| super::desktop_dock::dock_min_index(e) == Some(wi)).expect("the minimized window has a slot");
+        let k = list.iter().position(|&e| crate::shell::desktop_dock::dock_min_index(e) == Some(wi)).expect("the minimized window has a slot");
         let win = &sh.desk.as_ref().unwrap().wins[wi];
         let frame = thumbnail_frame(rects[k], win.r.w, win.r.h);
         let (w, h) = (m.w as usize, m.h as usize);
@@ -3270,7 +3271,7 @@ mod tests {
         let reqs = sh.take_capture_requests();
         let id = win_id(AppId::Settings).unwrap();
         assert_eq!(reqs.len(), 1, "one request");
-        assert_eq!(reqs[0].source, super::window_shots::Source::Surface(id), "named by the shell's own window");
+        assert_eq!(reqs[0].source, crate::shell::window_shots::Source::Surface(id), "named by the shell's own window");
         assert_eq!(reqs[0].max, DOCK_SHOT_BOUND);
         assert_eq!(reqs[0].since, 0, "a whole picture, not an unchanged answer");
         assert!(sh.take_capture_requests().is_empty(), "and no more while it stays minimized");
@@ -3289,7 +3290,7 @@ mod tests {
         let icon_centre = minimized_slot_centre(&sh, i, 5000.0);
         let token = sh.take_capture_requests()[0].token;
         let red = crate::gfx::pack(250, 10, 10, 255);
-        sh.window_capture_results(vec![(token, super::window_shots::Outcome::Ready { image: Image { w: 64, h: 40, px: vec![red; 64 * 40] }, serial: 1 })], 300.0);
+        sh.window_capture_results(vec![(token, crate::shell::window_shots::Outcome::Ready { image: Image { w: 64, h: 40, px: vec![red; 64 * 40] }, serial: 1 })], 300.0);
         assert!(sh.dock_picture(AppId::Settings).is_some());
         let picture_centre = minimized_slot_centre(&sh, i, 5000.0);
         assert_ne!(picture_centre, icon_centre, "the slot no longer shows the icon");
@@ -3303,7 +3304,7 @@ mod tests {
         sh.desk_minimize_window(i, 200.0);
         let before = minimized_slot_centre(&sh, i, 5000.0);
         let token = sh.take_capture_requests()[0].token;
-        sh.window_capture_results(vec![(token, super::window_shots::Outcome::Failed)], 300.0);
+        sh.window_capture_results(vec![(token, crate::shell::window_shots::Outcome::Failed)], 300.0);
         assert!(sh.dock_picture(AppId::Settings).is_none());
         assert_eq!(minimized_slot_centre(&sh, i, 5000.0), before, "the same icon-in-frame slot as without window capture");
     }
@@ -3324,7 +3325,7 @@ mod tests {
         let (mut sh, i) = desk_with_one_window();
         sh.desk_minimize_window(i, 200.0);
         let token = sh.take_capture_requests()[0].token;
-        sh.window_capture_results(vec![(token, super::window_shots::Outcome::Ready { image: Image { w: 8, h: 8, px: vec![0xff00_0000; 64] }, serial: 1 })], 300.0);
+        sh.window_capture_results(vec![(token, crate::shell::window_shots::Outcome::Ready { image: Image { w: 8, h: 8, px: vec![0xff00_0000; 64] }, serial: 1 })], 300.0);
         assert_eq!(sh.shots.held(), 1);
         sh.desk.as_mut().unwrap().close(i);
         sh.shots_tick(10_000.0);
