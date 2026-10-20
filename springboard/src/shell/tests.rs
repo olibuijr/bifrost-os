@@ -1350,6 +1350,41 @@
         assert_eq!(sh.desk.as_ref().unwrap().front().map(|w|w.app),Some(AppId::Settings));
     }
 
+    /// The strip is chrome surface 13 above the windows, only while Cmd+Tab is open; it takes neither pointer nor keys.
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn the_cmd_tab_strip_is_an_overlay_surface_only_while_it_is_open() {
+        let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;
+        sh.desk_open(AppId::Settings,0.);sh.desk_open(AppId::Files,1.);
+        let (w,h)=(sh.w as usize,sh.h as usize);let pixels=vec![0xff20_2020u32;w*h];
+        let strip=|sh:&Shell|sh.desktop_chrome_frames(&pixels,w,h).into_iter().find(|f|f.id==13);
+        assert!(strip(&sh).is_none(),"closed: no surface");
+        assert!(sh.cmdtab_rect().is_none());
+        sh.switcher_cycle(false);
+        let f=strip(&sh).expect("the open strip is a chrome surface above the windows");
+        assert_eq!(f.pixels.len(),f.width*f.height);
+        assert_eq!(Some((f.x as usize,f.y as usize,f.width,f.height)),sh.cmdtab_rect());
+        assert!(f.width<w&&f.height<h&&f.x>0&&f.y>0,"a centred capsule, not the whole screen");
+        assert_eq!(f.input,Some([0,0,0,0]),"an empty input region: the pointer reaches what is below");
+        if bifrost_render::glass::gpu() {
+            let r=sh.desk_regions_now().unwrap();
+            assert!(r.contains(&(f.x,f.y,f.width as i32,f.height as i32)),"the presenter keeps its region");
+        }
+        // the corners are transparent (the capsule's rounded ends), the middle is the strip
+        assert_eq!(f.pixels[0]>>24,0);
+        assert_eq!(f.pixels[(f.height/2)*f.width+f.width/2]>>24,0xff);
+        // the selection moving keeps the surface; releasing removes it
+        sh.switcher_cycle(false);
+        assert!(strip(&sh).is_some());
+        sh.cmdtab_release(3.);
+        assert!(strip(&sh).is_none(),"the release drops the surface");
+        // Esc cancels without a ghost, too
+        sh.switcher_cycle(false);
+        assert!(strip(&sh).is_some());
+        sh.switcher_key(crate::shell::overview::KEY_ESC,crate::shell::overview::KeyMods::default());
+        assert!(strip(&sh).is_none(),"Esc drops the surface");
+    }
+
     #[test]
     fn pointer_over_traffic_lights_sets_hover() {
         let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;
