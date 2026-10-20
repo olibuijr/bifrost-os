@@ -11,7 +11,7 @@ impl Rect {
 
 pub type WindowId = u64;
 
-use crate::tiling::{self, Layout};
+use crate::tiling::{self, Layout, Placement};
 
 /// Which edges a resize grab moves.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -30,7 +30,12 @@ pub const MIN_H: i32 = 160;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, PartialOrd, Ord)]
 pub enum Level { #[default] Normal, Floating }
 
-struct Window { id: WindowId, rect: Rect, restore: Option<Rect>, tiled: Option<Layout>, minimized: bool, level: Level }
+struct Window { id: WindowId, rect: Rect, restore: Option<Rect>, tiled: Option<Layout>, minimized: bool, level: Level, full: Option<Saved> }
+
+/// What a window held when it went full screen: the frame, the frame from before its maximize or tile, and its tile.
+/// Leaving full screen puts all three back, fitted to the usable area as it is then.
+#[derive(Clone, Copy)]
+struct Saved { rect: Rect, restore: Option<Rect>, tiled: Option<Layout> }
 
 /// An interactive move or resize in progress; `Wm::motion` applies the pointer to it.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -43,13 +48,26 @@ pub enum Grab {
 /// every floating window, and a window raised or set to a level goes to the top of its own band.
 pub struct Wm {
     area: Rect,
+    /// The whole output, menu bar included: what a full-screen window fills.
+    output: Rect,
     windows: Vec<Window>,
     /// the window the person last raised or made key
     key: Option<WindowId>,
 }
 
 impl Wm {
-    pub fn new(area: Rect) -> Self { Wm { area, windows: Vec::new(), key: None } }
+    pub fn new(area: Rect) -> Self { Wm { area, output: area, windows: Vec::new(), key: None } }
+
+    /// The whole output, menu bar included.
+    pub fn output(&self) -> Rect { self.output }
+
+    /// The whole output changed (mode, rotation, scale): a full-screen window fills it.
+    pub fn set_output(&mut self, output: Rect) {
+        self.output = output;
+        for w in &mut self.windows {
+            if w.full.is_some() { w.rect = output; }
+        }
+    }
 
     /// Puts `w` at the top of its level band: after every window of its level or below.
     fn insert_top(&mut self, w: Window) {
@@ -68,7 +86,7 @@ impl Wm {
         let rect = Rect::new(x, y, w, h);
         let level = self.level(id).unwrap_or_default();
         self.windows.retain(|w| w.id != id);
-        self.insert_top(Window { id, rect, restore: None, tiled: None, minimized: false, level });
+        self.insert_top(Window { id, rect, restore: None, tiled: None, minimized: false, level, full: None });
         self.key = Some(id);
         rect
     }
@@ -131,6 +149,7 @@ impl Wm {
     pub fn toggle_maximize(&mut self, id: WindowId) -> Option<Rect> {
         let area = self.area;
         let w = self.get_mut(id)?;
+        if w.full.is_some() { return None; }
         match (w.restore.take(), w.tiled.take()) {
             (Some(old), None) => w.rect = old,
             // a snapped window keeps its frame from before the snap and fills the area
@@ -145,6 +164,7 @@ impl Wm {
     pub fn begin_move(&mut self, id: WindowId, x: i32, y: i32) -> Option<Grab> {
         let area = self.area;
         let w = self.get_mut(id)?;
+        if w.full.is_some() { return None; }
         w.tiled = None;
         if let Some(old) = w.restore.take() {
             let rel = (x - w.rect.x) as f32 / w.rect.w.max(1) as f32;
@@ -157,6 +177,7 @@ impl Wm {
 
     pub fn begin_resize(&mut self, id: WindowId, edges: Edges, x: i32, y: i32) -> Option<Grab> {
         let w = self.get_mut(id)?;
+        if w.full.is_some() { return None; }
         w.restore = None;
         w.tiled = None;
         let start = w.rect;
@@ -181,7 +202,13 @@ impl Wm {
     /// The usable area changed (output mode, menu bar): maximized windows fill it, others are pulled back on screen.
     pub fn set_area(&mut self, area: Rect) {
         self.area = area;
+        let output = self.output;
         for w in &mut self.windows {
+            // a full-screen window fills the output; what it held is fitted to the new area when it leaves
+            if w.full.is_some() {
+                w.rect = output;
+                continue;
+            }
             w.rect = match (w.restore.is_some(), w.tiled) {
                 (_, Some(layout)) => tiling::frame(area, layout),
                 (true, None) => area,
@@ -195,6 +222,7 @@ impl Wm {
     pub fn tile(&mut self, id: WindowId, layout: Layout) -> Option<Rect> {
         let area = self.area;
         let w = self.get_mut(id)?;
+        if w.full.is_some() { return None; }
         if w.restore.is_none() { w.restore = Some(w.rect); }
         if layout == Layout::Maximize {
             w.tiled = None;
@@ -216,6 +244,7 @@ impl Wm {
     pub fn restore_centre(&mut self, id: WindowId) -> Option<Rect> {
         let area = self.area;
         let w = self.get_mut(id)?;
+        if w.full.is_some() { return None; }
         let size = w.restore.take().unwrap_or(w.rect);
         w.tiled = None;
         let (cw, ch) = (size.w.min(area.w), size.h.min(area.h));
@@ -231,8 +260,62 @@ impl Wm {
 
     /// The client settled on a frame of its own (it chose its size, or finished a resize).
     pub fn set_frame(&mut self, id: WindowId, rect: Rect) {
-        if let Some(w) = self.get_mut(id) { w.rect = rect; w.tiled = None; }
+        if let Some(w) = self.get_mut(id).filter(|w| w.full.is_none()) { w.rect = rect; w.tiled = None; }
     }
+
+    /// Goes back to the frame from before the last maximize or tile and leaves the tile; a window that never left its
+    /// frame stays. Returns the new frame.
+    pub fn restore_previous(&mut self, id: WindowId) -> Option<Rect> {
+        let w = self.get_mut(id)?;
+        if w.full.is_some() { return None; }
+        w.tiled = None;
+        if let Some(old) = w.restore.take() { w.rect = old; }
+        Some(w.rect)
+    }
+
+    /// Applies a window-management choice (a tile, the centre, the way back) to `id`; the new frame, or `None` for a
+    /// window that is unknown or full screen. The Ctrl+Super arrow keys and the shell's green-button menu both land here.
+    pub fn place(&mut self, id: WindowId, placement: Placement) -> Option<Rect> {
+        match placement {
+            Placement::Layout(layout) => self.tile(id, layout),
+            Placement::Centre => self.restore_centre(id),
+            Placement::Previous => self.restore_previous(id),
+        }
+    }
+
+    /// Takes `id` to the whole output, in its own full-screen space. What the window held (its frame, the frame before
+    /// a maximize, its tile) is kept for `leave_full_screen`. A window already full screen is left as it is. Returns
+    /// the new frame.
+    pub fn enter_full_screen(&mut self, id: WindowId) -> Option<Rect> {
+        let output = self.output;
+        let w = self.get_mut(id)?;
+        if w.full.is_none() {
+            w.full = Some(Saved { rect: w.rect, restore: w.restore, tiled: w.tiled });
+            w.restore = None;
+            w.tiled = None;
+        }
+        w.rect = output;
+        Some(w.rect)
+    }
+
+    /// Leaves full screen: the window goes back to the frame, maximize or tile it had, fitted to the usable area as it
+    /// is now. `None` for a window that is unknown or not full screen.
+    pub fn leave_full_screen(&mut self, id: WindowId) -> Option<Rect> {
+        let area = self.area;
+        let w = self.get_mut(id)?;
+        let saved = w.full.take()?;
+        w.restore = saved.restore;
+        w.tiled = saved.tiled;
+        w.rect = match (saved.restore.is_some(), saved.tiled) {
+            (_, Some(layout)) => tiling::frame(area, layout),
+            (true, None) => area,
+            (false, None) => keep_on_screen(saved.rect, area),
+        };
+        Some(w.rect)
+    }
+
+    /// Whether the window fills the output in its own full-screen space.
+    pub fn is_full_screen(&self, id: WindowId) -> bool { self.get(id).is_some_and(|w| w.full.is_some()) }
 
     fn get(&self, id: WindowId) -> Option<&Window> { self.windows.iter().find(|w| w.id == id) }
     fn get_mut(&mut self, id: WindowId) -> Option<&mut Window> { self.windows.iter_mut().find(|w| w.id == id) }
@@ -507,5 +590,116 @@ mod tests {
         assert_eq!(tiling::frame(Rect::new(10, 0, 100, 50), Layout::Right), Rect::new(60, 0, 50, 50));
         let odd = Rect::new(0, 0, 7, 1);
         assert_eq!(tiling::frame(odd, Layout::Left).w + tiling::frame(odd, Layout::Right).w, 7);
+    }
+
+    /// An output of `w` x `h` with a 28 px menu bar: the usable area under it and the whole output.
+    fn screen(w: i32, h: i32) -> (Rect, Rect) { (Rect::new(0, 28, w, h - 28), Rect::new(0, 0, w, h)) }
+
+    #[test]
+    fn full_screen_fills_the_whole_output_at_its_origin_for_any_output_size() {
+        for (w, h) in [(1024, 768), (1280, 720), (1920, 1080), (2560, 1440), (3840, 2160), (1440, 3200)] {
+            let (area, output) = screen(w, h);
+            let mut wm = Wm::new(area);
+            wm.set_output(output);
+            // a window far from the origin, as the lab machine's Music window was
+            let r = wm.map(1, w / 3, h / 3);
+            assert_ne!((r.x, r.y), (0, 0));
+            assert_eq!(wm.enter_full_screen(1), Some(output), "{w}x{h}: the whole output, menu bar included");
+            assert_eq!(wm.rect(1), Some(output));
+            assert!(wm.is_full_screen(1));
+            assert!(!wm.is_maximized(1), "full screen is not the maximize state");
+        }
+    }
+
+    #[test]
+    fn leaving_full_screen_restores_the_previous_frame_exactly() {
+        let (area, output) = screen(2560, 1440);
+        let mut wm = Wm::new(area);
+        wm.set_output(output);
+        let r = wm.map(1, 1200, 825);
+        wm.enter_full_screen(1);
+        assert_eq!(wm.leave_full_screen(1), Some(r));
+        assert_eq!(wm.rect(1), Some(r));
+        assert!(!wm.is_full_screen(1));
+        assert_eq!(wm.leave_full_screen(1), None, "nothing to leave the second time");
+    }
+
+    #[test]
+    fn a_maximized_or_tiled_window_comes_back_maximized_or_tiled() {
+        let (area, output) = screen(1920, 1080);
+        let mut wm = Wm::new(area);
+        wm.set_output(output);
+        let r = wm.map(1, 800, 600);
+        wm.toggle_maximize(1);
+        wm.enter_full_screen(1);
+        assert_eq!(wm.leave_full_screen(1), Some(area));
+        assert!(wm.is_maximized(1));
+        assert_eq!(wm.toggle_maximize(1), Some(r), "the frame from before the maximize survived the round trip");
+        wm.tile(1, Layout::Left);
+        wm.enter_full_screen(1);
+        assert_eq!(wm.snapped(1), None, "a full-screen window is not tiled");
+        assert_eq!(wm.leave_full_screen(1), Some(tiling::frame(area, Layout::Left)));
+        assert_eq!(wm.snapped(1), Some(Layout::Left));
+    }
+
+    #[test]
+    fn a_full_screen_window_cannot_be_moved_resized_tiled_or_maximized() {
+        let (area, output) = screen(1920, 1080);
+        let mut wm = Wm::new(area);
+        wm.set_output(output);
+        wm.map(1, 800, 600);
+        wm.enter_full_screen(1);
+        assert!(wm.begin_move(1, 500, 500).is_none());
+        assert!(wm.begin_resize(1, Edges { right: true, ..Edges::default() }, 500, 500).is_none());
+        assert_eq!(wm.tile(1, Layout::Left), None);
+        assert_eq!(wm.toggle_maximize(1), None);
+        assert_eq!(wm.restore_centre(1), None);
+        assert_eq!(wm.restore_previous(1), None);
+        wm.set_frame(1, Rect::new(10, 10, 100, 100));
+        assert_eq!(wm.rect(1), Some(output), "the client does not choose a frame for a full-screen window");
+    }
+
+    #[test]
+    fn a_full_screen_window_follows_the_output_and_what_it_held_follows_the_area() {
+        let (area, output) = screen(1920, 1080);
+        let mut wm = Wm::new(area);
+        wm.set_output(output);
+        wm.map(1, 800, 600);
+        wm.toggle_maximize(1);
+        wm.enter_full_screen(1);
+        let (small_area, small) = screen(1280, 720);
+        wm.set_area(small_area);
+        wm.set_output(small);
+        assert_eq!(wm.rect(1), Some(small), "the new output");
+        assert_eq!(wm.leave_full_screen(1), Some(small_area), "a maximized window fills the new area");
+    }
+
+    #[test]
+    fn a_full_screen_window_is_still_raised_and_focused_like_any_other() {
+        let (area, output) = screen(1920, 1080);
+        let mut wm = Wm::new(area);
+        wm.set_output(output);
+        wm.map(1, 800, 600);
+        wm.map(2, 800, 600);
+        wm.enter_full_screen(1);
+        wm.raise(1);
+        assert_eq!(wm.focused(), Some(1));
+        assert_eq!(wm.at(5, 5), Some(1), "its frame covers the menu bar strip too");
+    }
+
+    #[test]
+    fn placements_are_the_same_actions_for_the_menu_and_the_keys() {
+        let mut wm = Wm::new(AREA);
+        let r = wm.map(1, 800, 600);
+        assert_eq!(wm.place(1, Placement::Layout(Layout::Right)), Some(Rect::new(960, 28, 960, 1052)));
+        assert_eq!(wm.place(1, Placement::Layout(Layout::TopLeft)), Some(Rect::new(0, 28, 960, 526)));
+        assert_eq!(wm.place(1, Placement::Previous), Some(r), "the frame from before the first tile");
+        assert_eq!(wm.snapped(1), None);
+        assert_eq!(wm.place(1, Placement::Previous), Some(r), "already there: stays");
+        wm.set_frame(1, Rect::new(0, 28, 400, 300));
+        assert_eq!(wm.place(1, Placement::Centre), Some(Rect::new(760, 28 + 376, 400, 300)));
+        assert_eq!(wm.place(1, Placement::Layout(Layout::Maximize)), Some(AREA));
+        assert!(wm.is_maximized(1));
+        assert_eq!(wm.place(9, Placement::Centre), None, "an unknown window");
     }
 }

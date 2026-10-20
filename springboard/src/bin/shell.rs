@@ -1811,6 +1811,10 @@ fn run() -> std::io::Result<()> {
             let pt = shell.points_px();
             if pt != presenter_scale { presenter_scale = pt; disp.wayland_set_scale(pt); }
             disp.wayland_window_materials(shell.take_wayland_materials());
+            // the green-button menu and the tile keys ask the window server to place a window; it answers with the frame
+            for (id, placement) in shell.take_wayland_tiles() {
+                if let Err(e) = disp.wayland_window_tile(id, placement) { eprintln!("window tile: {e}"); }
+            }
             disp.wayland_windows(shell.take_wayland_windows())?;
             disp.wayland_chrome(shell.desktop_chrome_frames(&frame,fw,fh))?;
         }

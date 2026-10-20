@@ -1,7 +1,8 @@
 //! Compositor key bindings: Super+Space opens the search panel, Ctrl+Up and F3 Mission Control, Alt+Tab cycles the focus,
-//! Alt+F4 closes the focused window and Ctrl+Super+arrows tile it. The shell only gets keys while one of its surfaces has
-//! focus, so the compositor takes these chords before any client sees them. Super+A is deliberately not bound: Cmd+A is
-//! Select All and belongs to the app (the app list launcher it used to start was a leftover of the old window manager).
+//! Alt+F4 closes the focused window, Ctrl+Super+arrows tile it and Ctrl+Super+F toggles full screen. The shell only gets
+//! keys while one of its surfaces has focus, so the compositor takes these chords before any client sees them. Super+A is
+//! deliberately not bound: Cmd+A is Select All and belongs to the app (the app list launcher it used to start was a
+//! leftover of the old window manager).
 //!
 //! [`action`] is pure (keysym and modifiers in, action out) and host-tested. [`WmState::run_action`] performs one.
 
@@ -14,6 +15,7 @@ use crate::{state::WmState, tiling::Arrow, wm::WindowId};
 /// X11 keysym values (`xkbcommon-keysyms.h`).
 pub mod keysym {
     pub const SPACE: u32 = 0x0020;
+    pub const F: u32 = 0x0066;
     pub const TAB: u32 = 0xff09;
     pub const F3: u32 = 0xffc0;
     pub const F4: u32 = 0xffc1;
@@ -56,6 +58,8 @@ pub enum Action {
     CloseWindow,
     /// Ctrl+Super+arrow: Left and Right tile to a half, Up maximizes, Down centres at the previous size.
     Tile(Arrow),
+    /// Ctrl+Super+F: the focused window goes full screen, or leaves it.
+    FullScreen,
 }
 
 /// The action a chord is bound to. The modifiers must match exactly: Super+Shift+Space is not the search panel.
@@ -71,6 +75,7 @@ pub fn action(sym: u32, mods: Mods) -> Option<Action> {
         keysym::F3 if mods == none => Some(Action::MissionControl),
         keysym::TAB if alt_only => Some(Action::NextWindow),
         keysym::F4 if alt_only => Some(Action::CloseWindow),
+        keysym::F if ctrl_super => Some(Action::FullScreen),
         keysym::LEFT if ctrl_super => Some(Action::Tile(Arrow::Left)),
         keysym::RIGHT if ctrl_super => Some(Action::Tile(Arrow::Right)),
         keysym::UP if ctrl_super => Some(Action::Tile(Arrow::Up)),
@@ -115,13 +120,12 @@ impl WmState {
             }
             Action::Tile(arrow) => {
                 let Some(id) = self.wm.focused() else { return };
-                let rect = match crate::tiling::for_arrow(arrow) {
-                    Some(layout) => self.wm.tile(id, layout),
-                    None => self.wm.restore_centre(id),
-                };
-                if rect.is_some() {
-                    self.apply_frames();
-                }
+                // the same placement the shell's green-button menu asks for, and the client is resized to match
+                self.place_window(id, crate::tiling::placement_for_arrow(arrow));
+            }
+            Action::FullScreen => {
+                let Some(id) = self.wm.focused() else { return };
+                self.set_full_screen(id, !self.wm.is_full_screen(id));
             }
         }
     }
@@ -170,6 +174,13 @@ mod tests {
         assert_eq!(action(keysym::RIGHT, CTRL_SUPER), Some(Action::Tile(Arrow::Right)));
         assert_eq!(action(keysym::UP, CTRL_SUPER), Some(Action::Tile(Arrow::Up)));
         assert_eq!(action(keysym::DOWN, CTRL_SUPER), Some(Action::Tile(Arrow::Down)));
+    }
+
+    #[test]
+    fn ctrl_super_f_toggles_full_screen() {
+        assert_eq!(action(keysym::F, CTRL_SUPER), Some(Action::FullScreen));
+        assert_eq!(action(keysym::F, SUPER), None);
+        assert_eq!(action(keysym::F, Mods { shift: true, ..CTRL_SUPER }), None);
     }
 
     #[test]

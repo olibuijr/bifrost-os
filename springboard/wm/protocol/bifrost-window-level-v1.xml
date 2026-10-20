@@ -4,7 +4,7 @@
     Copyright 2026 BifrOSt. Private protocol of the BifrOSt window server (docs/bifrost-ui.md, "Window level").
   </copyright>
 
-  <interface name="bifrost_window_level_manager_v1" version="2">
+  <interface name="bifrost_window_level_manager_v1" version="3">
     <description summary="stacking level of a toplevel">
       Lets the shell put a toplevel on the floating level. A floating window stays above the normal windows of the
       desktop and is raised only within its own band; menus, panels and the menu bar are not affected. The level
@@ -12,6 +12,10 @@
 
       Since version 2 the window server also reports where it put each of the client's own toplevels (`frame`):
       the window server places, moves and resizes toplevels, and a client never learns their position from xdg-shell.
+
+      Since version 3 the shell can also ask the window server to place a toplevel (`tile`): the halves, the quarters,
+      fill, centre and the way back to the previous size, the same actions the window server's own Ctrl+Super arrow
+      keys perform. Full screen is the plain xdg_toplevel set_fullscreen and unset_fullscreen.
     </description>
 
     <request name="destroy" type="destructor"/>
@@ -22,6 +26,16 @@
       </description>
       <arg name="surface" type="object" interface="wl_surface"/>
       <arg name="level" type="uint" summary="0 normal, 1 floating"/>
+    </request>
+
+    <request name="tile" since="3">
+      <description summary="place the toplevel of a surface">
+        Places the toplevel of `surface` as `placement` says and configures the client to the new size; the frame
+        comes back in a `frame` event. Ignored for a surface that is not a mapped toplevel of the window server and
+        for a full-screen toplevel.
+      </description>
+      <arg name="surface" type="object" interface="wl_surface"/>
+      <arg name="placement" type="uint" summary="a placement value"/>
     </request>
 
     <event name="frame" since="2">
@@ -44,8 +58,23 @@
       <entry name="floating" value="1"/>
     </enum>
 
+    <enum name="placement">
+      <entry name="fill" value="0" summary="fill the usable area"/>
+      <entry name="left" value="1"/>
+      <entry name="right" value="2"/>
+      <entry name="top" value="3"/>
+      <entry name="bottom" value="4"/>
+      <entry name="top_left" value="5"/>
+      <entry name="top_right" value="6"/>
+      <entry name="bottom_left" value="7"/>
+      <entry name="bottom_right" value="8"/>
+      <entry name="centre" value="9" summary="centre at the previous size"/>
+      <entry name="previous" value="10" summary="back to the size before the last fill or tile"/>
+    </enum>
+
     <enum name="error">
       <entry name="invalid_level" value="0"/>
+      <entry name="invalid_placement" value="1"/>
     </enum>
   </interface>
 </protocol>

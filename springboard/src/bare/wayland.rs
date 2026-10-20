@@ -28,6 +28,8 @@ pub struct ChromeFrame {pub id:u32,pub x:i32,pub y:i32,pub width:usize,pub heigh
 struct ChromeWindow {surface:wl_surface::WlSurface,layer:surface::ZwlrLayerSurfaceV1,slots:Vec<Slot>,configured:bool,frame:ChromeFrame,pending:Damage}
 #[derive(Clone)]
 pub struct WindowFrame { pub id:u32, pub title:&'static str, pub x:i32, pub y:i32, pub width:usize, pub height:usize, pub pixels:Option<std::sync::Arc<[u32]>>, pub damage:Damage, pub maximized:bool, pub floating:bool, pub title_height:i32,
+    /// The window is full screen: the window server puts it on the whole output (xdg_toplevel set_fullscreen).
+    pub fullscreen:bool,
     /// A press above `drag_height` (window px) moves the window, unless it lands in one of `no_drag` (x, y, w, h):
     /// the traffic lights and an app's toolbar controls in a full-size-content window.
     pub drag_height:i32, pub no_drag:Vec<[i32;4]>,
@@ -39,8 +41,14 @@ pub struct WindowFrame { pub id:u32, pub title:&'static str, pub x:i32, pub y:i3
 /// What a shell window's toplevel reported. `Frame` is the window server's own frame of the toplevel (x, y, width,
 /// height in desktop px, `bifrost_window_level_v1` version 2): the window server places and moves toplevels, so this
 /// is where the window really is.
-pub enum WindowEvent { Focus(u32), Resize(u32,i32,i32), Close(u32), Maximized(u32,bool), Frame(u32,i32,i32,i32,i32) }
+pub enum WindowEvent { Focus(u32), Resize(u32,i32,i32), Close(u32), Maximized(u32,bool), Frame(u32,i32,i32,i32,i32),
+    /// The window server's full-screen state of the toplevel, when it differs from what the shell last asked for (the
+    /// window server's own keys, or a refusal).
+    Fullscreen(u32,bool) }
 struct Window { surface:wl_surface::WlSurface, level_sent:Option<bool>, xdg:xdg_surface::XdgSurface, top:xdg_toplevel::XdgToplevel, slots:Vec<Slot>, buffer_size:(usize,usize), configured:bool, frame:WindowFrame,
+    /// The full-screen state asked of the window server and not yet answered by a configure: a configure sent before
+    /// the request reached it carries the old state and must not undo the request.
+    fs_pending:Option<bool>,
     /// GPU path: content damage not presented yet, the shadow margin around the content, the drawable size
     pending:Damage, margin:i32, gpu_size:(usize,usize),
     /// window-server materials (ext-background-effect): the effect object and the blur rects last sent (surface px)
@@ -340,7 +348,11 @@ impl Display {
         let qh = self.queue.handle();
         for mut frame in frames {
             if let Some(w) = self.state.windows.get_mut(&frame.id) {
-                if w.frame.maximized != frame.maximized { if frame.maximized { w.top.set_maximized(); } else { w.top.unset_maximized(); } }
+                // full screen first: the window server keeps what a window held (a zoom, a tile) while it is full screen and
+                // gives it back, so the zoom flag changing around full screen is not a maximize request
+                let fs_changed = w.frame.fullscreen != frame.fullscreen;
+                if fs_changed { if frame.fullscreen { w.top.set_fullscreen(None); } else { w.top.unset_fullscreen(); } w.fs_pending = Some(frame.fullscreen); }
+                if !fs_changed && !frame.fullscreen && w.frame.maximized != frame.maximized { if frame.maximized { w.top.set_maximized(); } else { w.top.unset_maximized(); } }
                 for slot in &mut w.slots { slot.damage.union(&frame.damage); }
                 if w.pending.size()==frame.damage.size() { w.pending.union(&frame.damage); } else { w.pending=Damage::new(frame.width,frame.height); w.pending.all(); }
                 // a moved window with vibrancy shows a different part of the wallpaper
@@ -354,7 +366,7 @@ impl Display {
                 let top = xdg.get_toplevel(&qh,frame.id); top.set_title(frame.title.to_string()); top.set_app_id(format!("is.olibuijr.bifrost.{}",frame.id));
                 top.set_min_size(320,220); surface.commit();
                 let mut pending=Damage::new(frame.width,frame.height); pending.all();
-                self.state.windows.insert(frame.id,Window { surface,xdg,top,level_sent:None,slots:vec![],buffer_size:(0,0),configured:false,frame,pending,margin:0,gpu_size:(0,0),bg:None,bg_rects:Vec::new(),mat:None,mat_sent:(0,Vec::new()) });
+                self.state.windows.insert(frame.id,Window { surface,xdg,top,level_sent:None,slots:vec![],buffer_size:(0,0),configured:false,frame,fs_pending:None,pending,margin:0,gpu_size:(0,0),bg:None,bg_rects:Vec::new(),mat:None,mat_sent:(0,Vec::new()) });
             }
         }
         // bifrost_window_level_v1: a window whose band changed is told the new level (the window server keeps it per surface)
@@ -408,9 +420,9 @@ impl Display {
             let layers:Vec<crate::gpu::occlusion::Layer>=order.iter().map(|id|{
                 let f=&self.state.windows[id].frame;
                 let scale=if state_scale>0.0 {state_scale} else {(f.title_height as f32/TITLE_PT).max(1.0)};
-                let (m,b)=if f.maximized {(0,0)} else {((SHADOW_SIDE_PT*scale).round() as i32,(SHADOW_BOTTOM_PT*scale).round() as i32)};
+                let (m,b)=if f.maximized||f.fullscreen {(0,0)} else {((SHADOW_SIDE_PT*scale).round() as i32,(SHADOW_BOTTOM_PT*scale).round() as i32)};
                 let (x,y,cw,ch)=(f.x,f.y,f.width as i32,f.height as i32);
-                let radius=if f.maximized {0} else {(scale*bifrost_ui::prefs_layout::m::WINDOW_RADIUS).round() as i32};
+                let radius=if f.maximized||f.fullscreen {0} else {(scale*bifrost_ui::prefs_layout::m::WINDOW_RADIUS).round() as i32};
                 let glass=self.state.materials.get(id).is_some_and(|v|!v.is_empty());
                 let still=f.fx.is_identity();
                 crate::gpu::occlusion::Layer {
@@ -432,7 +444,7 @@ impl Display {
                 if width>8192||height>8192 { return Err(err("window too large")); }
                 // the margins hold the GPU shadow (a dedicated reach, longer below); maximized windows have none
                 let scale=if self.state.scale>0.0 {self.state.scale} else {(w.frame.title_height as f32/TITLE_PT).max(1.0)};
-                let (margin,bottom)=if w.frame.maximized {(0,0)} else {((SHADOW_SIDE_PT*scale).round() as i32,(SHADOW_BOTTOM_PT*scale).round() as i32)};
+                let (margin,bottom)=if w.frame.maximized||w.frame.fullscreen {(0,0)} else {((SHADOW_SIDE_PT*scale).round() as i32,(SHADOW_BOTTOM_PT*scale).round() as i32)};
                 let (bw,bh)=(width+2*margin as usize,height+(margin+bottom) as usize);
                 if w.gpu_size!=(bw,bh) || !g.p.has_surface(key) {
                     if let Some(slots)=self.state.gpu_slots.remove(&key) {for s in slots {s.buffer.destroy();}}
@@ -657,6 +669,14 @@ fn set_chrome_input(compositor:Option<&wl_compositor::WlCompositor>,surface:&wl_
     }
     pub fn foreign_action(&mut self,id:u32,minimize:bool)->io::Result<()> {
         if let Some(w)=self.state.foreign.iter().find(|w|w.info.id==id) {if minimize {w.handle.set_minimized();}else{w.handle.close();}}
+        transient(self.conn.flush())
+    }
+    /// Asks the window server to place the shell's toplevel `id` (a tile, the centre, the way back to the previous size;
+    /// `bifrost_window_level_v1` version 3). Without the request the window stays where it is.
+    pub fn tile_window(&mut self,id:u32,placement:super::window_level_client::Placement)->io::Result<()> {
+        if let (Some(mgr),Some(w))=(self.state.level_mgr.as_ref(),self.state.windows.get(&id)) {
+            if mgr.version()>=super::window_level_client::TILE_SINCE { mgr.tile(&w.surface,super::window_level_client::placement_wire(placement)); }
+        }
         transient(self.conn.flush())
     }
     pub fn foreign_maximize(&mut self,id:u32,maximized:bool)->io::Result<()> {if let Some(w)=self.state.foreign.iter().find(|w|w.info.id==id) {if maximized {w.handle.set_maximized();}else{w.handle.unset_maximized();}}transient(self.conn.flush())}
@@ -1111,7 +1131,9 @@ impl Dispatch<xdg_surface::XdgSurface,u32> for State {
 impl Dispatch<xdg_toplevel::XdgToplevel,u32> for State {
     fn event(s: &mut Self, _: &xdg_toplevel::XdgToplevel, e:xdg_toplevel::Event, id: &u32, _: &Connection, _: &QueueHandle<Self>) {
         match e {
-            xdg_toplevel::Event::Configure {width,height,states} => { let maximized=states.chunks_exact(4).any(|bytes|u32::from_ne_bytes(bytes.try_into().unwrap())==xdg_toplevel::State::Maximized as u32); s.window_events.push(WindowEvent::Maximized(*id,maximized)); if width>0 && height>0 {s.window_events.push(WindowEvent::Resize(*id,width,height));} },
+            xdg_toplevel::Event::Configure {width,height,states} => { let has=|state:xdg_toplevel::State|states.chunks_exact(4).any(|bytes|u32::from_ne_bytes(bytes.try_into().unwrap())==state as u32); let maximized=has(xdg_toplevel::State::Maximized); s.window_events.push(WindowEvent::Maximized(*id,maximized));
+                // full screen: the answer to our own request settles it; any other configure is the window server's own decision
+                if let Some(w)=s.windows.get_mut(id) { let fullscreen=has(xdg_toplevel::State::Fullscreen); match w.fs_pending { Some(want) if want==fullscreen => w.fs_pending=None, Some(_) => {}, None if w.frame.fullscreen!=fullscreen => { w.frame.fullscreen=fullscreen; s.window_events.push(WindowEvent::Fullscreen(*id,fullscreen)); }, None => {} } } if width>0 && height>0 {s.window_events.push(WindowEvent::Resize(*id,width,height));} },
             xdg_toplevel::Event::Close => s.window_events.push(WindowEvent::Close(*id)),
             _=>{}
         }

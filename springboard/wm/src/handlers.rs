@@ -139,6 +139,9 @@ impl WmState {
                 let y = if edges.top { want.y + want.h - size.h } else { want.y };
                 Rect::new(x, y, size.w, size.h)
             }
+            // a tiled or full-screen window is sized by the window server (the client was configured to it): a commit made
+            // before the client applied that configure must not turn the old size back into its frame
+            None if self.wm.snapped(id).is_some() || self.wm.is_full_screen(id) => return,
             None if (size.w, size.h) != (frame.w, frame.h) && size.w > 0 && size.h > 0 => Rect { w: size.w, h: size.h, ..frame },
             None => return,
         };
@@ -301,6 +304,18 @@ impl XdgShellHandler for WmState {
         }
     }
 
+    fn fullscreen_request(&mut self, surface: ToplevelSurface, _output: Option<WlOutput>) {
+        let Some(window) = self.window_for_surface(surface.wl_surface()) else { return };
+        let Some(id) = WmState::known_id(&window) else { return };
+        self.set_full_screen(id, true);
+    }
+
+    fn unfullscreen_request(&mut self, surface: ToplevelSurface) {
+        let Some(window) = self.window_for_surface(surface.wl_surface()) else { return };
+        let Some(id) = WmState::known_id(&window) else { return };
+        self.set_full_screen(id, false);
+    }
+
     fn minimize_request(&mut self, surface: ToplevelSurface) {
         let Some(window) = self.window_for_surface(surface.wl_surface()) else { return };
         let Some(id) = WmState::known_id(&window) else { return };
@@ -337,6 +352,68 @@ impl WmState {
         surface.send_pending_configure();
         self.place(window, (r.x, r.y));
         self.sync_toplevels();
+    }
+}
+
+impl WmState {
+    /// Tells a toplevel the state and size `wm` now holds for it (maximized, full screen, frame size) and moves it
+    /// there; its owner hears the frame (`bifrost_window_level_v1`) and the toplevel list is refreshed.
+    pub(crate) fn configure_frame(&mut self, window: &Window, id: crate::wm::WindowId) {
+        let Some(r) = self.wm.rect(id) else { return };
+        let (maximized, full) = (self.wm.is_maximized(id), self.wm.is_full_screen(id));
+        if let Some(t) = window.toplevel() {
+            t.with_pending_state(|s| {
+                if maximized {
+                    s.states.set(xdg_toplevel::State::Maximized);
+                } else {
+                    s.states.unset(xdg_toplevel::State::Maximized);
+                }
+                if full {
+                    s.states.set(xdg_toplevel::State::Fullscreen);
+                } else {
+                    s.states.unset(xdg_toplevel::State::Fullscreen);
+                }
+                s.size = Some((r.w, r.h).into());
+            });
+            t.send_pending_configure();
+        }
+        self.place(window, (r.x, r.y));
+        self.sync_toplevels();
+    }
+
+    /// Puts the window `id` on the whole output (`on`) or back to the frame it had. A request that changes nothing
+    /// (already there, or a window `wm` does not know) still answers with a configure, so the client's pending
+    /// request is settled.
+    pub fn set_full_screen(&mut self, id: crate::wm::WindowId, on: bool) {
+        let Some(window) = self.window(id) else { return };
+        let changed = if on {
+            if self.wm.is_full_screen(id) { None } else { self.wm.enter_full_screen(id) }
+        } else {
+            self.wm.leave_full_screen(id)
+        };
+        match changed {
+            Some(_) => self.configure_frame(&window, id),
+            None => {
+                if let Some(t) = window.toplevel() {
+                    t.send_configure();
+                }
+            }
+        }
+    }
+
+    /// Applies a window-management choice to `id` (a tile, the centre, the way back) and resizes the client to match.
+    /// The Ctrl+Super arrow keys and the shell's green-button menu both come through here.
+    pub fn place_window(&mut self, id: crate::wm::WindowId, placement: crate::tiling::Placement) {
+        let Some(window) = self.window(id) else { return };
+        if self.wm.place(id, placement).is_some() {
+            self.configure_frame(&window, id);
+        }
+    }
+
+    /// `place_window` for the toplevel of `surface` (the shell names its windows by surface).
+    pub fn place_surface(&mut self, surface: &WlSurface, placement: crate::tiling::Placement) {
+        let Some(id) = self.window_for_surface(surface).as_ref().and_then(WmState::known_id) else { return };
+        self.place_window(id, placement);
     }
 }
 

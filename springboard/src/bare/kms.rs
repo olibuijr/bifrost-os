@@ -882,6 +882,12 @@ impl Display {
     pub fn wayland_foreign_maximize(&mut self,id:u32,maximized:bool)->io::Result<()> {if let Some(w)=&mut self.wayland {w.foreign_maximize(id,maximized)?;}Ok(())}
     #[cfg(feature="desktop-wayland")]
     pub fn wayland_foreign_action(&mut self,id:u32,minimize:bool)->io::Result<()> {if let Some(w)=&mut self.wayland {w.foreign_action(id,minimize)?;}Ok(())}
+    /// Asks the window server to place the shell's toplevel `id` (see `wayland::Display::tile_window`).
+    #[cfg(feature = "desktop-wayland")]
+    pub fn wayland_window_tile(&mut self, id: u32, placement: super::window_level_client::Placement) -> io::Result<()> {
+        if let Some(w) = &mut self.wayland { w.tile_window(id, placement)?; }
+        Ok(())
+    }
     #[cfg(feature = "desktop-wayland")]
     pub fn wayland_windows(&mut self, frames: Vec<super::wayland::WindowFrame>) -> io::Result<()> {
         if let Some(w) = &mut self.wayland { w.windows(frames)?; }

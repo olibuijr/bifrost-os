@@ -2165,6 +2165,8 @@ impl Shell {
         if self.bell.pending() { due.add(Some(t)); }
         if let Some(end) = self.bell.flash_end(t) { due.add(Some(end.min(t + 33.0))); }
         if let Some(when)=self.desk.as_ref().and_then(|d|d.dock_hide_at){due.add(Some(when));}
+        // a rest on a green button opens its menu when the dwell is over
+        if self.desktop_menu.is_none() { if let Some((_,since))=self.desk.as_ref().and_then(|d|d.arrange_at) { if since.is_finite() { due.add(Some(since+desk::ARRANGE_DWELL_MS)); } } }
         if self.dock_animating(t) || self.fx_animating(t) { due.add(Some(t)); }
         if self.live.look() != live_wallpaper::Look::Still && self.desk_active() && self.screen_on { due.add(live_wallpaper::next_due(self.live.look(), t, self.live_still_only())); }
         if self.metrics_active() {
@@ -3688,6 +3690,8 @@ impl Shell {
         self.sensor_tick(t);
         self.terminal_follow_scheme();
         self.dock_tick(t);
+        #[cfg(feature = "desktop-wayland")]
+        self.arrange_tick(t);
         self.fx_tick(t);
         self.metrics_tick(t);
         self.live_wallpaper_tick(t);

@@ -215,8 +215,24 @@ impl WmState {
         let Some(output) = self.output() else { return };
         let zone = layer_map_for_output(&output).non_exclusive_zone();
         let area = Rect::new(zone.loc.x, zone.loc.y, zone.size.w, zone.size.h);
+        // a full-screen window fills the whole output, the menu bar's strip included
+        let mut output_changed = false;
+        if let Some(geo) = self.space.output_geometry(&output) {
+            let whole = Rect::new(geo.loc.x, geo.loc.y, geo.size.w, geo.size.h);
+            output_changed = self.wm.output() != whole;
+            self.wm.set_output(whole);
+        }
         self.wm.set_area(area);
         self.apply_frames();
+        // a full-screen window follows an output change: its client is told the new size (not on every menu bar commit)
+        if output_changed {
+            let full: Vec<crate::wm::WindowId> = self.wm.stack().into_iter().filter(|id| self.wm.is_full_screen(*id)).collect();
+            for id in full {
+                if let Some(window) = self.window(id) {
+                    self.configure_frame(&window, id);
+                }
+            }
+        }
     }
 
     /// Gives a window its `wm` id on first sight.

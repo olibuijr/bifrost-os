@@ -1088,8 +1088,9 @@ impl Shell {
                 vec![]
             }
             Shortcut::FullScreen if self.desk_active() && !self.is_locked() => {
-                if let Some(i) = self.desk.as_ref().and_then(|d| d.front().and_then(|w| d.index_of(w.app))) {
-                    self.desk_zoom_window(i);
+                // Ctrl+Cmd+F: the front window takes the whole screen in its own space, or leaves it
+                if let Some((app, full)) = self.desk.as_ref().and_then(|d| d.front().map(|w| (w.app, w.full))) {
+                    self.desk_set_full_screen(app, !full);
                 }
                 vec![]
             }

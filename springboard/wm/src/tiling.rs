@@ -26,6 +26,41 @@ pub enum Arrow {
     Down,
 }
 
+/// What a window-management choice asks of the window server: one of the tiled layouts, the centre at the window's
+/// previous size, or the way back to the previous size. The Ctrl+Super arrow keys and the shell's green-button menu
+/// (`bifrost_window_level_manager_v1.tile`) both name their action with one of these, so they do the same thing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Placement {
+    Layout(Layout),
+    /// Centre the window in the usable area at its previous size.
+    Centre,
+    /// Go back to the frame from before the last maximize or tile; a window that never left its frame stays.
+    Previous,
+}
+
+/// The placement of a wire value of `bifrost_window_level_v1` `tile` (the `placement` enum), or `None` when unknown.
+pub fn placement_from_wire(v: u32) -> Option<Placement> {
+    Some(match v {
+        0 => Placement::Layout(Layout::Maximize),
+        1 => Placement::Layout(Layout::Left),
+        2 => Placement::Layout(Layout::Right),
+        3 => Placement::Layout(Layout::Top),
+        4 => Placement::Layout(Layout::Bottom),
+        5 => Placement::Layout(Layout::TopLeft),
+        6 => Placement::Layout(Layout::TopRight),
+        7 => Placement::Layout(Layout::BottomLeft),
+        8 => Placement::Layout(Layout::BottomRight),
+        9 => Placement::Centre,
+        10 => Placement::Previous,
+        _ => return None,
+    })
+}
+
+/// The placement an arrow key gives: `for_arrow`, with Down as the centre.
+pub fn placement_for_arrow(arrow: Arrow) -> Placement {
+    for_arrow(arrow).map_or(Placement::Centre, Placement::Layout)
+}
+
 /// How close (px) the pointer must be to an edge to snap into it while dragging.
 pub const EDGE: i32 = 8;
 /// How close (px) to two edges at once the pointer must be to snap into a corner quarter.
@@ -125,6 +160,26 @@ mod tests {
         assert_eq!(for_arrow(Arrow::Right), Some(Layout::Right));
         assert_eq!(for_arrow(Arrow::Up), Some(Layout::Maximize));
         assert_eq!(for_arrow(Arrow::Down), None);
+    }
+
+    #[test]
+    fn every_wire_placement_is_a_distinct_action_and_unknown_values_are_refused() {
+        let all: Vec<Placement> = (0..=10).map(|v| placement_from_wire(v).expect("known value")).collect();
+        for (i, a) in all.iter().enumerate() {
+            assert!(all.iter().skip(i + 1).all(|b| a != b), "{a:?} appears twice");
+        }
+        assert_eq!(placement_from_wire(0), Some(Placement::Layout(Layout::Maximize)));
+        assert_eq!(placement_from_wire(9), Some(Placement::Centre));
+        assert_eq!(placement_from_wire(10), Some(Placement::Previous));
+        assert_eq!(placement_from_wire(11), None);
+    }
+
+    #[test]
+    fn the_arrow_keys_name_the_same_placements_as_the_menu() {
+        assert_eq!(placement_for_arrow(Arrow::Left), placement_from_wire(1).unwrap());
+        assert_eq!(placement_for_arrow(Arrow::Right), placement_from_wire(2).unwrap());
+        assert_eq!(placement_for_arrow(Arrow::Up), placement_from_wire(0).unwrap());
+        assert_eq!(placement_for_arrow(Arrow::Down), placement_from_wire(9).unwrap());
     }
 
     #[test]
