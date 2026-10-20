@@ -3870,6 +3870,14 @@ mod tests {
         fx
     }
 
+    /// Chooses the `k`th choice of the pop-up row labelled `label`: taps the row to open its menu, then picks from the menu.
+    fn pick(st: &mut Settings, ui: &Ui, prefs: &mut Prefs, label: &str, k: usize) -> Vec<Effect> {
+        tap_row(st, ui, prefs, label);
+        let fx = st.activate(ui, prefs, Hit::Choice(k), 0.0);
+        settle(st, ui);
+        fx
+    }
+
     fn settle(st: &mut Settings, ui: &Ui) {
         st.tick(ui, 1e9);
         // the pages' reads run on worker threads (see `settings_load`): wait for them, as a frame would
@@ -4573,7 +4581,7 @@ mod tests {
         st.set_data_dir(&dir);
         tap_row(&mut st, &ui, &mut prefs, "Privacy");
         assert!(st.row_centre(&ui, "Open Anyway").is_none(), "nothing waits");
-        assert!(st.row_centre(&ui, "Anywhere").is_some());
+        assert!(st.row_centre(&ui, "Allow Apps From").is_some());
         back(&mut st, &ui, &mut prefs);
         super::super::launch_gate::write_blocked(&dir, &prog, "\"tool\" cannot be opened because its developer cannot be identified.");
         tap_row(&mut st, &ui, &mut prefs, "Privacy");
@@ -4582,7 +4590,7 @@ mod tests {
         let remembered = std::fs::read_to_string(dir.join("launch_overrides.txt")).unwrap();
         assert!(remembered.starts_with(&format!("{}\t", prog.display())), "{remembered:?}");
         // the setting persists and the check follows the tap
-        assert_eq!(tap_row(&mut st, &ui, &mut prefs, "Anywhere"), vec![]);
+        assert_eq!(pick(&mut st, &ui, &mut prefs, "Allow Apps From", 2), vec![]);
         assert_eq!(prefs.get("allow_apps_from"), Some("anywhere"));
         assert_eq!(super::super::launch_gate::load_policy(&prefs, &dir).setting(), bifrost_core::launch_policy::Setting::Anywhere);
         let _ = std::fs::remove_dir_all(&dir);
@@ -4670,9 +4678,10 @@ mod tests {
         let (mut st, mut prefs) = settings(&ui, &info());
         tap_row(&mut st, &ui, &mut prefs, "Screen Saver");
         assert_eq!(st.page(), PageId::ScreenSaver);
-        assert_eq!(tap_row(&mut st, &ui, &mut prefs, "Colours"), vec![]);
+        assert_eq!(pick(&mut st, &ui, &mut prefs, "Screen Saver", 1), vec![]);
         assert_eq!(prefs.get("screensaver_module"), Some("1"));
-        assert_eq!(tap_row(&mut st, &ui, &mut prefs, "10 minutes"), vec![]);
+        let ten = super::super::screensaver::START_AFTER.iter().position(|(_, min)| *min == 10).unwrap();
+        assert_eq!(pick(&mut st, &ui, &mut prefs, "Start After", ten), vec![]);
         assert_eq!(prefs.get("screensaver_minutes"), Some("10"));
         assert!(!st.take_screensaver_preview());
         tap_row(&mut st, &ui, &mut prefs, "Preview");
@@ -4688,12 +4697,12 @@ mod tests {
         // Clock is the first saver: its switch and its choices are on the page
         tap_row(&mut st, &ui, &mut prefs, "Show Date");
         assert_eq!(prefs.get("ScreenSaver.Clock.show_date"), Some("false"));
-        tap_row(&mut st, &ui, &mut prefs, "30 seconds");
+        pick(&mut st, &ui, &mut prefs, "Move Every", 0);
         assert_eq!(prefs.get("ScreenSaver.Clock.move_every"), Some("30s"));
         assert_eq!(prefs.get("ScreenSaver.Colours.speed"), None, "another saver's keys are untouched");
         // the next saver shows its own options
-        tap_row(&mut st, &ui, &mut prefs, "Colours");
-        tap_row(&mut st, &ui, &mut prefs, "Fast");
+        pick(&mut st, &ui, &mut prefs, "Screen Saver", 1);
+        pick(&mut st, &ui, &mut prefs, "Colour Change", 2);
         assert_eq!(prefs.get("ScreenSaver.Colours.speed"), Some("fast"));
         assert_eq!(prefs.get("ScreenSaver.Clock.move_every"), Some("30s"));
     }

@@ -2656,14 +2656,17 @@ mod tests {
         let ss = spec(PageId::ScreenSaver, &Model { opts: &saver_opts, ..model(&info, &opts) });
         // Colours has its own Speed choice group between Preview and Start After
         assert_eq!(ss.groups.len(), 4);
-        assert_eq!(ss.groups[0].items.len(), super::super::screensaver::SAVERS.len());
-        assert_eq!(ss.groups[0].items[1].accessory, Accessory::Check(true));
-        assert_eq!(ss.groups[0].items[0].accessory, Accessory::Check(false));
+        let saver = ss.groups[0].items[0].popup.as_ref().expect("the saver choice is one pop-up row");
+        assert_eq!(ss.groups[0].items[0].accessory, Accessory::Popup);
+        assert_eq!(saver.choices.len(), super::super::screensaver::SAVERS.len());
+        assert_eq!(saver.selected, 1);
         assert_eq!(ss.groups[1].items[0].label, "Preview");
-        assert_eq!(ss.groups[2].items.len(), 3, "Colours: slow, normal, fast");
-        assert_eq!(ss.groups[3].items.len(), super::super::screensaver::START_AFTER.len());
-        assert_eq!(ss.groups[3].items[2].accessory, Accessory::Check(true));
-        assert_eq!(ss.groups[3].items[6].accessory, Accessory::Check(false));
+        let speed = ss.groups[2].items[0].popup.as_ref().expect("Colours: one Speed pop-up");
+        assert_eq!(speed.choices.len(), 3, "Colours: slow, normal, fast");
+        let start = ss.groups[3].items[0].popup.as_ref().expect("Start After is one pop-up row");
+        assert_eq!(ss.groups[3].items[0].accessory, Accessory::Popup);
+        assert_eq!(start.choices.len(), super::super::screensaver::START_AFTER.len());
+        assert_eq!(start.selected, super::super::screensaver::START_AFTER.iter().position(|(_, min)| *min == 5).unwrap());
         let a = spec(PageId::AutoLock, &m);
         assert_eq!(a.groups[0].items.len(), AUTO_LOCK.len());
         assert_eq!(a.groups[0].items[4].accessory, Accessory::Check(true));

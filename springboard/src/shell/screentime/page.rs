@@ -229,7 +229,7 @@ mod tests {
         w[6].1.secs.insert("files".into(), 120);
         let s = spec(PageId::ScreenTime, &view(&w, &cfg, true, false));
         assert_eq!(s.groups[2].items[0].value, "3m");
-        assert_eq!(s.groups[1].items[1].accessory, Accessory::Check(true));
+        assert_eq!(s.groups[1].items[0].segments.as_ref().map(|p| p.selected), Some(1));
     }
 
     #[test]

@@ -22,6 +22,8 @@ pub const CHART_ROW_PT: f32 = 230.0;
 /// Space above a group; a header sits inside a taller one.
 pub const GROUP_GAP_PT: f32 = 11.0;
 const HEADER_PT: f32 = 26.0;
+/// The room a row's leading check (the joined network) takes before its label.
+const LEADING_CHECK_PT: f32 = 26.0;
 /// A row label wraps onto at most this many lines before its last one ends with an ellipsis.
 const LABEL_LINES: usize = 2;
 const FOOTER_LINE_PT: f32 = 18.0;
@@ -352,11 +354,13 @@ fn popup_layout(ui: &Ui, right: f32, label_w: f32) -> (f32, f32) {
 
 /// A group header in headline case. Specs write headers in capitals ("DOCK POSITION"); the page shows them as title-case
 /// headlines ("Dock Position"). A word with a lower-case letter in it (a device name, "v1.2") is left as written, and so
-/// are the acronyms in `ACRONYMS`.
+/// are the acronyms in `ACRONYMS`. A small word (article, conjunction, preposition) stays low unless it opens or ends the
+/// header; verbs such as "is" are capitalised.
 pub fn headline_case(text: &str) -> String {
     const ACRONYMS: [&str; 28] = ["TV", "OS", "ID", "IP", "UI", "PC", "USB", "HID", "DNS", "VPN", "DHCP", "URL", "SSID", "VLAN", "LAN", "GPU", "CPU", "RAM", "SSD", "HDD", "PDF", "API", "TLS", "SSH", "NTP", "HDR", "LED", "PIN"];
-    const SMALL: [&str; 15] = ["A", "AN", "AND", "AS", "AT", "BUT", "BY", "FOR", "FROM", "IN", "IS", "OF", "ON", "OR", "TO"];
+    const SMALL: [&str; 15] = ["A", "AN", "AND", "AS", "AT", "BUT", "BY", "FOR", "FROM", "IN", "OF", "ON", "OR", "THE", "TO"];
     let mut out = String::with_capacity(text.len());
+    let last = text.split(' ').count() - 1;
     for (n, word) in text.split(' ').enumerate() {
         if n > 0 {
             out.push(' ');
@@ -368,7 +372,7 @@ pub fn headline_case(text: &str) -> String {
             out.push_str(&word.replace("IPV", "IPv"));
         } else if ACRONYMS.contains(&word) {
             out.push_str(word);
-        } else if n > 0 && SMALL.contains(&word) {
+        } else if n > 0 && n < last && SMALL.contains(&word) {
             out.push_str(&word.to_lowercase());
         } else {
             // each part of a hyphenated word starts with a capital: "Double-Click"
@@ -796,7 +800,7 @@ impl ListPage {
                 let accessory = if pane.sidebar { 0.0 } else { accessory_room(ui, item, chevron.w as f32, check.w as f32, badge_w) };
                 let (icon_pt, _, gap_pt) = row_icon(pane.sidebar);
                 // the label stops before the value and the trailing control and wraps instead of running under them
-                let label_w = cw - ui.pt(2.0 * TEXT_INSET_PT) - if has_leading(item) { ui.pt(icon_pt + gap_pt) } else { 0.0 } - value_room - accessory;
+                let label_w = cw - ui.pt(2.0 * TEXT_INSET_PT) - if has_leading(item) { ui.pt(icon_pt + gap_pt) } else { 0.0 } - if item.leading_check { ui.pt(LEADING_CHECK_PT) } else { 0.0 } - value_room - accessory;
                 // the app's icon at the icon token; a built-in app has none and leaves the slot blank
                 let icon_img = item.app_icon.as_ref().filter(|_| has_leading(item)).and_then(|id| super::apphost::icon_image(id, ui.pt(icon_pt).round() as usize));
                 images.push(RowImages {
@@ -1295,7 +1299,7 @@ impl ListPage {
                 }
                 if item.leading_check {
                     s.blit_colored(&self.check, lx as i32, (mid - self.check.h as f32 / 2.0) as i32, bifrost_render::appearance::accent_now(), 255);
-                    lx += ui.pt(26.0);
+                    lx += ui.pt(LEADING_CHECK_PT);
                 }
                 // a label of two lines is centred on the row as a block
                 let labels = &self.images[k].label;
@@ -1755,7 +1759,9 @@ mod tests {
     fn group_headers_are_title_case_headlines() {
         assert_eq!(headline_case("DOCK POSITION"), "Dock Position");
         assert_eq!(headline_case("NOTIFICATION STYLE"), "Notification Style");
-        assert_eq!(headline_case("ALLOW APPS FROM"), "Allow Apps from", "a small word inside a header stays low");
+        assert_eq!(headline_case("ALLOW IN THE BACKGROUND"), "Allow in the Background", "a small word inside a header stays low");
+        assert_eq!(headline_case("PUT THE COMPUTER TO SLEEP WHEN THE DISPLAY IS OFF"), "Put the Computer to Sleep When the Display Is Off", "verbs are capitalised");
+        assert_eq!(headline_case("START THIS COMPUTER FROM"), "Start This Computer From", "a final preposition is capitalised");
         assert_eq!(headline_case("ON"), "On", "the first word always starts with a capital");
         assert_eq!(headline_case("DOUBLE-CLICK SPEED"), "Double-Click Speed");
         assert_eq!(headline_case("WHAT'S NEW IN 1.2"), "What's New in 1.2");
