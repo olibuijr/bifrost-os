@@ -5,8 +5,10 @@
 //! Smithay relays the protocols. This module adds what the compositor decides:
 //!
 //! - **Who may bind the privileged globals.** An input method grabs the keyboard and sees every field's surrounding
-//!   text, and a virtual keyboard types into any window, so both are offered only to clients of the compositor's own
-//!   user (`Trust`). `BIFROST_WM_INPUT_METHOD=off` removes all three globals.
+//!   text, and a virtual keyboard types into any window, so both are offered only to the shell (the privileged
+//!   socket) and to unsandboxed programs of the compositor's own user (`Trust`, the rule of `data_control::admits`). A
+//!   sandboxed app runs as the same account on the raw socket but in a mount namespace of its own, and never sees them.
+//!   `BIFROST_WM_INPUT_METHOD=off` removes all three globals.
 //! - **Candidate popups.** An input method's popup surface is placed below the text cursor, flipped above the cursor
 //!   when it would leave the output (`place_popup`), drawn above the windows, hit-tested for pointer and touch, and
 //!   given frame callbacks.
@@ -39,7 +41,7 @@ pub const POLICY_ENV: &str = "BIFROST_WM_INPUT_METHOD";
 pub enum Trust {
     /// No input method and no virtual keyboard; text input is not offered either (it would have no counterpart).
     Off,
-    /// Clients running as the compositor's user.
+    /// The privileged shell, and clients running as the compositor's user outside any app sandbox (same mount namespace).
     SameUser,
 }
 
@@ -53,13 +55,14 @@ impl Trust {
         }
     }
 
-    /// Whether a client with `client_uid` (`None`: its credentials could not be read) may bind the globals while the
-    /// compositor runs as `own_uid` (`None`: unknown). Unknown on either side admits nobody.
-    pub fn admits(self, client_uid: Option<u32>, own_uid: Option<u32>) -> bool {
-        match (self, client_uid, own_uid) {
-            (Trust::Off, _, _) => false,
-            (Trust::SameUser, Some(c), Some(o)) => c == o,
-            (Trust::SameUser, _, _) => false,
+    /// Whether a client may bind the globals while the compositor runs as `own_uid` (`None`: unknown): it is `privileged`
+    /// (connected through the privileged socket), or it is the compositor's own user (`client_uid`, `None` when its
+    /// credentials could not be read) in the window server's mount namespace (`same_mount_ns`). The same rule as the
+    /// clipboard control globals (`data_control::admits`): a same-uid client in a sandbox of its own is refused.
+    pub fn admits(self, privileged: bool, client_uid: Option<u32>, own_uid: Option<u32>, same_mount_ns: bool) -> bool {
+        match self {
+            Trust::Off => false,
+            Trust::SameUser => crate::data_control::admits(privileged, client_uid, own_uid, same_mount_ns),
         }
     }
 }
@@ -72,7 +75,15 @@ pub(crate) fn own_uid() -> Option<u32> {
 
 /// The global filter of the privileged protocols: true for the clients `trust` admits.
 fn client_filter(trust: Trust, own: Option<u32>) -> impl for<'c> Fn(&'c Client) -> bool + Send + Sync + 'static {
-    move |client: &Client| trust.admits(client.get_data::<ClientState>().and_then(|data| data.peer_uid), own)
+    move |client: &Client| {
+        let data = client.get_data::<ClientState>();
+        trust.admits(
+            crate::privileged::is_privileged(client),
+            data.and_then(|data| data.peer_uid),
+            own,
+            data.is_some_and(|data| data.shares_mount_ns),
+        )
+    }
 }
 
 /// Where a popup of `size` (w, h) goes for a text cursor at `cursor`, inside `bounds` (all output pixels): left edges
@@ -230,13 +241,14 @@ mod tests {
     }
 
     #[test]
-    fn only_the_compositors_own_user_binds_the_privileged_globals() {
-        assert!(Trust::SameUser.admits(Some(1000), Some(1000)));
-        assert!(!Trust::SameUser.admits(Some(1001), Some(1000)), "another user");
-        assert!(!Trust::SameUser.admits(Some(0), Some(1000)), "root is not special-cased");
-        assert!(!Trust::SameUser.admits(None, Some(1000)), "unreadable credentials");
-        assert!(!Trust::SameUser.admits(Some(1000), None), "unknown own uid fails closed");
-        assert!(!Trust::Off.admits(Some(1000), Some(1000)));
+    fn only_the_shell_and_unsandboxed_programs_of_the_compositors_user_bind_the_privileged_globals() {
+        assert!(Trust::SameUser.admits(true, Some(0), Some(1000), true), "the shell, through the privileged socket");
+        assert!(Trust::SameUser.admits(false, Some(1000), Some(1000), true), "an unsandboxed program of the same user");
+        assert!(!Trust::SameUser.admits(false, Some(1000), Some(1000), false), "a sandboxed app of the same user");
+        assert!(!Trust::SameUser.admits(false, Some(1001), Some(1000), true), "another user");
+        assert!(!Trust::SameUser.admits(false, None, Some(1000), true), "unreadable credentials");
+        assert!(!Trust::SameUser.admits(false, Some(1000), None, true), "unknown own uid fails closed");
+        assert!(!Trust::Off.admits(true, Some(1000), Some(1000), true));
     }
 
     #[test]

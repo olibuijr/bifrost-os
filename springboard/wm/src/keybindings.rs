@@ -137,9 +137,16 @@ fn tell_shell(line: &[u8]) {
     }
 }
 
+/// Whether the compositor's own chords may run: not while a session lock is held.
+pub fn chords_enabled(locked: bool) -> bool { !locked }
+
 impl WmState {
-    /// Performs a key binding's action.
+    /// Performs a key binding's action. While the session is locked every chord is inert: the windows behind the lock
+    /// screen must not be closed, tiled or re-focused by someone at the keyboard.
     pub fn run_action(&mut self, action: Action) {
+        if !chords_enabled(self.locked) {
+            return;
+        }
         match action {
             Action::QuickSearch => tell_shell(QUICKSEARCH_LINE),
             Action::MissionControl => tell_shell(OVERVIEW_LINE),
@@ -262,6 +269,12 @@ mod tests {
         assert_eq!(action(keysym::LEFT, SUPER), None);
         assert_eq!(action(keysym::LEFT, ALT), None);
         assert_eq!(action(keysym::F4, SUPER), None);
+    }
+
+    #[test]
+    fn chords_are_inert_while_the_session_is_locked() {
+        assert!(chords_enabled(false));
+        assert!(!chords_enabled(true), "Alt+F4 must not close windows behind the lock screen");
     }
 
     #[test]

@@ -400,6 +400,15 @@ ordinary client's registry does not list them and a bind is refused (`GlobalDisp
   shell connects for it and passes the connected descriptor down in `WAYLAND_SOCKET` (`capture_flow.rs`, `privileged::give_to`),
   which the Wayland client library uses in place of `WAYLAND_DISPLAY`; run by root without it (the lab tooling), the script
   connects itself. The recording worker is a thread of the shell and connects on its own.
+- **Session lock, layer keyboard grabs, chords (2026-10-20 review).** `ext_session_lock_manager_v1` is listed to privileged
+  clients only (`lock.rs`), and a second `lock` while a live client holds it gets `finished` (a holder that died can be
+  replaced by a new lock client, which is how a crashed lock screen is recovered). A layer surface takes the keyboard
+  exclusively only when its client is privileged and the session is not locked (`handlers.rs`, `exclusive_keyboard_allowed`).
+  The usable area a layer surface's exclusive zone leaves is kept to at least a quarter of the output (`wm::clamp_area`), and
+  `keep_on_screen` is total, so a client cannot crash the window server with a huge zone. The compositor's own chords
+  (`keybindings.rs`) do nothing while the session is locked. The privileged listening descriptor is close-on-exec, checked
+  to be a listening Unix socket, and `BIFROST_WM_PRIVILEGED_FD` is removed from the environment; a persistent `accept`
+  error pauses the accept source for 500 ms instead of spinning.
 - **Not covered.** The foreign-toplevel list (titles and app ids, and requests to close, minimize or activate a window) and the
   output-management globals are still offered to every client; they carry no pixels. Windows of XWayland clients are not on this
   socket, and an X11 client could read the screen through X itself, which XWayland does not isolate.
@@ -455,8 +464,8 @@ Smithay relays the messages, the module adds the policy, the candidate popup and
 | Protocol | Bound by | Offered to |
 |---|---|---|
 | `zwp_text_input_v3` | applications (toolkits do this for their text fields) | every client, when the policy below is not `off` |
-| `zwp_input_method_v2` | the keyboard or IME process, one at a time | clients of the compositor's user |
-| `zwp_virtual_keyboard_v1` | a process that sends key events without a device (keys for applications with no text input, such as X11 clients) | clients of the compositor's user |
+| `zwp_input_method_v2` | the keyboard or IME process, one at a time | the shell (privileged socket) and unsandboxed programs of the compositor's user |
+| `zwp_virtual_keyboard_v1` | a process that sends key events without a device (keys for applications with no text input, such as X11 clients) | the shell (privileged socket) and unsandboxed programs of the compositor's user |
 
 What the compositor does:
 
@@ -471,8 +480,10 @@ What the compositor does:
   above the windows on both render paths, hit-tested before the windows (pointer and touch can pick a candidate) and given
   frame callbacks. A docked keyboard needs none of this and just does not create a popup.
 - **Who may bind.** An input method grabs the keyboard and reads the text around every cursor; a virtual keyboard types into
-  any window. Both globals are hidden from clients of another user, and from every client when the credentials cannot be
-  read. `BIFROST_WM_INPUT_METHOD=off` removes all three globals. The sandbox proxy (`docs/wayland-filter-design.md`) does not
+  any window. Both globals are hidden from clients of another user, from every client when the credentials cannot be
+  read, and from a same-user client in a mount namespace of its own (a sandboxed native app; the rule of `data_control::admits`,
+  `state::peer_shares_mount_ns`). The namespace is read through `SO_PEERPIDFD` where the kernel has it (6.5), so it is the
+  connecting process's and never a recycled pid's; on an older kernel the pid must also belong to the peer's uid. `BIFROST_WM_INPUT_METHOD=off` removes all three globals. The sandbox proxy (`docs/wayland-filter-design.md`) does not
   list the two privileged globals for native apps.
 - **Limits.** There is one input method per seat, so the shell must be the only binder: Smithay answers a second bind with `unavailable` on the object that is already registered and does not replace it. Text input exists for Wayland clients
   only: X11 applications get keys from the virtual keyboard, not text. The window server's chords (`keybindings.rs`) are

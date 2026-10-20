@@ -15,14 +15,28 @@
 //! process of the same user can then open it: development only).
 
 use std::{
+    cell::Cell,
     io,
-    os::{fd::FromRawFd, unix::net::UnixListener},
+    os::{
+        fd::{BorrowedFd, FromRawFd},
+        unix::net::UnixListener,
+    },
     path::PathBuf,
+    rc::Rc,
     sync::Arc,
+    time::Duration,
 };
 
 use smithay::reexports::{
-    calloop::{generic::Generic, Interest, LoopHandle, Mode, PostAction},
+    calloop::{
+        generic::Generic,
+        timer::{TimeoutAction, Timer},
+        Interest, LoopHandle, Mode, PostAction, RegistrationToken,
+    },
+    rustix::{
+        io::{fcntl_getfd, fcntl_setfd, FdFlags},
+        net::{sockopt, AddressFamily},
+    },
     wayland_server::Client,
 };
 
@@ -69,12 +83,26 @@ pub fn endpoint_from_env() -> Option<Endpoint> {
 /// The mode of the socket file the window server binds itself: its owner only.
 pub const SOCKET_MODE: u32 = 0o600;
 
+/// Whether `fd` is a listening Unix stream socket: the only thing the session helper may hand over.
+fn is_listening_unix_socket(fd: BorrowedFd<'_>) -> bool {
+    sockopt::socket_domain(fd).is_ok_and(|domain| domain == AddressFamily::UNIX) && sockopt::socket_acceptconn(fd).unwrap_or(false)
+}
+
 /// Opens the listener for `endpoint`.
 pub fn listener(endpoint: &Endpoint) -> io::Result<UnixListener> {
     let listener = match endpoint {
         Endpoint::Fd(fd) => {
-            // SAFETY: the session helper put a listening Unix socket on this descriptor for this process and nothing else
-            // in the process owns it; the window server takes it over here, once.
+            // SAFETY: only borrowed for the checks below; the descriptor is not closed or kept past them.
+            let borrowed = unsafe { BorrowedFd::borrow_raw(*fd) };
+            if !is_listening_unix_socket(borrowed) {
+                return Err(io::Error::new(io::ErrorKind::InvalidInput, format!("descriptor {fd} is not a listening Unix socket")));
+            }
+            // the descriptor is the window server's alone: the children it starts (the X server, the apps' helpers) must
+            // not inherit a root-owned listening socket
+            let flags = fcntl_getfd(borrowed).map_err(io::Error::from)?;
+            fcntl_setfd(borrowed, flags | FdFlags::CLOEXEC).map_err(io::Error::from)?;
+            // SAFETY: the session helper put a listening Unix socket on this descriptor for this process (checked
+            // above) and nothing else in the process owns it; the window server takes it over here, once.
             unsafe { UnixListener::from_raw_fd(*fd) }
         }
         Endpoint::Path(path) => {
@@ -89,19 +117,47 @@ pub fn listener(endpoint: &Endpoint) -> io::Result<UnixListener> {
     Ok(listener)
 }
 
+/// How long the accept source rests after an accept error that does not clear by itself (descriptor exhaustion).
+pub const ACCEPT_BACKOFF: Duration = Duration::from_millis(500);
+
+/// What the accept loop does with an `accept` error.
+#[derive(Debug, PartialEq, Eq)]
+pub enum AcceptError {
+    /// Nothing more to accept now.
+    Drained,
+    /// Try the next connection straight away (an interrupted call, a client that gave up while queued).
+    Retry,
+    /// The error stays while the queue is full (`EMFILE`, `ENFILE`, no memory): rest the source for `ACCEPT_BACKOFF`,
+    /// or a level-triggered source fires again at once and spins.
+    Pause,
+}
+
+/// Classifies an `accept` error.
+pub fn classify_accept_error(kind: io::ErrorKind) -> AcceptError {
+    match kind {
+        io::ErrorKind::WouldBlock => AcceptError::Drained,
+        io::ErrorKind::Interrupted | io::ErrorKind::ConnectionAborted => AcceptError::Retry,
+        _ => AcceptError::Pause,
+    }
+}
+
 /// Accepts the clients of `listener` on `handle` as privileged clients.
 pub fn register(handle: &LoopHandle<'static, WmState>, listener: UnixListener) -> Result<(), String> {
-    handle
-        .insert_source(Generic::new(listener, Interest::READ, Mode::Level), |_, listener, state: &mut WmState| {
+    // the source's own token, for the timer that wakes it again after a pause
+    let own_token: Rc<Cell<Option<RegistrationToken>>> = Rc::new(Cell::new(None));
+    let wake_token = own_token.clone();
+    let token = handle
+        .insert_source(Generic::new(listener, Interest::READ, Mode::Level), move |_, listener, state: &mut WmState| {
             loop {
                 match listener.accept() {
                     Ok((stream, _)) => {
                         let _ = stream.set_nonblocking(true);
                         let pid = crate::state::peer_pid(&stream);
+                        let uid = crate::state::peer_uid(&stream);
                         let data = Arc::new(ClientState {
-                            peer_uid: crate::state::peer_uid(&stream),
+                            peer_uid: uid,
                             peer_pid: pid,
-                            shares_mount_ns: crate::state::shares_mount_ns(pid),
+                            shares_mount_ns: crate::state::peer_shares_mount_ns(&stream, pid, uid),
                             privileged: true,
                             ..ClientState::default()
                         });
@@ -109,22 +165,39 @@ pub fn register(handle: &LoopHandle<'static, WmState>, listener: UnixListener) -
                             eprintln!("bifrost-wm: privileged client refused: {e}");
                         }
                     }
-                    Err(e) if e.kind() == io::ErrorKind::WouldBlock => break,
-                    Err(e) => {
-                        eprintln!("bifrost-wm: privileged socket: {e}");
-                        break;
-                    }
+                    Err(e) => match classify_accept_error(e.kind()) {
+                        AcceptError::Drained => break,
+                        AcceptError::Retry => continue,
+                        AcceptError::Pause => {
+                            // logged once per pause, so a client flood cannot flood the log either
+                            eprintln!("bifrost-wm: privileged socket: {e}; pausing accepts for {} ms", ACCEPT_BACKOFF.as_millis());
+                            let token = wake_token.clone();
+                            let resumed = state.loop_handle.insert_source(Timer::from_duration(ACCEPT_BACKOFF), move |_, _, state: &mut WmState| {
+                                if let Some(token) = token.get() {
+                                    let _ = state.loop_handle.enable(&token);
+                                }
+                                TimeoutAction::Drop
+                            });
+                            // without the timer the source must keep running rather than stay off for good
+                            return Ok(if resumed.is_ok() { PostAction::Disable } else { PostAction::Continue });
+                        }
+                    },
                 }
             }
             Ok(PostAction::Continue)
         })
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    own_token.set(Some(token));
+    Ok(())
 }
 
 /// Starts listening on the privileged socket the environment names, if it names one.
 pub fn start(handle: &LoopHandle<'static, WmState>) {
     let Some(endpoint) = endpoint_from_env() else { return };
+    if matches!(endpoint, Endpoint::Fd(_)) {
+        // the number is meaningless (and misleading) to the children this process starts
+        std::env::remove_var(FD_ENV);
+    }
     match listener(&endpoint).map_err(|e| e.to_string()).and_then(|l| register(handle, l)) {
         Ok(()) => eprintln!("bifrost-wm: privileged socket {endpoint:?}"),
         Err(e) => eprintln!("bifrost-wm: no privileged socket ({endpoint:?}): {e}"),
@@ -155,6 +228,44 @@ mod tests {
         assert_eq!(endpoint(Some("2"), None), None, "stderr is not a socket");
         assert_eq!(endpoint(Some("-1"), None), None);
         assert_eq!(endpoint(None, Some("relative/path")), None, "a path must be absolute");
+    }
+
+    #[test]
+    fn an_adopted_descriptor_is_close_on_exec_and_must_be_a_listening_unix_socket() {
+        use std::os::fd::{AsFd, AsRawFd, IntoRawFd};
+        let dir = std::env::temp_dir().join(format!("bifrost-wm-priv-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        // a listening socket made inheritable, the way the session helper hands it over
+        let made = UnixListener::bind(dir.join("p.sock")).unwrap();
+        let fd = made.into_raw_fd();
+        let borrowed = unsafe { BorrowedFd::borrow_raw(fd) };
+        fcntl_setfd(borrowed, FdFlags::empty()).unwrap();
+        assert!(is_listening_unix_socket(borrowed));
+        let adopted = listener(&Endpoint::Fd(fd)).expect("a listening socket is adopted");
+        assert_eq!(adopted.as_raw_fd(), fd);
+        assert!(fcntl_getfd(adopted.as_fd()).unwrap().contains(FdFlags::CLOEXEC), "the children must not inherit it");
+
+        // a connected (not listening) socket and a plain file are refused, and stay open for their owner
+        let (conn, _peer) = std::os::unix::net::UnixStream::pair().unwrap();
+        assert!(!is_listening_unix_socket(conn.as_fd()));
+        let file = std::fs::File::open("/proc/self/exe").unwrap();
+        assert!(!is_listening_unix_socket(file.as_fd()));
+        let err = listener(&Endpoint::Fd(conn.as_raw_fd())).expect_err("a connected socket is not adopted");
+        assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
+        assert!(conn.as_fd().as_raw_fd() >= 0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn accept_errors_that_persist_pause_the_source_and_the_others_do_not() {
+        assert_eq!(classify_accept_error(io::ErrorKind::WouldBlock), AcceptError::Drained);
+        assert_eq!(classify_accept_error(io::ErrorKind::Interrupted), AcceptError::Retry);
+        assert_eq!(classify_accept_error(io::ErrorKind::ConnectionAborted), AcceptError::Retry);
+        for kind in [io::ErrorKind::Other, io::ErrorKind::OutOfMemory, io::ErrorKind::PermissionDenied] {
+            assert_eq!(classify_accept_error(kind), AcceptError::Pause, "{kind:?}: a level-triggered source would spin");
+        }
+        assert!(ACCEPT_BACKOFF >= Duration::from_millis(100));
     }
 
     #[test]

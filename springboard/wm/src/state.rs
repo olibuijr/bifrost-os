@@ -1,7 +1,15 @@
 //! The compositor state: Smithay's protocol states, the window space, and the `wm` rules that place and move
 //! windows in it.
 
-use std::{ffi::OsString, os::unix::net::UnixStream, sync::Arc, time::Instant};
+use std::{
+    ffi::OsString,
+    os::{
+        fd::{AsRawFd, FromRawFd, OwnedFd},
+        unix::net::UnixStream,
+    },
+    sync::Arc,
+    time::Instant,
+};
 
 use smithay::{
     desktop::{layer_map_for_output, PopupManager, Space, Window, WindowSurfaceType},
@@ -60,6 +68,62 @@ pub(crate) fn shares_mount_ns(pid: Option<u32>) -> bool {
     same_namespace(own.as_deref(), peer.as_deref())
 }
 
+/// `SO_PEERPIDFD` (Linux 6.5): a pidfd for the process that connected, taken by the kernel at connect time. It names that
+/// very process even after its pid was recycled, which `SO_PEERCRED`'s number cannot.
+const SO_PEERPIDFD: libc::c_int = 77;
+
+/// The pidfd of the process on the other end of `stream`, or `None` (kernel older than 6.5, or no credentials).
+fn peer_pidfd(stream: &UnixStream) -> Option<OwnedFd> {
+    let mut fd: libc::c_int = -1;
+    let mut len = std::mem::size_of::<libc::c_int>() as libc::socklen_t;
+    // SAFETY: `fd` and `len` are valid for the call; on success the kernel stored a new descriptor (close-on-exec) that
+    // nothing else owns, which `OwnedFd` takes over.
+    let rc = unsafe {
+        libc::getsockopt(stream.as_raw_fd(), libc::SOL_SOCKET, SO_PEERPIDFD, (&mut fd as *mut libc::c_int).cast(), &mut len)
+    };
+    // SAFETY: see above; `fd` is only used when the call succeeded.
+    (rc == 0 && fd >= 0).then(|| unsafe { OwnedFd::from_raw_fd(fd) })
+}
+
+/// The pid in a `/proc/self/fdinfo/<pidfd>` text (`Pid:` line, in this pid namespace). `-1` (the process is gone) and
+/// `0` (it lives in another pid namespace) give `None`.
+pub(crate) fn parse_fdinfo_pid(text: &str) -> Option<u32> {
+    let value = text.lines().find_map(|line| line.strip_prefix("Pid:"))?;
+    value.trim().parse::<i64>().ok().filter(|pid| *pid > 0).and_then(|pid| u32::try_from(pid).ok())
+}
+
+/// Whether the process behind `pidfd` has terminated (a pidfd becomes readable then).
+fn pidfd_exited(pidfd: &OwnedFd) -> bool {
+    let mut poll = libc::pollfd { fd: pidfd.as_raw_fd(), events: libc::POLLIN, revents: 0 };
+    // SAFETY: one valid pollfd; a zero timeout returns at once.
+    let ready = unsafe { libc::poll(&mut poll, 1, 0) };
+    ready != 0
+}
+
+/// The mount-namespace check made through a pidfd: the pid is read from the pidfd itself (so it is the connecting
+/// process's, never a recycled number), and the process must still be running after its namespace link was read (so the
+/// link was its own). A connector that already exited fails closed.
+fn pidfd_shares_mount_ns(pidfd: &OwnedFd) -> bool {
+    if pidfd_exited(pidfd) {
+        return false;
+    }
+    let pid = std::fs::read_to_string(format!("/proc/self/fdinfo/{}", pidfd.as_raw_fd())).ok().and_then(|text| parse_fdinfo_pid(&text));
+    shares_mount_ns(pid) && !pidfd_exited(pidfd)
+}
+
+/// Whether the peer of `stream` shares this process's mount namespace, as of accept. `pid` is the `SO_PEERCRED` pid and
+/// `uid` its uid. Through `SO_PEERPIDFD` where the kernel has it (the answer is about the process that connected);
+/// otherwise through the pid, which must belong to the peer's uid (a recycled pid of another account's process is
+/// refused; a recycled pid within the account on a kernel before 6.5 remains a narrow race).
+pub(crate) fn peer_shares_mount_ns(stream: &UnixStream, pid: Option<u32>, uid: Option<u32>) -> bool {
+    if let Some(pidfd) = peer_pidfd(stream) {
+        return pidfd_shares_mount_ns(&pidfd);
+    }
+    use std::os::unix::fs::MetadataExt;
+    let owner = pid.filter(|pid| *pid != 0).and_then(|pid| std::fs::metadata(format!("/proc/{pid}")).ok()).map(|m| m.uid());
+    owner.is_some() && owner == uid && shares_mount_ns(pid)
+}
+
 /// The `wm` id of a Smithay window, kept in the window's user data.
 struct Id(WindowId);
 
@@ -109,6 +173,9 @@ pub struct WmState {
     /// A session lock is held: only `lock_surface` is drawn and takes input.
     pub locked: bool,
     pub lock_surface: Option<smithay::wayland::session_lock::LockSurface>,
+    /// The lock object of the client holding the lock; a second `lock` request is refused while it is alive. When the
+    /// holder died the session stays locked and a new lock client may take over (and unlock), as the protocol requires.
+    pub lock_holder: Option<smithay::reexports::wayland_protocols::ext::session_lock::v1::server::ext_session_lock_v1::ExtSessionLockV1>,
     pub idle_notifier_state: smithay::wayland::idle_notify::IdleNotifierState<WmState>,
     pub dmabuf_state: smithay::wayland::dmabuf::DmabufState,
     /// The backend's dmabuf import check (the DRM backend's renderer); without one no dmabuf global exists.
@@ -163,10 +230,11 @@ impl WmState {
         handle
             .insert_source(listening, |stream, _, state: &mut WmState| {
                 let pid = peer_pid(&stream);
+                let uid = peer_uid(&stream);
                 let data = Arc::new(ClientState {
-                    peer_uid: peer_uid(&stream),
+                    peer_uid: uid,
                     peer_pid: pid,
-                    shares_mount_ns: shares_mount_ns(pid),
+                    shares_mount_ns: peer_shares_mount_ns(&stream, pid, uid),
                     ..ClientState::default()
                 });
                 if let Err(e) = state.dh.insert_client(stream, data) {
@@ -218,9 +286,10 @@ impl WmState {
             window_capture: Default::default(),
             hidden: Vec::new(),
             material_dark: std::env::var("BIFROST_WM_APPEARANCE").map(|v| v != "light").unwrap_or(true),
-            lock_state: smithay::wayland::session_lock::SessionLockManagerState::new::<WmState, _>(&dh, |_| true),
+            lock_state: smithay::wayland::session_lock::SessionLockManagerState::new::<WmState, _>(&dh, crate::privileged::is_privileged),
             locked: false,
             lock_surface: None,
+            lock_holder: None,
             idle_notifier_state: smithay::wayland::idle_notify::IdleNotifierState::new(&dh, event_loop.handle()),
             dmabuf_state: smithay::wayland::dmabuf::DmabufState::new(),
             dmabuf_import: None,
@@ -258,13 +327,15 @@ impl WmState {
     pub fn refresh_area(&mut self) {
         let Some(output) = self.output() else { return };
         let zone = layer_map_for_output(&output).non_exclusive_zone();
-        let area = Rect::new(zone.loc.x, zone.loc.y, zone.size.w, zone.size.h);
+        let mut area = Rect::new(zone.loc.x, zone.loc.y, zone.size.w, zone.size.h);
         // a full-screen window fills the whole output, the menu bar's strip included
         let mut output_changed = false;
         if let Some(geo) = self.space.output_geometry(&output) {
             let whole = Rect::new(geo.loc.x, geo.loc.y, geo.size.w, geo.size.h);
             output_changed = self.wm.output() != whole;
             self.wm.set_output(whole);
+            // a client's layer surface may claim an exclusive zone of any size: the area stays a sane part of the output
+            area = crate::wm::clamp_area(area, whole);
         }
         self.wm.set_area(area);
         self.apply_frames();
@@ -473,5 +544,43 @@ mod peer_tests {
         assert!(!shares_mount_ns(None));
         assert!(!shares_mount_ns(Some(0)), "pid 0 is a peer in another pid namespace");
         assert!(!shares_mount_ns(Some(u32::MAX)), "no such process");
+    }
+
+    #[test]
+    fn the_pid_comes_out_of_the_pidfd_info_text() {
+        assert_eq!(parse_fdinfo_pid("pos:\t0\nflags:\t02000002\nmnt_id:\t17\nPid:\t4242\nNSpid:\t4242\n"), Some(4242));
+        assert_eq!(parse_fdinfo_pid("Pid:\t-1\n"), None, "the process is gone");
+        assert_eq!(parse_fdinfo_pid("Pid:\t0\n"), None, "another pid namespace");
+        assert_eq!(parse_fdinfo_pid("Pid:\tabc\n"), None);
+        assert_eq!(parse_fdinfo_pid("pos:\t0\n"), None);
+    }
+
+    #[test]
+    fn a_peer_in_this_namespace_is_admitted_by_pidfd_or_by_pid() {
+        let (a, b) = UnixStream::pair().expect("socketpair");
+        let (pid, uid) = (peer_pid(&a), peer_uid(&a));
+        assert!(peer_shares_mount_ns(&a, pid, uid), "this process is its own peer");
+        assert!(peer_shares_mount_ns(&b, peer_pid(&b), peer_uid(&b)));
+        // a wrong uid for the pid is refused on the pid path; the pidfd path ignores the number altogether
+        if peer_pidfd(&a).is_none() {
+            assert!(!peer_shares_mount_ns(&a, pid, uid.map(|u| u.wrapping_add(1))), "a recycled pid of another account");
+        }
+    }
+
+    #[test]
+    fn a_pidfd_notices_that_its_process_exited() {
+        use smithay::reexports::rustix::process::{pidfd_open, Pid, PidfdFlags};
+        let mut child = std::process::Command::new("true").spawn().expect("spawn true");
+        let pid = Pid::from_raw(child.id() as i32).expect("pid");
+        let Ok(pidfd) = pidfd_open(pid, PidfdFlags::empty()) else {
+            let _ = child.wait();
+            return; // no pidfd_open here (an old kernel or a seccomp filter): nothing to check
+        };
+        child.wait().expect("wait");
+        assert!(pidfd_exited(&pidfd));
+        assert!(!pidfd_shares_mount_ns(&pidfd), "an exited connector fails closed");
+        let own = pidfd_open(Pid::from_raw(std::process::id() as i32).expect("own pid"), PidfdFlags::empty()).expect("own pidfd");
+        assert!(!pidfd_exited(&own));
+        assert!(pidfd_shares_mount_ns(&own));
     }
 }

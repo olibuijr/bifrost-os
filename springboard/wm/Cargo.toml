@@ -26,6 +26,8 @@ gpu-tests = ["bifrost-gpu/gpu-tests"]
 [dependencies]
 smithay = { version = "0.7", default-features = false, features = ["wayland_frontend", "desktop", "renderer_gl", "backend_egl"] }
 png = "0.18"
+# SO_PEERPIDFD and pidfd polling for the peer checks (src/state.rs, src/privileged.rs)
+libc = "0.2"
 # the final render server (docs/graphics-architecture.md): Vulkan via bifrost-gpu, layer trees via bifrost-layers
 bifrost-gpu = { path = "../gpu" }
 # the shared material model (kind tables in material_kind.rs map from it)

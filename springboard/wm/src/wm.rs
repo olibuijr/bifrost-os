@@ -336,10 +336,26 @@ impl Wm {
 }
 
 /// The titlebar never goes above the area, and `KEEP_VISIBLE` of the window stays inside it on every side.
+///
+/// Total for every `r` and `a`, including an area narrower than `KEEP_VISIBLE` or an empty one (`i32::clamp` panics when
+/// its minimum exceeds its maximum, and a client's layer surface can shrink the area that far).
 fn keep_on_screen(r: Rect, a: Rect) -> Rect {
-    let x = r.x.clamp(a.x - r.w + KEEP_VISIBLE, a.x + a.w - KEEP_VISIBLE);
-    let y = r.y.clamp(a.y, (a.y + a.h - KEEP_VISIBLE).max(a.y));
-    Rect { x, y, ..r }
+    let lo_x = a.x.saturating_sub(r.w).saturating_add(KEEP_VISIBLE);
+    let hi_x = a.x.saturating_add(a.w).saturating_sub(KEEP_VISIBLE).max(lo_x);
+    let hi_y = a.y.saturating_add(a.h).saturating_sub(KEEP_VISIBLE).max(a.y);
+    Rect { x: r.x.clamp(lo_x, hi_x), y: r.y.clamp(a.y, hi_y), ..r }
+}
+
+/// The usable area a layer surface's exclusive zones may leave: `area` inside `output`, at least a quarter of the output
+/// wide and high (and at least one pixel), so a client's huge or negative exclusive zone cannot collapse it.
+pub fn clamp_area(area: Rect, output: Rect) -> Rect {
+    let min_w = (output.w / 4).max(1);
+    let min_h = (output.h / 4).max(1);
+    let w = area.w.clamp(min_w, output.w.max(min_w));
+    let h = area.h.clamp(min_h, output.h.max(min_h));
+    let x = area.x.clamp(output.x, output.x.saturating_add(output.w).saturating_sub(w).max(output.x));
+    let y = area.y.clamp(output.y, output.y.saturating_add(output.h).saturating_sub(h).max(output.y));
+    Rect { x, y, w, h }
 }
 
 /// `start` with the grabbed edges moved by (`dx`, `dy`), never smaller than the minimum; the opposite edges stay put.
@@ -357,6 +373,36 @@ mod tests {
     use super::*;
 
     const AREA: Rect = Rect::new(0, 28, 1920, 1052); // 1920x1080 output under a 28 px menu bar
+
+    #[test]
+    fn keeping_a_window_on_screen_never_panics_on_a_collapsed_area() {
+        let r = Rect::new(100, 100, 40, 40);
+        for a in [Rect::new(0, 0, 0, 0), Rect::new(0, 28, -90_000, 1000), Rect::new(0, 28, 20, -5), Rect::new(i32::MAX - 10, 0, 100, 100)] {
+            let k = keep_on_screen(r, a);
+            assert_eq!((k.w, k.h), (r.w, r.h));
+        }
+        let mut wm = Wm::new(AREA);
+        wm.map(1, 800, 600);
+        wm.set_area(Rect::new(0, 0, 0, 0));
+        wm.set_area(Rect::new(0, 28, -50_000, -50_000));
+        wm.map_at(2, 30, 30, Some((10, 10)));
+        assert!(wm.rect(2).is_some());
+    }
+
+    #[test]
+    fn the_usable_area_stays_a_sane_part_of_the_output() {
+        let out = Rect::new(0, 0, 1920, 1080);
+        let menu_bar = Rect::new(0, 28, 1920, 1052);
+        assert_eq!(clamp_area(menu_bar, out), menu_bar, "an ordinary menu bar is untouched");
+        let huge_right = clamp_area(Rect::new(0, 0, -98_000, 1080), out);
+        assert_eq!((huge_right.w, huge_right.h), (480, 1080), "at least a quarter of the output wide");
+        let none = clamp_area(Rect::new(0, 0, 0, 0), out);
+        assert_eq!((none.w, none.h), (480, 270));
+        let outside = clamp_area(Rect::new(5000, -400, 1920, 1080), out);
+        assert!(outside.x + outside.w <= 1920 && outside.y >= 0);
+        let empty_output = clamp_area(Rect::new(0, 0, 0, 0), Rect::new(0, 0, 0, 0));
+        assert_eq!((empty_output.w, empty_output.h), (1, 1), "never empty, never a panic");
+    }
 
     #[test]
     fn a_new_window_is_centred_in_the_usable_area_and_focused() {
