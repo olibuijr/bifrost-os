@@ -609,6 +609,14 @@ impl Text {
         self.restyle(|s| s.underline = on);
     }
 
+    /// Bold and italic set together, as the format bar's style pop-up does (Regular, Bold, Italic, Bold Italic).
+    pub fn set_face(&mut self, bold: bool, italic: bool) {
+        self.restyle(|s| {
+            s.bold = bold;
+            s.italic = italic;
+        });
+    }
+
     pub fn set_size(&mut self, size: f32) {
         let size = size.clamp(MIN_SIZE, MAX_SIZE);
         self.restyle(|s| s.size = size);
@@ -1236,6 +1244,22 @@ mod tests {
         t.toggle_italic();
         t.type_text("i");
         assert!(t.cells()[3].style.italic, "typed text takes the typing style");
+    }
+
+    #[test]
+    fn the_face_sets_bold_and_italic_together_on_the_selection() {
+        let mut t = plain("abc");
+        t.select(0, 2);
+        t.set_face(true, true);
+        assert!(t.cells()[0].style.bold && t.cells()[0].style.italic && t.cells()[1].style.bold);
+        assert!(!t.cells()[2].style.bold, "the character outside the selection is untouched");
+        t.set_face(false, false);
+        assert!(!t.cells()[0].style.bold && !t.cells()[0].style.italic);
+        // with no selection the typing style takes it
+        t.select(3, 3);
+        t.set_face(true, false);
+        t.type_text("d");
+        assert!(t.cells()[3].style.bold && !t.cells()[3].style.italic);
     }
 
     #[test]

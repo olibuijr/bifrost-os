@@ -110,6 +110,23 @@ Files look pass (E2E 2026-10-19, finding F7; `docs/e2e/2026-10-19-finder-browser
 | Toolbar without `toolbar_band` | A full-size content window whose toolbar shares the content background | `toolbar_band` is the unified titlebar material with a hairline. An app whose toolbar floats over its content (Files, as in the Home reference) skips it: fill the window with `CONTENT_BG`, then call `widgets::toolbar` alone, and the groups draw as glass capsules over the content colour. Other apps keep their band. |
 | `ToolbarItem::menu(id, label, Some("symbol"))` with `ToolbarLayout::menu_anchor(id, gap)` | `NSMenuToolbarItem` | Files's Group and Sort pop-up and its action menu ("...") open their menu under the button through `Ctx::context_menu` (window pixels, so points times `ui.s`); the choice returns as `Input::ContextAction(id)`. An app that lays the bar out itself must give a menu item `CAPSULE_PT + TOOLBAR_MENU_CHEVRON_PT` of width, as `widgets::toolbar_layout` does. Share is `share::show_picker` with `Payload::Url("file://...")` under the Share button; it takes the anchor in window pixels, like the context menu. |
 
+Text Editor look and input pass (E2E 2026-10-20, findings TE1, TE3, TE4; Text Editor 1.12.0):
+
+| API | Apple counterpart | Notes |
+|---|---|---|
+| `glyphs::NAMES` now 70: `bold`, `italic`, `underline`, `strikethrough`, `text.aligncenter`, `text.alignright`, `text.justify`, `list.number` | `NSImage(systemSymbolName:)` | The format bar's character styles, alignments and numbered list. `bold` and `strikethrough` draw their letter with the UI font; the others are lines. Same line style as the rest. |
+| Manifest `edit_keys = true` (`apphost::Manifest::edit_keys`, `HwKeys::nav_mods`, `Shell::hw_nav`) | `NSTextView` key bindings (`moveLeftAndModifySelection:`, `moveToBeginningOfLine:`) | A text editor in front gets the arrows, Home and End with Shift, Alt, Ctrl or Cmd (and Home and End alone) as chords on the evdev key: `KeyInput::chord(105, CHORD_SHIFT)` is Shift+Left, `chord(102, 0)` is Home. Without the key every app gets plain arrow codes with no modifiers, as before. The shell path has no key repeat for these chords yet, and the direct Wayland path (`wl/input.rs`, which deliberately sends chords on named keys as plain codes) does not send them, so a direct text editor does not get Shift+arrows yet. |
+| Save panel sheet: the base name selected, the window under it dimmed (`docpanel::Panel::name_sel`, `Shell::draw_doc_dim`) | `NSSavePanel` as a sheet (`beginSheetModal`), the name field with the base name selected | Typing replaces the name and keeps the extension; Backspace deletes the selection. The panel still draws as a popup with rounded top corners at the top of its window; the sheet slide and square top corners are not done. |
+
+Text Editor 1.12.0 uses the kit for its chrome: the title row (document icon and name, "Edited" while dirty) is drawn by the app because a full-size
+window has no title row of the shell's; the format bar is one `widgets::toolbar` (a `ToolbarItem` group of B I U S, a group of the four
+alignments, a `ToolbarItem::menu` list pull-down, and `ToolbarItem::custom` slots for the colour well, `widgets::popup_button` for font,
+style and size, and a `widgets::stepper` for the line spacing). Menus open with `Ctx::context_menu` and come back as `Input::ContextAction` with
+the menu id of the action; what does not fit moves behind the kit's `>>` button, whose menu the app builds from the hidden items. Pointer
+selection is by click count (`select::Clicks`): a caret, a word, a paragraph, and a drag grows by that unit. Apple parity gaps: no Shift-click
+to extend (the touch event carries no modifiers), no drag of selected text, and no line spacing stepper step smaller than a menu entry
+(`SPACINGS`).
+
 Files icon view: the default icon is 128 pt (`GRID_ICON`), the reference's folder width of 3.7 sidebar rows (about 118 pt
 drawn); the cell is the icon plus 40 x 60 pt and the name sits 10 pt under it. View Options > Icon size still steps by
 16 pt, from 32 to 160. Not matched yet: Network in the sidebar (Files has no network browsing view, only Go > Connect

@@ -9,6 +9,7 @@
 mod docx;
 mod encoding;
 mod document;
+mod format_bar;
 mod html;
 mod layout;
 mod links;
@@ -20,6 +21,7 @@ mod properties;
 mod replace;
 mod rtf;
 mod rtfd;
+mod select;
 mod spell;
 mod text;
 mod view;
@@ -28,7 +30,8 @@ mod xml;
 mod zipdoc;
 
 use bifrost_app::controls::undo::ChangeCount;
-use bifrost_app::controls::{Node, Role};
+use bifrost_app::controls::nav::ToolbarLayout;
+use bifrost_app::controls::Node;
 use bifrost_app::document::{is_menu_id, item, DocId, DocumentController, DocumentHost, Notice};
 use bifrost_app::kit::canvas::Canvas;
 use bifrost_app::pasteboard::NativePasteboard;
@@ -36,7 +39,7 @@ use bifrost_app::kit::ui::Ui;
 use bifrost_app::kit::{clipboard, Damage, Surface};
 use bifrost_app::print::{Orientation, PrintError, PrintInfo, PrintOperation};
 use bifrost_app::control::{RpcError, INTERNAL_ERROR, INVALID_PARAMS, METHOD_NOT_FOUND};
-use bifrost_app::proto::CHORD_FLAG;
+use bifrost_app::proto::{ContextItem, CHORD_ALT, CHORD_CTRL, CHORD_FLAG, CHORD_META, CHORD_SHIFT};
 use bifrost_app::services::ServiceCall;
 use bifrost_core::json::Json;
 use bifrost_app::dnd::{self, dragop, DragPhase};
@@ -78,8 +81,12 @@ struct TextEditApp {
     /// how far the page is scrolled, in points, and whether the caret should be brought into view
     scroll: f32,
     follow: bool,
-    /// a press in the page is extending a selection from its anchor
+    /// a press in the page is extending a selection: by what unit (a caret, a word after a double click, a paragraph after a
+    /// triple click), from which range, and the presses that count the clicks
     drag: bool,
+    drag_unit: select::Unit,
+    drag_origin: Range<usize>,
+    clicks: select::Clicks,
     /// bumped by every change to a document, so the cached layout is rebuilt
     revision: u64,
     cache: Option<Cache>,
@@ -119,6 +126,16 @@ struct TextEditApp {
     rich_clip: Option<(String, Vec<Cell>)>,
     /// Format > Text > Copy Ruler: the tab stop distance copied, for Paste Ruler
     ruler: Option<f32>,
+}
+
+/// What a press in the page did.
+enum PageDown {
+    /// nothing to place the caret in (no document)
+    Ignored,
+    /// the caret or the selection moved
+    Placed,
+    /// a press on a link in a document that cannot be edited: open this address
+    Link(String),
 }
 
 /// The link panel: which text it links, the address typed so far, and whether that text already links somewhere (the
@@ -243,6 +260,8 @@ fn is_formatting(action: Action) -> bool {
             | Action::Subscript
             | Action::Highlight(_)
             | Action::PasteStyle
+            | Action::FontStyle(_)
+            | Action::Size(_)
     )
 }
 
@@ -258,6 +277,9 @@ impl TextEditApp {
             scroll: 0.0,
             follow: true,
             drag: false,
+            drag_unit: select::Unit::Char,
+            drag_origin: 0..0,
+            clicks: select::Clicks::default(),
             revision: 0,
             cache: None,
             spelling: Spelling::new(),
@@ -314,35 +336,27 @@ impl TextEditApp {
         view::geometry_with(width_px as f32 / ui.s, height_px as f32 / ui.s, self.find_open, ruler, self.opts.wrap_window)
     }
 
-    /// The toolbar's status: what the document has at the caret.
+    /// The format bar's status: what the document has at the caret, or in the first selected character.
     fn status(&self) -> view::Status {
         match active_doc(&self.docs) {
-            Some(doc) => view::Status {
-                style: doc.text.style(),
-                align: doc.text.align_at(doc.text.head()),
-                rich: doc.rich,
-                can_undo: doc.text.can_undo(),
-                can_redo: doc.text.can_redo(),
-                find_open: self.find_open,
-            },
-            None => view::Status {
-                style: Style::default(),
-                align: Align::Left,
-                rich: false,
-                can_undo: false,
-                can_redo: false,
-                find_open: self.find_open,
-            },
+            Some(doc) => view::Status { style: doc.text.style(), align: doc.text.align_at(doc.text.head()), rich: doc.rich },
+            None => view::Status { style: Style::default(), align: Align::Left, rich: false },
         }
     }
 
-    /// The toolbar and format bar buttons, and, with the find bar open, its buttons.
-    fn buttons(&self, ui: &Ui, geom: &view::Geometry) -> (Vec<Button>, Vec<Button>) {
-        let status = self.status();
-        let mut bar = view::toolbar(ui, &status);
-        bar.extend(view::format_bar(ui, &status, geom));
-        let find = if self.find_open { view::find_buttons(ui, geom) } else { Vec::new() };
-        (bar, find)
+    /// The window's title: the document's name, with "Edited" after it while it has unsaved changes. The window has no
+    /// title row of its own (the shell draws none for a full-size window), so the app draws the title in its toolbar.
+    fn window_title(&self) -> String {
+        self.docs.active().and_then(|id| self.docs.window_title(id)).unwrap_or_else(|| "Text Editor".to_string())
+    }
+
+    /// The find bar's buttons: none while it is closed.
+    fn find_buttons(&self, ui: &Ui, geom: &view::Geometry) -> Vec<Button> {
+        if self.find_open {
+            view::find_buttons(ui, geom)
+        } else {
+            Vec::new()
+        }
     }
 
     /// Something in a document changed: the layout is stale, the caret should show, and the controller learns the
@@ -880,6 +894,17 @@ impl TextEditApp {
                 doc.text.set_font(index);
                 true
             }
+            Action::FontStyle(face) => {
+                doc.text.set_face(face & 1 != 0, face & 2 != 0);
+                true
+            }
+            Action::Size(index) => match text::SIZES.get(index as usize) {
+                Some(size) => {
+                    doc.text.set_size(*size);
+                    true
+                }
+                None => false,
+            },
             Action::Align(align) => {
                 doc.text.set_align(align);
                 true
@@ -1730,35 +1755,129 @@ impl TextEditApp {
         true
     }
 
-    /// A key that moves the caret or deletes forward (the page only).
+    /// A plain key that moves the caret (the page only).
     fn page_key(&mut self, ctx: &Ctx, code: u32) -> bool {
+        match select::nav_of_code(code) {
+            Some(nav) => self.navigate(ctx, nav, select::NavMods::default()),
+            None => false,
+        }
+    }
+
+    /// Whether the keys belong to the page: no panel is open over it and it has the keyboard.
+    fn page_has_keys(&self) -> bool {
+        self.focus == Focus::Body
+            && self.props.is_none()
+            && self.spacing_sheet.is_none()
+            && self.line.is_none()
+            && self.link.is_none()
+            && !self.settings
+            && !self.encodings_panel
+            && !self.spelling_panel
+            && !self.plain_sheet
+    }
+
+    /// A navigation key, with the modifiers a chord carries: Shift extends the selection, Alt or Ctrl move by word, Cmd by
+    /// line (and to the ends of the text for Up and Down).
+    fn navigate(&mut self, ctx: &Ctx, nav: select::Nav, mods: select::NavMods) -> bool {
         let width = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h).text_w;
-        self.ensure_layout(&ctx.ui, width);
+        self.move_caret(&ctx.ui, width, nav, mods)
+    }
+
+    /// Moves the caret (or, with Shift, the moving end of the selection) for a navigation key.
+    fn move_caret(&mut self, ui: &Ui, width: f32, nav: select::Nav, mods: select::NavMods) -> bool {
+        self.ensure_layout(ui, width);
         let (aspects, fit) = self.cache.as_ref().map_or((Vec::new(), 0.0), |c| (c.art.aspects.clone(), c.width));
-        let measure = view::measure_in(&ctx.ui, &aspects, fit);
+        let measure = view::measure_in(ui, &aspects, fit);
+        let Some(cache) = self.cache.as_ref() else { return false };
         let Some(doc) = active_doc_mut(&mut self.docs) else { return false };
-        let head = doc.text.head();
-        let target = match code {
-            37 => {
-                if doc.text.has_selection() { doc.text.selection().start } else { head.saturating_sub(1) }
-            }
-            39 => {
-                if doc.text.has_selection() { doc.text.selection().end } else { (head + 1).min(doc.text.len()) }
-            }
-            38 | 40 => {
-                let Some(cache) = self.cache.as_ref() else { return false };
-                cache.layout.move_vertical(&cache.cells, head, code == 40, &measure)
-            }
-            _ => return false,
-        };
-        doc.text.select(target, target);
+        let selection = doc.text.selection();
+        let to = select::target(nav, mods, &cache.cells, &cache.layout, doc.text.head(), &selection, &measure);
+        let anchor = if mods.shift { doc.text.anchor() } else { to };
+        doc.text.select(anchor, to);
         self.follow = true;
         true
     }
 
+    /// A press in the page: it places the caret, or selects the word (a double click) or the paragraph (a triple click)
+    /// under the pointer. `px` and `py` are window points. A press on a link in a document that cannot be edited follows
+    /// the link instead.
+    fn page_down(&mut self, ui: &Ui, geom: &view::Geometry, px: f32, py: f32, t: f64) -> PageDown {
+        self.focus = Focus::Body;
+        self.ensure_layout(ui, geom.text_w);
+        let (aspects, fit) = self.cache.as_ref().map_or((Vec::new(), 0.0), |c| (c.art.aspects.clone(), c.width));
+        let measure = view::measure_in(ui, &aspects, fit);
+        let Some(cache) = self.cache.as_ref() else { return PageDown::Ignored };
+        let (index, under) = select::locate(geom, self.scroll, &cache.layout, &cache.cells, &measure, px, py);
+        let unit = select::unit_of(self.clicks.press(t, px, py));
+        let Some(doc) = active_doc_mut(&mut self.docs) else { return PageDown::Ignored };
+        if doc.read_only {
+            if let Some(url) = links::url(doc.text.link_near(index)) {
+                return PageDown::Link(url);
+            }
+        }
+        let origin = select::unit_range(&cache.cells, unit, index, under);
+        doc.text.select(origin.start, origin.end);
+        self.drag = true;
+        self.drag_unit = unit;
+        self.drag_origin = origin;
+        self.follow = true;
+        PageDown::Placed
+    }
+
+    /// The pointer moved with the button down: the selection grows from where the press began, by the unit it selected.
+    fn page_drag(&mut self, ui: &Ui, geom: &view::Geometry, px: f32, py: f32) -> bool {
+        self.ensure_layout(ui, geom.text_w);
+        let (aspects, fit) = self.cache.as_ref().map_or((Vec::new(), 0.0), |c| (c.art.aspects.clone(), c.width));
+        let measure = view::measure_in(ui, &aspects, fit);
+        let Some(cache) = self.cache.as_ref() else { return false };
+        let (index, under) = select::locate(geom, self.scroll, &cache.layout, &cache.cells, &measure, px, py);
+        let (anchor, head) = select::drag_selection(&cache.cells, &self.drag_origin, self.drag_unit, index, under);
+        let Some(doc) = active_doc_mut(&mut self.docs) else { return false };
+        doc.text.select(anchor, head);
+        self.follow = true;
+        true
+    }
+
+    /// A press on the format bar: a button acts now, a pop-up or the `>>` button opens its menu under itself (the choice
+    /// comes back as `Input::ContextAction`, with the menu id of its action).
+    fn press_format(&mut self, ctx: &Ctx, status: &view::Status, placed: &ToolbarLayout, hit: format_bar::Hit, x: f32, y: f32) -> bool {
+        match format_bar::press(status, placed, hit, x, y) {
+            Some(format_bar::Press::Do(action)) => self.perform(ctx, action),
+            Some(format_bar::Press::Menu { anchor, rows }) => {
+                let items = rows
+                    .iter()
+                    .map(|row| match row.action {
+                        Some(action) => ContextItem::new(action.id().unwrap_or(0), &row.title),
+                        None => ContextItem::separator(),
+                    })
+                    .collect();
+                ctx.context_menu(ctx.ui.pt(anchor.0), ctx.ui.pt(anchor.1), items);
+                false
+            }
+            None => false,
+        }
+    }
+
+    /// A control the window published was activated (assistive technology): the same as pressing it in its middle.
+    fn activate(&mut self, ctx: &Ctx, node: u64) -> bool {
+        let Some(item) = format_bar::item_of_node(node) else { return false };
+        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let status = self.status();
+        let placed = format_bar::layout(&ctx.ui, &geom, &status);
+        let (hit, rect) = if item == format_bar::OVERFLOW {
+            (format_bar::Hit::Overflow, placed.overflow_button)
+        } else {
+            (format_bar::Hit::Item(item), placed.rect_of(item))
+        };
+        match rect {
+            Some(r) => self.press_format(ctx, &status, &placed, hit, r.x + r.w / 2.0, r.y + r.h / 2.0),
+            None => false,
+        }
+    }
+
     /// Mouse or finger: a press places the caret (or presses a control, or sets a tab stop on the ruler), a drag
-    /// extends the selection.
-    fn touch(&mut self, ctx: &Ctx, kind: TouchKind, x: f32, y: f32) -> bool {
+    /// extends the selection. `t` is the event time in ms, which tells a double or triple click from separate presses.
+    fn touch(&mut self, ctx: &Ctx, kind: TouchKind, x: f32, y: f32, t: f64) -> bool {
         let (px, py) = (x / ctx.ui.s, y / ctx.ui.s);
         match kind {
             TouchKind::Down => {
@@ -1787,9 +1906,13 @@ impl TextEditApp {
                     return self.touch_link(ctx, px, py);
                 }
                 let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
-                let (bar, find) = self.buttons(&ctx.ui, &geom);
-                let all: Vec<Button> = bar.into_iter().chain(find).collect();
-                match view::hit(&all, &geom, px, py) {
+                let status = self.status();
+                let placed = format_bar::layout(&ctx.ui, &geom, &status);
+                if let Some(hit) = format_bar::hit(&placed, px, py) {
+                    return self.press_format(ctx, &status, &placed, hit, px, py);
+                }
+                let find = self.find_buttons(&ctx.ui, &geom);
+                match view::hit(&find, &geom, px, py) {
                     Some(Hit::Button(b)) => {
                         return match (b.enabled, b.action) {
                             (true, Some(action)) => self.perform(ctx, action),
@@ -1813,45 +1936,22 @@ impl TextEditApp {
                 if py < geom.body_top || py >= geom.body_bottom {
                     return false;
                 }
-                self.focus = Focus::Body;
-                let width = geom.text_w;
-                self.ensure_layout(&ctx.ui, width);
-                let (aspects, fit) = self.cache.as_ref().map_or((Vec::new(), 0.0), |c| (c.art.aspects.clone(), c.width));
-                let measure = view::measure_in(&ctx.ui, &aspects, fit);
-                let at = px - geom.text_x;
-                let scroll_y = py - geom.body_top + self.scroll;
-                let Some(doc) = active_doc_mut(&mut self.docs) else { return false };
-                let Some(cache) = self.cache.as_ref() else { return false };
-                let index = cache.layout.index_at(&cache.cells, at, scroll_y, &measure);
-                // in a document that cannot be edited a press on a link follows it
-                if doc.read_only {
-                    if let Some(url) = links::url(doc.text.link_near(index)) {
+                match self.page_down(&ctx.ui, &geom, px, py, t) {
+                    PageDown::Ignored => false,
+                    PageDown::Placed => true,
+                    PageDown::Link(url) => {
                         ctx.open_url(&url);
                         self.note = Some(format!("Opening {url}"));
-                        return true;
+                        true
                     }
                 }
-                doc.text.select(index, index);
-                self.drag = true;
-                self.follow = true;
-                true
             }
             TouchKind::Move => {
                 if !self.drag {
                     return false;
                 }
                 let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
-                self.ensure_layout(&ctx.ui, geom.text_w);
-                let (aspects, fit) = self.cache.as_ref().map_or((Vec::new(), 0.0), |c| (c.art.aspects.clone(), c.width));
-                let measure = view::measure_in(&ctx.ui, &aspects, fit);
-                let at = px - geom.text_x;
-                let scroll_y = py - geom.body_top + self.scroll;
-                let Some(doc) = active_doc_mut(&mut self.docs) else { return false };
-                let Some(cache) = self.cache.as_ref() else { return false };
-                let index = cache.layout.index_at(&cache.cells, at, scroll_y, &measure);
-                let anchor = doc.text.anchor();
-                doc.text.select(anchor, index);
-                true
+                self.page_drag(&ctx.ui, &geom, px, py)
             }
             TouchKind::Up | TouchKind::Cancel => {
                 self.drag = false;
@@ -2094,7 +2194,7 @@ impl App for TextEditApp {
     /// (the file's contents as an untitled document, so Save asks for a place to write it).
     fn rpc(&mut self, ctx: Option<&Ctx>, _data_dir: &std::path::Path, method: &str, params: &Json) -> Result<Json, RpcError> {
         if ctx.is_none() {
-            return Err(RpcError::new(INTERNAL_ERROR, "TextEdit is not running yet"));
+            return Err(RpcError::new(INTERNAL_ERROR, "Text Editor is not running yet"));
         }
         let call = ServiceCall::from_params(params).ok_or_else(|| RpcError::new(INVALID_PARAMS, "the service call has no text or path"))?;
         let doc = match method {
@@ -2137,19 +2237,11 @@ impl App for TextEditApp {
         }
     }
 
+    /// The format bar's items are the window's controls (the shell moves the window by its title row, except over these).
     fn controls(&self, ctx: &Ctx) -> Vec<Node> {
-        view::toolbar(&ctx.ui, &self.status())
-            .into_iter()
-            .enumerate()
-            .map(|(index, button)| Node {
-                id: 0x5445_0000 + index as u64,
-                role: Role::Button,
-                label: button.label,
-                value: if button.active { "selected".into() } else { String::new() },
-                bounds: button.rect,
-                enabled: button.enabled,
-            })
-            .collect()
+        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let status = self.status();
+        format_bar::nodes(&format_bar::layout(&ctx.ui, &geom, &status), &status)
     }
 
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
@@ -2165,8 +2257,14 @@ impl App for TextEditApp {
             Input::Key(KeyInput::Text(s)) => self.type_into(&s),
             Input::Key(KeyInput::Code(code)) => {
                 if code & CHORD_FLAG != 0 {
-                    // chords are the menus' key equivalents, which the shell routes as menu actions
-                    return false;
+                    // chords are the menus' key equivalents, which the shell routes as menu actions. The navigation keys
+                    // with Shift, Alt, Ctrl or Cmd come as chords too (the manifest's `edit_keys`): they move or extend the
+                    // selection.
+                    let Some((key, bits)) = KeyInput::Code(code).as_chord() else { return false };
+                    return match select::nav_of_evdev(key) {
+                        Some(nav) if self.page_has_keys() => self.navigate(ctx, nav, nav_mods(bits)),
+                        _ => false,
+                    };
                 }
                 // the properties panel takes the keys while it is open
                 if self.props.is_some() {
@@ -2269,7 +2367,7 @@ impl App for TextEditApp {
                             None => false,
                         }
                     }
-                    37 | 38 | 39 | 40 if self.focus == Focus::Body => self.page_key(ctx, code),
+                    35..=40 if self.focus == Focus::Body => self.page_key(ctx, code),
                     _ => false,
                 }
             }
@@ -2283,7 +2381,13 @@ impl App for TextEditApp {
                 }
                 _ => false,
             },
-            Input::Touch { kind, x, y, .. } => self.touch(ctx, kind, x, y),
+            Input::Touch { kind, x, y, t, .. } => self.touch(ctx, kind, x, y, t),
+            // the choice in a menu the format bar opened (a font, a size, a colour...), by the menu id of its action
+            Input::ContextAction(id) => match Action::from_id(id) {
+                Some(action) => self.perform(ctx, action),
+                None => false,
+            },
+            Input::Activate(node) => self.activate(ctx, node),
             _ => false,
         }
     }
@@ -2392,11 +2496,10 @@ impl App for TextEditApp {
         let (w, h) = canvas.size();
         let ui = &ctx.ui;
         let geom = self.geometry(ui, ctx.cfg.w, ctx.cfg.h);
-        let (bar, find) = self.buttons(ui, &geom);
+        let find = self.find_buttons(ui, &geom);
         view::draw_bar(canvas, ui, &geom);
-        for b in &bar {
-            view::draw_button(canvas, ui, b);
-        }
+        view::draw_title(canvas, ui, &geom, &self.window_title());
+        format_bar::draw(canvas, ui, &geom, &self.status(), None);
         let tab = active_doc(&self.docs).map_or(0.0, |d| d.text.tab_width());
         view::draw_ruler(canvas, ui, &geom, tab);
         if self.find_open {
@@ -2500,6 +2603,11 @@ impl App for TextEditApp {
     fn draw(&mut self, ctx: &Ctx, s: &mut Surface, t: f64) -> Damage {
         self.draw_canvas(ctx, s, t)
     }
+}
+
+/// The modifiers of a navigation chord: Shift extends, Alt or Ctrl move by word, Cmd by line.
+fn nav_mods(bits: u32) -> select::NavMods {
+    select::NavMods { shift: bits & CHORD_SHIFT != 0, word: bits & (CHORD_ALT | CHORD_CTRL) != 0, line: bits & CHORD_META != 0 }
 }
 
 fn main() {
@@ -2777,5 +2885,260 @@ mod tests {
         assert!(!is_formatting(Action::MakePlain));
         assert!(!is_formatting(Action::Find));
         assert!(!is_formatting(Action::Print));
+    }
+
+    // ---- the page and the format bar, through a context with no shell behind it ----
+
+    const SENTENCE: &str = "Hello from the BifrOSt E2E run.";
+
+    fn window(w: u32, h: u32) -> Ctx {
+        use bifrost_app::kit::{Font, Ui};
+        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice());
+        let cfg = bifrost_app::Configure { w, h, scale: 1.0, safe_top: 0.0, safe_bottom: 0.0, dark: true, text_scale: 1.0, reduce_motion: false };
+        Ctx::testing(Ui::new(Font::parse(data).unwrap(), 1.0), cfg)
+    }
+
+    /// The window point a quarter of the way into the character at `index` on the first line of the page: the caret nearest
+    /// to it is the one before that character, and the character under it is that one.
+    fn middle_of(app: &TextEditApp, ctx: &Ctx, text: &str, index: usize) -> (f32, f32) {
+        let geom = app.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let width = |ch: char| view::char_width(&ctx.ui, ch, &Style::default());
+        let before: f32 = text.chars().take(index).map(width).sum();
+        let this = text.chars().nth(index).map_or(0.0, width);
+        (geom.text_x + before + this * 0.25, geom.body_top + 6.0)
+    }
+
+    fn press(app: &mut TextEditApp, ctx: &Ctx, kind: TouchKind, (x, y): (f32, f32), t: f64) -> bool {
+        app.touch(ctx, kind, x * ctx.ui.s, y * ctx.ui.s, t)
+    }
+
+    fn selected(app: &TextEditApp) -> String {
+        active_doc(&app.docs).unwrap().text.selected_text().unwrap_or_default()
+    }
+
+    #[test]
+    fn a_press_on_the_first_line_places_the_caret_though_the_find_fields_overlap_it() {
+        // the report: clicks never moved the caret, because the closed find bar's fields sat over the first line and took the press
+        let ctx = window(1200, 780);
+        let mut app = app_with_text(SENTENCE, SENTENCE.len()..SENTENCE.len());
+        let geom = app.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let point = middle_of(&app, &ctx, SENTENCE, 3);
+        assert!(geom.find_field.contains(point.0, point.1), "the point is under the hidden find field: {point:?} {:?}", geom.find_field);
+        assert!(press(&mut app, &ctx, TouchKind::Down, point, 0.0));
+        let doc = active_doc(&app.docs).unwrap();
+        assert_eq!(doc.text.head(), 3, "the caret is at the character pressed, not at the end");
+        assert_eq!(app.focus, Focus::Body);
+        // typing goes in at the caret
+        press(&mut app, &ctx, TouchKind::Up, point, 10.0);
+        app.type_into("X");
+        let text = active_doc(&app.docs).unwrap().text.text();
+        assert_eq!(text, "HelXlo from the BifrOSt E2E run.");
+    }
+
+    #[test]
+    fn a_double_click_selects_the_word_and_typing_replaces_it() {
+        let ctx = window(1200, 780);
+        let mut app = app_with_text(SENTENCE, SENTENCE.len()..SENTENCE.len());
+        let point = middle_of(&app, &ctx, SENTENCE, 7);
+        press(&mut app, &ctx, TouchKind::Down, point, 0.0);
+        press(&mut app, &ctx, TouchKind::Up, point, 40.0);
+        assert_eq!(selected(&app), "");
+        press(&mut app, &ctx, TouchKind::Down, point, 120.0);
+        press(&mut app, &ctx, TouchKind::Up, point, 160.0);
+        assert_eq!(selected(&app), "from");
+        app.type_into("X");
+        assert_eq!(active_doc(&app.docs).unwrap().text.text(), "Hello X the BifrOSt E2E run.");
+    }
+
+    #[test]
+    fn a_triple_click_selects_the_paragraph_and_a_fourth_press_starts_over() {
+        let ctx = window(1200, 780);
+        let mut app = app_with_text(SENTENCE, 0..0);
+        let point = middle_of(&app, &ctx, SENTENCE, 7);
+        for (k, t) in [0.0, 100.0, 200.0].into_iter().enumerate() {
+            press(&mut app, &ctx, TouchKind::Down, point, t);
+            press(&mut app, &ctx, TouchKind::Up, point, t + 30.0);
+            let expected = [0, 4, SENTENCE.len()][k];
+            assert_eq!(selected(&app).len(), expected, "press {}", k + 1);
+        }
+        press(&mut app, &ctx, TouchKind::Down, point, 300.0);
+        assert_eq!(selected(&app), "", "the fourth press places the caret again");
+    }
+
+    #[test]
+    fn dragging_selects_by_characters_and_by_words_after_a_double_click() {
+        let ctx = window(1200, 780);
+        let mut app = app_with_text(SENTENCE, 0..0);
+        // a plain drag from the middle of "from" to the middle of "BifrOSt"
+        let (from, to) = (middle_of(&app, &ctx, SENTENCE, 7), middle_of(&app, &ctx, SENTENCE, 16));
+        press(&mut app, &ctx, TouchKind::Down, from, 0.0);
+        assert!(press(&mut app, &ctx, TouchKind::Move, to, 20.0));
+        assert_eq!(selected(&app), "rom the B", "from the character pressed to the one under the pointer");
+        press(&mut app, &ctx, TouchKind::Up, to, 30.0);
+        assert!(!press(&mut app, &ctx, TouchKind::Move, from, 40.0), "a move with the button up does nothing");
+        // press twice and hold: the drag takes whole words
+        press(&mut app, &ctx, TouchKind::Down, from, 2000.0);
+        press(&mut app, &ctx, TouchKind::Up, from, 2010.0);
+        press(&mut app, &ctx, TouchKind::Down, from, 2100.0);
+        press(&mut app, &ctx, TouchKind::Move, to, 2120.0);
+        assert_eq!(selected(&app), "from the BifrOSt");
+    }
+
+    #[test]
+    fn the_navigation_chords_extend_the_selection_and_plain_keys_collapse_it() {
+        let ctx = window(1200, 780);
+        let mut app = app_with_text(SENTENCE, SENTENCE.len()..SENTENCE.len());
+        // Shift+Home (evdev 102) selects back to the start of the line, Shift+End forward again
+        assert!(app.event(&ctx, Input::Key(KeyInput::chord(102, CHORD_SHIFT))));
+        assert_eq!(selected(&app), SENTENCE);
+        // Shift+Right moves the head from the start; the anchor stays at the end of the text
+        assert!(app.event(&ctx, Input::Key(KeyInput::chord(106, CHORD_SHIFT))));
+        assert_eq!(selected(&app), &SENTENCE[1..]);
+        // Alt+Shift+Right moves the head one word on
+        assert!(app.event(&ctx, Input::Key(KeyInput::chord(106, CHORD_SHIFT | CHORD_ALT))));
+        assert_eq!(selected(&app), &SENTENCE[5..]);
+        // Left alone collapses to the start of the selection, then Home (plain code 36) goes to the line start
+        assert!(app.event(&ctx, Input::Key(KeyInput::Code(37))));
+        assert_eq!(active_doc(&app.docs).unwrap().text.selection(), 5..5);
+        assert!(app.event(&ctx, Input::Key(KeyInput::Code(36))));
+        assert_eq!(active_doc(&app.docs).unwrap().text.head(), 0);
+        assert!(app.event(&ctx, Input::Key(KeyInput::Code(35))));
+        assert_eq!(active_doc(&app.docs).unwrap().text.head(), SENTENCE.len());
+        // Cmd+Left is the line start as well, and a chord on another key is not a move
+        assert!(app.event(&ctx, Input::Key(KeyInput::chord(105, CHORD_META))));
+        assert_eq!(active_doc(&app.docs).unwrap().text.head(), 0);
+        assert!(!app.event(&ctx, Input::Key(KeyInput::chord(30, CHORD_META))));
+    }
+
+    #[test]
+    fn the_navigation_keys_leave_a_panel_or_the_find_field_alone() {
+        let ctx = window(1200, 780);
+        let mut app = app_with_text(SENTENCE, 3..3);
+        app.focus = Focus::Find;
+        assert!(!app.event(&ctx, Input::Key(KeyInput::chord(102, CHORD_SHIFT))), "the find field has the keyboard");
+        assert_eq!(active_doc(&app.docs).unwrap().text.head(), 3);
+        app.focus = Focus::Body;
+        app.open_line_sheet();
+        assert!(!app.event(&ctx, Input::Key(KeyInput::chord(107, CHORD_SHIFT))), "a panel is open over the page");
+        assert_eq!(active_doc(&app.docs).unwrap().text.head(), 3);
+    }
+
+    fn centre(r: bifrost_app::controls::Rect) -> (f32, f32) {
+        (r.x + r.w / 2.0, r.y + r.h / 2.0)
+    }
+
+    #[test]
+    fn the_format_bar_buttons_format_the_selection_and_show_its_state() {
+        let ctx = window(1200, 780);
+        let mut app = app_with_text(SENTENCE, 6..10);
+        let geom = app.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let placed = format_bar::layout(&ctx.ui, &geom, &app.status());
+        let bold = centre(placed.rect_of(format_bar::BOLD).unwrap());
+        assert!(press(&mut app, &ctx, TouchKind::Down, bold, 0.0));
+        let doc = active_doc(&app.docs).unwrap();
+        assert_eq!(doc.text.selection(), 6..10, "the press on a button keeps the selection");
+        assert!(doc.text.cells()[6..10].iter().all(|c| c.style.bold));
+        assert!(!doc.text.cells()[0].style.bold && !doc.text.cells()[10].style.bold);
+        assert!(app.status().style.bold, "the bar shows the style of the selection");
+        // without a selection the button sets the typing style
+        active_doc_mut(&mut app.docs).unwrap().text.select(31, 31);
+        let italic = centre(placed.rect_of(format_bar::ITALIC).unwrap());
+        press(&mut app, &ctx, TouchKind::Down, italic, 100.0);
+        app.type_into("z");
+        let typed = active_doc(&app.docs).unwrap().text.cells().last().copied().unwrap();
+        assert!(typed.ch == 'z' && typed.style.italic && !typed.style.bold, "{typed:?}");
+    }
+
+    #[test]
+    fn a_pop_up_opens_its_menu_and_the_choice_formats_the_selection() {
+        use bifrost_app::proto::ToShell;
+        let ctx = window(1200, 780);
+        let mut app = app_with_text(SENTENCE, 0..5);
+        let geom = app.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let placed = format_bar::layout(&ctx.ui, &geom, &app.status());
+        let size = centre(placed.rect_of(format_bar::SIZE).unwrap());
+        assert!(!press(&mut app, &ctx, TouchKind::Down, size, 0.0));
+        let sent = ctx.take_sent();
+        let items = sent.iter().find_map(|m| match m {
+            ToShell::ContextMenu { items, .. } => Some(items.clone()),
+            _ => None,
+        });
+        let items = items.expect("the size pop-up opens a menu");
+        assert_eq!(items.len(), text::SIZES.len());
+        // the choice comes back with the menu id of its action
+        let eighteen = items.iter().find(|i| i.label == "18").expect("a row for 18").id;
+        assert!(app.event(&ctx, Input::ContextAction(eighteen)));
+        assert!(active_doc(&app.docs).unwrap().text.cells()[..5].iter().all(|c| c.style.size == 18.0));
+        assert_eq!(app.status().style.size, 18.0);
+        // the style pop-up sets bold and italic together
+        assert!(app.event(&ctx, Input::ContextAction(Action::FontStyle(3).id().unwrap())));
+        let first = active_doc(&app.docs).unwrap().text.cells()[0].style;
+        assert!(first.bold && first.italic);
+        assert!(app.event(&ctx, Input::ContextAction(Action::FontStyle(0).id().unwrap())));
+        let first = active_doc(&app.docs).unwrap().text.cells()[0].style;
+        assert!(!first.bold && !first.italic);
+    }
+
+    #[test]
+    fn the_overflow_button_of_a_narrow_window_opens_the_hidden_controls() {
+        use bifrost_app::proto::ToShell;
+        let ctx = window(520, 600);
+        let mut app = app_with_text(SENTENCE, 0..0);
+        let geom = app.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let placed = format_bar::layout(&ctx.ui, &geom, &app.status());
+        let more = placed.overflow_button.expect("the bar overflows at 520 points");
+        let nodes = app.controls(&ctx);
+        assert!(nodes.iter().any(|n| n.label == "More Formatting" && n.bounds == more), "the button is a control");
+        assert!(nodes.iter().all(|n| n.bounds.right() <= geom.width + 0.01), "no control is cut by the window's edge");
+        press(&mut app, &ctx, TouchKind::Down, centre(more), 0.0);
+        let menu = ctx.take_sent().into_iter().find_map(|m| match m {
+            ToShell::ContextMenu { items, .. } => Some(items),
+            _ => None,
+        });
+        assert!(menu.is_some_and(|items| !items.is_empty() && items.len() <= 32));
+        // the same through the control: assistive technology activates it
+        assert!(!app.event(&ctx, Input::Activate(format_bar::NODE_BASE + u64::from(format_bar::OVERFLOW))));
+        assert!(ctx.take_sent().iter().any(|m| matches!(m, ToShell::ContextMenu { .. })));
+    }
+
+    #[test]
+    fn the_controls_the_window_publishes_are_the_format_bar() {
+        let ctx = window(1200, 780);
+        let app = app_with_text(SENTENCE, 0..0);
+        let nodes = app.controls(&ctx);
+        assert_eq!(nodes.len(), format_bar::ALL.len());
+        assert!(nodes.iter().all(|n| !n.label.is_empty()));
+        // none of the old text buttons (New, Open, Save, Undo, Redo, Find, Print) is a control any more
+        for gone in ["New", "Open", "Save", "Undo", "Redo", "Find", "Print", "Bullets", "Numbers"] {
+            assert!(!nodes.iter().any(|n| n.label == gone), "{gone}");
+        }
+    }
+
+    #[test]
+    fn the_title_row_names_the_document_and_says_when_it_has_unsaved_changes() {
+        let mut app = app_with_text("", 0..0);
+        assert_eq!(app.window_title(), "Untitled");
+        app.type_into("x");
+        assert_eq!(app.window_title(), "Untitled \u{2013} Edited");
+        assert_eq!(TextEditApp::new().window_title(), "Text Editor", "with no document the app's own name shows");
+    }
+
+    #[test]
+    fn a_plain_text_document_takes_no_press_on_the_format_bar() {
+        let ctx = window(1200, 780);
+        let mut app = app_with_text(SENTENCE, 0..5);
+        active_doc_mut(&mut app.docs).unwrap().rich = false;
+        let geom = app.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let placed = format_bar::layout(&ctx.ui, &geom, &app.status());
+        let bold = centre(placed.rect_of(format_bar::BOLD).unwrap());
+        assert!(!press(&mut app, &ctx, TouchKind::Down, bold, 0.0));
+        assert!(!active_doc(&app.docs).unwrap().text.cells()[0].style.bold);
+        assert!(ctx.take_sent().is_empty());
+    }
+
+    #[test]
+    fn the_size_and_style_actions_count_as_formatting() {
+        assert!(is_formatting(Action::Size(3)));
+        assert!(is_formatting(Action::FontStyle(1)));
     }
 }

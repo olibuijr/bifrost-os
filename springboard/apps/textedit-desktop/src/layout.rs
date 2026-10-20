@@ -232,6 +232,46 @@ impl Layout {
         self.index_in_line(cells, line, x, measure)
     }
 
+    /// The character under the point (`x`, `y`) in points: the one the point is inside, where `index_at` gives the caret
+    /// position nearest to it. Past the end of a line it is the line's last character (the line's own start for an
+    /// empty line). A double click picks the word of this character.
+    pub fn char_at(&self, cells: &[Cell], x: f32, y: f32, measure: &Measure) -> usize {
+        let Some(line) = self.lines.iter().position(|l| y < l.top + l.height).or(self.lines.len().checked_sub(1)) else {
+            return 0;
+        };
+        let line = &self.lines[line];
+        let origin = self.x_offset(line);
+        let mut rel = 0.0;
+        for k in line.start..line.end {
+            let w = advance(rel, &cells[k], self.tab, measure);
+            if x < origin + rel + w {
+                return k;
+            }
+            rel += w;
+        }
+        line.end.saturating_sub(1).max(line.start)
+    }
+
+    /// The first position of the line that holds `index` (Home).
+    pub fn line_start(&self, index: usize) -> usize {
+        self.lines.get(self.line_of(index)).map_or(0, |l| l.start)
+    }
+
+    /// The last caret position of the line that holds `index` (End): before the break or the blank that ends the line,
+    /// so the caret stays on that line.
+    pub fn line_end(&self, cells: &[Cell], index: usize) -> usize {
+        let at = self.line_of(index);
+        let Some(line) = self.lines.get(at) else { return 0 };
+        if line.end > line.start {
+            let last = cells[line.end - 1].ch;
+            let wrapped = self.lines.get(at + 1).is_some_and(|next| next.start == line.end);
+            if is_break(last) || (wrapped && last == ' ') {
+                return line.end - 1;
+            }
+        }
+        line.end
+    }
+
     /// The text position in line `line` nearest to `x`. The caret moves to the nearer side of each character.
     fn index_in_line(&self, cells: &[Cell], line: usize, x: f32, measure: &Measure) -> usize {
         let Some(line) = self.lines.get(line) else { return 0 };
@@ -370,6 +410,40 @@ mod tests {
         assert_eq!(l.index_at(&c, 0.4, second_line_top, &one), 4);
         assert_eq!(l.index_at(&c, 3.9, second_line_top, &one), 8, "past the end of the line");
         assert_eq!(l.index_at(&c, 0.0, 9999.0, &one), 8, "below the text goes to the last line start");
+    }
+
+    #[test]
+    fn the_character_under_a_point_is_the_one_it_is_inside() {
+        let c = cells("aaa bbb ccc");
+        let l = layout(&c, 4.0, &one);
+        let top = l.lines[1].top + 1.0;
+        // the second line is "bbb ": a point in the right half of its first character is still on that character
+        assert_eq!(l.char_at(&c, 0.9, top, &one), 4);
+        assert_eq!(l.index_at(&c, 0.9, top, &one), 5, "the caret position is the nearer edge");
+        assert_eq!(l.char_at(&c, 2.5, top, &one), 6);
+        assert_eq!(l.char_at(&c, 99.0, top, &one), 7, "past the end of the line is its last character");
+        assert_eq!(l.char_at(&c, 0.0, 9999.0, &one), 8, "below the text is the last line");
+        let empty = layout(&[], 100.0, &one);
+        assert_eq!(empty.char_at(&[], 0.0, 0.0, &one), 0);
+    }
+
+    #[test]
+    fn home_and_end_stay_on_the_line_that_holds_the_caret() {
+        let c = cells("aaa bbb ccc");
+        let l = layout(&c, 4.0, &one);
+        // the lines are "aaa ", "bbb " and "ccc"
+        assert_eq!(l.line_start(5), 4);
+        assert_eq!(l.line_end(&c, 5), 7, "End stops before the blank that wraps the line");
+        assert_eq!(l.line_end(&c, 9), 11, "the last line ends with the text");
+        assert_eq!(l.line_start(0), 0);
+        let broken = cells("ab\u{2028}cd");
+        let l = layout(&broken, 100.0, &one);
+        assert_eq!(l.line_end(&broken, 1), 2, "End stops before a line break");
+        assert_eq!(l.line_start(4), 3);
+        let para = cells("ab\ncd");
+        let l = layout(&para, 100.0, &one);
+        assert_eq!(l.line_end(&para, 0), 2, "a paragraph's line ends before its newline");
+        assert_eq!(l.line_end(&para, 4), 5);
     }
 
     #[test]

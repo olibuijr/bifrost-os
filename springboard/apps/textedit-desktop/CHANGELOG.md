@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.12.0 - 2026-10-20
+
+- Clicking in the text now places the caret where you click, drag selects, double-click selects a word and triple-click a
+  paragraph. Before, a click on the first lines of the page did nothing and typing went in at the old caret.
+- Shift with the arrow keys, Home or End extends the selection; Alt with an arrow moves by word and Cmd with Left or Right
+  by line. Home and End move to the start and end of the line.
+- The bold, italic, underline, size and other buttons act on the selected text, or on the text you type next when nothing
+  is selected, and show the state of the selection.
+- The window shows the document's name in its title, with a document icon and "Edited" while there are unsaved changes.
+- The toolbar of text buttons (New, Open, Save, Undo, Redo, Find and Print) is gone: those commands are in the File and
+  Edit menus. One format bar remains, with grouped icon controls: Bold, Italic, Underline and Strikethrough, the text
+  colour, the font, style and size pop-ups, the four alignments, the list menu and the line spacing with a stepper.
+- The format bar fits any window width: what does not fit moves into the button at its end.
+- The save panel opens with the name of the document selected up to its extension, so typing replaces the name, and it
+  hangs from the window as a sheet over a dimmed window.
+- The help book describes selecting text and the format bar.
+
 ## 1.11.1
 
 - BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.

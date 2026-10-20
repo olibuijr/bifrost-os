@@ -82,6 +82,9 @@ pub const VISIBLE_ROWS: usize = 10;
 /// Clicks on the same row closer than this are a double click (ms).
 const DOUBLE_CLICK_MS: f64 = 400.0;
 
+/// How much the window under a panel is dimmed (the alpha of black): 28%, as the kit's sheets dim their parent.
+const SHEET_DIM_ALPHA: u8 = 71;
+
 /// Panel geometry in points, relative to the panel's top-left corner.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct R {
@@ -139,6 +142,9 @@ pub struct Panel {
     pub creating: Option<String>,
     /// the save panel's file name
     pub name: String,
+    /// the part of the name that is selected (byte offsets): the base name without its extension when the panel opens or a
+    /// file is chosen, so typing replaces it and keeps the extension. Cleared by the first edit.
+    pub name_sel: Option<std::ops::Range<usize>>,
     /// first row shown
     pub top: usize,
     last_click: Option<(usize, f64)>,
@@ -170,6 +176,7 @@ impl Panel {
             recents: Vec::new(),
             creating: None,
             name: if kind == Kind::Save { suggested.chars().filter(|c| *c != '/' && !c.is_control()).take(255).collect() } else { String::new() },
+            name_sel: None,
             top: 0,
             last_click: None,
         };
@@ -179,7 +186,19 @@ impl Panel {
         }
         p.places = Self::places_in(opener);
         p.load(opener);
+        p.select_base_name();
         p
+    }
+
+    /// Selects the base name in the name field (everything before the last dot, or the whole name when there is no
+    /// extension), as a save panel opens on it: typing replaces the name and keeps the extension.
+    pub fn select_base_name(&mut self) {
+        if self.kind != Kind::Save || self.name.is_empty() {
+            self.name_sel = None;
+            return;
+        }
+        let end = self.name.rfind('.').filter(|i| *i > 0).unwrap_or(self.name.len());
+        self.name_sel = Some(0..end);
     }
 
     /// Recents, Home and the common folders that exist.
@@ -413,6 +432,7 @@ impl Panel {
         }
         if self.kind == Kind::Save && !self.entries[i].dir {
             self.name = self.entries[i].name.clone();
+            self.select_base_name();
         }
     }
 
@@ -507,9 +527,21 @@ impl Panel {
         if self.kind != Kind::Save {
             return false;
         }
-        for c in text.chars().filter(|c| *c != '/' && !c.is_control()) {
+        let typed: Vec<char> = text.chars().filter(|c| *c != '/' && !c.is_control()).collect();
+        if typed.is_empty() {
+            return true;
+        }
+        // typing over a selection replaces it; otherwise it goes in at the end
+        let mut at = self.name.len();
+        if let Some(sel) = self.name_sel.take() {
+            let sel = sel.start.min(self.name.len())..sel.end.min(self.name.len());
+            at = sel.start;
+            self.name.replace_range(sel, "");
+        }
+        for c in typed {
             if self.name.len() + c.len_utf8() <= 255 {
-                self.name.push(c);
+                self.name.insert(at, c);
+                at += c.len_utf8();
             }
         }
         true
@@ -520,7 +552,17 @@ impl Panel {
             n.pop();
             return true;
         }
-        self.kind == Kind::Save && self.name.pop().is_some()
+        if self.kind != Kind::Save {
+            return false;
+        }
+        // Backspace over a selection deletes it and keeps the rest (the extension)
+        if let Some(sel) = self.name_sel.take() {
+            let sel = sel.start.min(self.name.len())..sel.end.min(self.name.len());
+            let had = !sel.is_empty();
+            self.name.replace_range(sel, "");
+            return had;
+        }
+        self.name.pop().is_some()
     }
 
     /// The panel's geometry in points. Width and row count are fixed tokens; nothing depends on the screen size
@@ -1044,6 +1086,15 @@ impl super::Shell {
         Some((x as usize, y as usize, w as usize, h as usize))
     }
 
+    /// A sheet blocks the window it belongs to: the window under the panel is dimmed, as a sheet dims its parent. The panel
+    /// itself hangs from the top of that window (`doc_panel_rect`). Drawn before the panel's material.
+    pub(super) fn draw_doc_dim(&self, s: &mut crate::gfx::Surface) {
+        let Some(p) = self.doc_panel.as_ref() else { return };
+        let Some(body) = self.desk.as_ref().and_then(|d| d.index_of(super::AppId::External(p.slot)).map(|i| d.wins[i].body(&self.desk_metrics()))) else { return };
+        let radius = self.ui.pt(bifrost_ui::prefs_layout::m::WINDOW_RADIUS);
+        s.fill_rrect(body.x as f32, body.y as f32, body.w as f32, body.h as f32, radius, crate::gfx::rgba(0, 0, 0, SHEET_DIM_ALPHA));
+    }
+
     /// Draws the panel's content over the popup background (`draw_desktop_popup` drew the material).
     pub(super) fn draw_doc_panel(&self, s: &mut crate::gfx::Surface, x: usize, y: usize, _w: usize, _h: usize) {
         use super::ui::{Weight, DETAIL_BG, FIELD_BG, LABEL, LINK, MAC_BODY_PT, MAC_HEADLINE_PT, SECONDARY, SELECTION, SEPARATOR_C, SPACE_S, WHITE};
@@ -1070,8 +1121,28 @@ impl super::Shell {
             // the focused field: content background and the focus ring in the tint
             s.fill_rrect(fx, fy, fw, fh, radius, DETAIL_BG.now());
             s.stroke_rrect(fx, fy, fw, fh, radius, ui.pt(1.0), accent);
-            let shown = format!("{}|", p.name);
-            text(s, f, SPACE_S, &shown, MAC_BODY_PT, Weight::Regular, LABEL.now());
+            match p.name_sel.as_ref().filter(|r| !r.is_empty() && ui.measure(&p.name, MAC_BODY_PT, Weight::Regular) <= fw - ui.pt(2.0 * SPACE_S)) {
+                // the base name is selected: a plate behind it, its text in white, and no caret until the first edit
+                Some(sel) => {
+                    let (start, end) = (sel.start.min(p.name.len()), sel.end.min(p.name.len()));
+                    let before = ui.measure(&p.name[..start], MAC_BODY_PT, Weight::Regular);
+                    let picked = ui.measure(&p.name[start..end], MAC_BODY_PT, Weight::Regular);
+                    let left = fx + ui.pt(SPACE_S);
+                    s.fill_rrect(left + before, fy + ui.pt(3.0), picked, fh - ui.pt(6.0), ui.pt(3.0), SELECTION.now());
+                    let mut x = left;
+                    for (part, color) in [(&p.name[..start], LABEL.now()), (&p.name[start..end], WHITE), (&p.name[end..], LABEL.now())] {
+                        if part.is_empty() {
+                            continue;
+                        }
+                        self.label(part, MAC_BODY_PT, Weight::Regular, color, |im| s.blit(im, x as i32, (fy + (fh - im.h as f32) / 2.0) as i32, 255, 255));
+                        x += ui.measure(part, MAC_BODY_PT, Weight::Regular);
+                    }
+                }
+                None => {
+                    let shown = format!("{}|", p.name);
+                    text(s, f, SPACE_S, &shown, MAC_BODY_PT, Weight::Regular, LABEL.now());
+                }
+            }
         }
 
         // back control and the folder's name (detail navigation: back in LINK, disabled at the top)
@@ -1222,15 +1293,52 @@ pub(crate) mod tests {
         let mut p = Panel::new(0, 1, Kind::Save, "Export", vec![], "Untitled/1.md", &o);
         assert_eq!((p.name.as_str(), p.title.as_str()), ("Untitled1.md", "Export"), "a slash cannot be part of the name");
         assert!(p.layout().field.is_some());
-        p.backspace();
+        assert_eq!(p.name_sel, Some(0..9), "the base name is selected as the panel opens, the extension is not");
         p.type_text("x\n");
-        assert_eq!(p.name, "Untitled1.mx");
+        assert_eq!(p.name, "x.md", "typing replaces the selected base name and keeps the extension");
+        assert_eq!(p.name_sel, None);
+        p.type_text("y");
+        assert_eq!(p.name, "x.mdy", "with nothing selected typing goes in at the end");
+        p.backspace();
+        assert_eq!(p.name, "x.md");
         p.select(1);
+        assert_eq!(p.name_sel, Some(0..1), "choosing a file selects its base name too");
         assert_eq!(p.name, "b.txt");
         assert_eq!(p.key(28, &o), Some(Some(Outcome::Save { dir: "Documents".into(), name: "b.txt".into() })));
         p.name.clear();
         p.selected = None;
         assert!(!p.can_confirm(), "an empty name cannot be saved");
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn the_name_field_selects_the_base_name_and_editing_replaces_or_deletes_it() {
+        let (d, o) = scratch("namesel");
+        let save = |name: &str| Panel::new(0, 1, Kind::Save, "", vec![], name, &o);
+        // a name with an extension selects what is before the last dot; one without selects all of it
+        assert_eq!(save("Report.final.rtf").name_sel, Some(0..12));
+        assert_eq!(save("Untitled").name_sel, Some(0..8));
+        assert_eq!(save(".profile").name_sel, Some(0..8), "a leading dot is part of the name");
+        assert_eq!(save("").name_sel, None, "an empty name has nothing to select");
+        let open = Panel::new(0, 1, Kind::Open(DocMode::Read), "", vec![], "Untitled.rtf", &o);
+        assert_eq!(open.name_sel, None, "only a save panel has a name field");
+        // Backspace over the selection deletes it and keeps the extension
+        let mut p = save("Untitled.rtf");
+        assert!(p.backspace());
+        assert_eq!((p.name.as_str(), p.name_sel.clone()), (".rtf", None));
+        assert!(p.backspace(), "the next Backspace deletes a character as usual");
+        assert_eq!(p.name, ".rt");
+        // a slash is not typeable: it leaves the selection alone
+        let mut p = save("Untitled.rtf");
+        p.type_text("/");
+        assert_eq!((p.name.as_str(), p.name_sel.clone()), ("Untitled.rtf", Some(0..8)));
+        // typing replaces the selection in the middle of text and the limit still holds
+        p.type_text("Résumé");
+        assert_eq!(p.name, "Résumé.rtf");
+        let mut long = save(&format!("{}.md", "a".repeat(300)));
+        assert_eq!(long.name.len(), 255);
+        long.type_text("b");
+        assert!(long.name.len() <= 255 && long.name.starts_with('b'));
         fs::remove_dir_all(&d).unwrap();
     }
 
