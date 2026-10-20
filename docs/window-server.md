@@ -80,6 +80,7 @@ would make a root process the server for every untrusted app, so it stays out.
   450 ms with the loader's smoothstep, writing the `desktop-first-ui` and `desktop-faded` marks. The compositor owns
   the screen, so under `bifrost-wm` the shell no longer fades itself.
 - `video-arg` keeps learning the fastest mode for the next boot's command line, and `display-refresh` (session autostart) picks the fastest refresh at native size. Both still read the modes with `wlr-randr`; moving them to `bifrost-wm` output management is open.
+  The output manager is a privileged-only global, so every `wlr-randr` caller connects through the privileged socket (`WAYLAND_DISPLAY=/run/bifrost/wm-privileged`, an absolute path): `display-refresh` runs as root from the session script, `video-arg` sets it in its environment, and the shell's mode query (`Display::wayland`) takes it from `BIFROST_WM_PRIVILEGED`. `create_configuration` still ignores the output-management serial; that is acceptable while only root clients can reach the global (follow-up open).
 
 ## Code
 

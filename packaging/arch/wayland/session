@@ -123,7 +123,9 @@ while :; do
 done
 # the launchers' environment, the display mode refresh and the Settings portal
 as_user env XDG_RUNTIME_DIR="$runtime" WAYLAND_DISPLAY=wayland-0 /usr/lib/bifrost/session-env 1>&2 &
-as_user env XDG_RUNTIME_DIR="$runtime" WAYLAND_DISPLAY=wayland-0 /usr/lib/bifrost/display-refresh 1>&2 &
+# display-refresh drives the output manager, a privileged-only global: it runs as root through the privileged socket
+# (an absolute WAYLAND_DISPLAY) and only reads /var/lib/springboard/display-refresh and /etc/bifrost/display.conf
+env XDG_RUNTIME_DIR="$runtime" WAYLAND_DISPLAY="$priv_socket" /usr/lib/bifrost/display-refresh 1>&2 &
 as_user env XDG_RUNTIME_DIR="$runtime" WAYLAND_DISPLAY=wayland-0 ${DBUS_SESSION_BUS_ADDRESS:+DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS} /usr/bin/bifrost-portal 1>&2 &
 for ((i=0;i<250;i++)); do
     [[ -S "$runtime/wayland-0" && -f "$runtime/session.json" ]] && break

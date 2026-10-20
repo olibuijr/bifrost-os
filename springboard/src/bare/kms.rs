@@ -821,7 +821,10 @@ impl Display {
         let mut display = Self::virtual_panel(w,h,60);
         display.mode.vrefresh = backend.refresh();
         // the rates Settings > Displays > Refresh Rate offers and the sizes Resolution offers: the window server's modes
-        let randr = std::process::Command::new("wlr-randr").output().ok().map(|o| String::from_utf8_lossy(&o.stdout).into_owned()).unwrap_or_default();
+        // the output manager is a privileged-only global: ask through the privileged socket (an absolute WAYLAND_DISPLAY)
+        let mut cmd = std::process::Command::new("wlr-randr");
+        if let Some(path) = super::privileged::socket_path() { cmd.env("WAYLAND_DISPLAY", path); }
+        let randr = cmd.output().ok().map(|o| String::from_utf8_lossy(&o.stdout).into_owned()).unwrap_or_default();
         display.rates = wlr_randr_rates(&randr);
         display.sizes = wlr_randr_sizes(&randr);
         display.wayland = Some(backend);

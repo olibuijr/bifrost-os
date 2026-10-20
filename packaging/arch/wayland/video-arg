@@ -10,7 +10,8 @@ boot = os.environ.get('BIFROST_BOOT_DIR', '/boot')
 cmdline = boot + '/EFI/BIFROST/boot.cfg' if os.path.exists(boot + '/EFI/BIFROST/boot.cfg') else boot + '/EFI/BOOT/cmdline.txt'  # the file the loader boots first
 if not os.path.exists(cmdline):
     sys.exit(0)  # no EFI loader on this device (a U-Boot board with a boot image): nothing to learn the mode into
-env = dict(os.environ, XDG_RUNTIME_DIR='/run/bifrost/user', WAYLAND_DISPLAY='wayland-0')
+# the output manager is a privileged-only global: connect through the root-only privileged socket (session starts this as root)
+env = dict(os.environ, XDG_RUNTIME_DIR='/run/bifrost/user', WAYLAND_DISPLAY='/run/bifrost/wm-privileged')
 def wants_max():
     # the fastest refresh is the default; `refresh=firmware` in display.conf keeps the firmware mode (no retrain blink)
     try:
