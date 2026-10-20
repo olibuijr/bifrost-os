@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Settings and the player no longer invent a volume before the person sets one (a fresh install stays silent until the
+  volume is turned up). Both now take `media::volume::DEFAULT_LEVEL`, so a Settings save no longer persists 0.7.
+
 ## 0.10.12 — 2026-10-20
 
 - Streaming audio starts clean: the speaker output prebuffers about 50 ms before the device starts (a short system sound

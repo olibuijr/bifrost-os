@@ -394,6 +394,12 @@ mod tests {
     }
 
     #[test]
+    fn a_fresh_router_stays_muted_and_a_saved_one_is_kept() {
+        assert_eq!(Router::from_prefs(prefs(&[]), false).volume().level(), 0.0, "no saved volume -> 0.0 (muted)");
+        assert_eq!(Router::from_prefs(prefs(&[("volume", "0.75")]), false).volume().level(), 0.75, "a saved volume is kept");
+    }
+
+    #[test]
     fn plug_in_caps_loud_headphones_until_the_user_lifts_it() {
         let mut r = Router::from_prefs(prefs(&[(PREF_HEADPHONES, "1.0")]), false);
         let c = r.jack(true).unwrap();

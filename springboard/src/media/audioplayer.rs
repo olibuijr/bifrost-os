@@ -149,7 +149,7 @@ impl AudioPlayer {
             quit: false,
             generation: 0,
             start_ms: 0.0,
-            volume: 0.6,
+            volume: super::volume::DEFAULT_LEVEL,
             pan: 0.0,
             fade: None,
             epoch: Instant::now(),

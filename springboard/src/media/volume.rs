@@ -276,6 +276,13 @@ mod tests {
         assert_eq!(Volume::at_step(0).linear(), 0.0);
     }
     #[test]
+    fn a_fresh_install_stays_muted_and_a_saved_volume_is_kept() {
+        assert_eq!(Volume::default().level(), 0.0, "no saved volume -> 0.0 (muted)");
+        assert_eq!(Volume::from_pref(None).level(), 0.0, "no saved volume -> 0.0 (muted)");
+        assert_eq!(Volume::from_pref(Some("0.800")).level(), 0.8, "a saved volume is kept");
+    }
+
+    #[test]
     fn prefs_round_trip_with_a_default() {
         assert_eq!(Volume::from_pref(None), Volume::new(DEFAULT_LEVEL));
         assert_eq!(Volume::from_pref(Some("junk")), Volume::new(DEFAULT_LEVEL));
