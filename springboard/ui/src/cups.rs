@@ -19,7 +19,12 @@ pub const DEFAULT_HOST: &str = "localhost";
 pub const DEFAULT_PORT: u16 = 631;
 /// Where a socket-activated scheduler (`cups.socket`) listens; it has no TCP listener unless the admin adds one.
 pub const DEFAULT_SOCKET: &str = "/run/cups/cups.sock";
+/// How long one connect, read or write may wait.
 const TIMEOUT: Duration = Duration::from_secs(10);
+/// How long a whole exchange (connect, request and reply) may take; a peer that trickles bytes is cut off here.
+const DEADLINE: Duration = Duration::from_secs(30);
+/// The most reply bytes read from the scheduler (a printer list with supplies is a few tens of kilobytes).
+const MAX_REPLY: usize = 8 * 1024 * 1024;
 
 /// The attributes a printer listing asks for.
 const CAPABILITY_ATTRIBUTES: &[&str] = &[
@@ -153,7 +158,7 @@ impl Endpoint {
     fn connect(&self) -> std::io::Result<Stream> {
         let stream = match self {
             Endpoint::Unix(path) => Stream::Unix(UnixStream::connect(path)?),
-            Endpoint::Tcp { host, port } => Stream::Tcp(TcpStream::connect((host.as_str(), *port))?),
+            Endpoint::Tcp { host, port } => Stream::Tcp(connect_tcp(host, *port, TIMEOUT)?),
         };
         stream.set_timeouts(TIMEOUT)?;
         Ok(stream)
@@ -167,6 +172,44 @@ impl Endpoint {
                 .to_socket_addrs()
                 .map(|mut addrs| addrs.any(|a| TcpStream::connect_timeout(&a, Duration::from_millis(200)).is_ok()))
                 .unwrap_or(false),
+        }
+    }
+}
+
+/// Connects to `host:port`, trying each resolved address for at most `timeout`.
+fn connect_tcp(host: &str, port: u16, timeout: Duration) -> std::io::Result<TcpStream> {
+    let mut last = None;
+    for addr in (host, port).to_socket_addrs()? {
+        match TcpStream::connect_timeout(&addr, timeout) {
+            Ok(stream) => return Ok(stream),
+            Err(e) => last = Some(e),
+        }
+    }
+    Err(last.unwrap_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "the address did not resolve")))
+}
+
+/// Reads `stream` to its end, but at most `cap` bytes and until `deadline`: a longer reply or a peer that is too slow
+/// is an error. Each read waits no longer than `step` or what is left of the deadline.
+fn read_bounded(stream: &mut Stream, cap: usize, deadline: std::time::Instant, step: Duration) -> std::io::Result<Vec<u8>> {
+    use std::io::{Error, ErrorKind};
+    let mut out = Vec::new();
+    let mut chunk = [0u8; 16 * 1024];
+    loop {
+        let left = deadline.saturating_duration_since(std::time::Instant::now());
+        if left.is_zero() {
+            return Err(Error::new(ErrorKind::TimedOut, "the printing service took too long to answer"));
+        }
+        stream.set_timeouts(step.min(left))?;
+        match stream.read(&mut chunk) {
+            Ok(0) => return Ok(out),
+            Ok(n) => {
+                if out.len() + n > cap {
+                    return Err(Error::new(ErrorKind::InvalidData, "the printing service reply is too large"));
+                }
+                out.extend_from_slice(&chunk[..n]);
+            }
+            Err(e) if e.kind() == ErrorKind::Interrupted => {}
+            Err(e) => return Err(e),
         }
     }
 }
@@ -250,24 +293,27 @@ impl Write for Stream {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HttpTransport {
     pub endpoint: Endpoint,
+    /// the longest a whole exchange may take ([`DEADLINE`] unless a test shortens it)
+    pub deadline: Duration,
 }
 
 impl HttpTransport {
     pub fn new(endpoint: Endpoint) -> HttpTransport {
-        HttpTransport { endpoint }
+        HttpTransport { endpoint, deadline: DEADLINE }
     }
 }
 
 impl Default for HttpTransport {
     /// The scheduler of this machine: see [`Endpoint::detect`].
     fn default() -> Self {
-        HttpTransport { endpoint: Endpoint::detect() }
+        HttpTransport::new(Endpoint::detect())
     }
 }
 
 impl Transport for HttpTransport {
     fn send(&mut self, body: &[u8]) -> Result<Vec<u8>, CupsError> {
         let io = |e: std::io::Error| CupsError::Io(e.to_string());
+        let deadline = std::time::Instant::now() + self.deadline;
         let mut stream = self.endpoint.connect().map_err(io)?;
         let head = format!(
             "POST / HTTP/1.1\r\nHost: {}\r\nContent-Type: application/ipp\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
@@ -276,8 +322,7 @@ impl Transport for HttpTransport {
         );
         stream.write_all(head.as_bytes()).map_err(io)?;
         stream.write_all(body).map_err(io)?;
-        let mut raw = Vec::new();
-        stream.read_to_end(&mut raw).map_err(io)?;
+        let raw = read_bounded(&mut stream, MAX_REPLY, deadline, TIMEOUT).map_err(io)?;
         parse_http_response(&raw)
     }
 }
@@ -1319,6 +1364,72 @@ mod tests {
         assert!(request.starts_with(b"POST / HTTP/1.1\r\nHost: localhost\r\n"));
         assert!(request.ends_with(b"PING"));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Serves one connection on a fresh socket with `serve`, and returns the transport that talks to it.
+    fn served(tag: &str, serve: impl FnOnce(UnixStream) + Send + 'static) -> (HttpTransport, std::thread::JoinHandle<()>, PathBuf) {
+        let dir = std::env::temp_dir().join(format!("bifrost-cups-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let socket = dir.join("cups.sock");
+        let listener = std::os::unix::net::UnixListener::bind(&socket).unwrap();
+        let server = std::thread::spawn(move || {
+            let (conn, _) = listener.accept().unwrap();
+            serve(conn);
+        });
+        (HttpTransport::new(Endpoint::Unix(socket)), server, dir)
+    }
+
+    #[test]
+    fn an_endless_reply_is_cut_off_at_the_cap() {
+        let (mut transport, server, dir) = served("endless", |mut conn| {
+            let mut sink = [0u8; 256];
+            let _ = conn.read(&mut sink);
+            let _ = conn.write_all(b"HTTP/1.1 200 OK\r\n\r\n");
+            let block = vec![0u8; 64 * 1024];
+            // the client gives up at the cap and closes, which ends this loop with an error
+            while conn.write_all(&block).is_ok() {}
+        });
+        let began = std::time::Instant::now();
+        match transport.send(b"x") {
+            Err(CupsError::Io(e)) => assert!(e.contains("too large"), "{e}"),
+            other => panic!("expected the size cap, got {other:?}"),
+        }
+        assert!(began.elapsed() < Duration::from_secs(20));
+        server.join().unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_peer_that_trickles_bytes_is_cut_off_at_the_deadline() {
+        let (mut transport, server, dir) = served("trickle", |mut conn| {
+            let mut sink = [0u8; 256];
+            let _ = conn.read(&mut sink);
+            let _ = conn.write_all(b"HTTP/1.1 200 OK\r\n");
+            for _ in 0..40 {
+                std::thread::sleep(Duration::from_millis(50));
+                if conn.write_all(b"X-A: b\r\n").is_err() {
+                    break;
+                }
+            }
+        });
+        transport.deadline = Duration::from_millis(300);
+        let began = std::time::Instant::now();
+        match transport.send(b"x") {
+            Err(CupsError::Io(e)) => assert!(e.contains("too long"), "{e}"),
+            other => panic!("expected the deadline, got {other:?}"),
+        }
+        assert!(began.elapsed() < Duration::from_millis(1500), "{:?}", began.elapsed());
+        server.join().unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_tcp_connect_to_a_refused_port_fails_fast() {
+        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
+        assert!(connect_tcp("127.0.0.1", port, Duration::from_secs(2)).is_err());
     }
 
     #[test]
