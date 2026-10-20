@@ -723,6 +723,14 @@ impl MailWindow {
             },
             Pending::Add { account, password, old } => match passwords::decode_password(result) {
                 Ok(_) => self.account_saved(ctx, account, Some(password), old),
+                Err(KeyError::DuplicateItem) if self.password_shared(&account) => {
+                    // Another account keeps its password in this item: replacing it would change that account's login too
+                    self.mail.status = format!(
+                        "Another account already uses {} on {}. Its saved password is kept; change it in that account's settings",
+                        account.username,
+                        account.password_site()
+                    );
+                }
                 Err(KeyError::DuplicateItem) => {
                     let request = passwords::update(ctx, &account.password_site(), &account.username, &password);
                     self.pending.insert(request, Pending::Replace { account, password, old });
@@ -1816,7 +1824,7 @@ impl MailWindow {
             }
             Some(old) => match accounts::update(account.clone()) {
                 Ok(()) => {
-                    if account.password_site() != old.password_site() || account.username != old.username {
+                    if (account.password_site() != old.password_site() || account.username != old.username) && !self.password_shared(&old) {
                         let request = passwords::remove(ctx, &old.password_site(), &old.username);
                         self.pending.insert(request, Pending::Forget);
                     }
@@ -1849,6 +1857,12 @@ impl MailWindow {
         let mailbox = mailbox.to_string();
         self.jobs += 1;
         sync::spawn(self.tx.clone(), self.wake_clone(), move || sync::list(transport.as_ref(), &account, &password, &mailbox));
+    }
+
+    /// True when another account in the shared list uses the Passwords item of `account`. When the list cannot be
+    /// read the answer is yes, so nothing is removed or replaced on a guess.
+    fn password_shared(&self, account: &Account) -> bool {
+        accounts::load_all().map_or(true, |all| accounts::shares_password(&all, account))
     }
 
     /// Stops the inbox watcher of an account, which holds the old server and password. The next refresh starts a new one.
@@ -2727,8 +2741,11 @@ impl MailWindow {
             self.mail.status = e;
             return;
         }
-        let request = passwords::remove(ctx, &account.password_site(), &account.username);
-        self.pending.insert(request, Pending::Forget);
+        // the item stays when another account (an alias, a calendar or contacts account) uses the same login
+        if !self.password_shared(&account) {
+            let request = passwords::remove(ctx, &account.password_site(), &account.username);
+            self.pending.insert(request, Pending::Forget);
+        }
         self.mail.forget_account(id);
         self.stop_watcher(id);
         self.mail.queue.outbox.retain(|q| q.account != id);

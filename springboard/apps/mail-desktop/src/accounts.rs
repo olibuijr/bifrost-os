@@ -69,6 +69,13 @@ pub fn import(new: Vec<Account>) -> Result<usize, String> {
     Ok(added)
 }
 
+/// True when another account of `all` keeps its password in the same Passwords item as `account`: the same site and
+/// the same user name. Such an item is shared, so removing or overwriting it for one account would break the other.
+pub fn shares_password(all: &[Account], account: &Account) -> bool {
+    let site = account.password_site();
+    !site.is_empty() && all.iter().any(|a| a.id != account.id && a.password_site() == site && a.username == account.username)
+}
+
 /// The incoming (IMAP) server of a mail account. Accounts from the list always have one.
 pub fn incoming(account: &Account) -> Result<&Server, String> {
     account.imap.as_ref().ok_or_else(|| format!("{} has no incoming mail server", account.name))
@@ -95,6 +102,23 @@ mod tests {
         let list = removed(vec![work, home.clone()], "work").unwrap();
         assert_eq!(list, vec![home]);
         assert!(removed(list, "work").is_err());
+    }
+
+    #[test]
+    fn accounts_with_the_same_site_and_user_share_one_password_item() {
+        let server = Server { host: "imap.example.com".into(), port: 993, security: Security::Tls };
+        let mut work = Account::new(Kind::Mail, "work", "Work", "me");
+        work.imap = Some(server.clone());
+        let mut alias = Account::new(Kind::Mail, "alias", "Alias", "me");
+        alias.imap = Some(server.clone());
+        let mut other_user = Account::new(Kind::Mail, "other", "Other", "you");
+        other_user.imap = Some(server);
+        let all = vec![work.clone(), alias.clone(), other_user.clone()];
+        assert!(shares_password(&all, &work));
+        assert!(shares_password(&all, &alias));
+        assert!(!shares_password(&all, &other_user));
+        assert!(!shares_password(&[work.clone()], &work), "an account does not share with itself");
+        assert!(shares_password(&[work.clone()], &alias), "a new account is checked against the list");
     }
 
     #[test]
