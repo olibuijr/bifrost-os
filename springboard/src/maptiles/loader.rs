@@ -9,11 +9,14 @@ use crate::gfx::{rgba, Image};
 use crate::shell::browser::images::{decode, PixelFormat};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// Decoded tiles kept in memory; past this the ones not wanted by the view are dropped.
 const KEEP_TILES: usize = 400;
+/// The cache folder is pruned to its size limit on the first fetch and after this many more.
+const PRUNE_EVERY: usize = 100;
 /// Tiles decoded from the disk cache per call, so one frame never stalls on a big view.
 const DECODE_PER_CALL: usize = 16;
 
@@ -61,10 +64,15 @@ pub struct TileLoader {
     failed: HashSet<TileId>,
     /// the tiles of a Download Map still to ask for, and how many the job had
     queue: VecDeque<TileId>,
+    /// the tiles in `queue`, so a tile is queued once however often the view asks for it
+    queued: HashSet<TileId>,
     job_total: usize,
     job_done: usize,
     finished: Finished,
     last_sent: Arc<Mutex<Option<u64>>>,
+    /// fetches started so far, and whether a prune of the cache folder is running (it keeps the folder within its limit)
+    fetches: Arc<AtomicUsize>,
+    pruning: Arc<AtomicBool>,
     online: bool,
     /// a cached tile older than this is fetched again
     max_age: Duration,
@@ -83,10 +91,13 @@ impl TileLoader {
             pending: HashSet::new(),
             failed: HashSet::new(),
             queue: VecDeque::new(),
+            queued: HashSet::new(),
             job_total: 0,
             job_done: 0,
             finished: Arc::new(Mutex::new(Vec::new())),
             last_sent: Arc::new(Mutex::new(None)),
+            fetches: Arc::new(AtomicUsize::new(0)),
+            pruning: Arc::new(AtomicBool::new(false)),
             online: true,
             max_age: MAX_TILE_AGE,
             wake: None,
@@ -126,6 +137,7 @@ impl TileLoader {
         self.pending.clear();
         self.failed.clear();
         self.queue.clear();
+        self.queued.clear();
         self.job_total = 0;
         self.job_done = 0;
         self.finished.lock().unwrap_or_else(|e| e.into_inner()).clear();
@@ -147,20 +159,32 @@ impl TileLoader {
     pub fn want(&mut self, wanted: &[TileId]) -> bool {
         let mut changed = false;
         let mut decoded = 0;
+        if self.job_total == 0 {
+            // the view moved on: tiles it no longer shows are not fetched (a Download Map's tiles stay queued)
+            let keep: HashSet<TileId> = wanted.iter().copied().collect();
+            self.queue.retain(|t| keep.contains(t));
+            self.queued.retain(|t| keep.contains(t));
+        }
         for &t in wanted {
-            if !self.images.contains_key(&t) && decoded < DECODE_PER_CALL {
-                if let Some((bytes, _)) = self.cache.read(t) {
-                    if let Some(img) = decode_tile(&bytes) {
-                        self.images.insert(t, img);
-                        decoded += 1;
-                        changed = true;
+            // a fresh cached tile past this call's decode budget is decoded by a later call, not fetched
+            let mut deferred = false;
+            if !self.images.contains_key(&t) {
+                if decoded < DECODE_PER_CALL {
+                    if let Some((bytes, _)) = self.cache.read(t) {
+                        if let Some(img) = decode_tile(&bytes) {
+                            self.images.insert(t, img);
+                            decoded += 1;
+                            changed = true;
+                        }
                     }
+                } else {
+                    deferred = true;
                 }
             }
-            if self.cache.is_fresh(t, self.max_age) && self.images.contains_key(&t) {
+            if self.cache.is_fresh(t, self.max_age) && (self.images.contains_key(&t) || deferred) {
                 continue;
             }
-            if self.online && !self.failed.contains(&t) && !self.pending.contains(&t) {
+            if self.online && !self.failed.contains(&t) && !self.pending.contains(&t) && self.queued.insert(t) {
                 self.queue.push_front(t);
             }
         }
@@ -179,19 +203,29 @@ impl TileLoader {
         }
         while self.pending.len() < MAX_IN_FLIGHT {
             let Some(t) = self.queue.pop_front() else { break };
+            self.queued.remove(&t);
             if self.pending.contains(&t) {
                 continue;
             }
-            if self.job_total > 0 && self.cache.is_fresh(t, self.max_age) {
-                self.job_done += 1;
+            // a tile that is fresh on disk is not asked for again: a download counts it, a tile on screen keeps its image
+            if self.cache.is_fresh(t, self.max_age) && (self.job_total > 0 || self.images.contains_key(&t)) {
+                if self.job_total > 0 {
+                    self.job_done += 1;
+                }
                 continue;
             }
             self.pending.insert(t);
             let (net, source, cache, last, done) = (self.net.clone(), self.source.clone(), self.cache.clone(), self.last_sent.clone(), self.finished.clone());
+            let (fetches, pruning) = (self.fetches.clone(), self.pruning.clone());
             let wake = self.wake.clone();
             // one thread per fetch: at most MAX_IN_FLIGHT run at once, and each is paced by `fetch_tile`
             std::thread::spawn(move || {
                 let bytes = fetch_tile(&*net, &source, &cache, &last, t).ok();
+                // keep the folder within its size limit: the first fetch and every PRUNE_EVERY-th, one prune at a time
+                if fetches.fetch_add(1, Ordering::SeqCst) % PRUNE_EVERY == 0 && !pruning.swap(true, Ordering::SeqCst) {
+                    cache.prune_to_limit();
+                    pruning.store(false, Ordering::SeqCst);
+                }
                 done.lock().unwrap_or_else(|e| e.into_inner()).push((t, bytes));
                 if let Some(wake) = wake {
                     wake();
@@ -234,12 +268,17 @@ impl TileLoader {
     pub fn start_download(&mut self, tiles: Vec<TileId>) {
         self.job_total = tiles.len();
         self.job_done = 0;
-        self.queue.extend(tiles);
+        for t in tiles {
+            if self.queued.insert(t) {
+                self.queue.push_back(t);
+            }
+        }
         self.dispatch();
     }
 
     pub fn cancel_download(&mut self) {
         self.queue.clear();
+        self.queued.clear();
         self.job_total = 0;
         self.job_done = 0;
     }
@@ -364,6 +403,70 @@ mod tests {
         assert_eq!(woken.load(std::sync::atomic::Ordering::SeqCst), 1, "the loop is woken once the tile is in");
         assert!(loader.pump(), "and the next tick applies it");
         assert!(loader.image(TileId { z: 2, x: 1, y: 1 }).is_some());
+    }
+
+    /// Six tiles in a row at one zoom level.
+    fn row() -> Vec<TileId> {
+        (0..6).map(|x| TileId { z: 3, x, y: 0 }).collect()
+    }
+
+    #[test]
+    fn asking_again_every_tick_queues_a_tile_once() {
+        let root = dir("dupes");
+        let mut loader = TileLoader::new(&root, MapType::Standard.source("1.0.0"), Arc::new(super::super::net::Offline));
+        let wanted = row();
+        for _ in 0..10 {
+            loader.want(&wanted);
+        }
+        assert_eq!(loader.pending.len(), MAX_IN_FLIGHT);
+        assert_eq!(loader.queue.len(), wanted.len() - MAX_IN_FLIGHT, "no tile is queued twice");
+        assert_eq!(loader.queued.len(), loader.queue.len());
+    }
+
+    #[test]
+    fn tiles_the_view_moved_away_from_leave_the_queue() {
+        let root = dir("moved");
+        let mut loader = TileLoader::new(&root, MapType::Standard.source("1.0.0"), Arc::new(super::super::net::Offline));
+        loader.want(&row());
+        let far = TileId { z: 3, x: 7, y: 7 };
+        loader.want(&[far]);
+        assert_eq!(loader.queue.iter().copied().collect::<Vec<_>>(), vec![far]);
+        assert_eq!(loader.queued.len(), 1);
+    }
+
+    #[test]
+    fn a_tile_that_is_loaded_and_fresh_is_not_fetched_again() {
+        let root = dir("loaded");
+        let net = Fake::with("https://tile.openstreetmap.org/", &png());
+        let source = MapType::Standard.source("1.0.0");
+        let t = TileId { z: 2, x: 1, y: 1 };
+        TileCache::new(&root, &source.cache_key()).write(t, &png()).unwrap();
+        let mut loader = TileLoader::new(&root, source, net.clone());
+        assert!(loader.want(&[t]));
+        // a stale duplicate left in the queue (or a download) must not reach the server
+        loader.queue.push_back(t);
+        loader.queued.insert(t);
+        loader.pump();
+        assert!(!loader.busy());
+        assert!(net.seen.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_big_view_decodes_over_several_calls_and_fetches_nothing_that_is_cached() {
+        let root = dir("budget");
+        let net = Fake::with("https://tile.openstreetmap.org/", &png());
+        let source = MapType::Standard.source("1.0.0");
+        let cache = TileCache::new(&root, &source.cache_key());
+        let tiles: Vec<TileId> = (0..(DECODE_PER_CALL as u32 + 4)).map(|x| TileId { z: 6, x, y: 0 }).collect();
+        for t in &tiles {
+            cache.write(*t, &png()).unwrap();
+        }
+        let mut loader = TileLoader::new(&root, source, net.clone());
+        assert!(loader.want(&tiles));
+        assert!(!loader.busy(), "the tiles past the decode budget wait for the next call");
+        assert!(loader.want(&tiles));
+        assert!(tiles.iter().all(|t| loader.image(*t).is_some()));
+        assert!(net.seen.lock().unwrap().is_empty());
     }
 
     #[test]
