@@ -27,9 +27,12 @@ use std::io::{self, Read, Write};
 use std::os::fd::AsRawFd;
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
+
+/// How long a parked audio thread sleeps at most without a signal.
+const PARK_SAFETY: Duration = Duration::from_secs(2);
 
 /// Tapping Previous this far into a song restarts it instead.
 pub const RESTART_AFTER_MS: f64 = 3000.0;
@@ -108,6 +111,9 @@ struct Shared {
     live: Option<LiveHandle>,
     /// wakes the UI; also handed to the live handle
     notify: Arc<dyn Fn() + Send + Sync>,
+    /// wakes the audio thread while it is parked with nothing to do (paused, no song open); signalled by every
+    /// request that can give it work: a new queue, play, pause, a skip or seek, a rate change, quit
+    wake: Arc<Condvar>,
 }
 
 pub struct AudioPlayer {
@@ -162,6 +168,7 @@ impl AudioPlayer {
             current: None,
             live: None,
             notify,
+            wake: Arc::new(Condvar::new()),
         }));
         let worker = {
             let shared = shared.clone();
@@ -222,6 +229,7 @@ impl AudioPlayer {
         s.playing = !s.queue.is_empty();
         s.error = None;
         Self::restart(&mut s, 0.0);
+        s.wake.notify_all();
     }
 
     /// Has the thread reopen the queue's current song at `at_ms`; the
@@ -240,10 +248,13 @@ impl AudioPlayer {
         if !s.queue.is_empty() {
             s.playing = true;
         }
+        s.wake.notify_all();
     }
 
     pub fn pause(&mut self) {
-        self.shared.lock().unwrap_or_else(|p| p.into_inner()).playing = false;
+        let mut s = self.shared.lock().unwrap_or_else(|p| p.into_inner());
+        s.playing = false;
+        s.wake.notify_all();
     }
 
     pub fn toggle(&mut self) {
@@ -261,6 +272,7 @@ impl AudioPlayer {
         if s.queue.next(true) {
             Self::restart(&mut s, 0.0);
         }
+        s.wake.notify_all();
     }
 
     /// Restarts the song when it is past `RESTART_AFTER_MS`, else goes back
@@ -275,6 +287,7 @@ impl AudioPlayer {
             s.queue.prev();
         }
         Self::restart(&mut s, 0.0);
+        s.wake.notify_all();
     }
 
     /// Jumps to the queue item at `index` (list order).
@@ -283,6 +296,7 @@ impl AudioPlayer {
         s.queue.jump_to(index);
         s.playing = true;
         Self::restart(&mut s, 0.0);
+        s.wake.notify_all();
     }
 
     pub fn seek_ms(&mut self, ms: f64) {
@@ -292,6 +306,7 @@ impl AudioPlayer {
         }
         let ms = ms.max(0.0).min(s.duration_ms.unwrap_or(f64::MAX));
         Self::restart(&mut s, ms);
+        s.wake.notify_all();
     }
 
     pub fn set_shuffle(&mut self, on: bool, seed: u64) {
@@ -305,7 +320,9 @@ impl AudioPlayer {
     /// Playback speed, 0.5 to 3.0 (NaN is normal speed). The pitch is kept: the audio is time-stretched, not resampled.
     /// The rate stays set across songs until it is changed again.
     pub fn set_rate(&mut self, rate: f32) {
-        self.shared.lock().unwrap_or_else(|p| p.into_inner()).rate = timestretch::clamp_rate(rate);
+        let mut s = self.shared.lock().unwrap_or_else(|p| p.into_inner());
+        s.rate = timestretch::clamp_rate(rate);
+        s.wake.notify_all();
     }
 
     /// The crossfade between songs, in milliseconds: one song fades out as the next fades in over this long (equal power,
@@ -368,7 +385,11 @@ impl AudioPlayer {
 
     /// Stops the thread; the player is finished afterwards.
     pub fn stop(&mut self) {
-        self.shared.lock().unwrap_or_else(|p| p.into_inner()).quit = true;
+        {
+            let mut s = self.shared.lock().unwrap_or_else(|p| p.into_inner());
+            s.quit = true;
+            s.wake.notify_all();
+        }
         if let Some(w) = self.worker.take() {
             join_within(w, std::time::Duration::from_millis(300));
         }
@@ -616,7 +637,7 @@ impl Engine {
                 self.waker.wake();
             }
             if self.paused {
-                std::thread::sleep(Duration::from_millis(10));
+                self.park();
                 continue;
             }
             if self.drained {
@@ -632,7 +653,7 @@ impl Engine {
                 continue;
             }
             if self.decoder.is_none() {
-                std::thread::sleep(Duration::from_millis(10));
+                self.park();
                 continue;
             }
             self.sync_crossfade();
@@ -658,6 +679,18 @@ impl Engine {
             self.write_samples();
             self.report();
         }
+    }
+
+    /// Sleeps until a request can give the thread work, instead of polling: returns at once when one already
+    /// arrived (checked under the lock the setters take, so none is missed). The timeout is only a safety net
+    /// against a request that forgot to signal.
+    fn park(&self) {
+        let s = self.shared.lock().unwrap_or_else(|p| p.into_inner());
+        if s.quit || s.generation != self.generation || s.playing == self.paused || s.rate != self.applied_rate {
+            return;
+        }
+        let wake = s.wake.clone();
+        let _ = wake.wait_timeout(s, PARK_SAFETY).unwrap_or_else(|p| p.into_inner());
     }
 
     /// Whether a newer request (or quit) arrived since the song was opened.
@@ -832,6 +865,18 @@ mod tests {
         super::super::volume::scale(&mut pcm, g);
         assert!((pcm[0] as f32 - 10000.0 * g).abs() <= 1.0 && pcm[0] == -pcm[1]);
         assert!(g > 0.0 && g < 1.0);
+    }
+
+    #[test]
+    fn an_idle_player_parks_and_still_stops_and_wakes_at_once() {
+        let mut p = AudioPlayer::new(Box::new(NullOut::new())).unwrap();
+        // idle: nothing queued, so the thread parks instead of polling; a request must still reach it at once
+        std::thread::sleep(Duration::from_millis(60));
+        p.set_rate(2.0);
+        let t = Instant::now();
+        p.stop();
+        assert!(t.elapsed() < Duration::from_millis(250), "stop took {:?}", t.elapsed());
+        assert!(p.worker.is_none());
     }
 
     #[test]
