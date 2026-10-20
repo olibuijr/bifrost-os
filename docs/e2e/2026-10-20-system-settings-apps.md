@@ -196,5 +196,6 @@ New: the speaker trace reports `underruns 768` and a slowest write of 30 ms duri
 - OTA from the fresh install to 0.10.12: `phase=accepted`.
 - Radio on 0.10.12: `underruns 0 event(s) / 0 frame(s)` in every interval and in total, no xrun lines, the ring full
   (the 30 ms slowest write is back-pressure: every write waited for room).
-- New: a fresh install starts with the system volume at 0, so nothing is audible until the volume is raised. Fix:
-  `fix/default-volume` (half volume when nothing is saved).
+- A fresh install starts with the system volume at 0, so nothing is audible until the volume is raised. That is the
+  owner's standing rule (`media/volume.rs` `DEFAULT_LEVEL`), so it stays. Two places broke the rule and are fixed in
+  `fix/default-volume`: a Settings save persisted 0.7 and the player started at 0.6 before the shell's volume arrived.
