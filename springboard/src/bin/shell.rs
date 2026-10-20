@@ -939,7 +939,7 @@ fn run() -> std::io::Result<()> {
                 // the wheel goes to an app that asked for it; the drag emulated for it (the next three events) is then
                 // dropped for that app (`pointer_wheel`)
                 // the Apps grid pages with the wheel (a wheel turned down is the next page: `dy` is the content's travel, so both are negated) and
-                // Mission Control swallows it
+                // Overview swallows it
                 input::Event::Wheel{x,y,dx,dy,..}=>{let (x,y)=map(x,y);if shell.overview_scroll(-dx,-dy,t) {continue;}shell.pointer_wheel(x,y,dx,dy,t);continue;},
                 input::Event::Context{x,y,..}=>{let (x,y)=map(x,y);shell.desktop_pointer(x,y,true,t);continue;},
                 input::Event::Switch { .. } => continue,
@@ -999,7 +999,7 @@ fn run() -> std::io::Result<()> {
                     if !down && !hw_keys.mods_held() {
                         shell.cmdtab_release(t);
                     }
-                    // Mission Control: F3 and Ctrl+Up open or close it, and while it is open it takes its own keys
+                    // Overview: F3 and Ctrl+Up open or close it, and while it is open it takes its own keys
                     if shell.hw_overview_key(code, down, springboard::shell::overview::KeyMods { ctrl: hw_keys.ctrl_held(), cmd: hw_keys.meta_held(), shift: hw_keys.shift_held() }, hw_keys.alt_held(), t) {
                         key_repeat.press(code, None, t);
                         continue;

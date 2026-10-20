@@ -162,8 +162,14 @@ pub mod session;
 pub mod prefs;
 pub mod markup;
 pub mod screenshot;
-/// Screen recording: the frames the shell draws, encoded to a movie (ffmpeg or the built-in AVI writer).
+/// Screen recording: the window server's composed screen (the shell's own frames without one), encoded to a movie (ffmpeg or
+/// the built-in AVI writer).
 pub mod screenrec;
+/// Recording the composed screen: pacing, cropping, the encoder feed, the account that owns the file (see `screenrec.rs`).
+pub mod screenrec_composed;
+/// The worker that reads the composed screen from the window server (wlr-screencopy, a pool of shm buffers).
+#[cfg(feature = "desktop-wayland")]
+mod screenrec_wl;
 /// The screenshot toolbar's capture session: Shift-Cmd-5 and `screencapture -i -w` (see `capture.rs`).
 pub mod capture;
 /// Where a screenshot comes from (the window server's composed screen), where it is saved, and its overlays' surfaces.
@@ -772,6 +778,8 @@ pub struct Shell {
     pub(crate) shot_saved: Vec<PathBuf>,
     /// the screen recording in progress (the toolbar's Record buttons, `rec start`, `screencapture -v`)
     rec: Option<screenrec::Session>,
+    /// why the last recording did not start or stopped by itself (`rec status` says it after `idle`)
+    rec_note: Option<String>,
     /// the Options menu's choices, kept across capture sessions
     capture_prefs: capture::Prefs,
     /// the display's refresh rate and whether the GPU path is up (`set_display`): the recording's frame rate
@@ -1198,6 +1206,7 @@ impl Shell {
             shot_dir: None,
             shot_saved: Vec::new(),
             rec: None,
+            rec_note: None,
             capture_prefs: capture::Prefs::default(),
             rec_display: (screenrec::FPS, false),
             rec_clock: 0.0,
@@ -5710,8 +5719,9 @@ impl Shell {
         if sess.record {
             let whole = region.x <= 0 && region.y <= 0 && region.w >= self.w as i32 && region.h >= self.h as i32;
             let area = (!whole).then(|| (region.x.max(0) as u32, region.y.max(0) as u32, region.w.max(1) as u32, region.h.max(1) as u32));
-            if let Err(e) = self.recording_start(area, None, t) {
-                eprintln!("springboard: recording: {e}");
+            // the toolbar and the selection leave the composed screen before the first frame is taken
+            if let Err(e) = self.recording_begin(area, None, t, capture_flow::SETTLE_MS) {
+                self.recording_notice("Screen recording did not start", &e);
             }
             return;
         }

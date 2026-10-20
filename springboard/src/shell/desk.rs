@@ -1454,7 +1454,8 @@ impl Shell {
     /// Whether the menu bar is hidden now: the front window is full screen and the pointer is not at the top.
     pub(super) fn desk_bar_hidden(&self) -> bool {
         // a menu opened from the revealed bar keeps the bar while the pointer is down in the menu
-        let full = self.desk.as_ref().is_some_and(|d| d.front_full()) && self.desktop_menu.is_none();
+        // a screen recording keeps the bar: its indicator must stay visible for the whole recording, even over a full-screen window
+        let full = self.desk.as_ref().is_some_and(|d| d.front_full()) && self.desktop_menu.is_none() && !self.recording_active();
         bar_hidden(full, self.pointer_y, self.desktop_bar_height() as f32)
     }
 
@@ -3196,12 +3197,15 @@ mod tests {
     fn a_full_dock_icon_cache_keeps_only_the_current_generation() {
         let d = Desk::new();
         let img = Image { w: 2, h: 2, px: vec![0xff11_2233; 4] };
-        for i in 0..50 {
+        for i in 0..48 {
             d.with_scaled_icon(DockIconKey { owner: DockIconOwner::App(i), generation: 0, size: 2 }, &img, 2, 2, |_| ());
         }
+        // 48 entries do not evict. The first generation-1 insert makes 49; the second finds 49, keeps only the
+        // generation-1 entry and adds its own.
         d.with_scaled_icon(DockIconKey { owner: DockIconOwner::App(0), generation: 1, size: 2 }, &img, 2, 2, |_| ());
+        d.with_scaled_icon(DockIconKey { owner: DockIconOwner::App(1), generation: 1, size: 2 }, &img, 2, 2, |_| ());
         let cache = d.icon_cache.borrow();
-        assert_eq!(cache.len(), 1);
+        assert_eq!(cache.len(), 2);
         assert!(cache.keys().all(|k| k.generation == 1));
     }
 

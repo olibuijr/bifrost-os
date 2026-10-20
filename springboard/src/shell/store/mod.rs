@@ -1920,8 +1920,8 @@ mod tests {
     #[test]
     fn a_description_that_does_not_fit_ends_in_an_ellipsis_at_a_word() {
         let ui = crate::shell::tests::ui();
-        let text = "A Browser-style browser powered by Servo, with a separate BifrOSt profile";
-        let w = ui.measure("A Browser-style browser powered by", 17.0, Weight::Regular) + 4.0;
+        let text = "A fast, private web browser powered by Servo, with its own BifrOSt profile";
+        let w = ui.measure("A fast, private web browser", 17.0, Weight::Regular) + 4.0;
         let lines = wrap_clamped(&ui, text, 17.0, Weight::Regular, w, 2);
         assert_eq!(lines.len(), 2);
         assert!(lines[1].ends_with('\u{2026}'), "{lines:?}");

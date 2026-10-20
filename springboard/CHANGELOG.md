@@ -2,18 +2,48 @@
 
 ## Unreleased
 
-- Keyboard: Cmd+A (Select All) reaches the front app again. The window server no longer binds Super+A to the app menu launcher, which also swallowed the chord and showed a cream "Applications:" box. A lone Cmd press no longer goes Home on the desktop (it stays the Home key of a tablet), so a chord the window server or the app takes never sends every window to the Dock, and Cmd+Space keeps Spotlight open.
-- Mission Control opens with Ctrl+Up and F3 (the window server binds them, so it works with any app in front); Esc, Return, Tab and the arrows work inside it, and typing goes to the Apps grid's search field.
-- The system services (audio, network, update) now ship with the system. Music Radio, Podcasts and Voice Memos play
-  again and `bifrost-audio status` finds the media service: the update package installs the services under
-  /usr/lib/bifrost/services and bifrostd supervises them; a newer store-installed copy still wins.
-- The media service no longer runs as root: it runs as the logged-in user, and its socket is private to that user.
-- The terminal bell and the alert sound chosen in Settings > Sounds now play (at the system volume). When sound is
-  muted, or does not come out, the bell flashes the terminal instead. Choosing an alert sound plays it once.
-- The first system sound after the audio server connects is no longer lost: the shell keeps its sound player while the
-  stream opens instead of starting over.
-- `bifrost-audio status` says whether the media service or the audio server is the missing part.
-- Mission Control now opens above the app windows (an overlay surface above every window, with the keyboard while it is open): click a window to raise it, or click empty space, press Esc, F3 or Ctrl+Up to close it. F4 opens and closes the Apps grid, and the mouse wheel pages through it.
+- Screen recordings (Shift+Cmd+5 > Record Screen or Record Selection, `screencapture -v`) now show what is on the screen:
+  the wallpaper, every window, the menu bar and the Dock. Before, they recorded the shell's own frame, which holds only the
+  menu bar and the Dock on black. A worker reads the window server's composed output through its screencopy protocol, cropped
+  to the selection at any screen size, at the display rate up to 30 frames a second, without ever holding up the shell: when
+  the movie encoder falls behind, frames are dropped (the count is logged and shown by `rec status`) and the movie keeps real
+  time. If the screen cannot be read (no screen capture in the window server, the Vulkan renderer) nothing is recorded and a
+  notification says why. The red recording indicator now stays in the menu bar for the whole recording, also over a full-screen
+  window; a recording ends when the screen locks. The movie is saved in the Desktop folder of your account (Options > Save To)
+  and belongs to you, not to root.
+
+## 0.10.9 — 2026-10-20
+
+Fixes from the E2E run of 2026-10-20 (docs/e2e/2026-10-20-system-settings-apps.md).
+
+- Keyboard: Cmd+A selects all in the front app, and a Cmd shortcut an app uses no longer sends every window to the
+  Dock (a lone Cmd press does nothing on the desktop; on a tablet it is still Home). Cmd+Space opens Spotlight over
+  any app.
+- Mission Control opens with Ctrl+Up or F3 above the app windows: click a window to bring it forward, or click empty
+  space, press Esc, F3 or Ctrl+Up to close it. F4 opens and closes Launchpad.
+- Launchpad opens above the windows and closes with Esc, its Dock icon or one click outside; typing searches it and
+  the mouse wheel pages through it.
+- Closing Launchpad, Control Centre or Notification Center no longer leaves a blurred layer on the screen.
+  Notification Center opens below the menu bar, so the clock and status items stay visible.
+- The Dock keeps each app's own icon after an appearance change or an app update, shrinks cleanly when an app leaves,
+  and shows minimised windows as framed thumbnails to the right of the separator.
+- Full screen (the green button, Ctrl+Cmd+F or Window > Enter Full Screen) fills the whole display; the menu bar and
+  the Dock hide and come back at the screen edges. Resting the pointer on the green button opens a window menu: Fill,
+  Centre, halves and quarters, Tile with Next Window, Full Screen.
+- Sound: Music Radio, Podcasts and Voice Memos play again. The system's audio, network and update services now ship
+  with the system, and the media service runs as the logged-in user, not as an administrator. The terminal bell and
+  alert sounds play (or flash the window when the sound is off), and choosing an alert sound in Settings > Sounds
+  plays it. `bifrost-audio status` says which part is missing.
+- Screenshots: Shift+Cmd+3 saves the whole screen and Shift+Cmd+4 a selection (Space switches to a window).
+  Screenshots show the windows and the wallpaper, are saved to the Desktop as your own files, and leave nothing on the
+  screen; the thumbnail sits at the bottom right and slides away. The Shift+Cmd+5 toolbar sits above the Dock with
+  icon buttons.
+- Accent colour: switches, checkmarks and default buttons in apps follow the accent chosen in Settings > Appearance.
+- Text Editor 1.12.0: clicking places the cursor, dragging and double- or triple-clicking select, and Shift with the
+  arrow keys extends the selection. One format bar (styles, colour, font, size, alignment, lists, spacing) that fits
+  any window width, the document name in the title bar, and the save panel selects the name for you.
+- Calculator, Notes and Reminders fixes (square root of a result, the cube-root key, no "#" in note titles, live note
+  list, two-line list names), and plain release notes in the App Store.
 
 ## 0.10.8 — 2026-10-20
 

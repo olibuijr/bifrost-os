@@ -765,8 +765,8 @@ impl Shell {
         used
     }
 
-    /// Mission Control and the Apps grid from the keyboard while the shell has the keys: F3 and Ctrl+Up open or close Mission Control, F4 the Apps grid (the window server binds the
-    /// same chords for the times an app holds the keyboard, `wm/src/keybindings.rs`), and while Mission Control or the Apps grid is open
+    /// Overview and the Apps grid from the keyboard while the shell has the keys: F3 and Ctrl+Up open or close Overview, F4 the Apps grid (the window server binds the
+    /// same chords for the times an app holds the keyboard, `wm/src/keybindings.rs`), and while Overview or the Apps grid is open
     /// its own keys (Esc, Return, Tab, the arrows) are taken here and nothing else is typed. True when the key was used. Modifier,
     /// volume and brightness keys always pass.
     pub fn hw_overview_key(&mut self, code: u16, down: bool, mods: super::overview::KeyMods, alt: bool, t: f64) -> bool {
