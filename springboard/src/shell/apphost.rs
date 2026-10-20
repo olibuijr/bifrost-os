@@ -432,6 +432,13 @@ pub(super) fn is_known_incompatible(id: &str, exec: &Path) -> bool {
     INCOMPATIBLE.lock().map(|g| g.iter().any(|(i, e)| i == id && e == exec)).unwrap_or(false)
 }
 
+/// Seals a buffer the app sent against shrinking, then checks it holds at least `bytes`. The order matters: the length
+/// of a file the app can still truncate says nothing, because it can shrink between the check and the seal and leave the
+/// shell with a mapping that runs past the end of the file (SIGBUS on the first blit). After the seal the length can only grow.
+fn sealed_len_at_least(f: &sys::Owned, bytes: usize) -> bool {
+    sys::seal_shrink(f).is_ok() && sys::shm_len(f).is_ok_and(|n| n >= bytes)
+}
+
 /// The slot of an installed app by manifest id.
 pub fn slot_of(id: &str) -> Option<usize> {
     installed().iter().position(|a| a.manifest.id == id)
@@ -1109,7 +1116,7 @@ impl AppHost {
                 if fds.len() == 2 && w > 0 && h > 0 && w <= 8192 && h <= 8192 {
                     // IPC-1: a memfd shorter than the claim would SIGBUS the shell on the first blit, and one the app can
                     // still shrink could do the same later: require the size and seal against shrinking first.
-                    let safe = fds.iter().all(|f| sys::shm_len(f).is_ok_and(|n| n >= bytes) && sys::seal_shrink(f).is_ok());
+                    let safe = fds.iter().all(|f| sealed_len_at_least(f, bytes));
                     let maps: Vec<Buf> = if safe { fds.iter().filter_map(|f| Map::new(f, bytes).ok()).map(|map| Buf { map }).collect() } else { Vec::new() };
                     if maps.len() == 2 {
                         self.bufs = maps;
@@ -1304,7 +1311,7 @@ impl AppHost {
         if fds.len() != 2 || w == 0 || h == 0 || w > 8192 || h > 8192 || !self.window_open(id) {
             return;
         }
-        let safe = fds.iter().all(|f| sys::shm_len(f).is_ok_and(|n| n >= bytes) && sys::seal_shrink(f).is_ok());
+        let safe = fds.iter().all(|f| sealed_len_at_least(f, bytes));
         if !safe {
             return;
         }
@@ -2711,6 +2718,16 @@ mod tests {
         host.handle(ToShell::Buffers{w:8,h:6,generation:2},vec![sys::shm_create("resize-c",192).unwrap(),sys::shm_create("resize-d",192).unwrap()],&mut pumped);
         host.handle(ToShell::Frame{buf:0,damage:vec![[0,0,8,6]]},vec![],&mut pumped);
         assert_eq!(host.frame().map(|(_,w,h)|(w,h)),Some((8,6)));
+    }
+
+    #[test]
+    fn a_buffer_is_sealed_before_its_size_is_trusted() {
+        let fd = sys::shm_create("seal-order", 4096).unwrap();
+        assert!(sealed_len_at_least(&fd, 4096));
+        assert!(sys::shm_resize(&fd, 0).is_err(), "the check sealed it: the app can no longer shrink it under the mapping");
+        let short = sys::shm_create("seal-short", 64).unwrap();
+        assert!(!sealed_len_at_least(&short, 4096), "a file shorter than the claim is refused");
+        assert!(sys::shm_resize(&short, 0).is_err(), "and it stays sealed");
     }
 
     #[test]
