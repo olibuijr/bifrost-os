@@ -175,6 +175,9 @@ def main():
     if not a.skip_build:
         run(["cargo", "build", "--profile", prof, "--bin", "shell", "--bin", "bootweave", "--bin", "bifrost-portal", "--bin", "bifrost-privd", "--features", "desktop-wayland", "--timings"], cwd=os.path.join(REPO, "springboard"))
         run(["cargo", "build", "--profile", prof, "-p", "bifrost-mcp", "-p", "bifrostd", "-p", "bifrost-audiod", "-p", "bifrost-audio-bench", "-p", "bifrost-midid", "-p", "bifrost-alsa-plugin"], cwd=os.path.join(REPO, "springboard"))
+        # the system services bifrostd supervises (audio, network, update); package-files.sh installs them under
+        # /usr/lib/bifrost/services/<id>/ with the manifests of springboard/system
+        run(["cargo", "build", "--profile", prof, "-p", "audiod", "-p", "netd", "-p", "updated"], cwd=os.path.join(REPO, "springboard"))
         # the window server, its chrome clients and bifrost-log (the PKGBUILD builds the same set)
         run(["cargo", "build", "--profile", prof, "-p", "bifrost-wm", "--bin", "bifrost-wm", "-p", "bifrost-chrome", "--bins", "-p", "bifrost-app", "--bin", "bifrost-log"], cwd=os.path.join(REPO, "springboard"))
         # the command-line tools (springboard/cmd/src/bin); packaging/arch/package-files.sh installs every one of them
@@ -191,6 +194,9 @@ def main():
     mcp = os.path.join(REPO, f"springboard/target/{prof}/bifrost-mcp")
     bifrostd = os.path.join(REPO, f"springboard/target/{prof}/bifrostd")
     audiod = os.path.join(REPO, f"springboard/target/{prof}/bifrost-audiod")
+    svc_audiod = os.path.join(REPO, f"springboard/target/{prof}/audiod")
+    svc_netd = os.path.join(REPO, f"springboard/target/{prof}/netd")
+    svc_updated = os.path.join(REPO, f"springboard/target/{prof}/updated")
     audio_bench = os.path.join(REPO, f"springboard/target/{prof}/bifrost-audio-bench")
     midid = os.path.join(REPO, f"springboard/target/{prof}/bifrost-midid")
     alsa_plugin = os.path.join(REPO, f"springboard/target/{prof}/libasound_module_pcm_bifrost.so")
@@ -207,7 +213,7 @@ def main():
     for f in ("fast/PKGBUILD", "fast/springboard.install"):
         shutil.copy(os.path.join(src, f), work)
     assets_env = stage_system_assets(work)
-    env = {**os.environ, **assets_env, "PC_VER": ver, "PC_PKGSRC": src, "PC_BIN": binpath, "PC_BOOTWEAVE": bootweave, "PC_PORTAL": portal, "PC_PRIVD": privd, "PC_MCP": mcp, "PC_BIFROSTD": bifrostd, "PC_AUDIOD": audiod, "PC_AUDIO_BENCH": audio_bench, "PC_MIDID": midid, "PC_ALSA_PLUGIN": alsa_plugin, "PC_CMD_DIR": tdir, **wm_env, "PC_GUARD": os.path.join(REPO,"out/bifrost-update-guard-publish"), "PKGDEST": POOL, "BUILDDIR": work + "/b", "SRCDEST": work + "/s", "PKGEXT": ".pkg.tar.zst"}
+    env = {**os.environ, **assets_env, "PC_VER": ver, "PC_PKGSRC": src, "PC_BIN": binpath, "PC_BOOTWEAVE": bootweave, "PC_PORTAL": portal, "PC_PRIVD": privd, "PC_MCP": mcp, "PC_BIFROSTD": bifrostd, "PC_AUDIOD": audiod, "PC_SVC_AUDIOD": svc_audiod, "PC_SVC_NETD": svc_netd, "PC_SVC_UPDATED": svc_updated, "PC_AUDIO_BENCH": audio_bench, "PC_MIDID": midid, "PC_ALSA_PLUGIN": alsa_plugin, "PC_CMD_DIR": tdir, **wm_env, "PC_GUARD": os.path.join(REPO,"out/bifrost-update-guard-publish"), "PKGDEST": POOL, "BUILDDIR": work + "/b", "SRCDEST": work + "/s", "PKGEXT": ".pkg.tar.zst"}
     run(["makepkg", "-f", "--nodeps", "--skipinteg", "--nocheck"], cwd=work, env=env, stdout=subprocess.DEVNULL)
     pkg = sorted(glob.glob(os.path.join(POOL, f"springboard-shell-{ver}-1-x86_64.pkg.tar.zst")))[-1]
     # licence guard: the package may carry only BifrOSt's own and openly licensed files. A failing package is deleted

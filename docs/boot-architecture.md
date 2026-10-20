@@ -202,7 +202,8 @@ nothing. It now decodes the text (`parse_loader_var`); a missing or malformed va
 
 Nothing starts before desktop-ready unless the first frame needs it: seatd, the window server, the shell, the chrome
 clients. Every `bifrostd` service (audio, network, update, the parity of the reference's on-demand daemons) is
-socket-activated and starts on its first message. systemd units that are not needed for the desktop move after
+socket-activated and starts on its first message. The three system services ship with the OS package under
+`/usr/lib/bifrost/services/<id>/` (`springboard/docs/services.md`, "System services ship with the OS"). systemd units that are not needed for the desktop move after
 `desktop-ready` (a `bifrost-after-desktop.target`).
 
 ### Unlock is login

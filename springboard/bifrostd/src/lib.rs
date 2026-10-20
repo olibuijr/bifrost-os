@@ -1,7 +1,9 @@
 //! `bifrostd`: keeps the `kind = "service"` packages available, started on demand (docs/services.md,
 //! docs/boot-architecture.md "Services on demand").
 //!
-//! Services live like apps, under `<root>/apps/<id>/current/` with a `manifest.toml`. bifrostd binds each service's
+//! Services live like apps, under `<root>/apps/<id>/current/` with a `manifest.toml`, and the system's own services
+//! ship with the OS package under `/usr/lib/bifrost/services/<id>/` (read-only; a store-installed copy wins only when
+//! its manifest version is newer, see [`scan_with`]). bifrostd binds each service's
 //! socket (`<root>/run/<id>.sock`) itself, and starts the service's child only when a client is waiting on that
 //! socket (socket activation). The waiting connection sits in the listen backlog until the child accepts it: the
 //! child gets the listening socket as its stdin and `BIFROST_ACTIVATED=1` (`bifrost_proto::svc::listen`). A child
@@ -94,17 +96,70 @@ pub fn exec_inside(dir: &Path, exec: &str) -> bool {
     p.is_file() && std::fs::canonicalize(&p).is_ok_and(|r| r.starts_with(dir))
 }
 
-pub fn scan(root: &Path) -> Vec<Found> {
+/// Where the OS package puts the system services: `<dir>/<id>/manifest.toml` next to the executable. The package owns
+/// the directory (a path no earlier install has a file at), so an update replaces it without a pacman conflict.
+pub const SYSTEM_SERVICES_DIR: &str = "/usr/lib/bifrost/services";
+
+/// The dotted numbers of a version, one per component; a component keeps its leading digits (`3-rc1` is 3) and a
+/// component with none is 0. `0.10.8` is `[0, 10, 8]`.
+fn version_parts(v: &str) -> Vec<u64> {
+    v.trim().split('.').map(|c| c.chars().take_while(char::is_ascii_digit).collect::<String>().parse().unwrap_or(0)).collect()
+}
+
+/// Whether version `a` is strictly newer than `b` (numeric, component by component; missing components are 0).
+pub fn version_newer(a: &str, b: &str) -> bool {
+    let (mut a, mut b) = (version_parts(a), version_parts(b));
+    let n = a.len().max(b.len());
+    a.resize(n, 0);
+    b.resize(n, 0);
+    a > b
+}
+
+/// The services installed from the store: `<root>/apps/<id>/current/manifest.toml`.
+fn scan_store(root: &Path) -> Vec<Found> {
     let Ok(rd) = std::fs::read_dir(root.join("apps")) else { return Vec::new() };
-    let mut v: Vec<Found> = rd
-        .flatten()
+    rd.flatten()
         .filter_map(|e| {
             let cur = e.path().join("current");
             let dir = std::fs::canonicalize(&cur).ok()?;
             let manifest = Manifest::parse(&std::fs::read_to_string(dir.join("manifest.toml")).ok()?)?;
             (manifest.id == e.file_name().to_string_lossy() && exec_inside(&dir, &manifest.exec)).then_some(Found { manifest, dir })
         })
-        .collect();
+        .collect()
+}
+
+/// The services the OS package provides: `<system>/<id>/manifest.toml` (the directory itself, no `current` link).
+fn scan_system(system: &Path) -> Vec<Found> {
+    let Ok(rd) = std::fs::read_dir(system) else { return Vec::new() };
+    rd.flatten()
+        .filter_map(|e| {
+            let dir = std::fs::canonicalize(e.path()).ok()?;
+            let manifest = Manifest::parse(&std::fs::read_to_string(dir.join("manifest.toml")).ok()?)?;
+            (manifest.id == e.file_name().to_string_lossy() && exec_inside(&dir, &manifest.exec)).then_some(Found { manifest, dir })
+        })
+        .collect()
+}
+
+/// The store-installed services only (the package-provided ones are in [`scan_with`]).
+pub fn scan(root: &Path) -> Vec<Found> {
+    scan_with(root, Path::new("/nonexistent"))
+}
+
+/// Every service to supervise: the store-installed ones under `<root>/apps` and the package-provided ones under
+/// `system`. When both name the same id the store copy wins only if its manifest version is newer than the package's,
+/// so an update of the OS never loses to a stale store install, and a store update still takes effect. Sorted by id.
+pub fn scan_with(root: &Path, system: &Path) -> Vec<Found> {
+    let mut v = scan_system(system);
+    for s in scan_store(root) {
+        match v.iter_mut().find(|f| f.manifest.id == s.manifest.id) {
+            Some(sys) => {
+                if version_newer(&s.manifest.version, &sys.manifest.version) {
+                    *sys = s;
+                }
+            }
+            None => v.push(s),
+        }
+    }
     v.sort_by(|a, b| a.manifest.id.cmp(&b.manifest.id));
     v
 }
@@ -222,11 +277,30 @@ fn pending(listener: &UnixListener) -> bool {
     ready > 0 && p.revents & POLLIN != 0
 }
 
+/// Services whose socket any local account may connect to: the apps run under their own accounts (inside the
+/// sandbox, which binds only this socket) and bifrostd runs as root, so the default 0755 would refuse them.
+const OPEN_SOCKETS: &[&str] = &["is.olibuijr.audio"];
+
+/// The socket file mode for `id`: world-connectable for [`OPEN_SOCKETS`], else the umask's default (root only).
+pub fn socket_mode(id: &str) -> Option<u32> {
+    OPEN_SOCKETS.contains(&id).then_some(0o666)
+}
+
+/// Applies [`socket_mode`] to the bound socket file at `path`.
+fn set_socket_mode(path: &Path, id: &str) {
+    if let Some(mode) = socket_mode(id) {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode));
+    }
+}
+
 /// Binds the service's socket, replacing a stale file from an earlier run.
 fn bind(root: &Path, id: &str) -> io::Result<UnixListener> {
     let path = sock_path(root, id);
     let _ = std::fs::remove_file(&path);
-    UnixListener::bind(&path)
+    let l = UnixListener::bind(&path)?;
+    set_socket_mode(&path, id);
+    Ok(l)
 }
 
 /// Starts the child with `listener` as its stdin (socket activation).
@@ -279,13 +353,20 @@ struct Slot {
 
 pub struct Supervisor {
     root: PathBuf,
+    /// where the OS package keeps its services ([`SYSTEM_SERVICES_DIR`])
+    system: PathBuf,
     slots: HashMap<String, Slot>,
 }
 
 impl Supervisor {
     pub fn new(root: PathBuf) -> Self {
+        Self::with_system_dir(root, PathBuf::from(SYSTEM_SERVICES_DIR))
+    }
+
+    /// A supervisor that reads the package-provided services from `system` instead of [`SYSTEM_SERVICES_DIR`].
+    pub fn with_system_dir(root: PathBuf, system: PathBuf) -> Self {
         let _ = std::fs::create_dir_all(run_dir(&root));
-        Supervisor { root, slots: HashMap::new() }
+        Supervisor { root, system, slots: HashMap::new() }
     }
 
     /// How many services are running now (started on demand and not yet exited).
@@ -312,7 +393,7 @@ impl Supervisor {
     /// One pass: bind the sockets of new services, reap exits, start idle services that have a waiting connection,
     /// swap changed versions, stop removed services.
     pub fn tick(&mut self) {
-        let found = scan(&self.root);
+        let found = scan_with(&self.root, &self.system);
         let now = Instant::now();
         let gone: Vec<String> = self.slots.keys().filter(|id| !found.iter().any(|f| &f.manifest.id == *id)).cloned().collect();
         for id in gone {
@@ -404,7 +485,10 @@ fn swap(root: &Path, id: &str, old: &mut Running, new: &Found) -> Option<(Runnin
     let side_path = run_dir(root).join(format!("{id}.sock.new"));
     let _ = std::fs::remove_file(&side_path);
     let side = match UnixListener::bind(&side_path) {
-        Ok(l) => l,
+        Ok(l) => {
+            set_socket_mode(&side_path, id);
+            l
+        }
         Err(e) => {
             eprintln!("bifrostd: swap of {id} to {}: cannot bind: {e}", new.manifest.version);
             return None;
@@ -522,7 +606,7 @@ mod tests {
         std::fs::set_permissions(&exec, std::fs::Permissions::from_mode(0o755)).unwrap();
         std::os::unix::fs::symlink(&version, root.join("apps/is.test.echo/current")).unwrap();
 
-        let mut sup = Supervisor::new(root.clone());
+        let mut sup = Supervisor::with_system_dir(root.clone(), root.join("no-system-services"));
         sup.tick();
         assert!(sock_path(&root, "is.test.echo").exists(), "the socket is bound before anyone connects");
         assert_eq!(sup.running(), 0, "nothing starts without a client");
@@ -533,6 +617,119 @@ mod tests {
         sup.shutdown();
         assert_eq!(sup.running(), 0);
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// Writes a service package (`manifest.toml` and an executable) into `dir`.
+    fn write_service(dir: &Path, id: &str, version: &str) {
+        std::fs::create_dir_all(dir).unwrap();
+        std::fs::write(dir.join("manifest.toml"), format!("id = \"{id}\"\nversion = \"{version}\"\nkind = \"service\"\nexec = \"svc.sh\"\n")).unwrap();
+        let exec = dir.join("svc.sh");
+        std::fs::write(&exec, "#!/bin/sh\nexec sleep 30\n").unwrap();
+        std::fs::set_permissions(&exec, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    fn scratch(name: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("bifrostd-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        std::fs::canonicalize(&d).unwrap()
+    }
+
+    /// Installs a store copy of `id` the way the store does: `apps/<id>/versions/<v>` with a `current` link.
+    fn store_install(root: &Path, id: &str, version: &str) {
+        let v = root.join("apps").join(id).join("versions").join(version);
+        write_service(&v, id, version);
+        let cur = root.join("apps").join(id).join("current");
+        let _ = std::fs::remove_file(&cur);
+        std::os::unix::fs::symlink(&v, cur).unwrap();
+    }
+
+    #[test]
+    fn versions_compare_numerically() {
+        assert!(version_newer("0.10.8", "0.9.9"), "10 is more than 9");
+        assert!(version_newer("1.0.1", "1.0"));
+        assert!(!version_newer("1.0.0", "1.0"), "missing components are 0");
+        assert!(!version_newer("0.1.0", "0.1.0"), "equal is not newer");
+        assert!(!version_newer("0.1.0", "0.2.0"));
+        assert!(version_newer("2.0.0-rc1", "1.9.9"));
+    }
+
+    #[test]
+    fn package_provided_services_are_found_without_a_store_install() {
+        let d = scratch("system-only");
+        let (root, system) = (d.join("root"), d.join("system"));
+        write_service(&system.join("is.test.audio"), "is.test.audio", "0.1.0");
+        let found = scan_with(&root, &system);
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].manifest.id, "is.test.audio");
+        assert_eq!(found[0].dir, system.join("is.test.audio"));
+        assert!(found[0].exec_path().is_file());
+        assert!(scan(&root).is_empty(), "scan() sees the store only");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_package_directory_must_be_named_after_its_id_and_hold_its_exec() {
+        let d = scratch("system-bad");
+        let (root, system) = (d.join("root"), d.join("system"));
+        write_service(&system.join("wrong-name"), "is.test.audio", "0.1.0");
+        std::fs::create_dir_all(system.join("is.test.noexec")).unwrap();
+        std::fs::write(system.join("is.test.noexec/manifest.toml"), "id = \"is.test.noexec\"\nversion = \"1\"\nkind = \"service\"\nexec = \"missing\"\n").unwrap();
+        assert!(scan_with(&root, &system).is_empty());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_store_copy_wins_only_when_its_version_is_newer() {
+        let d = scratch("precedence");
+        let (root, system) = (d.join("root"), d.join("system"));
+        write_service(&system.join("is.test.audio"), "is.test.audio", "0.2.0");
+        // older store copy (a stale install from before the OS shipped the service): the package wins
+        store_install(&root, "is.test.audio", "0.1.0");
+        let f = scan_with(&root, &system);
+        assert_eq!(f.len(), 1);
+        assert_eq!(f[0].dir, system.join("is.test.audio"), "an older store copy loses");
+        // equal version: the package wins too
+        store_install(&root, "is.test.audio", "0.2.0");
+        assert_eq!(scan_with(&root, &system)[0].dir, system.join("is.test.audio"), "a tie goes to the package");
+        // newer store copy wins
+        store_install(&root, "is.test.audio", "0.10.0");
+        let f = scan_with(&root, &system);
+        assert_eq!(f.len(), 1, "one service per id");
+        assert_eq!(f[0].manifest.version, "0.10.0");
+        assert!(f[0].dir.starts_with(root.join("apps")));
+        // services only in the store are kept alongside, sorted by id
+        store_install(&root, "is.test.net", "1.0.0");
+        let ids: Vec<String> = scan_with(&root, &system).into_iter().map(|f| f.manifest.id).collect();
+        assert_eq!(ids, ["is.test.audio", "is.test.net"]);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// A package-provided service gets its socket under `<root>/run` and starts on demand like a store one.
+    #[test]
+    fn a_package_provided_service_starts_when_a_client_is_waiting() {
+        let d = scratch("system-activation");
+        let (root, system) = (d.join("root"), d.join("system"));
+        write_service(&system.join("is.olibuijr.audio"), "is.olibuijr.audio", "0.1.0");
+        let mut sup = Supervisor::with_system_dir(root.clone(), system);
+        sup.tick();
+        let sock = sock_path(&root, "is.olibuijr.audio");
+        assert!(sock.exists(), "the socket stays under <root>/run so clients and the app sandbox find it");
+        assert_eq!(sup.running(), 0);
+        let mode = std::fs::metadata(&sock).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o666, "apps run under their own accounts and must reach the audio socket");
+        let _client = UnixStream::connect(&sock).unwrap();
+        sup.tick();
+        assert_eq!(sup.running(), 1);
+        sup.shutdown();
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn only_the_audio_socket_is_open_to_every_account() {
+        assert_eq!(socket_mode("is.olibuijr.audio"), Some(0o666));
+        assert_eq!(socket_mode("is.olibuijr.net"), None);
+        assert_eq!(socket_mode("is.olibuijr.update"), None);
     }
 
     #[test]
