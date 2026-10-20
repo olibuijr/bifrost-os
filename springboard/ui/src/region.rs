@@ -193,9 +193,35 @@ pub fn short_date(region: &Region, wday: i32, mday: i32, mon: i32) -> String {
     }
 }
 
+const DAYS_FULL_EN: [&str; 7] = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const MONTHS_FULL_EN: [&str; 12] = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const DAYS_FULL_IS: [&str; 7] = ["sunnudagur", "mánudagur", "þriðjudagur", "miðvikudagur", "fimmtudagur", "föstudagur", "laugardagur"];
+const MONTHS_FULL_IS: [&str; 12] = ["janúar", "febrúar", "mars", "apríl", "maí", "júní", "júlí", "ágúst", "september", "október", "nóvember", "desember"];
+
+/// The full weekday name in the region's language ("Tuesday", "þriðjudagur"). `wday` is 0 for Sunday.
+pub fn day_name(region: &Region, wday: i32) -> &'static str {
+    let wd = wday.rem_euclid(7) as usize;
+    if region.language() == "is" { DAYS_FULL_IS[wd] } else { DAYS_FULL_EN[wd] }
+}
+
+/// The full month name in the region's language ("October", "október"). `mon` is 0 for January.
+pub fn month_name(region: &Region, mon: i32) -> &'static str {
+    let mo = mon.rem_euclid(12) as usize;
+    if region.language() == "is" { MONTHS_FULL_IS[mo] } else { MONTHS_FULL_EN[mo] }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn full_day_and_month_names_follow_the_language() {
+        let en = Region::default();
+        assert_eq!((day_name(&en, 2), month_name(&en, 9)), ("Tuesday", "October"));
+        assert_eq!((day_name(&en, -5), month_name(&en, 12)), ("Tuesday", "January"), "out of range wraps");
+        let is = Region::from_settings_text("languages=is\nregion=is\n");
+        assert_eq!((day_name(&is, 2), month_name(&is, 9)), ("þriðjudagur", "október"));
+    }
 
     #[test]
     fn a_fresh_install_is_english_in_iceland_with_monday_weeks_and_isk() {

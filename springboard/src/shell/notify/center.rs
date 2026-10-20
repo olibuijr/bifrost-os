@@ -75,7 +75,7 @@ pub struct Center {
     /// its app (`widgets_timeline::next_refresh`)
     refresh_due: i64,
     /// the apps' icons at the column's card size, rendered when the column opens
-    icons: Vec<(AppId, Image)>,
+    icons: Vec<(AppId, Option<Image>)>,
     /// the icon of an app that provides a widget row (by package id); None when the app has none
     widget_icons: Vec<(String, Option<Image>)>,
 }
@@ -476,8 +476,8 @@ const NC_INFO_PT: f32 = 104.0;
 /// the Edit Widgets capsule's width and the gap to the round close button beside it (the button is NC_EDIT_PT wide)
 const NC_EDIT_W_PT: f32 = 104.0;
 const NC_EDIT_GAP_PT: f32 = 8.0;
-const DAY_NAMES: [&str; 7] = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
-const MONTH_NAMES: [&str; 12] = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+/// the radius of the weather glyph at the top right of the Weather card
+const NC_WEATHER_GLYPH_R_PT: f32 = 14.0;
 const NC_RIGHT_PT: f32 = 18.0;
 const NC_TOP_GAP_PT: f32 = 6.0;
 const NC_TITLE_PT: f32 = 32.0;
@@ -525,6 +525,16 @@ enum InfoCard {
     Weather,
 }
 
+impl InfoCard {
+    /// The package ids of the app a tap on the card opens, the PC package first and the bare (tablet) id as the fallback.
+    fn app_ids(self) -> [&'static str; 2] {
+        match self {
+            InfoCard::Calendar => [super::super::services::calendar::STORE_APP, "is.olibuijr.calendar"],
+            InfoCard::Weather => ["is.olibuijr.weather.desktop", "is.olibuijr.weather"],
+        }
+    }
+}
+
 /// One gallery row: (index in the listing, row rect, add/remove disc, the size chips the widget supports with the size
 /// each sets, the Options chip when the widget has options).
 type GalleryRow = (usize, R4, R4, Vec<(Family, R4)>, Option<R4>);
@@ -566,7 +576,8 @@ impl Shell {
         let (w, gap) = (self.center_w(), ui.pt(NC_GAP_PT));
         let x = self.w as f32 - ui.pt(NC_RIGHT_PT) - w;
         let (y, h) = (self.center_flow_top(), ui.pt(NC_INFO_PT));
-        if y + h > self.h as f32 - ui.pt(NC_BOTTOM_PT) {
+        // the cards must end above the Edit Widgets capsule's slot, or the capsule would overlap them and win the tap
+        if y + h + ui.pt(NC_EDIT_TOP_PT) + ui.pt(NC_EDIT_PT) > self.h as f32 - ui.pt(NC_BOTTOM_PT) {
             return vec![];
         }
         let mut kinds = vec![InfoCard::Calendar];
@@ -906,8 +917,7 @@ impl Shell {
                         // the same close as a click outside the column, so the live-glass overlay goes the usual way
                         DeskHit::CloseCenter => self.notify.center.settle(1.0, false, t),
                         DeskHit::Info(card) => {
-                            let id = if card == InfoCard::Calendar { "is.olibuijr.calendar" } else { "is.olibuijr.weather" };
-                            if let Some(slot) = apphost::slot_of(id) {
+                            if let Some(slot) = card.app_ids().iter().find_map(|id| apphost::slot_of(id)) {
                                 self.notify.center.hide();
                                 self.desk_open_or_start(AppId::External(slot as u8), t);
                             }
@@ -946,15 +956,20 @@ impl Shell {
         vec![]
     }
 
-    /// The app's icon at the column's card size, rendered once per opening.
+    /// The app's icon at the column's card size, rendered once per opening: a built-in's from the dock or the grid, an
+    /// installed package's from its package; None (no icon drawn) when the app has none.
     fn desk_notification_icon(&mut self, app: AppId) {
         if self.notify.center.icons.iter().any(|(a, _)| *a == app) {
             return;
         }
-        let i = apps().iter().position(|a| a.id == app).unwrap_or(0);
-        let src = if i < IN_DOCK { &self.dock[i].icon } else { &self.grid[i - IN_DOCK].icon };
         let d = self.ui.pt(NC_ICON_PT).round() as usize;
-        let img = src.resized(d, d);
+        let img = match app {
+            AppId::External(slot) => apphost::installed().get(slot as usize).and_then(|a| apphost::icon_image(&a.manifest.id, d)),
+            _ => apps().iter().position(|a| a.id == app).map(|i| {
+                let src = if i < IN_DOCK { &self.dock[i].icon } else { &self.grid[i - IN_DOCK].icon };
+                src.resized(d, d)
+            }),
+        };
         self.notify.center.icons.push((app, img));
     }
 
@@ -977,7 +992,7 @@ impl Shell {
 
     fn draw_desk_center(&mut self, s: &mut Surface, t: f64) {
         use super::super::control_center::desk_glass;
-        use super::super::ui::{FIELD_BG, LABEL, LABEL_2, LINK, MAC_BODY_PT, MAC_HEADLINE_PT, MAC_LARGE_TITLE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT, BAR_TEXT, BAR_TEXT_SHADOW, BAR_TEXT_SHADOW_ALPHA, NC_WEATHER_TINT, SYSTEM_RED};
+        use super::super::ui::{FIELD_BG, LABEL, LABEL_2, LINK, MAC_BODY_PT, MAC_HEADLINE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT, BAR_TEXT, BAR_TEXT_SHADOW, BAR_TEXT_SHADOW_ALPHA, MAC_DISPLAY_PT, NC_QUIET_ALPHA, NC_WEATHER_TINT, SYSTEM_RED};
         let c = &self.notify.center;
         let p = c.progress(t).clamp(0.0, 1.0);
         if let Some((x, y, w, h)) = self.center_desk_rect().filter(|_| bifrost_render::glass::gpu()) {
@@ -1023,7 +1038,7 @@ impl Shell {
         // is a quiet line instead of a heading, and there is no clear button.
         let quiet = groups.is_empty();
         let tm = if quiet { ui.text("No Notifications", MAC_BODY_PT, Weight::Regular, WHITE) } else { ui.text("Notification Center", MAC_TITLE3_PT, Weight::Bold, WHITE) };
-        let ink_alpha = if quiet { alpha * 190 / 255 } else { alpha };
+        let ink_alpha = if quiet { alpha * NC_QUIET_ALPHA / 255 } else { alpha };
         let ty = (title.1 + (title.3 - tm.h as f32) / 2.0) as i32;
         s.blit_colored(&tm, (title.0 + slide) as i32, ty + ui.pt(0.5).max(1.0) as i32, BAR_TEXT_SHADOW, BAR_TEXT_SHADOW_ALPHA * ink_alpha / 255);
         s.blit_colored(&tm, (title.0 + slide) as i32, ty, BAR_TEXT, ink_alpha);
@@ -1042,13 +1057,16 @@ impl Shell {
             }
             desk_glass(s, ShellSurface::NotificationPanel, (x, y, w, h), r, alpha);
             let n = g.latest();
-            let app = apps().iter().find(|a| a.id == g.app).map_or("", |a| a.name);
+            let app = match g.app {
+                AppId::External(slot) => apphost::installed().get(slot as usize).map_or_else(String::new, |a| a.manifest.name.clone()),
+                other => apps().iter().find(|a| a.id == other).map_or_else(String::new, |a| a.name.to_string()),
+            };
             let tx = x + pad + ui.pt(NC_ICON_PT) + ui.pt(NC_ICON_GAP_PT);
-            if let Some((_, icon)) = self.notify.center.icons.iter().find(|(a, _)| *a == g.app) {
+            if let Some(icon) = self.notify.center.icons.iter().find(|(a, _)| *a == g.app).and_then(|(_, i)| i.as_ref()) {
                 s.blit(icon, (x + pad) as i32, (y + (h - icon.h as f32) / 2.0) as i32, 255, alpha);
             }
             let room = x + w - tx - pad - ui.pt(NC_CLOSE_PT);
-            let more = if g.items.len() > 1 { format!("{app} \u{b7} {} more", g.items.len() - 1) } else { app.to_string() };
+            let more = if g.items.len() > 1 { format!("{app} \u{b7} {} more", g.items.len() - 1) } else { app.clone() };
             let head = ui.text(&ui.fit(&more, MAC_SUBHEAD_PT, room - ui.pt(60.0)), MAC_SUBHEAD_PT, Weight::Regular, secondary);
             let age = ui.text(&super::store::age_text(n.time, now), MAC_SUBHEAD_PT, Weight::Regular, secondary);
             let t1 = ui.text(&ui.fit(&n.title, MAC_HEADLINE_PT, room), MAC_HEADLINE_PT, Weight::Semibold, label);
@@ -1069,10 +1087,12 @@ impl Shell {
             desk_glass(s, ShellSurface::NotificationPanel, (x, y, w, h), r, alpha);
             match card {
                 InfoCard::Calendar => {
-                    let day = DAY_NAMES[self.info.wday.rem_euclid(7) as usize];
-                    let month = MONTH_NAMES[self.info.mon.rem_euclid(12) as usize];
-                    let wd = ui.text(day, MAC_SUBHEAD_PT, Weight::Semibold, SYSTEM_RED);
-                    let num = ui.text(&self.info.mday.to_string(), MAC_LARGE_TITLE_PT * 2.0, Weight::Regular, label);
+                    let region = bifrost_ui::region::current();
+                    let day = bifrost_ui::region::day_name(&region, self.info.wday).to_uppercase();
+                    let month = bifrost_ui::region::month_name(&region, self.info.mon);
+                    // the weekday is red like the calendar's today marker, the one red besides destructive actions
+                    let wd = ui.text(&day, MAC_SUBHEAD_PT, Weight::Semibold, SYSTEM_RED);
+                    let num = ui.text(&self.info.mday.to_string(), MAC_DISPLAY_PT, Weight::Regular, label);
                     let mo = ui.text(month, MAC_SUBHEAD_PT, Weight::Regular, secondary);
                     s.blit(&wd, (x + pad) as i32, (y + pad) as i32, 255, alpha);
                     s.blit(&num, (x + pad) as i32, (y + pad + wd.h as f32) as i32, 255, alpha);
@@ -1081,11 +1101,11 @@ impl Shell {
                 InfoCard::Weather => {
                     let Some(sum) = self.today.weather() else { continue };
                     s.fill_rrect(x, y, w, h, r, crate::gfx::scale(NC_WEATHER_TINT, alpha));
-                    let glyph_r = ui.pt(14.0);
+                    let glyph_r = ui.pt(NC_WEATHER_GLYPH_R_PT);
                     super::super::weather::glyph::draw(s, sum.sky(), sum.day, (x + w - pad - glyph_r, y + pad + glyph_r), glyph_r);
                     let room = w - 2.0 * pad - 2.0 * glyph_r - ui.pt(NC_CHIP_GAP_PT);
                     let place = ui.text(&ui.fit(&sum.place, MAC_HEADLINE_PT, room), MAC_HEADLINE_PT, Weight::Semibold, WHITE);
-                    let temp = ui.text(&sum.units.degrees(sum.temp), MAC_LARGE_TITLE_PT * 2.0, Weight::Regular, WHITE);
+                    let temp = ui.text(&sum.units.degrees(sum.temp), MAC_DISPLAY_PT, Weight::Regular, WHITE);
                     let sky = ui.text(sum.sky().label(), MAC_SUBHEAD_PT, Weight::Medium, WHITE);
                     let hl = ui.text(&format!("H:{}  L:{}", sum.units.degrees(sum.max), sum.units.degrees(sum.min)), MAC_SUBHEAD_PT, Weight::Regular, WHITE);
                     s.blit(&place, (x + pad) as i32, (y + pad) as i32, 255, alpha);
@@ -1264,6 +1284,16 @@ mod edit_capsule_tests {
         assert_eq!(super::edit_capsule_y(200.0, 12.0, 900.0), 212.0, "just under the last row");
         assert_eq!(super::edit_capsule_y(895.0, 12.0, 900.0), 900.0, "a full column keeps it above the dock");
         assert_eq!(super::edit_capsule_y(0.0, 0.0, 0.0), 0.0);
+    }
+
+    /// E2E NC2 review: the Calendar and Weather cards open the PC packages (".desktop" ids), the bare id only as a
+    /// fallback, so a tap is never dead on the desktop.
+    #[test]
+    fn the_info_cards_open_the_desktop_packages_first() {
+        use super::InfoCard;
+        assert_eq!(InfoCard::Calendar.app_ids()[0], "is.olibuijr.calendar.desktop");
+        assert_eq!(InfoCard::Weather.app_ids()[0], "is.olibuijr.weather.desktop");
+        assert_eq!(InfoCard::Weather.app_ids()[1], "is.olibuijr.weather");
     }
 }
 

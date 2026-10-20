@@ -5549,6 +5549,25 @@ JavaScript (`JavaScriptOSA`, `JavaScriptAppleEvents`) is not built, and `osascri
 properties and deleting notes or events from a script are refused by the apps for now. The language has no
 `repeat while`, no `considering`, and no object references beyond specifiers.
 
+## Notification Center column and Control Centre modules (desktop, E2E round e4)
+
+- Notification Center (`shell/notify/center.rs`, `draw_desk_center`): a column 0.245 of the screen wide (never under 342 pt)
+  at the right under the menu bar. Top to bottom: the title ("Notification Center" with a clear button, or the quiet
+  "No Notifications" line), the notification cards (the app's icon, name, title, body), a Calendar and, with a saved forecast,
+  Weather card, the widget rows, and the Edit Widgets capsule with a round close button. A card draws no icon when its app
+  has none (a package's icon comes from `apphost::icon_image`). Calendar and Weather open the PC packages
+  (`is.olibuijr.calendar.desktop`, `is.olibuijr.weather.desktop`), the bare tablet id as the fallback. The weekday and month on
+  the date card follow the region (`bifrost_ui::region::day_name`, `month_name`; English and Icelandic). The date and the
+  temperature use `MAC_DISPLAY_PT` (twice the large title). The cards are left out when they would leave no room for the
+  Edit Widgets capsule above the dock.
+- Control Centre (`shell/control_center.rs`, desktop): Bluetooth is always a module (it reads Unavailable and takes no pressed
+  state without a controller); Display is a brightness slider when a backlight exists, otherwise a capsule that flips the
+  appearance between Light and Dark. From Auto a tap picks a fixed Light or Dark; Auto is chosen again in Settings >
+  Appearance. Now Playing shows only while something plays.
+- Not done: the column computes its layout several times per frame (`center_desk_layout`, `center_info_rects`,
+  `center_content_end`); it is cheap but should become one layout value per frame. Not verified on Midget (written without a
+  build).
+
 ## App controls in Control Center (`shell::app_controls`, `ui::control_widget`)
 
 Apps add buttons and toggles to Control Center by declaring `[[control]]` tables in `manifest.toml`:

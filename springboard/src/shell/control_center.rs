@@ -2134,7 +2134,8 @@ impl Shell {
     }
 
     /// The Display module without a backlight: switches the appearance between Light and Dark (Settings > Appearance
-    /// keeps the choice; `appearance_tick` fades to it).
+    /// keeps the choice; `appearance_tick` fades to it). From Auto a tap picks a fixed Light or Dark (the opposite of what
+    /// shows now); Auto is chosen again in Settings.
     fn toggle_appearance(&mut self) {
         use bifrost_render::appearance::{publish_mode, target_is_light, Mode};
         let to = if target_is_light() { Mode::Dark } else { Mode::Light };
@@ -2317,6 +2318,8 @@ impl Shell {
                     self.cc.touch = Some(Touch::Slider(tile));
                     self.desk_slider_at(tile, r, x)
                 }
+                // no controller: the module does nothing, so it takes no pressed highlight either
+                Some((Tile::Bluetooth, _)) if self.info.bt.state == crate::bare::bluetooth::State::Unavailable => vec![],
                 Some((tile, _)) => {
                     self.cc.touch = Some(Touch::Tile(tile));
                     vec![]
