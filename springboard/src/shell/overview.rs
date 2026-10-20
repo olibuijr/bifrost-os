@@ -1034,7 +1034,9 @@ impl Shell {
         if ov.open {
             ov.close(self, None, t);
         }
-        if ov.grid.visible() {
+        // a grid that is still animating out opens again (a close that has been asked for once cannot be asked for twice,
+        // so the Dock's Apps icon would do nothing during it)
+        if ov.grid.visible() && !ov.grid.closing() {
             ov.grid.close(self, t);
         } else {
             ov.grid.open(self, t);
