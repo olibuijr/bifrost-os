@@ -2410,6 +2410,7 @@ mod tests {
 
     #[test]
     fn the_light_scheme_is_a_flag_and_the_config_dark_is_its_inverse() {
+        let _lock = crate::test_support::global_lock();
         use bifrost_proto::appearance::LIGHT;
         bifrost_render::appearance::jump_to(true);
         assert_ne!(appearance_flags() & LIGHT, 0, "light scheme sends the LIGHT bit");
@@ -2419,6 +2420,7 @@ mod tests {
 
     #[test]
     fn the_accent_colour_rides_in_the_appearance_flags() {
+        let _lock = crate::test_support::global_lock();
         use bifrost_proto::appearance::{ACCENT_MASK, ACCENT_SHIFT};
         use bifrost_render::appearance::{accent, set_accent, Accent};
         let keep = accent();

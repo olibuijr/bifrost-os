@@ -39,6 +39,8 @@ pub mod shortcuts;
 pub mod status;
 pub mod svc;
 pub mod symbols;
+#[cfg(any(test, feature = "testkit"))]
+pub mod test_support;
 #[cfg(target_os = "linux")]
 pub mod term;
 #[cfg(target_os = "linux")]

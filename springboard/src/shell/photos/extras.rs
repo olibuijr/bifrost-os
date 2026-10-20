@@ -1642,7 +1642,9 @@ mod tests {
 
     #[test]
     fn importing_copies_a_folder_and_reports() {
-        let (mut p, dir, ui) = photos("import", 1);
+        // not "import": the importer's own test scratches `<tests>/import-<pid>` in this same process, and two tests
+        // removing and refilling one directory race each other
+        let (mut p, dir, ui) = photos("extras-import", 1);
         let source = dir.join("card");
         picture(&source.join("DCIM/IMG_9001.png"), 1_790_500_000);
         std::fs::write(source.join("notes.txt"), b"x").unwrap();

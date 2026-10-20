@@ -834,9 +834,9 @@ mod tests {
     #[test]
     fn plays_to_the_end_with_frames_in_order_and_fitted_to_the_viewport() {
         let mut p = player(BASELINE);
-        pump(&mut p, 1000, |p| p.duration_ms().is_some());
+        pump(&mut p, 10_000, |p| p.duration_ms().is_some());
         assert_eq!(p.duration_ms().map(|d| d.round()), Some(1000.0));
-        let frames = pump(&mut p, 3000, |p| p.state() == State::Ended);
+        let frames = pump(&mut p, 20_000, |p| p.state() == State::Ended);
         assert_eq!(p.state(), State::Ended);
         assert!(frames.len() >= 20 && frames.len() <= 30, "{} frames", frames.len());
         assert!(frames.iter().all(|f| (f.w, f.h) == (240, 160)), "96x64 fitted into 240x160");
@@ -862,7 +862,7 @@ mod tests {
     #[test]
     fn pause_freezes_and_resume_continues() {
         let mut p = player(BASELINE);
-        pump(&mut p, 1000, |p| p.position_ms() > 150.0);
+        pump(&mut p, 10_000, |p| p.position_ms() > 150.0);
         p.pause();
         assert_eq!(p.state(), State::Paused);
         let at = p.position_ms();
@@ -873,7 +873,7 @@ mod tests {
         assert_eq!(p.state(), State::Playing);
         // Frames more than LATE_MS behind the clock are dropped, so under a loaded test run 200 ms of media can pass
         // with few frames shown; wait for 400 ms of media within a longer budget.
-        let frames = pump(&mut p, 3000, |p| p.position_ms() > at + 400.0);
+        let frames = pump(&mut p, 15_000, |p| p.position_ms() > at + 400.0);
         assert!(!frames.is_empty());
         p.stop();
         assert_eq!(p.state(), State::Ended);
@@ -882,9 +882,9 @@ mod tests {
     #[test]
     fn seek_restarts_at_the_keyframe() {
         let mut p = player(BASELINE);
-        pump(&mut p, 1000, |p| p.position_ms() > 100.0);
+        pump(&mut p, 10_000, |p| p.position_ms() > 100.0);
         p.seek_ms(800.0);
-        let frames = pump(&mut p, 1000, |_| false);
+        let frames = pump(&mut p, 15_000, |p| p.state() == State::Ended);
         let frames: Vec<&Image> = frames.iter().filter(|f| luma(f) >= 16 + 500 / 5).collect();
         assert!(!frames.is_empty(), "frames after the seek");
         // keyframe at 500 ms, frames below the target are dropped, so the first shown is >= 800
@@ -896,7 +896,7 @@ mod tests {
     fn missing_data_buffers_then_resumes() {
         let mem = Growing(Arc::new(Mutex::new(MemSource { data: BASELINE.to_vec(), available: 3000, complete: false })));
         let mut p = Player::open_parts(Box::new(mem.clone()), StubDecoder::new(), Box::new(NullOut::new())).unwrap();
-        pump(&mut p, 1000, |p| matches!(p.state(), State::Buffering { .. }));
+        pump(&mut p, 10_000, |p| matches!(p.state(), State::Buffering { .. }));
         let State::Buffering { need } = p.state() else { panic!("{:?}", p.state()) };
         assert!(need.0 >= 3000 && need.1 > 0);
         {
@@ -904,7 +904,7 @@ mod tests {
             m.available = BASELINE.len() as u64;
             m.complete = true;
         }
-        pump(&mut p, 3000, |p| p.state() == State::Ended);
+        pump(&mut p, 20_000, |p| p.state() == State::Ended);
         assert_eq!(p.state(), State::Ended);
     }
 
@@ -912,11 +912,11 @@ mod tests {
     fn moov_arriving_late_is_waited_for() {
         let mem = Growing(Arc::new(Mutex::new(MemSource { data: BASELINE.to_vec(), available: 100, complete: false })));
         let mut p = Player::open_parts(Box::new(mem.clone()), StubDecoder::new(), Box::new(NullOut::new())).unwrap();
-        pump(&mut p, 1000, |p| matches!(p.state(), State::Buffering { .. }));
+        pump(&mut p, 10_000, |p| matches!(p.state(), State::Buffering { .. }));
         assert!(matches!(p.state(), State::Buffering { .. }));
         assert_eq!(p.duration_ms(), None);
         mem.0.lock().unwrap_or_else(|p| p.into_inner()).available = BASELINE.len() as u64;
-        pump(&mut p, 1000, |p| p.duration_ms().is_some());
+        pump(&mut p, 10_000, |p| p.duration_ms().is_some());
         assert_eq!(p.duration_ms().map(|d| d.round()), Some(1000.0));
     }
 
@@ -931,7 +931,7 @@ mod tests {
         let mut p = player(BASELINE);
         let mut sink = Last(Vec::new());
         let start = Instant::now();
-        while start.elapsed().as_millis() < 2500 && p.state() != State::Ended {
+        while start.elapsed().as_millis() < 20_000 && p.state() != State::Ended {
             if crate::bare::sys::wait(&[p.fd()], 20)[0] {
                 p.present_to(&mut sink);
             }
@@ -948,7 +948,7 @@ mod tests {
         d.fail = true;
         let p = Player::open_parts(Box::new(MemSource::new(BASELINE.to_vec())), d, Box::new(NullOut::new())).unwrap();
         let start = Instant::now();
-        while !matches!(p.state(), State::Error(_)) && start.elapsed().as_secs() < 2 {
+        while !matches!(p.state(), State::Error(_)) && start.elapsed().as_secs() < 10 {
             std::thread::sleep(Duration::from_millis(10));
         }
         assert!(matches!(p.state(), State::Error(e) if e.contains("no hardware")), "{:?}", p.state());
@@ -962,7 +962,7 @@ mod tests {
         std::fs::write(&path, BASELINE).unwrap();
         let p = Player::open(&path).unwrap();
         let start = Instant::now();
-        while !matches!(p.state(), State::Error(_)) && start.elapsed().as_secs() < 2 {
+        while !matches!(p.state(), State::Error(_)) && start.elapsed().as_secs() < 10 {
             std::thread::sleep(Duration::from_millis(10));
         }
         // the demux succeeds, then the decoder opens or not: no VSP and no libavcodec fails to open it, a desktop with

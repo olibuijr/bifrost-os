@@ -956,6 +956,7 @@
     #[cfg(feature="desktop-wayland")]
     #[test]
     fn a_frame_for_an_apps_pixels_alone_draws_no_shell_surface() {
+        let _lock=crate::test_support::global_lock();
         let saved=std::env::var_os("SPRINGBOARD_WAYLAND");std::env::set_var("SPRINGBOARD_WAYLAND","1");
         let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;sh.drawn=Drawn::App;
         let (w,h)=(sh.w as usize,sh.h as usize);
@@ -1139,6 +1140,7 @@
     #[test]
     #[ignore]
     fn preview_settings() {
+        let _lock=crate::test_support::global_lock();
         let Some(dir)=std::env::var_os("PREVIEW_DIR") else {return};
         let pages=std::env::var("PREVIEW_PAGES").unwrap_or_else(|_|"General".into());
         for (name,light) in [("dark",false),("light",true)].into_iter().filter(|(n,_)|std::env::var("PREVIEW_ONLY").map_or(true,|o|o==*n)) {
@@ -1294,6 +1296,7 @@
                 Some(login::AccountInfo { full_name: "Ada Lovelace".into(), username: "ada".into(), has_password: true, locked_out_secs: 0, password_hint: String::new() })
             }
         }
+        let _lock = crate::test_support::global_lock();
         let Some(dir) = std::env::var_os("PREVIEW_DIR") else { return };
         for (name, light) in [("dark", false), ("light", true)] {
             bifrost_render::appearance::jump_to(light);
@@ -1475,6 +1478,7 @@
     #[cfg(feature = "desktop-wayland")]
     #[test]
     fn a_bar_only_frame_repaints_only_the_menu_bar_band() {
+        let _lock=crate::test_support::global_lock();
         let saved=std::env::var_os("SPRINGBOARD_WAYLAND");std::env::set_var("SPRINGBOARD_WAYLAND","1");
         let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;sh.drawn=Drawn::App;
         let mut pixels=vec![0;sh.w as usize*sh.h as usize];
@@ -1510,6 +1514,7 @@
     #[cfg(feature = "desktop-wayland")]
     #[test]
     fn a_bar_only_frame_reports_damage_for_the_changed_items_alone() {
+        let _lock=crate::test_support::global_lock();
         let saved=std::env::var_os("SPRINGBOARD_WAYLAND");std::env::set_var("SPRINGBOARD_WAYLAND","1");
         let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;sh.drawn=Drawn::App;
         let (w,h)=(sh.w as usize,sh.h as usize);
@@ -1531,6 +1536,7 @@
     #[cfg(feature = "desktop-wayland")]
     #[test]
     fn review_performance_overlay_repaints_only_its_desktop_band() {
+        let _lock=crate::test_support::global_lock();
         let saved=std::env::var_os("SPRINGBOARD_WAYLAND");std::env::set_var("SPRINGBOARD_WAYLAND","1");
         let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;sh.perf.enabled=true;sh.drawn=Drawn::App;
         let mut pixels=vec![0;sh.w as usize*sh.h as usize];
