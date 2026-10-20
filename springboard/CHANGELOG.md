@@ -13,6 +13,7 @@
 - The first system sound after the audio server connects is no longer lost: the shell keeps its sound player while the
   stream opens instead of starting over.
 - `bifrost-audio status` says whether the media service or the audio server is the missing part.
+- Mission Control now opens above the app windows (an overlay surface above every window, with the keyboard while it is open): click a window to raise it, or click empty space, press Esc, F3 or Ctrl+Up to close it. F4 opens and closes the Apps grid, and the mouse wheel pages through it.
 
 ## 0.10.8 — 2026-10-20
 

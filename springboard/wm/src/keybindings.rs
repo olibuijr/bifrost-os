@@ -1,8 +1,8 @@
-//! Compositor key bindings: Super+Space opens the search panel, Ctrl+Up and F3 Mission Control, Alt+Tab cycles the focus,
-//! Alt+F4 closes the focused window, Ctrl+Super+arrows tile it and Ctrl+Super+F toggles full screen. The shell only gets
-//! keys while one of its surfaces has focus, so the compositor takes these chords before any client sees them. Super+A is
-//! deliberately not bound: Cmd+A is Select All and belongs to the app (the app list launcher it used to start was a
-//! leftover of the old window manager).
+//! Compositor key bindings: Super+Space opens the search panel, Ctrl+Up and F3 Mission Control, F4 the Apps grid,
+//! Alt+Tab cycles the focus, Alt+F4 closes the focused window, Ctrl+Super+arrows tile it and Ctrl+Super+F toggles full
+//! screen. The shell only gets keys while one of its surfaces has focus, so the compositor takes these chords before any
+//! client sees them. Super+A is deliberately not bound: Cmd+A is Select All and belongs to the app (the app list
+//! launcher it used to start was a leftover of the old window manager).
 //!
 //! [`action`] is pure (keysym and modifiers in, action out) and host-tested. [`WmState::run_action`] performs one.
 
@@ -31,6 +31,8 @@ pub const CONTROL_ADDR: &str = "127.0.0.1:7777";
 pub const QUICKSEARCH_LINE: &[u8] = b"quicksearch\n";
 /// The line sent to the shell for Mission Control.
 pub const OVERVIEW_LINE: &[u8] = b"overview\n";
+/// The line sent to the shell for the Apps grid.
+pub const APPGRID_LINE: &[u8] = b"appgrid\n";
 
 /// The modifier keys held with a chord.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -52,6 +54,8 @@ pub enum Action {
     QuickSearch,
     /// Ctrl+Up and F3: Mission Control, sends `overview` to the shell control port.
     MissionControl,
+    /// F4: the Apps grid, sends `appgrid` to the shell control port.
+    AppGrid,
     /// Alt+Tab: focuses the next window.
     NextWindow,
     /// Alt+F4: closes the focused toplevel.
@@ -73,6 +77,7 @@ pub fn action(sym: u32, mods: Mods) -> Option<Action> {
         keysym::SPACE if super_only => Some(Action::QuickSearch),
         keysym::UP if ctrl_only => Some(Action::MissionControl),
         keysym::F3 if mods == none => Some(Action::MissionControl),
+        keysym::F4 if mods == none => Some(Action::AppGrid),
         keysym::TAB if alt_only => Some(Action::NextWindow),
         keysym::F4 if alt_only => Some(Action::CloseWindow),
         keysym::F if ctrl_super => Some(Action::FullScreen),
@@ -106,6 +111,7 @@ impl WmState {
         match action {
             Action::QuickSearch => tell_shell(QUICKSEARCH_LINE),
             Action::MissionControl => tell_shell(OVERVIEW_LINE),
+            Action::AppGrid => tell_shell(APPGRID_LINE),
             Action::NextWindow => {
                 let shown: Vec<WindowId> = self.wm.stack().into_iter().filter(|id| self.wm.visible(*id)).collect();
                 if let Some(id) = next_window(&shown) {
@@ -161,6 +167,14 @@ mod tests {
 
     #[test]
     fn mission_control_is_one_line_for_the_control_port() { assert_eq!(OVERVIEW_LINE, b"overview\n"); }
+
+    #[test]
+    fn f4_is_the_apps_grid_and_alt_f4_still_closes() {
+        assert_eq!(action(keysym::F4, Mods::default()), Some(Action::AppGrid));
+        assert_eq!(action(keysym::F4, ALT), Some(Action::CloseWindow));
+        assert_eq!(action(keysym::F4, Mods { ctrl: true, ..Mods::default() }), None);
+        assert_eq!(APPGRID_LINE, b"appgrid\n");
+    }
 
     #[test]
     fn alt_tab_cycles_and_alt_f4_closes() {

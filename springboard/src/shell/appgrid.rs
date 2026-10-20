@@ -152,10 +152,7 @@ impl AppGrid {
         if !self.open {
             return None;
         }
-        let m = sh.desk_metrics();
-        let top = m.menubar.max(0);
-        let bottom = m.h - if sh.dock_is_visible() { m.dock_bottom } else { 0 };
-        (m.w > 0 && bottom > top).then(|| (0, top as usize, m.w as usize, (bottom - top) as usize))
+        sh.overview_veil_rect()
     }
 
     fn lay(&self, sh: &Shell) -> Lay {

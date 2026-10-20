@@ -331,6 +331,35 @@ impl Overview {
         self.open || self.slide.is_some() || self.grid.visible()
     }
 
+    /// The overlay surface Mission Control is exported as on the window server (x, y, w, h px): the veil between the menu
+    /// bar and the Dock, above every window. Listed only while Overview is open, which includes its enter and leave
+    /// animations (`open` turns false in `finish`, the frame the windows come back), so closing removes the surface.
+    #[allow(dead_code)] // the window-server export is the desktop-wayland build's
+    pub(super) fn overlay_rect(&self, sh: &Shell) -> Option<(usize, usize, usize, usize)> {
+        if self.open {
+            sh.overview_veil_rect()
+        } else {
+            None
+        }
+    }
+
+    /// The overlay surface of a desktop switch's sweep (same rectangle): present only while the sweep runs and Mission
+    /// Control is not open (it then has its own surface). It takes no pointer and no keys.
+    #[allow(dead_code)] // the window-server export is the desktop-wayland build's
+    pub(super) fn slide_overlay_rect(&self, sh: &Shell) -> Option<(usize, usize, usize, usize)> {
+        if !self.open && self.slide.is_some() {
+            sh.overview_veil_rect()
+        } else {
+            None
+        }
+    }
+
+    /// Tiles in the current layout: (app, final rectangle), back to front.
+    #[cfg(test)]
+    fn tile_rects(&self) -> Vec<(AppId, FRect)> {
+        self.tiles.iter().map(|t| (t.app, t.to)).collect()
+    }
+
     fn prog(&self, t: f64) -> f32 {
         match self.closing {
             Some(c) => 1.0 - progress(Kind::OverviewEnter, Curve::EaseInOut, c, t),
@@ -744,6 +773,33 @@ fn draw_slide(sh: &Shell, s: &mut Surface, dir: i32, start: f64, current: usize,
 }
 
 impl Shell {
+    /// The veil's rectangle (x, y, w, h px): the full width between the menu bar and the Dock. The menu bar and the Dock stay
+    /// their own surfaces, above or beside it, and stay usable. None when the output has no room for it.
+    pub(super) fn overview_veil_rect(&self) -> Option<(usize, usize, usize, usize)> {
+        let m = self.desk_metrics();
+        let top = m.menubar.max(0);
+        let bottom = m.h - if self.dock_is_visible() { m.dock_bottom } else { 0 };
+        (m.w > 0 && bottom > top).then(|| (0, top as usize, m.w as usize, (bottom - top) as usize))
+    }
+
+    /// The pointer moved over the veil without a button while Mission Control is open: the tile under it is highlighted. True
+    /// when the point is on the veil (the surface under it must not see the pointer); the menu bar and the Dock are not.
+    pub fn overview_hover(&mut self, x: f32, y: f32) -> bool {
+        if !self.desk_active() || self.is_locked() || !self.overview.open || self.overview.closing.is_some() {
+            return false;
+        }
+        let Some((vx, vy, vw, vh)) = self.overview_veil_rect() else { return false };
+        if x < vx as f32 || x >= (vx + vw) as f32 || y < vy as f32 || y >= (vy + vh) as f32 {
+            return false;
+        }
+        let tg = self.overview.target_at(&self.overview.geo(self), x, y);
+        if self.overview.hover != Some(tg) {
+            self.overview.hover = Some(tg);
+            self.dirty = true;
+        }
+        true
+    }
+
     /// True while Overview, the Apps grid or a desktop switch is on screen.
     pub(super) fn overview_active(&self) -> bool {
         self.desk_active() && self.overview.visible()
@@ -941,9 +997,17 @@ impl Shell {
         true
     }
 
-    /// Wheel or two-finger scroll while the Apps grid is open pages through it; true when it was taken.
+    /// Wheel or two-finger scroll while the Apps grid is open pages through it (`dx`, `dy` positive: the next page, so the
+    /// wheel turned down or a swipe to the left); while Mission Control is open the wheel is swallowed (nothing under the
+    /// veil scrolls). True when it was taken.
     pub fn overview_scroll(&mut self, dx: f32, dy: f32, t: f64) -> bool {
-        if !self.desk_active() || !self.overview.grid.visible() {
+        if !self.desk_active() || self.is_locked() {
+            return false;
+        }
+        if self.overview.open && !self.overview.grid.visible() {
+            return true;
+        }
+        if !self.overview.grid.visible() {
             return false;
         }
         let mut ov = std::mem::take(&mut self.overview);
@@ -1036,5 +1100,201 @@ mod tests {
         assert!(!sh.hw_overview_key(KEY_UP, true, KeyMods { ctrl: true, cmd: false, shift: false }, true, 1000.0), "Ctrl+Alt+Up is the screen reader's");
         assert!(!sh.hw_overview_key(KEY_F3, true, KeyMods { ctrl: false, cmd: true, shift: false }, false, 1000.0), "Cmd+F3 is not Mission Control");
         assert!(!sh.overview.open);
+    }
+
+    // ---- Mission Control as an overlay surface (E2E round 3, MC1) ----
+
+    const NO_MODS: KeyMods = KeyMods { ctrl: false, cmd: false, shift: false };
+    const APPS_FOR_TILES: [AppId; 6] = [AppId::Settings, AppId::AppStore, AppId::Terminal, AppId::Deildu, AppId::Photos, AppId::Magnifier];
+
+    /// A desktop shell on an output of `w` x `h` px at `s` px per point, past the lock screen, with `n` windows open.
+    fn desk_with(n: usize, w: i32, h: i32, s: f32) -> Shell {
+        let mut sh = crate::shell::tests::desktop_shell();
+        // the fixture starts on the lock screen, where nothing opens and no chrome is exported
+        sh.anim = None;
+        sh.screen_on = true;
+        sh.screen = crate::shell::Screen::Home;
+        sh.w = w;
+        sh.h = h;
+        sh.ui.s = s;
+        let m = sh.desk_metrics();
+        let d = sh.desk.as_mut().unwrap();
+        d.wins.clear();
+        for app in APPS_FOR_TILES.into_iter().take(n) {
+            d.open(&m, app, (m.w * 6 / 10, m.h * 5 / 10));
+        }
+        sh
+    }
+
+    /// Runs whatever Overview and the grid animate to their ends, as the frames after the close would.
+    fn settle(sh: &mut Shell) {
+        let (w, h) = (sh.w as usize, sh.h as usize);
+        let mut px = vec![0u32; w * h];
+        sh.draw_overview(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, 1e9);
+    }
+
+    #[test]
+    fn the_layout_scales_with_the_area_it_is_given() {
+        let sizes = [(900.0, 600.0), (700.0, 500.0), (1100.0, 640.0), (500.0, 500.0)];
+        let a = FRect { x: 40.0, y: 120.0, w: 1500.0, h: 700.0 };
+        let one = grid_layout(&sizes, a, 26.0);
+        let k = 1.5;
+        let big: Vec<(f32, f32)> = sizes.iter().map(|&(w, h)| (w * k, h * k)).collect();
+        let two = grid_layout(&big, FRect { x: a.x * k, y: a.y * k, w: a.w * k, h: a.h * k }, 26.0 * k);
+        assert_eq!(one.len(), two.len());
+        for (p, q) in one.iter().zip(&two) {
+            for (a, b) in [(p.x, q.x), (p.y, q.y), (p.w, q.w), (p.h, q.h)] {
+                assert!((a * k - b).abs() < 0.5, "the same arrangement at another scale: {p:?} vs {q:?}");
+            }
+        }
+    }
+
+    /// Whatever the output size, aspect ratio or scale, every window of the desktop gets a tile, the tiles never overlap, and
+    /// all of them lie in the area under the desktops strip and above the Dock.
+    #[test]
+    fn tiles_fit_any_output_without_overlap() {
+        for (w, h, s) in [(1200, 1920, 1.0), (1920, 1080, 1.0), (1366, 768, 1.0), (2560, 1080, 1.25), (3840, 2160, 2.0), (800, 1280, 0.75)] {
+            for n in 1..=APPS_FOR_TILES.len() {
+                let mut sh = desk_with(n, w, h, s);
+                sh.overview_toggle(1000.0);
+                assert!(sh.overview.open, "{w}x{h} opens");
+                let tiles = sh.overview.tile_rects();
+                assert_eq!(tiles.len(), n, "{w}x{h} at {s}: a tile per window");
+                let g = sh.overview.geo(&sh);
+                let (_, vy, _, vh) = sh.overview_veil_rect().expect("the output has room for the veil");
+                assert!(g.area.y >= vy as f32 && g.area.y + g.area.h <= (vy + vh) as f32 + 0.5, "{w}x{h}: the tile area is inside the veil");
+                for (i, (_, a)) in tiles.iter().enumerate() {
+                    assert!(a.x >= g.area.x - 0.5 && a.x + a.w <= g.area.x + g.area.w + 0.5, "{w}x{h} tile {i} of {n} outside in x");
+                    assert!(a.y >= g.area.y - 0.5 && a.y + a.h <= g.area.y + g.area.h + 0.5, "{w}x{h} tile {i} of {n} outside in y");
+                    for (_, b) in &tiles[i + 1..] {
+                        assert!(!a.overlaps(b), "{w}x{h} at {s}: {n} tiles overlap");
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn f4_opens_and_closes_the_apps_grid_and_mission_control_swallows_other_keys() {
+        let mut sh = desk_with(2, 1920, 1080, 1.0);
+        assert!(sh.hw_overview_key(KEY_F4, true, NO_MODS, false, 1000.0), "F4 opens the Apps grid");
+        assert!(sh.overview.grid.visible());
+        assert!(sh.hw_overview_key(KEY_F4, true, NO_MODS, false, 2000.0), "and closes it");
+        settle(&mut sh);
+        assert!(!sh.overview.grid.visible());
+        assert!(!sh.hw_overview_key(KEY_F4, true, KeyMods { ctrl: true, ..NO_MODS }, false, 3000.0), "Ctrl+F4 is not the grid's");
+        assert!(!sh.hw_overview_key(KEY_F4, true, NO_MODS, true, 3000.0), "Alt+F4 closes a window");
+        // Mission Control is modal: a letter is used up, a modifier passes, Esc closes it
+        assert!(sh.hw_overview_key(KEY_F3, true, NO_MODS, false, 4000.0));
+        assert!(sh.overview.open);
+        assert!(sh.hw_overview_key(30, true, NO_MODS, false, 4100.0), "a letter does not reach the app under it");
+        assert!(!sh.hw_overview_key(29, true, KeyMods { ctrl: true, ..NO_MODS }, false, 4200.0), "Ctrl passes");
+        assert!(sh.hw_overview_key(KEY_ESC, true, NO_MODS, false, 5000.0), "Esc closes it");
+        settle(&mut sh);
+        assert!(!sh.overview.open, "closed once its animation ends");
+        // F3 and Ctrl+Up close it, too
+        for (code, mods) in [(KEY_F3, NO_MODS), (KEY_UP, KeyMods { ctrl: true, ..NO_MODS })] {
+            assert!(sh.hw_overview_key(code, true, mods, false, 6000.0));
+            assert!(sh.overview.open);
+            assert!(sh.hw_overview_key(code, true, mods, false, 7000.0));
+            settle(&mut sh);
+            assert!(!sh.overview.open, "the chord that opened it closes it");
+        }
+    }
+
+    #[test]
+    fn the_wheel_pages_the_apps_grid_and_mission_control_swallows_it() {
+        let mut sh = desk_with(1, 1920, 1080, 1.0);
+        assert!(!sh.overview_scroll(0.0, 100.0, 1000.0), "nothing open: the wheel is the window's");
+        sh.appgrid_toggle(1000.0);
+        assert!(sh.overview_scroll(0.0, 100.0, 1100.0), "the grid takes the wheel");
+        assert!(sh.overview_scroll(100.0, 0.0, 1200.0), "and a sideways swipe");
+        sh.appgrid_toggle(2000.0);
+        settle(&mut sh);
+        sh.overview_toggle(3000.0);
+        assert!(sh.overview.open);
+        assert!(sh.overview_scroll(0.0, 100.0, 3100.0), "nothing under the veil scrolls");
+    }
+
+    #[test]
+    fn clicking_a_window_raises_it_and_closes_mission_control_and_empty_space_just_closes() {
+        let mut sh = desk_with(2, 1920, 1080, 1.0);
+        // click the window that is not in front
+        let front = sh.desk.as_ref().unwrap().front().map(|w| w.app).unwrap();
+        let other = if front == AppId::Settings { AppId::AppStore } else { AppId::Settings };
+        sh.overview_toggle(1000.0);
+        let tile = sh.overview.tile_rects().into_iter().find(|(a, _)| *a == other).expect("a tile for each window").1;
+        let (cx, cy) = (tile.x + tile.w / 2.0, tile.y + tile.h / 2.0);
+        // the pointer over the tile highlights it
+        assert!(sh.overview_hover(cx, cy), "the veil takes the hover");
+        assert!(matches!(sh.overview.hover, Some(Target::Tile(_))));
+        assert!(!sh.overview_hover(2.0, 2.0), "the menu bar is not the veil's");
+        assert!(sh.overview_event(Event::Down(cx, cy), 2000.0).is_some());
+        assert!(sh.overview_event(Event::Up(cx, cy), 2010.0).is_some());
+        assert!(sh.overview.closing.is_some() || !sh.overview.open, "the click closes it");
+        settle(&mut sh);
+        assert!(!sh.overview.open);
+        assert_eq!(sh.desk.as_ref().unwrap().front().map(|w| w.app), Some(other), "and raises the window that was clicked");
+        // a click on empty space (the area's bottom left corner holds no tile) only closes it
+        sh.overview_toggle(3000.0);
+        let g = sh.overview.geo(&sh);
+        let (ex, ey) = (2.0, g.area.y + g.area.h - 2.0);
+        assert!(matches!(sh.overview.target_at(&g, ex, ey), Target::Back), "the corner of the area is empty");
+        assert!(sh.overview_event(Event::Down(ex, ey), 4000.0).is_some());
+        assert!(sh.overview_event(Event::Up(ex, ey), 4010.0).is_some());
+        assert!(sh.overview.closing.is_some() || !sh.overview.open);
+        settle(&mut sh);
+        assert!(!sh.overview.open);
+        assert_eq!(sh.desk.as_ref().unwrap().front().map(|w| w.app), Some(other), "the stack is as it was");
+    }
+
+    #[cfg(feature = "desktop-wayland")]
+    fn frame_ids(sh: &Shell) -> Vec<u32> {
+        let (w, h) = (sh.w as usize, sh.h as usize);
+        let pixels = vec![0u32; w * h];
+        sh.desktop_chrome_frames(&pixels, w, h).iter().map(|f| f.id).collect()
+    }
+
+    /// Mission Control is chrome surface 9 (above the windows) only while it is open.
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn the_surface_is_listed_only_while_mission_control_is_open() {
+        let mut sh = desk_with(2, 1920, 1080, 1.0);
+        let (w, h) = (sh.w as usize, sh.h as usize);
+        assert!(!frame_ids(&sh).contains(&9), "closed: no surface");
+        sh.overview_toggle(1000.0);
+        let pixels = vec![0u32; w * h];
+        let frames = sh.desktop_chrome_frames(&pixels, w, h);
+        let f = frames.iter().find(|f| f.id == 9).expect("the open Mission Control is a chrome surface above the windows");
+        assert_eq!(f.pixels.len(), f.width * f.height);
+        assert_eq!((f.x, f.y as usize, f.width), (0, sh.desktop_bar_height(), w), "the full width under the menu bar");
+        assert!(f.y as usize + f.height <= h - sh.desk_metrics().dock_bottom.max(0) as usize, "and above the Dock");
+        assert!(f.input.is_none(), "the whole surface takes the pointer, so a click on empty space closes it");
+        assert!(!frames.iter().any(|f| f.id == 10), "no sweep surface while it is open");
+        // closing: still listed while it animates out, gone the frame it ends in
+        sh.hw_overview_key(KEY_ESC, true, NO_MODS, false, 2000.0);
+        if sh.overview.closing.is_some() {
+            assert!(frame_ids(&sh).contains(&9), "listed while it animates out");
+        }
+        settle(&mut sh);
+        assert!(!frame_ids(&sh).contains(&9), "the frame it closes in drops the surface");
+    }
+
+    /// A desktop switch's sweep is surface 10 with an empty input region, and only while it runs.
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn a_desktop_switch_sweeps_on_a_surface_that_takes_no_input() {
+        let mut sh = desk_with(1, 1920, 1080, 1.0);
+        sh.overview.spaces.count = 2;
+        sh.switch_desktop(1, 1000.0);
+        assert!(sh.overview.slide.is_some(), "the sweep runs");
+        let (w, h) = (sh.w as usize, sh.h as usize);
+        let pixels = vec![0u32; w * h];
+        let frames = sh.desktop_chrome_frames(&pixels, w, h);
+        let f = frames.iter().find(|f| f.id == 10).expect("the sweep is a surface above the windows");
+        assert_eq!(f.input, Some([0, 0, 0, 0]), "an empty input region: the pointer reaches what is below");
+        assert!(!frames.iter().any(|f| f.id == 9), "it is not Mission Control");
+        settle(&mut sh);
+        assert!(!frame_ids(&sh).contains(&10), "gone when the sweep ends");
     }
 }
