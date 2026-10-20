@@ -2724,7 +2724,7 @@ impl Shell {
         }
     }
 
-    /// What the shell itself draws over the desktop: the bar, the Dock, menus, the keyboard, Quick Look and the HUD.
+    /// What the shell itself draws over the desktop: the bar, the Dock, menus, the keyboard, the file preview and the HUD.
     fn draw_desk_chrome(&mut self, s: &mut Surface, t: f64) {
         let m = self.desk_metrics();
         self.draw_app_status(s);

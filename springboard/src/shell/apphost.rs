@@ -2694,7 +2694,7 @@ mod window_table_tests {
     /// frame of windows (`frame`), not for the shell to draw anything itself (`chrome`).
     #[test]
     fn identical_state_asks_for_no_frame_and_pixels_alone_are_no_chrome_change() {
-        let (mut host, _peer) = fixture_host();
+        let (mut host, _peer) = super::route_tests::fixture_host();
         let titles = || ToShell::UndoTitles { undo: "Undo Typing".into(), redo: String::new() };
         let mut first = Pumped::default();
         host.handle(titles(), Vec::new(), &mut first);
@@ -2951,7 +2951,7 @@ mod route_tests {
         assert!(!host.take_fallback(), "a shared-memory app is never demoted again");
     }
 
-    fn fixture_host() -> (AppHost, Channel) {
+    pub(super) fn fixture_host() -> (AppHost, Channel) {
         let (channel, peer) = sys::socketpair_pair().unwrap();
         let cfg = Configure { w: 4, h: 3, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
         (AppHost::with_channel("fixture", channel, None, cfg), peer)
