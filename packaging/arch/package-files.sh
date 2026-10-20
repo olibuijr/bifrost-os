@@ -53,6 +53,33 @@ package_bifrost_files() {
   # under, and the trigger that starts the target on the first desktop frame
   install -Dm755 "$PC_BIFROSTD" "$pkgdir/usr/bin/bifrostd"
   install -Dm644 "$here/bifrostd.service" "$pkgdir/usr/lib/systemd/system/bifrostd.service"
+  # The system services bifrostd supervises (docs/services.md "System services"): the audio (media player), network and
+  # update services are part of the OS, not store apps. The package owns /usr/lib/bifrost/services/<id>/ (a path no earlier
+  # install has a file at, so pacman finds no conflict) with the manifest from springboard/system/<dir> and the executable
+  # the manifest names. bifrostd reads it read-only; a store-installed copy wins only with a newer manifest version.
+  # Sockets stay <root>/run/<id>.sock. PC_SVC_AUDIOD / PC_SVC_NETD / PC_SVC_UPDATED override the binary paths; they default
+  # to the directory of the shell binary, where `cargo build -p audiod -p netd -p updated` puts them.
+  local spec sdir sbin svar sbinpath sid sexec smanifest
+  for spec in audio:audiod:PC_SVC_AUDIOD net:netd:PC_SVC_NETD update:updated:PC_SVC_UPDATED; do
+    IFS=: read -r sdir sbin svar <<<"$spec"
+    smanifest="$here/../../springboard/system/$sdir/manifest.toml"
+    sbinpath=${!svar:-$(dirname "$binary")/$sbin}
+    if [[ ! -x $sbinpath ]]; then
+      echo "package-files.sh: system service binary $sbin is not an executable ($sbinpath); build it first (cargo build -p $sbin; tools/pc-publish.py does)" >&2
+      return 1 2>/dev/null || exit 1
+    fi
+    sid=$(sed -n 's/^id[[:space:]]*=[[:space:]]*"\(.*\)"[[:space:]]*$/\1/p' "$smanifest" | head -n1)
+    sexec=$(sed -n 's/^exec[[:space:]]*=[[:space:]]*"\(.*\)"[[:space:]]*$/\1/p' "$smanifest" | head -n1)
+    if [[ -z $sid || $sexec != "$sbin" ]]; then
+      echo "package-files.sh: $smanifest must name id and exec = \"$sbin\" (id='$sid', exec='$sexec')" >&2
+      return 1 2>/dev/null || exit 1
+    fi
+    install -Dm644 "$smanifest" "$pkgdir/usr/lib/bifrost/services/$sid/manifest.toml"
+    install -Dm755 "$sbinpath" "$pkgdir/usr/lib/bifrost/services/$sid/$sexec"
+    if [[ -f $here/../../springboard/system/$sdir/icon.png ]]; then
+      install -Dm644 "$here/../../springboard/system/$sdir/icon.png" "$pkgdir/usr/lib/bifrost/services/$sid/icon.png"
+    fi
+  done
   # zram swap at boot (memory pressure; bifrostd adds swap files under pressure once it runs)
   install -Dm644 "$here/bifrost-zram.service" "$pkgdir/usr/lib/systemd/system/bifrost-zram.service"
   # application firewall: the per-app inbound policies (bifrost-firewall, springboard/cmd) loaded as nftables rules

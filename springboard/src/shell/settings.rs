@@ -2750,7 +2750,8 @@ impl Settings {
                     Pick::AlertSound(k) => {
                         self.opts.alert_sound = k.min(super::options::ALERT_SOUNDS.len() - 1);
                         self.opts.save(prefs);
-                        vec![]
+                        // choosing a sound plays it once (the binary skips it while the output is muted)
+                        vec![Effect::AlertSound(self.opts.alert_sound)]
                     }
                     Pick::ScreenSaverStart(k) => {
                         self.opts.screensaver_minutes = super::screensaver::START_AFTER[k.min(super::screensaver::START_AFTER.len() - 1)].1;
@@ -4458,7 +4459,7 @@ mod tests {
         assert_eq!(prefs.get("keyboard_clicks"), Some("0"));
         tap_row(&mut st, &ui, &mut prefs, "Lock Sound");
         assert_eq!(prefs.get("lock_sound"), Some("0"));
-        assert!(tap_row(&mut st, &ui, &mut prefs, "Chime").is_empty());
+        assert_eq!(tap_row(&mut st, &ui, &mut prefs, "Chime"), vec![Effect::AlertSound(1)], "choosing an alert sound plays it once");
         assert_eq!(prefs.get("alert_sound"), Some("1"));
         assert_eq!(st.options().alert_sound, 1);
         back(&mut st, &ui, &mut prefs);

@@ -11,6 +11,7 @@ Installs the SpringBoard shell as the sole UI of an x86_64 Arch machine (desktop
 | `/var/lib/springboard` | data dir (root's desktop-profile default); `seed-data` fills it from `system-assets` (else `assets`) at every start (`.seeded` marker) |
 | `/usr/lib/systemd/system/springboard.service` | runs the shell on tty1 |
 | `/usr/lib/springboard/seed-data` | the seeding script (copies changed assets, mirrors `icons/`) |
+| `/usr/lib/bifrost/services/<id>/` | the system services `bifrostd` supervises: `is.olibuijr.audio` (`audiod`), `is.olibuijr.net` (`netd`), `is.olibuijr.update` (`updated`), each with its `manifest.toml` (from `springboard/system/<dir>`) and executable; a package-owned path, so an update changes it with no conflict (see `springboard/docs/services.md`, "System services ship with the OS") |
 | `/usr/lib/springboard/prune-stale-assets`, `assets-allowlist.txt` | the scriptlet's cleanup of unowned files under `assets/` (see below) |
 
 ## Build

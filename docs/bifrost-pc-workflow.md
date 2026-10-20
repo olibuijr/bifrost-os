@@ -473,7 +473,9 @@ Release order used for system 0.4.47 to 0.4.49 and Files 1.10.x:
    commit as `release: system x.y.z`.
 3. `bifrost pc publish` (about 45 s; `--release` for the full-LTO build, `--skip-build`, `--no-serve`). It builds the shell,
    `bootweave`, `bifrost-portal`, `bifrost-privd`, `bifrost-mcp`, `bifrostd`, `bifrost-audiod`, the audio bench and ALSA
-   plugin, `bifrost-wm`, the chrome clients and `bifrost-log`; compiles the recovery guard (`packaging/arch/recovery/guard.rs`,
+   plugin, the system services `audiod`, `netd` and `updated` (installed under `/usr/lib/bifrost/services/<id>/` with their
+   manifests from `springboard/system`; `bifrostd` supervises them, so no store install is needed and `bifrost-audio status`
+   finds the media service after the update), `bifrost-wm`, the chrome clients and `bifrost-log`; compiles the recovery guard (`packaging/arch/recovery/guard.rs`,
    static); packs everything into one `springboard-shell` package (version = Cargo version + build timestamp; the
    last 3 are kept) and serves the repo at `http://192.168.1.12:8079/bifrost/$arch`. Nothing from `bifrost-ref` is ever
    packed: the package passes `tools/check-package-licenses.py` before it enters the repo, and a failing package is

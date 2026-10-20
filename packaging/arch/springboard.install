@@ -31,6 +31,9 @@ bifrost_post_update() {
     # socket-activated services: started on the first desktop frame by bifrost-desktop-ready (docs/boot-architecture.md)
     systemctl daemon-reload >/dev/null 2>&1 || true
     systemctl enable bifrost-desktop-ready.service bifrostd.service >/dev/null 2>&1 || true
+    # a running supervisor reads the system services (/usr/lib/bifrost/services) it started with; restart it once so the
+    # new binaries and manifests apply (the services start again on their next client, nothing waits on them)
+    systemctl try-restart bifrostd.service >/dev/null 2>&1 || true
     # zram swap at boot (bifrostd adds disk swap files under memory pressure)
     systemctl enable bifrost-zram.service >/dev/null 2>&1 || true
     # application firewall policies (bifrost-firewall) loaded at boot

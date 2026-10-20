@@ -4,6 +4,15 @@
 
 - Keyboard: Cmd+A (Select All) reaches the front app again. The window server no longer binds Super+A to the app menu launcher, which also swallowed the chord and showed a cream "Applications:" box. A lone Cmd press no longer goes Home on the desktop (it stays the Home key of a tablet), so a chord the window server or the app takes never sends every window to the Dock, and Cmd+Space keeps Spotlight open.
 - Mission Control opens with Ctrl+Up and F3 (the window server binds them, so it works with any app in front); Esc, Return, Tab and the arrows work inside it, and typing goes to the Apps grid's search field.
+- The system services (audio, network, update) now ship with the system. Music Radio, Podcasts and Voice Memos play
+  again and `bifrost-audio status` finds the media service: the update package installs the services under
+  /usr/lib/bifrost/services and bifrostd supervises them; a newer store-installed copy still wins.
+- The media service no longer runs as root: it runs as the logged-in user, and its socket is private to that user.
+- The terminal bell and the alert sound chosen in Settings > Sounds now play (at the system volume). When sound is
+  muted, or does not come out, the bell flashes the terminal instead. Choosing an alert sound plays it once.
+- The first system sound after the audio server connects is no longer lost: the shell keeps its sound player while the
+  stream opens instead of starting over.
+- `bifrost-audio status` says whether the media service or the audio server is the missing part.
 
 ## 0.10.8 — 2026-10-20
 

@@ -4,6 +4,15 @@
 //! binary connects (`bifrost_app::system_audio`) and prints.
 
 use bifrost_app::system_audio::{AudioError, Command, Snapshot};
+use std::io::ErrorKind;
+use std::path::Path;
+
+/// The low-level audio server's control socket (`bifrost-audiod`, `docs/audio-architecture.md`).
+pub const SERVER_SOCKET: &str = "/run/bifrost/audio/control";
+/// The media player service's id; its socket is `<root>/run/<id>.sock` (see `bifrost_app::system_audio::socket_path`).
+pub const SERVICE_ID: &str = "is.olibuijr.audio";
+/// Where the OS package keeps the system services that `bifrostd` supervises.
+pub const SERVICE_PACKAGE_DIR: &str = "/usr/lib/bifrost/services";
 
 pub const USAGE: &str = "usage: bifrost-audio status\n       bifrost-audio watch [SECONDS]\n       bifrost-audio volume LEVEL\n       bifrost-audio pan PAN\n       bifrost-audio fade LEVEL MILLISECONDS\n\nLEVEL is 0 to 1, PAN is -1 (left) to 1 (right). watch prints each state change and each output-route report for SECONDS (default 30).";
 
@@ -89,6 +98,37 @@ pub fn format_route(headphones: bool, reason: u8) -> String {
     format!("route {} ({})", if headphones { "headphones" } else { "speaker" }, reason_text(reason))
 }
 
+/// The line for the audio server: its control socket is a SEQPACKET socket, so presence is what can be told here.
+pub fn server_line(socket_present: bool) -> String {
+    if socket_present {
+        format!("audio server (bifrost-audiod): running, control socket {SERVER_SOCKET}")
+    } else {
+        format!("audio server (bifrost-audiod): not running, no control socket at {SERVER_SOCKET} (systemctl status bifrost-audiod)")
+    }
+}
+
+/// Why connecting to the media service failed, in words.
+pub fn unreachable_reason(kind: ErrorKind) -> &'static str {
+    match kind {
+        ErrorKind::NotFound => "no socket: the service is not installed, or bifrostd is not running",
+        ErrorKind::ConnectionRefused => "the socket exists but nothing answers: the service is starting or keeps crashing",
+        ErrorKind::PermissionDenied => "permission denied on the socket",
+        _ => "cannot connect",
+    }
+}
+
+/// The report when the media service cannot be reached: it names the service, its socket, the likely cause and the
+/// state of the audio server underneath it, so one missing part is not mistaken for the other.
+pub fn unreachable_report(socket: &Path, kind: ErrorKind, server_socket_present: bool) -> String {
+    let mut out = format!("media service ({SERVICE_ID}): not reachable at {}: {}\n", socket.display(), unreachable_reason(kind));
+    out.push_str(&server_line(server_socket_present));
+    out.push('\n');
+    if kind == ErrorKind::NotFound {
+        out.push_str(&format!("The OS package provides the service in {SERVICE_PACKAGE_DIR}/{SERVICE_ID}; bifrostd binds its socket (systemctl status bifrostd)."));
+    }
+    out.trim_end().to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -154,6 +194,27 @@ mod tests {
         assert_eq!(format_route(true, 1), "route headphones (a device appeared)");
         assert_eq!(format_route(false, 2), "route speaker (a device went away)");
         assert_eq!(format_route(false, 0), "route speaker (unknown reason)");
+    }
+
+    #[test]
+    fn a_missing_service_is_reported_apart_from_the_audio_server() {
+        let sock = Path::new("/var/lib/springboard/run/is.olibuijr.audio.sock");
+        let missing = unreachable_report(sock, ErrorKind::NotFound, true);
+        assert!(missing.contains("media service (is.olibuijr.audio): not reachable at /var/lib/springboard/run/is.olibuijr.audio.sock"), "{missing}");
+        assert!(missing.contains("not installed, or bifrostd is not running"));
+        assert!(missing.contains("audio server (bifrost-audiod): running"), "the server is fine and says so: {missing}");
+        assert!(missing.contains("/usr/lib/bifrost/services/is.olibuijr.audio"));
+        let both = unreachable_report(sock, ErrorKind::ConnectionRefused, false);
+        assert!(both.contains("nothing answers"));
+        assert!(both.contains("audio server (bifrost-audiod): not running"), "{both}");
+        assert!(!both.contains("OS package provides"), "the install hint is for a missing socket only");
+    }
+
+    #[test]
+    fn the_server_line_names_the_control_socket() {
+        assert!(server_line(true).contains("running"));
+        assert!(server_line(false).contains("not running"));
+        assert!(server_line(false).contains(SERVER_SOCKET));
     }
 
     fn bifrost_proto_track(path: &str) -> bifrost_app::proto::svc::audio::Track {

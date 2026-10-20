@@ -20,12 +20,14 @@ fn main() {
         return;
     }
     let path = socket_path(std::env::var(SOCKET_ENV).ok().as_deref());
-    let stream = UnixStream::connect(&path).unwrap_or_else(|e| die(TOOL, &format!("cannot reach the audio service at {}: {e}", path.display()), 1));
+    let server_present = std::path::Path::new(audioctl::SERVER_SOCKET).exists();
+    let stream = UnixStream::connect(&path).unwrap_or_else(|e| die(TOOL, &audioctl::unreachable_report(&path, e.kind(), server_present), 1));
     stream.set_read_timeout(Some(Duration::from_millis(500))).unwrap_or_else(|e| fail(e));
     let mut client = AudioClient::new(stream);
     match plan {
         Plan::Help => {}
         Plan::Status => {
+            println!("{}", audioctl::server_line(server_present));
             let state = client.subscribe().unwrap_or_else(|e| fail(e));
             println!("{}", audioctl::format_state(&state));
         }

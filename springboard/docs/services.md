@@ -3,6 +3,54 @@
 Status: supervisor, wire protocol, `audiod` (0.3.0), `netd` and `updated` (0.3.5) implemented; Podcasts and Voice Memos are packages (`apps/podcasts`, `apps/voicememos`, 0.3.2); Music is still in the shell.
 Extends "Package kinds" in `apps.md` (`kind = "service"`).
 
+## System services ship with the OS
+The audio (media player), network and update services are part of the system, not store apps. The `springboard-shell`
+package installs each one under the package-owned directory `/usr/lib/bifrost/services/<id>/`:
+
+| Id | Source (manifest) | Executable (crate) |
+|---|---|---|
+| `is.olibuijr.audio` | `springboard/system/audio/manifest.toml` | `audiod` (`springboard/audiod`) |
+| `is.olibuijr.net` | `springboard/system/net/manifest.toml` | `netd` (`springboard/netd`) |
+| `is.olibuijr.update` | `springboard/system/update/manifest.toml` | `updated` (`springboard/updated`) |
+
+`tools/pc-publish.py` builds the three (`cargo build -p audiod -p netd -p updated`) and hands the binaries to
+`packaging/arch/package-files.sh` as `PC_SVC_AUDIOD`, `PC_SVC_NETD` and `PC_SVC_UPDATED` (the full `PKGBUILD` does the
+same). The directory is a path no earlier install has a file at, so pacman finds no conflict on an existing machine,
+and an OS update replaces the services with the OS. Before this, the lab machine had only `.desktop` apps under
+`<root>/apps`, no service socket existed, and Music Radio, Podcasts, Voice Memos and `bifrost-audio status` found nothing
+to talk to.
+
+`bifrostd` supervises the package-provided services next to the store-installed ones (`bifrostd::scan_with`):
+- The package directory is read-only, one directory per id, named after the manifest `id`, with the `exec` inside it.
+- A store-installed `<root>/apps/<id>/current` wins only when its manifest `version` is **newer** (numeric, component by
+  component). An older or equal store copy loses, so a stale install from the tablet era (0.1.0) never shadows the OS.
+  When the store copy later wins, the usual health-checked swap applies.
+- Sockets stay `<root>/run/<id>.sock`, so clients (`bifrost_app::system_audio`, `bifrost-audio`, the Settings and
+  Software Update tools) and the app sandbox bind (`src/bare/app_policy.rs`) are unchanged.
+- Who a service runs as is the manifest field `user`: empty or `root` (the default; network and update need it), `session`
+  (the user logged in to the desktop), or a system user name. `is.olibuijr.audio` is `user = "session"`: it decodes internet
+  radio streams and user files, so a decoder bug must not be remote-to-root.
+- `bifrostd` runs as root and drops privileges for a `user` service in `pre_exec`: `setgroups` (the user's primary and
+  supplementary groups from `/etc/group`, so audio-device access is kept), `setgid`, `setuid`, then
+  `PR_SET_NO_NEW_PRIVS`. The child gets `HOME`, `USER`, `LOGNAME` and `XDG_RUNTIME_DIR` (`/run/user/<uid>` when it exists,
+  else its data directory). Its data directory `<root>/appdata/<id>` is created and chowned to that user.
+- The session user is the `username=` of `<root>/account` (what the app launch policy reads) looked up in `/etc/passwd`.
+  When the account file names nobody, uid 1000 is taken and the choice is logged once. When no such user exists, or the
+  name is uid 0, the service is neither bound nor started and is retried on the next pass: a session service never runs
+  as root.
+- Every service socket is mode 0600. For a `user` service it is chowned to that user (also the swap side socket, and again
+  when the session user changes); the sandboxed apps run as the same uid (`bwrap --uid`), so they connect and nobody else
+  can. The shell, which is root, connects regardless. No socket is world-writable.
+- What the media service still reaches as that user: the audio server's control socket `/run/bifrost/audio/control`
+  (mode 0666 by design, in a 0755 directory), the network, and the user's files.
+- `bifrost-audio status` names the media service and the audio server (`bifrost-audiod`) separately, so a missing
+  service is not mistaken for a missing server.
+- A package update restarts `bifrostd` (`try-restart` in `springboard.install`); the services start again on their
+  next client.
+
+Alert sounds (Settings > Sounds, the terminal bell) are not a service: the shell plays them on the sound-effects role
+of the audio server itself (`shell::bell`, `media::system_sound`).
+
 ## Why
 Music, Podcasts and Voice Memos each open their own `AudioPlayer` inside the shell
 (`shell/music`, `shell/podcasts`, `shell/voicememos`, ~7000 lines), so audio dies with the shell,
@@ -69,5 +117,5 @@ Events: `State{phase, offer, fraction, apps, system, error}` (on every change, o
 3. Delete the shell-side `Wifi::start` / `Ota` threads once both pages use the sockets.
 
 ## Not in this change
-Services ship as `kind = "service"` packages through the App Store (`tools/aap.py pack system/<name>
---bin <binary>`, then `publish-app.sh`); they are hidden from the home screen.
+The three system services above ship in the OS package. Other `kind = "service"` packages still go through the App Store
+(`tools/aap.py pack system/<name> --bin <binary>`, then `publish-app.sh`) and are hidden from the home screen.
