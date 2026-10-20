@@ -126,6 +126,9 @@ pub struct Notify {
     wake: bool,
     /// an app to open once the unlock animation lands
     pending_open: Option<AppId>,
+    /// the newest notification that arrived while Overview was on screen: its banner would cover the desktops strip, so
+    /// it waits (`release_held_banner`) until Overview is gone
+    held_banner: Option<(u64, AppId)>,
     icons: Vec<(AppId, Image)>,
     badges: Vec<(AppId, usize, Image)>,
     /// badge counts that are not notifications (pending updates), added to `badges`
@@ -165,6 +168,7 @@ impl Default for Notify {
             center: Center::default(),
             wake: false,
             pending_open: None,
+            held_banner: None,
             icons: Vec::new(),
             badges: Vec::new(),
             extra: Vec::new(),
@@ -456,9 +460,28 @@ impl Shell {
         }
         let covered = self.screen == Screen::Lock || self.cc_active() || self.center_active() || self.clock.alert().is_some();
         if !covered {
-            self.start_banner(id, app);
+            if self.overview_active() {
+                // a banner over Overview would sit on its desktops strip: it comes when Overview closes
+                self.notify.held_banner = Some((id, app));
+            } else {
+                self.start_banner(id, app);
+            }
         }
         id
+    }
+
+    /// Shows the banner of the notification that arrived while Overview was open, once Overview is gone (a notification
+    /// the person cleared meanwhile, or one a sheet or the lock screen now covers, only stays in the list).
+    pub(in crate::shell) fn release_held_banner(&mut self) {
+        if self.overview_active() {
+            return;
+        }
+        let Some((id, app)) = self.notify.held_banner.take() else { return };
+        let covered = self.screen == Screen::Lock || self.cc_active() || self.center_active() || self.clock.alert().is_some();
+        if self.screen_on && !covered && self.notify_exists(id) {
+            self.start_banner(id, app);
+            self.dirty = true;
+        }
     }
 
     /// Removes notification `id` from the store (an app withdrew it) and refreshes what shows it.
@@ -872,6 +895,14 @@ impl Shell {
                 DeilduEvent::Ready { title } => self.notify(Notification::new(AppId::Deildu, "Ready to play", title, now)),
             }
         }
+        // a banner that was up when Overview opened leaves; a new one waits (`held_banner`)
+        if self.overview_active() {
+            if let Some(b) = &mut self.notify.banner {
+                b.dismiss(t);
+            }
+        } else {
+            self.release_held_banner();
+        }
         if let Some(b) = &mut self.notify.banner {
             if b.tick(t) {
                 self.dirty = true;
@@ -892,6 +923,10 @@ impl Shell {
 
     /// The banner's box at `t`: (x, y, w, h) in px.
     fn banner_rect(&self, t: f64) -> Option<(f32, f32, f32, f32)> {
+        // Overview's desktops strip sits where the banner does: it is not drawn (and takes no touch) while Overview shows
+        if self.overview_active() {
+            return None;
+        }
         let b = self.notify.banner.as_ref()?;
         let ui = &self.ui;
         let w = ui.pt(CARD_W_PT);

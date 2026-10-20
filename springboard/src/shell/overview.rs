@@ -1422,6 +1422,52 @@ mod tests {
         }
     }
 
+    fn mail_note() -> crate::shell::notify::Notification {
+        crate::shell::notify::Notification::new(AppId::Files, "New Mail", "Fundur á morgun", 0)
+    }
+
+    #[test]
+    fn a_notification_while_overview_is_open_waits_for_it_to_close_instead_of_covering_the_desktops_strip() {
+        let mut sh = desk_with(2, 1920, 1080, 1.0);
+        sh.notify_tick(500.0);
+        sh.overview_toggle(1000.0);
+        assert!(sh.overview_active());
+        sh.notify(mail_note());
+        assert!(sh.notify.banner().is_none(), "no banner over Overview");
+        sh.notify_tick(1500.0);
+        assert!(sh.notify.banner().is_none(), "and none while it stays open");
+        sh.overview_toggle(2000.0);
+        settle(&mut sh);
+        assert!(!sh.overview_active());
+        sh.notify_tick(3000.0);
+        assert!(sh.notify.banner().is_some(), "the banner shows once Overview has closed");
+    }
+
+    #[test]
+    fn a_banner_on_screen_leaves_when_overview_opens() {
+        let mut sh = desk_with(2, 1920, 1080, 1.0);
+        sh.notify_tick(500.0);
+        sh.notify(mail_note());
+        assert!(sh.notify.banner().is_some());
+        sh.overview_toggle(1000.0);
+        sh.notify_tick(1100.0);
+        sh.notify_tick(9000.0);
+        assert!(sh.notify.banner().is_none(), "it slid out instead of staying over the strip");
+    }
+
+    #[test]
+    fn a_notification_the_person_cleared_while_overview_was_open_shows_no_banner_afterwards() {
+        let mut sh = desk_with(1, 1920, 1080, 1.0);
+        sh.notify_tick(500.0);
+        sh.overview_toggle(1000.0);
+        let id = sh.notify_id(mail_note());
+        sh.notify_remove(id);
+        sh.overview_toggle(2000.0);
+        settle(&mut sh);
+        sh.notify_tick(3000.0);
+        assert!(sh.notify.banner().is_none());
+    }
+
     #[test]
     fn a_zoomed_or_tiled_window_keeps_its_frame_through_overview() {
         let mut sh = desk_with(2, 1920, 1080, 1.0);
