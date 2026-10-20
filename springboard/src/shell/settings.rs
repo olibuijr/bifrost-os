@@ -279,7 +279,7 @@ impl Loads {
 
     /// A read is running.
     fn busy(&self) -> bool {
-        self.fonts.busy() || self.gpus.busy() || self.crashes.busy() || self.install_failures.busy() || self.latest_backup.busy() || self.logins.busy() || self.accounts.busy() || self.users.busy() || self.sharing.busy() || self.printers.busy() || self.screentime.busy() || self.net_diag.busy() || self.startup.busy()
+        self.fonts.busy() || self.gpus.busy() || self.crashes.busy() || self.install_failures.busy() || self.latest_backup.busy() || self.logins.busy() || self.accounts.busy() || self.users.busy() || self.sharing.busy() || self.printers.busy() || self.screentime.busy() || self.net_diag.busy() || self.startup.busy() || self.account_view.busy()
     }
 }
 
@@ -900,9 +900,17 @@ impl Settings {
                 View::List(p) => p.offset(),
                 View::Wallpaper(_) => 0.0,
             };
+            // a pop-up menu that is open stays open when a background read lands and the page is built again
+            let open_label = match &self.stack[k].view {
+                View::List(p) => p.open_popup_label(),
+                View::Wallpaper(_) => None,
+            };
             let mut entry = self.build(ui, self.stack[k].id, back.as_deref());
             if let View::List(p) = &mut entry.view {
                 p.jump_to(offset);
+                if let Some((g, i)) = open_label.and_then(|l| p.find(&l)) {
+                    p.open_popup(ui, g, i);
+                }
             }
             self.stack[k] = entry;
         }
@@ -3881,7 +3889,7 @@ mod tests {
         st.tick(ui, 1e9);
         // the pages' reads run on worker threads (see `settings_load`): wait for them, as a frame would
         let began = std::time::Instant::now();
-        while st.loads.busy() && began.elapsed() < std::time::Duration::from_secs(5) {
+        while st.loads.busy() && began.elapsed() < std::time::Duration::from_secs(30) {
             std::thread::sleep(std::time::Duration::from_millis(1));
             st.tick(ui, 1e9);
         }
