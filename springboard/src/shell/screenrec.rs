@@ -557,10 +557,9 @@ impl Session {
     /// and counted.
     pub fn push(&mut self, img: &Image, t: f64) {
         use std::sync::atomic::Ordering::Relaxed;
-        if t < self.next_due {
+        if !self.take_due(t) {
             return;
         }
-        self.next_due = t + self.interval;
         if let Some(tx) = &self.tx {
             match tx.try_send(crop_pixels(img, self.area)) {
                 Ok(()) => {
@@ -570,6 +569,28 @@ impl Session {
                     self.stats.dropped.fetch_add(1, Relaxed);
                 }
             }
+        }
+    }
+
+    /// Whether a frame is due at `t` (ms); when it is, the next one falls due an interval later.
+    fn take_due(&mut self, t: f64) -> bool {
+        if t < self.next_due {
+            return false;
+        }
+        self.next_due = t + self.interval;
+        true
+    }
+
+    /// `push` for a test: waits for room in the encoder's queue instead of dropping the frame, so which frames are written
+    /// depends on the session clock `t` alone and not on how fast the encoder thread runs.
+    #[cfg(test)]
+    fn push_waiting(&mut self, img: &Image, t: f64) {
+        if !self.take_due(t) {
+            return;
+        }
+        if let Some(tx) = &self.tx {
+            tx.send(crop_pixels(img, self.area)).expect("the encoder is running");
+            self.stats.captured.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }
     }
 
@@ -1002,9 +1023,8 @@ mod tests {
         let img = Image { w: 4, h: 2, px: vec![pack(9, 9, 9, 255); 8] };
         // due at 0, 16.7 and 33.3 ms; the frame at 10 ms is too early
         for t in [0.0, 10.0, 17.0, 34.0] {
-            // a full queue skips a frame, and these pushes come faster than the encoder thread drains it, so pace them
-            std::thread::sleep(std::time::Duration::from_millis(20));
-            s.push(&img, t);
+            // the session clock is `t`; the push waits for the encoder's queue, so a loaded machine cannot drop a frame
+            s.push_waiting(&img, t);
         }
         s.finish().unwrap();
         let bytes = std::fs::read(&path).unwrap();
