@@ -56,6 +56,28 @@ impl ImageFormat {
             other => other.word(),
         }
     }
+
+    /// The format a source file is read as, from its extension (`img`, `raw` and `iso` are raw). None for any other
+    /// name: the converter is never left to guess a format from the file's contents.
+    pub fn from_path(path: &str) -> Option<ImageFormat> {
+        let (stem, ext) = base_name(path).rsplit_once('.')?;
+        if stem.is_empty() {
+            return None;
+        }
+        match ext.to_ascii_lowercase().as_str() {
+            "img" | "raw" | "iso" => Some(ImageFormat::Raw),
+            "qcow2" => Some(ImageFormat::Qcow2),
+            "vmdk" => Some(ImageFormat::Vmdk),
+            "vhdx" => Some(ImageFormat::Vhdx),
+            "vdi" => Some(ImageFormat::Vdi),
+            _ => None,
+        }
+    }
+}
+
+/// The format of the image to convert, or the sentence that refuses it.
+pub fn source_format(path: &str) -> Result<ImageFormat, String> {
+    ImageFormat::from_path(path).ok_or_else(|| "The image's type is not one Convert reads: it must end in .img, .raw, .iso, .qcow2, .vmdk, .vhdx or .vdi.".to_string())
 }
 
 /// A new blank image: its size, the file system to put on it (none leaves it empty) and that file system's label.
@@ -140,11 +162,21 @@ pub fn iso_volume_name(folder: &str) -> String {
     name.trim_matches('_').to_string()
 }
 
-/// The command that converts the image `src` into `dst` in `format`.
-pub fn convert_command(src: &str, dst: &str, format: ImageFormat) -> Command {
+/// The command that converts the image `src`, read as `source`, into `dst` in `format`. The source format is always
+/// named (`-f`): left to probe, the converter would trust a header inside the file, and a crafted image could name a
+/// backing file elsewhere on the disk and have its contents copied into the output.
+pub fn convert_command(src: &str, source: ImageFormat, dst: &str, format: ImageFormat) -> Command {
     Command {
         program: "qemu-img",
-        args: vec!["convert".to_string(), "-O".to_string(), format.word().to_string(), src.to_string(), dst.to_string()],
+        args: vec![
+            "convert".to_string(),
+            "-f".to_string(),
+            source.word().to_string(),
+            "-O".to_string(),
+            format.word().to_string(),
+            src.to_string(),
+            dst.to_string(),
+        ],
     }
 }
 
@@ -268,8 +300,9 @@ pub fn write_folder_image(mut out: File, folder: &str, volname: &str) -> Result<
 
 /// Converts the image `src` into the new file.
 pub fn write_converted(file: File, src: &str, format: ImageFormat) -> Result<(), String> {
+    let source = source_format(src)?;
     let path = file_path(&file)?;
-    disk_run::run_plan(&[convert_command(src, &path, format)], false).map(|_| ())
+    disk_run::run_plan(&[convert_command(src, source, &path, format)], false).map(|_| ())
 }
 
 #[cfg(test)]
@@ -351,8 +384,27 @@ mod tests {
     }
 
     #[test]
+    fn the_source_format_comes_from_the_extension_and_unknown_ones_are_refused() {
+        assert_eq!(source_format("/x/disk.IMG"), Ok(ImageFormat::Raw));
+        assert_eq!(source_format("/x/a.iso"), Ok(ImageFormat::Raw));
+        assert_eq!(source_format("/x/a.qcow2"), Ok(ImageFormat::Qcow2));
+        assert_eq!(source_format("/x/a.vdi"), Ok(ImageFormat::Vdi));
+        assert!(source_format("/x/disk").is_err());
+        assert!(source_format("/x/disk.bin").is_err());
+        assert!(source_format("/x.d/disk").is_err());
+        assert!(source_format("/x/.img").is_err(), "a name that is only an extension has no type");
+    }
+
+    #[test]
     fn a_conversion_names_the_target_format() {
-        assert_eq!(words(&[convert_command("/a.img", "/b.qcow2", ImageFormat::Qcow2)]), vec![("qemu-img", s(&["convert", "-O", "qcow2", "/a.img", "/b.qcow2"]))]);
+        assert_eq!(
+            words(&[convert_command("/a.img", ImageFormat::Raw, "/b.qcow2", ImageFormat::Qcow2)]),
+            vec![("qemu-img", s(&["convert", "-f", "raw", "-O", "qcow2", "/a.img", "/b.qcow2"]))]
+        );
+        assert_eq!(
+            words(&[convert_command("/a.vmdk", ImageFormat::Vmdk, "/b.img", ImageFormat::Raw)]),
+            vec![("qemu-img", s(&["convert", "-f", "vmdk", "-O", "raw", "/a.vmdk", "/b.img"]))]
+        );
         assert_eq!(ImageFormat::Raw.extension(), "img");
         assert_eq!(ImageFormat::Vhdx.extension(), "vhdx");
         assert_eq!(ImageFormat::ALL.len(), 5);

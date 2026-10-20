@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.9
+
+- Disk Utility reads usage (df), SMART health (smartctl) and Get Info rows (lsblk) on a worker with a time limit and kills a tool that runs past it, so a stalled disk no longer freezes the window or its Unmount and Eject buttons. Get Info opens at once and adds the extra rows when they arrive.
+- Convert Image names the source format (from the file's extension) and refuses a file of an unknown type, so the converter never probes the contents and cannot be led to a backing file elsewhere on the disk.
+
 ## 0.7.8
 
 - The toolbar start comes from the SDK (`widgets::toolbar_lead_pt`) instead of a local sum.

@@ -202,9 +202,12 @@ impl DiskUtility {
                     Err(sentence) => self.error = Some(sentence),
                 }
             }
-            OpenThen::Convert => {
-                self.open_convert_form(path);
-            }
+            OpenThen::Convert => match images::source_format(&path) {
+                Ok(_) => {
+                    self.open_convert_form(path);
+                }
+                Err(sentence) => self.error = Some(sentence),
+            },
             OpenThen::Resize => {
                 self.open_resize_form(path, size, images::is_ext_image(head));
             }

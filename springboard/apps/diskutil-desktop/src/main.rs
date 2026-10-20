@@ -175,7 +175,7 @@ impl App for DiskUtility {
     /// A finished image write is committed (or thrown away) here.
     fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
         self.now = t;
-        let finished = self.poll(t);
+        let finished = self.poll(t) | self.take_probes();
         self.flush(ctx);
         if t - self.last_refresh >= REFRESH_S {
             let changed = self.refresh(t, false);
