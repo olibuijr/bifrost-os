@@ -47,10 +47,12 @@ use crate::{
     wm::{Level, Rect, WindowId},
 };
 
-/// The protocol version the global offers: 2 adds the `frame` event.
-pub const VERSION: u32 = 2;
+/// The protocol version the global offers: 2 adds the `frame` event, 3 the `tile` request.
+pub const VERSION: u32 = 3;
 /// The version that introduced `frame`; a manager bound at an older version is never sent one.
 pub const FRAME_SINCE: u32 = 2;
+/// The version that introduced `tile`.
+pub const TILE_SINCE: u32 = 3;
 
 pub fn init(dh: &DisplayHandle) -> GlobalId {
     dh.create_global::<WmState, BifrostWindowLevelManagerV1, ()>(VERSION, ())
@@ -140,18 +142,28 @@ impl Dispatch<BifrostWindowLevelManagerV1, ()> for WmState {
         _: &DisplayHandle,
         _: &mut DataInit<'_, Self>,
     ) {
-        if let bifrost_window_level_manager_v1::Request::SetLevel { surface, level } = request {
-            let Some(level) = from_wire(level) else {
-                manager.post_error(bifrost_window_level_manager_v1::Error::InvalidLevel, "unknown window level");
-                return;
-            };
-            with_states(&surface, |s| {
-                s.data_map.insert_if_missing_threadsafe(|| Mutex::new(Level::Normal));
-                if let Some(l) = s.data_map.get::<Mutex<Level>>() {
-                    *l.lock().unwrap_or_else(|p| p.into_inner()) = level;
-                }
-            });
-            state.set_window_level(&surface, level);
+        match request {
+            bifrost_window_level_manager_v1::Request::SetLevel { surface, level } => {
+                let Some(level) = from_wire(level) else {
+                    manager.post_error(bifrost_window_level_manager_v1::Error::InvalidLevel, "unknown window level");
+                    return;
+                };
+                with_states(&surface, |s| {
+                    s.data_map.insert_if_missing_threadsafe(|| Mutex::new(Level::Normal));
+                    if let Some(l) = s.data_map.get::<Mutex<Level>>() {
+                        *l.lock().unwrap_or_else(|p| p.into_inner()) = level;
+                    }
+                });
+                state.set_window_level(&surface, level);
+            }
+            bifrost_window_level_manager_v1::Request::Tile { surface, placement } => {
+                let Some(placement) = crate::tiling::placement_from_wire(placement) else {
+                    manager.post_error(bifrost_window_level_manager_v1::Error::InvalidPlacement, "unknown window placement");
+                    return;
+                };
+                state.place_surface(&surface, placement);
+            }
+            _ => {}
         }
     }
 }
@@ -190,7 +202,20 @@ mod tests {
         let xml = include_str!("../protocol/bifrost-window-level-v1.xml");
         assert!(xml.contains(&format!("name=\"bifrost_window_level_manager_v1\" version=\"{VERSION}\"")));
         assert!(xml.contains(&format!("<event name=\"frame\" since=\"{FRAME_SINCE}\">")));
-        assert!(FRAME_SINCE <= VERSION);
+        assert!(xml.contains(&format!("<request name=\"tile\" since=\"{TILE_SINCE}\">")));
+        assert!(FRAME_SINCE <= TILE_SINCE && TILE_SINCE <= VERSION);
+    }
+
+    #[test]
+    fn the_protocol_placements_match_the_wire_values_the_window_server_decodes() {
+        let xml = include_str!("../protocol/bifrost-window-level-v1.xml");
+        for (name, value) in [
+            ("fill", 0), ("left", 1), ("right", 2), ("top", 3), ("bottom", 4), ("top_left", 5), ("top_right", 6),
+            ("bottom_left", 7), ("bottom_right", 8), ("centre", 9), ("previous", 10),
+        ] {
+            assert!(xml.contains(&format!("<entry name=\"{name}\" value=\"{value}\"")), "{name} = {value}");
+            assert!(crate::tiling::placement_from_wire(value).is_some());
+        }
     }
 
     #[test]

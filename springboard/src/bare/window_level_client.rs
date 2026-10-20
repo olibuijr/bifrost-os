@@ -29,8 +29,31 @@ pub mod protocol {
 }
 
 /// The newest protocol version the shell binds: 2 adds `frame`, the window server's frame of each of the shell's
-/// toplevels (the shell keeps its window rectangles from it).
-pub const VERSION: u32 = 2;
+/// toplevels (the shell keeps its window rectangles from it); 3 adds `tile`, the shell's request to place one.
+pub const VERSION: u32 = 3;
+/// The version that introduced `tile`; a manager bound at an older version is never sent one.
+pub const TILE_SINCE: u32 = 3;
+
+/// The wire value of a placement in `bifrost_window_level_v1` `tile` (the `placement` enum).
+pub fn placement_wire(p: Placement) -> u32 {
+    match p {
+        Placement::Fill => 0,
+        Placement::Left => 1,
+        Placement::Right => 2,
+        Placement::Top => 3,
+        Placement::Bottom => 4,
+        Placement::TopLeft => 5,
+        Placement::TopRight => 6,
+        Placement::BottomLeft => 7,
+        Placement::BottomRight => 8,
+        Placement::Centre => 9,
+        Placement::Previous => 10,
+    }
+}
+
+/// What the shell can ask the window server to do with one of its toplevels.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Placement { Fill, Left, Right, Top, Bottom, TopLeft, TopRight, BottomLeft, BottomRight, Centre, Previous }
 
 /// The wire value of a window level: `true` is floating.
 pub fn wire(floating: bool) -> u32 {
@@ -46,6 +69,26 @@ mod tests {
         let xml = include_str!("../../wm/protocol/bifrost-window-level-v1.xml");
         assert!(xml.contains(&format!("name=\"bifrost_window_level_manager_v1\" version=\"{VERSION}\"")));
         assert!(xml.contains("<event name=\"frame\" since=\"2\">"));
+    }
+
+    #[test]
+    fn the_shell_asks_for_the_tile_request_the_protocol_declares() {
+        let xml = include_str!("../../wm/protocol/bifrost-window-level-v1.xml");
+        assert!(xml.contains(&format!("<request name=\"tile\" since=\"{TILE_SINCE}\">")));
+        assert!(TILE_SINCE <= VERSION);
+    }
+
+    #[test]
+    fn the_placement_wire_values_are_the_protocol_values() {
+        let xml = include_str!("../../wm/protocol/bifrost-window-level-v1.xml");
+        use Placement::*;
+        for (p, name) in [
+            (Fill, "fill"), (Left, "left"), (Right, "right"), (Top, "top"), (Bottom, "bottom"), (TopLeft, "top_left"),
+            (TopRight, "top_right"), (BottomLeft, "bottom_left"), (BottomRight, "bottom_right"), (Centre, "centre"),
+            (Previous, "previous"),
+        ] {
+            assert!(xml.contains(&format!("<entry name=\"{name}\" value=\"{}\"", placement_wire(p))), "{name}");
+        }
     }
 
     #[test]

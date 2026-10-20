@@ -261,6 +261,7 @@ surfaces has focus). Modifiers must match exactly, so Super+Shift+Space is not t
 | Alt+F4 | closes the focused toplevel |
 | Ctrl+Super+Left / Right | tiles to a half |
 | Ctrl+Super+Up / Down | maximizes / centres at the previous size |
+| Ctrl+Super+F | full screen on / off for the focused window |
 
 ## Window frames reported to the shell (2026-10-19)
 
@@ -388,3 +389,38 @@ not a Wayland client, so the shell (`src/bare/wayland.rs`, the shell's own conne
 | popup surface (candidates) | `get_input_popup_surface`, placed by the compositor |
 
 The shell is to count `done` events and send that number as `serial` in `commit`.
+
+## Full screen and the green-button menu (2026-10-20, E2E W2 and W3)
+
+W2: the green button made Music 2560x1440 but left it at its old origin (848,407), so it ran off the right and bottom,
+and the Dock stayed over it. The shell sized its own rectangle to the screen but never told the window server, which
+owns positions and kept the toplevel where it was (its `frame` event then put the shell's origin back). Now:
+
+- Window server (`wm/src/wm.rs`): `enter_full_screen` / `leave_full_screen` / `is_full_screen`. A full-screen window
+  fills the whole output (`Wm::output`, set from the output geometry in `refresh_area`; the menu bar strip included),
+  not the usable area. What it held (frame, frame before a maximize, tile) is kept and restored on leaving, fitted to the
+  area as it is then; it cannot be moved, resized, tiled or maximized meanwhile. `xdg_toplevel.set_fullscreen` /
+  `unset_fullscreen` and the foreign-toplevel full-screen requests reach it (`handlers.rs` `fullscreen_request`,
+  `WmState::set_full_screen`, `configure_frame`), and Ctrl+Super+F toggles it.
+- Client: the shell asks with the plain xdg requests (`WindowFrame::fullscreen`); the configure's full-screen state comes
+  back as `WindowEvent::Fullscreen`, so the window server's own changes reach `Win::full`. A configure that crosses the
+  request is ignored until the answer (`Window::fs_pending`).
+- Shell (`desk.rs`): `Desk::set_full_screen` makes the window the output at 0,0 (a zoomed window comes back zoomed),
+  the menu bar hides until the pointer reaches the top (`bar_hidden`) and the Dock auto-hides (`Desk::dock_autohides`)
+  and returns when the pointer reaches its edge; leaving restores both. A full-screen window has no lights or edges
+  (`Win::hit`).
+
+W3: resting the pointer 500 ms on a green button (`ARRANGE_DWELL_MS`) opens a menu under it (`Menu::Arrange`, built by
+`desk::arrange_lines`): Fill, Centre, Return to Previous Size, Move & Resize (halves and quarters), Tile with Next
+Window (with a second window), Enter Full Screen (Exit Full Screen in full screen). It stays while the pointer is on
+the button or the menu and closes when it leaves both; a press on the button still toggles full screen.
+
+`bifrost_window_level_v1` version 3 adds the request `tile(surface, placement)` so the menu and the keys do the same
+thing: `placement` is fill, left, right, top, bottom, the four corners, centre (at the previous size) or previous
+(`tiling::Placement`, `placement_from_wire`; shell side `window_level_client::Placement`). `WmState::place_window` is the
+one path, used by the request and by the Ctrl+Super arrow keys, and it now also configures the client to the new size
+(the keys used to move the frame only). Outside the Wayland session the shell tiles by itself (`Desk::tile`).
+
+Not done: the full-screen window does not get a desktop of its own that the switch keys step to (`spaces.rs` is a model
+that nothing drives yet), and a full-screen window shows no title bar when the pointer reaches the top, so it is left with
+the menu bar's Window menu or Ctrl+Cmd+F.

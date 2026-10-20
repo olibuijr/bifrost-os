@@ -599,6 +599,153 @@
         assert_eq!((moved.x,moved.y),(321,123),"the extra window is where the window server put it");
     }
 
+    /// E2E W2: green on Music made the window 2560x1440 but left it at its old origin, so it ran off the right and
+    /// bottom, and the Dock stayed over it. The window server puts the toplevel on the whole output and says so
+    /// (`xdg_toplevel` full-screen state); the shell's window then fills the output at 0,0 whatever size that is, the
+    /// menu bar hides, the Dock slides away, and leaving puts the frame back.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn full_screen_from_the_window_server_fills_the_output_and_hides_the_menu_bar_and_dock() {
+        use crate::bare::wayland::WindowEvent;
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        sh.desk_open(AppId::Settings,0.);
+        let id=apps().iter().position(|a|a.id==AppId::Settings).unwrap() as u32+1;
+        let m=sh.desk_metrics();
+        let i=sh.desk.as_ref().unwrap().index_of(AppId::Settings).unwrap();
+        let before=sh.desk.as_ref().unwrap().wins[i].r;
+        assert!(!sh.desk_bar_hidden(),"an ordinary window leaves the menu bar");
+        sh.wayland_window_event(WindowEvent::Fullscreen(id,true));
+        let w=sh.desk.as_ref().unwrap().wins[i];
+        assert!(w.full);
+        assert_eq!((w.r.x,w.r.y,w.r.w,w.r.h),(0,0,m.w,m.h),"the whole output at its origin");
+        assert!(sh.desk.as_ref().unwrap().front_full());
+        assert!(sh.desk_bar_hidden(),"the menu bar auto-hides");
+        assert!(sh.desk.as_ref().unwrap().dock_autohides(),"the Dock auto-hides");
+        assert!(sh.desk.as_ref().unwrap().dock_hide_at.is_some(),"and starts to slide away");
+        sh.dirty=false;
+        sh.wayland_window_event(WindowEvent::Fullscreen(id,true));
+        assert!(!sh.dirty,"the same state again is no change");
+        sh.wayland_window_event(WindowEvent::Fullscreen(id,false));
+        assert_eq!(sh.desk.as_ref().unwrap().wins[i].r,before,"the frame from before");
+        assert!(!sh.desk.as_ref().unwrap().front_full());
+        assert!(!sh.desk_bar_hidden());
+        assert!(sh.dock_is_visible(),"the Dock is back");
+    }
+
+    /// The same on an output of any size: the frame is the output, never a number of pixels.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn full_screen_fills_outputs_of_any_size() {
+        for (w,h) in [(1000usize,700usize),(1920,1080),(2560,1440),(3840,2160)] {
+            let mut sh=shell_sized(w,h);sh.screen=Screen::Home;sh.anim=None;
+            sh.desk=Some(desk::Desk::new());
+            sh.desk_open(AppId::Settings,0.);
+            sh.desk_set_full_screen(AppId::Settings,true);
+            let m=sh.desk_metrics();
+            let r=sh.desk.as_ref().unwrap().wins[0].r;
+            assert_eq!((r.x,r.y,r.w,r.h),(0,0,m.w,m.h),"{w}x{h}");
+        }
+    }
+
+    /// The first pixel of a window's green button, for the pointer tests.
+    #[cfg(feature="desktop-wayland")]
+    fn green_button(sh:&Shell)->(f32,f32) {
+        let m=sh.desk_metrics();let d=sh.desk.as_ref().unwrap();let r=d.wins[0].r;
+        for y in (r.y..r.y+80).step_by(2) {for x in (r.x..r.x+200).step_by(2) {
+            if let Some((_,desk::Hit::Light(desk::Light::Zoom)))=d.pick(&m,x as f32,y as f32) {return (x as f32,y as f32);}
+        }}
+        panic!("the window has no green button");
+    }
+
+    /// E2E W3: resting the pointer on the green button opens the window menu under it (Fill, Centre, Move & Resize,
+    /// Full Screen); the menu stays while the pointer is on the button or the menu and closes when it leaves both.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn resting_on_the_green_button_opens_the_window_menu_and_leaving_it_closes_it() {
+        use desktop_bar::Menu;
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        sh.desk_open(AppId::Settings,0.);
+        let (gx,gy)=green_button(&sh);
+        sh.desktop_pointer(gx,gy,false,1000.);
+        sh.arrange_tick(1000.+desk::ARRANGE_DWELL_MS-1.);
+        assert!(sh.desktop_menu.is_none(),"not before the dwell is over");
+        assert!(sh.next_wake(1000.).is_some_and(|w|w<=1000.+desk::ARRANGE_DWELL_MS),"the shell wakes for it");
+        sh.arrange_tick(1000.+desk::ARRANGE_DWELL_MS);
+        assert_eq!(sh.desktop_menu,Some(Menu::Arrange));
+        let texts=sh.menu_row_texts(Menu::Arrange);
+        for want in ["Fill","Centre","Return to Previous Size","Enter Full Screen"] {
+            assert!(texts.iter().any(|t|t.trim()==want),"{want} is in {texts:?}");
+        }
+        let (px,py,pw,ph)=sh.desktop_popup_rect().unwrap();
+        assert!(py as f32>=gy,"the menu opens under the button");
+        // on the way to the menu and inside it the menu stays
+        sh.desktop_pointer(gx,gy+sh.ui.pt(10.),false,1700.);
+        assert_eq!(sh.desktop_menu,Some(Menu::Arrange));
+        sh.desktop_pointer((px+pw/2) as f32,(py+ph/2) as f32,false,1800.);
+        assert_eq!(sh.desktop_menu,Some(Menu::Arrange));
+        // away from both it closes, and resting again opens it again
+        sh.desktop_pointer(sh.w as f32-4.,sh.h as f32-4.,false,1900.);
+        assert!(sh.desktop_menu.is_none());
+        assert!(sh.desk.as_ref().unwrap().arrange.is_none());
+        sh.desktop_pointer(gx,gy,false,2000.);
+        sh.arrange_tick(2000.+desk::ARRANGE_DWELL_MS);
+        assert_eq!(sh.desktop_menu,Some(Menu::Arrange));
+    }
+
+    /// A press on the green button while its menu is open is still the button's own click, so full screen keeps
+    /// working for anyone who rests on the button before clicking.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn a_press_on_the_green_button_under_its_open_menu_is_not_swallowed() {
+        use desktop_bar::Menu;
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        sh.desk_open(AppId::Settings,0.);
+        let (gx,gy)=green_button(&sh);
+        sh.desktop_pointer(gx,gy,false,1000.);
+        sh.arrange_tick(1000.+desk::ARRANGE_DWELL_MS);
+        assert_eq!(sh.desktop_menu,Some(Menu::Arrange));
+        assert!(sh.desktop_bar_event(Event::Down(gx,gy),2000.).is_none(),"the press goes on to the window");
+        assert!(sh.desktop_menu.is_none(),"and the menu closes");
+    }
+
+    /// Choosing in the menu tiles the window it hangs from (the shell places it itself outside the Wayland
+    /// session; inside, it asks the window server, `tile_requests`).
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn choosing_in_the_window_menu_tiles_that_window_or_takes_it_full_screen() {
+        use desktop_bar::Action;
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        sh.desk_open(AppId::Settings,0.);
+        let m=sh.desk_metrics();
+        let area=desk::Desk::area(&m);
+        sh.run_menu_action(Action::Arrange(AppId::Settings,desk::Arrange::Tile(desk::Tile::Left)),1000.);
+        let i=sh.desk.as_ref().unwrap().index_of(AppId::Settings).unwrap();
+        assert_eq!(sh.desk.as_ref().unwrap().wins[i].r,desk::tile_rect(area,desk::Tile::Left));
+        sh.run_menu_action(Action::Arrange(AppId::Settings,desk::Arrange::Previous),1100.);
+        assert_ne!(sh.desk.as_ref().unwrap().wins[i].r,desk::tile_rect(area,desk::Tile::Left),"back to the previous size");
+        sh.run_menu_action(Action::Arrange(AppId::Settings,desk::Arrange::FullScreen(true)),1200.);
+        let r=sh.desk.as_ref().unwrap().wins[i].r;
+        assert_eq!((r.x,r.y,r.w,r.h),(0,0,m.w,m.h));
+        sh.run_menu_action(Action::Arrange(AppId::Settings,desk::Arrange::FullScreen(false)),1300.);
+        assert!(!sh.desk.as_ref().unwrap().wins[i].full);
+    }
+
+    /// "Tile with Next Window": this window on the left half and the one behind it on the right half.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn the_window_menu_can_tile_two_windows_side_by_side() {
+        use desktop_bar::Action;
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        sh.desk_open(AppId::Terminal,0.);
+        sh.desk_open(AppId::Settings,10.);
+        let m=sh.desk_metrics();
+        let area=desk::Desk::area(&m);
+        sh.run_menu_action(Action::Arrange(AppId::Settings,desk::Arrange::SideBySide),1000.);
+        let d=sh.desk.as_ref().unwrap();
+        assert_eq!(d.wins[d.index_of(AppId::Settings).unwrap()].r,desk::tile_rect(area,desk::Tile::Left));
+        assert_eq!(d.wins[d.index_of(AppId::Terminal).unwrap()].r,desk::tile_rect(area,desk::Tile::Right));
+    }
+
     /// Ctrl+Cmd+Q is the lock chord: it maps to `Shortcut::Lock` (the plain Cmd+Q still closes) and locks the desktop.
     #[cfg(feature="desktop-wayland")]
     #[test]

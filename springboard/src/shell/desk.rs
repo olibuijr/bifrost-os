@@ -54,6 +54,90 @@ pub enum Tile {
     Left, Right, Top, Bottom, TopLeft, TopRight, BottomLeft, BottomRight, Fill, Center,
 }
 
+/// A choice of the green-button menu (hover on the green traffic light), for one window.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Arrange {
+    /// Fill, Centre and the halves and quarters of Move & Resize.
+    Tile(Tile),
+    /// Return to Previous Size.
+    Previous,
+    /// Enter (`true`) or Exit Full Screen.
+    FullScreen(bool),
+    /// This window on the left half, the window behind it on the right half.
+    SideBySide,
+}
+
+/// The open green-button menu: the window it is for, and where it opens (screen px, under the button).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ArrangeMenu {
+    pub app: AppId,
+    pub x: f32,
+    pub y: f32,
+}
+
+/// How long (ms) the pointer rests on a green button before its menu opens.
+pub const ARRANGE_DWELL_MS: f64 = 500.0;
+/// The gap (pt) between a green button and the menu under it, and how far above the menu's top (pt, measured from the
+/// anchor) the pointer may stray on the way in before the menu closes.
+pub const ARRANGE_GAP_PT: f32 = 4.0;
+pub const ARRANGE_BRIDGE_PT: f32 = 24.0;
+
+/// One line of the green-button menu.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ArrangeLine {
+    Item(&'static str, Arrange),
+    Header(&'static str),
+    Separator,
+}
+
+/// The lines of the green-button menu for a window: `full` when it is full screen (the only choice then is to leave
+/// it), `others` when another window could share the screen.
+pub fn arrange_lines(full: bool, others: bool) -> Vec<ArrangeLine> {
+    use ArrangeLine::*;
+    if full {
+        return vec![Item("Exit Full Screen", Arrange::FullScreen(false))];
+    }
+    let mut v = vec![
+        Item("Fill", Arrange::Tile(Tile::Fill)),
+        Item("Centre", Arrange::Tile(Tile::Center)),
+        Item("Return to Previous Size", Arrange::Previous),
+        Separator,
+        Header("Move & Resize"),
+        Item("Left", Arrange::Tile(Tile::Left)),
+        Item("Right", Arrange::Tile(Tile::Right)),
+        Item("Top", Arrange::Tile(Tile::Top)),
+        Item("Bottom", Arrange::Tile(Tile::Bottom)),
+        Item("Top Left", Arrange::Tile(Tile::TopLeft)),
+        Item("Top Right", Arrange::Tile(Tile::TopRight)),
+        Item("Bottom Left", Arrange::Tile(Tile::BottomLeft)),
+        Item("Bottom Right", Arrange::Tile(Tile::BottomRight)),
+    ];
+    if others {
+        v.extend([Separator, Item("Tile with Next Window", Arrange::SideBySide)]);
+    }
+    v.extend([Separator, Item("Enter Full Screen", Arrange::FullScreen(true))]);
+    v
+}
+
+/// What the window server is asked for a tile (`bifrost_window_level_v1` `tile`): the same actions the window
+/// server's Ctrl+Super arrow keys perform.
+#[cfg(feature = "desktop-wayland")]
+pub fn placement_of(tile: Tile) -> crate::bare::window_level_client::Placement {
+    use crate::bare::window_level_client::Placement as P;
+    match tile {
+        Tile::Fill => P::Fill,
+        Tile::Left => P::Left,
+        Tile::Right => P::Right,
+        Tile::Top => P::Top,
+        Tile::Bottom => P::Bottom,
+        Tile::TopLeft => P::TopLeft,
+        Tile::TopRight => P::TopRight,
+        Tile::BottomLeft => P::BottomLeft,
+        Tile::BottomRight => P::BottomRight,
+        Tile::Center => P::Centre,
+    }
+}
+
 /// Whether the Wayland compositor owns window positions (the desktop session): the shell can maximize and restore a
 /// window there, but cannot move it to a half or the centre.
 #[cfg(feature = "desktop-wayland")]
@@ -225,6 +309,14 @@ pub struct Desk {
     /// the last title-bar press (window, time in ms): a second press within the Double-Click Speed gap zooms
     last_title: Option<(AppId, f64)>,
     pub(super) dock_hide_at:Option<f64>,
+    /// the windows that went full screen while zoomed: they come back zoomed (`set_full_screen`)
+    full_from_zoom: Vec<AppId>,
+    /// the green-button menu that is open, and the window and time (ms) the pointer started resting on a green button
+    pub(super) arrange: Option<ArrangeMenu>,
+    pub(super) arrange_at: Option<(AppId, f64)>,
+    /// placements asked of the window server and not sent yet: (window id, placement), see `take_wayland_tiles`
+    #[cfg(feature = "desktop-wayland")]
+    tile_requests: Vec<(u32, crate::bare::window_level_client::Placement)>,
     /// the newest files of Downloads, fanned out by the Dock's stack, and when the folder was last listed (seconds)
     pub(super) stack_files:Vec<String>,
     pub(super) stack_listed:Option<f64>,
@@ -409,6 +501,10 @@ impl Win {
         if !outer.contains(x, y) {
             return None;
         }
+        // a full-screen window is the app alone: no resize edges, no title bar, no traffic lights
+        if self.full {
+            return self.r.contains(x, y).then_some(Hit::Content);
+        }
         if !self.maximized && !size_limits(self.app).fixed {
             let mut edges = 0;
             if x < (self.r.x + e / 2) as f32 {
@@ -577,9 +673,18 @@ impl Desk {
             return false;
         }
         if on {
-            w.restore = w.r;
+            // a zoomed window keeps the frame from before the zoom as its way back, and returns zoomed
+            if w.maximized {
+                self.full_from_zoom.push(w.app);
+            } else {
+                w.restore = w.r;
+            }
             w.r = Self::screen_rect(m);
             w.maximized = false;
+        } else if let Some(k) = self.full_from_zoom.iter().position(|a| *a == w.app) {
+            self.full_from_zoom.remove(k);
+            w.r = Self::area(m);
+            w.maximized = true;
         } else {
             w.r = w.restore;
         }
@@ -590,6 +695,12 @@ impl Desk {
     /// Whether the front window is full screen (Game Mode reads it).
     pub fn front_full(&self) -> bool {
         self.front().is_some_and(|w| w.full)
+    }
+
+    /// Whether the Dock slides away when the pointer leaves it: the Dock's own choice, or a full-screen front window
+    /// (which covers the screen; the Dock comes back when the pointer reaches its edge).
+    pub(super) fn dock_autohides(&self) -> bool {
+        self.dock_preferences.autohide || self.front_full()
     }
 
     pub fn toggle_zoom(&mut self, m: &Metrics, i: usize) {
@@ -798,7 +909,7 @@ impl Shell {
         for w in desk.wins.iter().filter(|w|!w.minimized && !desk.unmapped.contains(&w.app)) {
             let Some(id)=win_id(w.app) else{return false};
             if !desk.window_cache.contains_key(&id) {return false;}
-            frames.push(crate::bare::wayland::WindowFrame {id,title:frame_title(id),x:w.r.x,y:w.r.y,width:w.r.w as usize,height:w.r.h as usize,pixels:None,damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize),maximized:w.maximized,title_height,drag_height:0,no_drag:Vec::new(),floating:false,fx:bifrost_render::glass::Fx::IDENTITY,opaque:!matches!(w.app,AppId::External(_))});
+            frames.push(crate::bare::wayland::WindowFrame {id,title:frame_title(id),x:w.r.x,y:w.r.y,width:w.r.w as usize,height:w.r.h as usize,pixels:None,damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize),maximized:w.maximized,fullscreen:w.full,title_height,drag_height:0,no_drag:Vec::new(),floating:false,fx:bifrost_render::glass::Fx::IDENTITY,opaque:!matches!(w.app,AppId::External(_))});
             let controls=match w.app {AppId::External(slot)=>ext.get(slot as usize).and_then(Option::as_ref).map_or(&[][..],|h|&h.controls[..]),_=>&[][..]};
             let (dh,nd)=drag_zone(w,&m,controls);
             if let Some(f)=frames.last_mut(){f.drag_height=dh;f.no_drag=nd;}
@@ -953,9 +1064,9 @@ impl Shell {
     #[cfg(feature = "desktop-wayland")]
     pub fn wayland_window_event(&mut self, ev: crate::bare::wayland::WindowEvent) {
         use crate::bare::wayland::WindowEvent;
-        let id = match ev { WindowEvent::Focus(id) | WindowEvent::Close(id) | WindowEvent::Resize(id,_,_) | WindowEvent::Maximized(id,_) | WindowEvent::Frame(id,..) => id };
+        let id = match ev { WindowEvent::Focus(id) | WindowEvent::Close(id) | WindowEvent::Resize(id,_,_) | WindowEvent::Maximized(id,_) | WindowEvent::Frame(id,..) | WindowEvent::Fullscreen(id,_) => id };
         // a frame is reported for every toplevel of the shell, an app's extra windows (flagged ids) included
-        let app = if matches!(ev, WindowEvent::Frame(..)) { frame_app(id) } else { apps().get(id.saturating_sub(1) as usize).map(|a| a.id) };
+        let app = if matches!(ev, WindowEvent::Frame(..) | WindowEvent::Fullscreen(..)) { frame_app(id) } else { apps().get(id.saturating_sub(1) as usize).map(|a| a.id) };
         let Some(app) = app else { return };
         let Some(i) = self.desk.as_ref().and_then(|d| d.index_of(app)) else { return };
         match ev {
@@ -974,6 +1085,9 @@ impl Shell {
             // reports is the one source of truth: everything the shell puts on the screen from this rectangle (app
             // context menus, the share menu, taps) lands on the window. The size stays with the configure (`Resize`).
             WindowEvent::Frame(_,x,y,_,_) => { let win = &mut self.desk.as_mut().unwrap().wins[i]; if frame_follows(&mut win.r, x, y) { self.dirty = true; } },
+            // The window server put the toplevel on the whole output or took it back (its own keys, or an answer to a
+            // request the shell made): the shell's window follows, so its menu bar, Dock and layout agree.
+            WindowEvent::Fullscreen(_,on) => { if self.desk.as_ref().is_some_and(|d| d.wins[i].full != on) { self.desk_set_full_screen(app, on); } },
             _ => {}
         }
     }
@@ -1108,21 +1222,47 @@ impl Shell {
         self.desk.as_ref().and_then(|d| d.front().and_then(|w| d.index_of(w.app)))
     }
 
-    /// Tiles the front desktop window on `tile` (Window menu and Ctrl+Cmd arrow keys). In the Wayland session the
-    /// compositor places windows, so only Fill (maximize) applies here; the halves and Center are compositor key
-    /// bindings (packaging/arch/wayland/rc.xml).
+    /// Tiles the front desktop window on `tile` (Window menu and Ctrl+Cmd arrow keys).
     #[cfg(feature = "desktop-wayland")]
     pub(super) fn desk_tile_front(&mut self, tile: Tile) {
         let Some(i) = self.desk_front_index() else { return };
+        self.desk_tile_window(i, tile);
+    }
+
+    /// Tiles window `i` on `tile`. In the Wayland session the window server places windows, so the shell asks it
+    /// (`bifrost_window_level_v1` `tile`, the same actions as its Ctrl+Super arrow keys) and the frame comes back
+    /// from it; Fill stays the zoom the green button has always done.
+    #[cfg(feature = "desktop-wayland")]
+    pub(super) fn desk_tile_window(&mut self, i: usize, tile: Tile) {
+        let Some(w) = self.desk.as_ref().and_then(|d| d.wins.get(i)).copied() else { return };
+        if w.full { return; }
         if compositor_places_windows() {
-            let maximized = self.desk.as_ref().is_some_and(|d| d.wins[i].maximized);
-            if tile == Tile::Fill && !maximized { self.desk_zoom_window(i); }
+            if tile == Tile::Fill {
+                if !w.maximized { self.desk_zoom_window(i); }
+            } else {
+                self.desk_request_placement(w.app, placement_of(tile));
+            }
             return;
         }
         let m = self.desk_metrics();
         if let Some(d) = self.desk.as_mut() { d.tile(&m, i, tile); }
         self.desk_layout(i);
         self.desk_frame_changed(i);
+    }
+
+    /// Queues a placement for the window server (sent with the next frame, `take_wayland_tiles`).
+    #[cfg(feature = "desktop-wayland")]
+    fn desk_request_placement(&mut self, app: AppId, placement: crate::bare::window_level_client::Placement) {
+        let (Some(id), Some(d)) = (win_id(app), self.desk.as_mut()) else { return };
+        d.tile_requests.push((id, placement));
+        self.drawn = super::Drawn::Nothing;
+        self.dirty = true;
+    }
+
+    /// The placements to send to the window server, oldest first.
+    #[cfg(feature = "desktop-wayland")]
+    pub fn take_wayland_tiles(&mut self) -> Vec<(u32, crate::bare::window_level_client::Placement)> {
+        self.desk.as_mut().map(|d| std::mem::take(&mut d.tile_requests)).unwrap_or_default()
     }
 
     /// After a frame change outside a drag: the presenter takes the new frame through the zoom effect (as Zoom does),
@@ -1141,8 +1281,17 @@ impl Shell {
     #[cfg(feature = "desktop-wayland")]
     pub(super) fn desk_restore_front(&mut self) {
         let Some(i) = self.desk_front_index() else { return };
+        self.desk_restore_window(i);
+    }
+
+    /// Returns window `i` to the size it had before its last tiling or zoom (the window server does it in the Wayland
+    /// session, as it does for the zoom's way back).
+    #[cfg(feature = "desktop-wayland")]
+    pub(super) fn desk_restore_window(&mut self, i: usize) {
+        let Some(w) = self.desk.as_ref().and_then(|d| d.wins.get(i)).copied() else { return };
+        if w.full { return; }
         if compositor_places_windows() {
-            if self.desk.as_ref().is_some_and(|d| d.wins[i].maximized) { self.desk_zoom_window(i); }
+            self.desk_request_placement(w.app, crate::bare::window_level_client::Placement::Previous);
             return;
         }
         if let Some(d) = self.desk.as_mut() { d.return_to_previous(i); }
@@ -1150,9 +1299,112 @@ impl Shell {
         self.desk_frame_changed(i);
     }
 
+    /// The pointer moved: tracks a rest on a green button (the menu opens after `ARRANGE_DWELL_MS`, in `arrange_tick`)
+    /// and closes the open menu once the pointer has left both the button and the menu.
+    #[cfg(feature = "desktop-wayland")]
+    pub(super) fn arrange_hover(&mut self, x: f32, y: f32, t: f64) {
+        let over = self.zoom_button_at(x, y);
+        if self.desktop_menu == Some(super::desktop_bar::Menu::Arrange) {
+            if !self.arrange_keeps(x, y) {
+                self.desktop_menu = None;
+                self.dirty = true;
+                if let Some(d) = self.desk.as_mut() { d.arrange_at = None; d.arrange = None; }
+            }
+            return;
+        }
+        let Some(d) = self.desk.as_mut() else { return };
+        match (over, d.arrange_at) {
+            (Some(a), Some((b, _))) if a == b => {}
+            (Some(a), _) => d.arrange_at = Some((a, t)),
+            (None, _) => d.arrange_at = None,
+        }
+    }
+
+    /// The app whose green button is at (x, y), when the front-most window there has one under the pointer.
+    #[cfg(feature = "desktop-wayland")]
+    fn zoom_button_at(&self, x: f32, y: f32) -> Option<AppId> {
+        let m = self.desk_metrics();
+        let d = self.desk.as_ref()?;
+        match d.pick(&m, x, y) {
+            Some((i, Hit::Light(Light::Zoom))) => Some(d.wins[i].app),
+            _ => None,
+        }
+    }
+
+    /// Whether a press at (x, y) is on the green button the open menu hangs from.
+    #[cfg(feature = "desktop-wayland")]
+    pub(super) fn arrange_on_button(&self, x: f32, y: f32) -> bool {
+        let Some(a) = self.desk.as_ref().and_then(|d| d.arrange) else { return false };
+        self.zoom_button_at(x, y) == Some(a.app)
+    }
+
+    /// Whether the pointer at (x, y) keeps the open menu up: on its green button, inside the menu, or in the strip
+    /// between them (the menu opens under the button, so the pointer crosses it on the way in).
+    #[cfg(feature = "desktop-wayland")]
+    fn arrange_keeps(&self, x: f32, y: f32) -> bool {
+        if self.arrange_on_button(x, y) { return true; }
+        let (Some(a), Some((px, py, pw, ph))) = (self.desk.as_ref().and_then(|d| d.arrange), self.desktop_popup_rect()) else { return false };
+        let slack = self.ui.pt(ARRANGE_GAP_PT * 2.0);
+        let (left, top, right, bottom) = (px as f32 - slack, a.y - self.ui.pt(ARRANGE_BRIDGE_PT), (px + pw) as f32, (py + ph) as f32);
+        x >= left && x < right && y >= top && y < bottom
+    }
+
+    /// Per tick: opens the green-button menu once the pointer has rested on the button for `ARRANGE_DWELL_MS`. A rest
+    /// that cannot open it (a menu or a drag is under way, the screen is locked) is dropped, so nothing keeps waking the shell.
+    #[cfg(feature = "desktop-wayland")]
+    pub(super) fn arrange_tick(&mut self, t: f64) {
+        let Some((app, since)) = self.desk.as_ref().and_then(|d| d.arrange_at) else { return };
+        if t - since < ARRANGE_DWELL_MS { return; }
+        let m = self.desk_metrics();
+        let button = self.desk.as_ref().and_then(|d| d.index_of(app).and_then(|i| d.wins.get(i))).map(|w| w.light_rect(&m, 2));
+        let idle = self.desk.as_ref().is_some_and(|d| d.grab_idle());
+        let anchor = button.filter(|_| idle && self.desktop_menu.is_none() && !self.is_locked())
+            .map(|b| (b.x as f32, (b.y + b.h) as f32 + self.ui.pt(ARRANGE_GAP_PT)));
+        let Some(d) = self.desk.as_mut() else { return };
+        match anchor {
+            Some((x, y)) => {
+                d.arrange = Some(ArrangeMenu { app, x, y });
+                // resting on the button keeps the menu from opening again once it has closed
+                d.arrange_at = Some((app, f64::INFINITY));
+                self.desktop_menu = Some(super::desktop_bar::Menu::Arrange);
+                self.desktop_menu_row = None;
+            }
+            None => d.arrange_at = None,
+        }
+        self.dirty = true;
+    }
+
+    /// Carries out a green-button menu choice for the window of `app`: the window comes to the front, then the
+    /// choice is made (the window server places it in the Wayland session).
+    #[cfg(feature = "desktop-wayland")]
+    pub(super) fn desk_arrange(&mut self, app: AppId, what: Arrange, _t: f64) {
+        let Some(d) = self.desk.as_mut() else { return };
+        d.arrange = None;
+        d.arrange_at = None;
+        let Some(i) = d.index_of(app) else { return };
+        // the window that shares the screen with it: the top-most other visible one, found before this one is raised
+        let other = d.wins.iter().rev().find(|o| o.app.parent() != app.parent() && !o.minimized).map(|o| o.app);
+        d.raise_front = true;
+        let i = d.raise(i);
+        if !self.is_locked() { self.screen = Screen::App(app); }
+        match what {
+            Arrange::Tile(tile) => self.desk_tile_window(i, tile),
+            Arrange::Previous => self.desk_restore_window(i),
+            Arrange::FullScreen(on) => self.desk_set_full_screen(app, on),
+            Arrange::SideBySide => {
+                self.desk_tile_window(i, Tile::Left);
+                if let Some(j) = other.and_then(|o| self.desk.as_ref().and_then(|d| d.index_of(o))) {
+                    self.desk_tile_window(j, Tile::Right);
+                }
+            }
+        }
+        self.dirty = true;
+    }
+
     /// Whether the menu bar is hidden now: the front window is full screen and the pointer is not at the top.
     pub(super) fn desk_bar_hidden(&self) -> bool {
-        let full = self.desk.as_ref().is_some_and(|d| d.front_full());
+        // a menu opened from the revealed bar keeps the bar while the pointer is down in the menu
+        let full = self.desk.as_ref().is_some_and(|d| d.front_full()) && self.desktop_menu.is_none();
         bar_hidden(full, self.pointer_y, self.desktop_bar_height() as f32)
     }
 
@@ -1160,11 +1412,22 @@ impl Shell {
     /// hears it as `ToApp::FullScreen`. Game Mode reads the front window's state (`Desk::front_full`).
     pub(super) fn desk_set_full_screen(&mut self, app: AppId, on: bool) {
         let m = self.desk_metrics();
+        let now = self.last_input;
         let Some(d) = self.desk.as_mut() else { return };
         let Some(i) = d.index_of(app) else { return };
         if !d.set_full_screen(&m, i, on) {
             return;
         }
+        // the Dock slides away with the menu bar and comes back when the window leaves full screen; either edge reveals it
+        d.arrange = None;
+        if on {
+            d.dock_hide_at = Some(now);
+        } else {
+            d.dock_hide_at = None;
+            d.dock_visible = !d.dock_preferences.autohide;
+            d.dock_vis_anim = None;
+        }
+        if self.desktop_menu == Some(super::desktop_bar::Menu::Arrange) { self.desktop_menu = None; }
         self.desk_layout(i);
         if let AppId::External(slot) = app {
             if let Some(Some(h)) = self.ext.get_mut(slot as usize) {
@@ -2172,7 +2435,7 @@ impl Shell {
                     self.desk.as_mut().unwrap().frames.push(crate::bare::wayland::WindowFrame {
                         id, title: frame_title(id), x:w.r.x, y:w.r.y,
                         width:w.r.w as usize, height:w.r.h as usize, pixels:None,
-                        damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize), maximized:w.maximized, title_height:m.title,
+                        damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize), maximized:w.maximized, fullscreen:w.full, title_height:m.title,
                         drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false,
                     });
                     continue;
@@ -2181,7 +2444,7 @@ impl Shell {
                     self.desk.as_mut().unwrap().frames.push(crate::bare::wayland::WindowFrame {
                         id, title: frame_title(id), x:w.r.x, y:w.r.y,
                         width:w.r.w as usize, height:w.r.h as usize, pixels:None,
-                        damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize), maximized:w.maximized, title_height:m.title,
+                        damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize), maximized:w.maximized, fullscreen:w.full, title_height:m.title,
                         drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false,
                     });
                     self.desk.as_mut().unwrap().window_cache.insert(id,cached.unwrap());
@@ -2234,7 +2497,7 @@ impl Shell {
                         let desk=self.desk.as_mut().unwrap();
                         desk.body_cache.remove(&w.app);
                         desk.window_cache.insert(id,retained);
-                        desk.frames.push(crate::bare::wayland::WindowFrame{id,title:frame_title(id),x:w.r.x,y:w.r.y,width,height,pixels:outgoing,damage,maximized:w.maximized,title_height:m.title,drag_height,no_drag,fx:bifrost_render::glass::Fx::IDENTITY,opaque,floating:false});
+                        desk.frames.push(crate::bare::wayland::WindowFrame{id,title:frame_title(id),x:w.r.x,y:w.r.y,width,height,pixels:outgoing,damage,maximized:w.maximized,fullscreen:w.full,title_height:m.title,drag_height,no_drag,fx:bifrost_render::glass::Fx::IDENTITY,opaque,floating:false});
                         continue;
                     }
                 }
@@ -2268,7 +2531,7 @@ impl Shell {
                 desk.window_buf = image.px;
                 desk.frames.push(crate::bare::wayland::WindowFrame {
                     id, title: frame_title(id), x:w.r.x, y:w.r.y,
-                    width:w.r.w as usize, height:w.r.h as usize, pixels, damage, maximized:w.maximized, title_height:m.title,
+                    width:w.r.w as usize, height:w.r.h as usize, pixels, damage, maximized:w.maximized, fullscreen:w.full, title_height:m.title,
                     drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false,
                 });
                 continue;
@@ -2918,6 +3181,113 @@ mod tests {
         assert!(d.set_full_screen(&m, 0, false));
         assert_eq!(d.wins[0].r, before);
         assert!(!d.front_full());
+    }
+
+    /// Metrics of an output of `w` x `h` px at `pt` px per point: the sizes scale with it, as the shell's do.
+    fn metrics_for(w: i32, h: i32, pt: f32) -> Metrics {
+        let px = |v: f32| (v * pt).round() as i32;
+        Metrics { w, h, title: px(30.0), menubar: px(28.0), min_w: px(320.0), min_h: px(220.0), edge: px(6.0), light: px(12.0), light_gap: px(8.0), light_x: px(12.0), dock_bottom: px(100.0), pt }
+    }
+
+    #[test]
+    fn full_screen_covers_the_whole_output_at_its_origin_for_any_size_and_scale() {
+        for (w, h, pt) in [(1024, 768, 1.0), (1280, 720, 1.0), (1920, 1080, 1.0), (2560, 1440, 1.5625), (3840, 2160, 2.0), (1440, 3200, 3.0)] {
+            let m = metrics_for(w, h, pt);
+            let mut d = Desk::new();
+            d.open(&m, AppId::ExternalWindow(0, 4), (m.w / 3, m.h / 3));
+            let before = d.wins[0].r;
+            assert!(d.set_full_screen(&m, 0, true));
+            let r = d.wins[0].r;
+            assert_eq!((r.x, r.y, r.w, r.h), (0, 0, w, h), "{w}x{h} at {pt}x: the output, not the old origin");
+            let body = d.wins[0].body(&m);
+            assert_eq!((body.x, body.y, body.w, body.h), (0, 0, w, h), "no title bar in full screen");
+            assert!(d.set_full_screen(&m, 0, false));
+            assert_eq!(d.wins[0].r, before, "{w}x{h}: the previous frame comes back");
+        }
+    }
+
+    #[test]
+    fn a_zoomed_window_returns_zoomed_from_full_screen_and_keeps_the_frame_before_the_zoom() {
+        let m = metrics();
+        let mut d = Desk::new();
+        d.open(&m, AppId::ExternalWindow(0, 4), (500, 400));
+        let before = d.wins[0].r;
+        d.toggle_zoom(&m, 0);
+        assert_eq!(d.wins[0].r, Desk::area(&m));
+        assert!(d.set_full_screen(&m, 0, true));
+        assert_eq!(d.wins[0].r, Desk::screen_rect(&m));
+        assert!(!d.wins[0].maximized, "full screen is not the zoom");
+        assert!(d.set_full_screen(&m, 0, false));
+        assert!(d.wins[0].maximized && d.wins[0].r == Desk::area(&m), "back where it was: zoomed");
+        d.toggle_zoom(&m, 0);
+        assert_eq!(d.wins[0].r, before, "un-zooming still goes to the frame before the zoom");
+    }
+
+    #[test]
+    fn a_full_screen_window_is_all_content_with_no_lights_or_edges() {
+        let m = metrics();
+        let mut d = Desk::new();
+        d.open(&m, AppId::ExternalWindow(0, 4), (500, 400));
+        let lights = (d.wins[0].r.x + m.light_x + 2 * (m.light + m.light_gap) + m.light / 2, d.wins[0].r.y + m.title / 2);
+        assert!(matches!(d.wins[0].hit(&m, lights.0 as f32, lights.1 as f32), Some(Hit::Light(_))), "the lights are there before");
+        d.set_full_screen(&m, 0, true);
+        for (x, y) in [(lights.0, lights.1), (0, 0), (m.w / 2, m.h - 1), (m.w - 1, m.h / 2)] {
+            assert_eq!(d.wins[0].hit(&m, x as f32, y as f32), Some(Hit::Content), "({x},{y})");
+        }
+        assert_eq!(d.wins[0].hit(&m, -50.0, -50.0), None);
+    }
+
+    #[test]
+    fn a_full_screen_front_window_makes_the_dock_slide_away() {
+        let m = metrics();
+        let mut d = Desk::new();
+        d.open(&m, AppId::ExternalWindow(0, 4), (500, 400));
+        assert!(!d.dock_autohides(), "an ordinary window leaves the Dock as the Dock's own setting has it");
+        d.set_full_screen(&m, 0, true);
+        assert!(d.dock_autohides());
+        d.set_full_screen(&m, 0, false);
+        assert!(!d.dock_autohides());
+    }
+
+    #[test]
+    fn the_green_button_menu_has_fill_centre_the_halves_and_quarters_and_full_screen() {
+        let lines = arrange_lines(false, false);
+        let items: Vec<(&str, Arrange)> = lines.iter().filter_map(|l| if let ArrangeLine::Item(t, a) = l { Some((*t, *a)) } else { None }).collect();
+        for tile in [Tile::Fill, Tile::Center, Tile::Left, Tile::Right, Tile::Top, Tile::Bottom, Tile::TopLeft, Tile::TopRight, Tile::BottomLeft, Tile::BottomRight] {
+            assert!(items.iter().any(|(_, a)| *a == Arrange::Tile(tile)), "{tile:?} is in the menu");
+        }
+        assert!(items.iter().any(|(_, a)| *a == Arrange::FullScreen(true)));
+        assert!(items.iter().any(|(_, a)| *a == Arrange::Previous));
+        assert!(!items.iter().any(|(_, a)| *a == Arrange::SideBySide), "no other window to share the screen with");
+        assert!(lines.contains(&ArrangeLine::Header("Move & Resize")));
+        for (i, (t, a)) in items.iter().enumerate() {
+            assert!(items.iter().skip(i + 1).all(|(u, b)| u != t && b != a), "{t} appears once");
+        }
+        assert_eq!(lines.first(), Some(&ArrangeLine::Item("Fill", Arrange::Tile(Tile::Fill))));
+        assert_ne!(lines.last(), Some(&ArrangeLine::Separator));
+    }
+
+    #[test]
+    fn the_green_button_menu_offers_a_side_by_side_tile_only_with_a_second_window() {
+        let has = |others| arrange_lines(false, others).contains(&ArrangeLine::Item("Tile with Next Window", Arrange::SideBySide));
+        assert!(!has(false));
+        assert!(has(true));
+    }
+
+    #[test]
+    fn a_full_screen_window_can_only_leave_full_screen() {
+        assert_eq!(arrange_lines(true, true), vec![ArrangeLine::Item("Exit Full Screen", Arrange::FullScreen(false))]);
+    }
+
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn every_tile_is_a_distinct_placement_for_the_window_server() {
+        let tiles = [Tile::Fill, Tile::Center, Tile::Left, Tile::Right, Tile::Top, Tile::Bottom, Tile::TopLeft, Tile::TopRight, Tile::BottomLeft, Tile::BottomRight];
+        let wires: Vec<u32> = tiles.iter().map(|t| crate::bare::window_level_client::placement_wire(placement_of(*t))).collect();
+        for (i, a) in wires.iter().enumerate() {
+            assert!(wires.iter().skip(i + 1).all(|b| a != b), "{:?} shares its wire value", tiles[i]);
+        }
+        assert_eq!(placement_of(Tile::Center), crate::bare::window_level_client::Placement::Centre, "Centre is the window server's centre key");
     }
 
     #[test]

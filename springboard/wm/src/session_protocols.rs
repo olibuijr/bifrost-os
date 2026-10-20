@@ -366,7 +366,7 @@ impl WmState {
                 activated: self.wm.focused() == Some(id),
                 maximized: self.wm.is_maximized(id),
                 minimized: !self.wm.visible(id),
-                fullscreen: false,
+                fullscreen: self.wm.is_full_screen(id),
             });
         }
         let changes = diff_toplevels(&self.session.toplevels, &now);
@@ -725,7 +725,9 @@ impl Dispatch<ZwlrForeignToplevelHandleV1, WindowId> for WmState {
                     t.send_close();
                 }
             }
-            // The window manager has no fullscreen or taskbar-rectangle model yet: these are accepted and ignored.
+            R::SetFullscreen { .. } => state.set_full_screen(id, true),
+            R::UnsetFullscreen => state.set_full_screen(id, false),
+            // The window manager has no taskbar-rectangle model yet: that request is accepted and ignored.
             _ => {}
         }
     }

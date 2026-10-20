@@ -65,13 +65,13 @@ impl Shell {
    if magnify!=d.dock_ptr.is_some(){d.dock_mag=Some(Anim{from:cur,to:if magnify{1.}else{0.},start:now,kind:Kind::DockMagnify,curve:Curve::EaseOut});self.dirty=true;}
    let moved=d.dock_ptr!=magnify.then_some((x,y));d.dock_ptr=magnify.then_some((x,y));if moved&&magnify{self.dirty=true;}
    if edge||inside||menu {d.dock_hide_at=None;dock_reveal(d,now);if !d.dock_visible{self.dirty=true;}}
-   else if d.dock_preferences.autohide&&d.dock_hide_at.is_none(){d.dock_hide_at=Some(t+550.);}
+   else if d.dock_autohides()&&d.dock_hide_at.is_none(){d.dock_hide_at=Some(t+550.);}
    return Some(vec![]);
   }
   if let Pointer::Context(x,y)=event {let m=self.desk_metrics();let (list,bar,rects)=self.desk_dock(&m);if self.desk.as_ref().unwrap().dock_visible&&bar.contains(x,y){let target=rects.iter().position(|r|r.contains(x,y)).map(|i|list[i]).filter(|i|*i!=apps().len()&&*i!=super::desk::DOCK_TRASH&&*i!=DOCK_STACK&&dock_min_index(*i).is_none());let d=self.desk.as_mut().unwrap();d.dock_menu_target=target;d.dock_menu_anchor=(x,y);self.desktop_menu=Some(Menu::Dock);self.dirty=true;return Some(vec![]);}}
   None
  }
- pub fn desktop_pointer(&mut self,x:f32,y:f32,context:bool,t:f64){if !context{self.pointer_hover(x,y);}#[cfg(feature="desktop-wayland")] if !context&&self.desk_active()&&!self.is_locked(){self.desktop_menu_hover(x,y);}if !context&&self.desk_active()&&!self.is_locked(){let m=self.desk_metrics();let d=self.desk.as_mut().unwrap();let over=match d.pick(&m,x,y){Some((i,super::desk::Hit::Light(_)))=>Some(d.wins[i].app),_=>None};if d.lights_hover!=over{d.lights_hover=over;self.dirty=true;}}if self.dock_pointer(if context{Pointer::Context(x,y)}else{Pointer::Hover(x,y)},t).is_some(){return;}if context&&self.desk_active()&&!self.is_locked(){let m=self.desk_metrics();if let Some((i,super::desk::Hit::Content))=self.desk.as_ref().unwrap().pick(&m,x,y){let w=self.desk.as_ref().unwrap().wins[i];let b=w.body(&m);if let AppId::External(slot)=w.app {if let Some(Some(host))=self.ext.get_mut(slot as usize){host.send(&bifrost_proto::ToApp::Context{x:x-b.x as f32,y:y-b.y as f32});}}}}}
+ pub fn desktop_pointer(&mut self,x:f32,y:f32,context:bool,t:f64){if !context{self.pointer_hover(x,y);}#[cfg(feature="desktop-wayland")] if !context&&self.desk_active()&&!self.is_locked(){self.arrange_hover(x,y,t);self.desktop_menu_hover(x,y);}if !context&&self.desk_active()&&!self.is_locked(){let m=self.desk_metrics();let d=self.desk.as_mut().unwrap();let over=match d.pick(&m,x,y){Some((i,super::desk::Hit::Light(_)))=>Some(d.wins[i].app),_=>None};if d.lights_hover!=over{d.lights_hover=over;self.dirty=true;}}if self.dock_pointer(if context{Pointer::Context(x,y)}else{Pointer::Hover(x,y)},t).is_some(){return;}if context&&self.desk_active()&&!self.is_locked(){let m=self.desk_metrics();if let Some((i,super::desk::Hit::Content))=self.desk.as_ref().unwrap().pick(&m,x,y){let w=self.desk.as_ref().unwrap().wins[i];let b=w.body(&m);if let AppId::External(slot)=w.app {if let Some(Some(host))=self.ext.get_mut(slot as usize){host.send(&bifrost_proto::ToApp::Context{x:x-b.x as f32,y:y-b.y as f32});}}}}}
  pub(super) fn dock_tick(&mut self,t:f64){
   let now=t/1000.;let menu_open=self.desktop_menu==Some(Menu::Dock);
   // the Downloads stack re-lists its folder every few seconds (never per frame)
@@ -81,7 +81,7 @@ impl Shell {
   // a launch bounce lasts one hop once the app's first window maps (none under Reduce Motion), or ends after a timeout
   if !d.dock_bounce.is_empty(){let mut keep=keep_flags.into_iter();let before=d.dock_bounce.len();d.dock_bounce.retain(|_|keep.next().unwrap_or(false));if d.dock_bounce.len()!=before{self.dirty=true;}}
   let d=self.desk.as_mut().unwrap();
-  if d.dock_preferences.autohide&&d.dock_hide_at.is_some_and(|at|t>=at)&&d.grab_idle()&&!menu_open{
+  if d.dock_autohides()&&d.dock_hide_at.is_some_and(|at|t>=at)&&d.grab_idle()&&!menu_open{
    d.dock_hide_at=None;
    if d.dock_visible&&!d.dock_vis_anim.as_ref().is_some_and(|a|a.to<0.5){let cur=d.dock_vis_anim.as_ref().map_or(1.,|a|a.value(now));d.dock_vis_anim=Some(Anim{from:cur,to:0.,start:now,kind:Kind::PanelReveal,curve:Curve::EaseInOut});}
    self.dirty=true;
@@ -92,7 +92,7 @@ impl Shell {
  /// Whether a dock list entry is an app the user keeps in the Dock (not the Apps icon, Trash, the Downloads stack, a minimized window or a recent).
  pub(super) fn dock_removable(&self,entry:usize)->bool{entry!=apps().len()&&entry!=DOCK_TRASH&&dock_min_index(entry).is_none()&&self.dock_section(entry)==0}
  pub(super) fn dock_reorder(&mut self,from:usize,to:usize,after:bool){let Some(key)=self.dock_app_key(from)else{return;};let target=self.dock_app_key(to);let d=self.desk.as_mut().unwrap();d.dock_preferences.pinned.retain(|s|s!=&key);let at=target.and_then(|key|d.dock_preferences.pinned.iter().position(|s|s==&key)).map(|at|at+after as usize).unwrap_or(d.dock_preferences.pinned.len());d.dock_preferences.pinned.insert(at.min(d.dock_preferences.pinned.len()),key);d.dock_preferences.save(&self.data_dir);self.dirty=true;}
- pub(super) fn dock_is_visible(&self)->bool{self.desk.as_ref().is_some_and(|d|!d.dock_preferences.autohide||d.dock_visible)}
+ pub(super) fn dock_is_visible(&self)->bool{self.desk.as_ref().is_some_and(|d|!d.dock_autohides()||d.dock_visible)}
  pub(super) fn dock_overlay_rect(&self)->Rect {let m=self.desk_metrics();let (_,bar,_)=self.desk_dock(&m);if self.dock_is_visible(){bar}else{let p=self.ui.pt(3.) as i32;match self.dock_preferences().position {Position::Bottom=>Rect{x:0,y:self.h-p,w:self.w,h:p},Position::Left=>Rect{x:0,y:m.menubar,w:p,h:self.h-m.menubar},Position::Right=>Rect{x:self.w-p,y:m.menubar,w:p,h:self.h-m.menubar}}}}
 }
 
