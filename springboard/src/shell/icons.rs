@@ -39,10 +39,22 @@ pub enum Icon {
     Battery,
     Privacy,
     Passcode,
+    /// the BifrOSt Account row
+    Account,
+    Assistant,
+    Ethernet,
+    Keyboard,
+    Mouse,
+    Network,
+    Printer,
+    /// Search (the pane that sets what search looks in)
+    Search,
+    Trackpad,
+    Vpn,
 }
 
 impl Icon {
-    pub const ALL: [Icon; 16] = [
+    pub const ALL: [Icon; 26] = [
         Icon::Airplane,
         Icon::Wifi,
         Icon::Bluetooth,
@@ -59,17 +71,28 @@ impl Icon {
         Icon::Battery,
         Icon::Privacy,
         Icon::Passcode,
+        Icon::Account,
+        Icon::Assistant,
+        Icon::Ethernet,
+        Icon::Keyboard,
+        Icon::Mouse,
+        Icon::Network,
+        Icon::Printer,
+        Icon::Search,
+        Icon::Trackpad,
+        Icon::Vpn,
     ];
 
     /// The tile's background colour.
     pub fn color(self) -> u32 {
         match self {
             Icon::Airplane => ORANGE,
-            Icon::Wifi | Icon::Bluetooth | Icon::Display | Icon::HomeScreen | Icon::Accessibility | Icon::Privacy => BLUE,
+            Icon::Wifi | Icon::Bluetooth | Icon::Display | Icon::HomeScreen | Icon::Accessibility | Icon::Privacy | Icon::Network | Icon::Ethernet | Icon::Vpn | Icon::Account => BLUE,
             Icon::Notifications | Icon::Passcode => RED,
             Icon::Sounds => PINK,
             Icon::Focus | Icon::ScreenTime => INDIGO,
-            Icon::General | Icon::ControlCentre => GRAY,
+            Icon::General | Icon::ControlCentre | Icon::Printer | Icon::Search | Icon::Keyboard | Icon::Trackpad | Icon::Mouse => GRAY,
+            Icon::Assistant => INDIGO,
             Icon::Wallpaper => TEAL,
             Icon::Battery => GREEN,
         }
@@ -265,7 +288,8 @@ pub fn tile(s: &mut Surface, ui: &Ui, icon: Icon, x: f32, y: f32) {
             let (bx, by) = p(8.0, 22.0);
             s.fill_rrect(bx, by, ui.pt(13.0), ui.pt(2.0), ui.pt(1.0), WHITE);
         }
-        Icon::General => {
+        // the new pane tiles have artwork only; if it cannot be decoded the tile shows the gear, like General
+        Icon::General | Icon::Account | Icon::Assistant | Icon::Ethernet | Icon::Keyboard | Icon::Mouse | Icon::Network | Icon::Printer | Icon::Search | Icon::Trackpad | Icon::Vpn => {
             if !symbol(s, ui, Symbol::Gear, cx, cy, ui.pt(21.0), ui.pt(21.0), WHITE) {
                 for i in 0..8 {
                     let a = i as f32 * std::f32::consts::FRAC_PI_4;
@@ -438,6 +462,16 @@ fn artwork(icon: Icon, px: usize) -> Option<std::sync::Arc<crate::gfx::Image>> {
         Icon::Battery => include_bytes!("../../res/settings-icons/battery.png"),
         Icon::Privacy => include_bytes!("../../res/settings-icons/privacy.png"),
         Icon::Passcode => include_bytes!("../../res/settings-icons/passcode.png"),
+        Icon::Account => include_bytes!("../../res/settings-icons/account.png"),
+        Icon::Assistant => include_bytes!("../../res/settings-icons/assistant.png"),
+        Icon::Ethernet => include_bytes!("../../res/settings-icons/ethernet.png"),
+        Icon::Keyboard => include_bytes!("../../res/settings-icons/keyboard.png"),
+        Icon::Mouse => include_bytes!("../../res/settings-icons/mouse.png"),
+        Icon::Network => include_bytes!("../../res/settings-icons/network.png"),
+        Icon::Printer => include_bytes!("../../res/settings-icons/printer.png"),
+        Icon::Search => include_bytes!("../../res/settings-icons/search.png"),
+        Icon::Trackpad => include_bytes!("../../res/settings-icons/trackpad.png"),
+        Icon::Vpn => include_bytes!("../../res/settings-icons/vpn.png"),
     };
     let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
     let mut c = cache.lock().ok()?;

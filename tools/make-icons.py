@@ -8,7 +8,7 @@ With no arguments it writes every icon where the build expects it:
                                               turns them into the icons/<bundle id>.raw the Dock and Launchpad load
   springboard/apps/<app>-desktop/icon.png     the desktop app icons that used to be copies of other makers' artwork,
                                               180 px RGBA like the other app icons
-  springboard/res/settings-icons/<pane>.png   the 16 Settings pane tiles at 58 px RGBA (29 pt at 2x, 6.5 pt corners, as
+  springboard/res/settings-icons/<pane>.png   the 26 Settings pane tiles at 58 px RGBA (29 pt at 2x, 6.5 pt corners, as
                                               springboard/src/shell/icons.rs draws them); a second spec table, PANE_SPEC
 --size and --out render every selected icon at one size into a directory instead (for previews); --only limits the
 set by name; --sheet also writes a contact sheet (each icon at 180 px, and at 32 px on light and dark; the Settings
@@ -630,6 +630,126 @@ def wallpaper(c):
     c.paint(lambda p: p.circle(50, 50, 7), SYSTEM_YELLOW)
 
 
+def printer(c):
+    """A printer: a paper tray on top, a body with a status light, a sheet coming out below."""
+    def body(p):
+        p.rrect(30, 20, 70, 42, 3.5)
+        p.rrect(16, 38, 84, 70, 9)
+        with p.erase():
+            p.rrect(27, 58, 73, 86, 3.5)
+            p.circle(73, 48, 3)
+    c.paint(body, shadow=PANE_SHADOW)
+    c.paint(lambda p: p.rrect(32, 62, 68, 82, 2.5), shadow=PANE_SHADOW)
+    c.paint(lambda p: [p.line([(38, y), (62, y)], 2.4) for y in (69, 75)], fill=SLATE_DARK, alpha=0.5)
+
+
+def keyboard(c):
+    """A keyboard seen from above: two rows of keys and a space bar cut out of the body."""
+    def body(p):
+        p.rrect(13, 31, 87, 69, 7)
+        with p.erase():
+            for row_y in (37.5, 47.5):
+                for i in range(5):
+                    x = 21 + 12 * i
+                    p.rrect(x, row_y, x + 8, row_y + 6.5, 1.6)
+            p.rrect(30, 58, 70, 63.5, 2)
+    c.paint(body, shadow=PANE_SHADOW)
+
+
+def assistant(c):
+    """A ring with a four-pointed spark at its heart."""
+    def orb(p):
+        p.circle(50, 50, 30)
+        with p.erase():
+            p.circle(50, 50, 23.5)
+    c.paint(orb, shadow=PANE_SHADOW)
+    c.paint(lambda p: p.rpoly(sparkle(50, 50, 15, 4.2), 1.4), shadow=PANE_SHADOW)
+
+
+def trackpad(c):
+    """A trackpad outline with its click edge along the foot."""
+    def pad(p):
+        p.rrect(17, 24, 83, 76, 10)
+        with p.erase():
+            p.rrect(22.5, 29.5, 77.5, 70.5, 5.5)
+        p.line([(22.5, 62), (77.5, 62)], 3.2)
+    c.paint(pad, shadow=PANE_SHADOW)
+    c.paint(lambda p: p.circle(50, 45, 5.5), alpha=0.55)
+
+
+def mouse(c):
+    """A mouse: a rounded body split into two buttons, with a scroll wheel."""
+    def body(p):
+        p.rrect(32, 17, 68, 83, 18)
+        with p.erase():
+            p.line([(50, 20), (50, 44)], 3.2)
+            p.line([(34, 45), (66, 45)], 3.2)
+    c.paint(body, shadow=PANE_SHADOW)
+    c.paint(lambda p: p.rrect(47, 27, 53, 38, 3), alpha=0.5)
+
+
+def search(c):
+    """A magnifying glass: a ring and a short handle."""
+    def glass(p):
+        p.circle(44, 44, 23)
+        with p.erase():
+            p.circle(44, 44, 16)
+        p.line([(61, 61), (78, 78)], 8.4)
+    c.paint(glass, shadow=PANE_SHADOW)
+
+
+def ethernet(c):
+    """A wired network: one box on top branching to three below."""
+    def tree(p):
+        p.rrect(38, 18, 62, 38, 4)
+        p.line([(50, 38), (50, 54)], 4.4)
+        p.line([(27, 54), (73, 54)], 4.4)
+        for x in (27, 50, 73):
+            p.line([(x, 54), (x, 62)], 4.4)
+        for x in (18, 41, 64):
+            p.rrect(x, 62, x + 18, 82, 3.5)
+    c.paint(tree, shadow=PANE_SHADOW)
+
+
+def globe_shape(p, cx, cy, r, w):
+    """A globe outline: the ring, a meridian and the equator."""
+    p.circle(cx, cy, r)
+    with p.erase():
+        p.circle(cx, cy, r - w)
+    p.ellipse(cx, cy, r * 0.46 + w / 2, r, 0)
+    with p.erase():
+        p.ellipse(cx, cy, r * 0.46 - w / 2, r - w, 0)
+    p.line([(cx - r + w / 2, cy), (cx + r - w / 2, cy)], w * 0.9)
+    p.line([(cx, cy - r + w / 2), (cx, cy + r - w / 2)], w * 0.9)
+
+
+def network(c):
+    """A globe."""
+    c.paint(lambda p: globe_shape(p, 50, 50, 31, 5.4), shadow=PANE_SHADOW)
+
+
+def vpn(c):
+    """A globe with a padlock at its lower right."""
+    def shape(p):
+        globe_shape(p, 45, 45, 26, 4.8)
+        with p.erase():
+            p.rrect(52, 52, 90, 90, 12)
+    c.paint(shape, shadow=PANE_SHADOW)
+
+    def lock(p):
+        p.arc(71, 66, 7.5, 180, 360, 4.2)
+        p.line([(63.5, 66), (63.5, 70)], 4.2)
+        p.line([(78.5, 66), (78.5, 70)], 4.2)
+        p.rrect(58, 69, 84, 85, 4.5)
+    c.paint(lock, shadow=PANE_SHADOW)
+
+
+def account(c):
+    """A person: a head over rounded shoulders."""
+    c.paint(lambda p: p.circle(50, 36, 14.5), shadow=PANE_SHADOW)
+    c.paint(lambda p: p.ellipse(50, 84, 29, 26), shadow=PANE_SHADOW, clip=lambda p: p.rrect(0, 0, 100, 80, 0))
+
+
 # ---- the spec table: name, shell bundle id (or None), desktop app folder (or None), tile top, tile bottom, symbol ----
 
 def lit(base, up=0.28, down=0.0):
@@ -659,6 +779,8 @@ SPEC = [
 
 SLATE = mix(SYSTEM_GRAY, SYSTEM_BLUE, 0.3)
 NIGHT = mix(SYSTEM_INDIGO, CELL, 0.55)
+SLATE_DARK = mix(SLATE, BLACK, 0.55)
+GRAPHITE = mix(TRACK, WHITE, 0.2)
 
 PANE_SPEC = [
     ("accessibility", *lit(SYSTEM_BLUE, 0.22, 0.1),                                      accessibility),
@@ -677,6 +799,16 @@ PANE_SPEC = [
     ("sounds",        *lit(SYSTEM_PINK, 0.2, 0.12),                                      sounds),
     ("wallpaper",     mix(SYSTEM_PURPLE, SYSTEM_PINK, 0.4), mix(SYSTEM_INDIGO, SYSTEM_PURPLE, 0.5), wallpaper),
     ("wifi",          *lit(SYSTEM_MINT, 0.12, 0.26),                                     wifi),
+    ("account",       mix(SYSTEM_TEAL, SYSTEM_BLUE, 0.35), mix(SYSTEM_TEAL, SYSTEM_BLUE, 0.9), account),
+    ("assistant",     *lit(mix(CELL, SYSTEM_PURPLE, 0.4), 0.2, 0.3),                     assistant),
+    ("ethernet",      *lit(mix(SYSTEM_BLUE, SYSTEM_INDIGO, 0.3), 0.2, 0.14),             ethernet),
+    ("keyboard",      mix(GRAPHITE, WHITE, 0.1), mix(GRAPHITE, BLACK, 0.3),              keyboard),
+    ("mouse",         mix(GRAPHITE, WHITE, 0.1), mix(GRAPHITE, BLACK, 0.3),              mouse),
+    ("network",       *lit(SYSTEM_BLUE, 0.22, 0.12),                                     network),
+    ("printer",       *lit(SYSTEM_GRAY, 0.2, 0.18),                                      printer),
+    ("search",        *lit(SYSTEM_GRAY, 0.24, 0.16),                                     search),
+    ("trackpad",      mix(GRAPHITE, WHITE, 0.1), mix(GRAPHITE, BLACK, 0.3),              trackpad),
+    ("vpn",           *lit(mix(SYSTEM_BLUE, SYSTEM_INDIGO, 0.5), 0.2, 0.16),             vpn),
 ]
 NAMES = [row[0] for row in SPEC] + [row[0] for row in PANE_SPEC]
 
