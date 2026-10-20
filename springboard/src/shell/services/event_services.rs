@@ -4,7 +4,9 @@
 //! the shell acts on it; with no tap installed that costs a state-table update and nothing else. The model is
 //! `bifrost_ui::event_tap`.
 //!
-//! Methods (JSON parameters, all need the `accessibility` permission, otherwise the call fails):
+//! Methods (JSON parameters, all need the `accessibility` permission declared in the manifest and switched on by the
+//! person in Settings > Privacy & Security > App Permissions, otherwise the call fails; nothing is posted while a
+//! system sheet or alert is up, so an app can never answer a permission or security sheet):
 //! - `post {event}` posts an event into the session stream. It runs through the taps like a real one (a tap can drop
 //!   it) and then reaches the shell. Pointer kinds act as a touch or a hover at the event's location (points); a
 //!   right-button press opens the context menu; keys go through the shell's key path with the modifiers of the event
@@ -357,6 +359,11 @@ impl SystemService for EventServices {
         if !app_has_permission(app_id, PERMISSION) {
             return Err(format!("events: the app needs the {PERMISSION} permission"));
         }
+        // declaring the permission is not enough: the person turns it on for the app in Settings > Privacy & Security >
+        // App Permissions, and until then every call is refused
+        if !super::privacy_permissions::accessibility_allowed(app_id) {
+            return Err(format!("events: the {PERMISSION} permission has not been allowed in Settings"));
+        }
         match method {
             "post" => post(shell, app_id, params),
             "tap_create" => tap_create(shell, app_id, params),
@@ -397,7 +404,7 @@ impl SystemService for EventServices {
     fn tick(&mut self, shell: &mut Shell, _t: f64) -> Vec<ServiceEvent> {
         for app in shell.input_taps.apps_with_taps() {
             let alive = apphost::slot_of(&app).is_some_and(|slot| matches!(shell.ext.get(slot), Some(Some(_))));
-            if !alive {
+            if !alive || !super::privacy_permissions::accessibility_allowed(&app) {
                 shell.input_taps.remove_app(&app);
             }
         }
@@ -418,6 +425,9 @@ impl SystemService for EventServices {
 fn post(shell: &mut Shell, app_id: &str, params: &Json) -> Result<Json, String> {
     if shell.is_locked() {
         return Err("events: nothing can be posted while the screen is locked".into());
+    }
+    if shell.modal_up() {
+        return Err("events: nothing can be posted while a system sheet or alert is up".into());
     }
     let mut e = params.get("event").and_then(Event::from_json).ok_or("post needs a readable event")?;
     e.source_pid = app_pid(shell, app_id).unwrap_or(0);

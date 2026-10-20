@@ -4705,8 +4705,9 @@ impl Shell {
         &self.damage
     }
 
-    /// Whether a system sheet or alert is up that takes the whole screen (`draw_modal_sheets`).
-    fn modal_up(&self) -> bool {
+    /// Whether a system sheet or alert is up that takes the whole screen (`draw_modal_sheets`). Input that an app posts
+    /// through the `events` service is discarded while this is true, so no app can press a consent sheet.
+    pub fn modal_up(&self) -> bool {
         self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.pick_sheet.is_some() || self.crash_alert.is_some() || self.notify.ask.is_some() || self.compose_showing() || self.print_showing() || self.char_viewer.is_some() || self.help_viewer.is_some() || self.keyboard_viewer.is_some() || self.auth_showing() || self.volume_showing() || self.access_showing() || self.guardian_sheet.is_some() || self.malware_alert.is_some() || self.usb_showing() || self.net_auth_showing() || self.package_showing() || self.photo_pick_sheet.is_some() || self.trust_sheet.is_some() || self.fw_showing() || self.launch_alert.is_some() || self.a11y_panel.is_some() || self.switch_panel_shown()
     }
 

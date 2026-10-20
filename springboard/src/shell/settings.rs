@@ -3351,6 +3351,14 @@ impl Settings {
                 }
                 None => false,
             },
+            Toggle::Accessibility(index) => match super::apphost::installed().get(index) {
+                Some(app) => {
+                    let id = app.manifest.id.clone();
+                    let allowed = !super::services::privacy_permissions::accessibility_allowed(&id);
+                    super::services::privacy_permissions::set_accessibility_by_user(&id, allowed)
+                }
+                None => false,
+            },
             Toggle::Usb(index) => match super::apphost::installed().get(index) {
                 Some(app) => {
                     super::services::usb_access::revoke_app(&app.manifest.id);
