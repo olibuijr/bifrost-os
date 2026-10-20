@@ -155,3 +155,17 @@ New: the shell draws a 21-22 ms CPU frame about once a second while idle with ze
 
 Fix wave `fix/e2e3-followups`: L4, MC2, OV1 (Notification Center), W4, MU1, AU1 (default output device), the idle frame,
 plus the 0.10.10 build breaks (hdiutil after the control socket change, two capture tests, the control socket test).
+
+## Re-test on 0.10.10 (04:08 to 04:16)
+
+Midget 0.10.10 (`integration` at `8fd4bcf32`), Music 1.13.4, Podcasts 1.13.4, Voice Memos 1.10.4, Video Player 0.2.6.
+
+| ID | Result | Notes |
+|---|---|---|
+| Security | Fixed | `/run/bifrost/shell-control.sock` is 0600 (user), nothing listens on 7777, `nobody` gets "Permission denied". As the user on the normal Wayland socket, `grim` reports "compositor doesn't support the screen capture protocol"; root through `/run/bifrost/wm-privileged` captures. |
+| Capture | Fixed | Mission Control shows live tiles for all 11 windows, other apps' windows included (r32). |
+| MC2 | Fixed | Closing Mission Control with F3 keeps Music in front (r33). |
+| OV1 (Notification Center) | Fixed | Closing it leaves nothing on the screen (r34). |
+| L4 | Fixed | The Launchpad icon in the Dock opens and closes it (r35, r36). |
+| AU1, MU1 | Partly | The audio server now picks a default output (`default-output is now alsa:PCH:0 (ALC233 Analog)`); Music reaches the media service, shows a now-playing bar and states the error ("Cannot play: audio output: the audio server is not reachable; retrying later", r31). The bell and the media service fail one step later: `sound: add the IO procedure: UnknownObject`. Fix in progress (`fix/audio-ioproc`). |
+| Idle | Not fixed, P1 | With Music retrying playback in front, the shell used 98.6% of a core and Music 25.6%: the shell drew about 65 frames a second with zero damage (`why app(external(42)):dirty`). Quitting Music brought the shell to 7.6%. Without Music the shell still draws a 22 ms CPU frame about once a second. Fix in progress (`perf/idle-redraw`). |
