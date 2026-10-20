@@ -8,34 +8,54 @@
 # A machine whose package predates system-assets still seeds from /usr/share/springboard/assets and never overwrites
 # a file that exists, so the user's data and changed files stay as they are.
 #
+# Best effort: seeding never gates the session. A failure (full disk, a directory where a file is expected, one
+# unreadable asset) is logged to stderr and skipped, the script still exits 0, and the stamp is only written after a
+# pass without a failure, so the next start tries the missing files again.
+#
 # SEED_SYSTEM_ASSETS, SEED_ASSETS and SEED_DATA replace the three directories (tests).
-set -eu
+set -u
 sys=${SEED_SYSTEM_ASSETS:-/usr/share/springboard/system-assets}
 src=${SEED_ASSETS:-/usr/share/springboard/assets}
 dst=${SEED_DATA:-/var/lib/springboard}
-mkdir -p "$dst"
+failed=0
+note() { echo "seed-data: $*" >&2; failed=1; }
+mkdir -p "$dst" 2>/dev/null || note "cannot create $dst"
 if [ -n "$(ls -A "$sys" 2>/dev/null)" ]; then
     stamp="$dst/.system-assets"
     now=$(cd "$sys" && find . -type f -printf '%p %s %T@\n' | LC_ALL=C sort | sha256sum | cut -d' ' -f1)
     if [ "$(cat "$stamp" 2>/dev/null || true)" != "$now" ]; then
-        (cd "$sys" && find . -type f) | while IFS= read -r f; do
+        list=$(cd "$sys" && find . -type f)
+        while IFS= read -r f; do
+            [ -n "$f" ] || continue
             if cmp -s "$sys/$f" "$dst/$f" 2>/dev/null; then continue; fi
-            mkdir -p "$(dirname "$dst/$f")"
-            rm -f "$dst/$f"
-            cp "$sys/$f" "$dst/$f"
-        done
+            mkdir -p "$(dirname "$dst/$f")" 2>/dev/null || { note "cannot create the directory for $f"; continue; }
+            rm -f "$dst/$f" 2>/dev/null || { note "cannot replace $f"; continue; }
+            cp "$sys/$f" "$dst/$f" 2>/dev/null || { rm -f "$dst/$f" 2>/dev/null; note "cannot copy $f"; }
+        done <<LIST
+$list
+LIST
         if [ -d "$sys/icons" ] && [ -d "$dst/icons" ]; then
             for f in "$dst"/icons/*; do
                 if [ ! -e "$f" ] && [ ! -L "$f" ]; then continue; fi
                 if [ ! -e "$sys/icons/${f##*/}" ]; then
-                    rm -f "$f"
-                    echo "seed-data: removed retired icon ${f##*/}"
+                    if rm -f "$f" 2>/dev/null; then
+                        echo "seed-data: removed retired icon ${f##*/}"
+                    else
+                        note "cannot remove retired icon ${f##*/}"
+                    fi
                 fi
             done
         fi
-        echo "$now" > "$stamp"
+        if [ "$failed" = 0 ]; then
+            echo "$now" > "$stamp" 2>/dev/null || note "cannot write the stamp"
+        fi
     fi
 elif [ -d "$src" ]; then
-    cp -an "$src"/. "$dst"/
+    cp -an "$src"/. "$dst"/ 2>/dev/null || note "cannot copy the legacy assets"
 fi
-touch "$dst/.seeded"
+if [ "$failed" = 0 ]; then
+    touch "$dst/.seeded" 2>/dev/null || echo "seed-data: cannot mark $dst as seeded" >&2
+else
+    echo "seed-data: finished with errors; the desktop starts anyway and the next start retries" >&2
+fi
+exit 0

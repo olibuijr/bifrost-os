@@ -2,9 +2,26 @@
 # Last hook: prune usr/lib/firmware to the files the drivers requested on the recorded boot
 # (/var/lib/bifrost-recovery/firmware, written by `bifrost-update-guard record-modules` from the kernel log).
 # Without a list nothing is removed. A 35 MB image read at firmware speed was most of the loader's time.
+#
+# The list is the previous boot's names, so it is only trusted for the kernel and linux-firmware it was recorded with
+# (firmware-stamp: "<kernel release> <linux-firmware version>"). An update can rename versioned files (GPU GuC/DMC),
+# so the image built while an update is in flight, or for a different kernel or firmware package, keeps all firmware.
+# That image boots the probation boot; record-modules rebuilds the pruned image once the update is accepted.
+# BIFROST_RECOVERY_DIR and BIFROST_FIRMWARE_VERSION replace the store and the package query (tests).
 build() {
-    local list=/var/lib/bifrost-recovery/firmware root="$BUILDROOT/usr/lib/firmware" f rel
+    local dir=${BIFROST_RECOVERY_DIR:-/var/lib/bifrost-recovery}
+    local list=$dir/firmware stamp=$dir/firmware-stamp root="$BUILDROOT/usr/lib/firmware" f rel state rec_k rec_fw fw
     [[ -s $list && -d $root ]] || return 0
+    state=$(cat "$dir/state" 2>/dev/null || true)
+    case $state in
+        system-prepared|system-probation|system-restoring|prepared|probation|restoring) return 0 ;;
+    esac
+    [[ -r $stamp ]] || return 0
+    read -r rec_k rec_fw < "$stamp" || return 0
+    [[ -n $rec_k ]] || return 0
+    [[ -z ${KERNELVERSION:-} || $KERNELVERSION == "$rec_k" ]] || return 0
+    fw=${BIFROST_FIRMWARE_VERSION-$(pacman -Q linux-firmware 2>/dev/null | cut -d' ' -f2)}
+    [[ -n $fw && $fw == "$rec_fw" ]] || return 0
     while IFS= read -r -d '' f; do
         rel=${f#"$root"/}
         rel=${rel%.zst}; rel=${rel%.xz}

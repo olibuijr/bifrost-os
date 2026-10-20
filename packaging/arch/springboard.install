@@ -12,6 +12,22 @@ bifrost_prune_assets() {
     return 0
 }
 
+# Restarts the root helper so it runs the new binary. An update started through the helper (update.apply) runs
+# `bifrost-update-guard install` as the helper's child, in its cgroup: restarting it here would kill the guard and pacman
+# in the middle of the transaction (db.lck and the boot marker left behind). While a guard install or rollback runs,
+# the restart is left to a separate transient unit that waits for the guard and pacman to finish, then does a try-restart.
+# The patterns start with [b] so the waiting shell's own command line does not match them.
+bifrost_restart_privd() {
+    if command -v pgrep >/dev/null 2>&1 && ! pgrep -f '[b]ifrost-update-guard (install|rollback)' >/dev/null 2>&1; then
+        systemctl restart bifrost-privd.service >/dev/null 2>&1 || true
+        return 0
+    fi
+    systemd-run --quiet --collect --unit=bifrost-privd-restart /bin/sh -c \
+        'i=0; while [ "$i" -lt 600 ] && { pgrep -f "[b]ifrost-update-guard (install|rollback)" >/dev/null 2>&1 || [ -e /var/lib/pacman/db.lck ]; }; do i=$((i+1)); sleep 2; done; sleep 3; systemctl try-restart bifrost-privd.service' \
+        >/dev/null 2>&1 || true
+    return 0
+}
+
 bifrost_post_update() {
     bifrost_prune_assets
     install -d -m700 /var/lib/bifrost-recovery
@@ -42,7 +58,7 @@ bifrost_post_update() {
     systemd-sysusers /usr/lib/sysusers.d/bifrost.conf >/dev/null 2>&1 || true
     # stage 1: the account is not added to bifrost-session (privd serves root only until the user-session stage)
     systemctl enable bifrost-privd.service >/dev/null 2>&1 || true
-    systemctl restart bifrost-privd.service >/dev/null 2>&1 || true
+    bifrost_restart_privd
     # audio server (docs/audio-architecture.md): its user and runtime directory, then the unit. The ALSA plug-in config
     # (/etc/alsa/conf.d/50-bifrost.conf) makes it the default PCM, so it must run whenever the package is installed.
     systemd-sysusers /usr/lib/sysusers.d/bifrost-audio.conf >/dev/null 2>&1 || true
