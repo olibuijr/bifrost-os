@@ -52,7 +52,7 @@ pub fn paint(w: &mut DiskUtility, s: &mut Surface, ui: &Ui) {
     let bar = w.bar_rect();
     widgets::toolbar_band(s, ui, bar);
     let tb = w.toolbar();
-    widgets::toolbar(s, ui, bar, &tb, None);
+    widgets::toolbar(s, ui, w.toolbar_bounds(), &tb, None);
 
     let side = w.sidebar_rect();
     fill(s, ui, side, 0.0, SIDEBAR_BG.now());

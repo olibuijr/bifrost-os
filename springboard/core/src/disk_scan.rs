@@ -92,9 +92,80 @@ pub fn scan(sys_block: &Path, mounts_text: &str) -> Vec<Entry> {
     out
 }
 
+/// A disk or partition with the facts Disk Utility shows beyond a [`Disk`]: the disk a partition belongs to, and the
+/// file system type and label the udev database holds. The `volumes` call of the shell's `disks` service returns these
+/// to an app whose sandbox has no `/sys`, `/run/udev` or the host mount table.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Volume {
+    pub disk: Disk,
+    pub parent: Option<String>,
+    pub fs_type: Option<String>,
+    pub label: Option<String>,
+}
+
+/// The file system type and label that the udev database (`/run/udev/data/b<major>:<minor>`) holds for a device.
+pub fn parse_udev_db(text: &str) -> (Option<String>, Option<String>) {
+    let (mut fs, mut label) = (None, None);
+    for line in text.lines() {
+        let Some(entry) = line.strip_prefix("E:") else { continue };
+        if let Some(value) = entry.strip_prefix("ID_FS_TYPE=") {
+            fs = Some(value.to_string()).filter(|v| !v.is_empty());
+        } else if let Some(value) = entry.strip_prefix("ID_FS_LABEL=") {
+            label = Some(value.to_string()).filter(|v| !v.is_empty());
+        }
+    }
+    (fs, label)
+}
+
+/// The file system type and label of the device whose sysfs directory is `dir`, from its `dev` file (`major:minor`) and
+/// the udev database in `udev_dir` (`/run/udev/data`).
+fn udev_fields(dir: &Path, udev_dir: &Path) -> (Option<String>, Option<String>) {
+    let dev = read_trim(&dir.join("dev"));
+    if dev.is_empty() {
+        return (None, None);
+    }
+    fs::read_to_string(udev_dir.join(format!("b{dev}"))).map(|t| parse_udev_db(&t)).unwrap_or((None, None))
+}
+
+/// [`scan`] with each row's file system type and label. `sys_block` is `/sys/block`, `udev_dir` is `/run/udev/data`.
+pub fn scan_volumes(sys_block: &Path, udev_dir: &Path, mounts_text: &str) -> Vec<Volume> {
+    scan(sys_block, mounts_text)
+        .into_iter()
+        .map(|e| {
+            let dir = match &e.parent {
+                Some(parent) => sys_block.join(parent).join(&e.disk.bsd_name),
+                None => sys_block.join(&e.disk.bsd_name),
+            };
+            let (fs_type, label) = udev_fields(&dir, udev_dir);
+            Volume { disk: e.disk, parent: e.parent, fs_type, label }
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn volumes_carry_the_file_system_and_label_from_the_udev_database() {
+        let root = std::env::temp_dir().join(format!("bifrost-disk-volumes-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let disk_dir = root.join("block/nvme0n1");
+        fs::create_dir_all(disk_dir.join("nvme0n1p1")).unwrap();
+        fs::create_dir_all(root.join("udev")).unwrap();
+        fs::write(disk_dir.join("size"), "2000\n").unwrap();
+        fs::write(disk_dir.join("nvme0n1p1/partition"), "1\n").unwrap();
+        fs::write(disk_dir.join("nvme0n1p1/size"), "1000\n").unwrap();
+        fs::write(disk_dir.join("nvme0n1p1/dev"), "259:1\n").unwrap();
+        fs::write(root.join("udev/b259:1"), "S:disk/by-label/EFI\nE:ID_FS_TYPE=vfat\nE:ID_FS_LABEL=EFI\n").unwrap();
+        let volumes = scan_volumes(&root.join("block"), &root.join("udev"), "/dev/nvme0n1p1 /boot vfat rw 0 0\n");
+        let _ = fs::remove_dir_all(&root);
+        assert_eq!(volumes.len(), 2);
+        assert_eq!((volumes[0].parent.as_deref(), volumes[0].fs_type.as_deref()), (None, None));
+        assert_eq!(volumes[1].parent.as_deref(), Some("nvme0n1"));
+        assert_eq!((volumes[1].fs_type.as_deref(), volumes[1].label.as_deref()), (Some("vfat"), Some("EFI")));
+        assert_eq!(volumes[1].disk.mount_point.as_deref(), Some("/boot"));
+    }
 
     #[test]
     fn mount_table_lines_unescape_spaces() {

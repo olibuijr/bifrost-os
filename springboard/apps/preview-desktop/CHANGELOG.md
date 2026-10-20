@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.11.10
+
+- Fix: the Viewer starts again. It no longer declares the `screen` permission (the shell refuses it for every app but
+  one); File > Take Screenshot goes through the shell's screenshot service, which needs only the person's consent.
+
 ## 0.11.9
 
 - BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.

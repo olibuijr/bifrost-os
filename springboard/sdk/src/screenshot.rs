@@ -1,5 +1,5 @@
-//! Screenshots over the shell's `screenshot` service (`springboard/src/shell/services/screenshot.rs`). An app with the
-//! Screen permission asks for a picture; the shell saves it to Photos, as the screenshot toolbar does, and sends the
+//! Screenshots over the shell's `screenshot` service (`springboard/src/shell/services/screenshot.rs`). An app asks for a
+//! picture (no manifest permission; the person's screen-recording consent is asked on the first request); the shell saves it to Photos, as the screenshot toolbar does, and sends the
 //! `captured` event with the file's path once the file is there. The app opens the path itself.
 //!
 //! ```ignore

@@ -1,6 +1,7 @@
 //! The JSON shape of a disk on the wire between the shell's `disks` service and the SDK's disk session, and of the
 //! events the service pushes. One codec for both sides, so they cannot drift apart.
 use crate::disk_events::{Disk, DiskEvent};
+use crate::disk_scan::Volume;
 use crate::json::Json;
 
 /// The service name, as the shell registers it.
@@ -45,6 +46,25 @@ pub fn decode_disk(j: &Json) -> Option<Disk> {
     })
 }
 
+/// A disk or partition with its parent, file system type and label as JSON (the `volumes` call). The fields of a disk
+/// come first, so [`decode_disk`] reads a volume too.
+pub fn encode_volume(v: &Volume) -> Json {
+    let mut j = encode_disk(&v.disk);
+    if let Json::Obj(f) = &mut j {
+        for (key, value) in [("parent", &v.parent), ("fs_type", &v.fs_type), ("label", &v.label)] {
+            if let Some(value) = value {
+                f.push((key.to_string(), Json::Str(value.clone())));
+            }
+        }
+    }
+    j
+}
+
+/// A volume from JSON. None when its disk part is malformed.
+pub fn decode_volume(j: &Json) -> Option<Volume> {
+    Some(Volume { disk: decode_disk(j)?, parent: j.str_field("parent"), fs_type: j.str_field("fs_type"), label: j.str_field("label") })
+}
+
 /// The event name and body the service pushes for one change.
 pub fn encode_event(e: &DiskEvent) -> (&'static str, Json) {
     match e {
@@ -84,6 +104,14 @@ mod tests {
         assert_eq!(decode_disk(&encode_disk(&usb())), Some(usb()));
         let bare = Disk { mount_point: None, ..usb() };
         assert_eq!(decode_disk(&encode_disk(&bare)), Some(bare));
+    }
+
+    #[test]
+    fn a_volume_round_trips_through_the_wire_text() {
+        let v = Volume { disk: usb(), parent: Some("sdb".into()), fs_type: Some("vfat".into()), label: None };
+        let text = crate::json::parse(&encode_volume(&v).encode()).unwrap();
+        assert_eq!(decode_volume(&text), Some(v));
+        assert_eq!(decode_volume(&Json::Null), None);
     }
 
     #[test]

@@ -1,17 +1,18 @@
 //! The `screenshot` service: a picture of the screen for an app, taken the way the screenshot toolbar takes one and
 //! saved to Photos beside the toolbar's captures. The SDK client is `bifrost_app::screenshot`.
 //!
-//! Methods (the app needs the Screen permission for each):
+//! Methods (each needs the person's screen-recording consent; the app declares no manifest permission, because the shell
+//! takes the picture):
 //! - `selection()` opens the toolbar's selection: a rectangle dragged over the screen;
 //! - `window()` opens the window pick: the window under the pointer, with its shadow;
 //! - `screen()` takes the whole screen at once.
 //!
-//! Each replies `{started: true}` at once, or an error when the screen is locked, the Screen permission is missing or
+//! Each replies `{started: true}` at once, or an error when the screen is locked, the person has not allowed screen recording for the app or
 //! another capture is open. When the picture's file has landed the shell sends the event `captured` to the app with
 //! body `{path}`. A selection or window the person cancels sends nothing. Photos keeps the file, so the path is in the
 //! Pictures folder (or the Photos library's first folder), not in the app's data folder.
 
-use super::display_services::require_screen_recording;
+use super::display_services::require_screenshot_consent;
 use super::{Event, Shell, SystemService};
 use bifrost_core::json::Json;
 use std::path::{Path, PathBuf};
@@ -89,7 +90,7 @@ impl SystemService for ScreenshotService {
         if !matches!(method, "selection" | "window" | "screen") {
             return Err(format!("screenshot has no method {method}"));
         }
-        require_screen_recording(app_id)?;
+        require_screenshot_consent(app_id)?;
         if !shell.screen_on || shell.is_locked() {
             return Err("locked".into());
         }

@@ -35,6 +35,9 @@ pub const EVENT_RECONFIGURED: &str = "reconfigured";
 pub const PERMISSION_CONFIG: &str = "display-config";
 /// The manifest capability required in addition to the person's screen-recording consent.
 pub const PERMISSION_SCREEN: &str = "screen";
+/// The one app whose manifest may hold `screen` (Color Meter; `app_policy::SCREEN_APP_ID` is this id). Every other app
+/// takes pictures through the `screenshot` service, which the shell runs.
+pub const SCREEN_CAPTURE_APP_ID: &str = "is.olibuijr.colormeter.desktop";
 /// The id of the one display the shell drives.
 pub const DISPLAY_ID: DisplayId = 1;
 
@@ -487,9 +490,23 @@ fn mode_event(name: &str, applied: bool, with_revert_in: bool) -> Event {
 /// Lets a call through only when the app declares `screen` and the person authorized screen recording. The first call
 /// of an app that has not been asked queues the sheet and fails; a refusal fails with its reason.
 pub fn require_screen_recording(app_id: &str) -> Result<(), String> {
-    if !super::app_has_permission(app_id, PERMISSION_SCREEN) {
+    // Capture the app does itself (frames, window images, streams) is for the one first-party app the launch policy
+    // grants it to; a package that declares `screen` anyway is launched without the grant and gets nothing here.
+    if !screen_capture_declared(app_id, super::app_has_permission(app_id, PERMISSION_SCREEN)) {
         return Err("the screen permission is not declared by this app".into());
     }
+    require_screenshot_consent(app_id)
+}
+
+/// Whether `app_id` may capture the screen itself: it is the app the policy grants `screen` to and its manifest declares it.
+pub fn screen_capture_declared(app_id: &str, declared: bool) -> bool {
+    declared && app_id == SCREEN_CAPTURE_APP_ID
+}
+
+/// The person's screen-recording consent alone, for the shell-mediated `screenshot` service: the shell takes the
+/// picture and saves it, so the app needs no `screen` entry in its manifest. The first call of an app that has not
+/// been asked queues the sheet and fails; a refusal fails with its reason.
+pub fn require_screenshot_consent(app_id: &str) -> Result<(), String> {
     match privacy_permissions::access(app_id).status(Media::Screen) {
         Status::Authorized => Ok(()),
         Status::NotDetermined => {
@@ -505,6 +522,14 @@ pub fn require_screen_recording(app_id: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_the_color_meter_captures_the_screen_itself() {
+        assert!(screen_capture_declared(SCREEN_CAPTURE_APP_ID, true));
+        assert!(!screen_capture_declared(SCREEN_CAPTURE_APP_ID, false), "the manifest must declare it");
+        assert!(!screen_capture_declared("is.olibuijr.preview.desktop", true), "a legacy `screen` entry grants nothing");
+        assert!(!screen_capture_declared("is.example.recorder", true));
+    }
 
     #[test]
     fn the_resolution_choice_is_native_by_default_and_round_trips_a_size() {

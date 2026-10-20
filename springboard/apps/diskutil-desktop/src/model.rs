@@ -169,6 +169,28 @@ pub fn apply_usage(nodes: &mut [Node], table: &[(String, Usage)]) {
     }
 }
 
+/// The rows the shell's `volumes` answer describes, the way `sysfs::read_nodes` builds them from `/sys`: hidden devices
+/// (memory disks, device-mapper) left out, a partition marked as one. Usage and SMART are not part of the answer.
+pub fn nodes_from_volumes(volumes: &[bifrost_core::disk_scan::Volume]) -> Vec<Node> {
+    volumes
+        .iter()
+        .filter(|v| !is_hidden_device(&v.disk.bsd_name))
+        .map(|v| Node {
+            name: v.disk.bsd_name.clone(),
+            kind: if v.parent.is_some() { Kind::Partition } else { Kind::Disk },
+            parent: v.parent.clone(),
+            size: v.disk.size,
+            model: v.disk.model.clone(),
+            removable: v.disk.removable,
+            read_only: v.disk.read_only,
+            fs_type: v.fs_type.clone(),
+            label: v.label.clone(),
+            mount_point: v.disk.mount_point.clone(),
+            ..Node::default()
+        })
+        .collect()
+}
+
 /// Keeps the usage the last full read measured, for the volumes that are still mounted at the same point.
 pub fn carry_usage(nodes: &mut [Node], previous: &[Node]) {
     for node in nodes.iter_mut() {
@@ -379,6 +401,25 @@ mod tests {
 
     fn disk(name: &str) -> Node {
         Node { name: name.into(), size: 4_000_000_000, ..Node::default() }
+    }
+
+    #[test]
+    fn the_shells_volumes_become_disks_with_their_partitions() {
+        use bifrost_core::disk_scan::Volume;
+        let volume = |name: &str, parent: Option<&str>, fs: Option<&str>| Volume {
+            disk: Disk { bsd_name: name.into(), size: 1000, removable: false, read_only: false, model: String::new(), mount_point: None },
+            parent: parent.map(String::from),
+            fs_type: fs.map(String::from),
+            label: None,
+        };
+        let nodes = nodes_from_volumes(&[
+            volume("nvme0n1", None, None),
+            volume("nvme0n1p1", Some("nvme0n1"), Some("vfat")),
+            volume("dm-0", None, None),
+        ]);
+        assert_eq!(nodes.iter().map(|n| n.name.as_str()).collect::<Vec<_>>(), vec!["nvme0n1", "nvme0n1p1"], "device-mapper stays hidden");
+        assert_eq!((nodes[0].kind, nodes[1].kind), (Kind::Disk, Kind::Partition));
+        assert_eq!((nodes[1].parent.as_deref(), nodes[1].fs_type.as_deref()), (Some("nvme0n1"), Some("vfat")));
     }
 
     #[test]
