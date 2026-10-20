@@ -97,7 +97,14 @@ pub fn register(handle: &LoopHandle<'static, WmState>, listener: UnixListener) -
                 match listener.accept() {
                     Ok((stream, _)) => {
                         let _ = stream.set_nonblocking(true);
-                        let data = Arc::new(ClientState { peer_uid: crate::state::peer_uid(&stream), privileged: true, ..ClientState::default() });
+                        let pid = crate::state::peer_pid(&stream);
+                        let data = Arc::new(ClientState {
+                            peer_uid: crate::state::peer_uid(&stream),
+                            peer_pid: pid,
+                            shares_mount_ns: crate::state::shares_mount_ns(pid),
+                            privileged: true,
+                            ..ClientState::default()
+                        });
                         if let Err(e) = state.dh.insert_client(stream, data) {
                             eprintln!("bifrost-wm: privileged client refused: {e}");
                         }

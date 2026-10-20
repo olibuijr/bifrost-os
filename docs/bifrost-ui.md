@@ -2258,9 +2258,21 @@ never snapshots "Loading…".
 (`public.file-url`). Types are UTType ids (`public.utf8-plain-text`, `public.html`, `public.rtf`, `public.png`,
 `public.file-url`); `springboard::shell::pasteboard::mime_for` maps them to MIME (`text/plain;charset=utf-8`, `text/html`,
 `text/rtf`, `image/png`, `text/uri-list`). Wire: `ToShell::PasteboardSet` (0x190) and `ToApp::Pasteboard` (0x190), at most
-16 items. `Ctx::pasteboard_string` / `set_pasteboard_string` keep working. Gap: the shell publishes only the text-like type
-(plain text, else file URLs, else HTML) to the Wayland selection; other types stay inside BifrOSt until the presenter offers
-multi-MIME data sources (today one rich type, png then html, rtf, uri-list, goes out through `wl-copy --type`). The shell pushes `ToApp::Pasteboard` with the bytes to every other connected app.
+16 items. `Ctx::pasteboard_string` / `set_pasteboard_string` keep working. The shell pushes `ToApp::Pasteboard` (the typed
+items) and `ToApp::Clipboard` (the text, which the apps' text fields read) to every app that has not seen the board's change
+count (`AppHost::sync_pasteboard`); the writer is not sent its own write.
+
+**One clipboard** (`src/shell/pasteboard_sync.rs`, run from `Shell::ext_tick`): the shell-wide text clipboard
+(`clipboard::set_text`, what the shell's own fields copy), the typed pasteboard and the window server's selection are kept
+equal. A copy in a shell field (Settings search, Search, Apps search, file names in Files), an app's `SetClipboard` or
+`PasteboardSet`, and a selection another Wayland program sets all end up on the pasteboard, in the apps and in the selection.
+The shell owns the selection through `zwlr_data_control_v1` (`pasteboard_wl.rs`, a thread with its own privileged connection;
+`wm/src/data_control.rs` offers the global to the shell and to unsandboxed programs of the session's user: a client in another mount namespace, which a sandboxed native app always is, is refused and uses the ordinary focused data device) and
+offers text as `text/plain;charset=utf-8`, `text/plain`, `UTF8_STRING`, `TEXT` and `STRING`, beside `text/html`, `text/rtf`
+(and `application/rtf`), `image/png`, `image/jpeg` and `text/uri-list`. From another program's selection it reads one text
+type and each rich type (32 MiB at most per type, 1.5 s per type). Gaps: `STRING` carries UTF-8 (X clients that expect
+Latin-1 see the bytes unconverted); the primary (middle-click) selection is not shared; a type with no MIME form (a private
+UTType) stays inside BifrOSt; images are not imported into the shell's own text fields.
 
 #### Pasteboard items and named boards
 

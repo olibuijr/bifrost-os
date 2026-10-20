@@ -59,6 +59,7 @@ pub const CLOCK_REALTIME: c_int = 0;
 extern "C" {
     pub fn open(path: *const c_char, flags: c_int, ...) -> c_int;
     pub fn close(fd: c_int) -> c_int;
+    pub fn pipe2(fds: *mut c_int, flags: c_int) -> c_int;
     pub fn read(fd: c_int, buf: *mut c_void, n: usize) -> isize;
     pub fn write(fd: c_int, buf: *const c_void, n: usize) -> isize;
     pub fn fcntl(fd: c_int, cmd: c_int, ...) -> c_int;

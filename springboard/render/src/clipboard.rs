@@ -16,6 +16,9 @@ pub struct Clipboard {
     text: Option<String>,
     image: Option<Image>,
     path: Option<PathBuf>,
+    /// Counts the changes made through `set_text`, `set_image` and `attach`, so a reader can tell cheaply that the
+    /// contents are new without comparing them.
+    rev: u64,
 }
 
 impl Clipboard {
@@ -28,7 +31,7 @@ impl Clipboard {
     pub fn load(path: impl Into<PathBuf>) -> Self {
         let path = path.into();
         let text = std::fs::read_to_string(&path).ok().filter(|s| !s.is_empty());
-        Clipboard { text, image: None, path: Some(path) }
+        Clipboard { text, image: None, path: Some(path), rev: 0 }
     }
 
     pub fn text(&self) -> Option<&str> {
@@ -46,6 +49,7 @@ impl Clipboard {
     /// Replaces the contents with `text` (empty clears the clipboard) and persists it.
     pub fn set_text(&mut self, text: &str) {
         self.image = None;
+        self.rev = self.rev.wrapping_add(1);
         self.text = (!text.is_empty()).then(|| text.to_string());
         if let Err(e) = self.save() {
             eprintln!("springboard: clipboard: {e}");
@@ -55,6 +59,7 @@ impl Clipboard {
     /// Replaces the contents with an image; the persisted text is removed.
     pub fn set_image(&mut self, image: Image) {
         self.image = Some(image);
+        self.rev = self.rev.wrapping_add(1);
         self.text = None;
         if let Err(e) = self.save() {
             eprintln!("springboard: clipboard: {e}");
@@ -127,7 +132,14 @@ pub fn attach(path: impl Into<PathBuf>) {
     let mut g = global();
     let loaded = Clipboard::load(path);
     let image = g.as_mut().and_then(|c| c.image.take());
-    *g = Some(Clipboard { image: image.filter(|_| loaded.text.is_none()), ..loaded });
+    // the revision only ever moves on, so a reader that saw the old contents sees the loaded ones as a change
+    let rev = g.as_ref().map_or(0, |c| c.rev).wrapping_add(1);
+    *g = Some(Clipboard { image: image.filter(|_| loaded.text.is_none()), rev, ..loaded });
+}
+
+/// The shared clipboard's revision: it changes whenever the text or image is replaced (`set_text`, `set_image`, `attach`).
+pub fn revision() -> u64 {
+    global().as_ref().map_or(0, |c| c.rev)
 }
 
 /// The shared clipboard's text, if any.
@@ -192,6 +204,23 @@ pub mod tests {
         assert!(!c.has_text() && !path.exists());
         c.clear();
         assert!(!path.exists(), "clearing twice is fine");
+    }
+
+    #[test]
+    fn every_change_moves_the_revision_on() {
+        let _g = exclusive();
+        let r0 = revision();
+        set_text("a");
+        let r1 = revision();
+        assert_ne!(r0, r1);
+        set_text("a");
+        assert_ne!(r1, revision(), "setting the same text again is still a copy");
+        let r2 = revision();
+        let path = scratch("d/clipboard.txt");
+        let _ = std::fs::remove_file(&path);
+        attach(&path);
+        assert_ne!(r2, revision(), "attaching to a file replaces the contents");
+        *global() = Some(Clipboard::memory());
     }
 
     #[test]

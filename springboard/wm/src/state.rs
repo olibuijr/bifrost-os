@@ -36,6 +36,30 @@ pub(crate) fn peer_uid(stream: &UnixStream) -> Option<u32> {
     smithay::reexports::rustix::net::sockopt::socket_peercred(stream).ok().map(|credentials| credentials.uid.as_raw())
 }
 
+/// Capture the Linux Unix-socket peer pid on accept (`SO_PEERCRED`), in this process's pid namespace. `None` when the
+/// credentials cannot be read.
+pub(crate) fn peer_pid(stream: &UnixStream) -> Option<u32> {
+    smithay::reexports::rustix::net::sockopt::socket_peercred(stream)
+        .ok()
+        .and_then(|credentials| u32::try_from(credentials.pid.as_raw_nonzero().get()).ok())
+}
+
+/// Whether two namespace links (`readlink /proc/<pid>/ns/mnt`) name the same namespace. Anything unreadable is not the
+/// same: the check fails closed.
+pub(crate) fn same_namespace(own: Option<&std::path::Path>, peer: Option<&std::path::Path>) -> bool {
+    matches!((own, peer), (Some(a), Some(b)) if a == b)
+}
+
+/// Whether process `pid` shares this process's mount namespace. A sandboxed native app (`bwrap`, `src/bare/app_policy.rs`)
+/// always has a mount namespace of its own, a program the user started in their session does not. An unknown pid, a pid
+/// of 0 (the peer lives in another pid namespace) or an unreadable link is "not shared".
+pub(crate) fn shares_mount_ns(pid: Option<u32>) -> bool {
+    let Some(pid) = pid.filter(|pid| *pid != 0) else { return false };
+    let own = std::fs::read_link("/proc/self/ns/mnt").ok();
+    let peer = std::fs::read_link(format!("/proc/{pid}/ns/mnt")).ok();
+    same_namespace(own.as_deref(), peer.as_deref())
+}
+
 /// The `wm` id of a Smithay window, kept in the window's user data.
 struct Id(WindowId);
 
@@ -113,6 +137,8 @@ pub struct WmState {
     pub session: crate::session_protocols::SessionState,
     /// Text input, input method and virtual keyboard (`text_input.rs`).
     pub text_input: crate::text_input::TextInputProtocols,
+    /// Clipboard control for the shell and the user's tools (`data_control.rs`).
+    pub data_control: crate::data_control::DataControl,
 }
 
 impl WmState {
@@ -136,7 +162,13 @@ impl WmState {
         let presentation = PresentationState::new::<WmState>(&dh, 1);
         handle
             .insert_source(listening, |stream, _, state: &mut WmState| {
-                let data = Arc::new(ClientState { peer_uid: peer_uid(&stream), ..ClientState::default() });
+                let pid = peer_pid(&stream);
+                let data = Arc::new(ClientState {
+                    peer_uid: peer_uid(&stream),
+                    peer_pid: pid,
+                    shares_mount_ns: shares_mount_ns(pid),
+                    ..ClientState::default()
+                });
                 if let Err(e) = state.dh.insert_client(stream, data) {
                     eprintln!("bifrost-wm: client refused: {e}");
                 }
@@ -209,6 +241,7 @@ impl WmState {
             xwayland: crate::xwayland::XWaylandState::new(&dh),
             session,
             text_input: crate::text_input::TextInputProtocols::new(&dh),
+            data_control: crate::data_control::DataControl::new(&dh),
             dh,
         }
     }
@@ -403,6 +436,12 @@ pub struct ClientState {
     pub compositor_state: CompositorClientState,
     /// Cached from SO_PEERCRED on accept; filters must not query the Wayland backend while dispatching globals.
     pub peer_uid: Option<u32>,
+    /// Cached from SO_PEERCRED on accept (`None` when unreadable; 0 for a peer in another pid namespace).
+    pub peer_pid: Option<u32>,
+    /// The peer was in this process's mount namespace when it connected. A sandboxed app has its own, so this is how
+    /// the same-user data-control programs are told from a sandboxed app that runs as the same account. False by default
+    /// (unknown peers fail closed).
+    pub shares_mount_ns: bool,
     /// The client connected through the privileged socket (`privileged.rs`): the capture globals are visible to it.
     pub privileged: bool,
 }
@@ -410,4 +449,29 @@ pub struct ClientState {
 impl ClientData for ClientState {
     fn initialized(&self, _client_id: ClientId) {}
     fn disconnected(&self, _client_id: ClientId, _reason: DisconnectReason) {}
+}
+
+#[cfg(test)]
+mod peer_tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn namespace_links_compare_equal_only_when_both_are_known_and_identical() {
+        let a = Path::new("mnt:[4026531841]");
+        let b = Path::new("mnt:[4026532500]");
+        assert!(same_namespace(Some(a), Some(a)));
+        assert!(!same_namespace(Some(a), Some(b)), "a sandbox has its own mount namespace");
+        assert!(!same_namespace(None, Some(a)));
+        assert!(!same_namespace(Some(a), None));
+        assert!(!same_namespace(None, None), "unreadable links fail closed");
+    }
+
+    #[test]
+    fn this_process_shares_its_own_mount_namespace_and_unknown_pids_do_not() {
+        assert!(shares_mount_ns(Some(std::process::id())));
+        assert!(!shares_mount_ns(None));
+        assert!(!shares_mount_ns(Some(0)), "pid 0 is a peer in another pid namespace");
+        assert!(!shares_mount_ns(Some(u32::MAX)), "no such process");
+    }
 }

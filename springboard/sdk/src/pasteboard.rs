@@ -12,10 +12,9 @@
 //! (`readObjects(forClasses:options:)`).
 //!
 //! parity gap: the shell wire carries a flat (type, data) list, so the general board sends the representations of its
-//! items merged (the first item holding a type keeps it, at most 16 items), and the shell publishes only the text-like
-//! type to the Wayland selection for now; other types stay inside BifrOSt apps until the presenter offers multi-MIME
-//! data sources. Promised data that nobody has read yet is not sent, and another app's write ends this process's
-//! promises.
+//! items merged (the first item holding a type keeps it, at most 16 items). The shell offers every type that has a MIME
+//! form to the Wayland selection (`shell::pasteboard_sync`); a private UTType stays inside BifrOSt apps. Promised data that
+//! nobody has read yet is not sent, and another app's write ends this process's promises.
 
 use crate::pasteboard_item::{Found, PasteboardItem};
 use crate::pasteboard_promise::{OwnerProvider, PasteboardTypeOwner};

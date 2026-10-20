@@ -46,10 +46,10 @@ impl Shell {
             Mode::ColorsNoBackground => term.selected_rtf(false, font_pt),
         };
         let items = items(mode, &text, rtf.clone());
-        // the shell's pasteboard keeps every item; its plain text is what the shared clipboard carries
-        let plain = super::super::pasteboard::set(items.clone()).unwrap_or_else(|| text.clone());
+        // the shell's pasteboard keeps every item; its plain text is what the shared clipboard carries, and the next pass of
+        // `pasteboard_sync` offers the items to the window server
+        let plain = super::super::pasteboard::set(items).unwrap_or_else(|| text.clone());
         clipboard::set_text(&plain);
-        super::super::pasteboard::offer_wayland(&items);
         self.terminal_ui.message = match (mode, rtf.is_some()) {
             (Mode::Plain, _) => "Selection copied".into(),
             (Mode::Colors, true) => "Selection copied with colors".into(),

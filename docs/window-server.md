@@ -354,6 +354,27 @@ XRGB8888 or ARGB8888 buffer. Without a hook the request is answered `failed`.
   treats a refused probe frame (the Vulkan renderer) as "cannot record" and starts nothing.
 - Tests: `capture_size`/`clamp_region` unit tests, and `tests/capture.rs` (headless, red scene reads back `[255,0,0,255]`).
 
+## Clipboard control (data control)
+
+The seat's clipboard (`wl_data_device`) lets only the keyboard-focused client set the selection, so `wl-copy`, `wl-paste` and the
+shell, which has no focused surface for every copy, could neither set nor read it (`wl-paste --list-types` said "Nothing is
+copied" after a copy in an app). `wm/src/data_control.rs` offers `zwlr_data_control_manager_v1` and `ext_data_control_manager_v1`
+(Smithay keeps the selection) to:
+
+- the shell, which connected through the privileged socket and owns the selection (`src/shell/pasteboard_wl.rs`, see
+  "NSPasteboard rich types" in `docs/bifrost-ui.md`);
+- programs that run as root, or as the window server's own user outside any app sandbox: `wl-copy`, `wl-paste`, a terminal,
+  `pbcopy`, `pbpaste`.
+
+A sandboxed native app runs as the same account and gets the raw socket (the sandbox proxy in `docs/wayland-filter-design.md` is
+design only, nothing is implemented), so the uid alone cannot tell it from `wl-paste`. The window server records the peer pid
+(`SO_PEERCRED`) when it accepts a client and admits a same-user client only when `/proc/<pid>/ns/mnt` is the window server's own
+mount namespace (`wm/src/state.rs` `shares_mount_ns`). A `bwrap`'d app always has a namespace of its own, and a peer whose pid
+cannot be resolved (another pid namespace, unreadable link) is refused, so it never sees the globals; it copies and pastes through
+the ordinary focused `wl_data_device`, which the shell's data-control source feeds. Any unsandboxed program of the session's user
+can read the clipboard through the globals, as on other desktops. `BIFROST_WM_DATA_CONTROL=off` removes both
+globals. Tests: the policy in `wm/src/data_control.rs` (including a sandboxed same-user peer) and the namespace check in `wm/src/state.rs`.
+
 ## Privileged socket and capture globals
 
 Screen capture used to be open to every client: any app could bind `zwlr_screencopy_manager_v1` and read the whole screen, and

@@ -17,7 +17,7 @@ service adds all three over the named service channel. The wire protocol is unch
   - Each board has a change count. A write (`clear` plus `write`) is one change.
   - `tick` pushes one `changed` event per board whose count moved, to every running app, with `{board, change_count}`.
   - The `general` board is the shell clipboard. Its reads come from `shell::pasteboard::snapshot`, and its writes go through
-    `shell::pasteboard::set`, the plain clipboard (`clipboard::set_text`) and `offer_wayland`. Changes made over the older
+    `shell::pasteboard::set_items`, the plain clipboard (`clipboard::set_text`); the next `pasteboard_sync` pass offers the items to the window server. Changes made over the older
     protocol also show up as `changed` events for `general`.
   - Reuses the UTType model `bifrost_ui::uttype` for `can_read` (type conformance) and `shell::pasteboard::mime_for` for the MIME
     type of each representation.

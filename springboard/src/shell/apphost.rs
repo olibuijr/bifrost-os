@@ -501,6 +501,8 @@ pub struct AppHost {
     appearance_sent: u32,
     /// The input source the app last received (`ToApp::InputSource`); `None` until the first send.
     input_japanese: Option<bool>,
+    /// The pasteboard change count the app last received (`ToApp::Pasteboard`); `None` until the first sync.
+    pb_sent: Option<u32>,
     child: Option<Child>,
     chan: Channel,
     bufs: Vec<Buf>,
@@ -656,6 +658,7 @@ impl AppHost {
             exec: PathBuf::new(),
             appearance_sent: u32::MAX,
             input_japanese: None,
+            pb_sent: None,
             child,
             chan,
             bufs: Vec::new(),
@@ -771,6 +774,32 @@ impl AppHost {
             self.input_japanese = Some(japanese);
             self.send(&ToApp::InputSource { japanese });
         }
+    }
+
+    /// Gives the app the shell's pasteboard when its change count differs from what the app last received (and on first
+    /// contact, unless the board is empty): the typed items as `ToApp::Pasteboard`, and the text as `ToApp::Clipboard`, which is
+    /// what the app's text fields and `Ctx::pasteboard_string` read. An empty text clears the app's.
+    pub fn sync_pasteboard(&mut self, count: u32, items: &[(String, Vec<u8>)]) {
+        let first = self.pb_sent.is_none();
+        if self.pb_sent == Some(count) {
+            return;
+        }
+        self.pb_sent = Some(count);
+        if first && items.is_empty() {
+            return;
+        }
+        self.send(&ToApp::Pasteboard { change_count: count, items: items.to_vec() });
+        self.send(&ToApp::Clipboard { text: super::pasteboard::text_of(items).unwrap_or_default() });
+    }
+
+    /// The change count the app last received.
+    fn pb_known(&self) -> Option<u32> {
+        self.pb_sent
+    }
+
+    /// Records that the app already has the board at `count` (it made the change itself), so it is not sent back.
+    pub fn pasteboard_known(&mut self, count: u32) {
+        self.pb_sent = Some(count);
     }
 
     /// True when the installed binary is no longer the one this process runs (the app was updated while open), so
@@ -1839,6 +1868,24 @@ impl Shell {
         }
     }
 
+    /// Gives every running app the pasteboard it has not seen; `written` is the app that made the newest typed write and the
+    /// change count that write gave (that app has the board already).
+    pub(super) fn ext_sync_pasteboard(&mut self, written: Option<(usize, u32)>) {
+        if let Some((slot, count)) = written {
+            if let Some(h) = self.ext.get_mut(slot).and_then(Option::as_mut) {
+                h.pasteboard_known(count);
+            }
+        }
+        let count = super::pasteboard::count();
+        if self.ext.iter().flatten().all(|h| h.pb_known() == Some(count)) {
+            return;
+        }
+        let (count, items) = super::pasteboard::snapshot();
+        for h in self.ext.iter_mut().flatten() {
+            h.sync_pasteboard(count, &items);
+        }
+    }
+
     /// Sends `m` to the app in `slot` if it is running.
     pub(super) fn ext_send(&mut self, slot: usize, m: &bifrost_proto::ToApp) {
         if let Some(h) = self.ext.get_mut(slot).and_then(Option::as_mut) {
@@ -2302,15 +2349,12 @@ impl Shell {
         if let Some(text) = clip {
             super::clipboard::set_text(&text);
         }
-        if let Some(from) = pb_from {
-            // typed items go to every other connected app, and to external Wayland clients
-            let (change_count, items) = super::pasteboard::snapshot();
-            let m = bifrost_proto::ToApp::Pasteboard { change_count, items: items.clone() };
-            for slot in 0..self.ext.len() {
-                if slot != from { self.ext_send(slot, &m); }
-            }
-            super::pasteboard::offer_wayland(&items);
-        }
+        // one clipboard for the shell's fields, the apps and the window server's selection (`pasteboard_sync`): the pass
+        // folds a copy in a shell field, an app's text and another program's selection into the pasteboard and offers it;
+        // the writer of the newest typed write has that board already
+        let written = pb_from.map(|slot| (slot, super::pasteboard::count()));
+        super::pasteboard_sync::tick();
+        self.ext_sync_pasteboard(written);
         if let Some(on) = kb {
             self.ext_set_keyboard(on, t);
         }
@@ -2469,6 +2513,44 @@ mod tests {
         assert_eq!(next(&peer), None, "unchanged: nothing sent");
         host.sync_input_source(true);
         assert_eq!(next(&peer), Some(ToApp::InputSource { japanese: true }));
+    }
+
+    #[test]
+    fn the_pasteboard_reaches_an_app_once_per_change_and_not_back_to_its_writer() {
+        let (channel, peer) = sys::socketpair_pair().unwrap();
+        let cfg = Configure { w: 4, h: 3, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
+        let mut host = AppHost::with_channel("fixture", channel, None, cfg);
+        let next = |peer: &Channel| match peer.recv(false).unwrap() {
+            sys::Recv::Packet(p, _) => Some(ToApp::decode(&p).unwrap()),
+            _ => None,
+        };
+        let text = |s: &str| vec![("public.utf8-plain-text".to_string(), s.as_bytes().to_vec())];
+        host.sync_pasteboard(0, &[]);
+        assert_eq!(next(&peer), None, "an empty board at first contact sends nothing");
+        host.sync_pasteboard(3, &text("from another app"));
+        assert_eq!(next(&peer), Some(ToApp::Pasteboard { change_count: 3, items: text("from another app") }));
+        assert_eq!(next(&peer), Some(ToApp::Clipboard { text: "from another app".into() }), "the text fields read the plain clipboard");
+        host.sync_pasteboard(3, &text("from another app"));
+        assert_eq!(next(&peer), None, "unchanged: nothing sent");
+        host.pasteboard_known(4);
+        host.sync_pasteboard(4, &text("what this app wrote"));
+        assert_eq!(next(&peer), None, "the writer has its own board");
+        host.sync_pasteboard(5, &[("public.png".to_string(), vec![1])]);
+        assert!(matches!(next(&peer), Some(ToApp::Pasteboard { change_count: 5, .. })));
+        assert_eq!(next(&peer), Some(ToApp::Clipboard { text: String::new() }), "a board without text clears the app's text");
+    }
+
+    #[test]
+    fn a_board_with_content_is_sent_on_first_contact() {
+        let (channel, peer) = sys::socketpair_pair().unwrap();
+        let cfg = Configure { w: 4, h: 3, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
+        let mut host = AppHost::with_channel("fixture", channel, None, cfg);
+        host.sync_pasteboard(7, &[("public.utf8-plain-text".to_string(), b"kept".to_vec())]);
+        let first = match peer.recv(false).unwrap() {
+            sys::Recv::Packet(p, _) => ToApp::decode(&p).unwrap(),
+            _ => panic!("nothing sent"),
+        };
+        assert!(matches!(first, ToApp::Pasteboard { change_count: 7, .. }));
     }
 
     #[test]
