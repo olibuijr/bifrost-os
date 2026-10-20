@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- The system services (audio, network, update) now ship with the system. Music Radio, Podcasts and Voice Memos play
+  again and `bifrost-audio status` finds the media service: the update package installs the services under
+  /usr/lib/bifrost/services and bifrostd supervises them; a newer store-installed copy still wins.
+- The terminal bell and the alert sound chosen in Settings > Sounds now play (at the system volume). When sound is
+  muted, or does not come out, the bell flashes the terminal instead. Choosing an alert sound plays it once.
+- The first system sound after the audio server connects is no longer lost: the shell keeps its sound player while the
+  stream opens instead of starting over.
+- `bifrost-audio status` says whether the media service or the audio server is the missing part.
+
 ## 0.10.8 — 2026-10-20
 
 - System Update now updates the system's own assets (UI fonts, app icons, wallpapers). They ship in the update package

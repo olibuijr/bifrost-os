@@ -1815,6 +1815,30 @@
     }
 
     #[test]
+    fn the_terminal_bell_plays_the_alert_sound() {
+        let mut sh = terminal(&["/bin/sh", "-c", "printf '\\a'; read x"]);
+        sh.cc.volume = 0.5;
+        pump_until(&mut sh, |sh| sh.bell.pending());
+        let want = sh.options().alert_sound;
+        let fx = sh.tick(5000.0);
+        assert!(fx.contains(&Effect::AlertSound(want)), "{fx:?}");
+        assert_eq!(sh.bell.flash_alpha(5000.0), 0, "no flash while the sound can play");
+    }
+
+    #[test]
+    fn a_muted_terminal_bell_flashes_instead_of_sounding() {
+        let mut sh = terminal(&["/bin/sh", "-c", "printf '\\a'; read x"]);
+        sh.cc.volume = 0.0;
+        pump_until(&mut sh, |sh| sh.bell.pending());
+        let fx = sh.tick(5000.0);
+        assert!(!fx.iter().any(|e| matches!(e, Effect::AlertSound(_))), "{fx:?}");
+        assert_eq!(sh.bell.flash_alpha(5000.0), bell::FLASH_ALPHA);
+        assert_eq!(sh.bell_alpha, bell::FLASH_ALPHA, "the flash repaints the terminal");
+        sh.tick(5000.0 + bell::FLASH_MS + 1.0);
+        assert_eq!(sh.bell_alpha, 0, "and the veil is gone after it");
+    }
+
+    #[test]
     fn typing_on_the_keyboard_reaches_the_shell() {
         let mut sh = terminal(&["/bin/sh", "-c", "read x; echo got:$x; read y"]);
         for (i, k) in ["h", "i", "return"].iter().enumerate() {

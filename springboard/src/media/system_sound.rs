@@ -12,6 +12,33 @@ use crate::shell::ui_sounds;
 use crate::shell::options::ALERT_SOUNDS;
 use bifrost_audio_toolbox::system_sound::SystemSounds;
 use std::io;
+use std::time::{Duration, Instant};
+
+/// How long a play waits for the stream to open on the audio server: the first write after a (re)connect only starts
+/// the open (`speaker::Session::ensure` answers `WouldBlock` while it runs on its own thread), and the caller is
+/// meant to write again. Playing from a worker thread, so waiting here never stalls the UI.
+pub const OPEN_WAIT: Duration = Duration::from_millis(1500);
+/// The pause between two writes while the stream is opening.
+pub const OPEN_POLL: Duration = Duration::from_millis(20);
+
+/// Writes `pcm` to `out`, writing again (every `poll`, for at most `wait`) while the stream is still opening
+/// (`WouldBlock`). Any other error ends the attempt at once.
+pub fn write_when_open(out: &mut dyn AudioOut, pcm: &[i16], wait: Duration, poll: Duration) -> io::Result<()> {
+    let began = Instant::now();
+    loop {
+        match out.write(pcm) {
+            Err(e) if e.kind() == io::ErrorKind::WouldBlock && began.elapsed() < wait => std::thread::sleep(poll),
+            other => return other,
+        }
+    }
+}
+
+/// Whether the player is still good after a failed play: an open in progress (`WouldBlock`) or a server that is not
+/// reachable yet (`NotConnected`, the session backs off by itself) must keep the same player, because dropping it
+/// throws away the half-open stream and the backoff, so no sound would ever get through.
+pub fn keeps_player(e: &io::Error) -> bool {
+    matches!(e.kind(), io::ErrorKind::WouldBlock | io::ErrorKind::NotConnected)
+}
 
 /// The output rate (stereo S16, like every `AudioOut`).
 pub const RATE: u32 = 48_000;
@@ -140,7 +167,7 @@ impl SoundPlayer {
         let mut mix = vec![0f32; frames * 2];
         self.sounds.mix_into(&mut mix);
         let pcm: Vec<i16> = mix.iter().map(|s| (s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16).collect();
-        self.out.write(&pcm)
+        write_when_open(self.out.as_mut(), &pcm, OPEN_WAIT, OPEN_POLL)
     }
 }
 
@@ -234,6 +261,66 @@ mod tests {
         let tone = bifrost_ui::chart_ax::Tone { hz: 440.0, millis: 120, timbre: 0 };
         k.audio_graph(&crate::shell::audio_graph::pcm(&[tone], 1.0), 1.0).unwrap();
         assert!(got.lock().unwrap_or_else(|p| p.into_inner()).iter().any(|&s| s != 0));
+    }
+
+    /// An output whose stream opens after `opens_after` writes, like `SpeakerOut` (WouldBlock while it opens).
+    struct Opening {
+        opens_after: usize,
+        writes: usize,
+        got: Arc<Mutex<Vec<i16>>>,
+        error: io::ErrorKind,
+    }
+
+    impl AudioOut for Opening {
+        fn write(&mut self, frames: &[i16]) -> io::Result<()> {
+            self.writes += 1;
+            if self.writes <= self.opens_after {
+                return Err(io::Error::new(self.error, "opening"));
+            }
+            self.got.lock().unwrap_or_else(|p| p.into_inner()).extend_from_slice(frames);
+            Ok(())
+        }
+        fn played(&mut self) -> u64 {
+            0
+        }
+        fn pause(&mut self, _on: bool) {}
+        fn discard(&mut self) {}
+    }
+
+    #[test]
+    fn a_sound_waits_for_the_stream_to_open_instead_of_being_lost() {
+        let got = Arc::new(Mutex::new(Vec::new()));
+        let out = Opening { opens_after: 3, writes: 0, got: got.clone(), error: io::ErrorKind::WouldBlock };
+        let mut k = SoundPlayer::new(Box::new(out)).unwrap();
+        k.alert(0, 1.0).unwrap();
+        assert!(got.lock().unwrap_or_else(|p| p.into_inner()).iter().any(|&s| s != 0), "the alert reached the stream once it opened");
+    }
+
+    #[test]
+    fn a_stream_that_never_opens_gives_up_after_the_wait() {
+        let got = Arc::new(Mutex::new(Vec::new()));
+        let mut out = Opening { opens_after: usize::MAX, writes: 0, got, error: io::ErrorKind::WouldBlock };
+        let t = Instant::now();
+        let e = write_when_open(&mut out, &[1, 1], Duration::from_millis(60), Duration::from_millis(5)).unwrap_err();
+        assert_eq!(e.kind(), io::ErrorKind::WouldBlock);
+        assert!(t.elapsed() >= Duration::from_millis(60));
+        assert!(out.writes > 2, "it kept trying while it waited");
+    }
+
+    #[test]
+    fn another_error_is_not_retried() {
+        let got = Arc::new(Mutex::new(Vec::new()));
+        let mut out = Opening { opens_after: usize::MAX, writes: 0, got, error: io::ErrorKind::NotConnected };
+        assert!(write_when_open(&mut out, &[1, 1], Duration::from_secs(5), Duration::from_millis(5)).is_err());
+        assert_eq!(out.writes, 1);
+    }
+
+    #[test]
+    fn only_an_opening_or_unreachable_server_keeps_the_player() {
+        assert!(keeps_player(&io::Error::new(io::ErrorKind::WouldBlock, "x")));
+        assert!(keeps_player(&io::Error::new(io::ErrorKind::NotConnected, "x")));
+        assert!(!keeps_player(&io::Error::new(io::ErrorKind::TimedOut, "x")));
+        assert!(!keeps_player(&io::Error::other("x")));
     }
 
     #[test]

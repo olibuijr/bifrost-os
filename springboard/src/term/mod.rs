@@ -142,6 +142,8 @@ pub struct Terminal {
     pub unread: bool,
     /// the program rang the bell while this tab was not on screen (cleared when it is)
     pub bell: bool,
+    /// the program rang the bell since the shell last asked (`take_rang`), whichever tab is on screen
+    rang: bool,
     search_match: Option<termcore::search::Match>,
     /// the folded find query whose visible matches are highlighted (empty: none)
     find: Vec<char>,
@@ -206,7 +208,7 @@ impl Terminal {
         let pty = Pty::spawn(argv, &env, cols as u16, rows as u16, login.as_ref())?;
         let mut term = Term::new(cols, rows, history_lines());
         term.set_default_colors(THEME.fg, THEME.bg);
-        Ok(Terminal { pty, font_data, theme: 0, unread: false, bell: false, search_match: None, find: Vec::new(), term, glyphs: GlyphCache::new(font, px_size), metrics, area, canvas: blank(area), damage: RowCache::new(), outbox: Vec::new(), selection: None, cursor: None, blink: false, blink_on: true, custom_title: None, mouse_reporting: true, look: Look::default(), colors: Look::default().theme(0), px_size })
+        Ok(Terminal { pty, font_data, theme: 0, unread: false, bell: false, rang: false, search_match: None, find: Vec::new(), term, glyphs: GlyphCache::new(font, px_size), metrics, area, canvas: blank(area), damage: RowCache::new(), outbox: Vec::new(), selection: None, cursor: None, blink: false, blink_on: true, custom_title: None, mouse_reporting: true, look: Look::default(), colors: Look::default().theme(0), px_size })
     }
 
     /// The px rect the terminal occupies.
@@ -372,10 +374,16 @@ impl Terminal {
         }
         if self.term.take_bell() {
             self.bell = true;
+            self.rang = true;
         }
         let reply = self.term.take_response();
         self.send(&reply);
         changed
+    }
+
+    /// Whether the program rang the bell since the last call (the shell then plays the alert sound or flashes).
+    pub fn take_rang(&mut self) -> bool {
+        std::mem::take(&mut self.rang)
     }
 
     /// Keyboard input to the shell; jumps back to the live screen and drops
@@ -760,6 +768,20 @@ mod tests {
         }
         assert!(t.bell, "the BEL byte sets the flag");
         assert!(!t.viewport_text().contains('\u{7}'), "a bell is not printed");
+    }
+
+    #[test]
+    fn a_bell_is_reported_once_to_the_shell() {
+        let mut t = Terminal::spawn(font(), (0, 0, 400, 300), 20.0, &["/bin/sh", "-c", "printf '\\a'; read x"]).unwrap();
+        let start = std::time::Instant::now();
+        let mut rang = false;
+        while !rang && start.elapsed().as_secs() < 5 {
+            crate::bare::sys::wait(&[t.fd()], 50);
+            t.pump();
+            rang = t.take_rang();
+        }
+        assert!(rang, "the BEL byte is reported");
+        assert!(!t.take_rang(), "and only once");
     }
 
     #[test]

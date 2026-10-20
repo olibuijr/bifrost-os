@@ -1203,6 +1203,13 @@ fn run() -> std::io::Result<()> {
                         eprintln!("springboard: sound output: {e}");
                     }
                 }
+                // the terminal bell (the shell already chose the tone, or a flash while muted) and the preview when an
+                // Alert Sound is chosen in Settings; a muted output stays silent
+                Effect::AlertSound(index) => {
+                    if !vol.muted() {
+                        let _ = audio_tx.send(AudioJob::Sound(Sound::Alert(index)));
+                    }
+                }
                 // sound comes later; the full-screen alert already shows
                 Effect::Alarm => match shell.alert_tone() {
                     Some(index) => {
@@ -1912,10 +1919,16 @@ fn spawn_audio_worker() -> std::sync::mpsc::Sender<AudioJob> {
                 Sound::Earcon(index) => p.earcon(index, 1.0),
                 Sound::Ui(index) => p.ui_cue(index, 1.0),
             };
+            // the visual bell flashes while sound does not come out (springboard::shell::bell)
+            springboard::shell::bell::set_sound_failed(played.is_err());
             if let Err(e) = played {
                 eprintln!("springboard: sound: {e}");
-                // the connection may be stale (the server restarted): reconnect on the next sound
-                player = None;
+                // a stream that is still opening or a server that is not up yet keeps the player (dropping it would
+                // drop the half-open stream and its backoff, and no sound would ever play); any other error means the
+                // connection may be stale (the server restarted), so reconnect on the next sound
+                if !springboard::media::system_sound::keeps_player(&e) {
+                    player = None;
+                }
             }
         }
     });

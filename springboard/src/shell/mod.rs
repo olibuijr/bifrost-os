@@ -4,6 +4,7 @@
 pub mod pasteboard;
 pub mod pasteboard_transfer;
 pub mod battery;
+pub mod bell;
 pub mod browser;
 pub mod accessibility;
 pub mod atspi;
@@ -449,6 +450,9 @@ pub enum Effect {
     RotationLock(bool),
     /// a key press asked for a click and Keyboard Clicks is on: the shell binary plays it
     KeyClick(kb_clicks::Click),
+    /// play alert tone n (an index into `options::ALERT_SOUNDS`) once: the terminal bell, or the preview when an
+    /// Alert Sound is chosen in Settings > Sounds. The binary plays it unless the output is muted.
+    AlertSound(usize),
     #[cfg(feature = "desktop-wayland")]
     ActivateForeign(u32),
     #[cfg(feature="desktop-wayland")]
@@ -716,6 +720,10 @@ pub struct Shell {
     mono: &'static [u8],
     /// the Terminal's shell, alive in the background once opened
     term: term::Sessions,
+    /// the terminal bell: rings counted by `pump`, settled into a sound or a flash by `bell_tick`
+    bell: bell::Bell,
+    /// the visual bell's veil alpha as of the last tick (a change repaints)
+    bell_alpha: u8,
     terminal_ui: terminal::TerminalUi,
     term_cmd: &'static [&'static str],
     /// the Deildu library, alive in the background once opened
@@ -1141,6 +1149,8 @@ impl Shell {
             settings: None,
             mono,
             term: term::Sessions::default(),
+            bell: bell::Bell::default(),
+            bell_alpha: 0,
             terminal_ui: terminal::TerminalUi::default(),
             term_cmd: if std::path::Path::new("/system/bin/sh").exists() {
                 term::SHELL
@@ -2143,6 +2153,8 @@ impl Shell {
         let mut due = wake::Wake::default();
         due.add(self.clock.next_wake(t, self.screen_on));
         if bifrost_render::appearance::fading() { due.add(Some(t)); }
+        if self.bell.pending() { due.add(Some(t)); }
+        if let Some(end) = self.bell.flash_end(t) { due.add(Some(end.min(t + 33.0))); }
         if let Some(when)=self.desk.as_ref().and_then(|d|d.dock_hide_at){due.add(Some(when));}
         if self.dock_animating(t) || self.fx_animating(t) { due.add(Some(t)); }
         if self.live.look() != live_wallpaper::Look::Still && self.desk_active() && self.screen_on { due.add(live_wallpaper::next_due(self.live.look(), t, self.live_still_only())); }
@@ -3674,7 +3686,22 @@ impl Shell {
         fx.append(&mut self.voice_fx);
         fx.extend(self.voice_click_tick(t));
         fx.extend(self.gated_clicks().into_iter().map(Effect::KeyClick));
+        fx.extend(self.bell_tick(t));
         fx
+    }
+
+    /// Settles the terminal bell: the Alert Sound at the alert volume, or a flash of the terminal while sound is muted
+    /// or the last sound did not play (`bell`). The sound is still tried after a failure so a recovered server is noticed.
+    fn bell_tick(&mut self, t: f64) -> Vec<Effect> {
+        let tone = self.alert_tone();
+        let ring = self.bell.take(t, tone, bell::sound_failed());
+        // the veil fades frame by frame and the frame after it is drawn without it
+        let alpha = self.bell.flash_alpha(t);
+        if alpha != self.bell_alpha {
+            self.bell_alpha = alpha;
+            self.dirty = true;
+        }
+        ring.and_then(|r| r.sound).map(Effect::AlertSound).into_iter().collect()
     }
 
     /// Stops the external apps nothing shows, and resumes them, while Suspend Background Apps is on. Turning the switch
@@ -5117,6 +5144,7 @@ impl Shell {
     pub fn pump(&mut self) -> bool {
         let mut changed = false;
         let (c, exits) = self.term.pump();
+        if self.term.take_rang() { self.bell.ring(); }
         if exits > 0 { self.notify_term_exit(); }
         if c && self.screen == Screen::App(AppId::Terminal) { self.dirty = true; }
         if let Some(text) = self.term.as_mut().and_then(|t| t.take_clipboard()) { clipboard::set_text(&text); }
@@ -5426,6 +5454,11 @@ impl Shell {
         s.fill_rect(0, 0, w, top, bg);
         if self.term.is_some() {
             self.draw_panes(s);
+            // the visual bell: a white veil over the grid that fades out
+            let veil = self.bell.flash_alpha(t);
+            if veil > 0 {
+                s.fill_rrect(0.0, top as f32, w as f32, (bottom - top) as f32, 0.0, rgba(255, 255, 255, veil));
+            }
             self.term_touch.draw(s, &self.ui);
         } else {
             s.fill_rect(0, top, w, bottom - top, bg);

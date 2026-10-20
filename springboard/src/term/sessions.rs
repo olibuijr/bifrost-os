@@ -119,6 +119,14 @@ impl Sessions {
         self.active = 0;
         self.split = None;
     }
+    /// Whether any tab rang the bell since the last call.
+    pub fn take_rang(&mut self) -> bool {
+        let mut rang = false;
+        for t in self.items.iter_mut() {
+            rang |= t.take_rang();
+        }
+        rang
+    }
     /// Returns output/exit changes and how many shells exited.
     pub fn pump(&mut self) -> (bool, usize) {
         let mut changed = false;
