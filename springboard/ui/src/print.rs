@@ -19,9 +19,7 @@ use crate::cups::{self, Client, CupsError};
 use crate::ipp::{tag, Value};
 use crate::print_pages::{self, PrintableView, Rect};
 use bifrost_render::cg::pdf::writer::{self, text_literal};
-use std::net::{SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
 pub use bifrost_render::cg::pdf::writer::{Page as PdfPage, PageImage};
 
@@ -223,10 +221,9 @@ impl PrintInfo {
     }
 }
 
-/// True when a CUPS scheduler answers on the local port, so a job can be submitted.
+/// True when a CUPS scheduler answers on its socket or local port (see [`cups::Endpoint::detect`]), so a job can be submitted.
 pub fn available() -> bool {
-    let addr = SocketAddr::from(([127, 0, 0, 1], cups::DEFAULT_PORT));
-    TcpStream::connect_timeout(&addr, Duration::from_millis(200)).is_ok()
+    cups::Endpoint::detect().reachable()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
