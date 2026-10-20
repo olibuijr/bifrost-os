@@ -8,8 +8,11 @@ With no arguments it writes every icon where the build expects it:
                                               turns them into the icons/<bundle id>.raw the Dock and Launchpad load
   springboard/apps/<app>-desktop/icon.png     the desktop app icons that used to be copies of other makers' artwork,
                                               180 px RGBA like the other app icons
+  springboard/res/settings-icons/<pane>.png   the 16 Settings pane tiles at 58 px RGBA (29 pt at 2x, 6.5 pt corners, as
+                                              springboard/src/shell/icons.rs draws them); a second spec table, PANE_SPEC
 --size and --out render every selected icon at one size into a directory instead (for previews); --only limits the
-set by name; --sheet also writes a contact sheet (each icon at 180 px, and at 32 px on light and dark) for review.
+set by name; --sheet also writes a contact sheet (each icon at 180 px, and at 32 px on light and dark; the Settings
+pane tiles at 64 px and at 20 px) for review.
 
 Everything is drawn from the spec table at the bottom of this file: a full-bleed rounded-square tile with a vertical
 gradient (the corner radius, 40 px at 180 px, and the flat top-lighter lighting match the other own icons) and a
@@ -30,8 +33,11 @@ SHELL_DIR = ROOT / "springboard/res/app-icons"
 APPS_DIR = ROOT / "springboard/apps"
 SHELL_SIZE = 1024
 DESKTOP_SIZE = 180
+PANE_DIR = ROOT / "springboard/res/settings-icons"
+PANE_SIZE = 58               # a Settings tile is 29 pt, stored at 2x
 UNITS = 100.0                # the drawing grid: every coordinate below is 0..100
 TILE_RADIUS = 40 / 180 * UNITS   # corner radius of the full-bleed tile, as in the other own icons
+PANE_RADIUS = 6.5 / 29 * UNITS   # a Settings tile: 6.5 pt corners on 29 pt (TILE_RADIUS_PT / TILE_PT in shell/icons.rs)
 
 # BifrOSt palette: RGB values copied from springboard/render/src/ui.rs (the constant name in each comment)
 WHITE = (255, 255, 255)      # WHITE
@@ -157,8 +163,9 @@ def toward(cx, cy, deg, dist):
 class Canvas:
     """One icon: the gradient tile, then flat shapes painted over it, then the rounded-square clip."""
 
-    def __init__(self, size, top, bottom):
+    def __init__(self, size, top, bottom, radius=TILE_RADIUS):
         self.n = size
+        self.radius = radius
         self.k = 4 if size <= 256 else 3       # supersampling for the shape masks (box-filtered down: exact coverage)
         self.img = Grad(top, bottom).image(size).convert("RGBA")
 
@@ -189,7 +196,7 @@ class Canvas:
         self.img.alpha_composite(layer)
 
     def finish(self):
-        tile = self.mask(lambda p: p.rrect(0, 0, UNITS, UNITS, TILE_RADIUS))
+        tile = self.mask(lambda p: p.rrect(0, 0, UNITS, UNITS, self.radius))
         self.img.putalpha(tile)
         return self.img
 
@@ -412,6 +419,217 @@ def games(c):
     c.paint(bumpers, alpha=0.7)
 
 
+# ---- the Settings pane symbols: 16 tiles of 58 px, so strokes stay at least 5.5 grid units thick ------------------
+
+PANE_SHADOW = (0, 1.5, 2.0, 0.2)     # the soft shadow under every pane symbol
+
+
+def turned(pts, deg, cx=50.0, cy=50.0):
+    """`pts` turned `deg` degrees clockwise about (cx, cy)."""
+    c, s = math.cos(math.radians(deg)), math.sin(math.radians(deg))
+    return [(cx + (x - cx) * c - (y - cy) * s, cy + (x - cx) * s + (y - cy) * c) for x, y in pts]
+
+
+def mirrored(pts, cx=50.0):
+    return [(2 * cx - x, y) for x, y in pts]
+
+
+def sparkle(cx, cy, big, small):
+    """A four-pointed star with concave sides: tips `big` from the centre, waist `small`."""
+    return [(cx + (big if i % 2 == 0 else small) * math.sin(i * math.pi / 4),
+             cy - (big if i % 2 == 0 else small) * math.cos(i * math.pi / 4)) for i in range(8)]
+
+
+def wifi(c):
+    """Three nested arcs fanning up from a dot."""
+    def fan(p):
+        for r in (15, 26, 37):
+            p.arc(50, 67, r, -139, -41, 6.6)
+        p.circle(50, 67, 6.4)
+    c.paint(fan, shadow=PANE_SHADOW)
+
+
+def airplane(c):
+    """A plane seen from above, swept wings and tailplane, flying up and to the right."""
+    k, dx, dy = 0.92, 5.7, -5.7        # scaled up and shifted so its extent is centred on the tile
+
+    def place(pts):
+        return [(x + dx, y + dy) for x, y in turned([(50 + x * k, 50 + y * k) for x, y in pts], 45)]
+    nose = bezier((5, -18), (5, -30), (2.4, -37), (0, -40), 12)          # a rounded nose, the right half
+    fuselage = nose + mirrored(nose, 0)[::-1] + [(-5, 24), (-2.6, 35), (2.6, 35), (5, 24)]
+    wing = [(4, -9), (38, 13), (38, 19.5), (4, 13)]
+    tail = [(3, 23), (17, 32.5), (17, 38), (3, 35)]
+
+    def shape(p):
+        p.poly(place(fuselage))
+        for part in (wing, tail):
+            p.rpoly(place(part), 1.2)
+            p.rpoly(place(mirrored(part, 0)), 1.2)
+    c.paint(shape, shadow=PANE_SHADOW)
+
+
+def bluetooth(c):
+    """A rune of a stem with two angular lobes on its right."""
+    def rune(p):
+        p.line([(37, 22), (37, 78)], 7)
+        p.line([(37, 22), (61, 36), (37, 50)], 7)
+        p.line([(37, 50), (66, 64), (37, 78)], 7)
+    c.paint(rune, shadow=PANE_SHADOW)
+
+
+def notifications(c):
+    """A bell: knob, dome, flared skirt, lip and clapper."""
+    def bell(p):
+        p.circle(50, 21, 4.3)
+        p.circle(50, 41.5, 18)
+        p.rpoly([(34, 41.5), (66, 41.5), (72, 61), (28, 61)], 2)
+        p.rrect(22, 59.5, 78, 67.5, 4)
+        p.circle(50, 77.5, 5.5)
+    c.paint(bell, shadow=PANE_SHADOW)
+
+
+def sounds(c):
+    """A speaker cone and two wave marks."""
+    def cone(p):
+        p.rpoly([(24, 43.5), (32, 43.5), (45, 30.5), (45, 69.5), (32, 56.5), (24, 56.5)], 3)
+    c.paint(cone, shadow=PANE_SHADOW)
+
+    def waves(r, w):
+        return lambda p: p.arc(50, 50, r, -42, 42, w)
+    c.paint(waves(14, 6.3), shadow=PANE_SHADOW)
+    c.paint(waves(26.5, 6.3), shadow=PANE_SHADOW)
+
+
+def focus(c):
+    """A fat crescent and two sparkles."""
+    def moon(p):
+        p.circle(44, 54, 27)
+        with p.erase():
+            p.circle(58, 43, 23)
+    c.paint(moon, shadow=PANE_SHADOW)
+    c.paint(lambda p: p.rpoly(sparkle(63, 41, 8.5, 2.6), 1.2), shadow=PANE_SHADOW)
+    c.paint(lambda p: p.rpoly(sparkle(77, 59, 4.8, 1.4), 0.8), shadow=PANE_SHADOW)
+
+
+def screentime(c):
+    """An hourglass from two triangles, with sand."""
+    top = [(31, 25), (69, 25), (50, 50)]
+    foot = [(50, 50), (31, 75), (69, 75)]
+    c.paint(lambda p: (p.rpoly(top, 1.2), p.rpoly(foot, 1.2)), alpha=0.4)
+    c.paint(lambda p: p.rpoly(top, 1.2), clip=lambda p: p.rrect(0, 37, 100, 100, 0))
+    c.paint(lambda p: p.rpoly(foot, 1.2), clip=lambda p: p.rrect(0, 62, 100, 100, 0))
+    c.paint(lambda p: p.line([(50, 49), (50, 62)], 2.6))
+
+    def plates(p):
+        p.rrect(26, 18, 74, 26.5, 4)
+        p.rrect(26, 73.5, 74, 82, 4)
+    c.paint(plates, shadow=PANE_SHADOW)
+
+
+def general(c):
+    """A cog with six chunky teeth and a round hole."""
+    def cog(p):
+        p.circle(50, 50, 21.5)
+        for i in range(6):
+            u = (math.sin(math.radians(i * 60)), -math.cos(math.radians(i * 60)))
+            v = (-u[1], u[0])
+            core = [(50 + u[0] * ra + v[0] * w, 50 + u[1] * ra + v[1] * w) for ra, w in ((19, -7), (28, -4.6), (28, 4.6), (19, 7))]
+            p.rpoly(core, 1.9)
+        with p.erase():
+            p.circle(50, 50, 9.5)
+    c.paint(cog, shadow=PANE_SHADOW)
+
+
+def controlcentre(c):
+    """Two slider pills, one filled to the right and one to the left, each with a round knob."""
+    rows = ((32, 62), (68, 38))
+    c.paint(lambda p: [p.rrect(18, y - 7, 82, y + 7, 7) for y, _ in rows], alpha=0.3)
+    c.paint(lambda p: [p.rrect(18, y - 7, kx, y + 7, 7) for y, kx in rows], alpha=0.62)
+    c.paint(lambda p: [p.circle(kx, y, 11) for y, kx in rows], shadow=(0, 1.5, 2.4, 0.3))
+
+
+def display(c):
+    """A sun: a disc with eight rays, the four straight ones longer."""
+    def sun(p):
+        p.circle(50, 50, 12)
+        for i in range(8):
+            p.line([toward(50, 50, i * 45, 20), toward(50, 50, i * 45, 28.5 if i % 2 == 0 else 25.5)], 6)
+    c.paint(sun, shadow=PANE_SHADOW)
+
+
+def homescreen(c):
+    """A two by two grid of rounded squares, the last one faint."""
+    cells = ((20, 20), (54, 20), (20, 54), (54, 54))
+    c.paint(lambda p: [p.rrect(x, y, x + 26, y + 26, 7.5) for x, y in cells[:3]], shadow=PANE_SHADOW)
+    c.paint(lambda p: p.rrect(54, 54, 80, 80, 7.5), alpha=0.5)
+
+
+def accessibility(c):
+    """A white disc with a person cut out of it, arms spread."""
+    def disc(p):
+        p.circle(50, 50, 34)
+        with p.erase():
+            p.circle(50, 30, 6.2)
+            p.line([(28, 41), (50, 45), (72, 41)], 6.4)
+            p.line([(50, 45), (50, 57)], 7)
+            p.line([(50, 56), (41, 71)], 6.4)
+            p.line([(50, 56), (59, 71)], 6.4)
+    c.paint(disc, shadow=PANE_SHADOW)
+
+
+def battery(c):
+    """A battery outline with a terminal, two cells full and one faint."""
+    def body(p):
+        p.rrect(16, 31, 72, 69, 9)
+        with p.erase():
+            p.rrect(21, 36, 67, 64, 5)
+        p.rrect(74, 43.5, 80.5, 56.5, 3)
+    c.paint(body, shadow=PANE_SHADOW)
+    bars = ((24.5, 35.5), (38.5, 49.5), (52.5, 63.5))
+    c.paint(lambda p: [p.rrect(a, 40, b, 60, 2.5) for a, b in bars[:2]])
+    c.paint(lambda p: p.rrect(bars[2][0], 40, bars[2][1], 60, 2.5), alpha=0.4)
+
+
+def privacy(c):
+    """A shield with a check cut into it."""
+    def shield(p):
+        pts = bezier((50, 17), (58, 24), (68, 27), (79, 27), 20)
+        pts += bezier((79, 27), (79, 36), (79, 44), (79, 50), 4)
+        pts += bezier((79, 50), (79, 68), (64, 77), (50, 84), 24)
+        pts += bezier((50, 84), (36, 77), (21, 68), (21, 50), 24)
+        pts += bezier((21, 50), (21, 44), (21, 36), (21, 27), 4)
+        pts += bezier((21, 27), (32, 27), (42, 24), (50, 17), 20)
+        p.poly(pts)
+        with p.erase():
+            p.line([(36.5, 50), (46.5, 60), (64, 40)], 7)
+    c.paint(shield, shadow=PANE_SHADOW)
+
+
+def passcode(c):
+    """A padlock whose body carries three dots."""
+    def lock(p):
+        p.arc(50, 41, 16, 180, 360, 7)
+        p.line([(34, 41), (34, 50)], 7)
+        p.line([(66, 41), (66, 50)], 7)
+        p.rrect(24, 47, 76, 82, 9)
+        with p.erase():
+            for x in (36.5, 50, 63.5):
+                p.circle(x, 65, 4.3)
+    c.paint(lock, shadow=PANE_SHADOW)
+
+
+def wallpaper(c):
+    """A flower: six petals round a ring, with a yellow heart."""
+    def petals(p):
+        for i in range(6):
+            cx, cy = toward(50, 50, i * 60, 15.5)
+            p.ellipse(cx, cy, 8.8, 15.5, turn=i * 60)
+        with p.erase():
+            p.circle(50, 50, 10.5)
+    c.paint(petals, shadow=PANE_SHADOW)
+    c.paint(lambda p: p.circle(50, 50, 7), SYSTEM_YELLOW)
+
+
 # ---- the spec table: name, shell bundle id (or None), desktop app folder (or None), tile top, tile bottom, symbol ----
 
 def lit(base, up=0.28, down=0.0):
@@ -435,12 +653,42 @@ SPEC = [
     ("voicememos", "bifrost.voicememos", "voicememos-desktop",  mix(CELL, SYSTEM_INDIGO, 0.38), mix(CELL, SYSTEM_INDIGO, 0.1), voicememos),
     ("games",      None,                 "games-desktop",       *lit(SYSTEM_GREEN, 0.25, 0.12),                 games),
 ]
-NAMES = [row[0] for row in SPEC]
+
+# ---- the Settings pane table: name (the file springboard/res/settings-icons/<name>.png), tile top, tile bottom, symbol.
+# The hues spread round the wheel so neighbouring rows of the Settings sidebar stay apart. ----------------------------
+
+SLATE = mix(SYSTEM_GRAY, SYSTEM_BLUE, 0.3)
+NIGHT = mix(SYSTEM_INDIGO, CELL, 0.55)
+
+PANE_SPEC = [
+    ("accessibility", *lit(SYSTEM_BLUE, 0.22, 0.1),                                      accessibility),
+    ("airplane",      mix(SYSTEM_TEAL, SYSTEM_BLUE, 0.25), mix(SYSTEM_TEAL, SYSTEM_BLUE, 0.85), airplane),
+    ("battery",       *lit(SYSTEM_GREEN, 0.22, 0.14),                                    battery),
+    ("bluetooth",     *lit(mix(SYSTEM_BLUE, SYSTEM_INDIGO, 0.5), 0.2, 0.14),             bluetooth),
+    ("controlcentre", mix(TRACK, WHITE, 0.2), mix(TRACK, BLACK, 0.2),                    controlcentre),
+    ("display",       mix(SYSTEM_YELLOW, SYSTEM_ORANGE, 0.5), mix(SYSTEM_ORANGE, SYSTEM_RED, 0.15), display),
+    ("focus",         mix(NIGHT, WHITE, 0.14), mix(NIGHT, BLACK, 0.3),                   focus),
+    ("general",       *lit(SLATE, 0.2, 0.22),                                            general),
+    ("homescreen",    *lit(mix(SYSTEM_ORANGE, SYSTEM_RED, 0.3), 0.2, 0.1),               homescreen),
+    ("notifications", *lit(SYSTEM_RED, 0.22, 0.1),                                       notifications),
+    ("passcode",      *lit(SYSTEM_BROWN, 0.18, 0.28),                                    passcode),
+    ("privacy",       *lit(mix(SYSTEM_BLUE, CELL, 0.4), 0.2, 0.22),                      privacy),
+    ("screentime",    *lit(SYSTEM_PURPLE, 0.2, 0.18),                                    screentime),
+    ("sounds",        *lit(SYSTEM_PINK, 0.2, 0.12),                                      sounds),
+    ("wallpaper",     mix(SYSTEM_PURPLE, SYSTEM_PINK, 0.4), mix(SYSTEM_INDIGO, SYSTEM_PURPLE, 0.5), wallpaper),
+    ("wifi",          *lit(SYSTEM_MINT, 0.12, 0.26),                                     wifi),
+]
+NAMES = [row[0] for row in SPEC] + [row[0] for row in PANE_SPEC]
 
 
 def render(row, size):
-    name, _bundle, _desktop, top, bottom, draw = row
-    c = Canvas(size, top, bottom)
+    """One icon at `size` px. A Settings pane row (name, top, bottom, symbol) gets the shell's 6.5 pt tile corners."""
+    if len(row) == 4:
+        (_name, top, bottom, draw), radius = row, PANE_RADIUS
+    else:
+        _name, _bundle, _desktop, top, bottom, draw = row
+        radius = TILE_RADIUS
+    c = Canvas(size, top, bottom, radius)
     draw(c)
     return c.finish()
 
@@ -452,21 +700,27 @@ def save(img, path):
 
 
 def sheet(rows, path):
-    """A contact sheet: each icon at 180 px, then at 32 px on a light and on a dark ground."""
-    cell, small, pad = 180, 32, 16
-    cols = 7
-    h = cell + small + 3 * pad
-    out = Image.new("RGBA", (cols * (cell + pad) + pad, ((len(rows) + cols - 1) // cols) * (h + pad) + pad), (0, 0, 0, 255))
+    """A contact sheet: each icon big, then small on a light and on a dark ground. App icons are 180 px and 32 px;
+    Settings pane tiles are 64 px and 20 px, the sizes they are judged at."""
+    pad = 16
+    blocks = [(g, cell, small, cols) for g, cell, small, cols in
+              (([r for r in rows if len(r) != 4], 180, 32, 7), ([r for r in rows if len(r) == 4], 64, 20, 8)) if g]
+    width = max(cols * (cell + pad) + pad for _g, cell, _s, cols in blocks)
+    heights = [((len(g) + cols - 1) // cols) * (cell + small + 3 * pad + pad) for g, cell, small, cols in blocks]
+    out = Image.new("RGBA", (width, sum(heights) + pad), (0, 0, 0, 255))
     dark, light = (30, 30, 30, 255), (240, 240, 240, 255)
-    for i, row in enumerate(rows):
-        x, y = pad + (i % cols) * (cell + pad), pad + (i // cols) * (h + pad)
-        out.paste(dark, (x - pad // 2, y - pad // 2, x + cell + pad // 2, y + h - pad // 2))
-        big = render(row, cell)
-        out.alpha_composite(big, (x, y))
-        tiny = render(row, small * 4).resize((small, small), Image.LANCZOS)
-        out.paste(light, (x, y + cell + pad, x + cell // 2, y + cell + pad + small + 8))
-        out.alpha_composite(tiny, (x + 4, y + cell + pad + 4))
-        out.alpha_composite(tiny, (x + cell // 2 + 8, y + cell + pad + 4))
+    y0 = pad
+    for (g, cell, small, cols), height in zip(blocks, heights):
+        h = cell + small + 3 * pad
+        for i, row in enumerate(g):
+            x, y = pad + (i % cols) * (cell + pad), y0 + (i // cols) * (h + pad)
+            out.paste(dark, (x - pad // 2, y - pad // 2, x + cell + pad // 2, y + h - pad // 2))
+            out.alpha_composite(render(row, cell), (x, y))
+            tiny = render(row, small * 4).resize((small, small), Image.LANCZOS)
+            out.paste(light, (x, y + cell + pad, x + cell // 2, y + cell + pad + small + 8))
+            out.alpha_composite(tiny, (x + 4, y + cell + pad + 4))
+            out.alpha_composite(tiny, (x + cell // 2 + 8, y + cell + pad + 4))
+        y0 += height
     path.parent.mkdir(parents=True, exist_ok=True)
     out.convert("RGB").save(path)
     print(f"wrote {path}")
@@ -484,12 +738,15 @@ def main():
         sys.exit(f"make-icons.py: unknown name(s): {', '.join(sorted(only - set(NAMES)))}")
     if bool(a.size) != bool(a.out):
         sys.exit("make-icons.py: --size and --out go together")
-    rows = [r for r in SPEC if r[0] in only]
+    rows = [r for r in SPEC + PANE_SPEC if r[0] in only]
     if a.size:
         for r in rows:
             save(render(r, a.size), a.out / f"{r[0]}.png")
     else:
         for r in rows:
+            if len(r) == 4:
+                save(render(r, PANE_SIZE), PANE_DIR / f"{r[0]}.png")
+                continue
             if r[1]:
                 save(render(r, SHELL_SIZE), SHELL_DIR / f"{r[1]}.png")
             if r[2]:
