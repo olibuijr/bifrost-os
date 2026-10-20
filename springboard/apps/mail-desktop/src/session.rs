@@ -429,7 +429,7 @@ fn io_text(e: io::Error) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::line::script::Script;
+    use crate::line::script::{Script, Stalling};
     use crate::line::MAX_LITERAL;
 
     fn session(script: &str) -> Session<Script> {
@@ -527,41 +527,6 @@ mod tests {
         assert!(sent.ends_with("DONE\r\n"));
     }
 
-    /// A connection that stalls (a read timeout) wherever the script has a gap.
-    struct Stalling {
-        chunks: std::collections::VecDeque<Option<Vec<u8>>>,
-        output: Vec<u8>,
-    }
-
-    impl Stalling {
-        fn new(chunks: Vec<Option<&str>>) -> Self {
-            Stalling { chunks: chunks.into_iter().map(|c| c.map(|t| t.as_bytes().to_vec())).collect(), output: Vec::new() }
-        }
-    }
-
-    impl Read for Stalling {
-        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-            match self.chunks.pop_front() {
-                None => Ok(0),
-                Some(None) => Err(io::Error::new(io::ErrorKind::TimedOut, "timed out")),
-                Some(Some(bytes)) => {
-                    buf[..bytes.len()].copy_from_slice(&bytes);
-                    Ok(bytes.len())
-                }
-            }
-        }
-    }
-
-    impl Write for Stalling {
-        fn write(&mut self, data: &[u8]) -> io::Result<usize> {
-            self.output.extend_from_slice(data);
-            Ok(data.len())
-        }
-        fn flush(&mut self) -> io::Result<()> {
-            Ok(())
-        }
-    }
-
     fn stalling(chunks: Vec<Option<&str>>) -> Session<Stalling> {
         let mut all = vec![Some("* OK ready\r\n")];
         all.extend(chunks);
@@ -572,7 +537,7 @@ mod tests {
     fn a_read_timeout_does_not_end_idle() {
         let mut s = stalling(vec![Some("+ idling\r\n"), None, None, Some("* 4 EXISTS\r\n"), Some("A001 OK done\r\n")]);
         assert_eq!(s.idle_until(IDLE_REFRESH, &|| false).unwrap(), Idle::NewMail);
-        assert!(String::from_utf8_lossy(&s.lines.into_inner().output).ends_with("DONE\r\n"));
+        assert!(s.lines.into_inner().sent().ends_with("DONE\r\n"));
     }
 
     #[test]
@@ -585,7 +550,7 @@ mod tests {
     fn idle_stops_when_cancelled() {
         let mut s = stalling(vec![Some("+ idling\r\n"), None, Some("A001 OK done\r\n")]);
         assert_eq!(s.idle_until(IDLE_REFRESH, &|| true).unwrap(), Idle::Cancelled);
-        assert!(String::from_utf8_lossy(&s.lines.into_inner().output).ends_with("DONE\r\n"));
+        assert!(s.lines.into_inner().sent().ends_with("DONE\r\n"));
     }
 
     #[test]

@@ -1768,7 +1768,10 @@ impl MailWindow {
                     self.save_queue_file();
                 } else if let Some(mut queued) = flight {
                     queued.attempts += 1;
-                    if queued.attempts >= schedule::MAX_ATTEMPTS {
+                    if crate::submit::is_unconfirmed(&e) {
+                        // it may have been delivered: sending it again could reach the recipients twice
+                        self.mail.status = format!("A queued message was taken off the outbox because delivery is unknown. {e}");
+                    } else if queued.attempts >= schedule::MAX_ATTEMPTS {
                         self.mail.status = format!("A queued message could not be sent and was dropped: {e}");
                     } else {
                         queued.due = now_unix() + schedule::RETRY_SECS;

@@ -9,6 +9,20 @@ use crate::transport;
 use springboard::deildu::http::{Stream, Transport};
 use std::io::{self, Read, Write};
 
+/// How many read timeouts the wait for the server's answer to the end of the data outlasts. The transport's read timeout
+/// is 25 seconds, so this is about five minutes: a server may scan a large attachment or hold a first message back
+/// (greylisting) before it says 250.
+const DATA_PATIENCE: u32 = 12;
+
+/// What an error starts with when the message was handed over but the server never confirmed it. The message may have
+/// been delivered, so it is not sent again by itself.
+pub const UNCONFIRMED: &str = "The server did not confirm the message";
+
+/// True when `error` (from [`send`]) says the outcome is unknown: the message may have been delivered.
+pub fn is_unconfirmed(error: &str) -> bool {
+    error.starts_with(UNCONFIRMED)
+}
+
 /// Sends `message` (CRLF lines, as [`crate::message::Draft::render`] makes it) from `from` to `recipients`.
 /// `login` and `password` are the account's SMTP credentials.
 pub fn send(
@@ -79,7 +93,11 @@ pub fn converse<S: Read + Write>(
     put(lines, &smtp::data())?;
     expect(lines, &[354])?;
     put(lines, &smtp::data_payload(message))?;
-    expect(lines, &[250])?;
+    // From here the server has the whole message. A timeout is not a refusal: the outcome is unknown.
+    let (code, text) = reply_within(lines, DATA_PATIENCE).map_err(|e| format!("{UNCONFIRMED} ({e}). It may have been sent; check Sent Items before sending it again"))?;
+    if code != 250 {
+        return Err(format!("{code} {text}"));
+    }
     let _ = put(lines, &smtp::quit());
     Ok(())
 }
@@ -99,8 +117,21 @@ fn expect<S: Read + Write>(lines: &mut Lines<S>, codes: &[u16]) -> Result<String
 }
 
 fn reply<S: Read + Write>(lines: &mut Lines<S>) -> Result<(u16, String), String> {
+    reply_within(lines, 0)
+}
+
+/// Like [`reply`], and a read timeout is waited out up to `patience` times before it is an error.
+fn reply_within<S: Read + Write>(lines: &mut Lines<S>, patience: u32) -> Result<(u16, String), String> {
+    let mut stalls = 0;
     loop {
-        let line = lines.read_line().map_err(io_text)?;
+        let line = match lines.read_line() {
+            Ok(line) => line,
+            Err(e) if matches!(e.kind(), io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock) && stalls < patience => {
+                stalls += 1;
+                continue;
+            }
+            Err(e) => return Err(io_text(e)),
+        };
         let parsed = smtp::parse_reply_line(&line).ok_or_else(|| format!("unexpected server line: {line}"))?;
         if !parsed.more {
             return Ok((parsed.code, parsed.text));
@@ -115,7 +146,7 @@ fn io_text(e: io::Error) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::line::script::Script;
+    use crate::line::script::{Script, Stalling};
 
     fn recipients() -> Vec<String> {
         vec!["c@d.is".to_string()]
@@ -129,6 +160,26 @@ mod tests {
         let sent = lines.into_inner().sent();
         assert!(sent.starts_with("AUTH PLAIN AHVzZXIAcHc=\r\nMAIL FROM:<a@b.is>\r\nRCPT TO:<c@d.is>\r\nDATA\r\n"), "{sent}");
         assert!(sent.ends_with("\r\n..dot\r\n.\r\nQUIT\r\n"), "{sent}");
+    }
+
+    #[test]
+    fn a_slow_acceptance_after_the_data_is_waited_for() {
+        let script = vec![Some("235 ok\r\n250 ok\r\n250 ok\r\n354 go\r\n"), None, None, None, Some("250 queued\r\n")];
+        let mut lines = Lines::new(Stalling::new(script));
+        converse(&mut lines, "u", "p", "a@b.is", &recipients(), "x\r\n").unwrap();
+    }
+
+    #[test]
+    fn no_answer_after_the_data_is_unconfirmed_not_failed() {
+        let mut script = vec![Some("235 ok\r\n250 ok\r\n250 ok\r\n354 go\r\n")];
+        script.extend(std::iter::repeat(None).take(DATA_PATIENCE as usize + 1));
+        let mut lines = Lines::new(Stalling::new(script));
+        let err = converse(&mut lines, "u", "p", "a@b.is", &recipients(), "x\r\n").unwrap_err();
+        assert!(is_unconfirmed(&err), "{err}");
+        let mut refused = Lines::new(Script::new("235 ok\r\n250 ok\r\n250 ok\r\n354 go\r\n554 rejected\r\n"));
+        let err = converse(&mut refused, "u", "p", "a@b.is", &recipients(), "x\r\n").unwrap_err();
+        assert_eq!(err, "554 rejected");
+        assert!(!is_unconfirmed(&err));
     }
 
     #[test]
