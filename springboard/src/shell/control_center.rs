@@ -1684,6 +1684,7 @@ mod tests {
         assert!(parse_menu_bar_items(sh.prefs.get(MENU_BAR_PREF).unwrap_or("")).is_empty());
     }
 
+    #[cfg(feature = "desktop-wayland")]
     #[test]
     fn battery_label_needs_the_pref_and_a_battery() {
         let mut sh = shell();

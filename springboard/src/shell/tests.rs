@@ -13,6 +13,34 @@
         shell_sized(1200, 1920)
     }
 
+    /// For a test of the shell placing windows itself (tiling): with the window server's variable set, the compositor owns
+    /// window positions and a tile is only queued as a request (`compositor_places_windows`). The guard holds the
+    /// crate-wide test lock, so no parallel test has the variable set meanwhile, and puts the variable back when dropped.
+    #[cfg(feature = "desktop-wayland")]
+    pub(crate) struct ShellPlacesWindows {
+        saved: Option<std::ffi::OsString>,
+        _lock: std::sync::MutexGuard<'static, ()>,
+    }
+
+    #[cfg(feature = "desktop-wayland")]
+    impl ShellPlacesWindows {
+        pub(crate) fn new() -> Self {
+            let lock = crate::test_support::global_lock();
+            let saved = std::env::var_os("SPRINGBOARD_WAYLAND");
+            std::env::remove_var("SPRINGBOARD_WAYLAND");
+            ShellPlacesWindows { saved, _lock: lock }
+        }
+    }
+
+    #[cfg(feature = "desktop-wayland")]
+    impl Drop for ShellPlacesWindows {
+        fn drop(&mut self) {
+            if let Some(v) = self.saved.take() {
+                std::env::set_var("SPRINGBOARD_WAYLAND", v);
+            }
+        }
+    }
+
     /// A shell in desktop mode (menu bar, dock, windows).
     #[allow(dead_code)]
     pub(crate) fn desktop_shell() -> Shell {
@@ -191,6 +219,7 @@
         assert!(desktop_bar::input_menu_visible(1, false, true), "the user turned the menu on");
     }
 
+    #[cfg(feature = "desktop-wayland")]
     #[test]
     fn show_input_menu_in_menu_bar_makes_the_menu_and_its_keyboard_rows_reachable_with_one_source() {
         use desktop_bar::Menu;
@@ -773,6 +802,7 @@
     #[cfg(feature="desktop-wayland")]
     #[test]
     fn choosing_in_the_window_menu_tiles_that_window_or_takes_it_full_screen() {
+        let _placement=ShellPlacesWindows::new();
         use desktop_bar::Action;
         let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
         sh.desk_open(AppId::Settings,0.);
@@ -794,6 +824,7 @@
     #[cfg(feature="desktop-wayland")]
     #[test]
     fn the_window_menu_can_tile_two_windows_side_by_side() {
+        let _placement=ShellPlacesWindows::new();
         use desktop_bar::Action;
         let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
         sh.desk_open(AppId::Terminal,0.);
@@ -3163,6 +3194,7 @@
         assert_eq!(sh.run_menu_action(buds, 0.0), vec![Effect::Bluetooth(BtCmd::Disconnect("AA:BB:CC:DD:EE:01".into()))]);
     }
 
+    #[cfg(feature = "desktop-wayland")]
     #[test]
     fn battery_menu_switches_low_power_mode_on_and_off() {
         let mut sh = shell();
