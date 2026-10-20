@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.16.1 — 2026-10-20
+
+- The New Mail banner is built in one place for the window and the background check, and a test holds that its sender and
+  subject are the decoded ones (never `=?utf-8?Q?...?=`).
+
 ## 0.16.0 — 2026-10-20
 
 - Add Account asks for a name, an address and a password. The servers are found from the address: the domain's autoconfig
