@@ -737,16 +737,6 @@ impl Settings {
                 s.groups.push(Group::new(vec![Item::new("Schedule").value(super::wake_page::summary(&self.wake)).link(PageId::WakeSchedule)]));
                 s
             }
-            PageId::Battery => {
-                // the Schedule row sits under Energy
-                let mut s = spec(id, &self.model());
-                let row = Item::new("Schedule").value(super::wake_page::summary(&self.wake)).link(PageId::WakeSchedule);
-                match s.groups.iter().position(|g| g.items.iter().any(|it| it.label == "Energy")) {
-                    Some(k) => s.groups[k].items.push(row),
-                    None => s.groups.push(Group::new(vec![row])),
-                }
-                s
-            }
             PageId::Focus => {
                 let mut s = spec(id, &self.model());
                 let prefs = NotifyPrefs { clock_24h: self.opts.clock_24h, ..self.notify.clone() };
@@ -1498,6 +1488,8 @@ impl Settings {
     /// Opens the pane `id` directly, for an App Intent of the Settings panes (`settings_intents`, opened from Search).
     /// It goes on top of the current stack like `open_page` does; the root is the base and is not pushed twice.
     pub fn open_page_id(&mut self, ui: &Ui, id: PageId, t: f64) -> Vec<Effect> {
+        // a computer without a battery has no Battery pane: its power settings are Energy
+        let id = if id == PageId::Battery && !super::pages::has_battery(&self.info) { PageId::Energy } else { id };
         self.sheet = None;
         self.zone_picker = None;
         self.time_picker = None;
@@ -4632,6 +4624,7 @@ mod tests {
         let ui = super::super::tests::ui();
         let (mut st, mut prefs) = settings(&ui, &info());
         tap_row(&mut st, &ui, &mut prefs, "Battery");
+        tap_row(&mut st, &ui, &mut prefs, "Energy");
         tap_row(&mut st, &ui, &mut prefs, "Schedule");
         assert_eq!(st.page(), PageId::WakeSchedule);
         let fx = tap_row(&mut st, &ui, &mut prefs, "Add Time");

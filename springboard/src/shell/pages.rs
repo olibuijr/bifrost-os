@@ -627,8 +627,6 @@ pub fn uptime(minutes: i64) -> String {
     }
 }
 
-/// The About page's rows: (label, value) in page order, grouped.
-/// The battery level as text. A desktop without a battery has no level to show.
 /// Whether this computer has a battery to show. A desktop (it has the network snapshot) without one has no Battery
 /// pane, and its menu bar shows no battery or plug.
 pub fn has_battery(info: &Info) -> bool {
@@ -639,9 +637,13 @@ pub fn has_battery(info: &Info) -> bool {
 /// followed the form) and switch with `set_test_form`.
 fn form() -> bifrost_ui::form_factor::FormFactor {
     #[cfg(test)]
-    return TEST_FORM.with(|f| f.get());
+    {
+        TEST_FORM.with(|f| f.get())
+    }
     #[cfg(not(test))]
-    bifrost_ui::form_factor::FormFactor::current()
+    {
+        bifrost_ui::form_factor::FormFactor::current()
+    }
 }
 
 #[cfg(test)]
@@ -664,6 +666,7 @@ fn numeric_passcode() -> bool {
     form().is_tablet()
 }
 
+/// The battery level as text. A desktop without a battery has no level to show.
 fn battery_level(info: &Info) -> String {
     if info.desktop_network.is_some() && !info.battery_present {
         return "None".into();
@@ -671,6 +674,7 @@ fn battery_level(info: &Info) -> String {
     format!("{}%", info.battery)
 }
 
+/// The About page's rows: (label, value) in page order, grouped.
 pub fn about(info: &Info) -> Vec<Vec<(&'static str, String)>> {
     let dash = |s: &str| if s.is_empty() { "—".to_string() } else { s.to_string() };
     vec![
@@ -1125,7 +1129,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                     Group::new(vec![Item::new("Passcode").icon(Icon::Passcode).link(PageId::Passcode)])
                         .footer("A passcode is asked for before the screen opens again after it locks.")
                 } else {
-                    Group::new(vec![Item::new("Login Password").value("Users & Groups").link(PageId::Users)])
+                    Group::new(vec![Item::new("Login Password").link(PageId::Users)])
                         .footer("The password you sign in with is asked for before the screen opens again after it locks. Change it in Users & Groups.")
                 },
                 Group::new(vec![Item::new("Lock After Inactivity").value(o.auto_lock_label()).link(PageId::AutoLock)]),
@@ -1428,7 +1432,24 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
             false,
             vec![Group::new(SYSTEM_SLEEP.iter().enumerate().map(|(i, (l, mi))| Item::new(*l).check(*mi == o.system_sleep_min, Action::Pick(Pick::SystemSleep(i)))).collect())
                 .header("PUT THE COMPUTER TO SLEEP WHEN THE DISPLAY IS OFF")
-                .footer("Turning the display off or locking the screen never sleeps the computer by itself; this timeout starts once the display is off. The change takes effect at once.")],
+                .footer("Turning the display off or locking the screen never sleeps the computer by itself; this timeout starts once the display is off. The change takes effect at once.")]
+                .into_iter()
+                // a computer without a battery has no Battery pane: its power modes live here
+                .chain(if has_battery(info) {
+                    Vec::new()
+                } else {
+                    vec![
+                        Group::new(vec![Item::new("Low Power Mode").switch(o.low_power, Action::Toggle(Toggle::LowPower))])
+                            .footer("Caps the brightness at 50%, locks the screen after 30 seconds and limits animations to 30 frames a second until you turn it off."),
+                        Group::new(POWER_MODES.iter().enumerate().map(|(i, (l, p))| Item::new(*l).check(*p == o.power_profile, Action::Pick(Pick::PowerMode(i)))).collect())
+                            .header("POWER MODE")
+                            .footer(&format!(
+                                "In effect: {}. Low Power Mode caps the clock speeds to save energy.",
+                                if info.power_profile.is_empty() { "Balanced" } else { &info.power_profile }
+                            )),
+                    ]
+                })
+                .collect(),
         ),
         PageId::HomeScreen => page(
             "Home Screen & Dock",
@@ -1462,7 +1483,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
         PageId::MenuBar => page(
             "Menu Bar",
             false,
-            vec![Group::new(super::options::MenuExtra::ALL.iter().map(|&e| Item::new(e.label()).switch(o.menu_extras & e.bit() != 0, Action::Toggle(Toggle::MenuExtra(e)))).collect())
+            vec![Group::new(super::options::MenuExtra::ALL.iter().filter(|&&e| e != super::options::MenuExtra::Battery || has_battery(info)).map(|&e| Item::new(e.label()).switch(o.menu_extras & e.bit() != 0, Action::Toggle(Toggle::MenuExtra(e)))).collect())
                 .header("MENU BAR CONTROLS")
                 .footer("Choose the controls and readouts shown at the right of the menu bar, beside the clock. Controls that do not fit are left out from the left.")],
         ),
@@ -2332,6 +2353,18 @@ mod tests {
         assert!(root_labels(&desktop_info(true, false), Desktop).iter().any(|l| l == "Battery"), "a desktop with a battery keeps it");
         assert!(!root_labels(&desktop_info(true, false), Desktop).iter().any(|l| l == "Energy"));
         assert!(has_battery(&Info::default()), "a machine that is not a desktop always has the pane");
+        // the power modes moved with it: Energy carries Low Power Mode and the POWER MODE rows
+        let (info, opts) = (desktop_info(false, false), Options::default());
+        let energy = spec(PageId::Energy, &model(&info, &opts));
+        let items: Vec<&str> = energy.groups.iter().flat_map(|g| g.items.iter().map(|i| i.label.as_str())).collect();
+        assert!(items.contains(&"Low Power Mode"), "Energy has Low Power Mode: {items:?}");
+        assert!(["Automatic", "Performance", "Balanced", "Battery Saver"].iter().all(|l| items.contains(l)), "Energy has the power modes: {items:?}");
+        // a computer with a battery keeps them in Battery, not in Energy
+        let with = spec(PageId::Energy, &model(&desktop_info(true, false), &opts));
+        assert!(!with.groups.iter().any(|g| g.items.iter().any(|i| i.label == "Low Power Mode")));
+        // and its menu bar has no Battery control to switch
+        let bar = spec(PageId::MenuBar, &model(&info, &opts));
+        assert!(!bar.groups[0].items.iter().any(|i| i.label == "Battery"), "no Battery menu extra without a battery");
     }
 
     #[test]
