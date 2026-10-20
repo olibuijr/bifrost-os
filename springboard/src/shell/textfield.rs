@@ -120,6 +120,11 @@ impl TextField {
         self.caret
     }
 
+    /// True for a password field: its text is never shown, copied or handed to anything.
+    pub fn is_secure(&self) -> bool {
+        self.secure
+    }
+
     /// The field as an accessibility text element: caret, selection and length in characters. A secure field is marked
     /// `secure`, so the bridge exposes bullets and a length, never the text.
     pub fn ax_text(&self, id: u64) -> bifrost_ui::ax::AxText {

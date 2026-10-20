@@ -324,7 +324,8 @@ impl Shell {
     /// A raw key (Linux key code), through the taps. Returns the key code to act on, which a tap may have replaced;
     /// `None` when a tap dropped the event. Reserved keys and everything typed while locked skip the taps.
     pub fn tap_key(&mut self, code: u16, down: bool) -> Option<u16> {
-        if RESERVED_KEYS.contains(&code) || self.input_taps.bypass || self.is_locked() {
+        // a password being typed (a password sheet, a secure field, a Terminal with Secure Keyboard Entry on) is seen by no tap
+        if RESERVED_KEYS.contains(&code) || self.input_taps.bypass || self.is_locked() || self.secure_entry_up() {
             return Some(code);
         }
         let now = self.input_taps.now_ns();
@@ -628,6 +629,20 @@ mod tests {
             t.deliver(&e, EventFlags::NONE, 1.0).unwrap();
         }
         assert!(t.deliver(&e, EventFlags::NONE, 1.0).is_err());
+    }
+
+    #[test]
+    fn no_tap_sees_a_key_typed_under_secure_keyboard_entry() {
+        use crate::shell::{AppId, Screen};
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.screen = Screen::App(AppId::Terminal);
+        sh.anim = None;
+        sh.input_taps.create("app", EventMask::of(&[EventType::KeyDown]), TapOptions::DefaultTap, TapPlacement::TailAppend, vec![drop_key(30)]).unwrap();
+        assert_eq!(sh.tap_key(30, true), None, "an ordinary key goes through the tap, which drops it");
+        let seen = sh.input_taps.outbox.borrow().len();
+        sh.terminal_ui.secure = true;
+        assert_eq!(sh.tap_key(30, true), Some(30), "under Secure Keyboard Entry the tap is bypassed");
+        assert_eq!(sh.input_taps.outbox.borrow().len(), seen, "and was told nothing");
     }
 
     #[test]

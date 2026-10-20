@@ -1010,7 +1010,7 @@ fn run() -> std::io::Result<()> {
                     // gets the chord, not Select All or Redo. A shell layer over the app (Search, a sheet) keeps its own shortcuts.
                     let raw_sc = raw_sc.filter(|sc| {
                         use springboard::shell::hwkeys::Shortcut;
-                        !(match *sc { Shortcut::SelectAll => true, Shortcut::Redo => !hw_keys.shift_held(), _ => false } && hw_keys.ctrl_held() && !hw_keys.meta_held() && shell.sdk_app_front() && !shell.shell_takes_typing())
+                        !(match *sc { Shortcut::SelectAll => true, Shortcut::Redo => !hw_keys.shift_held(), _ => false } && hw_keys.ctrl_held() && !hw_keys.meta_held() && shell.ext_takes_edit_keys() && !shell.shell_takes_typing())
                     });
                     shell.set_photos_shift(hw_keys.shift_held());
                     if trace {
@@ -1123,6 +1123,10 @@ fn run() -> std::io::Result<()> {
         }
         // a held key that answered a card alert does not repeat into the app that is in front again
         if shell.take_key_repeat_cancel() {
+            key_repeat.cancel();
+        }
+        // a key that was already repeating when an alert appeared must not answer it: the repeat ends while the alert is up
+        if shell.card_alert_up() {
             key_repeat.cancel();
         }
         for out in key_repeat.due(t) {

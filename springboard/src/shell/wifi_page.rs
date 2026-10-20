@@ -200,6 +200,11 @@ impl Sheet {
         sh
     }
 
+    /// True while a password is being typed into the sheet: its field is secure and has the keyboard.
+    pub fn takes_secret(&self) -> bool {
+        self.field.is_secure() && self.field.focused
+    }
+
     /// Opens at `t` with the keyboard sliding in.
     pub fn new(ui: &Ui, ssid: String, w: i32, t: f64) -> Self {
         let prompt = ui.fit(&format!("Enter the password for “{ssid}”"), 13.0, ui.pt(CARD_W_PT - 40.0));
