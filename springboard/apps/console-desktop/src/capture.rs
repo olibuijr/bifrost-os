@@ -234,7 +234,7 @@ mod tests {
             c.cancel();
         });
         let started = std::time::Instant::now();
-        let err = run(&["sh", "-c", "sleep 30"], file, &control).unwrap_err();
+        let err = run(&["sh", "-c", "exec sleep 30"], file, &control).unwrap_err();
         killer.join().unwrap();
         assert_eq!(err, "The capture was cancelled.");
         assert!(started.elapsed() < std::time::Duration::from_secs(10));
