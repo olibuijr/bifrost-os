@@ -814,6 +814,10 @@ impl Shell {
         if !down || !self.screen_on || alt || PASS.contains(&code) {
             return false;
         }
+        // an alert holds the keyboard and Secure Keyboard Entry keeps the shell's keys out of the Terminal: neither is for Overview
+        if self.card_alert_up() || self.secure_entry_up() {
+            return false;
+        }
         // the Apps grid takes only its navigation keys: letters go on to `hw_type`, which types them into its search field
         let grid_key = self.overview.grid.visible() && matches!(code, KEY_ESC | KEY_BACKSPACE | KEY_ENTER | KEY_UP | KEY_LEFT | KEY_RIGHT | KEY_DOWN);
         let open = self.overview.open || grid_key;
@@ -844,6 +848,62 @@ impl Shell {
             || self.assistant.is_shown()
             || self.help_viewer.is_some()
             || self.card_alert_up()
+            // the layers `modal_up` lists that hold the pointer: the keyboard viewer is left out, as it is a palette whose touches
+            // reach the desktop and whose purpose is to show the keys that go on to the app behind it
+            || self.power_menu.is_some()
+            || self.pick_sheet.is_some()
+            || self.photo_pick_sheet.is_some()
+            || self.trust_sheet.is_some()
+            || self.a11y_panel.is_some()
+            || self.switch_panel_shown()
+            || self.print_showing()
+    }
+
+    /// True while a password is being entered: an app's password sheet, an encrypted volume's, a network login, a secure field
+    /// of Settings (the Wi-Fi password), or the Terminal in front with Secure Keyboard Entry on. Nothing else may see these keys.
+    pub fn secure_entry_up(&self) -> bool {
+        self.auth_showing()
+            || self.volume_showing()
+            || self.net_auth_showing()
+            || (self.screen == Screen::App(AppId::Terminal) && self.terminal_ui.secure)
+            || (self.screen == Screen::App(AppId::Settings) && self.settings.as_ref().is_some_and(|s| s.secret_field_focused()))
+    }
+
+    /// Escape closes the power menu, the picker, photo and trust sheets and the print sheet: layers `shell_takes_typing` holds
+    /// the keyboard for, so the key must not reach the app behind them. True when one was up.
+    fn modal_escape(&mut self) -> bool {
+        let closed = if self.power_menu.take().is_some() {
+            true
+        } else if let Some(sheet) = self.pick_sheet.take() {
+            self.pick_sheet = sheet.tapped(&self.ui, super::contact_pick_sheet::Tap::Cancel);
+            true
+        } else if let Some(sheet) = self.photo_pick_sheet.take() {
+            sheet.cancel();
+            true
+        } else if self.trust_sheet.is_some() {
+            use super::trust_sheet::Hit;
+            if self.trust_sheet.as_mut().is_some_and(|s| s.press(Hit::Cancel) || s.press(Hit::Done)) {
+                self.trust_sheet = None;
+            }
+            true
+        } else {
+            self.print_sheet_escape()
+        };
+        if closed {
+            self.drawn = super::Drawn::Nothing;
+            self.dirty = true;
+        }
+        closed
+    }
+
+    #[cfg(feature = "desktop-wayland")]
+    fn print_sheet_escape(&mut self) -> bool {
+        self.print_sheet.take().is_some()
+    }
+
+    #[cfg(not(feature = "desktop-wayland"))]
+    fn print_sheet_escape(&mut self) -> bool {
+        false
     }
 
     #[cfg(feature = "desktop-wayland")]
@@ -882,9 +942,7 @@ impl Shell {
         if !self.screen_on || self.shell_takes_typing() {
             return false;
         }
-        let Screen::App(AppId::External(slot)) = self.screen else { return false };
-        let takes = super::apphost::installed().get(slot as usize).is_some_and(|a| a.manifest.edit_keys) || self.ext_text_focused();
-        takes && self.ext_chord(u32::from(code), mods)
+        self.ext_takes_edit_keys() && self.ext_chord(u32::from(code), mods)
     }
 
     pub fn hw_type(&mut self, out: Out, t: f64) -> Vec<Effect> {
@@ -919,6 +977,11 @@ impl Shell {
         // it gets none)
         if self.card_alert_up() {
             return if matches!(out, Out::Enter) { self.card_alert_key(false, t) } else { vec![] };
+        }
+        // the power menu, the picker, photo and trust sheets, the print sheet and the Accessibility Shortcut panel have no field: typing is used up
+        // (Escape closes them in `hw_shortcut`), not sent to the app behind
+        if self.power_menu.is_some() || self.pick_sheet.is_some() || self.photo_pick_sheet.is_some() || self.trust_sheet.is_some() || self.print_showing() || self.a11y_panel.is_some() {
+            return vec![];
         }
         // the Apps grid is modal: typing goes to its search field, its own keys move and open, nothing reaches the app
         if self.overview_typed(&out, t) {
@@ -1155,8 +1218,9 @@ impl Shell {
             return vec![];
         }
         let in_terminal = matches!(self.screen, Screen::App(AppId::Terminal | AppId::External(_)));
-        // a card alert holds the keyboard: the terminal's own keys and Paste are used up, not sent to the app behind it
-        if self.card_alert_up() && matches!(sc, Shortcut::Term(_) | Shortcut::Paste) {
+        // a card alert holds the keyboard: every shortcut but Escape (which answers it) and the lock is used up, not run on
+        // the app that raised the alert or sent to the app behind it
+        if self.card_alert_up() && !matches!(sc, Shortcut::Back | Shortcut::Lock) {
             return vec![];
         }
         // Secure Keyboard Entry: while the Terminal is in front, only its own keys run; the shell's shortcuts
@@ -1268,6 +1332,8 @@ impl Shell {
             }
             // an alert is modal over everything and holds the keyboard: Escape answers it as its cancel button would
             Shortcut::Back if self.card_alert_up() => self.card_alert_key(true, t),
+            // Escape closes the other layers that hold the keyboard before it reaches the app behind
+            Shortcut::Back if self.modal_escape() => vec![],
             Shortcut::Back if self.capture.is_some() => {
                 self.capture = None;
                 vec![]

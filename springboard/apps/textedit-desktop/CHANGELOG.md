@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.12.2 - 2026-10-20
+
+- Cut, Copy, Paste, Select All, Undo and Redo from the keyboard act on the Find or Replace field, or on the sheet that is
+  open, and never on the document behind it. A paste into the Find field puts the text in the field.
+- Left, Right, Backspace and Delete move and remove a whole character as you see it: a flag, a family, a skin-tone emoji or
+  a letter with its accent is one step.
+
 ## 1.12.1 - 2026-10-20
 
 - Select All, Copy, Cut, Paste, Undo and Redo work from the keyboard (Cmd+A, C, X, V, Z and Shift+Cmd+Z); the shell used to

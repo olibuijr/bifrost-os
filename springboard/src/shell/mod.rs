@@ -542,6 +542,12 @@ enum Drawn {
     App,
 }
 
+/// Whether a release at `up` completes a press that went down on the same button of a sheet: `hit` maps a point to the
+/// button under it. A release with no press on a button answers nothing.
+fn press_lands<T: PartialEq>(press: Option<(f32, f32)>, up: (f32, f32), hit: impl Fn(f32, f32) -> Option<T>) -> bool {
+    press.is_some_and(|(px, py)| matches!((hit(px, py), hit(up.0, up.1)), (Some(a), Some(b)) if a == b))
+}
+
 pub struct Shell {
     pub w: i32,
     pub h: i32,
@@ -906,6 +912,9 @@ pub struct Shell {
     pick_sheet: Option<contact_pick_sheet::PickSheet>,
     /// the photo picker sheet for an app's open photo pick (see `photo_pick_sheet.rs`)
     photo_pick_sheet: Option<photo_pick_sheet::PhotoPickSheet>,
+    /// where the last pointer press went down while a sheet or alert was up: a button answers only when the press began on
+    /// it, so a click that began on the app beneath (and is released over a sheet that appeared meanwhile) answers nothing
+    modal_press: Option<(f32, f32)>,
     /// the password sheet an app's local authentication asks for (see `auth_sheet.rs`)
     auth_sheet: Option<auth_sheet::AuthSheet>,
     volume_sheet: Option<volume_sheet::VolumeSheet>,
@@ -1315,6 +1324,7 @@ impl Shell {
             suspender: Default::default(),
             pick_sheet: None,
             photo_pick_sheet: None,
+            modal_press: None,
             auth_sheet: None,
             volume_sheet: None,
             auth_clock: 0.0,
@@ -1787,6 +1797,15 @@ impl Shell {
             Event::Down(x, y) | Event::Move(x, y) | Event::Up(x, y) => (x, y),
             _ => return None,
         };
+        // a button answers a press that began on it after the sheet was up: remember where a press goes down, and take it at the release
+        let press = match ev {
+            Event::Down(x, y) => {
+                self.modal_press = Some((x, y));
+                None
+            }
+            Event::Up(..) => self.modal_press.take(),
+            _ => None,
+        };
         // the app's password sheet is the top-most modal: it takes every touch until it is answered
         if self.auth_showing() {
             self.auth_touch(x, y, matches!(ev, Event::Up(..)));
@@ -1799,7 +1818,8 @@ impl Shell {
         }
         if self.access_showing() {
             let t = self.auth_clock;
-            self.access_touch(x, y, matches!(ev, Event::Up(..)), t);
+            let up = matches!(ev, Event::Up(..)) && self.access_press_lands(press, x, y);
+            self.access_touch(x, y, up, t);
             return Some(vec![]);
         }
         // the package install sheet takes every touch while it is up
@@ -1816,12 +1836,14 @@ impl Shell {
         }
         // the USB accessory sheet takes every touch while it is up
         if self.usb_showing() {
-            self.usb_touch(x, y, matches!(ev, Event::Up(..)));
+            let up = matches!(ev, Event::Up(..)) && self.usb_press_lands(press, x, y);
+            self.usb_touch(x, y, up);
             return Some(vec![]);
         }
         if self.fw_showing() {
             let t = self.auth_clock;
-            self.fw_touch(x, y, matches!(ev, Event::Up(..)), t);
+            let up = matches!(ev, Event::Up(..)) && self.fw_press_lands(press, x, y);
+            self.fw_touch(x, y, up, t);
             return Some(vec![]);
         }
         if let Some(fx) = self.share_modal(ev) {
@@ -1829,7 +1851,7 @@ impl Shell {
         }
         if self.notify.ask.is_some() {
             // the first-time notification alert takes every touch until the person answers it
-            return self.usernotif_ask_event(ev);
+            return self.usernotif_ask_event(ev, press);
         }
         #[cfg(feature = "desktop-wayland")]
         if let Some(sheet) = &mut self.compose {
@@ -1883,7 +1905,7 @@ impl Shell {
         }
         if self.crash_alert.is_some() {
             // the crash alert takes every touch until one of its buttons answers it
-            if matches!(ev, Event::Up(..)) {
+            if matches!(ev, Event::Up(..)) && press_lands(press, (x, y), |px, py| self.crash_alert.as_ref().and_then(|a| a.hit(&self.ui, self.w, self.h, px, py))) {
                 self.crash_alert_touch(x, y);
             }
             self.drawn = Drawn::Nothing;
@@ -1892,7 +1914,7 @@ impl Shell {
         }
         if self.launch_alert.is_some() {
             // the launch alert takes every touch until one of its buttons answers it
-            if matches!(ev, Event::Up(..)) {
+            if matches!(ev, Event::Up(..)) && press_lands(press, (x, y), |px, py| self.launch_alert.as_ref().and_then(|a| a.hit(&self.ui, self.w, self.h, px, py))) {
                 self.launch_alert_touch(x, y);
             }
             self.drawn = Drawn::Nothing;
@@ -1903,7 +1925,8 @@ impl Shell {
             // the picker sheet takes every touch until the person picks or cancels
             if matches!(ev, Event::Up(..)) {
                 let hit = self.pick_sheet.as_ref().and_then(|s| s.hit(&self.ui, self.w, self.h, x, y));
-                if let Some(tap) = hit {
+                let pressed = press.and_then(|(px, py)| self.pick_sheet.as_ref().and_then(|s| s.hit(&self.ui, self.w, self.h, px, py)));
+                if let Some(tap) = hit.filter(|tap| pressed.as_ref() == Some(tap)) {
                     if let Some(sheet) = self.pick_sheet.take() {
                         self.pick_sheet = sheet.tapped(&self.ui, tap);
                     }
@@ -1915,7 +1938,7 @@ impl Shell {
         }
         if self.malware_alert.is_some() {
             // the malware card takes every touch until the person answers it
-            if matches!(ev, Event::Up(..)) {
+            if matches!(ev, Event::Up(..)) && press_lands(press, (x, y), |px, py| self.malware_alert.as_ref().and_then(|a| a.hit(&self.ui, self.w, self.h, px, py))) {
                 if let Some(held) = self.malware_alert_touch(x, y) {
                     let t = self.last_input;
                     self.resume_open(held, t);
@@ -1952,7 +1975,8 @@ impl Shell {
             // the trust sheet takes every touch until it is dismissed
             if matches!(ev, Event::Up(..)) {
                 let hit = self.trust_sheet.as_ref().and_then(|s| s.hit(&self.ui, self.w, self.h, x, y));
-                if let Some(hit) = hit {
+                let pressed = press.and_then(|(px, py)| self.trust_sheet.as_ref().and_then(|s| s.hit(&self.ui, self.w, self.h, px, py)));
+                if let Some(hit) = hit.filter(|hit| pressed == Some(*hit)) {
                     if self.trust_sheet.as_mut().is_some_and(|s| s.press(hit)) {
                         self.trust_sheet = None;
                     }
@@ -1966,7 +1990,8 @@ impl Shell {
             // the guardian's sheet takes every touch until the guardian answers it
             if matches!(ev, Event::Up(..)) {
                 let hit = self.guardian_sheet.as_ref().and_then(|s| s.hit(&self.ui, self.w, self.h, x, y));
-                if let Some(choice) = hit {
+                let pressed = press.and_then(|(px, py)| self.guardian_sheet.as_ref().and_then(|s| s.hit(&self.ui, self.w, self.h, px, py)));
+                if let Some(choice) = hit.filter(|choice| pressed.as_ref() == Some(choice)) {
                     if let Some(sheet) = self.guardian_sheet.take() {
                         sheet.finish(&choice, self.guardian_now);
                     }
@@ -1980,7 +2005,8 @@ impl Shell {
             // the sheet takes every touch until the person answers it
             if matches!(ev, Event::Up(..)) {
                 let hit = self.permission_sheet.as_ref().and_then(|s| s.hit(&self.ui, self.w, self.h, x, y));
-                if let Some(button) = hit {
+                let pressed = press.and_then(|(px, py)| self.permission_sheet.as_ref().and_then(|s| s.hit(&self.ui, self.w, self.h, px, py)));
+                if let Some(button) = hit.filter(|button| pressed == Some(*button)) {
                     if let Some(sheet) = self.permission_sheet.take() {
                         // the question has no expiry, so the clock does not matter to the answer
                         let _ = sheet.finish(button, 0);
@@ -1991,9 +2017,14 @@ impl Shell {
             self.dirty = true;
             return Some(vec![]);
         }
-        let alert = self.low_alert.as_ref()?;
+        let Some(alert) = self.low_alert.as_ref() else {
+            // no sheet is up: a press that began on the app beneath is not remembered for a sheet that appears while it is held
+            self.modal_press = None;
+            return None;
+        };
         if matches!(ev, Event::Up(..)) {
-            match alert.hit(&self.ui, self.w, self.h, x, y) {
+            let pressed = press.and_then(|(px, py)| alert.hit(&self.ui, self.w, self.h, px, py));
+            match alert.hit(&self.ui, self.w, self.h, x, y).filter(|b| pressed == Some(*b)) {
                 Some(low_battery::Button::LowPowerMode) => {
                     self.low_alert = None;
                     self.set_low_power(true);

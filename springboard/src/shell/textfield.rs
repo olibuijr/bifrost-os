@@ -120,6 +120,11 @@ impl TextField {
         self.caret
     }
 
+    /// True for a password field: its text is never shown, copied or handed to anything.
+    pub fn is_secure(&self) -> bool {
+        self.secure
+    }
+
     /// The field as an accessibility text element: caret, selection and length in characters. A secure field is marked
     /// `secure`, so the bridge exposes bullets and a length, never the text.
     pub fn ax_text(&self, id: u64) -> bifrost_ui::ax::AxText {
@@ -248,6 +253,8 @@ impl TextField {
             }
             Out::Enter => return true,
             // hardware-keyboard shortcuts (Ctrl/Cmd + C, X, V, A, Z, Shift+Z)
+            // a secure field never puts its text on the clipboard: Copy and Cut do nothing there, as in the touch edit menu
+            Out::Named("Copy" | "Cut") if self.secure => {}
             Out::Named("Copy") => edit::apply(Action::Copy, self, ui),
             Out::Named("Cut") => self.edit_with_undo(ui, |f, ui| edit::apply(Action::Cut, f, ui)),
             Out::Named("Paste") => self.edit_with_undo(ui, |f, ui| edit::apply(Action::Paste, f, ui)),
@@ -1184,5 +1191,25 @@ mod tests {
         let (mx, my, mw, _) = menu.rect();
         assert_eq!(menu.hit(mx + 5.0, my + 5.0), Some(Action::Paste));
         assert_eq!(menu.hit(mx + mw - 5.0, my + 5.0), Some(Action::Paste), "Paste is the only item");
+    }
+
+    #[test]
+    fn secure_fields_never_copy_or_cut_from_the_keyboard() {
+        let _g = clipboard::tests::exclusive();
+        let ui = ui();
+        let mut f = field(&ui, true);
+        f.set_text(&ui, "secret");
+        clipboard::set_text("before");
+        f.edit(&ui, &Out::Named("SelectAll"), 0.0);
+        f.edit(&ui, &Out::Named("Copy"), 0.0);
+        assert_eq!(clipboard::text().as_deref(), Some("before"), "Copy left the clipboard alone");
+        f.edit(&ui, &Out::Named("Cut"), 0.0);
+        assert_eq!(clipboard::text().as_deref(), Some("before"), "Cut left the clipboard alone");
+        assert_eq!(f.text(), "secret", "Cut did not remove the text");
+        let mut plain = field(&ui, false);
+        plain.set_text(&ui, "abc");
+        plain.edit(&ui, &Out::Named("SelectAll"), 0.0);
+        plain.edit(&ui, &Out::Named("Copy"), 0.0);
+        assert_eq!(clipboard::text().as_deref(), Some("abc"), "a plain field still copies");
     }
 }

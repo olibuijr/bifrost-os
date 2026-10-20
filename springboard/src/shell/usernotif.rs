@@ -681,11 +681,15 @@ impl super::Shell {
     }
 
     /// Touches while the first-time alert is up: it takes every touch until the person answers it.
-    pub(super) fn usernotif_ask_event(&mut self, ev: super::Event) -> Option<Vec<super::Effect>> {
+    ///
+    /// `press` is where the press that this release ends went down (`Shell::modal_press`): the alert answers only when that
+    /// press and the release both land on the same button.
+    pub(super) fn usernotif_ask_event(&mut self, ev: super::Event, press: Option<(f32, f32)>) -> Option<Vec<super::Effect>> {
         self.notify.ask.as_ref()?;
         if let super::Event::Up(x, y) = ev {
             let hit = self.notify.ask.as_ref().and_then(|s| s.hit(&self.ui, self.w, self.h, x, y));
-            if let Some(button) = hit {
+            let pressed = press.and_then(|(px, py)| self.notify.ask.as_ref().and_then(|s| s.hit(&self.ui, self.w, self.h, px, py)));
+            if let Some(button) = hit.filter(|button| pressed == Some(*button)) {
                 if let Some(sheet) = self.notify.ask.take() {
                     let app = sheet.app();
                     let t = self.notify.t;

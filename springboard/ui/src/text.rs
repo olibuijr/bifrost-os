@@ -189,10 +189,13 @@ pub fn line_start(s: &str, i: usize) -> usize {
     s[..i].rfind('\n').map_or(0, |p| p + 1)
 }
 
-/// End of the paragraph containing `i`, before its `\n`.
+/// End of the paragraph containing `i`, before its break: a `\n`, or the `\r\n` pair, which is one break.
 pub fn line_end(s: &str, i: usize) -> usize {
     let i = floor_boundary(s, i);
-    s[i..].find('\n').map_or(s.len(), |p| i + p)
+    s[i..].find('\n').map_or(s.len(), |p| {
+        let at = i + p;
+        if at > 0 && s.as_bytes()[at - 1] == b'\r' { at - 1 } else { at }
+    })
 }
 
 /// How many grapheme clusters `s` has.
@@ -407,7 +410,8 @@ impl TextBuffer {
                 self.move_to(self.text.len(), extend);
                 return;
             }
-            self.at_column(le + 1, col)
+            // the break may be a CRLF pair: the next line starts after all of it
+            self.at_column(next_boundary(&self.text, le), col)
         } else {
             if ls == 0 {
                 self.goal_col = Some(col);
@@ -536,7 +540,7 @@ impl TextBuffer {
     /// to the kill buffer.
     pub fn kill_line(&mut self) -> Option<Edit> {
         let le = line_end(&self.text, self.head);
-        let to = if le == self.head && le < self.text.len() { le + 1 } else { le };
+        let to = if le == self.head && le < self.text.len() { next_boundary(&self.text, le) } else { le };
         let range = if self.has_selection() { self.selection() } else { self.head..to };
         if range.is_empty() {
             return None;
@@ -1282,6 +1286,30 @@ mod tests {
         assert_eq!((line_start(s, 8), line_end(s, 8)), (6, 8));
         assert_eq!(line_end(s, 2), 2, "the caret before the newline is on the first line");
         assert_eq!(line_start(s, 3), 3, "after the newline is the next line");
+    }
+
+    #[test]
+    fn a_crlf_pair_is_one_line_break() {
+        let s = "ab\r\ncd\r\nef";
+        assert_eq!(line_end(s, 0), 2, "the line ends before the pair, not between its halves");
+        assert_eq!((line_start(s, 5), line_end(s, 5)), (4, 6));
+        assert_eq!(line_end(s, 9), 10);
+        let mut b = at(s, 0);
+        b.move_line(true, false);
+        assert_eq!(b.caret(), 2);
+        b.insert_text("X");
+        assert_eq!(b.text(), "abX\r\ncd\r\nef", "typing at the line end keeps the break whole");
+        let mut c = at(s, 4);
+        c.select_line_at(4);
+        assert_eq!(c.selected_text(), "cd", "a triple click does not take the carriage return");
+        let mut d = at(s, 0);
+        d.kill_line();
+        assert_eq!(d.text(), "\r\ncd\r\nef");
+        d.kill_line();
+        assert_eq!(d.text(), "cd\r\nef", "at the line end the whole pair goes");
+        let mut e = at(s, 1);
+        e.move_vertical(true, false);
+        assert_eq!(e.caret(), 5, "down lands in the next line, not between the halves");
     }
 
     #[test]

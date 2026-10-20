@@ -3035,8 +3035,10 @@
         assert_eq!(k.chord_mods(111),Some(CHORD_ALT),"Option+Delete");
         assert_eq!(k.nav_mods(106),Some(CHORD_ALT),"Option+Right");
         assert!(!sh.ext_text_focused(),"no text field is focused: an app without `edit_keys` keeps its plain arrows");
+        assert!(!sh.ext_takes_edit_keys(),"so Ctrl+A stays Select All and Ctrl+Y Redo");
         sh.ext[0].as_mut().unwrap().caret_rect=Some((0.,0.,1.,16.));
         assert!(sh.ext_text_focused());
+        assert!(sh.ext_takes_edit_keys(),"with a field focused Ctrl+A is the line start");
         assert!(sh.hw_nav(106,CHORD_ALT),"a focused field takes Option+Right");
         assert_eq!(sent(),vec![ToApp::Key(KeyInput::chord(106,CHORD_ALT))]);
         assert!(sh.hw_nav(102,0),"Home alone, too");

@@ -2153,6 +2153,13 @@ impl Shell {
         }
     }
 
+    /// True when the SDK app in front edits text from the keyboard: it declares `edit_keys`, or has a text field focused
+    /// (it reported the field's caret). Ctrl+A is then the line start and Ctrl+Y the yank; otherwise they are Select All and Redo.
+    pub fn ext_takes_edit_keys(&self) -> bool {
+        let Screen::App(AppId::External(slot)) = self.screen else { return false };
+        installed().get(slot as usize).is_some_and(|a| a.manifest.edit_keys) || self.ext_text_focused()
+    }
+
     /// True when the external app in front has a text field focused (it reported the field's caret).
     pub(super) fn ext_text_focused(&self) -> bool {
         matches!(self.screen, Screen::App(AppId::External(_)))

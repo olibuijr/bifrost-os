@@ -7,6 +7,7 @@ use super::ui::{AlertCard, Ui, Weight, LINK, MAC_BODY_PT};
 use super::{AppId, Shell};
 use crate::files::fs::Entry;
 use crate::gfx::Surface;
+use bifrost_core::codereq::Identity;
 use bifrost_core::launch_policy::Verdict;
 use std::path::{Path, PathBuf};
 
@@ -42,6 +43,9 @@ pub struct Alert {
     pub path: PathBuf,
     /// The sentence under the title (the policy's own words).
     pub sentence: String,
+    /// The identity (the hash of the code) the person was shown when the alert was raised: Open remembers and runs
+    /// exactly this code, and refuses a file that was replaced since.
+    pub assessed: Option<Identity>,
     card: AlertCard,
 }
 
@@ -53,7 +57,13 @@ impl Alert {
             Kind::Confirm => ("Cancel", "Open"),
         };
         let labels = vec![ui.text(dismiss, MAC_BODY_PT, Weight::Regular, LINK), ui.text(main, MAC_BODY_PT, Weight::Semibold, LINK)];
-        Alert { kind, path: path.to_path_buf(), sentence: sentence.to_string(), card: AlertCard::new(ui, &title(kind, &name), sentence, labels) }
+        Alert { kind, path: path.to_path_buf(), sentence: sentence.to_string(), assessed: None, card: AlertCard::new(ui, &title(kind, &name), sentence, labels) }
+    }
+
+    /// The alert for the code whose identity was `assessed` when the question was asked.
+    pub fn assessed(mut self, assessed: Identity) -> Self {
+        self.assessed = Some(assessed);
+        self
     }
 
     /// The button under (x, y), if any.
@@ -67,8 +77,13 @@ impl Alert {
         Some(self.card.button_centre(ui, w, h, i))
     }
 
-    /// The centre of the button a key presses: Esc dismisses, Return takes the main (bold) button.
+    /// The centre of the button a key presses: Esc dismisses. Return takes the main (bold) button only on the "cannot be
+    /// opened" alert (it opens Settings); it never says Open to a downloaded program, which only a click may run, so a
+    /// second Return (or a held one) that is meant for something else cannot start it and remember the grant.
     pub fn key_button(&self, ui: &Ui, w: i32, h: i32, cancel: bool) -> Option<(f32, f32)> {
+        if !cancel && self.kind == Kind::Confirm {
+            return None;
+        }
         self.button(ui, w, h, if cancel { Button::Dismiss } else { Button::Main })
     }
 
@@ -97,11 +112,11 @@ impl Shell {
         let name = entry.name.as_str();
         match launch_gate::assess(&policy, path, record, &identity) {
             Verdict::Allow => self.run_downloaded(path),
-            Verdict::Confirm(reason) => self.raise_launch_alert(Kind::Confirm, path, &reason.explain(name)),
+            Verdict::Confirm(reason) => self.raise_launch_alert(Kind::Confirm, path, &reason.explain(name), identity),
             Verdict::Block(reason) => {
                 let sentence = reason.explain(name);
-                launch_gate::write_blocked(&self.data_dir, path, &sentence);
-                self.raise_launch_alert(Kind::Blocked, path, &sentence);
+                launch_gate::write_blocked_hashed(&self.data_dir, path, &sentence, identity.code_directory_hash.as_deref());
+                self.raise_launch_alert(Kind::Blocked, path, &sentence, identity);
             }
         }
     }
@@ -112,8 +127,8 @@ impl Shell {
         }
     }
 
-    fn raise_launch_alert(&mut self, kind: Kind, path: &Path, sentence: &str) {
-        self.launch_alert = Some(Alert::new(&self.ui, kind, path, sentence));
+    fn raise_launch_alert(&mut self, kind: Kind, path: &Path, sentence: &str, assessed: Identity) {
+        self.launch_alert = Some(Alert::new(&self.ui, kind, path, sentence).assessed(assessed));
         self.dirty = true;
         self.drawn = super::Drawn::Nothing;
     }
@@ -134,12 +149,16 @@ impl Shell {
                 }
             }
             (Kind::Confirm, Button::Main) => {
-                // Open: remembered for this code, then started
-                if let Ok(identity) = launch_gate::identity_of(&alert.path) {
-                    let mut policy = launch_gate::load_policy(&self.prefs, &self.data_dir);
-                    launch_gate::grant(&mut policy, &alert.path, &identity);
-                    let _ = launch_gate::save_overrides(&policy, &self.data_dir);
-                    self.run_downloaded(&alert.path);
+                // Open: remembered for the code that was assessed, then started. A file replaced since the question was
+                // asked is another program: nothing is remembered or run for it, and opening it again asks again.
+                match (alert.assessed.as_ref(), launch_gate::identity_of(&alert.path)) {
+                    (Some(assessed), Ok(now)) if now.code_directory_hash == assessed.code_directory_hash => {
+                        let mut policy = launch_gate::load_policy(&self.prefs, &self.data_dir);
+                        launch_gate::grant(&mut policy, &alert.path, assessed);
+                        let _ = launch_gate::save_overrides(&policy, &self.data_dir);
+                        self.run_downloaded(&alert.path);
+                    }
+                    _ => eprintln!("springboard: launch {}: the file changed since it was assessed; not opened", alert.path.display()),
                 }
             }
         }
@@ -230,6 +249,50 @@ mod tests {
         sh.launch_program(&entry, 3.0);
         assert!(sh.launch_alert.is_none(), "asked once for this code");
         assert_eq!(ran(&entry.path), 2);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn return_never_opens_a_downloaded_program_but_escape_cancels() {
+        let (mut sh, dir, entry) = setup("keys");
+        sh.prefs.set(launch_gate::SETTING_PREF, "anywhere").unwrap();
+        sh.launch_program(&entry, 1.0);
+        let alert = sh.launch_alert.as_ref().unwrap();
+        assert_eq!(alert.kind, Kind::Confirm);
+        assert!(alert.key_button(&sh.ui, sh.w, sh.h, false).is_none(), "no key says Open");
+        assert!(alert.key_button(&sh.ui, sh.w, sh.h, true).is_some(), "Escape is Cancel");
+        assert!(sh.card_alert_key(false, 2.0).is_empty());
+        assert!(sh.launch_alert.is_some(), "Return left the alert up");
+        assert_eq!(ran(&entry.path), 0);
+        sh.card_alert_key(true, 3.0);
+        assert!(sh.launch_alert.is_none(), "Escape answered it");
+        assert_eq!(ran(&entry.path), 0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn open_runs_and_remembers_the_code_that_was_assessed_not_a_replacement() {
+        let (mut sh, dir, entry) = setup("replaced");
+        sh.prefs.set(launch_gate::SETTING_PREF, "anywhere").unwrap();
+        sh.launch_program(&entry, 1.0);
+        assert_eq!(sh.launch_alert.as_ref().map(|a| a.kind), Some(Kind::Confirm));
+        // another app swaps the file while the question is up
+        std::fs::write(&entry.path, "#!/bin/sh\necho swapped\n").unwrap();
+        press(&mut sh, Button::Main);
+        assert!(sh.launch_alert.is_none());
+        assert_eq!(ran(&entry.path), 0, "the replacement does not run");
+        assert!(!dir.join(launch_gate::OVERRIDES_FILE).exists(), "nothing is remembered for it");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn open_anyway_lifts_the_block_only_for_the_code_that_was_blocked() {
+        let (mut sh, dir, entry) = setup("anyway-replaced");
+        sh.launch_program(&entry, 1.0);
+        assert_eq!(sh.launch_alert.as_ref().map(|a| a.kind), Some(Kind::Blocked));
+        std::fs::write(&entry.path, "#!/bin/sh\necho swapped\n").unwrap();
+        assert!(!launch_gate::open_anyway(&dir, &sh.prefs), "the file is not the one that was blocked");
+        assert!(!dir.join(launch_gate::OVERRIDES_FILE).exists());
         let _ = std::fs::remove_dir_all(&dir);
     }
 

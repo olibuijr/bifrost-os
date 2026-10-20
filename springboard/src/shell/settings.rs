@@ -1576,6 +1576,11 @@ impl Settings {
         self.sheet.as_ref().map(|s| s.ssid.as_str())
     }
 
+    /// True while a password is being typed into the open sheet (the Wi-Fi password): no event tap may see these keys.
+    pub fn secret_field_focused(&self) -> bool {
+        self.sheet.as_ref().is_some_and(|s| s.takes_secret())
+    }
+
     /// Turns Low Power Mode on or off from outside the page (the low-battery
     /// alert's button), saving it and refreshing the open pages.
     pub fn set_low_power(&mut self, ui: &Ui, prefs: &mut Prefs, on: bool) {

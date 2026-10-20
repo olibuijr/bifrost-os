@@ -1,6 +1,6 @@
 //! Keys for the system alerts. An alert is modal over the whole screen and, on the desktop, a surface of its own that
 //! holds the keyboard (`desktop_chrome_frames`, id 15), so the keys come to the shell and must not reach the app in
-//! front: Esc answers the way the alert's cancel button does, Return presses its bold button unless that would grant a permission (a key never grants), every other key is used up.
+//! front: Esc answers the way the alert's cancel button does, Return presses its bold button unless that would grant a permission or run a downloaded program (a key never grants), every other key is used up. The shell's own shortcuts wait for the answer too, and a repeat of a key that was held before the alert appeared ends.
 //! The alerts handle touches in `Shell::modal_event`; a key is turned into the touch on the button it stands for, so
 //! there is one path for answering an alert and a key never does what a tap could not.
 
@@ -70,7 +70,7 @@ impl Shell {
     }
 
     /// True while a card alert is up that takes the keys (the app behind it gets none).
-    pub(super) fn card_alert_up(&self) -> bool {
+    pub fn card_alert_up(&self) -> bool {
         self.top_card_alert().is_some()
     }
 
@@ -140,6 +140,69 @@ mod tests {
         assert!(sh.hw_type(Out::Enter, 1.0).is_empty());
         assert!(sh.notify.ask.is_some(), "Return does not answer the alert");
         assert!(!sh.notify.store().is_asked(AppId::Files) && !sh.take_key_repeat_cancel());
+    }
+
+    /// A sheet's button answers only a press that went down on it while the sheet was up, then came up on it.
+    #[test]
+    fn a_release_alone_or_over_another_spot_answers_nothing() {
+        use crate::shell::Event;
+        let mut sh = shell_with_alert();
+        let (bx, by) = sh.notify.ask.as_ref().unwrap().key_button(&sh.ui, sh.w, sh.h, true).unwrap();
+        // the press began on the app beneath, before the alert: only the release reaches the alert
+        sh.modal_event(Event::Up(bx, by));
+        assert!(sh.notify.ask.is_some(), "a bare release answers nothing");
+        // the press went down away from the button and came up on it
+        sh.modal_event(Event::Down(1.0, 1.0));
+        sh.modal_event(Event::Up(bx, by));
+        assert!(sh.notify.ask.is_some(), "a press that began off the button answers nothing");
+        // the press is used up by its release: a second release has no press behind it
+        sh.modal_event(Event::Down(bx, by));
+        sh.modal_event(Event::Move(1.0, 1.0));
+        sh.modal_event(Event::Up(1.0, 1.0));
+        sh.modal_event(Event::Up(bx, by));
+        assert!(sh.notify.ask.is_some(), "a release of a press that ended elsewhere is not a click");
+        sh.modal_event(Event::Down(bx, by));
+        sh.modal_event(Event::Up(bx, by));
+        assert!(sh.notify.ask.is_none(), "press and release on the button answer it");
+    }
+
+    /// Every layer `shell_takes_typing` lists keeps its keys from the app behind it, and Escape closes the ones without a field.
+    #[test]
+    fn the_power_menu_takes_the_typing_and_escape_closes_it() {
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.screen = Screen::Home;
+        sh.anim = None;
+        assert!(!sh.shell_takes_typing());
+        sh.power_menu = Some(crate::shell::power_menu::PowerMenu::new(&sh.ui));
+        assert!(sh.shell_takes_typing(), "chords and navigation keys stay out of the app behind the menu");
+        assert!(sh.hw_type(Out::Text("a".into()), 1.0).is_empty());
+        sh.hw_shortcut(Shortcut::Back, 2.0);
+        assert!(sh.power_menu.is_none(), "Escape closes the menu");
+        assert!(!sh.shell_takes_typing());
+    }
+
+    /// Cmd+Q, the capture chords and the rest of the shell's shortcuts are used up while an alert is up; Escape answers it.
+    #[test]
+    fn the_shells_shortcuts_and_overview_keys_wait_for_the_alert() {
+        use crate::shell::overview::{KeyMods, KEY_F3};
+        let mut sh = shell_with_alert();
+        assert!(sh.hw_shortcut(Shortcut::Capture, 1.0).is_empty());
+        assert!(sh.capture.is_none(), "the capture toolbar did not open over the alert");
+        assert!(sh.hw_shortcut(Shortcut::AppSwitch, 1.0).is_empty());
+        assert!(sh.screen != Screen::Switcher, "the app switcher did not open");
+        let mods = KeyMods { ctrl: false, cmd: false, shift: false };
+        assert!(!sh.hw_overview_key(KEY_F3, true, mods, false, 1.0), "F3 does not open Overview over the alert");
+        assert!(!sh.overview.open);
+        assert!(sh.notify.ask.is_some());
+        // Secure Keyboard Entry: the Terminal in front keeps Overview's keys too
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.screen = Screen::App(AppId::Terminal);
+        sh.anim = None;
+        sh.terminal_ui.secure = true;
+        assert!(sh.secure_entry_up());
+        assert!(!sh.hw_overview_key(KEY_F3, true, mods, false, 1.0));
+        sh.terminal_ui.secure = false;
+        assert!(!sh.secure_entry_up());
     }
 
     #[test]

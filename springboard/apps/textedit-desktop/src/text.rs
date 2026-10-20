@@ -191,6 +191,28 @@ impl Style {
     }
 }
 
+/// How many cells either side of a caret the cluster rules look at; a cluster longer than this is cut.
+const CLUSTER_WINDOW: usize = 64;
+
+/// The cell index of the grapheme cluster boundary before `at`: where Left and Backspace land. A flag, a ZWJ sequence, a
+/// skin-tone emoji or a letter with its combining marks is one step.
+pub fn prev_cluster(cells: &[Cell], at: usize) -> usize {
+    let at = at.min(cells.len());
+    let from = at.saturating_sub(CLUSTER_WINDOW);
+    let window: String = cells[from..at].iter().map(|c| c.ch).collect();
+    let b = bifrost_app::controls::text::prev_boundary(&window, window.len());
+    from + window[..b].chars().count()
+}
+
+/// The cell index of the grapheme cluster boundary after `at`: where Right and Delete land.
+pub fn next_cluster(cells: &[Cell], at: usize) -> usize {
+    let at = at.min(cells.len());
+    let to = (at + CLUSTER_WINDOW).min(cells.len());
+    let window: String = cells[at..to].iter().map(|c| c.ch).collect();
+    let b = bifrost_app::controls::text::next_boundary(&window, 0);
+    at + window[..b].chars().count()
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Cell {
     pub ch: char,
@@ -524,24 +546,24 @@ impl Text {
         self.sync_typing();
     }
 
-    /// Deletes the selection, or the character before the caret.
+    /// Deletes the selection, or the grapheme cluster before the caret.
     pub fn delete_backward(&mut self) {
         if !self.has_selection() {
             if self.head == 0 {
                 return;
             }
-            self.anchor = self.head - 1;
+            self.anchor = prev_cluster(&self.cells, self.head);
         }
         self.delete_selection(Kind::Deleting);
     }
 
-    /// Deletes the selection, or the character after the caret.
+    /// Deletes the selection, or the grapheme cluster after the caret.
     pub fn delete_forward(&mut self) {
         if !self.has_selection() {
             if self.head >= self.len() {
                 return;
             }
-            self.head += 1;
+            self.head = next_cluster(&self.cells, self.head);
         }
         self.delete_selection(Kind::Deleting);
     }
@@ -1229,6 +1251,30 @@ mod tests {
         t.select(0, 0);
         t.delete_backward();
         assert_eq!(t.text(), "a", "nothing before the first character");
+    }
+
+    #[test]
+    fn backspace_and_delete_remove_a_whole_grapheme_cluster() {
+        // a flag (two regional indicators), a family (ZWJ sequence), a thumbs-up with a skin tone, an e with an accent
+        let text = "a\u{1F1EE}\u{1F1F8}\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{1F44D}\u{1F3FD}e\u{301}z";
+        let mut t = plain(text);
+        t.select(t.len(), t.len());
+        t.delete_backward();
+        assert_eq!(t.text(), text.strip_suffix('z').unwrap(), "z is a single character");
+        t.delete_backward();
+        assert!(t.text().ends_with('\u{1F3FD}'), "e with its accent went in one step: {:?}", t.text());
+        t.delete_backward();
+        assert!(t.text().ends_with('\u{1F467}'), "the skin tone went with its emoji");
+        t.delete_backward();
+        assert_eq!(t.text(), "a\u{1F1EE}\u{1F1F8}", "the whole family went in one step");
+        t.delete_backward();
+        assert_eq!(t.text(), "a", "the flag went in one step");
+        let mut f = plain(text);
+        f.select(1, 1);
+        f.delete_forward();
+        assert!(f.text().starts_with("a\u{1F468}"), "the flag went in one step");
+        assert_eq!(next_cluster(f.cells(), 1), 6, "the family is five cells");
+        assert_eq!(prev_cluster(f.cells(), 6), 1);
     }
 
     #[test]
