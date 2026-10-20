@@ -53,6 +53,8 @@ struct Window { surface:wl_surface::WlSurface, level_sent:Option<bool>, xdg:xdg_
     /// The full-screen state asked of the window server and not yet answered by a configure: a configure sent before
     /// the request reached it carries the old state and must not undo the request.
     fs_pending:Option<bool>,
+    /// Whether the last toplevel configure carried the Activated state, and whether the shell was told about it.
+    act:bool, act_seen:bool,
     /// GPU path: content damage not presented yet, the shadow margin around the content, the drawable size
     pending:Damage, margin:i32, gpu_size:(usize,usize),
     /// window-server materials (ext-background-effect): the effect object and the blur rects last sent (surface px)
@@ -419,7 +421,7 @@ impl Display {
                 }
                 surface.commit();
                 let mut pending=Damage::new(frame.width,frame.height); pending.all();
-                self.state.windows.insert(frame.id,Window { surface,xdg,top,level_sent:None,slots:vec![],buffer_size:(0,0),configured:false,frame,fs_pending:None,pending,margin:0,gpu_size:(0,0),bg:None,bg_rects:Vec::new(),mat:None,mat_sent:(0,Vec::new()) });
+                self.state.windows.insert(frame.id,Window { surface,xdg,top,level_sent:None,slots:vec![],buffer_size:(0,0),configured:false,frame,fs_pending:None,act:false,act_seen:false,pending,margin:0,gpu_size:(0,0),bg:None,bg_rects:Vec::new(),mat:None,mat_sent:(0,Vec::new()) });
             }
         }
         // bifrost_window_level_v1: a window whose band changed is told the new level (the window server keeps it per surface)
@@ -494,7 +496,8 @@ impl Display {
                 let w=self.state.windows.get_mut(&id).unwrap();
                 if !w.configured || w.frame.pixels.is_none() { continue; }
                 let (width,height)=(w.frame.width,w.frame.height);
-                if width>8192||height>8192 { return Err(err("window too large")); }
+                // a window with no area or an absurd size is skipped, not a reason to drop the shell's connection
+                if width==0||height==0||width>8192||height>8192 { continue; }
                 // the margins hold the GPU shadow (a dedicated reach, longer below); maximized windows have none
                 let scale=if self.state.scale>0.0 {self.state.scale} else {(w.frame.title_height as f32/TITLE_PT).max(1.0)};
                 let (margin,bottom)=if w.frame.maximized||w.frame.fullscreen {(0,0)} else {((SHADOW_SIDE_PT*scale).round() as i32,(SHADOW_BOTTOM_PT*scale).round() as i32)};
@@ -578,7 +581,7 @@ impl Display {
         for w in self.state.windows.values_mut() {
             if !w.configured { continue; }
             let width = w.frame.width; let height = w.frame.height; let len = width*height*4;
-            if width > 8192 || height > 8192 { return Err(err("window too large")); }
+            if width == 0 || height == 0 || width > 8192 || height > 8192 { continue; }
             if w.buffer_size != (width,height) {
                 for slot in w.slots.drain(..) { slot.buffer.destroy(); }
             }
@@ -1187,13 +1190,13 @@ impl Dispatch<xdg_wm_base::XdgWmBase, ()> for State {
 }
 impl Dispatch<xdg_surface::XdgSurface,u32> for State {
     fn event(s: &mut Self, obj: &xdg_surface::XdgSurface, e:xdg_surface::Event, id: &u32, _: &Connection, _: &QueueHandle<Self>) {
-        if let xdg_surface::Event::Configure {serial} = e {obj.ack_configure(serial); if let Some(w)=s.windows.get_mut(id) {w.configured=true; s.window_events.push(WindowEvent::Focus(*id));} }
+        if let xdg_surface::Event::Configure {serial} = e {obj.ack_configure(serial); if let Some(w)=s.windows.get_mut(id) {let focus=focus_on_configure(!w.configured,w.act,w.act_seen);w.configured=true;w.act_seen=w.act;if focus {s.window_events.push(WindowEvent::Focus(*id));}} }
     }
 }
 impl Dispatch<xdg_toplevel::XdgToplevel,u32> for State {
     fn event(s: &mut Self, _: &xdg_toplevel::XdgToplevel, e:xdg_toplevel::Event, id: &u32, _: &Connection, _: &QueueHandle<Self>) {
         match e {
-            xdg_toplevel::Event::Configure {width,height,states} => { let has=|state:xdg_toplevel::State|states.chunks_exact(4).any(|bytes|u32::from_ne_bytes(bytes.try_into().unwrap())==state as u32); let maximized=has(xdg_toplevel::State::Maximized); s.window_events.push(WindowEvent::Maximized(*id,maximized));
+            xdg_toplevel::Event::Configure {width,height,states} => { let has=|state:xdg_toplevel::State|states.chunks_exact(4).any(|bytes|u32::from_ne_bytes(bytes.try_into().unwrap())==state as u32); let maximized=has(xdg_toplevel::State::Maximized); s.window_events.push(WindowEvent::Maximized(*id,maximized)); if let Some(w)=s.windows.get_mut(id) {w.act=has(xdg_toplevel::State::Activated);}
                 // full screen: the answer to our own request settles it; any other configure is the window server's own decision
                 if let Some(w)=s.windows.get_mut(id) { let fullscreen=has(xdg_toplevel::State::Fullscreen); match w.fs_pending { Some(want) if want==fullscreen => w.fs_pending=None, Some(_) => {}, None if w.frame.fullscreen!=fullscreen => { w.frame.fullscreen=fullscreen; s.window_events.push(WindowEvent::Fullscreen(*id,fullscreen)); }, None => {} } } if width>0 && height>0 {s.window_events.push(WindowEvent::Resize(*id,width,height));} },
             xdg_toplevel::Event::Close => s.window_events.push(WindowEvent::Close(*id)),
@@ -1300,6 +1303,10 @@ fn dock_placement(x:i32,y:i32,width:usize,height:usize,screen:(u32,u32))->(DockE
         (DockEdge::Bottom,[0,0,bottom,0],h+bottom)
     }
 }
+/// Whether a configure of a toplevel tells the shell it has the focus: the first one (a new window is focused as it
+/// appears) or one that newly carries the Activated state. A size, tile or state configure on a window in the
+/// background must not lift it over the one the user is working in.
+fn focus_on_configure(first:bool,activated:bool,was_activated:bool)->bool { first || (activated && !was_activated) }
 // Keep quiet windows single-buffered. A pending update may allocate one spare
 // while the compositor owns the first; never write into an in-flight buffer.
 fn window_buffer_count(count:usize, available:bool, dirty:bool) -> usize {
@@ -1307,7 +1314,14 @@ fn window_buffer_count(count:usize, available:bool, dirty:bool) -> usize {
 }
 #[cfg(test)]
 mod tests {
-    use super::{dock_placement,DockEdge};
+    use super::{dock_placement,DockEdge,focus_on_configure};
+    #[test]
+    fn a_plain_configure_does_not_take_the_focus() {
+        assert!(focus_on_configure(true,false,false), "a new window is focused");
+        assert!(focus_on_configure(false,true,false), "a window that became active is focused");
+        assert!(!focus_on_configure(false,false,false), "a resize of a background window");
+        assert!(!focus_on_configure(false,true,true), "a resize of the active window raises nothing again");
+    }
     #[test]
     fn the_dock_is_anchored_to_its_own_edge() {
         let screen=(1920,1080);
