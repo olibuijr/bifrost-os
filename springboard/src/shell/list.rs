@@ -1004,6 +1004,11 @@ impl ListPage {
         self.open.take().map(|p| (p.g, p.i))
     }
 
+    /// The label of the row whose pop-up menu is open, so a rebuilt page can open the same one again.
+    pub fn open_popup_label(&self) -> Option<String> {
+        self.open.as_ref().map(|p| self.item(p.g, p.i).label.clone())
+    }
+
     /// Whether a pop-up menu is open.
     pub fn popup_open(&self) -> bool {
         self.open.is_some()
@@ -1768,7 +1773,7 @@ mod tests {
         assert_eq!(headline_case("USB DEVICES"), "USB Devices");
         assert_eq!(headline_case("IPV4"), "IPv4");
         assert_eq!(headline_case("is.example.chat"), "is.example.chat", "a name with lower-case letters is left alone");
-        assert_eq!(headline_case("My iPhone"), "My iPhone");
+        assert_eq!(headline_case("My eReader"), "My eReader");
         assert_eq!(headline_case(""), "");
     }
 

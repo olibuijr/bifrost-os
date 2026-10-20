@@ -56,7 +56,7 @@ pub const CATALOGUE: &[SettingsIntent] = &[
     SettingsIntent { id: "open-menu-bar", title: "Open Menu Bar", description: "Show which controls the menu bar shows", page: PageId::MenuBar },
     SettingsIntent { id: "open-screen-saver", title: "Open Screen Saver", description: "Show the screen saver settings", page: PageId::ScreenSaver },
     SettingsIntent { id: "open-lock-screen", title: "Open Lock Screen", description: "Show the lock screen settings", page: PageId::LockScreen },
-    SettingsIntent { id: "open-spotlight", title: "Open Spotlight", description: "Show what Search looks in", page: PageId::Spotlight },
+    SettingsIntent { id: "open-search", title: "Open Search", description: "Show what Search looks in", page: PageId::Spotlight },
     SettingsIntent { id: "open-hot-corners", title: "Open Hot Corners", description: "Show what the screen corners do", page: PageId::HotCorners },
     SettingsIntent { id: "open-accessibility-shortcut", title: "Open Accessibility Shortcut", description: "Show the features the Accessibility Shortcut switches", page: PageId::AccessibilityShortcut },
 ];

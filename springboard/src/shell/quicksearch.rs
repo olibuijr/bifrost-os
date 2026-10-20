@@ -728,7 +728,7 @@ fn compose(query: &str, calc: Option<Group>, top: Option<Group>, sections: Vec<G
     scoped(groups, &super::spotlight_scope::current())
 }
 
-/// The category a hit is listed under in Settings > Spotlight, and the path it names when it is a file. `None` for
+/// The category a hit is listed under in Settings > Search, and the path it names when it is a file. `None` for
 /// the hits that no switch controls (the Search in Apps action, the Top Hit's own kind, the calculator answer).
 fn hit_category(hit: &Hit) -> (Option<super::spotlight_scope::Category>, Option<&Path>) {
     use super::spotlight_scope::Category as C;
@@ -745,7 +745,7 @@ fn hit_category(hit: &Hit) -> (Option<super::spotlight_scope::Category>, Option<
     }
 }
 
-/// Drops the hits Settings > Spotlight hides, and any group left empty. A group with no hits stays only when it was
+/// Drops the hits Settings > Search hides, and any group left empty. A group with no hits stays only when it was
 /// empty to begin with (the "Search in Apps" action is never hidden).
 fn scoped(groups: Vec<Group>, scope: &super::spotlight_scope::Scope) -> Vec<Group> {
     groups

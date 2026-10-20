@@ -2070,7 +2070,7 @@ impl Shell {
     }
 
     /// Draws every app's icon again through the icon renderer (`apps::decode_icons`, in the current style) and
-    /// refreshes what holds them: the Dock and grid tiles, the App Library, Spotlight and the Overview. Runs when the
+    /// refreshes what holds them: the Dock and grid tiles, the App Library, Search and the Overview. Runs when the
     /// icon style changes and when an app is installed or updated.
     pub(super) fn rebuild_app_icons(&mut self) {
         self.icon_rebuilds = self.icon_rebuilds.wrapping_add(1);

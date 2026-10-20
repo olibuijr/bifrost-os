@@ -1,4 +1,4 @@
-//! Settings > Spotlight: which kinds of result Search lists, and the folders it never lists. The choice is kept in the
+//! Settings > Search: which kinds of result Search lists, and the folders it never lists. The choice is kept in the
 //! settings store (`settings.ini`) as two keys: `spotlight_off` names the categories switched off (comma separated) and
 //! `spotlight_excluded` holds the excluded folders, one escaped field each, joined by tabs. A category that is on is
 //! the default, and a folder is excluded with everything under it.
@@ -15,7 +15,7 @@ pub const EXCLUDED_PREF: &str = "spotlight_excluded";
 /// The longest folder path kept in the exclusion list.
 const PATH_MAX: usize = 4096;
 
-/// A kind of result Search lists, as Settings > Spotlight names it.
+/// A kind of result Search lists, as Settings > Search names it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Category {
     Applications,

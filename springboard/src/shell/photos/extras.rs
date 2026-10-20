@@ -1375,7 +1375,7 @@ mod tests {
 
     #[test]
     fn a_corrected_capture_time_moves_the_photo_and_a_bad_one_is_refused() {
-        let (mut p, dir, ui) = photos("taken", 3);
+        let (mut p, dir, ui) = photos("extras-taken", 3);
         p.open_viewer(0);
         let photo = p.photos()[0].clone();
         open_details(&mut p, &ui, 1000.0);
@@ -1556,7 +1556,7 @@ mod tests {
 
     #[test]
     fn identical_files_make_a_duplicates_album_and_merge_keeps_one() {
-        let (mut p, dir, ui) = photos("dupes", 3);
+        let (mut p, dir, ui) = photos("extras-merge-dupes", 3);
         // the three fixture pictures are the same bytes
         assert_eq!(p.dupe_groups.len(), 1);
         assert!(p.menu_albums().contains(&Album::Duplicates));

@@ -96,6 +96,9 @@ struct Shared {
     viewport: (u32, u32),
     /// the UI draws pictures on the GPU: leave them in the decoder's buffers
     zero_copy: bool,
+    /// every frame is shown: none is dropped as late and a frame waits until the last one was taken (tests, whose
+    /// consumer thread can be descheduled for longer than a frame while the whole suite runs)
+    strict: bool,
     /// the playback rate asked for (0.5 to 3.0); the audio thread time-stretches to it and the clock runs at it
     rate: f32,
     clock: Clock,
@@ -150,7 +153,18 @@ impl Player {
         Self::start(source, Box::new(move |_| Ok(decoder)), audio)
     }
 
+    /// Like `open_parts`, delivering every frame in order: nothing is dropped as late and the video thread waits for
+    /// the consumer to take a frame before it publishes the next. For tests that count frames.
+    #[cfg(test)]
+    fn open_parts_strict(source: Box<dyn Source>, decoder: Box<dyn VideoDecoder>, audio: Box<dyn AudioOut>) -> io::Result<Player> {
+        Self::start_with(source, Box::new(move |_| Ok(decoder)), audio, true)
+    }
+
     fn start(source: Box<dyn Source>, decoder: DecoderFactory, audio: Box<dyn AudioOut>) -> io::Result<Player> {
+        Self::start_with(source, decoder, audio, false)
+    }
+
+    fn start_with(source: Box<dyn Source>, decoder: DecoderFactory, audio: Box<dyn AudioOut>, strict: bool) -> io::Result<Player> {
         let mut pipe = [0; 2];
         // SAFETY: pipe2 fills the two-element array; O_NONBLOCK | O_CLOEXEC.
         if unsafe { pipe2(pipe.as_mut_ptr(), 0o4000 | 0o2000000) } < 0 {
@@ -172,6 +186,7 @@ impl Player {
             frame: None,
             viewport: DEFAULT_VIEWPORT,
             zero_copy: false,
+            strict,
             rate: 1.0,
             clock: Clock { media_ms: 0.0, anchor: Instant::now(), running: false, rate: 1.0 },
         }));
@@ -567,15 +582,15 @@ fn video_loop(shared: &Arc<Mutex<Shared>>, notify_fd: c_int, demux: &Demux, code
         }
         drop_until = 0.0;
         let frame = queue.pop_front().unwrap();
-        let (now, viewport, has_audio, want_zero_copy) = {
+        let (now, viewport, has_audio, want_zero_copy, strict) = {
             let s = shared.lock().unwrap_or_else(|p| p.into_inner());
-            (s.clock.now(), s.viewport, s.has_audio, s.zero_copy)
+            (s.clock.now(), s.viewport, s.has_audio, s.zero_copy, s.strict)
         };
         if want_zero_copy != zero_copy {
             // frames already queued keep their form; both forms are handled below
             zero_copy = decoder.set_zero_copy(want_zero_copy) && want_zero_copy;
         }
-        if now - pts_ms > LATE_MS && late_streak < 8 {
+        if !strict && now - pts_ms > LATE_MS && late_streak < 8 {
             late_streak += 1;
             continue;
         }
@@ -588,6 +603,11 @@ fn video_loop(shared: &Arc<Mutex<Shared>>, notify_fd: c_int, demux: &Demux, code
             Pixels::Dma(p) => Picture::Rgba(convert::dma_to_rgba(&p, ow, oh, matrix, CONVERT_THREADS)),
         };
         let mut s = shared.lock().unwrap_or_else(|p| p.into_inner());
+        while strict && s.frame.is_some() && !s.quit && s.generation == generation {
+            drop(s);
+            std::thread::sleep(Duration::from_millis(1));
+            s = shared.lock().unwrap_or_else(|p| p.into_inner());
+        }
         if s.generation == generation {
             if !has_audio && s.playing {
                 s.clock.set(pts_ms, true);
@@ -801,10 +821,17 @@ mod tests {
         }
     }
 
-    /// A player on a small viewport, so debug-build conversions stay fast
-    /// enough that no frame is dropped as late while the suite runs.
+    /// A player on a small viewport, so debug-build conversions stay fast.
     fn player(bytes: &[u8]) -> Player {
         let mut p = Player::open_parts(Box::new(MemSource::new(bytes.to_vec())), StubDecoder::new(), Box::new(NullOut::new())).unwrap();
+        p.set_viewport(240, 160);
+        p
+    }
+
+    /// Like `player`, for the tests that count or order every frame: none is dropped as late and the video thread
+    /// waits for the test to take a frame, so a loaded run (many test threads) cannot make frames go missing.
+    fn strict_player(bytes: &[u8]) -> Player {
+        let mut p = Player::open_parts_strict(Box::new(MemSource::new(bytes.to_vec())), StubDecoder::new(), Box::new(NullOut::new())).unwrap();
         p.set_viewport(240, 160);
         p
     }
@@ -833,7 +860,7 @@ mod tests {
 
     #[test]
     fn plays_to_the_end_with_frames_in_order_and_fitted_to_the_viewport() {
-        let mut p = player(BASELINE);
+        let mut p = strict_player(BASELINE);
         pump(&mut p, 10_000, |p| p.duration_ms().is_some());
         assert_eq!(p.duration_ms().map(|d| d.round()), Some(1000.0));
         let frames = pump(&mut p, 20_000, |p| p.state() == State::Ended);
@@ -881,7 +908,7 @@ mod tests {
 
     #[test]
     fn seek_restarts_at_the_keyframe() {
-        let mut p = player(BASELINE);
+        let mut p = strict_player(BASELINE);
         pump(&mut p, 10_000, |p| p.position_ms() > 100.0);
         p.seek_ms(800.0);
         let frames = pump(&mut p, 15_000, |p| p.state() == State::Ended);
@@ -928,7 +955,7 @@ mod tests {
                 self.0.push((frame.w, pts_ms));
             }
         }
-        let mut p = player(BASELINE);
+        let mut p = strict_player(BASELINE);
         let mut sink = Last(Vec::new());
         let start = Instant::now();
         while start.elapsed().as_millis() < 20_000 && p.state() != State::Ended {

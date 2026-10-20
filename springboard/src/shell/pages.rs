@@ -258,7 +258,7 @@ pub enum Toggle {
     SuspendBackground,
     FourFinger,
     CornerSwipe,
-    /// Settings > Spotlight: a kind of result Search lists, switched on or off
+    /// Settings > Search: a kind of result Search lists, switched on or off
     SpotlightCategory(super::spotlight_scope::Category),
     /// App Permissions: the app at this index (of `apphost::installed()`) may use this media type
     Permission(Media, usize),
@@ -288,7 +288,7 @@ pub enum Pick {
     AllowAppsFrom(usize),
     /// Mouse > Secondary Click: index into `mouse_page::SECONDARY_BUTTON`
     MouseSecondary(usize),
-    /// Settings > Spotlight > Privacy: stop excluding the folder at this index
+    /// Settings > Search > Privacy: stop excluding the folder at this index
     SpotlightExclude(usize),
     /// Settings > Backup > Backup Destination: the index into `backup_page::destination_choices`
     BackupDestination(usize),
@@ -929,7 +929,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                 Item::new("Screen Saver").icon(Icon::Wallpaper).value(if o.screensaver_minutes == 0 { "Never" } else { super::screensaver::saver_name(o.screensaver_module) }).link(PageId::ScreenSaver),
                 power,
                 Item::new("Privacy").icon(Icon::Privacy).link(PageId::Privacy),
-                Item::new("Spotlight").icon(Icon::Search).link(PageId::Spotlight),
+                Item::new("Search").icon(Icon::Search).link(PageId::Spotlight),
                 Item::new("Lock Screen").icon(Icon::Passcode).link(PageId::LockScreen),
             ];
             // the numeric passcode is a tablet's lock; a desktop signs in with its account password, which Lock Screen
@@ -1660,7 +1660,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
             let folders: Vec<Item> = scope.excluded().iter().enumerate().map(|(i, f)| Item::new(f.display().to_string()).action(Action::Pick(Pick::SpotlightExclude(i)))).collect();
             let folders = if folders.is_empty() { vec![Item::new("No Excluded Folders").tint(Tint::Dim)] } else { folders };
             page(
-                "Spotlight",
+                "Search",
                 false,
                 vec![
                     Group::new(kinds).header("RESULTS").footer("Turn off a kind of result to keep it out of Search."),
@@ -2395,7 +2395,7 @@ mod tests {
         let labels: Vec<&str> = s.groups.iter().flat_map(|g| g.items.iter().map(|i| i.label.as_str())).collect();
         assert_eq!(labels[..4], ["BifrOSt Account", "Airplane Mode", "Wi-Fi", "Bluetooth"]);
         assert_eq!(labels[4..8], ["Notifications", "Sounds", "Focus", "Screen Time"]);
-        assert_eq!(labels[8..], ["General", "Control Center", "Menu Bar", "Display & Brightness", "Home Screen & Dock", "Overview", "Sharing", "Print & Scan", "Keyboard Shortcuts", "Assistant", "Trackpad", "Mouse", "Users & Groups", "Accessibility", "Wallpaper", "Screen Saver", "Battery", "Privacy", "Spotlight", "Lock Screen", "Passcode", "Passwords", "Internet Accounts", "Developer"]);
+        assert_eq!(labels[8..], ["General", "Control Center", "Menu Bar", "Display & Brightness", "Home Screen & Dock", "Overview", "Sharing", "Print & Scan", "Keyboard Shortcuts", "Assistant", "Trackpad", "Mouse", "Users & Groups", "Accessibility", "Wallpaper", "Screen Saver", "Battery", "Privacy", "Search", "Lock Screen", "Passcode", "Passwords", "Internet Accounts", "Developer"]);
         assert_eq!(s.groups[1].items[1].value, "WIFI-5G");
         // Sharing, Trackpad, Mouse and Users & Groups sit before Wallpaper
         assert_eq!(s.groups[3].items[14].value, "Lake Day");
@@ -2517,11 +2517,11 @@ mod tests {
         assert_eq!((icon("Ethernet"), icon("VPN")), (Some(Icon::Ethernet), Some(Icon::Vpn)));
         let root = spec(PageId::Root, &model(&info, &opts));
         let icon = |label: &str| root.groups.iter().flat_map(|g| g.items.iter()).find(|i| i.label == label).and_then(|i| i.icon);
-        for (label, want) in [("BifrOSt Account", Icon::Account), ("Print & Scan", Icon::Printer), ("Keyboard Shortcuts", Icon::Keyboard), ("Assistant", Icon::Assistant), ("Trackpad", Icon::Trackpad), ("Mouse", Icon::Mouse), ("Spotlight", Icon::Search), ("Network", Icon::Network)] {
+        for (label, want) in [("BifrOSt Account", Icon::Account), ("Print & Scan", Icon::Printer), ("Keyboard Shortcuts", Icon::Keyboard), ("Assistant", Icon::Assistant), ("Trackpad", Icon::Trackpad), ("Mouse", Icon::Mouse), ("Search", Icon::Search), ("Network", Icon::Network)] {
             assert_eq!(icon(label), Some(want), "{label}");
         }
         // every pane row has a tile of its own kind: none of the listed ones is the gear any more
-        for label in ["Print & Scan", "Keyboard Shortcuts", "Assistant", "Trackpad", "Mouse", "Spotlight"] {
+        for label in ["Print & Scan", "Keyboard Shortcuts", "Assistant", "Trackpad", "Mouse", "Search"] {
             assert_ne!(icon(label), Some(Icon::General), "{label}");
         }
     }
