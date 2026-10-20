@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.13.5 — 2026-10-20
+
+- Music no longer repaints in a loop while the audio service is failing. A service that accepts the connection and
+  closes it again was reconnected at once, again and again, and every round redrew the window; the client now waits
+  1 s, 2 s, 4 s, up to 30 s between attempts after a connection that did not hold.
+- A station that could not be tuned in because the service was away is tried again on the same schedule (1 s, 2 s,
+  4 s, up to 30 s) and starts by itself when the service returns. Pausing, skipping or choosing another station or song
+  ends the retries.
+- The same failure message shown again no longer repaints the window, and a repaint that would draw the very
+  pixels already on screen is not sent to the shell. `BIFROST_FRAME_STATS=1` logs, once a second, how many repaints the
+  app asked for and from where (finished jobs, the audio service, motion).
+
 ## 1.13.4 — 2026-10-20
 
 - Radio plays again. The app's audio service client was created lazily and never connected, so a station or a song

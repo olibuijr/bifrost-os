@@ -29,6 +29,7 @@ pub mod equalizer;
 pub mod upnext;
 pub mod miniplayer;
 pub mod playback;
+pub mod retry;
 pub mod visualizer;
 
 use bifrost_app::layout::{top_inset, UNIFIED_BAR_PT};
@@ -281,6 +282,32 @@ struct Labels {
     mini_artist: Image,
 }
 
+/// Where the app's repaints came from since the last report: finished jobs, the audio service's state, motion
+/// (scrolling, easing). With `BIFROST_FRAME_STATS=1` one line a second names them while the app keeps repainting, so
+/// an app that draws without cause shows who asked.
+#[derive(Default)]
+pub struct RepaintWhy {
+    jobs: u32,
+    player: u32,
+    motion: u32,
+    asked: u32,
+    since: f64,
+}
+
+impl RepaintWhy {
+    /// Counts a turn that asked for a repaint (`asked`) and, once a second, prints the sources when the stats are on.
+    fn report(&mut self, t: f64, asked: bool) {
+        self.asked += asked as u32;
+        if t - self.since < 1000.0 {
+            return;
+        }
+        if self.asked > 4 && std::env::var_os("BIFROST_FRAME_STATS").is_some_and(|v| v == "1") {
+            eprintln!("music: {} turns asked for a repaint in the last second (jobs {}, audio service {}, motion {})", self.asked, self.jobs, self.player, self.motion);
+        }
+        *self = RepaintWhy { since: t, ..RepaintWhy::default() };
+    }
+}
+
 pub struct Music {
     w: i32,
     h: i32,
@@ -300,6 +327,10 @@ pub struct Music {
     player: AudioPlayer,
     /// why the last playback command could not be sent (the audio service is down), until it connects
     notice: Option<String>,
+    /// the station tune-in to send again while the audio service cannot be reached (`retry`)
+    retry: retry::Retry,
+    /// where the app's repaints came from in the last second (shown with `BIFROST_FRAME_STATS=1`)
+    why: RepaintWhy,
     library: Library,
     /// album index of every song, by song id
     album_of: Vec<usize>,
@@ -469,6 +500,8 @@ impl Music {
             logo_failed: HashSet::new(),
             player,
             notice: None,
+            retry: retry::Retry::default(),
+            why: RepaintWhy::default(),
             library: Library::default(),
             album_of: Vec::new(),
             scanning: true,
@@ -809,6 +842,8 @@ impl Music {
     pub fn next_wake(&self, t: f64) -> Option<f64> {
         let busy = self.scanning || self.scroll.animating() || self.np_anim.is_some() || !self.art_pending.is_empty() || !self.logo_pending.is_empty();
         let wake = t + if busy { 50.0 } else { 250.0 };
+        // a command to the audio service that is waiting for its retry
+        let wake = self.retry.next_wake().map_or(wake, |at| wake.min(at.max(t)));
         Some(self.player.next_wake(t).map_or(wake, |w| w.min(wake)))
     }
 
@@ -819,6 +854,7 @@ impl Music {
     pub fn pump(&mut self, ui: &Ui) -> bool {
         let finished: Vec<Done> = self.pool.drain().into_iter().chain(self.net.drain()).collect();
         let mut changed = !finished.is_empty();
+        self.why.jobs += finished.len() as u32;
         for done in finished {
             self.apply(done);
         }
@@ -826,10 +862,13 @@ impl Music {
             self.bpm_pending.remove(&path);
             self.bpm.insert(path, bpm);
             changed = true;
+            self.why.jobs += 1;
         }
         self.start_tempo();
         self.player.drain(now_ms());
-        changed |= self.refresh(ui);
+        let player = self.refresh(ui);
+        self.why.player += player as u32;
+        changed |= player;
         self.sync_smart();
         self.dirty |= changed;
         changed
@@ -926,6 +965,10 @@ impl Music {
         }
         if self.notice.is_some() && self.player.connected() {
             self.notice = None;
+        }
+        // the station plays: nothing is left to retry
+        if snap.playing {
+            self.retry.cancel();
         }
         // every playback error reaches the log with its cause, once per change
         if snap.error != self.snap.error {
@@ -1684,6 +1727,7 @@ impl Music {
     /// the engine's own shuffle stays off), keeping the position and the
     /// paused state, and saves it.
     fn push_queue(&mut self, position_ms: f64, playing: bool) {
+        self.retry.cancel();
         let tracks: Vec<Track> = self.queue.items().iter().filter_map(|p| self.path_id.get(p).map(|&id| Track::file(id as u64, p.clone()))).collect();
         let sent = self.player.play_queue(tracks, self.queue.current(), false, self.seed);
         self.report("play the queue", sent);
@@ -1774,6 +1818,8 @@ impl Music {
     /// station already tuned is left alone, or tuned in again when paused
     /// (a paused stream is stale; resuming means going live).
     fn play_station(&mut self, i: usize) {
+        // a choice ends the retries of the one before
+        self.retry.cancel();
         let stations = self.radio.stations();
         let order = self.radio.order();
         let Some(&chosen) = order.get(i) else { return };
@@ -1782,10 +1828,33 @@ impl Music {
             self.resume_live();
             return;
         }
-        let tracks: Vec<Track> = order.into_iter().map(|s| Track::live(stations[s].id, stations[s].stream_url.clone())).collect();
+        self.tune_in(i, id);
+    }
+
+    /// Sends the station list as the queue, starting at the `i`-th station (`id`). A command the audio service could not
+    /// take is kept for `retry`.
+    fn tune_in(&mut self, i: usize, id: u64) {
+        let stations = self.radio.stations();
+        let tracks: Vec<Track> = self.radio.order().into_iter().map(|s| Track::live(stations[s].id, stations[s].stream_url.clone())).collect();
         let sent = self.player.play_queue(tracks, i, false, self.seed);
+        if sent.is_err() {
+            self.retry.arm(retry::Wanted::Station(id), self.last_t);
+        } else {
+            self.retry.cancel();
+        }
         self.report("tune in the station", sent);
         self.take_snapshot();
+    }
+
+    /// The retry of a tune-in whose wait is over. A station that left the list is forgotten; a service that is still
+    /// away leaves the wish on its (longer) schedule.
+    fn retry_due(&mut self, t: f64) {
+        let Some(retry::Wanted::Station(id)) = self.retry.take_due(t) else { return };
+        let position = self.radio.order().iter().position(|&s| self.radio.stations()[s].id == id);
+        match position {
+            Some(i) => self.tune_in(i, id),
+            None => self.retry.cancel(),
+        }
     }
 
     /// Records the outcome of a command to the audio service: a failure goes to stderr with its cause and stays on
@@ -1795,8 +1864,11 @@ impl Music {
             Ok(()) => self.notice = None,
             Err(cause) => {
                 eprintln!("music: cannot {what}: {cause}");
-                self.notice = Some(cause);
-                self.dirty = true;
+                // the screen changes only when the message does: the same failure again (a retry) is not a repaint
+                if self.notice.as_deref() != Some(cause.as_str()) {
+                    self.notice = Some(cause);
+                    self.dirty = true;
+                }
             }
         }
     }
@@ -1812,6 +1884,9 @@ impl Music {
         if !self.snap.playing {
             if let Some(i) = self.snap.index {
                 let sent = self.player.jump_to(i);
+                if let (Err(_), Some(id)) = (&sent, self.snap.track.as_ref().map(|t| t.id)) {
+                    self.retry.arm(retry::Wanted::Station(id), self.last_t);
+                }
                 self.report("resume the stream", sent);
             }
         }
@@ -1821,6 +1896,8 @@ impl Music {
     /// A transport control from any surface (sheet, mini player, lock
     /// screen, Control Center).
     pub fn control(&mut self, target: nowplaying::Target) {
+        // pausing, skipping or any other transport choice is the person's: nothing is retried behind it
+        self.retry.cancel();
         match target {
             nowplaying::Target::Play if self.is_live() && !self.snap.playing => self.resume_live(),
             nowplaying::Target::Play => {
@@ -2266,6 +2343,7 @@ impl Music {
                 (Page::Info, _) => {}
                 (Page::Queue, _) => {
                     if i > 0 && i <= self.queue.upcoming().len() {
+                        self.retry.cancel();
                         let sent = self.player.jump_to(self.queue.current() + i);
                         self.report("jump to the song", sent);
                         self.take_snapshot();
@@ -2450,7 +2528,10 @@ impl Music {
         }
         if self.refresh(ui) {
             self.dirty = true;
+            self.why.player += 1;
         }
+        // a tune-in the audio service could not take is sent again on its schedule
+        self.retry_due(t);
         let target = if self.snap.playing { 1.0 } else { nowplaying::PAUSED_SCALE };
         if (self.art_scale - target).abs() > 0.002 {
             self.art_scale += (target - self.art_scale) * 0.2;
@@ -2465,7 +2546,9 @@ impl Music {
                 self.radio_refresh();
             }
         }
+        self.why.motion += moving as u32;
         self.dirty |= moving;
+        self.why.report(t, self.dirty);
         self.dirty
     }
 
@@ -3363,6 +3446,42 @@ mod tests {
         assert_eq!(m.playback_problem().as_deref(), Some("the audio service is not reachable (no socket)"));
         m.report("tune in the station", Ok(()));
         assert!(m.playback_problem().is_none(), "a command that was sent clears it");
+    }
+
+    #[test]
+    fn the_same_failure_again_is_not_a_repaint() {
+        let dir = folder("same-failure");
+        let mut m = music(&dir);
+        let cause = || Err("the audio service is not reachable (no socket)".to_string());
+        m.report("tune in the station", cause());
+        assert!(m.dirty, "the first failure is shown");
+        m.dirty = false;
+        m.report("tune in the station", cause());
+        assert!(!m.dirty, "the same message again changes nothing on screen");
+        m.report("tune in the station", Err("the audio service is not reachable (refused)".into()));
+        assert!(m.dirty, "another cause is shown");
+    }
+
+    #[test]
+    fn a_failed_tune_in_waits_for_its_retry_and_the_persons_next_choice_ends_it() {
+        let dir = folder("retry-ends");
+        let mut m = music(&dir);
+        // armed a second ago: due at 100 ms on the app clock, before the usual 250 ms wake
+        m.retry.arm(retry::Wanted::Station(99), -900.0);
+        assert_eq!(m.next_wake(10.0), Some(100.0), "the app wakes for the retry");
+        m.retry_due(99.0);
+        assert_eq!(m.retry.pending(), Some(retry::Wanted::Station(99)), "not yet due");
+        // due, but the station is no longer in the list: forgotten, not sent
+        m.retry_due(100.0);
+        assert_eq!(m.retry.pending(), None);
+        // pausing, skipping or any other transport choice ends a pending retry
+        m.retry.arm(retry::Wanted::Station(99), 0.0);
+        m.control(nowplaying::Target::Next);
+        assert_eq!(m.retry.pending(), None, "a transport choice ends the retries");
+        // choosing a song does too
+        m.retry.arm(retry::Wanted::Station(99), 0.0);
+        m.push_queue(0.0, true);
+        assert_eq!(m.retry.pending(), None);
     }
 
     #[test]
