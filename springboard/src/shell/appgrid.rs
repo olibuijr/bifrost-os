@@ -89,7 +89,7 @@ const MANIFEST_CHIP: &[(&str, usize)] = &[
 ];
 
 /// Apps whose manifest category (a work category) is not where people look for them: by app id.
-const ID_CHIP: &[(&str, usize)] = &[("is.olibuijr.messages.desktop", 4), ("is.olibuijr.facetime.desktop", 4)];
+const ID_CHIP: &[(&str, usize)] = &[("is.olibuijr.messages.desktop", 4)];
 
 /// The chip of an installed app from its manifest id and `category`.
 pub(super) fn chip_for_manifest(id: &str, category: &str) -> usize {

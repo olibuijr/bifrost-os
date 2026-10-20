@@ -1082,6 +1082,9 @@ pub struct QuickSearch {
     searches_header: Image,
     /// (app, 60 pt icon, 29 pt icon, label)
     icons: Vec<(AppId, Image, Image, Image)>,
+    /// the app icons resized to the Golden Gate row's icon square, so they match the pane tiles; rebuilt by `search`
+    /// whenever the square changes (another scale) or the icons were reset
+    row_icons: Vec<(AppId, Image)>,
     sections: Vec<Section>,
     /// the row the arrow keys moved to: (section, row); Return opens it instead of the Top Hit
     selected: Option<(usize, usize)>,
@@ -1194,6 +1197,7 @@ impl QuickSearch {
             search_imgs: vec![],
             searches_header: ui.text("Recent Searches", 20.0, Weight::Semibold, WHITE),
             icons: vec![],
+            row_icons: vec![],
             sections: vec![],
             selected: None,
             thumbs: vec![],
@@ -1301,6 +1305,7 @@ impl QuickSearch {
     /// or an install).
     pub fn clear_icons(&mut self) {
         self.icons.clear();
+        self.row_icons.clear();
     }
 
     /// Icons for the suggestion row and the result rows, from the home
@@ -1315,6 +1320,7 @@ impl QuickSearch {
                 (app, img.resized(big, big), img.resized(small, small), label)
             })
             .collect();
+        self.row_icons.clear();
     }
 
     pub fn has_icons(&self) -> bool {
@@ -1631,6 +1637,10 @@ impl QuickSearch {
         // thumbnails are fitted to the row's icon square; a size change (another scale) reloads them
         let isz = self.px(ui, m.row_icon).round() as usize;
         self.thumbs.retain(|(_, s, _)| *s == isz);
+        if self.mac && self.row_icons.first().map_or(!self.icons.is_empty(), |(_, img)| img.h != isz) {
+            // the 60 pt icons are the sharpest source for the (larger) Golden Gate row square
+            self.row_icons = self.icons.iter().map(|(app, big, ..)| (*app, big.resized(isz, isz))).collect();
+        }
         if self.thumbs.len() > 64 {
             self.thumbs.clear();
         }
@@ -2126,10 +2136,12 @@ impl QuickSearch {
                     if let Some(img) = thumb_img {
                         s.blit(img, (ix + (isz - img.w as f32) / 2.0) as i32, (iy + (isz - img.h as f32) / 2.0) as i32, 255, alpha);
                     }
-                    let icon = app.and_then(|app| self.icons.iter().find(|(a, ..)| *a == app)).map(|(_, _, small, _)| small);
+                    let sized = app.and_then(|app| self.row_icons.iter().find(|(a, _)| *a == app)).map(|(_, img)| img).filter(|img| self.mac && img.h == isz.round() as usize);
+                    let icon = sized.or_else(|| app.and_then(|app| self.icons.iter().find(|(a, ..)| *a == app)).map(|(_, _, small, _)| small));
                     match (icon, result_symbol(hit)) {
+                        // an app icon: the row-square copy fills the slot, the 29 pt one is centred in it
                         (Some(small), _) if thumb_img.is_none() => {
-                            s.blit(small, ix as i32, iy as i32, 255, alpha);
+                            s.blit(small, (ix + (isz - small.w as f32) / 2.0) as i32, (iy + (isz - small.h as f32) / 2.0) as i32, 255, alpha);
                         }
                         // a Settings result, a shell action or a Now Playing command: the symbol of its pane
                         (None, Some(Symbol::Tile(icon))) if thumb_img.is_none() => {
@@ -3132,7 +3144,7 @@ mod file_actions_tests {
         let u = ui();
         let mut q = QuickSearch::new(&u, 800.0, 1.0);
         let file = Hit::File { path: PathBuf::from("/home/me/a.txt"), name: "a.txt".into() };
-        let section = |u: &Ui| Section { header: u.text("Files", 20.0, Weight::Semibold, WHITE), rows: vec![(file.clone(), u.text("a.txt", 13.0, Weight::Regular, WHITE))] };
+        let section = |u: &Ui| Section { header: u.text("Files", 20.0, Weight::Semibold, WHITE), rows: vec![(file.clone(), u.text("a.txt", 13.0, Weight::Regular, WHITE))], subs: vec![None] };
         q.sections = vec![section(&u)];
         assert_eq!(q.key(&u, 800, Out::Text(" ".into()), 0.0), None, "no row selected: the space is typed");
         assert_eq!(q.query(), " ");
