@@ -86,7 +86,7 @@ pub struct Installed {
 }
 
 /// BifrOSt's font library in the data dir `dir`: the open fonts the system ships (packed by `tools/pack.py`,
-/// seeded from `/usr/share/springboard/assets/fonts`) and fonts that apps install. Settings offers only these,
+/// seeded from the package-owned `/usr/share/springboard/system-assets/fonts`) and fonts that apps install. Settings offers only these,
 /// never the host's or the distribution packages' fonts.
 pub fn library(dir: &str) -> PathBuf {
     Path::new(dir).join("fonts")

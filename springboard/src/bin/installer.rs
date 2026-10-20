@@ -76,7 +76,8 @@ fn run() -> std::io::Result<()> {
         };
     }
 
-    let assets = std::env::var("BIFROST_ASSETS").unwrap_or_else(|_| "/usr/share/springboard/assets".into());
+    // the live medium keeps its assets in the legacy directory; BIFROST_ASSETS still overrides (bifrost_core::system_assets)
+    let assets = bifrost_core::system_assets::root_string();
     let branding = std::env::var("BIFROST_BRANDING").unwrap_or_else(|_| "/usr/share/bifrost/installer".into());
     let font = Font::parse(sys::map_file(&format!("{assets}/SFUI.ttf"))?).ok_or_else(|| std::io::Error::other("bad font"))?;
     let wayland = std::env::var_os("SPRINGBOARD_WAYLAND").is_some();

@@ -1,6 +1,6 @@
 //! A small drawing surface for thumbnails: a pixel buffer, the UI font at a scale chosen so that a page of
 //! `logical_w` points fills the buffer, and a few drawing calls in points. Fonts come from the shell's assets
-//! directory (`BIFROST_ASSETS`, else the installed path, else the source tree's `assets`); with no font the canvas
+//! directory (`BIFROST_ASSETS`, else the installed paths, else the source tree's `assets`); with no font the canvas
 //! cannot be made and a provider answers with the type icon.
 
 use bifrost_render::font::Font;
@@ -22,11 +22,8 @@ pub const RED: u32 = pack(255, 59, 48, 255);
 fn font_bytes() -> Option<&'static [u8]> {
     static BYTES: OnceLock<Option<&'static [u8]>> = OnceLock::new();
     *BYTES.get_or_init(|| {
-        let mut dirs: Vec<PathBuf> = Vec::new();
-        if let Some(d) = std::env::var_os("BIFROST_ASSETS") {
-            dirs.push(PathBuf::from(d));
-        }
-        dirs.push(PathBuf::from(crate::first_frame_cache::ASSETS));
+        // the override, the package-owned assets, the legacy directory, then the source tree
+        let mut dirs: Vec<PathBuf> = bifrost_core::system_assets::candidates();
         dirs.push(PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/assets")));
         dirs.iter().find_map(|d| std::fs::read(d.join(crate::first_frame_cache::MENU_FONT)).ok()).map(|v| &*Box::leak(v.into_boxed_slice()))
     })

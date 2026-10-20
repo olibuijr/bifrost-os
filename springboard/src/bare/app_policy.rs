@@ -459,7 +459,7 @@ pub fn command(
         .env("BIFROST_APP_ID", id)
         .env(bifrost_ui::form_factor::ENV, form.as_str())
         .env("BIFROST_DATA", data)
-        .env("BIFROST_SHELL_DIR", "/usr/share/springboard/assets");
+        .env("BIFROST_SHELL_DIR", bifrost_core::system_assets::root());
     if policy.log_store {
         c.env("BIFROST_ENTITLEMENTS", bifrost_core::log::ENTITLEMENT);
     }

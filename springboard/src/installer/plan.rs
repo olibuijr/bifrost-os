@@ -698,12 +698,24 @@ impl Run<'_> {
     }
 }
 
-/// Files the installer needs from the live medium. The boot loader goes to the ESP after pacstrap. The shell's assets and
-/// installer media are not in the `springboard-shell` update package (it is built without assets), so they come from here.
-/// The shell, its units and session come from the package, which is installed last so it wins any overlap.
+/// Files the installer needs from the live medium. The boot loader goes to the ESP after pacstrap. The installer media are
+/// not in the `springboard-shell` update package, so they come from here. The shell's assets come from the package too
+/// (`bifrost_core::system_assets::SYSTEM_ASSETS`, so updates can change them); the medium's copy is only a fallback for a
+/// package older than that (`live_assets_needed`). The shell, its units and session come from the package.
 /// They are copied into RAM first: if the medium is a network CD that drops out half way, the install can still finish.
 const LIVE_FILES: &[&str] = &["/usr/share/bifrost/bootweave.efi"];
-const LIVE_DIRS: &[&str] = &["/usr/share/springboard/assets", "/usr/share/bifrost/installer", "/usr/share/bifrost/video"];
+const LIVE_DIRS: &[&str] = &[LIVE_ASSETS, "/usr/share/bifrost/installer", "/usr/share/bifrost/video"];
+/// The live medium's asset directory (no package owns it there).
+const LIVE_ASSETS: &str = bifrost_core::system_assets::LEGACY_ASSETS;
+/// Live-medium directories copied into the target before the package is installed, as (source, destination directory):
+/// installer media only, never the shell's assets.
+const PRE_PACKAGE_COPIES: &[(&str, &str)] = &[("/usr/share/bifrost/installer", "/usr/share/bifrost/"), ("/usr/share/bifrost/video", "/usr/share/bifrost/")];
+
+/// Whether the live medium's assets must be copied into the target: only when the installed `springboard-shell` did not
+/// bring its own `system-assets` (a package older than that). Otherwise the target has no unowned asset copy at all.
+fn live_assets_needed(target: &Path) -> bool {
+    !bifrost_core::system_assets::provided_under(target)
+}
 const STAGE: &str = "/run/bifrost-stage";
 
 /// Waits (at most 2 min) while the lab sync is still writing the newest installer files and assets into the medium:
@@ -903,19 +915,28 @@ pub fn install(cfg: &Config, progress: &Shared) {
         }
 
         r.set(2, 86, "Installing the desktop");
-        // installer media only: bootweave.efi and wayland/ are owned by the package, and pacman refuses to overwrite files it does not own
-        for (src, dst) in [("/usr/share/springboard/assets", "/usr/share/springboard/"), ("/usr/share/bifrost/installer", "/usr/share/bifrost/"), ("/usr/share/bifrost/video", "/usr/share/bifrost/")] {
+        // installer media only: bootweave.efi and wayland/ are owned by the package, and pacman refuses to overwrite files it does not own.
+        // The shell's assets are not copied here: the package owns them (system-assets).
+        for &(src, dst) in PRE_PACKAGE_COPIES {
             std::fs::create_dir_all(sys(dst)).map_err(|e| e.to_string())?;
             r.cmd(&["cp", "-a", &format!("{STAGE}{src}"), &sys(dst)])?;
         }
-        // the live medium can be older than the packed assets the lab sync brought: drop what the packed set no longer has
-        prune_assets(std::path::Path::new(&sys("/usr/share/springboard/assets"))).map_err(|e| format!("assets: {e}"))?;
         // The package owns the shell, units, session and apps. Installing it here, from the same
         // repo System Update uses, keeps one source of truth and no fake pacman registration.
         if let Some(bundle) = offline.as_ref() {
             install_offline_desktop(&r, bundle)?;
         } else {
             r.chroot(&["pacman", "-Sy", "--noconfirm", "--overwrite", "*", "springboard-shell"])?;
+        }
+
+        // a package older than system-assets brings no assets: fall back to the live medium's copy, pruned to the packed set
+        if live_assets_needed(Path::new("/mnt")) {
+            r.log("the installed package has no system-assets; copying the live medium's assets".to_string());
+            let dst = "/usr/share/springboard/";
+            std::fs::create_dir_all(sys(dst)).map_err(|e| e.to_string())?;
+            r.cmd(&["cp", "-a", &format!("{STAGE}{LIVE_ASSETS}"), &sys(dst)])?;
+            // the live medium can be older than the packed assets the lab sync brought: drop what the packed set no longer has
+            prune_assets(Path::new(&sys(LIVE_ASSETS))).map_err(|e| format!("assets: {e}"))?;
         }
 
         r.set(2, 89, if offline.is_some() { "Installing bundled desktop apps" } else { "Installing default apps from App Store" });
@@ -996,9 +1017,11 @@ pub fn install(cfg: &Config, progress: &Shared) {
         let _ = r.chroot(&["bifrost-update-guard", "uki"]);
 
         // the first frame's caches for this machine's panel, written into the target before it is unmounted (boot-08)
-        if let (Some((panel, scale)), Some(wp)) = (crate::first_frame_cache::installed_panel(), crate::first_frame_cache::wallpaper_path(LIVE_DIRS[0], &cfg.wallpaper)) {
+        // (from the assets the target will run with: its own system-assets, else the copy made above)
+        let installed_assets = bifrost_core::system_assets::root_under(Path::new("/mnt")).to_string_lossy().into_owned();
+        if let (Some((panel, scale)), Some(wp)) = (crate::first_frame_cache::installed_panel(), crate::first_frame_cache::wallpaper_path(&installed_assets, &cfg.wallpaper)) {
             let dir = std::path::Path::new("/mnt").join(crate::first_frame_cache::CACHE_DIR.trim_start_matches('/'));
-            if let Err(e) = crate::first_frame_cache::build_into(&dir, panel, scale, LIVE_DIRS[0], &wp) {
+            if let Err(e) = crate::first_frame_cache::build_into(&dir, panel, scale, &installed_assets, &wp) {
                 r.log(format!("first-frame cache skipped: {e}"));
             }
         }
@@ -1142,6 +1165,32 @@ mod tests {
         left.sort();
         assert_eq!(left, ["SFUI.ttf", "SFUIMono.ttf", "Symbols.ttf", "fonts/Geist-Variable.ttf", "wallpaper.raw", "wallpapers/index.ini", "wallpapers/kirkjufell_dusk.raw", "wallpapers/kirkjufell_dusk.thumb.raw"]);
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn the_plan_no_longer_copies_the_live_assets_before_the_package() {
+        for (src, dst) in super::PRE_PACKAGE_COPIES {
+            assert!(!src.contains("springboard"), "{src}: the shell's assets belong to the package");
+            assert!(!dst.contains("springboard"), "{dst}: nothing is copied under /usr/share/springboard before the package");
+        }
+        // the medium's assets stay staged in RAM only as the fallback and are never one of the pre-package copies
+        assert!(super::LIVE_DIRS.contains(&super::LIVE_ASSETS));
+        assert!(super::PRE_PACKAGE_COPIES.iter().all(|(src, _)| *src != super::LIVE_ASSETS));
+    }
+
+    #[test]
+    fn the_live_assets_are_copied_only_when_the_package_has_no_system_assets() {
+        let root = std::env::temp_dir().join(format!("plan-system-assets-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let dir = root.join("usr/share/springboard/system-assets");
+        std::fs::create_dir_all(&dir).unwrap();
+        assert!(super::live_assets_needed(&root), "an empty directory is no package content");
+        std::fs::remove_dir_all(root.join("usr/share/springboard")).unwrap();
+        assert!(super::live_assets_needed(&root), "an older package");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("SFUI.ttf"), b"x").unwrap();
+        assert!(!super::live_assets_needed(&root), "the package brought its assets");
+        std::fs::remove_dir_all(&root).unwrap();
     }
 
     fn walk(root: &std::path::Path, d: &std::path::Path) -> Vec<String> {

@@ -25,8 +25,11 @@ use std::sync::OnceLock;
 
 /// The cache directory on an installed system. The installer writes the same path under the target root.
 pub const CACHE_DIR: &str = "/var/cache/bifrost/first-frame";
-/// The shell's assets on an installed system (`wallpaper.raw`, `wallpapers/`, `icons/`, `SFUI.ttf`).
-pub const ASSETS: &str = "/usr/share/springboard/assets";
+/// The shell's assets on an installed system (`wallpaper.raw`, `wallpapers/`, `icons/`, `SFUI.ttf`): the package-owned
+/// directory, else the legacy one (`bifrost_core::system_assets`).
+pub fn assets() -> String {
+    bifrost_core::system_assets::root_string()
+}
 /// The file in `CACHE_DIR`.
 pub const FILE: &str = "first-frame.ffc";
 /// File magic and format version. A different version is never read.
@@ -313,9 +316,10 @@ pub fn invalidate(dir: &Path) {
 /// update (`springboard --first-frame-cache`); a shell whose wallpaper or scale differs misses and rebuilds for its own.
 pub fn rebuild_default() -> io::Result<()> {
     let (panel, scale) = installed_panel().ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "no connected panel"))?;
-    let wallpaper = wallpaper_path(ASSETS, "").ok_or_else(|| io::Error::other("no default wallpaper"))?;
+    let assets = assets();
+    let wallpaper = wallpaper_path(&assets, "").ok_or_else(|| io::Error::other("no default wallpaper"))?;
     invalidate(Path::new(CACHE_DIR));
-    build_into(Path::new(CACHE_DIR), panel, scale, ASSETS, &wallpaper)
+    build_into(Path::new(CACHE_DIR), panel, scale, &assets, &wallpaper)
 }
 
 /// Builds the cache for this shell's panel and layout scale in a background thread, into `CACHE_DIR`. The shell calls
