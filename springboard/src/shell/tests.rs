@@ -2184,6 +2184,8 @@
         let _ = std::fs::remove_dir_all(&dir);
         sh.data_dir = dir.clone();
         sh.photo_dirs = vec![dir.join("Pictures")];
+        // pictures go to the account's Desktop unless told otherwise; this test looks at the library's folder
+        sh.shot_dir = Some(dir.join("Pictures"));
         sh.set_wall(1_791_073_395, 0, 1000.0);
         unlock(&mut sh);
         let mut buf = vec![0u32; 1200 * 1920];

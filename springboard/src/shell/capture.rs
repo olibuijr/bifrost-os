@@ -6,16 +6,23 @@
 use super::ui::{Ui, Weight, CARD_BG, SECONDARY, TINT, WHITE};
 use crate::gfx::{pack, Image, Surface};
 use crate::layout::Rect;
+use crate::symbols::Symbol;
+use std::path::{Path, PathBuf};
 
 /// A region with a side shorter than this many points is a click, not a selection.
 const MIN_SIDE_PT: f32 = 4.0;
 /// A window capture takes this much of the shadow around the frame, in points.
-const SHADOW_PT: f32 = 24.0;
-/// The toolbar's height and its distance from the bottom edge, in points.
+pub const SHADOW_PT: f32 = 24.0;
+/// The toolbar's height in points, its distance from the bottom edge when there is no Dock, and the gap kept above a Dock.
 const BAR_PT: f32 = 44.0;
 const BOTTOM_PT: f32 = 28.0;
-/// Button label size in points.
-const LABEL_PT: f32 = 15.0;
+const DOCK_GAP_PT: f32 = 12.0;
+/// A toolbar button's width and its icon's size, in points.
+const BUTTON_PT: f32 = 40.0;
+const ICON_PT: f32 = 18.0;
+/// Text size of the tooltip that names the button under the pointer, and of the Options rows.
+const LABEL_PT: f32 = 13.0;
+const MENU_PT: f32 = 15.0;
 /// The countdown's numerals, in points.
 const COUNT_PT: f32 = 72.0;
 /// What is not captured is dimmed: black at 40 per cent (premultiplied, so the colour is zero).
@@ -114,7 +121,7 @@ pub fn with_shadow(r: Rect, s: f32, w: i32, h: i32) -> Rect {
     Rect { x: x0, y: y0, w: (x1 - x0).max(0), h: (y1 - y0).max(0) }
 }
 
-/// A countdown that started at `start` (seconds on the shell's clock) and runs for `secs`.
+/// A countdown that started at `start` (the shell's clock, in milliseconds) and runs for `secs` seconds.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Countdown {
     start: f64,
@@ -128,13 +135,13 @@ impl Countdown {
 
     /// The seconds still to wait at `t`, rounded up: the timer shows 5, 4, ... 1 and the capture follows.
     pub fn left(&self, t: f64) -> u32 {
-        let elapsed = (t - self.start).max(0.0);
+        let elapsed = (t - self.start).max(0.0) / 1000.0;
         (self.secs as f64 - elapsed).ceil().max(0.0) as u32
     }
 
-    /// When the countdown ends.
+    /// When the countdown ends, in the shell's milliseconds.
     pub fn end(&self) -> f64 {
-        self.start + self.secs as f64
+        self.start + self.secs as f64 * 1000.0
     }
 
     pub fn done(&self, t: f64) -> bool {
@@ -153,12 +160,69 @@ pub enum Tool {
     Cancel,
 }
 
-/// Where a recording is saved: a folder in the home directory.
+impl Tool {
+    /// The button's name, shown as its tooltip (the buttons themselves are icons).
+    pub fn label(self) -> &'static str {
+        match self {
+            Tool::Pick(Pick::Region) => "Capture Selected Portion",
+            Tool::Pick(Pick::Window) => "Capture Selected Window",
+            Tool::Pick(Pick::Screen) => "Capture Entire Screen",
+            Tool::Record(Pick::Region) => "Record Selected Portion",
+            Tool::Record(_) => "Record Entire Screen",
+            Tool::Options => "Options",
+            Tool::Cancel => "Close",
+        }
+    }
+}
+
+/// The toolbar's buttons, left to right.
+pub const TOOLS: [Tool; 7] = [
+    Tool::Pick(Pick::Screen),
+    Tool::Pick(Pick::Window),
+    Tool::Pick(Pick::Region),
+    Tool::Record(Pick::Screen),
+    Tool::Record(Pick::Region),
+    Tool::Options,
+    Tool::Cancel,
+];
+
+/// Where the toolbar goes: the free strip of a `w` by `h` screen above a bottom Dock (or beside a side Dock), as
+/// `(left, right, bottom)` in px. `dock` is the Dock's frame, `s` the points-to-pixels scale. Derived from the frame, so
+/// it follows the Dock's size, position and any screen size.
+pub fn free_strip(dock: Option<Rect>, w: i32, h: i32, s: f32) -> (i32, i32, i32) {
+    let gap = (DOCK_GAP_PT * s).round() as i32;
+    let floor = h - (BOTTOM_PT * s).round() as i32;
+    let Some(d) = dock.filter(|d| d.w > 0 && d.h > 0) else { return (0, w, floor) };
+    if d.w >= d.h {
+        // along the bottom edge (or the top): the bar sits above its top edge
+        let bottom = if d.y + d.h / 2 >= h / 2 { (d.y - gap).min(floor) } else { floor };
+        (0, w, bottom.max(0))
+    } else if d.x + d.w / 2 < w / 2 {
+        (d.x + d.w + gap, w, floor)
+    } else {
+        (0, d.x - gap, floor)
+    }
+}
+
+/// The toolbar's bar for `n` buttons in a screen of `w` by `h`, `s` px per point, centred in the free strip.
+pub fn bar_rect(dock: Option<Rect>, w: i32, h: i32, s: f32, n: usize) -> Rect {
+    let pad = (8.0 * s).round() as i32;
+    let gap = (6.0 * s).round() as i32;
+    let button = (BUTTON_PT * s).round() as i32;
+    let bar_h = (BAR_PT * s).round() as i32;
+    let bar_w = n as i32 * button + (n as i32 - 1).max(0) * gap + 2 * pad;
+    let (left, right, bottom) = free_strip(dock, w, h, s);
+    let x = (left + (right - left - bar_w) / 2).clamp(0, (w - bar_w).max(0));
+    Rect { x, y: (bottom - bar_h).max(0), w: bar_w, h: bar_h }
+}
+
+/// Where a picture or a recording is saved: a folder in the home directory. The Desktop is the default.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum SaveTo {
     #[default]
     Desktop,
     Documents,
+    Pictures,
 }
 
 impl SaveTo {
@@ -167,6 +231,21 @@ impl SaveTo {
         match self {
             SaveTo::Desktop => "Desktop",
             SaveTo::Documents => "Documents",
+            SaveTo::Pictures => "Pictures",
+        }
+    }
+
+    /// The folder for the account whose home is `home`.
+    pub fn dir(self, home: &Path) -> PathBuf {
+        home.join(self.folder())
+    }
+
+    /// The next choice in the Options menu's cycle.
+    fn next(self) -> SaveTo {
+        match self {
+            SaveTo::Desktop => SaveTo::Documents,
+            SaveTo::Documents => SaveTo::Pictures,
+            SaveTo::Pictures => SaveTo::Desktop,
         }
     }
 }
@@ -175,7 +254,7 @@ impl SaveTo {
 /// starts from them.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Prefs {
-    /// the folder a recording is saved to
+    /// the folder a picture or a recording is saved to, in the account's home (the Desktop unless Options says otherwise)
     pub save_to: SaveTo,
     /// seconds to wait before a capture: 0, 5 or 10
     pub timer: u32,
@@ -201,12 +280,7 @@ impl Prefs {
     /// Applies a menu row: Save To and Timer cycle through their choices, the switches flip.
     pub fn choose(&mut self, row: OptionRow) {
         match row {
-            OptionRow::SaveTo => {
-                self.save_to = match self.save_to {
-                    SaveTo::Desktop => SaveTo::Documents,
-                    SaveTo::Documents => SaveTo::Desktop,
-                }
-            }
+            OptionRow::SaveTo => self.save_to = self.save_to.next(),
             OptionRow::Timer => self.timer = next_timer(self.timer),
             OptionRow::Pointer => self.pointer = !self.pointer,
             OptionRow::Microphone => self.microphone = !self.microphone,
@@ -248,6 +322,12 @@ pub struct Session {
     pub record: bool,
     /// The Options menu is open above the bar.
     pub menu: bool,
+    /// Whether the toolbar is shown: Shift-Cmd-5 shows it, Shift-Cmd-4 goes straight to the crosshair without it.
+    pub bar: bool,
+    /// The Dock's frame, which the toolbar keeps clear of (set by the shell from the Dock's own frame; None without a Dock).
+    pub dock: Option<Rect>,
+    /// The window the pending window capture picked, without its shadow.
+    pub window: Option<Rect>,
 }
 
 impl Default for Session {
@@ -264,7 +344,23 @@ impl Session {
 
     /// A fresh session that starts with the options the shell kept from the last one.
     pub fn with_prefs(prefs: Prefs) -> Self {
-        Session { pick: Pick::Region, prefs, at: (0.0, 0.0), drag: Drag::default(), pressed: None, pending: None, record: false, menu: false }
+        Session { pick: Pick::Region, prefs, at: (0.0, 0.0), drag: Drag::default(), pressed: None, pending: None, record: false, menu: false, bar: true, dock: None, window: None }
+    }
+
+    /// A session for Shift-Cmd-4: the crosshair for a selection, no toolbar. Space turns it into a window pick.
+    pub fn crosshair(prefs: Prefs) -> Self {
+        Session { bar: false, ..Session::with_prefs(prefs) }
+    }
+
+    /// Space: a selection becomes a window pick and back. The whole-screen pick stays.
+    pub fn toggle_pick(&mut self) {
+        self.drag = Drag::default();
+        self.record = false;
+        self.pick = match self.pick {
+            Pick::Region => Pick::Window,
+            Pick::Window => Pick::Region,
+            Pick::Screen => Pick::Screen,
+        };
     }
 
     /// A press on the screen (not on the toolbar): a selection starts here.
@@ -286,13 +382,17 @@ impl Session {
     pub fn release(&mut self, x: f32, y: f32, frames: &[Rect], w: i32, h: i32, s: f32) -> Option<Rect> {
         self.at = (x, y);
         let min = (MIN_SIDE_PT * s).round().max(1.0) as i32;
+        self.window = None;
         match self.pick {
             Pick::Region => {
                 // the release point is the drag's last corner, even when no move came in before it
                 self.drag.move_to(x, y);
                 self.drag.finish(w, h, min)
             }
-            Pick::Window => window_at(frames, x, y).map(|r| with_shadow(r, s, w, h)),
+            Pick::Window => {
+                self.window = window_at(frames, x, y);
+                self.window.map(|r| with_shadow(r, s, w, h))
+            }
             Pick::Screen => Some(Rect { x: 0, y: 0, w, h }),
         }
     }
@@ -319,51 +419,55 @@ impl Session {
         self.pending.is_some_and(|(_, c)| c.done(t))
     }
 
-    /// The button labels and the toolbar's rectangle for a `w` by `h` screen, as `(bar, buttons)`. The buttons come
-    /// with their labels, laid out bottom centre.
-    pub fn toolbar(&self, ui: &Ui, w: i32, h: i32) -> (Rect, Vec<(Tool, Rect, Image)>) {
-        let s = ui.s;
-        let mut items: Vec<(Tool, Image)> = Vec::new();
-        for p in [Pick::Region, Pick::Window, Pick::Screen] {
-            let color = if self.pick == p && !self.record { WHITE } else { SECONDARY };
-            items.push((Tool::Pick(p), ui.text(p.label(), LABEL_PT, Weight::Medium, color)));
+    /// Whether the toolbar button is the one the session is set to (drawn on the tint).
+    pub fn is_on(&self, tool: Tool) -> bool {
+        match tool {
+            Tool::Pick(p) => self.pick == p && !self.record,
+            Tool::Record(p) => self.pick == p && self.record,
+            Tool::Options => self.menu,
+            Tool::Cancel => false,
         }
-        for p in [Pick::Region, Pick::Screen] {
-            let color = if self.pick == p && self.record { WHITE } else { SECONDARY };
-            let label = if p == Pick::Region { "Record Selection" } else { "Record Screen" };
-            items.push((Tool::Record(p), ui.text(label, LABEL_PT, Weight::Medium, color)));
-        }
-        let options = if self.menu { WHITE } else { SECONDARY };
-        items.push((Tool::Options, ui.text("Options", LABEL_PT, Weight::Medium, options)));
-        items.push((Tool::Cancel, ui.text("Cancel", LABEL_PT, Weight::Medium, TINT)));
+    }
 
+    /// The toolbar's bar and its icon buttons for a `w` by `h` screen, as `(bar, buttons)`: a row of `TOOLS`, centred above
+    /// the Dock (`Session::dock`). Each button comes with its icon; its name is the tooltip (`Tool::label`). With no
+    /// toolbar (Shift-Cmd-4) the bar is empty and there are no buttons.
+    pub fn toolbar(&self, ui: &Ui, w: i32, h: i32) -> (Rect, Vec<(Tool, Rect, Image)>) {
+        if !self.bar {
+            return (Rect { x: 0, y: 0, w: 0, h: 0 }, Vec::new());
+        }
+        let s = ui.s;
+        let bar = bar_rect(self.dock, w, h, s, TOOLS.len());
         let pad = (8.0 * s).round() as i32;
         let gap = (6.0 * s).round() as i32;
-        let side = (16.0 * s).round() as i32;
-        let bar_h = (BAR_PT * s).round() as i32;
-        let btn_h = bar_h - 2 * pad;
-        let widths: Vec<i32> = items.iter().map(|(_, img)| img.w as i32 + 2 * side).collect();
-        let inner = widths.iter().sum::<i32>() + gap * (widths.len() as i32 - 1);
-        let bar_w = inner + 2 * pad;
-        let bar = Rect { x: (w - bar_w) / 2, y: h - (BOTTOM_PT * s).round() as i32 - bar_h, w: bar_w, h: bar_h };
-        let mut x = bar.x + pad;
-        let mut buttons = Vec::with_capacity(items.len());
-        for ((tool, img), bw) in items.into_iter().zip(widths) {
-            buttons.push((tool, Rect { x, y: bar.y + pad, w: bw, h: btn_h }, img));
-            x += bw + gap;
-        }
+        let button = (BUTTON_PT * s).round() as i32;
+        let buttons = TOOLS
+            .into_iter()
+            .enumerate()
+            .map(|(i, tool)| {
+                let color = if self.is_on(tool) {
+                    WHITE
+                } else if tool == Tool::Cancel {
+                    TINT
+                } else {
+                    SECONDARY
+                };
+                let r = Rect { x: bar.x + pad + i as i32 * (button + gap), y: bar.y + pad, w: button, h: bar.h - 2 * pad };
+                (tool, r, tool_icon(ui, tool, color))
+            })
+            .collect();
         (bar, buttons)
     }
 
     /// The Options menu's card and its rows (with their text), when the menu is open. The card sits above the bar,
     /// centred, one bar-height row per option.
     pub fn menu_rows(&self, ui: &Ui, w: i32, h: i32) -> Option<(Rect, Vec<(OptionRow, Rect, Image)>)> {
-        if !self.menu {
+        if !self.menu || !self.bar {
             return None;
         }
         let s = ui.s;
         let (bar, _) = self.toolbar(ui, w, h);
-        let texts: Vec<(OptionRow, Image)> = OPTION_ROWS.iter().map(|&row| (row, ui.text(&self.prefs.text(row), LABEL_PT, Weight::Medium, WHITE))).collect();
+        let texts: Vec<(OptionRow, Image)> = OPTION_ROWS.iter().map(|&row| (row, ui.text(&self.prefs.text(row), MENU_PT, Weight::Medium, WHITE))).collect();
         let pad = (8.0 * s).round() as i32;
         let gap = (6.0 * s).round() as i32;
         let side = (16.0 * s).round() as i32;
@@ -424,18 +528,25 @@ impl Session {
             s.blit(&n, (w - n.w as i32) / 2, (h - n.h as i32) / 2, 255, 255);
         }
         let (bar, buttons) = self.toolbar(ui, w, h);
-        s.fill_rrect(bar.x as f32, bar.y as f32, bar.w as f32, bar.h as f32, bar.h as f32 / 2.0, CARD_BG.now());
+        if self.bar {
+            s.fill_rrect(bar.x as f32, bar.y as f32, bar.w as f32, bar.h as f32, bar.h as f32 / 2.0, CARD_BG.now());
+        }
+        let hover = (!self.menu && !self.drag.active()).then(|| buttons.iter().find(|(_, r, _)| r.contains(self.at.0, self.at.1)).map(|(t, r, _)| (*t, *r))).flatten();
         for (tool, r, img) in buttons {
-            let on = match tool {
-                Tool::Pick(p) => self.pick == p && !self.record,
-                Tool::Record(p) => self.pick == p && self.record,
-                Tool::Options => self.menu,
-                _ => false,
-            };
-            if on {
+            if self.is_on(tool) {
                 s.fill_rrect(r.x as f32, r.y as f32, r.w as f32, r.h as f32, r.h as f32 / 2.0, TINT);
             }
             s.blit(&img, r.x + (r.w - img.w as i32) / 2, r.y + (r.h - img.h as i32) / 2, 255, 255);
+        }
+        if let Some((tool, r)) = hover {
+            // the tooltip names the icon under the pointer, above the bar
+            let name = ui.text(tool.label(), LABEL_PT, Weight::Medium, WHITE);
+            let (px, py) = ((8.0 * k).round() as i32, (4.0 * k).round() as i32);
+            let (tw, th) = (name.w as i32 + 2 * px, name.h as i32 + 2 * py);
+            let tx = (r.x + r.w / 2 - tw / 2).clamp(0, (w - tw).max(0));
+            let ty = (bar.y - (6.0 * k).round() as i32 - th).max(0);
+            s.fill_rrect(tx as f32, ty as f32, tw as f32, th as f32, 6.0 * k, CARD_BG.now());
+            s.blit(&name, tx + px, ty + py, 255, 255);
         }
         if let Some((card, rows)) = self.menu_rows(ui, w, h) {
             s.fill_rrect(card.x as f32, card.y as f32, card.w as f32, card.h as f32, 10.0 * k, CARD_BG.now());
@@ -444,6 +555,111 @@ impl Session {
             }
         }
     }
+}
+
+/// A dashed rectangle's outline: three dashes along each side, drawn into `s`.
+fn dashed_rect(s: &mut Surface, x: f32, y: f32, w: f32, h: f32, thick: f32, color: u32) {
+    let (dx, dy) = (w / 5.0, h / 5.0);
+    for i in [0.0, 2.0, 4.0] {
+        s.fill_rrect(x + i * dx, y, dx, thick, 0.0, color);
+        s.fill_rrect(x + i * dx, y + h - thick, dx, thick, 0.0, color);
+        s.fill_rrect(x, y + i * dy, thick, dy, 0.0, color);
+        s.fill_rrect(x + w - thick, y + i * dy, thick, dy, 0.0, color);
+    }
+}
+
+/// A filled dot centred at (`cx`, `cy`), the mark of a recording button.
+fn record_dot(s: &mut Surface, cx: f32, cy: f32, r: f32, color: u32) {
+    s.fill_rrect(cx - r, cy - r, 2.0 * r, 2.0 * r, r, color);
+}
+
+/// The icon of a toolbar button in `color`, `ICON_PT` points square: a dashed square for a selection, a window with its
+/// title strip, a screen on its stand (each with a dot when it records), and the symbol set's gear and cross for Options
+/// and Close. A symbol the font lacks falls back to a drawn mark, so a button is never blank.
+pub fn tool_icon(ui: &Ui, tool: Tool, color: u32) -> Image {
+    let n = (ICON_PT * ui.s).round().max(8.0) as usize;
+    let nf = n as f32;
+    let k = (1.5 * ui.s).max(1.0);
+    match tool {
+        Tool::Options => {
+            if let Some(img) = ui.symbols.render(Symbol::GearOutline, nf, color) {
+                return img;
+            }
+        }
+        Tool::Cancel => {
+            if let Some(img) = ui.symbols.render(Symbol::Xmark, nf * 0.8, color) {
+                return img;
+            }
+        }
+        _ => {}
+    }
+    let mut img = Image::new(n, n);
+    let mut s = Surface { w: n, h: n, stride: n, px: &mut img.px, y0: 0 };
+    let (half, corner) = (k / 2.0, 2.0 * ui.s);
+    match tool {
+        Tool::Pick(Pick::Region) => dashed_rect(&mut s, half, half, nf - k, nf - k, k, color),
+        Tool::Record(Pick::Region) => {
+            dashed_rect(&mut s, half, half, nf - k, nf - k, k, color);
+            record_dot(&mut s, nf / 2.0, nf / 2.0, nf * 0.16, color);
+        }
+        Tool::Pick(Pick::Window) => {
+            s.stroke_rrect(half, nf * 0.12, nf - k, nf * 0.76, corner, k, color);
+            s.fill_rrect(half, nf * 0.12 + nf * 0.26, nf - k, k, 0.0, color);
+        }
+        Tool::Pick(Pick::Screen) | Tool::Record(Pick::Screen) => {
+            s.stroke_rrect(half, nf * 0.08, nf - k, nf * 0.62, corner, k, color);
+            s.fill_rrect(nf * 0.32, nf * 0.84, nf * 0.36, k, k / 2.0, color);
+            s.fill_rrect(nf / 2.0 - half, nf * 0.7, k, nf * 0.14, 0.0, color);
+            if tool == Tool::Record(Pick::Screen) {
+                record_dot(&mut s, nf / 2.0, nf * 0.39, nf * 0.14, color);
+            }
+        }
+        // the fallbacks: three dots for Options, a cross for Close
+        Tool::Options => {
+            for i in 0..3 {
+                record_dot(&mut s, nf * (0.2 + 0.3 * i as f32), nf / 2.0, nf * 0.08, color);
+            }
+        }
+        Tool::Cancel => {
+            for i in 0..n {
+                let d = i as f32 + 0.5;
+                s.fill_rrect(d - half, d - half, k, k, 0.0, color);
+                s.fill_rrect(nf - d - half, d - half, k, k, 0.0, color);
+            }
+        }
+        Tool::Record(Pick::Window) => {}
+    }
+    img
+}
+
+/// A window capture's picture from the composed screen `shot`: the window at `win` (screen px) alone on a transparent
+/// ground, its corners rounded by `radius` px and its drop shadow around it, `pad` px of room on every side. `scale`
+/// converts the shell's coordinates to `shot`'s pixels when the output is not the shell's size.
+pub fn window_image(ui: &Ui, shot: &Image, win: Rect, radius: f32, pad: i32, scale: (f32, f32)) -> Image {
+    let sw = ((win.w as f32 * scale.0).round() as i32).max(1);
+    let sh = ((win.h as f32 * scale.1).round() as i32).max(1);
+    let (sx, sy) = ((win.x as f32 * scale.0).round().max(0.0) as usize, (win.y as f32 * scale.1).round().max(0.0) as usize);
+    let body = shot.crop(sx, sy, sw as usize, sh as usize);
+    let (w, h) = (sw as usize + 2 * pad as usize, sh as usize + 2 * pad as usize);
+    let mut out = Image::new(w, h);
+    let mut s = Surface { w, h, stride: w, px: &mut out.px, y0: 0 };
+    super::desk::soft_shadow(&mut s, ui, pad as f32, pad as f32, sw as f32, sh as f32, radius);
+    super::switcher::draw_scaled(&mut s, &body, Rect { x: pad, y: pad, w: sw, h: sh }, radius, 255);
+    out
+}
+
+/// A rectangle given in the shell's pixels, in the pixels of a capture of `from` by `to` size (the output the window
+/// server composes need not be the shell's size): scaled and clipped to the picture. None when nothing is left.
+pub fn region_in(region: Rect, from: (i32, i32), to: (usize, usize)) -> Option<Rect> {
+    if from.0 <= 0 || from.1 <= 0 {
+        return None;
+    }
+    let (kx, ky) = (to.0 as f32 / from.0 as f32, to.1 as f32 / from.1 as f32);
+    let x0 = ((region.x as f32 * kx).round() as i32).clamp(0, to.0 as i32);
+    let y0 = ((region.y as f32 * ky).round() as i32).clamp(0, to.1 as i32);
+    let x1 = (((region.x + region.w) as f32 * kx).round() as i32).clamp(0, to.0 as i32);
+    let y1 = (((region.y + region.h) as f32 * ky).round() as i32).clamp(0, to.1 as i32);
+    (x1 > x0 && y1 > y0).then_some(Rect { x: x0, y: y0, w: x1 - x0, h: y1 - y0 })
 }
 
 /// Dims everything of a `w` by `h` screen outside `r`.
@@ -530,14 +746,15 @@ mod tests {
 
     #[test]
     fn the_countdown_shows_the_seconds_left_and_ends_the_capture() {
-        let c = Countdown::new(100.0, 5);
-        assert_eq!(c.left(100.0), 5);
-        assert_eq!(c.left(100.5), 5);
-        assert_eq!(c.left(101.0), 4);
-        assert_eq!(c.left(104.2), 1);
-        assert!(!c.done(104.9));
-        assert!(c.done(105.0));
-        assert_eq!(c.left(200.0), 0);
+        let c = Countdown::new(100_000.0, 5);
+        assert_eq!(c.left(100_000.0), 5);
+        assert_eq!(c.left(100_500.0), 5);
+        assert_eq!(c.left(101_000.0), 4);
+        assert_eq!(c.left(104_200.0), 1);
+        assert!(!c.done(104_900.0), "five seconds are five thousand milliseconds on the shell clock");
+        assert!(c.done(105_000.0));
+        assert_eq!(c.end(), 105_000.0);
+        assert_eq!(c.left(200_000.0), 0);
         assert!(Countdown::new(3.0, 0).done(3.0), "no timer means the capture is due at once");
     }
 
@@ -577,9 +794,11 @@ mod tests {
     #[test]
     fn options_rows_change_the_prefs_they_name() {
         let mut p = Prefs::default();
-        assert_eq!(p.save_to, SaveTo::Desktop, "recordings go to the Desktop first");
+        assert_eq!(p.save_to, SaveTo::Desktop, "pictures and recordings go to the Desktop first");
         p.choose(OptionRow::SaveTo);
         assert_eq!(p.save_to, SaveTo::Documents);
+        p.choose(OptionRow::SaveTo);
+        assert_eq!(p.save_to, SaveTo::Pictures);
         p.choose(OptionRow::SaveTo);
         assert_eq!(p.save_to, SaveTo::Desktop);
         p.choose(OptionRow::Timer);
@@ -619,9 +838,9 @@ mod tests {
     #[test]
     fn a_due_capture_waits_for_its_countdown() {
         let mut s = Session::new();
-        s.pending = Some((rect(0, 0, 10, 10), Countdown::new(50.0, 5)));
-        assert!(!s.due(54.0));
-        assert!(s.due(55.0));
+        s.pending = Some((rect(0, 0, 10, 10), Countdown::new(50_000.0, 5)));
+        assert!(!s.due(54_000.0));
+        assert!(s.due(55_000.0));
         assert!(!Session::new().due(0.0));
     }
 
@@ -634,5 +853,130 @@ mod tests {
         let mut off = Image { w: 2, h: 2, px: vec![0; 4] };
         draw_pointer(&mut off, 5.0, 5.0, 1.0);
         assert_eq!(off.px, vec![0; 4], "a pointer off the image draws nothing");
+    }
+
+    fn overlaps(a: Rect, b: Rect) -> bool {
+        a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
+    }
+
+    #[test]
+    fn pictures_go_to_the_desktop_of_the_account_by_default() {
+        let home = Path::new("/home/ola");
+        assert_eq!(Prefs::default().save_to.dir(home), PathBuf::from("/home/ola/Desktop"), "the Desktop is the default");
+        assert_eq!(SaveTo::Documents.dir(home), PathBuf::from("/home/ola/Documents"));
+        assert_eq!(SaveTo::Pictures.dir(home), PathBuf::from("/home/ola/Pictures"));
+        assert!(SaveTo::Desktop.dir(home).starts_with(home), "under the home, never at the filesystem root");
+    }
+
+    #[test]
+    fn the_toolbar_sits_above_a_bottom_dock_at_any_screen_size() {
+        for (w, h, s) in [(2560, 1440, 1.5625), (1200, 1920, 1.5625), (1280, 720, 1.0), (3840, 2160, 2.0)] {
+            // a Dock capsule centred at the bottom, as the desk lays it out
+            let dock = Rect { x: w / 6, y: h - (80.0 * s) as i32, w: w * 2 / 3, h: (70.0 * s) as i32 };
+            let bar = bar_rect(Some(dock), w, h, s, TOOLS.len());
+            assert!(!overlaps(bar, dock), "{w}x{h}: the bar {bar:?} is clear of the Dock {dock:?}");
+            assert!(bar.y + bar.h <= dock.y, "{w}x{h}: above the Dock");
+            assert!(bar.x >= 0 && bar.x + bar.w <= w && bar.y >= 0, "{w}x{h}: on the screen");
+            assert!((bar.x + bar.w / 2 - w / 2).abs() <= 1, "{w}x{h}: centred");
+        }
+    }
+
+    #[test]
+    fn the_toolbar_follows_a_dock_at_the_side_or_none_at_all() {
+        let (w, h, s) = (2560, 1440, 1.0);
+        let left = Rect { x: 0, y: 60, w: 90, h: 900 };
+        let bar = bar_rect(Some(left), w, h, s, TOOLS.len());
+        assert!(!overlaps(bar, left) && bar.x >= left.w, "beside a Dock on the left: {bar:?}");
+        let right = Rect { x: w - 90, y: 60, w: 90, h: 900 };
+        let bar = bar_rect(Some(right), w, h, s, TOOLS.len());
+        assert!(!overlaps(bar, right) && bar.x + bar.w <= right.x, "beside a Dock on the right: {bar:?}");
+        let bare = bar_rect(None, w, h, s, TOOLS.len());
+        assert_eq!(bare.y + bare.h, h - BOTTOM_PT as i32, "without a Dock the bar keeps its own distance from the edge");
+        // a hidden Dock leaves a thin strip at the edge: the bar does not drop below its own resting place
+        let strip = Rect { x: 0, y: h - 3, w, h: 3 };
+        assert_eq!(bar_rect(Some(strip), w, h, s, TOOLS.len()), bare);
+    }
+
+    #[test]
+    fn the_toolbar_is_a_row_of_icon_buttons_with_a_name_each() {
+        let ui = crate::shell::tests::ui();
+        let (w, h) = (2560, 1440);
+        let dock = Rect { x: 600, y: h - 120, w: 1360, h: 100 };
+        let mut sess = Session::new();
+        sess.dock = Some(dock);
+        let (bar, buttons) = sess.toolbar(&ui, w, h);
+        assert_eq!(buttons.len(), TOOLS.len());
+        assert!(!overlaps(bar, dock), "the bar does not cover the Dock's icons");
+        let mut last_right = bar.x;
+        for (tool, r, icon) in &buttons {
+            assert!(r.x >= last_right && r.x + r.w <= bar.x + bar.w && r.y >= bar.y && r.y + r.h <= bar.y + bar.h, "{tool:?} {r:?} is inside {bar:?}");
+            last_right = r.x + r.w;
+            assert!(icon.px.iter().any(|p| p >> 24 != 0), "{tool:?} has an icon, not an empty box");
+            assert!(icon.w <= r.w as usize && icon.h <= r.h as usize, "{tool:?}'s icon fits its button");
+        }
+        // text labels live in the tooltips and are all different
+        let names: Vec<&str> = TOOLS.iter().map(|t| t.label()).collect();
+        for (i, a) in names.iter().enumerate() {
+            assert!(!a.is_empty() && !names[i + 1..].contains(a), "tooltip {a:?} names one button");
+        }
+        // a press on a button finds it, a press on the Dock does not
+        let (tool, r, _) = &buttons[0];
+        assert_eq!(sess.tool_at(&ui, w, h, (r.x + r.w / 2) as f32, (r.y + r.h / 2) as f32), Some(*tool));
+        assert_eq!(sess.tool_at(&ui, w, h, (dock.x + 10) as f32, (dock.y + 10) as f32), None);
+    }
+
+    #[test]
+    fn a_crosshair_session_has_no_toolbar_and_space_swaps_selection_and_window() {
+        let ui = crate::shell::tests::ui();
+        let mut s = Session::crosshair(Prefs::default());
+        assert!(!s.bar);
+        assert_eq!(s.pick, Pick::Region);
+        let (bar, buttons) = s.toolbar(&ui, 1000, 800);
+        assert!(buttons.is_empty() && bar.w == 0);
+        assert_eq!(s.tool_at(&ui, 1000, 800, 500.0, 760.0), None);
+        assert!(!s.on_toolbar(&ui, 1000, 800, 500.0, 760.0));
+        s.toggle_pick();
+        assert_eq!(s.pick, Pick::Window, "Space turns the selection into a window pick");
+        s.toggle_pick();
+        assert_eq!(s.pick, Pick::Region, "and back");
+        s.pick = Pick::Screen;
+        s.toggle_pick();
+        assert_eq!(s.pick, Pick::Screen, "the whole-screen pick stays");
+    }
+
+    #[test]
+    fn a_window_pick_remembers_the_window_without_its_shadow() {
+        let frames = [rect(100, 100, 300, 200)];
+        let mut s = Session::new();
+        s.pick = Pick::Window;
+        let taken = s.release(150.0, 150.0, &frames, 1000, 800, 1.0).unwrap();
+        assert_eq!(s.window, Some(rect(100, 100, 300, 200)));
+        assert_eq!(taken, with_shadow(rect(100, 100, 300, 200), 1.0, 1000, 800));
+        assert_eq!(s.release(900.0, 700.0, &frames, 1000, 800, 1.0), None);
+        assert_eq!(s.window, None, "a pick that found nothing forgets the last window");
+    }
+
+    #[test]
+    fn a_region_in_the_shells_pixels_maps_onto_the_composed_picture() {
+        let r = rect(100, 50, 200, 100);
+        assert_eq!(region_in(r, (1000, 500), (2000, 1000)), Some(rect(200, 100, 400, 200)), "an output twice the shell's size");
+        assert_eq!(region_in(r, (1000, 500), (1000, 500)), Some(r), "the same size is unchanged");
+        assert_eq!(region_in(rect(900, 450, 300, 300), (1000, 500), (1000, 500)), Some(rect(900, 450, 100, 50)), "clipped to the picture");
+        assert_eq!(region_in(rect(1200, 0, 10, 10), (1000, 500), (1000, 500)), None, "outside it nothing is left");
+        assert_eq!(region_in(r, (0, 0), (10, 10)), None);
+    }
+
+    #[test]
+    fn a_window_capture_is_the_window_on_a_clear_ground_with_a_shadow() {
+        let ui = crate::shell::tests::ui();
+        let shot = Image { w: 400, h: 300, px: vec![pack(200, 100, 50, 255); 400 * 300] };
+        let (win, pad) = (rect(100, 80, 200, 120), 40);
+        let img = window_image(&ui, &shot, win, 12.0, pad, (1.0, 1.0));
+        assert_eq!((img.w, img.h), (280, 200), "the window and the shadow's room on every side");
+        let at = |x: usize, y: usize| img.px[y * img.w + x];
+        assert_eq!(at(140, 100), pack(200, 100, 50, 255), "the window's own pixels");
+        assert_eq!(at(0, 0) >> 24, 0, "the far corner of the margin is clear: the picture has a transparent ground");
+        assert!(at(pad as usize, pad as usize) >> 24 < 255, "the window's corner is rounded: its square corner is not opaque");
+        assert!(img.px.iter().any(|p| p >> 24 != 0 && p >> 24 != 255), "the shadow is partly transparent");
     }
 }

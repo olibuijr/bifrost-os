@@ -1002,6 +1002,13 @@ impl Shell {
                 }
             }
         }
+        // the screenshot toolbar's session (id 11, the whole screen) and the capture thumbnail (id 12): overlay surfaces above
+        // the windows, drawn on their own ground so nothing of them is left behind (E2E SC3)
+        for (id,layer) in [(11,&self.capture_layer),(12,&self.shot_layer)] {
+            if let Some(l)=layer {
+                if l.image.w>0&&l.image.h>0 {frames.push(crate::bare::wayland::ChromeFrame{id,x:l.x,y:l.y,width:l.image.w,height:l.image.h,pixels:l.image.px.clone(),input:l.input});}
+            }
+        }
         frames
     }
 }

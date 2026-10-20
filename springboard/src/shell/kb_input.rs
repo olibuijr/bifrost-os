@@ -91,7 +91,7 @@ pub const BINDINGS: [(&str, &str); 12] = [
     ("Next Input Source", "Ctrl+Space"),
     ("Settings", "Cmd+,"),
     ("Home", "Cmd"),
-    ("Screenshot Toolbar", "Shift+Cmd+5"),
+    ("Screenshots", "Shift+Cmd+3, 4, 5"),
     ("Assistant", "Shift+Cmd+A"),
 ];
 
@@ -109,7 +109,8 @@ pub fn binding_of(sc: Shortcut) -> Option<usize> {
         Shortcut::InputSource => 7,
         Shortcut::Settings => 8,
         Shortcut::Home => 9,
-        Shortcut::Capture => 10,
+        // Shift+Cmd+3, 4 and 5 are one switch: the screenshot keys
+        Shortcut::Capture | Shortcut::CaptureScreen | Shortcut::CaptureSelection => 10,
         Shortcut::Assistant => 11,
         _ => return None,
     })
@@ -285,6 +286,10 @@ mod tests {
         seen.push(binding_of(Shortcut::Tile(super::super::desk::Tile::Center)).unwrap());
         seen.sort_unstable();
         assert_eq!(seen, (0..BINDINGS.len()).collect::<Vec<_>>());
+        // the three screenshot chords are one switch
+        assert_eq!(binding_of(Shortcut::CaptureScreen), binding_of(Shortcut::Capture));
+        assert_eq!(binding_of(Shortcut::CaptureSelection), binding_of(Shortcut::Capture));
+        assert!(!enabled(Shortcut::CaptureScreen, 1 << 10) && enabled(Shortcut::CaptureScreen, 0));
     }
 
     #[test]

@@ -23,6 +23,8 @@ const KEY_MINUS: u16 = 12;
 const KEY_EQUAL: u16 = 13;
 const KEY_D: u16 = 32;
 const KEY_GRAVE: u16 = 41;
+const KEY_3: u16 = 4;
+const KEY_4: u16 = 5;
 const KEY_5: u16 = 6;
 const KEY_BACKSPACE: u16 = 14;
 const KEY_ENTER: u16 = 28;
@@ -210,6 +212,10 @@ pub enum Shortcut {
     LookUp,
     /// Shift+Cmd+5: the screenshot toolbar, a capture session over the screen
     Capture,
+    /// Shift+Cmd+3: the whole screen is saved as a picture at once
+    CaptureScreen,
+    /// Shift+Cmd+4: a crosshair to drag a selection (Space turns it into a window pick); no toolbar
+    CaptureSelection,
     /// a Photos menu command or its key equivalent, taken while Photos is in front (`photos::commands`)
     Photo(PhotoCommand),
     /// Option+Cmd+8: Screen Zoom on or off (`accessibility::zoom`)
@@ -234,7 +240,7 @@ impl Shortcut {
             Shortcut::SelectAll => "SelectAll",
             Shortcut::Undo => "Undo",
             Shortcut::Redo => "Redo",
-            Shortcut::Term(_) | Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Back | Shortcut::Home | Shortcut::Close | Shortcut::Quit | Shortcut::Minimize | Shortcut::Settings | Shortcut::FullScreen | Shortcut::Tile(_) | Shortcut::CycleWindow | Shortcut::InputSource | Shortcut::ReaderStep(_) | Shortcut::ReaderRotor(_) | Shortcut::ReaderActivate | Shortcut::SpeakSelection | Shortcut::AccessibilityShortcut | Shortcut::Capture | Shortcut::ZoomToggle | Shortcut::ZoomStep(_) | Shortcut::LookUp | Shortcut::Photo(_) | Shortcut::HelpSearch | Shortcut::Lock | Shortcut::Assistant => return None,
+            Shortcut::Term(_) | Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Back | Shortcut::Home | Shortcut::Close | Shortcut::Quit | Shortcut::Minimize | Shortcut::Settings | Shortcut::FullScreen | Shortcut::Tile(_) | Shortcut::CycleWindow | Shortcut::InputSource | Shortcut::ReaderStep(_) | Shortcut::ReaderRotor(_) | Shortcut::ReaderActivate | Shortcut::SpeakSelection | Shortcut::AccessibilityShortcut | Shortcut::Capture | Shortcut::CaptureScreen | Shortcut::CaptureSelection | Shortcut::ZoomToggle | Shortcut::ZoomStep(_) | Shortcut::LookUp | Shortcut::Photo(_) | Shortcut::HelpSearch | Shortcut::Lock | Shortcut::Assistant => return None,
         }))
     }
 }
@@ -502,6 +508,8 @@ impl HwKeys {
             KEY_SPACE if ctrl && alt && !meta && self.shift == 0 => Some(Shortcut::ReaderActivate),
             KEY_ESC if alt && !ctrl && !meta && self.shift == 0 => Some(Shortcut::SpeakSelection),
             KEY_F5 if meta && alt && !ctrl && self.shift == 0 => Some(Shortcut::AccessibilityShortcut),
+            KEY_3 if meta && self.shift > 0 && !ctrl && !alt => Some(Shortcut::CaptureScreen),
+            KEY_4 if meta && self.shift > 0 && !ctrl && !alt => Some(Shortcut::CaptureSelection),
             KEY_5 if meta && self.shift > 0 && !ctrl && !alt => Some(Shortcut::Capture),
             KEY_SLASH if meta && self.shift > 0 && !ctrl && !alt => Some(Shortcut::HelpSearch),
             KEY_COMMA if meta && !ctrl && !alt && self.shift == 0 => Some(Shortcut::Settings),
@@ -722,6 +730,14 @@ impl Shell {
         const KEEP: [u16; 4] = [114, 115, 116, 143];
         if !down || !self.screen_on || self.anim.is_some() || KEEP.contains(&code) {
             return false;
+        }
+        // Space in an open capture session turns the selection into a window pick and back
+        if code == KEY_SPACE {
+            if let Some(c) = self.capture.as_mut().filter(|c| c.pending.is_none()) {
+                c.toggle_pick();
+                self.dirty = true;
+                return true;
+            }
         }
         let used = match self.screen {
             Screen::App(AppId::Deildu) => self.deildu.as_mut().is_some_and(|d| d.hw_key(code, t)),
@@ -1102,7 +1118,16 @@ impl Shell {
                 vec![]
             }
             Shortcut::Capture if !self.is_locked() => {
-                self.capture = Some(super::capture::Session::with_prefs(self.capture_prefs));
+                self.capture_open(super::capture::Session::with_prefs(self.capture_prefs));
+                vec![]
+            }
+            // Shift+Cmd+3 saves the whole screen at once; Shift+Cmd+4 opens the crosshair (Space picks a window)
+            Shortcut::CaptureScreen if !self.is_locked() => {
+                self.capture_screen_now(t);
+                vec![]
+            }
+            Shortcut::CaptureSelection if !self.is_locked() => {
+                self.capture_open(super::capture::Session::crosshair(self.capture_prefs));
                 vec![]
             }
             Shortcut::Back if self.capture.is_some() => {
@@ -1275,6 +1300,13 @@ mod tests {
         assert_eq!(chord(&mut k, &[KEY_LEFTMETA], KEY_SPACE), Some(Shortcut::QuickSearch));
         assert_eq!(chord(&mut k, &[KEY_LEFTMETA, KEY_LEFTSHIFT], KEY_5), Some(Shortcut::Capture), "Shift-Cmd-5 opens the toolbar");
         assert_eq!(chord(&mut k, &[KEY_LEFTMETA, KEY_LEFTSHIFT], KEY_SLASH), Some(Shortcut::HelpSearch), "Shift-Cmd-/ opens the Help search");
+        assert_eq!(chord(&mut k, &[KEY_LEFTMETA, KEY_LEFTSHIFT], KEY_3), Some(Shortcut::CaptureScreen), "Shift-Cmd-3 saves the whole screen");
+        assert_eq!(chord(&mut k, &[KEY_LEFTMETA, KEY_LEFTSHIFT], KEY_4), Some(Shortcut::CaptureSelection), "Shift-Cmd-4 opens the crosshair");
+        assert_eq!(chord(&mut k, &[KEY_RIGHTMETA, KEY_RIGHTSHIFT], KEY_4), Some(Shortcut::CaptureSelection), "with the right-hand keys too");
+        assert_eq!(chord(&mut k, &[KEY_LEFTMETA], KEY_3), None, "Cmd-3 alone is not a shortcut");
+        assert_eq!(chord(&mut k, &[KEY_LEFTMETA], KEY_4), None, "Cmd-4 alone is not a shortcut");
+        assert_eq!(chord(&mut k, &[KEY_LEFTSHIFT], KEY_4), None, "Shift-4 types a symbol");
+        assert_eq!(chord(&mut k, &[KEY_LEFTMETA, KEY_LEFTSHIFT, KEY_LEFTALT], KEY_4), None, "extra modifiers are not the chord");
         assert_eq!(chord(&mut k, &[KEY_LEFTMETA], KEY_5), None, "Cmd-5 alone is not a shortcut");
         assert_eq!(chord(&mut k, &[KEY_LEFTALT], KEY_TAB), Some(Shortcut::AppSwitch));
         assert_eq!(chord(&mut k, &[KEY_RIGHTMETA], KEY_TAB), Some(Shortcut::AppSwitch));

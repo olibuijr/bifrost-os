@@ -31,12 +31,37 @@ const DIST_EXTRA: [u8; 30] = [0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7,
 
 /// Encodes `w` x `h` premultiplied RGBA pixels (alpha ignored) as a PNG.
 pub fn encode_rgb(w: usize, h: usize, px: &[u32]) -> Vec<u8> {
+    encode(w, h, px, false)
+}
+
+/// Encodes `w` x `h` premultiplied RGBA pixels as an 8-bit RGBA PNG with straight (not premultiplied) colour, so a
+/// transparent border (a window capture's shadow) stays transparent.
+pub fn encode_rgba(w: usize, h: usize, px: &[u32]) -> Vec<u8> {
+    encode(w, h, px, true)
+}
+
+/// The straight-colour channels (r, g, b, a) of a premultiplied pixel; colour is zero where alpha is.
+fn unpremultiply(p: u32) -> [u8; 4] {
+    let a = (p >> 24) as u8;
+    if a == 0 {
+        return [0, 0, 0, 0];
+    }
+    let un = |c: u32| ((c * 255 + a as u32 / 2) / a as u32).min(255) as u8;
+    [un(p & 0xff), un((p >> 8) & 0xff), un((p >> 16) & 0xff), a]
+}
+
+fn encode(w: usize, h: usize, px: &[u32], alpha: bool) -> Vec<u8> {
     assert!(px.len() >= w * h, "pixel buffer too small");
-    let mut raw = Vec::with_capacity(h * (1 + 3 * w));
+    let bytes = if alpha { 4 } else { 3 };
+    let mut raw = Vec::with_capacity(h * (1 + bytes * w));
     for row in px[..w * h].chunks_exact(w.max(1)) {
         raw.push(0); // filter: none
         for &p in row {
-            raw.extend([p as u8, (p >> 8) as u8, (p >> 16) as u8]);
+            if alpha {
+                raw.extend(unpremultiply(p));
+            } else {
+                raw.extend([p as u8, (p >> 8) as u8, (p >> 16) as u8]);
+            }
         }
     }
     let mut out = Vec::with_capacity(raw.len() + raw.len() / BLOCK * 5 + 64);
@@ -44,7 +69,8 @@ pub fn encode_rgb(w: usize, h: usize, px: &[u32]) -> Vec<u8> {
     let mut ihdr = Vec::with_capacity(13);
     ihdr.extend((w as u32).to_be_bytes());
     ihdr.extend((h as u32).to_be_bytes());
-    ihdr.extend([8, 2, 0, 0, 0]); // 8 bits, RGB, deflate, no filter, no interlace
+    // 8 bits, RGB (2) or RGBA (6), deflate, no filter, no interlace
+    ihdr.extend([8, if alpha { 6 } else { 2 }, 0, 0, 0]);
     chunk(&mut out, b"IHDR", &ihdr);
     chunk(&mut out, b"IDAT", &zlib_compressed(&raw));
     chunk(&mut out, b"IEND", &[]);
@@ -227,6 +253,18 @@ pub fn adler32(data: &[u8]) -> u32 {
 mod tests {
     use super::*;
     use crate::gfx::pack;
+
+    #[test]
+    fn an_rgba_png_keeps_a_clear_border_clear() {
+        // two pixels: clear, and half-covered white (premultiplied: 128, 128, 128, 128)
+        let png = encode_rgba(2, 1, &[0, pack(128, 128, 128, 128)]);
+        assert_eq!(&png[..8], b"\x89PNG\r\n\x1a\n");
+        assert_eq!(png[25], 6, "colour type 6 is RGBA");
+        assert_eq!(unpremultiply(0), [0, 0, 0, 0]);
+        assert_eq!(unpremultiply(pack(128, 128, 128, 128)), [255, 255, 255, 128], "the colour is straight, not premultiplied");
+        assert_eq!(unpremultiply(pack(1, 2, 3, 255)), [1, 2, 3, 255]);
+        assert_eq!(encode_rgb(2, 1, &[0, 0])[25], 2, "the RGB encoder is unchanged");
+    }
 
     #[test]
     fn checksums_match_the_known_vectors() {

@@ -610,12 +610,10 @@ impl Shell {
         }
     }
 
-    /// The folder a recording is saved to: the Options menu's choice in the home directory (the data folder without one).
+    /// The folder a recording is saved to: the Options menu's choice in the account's home directory (the Desktop unless
+    /// it says otherwise), the same folder pictures go to.
     fn recording_dir(&self) -> PathBuf {
-        match std::env::var_os("HOME") {
-            Some(home) => PathBuf::from(home).join(self.capture_prefs.save_to.folder()),
-            None => self.data_dir.clone(),
-        }
+        self.capture_prefs.save_to.dir(&super::dock_stack::home_dir())
     }
 }
 
