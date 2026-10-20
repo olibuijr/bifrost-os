@@ -3361,6 +3361,8 @@ mod dock_and_scroll_tests {
     /// A desktop shell with Search open and "se" typed (several kinds of result).
     fn typed() -> Shell {
         let mut sh = crate::shell::tests::desktop_shell();
+        sh.anim = None;
+        sh.screen = Screen::Home;
         sh.open_quicksearch_hw(1000.0);
         sh.quicksearch_tick(2000.0);
         assert!(sh.quicksearch.is_shown());
