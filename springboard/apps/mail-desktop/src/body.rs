@@ -30,6 +30,29 @@ pub(crate) fn take_part(budget: &mut usize) -> bool {
     true
 }
 
+/// How many remote images the HTML part of a raw message would load, counted on the decoded HTML alone (not on the
+/// headers, boundaries and encoded attachments around it). Zero when the message has no HTML part.
+pub fn remote_images(raw: &str) -> usize {
+    match html_part(raw, 0, &mut { MAX_PARTS }) {
+        Some(text) => html::sanitize(&text, false).remote_images_blocked,
+        None => 0,
+    }
+}
+
+/// The decoded text of the first text/html part of an entity, nested multipart entities included.
+fn html_part(raw: &str, depth: usize, budget: &mut usize) -> Option<String> {
+    if depth > MAX_DEPTH || !take_part(budget) {
+        return None;
+    }
+    let (head, body) = split_head(raw);
+    let headers = parse_headers(head);
+    let kind = content_type(&headers);
+    if let Some(boundary) = kind.strip_prefix("multipart/").and(boundary(&headers)) {
+        return split_parts(body, &boundary).into_iter().find_map(|p| html_part(p, depth + 1, budget));
+    }
+    (kind == "text/html").then(|| decode_body(&headers, body, param(&headers, "charset").as_deref()))
+}
+
 struct Part {
     html: bool,
     text: String,
@@ -234,6 +257,17 @@ pub fn quoted_printable(text: &str) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn remote_images_are_counted_in_the_decoded_html_part() {
+        let html = "<p>hi</p><img src=\"https://t.example/a.png\"><img src=\"http://t.example/b.png\">";
+        let encoded = crate::codec::base64_encode(html.as_bytes());
+        let raw = format!(
+            "Content-Type: multipart/alternative; boundary=B\r\n\r\n--B\r\nContent-Type: text/plain\r\n\r\nhi\r\n--B\r\nContent-Type: text/html\r\nContent-Transfer-Encoding: base64\r\n\r\n{encoded}\r\n--B--\r\n"
+        );
+        assert_eq!(remote_images(&raw), 2);
+        assert_eq!(remote_images("Subject: x\r\n\r\nno html\r\n"), 0);
+    }
 
     #[test]
     fn a_plain_message_is_its_body() {
