@@ -23,9 +23,9 @@ use bifrost_app::widgets;
 use bifrost_core::disk_commands::Command;
 use bifrost_core::disk_format::Personality;
 use bifrost_core::disk_request::DiskRequest;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
-use std::sync::mpsc::{Receiver, TryRecvError};
+use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 
 /// The sidebar width (points).
 pub const SIDE_PT: f32 = 220.0;
@@ -152,10 +152,20 @@ pub struct DiskUtility {
     pub volumes_request: Option<u32>,
     /// Whether the last `volumes` answer failed, so the footer sentence it set is cleared by the next good one.
     pub scan_failed: bool,
+    /// The slow reads (`df`, `smartctl`, `lsblk`) run on a worker and answer here (`probe.rs`), so a stalled disk
+    /// never freezes the window.
+    probe_tx: Sender<probe::Done>,
+    probe_rx: Receiver<probe::Done>,
+    /// Whether a `df` is running, and the disks whose SMART read is running.
+    usage_pending: bool,
+    smart_pending: BTreeSet<String>,
+    /// The device whose Get Info sheet is open and still waiting for its `lsblk` rows.
+    info_pending: Option<String>,
 }
 
 impl DiskUtility {
     pub fn new() -> DiskUtility {
+        let (probe_tx, probe_rx) = channel();
         DiskUtility {
             nodes: Vec::new(),
             selected: None,
@@ -180,6 +190,11 @@ impl DiskUtility {
             shell_scan: false,
             volumes_request: None,
             scan_failed: false,
+            probe_tx,
+            probe_rx,
+            usage_pending: false,
+            smart_pending: BTreeSet::new(),
+            info_pending: None,
         }
     }
 
@@ -194,12 +209,13 @@ impl DiskUtility {
             return false;
         }
         model::apply_mounts(&mut nodes, &model::parse_mounts(&probe::read_mounts()));
-        if force_usage || t - self.last_usage >= USAGE_S {
+        // usage is measured on a worker; the rows keep the last measurement until the new one arrives
+        model::carry_usage(&mut nodes, &self.nodes);
+        if (force_usage || t - self.last_usage >= USAGE_S) && !self.usage_pending {
             let points: Vec<String> = nodes.iter().filter_map(|n| n.mount_point.clone()).collect();
-            model::apply_usage(&mut nodes, &probe::read_df(&points));
+            self.usage_pending = true;
             self.last_usage = t;
-        } else {
-            model::carry_usage(&mut nodes, &self.nodes);
+            probe::spawn(self.probe_tx.clone(), move || probe::Done::Usage(probe::read_df(&points)));
         }
         for node in nodes.iter_mut().filter(|n| n.kind == Kind::Disk) {
             node.smart = self.smart.get(&node.name).cloned();
@@ -253,18 +269,56 @@ impl DiskUtility {
         self.nodes != before
     }
 
-    /// Reads the SMART health of the selected disk, once. Partitions have none.
+    /// Starts the SMART read of the selected disk, once (on a worker; `take_probes` stores the answer). Partitions
+    /// have none.
     fn probe_smart(&mut self) {
         let Some(name) = self.selected.clone() else { return };
         let is_disk = self.nodes.iter().any(|n| n.name == name && n.kind == Kind::Disk);
-        if !is_disk || self.smart.contains_key(&name) {
+        if !is_disk || self.smart.contains_key(&name) || !self.smart_pending.insert(name.clone()) {
             return;
         }
-        let health = probe::read_smart(&name);
-        if let Some(node) = self.nodes.iter_mut().find(|n| n.name == name) {
-            node.smart = Some(health.clone());
+        probe::spawn(self.probe_tx.clone(), move || {
+            let health = probe::read_smart(&name);
+            probe::Done::Smart(name, health)
+        });
+    }
+
+    /// Takes the answers of the workers. True when the window changed.
+    pub fn take_probes(&mut self) -> bool {
+        let mut changed = false;
+        while let Ok(done) = self.probe_rx.try_recv() {
+            match done {
+                probe::Done::Usage(table) => {
+                    self.usage_pending = false;
+                    // a failed or timed-out `df` leaves the last measurement in place
+                    if !table.is_empty() {
+                        let before = self.nodes.clone();
+                        model::apply_usage(&mut self.nodes, &table);
+                        changed |= self.nodes != before;
+                    }
+                }
+                probe::Done::Smart(name, health) => {
+                    self.smart_pending.remove(&name);
+                    if let Some(node) = self.nodes.iter_mut().find(|n| n.name == name) {
+                        node.smart = Some(health.clone());
+                    }
+                    self.smart.insert(name, health);
+                    changed = true;
+                }
+                probe::Done::Lsblk(name, pairs) => {
+                    if self.info_pending.as_deref() == Some(name.as_str()) {
+                        self.info_pending = None;
+                        let open = self.sheet.as_ref().is_some_and(|p| p.requests.is_empty());
+                        if let (true, Some(node)) = (open, self.nodes.iter().find(|n| n.name == name).cloned()) {
+                            let extra = model::extra_rows(&pairs);
+                            self.sheet = Some(Pending { sheet: info_sheet(&format!("Info for {name}"), &model::info_lines(&node, &extra)), requests: Vec::new() });
+                            changed = true;
+                        }
+                    }
+                }
+            }
         }
-        self.smart.insert(name, health);
+        changed
     }
 
     /// The row the info pane shows.
@@ -358,10 +412,16 @@ impl DiskUtility {
             // the name, format and scheme are asked for in a form sheet, which then confirms
             Ask::Erase => return self.open_erase_form(),
             Ask::Info => {
-                let extra = model::extra_rows(&probe::read_lsblk(&name));
+                // the sheet opens with what the scan knows; the `lsblk` rows are added when the worker answers
                 self.error = None;
                 self.notice = None;
-                self.sheet = Some(Pending { sheet: info_sheet(&format!("Info for {name}"), &model::info_lines(&node, &extra)), requests: Vec::new() });
+                self.sheet = Some(Pending { sheet: info_sheet(&format!("Info for {name}"), &model::info_lines(&node, &[])), requests: Vec::new() });
+                self.info_pending = Some(name.clone());
+                let device = name.clone();
+                probe::spawn(self.probe_tx.clone(), move || {
+                    let pairs = probe::read_lsblk(&device);
+                    probe::Done::Lsblk(device, pairs)
+                });
                 return true;
             }
             // the sizes and names are asked for in a form sheet, which then asks for the disk's name
@@ -400,6 +460,7 @@ impl DiskUtility {
     /// The sheet's answer. Cancel closes it; another button starts the request it names.
     fn answer(&mut self, id: u32) -> bool {
         let Some(pending) = self.sheet.take() else { return false };
+        self.info_pending = None;
         if id != SHEET_CANCEL {
             if let Some((_, request)) = pending.requests.into_iter().find(|(button, _)| *button == id) {
                 self.start_request(request);
@@ -832,6 +893,55 @@ mod tests {
         assert!(w.ask_menu(Ask::Info));
         let pending = w.sheet.as_ref().expect("sheet");
         assert!(pending.requests.is_empty() && pending.sheet.message.contains("Device: /dev/sdb1"));
+        assert_eq!(w.info_pending.as_deref(), Some("sdb1"), "the lsblk rows are still on their way");
+    }
+
+    #[test]
+    fn the_lsblk_answer_adds_its_rows_to_the_open_info_sheet_only() {
+        let mut w = one_stick();
+        w.selected = Some("sdb1".into());
+        assert!(w.ask_menu(Ask::Info));
+        let pairs = vec![("SERIAL".to_string(), "ABC123".to_string())];
+        // a stale answer for another device changes nothing
+        w.probe_tx.send(probe::Done::Lsblk("sdc".into(), pairs.clone())).unwrap();
+        assert!(!w.take_probes());
+        w.probe_tx.send(probe::Done::Lsblk("sdb1".into(), pairs.clone())).unwrap();
+        assert!(w.take_probes());
+        assert!(w.sheet.as_ref().expect("sheet").sheet.message.contains("ABC123"));
+        // once the sheet is closed, a late answer is dropped
+        assert!(w.answer(SHEET_CANCEL));
+        w.info_pending = Some("sdb1".into());
+        w.probe_tx.send(probe::Done::Lsblk("sdb1".into(), pairs)).unwrap();
+        assert!(!w.take_probes());
+        assert!(w.sheet.is_none());
+    }
+
+    #[test]
+    fn a_usage_answer_updates_the_rows_and_an_empty_one_keeps_the_last_measurement() {
+        let mut w = one_stick();
+        w.nodes[1].mount_point = Some("/mnt/a".into());
+        let point = "/mnt/a".to_string();
+        let usage = model::Usage { total: 100, used: 40, free: 60 };
+        w.usage_pending = true;
+        w.probe_tx.send(probe::Done::Usage(vec![(point, usage)])).unwrap();
+        assert!(w.take_probes());
+        assert!(!w.usage_pending);
+        assert_eq!(w.nodes[1].usage, Some(usage));
+        w.usage_pending = true;
+        w.probe_tx.send(probe::Done::Usage(Vec::new())).unwrap();
+        assert!(!w.take_probes());
+        assert_eq!(w.nodes[1].usage, Some(usage));
+    }
+
+    #[test]
+    fn a_smart_answer_is_stored_once_per_disk() {
+        let mut w = one_stick();
+        w.smart_pending.insert("sdb".into());
+        w.probe_tx.send(probe::Done::Smart("sdb".into(), "Passed".into())).unwrap();
+        assert!(w.take_probes());
+        assert_eq!(w.smart.get("sdb").map(String::as_str), Some("Passed"));
+        assert_eq!(w.nodes[0].smart.as_deref(), Some("Passed"));
+        assert!(w.smart_pending.is_empty());
     }
 
     #[test]

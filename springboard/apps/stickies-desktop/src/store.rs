@@ -17,15 +17,38 @@ pub fn first_launch(data_dir: &Path) -> bool {
     !path_in(data_dir).exists() && !data_dir.join(format!("{FILE_NAME}.bad")).exists()
 }
 
-/// The saved board, or an empty one when there is no file yet. A file that cannot be read or decoded is kept
-/// aside as `stickies.json.bad` and the board starts empty, so the user's notes are never silently overwritten.
+/// Moves the damaged board file aside under a name nothing else has: `stickies.json.bad`, then `.bad.1`, `.bad.2` and
+/// so on, so an earlier damaged copy is never replaced.
+fn set_aside(data_dir: &Path, path: &Path) {
+    let first = data_dir.join(format!("{FILE_NAME}.bad"));
+    let target = if !first.exists() {
+        first
+    } else {
+        (1..1000).map(|n| data_dir.join(format!("{FILE_NAME}.bad.{n}"))).find(|p| !p.exists()).unwrap_or_else(|| {
+            let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+            data_dir.join(format!("{FILE_NAME}.bad.{secs}"))
+        })
+    };
+    let _ = fs::rename(path, target);
+}
+
+/// The saved board, or an empty one when there is no file yet. A file that cannot be read (not text, an I/O or
+/// permission error) or decoded is kept aside as `stickies.json.bad` (or the next free `.bad.N`) and the board starts
+/// empty, so the user's notes are never silently overwritten.
 pub fn load(data_dir: &Path) -> Board {
     let path = path_in(data_dir);
-    let Ok(text) = fs::read_to_string(&path) else { return Board::default() };
+    let text = match fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Board::default(),
+        Err(_) => {
+            set_aside(data_dir, &path);
+            return Board::default();
+        }
+    };
     match model::decode(&text) {
         Ok(board) => board,
         Err(_) => {
-            let _ = fs::rename(&path, data_dir.join(format!("{FILE_NAME}.bad")));
+            set_aside(data_dir, &path);
             Board::default()
         }
     }
@@ -78,6 +101,19 @@ mod tests {
     fn missing_file_loads_an_empty_board() {
         let dir = scratch("missing");
         assert_eq!(load(&dir), Board::default());
+    }
+
+    #[test]
+    fn a_file_that_is_not_text_is_moved_aside_and_an_earlier_copy_is_kept() {
+        let dir = scratch("binary");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("stickies.json.bad"), "an older damaged board").unwrap();
+        fs::write(path_in(&dir), [0xff, 0xfe, 0x00, 0x80]).unwrap();
+        assert!(load(&dir).notes.is_empty());
+        assert!(!path_in(&dir).exists(), "the next save cannot overwrite the notes");
+        assert_eq!(fs::read_to_string(dir.join("stickies.json.bad")).unwrap(), "an older damaged board");
+        assert_eq!(fs::read(dir.join("stickies.json.bad.1")).unwrap(), vec![0xff, 0xfe, 0x00, 0x80]);
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

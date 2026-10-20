@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.6
+
+- Wireless Diagnostics stops reading the radio while its window is hidden or minimised and starts again when it is shown, repaints only when a reading changes what is on screen, and kills an `iw` that does not answer in time (5 s for a link read, 30 s for a scan).
+
 ## 0.1.5
 
 - Fix: under the compliance harness (pinned clock) the app shows a fixed Wi-Fi link and signal history instead of polling the host radio, so its snapshot no longer varies from run to run.

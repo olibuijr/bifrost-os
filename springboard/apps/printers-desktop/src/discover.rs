@@ -19,6 +19,10 @@ const SERVICES: [(&str, &str); 2] = [("_ipps._tcp", "ipps"), ("_ipp._tcp", "ipp"
 const QUERY_EVERY_MS: f64 = 3000.0;
 /// The largest datagram read.
 const MAX_DATAGRAM: usize = 9000;
+/// The most datagrams read in one poll; the rest wait for the next one, so a flood cannot hold the app's tick.
+const MAX_DATAGRAMS_PER_POLL: usize = 64;
+/// The most instances kept for one service type, and the most printers listed.
+const MAX_INSTANCES: usize = 128;
 /// The resource path of a printer whose TXT record names none.
 const DEFAULT_PATH: &str = "ipp/print";
 
@@ -43,6 +47,30 @@ fn txt_text(txt: &TxtRecord, key: &str) -> String {
     }
 }
 
+/// Whether a host name is plain: letters, digits, `.`, `-` and `_`, as a DNS host name is. Anything else (a space, `/`,
+/// `?`, `#`, `@`, `:`, a control character) would change what the address means.
+fn valid_host(host: &str) -> bool {
+    !host.is_empty() && host.len() <= 253 && host.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_'))
+}
+
+/// Whether a resource path is plain: no control character, space, `?`, `#` or a backslash, which would end the path or change
+/// how the scheduler reads the address.
+fn valid_path(path: &str) -> bool {
+    path.len() <= 255 && !path.chars().any(|c| c.is_control() || c.is_whitespace() || matches!(c, '?' | '#' | '\\'))
+}
+
+/// Whether a datagram may come from `addr`: a printer announcing itself is on this link or a private network, never on
+/// the open internet.
+fn local_source(addr: IpAddr) -> bool {
+    match addr {
+        IpAddr::V4(a) => a.is_private() || a.is_link_local() || a.is_loopback(),
+        IpAddr::V6(a) => {
+            let first = a.segments()[0];
+            a.is_loopback() || (first & 0xffc0) == 0xfe80 || (first & 0xfe00) == 0xfc00
+        }
+    }
+}
+
 /// The host part of an address: an IPv4 address first, then an IPv6 one in brackets, then the host name. `None` when
 /// the reply named no host yet.
 fn host_part(addresses: &[IpAddr], host: Option<&str>) -> Option<String> {
@@ -52,7 +80,7 @@ fn host_part(addresses: &[IpAddr], host: Option<&str>) -> Option<String> {
     if let Some(v6) = addresses.first() {
         return Some(format!("[{v6}]"));
     }
-    host.map(|h| h.trim_end_matches('.').to_string()).filter(|h| !h.is_empty())
+    host.map(|h| h.trim_end_matches('.').to_string()).filter(|h| valid_host(h))
 }
 
 /// The printer an instance stands for, or `None` while its host or port is not resolved yet.
@@ -62,8 +90,11 @@ pub fn found_from(instance: &ServiceInstance, scheme: &str) -> Option<Found> {
     let path = txt_text(&instance.txt, "rp");
     let path = path.trim_matches('/');
     let path = if path.is_empty() { DEFAULT_PATH } else { path };
+    if !valid_path(path) {
+        return None;
+    }
     Some(Found {
-        name: instance.name.clone(),
+        name: instance.name.chars().filter(|c| !c.is_control()).collect(),
         device_uri: format!("{scheme}://{host}:{port}/{path}"),
         model: txt_text(&instance.txt, "ty"),
         location: txt_text(&instance.txt, "note"),
@@ -83,6 +114,7 @@ pub fn merge(lists: &[(&str, &[ServiceInstance])]) -> Vec<Found> {
             }
         }
     }
+    found.truncate(MAX_INSTANCES);
     found
 }
 
@@ -169,10 +201,17 @@ impl Discover {
         }
         let mut changed = 0;
         let mut buf = vec![0u8; MAX_DATAGRAM];
-        while let Ok((n, _)) = socket.recv_from(&mut buf) {
+        for _ in 0..MAX_DATAGRAMS_PER_POLL {
+            let Ok((n, from)) = socket.recv_from(&mut buf) else { break };
+            if !local_source(from.ip()) {
+                continue;
+            }
+            // a datagram that does not decode is dropped, and a browser that holds enough instances takes no more
             if let Ok(message) = Message::decode(&buf[..n]) {
                 for (_, browser) in &mut self.browsers {
-                    changed += browser.handle_message(&message);
+                    if browser.instances().len() < MAX_INSTANCES {
+                        changed += browser.handle_message(&message);
+                    }
                 }
             }
         }
@@ -257,6 +296,38 @@ mod tests {
         assert_eq!(found_from(&only6, "ipp").unwrap().device_uri, "ipp://[fe80::1]:631/ipp/print");
         let named = instance("A", Some("a.local."), Some(8631), vec![], &[]);
         assert_eq!(found_from(&named, "ipp").unwrap().device_uri, "ipp://a.local:8631/ipp/print");
+    }
+
+    #[test]
+    fn an_address_with_a_host_or_path_that_would_change_its_meaning_is_not_listed() {
+        let v4: IpAddr = "10.0.0.7".parse().unwrap();
+        for path in ["ipp/print?x=1", "ipp#frag", "a b", "ipp\\print", "a\nb"] {
+            let i = instance("A", Some("a.local"), Some(631), vec![v4], &[("rp", path)]);
+            assert_eq!(found_from(&i, "ipp"), None, "{path:?}");
+        }
+        for host in ["evil.example/x", "a b", "h@evil", "h?x", "h#x", "h:80"] {
+            let i = instance("A", Some(host), Some(631), vec![], &[]);
+            assert_eq!(found_from(&i, "ipp"), None, "{host:?}");
+        }
+        let named = instance("Front\u{7}Desk", Some("a-b_c.local"), Some(631), vec![], &[]);
+        assert_eq!(found_from(&named, "ipp").unwrap().name, "FrontDesk");
+    }
+
+    #[test]
+    fn only_link_local_and_private_sources_are_listened_to() {
+        for ok in ["192.168.1.9", "10.1.2.3", "172.16.0.5", "169.254.3.4", "127.0.0.1", "fe80::1", "fd00::2"] {
+            assert!(local_source(ok.parse().unwrap()), "{ok}");
+        }
+        for bad in ["8.8.8.8", "93.184.216.34", "2001:db8::1"] {
+            assert!(!local_source(bad.parse().unwrap()), "{bad}");
+        }
+    }
+
+    #[test]
+    fn the_list_is_capped() {
+        let v4: IpAddr = "10.0.0.7".parse().unwrap();
+        let many: Vec<ServiceInstance> = (0..MAX_INSTANCES + 40).map(|n| instance(&format!("P{n}"), Some("a.local"), Some(631), vec![v4], &[])).collect();
+        assert_eq!(merge(&[("ipp", many.as_slice())]).len(), MAX_INSTANCES);
     }
 
     #[test]

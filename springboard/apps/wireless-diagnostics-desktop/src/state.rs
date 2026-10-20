@@ -110,14 +110,20 @@ impl Diagnostics {
     }
 
     /// Takes the readings delivered on the main queue and refreshes the chart.
+    /// True only when something the window shows changed: a reading equal to the last one, with the chart already full
+    /// of the same values, needs no new frame.
     pub fn drain_readings(&mut self) -> bool {
         let Ok(mut queue) = self.readings.lock() else { return false };
         let pending: Vec<_> = queue.drain(..).collect();
         drop(queue);
-        for reading in pending.iter().cloned() {
+        if pending.is_empty() {
+            return false;
+        }
+        let before = (self.reading.clone(), self.history.clone());
+        for reading in pending {
             self.apply_reading(reading);
         }
-        !pending.is_empty()
+        before != (self.reading.clone(), self.history.clone())
     }
 
     /// Records a scan's answer: the networks merged by name, strongest first.
@@ -241,6 +247,25 @@ mod tests {
         assert_eq!(d.history.latest(), Some(-45));
         assert_eq!(d.noise(), None, "noise is from the latest reading, not a stale sample");
         assert_eq!(d.rating(), Rating::Unknown, "no current signal has no current rating");
+    }
+
+    #[test]
+    fn a_reading_that_changes_nothing_on_screen_asks_for_no_frame() {
+        let mut d = Diagnostics::new();
+        let push = |d: &Diagnostics, r: Reading| d.readings.lock().unwrap().push_back(r);
+        assert!(!d.drain_readings(), "nothing arrived");
+        push(&d, reading(Some(-50), Some(-95)));
+        assert!(d.drain_readings(), "the first reading is new");
+        // fill the chart's window with the same value, then one more of it changes nothing
+        for _ in 0..crate::model::HISTORY_LEN {
+            push(&d, reading(Some(-50), Some(-95)));
+        }
+        assert!(d.drain_readings());
+        assert_eq!(d.history.len(), crate::model::HISTORY_LEN);
+        push(&d, reading(Some(-50), Some(-95)));
+        assert!(!d.drain_readings());
+        push(&d, reading(Some(-51), Some(-95)));
+        assert!(d.drain_readings());
     }
 
     #[test]

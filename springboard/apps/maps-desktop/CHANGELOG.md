@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.7
+
+- Maps refuses a redirect from an https tile, search or route server to plain http, and keeps cookies per host instead of one jar for every service. A server the person configured as http still works.
+
 ## 0.6.6
 
 - Fix: the toolbar is drawn where its clicks land. It is laid out in the detail pane's own coordinates, so the SDK traffic-light inset now gets the pane's offset and leaves it beside the sidebar.

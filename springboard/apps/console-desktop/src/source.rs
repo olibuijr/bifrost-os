@@ -131,7 +131,7 @@ impl Source for Journal {
         if bifrost_app::testing::pinned() {
             return None;
         }
-        crate::identity::detail_for_pid(e.pid)
+        crate::identity::detail_for_entry(e.pid, e.date)
     }
 }
 
@@ -157,10 +157,25 @@ impl Source for Coredumps {
         if e.pid == 0 {
             return None;
         }
-        let pid = e.pid.to_string();
-        let out = capture(&["coredumpctl", "info", pid.as_str(), "--no-pager"]).ok()?;
-        Some(String::from_utf8_lossy(&out.stdout).into_owned())
+        let args = info_args(e.pid, e.date);
+        let args: Vec<&str> = args.iter().map(String::as_str).collect();
+        let out = capture(&args).ok()?;
+        // without a match for this very dump `coredumpctl info` prints nothing, and the pane shows no detail
+        let text = String::from_utf8_lossy(&out.stdout).into_owned();
+        (out.status.success() && !text.trim().is_empty()).then_some(text)
     }
+}
+
+/// The `coredumpctl info` command for one dump. The process id alone can match an older or newer dump of another
+/// program that had the same id, so a dump with a known time is matched on its own time stamp as well.
+fn info_args(pid: u32, date_us: i64) -> Vec<String> {
+    let mut args: Vec<String> = ["coredumpctl", "info"].iter().map(|s| s.to_string()).collect();
+    args.push(pid.to_string());
+    if date_us > 0 {
+        args.push(format!("COREDUMP_TIMESTAMP={date_us}"));
+    }
+    args.push("--no-pager".to_string());
+    args
 }
 
 /// One plain file, read from its end: each line is a message from that file.
@@ -216,4 +231,15 @@ pub fn log_files() -> Vec<PathBuf> {
         .unwrap_or_default();
     files.sort();
     files
+}
+
+#[cfg(test)]
+mod info_tests {
+    use super::*;
+
+    #[test]
+    fn a_dump_is_matched_on_its_pid_and_its_own_time() {
+        assert_eq!(info_args(42, 1_700_000_000_123_456), ["coredumpctl", "info", "42", "COREDUMP_TIMESTAMP=1700000000123456", "--no-pager"]);
+        assert_eq!(info_args(42, 0), ["coredumpctl", "info", "42", "--no-pager"]);
+    }
 }

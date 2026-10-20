@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.9
+
+- Validating a font reads its character map in bounded time and memory: a format 4 segment is one range, so a crafted font can no longer exhaust memory when its family is selected.
+
 ## 0.6.8
 
 - The list of turned-off fonts is named Disabled, not Off (which read as a switch label), and the list and preview columns use the window's content colour instead of pure black.
